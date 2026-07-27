@@ -34,6 +34,8 @@ func (lx *Lexer) Next() Token {
 		return lx.scanSLNote(start) // // ...
 	case c == '/' && lx.peek(1) == '*':
 		return lx.scanBlockComment(start) // /* ... */
+	case isIdentStart(c):
+		return lx.scanIdentOrKeyword(start)
 	}
 
 	// Not trivia: emit a single-byte Error for now; later tasks add cases
@@ -91,6 +93,27 @@ func (lx *Lexer) consumeUntilStarSlash() {
 		}
 		lx.pos++
 	}
+}
+
+func isIdentStart(c byte) bool {
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+func isIdentCont(c byte) bool {
+	return isIdentStart(c) || (c >= '0' && c <= '9')
+}
+
+func (lx *Lexer) scanIdentOrKeyword(start int) Token {
+	lx.pos++ // first char already known to be identStart
+	for lx.pos < len(lx.src) && isIdentCont(lx.src[lx.pos]) {
+		lx.pos++
+	}
+	sp := lx.span(start)
+	text := string(lx.src[start:lx.pos])
+	if _, ok := keywords[text]; ok {
+		return Token{Kind: Keyword, Span: sp, KeywordID: text}
+	}
+	return Token{Kind: Identifier, Span: sp}
 }
 
 // peek returns the byte at pos+n without advancing, or 0 if out of range.

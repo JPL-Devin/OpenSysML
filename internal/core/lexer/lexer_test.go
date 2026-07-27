@@ -155,6 +155,33 @@ func TestUnterminatedMLNote(t *testing.T) {
 	}
 }
 
+func TestIdentifier(t *testing.T) {
+	toks := lex(t, "Engine _x9 abc")
+	want := []Kind{Identifier, Whitespace, Identifier, Whitespace, Identifier, EOF}
+	if !eq(kinds(toks), want) {
+		t.Fatalf("kinds = %v, want %v", kinds(toks), want)
+	}
+}
+
+func TestKeyword(t *testing.T) {
+	toks := lex(t, "part def package")
+	for i, ki := range []int{0, 2, 4} {
+		if toks[ki].Kind != Keyword {
+			t.Fatalf("token %d kind = %v, want Keyword", i, toks[ki].Kind)
+		}
+	}
+	if toks[0].KeywordID != "part" {
+		t.Fatalf("KeywordID = %q, want part", toks[0].KeywordID)
+	}
+}
+
+func TestKeywordPrefixIsIdentifier(t *testing.T) {
+	toks := lex(t, "partial")
+	if toks[0].Kind != Identifier {
+		t.Fatalf("kind = %v, want Identifier", toks[0].Kind)
+	}
+}
+
 func TestCRLFWhitespaceIsOneToken(t *testing.T) {
 	toks := lex(t, "\r\n\r\n")
 	if !eq(kinds(toks), []Kind{Whitespace, EOF}) {
