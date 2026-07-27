@@ -218,3 +218,37 @@ func TestUnterminatedUnrestrictedName(t *testing.T) {
 		t.Fatalf("kind = %v, want Error", toks[0].Kind)
 	}
 }
+
+func TestDecimal(t *testing.T) {
+	toks := lex(t, "42")
+	if !eq(kinds(toks), []Kind{Decimal, EOF}) {
+		t.Fatalf("kinds = %v", kinds(toks))
+	}
+}
+
+func TestReal(t *testing.T) {
+	for _, in := range []string{"1.5", ".5", "1e3", "1.5e-2", "2E+10", "1.0e5"} {
+		toks := lex(t, in)
+		if !eq(kinds(toks), []Kind{Real, EOF}) {
+			t.Fatalf("input %q kinds = %v, want Real EOF", in, kinds(toks))
+		}
+	}
+}
+
+func TestRangeNotReal(t *testing.T) {
+	// 1..2 must be Decimal DotDot Decimal, not a malformed real.
+	toks := lex(t, "1..2")
+	want := []Kind{Decimal, DotDot, Decimal, EOF}
+	if !eq(kinds(toks), want) {
+		t.Fatalf("kinds = %v, want %v", kinds(toks), want)
+	}
+}
+
+func TestTrailingDot(t *testing.T) {
+	// "1." → Decimal then Dot (no digit after dot)
+	toks := lex(t, "1.")
+	want := []Kind{Decimal, Dot, EOF}
+	if !eq(kinds(toks), want) {
+		t.Fatalf("kinds = %v, want %v", kinds(toks), want)
+	}
+}

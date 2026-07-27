@@ -38,6 +38,10 @@ func (lx *Lexer) Next() Token {
 		return lx.scanIdentOrKeyword(start)
 	case c == '\'':
 		return lx.scanQuoted(start, '\'', UnrestrictedName)
+	case c >= '0' && c <= '9':
+		return lx.scanNumber(start)
+	case c == '.' && lx.peek(1) >= '0' && lx.peek(1) <= '9':
+		return lx.scanNumber(start) // leading-dot real: .5
 	}
 
 	// Not trivia: emit a single-byte Error for now; later tasks add cases
@@ -144,6 +148,67 @@ func (lx *Lexer) scanIdentOrKeyword(start int) Token {
 		return Token{Kind: Keyword, Span: sp, KeywordID: text}
 	}
 	return Token{Kind: Identifier, Span: sp}
+}
+
+func isDigit(c byte) bool { return c >= '0' && c <= '9' }
+
+// scanNumber scans Decimal or Real starting at start.
+func (lx *Lexer) scanNumber(start int) Token {
+	isReal := false
+
+	// leading-dot real (.5) — start is '.'
+	if lx.src[lx.pos] == '.' {
+		isReal = true
+		lx.pos++ // '.'
+		lx.consumeDigits()
+		lx.consumeExponent(&isReal)
+		return Token{Kind: Real, Span: lx.span(start)}
+	}
+
+	lx.consumeDigits() // integer part
+
+	// fractional part: '.' only if followed by a digit (avoids 1..2 and 1.)
+	if lx.pos < len(lx.src) && lx.src[lx.pos] == '.' &&
+		lx.pos+1 < len(lx.src) && isDigit(lx.src[lx.pos+1]) {
+		isReal = true
+		lx.pos++ // '.'
+		lx.consumeDigits()
+	}
+
+	lx.consumeExponent(&isReal)
+
+	if isReal {
+		return Token{Kind: Real, Span: lx.span(start)}
+	}
+	return Token{Kind: Decimal, Span: lx.span(start)}
+}
+
+func (lx *Lexer) consumeDigits() {
+	for lx.pos < len(lx.src) && isDigit(lx.src[lx.pos]) {
+		lx.pos++
+	}
+}
+
+// consumeExponent consumes an (e|E)(+|-)?[0-9]+ suffix if present, setting real.
+func (lx *Lexer) consumeExponent(isReal *bool) {
+	if lx.pos >= len(lx.src) {
+		return
+	}
+	c := lx.src[lx.pos]
+	if c != 'e' && c != 'E' {
+		return
+	}
+	// lookahead: need optional sign then at least one digit, else not an exponent
+	i := lx.pos + 1
+	if i < len(lx.src) && (lx.src[i] == '+' || lx.src[i] == '-') {
+		i++
+	}
+	if i >= len(lx.src) || !isDigit(lx.src[i]) {
+		return // not a valid exponent; leave 'e' for identifier/other handling
+	}
+	*isReal = true
+	lx.pos = i
+	lx.consumeDigits()
 }
 
 // peek returns the byte at pos+n without advancing, or 0 if out of range.
