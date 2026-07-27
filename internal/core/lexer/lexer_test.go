@@ -372,3 +372,32 @@ func TestOperatorMixedStreams(t *testing.T) {
 		}
 	}
 }
+
+func TestErrorCoalescing(t *testing.T) {
+	// A run of unrecognized bytes becomes ONE Error token.
+	toks := lex(t, "\x00\x01\x02")
+	if !eq(kinds(toks), []Kind{Error, EOF}) {
+		t.Fatalf("kinds = %v, want Error EOF", kinds(toks))
+	}
+	if toks[0].Span.Len != 3 {
+		t.Fatalf("error span len = %d, want 3", toks[0].Span.Len)
+	}
+}
+
+func TestErrorThenValid(t *testing.T) {
+	toks := lex(t, "\x00part")
+	want := []Kind{Error, Keyword, EOF}
+	if !eq(kinds(toks), want) {
+		t.Fatalf("kinds = %v, want %v", kinds(toks), want)
+	}
+}
+
+func TestAlwaysMakesProgress(t *testing.T) {
+	// Every non-EOF token must have Len >= 1 so parsers can't loop forever.
+	toks := lex(t, "part\x00'unterminated")
+	for _, tk := range toks {
+		if tk.Kind != EOF && tk.Span.Len < 1 {
+			t.Fatalf("token %v has zero width", tk)
+		}
+	}
+}

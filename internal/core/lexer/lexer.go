@@ -143,9 +143,41 @@ func (lx *Lexer) Next() Token {
 		return Token{Kind: k, Span: lx.span(start)}
 	}
 
-	// Unrecognized byte → Error, advance one byte to guarantee progress.
-	lx.pos++
+	// Unrecognized byte(s): coalesce a maximal run of bytes that cannot start
+	// any known token into a single Error token. Guarantees progress.
+	return lx.scanError(start)
+}
+
+// scanError consumes a maximal run of bytes that cannot begin a valid token,
+// emitting a single Error token. Always advances at least one byte.
+func (lx *Lexer) scanError(start int) Token {
+	lx.pos++ // consume the offending byte (guarantees progress)
+	for lx.pos < len(lx.src) && !canStartToken(lx.src[lx.pos]) {
+		lx.pos++
+	}
 	return Token{Kind: Error, Span: lx.span(start)}
+}
+
+// canStartToken reports whether c can begin some valid token. Used only to
+// bound Error coalescing; conservative (false positives just end the run early).
+func canStartToken(c byte) bool {
+	switch {
+	case c == ' ' || c == '\t' || c == '\r' || c == '\n':
+		return true
+	case isIdentStart(c):
+		return true
+	case isDigit(c):
+		return true
+	case c == '\'' || c == '"':
+		return true
+	}
+	switch c {
+	case ':', '-', '.', '*', '=', '!', '<', '>', '?', '@', '/',
+		'|', '&', '+', '%', '^', '~', '#', '(', ')', '[', ']',
+		'{', '}', ',', '$', ';':
+		return true
+	}
+	return false
 }
 
 var singleCharKind = map[byte]Kind{
