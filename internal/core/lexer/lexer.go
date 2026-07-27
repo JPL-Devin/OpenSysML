@@ -4,10 +4,9 @@ import "github.com/Open-MBEE/Systemica/internal/core/source"
 
 // Lexer is a hand-written, pull-based scanner. Call Next() repeatedly.
 type Lexer struct {
-	sf    *source.SourceFile
-	src   []byte
-	pos   int // current byte offset
-	atEOF bool
+	sf  *source.SourceFile // retained for Plan 02 (parser diagnostics/positions)
+	src []byte
+	pos int // current byte offset
 }
 
 // New creates a Lexer over a source file.
@@ -19,7 +18,6 @@ func New(sf *source.SourceFile) *Lexer {
 // returns EOF repeatedly (idempotent).
 func (lx *Lexer) Next() Token {
 	if lx.pos >= len(lx.src) {
-		lx.atEOF = true
 		return Token{Kind: EOF, Span: source.Span{Offset: len(lx.src), Len: 0}}
 	}
 	start := lx.pos
@@ -279,9 +277,11 @@ func (lx *Lexer) scanIdentOrKeyword(start int) Token {
 		lx.pos++
 	}
 	sp := lx.span(start)
-	text := string(lx.src[start:lx.pos])
-	if _, ok := keywords[text]; ok {
-		return Token{Kind: Keyword, Span: sp, KeywordID: text}
+	// The map index over a []byte->string conversion is optimized by the
+	// compiler to avoid allocating; only materialize the string for KeywordID
+	// on the (less common) keyword path.
+	if _, ok := keywords[string(lx.src[start:lx.pos])]; ok {
+		return Token{Kind: Keyword, Span: sp, KeywordID: string(lx.src[start:lx.pos])}
 	}
 	return Token{Kind: Identifier, Span: sp}
 }

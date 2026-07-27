@@ -401,3 +401,22 @@ func TestAlwaysMakesProgress(t *testing.T) {
 		}
 	}
 }
+
+// TestCanStartTokenCoversPunctuation guards the hand-maintained sync between
+// the operator dispatch, singleCharKind, and canStartToken. Every byte that
+// begins a real token must be reported startable, else scanError would wrongly
+// swallow it into an Error run.
+func TestCanStartTokenCoversPunctuation(t *testing.T) {
+	// First bytes of all multi/single-char operators and punctuation.
+	starts := []byte(":-.*=!<>?@/|&+%^~#()[]{},$;")
+	for _, b := range starts {
+		if !canStartToken(b) {
+			t.Errorf("canStartToken(%q) = false, want true", string(b))
+		}
+	}
+	for b := range singleCharKind {
+		if !canStartToken(b) {
+			t.Errorf("singleCharKind key %q not covered by canStartToken", string(b))
+		}
+	}
+}
