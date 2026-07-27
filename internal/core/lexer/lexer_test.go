@@ -310,3 +310,65 @@ func TestOperators(t *testing.T) {
 		}
 	}
 }
+
+func TestOperatorGreedyBoundaries(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []Kind
+	}{
+		{"====", []Kind{EqEqEq, Eq, EOF}},
+		{"!===", []Kind{NotEqEq, Eq, EOF}},
+		{"...", []Kind{DotDot, Dot, EOF}},
+		{".?.", []Kind{DotQuestion, Dot, EOF}},
+		{"->->", []Kind{Arrow, Arrow, EOF}},
+	}
+	for _, c := range cases {
+		toks := lex(t, c.in)
+		if !eq(kinds(toks), c.want) {
+			t.Errorf("input %q kinds = %v, want %v", c.in, kinds(toks), c.want)
+		}
+	}
+}
+
+func TestOperatorSpanLengths(t *testing.T) {
+	cases := []struct {
+		in      string
+		wantLen int
+	}{
+		{"===", 3},
+		{"!==", 3},
+		{"<=", 2},
+		{"::", 2},
+		{"..", 2},
+		{".?", 2},
+		{"->", 2},
+		{":", 1},
+		{".", 1},
+	}
+	for _, c := range cases {
+		toks := lex(t, c.in)
+		if len(toks) < 1 {
+			t.Fatalf("input %q produced no tokens", c.in)
+		}
+		if toks[0].Span.Len != c.wantLen {
+			t.Errorf("input %q first token Span.Len = %d, want %d", c.in, toks[0].Span.Len, c.wantLen)
+		}
+	}
+}
+
+func TestOperatorMixedStreams(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []Kind
+	}{
+		{"a->b", []Kind{Identifier, Arrow, Identifier, EOF}},
+		{"1<=2", []Kind{Decimal, Le, Decimal, EOF}},
+		{"!x", []Kind{Error, Identifier, EOF}},
+	}
+	for _, c := range cases {
+		toks := lex(t, c.in)
+		if !eq(kinds(toks), c.want) {
+			t.Errorf("input %q kinds = %v, want %v", c.in, kinds(toks), c.want)
+		}
+	}
+}
