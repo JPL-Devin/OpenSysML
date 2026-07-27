@@ -24,11 +24,72 @@ func (lx *Lexer) Next() Token {
 	}
 	start := lx.pos
 	c := lx.src[lx.pos]
-	_ = c
-	// Dispatch is filled in subsequent tasks. For now, emit a single-byte
-	// Error token so the loop always advances and terminates.
+
+	switch {
+	case c == ' ' || c == '\t' || c == '\r' || c == '\n':
+		return lx.scanWhitespace(start)
+	case c == '/' && lx.peek(1) == '/' && lx.peek(2) == '*':
+		return lx.scanMLNote(start) // //* ... */
+	case c == '/' && lx.peek(1) == '/':
+		return lx.scanSLNote(start) // // ...
+	case c == '/' && lx.peek(1) == '*':
+		return lx.scanBlockComment(start) // /* ... */
+	}
+
+	// Not trivia: emit a single-byte Error for now; later tasks add cases
+	// BEFORE this fallthrough point.
 	lx.pos++
 	return Token{Kind: Error, Span: source.Span{Offset: start, Len: 1}}
+}
+
+func (lx *Lexer) scanWhitespace(start int) Token {
+	for lx.pos < len(lx.src) {
+		c := lx.src[lx.pos]
+		if c != ' ' && c != '\t' && c != '\r' && c != '\n' {
+			break
+		}
+		lx.pos++
+	}
+	return Token{Kind: Whitespace, Span: lx.span(start)}
+}
+
+func (lx *Lexer) scanSLNote(start int) Token {
+	lx.pos += 2 // consume "//"
+	for lx.pos < len(lx.src) && lx.src[lx.pos] != '\n' && lx.src[lx.pos] != '\r' {
+		lx.pos++
+	}
+	// include the line terminator (\r?\n) in the note span, per SL_NOTE rule
+	if lx.pos < len(lx.src) && lx.src[lx.pos] == '\r' {
+		lx.pos++
+	}
+	if lx.pos < len(lx.src) && lx.src[lx.pos] == '\n' {
+		lx.pos++
+	}
+	return Token{Kind: SLNote, Span: lx.span(start)}
+}
+
+func (lx *Lexer) scanMLNote(start int) Token {
+	lx.pos += 3 // consume "//*"
+	lx.consumeUntilStarSlash()
+	return Token{Kind: MLNote, Span: lx.span(start)}
+}
+
+func (lx *Lexer) scanBlockComment(start int) Token {
+	lx.pos += 2 // consume "/*"
+	lx.consumeUntilStarSlash()
+	return Token{Kind: RegularComment, Span: lx.span(start)}
+}
+
+// consumeUntilStarSlash advances until it consumes a closing "*/", or to EOF
+// if unterminated.
+func (lx *Lexer) consumeUntilStarSlash() {
+	for lx.pos < len(lx.src) {
+		if lx.src[lx.pos] == '*' && lx.peek(1) == '/' {
+			lx.pos += 2
+			return
+		}
+		lx.pos++
+	}
 }
 
 // peek returns the byte at pos+n without advancing, or 0 if out of range.
