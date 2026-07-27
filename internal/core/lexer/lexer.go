@@ -36,6 +36,8 @@ func (lx *Lexer) Next() Token {
 		return lx.scanBlockComment(start) // /* ... */
 	case isIdentStart(c):
 		return lx.scanIdentOrKeyword(start)
+	case c == '\'':
+		return lx.scanQuoted(start, '\'', UnrestrictedName)
 	}
 
 	// Not trivia: emit a single-byte Error for now; later tasks add cases
@@ -81,6 +83,34 @@ func (lx *Lexer) scanBlockComment(start int) Token {
 	lx.pos += 2 // consume "/*"
 	lx.consumeUntilStarSlash()
 	return Token{Kind: RegularComment, Span: lx.span(start)}
+}
+
+// scanQuoted scans a quoted literal delimited by quote (' or "), honoring the
+// backslash escape set. On success emits kind; on unterminated (newline/EOF
+// before closing quote) emits Error covering what was consumed.
+func (lx *Lexer) scanQuoted(start int, quote byte, kind Kind) Token {
+	lx.pos++ // opening quote
+	for lx.pos < len(lx.src) {
+		c := lx.src[lx.pos]
+		switch {
+		case c == '\\':
+			// escape: consume backslash + next char if present
+			lx.pos++
+			if lx.pos < len(lx.src) {
+				lx.pos++
+			}
+		case c == quote:
+			lx.pos++ // closing quote
+			return Token{Kind: kind, Span: lx.span(start)}
+		case c == '\n' || c == '\r':
+			// unterminated on this line
+			return Token{Kind: Error, Span: lx.span(start)}
+		default:
+			lx.pos++
+		}
+	}
+	// reached EOF without closing quote
+	return Token{Kind: Error, Span: lx.span(start)}
 }
 
 // consumeUntilStarSlash advances until it consumes a closing "*/", or to EOF

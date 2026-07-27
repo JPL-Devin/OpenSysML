@@ -191,3 +191,30 @@ func TestCRLFWhitespaceIsOneToken(t *testing.T) {
 		t.Fatalf("ws span len = %d, want 4", toks[0].Span.Len)
 	}
 }
+
+func TestUnrestrictedName(t *testing.T) {
+	toks := lex(t, "'my name'")
+	if !eq(kinds(toks), []Kind{UnrestrictedName, EOF}) {
+		t.Fatalf("kinds = %v", kinds(toks))
+	}
+	if toks[0].Span.Len != 9 {
+		t.Fatalf("span len = %d, want 9", toks[0].Span.Len)
+	}
+}
+
+func TestUnrestrictedNameWithEscape(t *testing.T) {
+	toks := lex(t, `'a\'b'`)
+	if !eq(kinds(toks), []Kind{UnrestrictedName, EOF}) {
+		t.Fatalf("kinds = %v, want UnrestrictedName EOF", kinds(toks))
+	}
+	if toks[0].Span.Len != 6 {
+		t.Fatalf("span len = %d, want 6", toks[0].Span.Len)
+	}
+}
+
+func TestUnterminatedUnrestrictedName(t *testing.T) {
+	toks := lex(t, "'open\n")
+	if toks[0].Kind != Error {
+		t.Fatalf("kind = %v, want Error", toks[0].Kind)
+	}
+}
