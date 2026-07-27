@@ -273,3 +273,40 @@ func TestUnterminatedString(t *testing.T) {
 		t.Fatalf("kind = %v, want Error", toks[0].Kind)
 	}
 }
+
+func TestOperators(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []Kind
+	}{
+		{"::", []Kind{ColonColon, EOF}},
+		{":", []Kind{Colon, EOF}},
+		{"->", []Kind{Arrow, EOF}},
+		{".?", []Kind{DotQuestion, EOF}},
+		{"..", []Kind{DotDot, EOF}},
+		{".", []Kind{Dot, EOF}},
+		{"**", []Kind{StarStar, EOF}},
+		{"*", []Kind{Star, EOF}},
+		{"==", []Kind{EqEq, EOF}},
+		{"===", []Kind{EqEqEq, EOF}},
+		{"!=", []Kind{NotEq, EOF}},
+		{"!==", []Kind{NotEqEq, EOF}},
+		{"<=", []Kind{Le, EOF}},
+		{">=", []Kind{Ge, EOF}},
+		{"??", []Kind{QuestionQ, EOF}},
+		{"?", []Kind{Question, EOF}},
+		{"@@", []Kind{AtAt, EOF}},
+		{"@", []Kind{At, EOF}},
+		{"|&+-%^~#()[]{},$=;<>", []Kind{
+			Pipe, Amp, Plus, Minus, Percent, Caret, Tilde, Hash,
+			LParen, RParen, LBracket, RBracket, LBrace, RBrace, Comma,
+			Dollar, Eq, Semicolon, Lt, Gt, EOF,
+		}},
+	}
+	for _, c := range cases {
+		toks := lex(t, c.in)
+		if !eq(kinds(toks), c.want) {
+			t.Errorf("input %q kinds = %v, want %v", c.in, kinds(toks), c.want)
+		}
+	}
+}

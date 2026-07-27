@@ -46,10 +46,112 @@ func (lx *Lexer) Next() Token {
 		return lx.scanQuoted(start, '"', String)
 	}
 
-	// Not trivia: emit a single-byte Error for now; later tasks add cases
-	// BEFORE this fallthrough point.
+	// Operators & punctuation (longest match first).
+	switch c {
+	case ':':
+		if lx.peek(1) == ':' {
+			lx.pos += 2
+			return Token{Kind: ColonColon, Span: lx.span(start)}
+		}
+		lx.pos++
+		return Token{Kind: Colon, Span: lx.span(start)}
+	case '-':
+		if lx.peek(1) == '>' {
+			lx.pos += 2
+			return Token{Kind: Arrow, Span: lx.span(start)}
+		}
+		lx.pos++
+		return Token{Kind: Minus, Span: lx.span(start)}
+	case '.':
+		if lx.peek(1) == '?' {
+			lx.pos += 2
+			return Token{Kind: DotQuestion, Span: lx.span(start)}
+		}
+		if lx.peek(1) == '.' {
+			lx.pos += 2
+			return Token{Kind: DotDot, Span: lx.span(start)}
+		}
+		lx.pos++
+		return Token{Kind: Dot, Span: lx.span(start)}
+	case '*':
+		if lx.peek(1) == '*' {
+			lx.pos += 2
+			return Token{Kind: StarStar, Span: lx.span(start)}
+		}
+		lx.pos++
+		return Token{Kind: Star, Span: lx.span(start)}
+	case '=':
+		if lx.peek(1) == '=' && lx.peek(2) == '=' {
+			lx.pos += 3
+			return Token{Kind: EqEqEq, Span: lx.span(start)}
+		}
+		if lx.peek(1) == '=' {
+			lx.pos += 2
+			return Token{Kind: EqEq, Span: lx.span(start)}
+		}
+		lx.pos++
+		return Token{Kind: Eq, Span: lx.span(start)}
+	case '!':
+		if lx.peek(1) == '=' && lx.peek(2) == '=' {
+			lx.pos += 3
+			return Token{Kind: NotEqEq, Span: lx.span(start)}
+		}
+		if lx.peek(1) == '=' {
+			lx.pos += 2
+			return Token{Kind: NotEq, Span: lx.span(start)}
+		}
+		// bare '!' is not a defined token
+		lx.pos++
+		return Token{Kind: Error, Span: lx.span(start)}
+	case '<':
+		if lx.peek(1) == '=' {
+			lx.pos += 2
+			return Token{Kind: Le, Span: lx.span(start)}
+		}
+		lx.pos++
+		return Token{Kind: Lt, Span: lx.span(start)}
+	case '>':
+		if lx.peek(1) == '=' {
+			lx.pos += 2
+			return Token{Kind: Ge, Span: lx.span(start)}
+		}
+		lx.pos++
+		return Token{Kind: Gt, Span: lx.span(start)}
+	case '?':
+		if lx.peek(1) == '?' {
+			lx.pos += 2
+			return Token{Kind: QuestionQ, Span: lx.span(start)}
+		}
+		lx.pos++
+		return Token{Kind: Question, Span: lx.span(start)}
+	case '@':
+		if lx.peek(1) == '@' {
+			lx.pos += 2
+			return Token{Kind: AtAt, Span: lx.span(start)}
+		}
+		lx.pos++
+		return Token{Kind: At, Span: lx.span(start)}
+	case '/':
+		// // and /* already handled as trivia in Task 6; this is division
+		lx.pos++
+		return Token{Kind: Slash, Span: lx.span(start)}
+	}
+
+	// Single-char punctuation with a fixed 1:1 mapping.
+	if k, ok := singleCharKind[c]; ok {
+		lx.pos++
+		return Token{Kind: k, Span: lx.span(start)}
+	}
+
+	// Unrecognized byte → Error, advance one byte to guarantee progress.
 	lx.pos++
-	return Token{Kind: Error, Span: source.Span{Offset: start, Len: 1}}
+	return Token{Kind: Error, Span: lx.span(start)}
+}
+
+var singleCharKind = map[byte]Kind{
+	'|': Pipe, '&': Amp, '+': Plus, '%': Percent, '^': Caret, '~': Tilde,
+	'#': Hash, '(': LParen, ')': RParen, '[': LBracket, ']': RBracket,
+	'{': LBrace, '}': RBrace, ',': Comma, '$': Dollar, ';': Semicolon,
 }
 
 func (lx *Lexer) scanWhitespace(start int) Token {
