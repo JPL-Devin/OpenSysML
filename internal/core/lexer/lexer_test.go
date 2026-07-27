@@ -252,3 +252,24 @@ func TestTrailingDot(t *testing.T) {
 		t.Fatalf("kinds = %v, want %v", kinds(toks), want)
 	}
 }
+
+func TestString(t *testing.T) {
+	toks := lex(t, `"hello world"`)
+	if !eq(kinds(toks), []Kind{String, EOF}) {
+		t.Fatalf("kinds = %v", kinds(toks))
+	}
+}
+
+func TestStringWithEscape(t *testing.T) {
+	toks := lex(t, `"a\"b\n"`)
+	if !eq(kinds(toks), []Kind{String, EOF}) {
+		t.Fatalf("kinds = %v, want String EOF", kinds(toks))
+	}
+}
+
+func TestUnterminatedString(t *testing.T) {
+	toks := lex(t, `"open`)
+	if toks[0].Kind != Error {
+		t.Fatalf("kind = %v, want Error", toks[0].Kind)
+	}
+}

@@ -42,6 +42,8 @@ func (lx *Lexer) Next() Token {
 		return lx.scanNumber(start)
 	case c == '.' && lx.peek(1) >= '0' && lx.peek(1) <= '9':
 		return lx.scanNumber(start) // leading-dot real: .5
+	case c == '"':
+		return lx.scanQuoted(start, '"', String)
 	}
 
 	// Not trivia: emit a single-byte Error for now; later tasks add cases
