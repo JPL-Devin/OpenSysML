@@ -1,0 +1,7 @@
+# Pilot reference implementation (separate upstream repo, not part of this module)
+/SysML-v2-Pilot-Implementation/
+
+# Go build artifacts
+/bin/
+*.test
+*.out
