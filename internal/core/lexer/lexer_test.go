@@ -105,3 +105,62 @@ func TestUnterminatedBlockComment(t *testing.T) {
 		t.Fatalf("span len = %d, want 7 (to EOF)", toks[0].Span.Len)
 	}
 }
+
+func TestSLNoteSpanIncludesTerminator(t *testing.T) {
+	// "// hi\n" is 6 bytes; SL_NOTE per grammar includes the trailing \n.
+	toks := lex(t, "// hi\n")
+	if toks[0].Kind != SLNote {
+		t.Fatalf("kind = %v, want SLNote", toks[0].Kind)
+	}
+	if toks[0].Span.Len != 6 {
+		t.Fatalf("SLNote span len = %d, want 6", toks[0].Span.Len)
+	}
+}
+
+func TestSLNoteNoTerminatorAtEOF(t *testing.T) {
+	// No trailing newline: span is just the "// hi" (5 bytes).
+	toks := lex(t, "// hi")
+	if toks[0].Kind != SLNote {
+		t.Fatalf("kind = %v, want SLNote", toks[0].Kind)
+	}
+	if toks[0].Span.Len != 5 {
+		t.Fatalf("SLNote span len = %d, want 5", toks[0].Span.Len)
+	}
+}
+
+func TestRegularCommentSpanLen(t *testing.T) {
+	toks := lex(t, "/* c */")
+	if toks[0].Span.Len != 7 {
+		t.Fatalf("RegularComment span len = %d, want 7", toks[0].Span.Len)
+	}
+}
+
+func TestMLNoteSpanLen(t *testing.T) {
+	toks := lex(t, "//* note */")
+	if toks[0].Kind != MLNote {
+		t.Fatalf("kind = %v, want MLNote", toks[0].Kind)
+	}
+	if toks[0].Span.Len != 11 {
+		t.Fatalf("MLNote span len = %d, want 11", toks[0].Span.Len)
+	}
+}
+
+func TestUnterminatedMLNote(t *testing.T) {
+	toks := lex(t, "//* open")
+	if toks[0].Kind != MLNote {
+		t.Fatalf("kind = %v, want MLNote", toks[0].Kind)
+	}
+	if toks[0].Span.Len != 8 {
+		t.Fatalf("MLNote span len = %d, want 8 (to EOF)", toks[0].Span.Len)
+	}
+}
+
+func TestCRLFWhitespaceIsOneToken(t *testing.T) {
+	toks := lex(t, "\r\n\r\n")
+	if !eq(kinds(toks), []Kind{Whitespace, EOF}) {
+		t.Fatalf("kinds = %v, want Whitespace EOF", kinds(toks))
+	}
+	if toks[0].Span.Len != 4 {
+		t.Fatalf("ws span len = %d, want 4", toks[0].Span.Len)
+	}
+}

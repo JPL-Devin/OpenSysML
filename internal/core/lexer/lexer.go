@@ -58,7 +58,8 @@ func (lx *Lexer) scanSLNote(start int) Token {
 	for lx.pos < len(lx.src) && lx.src[lx.pos] != '\n' && lx.src[lx.pos] != '\r' {
 		lx.pos++
 	}
-	// include the line terminator (\r?\n) in the note span, per SL_NOTE rule
+	// SL_NOTE includes the trailing line terminator: KerMLExpressions.xtext
+	// SL_NOTE: '//' (...)? ('\r'? '\n')?  -- so \r?\n is part of the token span.
 	if lx.pos < len(lx.src) && lx.src[lx.pos] == '\r' {
 		lx.pos++
 	}
