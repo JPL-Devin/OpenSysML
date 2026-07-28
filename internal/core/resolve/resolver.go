@@ -2,6 +2,7 @@ package resolve
 
 import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -45,6 +46,34 @@ func (r *Resolver) ResolveQualified(scope *symbols.Scope, qn *ast.QualifiedName)
 // doResolveQualified is the uncached qualified-name resolution.
 func (r *Resolver) doResolveQualified(scope *symbols.Scope, qn *ast.QualifiedName) resolution {
 	return r.walkQualified(scope, qn)
+}
+
+// ResolveName resolves a single-segment (unqualified) reference from the given
+// scope. The at node keys the memo table.
+func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (*symbols.Symbol, bool) {
+	if at != nil {
+		if res, done := r.memo[at]; done {
+			return res.sym, res.ok
+		}
+	}
+	res := r.walkUnqualified(scope, name)
+	if at != nil {
+		r.memo[at] = res
+	}
+	if !res.ok {
+		r.Diagnostics = append(r.Diagnostics, Diagnostic{
+			Span:    spanOf(at),
+			Message: "unresolved reference: " + name,
+		})
+	}
+	return res.sym, res.ok
+}
+
+func spanOf(n ast.Node) source.Span {
+	if n == nil {
+		return source.Span{}
+	}
+	return n.Span()
 }
 
 // qnText renders a qualified name for diagnostics (segments joined by "::",
