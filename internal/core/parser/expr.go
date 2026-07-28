@@ -188,9 +188,78 @@ func (p *Parser) expect2Keyword(kw string) bool {
 	return false
 }
 
-// parsePrimary parses a base expression (Task 14 extends it with postfixes).
+// parsePrimary parses a base expression and then any chain of postfix
+// operators (feature chain, index, invocation, collect, select).
 func (p *Parser) parsePrimary() ast.Node {
-	return p.parseBase()
+	start := p.peek().Span.Offset
+	expr := p.parseBase()
+	return p.parsePostfixes(start, expr)
+}
+
+// parsePostfixes applies zero or more postfix operators to expr.
+func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
+	for {
+		switch {
+		case p.at(lexer.Dot):
+			// `.member` (chain) or `.{ body }` (collect).
+			p.advance() // .
+			if p.at(lexer.LBrace) {
+				body := p.parseBodyExpr(p.peek().Span.Offset)
+				c := &ast.CollectExpr{Operand: expr, Body: body}
+				c.NodeSpan = p.spanFrom(start)
+				expr = c
+				continue
+			}
+			member := p.parseQualifiedName()
+			fc := &ast.FeatureChainExpr{Operand: expr, Member: member}
+			fc.NodeSpan = p.spanFrom(start)
+			expr = fc
+
+		case p.at(lexer.DotQuestion):
+			// `.?{ body }` (select).
+			p.advance() // .?
+			body := p.parseBodyExpr(p.peek().Span.Offset)
+			s := &ast.SelectExpr{Operand: expr, Body: body}
+			s.NodeSpan = p.spanFrom(start)
+			expr = s
+
+		case p.at(lexer.Hash):
+			// `#( index )` sequence index.
+			p.advance() // #
+			p.expect(lexer.LParen, "expected '(' after '#'")
+			idx := p.ParseExpression()
+			p.expect(lexer.RParen, "expected ')'")
+			ix := &ast.IndexExpr{Operand: expr, Index: idx}
+			ix.NodeSpan = p.spanFrom(start)
+			expr = ix
+
+		case p.at(lexer.LBracket):
+			// `[ index ]` operator index.
+			p.advance() // [
+			idx := p.ParseExpression()
+			p.expect(lexer.RBracket, "expected ']'")
+			ix := &ast.IndexExpr{Operand: expr, Index: idx}
+			ix.NodeSpan = p.spanFrom(start)
+			expr = ix
+
+		case p.at(lexer.Arrow):
+			// `-> Type ( args )` invocation with receiver.
+			p.advance() // ->
+			typ := p.parseQualifiedName()
+			inv := &ast.InvocationExpr{Operand: expr, Type: typ}
+			if p.at(lexer.LParen) {
+				inv.Args, inv.NamedArgs = p.parseArgList()
+			} else if p.at(lexer.LBrace) {
+				// Function reference given as a body: store as a single arg.
+				inv.Args = []ast.Node{p.parseBodyExpr(p.peek().Span.Offset)}
+			}
+			inv.NodeSpan = p.spanFrom(start)
+			expr = inv
+
+		default:
+			return expr
+		}
+	}
 }
 
 // parseBase parses a leaf/base expression.

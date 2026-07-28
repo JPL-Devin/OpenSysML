@@ -206,3 +206,76 @@ func TestParseInfinity(t *testing.T) {
 		t.Fatalf("expected infinity literal")
 	}
 }
+
+func TestPostfixFeatureChain(t *testing.T) {
+	e := exprOf(t, "a.b").(*ast.FeatureChainExpr)
+	if e.Member == nil || e.Member.Parts[0].Text != "b" {
+		t.Fatalf("member = %+v", e.Member)
+	}
+	if _, ok := e.Operand.(*ast.FeatureReference); !ok {
+		t.Fatalf("operand = %#v", e.Operand)
+	}
+}
+
+func TestPostfixChainDeep(t *testing.T) {
+	// a.b.c  => (chain (chain a b) c)
+	e := exprOf(t, "a.b.c").(*ast.FeatureChainExpr)
+	if e.Member.Parts[0].Text != "c" {
+		t.Fatalf("outer member = %+v", e.Member)
+	}
+	if _, ok := e.Operand.(*ast.FeatureChainExpr); !ok {
+		t.Fatalf("inner = %#v", e.Operand)
+	}
+}
+
+func TestPostfixIndexHash(t *testing.T) {
+	e := exprOf(t, "a#(0)").(*ast.IndexExpr)
+	if _, ok := e.Index.(*ast.LiteralInteger); !ok {
+		t.Fatalf("index = %#v", e.Index)
+	}
+}
+
+func TestPostfixIndexBracket(t *testing.T) {
+	e := exprOf(t, "a[1]").(*ast.IndexExpr)
+	if _, ok := e.Index.(*ast.LiteralInteger); !ok {
+		t.Fatalf("index = %#v", e.Index)
+	}
+}
+
+func TestPostfixInvocationArrow(t *testing.T) {
+	e := exprOf(t, "coll->select(x)").(*ast.InvocationExpr)
+	if e.Type == nil || e.Type.Parts[0].Text != "select" {
+		t.Fatalf("type = %+v", e.Type)
+	}
+	if e.Operand == nil {
+		t.Fatalf("expected receiver operand")
+	}
+	if len(e.Args) != 1 {
+		t.Fatalf("args = %+v", e.Args)
+	}
+}
+
+func TestPostfixCollect(t *testing.T) {
+	e := exprOf(t, "a.{ x }").(*ast.CollectExpr)
+	if _, ok := e.Body.(*ast.BodyExpr); !ok {
+		t.Fatalf("body = %#v", e.Body)
+	}
+}
+
+func TestPostfixSelect(t *testing.T) {
+	e := exprOf(t, "a.?{ x }").(*ast.SelectExpr)
+	if _, ok := e.Body.(*ast.BodyExpr); !ok {
+		t.Fatalf("body = %#v", e.Body)
+	}
+}
+
+func TestPostfixArrowThenChain(t *testing.T) {
+	// coll->size().x  => chain( invocation(coll,size), x )
+	e := exprOf(t, "coll->size().x").(*ast.FeatureChainExpr)
+	if e.Member.Parts[0].Text != "x" {
+		t.Fatalf("member = %+v", e.Member)
+	}
+	if _, ok := e.Operand.(*ast.InvocationExpr); !ok {
+		t.Fatalf("operand = %#v", e.Operand)
+	}
+}
