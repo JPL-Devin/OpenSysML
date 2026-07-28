@@ -29,20 +29,20 @@ func (p *Parser) parseConditional() ast.Node {
 
 // Precedence levels (higher binds tighter). Conditional is handled separately.
 const (
-	precNullCoalesce = iota + 1 // ??
-	precImplies                 // implies
-	precOr                      // | or
-	precXor                     // xor
-	precAnd                     // & and
-	precEquality                // == != === !==
-	precClassify                // hastype istype @ @@ as meta
-	precRelational              // < > <= >=
-	precRange                   // ..
-	precAdditive                // + -
-	precMultiplicative          // * / %
-	precExponent                // ** ^  (right-assoc)
-	precUnary                   // prefix + - ~ not
-	precExtent                  // all
+	precNullCoalesce   = iota + 1 // ??
+	precImplies                   // implies
+	precOr                        // | or
+	precXor                       // xor
+	precAnd                       // & and
+	precEquality                  // == != === !==
+	precClassify                  // hastype istype @ @@ as meta
+	precRelational                // < > <= >=
+	precRange                     // ..
+	precAdditive                  // + -
+	precMultiplicative            // * / %
+	precExponent                  // ** ^  (right-assoc)
+	precUnary                     // prefix + - ~ not
+	precExtent                    // all
 )
 
 type binOp struct {

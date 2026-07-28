@@ -3,7 +3,7 @@
     (Package name="P" library=false standard=false
       (Import visibility="public" all=false kind=namespace recursive=false imported="A::B")
       (Import visibility="private" all=false kind=membership recursive=false imported="C::D")
-      (Import visibility="default" all=false kind=namespace recursive=true imported="E")
+      (Import visibility="default" all=false kind=membership recursive=true imported="E")
       (Membership visibility="default"
         (Namespace name="N"
           (Alias visibility="default" name="X" for="P::Q")))

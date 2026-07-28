@@ -37,9 +37,9 @@ type NodeBase struct {
 	trailing []Trivia
 }
 
-func (b *NodeBase) Span() source.Span        { return b.NodeSpan }
-func (b *NodeBase) LeadingTrivia() []Trivia  { return b.leading }
-func (b *NodeBase) TrailingTrivia() []Trivia { return b.trailing }
+func (b *NodeBase) Span() source.Span            { return b.NodeSpan }
+func (b *NodeBase) LeadingTrivia() []Trivia      { return b.leading }
+func (b *NodeBase) TrailingTrivia() []Trivia     { return b.trailing }
 func (b *NodeBase) SetLeadingTrivia(t []Trivia)  { b.leading = t }
 func (b *NodeBase) SetTrailingTrivia(t []Trivia) { b.trailing = t }
 

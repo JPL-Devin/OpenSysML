@@ -324,8 +324,9 @@ func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
 		Imported:   qn,
 	}
 
-	// Wildcard tail: `:: *` (namespace) then optional `:: **` (recursive),
-	// or `:: **` directly.
+	// Wildcard tail (per KerML.xtext ImportedMembership/ImportedNamespace):
+	//   `:: *`          -> namespace import (may then take `:: **` recursive)
+	//   `:: **` directly -> recursive MEMBERSHIP import (no `::*`)
 	if p.at(lexer.ColonColon) {
 		nk := p.peekN(1).Kind
 		if nk == lexer.Star {
@@ -340,8 +341,7 @@ func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
 		} else if nk == lexer.StarStar {
 			p.advance() // ::
 			p.advance() // **
-			imp.Kind = ast.ImportNamespace
-			imp.IsRecursive = true
+			imp.IsRecursive = true // recursive membership import; Kind stays ImportMembership
 		}
 	}
 

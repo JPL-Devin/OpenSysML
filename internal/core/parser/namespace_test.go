@@ -237,8 +237,9 @@ func TestParseNamespaceImportStar(t *testing.T) {
 }
 
 func TestParseRecursiveImport(t *testing.T) {
+	// `A::B::**` (no `::*`) is a recursive MEMBERSHIP import per KerML.xtext.
 	imp := importOf(t, "import A::B::**;")
-	if imp.Kind != ast.ImportNamespace || !imp.IsRecursive {
+	if imp.Kind != ast.ImportMembership || !imp.IsRecursive {
 		t.Fatalf("imp = %+v", imp)
 	}
 }
