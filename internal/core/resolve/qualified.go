@@ -11,13 +11,19 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 		return resolution{nil, false}
 	}
 
-	// Resolve the first segment.
+	// Resolve the first segment. A non-global name first searches the enclosing
+	// scope chain; a global ($::) name starts at the document root. When the
+	// local scope tree has no match, fall back to the global qualified-name
+	// index so top-level names declared in other documents resolve.
 	first := qn.Parts[0].Text
 	var cur *symbols.Symbol
 	if qn.Global {
 		cur = r.lookupInRoot(scope, first)
 	} else {
 		cur = r.lookupOutward(scope, first)
+	}
+	if cur == nil {
+		cur = r.lookupGlobalTop(first)
 	}
 	if cur == nil {
 		r.unresolved(qn)
@@ -61,6 +67,19 @@ func (r *Resolver) lookupOutward(scope *symbols.Scope, name string) *symbols.Sym
 		if sym, ok := s.LookupLocal(name); ok {
 			return sym
 		}
+	}
+	return nil
+}
+
+// lookupGlobalTop finds a top-level (single-segment FQN) symbol in the global
+// index. Returns nil unless exactly one match (multiple = ambiguous, handled by
+// the caller reporting unresolved rather than picking arbitrarily).
+func (r *Resolver) lookupGlobalTop(name string) *symbols.Symbol {
+	if r.idx == nil {
+		return nil
+	}
+	if syms := r.idx.LookupQualified(name); len(syms) == 1 {
+		return syms[0]
 	}
 	return nil
 }
