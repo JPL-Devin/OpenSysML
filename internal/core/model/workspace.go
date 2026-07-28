@@ -3,6 +3,7 @@ package model
 import (
 	"sync"
 
+	"github.com/Open-MBEE/Systemica/internal/core/passes"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -11,22 +12,22 @@ import (
 // write lock (and, in Task 5, through a single owner goroutine); reads take a
 // read lock.
 type Workspace struct {
-	mu       sync.RWMutex
-	docs     map[string]*Document
-	onDisk   map[string][]byte // last-known on-disk bytes, used when a doc is not open
-	open     map[string]bool   // names with an authoritative open buffer
-	index    *symbols.Index
-	diagChan map[string]bool // reserved for Task 4 cache; unused here
+	mu        sync.RWMutex
+	docs      map[string]*Document
+	onDisk    map[string][]byte // last-known on-disk bytes, used when a doc is not open
+	open      map[string]bool   // names with an authoritative open buffer
+	index     *symbols.Index
+	diagCache map[string][]passes.Diagnostic
 }
 
 // NewWorkspace returns an empty workspace with a fresh index.
 func NewWorkspace() *Workspace {
 	return &Workspace{
-		docs:     map[string]*Document{},
-		onDisk:   map[string][]byte{},
-		open:     map[string]bool{},
-		index:    symbols.NewIndex(),
-		diagChan: map[string]bool{},
+		docs:      map[string]*Document{},
+		onDisk:    map[string][]byte{},
+		open:      map[string]bool{},
+		index:     symbols.NewIndex(),
+		diagCache: map[string][]passes.Diagnostic{},
 	}
 }
 
@@ -95,8 +96,39 @@ func (w *Workspace) removeLocked(name string) {
 	w.invalidateLocked()
 }
 
-// invalidateLocked is the cache-invalidation hook; filled in Task 4.
-func (w *Workspace) invalidateLocked() {}
+// invalidateLocked clears all cached diagnostics. Caller holds the write lock.
+func (w *Workspace) invalidateLocked() {
+	// Conservative: any change clears all cached diagnostics. Correctness first;
+	// fine-grained cross-document dependency tracking is a later optimization.
+	w.diagCache = map[string][]passes.Diagnostic{}
+}
+
+// Diagnostics returns the analysis diagnostics for name, computing them lazily
+// (and caching) on first request after a change. Returns nil for unknown docs.
+func (w *Workspace) Diagnostics(name string) []passes.Diagnostic {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if cached, ok := w.diagCache[name]; ok {
+		return cached
+	}
+	doc := w.docs[name]
+	if doc == nil {
+		return nil
+	}
+	parseDiags := make([]passes.Diagnostic, len(doc.ParseDiagnostics))
+	for i, pd := range doc.ParseDiagnostics {
+		parseDiags[i] = passes.Diagnostic{
+			Severity: passes.SeverityError,
+			Span:     pd.Span,
+			Message:  pd.Message,
+			Code:     "syntax",
+			Source:   "syntax",
+		}
+	}
+	diags := passes.Analyze(name, doc.AST, parseDiags, w.index)
+	w.diagCache[name] = diags
+	return diags
+}
 
 // Index returns the global symbol index. Callers must not mutate it directly.
 func (w *Workspace) Index() *symbols.Index {
