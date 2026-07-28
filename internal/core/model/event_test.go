@@ -12,7 +12,7 @@ func TestEventLoopAppliesEvents(t *testing.T) {
 	loop.Post(ChangeEvent{Kind: EventOpen, Name: "a.sysml", Content: []byte("package P { namespace N; }"), Version: 1, ack: done})
 	<-done
 
-	if syms := ws.Index().LookupQualified("P::N"); len(syms) != 1 {
+	if syms := ws.LookupQualified("P::N"); len(syms) != 1 {
 		t.Fatalf("P::N = %d, want 1 after event applied", len(syms))
 	}
 }

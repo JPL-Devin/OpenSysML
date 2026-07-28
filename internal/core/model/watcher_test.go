@@ -36,7 +36,7 @@ func TestWatcherPostsModifyEvent(t *testing.T) {
 
 	deadline := time.After(2 * time.Second)
 	for {
-		if syms := ws.Index().LookupQualified("P::M"); len(syms) == 1 {
+		if syms := ws.LookupQualified("P::M"); len(syms) == 1 {
 			return // converged
 		}
 		select {
@@ -78,10 +78,10 @@ func TestWatcherIgnoresOpenDocuments(t *testing.T) {
 	}
 	time.Sleep(100 * time.Millisecond) // allow any (wrongly) posted event to apply
 
-	if syms := ws.Index().LookupQualified("P::Buffered"); len(syms) != 1 {
+	if syms := ws.LookupQualified("P::Buffered"); len(syms) != 1 {
 		t.Fatalf("P::Buffered = %d, want 1 (buffer must stay authoritative)", len(syms))
 	}
-	if syms := ws.Index().LookupQualified("P::Changed"); len(syms) != 0 {
+	if syms := ws.LookupQualified("P::Changed"); len(syms) != 0 {
 		t.Fatalf("P::Changed = %d, want 0 (disk event must be ignored while open)", len(syms))
 	}
 }

@@ -130,11 +130,20 @@ func (w *Workspace) Diagnostics(name string) []passes.Diagnostic {
 	return diags
 }
 
-// Index returns the global symbol index. Callers must not mutate it directly.
-func (w *Workspace) Index() *symbols.Index {
+// LookupQualified resolves a fully-qualified name against the global index under
+// the read lock and returns a copy of the matching symbols, so callers never
+// touch the shared index concurrently with a reindex. This is the safe read path
+// for consumers (LSP/REPL); the raw index is intentionally not exposed.
+func (w *Workspace) LookupQualified(fqn string) []*symbols.Symbol {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	return w.index
+	syms := w.index.LookupQualified(fqn)
+	if len(syms) == 0 {
+		return nil
+	}
+	out := make([]*symbols.Symbol, len(syms))
+	copy(out, syms)
+	return out
 }
 
 // Document returns the current parsed document for name, or nil.

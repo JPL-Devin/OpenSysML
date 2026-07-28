@@ -54,10 +54,19 @@ func NewEventLoop(ws *Workspace) *EventLoop {
 	}
 }
 
-// Post enqueues an event for the owner goroutine.
-func (l *EventLoop) Post(ev ChangeEvent) { l.events <- ev }
+// Post enqueues an event for the owner goroutine. If the loop has been closed,
+// Post returns without blocking (the event is dropped) so late producers such as
+// the fsnotify watcher never hang on a stopped loop.
+func (l *EventLoop) Post(ev ChangeEvent) {
+	select {
+	case l.events <- ev:
+	case <-l.done:
+	}
+}
 
-// Close stops the owner goroutine after draining nothing further is posted.
+// Close stops the owner goroutine. Events still buffered when Close is observed
+// are not guaranteed to be applied; callers that need delivery should drain
+// before closing.
 func (l *EventLoop) Close() { close(l.done) }
 
 // Run is the owner loop; run it in its own goroutine. It is the sole writer to

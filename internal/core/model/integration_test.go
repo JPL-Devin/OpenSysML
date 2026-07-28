@@ -5,7 +5,7 @@ import "testing"
 // hasSym reports whether the workspace index resolves fqn to exactly one symbol.
 func hasSym(t *testing.T, ws *Workspace, fqn string) bool {
 	t.Helper()
-	return len(ws.Index().LookupQualified(fqn)) == 1
+	return len(ws.LookupQualified(fqn)) == 1
 }
 
 func TestWorkspaceConvergesAcrossChangeSequence(t *testing.T) {
