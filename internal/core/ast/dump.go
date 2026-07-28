@@ -98,6 +98,48 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		return
 	case *ErrorNode:
 		fmt.Fprintf(b, `(ErrorNode message=%q)`, v.Message)
+	case *RootNamespace:
+		b.WriteString(`(RootNamespace`)
+		writeChildren(b, depth, v.Members)
+		return
+	case *Membership:
+		fmt.Fprintf(b, `(Membership visibility=%q`, visibilityString(v.Visibility))
+		writeChildren(b, depth, []Node{v.Member})
+		return
+	case *Package:
+		fmt.Fprintf(b, `(Package name=%q library=%t standard=%t`, identName(v.Ident), v.IsLibrary, v.IsStandard)
+		writeChildren(b, depth, prefixesAnd(v.Prefixes, v.Members))
+		return
+	case *Namespace:
+		fmt.Fprintf(b, `(Namespace name=%q`, identName(v.Ident))
+		writeChildren(b, depth, prefixesAnd(v.Prefixes, v.Members))
+		return
+	case *Import:
+		fmt.Fprintf(b, `(Import visibility=%q all=%t kind=%s recursive=%t imported=%q`,
+			visibilityString(v.Visibility), v.IsAll, importKindString(v.Kind), v.IsRecursive, qnString(v.Imported))
+		writeChildren(b, depth, v.Body)
+		return
+	case *Alias:
+		fmt.Fprintf(b, `(Alias visibility=%q name=%q for=%q`,
+			visibilityString(v.Visibility), identName(v.Ident), qnString(v.For))
+		writeChildren(b, depth, v.Body)
+		return
+	case *Dependency:
+		fmt.Fprintf(b, `(Dependency clients=%q suppliers=%q`, qnList(v.Clients), qnList(v.Suppliers))
+		writeChildren(b, depth, prefixesAnd(v.Prefixes, v.Body))
+		return
+	case *Comment:
+		fmt.Fprintf(b, `(Comment about=%q locale=%q)`, qnList(v.About), v.Locale)
+	case *Documentation:
+		fmt.Fprintf(b, `(Documentation locale=%q)`, v.Locale)
+	case *TextualRepresentation:
+		fmt.Fprintf(b, `(TextualRepresentation language=%q)`, v.Language)
+	case *PrefixMetadata:
+		fmt.Fprintf(b, `(PrefixMetadata type=%q)`, qnString(v.Type))
+	case *FilterMember:
+		b.WriteString(`(FilterMember`)
+		writeChildren(b, depth, []Node{v.Condition})
+		return
 	default:
 		fmt.Fprintf(b, `(%T)`, n)
 	}
@@ -132,5 +174,53 @@ func invocationChildren(v *InvocationExpr) []Node {
 		kids = append(kids, v.Operand)
 	}
 	kids = append(kids, v.Args...)
+	return kids
+}
+
+func visibilityString(v Visibility) string {
+	switch v {
+	case VisibilityPublic:
+		return "public"
+	case VisibilityPrivate:
+		return "private"
+	case VisibilityProtected:
+		return "protected"
+	default:
+		return "default"
+	}
+}
+
+func importKindString(k ImportKind) string {
+	if k == ImportNamespace {
+		return "namespace"
+	}
+	return "membership"
+}
+
+func identName(id Identification) string {
+	if id.ShortName != "" && id.Name != "" {
+		return "<" + id.ShortName + "> " + id.Name
+	}
+	if id.ShortName != "" {
+		return "<" + id.ShortName + ">"
+	}
+	return id.Name
+}
+
+func qnList(qns []*QualifiedName) string {
+	parts := make([]string, len(qns))
+	for i, qn := range qns {
+		parts[i] = qnString(qn)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// prefixesAnd renders prefix-metadata nodes (as children) followed by members.
+func prefixesAnd(prefixes []*PrefixMetadata, members []Node) []Node {
+	kids := make([]Node, 0, len(prefixes)+len(members))
+	for _, pm := range prefixes {
+		kids = append(kids, pm)
+	}
+	kids = append(kids, members...)
 	return kids
 }

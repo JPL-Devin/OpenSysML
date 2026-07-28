@@ -1,0 +1,31 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="E" library=false standard=false
+      (Membership visibility="default"
+        (FilterMember
+          (OperatorExpr operator="+"
+            (LiteralInteger value="1")
+            (OperatorExpr operator="*"
+              (LiteralInteger value="2")
+              (LiteralInteger value="3")))))
+      (Membership visibility="default"
+        (FilterMember
+          (FeatureChainExpr member="c"
+            (FeatureChainExpr member="b"
+              (FeatureReference name="a")))))
+      (Membership visibility="default"
+        (FilterMember
+          (InvocationExpr type="select"
+            (FeatureReference name="coll")
+            (FeatureReference name="x"))))
+      (Membership visibility="default"
+        (FilterMember
+          (OperatorExpr operator="if"
+            (FeatureReference name="c")
+            (FeatureReference name="a")
+            (FeatureReference name="b"))))
+      (Membership visibility="default"
+        (FilterMember
+          (OperatorExpr operator="as"
+            (FeatureReference name="x")
+            (FeatureReference name="Integer")))))))

@@ -140,3 +140,9 @@ type TextualRepresentation struct {
 	Language string
 	BodySpan source.Span
 }
+
+// FilterMember is an `filter <expression> ;` element filter.
+type FilterMember struct {
+	NodeBase
+	Condition Node
+}

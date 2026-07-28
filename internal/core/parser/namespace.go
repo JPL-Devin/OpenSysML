@@ -152,6 +152,8 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		return p.parseDocumentation(start)
 	case p.atKeyword("rep"), p.atKeyword("language"):
 		return p.parseTextualRepresentation(start)
+	case p.atKeyword("filter"):
+		return p.parseFilter(start)
 	case p.at(lexer.Hash):
 		// Look past `# QualifiedName ...` prefixes for the declaration keyword.
 		if p.leadingPrefixIsPackage() {
@@ -503,4 +505,14 @@ func (p *Parser) leadingPrefixIsPackage() bool {
 func (p *Parser) leadingPrefixIsNamespace() bool {
 	t := p.peekN(p.prefixLookahead())
 	return t.Kind == lexer.Keyword && t.KeywordID == "namespace"
+}
+
+// parseFilter parses `filter OwnedExpression ;` (ElementFilterMember).
+func (p *Parser) parseFilter(start int) ast.Node {
+	p.advance() // filter
+	expr := p.ParseExpression()
+	p.expect(lexer.Semicolon, "expected ';' after filter expression")
+	f := &ast.FilterMember{Condition: expr}
+	f.NodeSpan = p.spanFrom(start)
+	return f
 }
