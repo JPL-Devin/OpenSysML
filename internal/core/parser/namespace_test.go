@@ -322,3 +322,79 @@ func TestParseDependencyNamed(t *testing.T) {
 		t.Fatalf("clients = %+v", dep.Clients)
 	}
 }
+
+func TestParseComment(t *testing.T) {
+	p := newParser("comment C /* hello */")
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("diagnostics = %+v", p.Diagnostics)
+	}
+	m := root.Members[0].(*ast.Membership)
+	c, ok := m.Member.(*ast.Comment)
+	if !ok {
+		t.Fatalf("member type = %T", m.Member)
+	}
+	if c.Ident.Name != "C" {
+		t.Fatalf("ident name = %q", c.Ident.Name)
+	}
+	if got := p.src.Text(c.BodySpan); got != "/* hello */" {
+		t.Fatalf("body = %q", got)
+	}
+}
+
+func TestParseCommentAbout(t *testing.T) {
+	p := newParser("comment about A, B /* x */")
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("diagnostics = %+v", p.Diagnostics)
+	}
+	c := root.Members[0].(*ast.Membership).Member.(*ast.Comment)
+	if len(c.About) != 2 {
+		t.Fatalf("about = %+v", c.About)
+	}
+}
+
+func TestParseDocumentation(t *testing.T) {
+	p := newParser("doc D /* the docs */")
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("diagnostics = %+v", p.Diagnostics)
+	}
+	d := root.Members[0].(*ast.Membership).Member.(*ast.Documentation)
+	if d.Ident.Name != "D" {
+		t.Fatalf("ident name = %q", d.Ident.Name)
+	}
+	if got := p.src.Text(d.BodySpan); got != "/* the docs */" {
+		t.Fatalf("body = %q", got)
+	}
+}
+
+func TestParseTextualRepresentation(t *testing.T) {
+	p := newParser(`rep R language "html" /* <b>hi</b> */`)
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("diagnostics = %+v", p.Diagnostics)
+	}
+	r := root.Members[0].(*ast.Membership).Member.(*ast.TextualRepresentation)
+	if r.Ident.Name != "R" {
+		t.Fatalf("ident name = %q", r.Ident.Name)
+	}
+	if r.Language != `"html"` {
+		t.Fatalf("language = %q", r.Language)
+	}
+	if got := p.src.Text(r.BodySpan); got != "/* <b>hi</b> */" {
+		t.Fatalf("body = %q", got)
+	}
+}
+
+func TestParseTextualRepresentationNoRep(t *testing.T) {
+	p := newParser(`language "text" /* body */`)
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("diagnostics = %+v", p.Diagnostics)
+	}
+	r := root.Members[0].(*ast.Membership).Member.(*ast.TextualRepresentation)
+	if r.Language != `"text"` {
+		t.Fatalf("language = %q", r.Language)
+	}
+}

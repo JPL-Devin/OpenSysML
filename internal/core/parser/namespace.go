@@ -3,6 +3,7 @@ package parser
 import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 // atName reports whether the current token can begin a name segment.
@@ -207,15 +208,68 @@ func (p *Parser) errorNodeSkip(start int, msg string) *ast.ErrorNode {
 	return en
 }
 
-// Temporary stubs (replaced in Tasks 8-11).
+// expectCommentBody consumes a trailing /* */ regular comment and returns its
+// span. It peeks first to force any trailing comment into the pending slot.
+func (p *Parser) expectCommentBody(start int) source.Span {
+	p.peek()
+	if sp, ok := p.takePendingComment(); ok {
+		return sp
+	}
+	p.error(p.peek().Span, "expected a /* ... */ comment body")
+	return p.spanFrom(start)
+}
+
 func (p *Parser) parseComment(start int) ast.Node {
-	return p.errorNodeSkip(start, "comment: not yet implemented")
+	p.advance() // 'comment'
+	c := &ast.Comment{}
+	if p.atName() && !p.atKeyword("about") && !p.atKeyword("locale") {
+		c.Ident = p.parseIdentification()
+	}
+	if p.acceptKeyword("about") {
+		c.About = p.parseQualifiedNameList()
+	}
+	if p.acceptKeyword("locale") {
+		if tok, ok := p.expect(lexer.String, "expected locale string"); ok {
+			c.Locale = p.src.Text(tok.Span)
+		}
+	}
+	c.BodySpan = p.expectCommentBody(start)
+	c.NodeSpan = p.spanFrom(start)
+	return c
 }
+
 func (p *Parser) parseDocumentation(start int) ast.Node {
-	return p.errorNodeSkip(start, "doc: not yet implemented")
+	p.advance() // 'doc'
+	d := &ast.Documentation{}
+	if p.atName() && !p.atKeyword("locale") {
+		d.Ident = p.parseIdentification()
+	}
+	if p.acceptKeyword("locale") {
+		if tok, ok := p.expect(lexer.String, "expected locale string"); ok {
+			d.Locale = p.src.Text(tok.Span)
+		}
+	}
+	d.BodySpan = p.expectCommentBody(start)
+	d.NodeSpan = p.spanFrom(start)
+	return d
 }
+
 func (p *Parser) parseTextualRepresentation(start int) ast.Node {
-	return p.errorNodeSkip(start, "rep: not yet implemented")
+	r := &ast.TextualRepresentation{}
+	if p.acceptKeyword("rep") {
+		if p.atName() && !p.atKeyword("language") {
+			r.Ident = p.parseIdentification()
+		}
+	}
+	if !p.acceptKeyword("language") {
+		return p.errorNodeSkip(start, "expected 'language'")
+	}
+	if tok, ok := p.expect(lexer.String, "expected representation language string"); ok {
+		r.Language = p.src.Text(tok.Span)
+	}
+	r.BodySpan = p.expectCommentBody(start)
+	r.NodeSpan = p.spanFrom(start)
+	return r
 }
 // parseImport parses `import [all] QualifiedName [::*|::**] body`.
 // Visibility has already been consumed by the caller.

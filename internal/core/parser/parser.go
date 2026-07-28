@@ -15,6 +15,9 @@ type Parser struct {
 	buf         []lexer.Token // lookahead ring of non-trivia tokens
 	triv        []ast.Trivia  // trivia pending attachment to the next node
 	Diagnostics []Diagnostic
+
+	pendingComment    source.Span // span of the most recent /* */ regular comment
+	hasPendingComment bool
 }
 
 // New creates a Parser for the given source file.
@@ -29,6 +32,10 @@ func (p *Parser) fill(n int) {
 		tok := p.lx.Next()
 		for tok.IsTrivia() || tok.Kind == lexer.RegularComment {
 			p.triv = append(p.triv, triviaOf(tok))
+			if tok.Kind == lexer.RegularComment {
+				p.pendingComment = tok.Span
+				p.hasPendingComment = true
+			}
 			if tok.Kind == lexer.EOF {
 				break
 			}
@@ -128,6 +135,16 @@ func (p *Parser) takeTrivia() []ast.Trivia {
 	t := p.triv
 	p.triv = nil
 	return t
+}
+
+// takePendingComment returns and clears the most recent regular-comment span.
+func (p *Parser) takePendingComment() (source.Span, bool) {
+	if !p.hasPendingComment {
+		return source.Span{}, false
+	}
+	sp := p.pendingComment
+	p.hasPendingComment = false
+	return sp, true
 }
 
 // spanFrom builds a span from a start offset to the end of the previously
