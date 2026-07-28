@@ -42,14 +42,9 @@ func (r *Resolver) ResolveQualified(scope *symbols.Scope, qn *ast.QualifiedName)
 	return res.sym, res.ok
 }
 
-// doResolveQualified is the uncached qualified-name resolution. Task 6 replaces
-// the body; the skeleton always fails with an unresolved diagnostic.
+// doResolveQualified is the uncached qualified-name resolution.
 func (r *Resolver) doResolveQualified(scope *symbols.Scope, qn *ast.QualifiedName) resolution {
-	r.Diagnostics = append(r.Diagnostics, Diagnostic{
-		Span:    qn.Span(),
-		Message: "unresolved reference: " + qnText(qn),
-	})
-	return resolution{nil, false}
+	return r.walkQualified(scope, qn)
 }
 
 // qnText renders a qualified name for diagnostics (segments joined by "::",

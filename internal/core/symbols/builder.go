@@ -45,30 +45,30 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility) {
 	switch d := decl.(type) {
 	case *ast.Package:
 		child := NewScope(scope, d)
-		sym := newSymbol(d.Ident, SymbolPackage, d, vis, child)
+		sym := newSymbol(d.Ident, SymbolPackage, d, vis, child, scope)
 		defineIdent(scope, d.Ident, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
 	case *ast.Namespace:
 		child := NewScope(scope, d)
-		sym := newSymbol(d.Ident, SymbolNamespace, d, vis, child)
+		sym := newSymbol(d.Ident, SymbolNamespace, d, vis, child, scope)
 		defineIdent(scope, d.Ident, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
 	case *ast.Alias:
-		sym := newSymbol(d.Ident, SymbolAlias, d, vis, scope)
+		sym := newSymbol(d.Ident, SymbolAlias, d, vis, nil, scope)
 		defineIdent(scope, d.Ident, sym)
 	case *ast.Dependency:
-		sym := newSymbol(d.Ident, SymbolDependency, d, vis, scope)
+		sym := newSymbol(d.Ident, SymbolDependency, d, vis, nil, scope)
 		defineIdent(scope, d.Ident, sym)
 	case *ast.Comment:
-		sym := newSymbol(d.Ident, SymbolComment, d, vis, scope)
+		sym := newSymbol(d.Ident, SymbolComment, d, vis, nil, scope)
 		defineIdent(scope, d.Ident, sym)
 	case *ast.Documentation:
-		sym := newSymbol(d.Ident, SymbolDocumentation, d, vis, scope)
+		sym := newSymbol(d.Ident, SymbolDocumentation, d, vis, nil, scope)
 		defineIdent(scope, d.Ident, sym)
 	case *ast.TextualRepresentation:
-		sym := newSymbol(d.Ident, SymbolTextualRepresentation, d, vis, scope)
+		sym := newSymbol(d.Ident, SymbolTextualRepresentation, d, vis, nil, scope)
 		defineIdent(scope, d.Ident, sym)
 	case *ast.Import, *ast.FilterMember, *ast.ErrorNode:
 		// Imports are processed during resolution; filters hold expressions;
@@ -76,8 +76,10 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility) {
 	}
 }
 
-// newSymbol builds a Symbol from an identification.
-func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Visibility, scope *Scope) *Symbol {
+// newSymbol builds a Symbol from an identification. scope is the child scope the
+// declaration owns (nil for leaf declarations); owner is the enclosing scope the
+// declaration was declared in.
+func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Visibility, scope, owner *Scope) *Symbol {
 	name := id.Name
 	if name == "" {
 		name = id.ShortName
@@ -89,6 +91,7 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 		Visibility: vis,
 		DeclSpan:   decl.Span(),
 		Scope:      scope,
+		OwnerScope: owner,
 	}
 	return sym
 }
