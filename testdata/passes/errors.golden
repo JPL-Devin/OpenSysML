@@ -1,0 +1,3 @@
+2:16 error [name-resolution/unresolved] unresolved reference: P::Missing
+3:9 error [name-resolution/unresolved] unresolved reference: Undefined
+4:9 error [name-resolution/unresolved] unresolved reference: Nowhere
