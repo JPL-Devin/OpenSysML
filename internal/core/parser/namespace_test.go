@@ -156,3 +156,51 @@ func TestParseNamespaceBodyMembers(t *testing.T) {
 		t.Fatalf("inner = %+v", inner)
 	}
 }
+
+func TestParsePackageEmptyBody(t *testing.T) {
+	p := newParser("package P { }")
+	root := p.ParseFile()
+	pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
+	if pkg.Ident.Name != "P" || !pkg.HasBody || len(pkg.Members) != 0 {
+		t.Fatalf("pkg = %+v", pkg)
+	}
+}
+
+func TestParsePackageSemicolon(t *testing.T) {
+	p := newParser("package P;")
+	root := p.ParseFile()
+	pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
+	if pkg.HasBody {
+		t.Fatalf("expected no body: %+v", pkg)
+	}
+}
+
+func TestParseLibraryPackage(t *testing.T) {
+	p := newParser("standard library package Base;")
+	root := p.ParseFile()
+	pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
+	if !pkg.IsLibrary || !pkg.IsStandard {
+		t.Fatalf("flags = %+v", pkg)
+	}
+}
+
+func TestParseNamespaceDecl(t *testing.T) {
+	p := newParser("namespace N { }")
+	root := p.ParseFile()
+	ns := root.Members[0].(*ast.Membership).Member.(*ast.Namespace)
+	if !ns.HasBody {
+		t.Fatalf("ns = %+v", ns)
+	}
+}
+
+func TestParsePrefixMetadata(t *testing.T) {
+	p := newParser("#Meta package P;")
+	root := p.ParseFile()
+	pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
+	if len(pkg.Prefixes) != 1 || pkg.Prefixes[0].Type == nil {
+		t.Fatalf("prefixes = %+v", pkg.Prefixes)
+	}
+	if pkg.Prefixes[0].Type.Parts[0].Text != "Meta" {
+		t.Fatalf("prefix type = %+v", pkg.Prefixes[0].Type)
+	}
+}

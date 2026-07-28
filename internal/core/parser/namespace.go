@@ -152,9 +152,13 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 	case p.atKeyword("rep"), p.atKeyword("language"):
 		return p.parseTextualRepresentation(start)
 	case p.at(lexer.Hash):
-		// A bare prefix-metadata member with no following declaration is rare;
-		// `parsePackage`/`parseNamespace` consume leading `#` prefixes themselves.
-		// Reaching here with `#` means prefixes then a non-declaration keyword.
+		// Look past `# QualifiedName ...` prefixes for the declaration keyword.
+		if p.leadingPrefixIsPackage() {
+			return p.parsePackage(start)
+		}
+		if p.leadingPrefixIsNamespace() {
+			return p.parseNamespace(start)
+		}
 		return nil
 	default:
 		return nil
@@ -204,12 +208,6 @@ func (p *Parser) errorNodeSkip(start int, msg string) *ast.ErrorNode {
 }
 
 // Temporary stubs (replaced in Tasks 8-11).
-func (p *Parser) parsePackage(start int) ast.Node {
-	return p.errorNodeSkip(start, "package: not yet implemented")
-}
-func (p *Parser) parseNamespace(start int) ast.Node {
-	return p.errorNodeSkip(start, "namespace: not yet implemented")
-}
 func (p *Parser) parseDependency(start int) ast.Node {
 	return p.errorNodeSkip(start, "dependency: not yet implemented")
 }
@@ -233,4 +231,86 @@ func (p *Parser) parseAlias(start int, vis ast.Visibility) *ast.Alias {
 	al := &ast.Alias{Visibility: vis}
 	al.NodeSpan = en.NodeSpan
 	return al
+}
+
+// parsePrefixMetadata parses zero or more `# QualifiedName` prefix annotations.
+func (p *Parser) parsePrefixMetadata() []*ast.PrefixMetadata {
+	var prefixes []*ast.PrefixMetadata
+	for p.at(lexer.Hash) {
+		start := p.peek().Span.Offset
+		p.advance() // #
+		qn := p.parseQualifiedName()
+		pm := &ast.PrefixMetadata{Type: qn}
+		pm.NodeSpan = p.spanFrom(start)
+		prefixes = append(prefixes, pm)
+	}
+	return prefixes
+}
+
+// parsePackage parses `[standard] [library] package <id> body`.
+// Prefix metadata may precede `package`; it is consumed here.
+func (p *Parser) parsePackage(start int) ast.Node {
+	prefixes := p.parsePrefixMetadata()
+	isStandard := p.acceptKeyword("standard")
+	isLibrary := p.acceptKeyword("library")
+	if !p.acceptKeyword("package") {
+		return p.errorNodeSkip(start, "expected 'package'")
+	}
+	id := p.parseIdentification()
+	members, hasBody := p.parseNamespaceBody()
+	pkg := &ast.Package{
+		Prefixes:   prefixes,
+		Ident:      id,
+		IsLibrary:  isLibrary,
+		IsStandard: isStandard,
+		Members:    members,
+		HasBody:    hasBody,
+	}
+	pkg.NodeSpan = p.spanFrom(start)
+	return pkg
+}
+
+// parseNamespace parses `namespace <id> body`.
+func (p *Parser) parseNamespace(start int) ast.Node {
+	prefixes := p.parsePrefixMetadata()
+	if !p.acceptKeyword("namespace") {
+		return p.errorNodeSkip(start, "expected 'namespace'")
+	}
+	id := p.parseIdentification()
+	members, hasBody := p.parseNamespaceBody()
+	ns := &ast.Namespace{Prefixes: prefixes, Ident: id, Members: members, HasBody: hasBody}
+	ns.NodeSpan = p.spanFrom(start)
+	return ns
+}
+
+// prefixLookahead returns the buffer index of the token following all
+// leading `# QualifiedName` prefixes, without consuming anything.
+func (p *Parser) prefixLookahead() int {
+	i := 0
+	for p.peekN(i).Kind == lexer.Hash {
+		i++ // '#'
+		// QualifiedName: Name (:: Name)*
+		if k := p.peekN(i).Kind; k != lexer.Identifier && k != lexer.UnrestrictedName {
+			return i
+		}
+		i++
+		for p.peekN(i).Kind == lexer.ColonColon {
+			i++
+			if k := p.peekN(i).Kind; k != lexer.Identifier && k != lexer.UnrestrictedName {
+				return i
+			}
+			i++
+		}
+	}
+	return i
+}
+
+func (p *Parser) leadingPrefixIsPackage() bool {
+	t := p.peekN(p.prefixLookahead())
+	return t.Kind == lexer.Keyword && (t.KeywordID == "package" || t.KeywordID == "library" || t.KeywordID == "standard")
+}
+
+func (p *Parser) leadingPrefixIsNamespace() bool {
+	t := p.peekN(p.prefixLookahead())
+	return t.Kind == lexer.Keyword && t.KeywordID == "namespace"
 }
