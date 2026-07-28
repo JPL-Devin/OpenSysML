@@ -196,10 +196,46 @@ func (p *Parser) accept2(k lexer.Kind) bool {
 	return ok
 }
 
-// errorNodeSkip builds an ErrorNode and skips tokens to the next `;`/`}`/EOF.
+// declStartKeywords are keywords that begin a namespace-member declaration.
+// They serve as recovery sync points so a malformed member does not swallow
+// the declaration that follows it.
+var declStartKeywords = map[string]bool{
+	"package":    true,
+	"namespace":  true,
+	"library":    true,
+	"standard":   true,
+	"dependency": true,
+	"comment":    true,
+	"doc":        true,
+	"rep":        true,
+	"language":   true,
+	"alias":      true,
+	"import":     true,
+	"public":     true,
+	"private":    true,
+	"protected":  true,
+}
+
+// atMemberSync reports whether the parser sits at a recovery synchronization
+// point: EOF, `;`, `}`, `#`, or a declaration-start keyword.
+func (p *Parser) atMemberSync() bool {
+	if p.atEOF() || p.at(lexer.Semicolon) || p.at(lexer.RBrace) || p.at(lexer.Hash) {
+		return true
+	}
+	t := p.peek()
+	return t.Kind == lexer.Keyword && declStartKeywords[t.KeywordID]
+}
+
+// errorNodeSkip builds an ErrorNode and skips tokens up to the next member
+// sync point (`;`/`}`/`#`/declaration keyword/EOF), leaving that token for the
+// enclosing loop. It always advances at least one token (unless already at
+// EOF/`;`/`}`) so parsing makes progress.
 func (p *Parser) errorNodeSkip(start int, msg string) *ast.ErrorNode {
 	p.error(p.peek().Span, msg)
-	for !p.atEOF() && !p.at(lexer.Semicolon) && !p.at(lexer.RBrace) {
+	if !p.atEOF() && !p.at(lexer.Semicolon) && !p.at(lexer.RBrace) {
+		p.advance()
+	}
+	for !p.atMemberSync() {
 		p.advance()
 	}
 	p.accept2(lexer.Semicolon) // consume the terminator if present
@@ -271,6 +307,7 @@ func (p *Parser) parseTextualRepresentation(start int) ast.Node {
 	r.NodeSpan = p.spanFrom(start)
 	return r
 }
+
 // parseImport parses `import [all] QualifiedName [::*|::**] body`.
 // Visibility has already been consumed by the caller.
 func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
