@@ -87,3 +87,150 @@ func (p *Parser) parseIdentification() ast.Identification {
 	}
 	return id
 }
+
+// parseVisibility reads an optional public/private/protected prefix.
+func (p *Parser) parseVisibility() ast.Visibility {
+	switch {
+	case p.acceptKeyword("public"):
+		return ast.VisibilityPublic
+	case p.acceptKeyword("private"):
+		return ast.VisibilityPrivate
+	case p.acceptKeyword("protected"):
+		return ast.VisibilityProtected
+	default:
+		return ast.VisibilityDefault
+	}
+}
+
+// parseMember parses one namespace member: an optional visibility prefix
+// followed by a declaration. Import/Alias carry their own visibility and are
+// returned directly; other declarations are wrapped in a Membership.
+func (p *Parser) parseMember() ast.Node {
+	start := p.peek().Span.Offset
+	trivia := p.takeTrivia()
+	vis := p.parseVisibility()
+
+	// Import and Alias hold visibility internally and are not wrapped.
+	if p.atKeyword("import") {
+		imp := p.parseImport(start, vis)
+		imp.SetLeadingTrivia(trivia)
+		return imp
+	}
+	if p.atKeyword("alias") {
+		al := p.parseAlias(start, vis)
+		al.SetLeadingTrivia(trivia)
+		return al
+	}
+
+	inner := p.parseDeclaration(start)
+	if inner == nil {
+		// No declaration recognized. Emit an error node spanning the skip.
+		en := p.errorNodeSkip(start, "expected a namespace member")
+		en.SetLeadingTrivia(trivia)
+		return en
+	}
+	m := &ast.Membership{Visibility: vis, Member: inner}
+	m.NodeSpan = p.spanFrom(start)
+	m.SetLeadingTrivia(trivia)
+	return m
+}
+
+// parseDeclaration dispatches on the leading keyword to a declaration parser.
+// Returns nil if the current token starts no known (in-scope) declaration.
+func (p *Parser) parseDeclaration(start int) ast.Node {
+	switch {
+	case p.atKeyword("package"), p.atKeyword("library"), p.atKeyword("standard"):
+		return p.parsePackage(start)
+	case p.atKeyword("namespace"):
+		return p.parseNamespace(start)
+	case p.atKeyword("dependency"):
+		return p.parseDependency(start)
+	case p.atKeyword("comment"):
+		return p.parseComment(start)
+	case p.atKeyword("doc"):
+		return p.parseDocumentation(start)
+	case p.atKeyword("rep"), p.atKeyword("language"):
+		return p.parseTextualRepresentation(start)
+	case p.at(lexer.Hash):
+		// A bare prefix-metadata member with no following declaration is rare;
+		// `parsePackage`/`parseNamespace` consume leading `#` prefixes themselves.
+		// Reaching here with `#` means prefixes then a non-declaration keyword.
+		return nil
+	default:
+		return nil
+	}
+}
+
+// parseNamespaceBody parses `{ member* }` or `;`. Returns (members, hasBody).
+// The caller has already consumed the declaration head up to this point.
+func (p *Parser) parseNamespaceBody() ([]ast.Node, bool) {
+	if p.accept2(lexer.Semicolon) {
+		return nil, false
+	}
+	if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); !ok {
+		return nil, false
+	}
+	var members []ast.Node
+	for !p.atEOF() && !p.at(lexer.RBrace) {
+		before := p.peek().Span.Offset
+		m := p.parseMember()
+		if m != nil {
+			members = append(members, m)
+		}
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.advance()
+		}
+	}
+	p.expect(lexer.RBrace, "expected '}'")
+	return members, true
+}
+
+// accept2 is accept that discards the token (convenience for punctuation).
+func (p *Parser) accept2(k lexer.Kind) bool {
+	_, ok := p.accept(k)
+	return ok
+}
+
+// errorNodeSkip builds an ErrorNode and skips tokens to the next `;`/`}`/EOF.
+func (p *Parser) errorNodeSkip(start int, msg string) *ast.ErrorNode {
+	p.error(p.peek().Span, msg)
+	for !p.atEOF() && !p.at(lexer.Semicolon) && !p.at(lexer.RBrace) {
+		p.advance()
+	}
+	p.accept2(lexer.Semicolon) // consume the terminator if present
+	en := &ast.ErrorNode{Message: msg}
+	en.NodeSpan = p.spanFrom(start)
+	return en
+}
+
+// Temporary stubs (replaced in Tasks 8-11).
+func (p *Parser) parsePackage(start int) ast.Node {
+	return p.errorNodeSkip(start, "package: not yet implemented")
+}
+func (p *Parser) parseNamespace(start int) ast.Node {
+	return p.errorNodeSkip(start, "namespace: not yet implemented")
+}
+func (p *Parser) parseDependency(start int) ast.Node {
+	return p.errorNodeSkip(start, "dependency: not yet implemented")
+}
+func (p *Parser) parseComment(start int) ast.Node {
+	return p.errorNodeSkip(start, "comment: not yet implemented")
+}
+func (p *Parser) parseDocumentation(start int) ast.Node {
+	return p.errorNodeSkip(start, "doc: not yet implemented")
+}
+func (p *Parser) parseTextualRepresentation(start int) ast.Node {
+	return p.errorNodeSkip(start, "rep: not yet implemented")
+}
+func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
+	en := p.errorNodeSkip(start, "import: not yet implemented")
+	imp := &ast.Import{Visibility: vis}
+	imp.NodeSpan = en.NodeSpan
+	return imp
+}
+func (p *Parser) parseAlias(start int, vis ast.Visibility) *ast.Alias {
+	en := p.errorNodeSkip(start, "alias: not yet implemented")
+	al := &ast.Alias{Visibility: vis}
+	al.NodeSpan = en.NodeSpan
+	return al
+}

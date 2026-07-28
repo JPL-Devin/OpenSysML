@@ -99,3 +99,60 @@ func TestParseIdentificationEmpty(t *testing.T) {
 		t.Errorf("expected empty id, got %+v", id)
 	}
 }
+
+func TestParseFileEmpty(t *testing.T) {
+	p := newParser("")
+	root := p.ParseFile()
+	if root == nil || len(root.Members) != 0 {
+		t.Fatalf("root = %+v", root)
+	}
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("diags = %+v", p.Diagnostics)
+	}
+}
+
+func TestParseFileVisibilityPrefix(t *testing.T) {
+	p := newParser("private package P;")
+	root := p.ParseFile()
+	if len(root.Members) != 1 {
+		t.Fatalf("members = %+v", root.Members)
+	}
+	m, ok := root.Members[0].(*ast.Membership)
+	if !ok {
+		t.Fatalf("member type = %T", root.Members[0])
+	}
+	if m.Visibility != ast.VisibilityPrivate {
+		t.Fatalf("vis = %v", m.Visibility)
+	}
+	if _, ok := m.Member.(*ast.Package); !ok {
+		t.Fatalf("inner type = %T", m.Member)
+	}
+}
+
+func TestParseFileUnknownKeywordErrorNode(t *testing.T) {
+	p := newParser("part def Vehicle;")
+	root := p.ParseFile()
+	if len(root.Members) != 1 {
+		t.Fatalf("members = %+v", root.Members)
+	}
+	if _, ok := root.Members[0].(*ast.ErrorNode); !ok {
+		t.Fatalf("expected ErrorNode, got %T", root.Members[0])
+	}
+	if len(p.Diagnostics) == 0 {
+		t.Fatal("expected a diagnostic")
+	}
+}
+
+func TestParseNamespaceBodyMembers(t *testing.T) {
+	p := newParser("package Outer { package Inner; }")
+	root := p.ParseFile()
+	m := root.Members[0].(*ast.Membership)
+	outer := m.Member.(*ast.Package)
+	if !outer.HasBody || len(outer.Members) != 1 {
+		t.Fatalf("outer = %+v", outer)
+	}
+	inner := outer.Members[0].(*ast.Membership).Member.(*ast.Package)
+	if inner.Ident.Name != "Inner" {
+		t.Fatalf("inner = %+v", inner)
+	}
+}
