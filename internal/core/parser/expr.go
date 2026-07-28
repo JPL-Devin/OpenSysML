@@ -5,11 +5,187 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 )
 
-// ParseExpression is the public entry to the expression sub-parser.
-// Task 12 delegates to parsePrimary; Tasks 13-14 layer the operator ladder
-// and postfix chain above it.
+// ParseExpression parses a full expression (conditional at the lowest level).
 func (p *Parser) ParseExpression() ast.Node {
-	return p.parsePrimary()
+	return p.parseConditional()
+}
+
+// parseConditional parses `if cond ? then else else` or falls through.
+func (p *Parser) parseConditional() ast.Node {
+	if p.atKeyword("if") {
+		start := p.peek().Span.Offset
+		p.advance() // if
+		cond := p.parseBinary(precNullCoalesce)
+		p.expect(lexer.Question, "expected '?' in conditional")
+		thn := p.parseBinary(precNullCoalesce)
+		p.expect2Keyword("else")
+		els := p.parseConditional()
+		e := &ast.OperatorExpr{Operator: ast.OpConditional, Operands: []ast.Node{cond, thn, els}}
+		e.NodeSpan = p.spanFrom(start)
+		return e
+	}
+	return p.parseBinary(precNullCoalesce)
+}
+
+// Precedence levels (higher binds tighter). Conditional is handled separately.
+const (
+	precNullCoalesce = iota + 1 // ??
+	precImplies                 // implies
+	precOr                      // | or
+	precXor                     // xor
+	precAnd                     // & and
+	precEquality                // == != === !==
+	precClassify                // hastype istype @ @@ as meta
+	precRelational              // < > <= >=
+	precRange                   // ..
+	precAdditive                // + -
+	precMultiplicative          // * / %
+	precExponent                // ** ^  (right-assoc)
+	precUnary                   // prefix + - ~ not
+	precExtent                  // all
+)
+
+type binOp struct {
+	op         ast.OperatorKind
+	prec       int
+	rightAssoc bool
+	classify   bool // RHS is a type reference, stored in TypeRef
+}
+
+// binaryOpFor returns the binary operator for the current token, if any.
+func (p *Parser) binaryOpFor() (binOp, bool) {
+	t := p.peek()
+	switch t.Kind {
+	case lexer.QuestionQ:
+		return binOp{ast.OpNullCoalesce, precNullCoalesce, false, false}, true
+	case lexer.Pipe:
+		return binOp{ast.OpOr, precOr, false, false}, true
+	case lexer.Amp:
+		return binOp{ast.OpAnd, precAnd, false, false}, true
+	case lexer.EqEq:
+		return binOp{ast.OpEq, precEquality, false, false}, true
+	case lexer.NotEq:
+		return binOp{ast.OpNeq, precEquality, false, false}, true
+	case lexer.EqEqEq:
+		return binOp{ast.OpEqEqEq, precEquality, false, false}, true
+	case lexer.NotEqEq:
+		return binOp{ast.OpNeqEqEq, precEquality, false, false}, true
+	case lexer.At:
+		return binOp{ast.OpAt, precClassify, false, true}, true
+	case lexer.AtAt:
+		return binOp{ast.OpMetaAt, precClassify, false, true}, true
+	case lexer.Lt:
+		return binOp{ast.OpLt, precRelational, false, false}, true
+	case lexer.Gt:
+		return binOp{ast.OpGt, precRelational, false, false}, true
+	case lexer.Le:
+		return binOp{ast.OpLe, precRelational, false, false}, true
+	case lexer.Ge:
+		return binOp{ast.OpGe, precRelational, false, false}, true
+	case lexer.DotDot:
+		return binOp{ast.OpRange, precRange, false, false}, true
+	case lexer.Plus:
+		return binOp{ast.OpAdd, precAdditive, false, false}, true
+	case lexer.Minus:
+		return binOp{ast.OpSub, precAdditive, false, false}, true
+	case lexer.Star:
+		return binOp{ast.OpMul, precMultiplicative, false, false}, true
+	case lexer.Slash:
+		return binOp{ast.OpDiv, precMultiplicative, false, false}, true
+	case lexer.Percent:
+		return binOp{ast.OpMod, precMultiplicative, false, false}, true
+	case lexer.StarStar:
+		return binOp{ast.OpPow, precExponent, true, false}, true
+	case lexer.Caret:
+		return binOp{ast.OpPow, precExponent, true, false}, true
+	case lexer.Keyword:
+		switch t.KeywordID {
+		case "implies":
+			return binOp{ast.OpImplies, precImplies, false, false}, true
+		case "or":
+			return binOp{ast.OpConditionalOr, precOr, false, false}, true
+		case "xor":
+			return binOp{ast.OpXor, precXor, false, false}, true
+		case "and":
+			return binOp{ast.OpConditionalAnd, precAnd, false, false}, true
+		case "hastype":
+			return binOp{ast.OpHasType, precClassify, false, true}, true
+		case "istype":
+			return binOp{ast.OpIsType, precClassify, false, true}, true
+		case "as":
+			return binOp{ast.OpAs, precClassify, false, true}, true
+		case "meta":
+			return binOp{ast.OpMeta, precClassify, false, true}, true
+		}
+	}
+	return binOp{}, false
+}
+
+// parseBinary parses a binary expression at or above the given precedence.
+func (p *Parser) parseBinary(minPrec int) ast.Node {
+	start := p.peek().Span.Offset
+	left := p.parseUnary()
+	for {
+		bop, ok := p.binaryOpFor()
+		if !ok || bop.prec < minPrec {
+			break
+		}
+		p.advance() // operator
+		e := &ast.OperatorExpr{Operator: bop.op}
+		if bop.classify {
+			e.Operands = []ast.Node{left}
+			e.TypeRef = p.parseQualifiedName()
+		} else {
+			nextMin := bop.prec + 1
+			if bop.rightAssoc {
+				nextMin = bop.prec
+			}
+			right := p.parseBinary(nextMin)
+			e.Operands = []ast.Node{left, right}
+		}
+		e.NodeSpan = p.spanFrom(start)
+		left = e
+	}
+	return left
+}
+
+// parseUnary parses prefix operators and the `all` extent, then a primary.
+func (p *Parser) parseUnary() ast.Node {
+	start := p.peek().Span.Offset
+	var op ast.OperatorKind
+	switch {
+	case p.at(lexer.Plus):
+		op = ast.OpPos
+	case p.at(lexer.Minus):
+		op = ast.OpNeg
+	case p.at(lexer.Tilde):
+		op = ast.OpBitNot
+	case p.atKeyword("not"):
+		op = ast.OpNot
+	case p.atKeyword("all"):
+		p.advance()
+		operand := p.parseUnary()
+		e := &ast.OperatorExpr{Operator: ast.OpAll, Operands: []ast.Node{operand}}
+		e.NodeSpan = p.spanFrom(start)
+		return e
+	default:
+		return p.parsePrimary()
+	}
+	p.advance() // prefix operator
+	operand := p.parseUnary()
+	e := &ast.OperatorExpr{Operator: op, Operands: []ast.Node{operand}}
+	e.NodeSpan = p.spanFrom(start)
+	return e
+}
+
+// expect2Keyword records a diagnostic if the given keyword is not present,
+// consuming it when it is.
+func (p *Parser) expect2Keyword(kw string) bool {
+	if p.acceptKeyword(kw) {
+		return true
+	}
+	p.error(p.peek().Span, "expected '"+kw+"'")
+	return false
 }
 
 // parsePrimary parses a base expression (Task 14 extends it with postfixes).

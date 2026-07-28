@@ -1,10 +1,115 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 )
+
+func dumpExpr(t *testing.T, src string) string {
+	t.Helper()
+	p := newParser(src)
+	e := p.ParseExpression()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("diags for %q = %+v", src, p.Diagnostics)
+	}
+	return strings.TrimSpace(ast.Dump(e))
+}
+
+func TestPrecedenceAddMul(t *testing.T) {
+	got := dumpExpr(t, "1 + 2 * 3")
+	want := strings.Join([]string{
+		`(OperatorExpr operator="+"`,
+		`  (LiteralInteger value="1")`,
+		`  (OperatorExpr operator="*"`,
+		`    (LiteralInteger value="2")`,
+		`    (LiteralInteger value="3")))`,
+	}, "\n")
+	if got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestLeftAssoc(t *testing.T) {
+	got := dumpExpr(t, "1 - 2 - 3")
+	want := strings.Join([]string{
+		`(OperatorExpr operator="-"`,
+		`  (OperatorExpr operator="-"`,
+		`    (LiteralInteger value="1")`,
+		`    (LiteralInteger value="2"))`,
+		`  (LiteralInteger value="3"))`,
+	}, "\n")
+	if got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestPowRightAssoc(t *testing.T) {
+	got := dumpExpr(t, "2 ** 3 ** 4")
+	want := strings.Join([]string{
+		`(OperatorExpr operator="**"`,
+		`  (LiteralInteger value="2")`,
+		`  (OperatorExpr operator="**"`,
+		`    (LiteralInteger value="3")`,
+		`    (LiteralInteger value="4")))`,
+	}, "\n")
+	if got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestUnaryNeg(t *testing.T) {
+	e := exprOf(t, "-5").(*ast.OperatorExpr)
+	if e.Operator != ast.OpNeg || len(e.Operands) != 1 {
+		t.Fatalf("e = %+v", e)
+	}
+}
+
+func TestNotOperator(t *testing.T) {
+	e := exprOf(t, "not x").(*ast.OperatorExpr)
+	if e.Operator != ast.OpNot {
+		t.Fatalf("op = %v", e.Operator)
+	}
+}
+
+func TestAllExtent(t *testing.T) {
+	e := exprOf(t, "all X").(*ast.OperatorExpr)
+	if e.Operator != ast.OpAll {
+		t.Fatalf("op = %v", e.Operator)
+	}
+}
+
+func TestConditional(t *testing.T) {
+	e := exprOf(t, "if c ? a else b").(*ast.OperatorExpr)
+	if e.Operator != ast.OpConditional || len(e.Operands) != 3 {
+		t.Fatalf("e = %+v", e)
+	}
+}
+
+func TestClassificationAs(t *testing.T) {
+	e := exprOf(t, "x as Integer").(*ast.OperatorExpr)
+	if e.Operator != ast.OpAs || e.TypeRef == nil {
+		t.Fatalf("e = %+v", e)
+	}
+	if e.TypeRef.Parts[0].Text != "Integer" {
+		t.Fatalf("typeref = %+v", e.TypeRef)
+	}
+}
+
+func TestRange(t *testing.T) {
+	e := exprOf(t, "1 .. 10").(*ast.OperatorExpr)
+	if e.Operator != ast.OpRange || len(e.Operands) != 2 {
+		t.Fatalf("e = %+v", e)
+	}
+}
+
+func TestImplies(t *testing.T) {
+	e := exprOf(t, "a implies b").(*ast.OperatorExpr)
+	if e.Operator != ast.OpImplies {
+		t.Fatalf("op = %v", e.Operator)
+	}
+}
 
 func exprOf(t *testing.T, src string) ast.Node {
 	t.Helper()
