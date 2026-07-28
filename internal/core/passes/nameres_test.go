@@ -46,3 +46,38 @@ func TestNameResolutionPassLevel(t *testing.T) {
 		t.Fatalf("Level() = %v, want LevelNameResolution", (NameResolutionPass{}).Level())
 	}
 }
+
+// parseDoc parses src into a RootNamespace, failing on any parse diagnostic.
+func parseDoc(t *testing.T, name, src string) *ast.RootNamespace {
+	t.Helper()
+	p := parser.New(source.New(name, []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("unexpected parse diagnostics in %s: %+v", name, p.Diagnostics)
+	}
+	return root
+}
+
+func TestNameResolutionPassReportsAmbiguous(t *testing.T) {
+	// Two documents each declare a top-level package P, so a qualified
+	// reference whose first segment is P has two global candidates and the
+	// resolver reports an ambiguous reference.
+	rootA := parseDoc(t, "a.sysml", "package P { namespace X; }")
+	rootB := parseDoc(t, "b.sysml", "package P { namespace Y; }")
+	rootC := parseDoc(t, "c.sysml", "package Q { alias A for P::X; }")
+
+	idx := symbols.NewIndex()
+	idx.AddDocument("a.sysml", rootA)
+	idx.AddDocument("b.sysml", rootB)
+	idx.AddDocument("c.sysml", rootC)
+
+	ctx := NewContext("c.sysml", idx, nil)
+	got := NameResolutionPass{}.Run(ctx, "c.sysml", rootC)
+	if len(got) == 0 {
+		t.Fatalf("expected an ambiguous diagnostic, got none")
+	}
+	d := got[0]
+	if d.Source != "name-resolution" || d.Code != "ambiguous" || d.Severity != SeverityError {
+		t.Fatalf("got %+v, want source=name-resolution code=ambiguous severity=error", d)
+	}
+}
