@@ -68,3 +68,43 @@ func TestIndexShortNameNotDuplicatedInFQN(t *testing.T) {
 		t.Fatalf("Primary::N not indexed")
 	}
 }
+
+func TestIndexRemoveDocument(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml", "package P { namespace N; }")
+	if got := idx.LookupQualified("P::N"); len(got) != 1 {
+		t.Fatalf("before remove: P::N = %d symbols, want 1", len(got))
+	}
+	idx.RemoveDocument("a.sysml")
+	if got := idx.LookupQualified("P::N"); len(got) != 0 {
+		t.Fatalf("after remove: P::N = %d symbols, want 0", len(got))
+	}
+	if idx.DocumentRoot("a.sysml") != nil {
+		t.Fatalf("after remove: DocumentRoot should be nil")
+	}
+}
+
+func TestIndexReAddReplacesStaleEntries(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml", "package P { namespace Old; }")
+	addDoc(t, idx, "a.sysml", "package P { namespace New; }")
+	if got := idx.LookupQualified("P::Old"); len(got) != 0 {
+		t.Fatalf("P::Old = %d symbols after re-add, want 0 (stale)", len(got))
+	}
+	if got := idx.LookupQualified("P::New"); len(got) != 1 {
+		t.Fatalf("P::New = %d symbols after re-add, want 1", len(got))
+	}
+	if got := idx.LookupQualified("P"); len(got) != 1 {
+		t.Fatalf("P = %d symbols after re-add, want 1 (not doubled)", len(got))
+	}
+}
+
+func TestIndexRemoveUnknownDocumentNoop(t *testing.T) {
+	idx := NewIndex()
+	idx.RemoveDocument("missing.sysml") // must not panic
+	addDoc(t, idx, "a.sysml", "package P;")
+	idx.RemoveDocument("b.sysml") // unrelated doc untouched
+	if got := idx.LookupQualified("P"); len(got) != 1 {
+		t.Fatalf("P = %d after removing unrelated doc, want 1", len(got))
+	}
+}
