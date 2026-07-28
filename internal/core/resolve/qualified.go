@@ -1,6 +1,8 @@
 package resolve
 
 import (
+	"fmt"
+
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -23,7 +25,12 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 		cur = r.lookupOutward(scope, first)
 	}
 	if cur == nil {
-		cur = r.lookupGlobalTop(first)
+		sym, n := r.lookupGlobalTop(first)
+		if n > 1 {
+			r.ambiguous(qn, n)
+			return resolution{nil, false}
+		}
+		cur = sym
 	}
 	if cur == nil {
 		r.unresolved(qn)
@@ -72,16 +79,18 @@ func (r *Resolver) lookupOutward(scope *symbols.Scope, name string) *symbols.Sym
 }
 
 // lookupGlobalTop finds a top-level (single-segment FQN) symbol in the global
-// index. Returns nil unless exactly one match (multiple = ambiguous, handled by
-// the caller reporting unresolved rather than picking arbitrarily).
-func (r *Resolver) lookupGlobalTop(name string) *symbols.Symbol {
+// index. Returns the unique match and the total number of matches, so the
+// caller can report ambiguity (n > 1) rather than silently degrading to
+// "unresolved". A unique symbol is returned only when n == 1.
+func (r *Resolver) lookupGlobalTop(name string) (*symbols.Symbol, int) {
 	if r.idx == nil {
-		return nil
+		return nil, 0
 	}
-	if syms := r.idx.LookupQualified(name); len(syms) == 1 {
-		return syms[0]
+	syms := r.idx.LookupQualified(name)
+	if len(syms) == 1 {
+		return syms[0], 1
 	}
-	return nil
+	return nil, len(syms)
 }
 
 // rootOf returns the topmost ancestor of scope (the document root), or nil.
@@ -103,10 +112,10 @@ func (r *Resolver) unresolved(qn *ast.QualifiedName) {
 	})
 }
 
-// ambiguous records an ambiguity diagnostic.
+// ambiguous records an ambiguity diagnostic reporting the number of matches.
 func (r *Resolver) ambiguous(qn *ast.QualifiedName, n int) {
 	r.Diagnostics = append(r.Diagnostics, Diagnostic{
 		Span:    qn.Span(),
-		Message: "ambiguous reference: " + qnText(qn),
+		Message: fmt.Sprintf("ambiguous reference: %s (%d candidates)", qnText(qn), n),
 	})
 }

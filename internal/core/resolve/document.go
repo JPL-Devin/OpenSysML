@@ -72,6 +72,10 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		for _, s := range d.Suppliers {
 			r.ResolveQualified(scope, s)
 		}
+	case *ast.Comment:
+		for _, a := range d.About {
+			r.ResolveQualified(scope, a)
+		}
 	case *ast.FilterMember:
 		r.resolveExpr(scope, d.Condition)
 	}
@@ -112,6 +116,9 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 		}
 	case *ast.FeatureChainExpr:
 		r.resolveExpr(scope, v.Operand)
+		if v.Member != nil {
+			r.ResolveQualified(scope, v.Member)
+		}
 	case *ast.IndexExpr:
 		r.resolveExpr(scope, v.Operand)
 		r.resolveExpr(scope, v.Index)
@@ -124,6 +131,9 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			r.resolveExpr(scope, a)
 		}
 		for _, na := range v.NamedArgs {
+			if na.Name != nil {
+				r.ResolveQualified(scope, na.Name)
+			}
 			r.resolveExpr(scope, na.Value)
 		}
 	case *ast.CollectExpr:
