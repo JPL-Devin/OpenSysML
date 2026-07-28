@@ -204,3 +204,64 @@ func TestParsePrefixMetadata(t *testing.T) {
 		t.Fatalf("prefix type = %+v", pkg.Prefixes[0].Type)
 	}
 }
+
+func importOf(t *testing.T, src string) *ast.Import {
+	t.Helper()
+	p := newParser(src)
+	root := p.ParseFile()
+	if len(root.Members) != 1 {
+		t.Fatalf("members = %+v (diags %+v)", root.Members, p.Diagnostics)
+	}
+	imp, ok := root.Members[0].(*ast.Import)
+	if !ok {
+		t.Fatalf("member type = %T", root.Members[0])
+	}
+	return imp
+}
+
+func TestParseMembershipImport(t *testing.T) {
+	imp := importOf(t, "import A::B;")
+	if imp.Kind != ast.ImportMembership || imp.IsRecursive || imp.IsAll {
+		t.Fatalf("imp = %+v", imp)
+	}
+	if imp.Imported == nil || len(imp.Imported.Parts) != 2 {
+		t.Fatalf("imported = %+v", imp.Imported)
+	}
+}
+
+func TestParseNamespaceImportStar(t *testing.T) {
+	imp := importOf(t, "import A::B::*;")
+	if imp.Kind != ast.ImportNamespace || imp.IsRecursive {
+		t.Fatalf("imp = %+v", imp)
+	}
+}
+
+func TestParseRecursiveImport(t *testing.T) {
+	imp := importOf(t, "import A::B::**;")
+	if imp.Kind != ast.ImportNamespace || !imp.IsRecursive {
+		t.Fatalf("imp = %+v", imp)
+	}
+}
+
+func TestParseStarThenRecursiveImport(t *testing.T) {
+	imp := importOf(t, "import A::*::**;")
+	if imp.Kind != ast.ImportNamespace || !imp.IsRecursive {
+		t.Fatalf("imp = %+v", imp)
+	}
+}
+
+func TestParseImportAll(t *testing.T) {
+	imp := importOf(t, "import all A::B::*;")
+	if !imp.IsAll || imp.Kind != ast.ImportNamespace {
+		t.Fatalf("imp = %+v", imp)
+	}
+}
+
+func TestParseImportPublicPrefix(t *testing.T) {
+	p := newParser("public import A::B;")
+	root := p.ParseFile()
+	imp := root.Members[0].(*ast.Import)
+	if imp.Visibility != ast.VisibilityPublic {
+		t.Fatalf("vis = %v", imp.Visibility)
+	}
+}

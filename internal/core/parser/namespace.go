@@ -220,10 +220,43 @@ func (p *Parser) parseDocumentation(start int) ast.Node {
 func (p *Parser) parseTextualRepresentation(start int) ast.Node {
 	return p.errorNodeSkip(start, "rep: not yet implemented")
 }
+// parseImport parses `import [all] QualifiedName [::*|::**] body`.
+// Visibility has already been consumed by the caller.
 func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
-	en := p.errorNodeSkip(start, "import: not yet implemented")
-	imp := &ast.Import{Visibility: vis}
-	imp.NodeSpan = en.NodeSpan
+	p.advance() // 'import' (guaranteed by caller)
+	isAll := p.acceptKeyword("all")
+
+	qn := p.parseQualifiedName()
+	imp := &ast.Import{
+		Visibility: vis,
+		IsAll:      isAll,
+		Kind:       ast.ImportMembership,
+		Imported:   qn,
+	}
+
+	// Wildcard tail: `:: *` (namespace) then optional `:: **` (recursive),
+	// or `:: **` directly.
+	if p.at(lexer.ColonColon) {
+		nk := p.peekN(1).Kind
+		if nk == lexer.Star {
+			p.advance() // ::
+			p.advance() // *
+			imp.Kind = ast.ImportNamespace
+			if p.at(lexer.ColonColon) && p.peekN(1).Kind == lexer.StarStar {
+				p.advance() // ::
+				p.advance() // **
+				imp.IsRecursive = true
+			}
+		} else if nk == lexer.StarStar {
+			p.advance() // ::
+			p.advance() // **
+			imp.Kind = ast.ImportNamespace
+			imp.IsRecursive = true
+		}
+	}
+
+	imp.Body, imp.HasBody = p.parseNamespaceBody()
+	imp.NodeSpan = p.spanFrom(start)
 	return imp
 }
 func (p *Parser) parseAlias(start int, vis ast.Visibility) *ast.Alias {
