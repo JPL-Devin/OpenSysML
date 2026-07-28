@@ -208,9 +208,6 @@ func (p *Parser) errorNodeSkip(start int, msg string) *ast.ErrorNode {
 }
 
 // Temporary stubs (replaced in Tasks 8-11).
-func (p *Parser) parseDependency(start int) ast.Node {
-	return p.errorNodeSkip(start, "dependency: not yet implemented")
-}
 func (p *Parser) parseComment(start int) ast.Node {
 	return p.errorNodeSkip(start, "comment: not yet implemented")
 }
@@ -260,10 +257,79 @@ func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
 	return imp
 }
 func (p *Parser) parseAlias(start int, vis ast.Visibility) *ast.Alias {
-	en := p.errorNodeSkip(start, "alias: not yet implemented")
-	al := &ast.Alias{Visibility: vis}
-	al.NodeSpan = en.NodeSpan
+	p.advance() // 'alias'
+	id := p.parseIdentification()
+	al := &ast.Alias{Visibility: vis, Ident: id}
+	if !p.acceptKeyword("for") {
+		p.error(p.peek().Span, "expected 'for' in alias")
+	} else {
+		al.For = p.parseQualifiedName()
+	}
+	al.Body, al.HasBody = p.parseNamespaceBody()
+	al.NodeSpan = p.spanFrom(start)
 	return al
+}
+
+// parseQualifiedNameList parses `QualifiedName (, QualifiedName)*`.
+func (p *Parser) parseQualifiedNameList() []*ast.QualifiedName {
+	var list []*ast.QualifiedName
+	if qn := p.parseQualifiedName(); qn != nil {
+		list = append(list, qn)
+	}
+	for p.at(lexer.Comma) {
+		p.advance() // ,
+		if qn := p.parseQualifiedName(); qn != nil {
+			list = append(list, qn)
+		}
+	}
+	return list
+}
+
+// parseDependency parses
+// `[# prefixes] dependency [<id> from] clients to suppliers body`.
+func (p *Parser) parseDependency(start int) ast.Node {
+	prefixes := p.parsePrefixMetadata()
+	if !p.acceptKeyword("dependency") {
+		return p.errorNodeSkip(start, "expected 'dependency'")
+	}
+	dep := &ast.Dependency{Prefixes: prefixes}
+
+	// Optional `<id> [name] from`. The `from` keyword disambiguates: an
+	// identification is present only if a `from` follows it.
+	if p.identificationThenFrom() {
+		dep.Ident = p.parseIdentification()
+		p.acceptKeyword("from") // guaranteed
+	}
+
+	dep.Clients = p.parseQualifiedNameList()
+	if !p.acceptKeyword("to") {
+		p.error(p.peek().Span, "expected 'to' in dependency")
+	} else {
+		dep.Suppliers = p.parseQualifiedNameList()
+	}
+	dep.Body, dep.HasBody = p.parseNamespaceBody()
+	dep.NodeSpan = p.spanFrom(start)
+	return dep
+}
+
+// identificationThenFrom reports whether the upcoming tokens form an
+// identification (`<x> y` / `y`) immediately followed by `from`.
+func (p *Parser) identificationThenFrom() bool {
+	i := 0
+	if p.peekN(i).Kind == lexer.Lt {
+		i++ // <
+		if k := p.peekN(i).Kind; k == lexer.Identifier || k == lexer.UnrestrictedName {
+			i++
+		}
+		if p.peekN(i).Kind == lexer.Gt {
+			i++
+		}
+	}
+	if k := p.peekN(i).Kind; k == lexer.Identifier || k == lexer.UnrestrictedName {
+		i++
+	}
+	t := p.peekN(i)
+	return t.Kind == lexer.Keyword && t.KeywordID == "from"
 }
 
 // parsePrefixMetadata parses zero or more `# QualifiedName` prefix annotations.

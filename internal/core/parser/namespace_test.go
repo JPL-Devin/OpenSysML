@@ -265,3 +265,60 @@ func TestParseImportPublicPrefix(t *testing.T) {
 		t.Fatalf("vis = %v", imp.Visibility)
 	}
 }
+
+func TestParseAlias(t *testing.T) {
+	p := newParser("alias V for Vehicles::Vehicle;")
+	root := p.ParseFile()
+	al, ok := root.Members[0].(*ast.Alias)
+	if !ok {
+		t.Fatalf("member = %T", root.Members[0])
+	}
+	if al.Ident.Name != "V" {
+		t.Fatalf("name = %q", al.Ident.Name)
+	}
+	if al.For == nil || len(al.For.Parts) != 2 {
+		t.Fatalf("for = %+v", al.For)
+	}
+}
+
+func TestParseAliasShortName(t *testing.T) {
+	p := newParser("alias <v> Veh for A::B;")
+	root := p.ParseFile()
+	al := root.Members[0].(*ast.Alias)
+	if al.Ident.ShortName != "v" || al.Ident.Name != "Veh" {
+		t.Fatalf("ident = %+v", al.Ident)
+	}
+}
+
+func TestParseDependencySimple(t *testing.T) {
+	p := newParser("dependency A to B;")
+	root := p.ParseFile()
+	dep := root.Members[0].(*ast.Membership).Member.(*ast.Dependency)
+	if len(dep.Clients) != 1 || len(dep.Suppliers) != 1 {
+		t.Fatalf("dep = %+v", dep)
+	}
+	if dep.Clients[0].Parts[0].Text != "A" || dep.Suppliers[0].Parts[0].Text != "B" {
+		t.Fatalf("dep names = %+v", dep)
+	}
+}
+
+func TestParseDependencyLists(t *testing.T) {
+	p := newParser("dependency X, Y to P, Q, R;")
+	root := p.ParseFile()
+	dep := root.Members[0].(*ast.Membership).Member.(*ast.Dependency)
+	if len(dep.Clients) != 2 || len(dep.Suppliers) != 3 {
+		t.Fatalf("dep = %+v", dep)
+	}
+}
+
+func TestParseDependencyNamed(t *testing.T) {
+	p := newParser("dependency <d1> Dep from A to B;")
+	root := p.ParseFile()
+	dep := root.Members[0].(*ast.Membership).Member.(*ast.Dependency)
+	if dep.Ident.ShortName != "d1" || dep.Ident.Name != "Dep" {
+		t.Fatalf("ident = %+v", dep.Ident)
+	}
+	if len(dep.Clients) != 1 || dep.Clients[0].Parts[0].Text != "A" {
+		t.Fatalf("clients = %+v", dep.Clients)
+	}
+}
