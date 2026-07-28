@@ -66,3 +66,10 @@ func (idx *Index) LookupQualified(fqn string) []*Symbol {
 func (idx *Index) DocumentRoot(name string) *Scope {
 	return idx.docRoots[name]
 }
+
+// NewIndexFromDoc builds an Index containing a single document.
+func NewIndexFromDoc(name string, root *ast.RootNamespace) *Index {
+	idx := NewIndex()
+	idx.AddDocument(name, root)
+	return idx
+}
