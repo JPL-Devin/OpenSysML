@@ -79,15 +79,15 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		}
 		return nil, false
 	}
-	// Namespace import: members of the target's scope are visible.
+	// Namespace import: visible members of the target's scope are surfaced.
 	if target.Scope == nil {
 		return nil, false
 	}
-	if sym, ok := target.Scope.LookupLocal(name); ok {
+	if sym, ok := target.Scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) {
 		return sym, true
 	}
 	if imp.IsRecursive {
-		if sym, ok := lookupInSubtree(target.Scope, name, map[*symbols.Scope]bool{}); ok {
+		if sym, ok := lookupInSubtree(target.Scope, name, map[*symbols.Scope]bool{}); ok && visibleThroughImport(imp, sym) {
 			return sym, true
 		}
 	}
