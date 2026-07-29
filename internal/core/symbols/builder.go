@@ -19,7 +19,9 @@ func buildMembers(scope *Scope, members []ast.Node) {
 		if decl == nil {
 			continue
 		}
-		buildDecl(scope, decl, vis)
+		// Trivia (doc comments) is attached to the member wrapper m, not to the
+		// unwrapped inner decl; capture it here so the Symbol can carry it.
+		buildDecl(scope, decl, vis, m.LeadingTrivia())
 	}
 }
 
@@ -40,35 +42,36 @@ func unwrapMember(m ast.Node) (ast.Node, ast.Visibility) {
 }
 
 // buildDecl registers a symbol (and child scope, where applicable) for a single
-// declaration node.
-func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility) {
+// declaration node. trivia is the leading trivia captured from the member
+// wrapper before unwrap.
+func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Trivia) {
 	switch d := decl.(type) {
 	case *ast.Package:
 		child := NewScope(scope, d)
-		sym := newSymbol(d.Ident, SymbolPackage, d, vis, child, scope)
+		sym := newSymbol(d.Ident, SymbolPackage, d, vis, child, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
 	case *ast.Namespace:
 		child := NewScope(scope, d)
-		sym := newSymbol(d.Ident, SymbolNamespace, d, vis, child, scope)
+		sym := newSymbol(d.Ident, SymbolNamespace, d, vis, child, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
 	case *ast.Alias:
-		sym := newSymbol(d.Ident, SymbolAlias, d, vis, nil, scope)
+		sym := newSymbol(d.Ident, SymbolAlias, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 	case *ast.Dependency:
-		sym := newSymbol(d.Ident, SymbolDependency, d, vis, nil, scope)
+		sym := newSymbol(d.Ident, SymbolDependency, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 	case *ast.Comment:
-		sym := newSymbol(d.Ident, SymbolComment, d, vis, nil, scope)
+		sym := newSymbol(d.Ident, SymbolComment, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 	case *ast.Documentation:
-		sym := newSymbol(d.Ident, SymbolDocumentation, d, vis, nil, scope)
+		sym := newSymbol(d.Ident, SymbolDocumentation, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 	case *ast.TextualRepresentation:
-		sym := newSymbol(d.Ident, SymbolTextualRepresentation, d, vis, nil, scope)
+		sym := newSymbol(d.Ident, SymbolTextualRepresentation, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 	case *ast.Import, *ast.FilterMember, *ast.ErrorNode:
 		// Imports are processed during resolution; filters hold expressions;
@@ -78,20 +81,21 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility) {
 
 // newSymbol builds a Symbol from an identification. scope is the child scope the
 // declaration owns (nil for leaf declarations); owner is the enclosing scope the
-// declaration was declared in.
-func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Visibility, scope, owner *Scope) *Symbol {
+// declaration was declared in. trivia is the leading trivia from the member wrapper.
+func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Visibility, scope, owner *Scope, trivia []ast.Trivia) *Symbol {
 	name := id.Name
 	if name == "" {
 		name = id.ShortName
 	}
 	sym := &Symbol{
-		Name:       name,
-		Kind:       kind,
-		Decl:       decl,
-		Visibility: vis,
-		DeclSpan:   decl.Span(),
-		Scope:      scope,
-		OwnerScope: owner,
+		Name:          name,
+		Kind:          kind,
+		Decl:          decl,
+		Visibility:    vis,
+		DeclSpan:      decl.Span(),
+		Scope:         scope,
+		OwnerScope:    owner,
+		LeadingTrivia: trivia,
 	}
 	return sym
 }

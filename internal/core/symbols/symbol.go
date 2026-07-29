@@ -51,4 +51,9 @@ type Symbol struct {
 	DeclSpan   source.Span    // span of the declaration (for diagnostics)
 	Scope      *Scope         // the child scope this declaration owns, or nil for leaves
 	OwnerScope *Scope         // the enclosing scope this declaration was declared in
+
+	// LeadingTrivia is the comment/note trivia attached to the member wrapper
+	// preceding this declaration (captured before unwrap, since wrappers carry
+	// the trivia while the unwrapped inner Decl does not). Used for doc hover.
+	LeadingTrivia []ast.Trivia
 }
