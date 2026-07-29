@@ -6,10 +6,11 @@ import "github.com/Open-MBEE/Systemica/internal/core/ast"
 // symbols declared directly within a namespace-like construct and links to
 // its parent and child scopes.
 type Scope struct {
-	parent   *Scope
-	node     ast.Node             // the owning declaration node (nil for the doc root)
-	members  map[string][]*Symbol // name key -> symbols defined under that key (in definition order)
-	children []*Scope
+	parent      *Scope
+	node        ast.Node             // the owning declaration node (nil for the doc root)
+	members     map[string][]*Symbol // name key -> symbols defined under that key (in definition order)
+	memberOrder []string             // name keys in first-seen order (for deterministic enumeration)
+	children    []*Scope
 }
 
 // NewScope creates an empty scope with the given parent and owning node.
@@ -38,6 +39,9 @@ func (s *Scope) AddChild(c *Scope) { s.children = append(s.children, c) }
 func (s *Scope) Define(name string, sym *Symbol) {
 	if name == "" {
 		return
+	}
+	if _, ok := s.members[name]; !ok {
+		s.memberOrder = append(s.memberOrder, name)
 	}
 	s.members[name] = append(s.members[name], sym)
 }
