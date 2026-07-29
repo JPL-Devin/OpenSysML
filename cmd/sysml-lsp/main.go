@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 
@@ -16,10 +17,7 @@ type stdio struct{}
 func (stdio) Read(p []byte) (int, error)  { return os.Stdin.Read(p) }
 func (stdio) Write(p []byte) (int, error) { return os.Stdout.Write(p) }
 func (stdio) Close() error {
-	if err := os.Stdin.Close(); err != nil {
-		return err
-	}
-	return os.Stdout.Close()
+	return errors.Join(os.Stdin.Close(), os.Stdout.Close())
 }
 
 func main() {
