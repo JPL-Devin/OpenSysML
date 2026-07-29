@@ -30,7 +30,7 @@ func (s *Server) Run(ctx context.Context, rwc io.ReadWriteCloser) error {
 	stream := jsonrpc2.NewStream(rwc)
 	ctx, conn, client := protocol.NewServer(ctx, s, stream, zap.NewNop())
 	s.client = client
-	conn.Go(ctx, protocol.ServerHandler(s, jsonrpc2.MethodNotFoundHandler))
+	conn.Go(ctx, s.changeHandler(protocol.ServerHandler(s, jsonrpc2.MethodNotFoundHandler)))
 	<-conn.Done()
 	return conn.Err()
 }
