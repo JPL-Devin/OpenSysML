@@ -59,3 +59,10 @@ func (s *Scope) LookupLocal(name string) (*Symbol, bool) {
 func (s *Scope) LookupLocalAll(name string) []*Symbol {
 	return s.members[name]
 }
+
+// MemberNames returns the member keys of this scope in declaration order.
+func (s *Scope) MemberNames() []string {
+	out := make([]string, len(s.memberOrder))
+	copy(out, s.memberOrder)
+	return out
+}
