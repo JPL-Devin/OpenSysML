@@ -18,15 +18,37 @@ func NewLoader(src Source, cache *Cache) *Loader {
 	return &Loader{src: src, cache: cache}
 }
 
-// Load reads the named library file, parses it, and registers the resulting
-// scope into idx. Cache integration is added in Task 6.
+// Load reads the named library file and registers its symbols into idx. On a
+// cache hit the reduced record is restored directly, skipping lexing/parsing;
+// on a miss the file is parsed, registered, and a reduced record is persisted.
 func (l *Loader) Load(name string, idx *symbols.Index) error {
 	content, err := l.src.Read(name)
 	if err != nil {
 		return err
 	}
+	key := l.cache.keyFor(content)
+
+	// Cache hit: restore reduced records, skip lexing/parsing entirely.
+	if rec, ok := l.cache.Load(key); ok {
+		idx.AddRecords(name, recordEntries(rec))
+		return nil
+	}
+
+	// Miss: parse, register, extract a reduced record, persist it.
 	p := parser.New(source.New(name, content))
 	root := p.ParseFile()
 	idx.AddDocument(name, root)
+	if rec := recordFromIndex(name, idx); rec != nil {
+		_ = l.cache.Store(key, rec) // cache write failure is non-fatal
+	}
 	return nil
+}
+
+// recordEntries projects a persisted IndexRecord onto symbols.RecordEntry.
+func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
+	out := make([]symbols.RecordEntry, len(rec.Symbols))
+	for i, s := range rec.Symbols {
+		out[i] = symbols.RecordEntry{FQN: s.FQN, Kind: s.Kind, Span: s.Span}
+	}
+	return out
 }
