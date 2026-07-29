@@ -17,3 +17,17 @@ func (s *Scope) Members() []*Symbol {
 	}
 	return out
 }
+
+// SetDocName stamps name onto every symbol in the scope tree (members and
+// all descendant scopes), recording which document declares each symbol.
+func SetDocName(scope *Scope, name string) {
+	if scope == nil {
+		return
+	}
+	for _, sym := range scope.Members() {
+		sym.DocName = name
+		if sym.Scope != nil {
+			SetDocName(sym.Scope, name)
+		}
+	}
+}

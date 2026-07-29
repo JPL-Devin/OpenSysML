@@ -3,7 +3,9 @@ package model
 import (
 	"sync"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -151,4 +153,12 @@ func (w *Workspace) Document(name string) *Document {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	return w.docs[name]
+}
+
+// ResolveQualifiedInDoc resolves a qualified name against the given scope using
+// the workspace's symbol index. Used by the LSP layer for go-to-definition.
+func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return resolve.New(w.index).ResolveQualified(scope, qn)
 }

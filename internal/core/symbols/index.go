@@ -34,6 +34,7 @@ func NewIndex() *Index {
 func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 	idx.RemoveDocument(name)
 	rs := Build(root)
+	SetDocName(rs, name)
 	idx.docRoots[name] = rs
 	idx.indexScope(name, rs, "")
 }

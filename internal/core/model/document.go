@@ -25,13 +25,15 @@ func newDocument(name string, content []byte, version int) *Document {
 	sf := source.New(name, content)
 	p := parser.New(sf)
 	root := p.ParseFile()
+	scope := symbols.Build(root)
+	symbols.SetDocName(scope, name)
 	return &Document{
 		Name:             name,
 		Content:          content,
 		Version:          version,
 		AST:              root,
 		ParseDiagnostics: p.Diagnostics,
-		Scope:            symbols.Build(root),
+		Scope:            scope,
 		sf:               sf,
 	}
 }

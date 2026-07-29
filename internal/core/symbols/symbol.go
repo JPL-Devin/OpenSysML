@@ -56,4 +56,6 @@ type Symbol struct {
 	// preceding this declaration (captured before unwrap, since wrappers carry
 	// the trivia while the unwrapped inner Decl does not). Used for doc hover.
 	LeadingTrivia []ast.Trivia
+
+	DocName string // name of the document that declares this symbol (stamped after Build)
 }
