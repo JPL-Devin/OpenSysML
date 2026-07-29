@@ -1,6 +1,8 @@
 package libs
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -79,5 +81,31 @@ func TestNewCacheCreatesDir(t *testing.T) {
 	}
 	if _, ok := c.Load(key); !ok {
 		t.Fatal("Load miss from freshly created cache dir")
+	}
+}
+
+func TestCacheStoreIsAtomic(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	c, err := NewCache()
+	if err != nil {
+		t.Fatalf("NewCache: %v", err)
+	}
+	key := c.keyFor([]byte("some content"))
+	if err := c.Store(key, sampleRecord("P")); err != nil {
+		t.Fatalf("Store: %v", err)
+	}
+	// The final file exists and round-trips...
+	if _, ok := c.Load(key); !ok {
+		t.Fatalf("Load after Store: miss")
+	}
+	// ...and no temp file is left behind.
+	entries, err := os.ReadDir(c.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".tmp") {
+			t.Fatalf("leftover temp file after Store: %s", e.Name())
+		}
 	}
 }

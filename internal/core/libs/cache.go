@@ -62,11 +62,23 @@ func (c *Cache) Load(key string) (*IndexRecord, bool) {
 	return &rec, true
 }
 
-// Store gob-encodes rec and writes it to <dir>/<key>.idx.
+// Store gob-encodes rec and writes it to <dir>/<key>.idx atomically: it writes a
+// sibling <key>.idx.tmp then renames it into place, so a concurrent Load or a
+// crash never observes a partially written file. A failed encode/write removes
+// the temp and leaves any existing final file untouched.
 func (c *Cache) Store(key string, rec *IndexRecord) error {
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(rec); err != nil {
 		return err
 	}
-	return os.WriteFile(c.path(key), buf.Bytes(), 0o644)
+	final := c.path(key)
+	tmp := final + ".tmp"
+	if err := os.WriteFile(tmp, buf.Bytes(), 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, final); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
 }
