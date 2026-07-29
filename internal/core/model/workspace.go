@@ -155,6 +155,17 @@ func (w *Workspace) Document(name string) *Document {
 	return w.docs[name]
 }
 
+// DocumentNames returns a snapshot of the names of all known documents.
+func (w *Workspace) DocumentNames() []string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	names := make([]string, 0, len(w.docs))
+	for name := range w.docs {
+		names = append(names, name)
+	}
+	return names
+}
+
 // ResolveQualifiedInDoc resolves a qualified name against the given scope using
 // the workspace's symbol index. Used by the LSP layer for go-to-definition.
 func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {

@@ -2,8 +2,10 @@ package lsp
 
 import (
 	"context"
+	"strings"
 
 	"go.lsp.dev/protocol"
+	"go.lsp.dev/uri"
 
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -60,5 +62,46 @@ func lspSymbolKind(k symbols.SymbolKind) protocol.SymbolKind {
 		return protocol.SymbolKindString
 	default:
 		return protocol.SymbolKindObject
+	}
+}
+
+// Symbols implements workspace/symbol: a flat, query-filtered list of all
+// symbols across every open document.
+func (s *Server) Symbols(ctx context.Context, params *protocol.WorkspaceSymbolParams) ([]protocol.SymbolInformation, error) {
+	query := strings.ToLower(params.Query)
+
+	var out []protocol.SymbolInformation
+	for _, name := range s.ws.DocumentNames() {
+		doc := s.ws.Document(name)
+		if doc == nil || doc.Scope == nil {
+			continue
+		}
+		content := doc.Content
+		uriStr := nameToURI(name)
+		collectWorkspaceSymbols(doc.Scope, "", query, content, uriStr, &out)
+	}
+	return out, nil
+}
+
+// collectWorkspaceSymbols recursively appends matching symbols to out.
+func collectWorkspaceSymbols(scope *symbols.Scope, container, query string, content []byte, docURI uri.URI, out *[]protocol.SymbolInformation) {
+	for _, sym := range scope.Members() {
+		if sym.Name == "" {
+			continue
+		}
+		if query == "" || strings.Contains(strings.ToLower(sym.Name), query) {
+			*out = append(*out, protocol.SymbolInformation{
+				Name: sym.Name,
+				Kind: lspSymbolKind(sym.Kind),
+				Location: protocol.Location{
+					URI:   docURI,
+					Range: spanToRange(content, sym.DeclSpan),
+				},
+				ContainerName: container,
+			})
+		}
+		if sym.Scope != nil {
+			collectWorkspaceSymbols(sym.Scope, sym.Name, query, content, docURI, out)
+		}
 	}
 }
