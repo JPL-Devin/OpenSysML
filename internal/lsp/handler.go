@@ -43,15 +43,15 @@ func (s *Server) changeHandler(inner jsonrpc2.Handler) jsonrpc2.Handler {
 		if err := json.Unmarshal(req.Params(), &params); err != nil {
 			return reply(ctx, nil, err)
 		}
-		s.applyDidChange(uriToName(params.TextDocument.URI), params.ContentChanges, int(params.TextDocument.Version))
+		s.applyDidChange(ctx, uriToName(params.TextDocument.URI), params.ContentChanges, int(params.TextDocument.Version))
 		return reply(ctx, nil, nil)
 	}
 }
 
 // applyDidChange folds the content changes into the current document text and
-// updates the workspace. A change with a nil Range is a full-document replace;
-// otherwise it is an incremental splice.
-func (s *Server) applyDidChange(name string, changes []rawContentChange, version int) {
+// updates the workspace, then publishes refreshed diagnostics. A change with a
+// nil Range is a full-document replace; otherwise it is an incremental splice.
+func (s *Server) applyDidChange(ctx context.Context, name string, changes []rawContentChange, version int) {
 	doc := s.ws.Document(name)
 	var content []byte
 	if doc != nil {
@@ -61,6 +61,7 @@ func (s *Server) applyDidChange(name string, changes []rawContentChange, version
 		content = applyRawContentChange(content, ch)
 	}
 	s.ws.Update(name, content, version)
+	s.publishDiagnostics(ctx, name)
 }
 
 // applyRawContentChange applies a single change. Nil Range means full replace.

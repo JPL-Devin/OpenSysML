@@ -10,6 +10,7 @@ import (
 func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocumentParams) error {
 	name := uriToName(params.TextDocument.URI)
 	s.ws.Open(name, []byte(params.TextDocument.Text), int(params.TextDocument.Version))
+	s.publishDiagnostics(ctx, name)
 	return nil
 }
 
@@ -29,7 +30,7 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 		rng := ch.Range
 		raw[i] = rawContentChange{Range: &rng, RangeLength: ch.RangeLength, Text: ch.Text}
 	}
-	s.applyDidChange(uriToName(params.TextDocument.URI), raw, int(params.TextDocument.Version))
+	s.applyDidChange(ctx, uriToName(params.TextDocument.URI), raw, int(params.TextDocument.Version))
 	return nil
 }
 
@@ -39,7 +40,9 @@ func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocu
 	return nil
 }
 
-// DidSave is a no-op for now; diagnostics are refreshed on change.
+// DidSave refreshes diagnostics for the saved document.
 func (s *Server) DidSave(ctx context.Context, params *protocol.DidSaveTextDocumentParams) error {
+	name := uriToName(params.TextDocument.URI)
+	s.publishDiagnostics(ctx, name)
 	return nil
 }
