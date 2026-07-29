@@ -39,3 +39,11 @@ var keywordList = []string{
 	"variation", "verification", "verify", "via", "view", "viewpoint", "when",
 	"while", "xor",
 }
+
+// Keywords returns a copy of the KerML+SysML keyword list, for tooling
+// (e.g. LSP completion). The returned slice is safe to mutate.
+func Keywords() []string {
+	out := make([]string, len(keywordList))
+	copy(out, keywordList)
+	return out
+}
