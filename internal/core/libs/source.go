@@ -33,6 +33,11 @@ func DefaultSource() Source {
 	return &embedSource{}
 }
 
+// NewDirSource returns a Source that reads .kerml/.sysml files from dir.
+func NewDirSource(dir string) Source {
+	return &dirSource{dir: dir}
+}
+
 type embedSource struct{}
 
 func (s *embedSource) List() []string {

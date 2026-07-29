@@ -26,6 +26,14 @@ func (l *Loader) Load(name string, idx *symbols.Index) error {
 	if err != nil {
 		return err
 	}
+
+	// No cache: parse and register directly, skipping persistence.
+	if l.cache == nil {
+		p := parser.New(source.New(name, content))
+		idx.AddDocument(name, p.ParseFile())
+		return nil
+	}
+
 	key := l.cache.keyFor(content)
 
 	// Cache hit: restore reduced records, skip lexing/parsing entirely.

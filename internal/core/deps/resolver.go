@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/Open-MBEE/Systemica/internal/core/libs"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // Resolver turns a manifest's declared dependencies into local directories and
@@ -58,4 +59,32 @@ func (r *Resolver) resolveDirs(root string, m *Manifest) (map[string]string, err
 		dirs[name] = p
 	}
 	return dirs, nil
+}
+
+// Resolve resolves the manifest's dependencies and library paths (relative to
+// root) and loads their files into idx. Dependencies are loaded after the
+// caller's workspace files and before the bundled stdlib, matching the spec's
+// workspace -> dependencies -> stdlib import order.
+func (r *Resolver) Resolve(root string, m *Manifest, idx *symbols.Index) error {
+	dirs, err := r.resolveDirs(root, m)
+	if err != nil {
+		return err
+	}
+	for _, dir := range dirs {
+		if err := loadDir(dir, idx, r.cache); err != nil {
+			return err
+		}
+	}
+	if m != nil {
+		for _, lp := range m.LibraryPaths {
+			dir := lp
+			if !filepath.IsAbs(dir) {
+				dir = filepath.Join(root, dir)
+			}
+			if err := loadDir(dir, idx, r.cache); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
