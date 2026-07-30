@@ -19,6 +19,10 @@ const (
 	SymbolComment
 	SymbolDocumentation
 	SymbolTextualRepresentation
+	SymbolPartDef
+	SymbolAttributeDef
+	SymbolPartUsage
+	SymbolAttributeUsage
 )
 
 var symbolKindNames = map[SymbolKind]string{
@@ -30,6 +34,10 @@ var symbolKindNames = map[SymbolKind]string{
 	SymbolComment:               "comment",
 	SymbolDocumentation:         "documentation",
 	SymbolTextualRepresentation: "textualRepresentation",
+	SymbolPartDef:               "partDef",
+	SymbolAttributeDef:          "attributeDef",
+	SymbolPartUsage:             "partUsage",
+	SymbolAttributeUsage:        "attributeUsage",
 }
 
 // String returns the display name of the kind.

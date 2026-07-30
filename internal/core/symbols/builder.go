@@ -73,6 +73,18 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	case *ast.TextualRepresentation:
 		sym := newSymbol(d.Ident, SymbolTextualRepresentation, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
+	case *ast.Definition:
+		child := NewScope(scope, d)
+		sym := newSymbol(d.Ident, definitionSymbolKind(d.Kind), d, vis, child, scope, trivia)
+		defineIdent(scope, d.Ident, sym)
+		scope.AddChild(child)
+		buildMembers(child, d.Members)
+	case *ast.Usage:
+		child := NewScope(scope, d)
+		sym := newSymbol(d.Ident, usageSymbolKind(d.Kind), d, vis, child, scope, trivia)
+		defineIdent(scope, d.Ident, sym)
+		scope.AddChild(child)
+		buildMembers(child, d.Members)
 	case *ast.Import, *ast.FilterMember, *ast.ErrorNode:
 		// Imports are processed during resolution; filters hold expressions;
 		// error nodes have no declaration. Nothing to register here.
@@ -100,8 +112,37 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 	return sym
 }
 
-// defineIdent registers sym under both the short and primary name keys.
+// defineIdent registers sym under its short and primary name keys, skipping
+// any that are empty (e.g. anonymous usages).
 func defineIdent(scope *Scope, id ast.Identification, sym *Symbol) {
-	scope.Define(id.ShortName, sym)
-	scope.Define(id.Name, sym)
+	if id.ShortName != "" {
+		scope.Define(id.ShortName, sym)
+	}
+	if id.Name != "" {
+		scope.Define(id.Name, sym)
+	}
+}
+
+// definitionSymbolKind maps an ast.DefinitionKind to its SymbolKind.
+func definitionSymbolKind(k ast.DefinitionKind) SymbolKind {
+	switch k {
+	case ast.DefPart:
+		return SymbolPartDef
+	case ast.DefAttribute:
+		return SymbolAttributeDef
+	default:
+		return SymbolUnknown
+	}
+}
+
+// usageSymbolKind maps an ast.UsageKind to its SymbolKind.
+func usageSymbolKind(k ast.UsageKind) SymbolKind {
+	switch k {
+	case ast.UsagePart:
+		return SymbolPartUsage
+	case ast.UsageAttribute:
+		return SymbolAttributeUsage
+	default:
+		return SymbolUnknown
+	}
 }

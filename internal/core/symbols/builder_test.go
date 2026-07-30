@@ -98,3 +98,55 @@ func TestBuildErrorNodeSkipped(t *testing.T) {
 		t.Fatalf("Good not registered")
 	}
 }
+
+func TestBuildDefinitionAndNestedUsages(t *testing.T) {
+	src := "part def Car { part engine; attribute mass; }"
+	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
+	scope := Build(root)
+
+	syms := scope.LookupLocalAll("Car")
+	if len(syms) != 1 {
+		t.Fatalf("expected 1 Car symbol, got %d", len(syms))
+	}
+	car := syms[0]
+	if car.Kind != SymbolPartDef {
+		t.Fatalf("Car kind = %v, want SymbolPartDef", car.Kind)
+	}
+	if car.Scope == nil {
+		t.Fatalf("Car should own a child scope")
+	}
+	if len(car.Scope.LookupLocalAll("engine")) != 1 {
+		t.Fatalf("engine not registered in Car scope")
+	}
+	eng := car.Scope.LookupLocalAll("engine")[0]
+	if eng.Kind != SymbolPartUsage {
+		t.Fatalf("engine kind = %v, want SymbolPartUsage", eng.Kind)
+	}
+	if len(car.Scope.LookupLocalAll("mass")) != 1 {
+		t.Fatalf("mass not registered in Car scope")
+	}
+	if car.Scope.LookupLocalAll("mass")[0].Kind != SymbolAttributeUsage {
+		t.Fatalf("mass kind wrong")
+	}
+}
+
+func TestBuildAttributeDefKind(t *testing.T) {
+	root := parser.New(source.New("<t>", []byte("attribute def Mass;"))).ParseFile()
+	scope := Build(root)
+	syms := scope.LookupLocalAll("Mass")
+	if len(syms) != 1 || syms[0].Kind != SymbolAttributeDef {
+		t.Fatalf("Mass symbol wrong: %+v", syms)
+	}
+}
+
+func TestBuildAnonymousUsageNotNamed(t *testing.T) {
+	root := parser.New(source.New("<t>", []byte("part def Car { part; }"))).ParseFile()
+	scope := Build(root)
+	car := scope.LookupLocalAll("Car")[0]
+	if len(car.Scope.LookupLocalAll("")) != 0 {
+		t.Fatalf("anonymous usage should not be registered under empty name")
+	}
+	if len(car.Scope.Children()) != 1 {
+		t.Fatalf("expected 1 child scope for the anonymous usage, got %d", len(car.Scope.Children()))
+	}
+}
