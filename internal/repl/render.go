@@ -1,10 +1,12 @@
 package repl
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 // Result is the outcome of one Submit: the top-level members parsed from the
@@ -72,4 +74,58 @@ func qnString(qn *ast.QualifiedName) string {
 		parts[i] = p.Text
 	}
 	return strings.Join(parts, "::")
+}
+
+// renderDiagnostics formats each diagnostic as a two-line block:
+//
+//	<line>:<col>: <severity>: <message>
+//	    <source line>
+//	    <caret span>
+//
+// Note: byte-column carets assume ASCII/monospace alignment; multi-byte runes
+// before the caret will misalign by display width. Acceptable for v1 — the LSP
+// server owns UTF-16 correctness; the REPL caret is only a terminal aid.
+func renderDiagnostics(diags []passes.Diagnostic, src string) []string {
+	if len(diags) == 0 {
+		return nil
+	}
+	sf := source.New(docName, []byte(src))
+	lines := strings.Split(src, "\n")
+	var out []string
+	for _, d := range diags {
+		p := sf.Lines().PosAt(d.Span.Offset)
+		out = append(out, fmt.Sprintf("%d:%d: %s: %s", p.Line, p.Col, d.Severity.String(), d.Message))
+		if p.Line-1 >= 0 && p.Line-1 < len(lines) {
+			srcLine := lines[p.Line-1]
+			out = append(out, srcLine)
+			out = append(out, caretLine(p.Col, d.Span.Len, len(srcLine)))
+		}
+	}
+	return out
+}
+
+// caretLine builds "   ^~~~" with (col-1) leading spaces and a caret span of
+// width max(1, spanLen), clamped so it never runs past the source line.
+func caretLine(col, spanLen, lineLen int) string {
+	if col < 1 {
+		col = 1
+	}
+	lead := col - 1
+	width := spanLen
+	if width < 1 {
+		width = 1
+	}
+	if lead+width > lineLen {
+		width = lineLen - lead
+		if width < 1 {
+			width = 1
+		}
+	}
+	var b strings.Builder
+	b.WriteString(strings.Repeat(" ", lead))
+	b.WriteByte('^')
+	if width > 1 {
+		b.WriteString(strings.Repeat("~", width-1))
+	}
+	return b.String()
 }

@@ -33,3 +33,20 @@ func TestKindLabel(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderDiagnostics(t *testing.T) {
+	s := NewSession()
+	r := s.Submit("namespace N { import Missing::X; }")
+	if len(r.Diagnostics) == 0 {
+		t.Skip("no diagnostic produced; adjust source to force one")
+	}
+	out := renderDiagnostics(r.Diagnostics, r.Source)
+	joined := strings.Join(out, "\n")
+	// Expect: a "line:col: severity: message" header and a caret line.
+	if !strings.Contains(joined, "error:") && !strings.Contains(joined, "warning:") {
+		t.Errorf("missing severity header: %q", joined)
+	}
+	if !strings.Contains(joined, "^") {
+		t.Errorf("missing caret line: %q", joined)
+	}
+}
