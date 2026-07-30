@@ -64,6 +64,11 @@ const (
 	Semicolon   // ;
 	Colon       // :
 
+	ColonGt      // :>
+	ColonGtGt    // :>>
+	ColonColonGt // ::>
+	EqGt         // =>
+
 	Keyword // generic keyword marker; specific keyword identity via Token.KeywordID
 
 	Error // illegal char / unterminated literal
@@ -83,6 +88,7 @@ var kindNames = map[Kind]string{
 	Hash: "#", LParen: "(", RParen: ")", LBracket: "[", RBracket: "]",
 	Arrow: "->", DotQuestion: ".?", Comma: ",", ColonColon: "::",
 	Dollar: "$", Eq: "=", LBrace: "{", RBrace: "}", Semicolon: ";", Colon: ":",
+	ColonGt: ":>", ColonGtGt: ":>>", ColonColonGt: "::>", EqGt: "=>",
 	Keyword: "Keyword", Error: "Error",
 }
 

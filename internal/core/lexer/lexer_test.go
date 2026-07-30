@@ -420,3 +420,44 @@ func TestCanStartTokenCoversPunctuation(t *testing.T) {
 		}
 	}
 }
+
+func TestCompoundRelationshipOperators(t *testing.T) {
+	cases := []struct {
+		src  string
+		want []Kind
+	}{
+		{":>", []Kind{ColonGt, EOF}},
+		{":>>", []Kind{ColonGtGt, EOF}},
+		{"::>", []Kind{ColonColonGt, EOF}},
+		{"=>", []Kind{EqGt, EOF}},
+		{":", []Kind{Colon, EOF}},
+		{"::", []Kind{ColonColon, EOF}},
+		{"=", []Kind{Eq, EOF}},
+		{">", []Kind{Gt, EOF}},
+		{"<x>", []Kind{Lt, Identifier, Gt, EOF}},
+		{":> >", []Kind{ColonGt, Gt, EOF}},
+		{"= 1", []Kind{Eq, Decimal, EOF}},
+	}
+	for _, tc := range cases {
+		lx := New(source.New("<t>", []byte(tc.src)))
+		var got []Kind
+		for {
+			tok := lx.Next()
+			if tok.IsTrivia() {
+				continue
+			}
+			got = append(got, tok.Kind)
+			if tok.Kind == EOF {
+				break
+			}
+		}
+		if len(got) != len(tc.want) {
+			t.Fatalf("%q: got %v want %v", tc.src, got, tc.want)
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Fatalf("%q: token %d got %v want %v", tc.src, i, got[i], tc.want[i])
+			}
+		}
+	}
+}

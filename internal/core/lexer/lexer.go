@@ -48,8 +48,20 @@ func (lx *Lexer) Next() Token {
 	switch c {
 	case ':':
 		if lx.peek(1) == ':' {
+			if lx.peek(2) == '>' {
+				lx.pos += 3
+				return Token{Kind: ColonColonGt, Span: lx.span(start)}
+			}
 			lx.pos += 2
 			return Token{Kind: ColonColon, Span: lx.span(start)}
+		}
+		if lx.peek(1) == '>' {
+			if lx.peek(2) == '>' {
+				lx.pos += 3
+				return Token{Kind: ColonGtGt, Span: lx.span(start)}
+			}
+			lx.pos += 2
+			return Token{Kind: ColonGt, Span: lx.span(start)}
 		}
 		lx.pos++
 		return Token{Kind: Colon, Span: lx.span(start)}
@@ -86,6 +98,10 @@ func (lx *Lexer) Next() Token {
 		if lx.peek(1) == '=' {
 			lx.pos += 2
 			return Token{Kind: EqEq, Span: lx.span(start)}
+		}
+		if lx.peek(1) == '>' {
+			lx.pos += 2
+			return Token{Kind: EqGt, Span: lx.span(start)}
 		}
 		lx.pos++
 		return Token{Kind: Eq, Span: lx.span(start)}
