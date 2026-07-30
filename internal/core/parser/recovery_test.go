@@ -7,7 +7,7 @@ import (
 )
 
 func TestRecoverBadMemberThenGood(t *testing.T) {
-	p := newParser("part def X; package P;")
+	p := newParser("@@@ package P;")
 	root := p.ParseFile()
 	if len(root.Members) != 2 {
 		t.Fatalf("got %d members, want 2", len(root.Members))

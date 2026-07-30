@@ -129,10 +129,25 @@ func TestParseFileVisibilityPrefix(t *testing.T) {
 	}
 }
 
-func TestParseFileUnknownKeywordErrorNode(t *testing.T) {
+func TestParseFileDefinitionNowParses(t *testing.T) {
 	p := newParser("part def Vehicle;")
 	root := p.ParseFile()
 	if len(root.Members) != 1 {
+		t.Fatalf("members = %+v", root.Members)
+	}
+	def, ok := root.Members[0].(*ast.Membership).Member.(*ast.Definition)
+	if !ok {
+		t.Fatalf("expected *ast.Definition, got %T", root.Members[0])
+	}
+	if def.Kind != ast.DefPart || def.Ident.Name != "Vehicle" {
+		t.Fatalf("kind=%v name=%q", def.Kind, def.Ident.Name)
+	}
+}
+
+func TestParseFileUnknownKeywordErrorNode(t *testing.T) {
+	p := newParser("@@@ Vehicle;")
+	root := p.ParseFile()
+	if len(root.Members) == 0 {
 		t.Fatalf("members = %+v", root.Members)
 	}
 	if _, ok := root.Members[0].(*ast.ErrorNode); !ok {

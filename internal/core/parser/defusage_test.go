@@ -175,3 +175,43 @@ func TestParseUsageMultiplicityThenValue(t *testing.T) {
 		t.Fatalf("expected both multiplicity and value, got mult=%v value=%v", u.Multiplicity, u.Value)
 	}
 }
+
+func TestParseDefinitionNestedBody(t *testing.T) {
+	def := parseOneMember(t, "part def Car { part engine; attribute mass; }").(*ast.Definition)
+	if !def.HasBody {
+		t.Fatalf("expected body")
+	}
+	if len(def.Members) != 2 {
+		t.Fatalf("expected 2 members, got %d", len(def.Members))
+	}
+	m0 := def.Members[0].(*ast.Membership).Member.(*ast.Usage)
+	if m0.Kind != ast.UsagePart {
+		t.Fatalf("member[0] kind=%v", m0.Kind)
+	}
+	m1 := def.Members[1].(*ast.Membership).Member.(*ast.Usage)
+	if m1.Kind != ast.UsageAttribute {
+		t.Fatalf("member[1] kind=%v", m1.Kind)
+	}
+}
+
+func TestParseDefinitionBodyMixedMembers(t *testing.T) {
+	def := parseOneMember(t, "part def Car { part wheel; comment /* c */ }").(*ast.Definition)
+	if len(def.Members) != 2 {
+		t.Fatalf("expected 2 members, got %d", len(def.Members))
+	}
+}
+
+func TestParseUsageNestedBody(t *testing.T) {
+	u := parseOneMember(t, "part car { part engine; }").(*ast.Usage)
+	if !u.HasBody || len(u.Members) != 1 {
+		t.Fatalf("expected 1 body member, got hasBody=%v members=%d", u.HasBody, len(u.Members))
+	}
+}
+
+func TestParseDefinitionBodyVisibility(t *testing.T) {
+	def := parseOneMember(t, "part def Car { private part secret; }").(*ast.Definition)
+	m := def.Members[0].(*ast.Membership)
+	if m.Visibility != ast.VisibilityPrivate {
+		t.Fatalf("expected private, got %v", m.Visibility)
+	}
+}

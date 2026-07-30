@@ -128,7 +128,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 		Ident:       p.parseIdentification(),
 	}
 	def.Relationships = p.parseRelationships(false)
-	members, hasBody := p.parseNamespaceBody() // placeholder; Task 5 replaces
+	members, hasBody := p.parseDefUsageBody()
 	def.Members = members
 	def.HasBody = hasBody
 	def.NodeSpan = p.spanFrom(start)
@@ -152,11 +152,67 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods) *as
 	if p.accept2(lexer.Eq) {
 		u.Value = p.ParseExpression()
 	}
-	members, hasBody := p.parseNamespaceBody() // placeholder; Task 5 replaces
+	members, hasBody := p.parseDefUsageBody()
 	u.Members = members
 	u.HasBody = hasBody
 	u.NodeSpan = p.spanFrom(start)
 	return u
+}
+
+// parseDefUsageBody parses a definition/usage body: `;` (no body) or
+// `{ member* }`. Body members may be nested def/usage declarations or ordinary
+// namespace members, each carrying optional visibility.
+func (p *Parser) parseDefUsageBody() (members []ast.Node, hasBody bool) {
+	if p.accept2(lexer.Semicolon) {
+		return nil, false
+	}
+	if _, ok := p.expect(lexer.LBrace, "expected '{' or ';' after declaration"); !ok {
+		return nil, false
+	}
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
+		m := p.parseBodyMember()
+		if m != nil {
+			members = append(members, m)
+		}
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.advance()
+		}
+	}
+	p.expect(lexer.RBrace, "expected '}' to close body")
+	return members, true
+}
+
+// parseBodyMember parses one body member: an optional visibility prefix
+// followed by a declaration (which may be a nested def/usage). Import/Alias
+// carry their own visibility and are returned directly; other declarations are
+// wrapped in a Membership. Mirrors parseMember.
+func (p *Parser) parseBodyMember() ast.Node {
+	start := p.peek().Span.Offset
+	trivia := p.takeTrivia()
+	vis := p.parseVisibility()
+
+	if p.atKeyword("import") {
+		imp := p.parseImport(start, vis)
+		imp.SetLeadingTrivia(trivia)
+		return imp
+	}
+	if p.atKeyword("alias") {
+		al := p.parseAlias(start, vis)
+		al.SetLeadingTrivia(trivia)
+		return al
+	}
+
+	inner := p.parseDeclaration(start)
+	if inner == nil {
+		en := p.errorNodeSkip(start, "expected a body member")
+		en.SetLeadingTrivia(trivia)
+		return en
+	}
+	mem := &ast.Membership{Visibility: vis, Member: inner}
+	mem.NodeSpan = p.spanFrom(start)
+	mem.SetLeadingTrivia(trivia)
+	return mem
 }
 
 // parseRelationships parses zero or more relationship clauses. isUsage selects
