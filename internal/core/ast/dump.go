@@ -140,6 +140,30 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		b.WriteString(`(FilterMember`)
 		writeChildren(b, depth, []Node{v.Condition})
 		return
+	case *Definition:
+		fmt.Fprintf(b, `(Definition kind=%q abstract=%t variation=%t name=%q`,
+			v.Kind.String(), v.IsAbstract, v.IsVariation, identName(v.Ident))
+		writeChildren(b, depth, defusageChildren(v.Prefixes, v.Relationships, nil, nil, v.Members))
+		return
+	case *Usage:
+		fmt.Fprintf(b, `(Usage kind=%q name=%q ref=%t direction=%q composite=%t derived=%t ordered=%t nonunique=%t`,
+			v.Kind.String(), identName(v.Ident), v.IsReference, v.Direction.String(),
+			v.IsComposite, v.IsDerived, v.IsOrdered, v.IsNonunique)
+		writeChildren(b, depth, defusageChildren(v.Prefixes, v.Relationships, v.Multiplicity, v.Value, v.Members))
+		return
+	case *Relationship:
+		fmt.Fprintf(b, `(Relationship kind=%q target=%q)`, v.Kind.String(), qnString(v.Target))
+	case *Multiplicity:
+		fmt.Fprintf(b, `(Multiplicity range=%t`, v.IsRange)
+		var kids []Node
+		if v.Lower != nil {
+			kids = append(kids, v.Lower)
+		}
+		if v.Upper != nil {
+			kids = append(kids, v.Upper)
+		}
+		writeChildren(b, depth, kids)
+		return
 	default:
 		fmt.Fprintf(b, `(%T)`, n)
 	}
@@ -220,6 +244,27 @@ func prefixesAnd(prefixes []*PrefixMetadata, members []Node) []Node {
 	kids := make([]Node, 0, len(prefixes)+len(members))
 	for _, pm := range prefixes {
 		kids = append(kids, pm)
+	}
+	kids = append(kids, members...)
+	return kids
+}
+
+// defusageChildren flattens the ordered child set for a Definition/Usage
+// dump: prefixes, relationships, optional multiplicity, optional value,
+// then members. nil multiplicity/value are omitted.
+func defusageChildren(prefixes []*PrefixMetadata, rels []*Relationship, mult *Multiplicity, value Node, members []Node) []Node {
+	kids := make([]Node, 0, len(prefixes)+len(rels)+2+len(members))
+	for _, pm := range prefixes {
+		kids = append(kids, pm)
+	}
+	for _, r := range rels {
+		kids = append(kids, r)
+	}
+	if mult != nil {
+		kids = append(kids, mult)
+	}
+	if value != nil {
+		kids = append(kids, value)
 	}
 	kids = append(kids, members...)
 	return kids
