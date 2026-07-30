@@ -1,6 +1,9 @@
 package libs
 
 import (
+	"strings"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -47,12 +50,53 @@ func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord) {
 			fqn = prefix + "::" + sym.Name
 		}
 		rec.Symbols = append(rec.Symbols, symRecord{
-			FQN:  fqn,
-			Kind: sym.Kind,
-			Span: sym.DeclSpan,
+			FQN:    fqn,
+			Kind:   sym.Kind,
+			Span:   sym.DeclSpan,
+			Supers: supersOf(sym.Decl),
 		})
 		if sym.Scope != nil {
 			collectScope(sym.Scope, fqn, rec)
 		}
 	}
+}
+
+// supersOf extracts the raw qualified-name text of the specialization edges
+// (specializes/subsets/redefines) declared by a Definition or Usage. Typing,
+// references, and crosses edges are not specializations and are excluded.
+// Returns nil for any other node kind.
+func supersOf(decl ast.Node) []string {
+	var rels []*ast.Relationship
+	switch d := decl.(type) {
+	case *ast.Definition:
+		rels = d.Relationships
+	case *ast.Usage:
+		rels = d.Relationships
+	default:
+		return nil
+	}
+	var out []string
+	for _, r := range rels {
+		switch r.Kind {
+		case ast.RelSpecializes, ast.RelSubsets, ast.RelRedefines:
+			out = append(out, qualifiedNameText(r.Target))
+		}
+	}
+	return out
+}
+
+// qualifiedNameText renders a QualifiedName as "A::B::C" (no leading $:: marker;
+// specialization targets are relative names). Returns "" for a nil name.
+func qualifiedNameText(qn *ast.QualifiedName) string {
+	if qn == nil {
+		return ""
+	}
+	var b strings.Builder
+	for i, seg := range qn.Parts {
+		if i > 0 {
+			b.WriteString("::")
+		}
+		b.WriteString(seg.Text)
+	}
+	return b.String()
 }

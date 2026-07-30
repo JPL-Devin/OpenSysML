@@ -74,3 +74,48 @@ func TestIndexRecordGobRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestRecordSupersFromSpecializationEdges(t *testing.T) {
+	src := "part def Car specializes Vehicle, Machine; part def Vehicle; part def Machine;"
+	root := parser.New(source.New("lib", []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("lib", root)
+
+	rec := recordFromIndex("lib", idx)
+	if rec == nil {
+		t.Fatalf("expected a record")
+	}
+	var car *symRecord
+	for i := range rec.Symbols {
+		if rec.Symbols[i].FQN == "Car" {
+			car = &rec.Symbols[i]
+		}
+	}
+	if car == nil {
+		t.Fatalf("Car record not found")
+	}
+	if len(car.Supers) != 2 || car.Supers[0] != "Vehicle" || car.Supers[1] != "Machine" {
+		t.Fatalf("Supers = %v, want [Vehicle Machine]", car.Supers)
+	}
+}
+
+func TestRecordSupersExcludesTypingAndReferences(t *testing.T) {
+	src := "part def Engine; part e : Engine subsets Engine;"
+	root := parser.New(source.New("lib", []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("lib", root)
+
+	rec := recordFromIndex("lib", idx)
+	var e *symRecord
+	for i := range rec.Symbols {
+		if rec.Symbols[i].FQN == "e" {
+			e = &rec.Symbols[i]
+		}
+	}
+	if e == nil {
+		t.Fatalf("e record not found")
+	}
+	if len(e.Supers) != 1 || e.Supers[0] != "Engine" {
+		t.Fatalf("Supers = %v, want [Engine] (subsets only)", e.Supers)
+	}
+}
