@@ -5,6 +5,7 @@ package repl
 import (
 	"strings"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/model"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -78,6 +79,29 @@ func intersects(names []string, set map[string]bool) bool {
 		}
 	}
 	return false
+}
+
+// Submit accumulates src into the <repl> document, reindexes and eagerly
+// analyzes the whole buffer, and returns a Result. Submissions are always
+// accumulated (even with parse errors) so diagnostics are reported against the
+// live session context; a later redeclaration of the same name replaces the
+// prior snippet (see accept).
+func (s *Session) Submit(src string) Result {
+	declared := declaredNames(parser.New(source.New(docName, []byte(src))).ParseFile())
+	joined := s.accept(src)
+	s.version++
+	s.ws.Open(docName, []byte(joined), s.version)
+	diags := s.ws.Diagnostics(docName)
+	var members []ast.Node
+	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
+		members = doc.AST.Members
+	}
+	return Result{
+		Members:     members,
+		Declared:    declared,
+		Diagnostics: diags,
+		Source:      joined,
+	}
 }
 
 // Clear resets the session, dropping all accumulated declarations.

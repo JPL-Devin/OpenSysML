@@ -31,3 +31,19 @@ func TestAcceptReplacesByName(t *testing.T) {
 		t.Fatalf("P not deduplicated: %q", joined)
 	}
 }
+
+func TestSubmitResolvesAcrossSubmissions(t *testing.T) {
+	s := NewSession()
+	r1 := s.Submit("package P { }")
+	if len(r1.Diagnostics) != 0 {
+		t.Fatalf("clean package should have no diags, got %v", r1.Diagnostics)
+	}
+	if len(r1.Declared) != 1 || r1.Declared[0] != "P" {
+		t.Fatalf("want declared [P], got %v", r1.Declared)
+	}
+	// A later submission referencing an undefined name yields a diagnostic.
+	r2 := s.Submit("namespace N { import Missing::X; }")
+	if len(r2.Diagnostics) == 0 {
+		t.Fatalf("expected unresolved-reference diagnostic")
+	}
+}
