@@ -29,6 +29,15 @@ var featureModifierKeywords = map[string]bool{
 	"nonunique": true,
 }
 
+// relationshipKeywords maps a spelled-out relationship keyword to its kind.
+var relationshipKeywords = map[string]ast.RelationshipKind{
+	"specializes": ast.RelSpecializes,
+	"subsets":     ast.RelSubsets,
+	"redefines":   ast.RelRedefines,
+	"references":  ast.RelReferences,
+	"crosses":     ast.RelCrosses,
+}
+
 type featureMods struct {
 	isAbstract  bool
 	isVariation bool
@@ -118,6 +127,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 		IsVariation: mods.isVariation,
 		Ident:       p.parseIdentification(),
 	}
+	def.Relationships = p.parseRelationships(false)
 	members, hasBody := p.parseNamespaceBody() // placeholder; Task 5 replaces
 	def.Members = members
 	def.HasBody = hasBody
@@ -137,9 +147,108 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods) *as
 		IsNonunique: mods.isNonunique,
 		Ident:       p.parseIdentification(),
 	}
+	u.Relationships = p.parseRelationships(true)
+	u.Multiplicity = p.parseMultiplicity()
+	if p.accept2(lexer.Eq) {
+		u.Value = p.ParseExpression()
+	}
 	members, hasBody := p.parseNamespaceBody() // placeholder; Task 5 replaces
 	u.Members = members
 	u.HasBody = hasBody
 	u.NodeSpan = p.spanFrom(start)
 	return u
+}
+
+// parseRelationships parses zero or more relationship clauses. isUsage selects
+// the meaning of the symbolic `:>` operator (subsets on a usage, specializes on
+// a definition). Each clause may carry a comma-separated target list; every
+// target becomes its own Relationship sharing the clause kind.
+func (p *Parser) parseRelationships(isUsage bool) []*ast.Relationship {
+	var rels []*ast.Relationship
+	for {
+		kind, ok := p.relationshipClauseKind(isUsage)
+		if !ok {
+			return rels
+		}
+		for {
+			start := p.peek().Span.Offset
+			qn := p.parseQualifiedName()
+			r := &ast.Relationship{Kind: kind, Target: qn}
+			r.NodeSpan = p.spanFrom(start)
+			rels = append(rels, r)
+			if !p.accept2(lexer.Comma) {
+				break
+			}
+		}
+	}
+}
+
+// relationshipClauseKind consumes the operator/keyword that begins a
+// relationship clause and returns its kind. Reports ok=false (consuming
+// nothing) when the current token does not begin a relationship clause.
+func (p *Parser) relationshipClauseKind(isUsage bool) (ast.RelationshipKind, bool) {
+	if t := p.peek(); t.Kind == lexer.Keyword {
+		if k, ok := relationshipKeywords[t.KeywordID]; ok {
+			p.advance()
+			return k, true
+		}
+		if t.KeywordID == "defined" {
+			p.advance()
+			p.expect2Keyword("by")
+			return ast.RelTyping, true
+		}
+	}
+	switch p.peek().Kind {
+	case lexer.Colon:
+		p.advance()
+		return ast.RelTyping, true
+	case lexer.ColonGt:
+		p.advance()
+		if isUsage {
+			return ast.RelSubsets, true
+		}
+		return ast.RelSpecializes, true
+	case lexer.ColonGtGt:
+		p.advance()
+		return ast.RelRedefines, true
+	case lexer.ColonColonGt:
+		p.advance()
+		return ast.RelReferences, true
+	case lexer.EqGt:
+		p.advance()
+		return ast.RelCrosses, true
+	}
+	return 0, false
+}
+
+// parseMultiplicity parses `[ lower ( .. upper )? ]` when a `[` is present.
+func (p *Parser) parseMultiplicity() *ast.Multiplicity {
+	if p.peek().Kind != lexer.LBracket {
+		return nil
+	}
+	start := p.peek().Span.Offset
+	p.advance() // '['
+	m := &ast.Multiplicity{}
+	m.Lower = p.parseMultiplicityBound()
+	if p.accept2(lexer.DotDot) {
+		m.IsRange = true
+		m.Upper = p.parseMultiplicityBound()
+	}
+	p.expect(lexer.RBracket, "expected ']' to close multiplicity")
+	m.NodeSpan = p.spanFrom(start)
+	return m
+}
+
+// parseMultiplicityBound parses a single bound: `*` (infinity) or an expression.
+// The bound is parsed above range precedence so the multiplicity's own `..`
+// separator is not swallowed as a range operator.
+func (p *Parser) parseMultiplicityBound() ast.Node {
+	if p.peek().Kind == lexer.Star {
+		star := p.peek()
+		p.advance()
+		inf := &ast.LiteralInfinity{}
+		inf.NodeSpan = star.Span
+		return inf
+	}
+	return p.parseBinary(precAdditive)
 }

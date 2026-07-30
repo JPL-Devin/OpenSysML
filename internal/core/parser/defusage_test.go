@@ -68,3 +68,110 @@ func TestParseAnonymousUsage(t *testing.T) {
 		t.Fatalf("got kind=%v name=%q", u.Kind, u.Ident.Name)
 	}
 }
+
+func relTargets(rels []*ast.Relationship) []string {
+	out := make([]string, len(rels))
+	for i, r := range rels {
+		var parts string
+		for j, seg := range r.Target.Parts {
+			if j > 0 {
+				parts += "::"
+			}
+			parts += seg.Text
+		}
+		out[i] = parts
+	}
+	return out
+}
+
+func TestParseDefinitionSpecializes(t *testing.T) {
+	def := parseOneMember(t, "part def Car specializes Vehicle, Machine;").(*ast.Definition)
+	if len(def.Relationships) != 2 {
+		t.Fatalf("expected 2 relationships, got %d", len(def.Relationships))
+	}
+	for _, r := range def.Relationships {
+		if r.Kind != ast.RelSpecializes {
+			t.Fatalf("expected RelSpecializes, got %v", r.Kind)
+		}
+	}
+	if got := relTargets(def.Relationships); got[0] != "Vehicle" || got[1] != "Machine" {
+		t.Fatalf("targets=%v", got)
+	}
+}
+
+func TestParseDefinitionSpecializesSymbol(t *testing.T) {
+	def := parseOneMember(t, "part def Car :> Vehicle;").(*ast.Definition)
+	if len(def.Relationships) != 1 || def.Relationships[0].Kind != ast.RelSpecializes {
+		t.Fatalf("rels=%+v", def.Relationships)
+	}
+}
+
+func TestParseUsageTypingAndSubsets(t *testing.T) {
+	u := parseOneMember(t, "part engine : Engine subsets vehicle::parts;").(*ast.Usage)
+	if len(u.Relationships) != 2 {
+		t.Fatalf("expected 2 relationships, got %d", len(u.Relationships))
+	}
+	if u.Relationships[0].Kind != ast.RelTyping {
+		t.Fatalf("first should be RelTyping, got %v", u.Relationships[0].Kind)
+	}
+	if u.Relationships[1].Kind != ast.RelSubsets {
+		t.Fatalf("second should be RelSubsets, got %v", u.Relationships[1].Kind)
+	}
+}
+
+func TestParseUsageSubsetsSymbol(t *testing.T) {
+	u := parseOneMember(t, "part p :> q;").(*ast.Usage)
+	if len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelSubsets {
+		t.Fatalf("rels=%+v", u.Relationships)
+	}
+}
+
+func TestParseUsageRedefinesReferencesCrosses(t *testing.T) {
+	u := parseOneMember(t, "part p :>> a ::> b => c;").(*ast.Usage)
+	if len(u.Relationships) != 3 {
+		t.Fatalf("expected 3 relationships, got %d", len(u.Relationships))
+	}
+	want := []ast.RelationshipKind{ast.RelRedefines, ast.RelReferences, ast.RelCrosses}
+	for i, r := range u.Relationships {
+		if r.Kind != want[i] {
+			t.Fatalf("rel[%d]=%v want %v", i, r.Kind, want[i])
+		}
+	}
+}
+
+func TestParseUsageMultiplicityRange(t *testing.T) {
+	u := parseOneMember(t, "part wheels [4];").(*ast.Usage)
+	if u.Multiplicity == nil || u.Multiplicity.IsRange {
+		t.Fatalf("expected single-bound multiplicity, got %+v", u.Multiplicity)
+	}
+	if _, ok := u.Multiplicity.Lower.(*ast.LiteralInteger); !ok {
+		t.Fatalf("lower should be LiteralInteger, got %T", u.Multiplicity.Lower)
+	}
+}
+
+func TestParseUsageMultiplicityStarRange(t *testing.T) {
+	u := parseOneMember(t, "part parts [0..*];").(*ast.Usage)
+	if u.Multiplicity == nil || !u.Multiplicity.IsRange {
+		t.Fatalf("expected range multiplicity, got %+v", u.Multiplicity)
+	}
+	if _, ok := u.Multiplicity.Upper.(*ast.LiteralInfinity); !ok {
+		t.Fatalf("upper should be LiteralInfinity, got %T", u.Multiplicity.Upper)
+	}
+}
+
+func TestParseUsageValue(t *testing.T) {
+	u := parseOneMember(t, "attribute mass = 1500;").(*ast.Usage)
+	if u.Value == nil {
+		t.Fatalf("expected value expression")
+	}
+	if _, ok := u.Value.(*ast.LiteralInteger); !ok {
+		t.Fatalf("value should be LiteralInteger, got %T", u.Value)
+	}
+}
+
+func TestParseUsageMultiplicityThenValue(t *testing.T) {
+	u := parseOneMember(t, "attribute xs [3] = 7;").(*ast.Usage)
+	if u.Multiplicity == nil || u.Value == nil {
+		t.Fatalf("expected both multiplicity and value, got mult=%v value=%v", u.Multiplicity, u.Value)
+	}
+}
