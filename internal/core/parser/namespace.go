@@ -154,6 +154,8 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		return p.parseTextualRepresentation(start)
 	case p.atKeyword("filter"):
 		return p.parseFilter(start)
+	case p.atDefUsageStart():
+		return p.parseDefUsage(start)
 	case p.at(lexer.Hash):
 		// Look past `# QualifiedName ...` prefixes for the declaration keyword.
 		if p.leadingPrefixIsPackage() {
@@ -216,6 +218,20 @@ var declStartKeywords = map[string]bool{
 	"public":     true,
 	"private":    true,
 	"protected":  true,
+	"part":       true,
+	"attribute":  true,
+	"def":        true,
+	"abstract":   true,
+	"variation":  true,
+	"ref":        true,
+	"in":         true,
+	"out":        true,
+	"inout":      true,
+	"composite":  true,
+	"portion":    true,
+	"derived":    true,
+	"ordered":    true,
+	"nonunique":  true,
 }
 
 // atMemberSync reports whether the parser sits at a recovery synchronization
@@ -339,8 +355,8 @@ func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
 				imp.IsRecursive = true
 			}
 		} else if nk == lexer.StarStar {
-			p.advance() // ::
-			p.advance() // **
+			p.advance()            // ::
+			p.advance()            // **
 			imp.IsRecursive = true // recursive membership import; Kind stays ImportMembership
 		}
 	}
