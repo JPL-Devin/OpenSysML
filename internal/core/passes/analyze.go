@@ -12,6 +12,7 @@ func DefaultRegistry() *Registry {
 	reg := NewRegistry()
 	reg.Register(SyntaxPass{})
 	reg.Register(NameResolutionPass{})
+	reg.Register(TypeCheckPass{})
 	return reg
 }
 
