@@ -78,6 +78,23 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 	case *ast.FilterMember:
 		r.resolveExpr(scope, d.Condition)
+	case *ast.Definition:
+		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolveRelationships(scope, d.Relationships)
+		if child := r.childScope(scope, d); child != nil {
+			r.walkMembers(child, d.Members)
+		}
+	case *ast.Usage:
+		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolveRelationships(scope, d.Relationships)
+		if d.Multiplicity != nil {
+			r.resolveExpr(scope, d.Multiplicity.Lower)
+			r.resolveExpr(scope, d.Multiplicity.Upper)
+		}
+		r.resolveExpr(scope, d.Value)
+		if child := r.childScope(scope, d); child != nil {
+			r.walkMembers(child, d.Members)
+		}
 	}
 }
 
@@ -95,6 +112,15 @@ func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixM
 	for _, p := range prefixes {
 		if p != nil {
 			r.ResolveQualified(scope, p.Type)
+		}
+	}
+}
+
+// resolveRelationships resolves each relationship target as a qualified name.
+func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relationship) {
+	for _, rel := range rels {
+		if rel != nil && rel.Target != nil {
+			r.ResolveQualified(scope, rel.Target)
 		}
 	}
 }
