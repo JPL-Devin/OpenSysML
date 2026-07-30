@@ -129,3 +129,12 @@ func caretLine(col, spanLen, lineLen int) string {
 	}
 	return b.String()
 }
+
+// renderResult produces the printable lines for a submission: diagnostics if any,
+// otherwise the success summary.
+func renderResult(r Result) []string {
+	if len(r.Diagnostics) > 0 {
+		return renderDiagnostics(r.Diagnostics, r.Source)
+	}
+	return renderSummary(r.Members)
+}
