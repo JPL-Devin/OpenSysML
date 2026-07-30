@@ -20,7 +20,7 @@ type symRecord struct {
 	FQN    string
 	Kind   symbols.SymbolKind
 	Span   source.Span
-	Supers []string // specialization-edge placeholder; empty until def/usage grammar lands
+	Supers []string // raw target text of specializes/subsets/redefines edges
 }
 
 // IndexRecord is the serializable snapshot of one library document's symbols.
