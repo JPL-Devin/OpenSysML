@@ -12,6 +12,8 @@ var builtins = map[string]func(*EvalContext, []Value) (Value, error){
 	"SequenceFunctions::includes":  builtinSequenceIncludes,
 	"CollectionFunctions::size":    builtinCollectionSize,
 	"CollectionFunctions::isEmpty": builtinCollectionIsEmpty,
+	"ControlFunctions::select":     builtinControlSelect,
+	"ControlFunctions::collect":    builtinControlCollect,
 }
 
 func builtinSequenceSize(ec *EvalContext, args []Value) (Value, error) {
@@ -58,4 +60,15 @@ func builtinCollectionSize(ec *EvalContext, args []Value) (Value, error) {
 
 func builtinCollectionIsEmpty(ec *EvalContext, args []Value) (Value, error) {
 	return builtinSequenceIsEmpty(ec, args)
+}
+
+func builtinControlSelect(ec *EvalContext, args []Value) (Value, error) {
+	if len(args) != 2 {
+		return Value{}, errors.New("ControlFunctions::select: expected 2 arguments")
+	}
+	return Value{}, errors.New("ControlFunctions::select: not yet implemented")
+}
+
+func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
+	return Value{}, errors.New("ControlFunctions::collect: not yet implemented")
 }

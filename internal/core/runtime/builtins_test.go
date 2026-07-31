@@ -23,3 +23,8 @@ func TestBuiltin_SequenceSize(t *testing.T) {
 		t.Errorf("expected size 2, got %d", result.Const.Int)
 	}
 }
+
+func TestBuiltin_ControlSelect(t *testing.T) {
+	// Stub test - full impl in integration
+	t.Skip("defer to integration tests")
+}
