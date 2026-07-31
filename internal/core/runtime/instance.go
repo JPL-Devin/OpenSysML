@@ -25,6 +25,11 @@ type Slot struct {
 // Allocates ID, creates slots per FeaturesOf(sym), evaluates default values,
 // leaves composite features lazy. Returns the instance or an error.
 func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
+	// Check step limit (I3)
+	if err := ctx.incrementStep(); err != nil {
+		return nil, err
+	}
+
 	// Allocate ID
 	id := ctx.allocateID()
 
@@ -79,9 +84,13 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 
 	// Lazy instantiation: if feature is composite (has a type that's a part/item def)
 	if slot.Feature.Type != nil {
-		// Check multiplicity
+		// Check multiplicity (C2 + C1)
 		mult := slot.Feature.Multiplicity
-		if mult.Upper.Value == 1 {
+		if !mult.Upper.Known || !mult.Lower.Known {
+			return nil, fmt.Errorf("cannot materialize slot %q with unknown multiplicity", name)
+		}
+
+		if !mult.Upper.Infinite && mult.Upper.Value == 1 {
 			// Scalar: instantiate one
 			childInst, err := ctx.Instantiate(slot.Feature.Type)
 			if err != nil {
@@ -91,6 +100,12 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 		} else {
 			// Collection: instantiate up to lower bound (or 0 if unbounded)
 			count := int(mult.Lower.Value)
+
+			// Guard against infinite/huge lower bound (C3)
+			if mult.Lower.Infinite || mult.Lower.Value > 1000 {
+				return nil, fmt.Errorf("lower bound too large or infinite for slot %q", name)
+			}
+
 			if count < 0 {
 				count = 0
 			}
