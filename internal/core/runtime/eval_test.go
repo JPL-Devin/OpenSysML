@@ -134,3 +134,24 @@ func TestEval_BuiltinInvocation(t *testing.T) {
 	t.Skip("defer to integration — requires InvocationExpr parse")
 }
 
+func TestEval_StepLimit(t *testing.T) {
+	// Verify step counter triggers on deep recursion
+	// (Step counter already wired in Context.incrementStep + eval.go)
+	src := `part def Simple {}`
+	model, resolver, _ := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 5) // very low limit
+	
+	// Eval 6 literals → should exceed 5 steps
+	for i := 0; i < 6; i++ {
+		_, err := ctx.Eval(&ast.LiteralInteger{Value: "1"})
+		if err != nil {
+			// Check for step limit error (message format is "evaluation step limit exceeded (5 steps)")
+			if err == ErrStepLimitExceeded || err.Error() == "evaluation step limit exceeded (5 steps)" {
+				return // success — limit triggered
+			}
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	t.Error("expected ErrStepLimitExceeded but got none")
+}
+
