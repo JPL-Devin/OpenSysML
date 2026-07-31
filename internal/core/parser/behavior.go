@@ -287,6 +287,35 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 	return node
 }
 
+// parseSuccessionEdge parses: then source target [if guard] ;
 func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
-	return &ast.SuccessionEdge{NodeBase: ast.NodeBase{NodeSpan: tok.Span}}
+	start := tok.Span.Offset
+	
+	source := p.parseQualifiedName()
+	target := p.parseQualifiedName()
+	
+	// Check for optional guard
+	if p.acceptKeyword("if") {
+		// 'if' keyword already consumed
+		guard := p.ParseExpression()
+		
+		p.expect(lexer.Semicolon, "expected ';' after control flow edge")
+		
+		node := &ast.ControlFlowEdge{
+			NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
+			Source:   source,
+			Target:   target,
+			Guard:    guard,
+		}
+		return node
+	}
+	
+	p.expect(lexer.Semicolon, "expected ';' after succession edge")
+	
+	node := &ast.SuccessionEdge{
+		NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
+		Source:   source,
+		Target:   target,
+	}
+	return node
 }
