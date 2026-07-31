@@ -105,3 +105,73 @@ type PseudostateNode struct {
 	Kind PseudostateKind
 	Name string
 }
+
+// SuccessionEdge is sequential control flow in actions (source then target).
+type SuccessionEdge struct {
+	NodeBase
+	Source *QualifiedName // source action node
+	Target *QualifiedName // target action node
+}
+
+// ControlFlowEdge is guarded control flow from decision nodes.
+type ControlFlowEdge struct {
+	NodeBase
+	Source *QualifiedName // source node (typically DecisionNode)
+	Target *QualifiedName // target node
+	Guard  Node            // boolean guard expression
+}
+
+// ObjectFlowEdge is data flow between action parameters/pins (Tier 5).
+type ObjectFlowEdge struct {
+	NodeBase
+	Source *QualifiedName // source pin/parameter
+	Target *QualifiedName // target pin/parameter
+}
+
+// TransitionEdge is a state machine transition.
+type TransitionEdge struct {
+	NodeBase
+	Source  *QualifiedName // source state
+	Target  *QualifiedName // target state
+	Trigger TriggerEvent   // event that fires transition (interface, see below)
+	Guard   Node           // optional guard expression
+	Effect  []Node         // optional effect actions
+}
+
+// TriggerEvent is the interface for state transition triggers.
+type TriggerEvent interface {
+	Node
+	triggerEvent() // unexported marker method (closed set)
+}
+
+// TimeEvent fires after a specified duration.
+type TimeEvent struct {
+	NodeBase
+	Duration Node // time expression (literal or variable)
+}
+
+func (*TimeEvent) triggerEvent() {}
+
+// ChangeEvent fires when a condition becomes true.
+type ChangeEvent struct {
+	NodeBase
+	Condition Node // boolean expression
+}
+
+func (*ChangeEvent) triggerEvent() {}
+
+// AcceptEvent fires when a signal is received.
+type AcceptEvent struct {
+	NodeBase
+	SignalType *QualifiedName // signal type to accept
+}
+
+func (*AcceptEvent) triggerEvent() {}
+
+// CallEvent fires when an operation is invoked.
+type CallEvent struct {
+	NodeBase
+	Operation *QualifiedName // operation to invoke
+}
+
+func (*CallEvent) triggerEvent() {}
