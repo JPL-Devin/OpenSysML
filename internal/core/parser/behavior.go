@@ -178,7 +178,113 @@ func (p *Parser) parseDecisionNode(tok lexer.Token) ast.Node {
 }
 
 func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
-	return &ast.ActionExecutionNode{NodeBase: ast.NodeBase{NodeSpan: tok.Span}}
+	// Syntax:
+	//   action [name] actionRef ;
+	//   action [name] { expression } ;
+	start := tok.Span.Offset
+	trivia := p.takeTrivia()
+	
+	var name string
+	var actionRef *ast.QualifiedName
+	var expression ast.Node
+	
+	// Disambiguate: name vs ref, inline vs reference mode
+	if p.at(lexer.LBrace) {
+		// Inline mode, no name: action { expr };
+		p.advance() // consume '{'
+		expression = p.ParseExpression()
+		_, ok := p.expect(lexer.RBrace, "expected '}' after action expression")
+		if !ok {
+			return &ast.ErrorNode{
+				NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
+				Message:  "expected '}' after action expression",
+			}
+		}
+	} else if p.at(lexer.Identifier) {
+		// Could be:
+		// - action name { expr }; (name + inline)
+		// - action name ref; (name + ref)
+		// - action ref; (ref only)
+		// Use lookahead to decide
+		nextTok := p.peekN(1)
+		if nextTok.Kind == lexer.LBrace {
+			// name + inline: action name { expr };
+			nameToken := p.peek()
+			name = p.src.Text(nameToken.Span)
+			p.advance()
+			p.advance() // consume '{'
+			expression = p.ParseExpression()
+			_, ok := p.expect(lexer.RBrace, "expected '}' after action expression")
+			if !ok {
+				return &ast.ErrorNode{
+					NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
+					Message:  "expected '}' after action expression",
+				}
+			}
+		} else if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.ColonColon {
+			// Could be name + ref OR just ref (qualified name)
+			// Parse first identifier
+			firstIdToken := p.peek()
+			firstIdSpan := firstIdToken.Span
+			firstId := p.src.Text(firstIdSpan)
+			p.advance()
+			
+			// Check what follows
+			if p.at(lexer.ColonColon) {
+				// It's a qualified name starting with firstId (no separate name)
+				// Build QualifiedName manually since we consumed first part
+				parts := []ast.NameSegment{{Text: firstId, Span: firstIdSpan}}
+				for p.at(lexer.ColonColon) {
+					p.advance() // consume '::'
+					if !p.at(lexer.Identifier) {
+						return &ast.ErrorNode{
+							NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
+							Message:  "expected identifier after '::'",
+						}
+					}
+					seg := p.peek()
+					parts = append(parts, ast.NameSegment{Text: p.src.Text(seg.Span), Span: seg.Span})
+					p.advance()
+				}
+				actionRef = &ast.QualifiedName{Parts: parts}
+				actionRef.NodeSpan = p.spanFrom(firstIdSpan.Offset)
+			} else if p.at(lexer.Identifier) {
+				// firstId is name, what follows is actionRef
+				name = firstId
+				actionRef = p.parseQualifiedName()
+			} else {
+				// firstId is a simple (non-qualified) actionRef
+				actionRef = &ast.QualifiedName{
+					Parts: []ast.NameSegment{{Text: firstId, Span: firstIdSpan}},
+				}
+				actionRef.NodeSpan = firstIdSpan
+			}
+		} else {
+			// Single identifier followed by something else (likely ';')
+			idToken := p.peek()
+			actionRef = &ast.QualifiedName{
+				Parts: []ast.NameSegment{{Text: p.src.Text(idToken.Span), Span: idToken.Span}},
+			}
+			actionRef.NodeSpan = idToken.Span
+			p.advance()
+		}
+	} else {
+		return &ast.ErrorNode{
+			NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
+			Message:  "expected action reference or '{' after 'action'",
+		}
+	}
+	
+	p.expect(lexer.Semicolon, "expected ';' after action execution node")
+	
+	node := &ast.ActionExecutionNode{
+		Name:       name,
+		ActionRef:  actionRef,
+		Expression: expression,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	node.SetLeadingTrivia(trivia)
+	return node
 }
 
 func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
