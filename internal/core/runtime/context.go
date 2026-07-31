@@ -8,11 +8,6 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// Instance is a placeholder for Tier 2. Stub allows Context to compile.
-type Instance struct {
-	ID int64
-}
-
 // Context carries runtime execution state. One per workspace session.
 type Context struct {
 	model     *semantics.Model
