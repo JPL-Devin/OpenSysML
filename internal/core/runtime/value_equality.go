@@ -45,6 +45,9 @@ func valueKeyFunc(v Value) valueKey {
 
 // hashSequence computes a content-based hash for a Sequence.
 func hashSequence(seq *Sequence) uint64 {
+	if seq == nil {
+		return 0
+	}
 	h := fnv.New64a()
 	for _, elem := range seq.elements {
 		k := valueKeyFunc(elem)
@@ -59,6 +62,9 @@ func hashSequence(seq *Sequence) uint64 {
 
 // hashSet computes a content-based hash for a Set (order-invariant).
 func hashSet(set *Set) uint64 {
+	if set == nil {
+		return 0
+	}
 	// Sum hashes of elements (order-invariant)
 	var sum uint64
 	for k := range set.elements {
