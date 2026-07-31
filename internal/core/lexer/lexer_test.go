@@ -490,3 +490,32 @@ func TestBehavioralKeywords(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenArrow(t *testing.T) {
+	src := source.New("test", []byte("a -> b"))
+	l := New(src)
+
+	l.Next() // 'a'
+	l.Next() // whitespace
+	tok := l.Next()
+
+	if tok.Kind != Arrow {
+		t.Errorf("expected Arrow, got %v", tok.Kind)
+	}
+	if src.Text(tok.Span) != "->" {
+		t.Errorf("expected '->', got %q", src.Text(tok.Span))
+	}
+}
+
+func TestMinusNotArrow(t *testing.T) {
+	src := source.New("test", []byte("a - b"))
+	l := New(src)
+
+	l.Next() // 'a'
+	l.Next() // whitespace
+	tok := l.Next()
+
+	if tok.Kind != Minus {
+		t.Errorf("expected Minus, got %v", tok.Kind)
+	}
+}
