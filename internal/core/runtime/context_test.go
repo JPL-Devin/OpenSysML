@@ -3,12 +3,16 @@ package runtime
 import (
 	"testing"
 
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 func TestContextIDAllocation(t *testing.T) {
-	model := &semantics.Model{} // minimal mock
-	ctx := NewContext(model, 100000)
+	idx := symbols.NewIndex()
+	resolver := resolve.New(idx)
+	model := semantics.NewModel(resolver)
+	ctx := NewContext(model, resolver, 100000)
 	
 	id1 := ctx.allocateID()
 	id2 := ctx.allocateID()
@@ -22,8 +26,10 @@ func TestContextIDAllocation(t *testing.T) {
 }
 
 func TestContextStepCounter(t *testing.T) {
-	model := &semantics.Model{}
-	ctx := NewContext(model, 10)
+	idx := symbols.NewIndex()
+	resolver := resolve.New(idx)
+	model := semantics.NewModel(resolver)
+	ctx := NewContext(model, resolver, 10)
 	
 	for i := 0; i < 10; i++ {
 		if err := ctx.incrementStep(); err != nil {

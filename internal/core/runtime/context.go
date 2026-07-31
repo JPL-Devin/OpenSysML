@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -12,13 +13,10 @@ type Instance struct {
 	ID int64
 }
 
-// EffectiveFeature is a placeholder for Tier 1. Stub allows Context to compile.
-type EffectiveFeature struct{}
-
-
 // Context carries runtime execution state. One per workspace session.
 type Context struct {
 	model     *semantics.Model
+	resolver  *resolve.Resolver
 	nextID    int64
 	steps     int64
 	maxSteps  int64
@@ -28,12 +26,13 @@ type Context struct {
 
 // NewContext creates a runtime context backed by the given semantic model.
 // maxSteps sets the runaway guard (step counter limit).
-func NewContext(model *semantics.Model, maxSteps int64) *Context {
+func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int64) *Context {
 	if maxSteps <= 0 {
 		panic(fmt.Sprintf("runtime: maxSteps must be > 0, got %d", maxSteps))
 	}
 	return &Context{
 		model:     model,
+		resolver:  resolver,
 		nextID:    1, // IDs start at 1 (0 = invalid)
 		steps:     0,
 		maxSteps:  maxSteps,

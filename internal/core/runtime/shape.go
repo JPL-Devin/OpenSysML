@@ -1,0 +1,166 @@
+package runtime
+
+import (
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
+
+// EffectiveFeature represents one slot in a type's flattened schema:
+// own + inherited − redefined/masked, carrying type + multiplicity + default.
+type EffectiveFeature struct {
+	Name         string
+	OwnerType    *symbols.Symbol         // type that declares this feature (may be supertype)
+	Type         *symbols.Symbol         // resolved type (nil if untyped)
+	Multiplicity semantics.Range         // from MultiplicityOf (default 1..1)
+	DefaultValue ast.Node                // value-binding expression (nil if none)
+}
+
+// FeaturesOf returns the ordered, deduplicated effective-feature list for the given type symbol.
+// Result: own + inherited − redefined/masked, memoized per symbol.
+func (ctx *Context) FeaturesOf(typeSym *symbols.Symbol) []EffectiveFeature {
+	// Memoization
+	if cached, ok := ctx.features[typeSym]; ok {
+		return cached
+	}
+
+	features := ctx.buildFeatures(typeSym)
+	ctx.features[typeSym] = features
+	return features
+}
+
+// buildFeatures constructs the effective-feature list by walking the type hierarchy.
+func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
+	// Collect all members (local + inherited) using semantics.MembersOf
+	allMembers := ctx.model.MembersOf(typeSym)
+
+	// Track which features to keep (deduplication by name: last declarator wins per masking/redefinition)
+	featureMap := make(map[string]EffectiveFeature)
+	seen := make(map[*symbols.Symbol]bool)
+
+	// Process members in order (local first, then inherited)
+	for _, memberSym := range allMembers {
+		// Dedupe by pointer (short+primary names alias the same symbol)
+		if seen[memberSym] {
+			continue
+		}
+		seen[memberSym] = true
+
+		// Only include features (attributes, parts, etc.)
+		if !isFeature(memberSym) {
+			continue
+		}
+
+		name := memberSym.Name
+		typ := ctx.extractType(memberSym)
+		mult := ctx.extractMultiplicity(memberSym)
+		defaultVal := ctx.extractDefaultValue(memberSym)
+
+		// Determine owner type (walk up to find the declaration scope's owner)
+		ownerType := ctx.findOwnerType(memberSym)
+
+		// Store feature; last one wins (redefinition/masking)
+		featureMap[name] = EffectiveFeature{
+			Name:         name,
+			OwnerType:    ownerType,
+			Type:         typ,
+			Multiplicity: mult,
+			DefaultValue: defaultVal,
+		}
+	}
+
+	// Convert map to ordered list (stable order: iterate over allMembers and pick from map)
+	result := make([]EffectiveFeature, 0, len(featureMap))
+	seenNames := make(map[string]bool)
+	for _, memberSym := range allMembers {
+		name := memberSym.Name
+		if seenNames[name] {
+			continue
+		}
+		if feat, ok := featureMap[name]; ok {
+			result = append(result, feat)
+			seenNames[name] = true
+		}
+	}
+
+	return result
+}
+
+// isFeature returns true if the symbol represents a structural feature (attribute, part, etc.).
+func isFeature(sym *symbols.Symbol) bool {
+	switch sym.Kind {
+	case symbols.SymbolAttributeUsage, symbols.SymbolPartUsage, symbols.SymbolItemUsage,
+		symbols.SymbolPortUsage, symbols.SymbolConnectionUsage, symbols.SymbolActionUsage,
+		symbols.SymbolStateUsage, symbols.SymbolConstraintUsage, symbols.SymbolRequirementUsage:
+		return true
+	default:
+		return false
+	}
+}
+
+// extractType resolves the type of a feature from its typing relationships.
+func (ctx *Context) extractType(featureSym *symbols.Symbol) *symbols.Symbol {
+	// Check usage relationships for typing
+	rels := semantics.RelationshipsOf(featureSym)
+	for _, rel := range rels {
+		if rel.Kind == ast.RelTyping && rel.Target != nil {
+			if resolved, ok := ctx.resolver.ResolveQualified(featureSym.OwnerScope, rel.Target); ok {
+				return resolved
+			}
+		}
+	}
+	return nil
+}
+
+// extractMultiplicity returns the multiplicity range for a feature.
+func (ctx *Context) extractMultiplicity(featureSym *symbols.Symbol) semantics.Range {
+	if mult, ok := ctx.model.MultiplicityOf(featureSym); ok {
+		return mult
+	}
+	// Default: 1..1
+	return semantics.Range{
+		Lower: semantics.Bound{Value: 1, Known: true},
+		Upper: semantics.Bound{Value: 1, Known: true},
+	}
+}
+
+// extractDefaultValue returns the default-value expression for a feature (nil if none).
+func (ctx *Context) extractDefaultValue(featureSym *symbols.Symbol) ast.Node {
+	if usage, ok := featureSym.Decl.(*ast.Usage); ok {
+		return usage.Value // nil if no default
+	}
+	return nil
+}
+
+// findOwnerType walks up the scope chain to find the type symbol that owns the feature's declaration.
+func (ctx *Context) findOwnerType(featureSym *symbols.Symbol) *symbols.Symbol {
+	// Start from the feature's owner scope (the scope that contains the declaration)
+	ownerScope := featureSym.OwnerScope
+	if ownerScope == nil {
+		return nil
+	}
+
+	// The owner scope's node is the definition/usage that contains the feature
+	ownerNode := ownerScope.Node()
+	if ownerNode == nil {
+		return nil
+	}
+
+	// Look up the symbol for the owner node in the parent scope
+	parentScope := ownerScope.Parent()
+	if parentScope == nil {
+		return nil
+	}
+
+	// Find the symbol in the parent scope that declares the owner node
+	for _, name := range parentScope.MemberNames() {
+		syms := parentScope.LookupLocalAll(name)
+		for _, sym := range syms {
+			if sym.Decl == ownerNode {
+				return sym
+			}
+		}
+	}
+
+	return nil
+}
