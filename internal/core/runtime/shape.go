@@ -19,6 +19,10 @@ type EffectiveFeature struct {
 // FeaturesOf returns the ordered, deduplicated effective-feature list for the given type symbol.
 // Result: own + inherited − redefined/masked, memoized per symbol.
 func (ctx *Context) FeaturesOf(typeSym *symbols.Symbol) []EffectiveFeature {
+	if typeSym == nil {
+		return nil
+	}
+	
 	// Memoization
 	if cached, ok := ctx.features[typeSym]; ok {
 		return cached
@@ -91,7 +95,9 @@ func isFeature(sym *symbols.Symbol) bool {
 	switch sym.Kind {
 	case symbols.SymbolAttributeUsage, symbols.SymbolPartUsage, symbols.SymbolItemUsage,
 		symbols.SymbolPortUsage, symbols.SymbolConnectionUsage, symbols.SymbolActionUsage,
-		symbols.SymbolStateUsage, symbols.SymbolConstraintUsage, symbols.SymbolRequirementUsage:
+		symbols.SymbolStateUsage, symbols.SymbolConstraintUsage, symbols.SymbolRequirementUsage,
+		symbols.SymbolOccurrenceUsage, symbols.SymbolIndividualUsage,
+		symbols.SymbolInterfaceUsage, symbols.SymbolFlowUsage:
 		return true
 	default:
 		return false

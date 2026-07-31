@@ -11,6 +11,8 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
+const testMaxSteps = 10000
+
 // parseAndBuildModel helper returns model + root scope + resolver
 func parseAndBuildModel(t *testing.T, code string) (*semantics.Model, *resolve.Resolver, *symbols.Scope) {
 	t.Helper()
@@ -48,7 +50,7 @@ func TestFeaturesOf(t *testing.T) {
 		}
 	`
 	model, resolver, rootScope := parseAndBuildModel(t, code)
-	ctx := NewContext(model, resolver, 10000)
+	ctx := NewContext(model, resolver, testMaxSteps)
 
 	derivedSym := resolveSymbol(t, rootScope, "Derived")
 	features := ctx.FeaturesOf(derivedSym)
@@ -86,7 +88,7 @@ func TestFeaturesOf_Redefinition(t *testing.T) {
 		}
 	`
 	model, resolver, rootScope := parseAndBuildModel(t, code)
-	ctx := NewContext(model, resolver, 10000)
+	ctx := NewContext(model, resolver, testMaxSteps)
 
 	derivedSym := resolveSymbol(t, rootScope, "Derived")
 	features := ctx.FeaturesOf(derivedSym)
@@ -115,7 +117,7 @@ func TestFeaturesOf_Multiplicity(t *testing.T) {
 		}
 	`
 	model, resolver, rootScope := parseAndBuildModel(t, code)
-	ctx := NewContext(model, resolver, 10000)
+	ctx := NewContext(model, resolver, testMaxSteps)
 
 	thingSym := resolveSymbol(t, rootScope, "Thing")
 	features := ctx.FeaturesOf(thingSym)
@@ -140,7 +142,7 @@ func TestFeaturesOf_DefaultValue(t *testing.T) {
 		}
 	`
 	model, resolver, rootScope := parseAndBuildModel(t, code)
-	ctx := NewContext(model, resolver, 10000)
+	ctx := NewContext(model, resolver, testMaxSteps)
 
 	thingSym := resolveSymbol(t, rootScope, "Thing")
 	features := ctx.FeaturesOf(thingSym)
