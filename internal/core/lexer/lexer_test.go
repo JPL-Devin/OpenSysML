@@ -461,3 +461,32 @@ func TestCompoundRelationshipOperators(t *testing.T) {
 		}
 	}
 }
+
+// TestBehavioralKeywords verifies lexer recognizes all SysML v2 behavioral
+// keywords for action control-flow and state machine parsing (Task 6).
+func TestBehavioralKeywords(t *testing.T) {
+	src := source.New("test", []byte("first done fork join merge decision then state initial final entry exit transition after when accept on choice junction region"))
+	l := New(src)
+
+	expectedKeywords := []string{
+		"first", "done", "fork", "join", "merge", "decision", "then", // Action
+		"state", "initial", "final", "entry", "exit", "transition",    // State
+		"after", "when", "accept", "on",                               // Trigger
+		"choice", "junction",                                          // Pseudostate
+		"region",                                                      // Region
+	}
+	for i, expected := range expectedKeywords {
+		tok := l.Next()
+		// skip whitespace between keywords
+		for tok.IsTrivia() {
+			tok = l.Next()
+		}
+		if tok.Kind != Keyword {
+			t.Errorf("token %d: expected keyword, got %v", i, tok.Kind)
+		}
+		text := src.Text(tok.Span)
+		if text != expected {
+			t.Errorf("token %d: expected %q, got %q", i, expected, text)
+		}
+	}
+}
