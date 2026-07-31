@@ -66,6 +66,12 @@ func (ec *EvalContext) Eval(node ast.Node) (Value, error) {
 		return ec.evalNull(n)
 	case *ast.OperatorExpr:
 		return ec.evalOperator(n)
+	case *ast.SequenceExpr:
+		return ec.evalSequenceExpr(n)
+	case *ast.CollectExpr:
+		return ec.evalCollectExpr(n)
+	case *ast.SelectExpr:
+		return ec.evalSelectExpr(n)
 	default:
 		return Value{}, fmt.Errorf("unsupported node type: %T", node)
 	}
@@ -221,5 +227,85 @@ func (ec *EvalContext) evalNeg(n *ast.OperatorExpr) (Value, error) {
 // evalNot evaluates logical not (!).
 func (ec *EvalContext) evalNot(n *ast.OperatorExpr) (Value, error) {
 	return Value{}, fmt.Errorf("not not yet implemented")
+}
+
+// evalSequenceExpr evaluates a sequence expression (1, 2, 3).
+func (ec *EvalContext) evalSequenceExpr(n *ast.SequenceExpr) (Value, error) {
+	seq := NewSequence()
+	for _, elem := range n.Elements {
+		val, err := ec.Eval(elem)
+		if err != nil {
+			return Value{}, err
+		}
+		seq.Append(val)
+	}
+	return Value{Kind: ValSequence, Sequence: seq}, nil
+}
+
+// evalCollectExpr evaluates `operand . body` — map over collection.
+func (ec *EvalContext) evalCollectExpr(n *ast.CollectExpr) (Value, error) {
+	operand, err := ec.Eval(n.Operand)
+	if err != nil {
+		return Value{}, err
+	}
+	
+	var elements []Value
+	switch operand.Kind {
+	case ValSequence:
+		elements = operand.Sequence.Elements()
+	case ValSet:
+		elements = operand.Set.Elements()
+	default:
+		return Value{}, fmt.Errorf("%w: collect operand must be collection", ErrTypeMismatch)
+	}
+	
+	result := NewSequence()
+	for _, elem := range elements {
+		// Push 'it' binding for body
+		ec.Push(map[string]Value{"it": elem})
+		val, err := ec.Eval(n.Body)
+		ec.Pop()
+		if err != nil {
+			return Value{}, err
+		}
+		result.Append(val)
+	}
+	
+	return Value{Kind: ValSequence, Sequence: result}, nil
+}
+
+// evalSelectExpr evaluates `operand .? body` — filter collection.
+func (ec *EvalContext) evalSelectExpr(n *ast.SelectExpr) (Value, error) {
+	operand, err := ec.Eval(n.Operand)
+	if err != nil {
+		return Value{}, err
+	}
+	
+	var elements []Value
+	switch operand.Kind {
+	case ValSequence:
+		elements = operand.Sequence.Elements()
+	case ValSet:
+		elements = operand.Set.Elements()
+	default:
+		return Value{}, fmt.Errorf("%w: select operand must be collection", ErrTypeMismatch)
+	}
+	
+	result := NewSequence()
+	for _, elem := range elements {
+		ec.Push(map[string]Value{"it": elem})
+		predVal, err := ec.Eval(n.Body)
+		ec.Pop()
+		if err != nil {
+			return Value{}, err
+		}
+		
+		// Check if predicate is true (ValConst boolean)
+		if predVal.Kind == ValConst && predVal.Const.Kind == semantics.ValBool && predVal.Const.Bool {
+			result.Append(elem)
+		}
+	}
+	
+	return Value{Kind: ValSequence, Sequence: result}, nil
 }
 

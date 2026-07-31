@@ -4,41 +4,9 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 const testMaxSteps = 10000
-
-// parseAndBuildModel helper returns model + root scope + resolver
-func parseAndBuildModel(t *testing.T, code string) (*semantics.Model, *resolve.Resolver, *symbols.Scope) {
-	t.Helper()
-	src := source.New("test.sysml", []byte(code))
-	p := parser.New(src)
-	root := p.ParseFile()
-	idx := symbols.NewIndex()
-	idx.AddDocument("test.sysml", root)
-	rootScope := idx.DocumentRoot("test.sysml")
-	if rootScope == nil {
-		t.Fatal("rootScope nil")
-	}
-	resolver := resolve.New(idx)
-	model := semantics.NewModel(resolver)
-	return model, resolver, rootScope
-}
-
-// resolveSymbol helper finds symbol by short name
-func resolveSymbol(t *testing.T, rootScope *symbols.Scope, name string) *symbols.Symbol {
-	t.Helper()
-	sym, ok := rootScope.LookupLocal(name)
-	if !ok || sym == nil {
-		t.Fatalf("symbol %q not found", name)
-	}
-	return sym
-}
 
 func TestFeaturesOf(t *testing.T) {
 	code := `
