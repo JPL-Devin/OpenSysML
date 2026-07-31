@@ -61,30 +61,120 @@ func (p *Parser) parseActionMember() ast.Node {
 	return en
 }
 
-// Stubs — Tasks 9-10 will implement
+// Action node parsers — Task 9 complete. Task 10 (ActionExecutionNode + SuccessionEdge) below.
 
 func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
-	return &ast.InitialNode{NodeBase: ast.NodeBase{NodeSpan: tok.Span}}
+	start := tok.Span.Offset
+	var name string
+	
+	if p.at(lexer.Identifier) {
+		nameToken := p.peek()
+		name = p.src.Text(nameToken.Span)
+		p.advance()
+	}
+	
+	p.expect(lexer.Semicolon, "expected ';' after initial node")
+	
+	node := &ast.InitialNode{
+		Name: name,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
 }
 
 func (p *Parser) parseFinalNode(tok lexer.Token) ast.Node {
-	return &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: tok.Span}}
+	start := tok.Span.Offset
+	var name string
+	
+	if p.at(lexer.Identifier) {
+		nameToken := p.peek()
+		name = p.src.Text(nameToken.Span)
+		p.advance()
+	}
+	
+	p.expect(lexer.Semicolon, "expected ';' after final node")
+	
+	node := &ast.FinalNode{
+		Name: name,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
 }
 
 func (p *Parser) parseForkNode(tok lexer.Token) ast.Node {
-	return &ast.ForkNode{NodeBase: ast.NodeBase{NodeSpan: tok.Span}}
+	start := tok.Span.Offset
+	var name string
+	
+	if p.at(lexer.Identifier) {
+		nameToken := p.peek()
+		name = p.src.Text(nameToken.Span)
+		p.advance()
+	}
+	
+	p.expect(lexer.Semicolon, "expected ';' after fork node")
+	
+	node := &ast.ForkNode{
+		Name: name,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
 }
 
 func (p *Parser) parseJoinNode(tok lexer.Token) ast.Node {
-	return &ast.JoinNode{NodeBase: ast.NodeBase{NodeSpan: tok.Span}}
+	start := tok.Span.Offset
+	var name string
+	
+	if p.at(lexer.Identifier) {
+		nameToken := p.peek()
+		name = p.src.Text(nameToken.Span)
+		p.advance()
+	}
+	
+	p.expect(lexer.Semicolon, "expected ';' after join node")
+	
+	node := &ast.JoinNode{
+		Name: name,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
 }
 
 func (p *Parser) parseMergeNode(tok lexer.Token) ast.Node {
-	return &ast.MergeNode{NodeBase: ast.NodeBase{NodeSpan: tok.Span}}
+	start := tok.Span.Offset
+	var name string
+	
+	if p.at(lexer.Identifier) {
+		nameToken := p.peek()
+		name = p.src.Text(nameToken.Span)
+		p.advance()
+	}
+	
+	p.expect(lexer.Semicolon, "expected ';' after merge node")
+	
+	node := &ast.MergeNode{
+		Name: name,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
 }
 
 func (p *Parser) parseDecisionNode(tok lexer.Token) ast.Node {
-	return &ast.DecisionNode{NodeBase: ast.NodeBase{NodeSpan: tok.Span}}
+	start := tok.Span.Offset
+	var name string
+	
+	if p.at(lexer.Identifier) {
+		nameToken := p.peek()
+		name = p.src.Text(nameToken.Span)
+		p.advance()
+	}
+	
+	p.expect(lexer.Semicolon, "expected ';' after decision node")
+	
+	node := &ast.DecisionNode{
+		Name: name,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
 }
 
 func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
