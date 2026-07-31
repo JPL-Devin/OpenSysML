@@ -54,8 +54,8 @@ func (p *Parser) parseActionMember() ast.Node {
 	// Not a keyword — for now, return ErrorNode (Task 11 will handle edges)
 	p.error(p.peek().Span, "expected action node or edge keyword")
 	en := &ast.ErrorNode{Message: "expected action node or edge keyword"}
-	if !p.atEOF() && !p.at(lexer.RBrace) && !p.at(lexer.Semicolon) {
-		p.advance() // ensure progress
+	if !p.atEOF() && !p.at(lexer.RBrace) {
+		p.advance() // ensure progress (consume even semicolons to prevent infinite loop)
 	}
 	en.NodeSpan = p.spanFrom(start)
 	return en
