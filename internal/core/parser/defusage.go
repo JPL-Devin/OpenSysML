@@ -237,7 +237,26 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods) *as
 		u.Value = p.ParseExpression()
 	}
 	p.parseTierBEnds(u, kind)
-	members, hasBody := p.parseDefUsageBody()
+	
+	// Dispatch to specialized body parsers based on kind
+	var members []ast.Node
+	var hasBody bool
+	switch kind {
+	case ast.UsageAction:
+		// Action bodies: { first x; action y; then x y; ... }
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			members = p.parseActionBody() // parseActionBody expects '{' already consumed
+			hasBody = true
+		}
+	case ast.UsageState:
+		// TODO: Phase C4 — implement parseStateBody
+		members, hasBody = p.parseDefUsageBody()
+	default:
+		members, hasBody = p.parseDefUsageBody()
+	}
+	
 	u.Members = members
 	u.HasBody = hasBody
 	u.NodeSpan = p.spanFrom(start)

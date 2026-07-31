@@ -215,3 +215,53 @@ func TestParseDefinitionBodyVisibility(t *testing.T) {
 		t.Fatalf("expected private, got %v", m.Visibility)
 	}
 }
+
+// TestParseActionUsageIntegration verifies parseActionBody is invoked for action usages.
+func TestParseActionUsageIntegration(t *testing.T) {
+	src := `action example {
+		first startNode;
+		done endNode;
+		then startNode endNode;
+	}`
+	u, ok := parseOneMember(t, src).(*ast.Usage)
+	if !ok {
+		t.Fatalf("expected *ast.Usage")
+	}
+	if u.Kind != ast.UsageAction {
+		t.Fatalf("expected UsageAction, got %v", u.Kind)
+	}
+	if !u.HasBody {
+		t.Fatalf("expected HasBody=true")
+	}
+	if len(u.Members) != 3 {
+		t.Fatalf("expected 3 action members, got %d", len(u.Members))
+	}
+	
+	// Verify InitialNode
+	init, ok := u.Members[0].(*ast.InitialNode)
+	if !ok || init.Name != "startNode" {
+		t.Fatalf("member[0]: expected InitialNode startNode, got %T %+v", u.Members[0], u.Members[0])
+	}
+	
+	// Verify FinalNode
+	final, ok := u.Members[1].(*ast.FinalNode)
+	if !ok || final.Name != "endNode" {
+		t.Fatalf("member[1]: expected FinalNode endNode, got %T", u.Members[1])
+	}
+	
+	// Verify SuccessionEdge
+	edge, ok := u.Members[2].(*ast.SuccessionEdge)
+	if !ok {
+		t.Fatalf("member[2]: expected SuccessionEdge, got %T", u.Members[2])
+	}
+	if edge.Source == nil || edge.Target == nil {
+		t.Fatalf("edge missing source/target")
+	}
+	// QualifiedName.Parts[0].Text holds the identifier
+	if len(edge.Source.Parts) == 0 || edge.Source.Parts[0].Text != "startNode" {
+		t.Fatalf("edge source: expected startNode, got %+v", edge.Source)
+	}
+	if len(edge.Target.Parts) == 0 || edge.Target.Parts[0].Text != "endNode" {
+		t.Fatalf("edge target: expected endNode, got %+v", edge.Target)
+	}
+}
