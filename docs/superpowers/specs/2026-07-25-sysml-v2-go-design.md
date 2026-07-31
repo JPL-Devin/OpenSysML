@@ -1,0 +1,387 @@
+# SysML v2 Language Server & REPL — Design Specification
+
+Status: Draft
+Date: 2026-07-25
+
+## 1. Overview & Goals
+
+A new, independent implementation of the SysML v2 textual language (including its
+KerML foundation) written in Go. The implementation provides two frontends over a
+shared core:
+
+1. **Language Server (`sysml-lsp`)** — an LSP-compatible server enabling syntax
+   highlighting, diagnostics, hover, go-to-definition, references, document/workspace
+   symbols, and context-aware code completion in any LSP client editor.
+2. **REPL (`sysml-repl`)** — a command-line, statement-by-statement interactive
+   environment for authoring and exploring models, modeled after the pilot's
+   `SysMLInteractive`.
+
+Primary goals:
+
+- **Performance.** Hand-written lexer/parser targeting sub-millisecond parses for
+  per-keystroke diagnostics. Single static binary (Go), no JVM/Eclipse dependency.
+- **Correctness path to full validation.** v1 ships syntax + name-resolution
+  diagnostics; the validation architecture is pluggable so type-checking and the full
+  pilot-parity constraint set layer in without rearchitecting.
+- **Incremental & lazy.** Parse eagerly; resolve types/semantics on demand (hover,
+  completion, diagnostics request). Precedent: gopls, rust-analyzer.
+- **Real-project ergonomics.** Multi-file workspaces, cross-file references, a project
+  manifest with local and remote (git) dependencies, and a bundled standard library.
+
+## 2. Non-Goals & Scope Boundaries
+
+- **SysML v2 only.** No SysML v1, no UML profile, no XMI, no diagram interchange
+  (DI/notation). The target is the pure v2 textual notation plus its KerML foundation.
+- **v1 validation depth = A.** Only syntax and name-resolution diagnostics ship in v1.
+  Type checking (B) and full constraint parity (C) are on the roadmap; C is required
+  before the project is considered finished.
+- **Visualization (`%viz`, PlantUML/Graphviz) and API publish (`%publish`) are out of
+  v1.** Revisited after the core is solid.
+- **Deferred LSP features:** semantic tokens, formatting, rename, code actions/quick-fix,
+  signature help, folding, inlay hints. Basic coloring is covered by existing TextMate
+  grammars; server-side semantic tokens layer in later.
+- Grammar is derived from the pilot Xtext grammars (`SysML.xtext` with
+  `KerMLExpressions`), metamodel reference `https://www.omg.org/spec/SysML/20250201`.
+
+## 3. Technology Choices
+
+- **Language: Go.** Rationale: goroutines for concurrent reindex/query handling, a
+  single static cross-platform binary, and a proven LSP track record (gopls).
+- **Parser: hand-written recursive descent.** Chosen over ANTLR4-Go, goyacc, and a
+  JNI/gRPC bridge to the pilot. Rationale: zero runtime overhead, full control over
+  error recovery, and sub-millisecond parses suitable for keystroke-latency diagnostics
+  (gopls precedent). Trade-off accepted: the grammar is translated by hand from the
+  pilot Xtext sources.
+- **Semantic analysis: incremental with lazy evaluation.** Parse immediately; defer
+  name resolution / type checking until requested.
+- **Standard library bundling: Go `embed.FS`.** Stdlib shipped inside the binary,
+  version-locked to it.
+
+## 4. Architecture Overview
+
+A single Go module. KerML and SysML are handled by **one engine**: a shared
+lexer/parser, with the grammar layered (KerML as the base, SysML extending it) and a
+single AST package where SysML node types reference the KerML base node types. Two thin
+command frontends (`sysml-lsp`, `sysml-repl`) sit over one shared core `Workspace`.
+
+### 4.1 Module Layout
+
+- `internal/core/source/` — `SourceFile`, positions/spans, line index (offset↔line/col).
+- `internal/core/lexer/` — hand-written scanner producing a token stream.
+- `internal/core/ast/` — CST node types (syntax-only, immutable after parse).
+- `internal/core/parser/` — hand-written recursive descent + error recovery.
+- `internal/core/symbols/` — symbol table, qualified-name index, scope trees.
+- `internal/core/resolve/` — lazy name resolution + memoization side tables.
+- `internal/core/passes/` — pluggable validation rule passes.
+- `internal/core/model/` — `Workspace`, document set, reindex orchestration.
+- `internal/core/libs/` — bundled stdlib load + persistent cache + dependency fetch.
+- `internal/lsp/` — LSP protocol glue.
+- `cmd/sysml-lsp/` — LSP server over stdio.
+- `cmd/sysml-repl/` — readline REPL loop.
+- `testdata/` — `.sysml`/`.kerml` fixtures.
+
+### 4.2 Data Flow
+
+`source → lexer → tokens → parser → AST (+ syntax diagnostics) → symbol indexer
+populates the workspace index → on-demand resolve/passes produce semantic diagnostics /
+hover / completion.`
+
+The AST is syntax-only and immutable after parse. All semantic information (resolved
+references, types, diagnostics) lives in **side tables keyed by node**, enabling
+incremental reparse without wholesale semantic-cache invalidation and keeping the AST
+serialization-friendly.
+
+## 5. Lexer & Token Model
+
+Hand-written scanner, **pull-based / lazy**: the parser drives tokenization by requesting
+the next token; there is no full upfront tokenization pass.
+
+Token classes:
+
+- **Keywords** (~200) — recognized via map lookup after scanning an identifier.
+- **Identifiers** — plain `ID` (`[a-zA-Z_][a-zA-Z_0-9]*`, ASCII only), plus
+  **unrestricted names** delimited by **single quotes** `'...'` with escape handling
+  (`\b \t \n \f \r \" \' \\`). Non-ASCII/Unicode identifiers are expressed only via the
+  single-quoted unrestricted form, matching the pilot `UNRESTRICTED_NAME` terminal.
+- **`::`** namespace separator; **`$`** global-qualification prefix (`$::`).
+- **Numbers** — `DECIMAL_VALUE` (`[0-9]+`), real (`DECIMAL? '.' (DECIMAL | EXP)` or `EXP`),
+  and `EXP_VALUE` (`DECIMAL ('e'|'E') ('+'|'-')? DECIMAL`).
+- **Strings** — double-quoted `"..."` with the same escape set as unrestricted names.
+- **Operators & punctuation** — the full KerMLExpressions set: `? ?? | & == != === !==`
+  `@ @@ < > <= >= .. + - * / % ** ^ ~ . # ( ) [ ] -> .? , :: $ =` (word-operators such
+  as `if else or xor and implies hastype istype as meta not all new null true false`
+  `metadata` are lexed as identifiers/keywords and recognized by the parser).
+- **Comments / notes** — `/* ... */` regular comment (`REGULAR_COMMENT`), `//* ... */`
+  multi-line note (`ML_NOTE`), and `// ...` single-line note to end of line (`SL_NOTE`).
+  `//*` must be matched before `//`. Notes (`ML_NOTE`/`SL_NOTE`) are hidden trivia.
+- **Whitespace** — `(' ' | '\t' | '\r' | '\n')+`, hidden but tracked for spans.
+
+Every token carries a byte offset + length; line/column is derived via the source line
+index. The scanner reads UTF-8 bytes and is Unicode-safe for spans and string/unrestricted
+content, but plain `ID` tokens are ASCII-only per the grammar. **Contextual keywords**
+(e.g. `end`, `variation`, `individual`) are emitted as identifiers and disambiguated at
+the parser level — the lexer stays dumb and fast. An illegal character produces an
+**error token** and the lexer continues (recovery-friendly).
+
+## 6. Parser & AST
+
+**Recursive descent**, one method per grammar production (`parsePackage`, `parsePartDef`,
+`parseFeature`, …). Expressions use a **Pratt / precedence-climbing** sub-parser for the
+KerMLExpressions operator set. Lookahead is single-token by default, with a small
+buffered lookahead for ambiguous prefixes (e.g. feature vs. definition).
+
+**Error recovery:** panic-mode with synchronization tokens (`;`, `}`, top-level
+keywords). On error, emit a diagnostic, skip to a sync token, and continue. The parser
+**always produces a tree** — unparseable spans become error nodes; it never bails,
+because the LSP needs a partial tree. Missing-token insertion covers dropped `}`/`;`.
+
+**AST/CST:** a concrete syntax tree. Every node carries a span (offset + length). Node
+kinds mirror the grammar (Namespace, Package, Definition — part/attribute/port/action/
+state/connection via a kind field or subtypes, Feature, Membership, Import,
+Specialization edges, Expression subtree). KerML base node types exist; SysML nodes
+embed/reference them. Trivia (comments/whitespace) is attached for doc-comment hover and
+future formatting.
+
+**Key invariant:** the AST is syntax-only and **immutable after parse**. Semantic
+information (resolved refs, types) lives in side tables keyed by node. This enables
+incremental reparse without wholesale semantic-cache invalidation and keeps the AST
+serialization-friendly.
+
+## 7. Symbol Index & Name Resolution
+
+This is the core semantic engine and the highest-complexity subsystem — staged carefully.
+
+**Symbol index (per-document, merged to global):**
+
+- Each parsed document produces a **scope tree** mirroring namespace nesting:
+  root namespace → packages → definitions → features.
+- Each scope holds its **local members** (declared names, both short and full name),
+  keyed for lookup.
+- A **global index** maps qualified name → declaration node(s) across the whole scope
+  (workspace + dependencies + stdlib).
+- Built **eagerly** at index time (cheap: names + spans + kinds only), independent of
+  full resolution.
+
+**Resolution (lazy, on-demand)** — two lookup modes:
+
+1. **Qualified name** (`A::B::C`): walk from the root namespace, segment by segment, each
+   resolved as a member of the prior.
+2. **Unqualified name**: search outward through enclosing scopes, then **imports**, then
+   **inherited members** (via specialization edges), then the global root. First match
+   wins, following SysML's precedence rules.
+
+**Inheritance-aware lookup:** resolving a member of a definition must include members
+inherited through `:>` / `:` supertypes, transitively. This requires specialization
+edges to be resolved first → recursion → **cycle guard + memoization** in side tables.
+
+**Caching:** resolution results are memoized in side tables keyed by (reference node →
+target declaration). Invalidated per-document on reparse; cross-document dependents are
+tracked so a changed export invalidates dependent resolutions.
+
+**Ambiguity/errors:** unresolved → diagnostic; multiple matches → ambiguity diagnostic;
+results are visibility-filtered (private members of dependencies are not visible).
+
+## 8. Validation Passes
+
+Validation is architected as **pluggable rule passes over the resolved model**, not
+hardcoded checks.
+
+- **Pass interface:** each pass is a function over a resolved model subtree that emits
+  diagnostics — roughly `Run(ctx, node) []Diagnostic`. Stateless where possible; `ctx`
+  provides resolver + index access.
+- **Pass registry:** an ordered list, each pass tagged with a dependency level
+  (syntax / name-resolution / type / constraint). The runner skips passes whose
+  prerequisites failed on a given node (e.g. no type-check on an unresolved reference) to
+  avoid cascade noise.
+- **Lazy invocation:** passes run on demand per document/node — on a publishDiagnostics
+  request, on a debounced `didChange`, or on an explicit REPL eval. Not global-eager.
+- **Diagnostic model:** severity (error/warn/info/hint), span, message, a stable `code`
+  (for filtering / future quick-fixes), and the source pass ID.
+- **Incremental:** per-document diagnostics are cached; recomputed only for reparsed
+  documents + cross-document dependents (reusing the resolution dependency tracking).
+
+**v1 passes:** (1) **syntax** — emitted directly by the parser (error nodes →
+diagnostics); (2) **name-resolution** — walk references, report unresolved / ambiguous /
+visibility violations.
+
+**Roadmap passes** drop in as registry entries with no runner rearchitecting: typing
+conformance, redefinition validity, multiplicity, specialization cycles, up to the full
+constraint set (C).
+
+## 9. Workspace & Reindex Orchestration
+
+- **Workspace** owns the document set, the global symbol index, the dependency graph, and
+  the diagnostic cache. It is the single source of truth — one per server / REPL session.
+- **Document** holds source text, current AST, per-document scope tree, and a version. Its
+  content has two sources: the LSP open-buffer (authoritative when the document is open)
+  or on-disk (via fsnotify).
+
+**Reindex pipeline** — one path, all change sources feed it:
+
+1. Change event = LSP `didChange`/`didOpen`/`didClose`, OR fsnotify
+   create/modify/delete, OR a manifest edit.
+2. **Debounce** to coalesce bursts (per-document short window; e.g. a git checkout).
+3. **Reparse** the changed document(s) → new AST + syntax diagnostics + fresh scope tree.
+4. **Update index:** swap the document's local scope into the global index; recompute the
+   qualified-name entries for that document.
+5. **Invalidate** memoized resolutions/diagnostics for reparsed documents + cross-document
+   dependents (via the resolution-layer dependency tracking).
+6. **Lazy recompute** resolution/passes on demand (next diagnostics request / hover), not
+   eagerly.
+
+**Concurrency:** workspace mutations are serialized through a single owner goroutine (a
+channel of change events); read queries (hover/completion) take a snapshot or read-lock.
+This avoids races between the fsnotify and LSP threads.
+
+**Manifest/dependency changes:** a `sysml.toml` edit → re-resolve dependencies → fetch
+missing → adjust index scope → reindex affected roots.
+
+**Startup:** load manifest → resolve dependencies → discover workspace files →
+eager-index names (cheap) → stdlib is lazy on first reference.
+
+## 10. Bundled Standard Library & Persistent Cache
+
+- **Bundling:** the SysML v2 standard library (KerML root library + SysML domain
+  libraries: ScalarValues, Collections, SI, Quantities, Parts, Actions, …) is shipped
+  inside the binary via Go `embed.FS`. Zero external install; the stdlib version is locked
+  to the binary. The env var `SYSML_LIBRARY_PATH` overrides this to point at on-disk
+  libraries (dev / custom stdlib).
+- **Load:** lazy — the first import referencing a stdlib namespace triggers a parse of
+  that file. Not all-upfront.
+- **Cache layer:** directory `$XDG_CACHE_HOME/sysml-ls/libs/` (fallback `~/.cache`). The
+  unit is one serialized symbol index per library file: `<hash>.idx`. Cache key =
+  content hash + index-format-version (embedded libs are keyed by content hash, not
+  mtime). A hit deserializes the index (names, kinds, qualified names, spans,
+  specialization edges) and skips the lexer/parser entirely — this must be measurably
+  faster than reparsing. A miss / stale entry / format-version bump triggers
+  parse → build index → serialize → write.
+- **Serialization format:** a compact binary encoding (gob or custom) of the symbol-index
+  side tables. This forces the symbol index to be serializable early; the persisted
+  fields are fixed: qualified names, kinds, relationships (specialization edges), and
+  source spans.
+- **Scope:** the same cache mechanism serves git dependencies (also keyed by content
+  hash) — one code path for stdlib + dependencies.
+
+## 11. Project Dependencies & Manifest
+
+Two distinct concepts:
+
+**(1) Language-level in-source imports.** SysML `import` / `private import` /
+`public import`, `Pkg::*`, recursive `Pkg::**`, and namespace/alias imports. These are
+parsed as AST Import nodes and resolved against the symbol index. Visibility
+(public/private/protected re-export) affects resolution correctness.
+
+**(2) Project-level external dependencies.** Declared in a manifest `sysml.toml` at the
+workspace root:
+
+- `library-paths = [...]` — extra local directories added to the index scope.
+- `[dependencies]` — named dependencies, each either a local path OR a git source
+  (`{ url, rev|tag|branch }`).
+
+Behavior:
+
+- **Git dependencies:** shallow-cloned at the pinned rev into the cache
+  `$XDG_CACHE_HOME/sysml-ls/deps/<host>/<path>@<rev>`. A lockfile `sysml.lock` pins
+  resolved commit SHAs.
+- **Import resolution order:** workspace files → declared dependencies → bundled stdlib.
+- Dependency files feed the **same** symbol index + persistent cache as workspace/stdlib;
+  parsed lazily, cached by content hash. Git dependencies are read-only (no fs watch;
+  pinned).
+- **Transitive dependencies:** nested `sysml.toml` files are resolved recursively
+  (deduplicated by SHA, with cycle detection). Elements from a dependency project are
+  therefore available in the child project — importable, and extensible/overridable via
+  specialization/redefinition — subject to visibility.
+- **Reindex:** a manifest edit → re-resolve dependencies → fetch missing → reindex scope.
+- **Failure modes:** unreachable remote → diagnostic on the manifest, keep the last cached
+  rev; missing lockfile → resolve + write; SHA mismatch → warn.
+
+## 12. LSP Surface
+
+**v1 capabilities:**
+
+- **Lifecycle/sync:** `initialize` / `initialized` / `shutdown` (advertising
+  capabilities); `textDocument/didOpen`/`didChange`/`didClose`/`didSave` feed the reindex
+  pipeline (open-buffer authoritative). **Incremental sync**
+  (`TextDocumentSyncKind.Incremental` — send ranges, not full text).
+- **Diagnostics:** `textDocument/publishDiagnostics` pushed after a debounced reindex
+  (syntax + name-resolution passes); pull `textDocument/diagnostic` also supported for
+  on-demand.
+- **Navigation/info** (from the symbol index + resolver):
+  - `hover` — declaration kind + qualified name + doc-comment trivia.
+  - `definition` — resolve a reference → target declaration span.
+  - `references` — reverse lookup via dependency tracking.
+  - `documentSymbol` — scope tree → outline.
+  - `workspace/symbol` — global qualified-name index query.
+- **Completion:** `textDocument/completion`, context-aware from scope + imports +
+  inherited members + keywords. The marquee feature.
+
+**Deferred to roadmap:** semantic tokens (server-side highlighting), formatting, rename,
+code actions/quick-fix, signature help, folding, inlay hints. Basic coloring is covered
+by the pilot's TextMate grammars; semantic tokens layer in later.
+
+## 13. REPL Frontend
+
+`cmd/sysml-repl` is a thin frontend over the same core `Workspace`.
+
+- **Loop:** readline (history, line editing via a Go readline library). Read input → feed
+  the core → print result / diagnostics.
+- **Statement-by-statement:** each submission is parsed as top-level namespace member(s).
+  The session holds **one implicit root namespace** that accumulates declarations across
+  inputs (like the pilot's `SysMLInteractive`).
+- **Continuation detection:** after reading, attempt a parse; if the input is
+  unterminated (unclosed `{`, incomplete declaration) → show a secondary prompt (`...`)
+  and keep buffering until the parse completes or a blank line forces a flush. Brace-depth
+  plus the parser's "expected more" signal drive this.
+- **Session state:** accumulated declarations persist in an in-memory `<repl>` document
+  added to the workspace. Later inputs resolve against earlier ones + stdlib + imports.
+  Redefining the same name replaces the prior declaration (REPL convenience).
+- **Output:** success → echo a resolved summary (kind + qualified name); error → render
+  diagnostics with caret spans against the input. Name resolution runs **eagerly** per
+  submission (the REPL wants immediate feedback) — unlike the lazy LSP path.
+- **Meta commands (v1, minimal):** `%help`, `%list` (dump session declarations), `%clear`
+  (reset session), `%load <file>` (parse a file into the session). Viz/publish deferred.
+- **Imports:** `import` statements work as in source files; the stdlib lazy-loads on first
+  reference.
+
+## 14. Testing Strategy
+
+- **Lexer:** table-driven, input → expected token sequence (kind, span, text); covers
+  keywords, unrestricted names, numbers, operators, comments/notes, non-ASCII in
+  unrestricted names, illegal chars.
+- **Parser:** golden-file tests — a fixture in `testdata/` → serialized AST
+  (S-expression / indented dump) compared against a `.golden` file, updatable via a flag.
+  Covers every production plus error-recovery cases (malformed input → expected error
+  nodes + diagnostics) and round-trip span checks.
+- **Symbol index / resolution:** fixtures with annotated expectations
+  (`// ref -> expected qualified name`, `// unresolved`); covers qualified/unqualified,
+  inheritance-aware, imports, visibility, cross-file, and ambiguity.
+- **Validation passes:** fixtures with expected-diagnostic annotations
+  (`// error: ... at span`); one fixture set per pass.
+- **Workspace/reindex:** scripted change sequences (open → edit → save →
+  external-modify) asserting the index + diagnostics converge; incremental correctness.
+- **Libs/cache:** cache round-trip (parse → serialize → deserialize → identical index);
+  staleness / version-bump invalidation; `embed.FS` load.
+- **LSP:** protocol-level tests — feed JSON-RPC over a pipe and assert responses
+  (initialize capabilities, `didOpen` → `publishDiagnostics`, hover/definition/completion
+  at a position); table-driven.
+- **REPL:** scripted input lines asserting printed output + continuation behavior.
+- **Integration:** the real SysML v2 stdlib + sample models (e.g. VehicleModel) parse
+  cleanly; benchmark parse/resolve latency against the sub-millisecond keystroke budget.
+- **CI:** `go test ./...` + `go vet` + the race detector on the workspace concurrency
+  tests.
+
+## 15. Roadmap (Post-v1)
+
+Ordered by dependency, not commitment date:
+
+1. **Type-checking pass (validation depth B):** typing/specialization conformance,
+   redefinition validity — drops in as a registry entry.
+2. **Full constraint parity (validation depth C):** port the remaining pilot constraint
+   rules (multiplicity, specialization cycles, …). **Required before the project is
+   considered finished.**
+3. **Semantic tokens** for server-side syntax highlighting.
+4. **Additional LSP features:** formatting, rename, code actions/quick-fix, signature
+   help, folding, inlay hints.
+5. **Filesystem watch hardening** and large-workspace performance tuning.
+6. **Visualization (`%viz`)** and **API publish (`%publish`)**, revisited after the core
+   is solid.

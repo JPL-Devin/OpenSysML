@@ -23,6 +23,58 @@ const (
 	SymbolAttributeDef
 	SymbolPartUsage
 	SymbolAttributeUsage
+	// Tier A definitions.
+	SymbolItemDef
+	SymbolOccurrenceDef
+	SymbolIndividualDef
+	SymbolMetadataDef
+	SymbolEnumerationDef
+	SymbolViewDef
+	SymbolViewpointDef
+	SymbolRenderingDef
+	SymbolConcernDef
+	// Tier B definitions.
+	SymbolConnectionDef
+	SymbolFlowDef
+	SymbolPortDef
+	SymbolInterfaceDef
+	SymbolAllocationDef
+	// Tier C definitions.
+	SymbolActionDef
+	SymbolStateDef
+	SymbolCalcDef
+	SymbolConstraintDef
+	SymbolRequirementDef
+	SymbolCaseDef
+	SymbolAnalysisCaseDef
+	SymbolVerificationCaseDef
+	SymbolUseCaseDef
+	// Tier A usages.
+	SymbolItemUsage
+	SymbolOccurrenceUsage
+	SymbolIndividualUsage
+	SymbolMetadataUsage
+	SymbolEnumerationUsage
+	SymbolViewUsage
+	SymbolViewpointUsage
+	SymbolRenderingUsage
+	SymbolConcernUsage
+	// Tier B usages.
+	SymbolConnectionUsage
+	SymbolFlowUsage
+	SymbolPortUsage
+	SymbolInterfaceUsage
+	SymbolAllocationUsage
+	// Tier C usages.
+	SymbolActionUsage
+	SymbolStateUsage
+	SymbolCalcUsage
+	SymbolConstraintUsage
+	SymbolRequirementUsage
+	SymbolCaseUsage
+	SymbolAnalysisCaseUsage
+	SymbolVerificationCaseUsage
+	SymbolUseCaseUsage
 )
 
 var symbolKindNames = map[SymbolKind]string{
@@ -38,6 +90,52 @@ var symbolKindNames = map[SymbolKind]string{
 	SymbolAttributeDef:          "attributeDef",
 	SymbolPartUsage:             "partUsage",
 	SymbolAttributeUsage:        "attributeUsage",
+	SymbolItemDef:               "itemDef",
+	SymbolOccurrenceDef:         "occurrenceDef",
+	SymbolIndividualDef:         "individualDef",
+	SymbolMetadataDef:           "metadataDef",
+	SymbolEnumerationDef:        "enumDef",
+	SymbolViewDef:               "viewDef",
+	SymbolViewpointDef:          "viewpointDef",
+	SymbolRenderingDef:          "renderingDef",
+	SymbolConcernDef:            "concernDef",
+	SymbolConnectionDef:         "connectionDef",
+	SymbolFlowDef:               "flowDef",
+	SymbolPortDef:               "portDef",
+	SymbolInterfaceDef:          "interfaceDef",
+	SymbolAllocationDef:         "allocationDef",
+	SymbolActionDef:             "actionDef",
+	SymbolStateDef:              "stateDef",
+	SymbolCalcDef:               "calcDef",
+	SymbolConstraintDef:         "constraintDef",
+	SymbolRequirementDef:        "requirementDef",
+	SymbolCaseDef:               "caseDef",
+	SymbolAnalysisCaseDef:       "analysisCaseDef",
+	SymbolVerificationCaseDef:   "verificationCaseDef",
+	SymbolUseCaseDef:            "useCaseDef",
+	SymbolItemUsage:             "itemUsage",
+	SymbolOccurrenceUsage:       "occurrenceUsage",
+	SymbolIndividualUsage:       "individualUsage",
+	SymbolMetadataUsage:         "metadataUsage",
+	SymbolEnumerationUsage:      "enumUsage",
+	SymbolViewUsage:             "viewUsage",
+	SymbolViewpointUsage:        "viewpointUsage",
+	SymbolRenderingUsage:        "renderingUsage",
+	SymbolConcernUsage:          "concernUsage",
+	SymbolConnectionUsage:       "connectionUsage",
+	SymbolFlowUsage:             "flowUsage",
+	SymbolPortUsage:             "portUsage",
+	SymbolInterfaceUsage:        "interfaceUsage",
+	SymbolAllocationUsage:       "allocationUsage",
+	SymbolActionUsage:           "actionUsage",
+	SymbolStateUsage:            "stateUsage",
+	SymbolCalcUsage:             "calcUsage",
+	SymbolConstraintUsage:       "constraintUsage",
+	SymbolRequirementUsage:      "requirementUsage",
+	SymbolCaseUsage:             "caseUsage",
+	SymbolAnalysisCaseUsage:     "analysisCaseUsage",
+	SymbolVerificationCaseUsage: "verificationCaseUsage",
+	SymbolUseCaseUsage:          "useCaseUsage",
 }
 
 // String returns the display name of the kind.

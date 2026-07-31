@@ -6,7 +6,32 @@ type DefinitionKind int
 const (
 	DefPart DefinitionKind = iota
 	DefAttribute
-	// extensible: DefItem, DefPort, DefAction, ...
+	// Tier A — pure keyword-swaps of the part/attribute pattern.
+	DefItem
+	DefOccurrence
+	DefIndividual
+	DefMetadata
+	DefEnumeration
+	DefView
+	DefViewpoint
+	DefRendering
+	DefConcern
+	// Tier B — distinctive declaration grammar.
+	DefConnection
+	DefFlow
+	DefPort
+	DefInterface
+	DefAllocation
+	// Tier C — nested behavioral bodies (generic body this cycle).
+	DefAction
+	DefState
+	DefCalc
+	DefConstraint
+	DefRequirement
+	DefCase
+	DefAnalysisCase
+	DefVerificationCase
+	DefUseCase
 )
 
 func (k DefinitionKind) String() string {
@@ -15,6 +40,52 @@ func (k DefinitionKind) String() string {
 		return "part"
 	case DefAttribute:
 		return "attribute"
+	case DefItem:
+		return "item"
+	case DefOccurrence:
+		return "occurrence"
+	case DefIndividual:
+		return "individual"
+	case DefMetadata:
+		return "metadata"
+	case DefEnumeration:
+		return "enum"
+	case DefView:
+		return "view"
+	case DefViewpoint:
+		return "viewpoint"
+	case DefRendering:
+		return "rendering"
+	case DefConcern:
+		return "concern"
+	case DefConnection:
+		return "connection"
+	case DefFlow:
+		return "flow"
+	case DefPort:
+		return "port"
+	case DefInterface:
+		return "interface"
+	case DefAllocation:
+		return "allocation"
+	case DefAction:
+		return "action"
+	case DefState:
+		return "state"
+	case DefCalc:
+		return "calc"
+	case DefConstraint:
+		return "constraint"
+	case DefRequirement:
+		return "requirement"
+	case DefCase:
+		return "case"
+	case DefAnalysisCase:
+		return "analysis case"
+	case DefVerificationCase:
+		return "verification case"
+	case DefUseCase:
+		return "use case"
 	default:
 		return "unknown"
 	}
@@ -26,6 +97,32 @@ type UsageKind int
 const (
 	UsagePart UsageKind = iota
 	UsageAttribute
+	// Tier A.
+	UsageItem
+	UsageOccurrence
+	UsageIndividual
+	UsageMetadata
+	UsageEnumeration
+	UsageView
+	UsageViewpoint
+	UsageRendering
+	UsageConcern
+	// Tier B.
+	UsageConnection
+	UsageFlow
+	UsagePort
+	UsageInterface
+	UsageAllocation
+	// Tier C.
+	UsageAction
+	UsageState
+	UsageCalc
+	UsageConstraint
+	UsageRequirement
+	UsageCase
+	UsageAnalysisCase
+	UsageVerificationCase
+	UsageUseCase
 )
 
 func (k UsageKind) String() string {
@@ -34,6 +131,52 @@ func (k UsageKind) String() string {
 		return "part"
 	case UsageAttribute:
 		return "attribute"
+	case UsageItem:
+		return "item"
+	case UsageOccurrence:
+		return "occurrence"
+	case UsageIndividual:
+		return "individual"
+	case UsageMetadata:
+		return "metadata"
+	case UsageEnumeration:
+		return "enum"
+	case UsageView:
+		return "view"
+	case UsageViewpoint:
+		return "viewpoint"
+	case UsageRendering:
+		return "rendering"
+	case UsageConcern:
+		return "concern"
+	case UsageConnection:
+		return "connection"
+	case UsageFlow:
+		return "flow"
+	case UsagePort:
+		return "port"
+	case UsageInterface:
+		return "interface"
+	case UsageAllocation:
+		return "allocation"
+	case UsageAction:
+		return "action"
+	case UsageState:
+		return "state"
+	case UsageCalc:
+		return "calc"
+	case UsageConstraint:
+		return "constraint"
+	case UsageRequirement:
+		return "requirement"
+	case UsageCase:
+		return "case"
+	case UsageAnalysisCase:
+		return "analysis case"
+	case UsageVerificationCase:
+		return "verification case"
+	case UsageUseCase:
+		return "use case"
 	default:
 		return "unknown"
 	}
@@ -126,7 +269,7 @@ type Definition struct {
 	HasBody       bool
 }
 
-// Usage is a `part` / `attribute` usage node.
+// Usage is a `part` / `attribute` usage node (and all other usage kinds).
 type Usage struct {
 	NodeBase
 	Prefixes      []*PrefixMetadata
@@ -144,4 +287,20 @@ type Usage struct {
 	Value         Node
 	Members       []Node
 	HasBody       bool
+
+	// Tier B connection/flow/port grammar. These are nil/zero for kinds
+	// that do not use them.
+	ConnectorEnds []*QualifiedName // connection / interface / allocation usage ends
+	FlowEnds      *FlowEnds        // flow usage ends
+	IsConjugated  bool             // `~` conjugation on port / interface
+}
+
+// FlowEnds holds the ends of a flow usage: the `from`/`to` targets and an
+// optional payload from the `of` clause. It embeds NodeBase (spannable) but is
+// only ever reached through the *ast.Usage traversal case.
+type FlowEnds struct {
+	NodeBase
+	From    *QualifiedName
+	To      *QualifiedName
+	Payload *QualifiedName // optional; from the `of` clause
 }

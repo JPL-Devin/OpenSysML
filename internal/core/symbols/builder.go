@@ -130,6 +130,52 @@ func definitionSymbolKind(k ast.DefinitionKind) SymbolKind {
 		return SymbolPartDef
 	case ast.DefAttribute:
 		return SymbolAttributeDef
+	case ast.DefItem:
+		return SymbolItemDef
+	case ast.DefOccurrence:
+		return SymbolOccurrenceDef
+	case ast.DefIndividual:
+		return SymbolIndividualDef
+	case ast.DefMetadata:
+		return SymbolMetadataDef
+	case ast.DefEnumeration:
+		return SymbolEnumerationDef
+	case ast.DefView:
+		return SymbolViewDef
+	case ast.DefViewpoint:
+		return SymbolViewpointDef
+	case ast.DefRendering:
+		return SymbolRenderingDef
+	case ast.DefConcern:
+		return SymbolConcernDef
+	case ast.DefConnection:
+		return SymbolConnectionDef
+	case ast.DefFlow:
+		return SymbolFlowDef
+	case ast.DefPort:
+		return SymbolPortDef
+	case ast.DefInterface:
+		return SymbolInterfaceDef
+	case ast.DefAllocation:
+		return SymbolAllocationDef
+	case ast.DefAction:
+		return SymbolActionDef
+	case ast.DefState:
+		return SymbolStateDef
+	case ast.DefCalc:
+		return SymbolCalcDef
+	case ast.DefConstraint:
+		return SymbolConstraintDef
+	case ast.DefRequirement:
+		return SymbolRequirementDef
+	case ast.DefCase:
+		return SymbolCaseDef
+	case ast.DefAnalysisCase:
+		return SymbolAnalysisCaseDef
+	case ast.DefVerificationCase:
+		return SymbolVerificationCaseDef
+	case ast.DefUseCase:
+		return SymbolUseCaseDef
 	default:
 		return SymbolUnknown
 	}
@@ -142,6 +188,52 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 		return SymbolPartUsage
 	case ast.UsageAttribute:
 		return SymbolAttributeUsage
+	case ast.UsageItem:
+		return SymbolItemUsage
+	case ast.UsageOccurrence:
+		return SymbolOccurrenceUsage
+	case ast.UsageIndividual:
+		return SymbolIndividualUsage
+	case ast.UsageMetadata:
+		return SymbolMetadataUsage
+	case ast.UsageEnumeration:
+		return SymbolEnumerationUsage
+	case ast.UsageView:
+		return SymbolViewUsage
+	case ast.UsageViewpoint:
+		return SymbolViewpointUsage
+	case ast.UsageRendering:
+		return SymbolRenderingUsage
+	case ast.UsageConcern:
+		return SymbolConcernUsage
+	case ast.UsageConnection:
+		return SymbolConnectionUsage
+	case ast.UsageFlow:
+		return SymbolFlowUsage
+	case ast.UsagePort:
+		return SymbolPortUsage
+	case ast.UsageInterface:
+		return SymbolInterfaceUsage
+	case ast.UsageAllocation:
+		return SymbolAllocationUsage
+	case ast.UsageAction:
+		return SymbolActionUsage
+	case ast.UsageState:
+		return SymbolStateUsage
+	case ast.UsageCalc:
+		return SymbolCalcUsage
+	case ast.UsageConstraint:
+		return SymbolConstraintUsage
+	case ast.UsageRequirement:
+		return SymbolRequirementUsage
+	case ast.UsageCase:
+		return SymbolCaseUsage
+	case ast.UsageAnalysisCase:
+		return SymbolAnalysisCaseUsage
+	case ast.UsageVerificationCase:
+		return SymbolVerificationCaseUsage
+	case ast.UsageUseCase:
+		return SymbolUseCaseUsage
 	default:
 		return SymbolUnknown
 	}

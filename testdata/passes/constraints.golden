@@ -1,0 +1,4 @@
+2:25 error [constraint/specialization-cycle] A participates in a specialization cycle
+3:25 error [constraint/specialization-cycle] B participates in a specialization cycle
+6:20 error [constraint/subsetting-multiplicity] subsetting few: upper bound exceeds subsetted cap
+9:11 error [constraint/multiplicity-range] multiplicity lower bound exceeds upper bound on lo

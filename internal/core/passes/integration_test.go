@@ -64,5 +64,6 @@ func runPassesGolden(t *testing.T, name string) {
 	}
 }
 
-func TestPassesGoldenClean(t *testing.T)  { runPassesGolden(t, "clean") }
-func TestPassesGoldenErrors(t *testing.T) { runPassesGolden(t, "errors") }
+func TestPassesGoldenClean(t *testing.T)       { runPassesGolden(t, "clean") }
+func TestPassesGoldenErrors(t *testing.T)      { runPassesGolden(t, "errors") }
+func TestPassesGoldenConstraints(t *testing.T) { runPassesGolden(t, "constraints") }

@@ -3,6 +3,7 @@ package passes
 import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -50,6 +51,7 @@ type Context struct {
 	ParseDiagnostics []Diagnostic
 
 	resolver *resolve.Resolver
+	model    *semantics.Model
 }
 
 // NewContext builds a Context for a document.
@@ -64,4 +66,14 @@ func (c *Context) Resolver() *resolve.Resolver {
 		c.resolver = resolve.New(c.Index)
 	}
 	return c.resolver
+}
+
+// Model returns the shared semantic model (specialization graph, multiplicity,
+// inherited members, evaluator) for this context, creating it on first use over
+// the shared resolver so constraint passes reuse one memoized instance.
+func (c *Context) Model() *semantics.Model {
+	if c.model == nil {
+		c.model = semantics.NewModel(c.Resolver())
+	}
+	return c.model
 }

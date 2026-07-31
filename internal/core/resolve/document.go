@@ -92,6 +92,14 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.resolveExpr(scope, d.Multiplicity.Upper)
 		}
 		r.resolveExpr(scope, d.Value)
+		for _, end := range d.ConnectorEnds {
+			r.ResolveQualified(scope, end)
+		}
+		if d.FlowEnds != nil {
+			r.ResolveQualified(scope, d.FlowEnds.From)
+			r.ResolveQualified(scope, d.FlowEnds.To)
+			r.ResolveQualified(scope, d.FlowEnds.Payload)
+		}
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 		}

@@ -123,6 +123,52 @@ func defSymbolKind(k ast.DefinitionKind) symbols.SymbolKind {
 		return symbols.SymbolPartDef
 	case ast.DefAttribute:
 		return symbols.SymbolAttributeDef
+	case ast.DefItem:
+		return symbols.SymbolItemDef
+	case ast.DefOccurrence:
+		return symbols.SymbolOccurrenceDef
+	case ast.DefIndividual:
+		return symbols.SymbolIndividualDef
+	case ast.DefMetadata:
+		return symbols.SymbolMetadataDef
+	case ast.DefEnumeration:
+		return symbols.SymbolEnumerationDef
+	case ast.DefView:
+		return symbols.SymbolViewDef
+	case ast.DefViewpoint:
+		return symbols.SymbolViewpointDef
+	case ast.DefRendering:
+		return symbols.SymbolRenderingDef
+	case ast.DefConcern:
+		return symbols.SymbolConcernDef
+	case ast.DefConnection:
+		return symbols.SymbolConnectionDef
+	case ast.DefFlow:
+		return symbols.SymbolFlowDef
+	case ast.DefPort:
+		return symbols.SymbolPortDef
+	case ast.DefInterface:
+		return symbols.SymbolInterfaceDef
+	case ast.DefAllocation:
+		return symbols.SymbolAllocationDef
+	case ast.DefAction:
+		return symbols.SymbolActionDef
+	case ast.DefState:
+		return symbols.SymbolStateDef
+	case ast.DefCalc:
+		return symbols.SymbolCalcDef
+	case ast.DefConstraint:
+		return symbols.SymbolConstraintDef
+	case ast.DefRequirement:
+		return symbols.SymbolRequirementDef
+	case ast.DefCase:
+		return symbols.SymbolCaseDef
+	case ast.DefAnalysisCase:
+		return symbols.SymbolAnalysisCaseDef
+	case ast.DefVerificationCase:
+		return symbols.SymbolVerificationCaseDef
+	case ast.DefUseCase:
+		return symbols.SymbolUseCaseDef
 	}
 	return symbols.SymbolUnknown
 }
@@ -133,16 +179,120 @@ func usageWantsDefKind(k ast.UsageKind) symbols.SymbolKind {
 		return symbols.SymbolPartDef
 	case ast.UsageAttribute:
 		return symbols.SymbolAttributeDef
+	case ast.UsageItem:
+		return symbols.SymbolItemDef
+	case ast.UsageOccurrence:
+		return symbols.SymbolOccurrenceDef
+	case ast.UsageIndividual:
+		return symbols.SymbolIndividualDef
+	case ast.UsageMetadata:
+		return symbols.SymbolMetadataDef
+	case ast.UsageEnumeration:
+		return symbols.SymbolEnumerationDef
+	case ast.UsageView:
+		return symbols.SymbolViewDef
+	case ast.UsageViewpoint:
+		return symbols.SymbolViewpointDef
+	case ast.UsageRendering:
+		return symbols.SymbolRenderingDef
+	case ast.UsageConcern:
+		return symbols.SymbolConcernDef
+	case ast.UsageConnection:
+		return symbols.SymbolConnectionDef
+	case ast.UsageFlow:
+		return symbols.SymbolFlowDef
+	case ast.UsagePort:
+		return symbols.SymbolPortDef
+	case ast.UsageInterface:
+		return symbols.SymbolInterfaceDef
+	case ast.UsageAllocation:
+		return symbols.SymbolAllocationDef
+	case ast.UsageAction:
+		return symbols.SymbolActionDef
+	case ast.UsageState:
+		return symbols.SymbolStateDef
+	case ast.UsageCalc:
+		return symbols.SymbolCalcDef
+	case ast.UsageConstraint:
+		return symbols.SymbolConstraintDef
+	case ast.UsageRequirement:
+		return symbols.SymbolRequirementDef
+	case ast.UsageCase:
+		return symbols.SymbolCaseDef
+	case ast.UsageAnalysisCase:
+		return symbols.SymbolAnalysisCaseDef
+	case ast.UsageVerificationCase:
+		return symbols.SymbolVerificationCaseDef
+	case ast.UsageUseCase:
+		return symbols.SymbolUseCaseDef
 	}
 	return symbols.SymbolUnknown
 }
 
+// defSymbolKinds is the set of SymbolKinds that classify a definition.
+var defSymbolKinds = map[symbols.SymbolKind]bool{
+	symbols.SymbolPartDef:             true,
+	symbols.SymbolAttributeDef:        true,
+	symbols.SymbolItemDef:             true,
+	symbols.SymbolOccurrenceDef:       true,
+	symbols.SymbolIndividualDef:       true,
+	symbols.SymbolMetadataDef:         true,
+	symbols.SymbolEnumerationDef:      true,
+	symbols.SymbolViewDef:             true,
+	symbols.SymbolViewpointDef:        true,
+	symbols.SymbolRenderingDef:        true,
+	symbols.SymbolConcernDef:          true,
+	symbols.SymbolConnectionDef:       true,
+	symbols.SymbolFlowDef:             true,
+	symbols.SymbolPortDef:             true,
+	symbols.SymbolInterfaceDef:        true,
+	symbols.SymbolAllocationDef:       true,
+	symbols.SymbolActionDef:           true,
+	symbols.SymbolStateDef:            true,
+	symbols.SymbolCalcDef:             true,
+	symbols.SymbolConstraintDef:       true,
+	symbols.SymbolRequirementDef:      true,
+	symbols.SymbolCaseDef:             true,
+	symbols.SymbolAnalysisCaseDef:     true,
+	symbols.SymbolVerificationCaseDef: true,
+	symbols.SymbolUseCaseDef:          true,
+}
+
+// usageSymbolKinds is the set of SymbolKinds that classify a usage.
+var usageSymbolKinds = map[symbols.SymbolKind]bool{
+	symbols.SymbolPartUsage:             true,
+	symbols.SymbolAttributeUsage:        true,
+	symbols.SymbolItemUsage:             true,
+	symbols.SymbolOccurrenceUsage:       true,
+	symbols.SymbolIndividualUsage:       true,
+	symbols.SymbolMetadataUsage:         true,
+	symbols.SymbolEnumerationUsage:      true,
+	symbols.SymbolViewUsage:             true,
+	symbols.SymbolViewpointUsage:        true,
+	symbols.SymbolRenderingUsage:        true,
+	symbols.SymbolConcernUsage:          true,
+	symbols.SymbolConnectionUsage:       true,
+	symbols.SymbolFlowUsage:             true,
+	symbols.SymbolPortUsage:             true,
+	symbols.SymbolInterfaceUsage:        true,
+	symbols.SymbolAllocationUsage:       true,
+	symbols.SymbolActionUsage:           true,
+	symbols.SymbolStateUsage:            true,
+	symbols.SymbolCalcUsage:             true,
+	symbols.SymbolConstraintUsage:       true,
+	symbols.SymbolRequirementUsage:      true,
+	symbols.SymbolCaseUsage:             true,
+	symbols.SymbolAnalysisCaseUsage:     true,
+	symbols.SymbolVerificationCaseUsage: true,
+	symbols.SymbolUseCaseUsage:          true,
+}
+
 func isDefKind(k symbols.SymbolKind) bool {
-	return k == symbols.SymbolPartDef || k == symbols.SymbolAttributeDef
+	return defSymbolKinds[k]
 }
 
 func isUsageKind(k symbols.SymbolKind) bool {
-	return k == symbols.SymbolPartUsage || k == symbols.SymbolAttributeUsage
+	return usageSymbolKinds[k]
 }
 
 func unwrapType(n ast.Node) ast.Node {

@@ -149,8 +149,16 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		fmt.Fprintf(b, `(Usage kind=%q name=%q ref=%t direction=%q composite=%t derived=%t ordered=%t nonunique=%t`,
 			v.Kind.String(), identName(v.Ident), v.IsReference, v.Direction.String(),
 			v.IsComposite, v.IsDerived, v.IsOrdered, v.IsNonunique)
-		writeChildren(b, depth, defusageChildren(v.Prefixes, v.Relationships, v.Multiplicity, v.Value, v.Members))
+		if v.IsConjugated {
+			b.WriteString(` conjugated=true`)
+		}
+		if len(v.ConnectorEnds) > 0 {
+			fmt.Fprintf(b, ` ends=%q`, qnList(v.ConnectorEnds))
+		}
+		writeChildren(b, depth, usageChildren(v))
 		return
+	case *FlowEnds:
+		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q)`, qnString(v.From), qnString(v.To), qnString(v.Payload))
 	case *Relationship:
 		fmt.Fprintf(b, `(Relationship kind=%q target=%q)`, v.Kind.String(), qnString(v.Target))
 	case *Multiplicity:
@@ -267,5 +275,28 @@ func defusageChildren(prefixes []*PrefixMetadata, rels []*Relationship, mult *Mu
 		kids = append(kids, value)
 	}
 	kids = append(kids, members...)
+	return kids
+}
+
+// usageChildren is defusageChildren for a Usage, additionally emitting the
+// optional FlowEnds node (after value, before members).
+func usageChildren(v *Usage) []Node {
+	kids := make([]Node, 0)
+	for _, pm := range v.Prefixes {
+		kids = append(kids, pm)
+	}
+	for _, r := range v.Relationships {
+		kids = append(kids, r)
+	}
+	if v.Multiplicity != nil {
+		kids = append(kids, v.Multiplicity)
+	}
+	if v.Value != nil {
+		kids = append(kids, v.Value)
+	}
+	if v.FlowEnds != nil {
+		kids = append(kids, v.FlowEnds)
+	}
+	kids = append(kids, v.Members...)
 	return kids
 }

@@ -7,12 +7,14 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// DefaultRegistry returns the v1 pass registry: syntax + name resolution.
+// DefaultRegistry returns the default pass registry: syntax, name resolution,
+// type checking, and semantic constraints.
 func DefaultRegistry() *Registry {
 	reg := NewRegistry()
 	reg.Register(SyntaxPass{})
 	reg.Register(NameResolutionPass{})
 	reg.Register(TypeCheckPass{})
+	reg.Register(ConstraintPass{})
 	return reg
 }
 
