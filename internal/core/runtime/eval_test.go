@@ -129,3 +129,8 @@ func TestEval_SelectExpr(t *testing.T) {
 	t.Skip("defer collection operations to integration tests")
 }
 
+func TestEval_BuiltinInvocation(t *testing.T) {
+	// Verify builtin dispatch works (test with SequenceFunctions::size)
+	t.Skip("defer to integration — requires InvocationExpr parse")
+}
+

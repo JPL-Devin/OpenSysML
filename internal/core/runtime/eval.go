@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
@@ -72,6 +73,8 @@ func (ec *EvalContext) Eval(node ast.Node) (Value, error) {
 		return ec.evalCollectExpr(n)
 	case *ast.SelectExpr:
 		return ec.evalSelectExpr(n)
+	case *ast.InvocationExpr:
+		return ec.evalInvocation(n)
 	default:
 		return Value{}, fmt.Errorf("unsupported node type: %T", node)
 	}
@@ -307,5 +310,44 @@ func (ec *EvalContext) evalSelectExpr(n *ast.SelectExpr) (Value, error) {
 	}
 	
 	return Value{Kind: ValSequence, Sequence: result}, nil
+}
+
+// evalInvocation evaluates a function/calc invocation.
+func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
+	// Build qualified name string for builtin lookup
+	qualName := qualifiedNameToString(n.Type)
+	
+	// Eval args
+	args := make([]Value, len(n.Args))
+	for i, arg := range n.Args {
+		val, err := ec.Eval(arg)
+		if err != nil {
+			return Value{}, err
+		}
+		args[i] = val
+	}
+	
+	// Check builtin registry
+	if fn, ok := builtins[qualName]; ok {
+		return fn(ec, args)
+	}
+	
+	// User-defined calc: resolve target
+	// (Simplified: requires test to provide proper scope context; defer full resolution to integration)
+	return Value{}, fmt.Errorf("user-defined calc invocation not yet fully implemented: %s", qualName)
+}
+
+// qualifiedNameToString converts a QualifiedName AST node to "Package::Name" format.
+func qualifiedNameToString(qn *ast.QualifiedName) string {
+	if qn == nil {
+		return ""
+	}
+	parts := make([]string, 0, len(qn.Parts))
+	for _, seg := range qn.Parts {
+		if seg.Text != "" {
+			parts = append(parts, seg.Text)
+		}
+	}
+	return strings.Join(parts, "::")
 }
 
