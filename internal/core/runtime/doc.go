@@ -1,7 +1,31 @@
 // Package runtime provides the SysML v2 execution runtime: expression
 // evaluation, instance materialization, and KerML operator library.
 //
-// This package implements Tiers 1–3 of the SysML v2 runtime:
+// # Usage Example
+//
+//	// Create runtime context
+//	model := semantics.NewModel(resolver)
+//	ctx := runtime.NewContext(model, resolver, 100000)
+//	
+//	// Instantiate a part
+//	partSym := resolveSymbol(root, "MyCar")
+//	inst, err := ctx.Instantiate(partSym)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	
+//	// Evaluate an expression
+//	exprNode := parseExpression("1 + 2")
+//	result, err := ctx.Eval(exprNode)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	fmt.Println(result.Const.Int) // 3
+//
+// # Architecture
+//
+// The runtime is organized in three tiers:
+//
 //   - Tier 1: Feature flattening (effective-feature lists per type)
 //   - Tier 2: Instance model (lazy slot materialization, multiplicity-driven collections)
 //   - Tier 3: Expression evaluator (literals, operators, feature access, calc invocation, KerML builtins)
@@ -13,7 +37,8 @@
 //   - Instance: Runtime-materialized object with typed slots
 //   - EvalContext: Lexical environment for evaluation (frame stack)
 //
-// Integration:
+// # Integration
+//
 //   - Consumes semantics.Model (inherits features, multiplicity, constant folding)
 //   - Gates on pass-validated models (LevelConstraint success)
 //   - One Context per workspace session (LSP/REPL lifetime)
