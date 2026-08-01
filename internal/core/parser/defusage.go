@@ -251,6 +251,17 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	
 	// Parse 'all' modifier if present (appears after keyword, before name)
 	isAll := p.acceptKeyword("all")
+	
+	// Parse secondary keyword if present (e.g., 'assoc struct')
+	// Check if next token is also a kind keyword
+	t2 := p.peek()
+	if t2.Kind == lexer.Keyword {
+		if secondKind, ok := definitionKindKeywords[t2.KeywordID]; ok && t2.KeywordID != "def" {
+			// Have secondary keyword - use it as primary kind
+			defKind = secondKind
+			p.advance() // consume secondary keyword
+		}
+	}
 
 	if p.atKeyword("def") {
 		p.advance() // consume 'def'
