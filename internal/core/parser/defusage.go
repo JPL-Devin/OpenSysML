@@ -720,20 +720,30 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return p.parseResultMember()
 	}
 	
-	// Check for anonymous feature pattern: [modifiers] name : Type
-	// Examples: private thisClock : Clock :>> self; or ref stateSpace: StateSpace;
+	// Check for anonymous feature pattern: [modifiers] [name] : Type OR [modifiers] :>> relationships
+	// Examples: private thisClock : Clock :>> self; or ref stateSpace: StateSpace; or ref :>> x
 	// This handles features with visibility but no usage kind keyword
 	nextKind := p.peekN(1).Kind
 	
-	// Check for modifier + name + colon pattern (e.g., ref name : Type)
+	// Check for modifier + (name + colon OR relationship) pattern
 	if p.atKeyword("ref") || p.atKeyword("readonly") || p.atKeyword("derived") || p.atKeyword("composite") || p.atKeyword("portion") {
 		mods := p.parseFeatureModifiers()
-		if p.atName() && p.peekN(1).Kind == lexer.Colon {
+		
+		// Check for name + colon (typed) OR direct relationship (anonymous)
+		hasNameAndType := p.atName() && p.peekN(1).Kind == lexer.Colon
+		hasRelationship := p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt)
+		
+		if hasNameAndType || hasRelationship {
 			var id ast.Identification
-			tok := p.advance()
-			if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
-				id.Name = p.src.Text(tok.Span)
-				id.NameSpan = tok.Span
+			
+			// Parse optional name
+			if hasNameAndType {
+				tok := p.advance()
+				if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
+					id.Name = p.src.Text(tok.Span)
+					id.NameSpan = tok.Span
+				}
+				p.advance() // consume ':'
 			}
 			
 			// Parse as anonymous usage (attribute by default)
@@ -750,12 +760,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 				IsNonunique:   mods.isNonunique,
 			}
 			
-			// Parse typing/relationships
-			p.advance() // consume ':'
-			u.Relationships = append(u.Relationships, &ast.Relationship{
-				Kind:   ast.RelTyping,
-				Target: p.parseQualifiedName(),
-			})
+			// If we consumed a colon, parse typing relationship
+			if hasNameAndType {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelTyping,
+					Target: p.parseQualifiedName(),
+				})
+			}
 			
 			// Parse optional multiplicity
 			if p.at(lexer.LBracket) {
@@ -912,6 +923,53 @@ func (p *Parser) parseBodyMember() ast.Node {
 	return mem
 }
 
+// parseRelationshipTarget parses a relationship target which can be either:
+// - A qualified name (A::B::C)
+// - A feature chain (A.B.C or A::B.C.D - mix of :: and .)
+// Returns Node interface (either *QualifiedName or *FeatureChainExpr).
+// Does NOT consume body expressions ({ in ... }) unlike ParseExpression().
+func (p *Parser) parseRelationshipTarget() ast.Node {
+	start := p.peek().Span.Offset
+	
+	// Start with qualified name (handles A::B::C)
+	base := p.parseQualifiedName()
+	if base == nil {
+		return nil
+	}
+	
+	// Check for dot extensions (feature chain)
+	if !p.at(lexer.Dot) {
+		return base // Just a qualified name
+	}
+	
+	// Build feature chain expression
+	var operand ast.Node = &ast.FeatureReference{Name: base}
+	operand.(*ast.FeatureReference).NodeSpan = base.NodeSpan
+	
+	for p.at(lexer.Dot) {
+		p.advance() // consume '.'
+		// Parse member name
+		seg, ok := p.parseNameSegmentRelaxed()
+		if !ok {
+			p.error(p.peek().Span, "expected a name after '.'")
+			break
+		}
+		
+		// Create member name as QualifiedName
+		memberName := &ast.QualifiedName{Parts: []ast.NameSegment{seg}}
+		memberName.NodeSpan = p.spanFrom(p.peek().Span.Offset)
+		
+		chain := &ast.FeatureChainExpr{
+			Operand: operand,
+			Member:  memberName,
+		}
+		chain.NodeSpan = p.spanFrom(start)
+		operand = chain
+	}
+	
+	return operand
+}
+
 // parseRelationships parses zero or more relationship clauses. isUsage selects
 // the meaning of the symbolic `:>` operator (subsets on a usage, specializes on
 // a definition). Each clause may carry a comma-separated target list; every
@@ -928,8 +986,10 @@ func (p *Parser) parseRelationships(isUsage bool) (rels []*ast.Relationship, con
 			if p.accept2(lexer.Tilde) && kind == ast.RelTyping {
 				conjugated = true
 			}
-			qn := p.parseQualifiedName()
-			r := &ast.Relationship{Kind: kind, Target: qn}
+			// Parse target using specialized parser that handles both qualified names
+			// and feature chains but does NOT consume body expressions.
+			target := p.parseRelationshipTarget()
+			r := &ast.Relationship{Kind: kind, Target: target}
 			r.NodeSpan = p.spanFrom(start)
 			rels = append(rels, r)
 			if !p.accept2(lexer.Comma) {

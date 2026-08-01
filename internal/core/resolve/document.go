@@ -133,7 +133,15 @@ func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixM
 func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relationship) {
 	for _, rel := range rels {
 		if rel != nil && rel.Target != nil {
-			r.ResolveQualified(scope, rel.Target)
+			// Unwrap FeatureReference if needed (relationship targets parsed as expressions)
+			target := rel.Target
+			if fr, ok := target.(*ast.FeatureReference); ok {
+				target = fr.Name
+			}
+			if qn, ok := target.(*ast.QualifiedName); ok {
+				r.ResolveQualified(scope, qn)
+			}
+			// Note: Other target types (FeatureChainExpr, etc.) not yet supported in resolution
 		}
 	}
 }

@@ -317,7 +317,7 @@ func (d FeatureDirection) String() string {
 type Relationship struct {
 	NodeBase
 	Kind   RelationshipKind
-	Target *QualifiedName
+	Target Node // QualifiedName or Expression (e.g., FeatureChainExpr for interfacingPorts.incomingTransfers)
 }
 
 // Multiplicity is a `[n]` / `[lo..hi]` / `[*]` bound on a usage. Bounds are

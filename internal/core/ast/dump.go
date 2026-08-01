@@ -188,7 +188,21 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		writeChildren(b, depth, kids)
 		return
 	case *Relationship:
-		fmt.Fprintf(b, `(Relationship kind=%q target=%q)`, v.Kind.String(), qnString(v.Target))
+		targetStr := "nil"
+		if v.Target != nil {
+			if qn, ok := v.Target.(*QualifiedName); ok {
+				targetStr = qnString(qn)
+			} else {
+				targetStr = "(expr)"
+			}
+		}
+		fmt.Fprintf(b, `(Relationship kind=%q target=%s`, v.Kind.String(), targetStr)
+		var kids []Node
+		if v.Target != nil {
+			kids = append(kids, v.Target)
+		}
+		writeChildren(b, depth, kids)
+		return
 	case *Multiplicity:
 		fmt.Fprintf(b, `(Multiplicity range=%t`, v.IsRange)
 		var kids []Node

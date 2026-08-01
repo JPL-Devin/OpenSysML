@@ -110,8 +110,15 @@ func (ctx *Context) extractType(featureSym *symbols.Symbol) *symbols.Symbol {
 	rels := semantics.RelationshipsOf(featureSym)
 	for _, rel := range rels {
 		if rel.Kind == ast.RelTyping && rel.Target != nil {
-			if resolved, ok := ctx.resolver.ResolveQualified(featureSym.OwnerScope, rel.Target); ok {
-				return resolved
+			// Unwrap FeatureReference if needed
+			target := rel.Target
+			if fr, ok := target.(*ast.FeatureReference); ok {
+				target = fr.Name
+			}
+			if qn, ok := target.(*ast.QualifiedName); ok {
+				if resolved, ok := ctx.resolver.ResolveQualified(featureSym.OwnerScope, qn); ok {
+					return resolved
+				}
 			}
 		}
 	}

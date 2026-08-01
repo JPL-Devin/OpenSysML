@@ -79,7 +79,16 @@ func supersOf(decl ast.Node) []string {
 	for _, r := range rels {
 		switch r.Kind {
 		case ast.RelSpecializes, ast.RelSubsets, ast.RelRedefines:
-			out = append(out, qualifiedNameText(r.Target))
+			// Unwrap FeatureReference to get underlying QualifiedName
+			target := r.Target
+			if ref, ok := target.(*ast.FeatureReference); ok {
+				target = ref.Name
+			}
+			
+			if qn, ok := target.(*ast.QualifiedName); ok {
+				out = append(out, qualifiedNameText(qn))
+			}
+			// Feature chain targets are not QualifiedNames, skip
 		}
 	}
 	return out

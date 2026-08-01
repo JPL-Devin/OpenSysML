@@ -73,11 +73,21 @@ func relTargets(rels []*ast.Relationship) []string {
 	out := make([]string, len(rels))
 	for i, r := range rels {
 		var parts string
-		for j, seg := range r.Target.Parts {
-			if j > 0 {
-				parts += "::"
+		// Unwrap FeatureReference to get underlying QualifiedName
+		target := r.Target
+		if ref, ok := target.(*ast.FeatureReference); ok {
+			target = ref.Name
+		}
+		
+		if qn, ok := target.(*ast.QualifiedName); ok {
+			for j, seg := range qn.Parts {
+				if j > 0 {
+					parts += "::"
+				}
+				parts += seg.Text
 			}
-			parts += seg.Text
+		} else {
+			parts = "(expr)"
 		}
 		out[i] = parts
 	}
