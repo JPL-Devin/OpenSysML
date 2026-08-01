@@ -30,6 +30,7 @@ var definitionKindKeywords = map[string]ast.DefinitionKind{
 	"action":       ast.DefAction,
 	"state":        ast.DefState,
 	"calc":         ast.DefCalc,
+	"function":     ast.DefCalc, // synonym for calc
 	"constraint":   ast.DefConstraint,
 	"requirement":  ast.DefRequirement,
 	"case":         ast.DefCase,
@@ -61,6 +62,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"action":       ast.UsageAction,
 	"state":        ast.UsageState,
 	"calc":         ast.UsageCalc,
+	"function":     ast.UsageCalc, // synonym for calc
 	"constraint":   ast.UsageConstraint,
 	"requirement":  ast.UsageRequirement,
 	"case":         ast.UsageCase,

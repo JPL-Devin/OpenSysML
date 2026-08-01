@@ -366,7 +366,9 @@ func (p *Parser) parseResultBody() []ast.Node {
 	return members
 }
 
-// parseResultMember parses one result member: return <expr>;
+// parseResultMember parses one result member: 
+//   return <expr>;         -- computed result
+//   return : Type[mult];   -- result parameter (anonymous, type-only)
 func (p *Parser) parseResultMember() ast.Node {
 	start := p.peek().Span.Offset
 	
@@ -381,7 +383,42 @@ func (p *Parser) parseResultMember() ast.Node {
 		return en
 	}
 	
-	// Parse expression
+	// Check for ': Type[mult] default expr;' syntax (result parameter, no computed expression)
+	if p.at(lexer.Colon) {
+		// Parse as anonymous usage with typing
+		u := &ast.Usage{
+			Kind:      ast.UsageAttribute, // anonymous result parameter
+			Direction: ast.DirOut,
+		}
+		
+		// Parse typing relationship ': Type'
+		p.advance() // consume ':'
+		
+		// Parse type name directly (QualifiedName)
+		qn := p.parseQualifiedName()
+		if qn != nil {
+			rel := &ast.Relationship{Kind: ast.RelTyping, Target: qn}
+			rel.NodeSpan = qn.NodeSpan
+			u.Relationships = append(u.Relationships, rel)
+		}
+		
+		// Parse optional multiplicity '[n..m]'
+		if p.at(lexer.LBracket) {
+			u.Multiplicity = p.parseMultiplicity()
+		}
+		
+		// Parse optional default value 'default expr'
+		if p.acceptKeyword("default") {
+			u.Value = p.ParseExpression()
+		}
+		
+		p.expect(lexer.Semicolon, "expected ';' after return type")
+		
+		u.NodeSpan = p.spanFrom(start)
+		return u
+	}
+	
+	// Otherwise parse as computed result (expression)
 	expr := p.ParseExpression()
 	
 	p.expect(lexer.Semicolon, "expected ';' after return expression")
