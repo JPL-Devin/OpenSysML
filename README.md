@@ -25,6 +25,7 @@ go build -o sysml ./cmd/sysml
 
 ### Try it
 
+**Interactive modeling:**
 ```bash
 $ sysml
 sysml> part Wheel { attribute diameter = 16.0; }
@@ -37,6 +38,24 @@ sysml> %slots Wheel
 Instance: Wheel (ID: 1)
   diameter: 16.0
 ```
+
+**Behavioral execution:**
+```bash
+sysml> calc add { in x; in y; return x + y; }
+✓ add
+
+sysml> %calc add 10 20
+✓ add(10, 20)
+  = 30
+
+sysml> constraint ValidSpeed { assert 65 <= 120; }
+✓ ValidSpeed
+
+sysml> %constraint ValidSpeed
+✓ Constraint ValidSpeed passed
+```
+
+**See [examples/repl-behavioral-demo.sysml](examples/repl-behavioral-demo.sysml) for comprehensive demos.**
 
 ---
 
@@ -68,8 +87,8 @@ Instance: Wheel (ID: 1)
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
 | Behavioral parser (Phase C1-5: all behavioral bodies) | ✅ Complete |
-| **Calc invocation & constraint evaluation** | ✅ **Complete** |
-| **REPL implementation** | ✅ **Complete** |
+| **Calc invocation, constraint & requirement evaluation** | ✅ **Complete** |
+| **REPL commands (%calc, %constraint, %requirement)** | ✅ **Complete** |
 | Standard library bundling & caching | 🚧 In progress |
 | LSP server implementation | 🚧 In progress |
 | Action execution engine (Tier 5) | 🔮 Future |

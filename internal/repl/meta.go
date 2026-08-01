@@ -30,6 +30,11 @@ var helpText = []string{
 	"%eval <expr>        evaluate an expression",
 	"%slots <name>       show instance slots and values",
 	"%instances          list all instantiated objects",
+	"",
+	"Behavioral commands:",
+	"%calc <name> <args> invoke a calculation with arguments",
+	"%constraint <name>  evaluate a constraint definition",
+	"%requirement <name> evaluate a requirement definition",
 }
 
 // runMeta executes a meta command line. Returns lines to print, whether to quit,
@@ -79,6 +84,21 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		return s.doSlots(fields[1])
 	case "%instances":
 		return s.doInstances()
+	case "%calc":
+		if len(fields) < 2 {
+			return []string{"usage: %calc <name> [args...]"}, false, nil
+		}
+		return s.doCalc(fields[1:])
+	case "%constraint":
+		if len(fields) < 2 {
+			return []string{"usage: %constraint <name>"}, false, nil
+		}
+		return s.doConstraint(fields[1])
+	case "%requirement":
+		if len(fields) < 2 {
+			return []string{"usage: %requirement <name>"}, false, nil
+		}
+		return s.doRequirement(fields[1])
 	default:
 		return []string{fmt.Sprintf("unknown command %q (try %%help)", fields[0])}, false, nil
 	}
@@ -319,4 +339,156 @@ func formatValue(val runtime.Value) string {
 	default:
 		return "<unknown>"
 	}
+}
+
+// doCalc invokes a calculation with arguments.
+func (s *Session) doCalc(args []string) ([]string, bool, error) {
+	if len(args) == 0 {
+		return []string{"usage: %calc <name> [args...]"}, false, nil
+	}
+	
+	calcName := args[0]
+	calcArgs := args[1:]
+	
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		return []string{"error: no declarations loaded"}, false, nil
+	}
+	
+	sym, ok := doc.Scope.LookupLocal(calcName)
+	if !ok || sym == nil {
+		return []string{fmt.Sprintf("error: calc %q not found", calcName)}, false, nil
+	}
+	
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	
+	// Parse arguments as literal expressions (no session context needed)
+	argValues := make([]runtime.Value, len(calcArgs))
+	for i, argStr := range calcArgs {
+		// Use empty context for literal evaluation
+		emptyIdx := symbols.NewIndex()
+		emptyModel := semantics.NewModel(resolve.New(emptyIdx))
+		literalCtx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), 100000)
+		
+		// Parse as attribute inside a part (top-level attribute syntax not supported)
+		src := fmt.Sprintf("part __dummy__ { attribute __arg__ = %s; }", argStr)
+		p := parser.New(source.New("arg", []byte(src)))
+		root := p.ParseFile()
+		
+		// Ignore parse diagnostics - literals might have unresolved types
+		if len(root.Members) == 0 {
+			return []string{fmt.Sprintf("error: failed to parse argument %q", argStr)}, false, nil
+		}
+		
+		// Unwrap Membership if present
+		member := root.Members[0]
+		if membership, ok := member.(*ast.Membership); ok {
+			member = membership.Member
+		}
+		
+		// Extract attribute from part body
+		partUsage, ok := member.(*ast.Usage)
+		if !ok || partUsage.Kind != ast.UsagePart {
+			return []string{fmt.Sprintf("error: argument %q: not a part usage", argStr)}, false, nil
+		}
+		
+		if len(partUsage.Members) == 0 {
+			return []string{fmt.Sprintf("error: argument %q: empty part body", argStr)}, false, nil
+		}
+		
+		// Unwrap first member (attribute)
+		attrMember := partUsage.Members[0]
+		if attrMembership, ok := attrMember.(*ast.Membership); ok {
+			attrMember = attrMembership.Member
+		}
+		
+		usage, ok := attrMember.(*ast.Usage)
+		if !ok {
+			return []string{fmt.Sprintf("error: argument %q: first member not usage", argStr)}, false, nil
+		}
+		
+		if usage.Value == nil {
+			return []string{fmt.Sprintf("error: argument %q: usage has no value", argStr)}, false, nil
+		}
+		
+		val, err := literalCtx.Eval(usage.Value)
+		if err != nil {
+			return []string{fmt.Sprintf("error: evaluation of argument %q failed: %v", argStr, err)}, false, nil
+		}
+		argValues[i] = val
+	}
+	
+	// Invoke calculation via InvokeCalc
+	result, err := ctx.InvokeCalc(sym, argValues, doc.Scope)
+	if err != nil {
+		return []string{fmt.Sprintf("error: calc invocation failed: %v", err)}, false, nil
+	}
+	
+	return []string{
+		fmt.Sprintf("✓ %s(%s)", calcName, strings.Join(calcArgs, ", ")),
+		fmt.Sprintf("  = %s", formatValue(result)),
+	}, false, nil
+}
+
+// doConstraint evaluates a constraint definition.
+func (s *Session) doConstraint(name string) ([]string, bool, error) {
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		return []string{"error: no declarations loaded"}, false, nil
+	}
+	
+	sym, ok := doc.Scope.LookupLocal(name)
+	if !ok || sym == nil {
+		return []string{fmt.Sprintf("error: constraint %q not found", name)}, false, nil
+	}
+	
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	
+	passed, err := ctx.EvaluateConstraint(sym, doc.Scope)
+	if err != nil || !passed {
+		return []string{
+			fmt.Sprintf("✗ Constraint %s failed", name),
+			fmt.Sprintf("  Error: %v", err),
+		}, false, nil
+	}
+	
+	return []string{
+		fmt.Sprintf("✓ Constraint %s passed", name),
+	}, false, nil
+}
+
+// doRequirement evaluates a requirement definition.
+func (s *Session) doRequirement(name string) ([]string, bool, error) {
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		return []string{"error: no declarations loaded"}, false, nil
+	}
+	
+	sym, ok := doc.Scope.LookupLocal(name)
+	if !ok || sym == nil {
+		return []string{fmt.Sprintf("error: requirement %q not found", name)}, false, nil
+	}
+	
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	
+	passed, err := ctx.EvaluateRequirement(sym, doc.Scope)
+	if err != nil || !passed {
+		return []string{
+			fmt.Sprintf("✗ Requirement %s failed", name),
+			fmt.Sprintf("  Error: %v", err),
+		}, false, nil
+	}
+	
+	return []string{
+		fmt.Sprintf("✓ Requirement %s satisfied", name),
+	}, false, nil
 }

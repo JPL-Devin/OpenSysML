@@ -180,10 +180,16 @@ Instance: MyModel::System (ID: 1)
 | `%list` | List all declarations in current session |
 | `%clear` | Clear session (reset all declarations) |
 | `%load <file>` | Load .sysml file into session |
+| **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create instance from part definition |
 | `%slots <name>` | Show instance slots and values |
 | `%instances` | List all created instances |
 | `%eval <expr>` | Evaluate expression |
+| **Behavioral Execution** | |
+| `%calc <name> [args...]` | Invoke calculation with arguments |
+| `%constraint <name>` | Evaluate constraint (assert/assume) |
+| `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
+| **Control** | |
 | `Ctrl-D` | Exit REPL |
 
 ---
@@ -252,7 +258,49 @@ part System {
 }
 ```
 
-### 4. Behavioral Models (Parsed, not yet executable)
+### 4. Behavioral Execution
+
+**Calculations:**
+```sysml
+sysml> calc distance {
+...>     in x;
+...>     in y;
+...>     return (x * x + y * y);
+...> }
+✓ distance
+
+sysml> %calc distance 3 4
+✓ distance(3, 4)
+  = 25
+```
+
+**Constraints:**
+```sysml
+sysml> constraint ValidSpeed {
+...>     assert 65 > 0;
+...>     assert 65 <= 120;
+...> }
+✓ ValidSpeed
+
+sysml> %constraint ValidSpeed
+✓ Constraint ValidSpeed passed
+```
+
+**Requirements:**
+```sysml
+sysml> requirement SafetyReq {
+...>     assume 65 > 0;
+...>     require 100 > 50;
+...> }
+✓ SafetyReq
+
+sysml> %requirement SafetyReq
+✓ Requirement SafetyReq satisfied
+```
+
+**See [examples/repl-behavioral-demo.sysml](../examples/repl-behavioral-demo.sysml) for comprehensive examples.**
+
+### 5. Action Bodies (Parsed, execution in progress)
 
 ```sysml
 action TrafficLight {
