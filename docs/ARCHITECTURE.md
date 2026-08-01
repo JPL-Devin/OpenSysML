@@ -178,19 +178,24 @@ Harden `MembersOf` into stable, ordered **effective-feature list** per type:
 
 ### Tier 3 — Expression Evaluator ✅
 
-Grow evaluation from constant-folder to **full evaluator**:
+Full evaluator with **user-defined calc invocation** and **constraint evaluation**:
 - Feature access `x.y.z` resolved against instance slots
 - KerML operator library (`->select`, `->collect`, `size`, string ops)
-- `calc` invocation: bind args → evaluate body → return
-- **Unlocks:** Constraint checking against concrete values, `analysis`/`calc` execution
+- **Calc invocation:** Resolve calc symbol → bind args to parameters → evaluate return expression
+- **Constraint evaluation:** Extract `assert`/`assume` members → evaluate → check satisfaction
+- **Scoped evaluation:** `EvalContext.scope` for name resolution, frame stack for parameter bindings
+- **Unlocks:** Constraint checking against concrete values, `calc` execution, runtime validation
 
-### Tier 4 — Behavioral AST ✅ (Phase C3 integrated)
+### Tier 4 — Behavioral AST ✅ (Phase C complete)
 
-Parse + model action bodies:
-- **Nodes:** InitialNode, FinalNode, ForkNode, JoinNode, MergeNode, DecisionNode, ActionExecutionNode
-- **Edges:** SuccessionEdge with optional guard expressions
-- **Dispatcher:** Lookahead detects behavioral vs generic bodies
-- **Status:** Parsed and modeled, **not yet executable**
+Parse + model all behavioral bodies:
+- **C1: Calc bodies** — `return` expressions + mixed parameter declarations
+- **C2: Constraint bodies** — `assert`/`assume` with optional `not` negation
+- **C3: Requirement bodies** — `subject`/`assume`/`require`/`actor` declarations
+- **C4: Action bodies** — Control flow nodes (initial/final/fork/join/merge/decision) + action execution nodes + succession edges
+- **C5: State bodies** — Entry/do/exit behaviors, substates, transitions with triggers/guards/effects
+- **Dispatcher:** Lookahead detects specialized vs generic bodies (e.g., `return` → calc, generic → fallback)
+- **Status:** Parsed, calc/constraint **executable**, action/state **not yet executable**
 
 ### Tier 5 — Behavioral Interpreter ⏳ (Future)
 
@@ -270,11 +275,13 @@ Token-flow execution for actions (Petri-net-like), event-driven state machine st
 | Validation passes (syntax → constraints) | ✅ Complete |
 | Expression evaluator & instance model (Tiers 1-3) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (Phase C3: action bodies) | ✅ Integrated |
+| Behavioral parser (Phase C1-5: all behavioral bodies) | ✅ Complete |
+| **Calc invocation & constraint evaluation** | ✅ **Complete** |
 | REPL implementation | ✅ Complete |
 | Standard library bundling | 🚧 In progress |
 | LSP server implementation | ⏳ Planned |
-| Behavioral execution (Tiers 4-5) | 🔮 Future |
+| Action execution engine (Tier 5) | 🔮 Future |
+| State machine runtime (Tier 5) | 🔮 Future |
 
 ---
 

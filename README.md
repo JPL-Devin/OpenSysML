@@ -67,11 +67,13 @@ Instance: Wheel (ID: 1)
 | Validation passes (syntax → constraints) | ✅ Complete |
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (actions/states) | ✅ Phase C3 integrated |
+| Behavioral parser (Phase C1-5: all behavioral bodies) | ✅ Complete |
+| **Calc invocation & constraint evaluation** | ✅ **Complete** |
 | **REPL implementation** | ✅ **Complete** |
 | Standard library bundling & caching | 🚧 In progress |
 | LSP server implementation | 🚧 In progress |
-| Behavioral execution (Tiers 4-5) | 🔮 Future |
+| Action execution engine (Tier 5) | 🔮 Future |
+| State machine runtime (Tier 5) | 🔮 Future |
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
 
