@@ -132,6 +132,7 @@ var relationshipKeywords = map[string]ast.RelationshipKind{
 	"intersects":  ast.RelIntersects,
 	"disjoint":    ast.RelDisjoint, // followed by 'from' keyword
 	"unions":      ast.RelUnions,
+	"chains":      ast.RelChains,
 }
 
 type featureMods struct {

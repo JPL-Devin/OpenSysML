@@ -268,6 +268,7 @@ const (
 	RelIntersects                          // 'intersects'
 	RelInverseOf                           // 'inverse of'
 	RelUnions                              // 'unions'
+	RelChains                              // 'chains'
 )
 
 func (k RelationshipKind) String() string {
@@ -292,6 +293,8 @@ func (k RelationshipKind) String() string {
 		return "inverse"
 	case RelUnions:
 		return "unions"
+	case RelChains:
+		return "chains"
 	default:
 		return "unknown"
 	}
