@@ -134,6 +134,7 @@ const (
 	UsageConcern
 	// Tier B.
 	UsageConnection
+	UsageConnector
 	UsageSuccession
 	UsageFlow
 	UsagePort
@@ -187,6 +188,8 @@ func (k UsageKind) String() string {
 		return "concern"
 	case UsageConnection:
 		return "connection"
+	case UsageConnector:
+		return "connector"
 	case UsageSuccession:
 		return "succession"
 	case UsageFlow:
@@ -373,6 +376,6 @@ type FlowEnds struct {
 // ConnectorEnd represents a single connector end with optional multiplicity.
 type ConnectorEnd struct {
 	NodeBase
-	Target       *QualifiedName
+	Target       Node // QualifiedName or Expression (e.g., FeatureChainExpr for occ.startShot)
 	Multiplicity *Multiplicity
 }

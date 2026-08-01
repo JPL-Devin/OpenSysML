@@ -69,6 +69,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"concern":    ast.UsageConcern,
 	// Tier B.
 	"connection": ast.UsageConnection,
+	"connector":  ast.UsageConnector,
 	"succession": ast.UsageSuccession,
 	"flow":       ast.UsageFlow,
 	"port":       ast.UsagePort,
@@ -256,8 +257,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" {
+	// Check for usage-only keywords (subject, objective, succession, inv, connector) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
@@ -751,6 +752,8 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 	switch kind {
 	case ast.UsageConnection, ast.UsageInterface:
 		p.parseConnectorEnds(u, "connect")
+	case ast.UsageConnector:
+		p.parseConnectorFromTo(u)
 	case ast.UsageSuccession:
 		p.parseConnectorEnds(u, "") // succession has no intermediate keyword
 	case ast.UsageAllocation:
@@ -826,14 +829,39 @@ func (p *Parser) parseConnectorEnd() *ast.ConnectorEnd {
 		ce.Multiplicity = p.parseMultiplicity()
 	}
 	
-	// Qualified name (required)
-	ce.Target = p.parseQualifiedName()
+	// Target expression (qualified name or feature chain)
+	ce.Target = p.ParseExpression()
 	if ce.Target == nil {
 		return nil
 	}
 	
 	ce.NodeSpan = p.spanFrom(start)
 	return ce
+}
+
+// parseConnectorFromTo parses the `from x to y` pattern for connector usages.
+// Pattern: `from <end> to <end>` (binary form only).
+func (p *Parser) parseConnectorFromTo(u *ast.Usage) {
+	if !p.acceptKeyword("from") {
+		return // Optional connector clause
+	}
+	
+	from := p.parseConnectorEnd()
+	if from == nil {
+		return
+	}
+	u.ConnectorEnds = append(u.ConnectorEnds, from)
+	
+	if !p.acceptKeyword("to") {
+		p.error(p.peek().Span, "expected 'to' between connector ends")
+		return
+	}
+	
+	to := p.parseConnectorEnd()
+	if to == nil {
+		return
+	}
+	u.ConnectorEnds = append(u.ConnectorEnds, to)
 }
 
 // atFlowShorthand reports whether the parser sits at a bare flow shorthand
