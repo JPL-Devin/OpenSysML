@@ -226,9 +226,62 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 			}
 			hasBody = true
 		}
+	case ast.DefCalc:
+		// Calculation def bodies: result body OR generic
+		// Lookahead: if body starts with 'return' → parseResultBody
+		// Otherwise → generic parseDefUsageBody
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			if p.isResultKeyword() {
+				members = p.parseResultBody()
+			} else {
+				members = p.parseActionBodyGeneric()
+			}
+			hasBody = true
+		}
+	case ast.DefConstraint:
+		// Constraint def bodies: constraint body OR generic
+		// Lookahead: if body starts with 'assert'/'assume' → parseConstraintBody
+		// Otherwise → generic parseDefUsageBody
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			if p.isConstraintKeyword() {
+				members = p.parseConstraintBody()
+			} else {
+				members = p.parseActionBodyGeneric()
+			}
+			hasBody = true
+		}
+	case ast.DefRequirement:
+		// Requirement def bodies: requirement body OR generic
+		// Lookahead: if body starts with requirement keywords → parseRequirementBody
+		// Otherwise → generic parseDefUsageBody
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			if p.isRequirementKeyword() {
+				members = p.parseRequirementBody()
+			} else {
+				members = p.parseActionBodyGeneric()
+			}
+			hasBody = true
+		}
 	case ast.DefState:
-		// TODO: Phase C4 — implement parseStateBody
-		members, hasBody = p.parseDefUsageBody()
+		// State def bodies: state body OR generic
+		// Lookahead: if body starts with state keywords → parseStateBody
+		// Otherwise → generic parseDefUsageBody
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			if p.isStateKeyword() {
+				members = p.parseStateBody()
+			} else {
+				members = p.parseActionBodyGeneric()
+			}
+			hasBody = true
+		}
 	default:
 		members, hasBody = p.parseDefUsageBody()
 	}
@@ -269,6 +322,38 @@ func (p *Parser) isBehavioralKeyword() bool {
 	return false
 }
 
+// isResultKeyword checks if next token is 'return'
+func (p *Parser) isResultKeyword() bool {
+	return p.at(lexer.Keyword) && p.peek().KeywordID == "return"
+}
+
+// isConstraintKeyword checks if next token is 'assert' or 'assume'
+func (p *Parser) isConstraintKeyword() bool {
+	if !p.at(lexer.Keyword) {
+		return false
+	}
+	kw := p.peek().KeywordID
+	return kw == "assert" || kw == "assume"
+}
+
+// isRequirementKeyword checks if next token is requirement-related
+func (p *Parser) isRequirementKeyword() bool {
+	if !p.at(lexer.Keyword) {
+		return false
+	}
+	kw := p.peek().KeywordID
+	return kw == "subject" || kw == "assume" || kw == "require" || kw == "actor"
+}
+
+// isStateKeyword checks if next token is state body keyword
+func (p *Parser) isStateKeyword() bool {
+	if !p.at(lexer.Keyword) {
+		return false
+	}
+	kw := p.peek().KeywordID
+	return kw == "entry" || kw == "do" || kw == "exit" || kw == "state" || kw == "transition"
+}
+
 func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods) *ast.Usage {
 	u := &ast.Usage{
 		Kind:        kind,
@@ -306,9 +391,38 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods) *as
 			members = p.parseActionBody() // parseActionBody expects '{' already consumed
 			hasBody = true
 		}
+	case ast.UsageCalc:
+		// Calculation bodies: { return expr; ... }
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			members = p.parseResultBody()
+			hasBody = true
+		}
+	case ast.UsageConstraint:
+		// Constraint bodies: { assert/assume expr; ... }
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			members = p.parseConstraintBody()
+			hasBody = true
+		}
+	case ast.UsageRequirement:
+		// Requirement bodies: { subject/assume/require/actor ... }
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			members = p.parseRequirementBody()
+			hasBody = true
+		}
 	case ast.UsageState:
-		// TODO: Phase C4 — implement parseStateBody
-		members, hasBody = p.parseDefUsageBody()
+		// State bodies: { entry/do/exit/state/transition ... }
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			members = p.parseStateBody()
+			hasBody = true
+		}
 	default:
 		members, hasBody = p.parseDefUsageBody()
 	}

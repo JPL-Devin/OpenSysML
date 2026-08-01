@@ -175,3 +175,94 @@ type CallEvent struct {
 }
 
 func (*CallEvent) triggerEvent() {}
+
+// Phase C1: Calculation and Constraint Body Members
+
+// ResultMember represents a return expression in a calculation body.
+// Syntax: return <expression>;
+type ResultMember struct {
+	NodeBase
+	Expression Node // the value expression
+}
+
+// ConstraintMember represents an assertion/assumption in a constraint body.
+// Syntax: assert <expression>; or assume <expression>;
+type ConstraintMember struct {
+	NodeBase
+	IsAssert   bool // true for 'assert', false for 'assume'
+	IsNegated  bool // true if 'not' keyword present (assert not expr)
+	Expression Node // the constraint expression
+}
+
+// Phase C2: Requirement Body Members
+
+// SubjectMember represents the subject declaration in a requirement body.
+// Syntax: subject <name> : <Type>;
+type SubjectMember struct {
+	NodeBase
+	Name     string
+	TypeRef  *QualifiedName // subject type
+}
+
+// AssumeMember represents an assumption in a requirement body.
+// Syntax: assume <expression>;
+type AssumeMember struct {
+	NodeBase
+	Expression Node // assumption condition
+}
+
+// RequireMember represents a requirement constraint.
+// Syntax: require <expression>;
+type RequireMember struct {
+	NodeBase
+	Expression Node // requirement condition
+}
+
+// ActorMember represents an actor declaration in a requirement/use case.
+// Syntax: actor <name> : <Type>;
+type ActorMember struct {
+	NodeBase
+	Name     string
+	TypeRef  *QualifiedName // actor type
+}
+
+// Phase C4: State Body Members
+
+// EntryMember represents entry behavior in a state body.
+// Syntax: entry { <actions> }
+type EntryMember struct {
+	NodeBase
+	Actions []Node // action sequence
+}
+
+// DoMember represents ongoing activity in a state body.
+// Syntax: do { <actions> }
+type DoMember struct {
+	NodeBase
+	Actions []Node // action sequence
+}
+
+// ExitMember represents exit behavior in a state body.
+// Syntax: exit { <actions> }
+type ExitMember struct {
+	NodeBase
+	Actions []Node // action sequence
+}
+
+// SubstateMember represents a nested state declaration.
+// Syntax: state <name>;
+type SubstateMember struct {
+	NodeBase
+	Name string // substate name
+}
+
+// TransitionMember represents a state transition in textual form.
+// Syntax: transition <source> to <target> [when <trigger>] [if <guard>] [do { <effect> }];
+type TransitionMember struct {
+	NodeBase
+	Source  *QualifiedName // source state
+	Target  *QualifiedName // target state
+	Trigger Node           // optional trigger event (TimeEvent/ChangeEvent/etc)
+	Guard   Node           // optional guard expression
+	Effect  []Node         // optional effect actions
+}
