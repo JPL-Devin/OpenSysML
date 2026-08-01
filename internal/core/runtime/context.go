@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -72,4 +73,71 @@ func (ctx *Context) registerInstance(inst *Instance) {
 		panic(fmt.Sprintf("runtime: duplicate instance ID %d", inst.ID))
 	}
 	ctx.instances[inst.ID] = inst
+}
+
+// EvaluateConstraint evaluates a constraint definition/usage.
+// Returns (satisfied, error). If IsAssert=true, violation is an error.
+// If IsAssert=false (assume), always returns (true, nil) but logs assumptions.
+func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope) (bool, error) {
+	// Extract constraint members
+	var members []ast.Node
+	
+	switch decl := sym.Decl.(type) {
+	case *ast.Definition:
+		if decl.Kind != ast.DefConstraint {
+			return false, fmt.Errorf("not a constraint definition: %s", sym.Name)
+		}
+		members = decl.Members
+	case *ast.Usage:
+		if decl.Kind != ast.UsageConstraint {
+			return false, fmt.Errorf("not a constraint usage: %s", sym.Name)
+		}
+		members = decl.Members
+	default:
+		return false, fmt.Errorf("invalid constraint symbol: %s (%T)", sym.Name, sym.Decl)
+	}
+	
+	// Evaluate each constraint member
+	for _, member := range members {
+		// Unwrap Membership
+		node := member
+		if membership, ok := member.(*ast.Membership); ok {
+			node = membership.Member
+		}
+		
+		// Check for ConstraintMember
+		constraintMember, ok := node.(*ast.ConstraintMember)
+		if !ok {
+			continue // skip non-constraint members
+		}
+		
+		// Evaluate constraint expression
+		result, err := ctx.EvalWithScope(constraintMember.Expression, scope)
+		if err != nil {
+			return false, fmt.Errorf("constraint %s: evaluation failed: %w", sym.Name, err)
+		}
+		
+		// Extract boolean value
+		satisfied := false
+		if result.Kind == ValConst && result.Const.Kind == semantics.ValBool {
+			satisfied = result.Const.Bool
+		} else {
+			return false, fmt.Errorf("constraint %s: expression must evaluate to boolean, got %v", sym.Name, result.Kind)
+		}
+		
+		// Apply negation
+		if constraintMember.IsNegated {
+			satisfied = !satisfied
+		}
+		
+		// Handle assert vs assume
+		if constraintMember.IsAssert {
+			if !satisfied {
+				return false, fmt.Errorf("constraint %s: assertion failed", sym.Name)
+			}
+		}
+		// assume: always pass (assumptions are trusted)
+	}
+	
+	return true, nil
 }

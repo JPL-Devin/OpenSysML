@@ -7,18 +7,21 @@ import (
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // EvalContext is the lexical environment during evaluation (Tier 3).
 type EvalContext struct {
-	ctx    *Context            // runtime context
-	frames []map[string]Value  // stack of local bindings (innermost = frames[len-1])
+	ctx    *Context             // runtime context
+	scope  *symbols.Scope       // scope context for name resolution
+	frames []map[string]Value   // stack of local bindings (innermost = frames[len-1])
 }
 
 // NewEvalContext creates an evaluation context with an empty frame stack.
-func NewEvalContext(ctx *Context) *EvalContext {
+func NewEvalContext(ctx *Context, scope *symbols.Scope) *EvalContext {
 	return &EvalContext{
 		ctx:    ctx,
+		scope:  scope,
 		frames: nil,
 	}
 }
@@ -65,6 +68,8 @@ func (ec *EvalContext) Eval(node ast.Node) (Value, error) {
 		return ec.evalLiteralString(n)
 	case *ast.NullExpr:
 		return ec.evalNull(n)
+	case *ast.FeatureReference:
+		return ec.evalFeatureReference(n)
 	case *ast.OperatorExpr:
 		return ec.evalOperator(n)
 	case *ast.SequenceExpr:
@@ -81,8 +86,17 @@ func (ec *EvalContext) Eval(node ast.Node) (Value, error) {
 }
 
 // Eval is the top-level entry point for evaluating an expression in an empty environment.
+// Resolves names from the root scope.
 func (ctx *Context) Eval(node ast.Node) (Value, error) {
-	ec := NewEvalContext(ctx)
+	// Use resolver's root scope for name resolution
+	// (In a full implementation, this would track evaluation context scope)
+	ec := NewEvalContext(ctx, nil)
+	return ec.Eval(node)
+}
+
+// EvalWithScope evaluates an expression with a given scope context for name resolution.
+func (ctx *Context) EvalWithScope(node ast.Node, scope *symbols.Scope) (Value, error) {
+	ec := NewEvalContext(ctx, scope)
 	return ec.Eval(node)
 }
 
@@ -117,6 +131,26 @@ func (ec *EvalContext) evalLiteralString(n *ast.LiteralString) (Value, error) {
 func (ec *EvalContext) evalNull(n *ast.NullExpr) (Value, error) {
 	return Value{Kind: ValNull}, nil
 }
+
+// evalFeatureReference evaluates a feature reference (variable lookup).
+func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, error) {
+	if n.Name == nil || len(n.Name.Parts) == 0 {
+		return Value{}, fmt.Errorf("empty feature reference")
+	}
+	
+	// Simple case: single-part name lookup in frame stack
+	if len(n.Name.Parts) == 1 {
+		name := n.Name.Parts[0].Text
+		if val, ok := ec.Lookup(name); ok {
+			return val, nil
+		}
+		return Value{}, fmt.Errorf("unresolved feature: %s", name)
+	}
+	
+	// Multi-part qualified names (e.g., "Vehicle::speed") not yet supported
+	return Value{}, fmt.Errorf("qualified feature reference not yet supported: %s", qualifiedNameToString(n.Name))
+}
+
 
 // evalOperator evaluates an operator expression.
 func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
@@ -332,9 +366,76 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 		return fn(ec, args)
 	}
 	
-	// User-defined calc: resolve target
-	// (Simplified: requires test to provide proper scope context; defer full resolution to integration)
-	return Value{}, fmt.Errorf("user-defined calc invocation not yet fully implemented: %s", qualName)
+	// User-defined calc: resolve target symbol
+	// Use evaluation context scope (or fallback to root if nil)
+	calcSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.Type)
+	if !ok || calcSym == nil {
+		return Value{}, fmt.Errorf("unresolved calc: %s", qualName)
+	}
+	
+	// Ensure it's a calc definition or usage
+	calcDef, isCalcDef := calcSym.Decl.(*ast.Definition)
+	calcUsage, isCalcUsage := calcSym.Decl.(*ast.Usage)
+	
+	if !isCalcDef && !isCalcUsage {
+		return Value{}, fmt.Errorf("not a calc: %s (%T)", qualName, calcSym.Decl)
+	}
+	
+	var members []ast.Node
+	if isCalcDef && calcDef.Kind == ast.DefCalc {
+		members = calcDef.Members
+	} else if isCalcUsage && calcUsage.Kind == ast.UsageCalc {
+		members = calcUsage.Members
+	} else {
+		return Value{}, fmt.Errorf("symbol is not a calc: %s", qualName)
+	}
+	
+	// Extract parameters (usages with 'in' direction) and result members
+	params := []string{}
+	var resultExprs []ast.Node
+	
+	for _, member := range members {
+		// Unwrap Membership
+		var node ast.Node = member
+		if membership, ok := member.(*ast.Membership); ok {
+			node = membership.Member
+		}
+		
+		// Check for parameters (usages with 'in' direction and name)
+		if usage, ok := node.(*ast.Usage); ok {
+			if usage.Ident.Name != "" && (usage.Direction == ast.DirIn || usage.Direction == ast.DirInOut) {
+				params = append(params, usage.Ident.Name)
+			}
+		}
+		
+		// Check for ResultMember
+		if resultMember, ok := node.(*ast.ResultMember); ok {
+			resultExprs = append(resultExprs, resultMember.Expression)
+		}
+	}
+	
+	// Bind arguments to parameters
+	if len(args) != len(params) {
+		return Value{}, fmt.Errorf("calc %s: expected %d args, got %d", qualName, len(params), len(args))
+	}
+	
+	bindings := make(map[string]Value)
+	for i, paramName := range params {
+		bindings[paramName] = args[i]
+	}
+	
+	// Push new frame with parameter bindings
+	ec.Push(bindings)
+	defer ec.Pop()
+	
+	// Evaluate result expressions (return statements)
+	if len(resultExprs) == 0 {
+		return Value{}, fmt.Errorf("calc %s has no return statement", qualName)
+	}
+	
+	// Evaluate the first return expression
+	// (In SysML v2, calcs typically have one return; multiple would need aggregation)
+	return ec.Eval(resultExprs[0])
 }
 
 // qualifiedNameToString converts a QualifiedName AST node to "Package::Name" format.

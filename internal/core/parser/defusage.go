@@ -187,6 +187,11 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	}
 	defKind, ok := definitionKindKeywords[kw]
 	if !ok {
+		// Fallback: if we have modifiers but no kind keyword, assume it's a generic usage (e.g., "in x: Integer;")
+		// This is common for parameters in calc/action bodies.
+		if mods.direction != ast.DirNone || mods.isReference || mods.isComposite || mods.isDerived {
+			return p.parseUsage(start, ast.UsagePart, mods)
+		}
 		return nil
 	}
 	p.advance() // consume the kind keyword
@@ -227,17 +232,11 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 			hasBody = true
 		}
 	case ast.DefCalc:
-		// Calculation def bodies: result body OR generic
-		// Lookahead: if body starts with 'return' → parseResultBody
-		// Otherwise → generic parseDefUsageBody
+		// Calculation def bodies: mixed (parameters + return statements)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
-			if p.isResultKeyword() {
-				members = p.parseResultBody()
-			} else {
-				members = p.parseActionBodyGeneric()
-			}
+			members = p.parseCalcBody()
 			hasBody = true
 		}
 	case ast.DefConstraint:
@@ -392,11 +391,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods) *as
 			hasBody = true
 		}
 	case ast.UsageCalc:
-		// Calculation bodies: { return expr; ... }
+		// Calculation usage bodies: mixed (parameters + return statements)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
-			members = p.parseResultBody()
+			members = p.parseCalcBody()
 			hasBody = true
 		}
 	case ast.UsageConstraint:
