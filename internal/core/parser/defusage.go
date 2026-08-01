@@ -690,9 +690,50 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return al
 	}
 	
+	// Check for anonymous feature pattern: name : Type
+	// Examples: private thisClock : Clock :>> self;
+	// This handles features with visibility but no usage kind keyword
+	nextKind := p.peekN(1).Kind
+	if p.atName() && nextKind == lexer.Colon {
+		var id ast.Identification
+		tok := p.advance()
+		if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
+			id.Name = p.src.Text(tok.Span)
+			id.NameSpan = tok.Span
+		}
+		
+		// Parse as anonymous usage (attribute by default)
+		u := &ast.Usage{
+			Kind:  ast.UsageAttribute,
+			Ident: id,
+		}
+		
+		// Parse typing/relationships
+		p.advance() // consume ':'
+		u.Relationships = append(u.Relationships, &ast.Relationship{
+			Kind:   ast.RelTyping,
+			Target: p.parseQualifiedName(),
+		})
+		
+		// Parse additional relationships
+		moreRels, conjugated := p.parseRelationships(true)
+		u.Relationships = append(u.Relationships, moreRels...)
+		u.IsConjugated = conjugated
+		
+		// Parse body or semicolon
+		members, hasBody := p.parseDefUsageBody()
+		u.Members = members
+		u.HasBody = hasBody
+		
+		u.NodeSpan = p.spanFrom(start)
+		mem := &ast.Membership{Visibility: vis, Member: u}
+		mem.NodeSpan = p.spanFrom(start)
+		mem.SetLeadingTrivia(trivia)
+		return mem
+	}
+	
 	// Check for enum literal pattern: identifier = expr; OR identifier;
 	// Examples: low = 0.25; or pass;
-	nextKind := p.peekN(1).Kind
 	if p.atName() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon) {
 		var id ast.Identification
 		tok := p.advance()

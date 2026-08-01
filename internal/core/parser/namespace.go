@@ -355,7 +355,10 @@ func (p *Parser) parseComment(start int) ast.Node {
 func (p *Parser) parseDocumentation(start int) ast.Node {
 	p.advance() // 'doc'
 	d := &ast.Documentation{}
-	if p.atName() && !p.atKeyword("locale") {
+	
+	// Parse optional identification only if there's no pending comment
+	// Pattern: `doc name /* comment */` vs `doc /* comment */` (comment belongs to doc, not name)
+	if p.atName() && !p.atKeyword("locale") && !p.hasPendingComment {
 		d.Ident = p.parseIdentification()
 	}
 	if p.acceptKeyword("locale") {
