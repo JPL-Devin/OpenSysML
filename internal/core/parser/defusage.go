@@ -648,8 +648,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			members = p.parseCalcBody()
 			hasBody = true
 		}
-	case ast.UsageConstraint:
+	case ast.UsageConstraint, ast.UsageBool, ast.UsagePredicate:
 		// Constraint bodies: { assert/assume expr; ... }
+		// Bool and predicate usages also use constraint-style bodies with expressions
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
@@ -856,7 +857,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Also exclude constraint (has both def/usage forms but shouldn't be enum literal name)
 	isUsageOnlyKwForEnum := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
-		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint" || p.peek().KeywordID == "interaction")
+		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint" || 
+		p.peek().KeywordID == "interaction" || p.peek().KeywordID == "bool" || p.peek().KeywordID == "assoc" || p.peek().KeywordID == "struct" || 
+		p.peek().KeywordID == "class" || p.peek().KeywordID == "predicate")
 	if !isUsageOnlyKwForEnum && p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
 		seg, _ := p.parseNameSegmentRelaxed()
 		id := ast.Identification{Name: seg.Text, NameSpan: seg.Span}
