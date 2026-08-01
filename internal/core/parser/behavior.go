@@ -388,17 +388,39 @@ func (p *Parser) parseResultMember() ast.Node {
 		return en
 	}
 	
+	// Parse optional usage kind keyword (e.g., 'attribute')
+	// Default to UsageAttribute if not specified
+	usageKind := ast.UsageAttribute
+	if p.at(lexer.Keyword) {
+		if kind, ok := usageKindKeywords[p.peek().KeywordID]; ok {
+			usageKind = kind
+			p.advance() // consume kind keyword
+		}
+	}
+	
+	// Parse optional feature modifiers after kind keyword
+	mods := p.parseFeatureModifiers()
+	
 	// Check for named or anonymous result parameter syntax
-	// Pattern 1: return name: Type[mult];  (named result parameter)
-	// Pattern 2: return : Type[mult];      (anonymous result parameter)
+	// Pattern 1: return [modifiers] name: Type[mult];  (named result parameter)
+	// Pattern 2: return [modifiers] : Type[mult];      (anonymous result parameter)
 	// Pattern 3: return expr;              (computed result)
 	// Pattern 4: return name = expr;       (computed result with binding)
+	// Pattern 5: return [modifiers] name;  (named result parameter, no type)
+	// Pattern 6: return [modifiers] name : Type { body } (with body)
 	// Use lookahead to distinguish Pattern 1 from Pattern 4
 	if p.at(lexer.Colon) || (p.atName() && p.peekN(1).Kind == lexer.Colon) {
 		// Parse as result parameter (named or anonymous usage with typing)
 		u := &ast.Usage{
-			Kind:      ast.UsageAttribute, // result parameter
-			Direction: ast.DirOut,
+			Kind:        usageKind,
+			Direction:   ast.DirOut,
+			IsAbstract:  mods.isAbstract,
+			IsReference: mods.isReference,
+			IsEnd:       mods.isEnd,
+			IsComposite: mods.isComposite,
+			IsDerived:   mods.isDerived,
+			IsOrdered:   mods.isOrdered,
+			IsNonunique: mods.isNonunique,
 		}
 		
 		// Check if named (identifier before colon)
@@ -433,21 +455,55 @@ func (p *Parser) parseResultMember() ast.Node {
 			u.Value = p.ParseExpression()
 		}
 		
-		p.expect(lexer.Semicolon, "expected ';' after return parameter")
+		// Check for body or semicolon
+		if p.at(lexer.LBrace) || p.at(lexer.Semicolon) {
+			members, hasBody := p.parseDefUsageBody()
+			u.Members = members
+			u.HasBody = hasBody
+		} else {
+			// Neither body nor semicolon → error
+			p.error(p.peek().Span, "expected '{' or ';' after return parameter")
+		}
 		
 		u.NodeSpan = p.spanFrom(start)
 		return u
 	}
 	
-	// Check for Pattern 4: return name = expr (result parameter with initializer, no type)
+	// Check for Pattern 4: return [kind] [modifiers] name = expr (result parameter with initializer, no type)
 	if p.atName() && p.peekN(1).Kind == lexer.Eq {
 		u := &ast.Usage{
-			Kind:      ast.UsageAttribute, // result parameter
-			Direction: ast.DirOut,
+			Kind:        usageKind,
+			Direction:   ast.DirOut,
+			IsAbstract:  mods.isAbstract,
+			IsReference: mods.isReference,
+			IsEnd:       mods.isEnd,
+			IsComposite: mods.isComposite,
+			IsDerived:   mods.isDerived,
+			IsOrdered:   mods.isOrdered,
+			IsNonunique: mods.isNonunique,
 		}
 		u.Ident = p.parseIdentification()
 		p.advance() // consume '='
 		u.Value = p.ParseExpression()
+		p.expect(lexer.Semicolon, "expected ';' after return parameter")
+		u.NodeSpan = p.spanFrom(start)
+		return u
+	}
+	
+	// Check for Pattern 5: return [kind] [modifiers] name; (no type, no value)
+	if p.atName() && p.peekN(1).Kind == lexer.Semicolon {
+		u := &ast.Usage{
+			Kind:        usageKind,
+			Direction:   ast.DirOut,
+			IsAbstract:  mods.isAbstract,
+			IsReference: mods.isReference,
+			IsEnd:       mods.isEnd,
+			IsComposite: mods.isComposite,
+			IsDerived:   mods.isDerived,
+			IsOrdered:   mods.isOrdered,
+			IsNonunique: mods.isNonunique,
+		}
+		u.Ident = p.parseIdentification()
 		p.expect(lexer.Semicolon, "expected ';' after return parameter")
 		u.NodeSpan = p.spanFrom(start)
 		return u
