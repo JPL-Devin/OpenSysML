@@ -4,6 +4,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 // isMeta reports whether a trimmed input line is a meta command.
@@ -12,10 +18,16 @@ func isMeta(line string) bool {
 }
 
 var helpText = []string{
-	"%help          show this help",
-	"%list          list current session declarations",
-	"%clear         reset the session",
-	"%load <file>   read a file and submit its contents",
+	"%help               show this help",
+	"%list               list current session declarations",
+	"%clear              reset the session",
+	"%load <file>        read a file and submit its contents",
+	"",
+	"Runtime commands:",
+	"%instantiate <name> create an instance of a part def",
+	"%eval <expr>        evaluate an expression",
+	"%slots <name>       show instance slots and values",
+	"%instances          list all instantiated objects",
 }
 
 // runMeta executes a meta command line. Returns lines to print, whether to quit,
@@ -47,7 +59,175 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		}
 		r := s.Submit(string(data))
 		return renderResult(r), false, nil
+	case "%instantiate":
+		if len(fields) < 2 {
+			return []string{"usage: %instantiate <name>"}, false, nil
+		}
+		return s.doInstantiate(fields[1])
+	case "%eval":
+		if len(fields) < 2 {
+			return []string{"usage: %eval <expression>"}, false, nil
+		}
+		expr := strings.TrimPrefix(line, "%eval")
+		return s.doEval(strings.TrimSpace(expr))
+	case "%slots":
+		if len(fields) < 2 {
+			return []string{"usage: %slots <name>"}, false, nil
+		}
+		return s.doSlots(fields[1])
+	case "%instances":
+		return s.doInstances()
 	default:
 		return []string{fmt.Sprintf("unknown command %q (try %%help)", fields[0])}, false, nil
+	}
+}
+
+// doInstantiate creates an instance of a part def.
+func (s *Session) doInstantiate(name string) ([]string, bool, error) {
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return nil, false, fmt.Errorf("runtime init: %w", err)
+	}
+	
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		return []string{"error: no declarations loaded"}, false, nil
+	}
+	
+	sym, ok := doc.Scope.LookupLocal(name)
+	if !ok || sym == nil {
+		return []string{fmt.Sprintf("error: symbol %q not found", name)}, false, nil
+	}
+	
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		return []string{fmt.Sprintf("error: instantiation failed: %v", err)}, false, nil
+	}
+	
+	s.instances[name] = inst
+	return []string{
+		fmt.Sprintf("✓ Created instance of %s", name),
+		fmt.Sprintf("  ID: %d", inst.ID),
+		fmt.Sprintf("  Use %%slots %s to inspect", name),
+	}, false, nil
+}
+
+// doEval evaluates an expression.
+func (s *Session) doEval(expr string) ([]string, bool, error) {
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return nil, false, fmt.Errorf("runtime init: %w", err)
+	}
+	
+	// Parse expression as an attribute default value
+	src := fmt.Sprintf("attribute __eval__ = %s;", expr)
+	p := parser.New(source.New("eval", []byte(src)))
+	root := p.ParseFile()
+	
+	if len(p.Diagnostics) > 0 {
+		lines := []string{"error: parse failed:"}
+		for _, d := range p.Diagnostics {
+			lines = append(lines, "  "+d.Message)
+		}
+		return lines, false, nil
+	}
+	
+	if len(root.Members) == 0 {
+		return []string{"error: no expression parsed"}, false, nil
+	}
+	
+	usage, ok := root.Members[0].(*ast.Usage)
+	if !ok || usage.Value == nil {
+		return []string{"error: invalid expression"}, false, nil
+	}
+	
+	val, err := ctx.Eval(usage.Value)
+	if err != nil {
+		return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
+	}
+	
+	return []string{
+		fmt.Sprintf("✓ %s", expr),
+		fmt.Sprintf("  = %s", formatValue(val)),
+	}, false, nil
+}
+
+// doSlots shows instance slots.
+func (s *Session) doSlots(name string) ([]string, bool, error) {
+	inst, ok := s.instances[name]
+	if !ok {
+		return []string{fmt.Sprintf("error: no instance named %q (use %%instantiate first)", name)}, false, nil
+	}
+	
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return nil, false, fmt.Errorf("runtime init: %w", err)
+	}
+	
+	lines := []string{
+		fmt.Sprintf("Instance: %s (ID: %d)", name, inst.ID),
+		"Slots:",
+	}
+	
+	// Get effective features to know slot names
+	features := ctx.FeaturesOf(inst.Type)
+	if len(features) == 0 {
+		lines = append(lines, "  (no features)")
+		return lines, false, nil
+	}
+	
+	for _, feat := range features {
+		slot, err := inst.GetSlot(ctx, feat.Name)
+		if err != nil {
+			lines = append(lines, fmt.Sprintf("  %s: <error: %v>", feat.Name, err))
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("  %s = %s", feat.Name, formatValue(slot.Value)))
+	}
+	
+	return lines, false, nil
+}
+
+// doInstances lists all instantiated objects.
+func (s *Session) doInstances() ([]string, bool, error) {
+	if len(s.instances) == 0 {
+		return []string{"(no instances created)"}, false, nil
+	}
+	
+	lines := []string{"Instances:"}
+	for name, inst := range s.instances {
+		lines = append(lines, fmt.Sprintf("  %s (ID: %d)", name, inst.ID))
+	}
+	return lines, false, nil
+}
+
+// formatValue renders a runtime value for display.
+func formatValue(val runtime.Value) string {
+	switch val.Kind {
+	case runtime.ValConst:
+		switch val.Const.Kind {
+		case semantics.ValInt:
+			return fmt.Sprintf("%d", val.Const.Int)
+		case semantics.ValReal:
+			return fmt.Sprintf("%.2f", val.Const.Real)
+		case semantics.ValBool:
+			return fmt.Sprintf("%v", val.Const.Bool)
+		case semantics.ValInfinity:
+			return "∞"
+		default:
+			return "<unknown const>"
+		}
+	case runtime.ValNull:
+		return "null"
+	case runtime.ValString:
+		return fmt.Sprintf("%q", val.Str)
+	case runtime.ValInstance:
+		return fmt.Sprintf("Instance(ID: %d)", val.Instance)
+	case runtime.ValSequence:
+		return fmt.Sprintf("Sequence[%d]", val.Sequence.Size())
+	case runtime.ValSet:
+		return fmt.Sprintf("Set{%d}", val.Set.Size())
+	default:
+		return "<unknown>"
 	}
 }

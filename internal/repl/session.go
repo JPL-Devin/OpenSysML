@@ -3,12 +3,17 @@
 package repl
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/model"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // docName is the in-memory workspace key for the accumulated REPL buffer.
@@ -25,11 +30,18 @@ type Session struct {
 	ws       *model.Workspace
 	snippets []snippet
 	version  int
+	
+	// Runtime execution context
+	rtCtx     *runtime.Context
+	instances map[string]*runtime.Instance // name -> instance for %instantiate tracking
 }
 
 // NewSession returns a session over a fresh workspace.
 func NewSession() *Session {
-	return &Session{ws: model.NewWorkspace()}
+	return &Session{
+		ws:        model.NewWorkspace(),
+		instances: make(map[string]*runtime.Instance),
+	}
 }
 
 // List returns a one-line summary per surviving snippet.
@@ -109,4 +121,27 @@ func (s *Session) Clear() {
 	s.ws.Remove(docName)
 	s.snippets = nil
 	s.version = 0
+	s.rtCtx = nil
+	s.instances = make(map[string]*runtime.Instance)
+}
+
+// getOrCreateRuntime lazily creates runtime context when first needed.
+func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
+	if s.rtCtx != nil {
+		return s.rtCtx, nil
+	}
+	
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		return nil, fmt.Errorf("no document loaded")
+	}
+	
+	// Build fresh index from current document
+	idx := symbols.NewIndex()
+	idx.AddDocument(docName, doc.AST)
+	
+	resolver := resolve.New(idx)
+	model := semantics.NewModel(resolver)
+	s.rtCtx = runtime.NewContext(model, resolver, 100000)
+	return s.rtCtx, nil
 }
