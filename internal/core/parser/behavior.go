@@ -5,6 +5,36 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 )
 
+// parseCalcBody parses the body of a calc def/usage.
+// Handles BOTH generic members (parameters like 'in x: Integer;') AND result members ('return expr;').
+// Expects '{' already consumed.
+func (p *Parser) parseCalcBody() []ast.Node {
+	var members []ast.Node
+	
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
+		
+		// Check for 'return' keyword → ResultMember
+		if p.isResultKeyword() {
+			members = append(members, p.parseResultMember())
+		} else {
+			// Parse as generic body member (parameters, etc.)
+			m := p.parseBodyMember()
+			if m != nil {
+				members = append(members, m)
+			}
+		}
+		
+		// Guard against infinite loop
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.advance()
+		}
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after calc body")
+	return members
+}
+
 // parseActionBody parses the body of an action usage.
 // Expects '{' already consumed, returns list of action nodes + edges.
 func (p *Parser) parseActionBody() []ast.Node {
