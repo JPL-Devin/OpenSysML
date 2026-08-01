@@ -101,10 +101,19 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 					b.WriteString(`:`)
 					b.WriteString(qnString(p.Type))
 				}
+				if p.Value != nil {
+					b.WriteString(`=...`)
+				}
 			}
 			b.WriteString(`]`)
 		}
 		var kids []Node
+		// Add param values to children
+		for _, p := range v.Params {
+			if p.Value != nil {
+				kids = append(kids, p.Value)
+			}
+		}
 		if v.Result != nil {
 			kids = append(kids, v.Result)
 		}

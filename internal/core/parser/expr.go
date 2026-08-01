@@ -489,12 +489,17 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 	for p.atKeyword("in") {
 		p.advance() // in
 		var paramType *ast.QualifiedName
+		var paramValue ast.Node
 		if seg, ok := p.parseNameSegment(); ok {
 			if p.at(lexer.Colon) {
 				p.advance() // :
 				paramType = p.parseQualifiedName()
 			}
-			b.Params = append(b.Params, ast.BodyParam{Name: seg.Text, Type: paramType, Span: seg.Span})
+			if p.at(lexer.Eq) {
+				p.advance() // =
+				paramValue = p.ParseExpression()
+			}
+			b.Params = append(b.Params, ast.BodyParam{Name: seg.Text, Type: paramType, Value: paramValue, Span: seg.Span})
 		}
 		p.expect(lexer.Semicolon, "expected ';' after body parameter")
 	}
