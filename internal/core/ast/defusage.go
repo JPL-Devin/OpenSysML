@@ -146,6 +146,7 @@ const (
 	UsageState
 	UsageStep
 	UsageCalc
+	UsageExpr
 	UsageConstraint
 	UsageRequirement
 	UsageSatisfy // satisfy requirement ... by ...
@@ -212,6 +213,8 @@ func (k UsageKind) String() string {
 		return "step"
 	case UsageCalc:
 		return "calc"
+	case UsageExpr:
+		return "expr"
 	case UsageConstraint:
 		return "constraint"
 	case UsageRequirement:

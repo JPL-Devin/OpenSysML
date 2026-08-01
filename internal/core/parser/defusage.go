@@ -81,6 +81,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"state":        ast.UsageState,
 	"step":         ast.UsageStep,
 	"calc":         ast.UsageCalc,
+	"expr":         ast.UsageExpr, // expression parameter (lambda/closure)
 	"function":     ast.UsageCalc, // synonym for calc
 	"constraint":   ast.UsageConstraint,
 	"inv":          ast.UsageConstraint, // synonym for constraint (invariant)
@@ -267,8 +268,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv, connector, satisfy, step) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "satisfy" || kw == "step" {
+	// Check for usage-only keywords (subject, objective, succession, inv, connector, satisfy, step, expr) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "satisfy" || kw == "step" || kw == "expr" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
@@ -773,10 +774,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Example: assert constraint { ... }, require constraint { ... }
 	// <name> can be identifier OR keyword used as name
 	// But exclude usage-only keywords (they're declarations, not names)
+	// Also exclude direction modifiers (in/out - they're modifiers, not names)
 	isUsageOnlyKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
-		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step")
-	if !isUsageOnlyKw && (p.atName() || p.at(lexer.Keyword)) {
+		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr")
+	isDirectionKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "in" || p.peek().KeywordID == "out")
+	if !isUsageOnlyKw && !isDirectionKw && (p.atName() || p.at(lexer.Keyword)) {
 		next := p.peekN(1)
 		if next.Kind == lexer.Keyword {
 			_, isDef := definitionKindKeywords[next.KeywordID]
