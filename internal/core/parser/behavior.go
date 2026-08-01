@@ -448,6 +448,31 @@ func (p *Parser) parseResultMember() ast.Node {
 			u.Multiplicity = p.parseMultiplicity()
 		}
 		
+		// Parse additional feature modifiers after multiplicity (e.g., 'nonunique')
+		// Stdlib pattern: return : Type[mult] nonunique;
+		mods2 := p.parseFeatureModifiers()
+		if mods2.isAbstract {
+			u.IsAbstract = true
+		}
+		if mods2.isReference {
+			u.IsReference = true
+		}
+		if mods2.isEnd {
+			u.IsEnd = true
+		}
+		if mods2.isComposite {
+			u.IsComposite = true
+		}
+		if mods2.isDerived {
+			u.IsDerived = true
+		}
+		if mods2.isOrdered {
+			u.IsOrdered = true
+		}
+		if mods2.isNonunique {
+			u.IsNonunique = true
+		}
+		
 		// Parse optional default value 'default expr' or '= expr'
 		if p.acceptKeyword("default") {
 			u.Value = p.ParseExpression()
