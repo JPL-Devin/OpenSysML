@@ -107,6 +107,7 @@ var featureModifierKeywords = map[string]bool{
 	"variation": true,
 	"ref":       true,
 	"end":       true,
+	"constant":  true,
 	"in":        true,
 	"out":       true,
 	"inout":     true,
@@ -139,6 +140,7 @@ type featureMods struct {
 	isReference bool
 	isEnd       bool
 	isChain     bool
+	isConstant  bool
 	visibility  ast.Visibility
 	direction   ast.FeatureDirection
 	isComposite bool
@@ -209,6 +211,8 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			m.isReference = true
 		case "end":
 			m.isEnd = true
+		case "constant":
+			m.isConstant = true
 		case "public":
 			m.visibility = ast.VisibilityPublic
 		case "protected":
@@ -353,6 +357,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 		IsAbstract:  mods.isAbstract,
 		IsVariation: mods.isVariation,
 		IsAll:       isAll,
+		IsConstant:  mods.isConstant,
 		Visibility:  mods.visibility,
 		Ident:       p.parseIdentification(),
 	}
@@ -507,6 +512,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		IsAll:       isAll,
 		IsEnd:       mods.isEnd,
 		IsChain:     mods.isChain,
+		IsConstant:  mods.isConstant,
 		Visibility:  mods.visibility,
 		Direction:   mods.direction,
 		IsComposite: mods.isComposite,
@@ -553,7 +559,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		return u
 	}
 	
-	// Handle UsageBinding special syntax: binding [mult] name = [mult] target; OR binding name of [mult] target = [mult] value;
+	// Handle UsageBinding special syntax: binding [mult] name = [mult] target; OR binding name[mult] of [mult] target = [mult] value;
 	if kind == ast.UsageBinding {
 		// Check for multiplicity before name: binding [mult] name ...
 		if p.at(lexer.LBracket) {
@@ -562,9 +568,14 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		
 		// Parse source (name or feature chain like x.field)
 		// Check if simple name or feature chain
-		if p.atName() && p.peekN(1).Kind != lexer.Dot {
+		if p.atName() && p.peekN(1).Kind != lexer.Dot && p.peekN(1).Kind != lexer.LBracket {
 			// Simple name - use as identification
 			u.Ident = p.parseIdentification()
+		} else if p.atName() && p.peekN(1).Kind == lexer.LBracket {
+			// Name with multiplicity after it: name[mult]
+			// Parse as identification first
+			u.Ident = p.parseIdentification()
+			// Don't parse multiplicity yet, handle after checking for "of"
 		} else {
 			// Feature chain or qualified name - parse as relationship target
 			// Store in relationships as source (redefines relationship to indicate binding source)
@@ -575,6 +586,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 					Target: source,
 				})
 			}
+		}
+		
+		// Check for multiplicity after name (before "of"): name[mult] of ...
+		if p.at(lexer.LBracket) {
+			u.Multiplicity = p.parseMultiplicity()
 		}
 		
 		// Check for "of" keyword (binding name of [mult] target = value)

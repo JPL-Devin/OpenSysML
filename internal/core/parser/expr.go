@@ -490,6 +490,14 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 		p.advance() // in
 		var paramType *ast.QualifiedName
 		var paramValue ast.Node
+		var isRef bool
+		
+		// Check for 'ref' modifier after 'in'
+		if p.atKeyword("ref") {
+			p.advance()
+			isRef = true
+		}
+		
 		if seg, ok := p.parseNameSegment(); ok {
 			if p.at(lexer.Colon) {
 				p.advance() // :
@@ -499,7 +507,7 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 				p.advance() // =
 				paramValue = p.ParseExpression()
 			}
-			b.Params = append(b.Params, ast.BodyParam{Name: seg.Text, Type: paramType, Value: paramValue, Span: seg.Span})
+			b.Params = append(b.Params, ast.BodyParam{Name: seg.Text, Type: paramType, Value: paramValue, IsReference: isRef, Span: seg.Span})
 		}
 		p.expect(lexer.Semicolon, "expected ';' after body parameter")
 	}

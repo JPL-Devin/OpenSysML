@@ -168,10 +168,11 @@ type BodyExpr struct {
 
 // BodyParam is `in name` inside a body expression.
 type BodyParam struct {
-	Name  string
-	Type  *QualifiedName // optional type annotation (e.g., in x : Type)
-	Value Node           // optional default value (e.g., in x = expr)
-	Span  source.Span
+	Name        string
+	Type        *QualifiedName // optional type annotation (e.g., in x : Type)
+	Value       Node           // optional default value (e.g., in x = expr)
+	IsReference bool           // true if 'ref' modifier present
+	Span        source.Span
 }
 
 // SequenceExpr is a comma-separated list of expressions (flattened).

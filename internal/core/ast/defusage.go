@@ -347,6 +347,7 @@ type Definition struct {
 	IsAbstract    bool
 	IsVariation   bool
 	IsAll         bool // 'all' multiplicity propagation modifier
+	IsConstant    bool // 'constant' feature modifier
 	Visibility    Visibility
 	Ident         Identification
 	Relationships []*Relationship
@@ -364,6 +365,7 @@ type Usage struct {
 	IsAll         bool // 'all' multiplicity propagation modifier
 	IsEnd         bool // 'end' feature modifier
 	IsChain       bool // 'chain' feature modifier
+	IsConstant    bool // 'constant' feature modifier
 	Visibility    Visibility
 	Direction     FeatureDirection
 	IsComposite   bool
