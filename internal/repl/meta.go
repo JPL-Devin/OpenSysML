@@ -7,9 +7,11 @@ import (
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // isMeta reports whether a trimmed input line is a meta command.
@@ -114,14 +116,45 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 
 // doEval evaluates an expression.
 func (s *Session) doEval(expr string) ([]string, bool, error) {
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
-		return nil, false, fmt.Errorf("runtime init: %w", err)
+	// Try literal evaluation first (works even with empty session)
+	literalResult, isLiteral := s.tryEvalLiteral(expr)
+	if isLiteral {
+		return literalResult, false, nil
 	}
 	
-	// Parse expression as an attribute default value
-	src := fmt.Sprintf("attribute __eval__ = %s;", expr)
-	p := parser.New(source.New("eval", []byte(src)))
+	// For feature references/complex expressions, need session context
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		return []string{"error: no declarations loaded (literals work, but feature references need declarations)"}, false, nil
+	}
+	
+	// Create runtime context
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	
+	// Try simple feature reference lookup (e.g., "%eval x")
+	if isSimpleIdentifier(expr) {
+		sym, ok := doc.Scope.LookupLocal(expr)
+		if ok && sym != nil {
+			if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+				val, err := ctx.Eval(usage.Value)
+				if err != nil {
+					return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
+				}
+				return []string{
+					fmt.Sprintf("✓ %s", expr),
+					fmt.Sprintf("  = %s", formatValue(val)),
+				}, false, nil
+			}
+		}
+		return []string{fmt.Sprintf("error: symbol %q not found", expr)}, false, nil
+	}
+	
+	// Complex expression with feature refs - inject into session context
+	tempSrc := s.joined() + fmt.Sprintf("\nattribute __eval__ = %s;", expr)
+	p := parser.New(source.New("eval", []byte(tempSrc)))
 	root := p.ParseFile()
 	
 	if len(p.Diagnostics) > 0 {
@@ -132,16 +165,22 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 		return lines, false, nil
 	}
 	
-	if len(root.Members) == 0 {
-		return []string{"error: no expression parsed"}, false, nil
+	// Find __eval__ attribute (should be last member)
+	var evalUsage *ast.Usage
+	for i := len(root.Members) - 1; i >= 0; i-- {
+		if usage, ok := root.Members[i].(*ast.Usage); ok && usage.Value != nil {
+			if usage.Ident.ShortName == "__eval__" {
+				evalUsage = usage
+				break
+			}
+		}
 	}
 	
-	usage, ok := root.Members[0].(*ast.Usage)
-	if !ok || usage.Value == nil {
-		return []string{"error: invalid expression"}, false, nil
+	if evalUsage == nil || evalUsage.Value == nil {
+		return []string{"error: could not parse expression"}, false, nil
 	}
 	
-	val, err := ctx.Eval(usage.Value)
+	val, err := ctx.Eval(evalUsage.Value)
 	if err != nil {
 		return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
 	}
@@ -150,6 +189,56 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(val)),
 	}, false, nil
+}
+
+// tryEvalLiteral attempts to evaluate standalone literal expressions.
+func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
+	// Parse as standalone attribute
+	src := fmt.Sprintf("attribute __lit__ = %s;", expr)
+	p := parser.New(source.New("literal", []byte(src)))
+	root := p.ParseFile()
+	
+	if len(p.Diagnostics) > 0 || len(root.Members) == 0 {
+		return nil, false
+	}
+	
+	usage, ok := root.Members[0].(*ast.Usage)
+	if !ok || usage.Value == nil {
+		return nil, false
+	}
+	
+	// Use runtime context with empty model (no symbols needed for literals)
+	emptyIdx := symbols.NewIndex()
+	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
+	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), 100000)
+	
+	val, err := ctx.Eval(usage.Value)
+	if err != nil {
+		// Not evaluable as literal (needs session symbols)
+		return nil, false
+	}
+	
+	return []string{
+		fmt.Sprintf("✓ %s", expr),
+		fmt.Sprintf("  = %s", formatValue(val)),
+	}, true
+}
+
+
+// isSimpleIdentifier checks if string is a single identifier (no operators/spaces).
+func isSimpleIdentifier(s string) bool {
+	s = strings.TrimSpace(s)
+	if len(s) == 0 {
+		return false
+	}
+	// Simple heuristic: no spaces, operators, or parens
+	for _, ch := range s {
+		if ch == ' ' || ch == '+' || ch == '-' || ch == '*' || ch == '/' || 
+		   ch == '(' || ch == ')' || ch == '.' {
+			return false
+		}
+	}
+	return true
 }
 
 // doSlots shows instance slots.
