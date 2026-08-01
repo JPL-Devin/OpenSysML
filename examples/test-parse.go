@@ -29,7 +29,7 @@ func main() {
 	if len(p.Diagnostics) > 0 {
 		fmt.Println("Parse errors:")
 		for _, diag := range p.Diagnostics {
-			fmt.Printf("  %s\n", diag)
+			fmt.Printf("  %+v\n", diag)
 		}
 		os.Exit(1)
 	}
