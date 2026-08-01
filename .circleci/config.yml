@@ -25,14 +25,15 @@ jobs:
       - run:
           name: Build binaries
           command: |
-            go build -v -o bin/sysml ./cmd/sysml
-            go build -v -o bin/sysml-lsp ./cmd/sysml-lsp
+            VERSION=${CIRCLE_TAG:-dev}
+            go build -v -ldflags "-X main.Version=$VERSION" -o bin/sysml ./cmd/sysml
+            go build -v -ldflags "-X main.Version=$VERSION" -o bin/sysml-lsp ./cmd/sysml-lsp
       
       - run:
           name: Verify binaries
           command: |
-            test -x ./bin/sysml && echo "✓ sysml binary built"
-            test -x ./bin/sysml-lsp && echo "✓ sysml-lsp binary built"
+            ./bin/sysml --version
+            ./bin/sysml-lsp --version
             ls -lh bin/
       
       - store_artifacts:
@@ -61,18 +62,22 @@ jobs:
             # Create dist directory
             mkdir -p dist
             
-            # Build for multiple platforms
-            GOOS=linux GOARCH=amd64 go build -o dist/sysml-linux-amd64 ./cmd/sysml
-            GOOS=linux GOARCH=arm64 go build -o dist/sysml-linux-arm64 ./cmd/sysml
-            GOOS=darwin GOARCH=amd64 go build -o dist/sysml-darwin-amd64 ./cmd/sysml
-            GOOS=darwin GOARCH=arm64 go build -o dist/sysml-darwin-arm64 ./cmd/sysml
-            GOOS=windows GOARCH=amd64 go build -o dist/sysml-windows-amd64.exe ./cmd/sysml
+            # Get version from tag
+            VERSION=${CIRCLE_TAG}
+            LDFLAGS="-X main.Version=$VERSION"
             
-            GOOS=linux GOARCH=amd64 go build -o dist/sysml-lsp-linux-amd64 ./cmd/sysml-lsp
-            GOOS=linux GOARCH=arm64 go build -o dist/sysml-lsp-linux-arm64 ./cmd/sysml-lsp
-            GOOS=darwin GOARCH=amd64 go build -o dist/sysml-lsp-darwin-amd64 ./cmd/sysml-lsp
-            GOOS=darwin GOARCH=arm64 go build -o dist/sysml-lsp-darwin-arm64 ./cmd/sysml-lsp
-            GOOS=windows GOARCH=amd64 go build -o dist/sysml-lsp-windows-amd64.exe ./cmd/sysml-lsp
+            # Build for multiple platforms
+            GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-linux-amd64 ./cmd/sysml
+            GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/sysml-linux-arm64 ./cmd/sysml
+            GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-darwin-amd64 ./cmd/sysml
+            GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/sysml-darwin-arm64 ./cmd/sysml
+            GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-windows-amd64.exe ./cmd/sysml
+            
+            GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-lsp-linux-amd64 ./cmd/sysml-lsp
+            GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/sysml-lsp-linux-arm64 ./cmd/sysml-lsp
+            GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-lsp-darwin-amd64 ./cmd/sysml-lsp
+            GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/sysml-lsp-darwin-arm64 ./cmd/sysml-lsp
+            GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-lsp-windows-amd64.exe ./cmd/sysml-lsp
             
             # Create tarballs
             cd dist

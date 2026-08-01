@@ -12,6 +12,11 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/repl"
 )
 
+var (
+	// Version is set via ldflags during build
+	Version = "dev"
+)
+
 type rlReader struct{ rl *readline.Instance }
 
 func (r *rlReader) ReadLine(prompt string) (string, error) {
@@ -27,6 +32,12 @@ func (r *rlReader) ReadLine(prompt string) (string, error) {
 }
 
 func main() {
+	// Handle version flag
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Printf("sysml %s\n", Version)
+		os.Exit(0)
+	}
+
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "sysml:", err)
 		os.Exit(1)

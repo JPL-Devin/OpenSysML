@@ -4,11 +4,17 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 
 	"github.com/Open-MBEE/Systemica/internal/core/model"
 	"github.com/Open-MBEE/Systemica/internal/lsp"
+)
+
+var (
+	// Version is set via ldflags during build
+	Version = "dev"
 )
 
 // stdio adapts os.Stdin/os.Stdout into a single io.ReadWriteCloser.
@@ -21,6 +27,12 @@ func (stdio) Close() error {
 }
 
 func main() {
+	// Handle version flag
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Printf("sysml-lsp %s\n", Version)
+		os.Exit(0)
+	}
+
 	ws := model.NewWorkspace()
 	srv := lsp.NewServer(ws)
 	if err := srv.Run(context.Background(), stdio{}); err != nil {
