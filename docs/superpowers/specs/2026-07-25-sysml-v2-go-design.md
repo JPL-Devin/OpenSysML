@@ -1,47 +1,82 @@
-# SysML v2 Language Server & REPL — Design Specification
+# SysML v2 Execution Environment — Design Specification
 
-Status: Draft
-Date: 2026-07-25
+Status: Active Development
+Date: 2026-07-25 (Updated: 2026-07-31)
 
 ## 1. Overview & Goals
 
-A new, independent implementation of the SysML v2 textual language (including its
-KerML foundation) written in Go. The implementation provides two frontends over a
-shared core:
+A complete, production-grade SysML v2 execution environment written in Go—a unified
+system spanning the full lifecycle from authoring to execution, inspired by modern
+language ecosystems like Python, Rust, and Go.
 
-1. **Language Server (`sysml-lsp`)** — an LSP-compatible server enabling syntax
-   highlighting, diagnostics, hover, go-to-definition, references, document/workspace
-   symbols, and context-aware code completion in any LSP client editor.
-2. **REPL (`sysml-repl`)** — a command-line, statement-by-statement interactive
-   environment for authoring and exploring models, modeled after the pilot's
-   `SysMLInteractive`.
+The system provides a cohesive stack:
 
-Primary goals:
+1. **Language Server (`sysml-lsp`)** — Full-featured LSP server delivering
+   first-class IDE support: syntax highlighting, live diagnostics, semantic hover,
+   go-to-definition, workspace-wide symbol search, intelligent code completion, and
+   reference tracking across multi-file projects.
 
-- **Performance.** Hand-written lexer/parser targeting sub-millisecond parses for
-  per-keystroke diagnostics. Single static binary (Go), no JVM/Eclipse dependency.
-- **Correctness path to full validation.** v1 ships syntax + name-resolution
-  diagnostics; the validation architecture is pluggable so type-checking and the full
-  pilot-parity constraint set layer in without rearchitecting.
-- **Incremental & lazy.** Parse eagerly; resolve types/semantics on demand (hover,
-  completion, diagnostics request). Precedent: gopls, rust-analyzer.
-- **Real-project ergonomics.** Multi-file workspaces, cross-file references, a project
-  manifest with local and remote (git) dependencies, and a bundled standard library.
+2. **Interactive REPL (`sysml-repl`)** — Command-line environment for exploratory
+   modeling and immediate feedback: define models incrementally, evaluate expressions
+   on-the-fly, instantiate parts, run calculations and analyses, inspect runtime
+   state—modeled after IPython/Jupyter but for systems engineering.
 
-## 2. Non-Goals & Scope Boundaries
+3. **Execution Runtime** — Evaluate expressions, materialize instances, execute
+   calculations and constraints, run analysis/verification cases, and (future)
+   simulate behavioral models—turning static SysML v2 specifications into executable,
+   verifiable systems.
 
-- **SysML v2 only.** No SysML v1, no UML profile, no XMI, no diagram interchange
-  (DI/notation). The target is the pure v2 textual notation plus its KerML foundation.
-- **v1 validation depth = A.** Only syntax and name-resolution diagnostics ship in v1.
-  Type checking (B) and full constraint parity (C) are on the roadmap; C is required
-  before the project is considered finished.
-- **Visualization (`%viz`, PlantUML/Graphviz) and API publish (`%publish`) are out of
-  v1.** Revisited after the core is solid.
-- **Deferred LSP features:** semantic tokens, formatting, rename, code actions/quick-fix,
-  signature help, folding, inlay hints. Basic coloring is covered by existing TextMate
-  grammars; server-side semantic tokens layer in later.
-- Grammar is derived from the pilot Xtext grammars (`SysML.xtext` with
-  `KerMLExpressions`), metamodel reference `https://www.omg.org/spec/SysML/20250201`.
+4. **Toolchain Infrastructure** — Workspace management, dependency resolution (local
+   and remote git sources), incremental compilation, bundled standard library, and
+   persistent semantic caches—delivering the ergonomics of `cargo`/`go mod` for
+   systems modeling.
+
+### Vision: The SysML v2 Ecosystem Python Developers Expect
+
+- **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse
+  runtime—fast enough for keystroke-latency feedback in editors.
+- **Completeness:** Full OMG SysML v2 spec compliance (textual notation + KerML
+  foundation), validation parity with the pilot implementation, executable semantics
+  for expressions and behaviors.
+- **Modern ergonomics:** Incremental/lazy analysis (gopls/rust-analyzer precedent),
+  multi-file workspaces, rich diagnostics, integrated package management.
+- **Executable models:** Not just a validator—a runtime that instantiates parts,
+  evaluates constraints against concrete values, executes calc/analysis cases, and
+  simulates action/state behaviors.
+
+## 2. Scope & Development Phases
+
+### Current Scope (Active Development)
+
+- **Core language infrastructure:** Complete SysML v2 textual parser (structural +
+  behavioral grammar), symbol resolution, type system, validation passes (Depths A-C).
+- **Execution runtime (Tiers 1-3):** Expression evaluation, instance materialization,
+  KerML operator library—enabling calc/constraint execution.
+- **Behavioral foundations (Phase C):** Action control-flow (fork/join/decision/merge,
+  succession edges), state machines (entry/exit/do, transitions)—parsed and modeled,
+  not yet executable.
+- **Toolchain core:** Workspace/document management, file watching, incremental
+  reindexing, stdlib bundling, semantic caching.
+
+### Near-Term Roadmap
+
+- **LSP server completion:** Workspace symbols, hover, completion, references—wire
+  existing semantic engine to LSP protocol.
+- **REPL implementation:** Statement-by-statement parsing, expression evaluation,
+  instance inspection, runtime commands (`%run`, `%inspect`, etc.).
+- **Behavioral execution (Tiers 4-5):** Token-flow interpreter for actions,
+  event-driven state machine stepping, deterministic scheduling to quiescence.
+- **Analysis/verification drivers:** Run analysis cases (calc chains), evaluate
+  requirement constraints, trace execution, report results.
+
+### Out of Scope (Deferred)
+
+- **Graphical notation:** No SysML v1, no UML profiles, no XMI, no diagram interchange
+  (DI/notation)—pure textual v2 only.
+- **Visualization:** `%viz` commands (PlantUML/Graphviz), diagram export—revisited
+  post-core.
+- **Advanced LSP:** Semantic tokens, formatting, rename, code actions/quick-fix,
+  signature help, folding, inlay hints—layer in after fundamentals solid.
 
 ## 3. Technology Choices
 
@@ -72,7 +107,9 @@ command frontends (`sysml-lsp`, `sysml-repl`) sit over one shared core `Workspac
 - `internal/core/parser/` — hand-written recursive descent + error recovery.
 - `internal/core/symbols/` — symbol table, qualified-name index, scope trees.
 - `internal/core/resolve/` — lazy name resolution + memoization side tables.
-- `internal/core/passes/` — pluggable validation rule passes.
+- `internal/core/semantics/` — type conformance, multiplicity, feature inheritance.
+- `internal/core/passes/` — pluggable validation rule passes (syntax → constraints).
+- `internal/core/runtime/` — execution engine (expression eval, instances, KerML builtins).
 - `internal/core/model/` — `Workspace`, document set, reindex orchestration.
 - `internal/core/libs/` — bundled stdlib load + persistent cache + dependency fetch.
 - `internal/lsp/` — LSP protocol glue.
