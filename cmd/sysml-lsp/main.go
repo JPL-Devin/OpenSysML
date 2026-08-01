@@ -1,4 +1,4 @@
-// Command systemica-lsp is a stdio Language Server for SysML v2 / KerML.
+// Command sysml-lsp is a stdio Language Server for SysML v2 / KerML.
 package main
 
 import (
@@ -24,6 +24,6 @@ func main() {
 	ws := model.NewWorkspace()
 	srv := lsp.NewServer(ws)
 	if err := srv.Run(context.Background(), stdio{}); err != nil {
-		log.Fatalf("systemica-lsp: %v", err)
+		log.Fatalf("sysml-lsp: %v", err)
 	}
 }

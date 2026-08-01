@@ -27,7 +27,7 @@ part def Vehicle {
 ## REPL Session
 
 ```bash
-$ go run ./cmd/systemica-repl
+$ go run ./cmd/sysml
 
 SysML v2 REPL — %help for commands, Ctrl-D to exit
 

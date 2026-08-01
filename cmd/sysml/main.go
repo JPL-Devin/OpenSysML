@@ -1,4 +1,4 @@
-// Command systemica-repl is an interactive SysML v2 REPL (spec §13).
+// Command sysml is an interactive SysML v2 REPL (spec §13).
 package main
 
 import (
@@ -28,13 +28,13 @@ func (r *rlReader) ReadLine(prompt string) (string, error) {
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "systemica-repl:", err)
+		fmt.Fprintln(os.Stderr, "sysml:", err)
 		os.Exit(1)
 	}
 }
 
 func run() error {
-	histPath := filepath.Join(os.TempDir(), "systemica-repl.history")
+	histPath := filepath.Join(os.TempDir(), "sysml-repl.history")
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          "sysml> ",
 		HistoryFile:     histPath,
