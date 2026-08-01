@@ -222,3 +222,85 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 	
 	return true, nil
 }
+
+// InvokeCalc invokes a calculation with given arguments and returns the result.
+// Arguments should be in the same order as the calc's input parameters.
+func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols.Scope) (Value, error) {
+	if sym == nil || sym.Decl == nil {
+		return Value{}, fmt.Errorf("calc invocation: invalid symbol")
+	}
+	
+	var members []ast.Node
+	switch decl := sym.Decl.(type) {
+	case *ast.Definition:
+		members = decl.Members
+	case *ast.Usage:
+		members = decl.Members
+	default:
+		return Value{}, fmt.Errorf("calc invocation: %q is not a calc definition or usage", sym.Name)
+	}
+	
+	if members == nil {
+		return Value{}, fmt.Errorf("calc invocation: %q has no body", sym.Name)
+	}
+	
+	// Extract parameters (usages with Direction = DirIn or DirInOut)
+	var params []*ast.Usage
+	for _, m := range members {
+		// Unwrap Membership if present
+		node := m
+		if membership, ok := m.(*ast.Membership); ok {
+			node = membership.Member
+		}
+		
+		if usage, ok := node.(*ast.Usage); ok {
+			if usage.Direction == ast.DirIn || usage.Direction == ast.DirInOut {
+				params = append(params, usage)
+			}
+		}
+	}
+	
+	// Validate argument count
+	if len(args) != len(params) {
+		return Value{}, fmt.Errorf("calc invocation: expected %d arguments, got %d", len(params), len(args))
+	}
+	
+	// Create parameter bindings
+	bindings := make(map[string]Value)
+	for i, param := range params {
+		// Use Name (not ShortName which might be empty for simple usages)
+		name := param.Ident.Name
+		if name == "" && param.Ident.ShortName != "" {
+			name = param.Ident.ShortName
+		}
+		bindings[name] = args[i]
+	}
+	
+	// Extract return member (ResultMember with Expression)
+	var returnExpr ast.Node
+	for _, m := range members {
+		// Unwrap Membership if present
+		node := m
+		if membership, ok := m.(*ast.Membership); ok {
+			node = membership.Member
+		}
+		
+		if rm, ok := node.(*ast.ResultMember); ok && rm.Expression != nil {
+			returnExpr = rm.Expression
+			break
+		}
+	}
+	
+	if returnExpr == nil {
+		return Value{}, fmt.Errorf("calc invocation: %q has no return expression", sym.Name)
+	}
+	
+	// Evaluate return expression with parameter bindings
+	ec := &EvalContext{
+		ctx:    ctx,
+		frames: []map[string]Value{bindings},
+		scope:  scope,
+	}
+	
+	return ec.Eval(returnExpr)
+}
