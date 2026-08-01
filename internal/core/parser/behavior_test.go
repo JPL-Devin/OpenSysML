@@ -175,3 +175,200 @@ func TestParseAction_Decision(t *testing.T) {
 		}
 	}
 }
+
+// Phase C1 Tests
+
+func parseResultBodyTest(t *testing.T, input string) []ast.Node {
+	src := source.New("test.sysml", []byte(input))
+	p := New(src)
+
+	// Consume opening brace
+	_, ok := p.accept(lexer.LBrace)
+	if !ok {
+		t.Fatalf("expected '{', got %v", p.peek().Kind)
+	}
+
+	return p.parseResultBody()
+}
+
+func parseConstraintBodyTest(t *testing.T, input string) []ast.Node {
+	src := source.New("test.sysml", []byte(input))
+	p := New(src)
+
+	// Consume opening brace
+	_, ok := p.accept(lexer.LBrace)
+	if !ok {
+		t.Fatalf("expected '{', got %v", p.peek().Kind)
+	}
+
+	return p.parseConstraintBody()
+}
+
+func TestParseResultBody_Simple(t *testing.T) {
+	input := `{
+		return x + 5;
+	}`
+
+	nodes := parseResultBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	result, ok := nodes[0].(*ast.ResultMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.ResultMember, got %T", nodes[0])
+	} else {
+		if result.Expression == nil {
+			t.Errorf("ResultMember.Expression is nil")
+		}
+		// Check it's an operator expression (x + 5)
+		if _, ok := result.Expression.(*ast.OperatorExpr); !ok {
+			t.Errorf("ResultMember.Expression: expected *ast.OperatorExpr, got %T", result.Expression)
+		}
+	}
+}
+
+func TestParseResultBody_Multiple(t *testing.T) {
+	input := `{
+		return a;
+		return b * 2;
+	}`
+
+	nodes := parseResultBodyTest(t, input)
+
+	if len(nodes) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(nodes))
+	}
+
+	for i, node := range nodes {
+		if _, ok := node.(*ast.ResultMember); !ok {
+			t.Errorf("node %d: expected *ast.ResultMember, got %T", i, node)
+		}
+	}
+}
+
+func TestParseConstraintBody_Assert(t *testing.T) {
+	input := `{
+		assert x > 0;
+	}`
+
+	nodes := parseConstraintBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	constraint, ok := nodes[0].(*ast.ConstraintMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.ConstraintMember, got %T", nodes[0])
+	} else {
+		if !constraint.IsAssert {
+			t.Errorf("ConstraintMember.IsAssert: expected true, got false")
+		}
+		if constraint.IsNegated {
+			t.Errorf("ConstraintMember.IsNegated: expected false, got true")
+		}
+		if constraint.Expression == nil {
+			t.Errorf("ConstraintMember.Expression is nil")
+		}
+	}
+}
+
+func TestParseConstraintBody_AssertNot(t *testing.T) {
+	input := `{
+		assert not z < 0;
+	}`
+
+	nodes := parseConstraintBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	constraint, ok := nodes[0].(*ast.ConstraintMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.ConstraintMember, got %T", nodes[0])
+	} else {
+		if !constraint.IsAssert {
+			t.Errorf("ConstraintMember.IsAssert: expected true, got false")
+		}
+		if !constraint.IsNegated {
+			t.Errorf("ConstraintMember.IsNegated: expected true, got false")
+		}
+		if constraint.Expression == nil {
+			t.Errorf("ConstraintMember.Expression is nil")
+		}
+	}
+}
+
+func TestParseConstraintBody_Assume(t *testing.T) {
+	input := `{
+		assume y != null;
+	}`
+
+	nodes := parseConstraintBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	constraint, ok := nodes[0].(*ast.ConstraintMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.ConstraintMember, got %T", nodes[0])
+	} else {
+		if constraint.IsAssert {
+			t.Errorf("ConstraintMember.IsAssert: expected false, got true")
+		}
+		if constraint.IsNegated {
+			t.Errorf("ConstraintMember.IsNegated: expected false, got true")
+		}
+		if constraint.Expression == nil {
+			t.Errorf("ConstraintMember.Expression is nil")
+		}
+	}
+}
+
+func TestParseConstraintBody_Multiple(t *testing.T) {
+	input := `{
+		assert x > 0;
+		assume y != null;
+		assert not z < 0;
+	}`
+
+	nodes := parseConstraintBodyTest(t, input)
+
+	if len(nodes) != 3 {
+		t.Fatalf("expected 3 nodes, got %d", len(nodes))
+	}
+
+	// Check first: assert x > 0
+	c1, ok := nodes[0].(*ast.ConstraintMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.ConstraintMember, got %T", nodes[0])
+	} else {
+		if !c1.IsAssert || c1.IsNegated {
+			t.Errorf("node 0: expected assert (not negated), got IsAssert=%v IsNegated=%v", c1.IsAssert, c1.IsNegated)
+		}
+	}
+
+	// Check second: assume y != null
+	c2, ok := nodes[1].(*ast.ConstraintMember)
+	if !ok {
+		t.Errorf("node 1: expected *ast.ConstraintMember, got %T", nodes[1])
+	} else {
+		if c2.IsAssert || c2.IsNegated {
+			t.Errorf("node 1: expected assume (not negated), got IsAssert=%v IsNegated=%v", c2.IsAssert, c2.IsNegated)
+		}
+	}
+
+	// Check third: assert not z < 0
+	c3, ok := nodes[2].(*ast.ConstraintMember)
+	if !ok {
+		t.Errorf("node 2: expected *ast.ConstraintMember, got %T", nodes[2])
+	} else {
+		if !c3.IsAssert || !c3.IsNegated {
+			t.Errorf("node 2: expected assert not, got IsAssert=%v IsNegated=%v", c3.IsAssert, c3.IsNegated)
+		}
+	}
+}

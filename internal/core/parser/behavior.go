@@ -319,3 +319,101 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 	}
 	return node
 }
+
+// Phase C1: Calculation and Constraint Bodies
+
+// parseResultBody parses the body of a calculation usage.
+// Expects '{' already consumed, returns list of ResultMember nodes.
+// Syntax: calc example { return x + 5; }
+func (p *Parser) parseResultBody() []ast.Node {
+	var members []ast.Node
+	
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		members = append(members, p.parseResultMember())
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after result body")
+	return members
+}
+
+// parseResultMember parses one result member: return <expr>;
+func (p *Parser) parseResultMember() ast.Node {
+	start := p.peek().Span.Offset
+	
+	// Expect 'return' keyword
+	if !p.acceptKeyword("return") {
+		p.error(p.peek().Span, "expected 'return' in calculation body")
+		en := &ast.ErrorNode{Message: "expected 'return' in calculation body"}
+		if !p.atEOF() && !p.at(lexer.RBrace) {
+			p.advance() // ensure progress
+		}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	// Parse expression
+	expr := p.ParseExpression()
+	
+	p.expect(lexer.Semicolon, "expected ';' after return expression")
+	
+	node := &ast.ResultMember{
+		Expression: expr,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseConstraintBody parses the body of a constraint usage.
+// Expects '{' already consumed, returns list of ConstraintMember nodes.
+// Syntax: constraint example { assert x > 0; assume y != null; assert not z < 0; }
+func (p *Parser) parseConstraintBody() []ast.Node {
+	var members []ast.Node
+	
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		members = append(members, p.parseConstraintMember())
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after constraint body")
+	return members
+}
+
+// parseConstraintMember parses one constraint member: assert/assume [not] <expr>;
+func (p *Parser) parseConstraintMember() ast.Node {
+	start := p.peek().Span.Offset
+	
+	var isAssert bool
+	var isNegated bool
+	
+	// Expect 'assert' or 'assume' keyword
+	if p.acceptKeyword("assert") {
+		isAssert = true
+	} else if p.acceptKeyword("assume") {
+		isAssert = false
+	} else {
+		p.error(p.peek().Span, "expected 'assert' or 'assume' in constraint body")
+		en := &ast.ErrorNode{Message: "expected 'assert' or 'assume' in constraint body"}
+		if !p.atEOF() && !p.at(lexer.RBrace) {
+			p.advance() // ensure progress
+		}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	// Check for optional 'not' keyword
+	if p.acceptKeyword("not") {
+		isNegated = true
+	}
+	
+	// Parse expression
+	expr := p.ParseExpression()
+	
+	p.expect(lexer.Semicolon, "expected ';' after constraint expression")
+	
+	node := &ast.ConstraintMember{
+		IsAssert:   isAssert,
+		IsNegated:  isNegated,
+		Expression: expr,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
