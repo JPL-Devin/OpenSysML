@@ -23,6 +23,7 @@ const (
 	DefPort
 	DefInterface
 	DefAllocation
+	DefBinding
 	// Tier C — nested behavioral bodies (generic body this cycle).
 	DefAction
 	DefState
@@ -33,6 +34,10 @@ const (
 	DefAnalysisCase
 	DefVerificationCase
 	DefUseCase
+	// KerML structural kinds
+	DefBehavior
+	DefAssoc
+	DefStruct
 )
 
 func (k DefinitionKind) String() string {
@@ -71,6 +76,8 @@ func (k DefinitionKind) String() string {
 		return "interface"
 	case DefAllocation:
 		return "allocation"
+	case DefBinding:
+		return "binding"
 	case DefAction:
 		return "action"
 	case DefState:
@@ -89,6 +96,12 @@ func (k DefinitionKind) String() string {
 		return "verification case"
 	case DefUseCase:
 		return "use case"
+	case DefBehavior:
+		return "behavior"
+	case DefAssoc:
+		return "assoc"
+	case DefStruct:
+		return "struct"
 	default:
 		return "unknown"
 	}
@@ -116,6 +129,7 @@ const (
 	UsagePort
 	UsageInterface
 	UsageAllocation
+	UsageBinding
 	// Tier C.
 	UsageAction
 	UsageState
@@ -126,6 +140,10 @@ const (
 	UsageAnalysisCase
 	UsageVerificationCase
 	UsageUseCase
+	// KerML structural kinds
+	UsageBehavior
+	UsageAssoc
+	UsageStruct
 )
 
 func (k UsageKind) String() string {
@@ -162,6 +180,8 @@ func (k UsageKind) String() string {
 		return "interface"
 	case UsageAllocation:
 		return "allocation"
+	case UsageBinding:
+		return "binding"
 	case UsageAction:
 		return "action"
 	case UsageState:
@@ -180,6 +200,12 @@ func (k UsageKind) String() string {
 		return "verification case"
 	case UsageUseCase:
 		return "use case"
+	case UsageBehavior:
+		return "behavior"
+	case UsageAssoc:
+		return "assoc"
+	case UsageStruct:
+		return "struct"
 	default:
 		return "unknown"
 	}

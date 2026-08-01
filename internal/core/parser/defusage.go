@@ -29,6 +29,7 @@ var definitionKindKeywords = map[string]ast.DefinitionKind{
 	"port":       ast.DefPort,
 	"interface":  ast.DefInterface,
 	"allocation": ast.DefAllocation,
+	"binding":    ast.DefBinding,
 	// Tier C.
 	"action":       ast.DefAction,
 	"state":        ast.DefState,
@@ -39,6 +40,10 @@ var definitionKindKeywords = map[string]ast.DefinitionKind{
 	"case":         ast.DefCase,
 	"analysis":     ast.DefAnalysisCase,
 	"verification": ast.DefVerificationCase,
+	// KerML structural.
+	"behavior": ast.DefBehavior,
+	"assoc":    ast.DefAssoc,
+	"struct":   ast.DefStruct,
 }
 
 // usageKindKeywords maps a single kind keyword to its UsageKind.
@@ -63,6 +68,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"port":       ast.UsagePort,
 	"interface":  ast.UsageInterface,
 	"allocation": ast.UsageAllocation,
+	"binding":    ast.UsageBinding,
 	// Tier C.
 	"action":       ast.UsageAction,
 	"state":        ast.UsageState,
@@ -74,6 +80,10 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"case":         ast.UsageCase,
 	"analysis":     ast.UsageAnalysisCase,
 	"verification": ast.UsageVerificationCase,
+	// KerML structural.
+	"behavior": ast.UsageBehavior,
+	"assoc":    ast.UsageAssoc,
+	"struct":   ast.UsageStruct,
 }
 
 var featureModifierKeywords = map[string]bool{

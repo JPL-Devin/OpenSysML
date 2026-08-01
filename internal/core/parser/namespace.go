@@ -247,6 +247,7 @@ var declStartKeywords = map[string]bool{
 	"port":         true,
 	"interface":    true,
 	"allocation":   true,
+	"binding":      true,
 	"action":       true,
 	"state":        true,
 	"calc":         true,
@@ -258,6 +259,10 @@ var declStartKeywords = map[string]bool{
 	"use":          true,
 	"datatype":     true,
 	"feature":      true,
+	// KerML structural.
+	"behavior": true,
+	"assoc":    true,
+	"struct":   true,
 }
 
 // atMemberSync reports whether the parser sits at a recovery synchronization
