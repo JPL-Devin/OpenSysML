@@ -18,10 +18,28 @@ func (p *Parser) parseCalcBody() []ast.Node {
 		if p.isResultKeyword() {
 			members = append(members, p.parseResultMember())
 		} else {
-			// Parse as generic body member (parameters, etc.)
-			m := p.parseBodyMember()
-			if m != nil {
-				members = append(members, m)
+			// Try parsing as body member (parameters, doc, import, etc.)
+			// Body member expects: visibility + declaration keyword, or special patterns
+			// If we see expression-start that's NOT a declaration, parse as implicit return expression
+			// Heuristic: if next token after name is NOT ':', ';', or keyword, it's likely expression
+			peek1 := p.peek()
+			peek2 := p.peekN(1)
+			isLikelyExpr := (peek1.Kind == lexer.Identifier || peek1.Kind == lexer.UnrestrictedName) &&
+				peek2.Kind != lexer.Colon && peek2.Kind != lexer.Semicolon && peek2.Kind != lexer.Keyword &&
+				peek2.Kind != lexer.LBracket
+			
+			if isLikelyExpr {
+				// Parse as implicit return expression
+				expr := p.ParseExpression()
+				if expr != nil {
+					members = append(members, expr)
+				}
+			} else {
+				// Parse as generic body member (parameters, etc.)
+				m := p.parseBodyMember()
+				if m != nil {
+					members = append(members, m)
+				}
 			}
 		}
 		

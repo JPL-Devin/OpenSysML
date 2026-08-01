@@ -207,6 +207,14 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 
 // parsePostModifiers parses feature modifiers that appear after typing/multiplicity.
 // Currently only 'ordered' and 'nonunique' are allowed in this position.
+// isPostModifierKeyword checks if token is a post-multiplicity modifier keyword
+func isPostModifierKeyword(tok lexer.Token) bool {
+	if tok.Kind != lexer.Keyword {
+		return false
+	}
+	return tok.KeywordID == "ordered" || tok.KeywordID == "nonunique"
+}
+
 func (p *Parser) parsePostModifiers() featureMods {
 	var m featureMods
 	for {
@@ -268,7 +276,10 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	if !ok {
 		// Fallback: if we have modifiers but no kind keyword, assume it's a generic usage (e.g., "in x: Integer;")
 		// This is common for parameters in calc/action bodies.
-		if mods.direction != ast.DirNone || mods.isReference || mods.isEnd || mods.isComposite || mods.isDerived {
+		// Also check if name + multiplicity/modifiers follow (e.g., "in seq[1..*] ordered;")
+		hasModifiers := mods.direction != ast.DirNone || mods.isReference || mods.isEnd || mods.isComposite || mods.isDerived
+		hasNameWithMultOrMods := p.atNameOrKeyword() && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon || isPostModifierKeyword(p.peekN(1)))
+		if hasModifiers || hasNameWithMultOrMods {
 			return p.parseUsage(start, ast.UsageAttribute, mods, false)
 		}
 		return nil
@@ -523,7 +534,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	postRels, _ := p.parseRelationships(true)
 	u.Relationships = append(u.Relationships, postRels...)
 	
-	if p.accept2(lexer.Eq) {
+	if p.accept2(lexer.Eq) || p.acceptKeyword("default") {
 		u.Value = p.ParseExpression()
 	}
 	p.parseTierBEnds(u, kind)
