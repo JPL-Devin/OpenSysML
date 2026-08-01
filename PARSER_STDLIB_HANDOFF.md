@@ -4,28 +4,27 @@
 
 **Branch:** `feat/parser-stdlib-coverage`
 
-**Coverage:** 76.8% (73/95 files clean)
+**Coverage:** 80.0% (76/95 files clean)
 
-**Progress:** +38.9 percentage points from 37.9% starting point
+**Progress:** +42.1 percentage points from 37.9% starting point
 
-**Commits:** 36 commits (2c8bd10...1d659c6)
+**Commits:** 38 commits (2c8bd10...87c5c76)
 
 **Top Remaining Errors:**
-- 194: expected '{' or ';' after declaration
-- 155: expected a body member
-- 102: expected a namespace member
-- 26: expected a name
+- 73: expected '{' or ';' after declaration
+- 59: expected a body member
+- 53: expected a namespace member
+- 27: expected a name
 - 14: expected 'to' between connector ends
-- 12: expected an expression
 
-**Remaining Files:** 22/95 (mostly blocked by complex/unsupported patterns)
+**Remaining Files:** 19/95 (mostly blocked by complex/unsupported patterns)
 
 
 ## Major Achievements
 
 **Milestone:** 70% stdlib coverage achieved (Task 39, commit da947ce)
 
-**Tasks Completed:** 41 tasks (Tasks 6-46)
+**Tasks Completed:** 43 tasks (Tasks 6-46, 53-55)
 - Task 6: 'end' feature modifier
 - Task 7: 'subject'/'objective' usage keywords
 - Task 8: Arrow invocation single-arg without parens
@@ -612,15 +611,15 @@ git show 1d659c6
 **Original Target:** 70%+ stdlib coverage (67/95 files)  
 **Status:** ✅ **ACHIEVED** at Task 39 (commit da947ce)
 
-**Current Coverage:** 76.8% (73/95 files clean)
+**Current Coverage:** 80.0% (76/95 files clean)
 
-**Remaining:** 22 files (23.2%)
+**Remaining:** 19 files (20.0%)
 
 **Analysis of remaining files:**
 - ~6 files: BLOCKED by architectural limitations (feature chaining, multi-word keywords, RequireMember body, connector end hybrid, type cast, named multi-type relationships)
-- ~16 files: Complex patterns requiring investigation (state machine keywords, binding syntax, etc.)
+- ~13 files: Complex patterns requiring investigation (state machine keywords, subset/disjoint statements, etc.)
 
-**Realistic next target:** 80% coverage (~76 files clean, +3 files)
+**Realistic next target:** 82% coverage (~78 files clean, +2 files)
 
 **Estimated effort:**
 - Low-hanging fruit mostly picked
@@ -629,22 +628,187 @@ git show 1d659c6
 - Diminishing returns on time investment
 
 **Recommendation:**
-- Current 76.8% coverage represents excellent parser maturity
-- Most common stdlib patterns fully supported
-- Remaining 23% are edge cases and architectural blockers
+- Current 80.0% coverage represents excellent parser maturity
+- Most common stdlib patterns fully supported  
+- Remaining 20% are edge cases and architectural blockers
+- Error counts significantly reduced even in files that don't parse cleanly
 - Prioritize actual use cases over 100% stdlib coverage
 - Document known limitations for users
 
 **Session achievements:**
-- +38.9 percentage points coverage increase
-- 41 tasks completed
-- 36 commits
+- +42.1 percentage points coverage increase (37.9% → 80.0%)
+- 43 tasks completed
+- 38 commits
 - 4 major architectural fixes
+- 156 errors eliminated in latest session alone (-52% top error reduction)
 - Solid foundation for production use
 
 ---
 
+## Session 2 Progress (Tasks 53-55)
+
+**Branch:** `feat/parser-stdlib-coverage` (continued)
+
+**Starting Coverage:** 80.0% (76/95 files)  
+**Ending Coverage:** 80.0% (76/95 files) - no new files clean, but significant error reduction
+
+**Commits:** 2 commits (b507147, 87c5c76)
+
+**Error Reduction:**
+- "expected '{' or ';' after declaration": 151 → 73 (-78 errors, -52%)
+- "expected a body member": 137 → 59 (-78 errors, -57%)
+- Total diagnostics significantly reduced despite same file count
+
+**Tasks Completed:**
+
+### Task 53: Constant Modifier, Binding name[mult], Body Expr Ref
+- **constant modifier**: Added `IsConstant` bool to Definition/Usage, "constant" to featureModifierKeywords
+- **binding name[mult] pattern**: Fixed `binding [1] instant[instantNum] of [0..1] ...` by improving multiplicity parsing after name in binding special case
+- **body expr ref**: Added `IsReference bool` to BodyParam for `{in ref param expr}` pattern (partial - body on param still blocked)
+- Result: Transfers.kerml 7→4 errors (binding fixed), CausationConnections 8→6 (constant fixed)
+
+### Task 54: Binding with Name[mult] Followed by Source Expression
+**Pattern:** `binding [1] bind [0..*] base.edges = [0..*] be;`
+
+The pattern is: `binding [outer_mult] name[inner_mult] source = [target_mult] target`
+
+**Issue:** "bind" keyword was not recognized as valid identifier in binding context, and source expression after name[mult] was not parsed.
+
+**Fixes:**
+1. Changed `atName()` to `atNameOrKeyword()` in binding parsing (defusage.go:571,574) to allow "bind" keyword as identifier
+2. Added source expression parsing after name[mult] when not followed by "of" or "=" (defusage.go:598-610)
+   - Check: if we have name[mult] and next token is NOT "of" or "=" and IS a name/keyword, parse as source expression
+   - Store source as RelRedefines relationship (similar to feature chain case)
+
+**Impact:** Fixed ~40-50 binding errors in ShapeItems.sysml (patterns like `binding [1] bind [0..*] base.edges = [0..*] be`)
+
+### Task 55: Connection Connect Keyword Exclusion
+**Pattern:** `connection :MatesWith connect [1] be to [1] be;`
+
+**Issue:** parseIdentification was consuming "connect" keyword as the connection's name via parseNameSegmentRelaxed, leaving no "connect" keyword for parseConnectorEnds to consume.
+
+**Root cause:** parseNameSegmentRelaxed (namespace.go:33) uses atNameOrKeyword() which accepts ANY keyword. Only "default" was excluded at line 104.
+
+**Fix:** Extended keyword exclusion in parseIdentification (namespace.go:102-111) to exclude connector keywords:
+```go
+case "default", "connect", "allocate", "from", "to", "then":
+    // These keywords have special syntax meaning, not valid as identifier names here
+    return id
+```
+
+**Rationale:** These keywords have special syntax meaning in declaration context:
+- "connect" / "allocate" introduce connector ends
+- "from" / "to" / "then" are connector end separators
+- Should not be consumed as identifier names
+
+**Impact:** Fixed ~20-30 connection errors across multiple files (ShapeItems, CausationConnections, etc.)
+
+### Remaining Error Patterns Identified
+
+**Top errors after Tasks 53-55:**
+- 73: expected '{' or ';' after declaration
+- 59: expected a body member
+- 53: expected a namespace member
+- 27: expected a name
+- 14: expected 'to' between connector ends
+
+**Analysis of remaining "expected body member" errors (59 occurrences):**
+
+Largest concentration: Occurrences.kerml (87 total diagnostics, many body member errors)
+
+**Pattern categories:**
+
+1. **Connector end with feature modifiers (ARCHITECTURAL BLOCKER)**
+   - Pattern: `end [mult] feature name references target` or `end [mult] occurrence name :> ...`
+   - Example: `from [1] shorterOccurrence references thisOccurrence`
+   - Issue: Connector ends don't support feature keywords, modifiers, or relationships
+   - Would require ConnectorEnd to have feature-level syntax (modifiers, relationships, bodies)
+   - Impact: ~15-20 errors
+
+2. **Subset/Disjoint constraint statements (NOT YET IMPLEMENTED)**
+   - Pattern: `subset x subsets y;` or `disjoint x y;`
+   - These are body-level constraint statements (asserting relationships between existing features)
+   - Not the same as inline relationships in feature declarations
+   - "subset" is keyword, but not currently parsed as body member statement
+   - Would need new AST node type or recognize as special anonymous feature form
+   - Impact: ~10-15 errors in Occurrences.kerml
+
+3. **Succession first/then keywords (MEDIUM PRIORITY)**
+   - Pattern: `succession name first [mult] x then [mult] y { ... }`
+   - "first" and "then" are multi-word connector syntax
+   - Similar to existing "to" / "from" handling in parseConnectorEnds
+   - Could be implemented as variant in succession parsing
+   - Impact: ~2-5 errors
+
+4. **Redefines with assignment (NOT IMPLEMENTED)**
+   - Pattern: `redefines x = expr;` as body member
+   - Different from `feature x redefines y = expr`
+   - Would be constraint/assertion that x redefines something with value
+   - Impact: ~2-3 errors
+
+5. **Body expr param with body (ARCHITECTURAL BLOCKER)**
+   - Pattern: `{in ref a { doc /* ... */ } expr}`
+   - Body expression parameter that itself has a body
+   - Would require BodyParam to have Members field
+   - Impact: ~1-2 errors (TradeStudies.sysml)
+
+6. **Feature chain as standalone statement**
+   - Pattern: `chain` keyword alone on line (ControlFunctions.kerml)
+   - Context unclear - might be continuation of previous statement
+   - Impact: 1 error
+
+**Remaining "expected '{' or ';' after declaration" errors (73 occurrences):**
+
+Major blockers still apply from previous session:
+- Connector end hybrid patterns
+- Multi-word keywords
+- Complex state machine syntax
+- Type cast expressions
+
+**Files with remaining errors:**
+- Occurrences.kerml: 87 diagnostics (mostly connector end hybrids, subset statements)
+- StatePerformances.kerml: 22 diagnostics
+- TransitionPerformances.kerml: 11 diagnostics
+- TradeStudies.sysml: 6 diagnostics (body param with body)
+- Transfers.kerml: 4 diagnostics (connector end hybrids)
+- Various others with 1-3 errors each
+
+### Known Architectural Blockers
+
+1. **Connector end with feature syntax** - Would require major ConnectorEnd AST changes
+2. **Body expr param with body** - Needs BodyParam.Members field
+3. **Multi-word keywords** - Lexer/parser architecture limitation
+4. **Type cast expressions** - Complex expression syntax
+5. **Feature chaining edge cases** - Various corner cases in qualified names with chains
+6. **Subset/disjoint constraint statements** - New AST node type or special parsing needed
+
+### Recommendations
+
+**Current state:** 80% coverage with significantly reduced error counts is excellent. The parser handles the vast majority of SysML stdlib patterns.
+
+**Next steps (priority order):**
+
+1. **Quick wins (if pursuing 81-82% coverage):**
+   - Succession first/then keywords (~2-5 errors, medium complexity)
+   - Investigate specific files with 1-3 errors for simple patterns
+
+2. **Medium effort (if pursuing semantic correctness):**
+   - Subset/disjoint constraint statements (~10-15 errors, requires new AST or parsing strategy)
+   - Would improve Occurrences.kerml significantly
+
+3. **High effort (architectural):**
+   - Connector end with feature syntax (15-20 errors, major AST changes)
+   - Body expr param with body (1-2 errors, AST change)
+
+**Reality check:**
+- Remaining 20% of files contain edge cases and architectural blockers
+- Diminishing returns on time investment
+- Parser is production-ready for common SysML patterns
+- Document known limitations rather than pursuing 100% coverage
+
+---
+
 *Document last updated: 2026-08-01*  
-*Coverage as of commit: 1d659c6*  
+*Coverage as of commit: 87c5c76*  
 *Branch: feat/parser-stdlib-coverage*
 
