@@ -889,7 +889,7 @@ func (p *Parser) parseStateBody() []ast.Node {
 	return members
 }
 
-// parseStateMember parses one state member: entry/do/exit/state/transition.
+// parseStateMember parses one state member: entry/do/exit/state/transition, or general body member.
 func (p *Parser) parseStateMember() ast.Node {
 	start := p.peek().Span.Offset
 	
@@ -898,37 +898,33 @@ func (p *Parser) parseStateMember() ast.Node {
 		return p.parseDocumentation(start)
 	}
 	
-	// Must be keyword
-	if !p.at(lexer.Keyword) {
-		p.error(p.peek().Span, "expected state keyword (entry/do/exit/state/transition)")
-		en := &ast.ErrorNode{Message: "expected state keyword"}
-		if !p.atEOF() && !p.at(lexer.RBrace) {
+	// Check for state-specific keywords first
+	if p.at(lexer.Keyword) {
+		tok := p.peek()
+		kw := tok.KeywordID
+		
+		switch kw {
+		case "entry":
 			p.advance()
+			return p.parseEntryMember(start)
+		case "do":
+			p.advance()
+			return p.parseDoMember(start)
+		case "exit":
+			p.advance()
+			return p.parseExitMember(start)
+		case "state":
+			p.advance()
+			return p.parseSubstateMember(start)
+		case "transition":
+			p.advance()
+			return p.parseTransitionMember(start)
 		}
-		en.NodeSpan = p.spanFrom(start)
-		return en
 	}
 	
-	tok := p.advance()
-	kw := tok.KeywordID
-	
-	switch kw {
-	case "entry":
-		return p.parseEntryMember(start)
-	case "do":
-		return p.parseDoMember(start)
-	case "exit":
-		return p.parseExitMember(start)
-	case "state":
-		return p.parseSubstateMember(start)
-	case "transition":
-		return p.parseTransitionMember(start)
-	default:
-		p.error(tok.Span, "unknown state keyword: "+kw)
-		en := &ast.ErrorNode{Message: "unknown state keyword: " + kw}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
+	// Not a state-specific keyword - try parsing as general body member
+	// This allows succession, binding, feature declarations, etc. in state bodies
+	return p.parseBodyMember()
 }
 
 // parseEntryMember parses: entry { <actions> }
