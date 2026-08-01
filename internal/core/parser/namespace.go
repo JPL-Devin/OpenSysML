@@ -100,11 +100,11 @@ func (p *Parser) parseIdentification() ast.Identification {
 		p.expect(lexer.Gt, "expected '>'")
 	}
 	// Parse name, but exclude keywords that have special syntax meaning in declaration context
-	// (e.g., "default" introduces a value expression, "connect"/"allocate" introduce connector ends)
+	// (e.g., "default" introduces a value expression, "connect"/"allocate" introduce connector ends, "first" for succession)
 	if p.at(lexer.Keyword) {
 		kw := p.peek().KeywordID
 		switch kw {
-		case "default", "connect", "allocate", "from", "to", "then":
+		case "default", "connect", "allocate", "from", "to", "then", "first":
 			// These keywords have special syntax meaning, not valid as identifier names here
 			return id
 		}

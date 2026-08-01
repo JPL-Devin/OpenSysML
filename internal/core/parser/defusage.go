@@ -504,6 +504,28 @@ func (p *Parser) isStateKeyword() bool {
 	return kw == "entry" || kw == "do" || kw == "exit" || kw == "state" || kw == "transition"
 }
 
+// isAnonymousSuccession checks if we're at the start of anonymous succession ends (no name).
+// Anonymous succession patterns:
+// - `succession [mult] x then y` - starts with multiplicity
+// - `succession first [mult] x then y` - starts with "first" keyword
+// - `succession x then y` - identifier followed by "then" (not name, but first connector end)
+func (p *Parser) isAnonymousSuccession() bool {
+	if p.at(lexer.LBracket) {
+		return true // starts with multiplicity
+	}
+	if p.atKeyword("first") {
+		return true // starts with "first" keyword
+	}
+	// Check for pattern: identifier + "then" (means identifier is connector end, not name)
+	if p.atName() || p.atNameOrKeyword() {
+		nextTok := p.peekN(1)
+		if nextTok.Kind == lexer.Keyword && nextTok.KeywordID == "then" {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isAll bool) *ast.Usage {
 	u := &ast.Usage{
 		Kind:        kind,
@@ -677,25 +699,25 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 				// Normal relationship parsing (qualified names, feature chains, or no name after keyword)
 				preRels, conjugated = p.parseRelationships(true)
 				// A bare flow shorthand `flow x to y` and succession `succession x then y` have no declaration name
-				if !(kind == ast.UsageFlow && p.atFlowShorthand()) && kind != ast.UsageSuccession {
+				if !(kind == ast.UsageFlow && p.atFlowShorthand()) && !(kind == ast.UsageSuccession && p.isAnonymousSuccession()) {
 					u.Ident = p.parseIdentification()
 				}
 			}
 		} else {
 			// Not a relationship keyword
 			preRels, conjugated = p.parseRelationships(true)
-			// A bare flow shorthand `flow x to y` and succession `succession x then y` have no declaration name
-			if !(kind == ast.UsageFlow && p.atFlowShorthand()) && kind != ast.UsageSuccession {
+			// A bare flow shorthand `flow x to y` and anonymous succession `succession x then y` have no declaration name
+			if !(kind == ast.UsageFlow && p.atFlowShorthand()) && !(kind == ast.UsageSuccession && p.isAnonymousSuccession()) {
 				u.Ident = p.parseIdentification()
 			}
 		}
 	} else {
 		// No relationship shorthand
 		preRels, conjugated = p.parseRelationships(true)
-		// A bare flow shorthand `flow x to y` and succession `succession x then y` have no declaration name
+		// A bare flow shorthand `flow x to y` and anonymous succession `succession x then y` have no declaration name
 		// Anonymous connector starts with 'from' keyword (e.g., `connector : X from y to z`)
 		skipIdentification := (kind == ast.UsageFlow && p.atFlowShorthand()) || 
-			kind == ast.UsageSuccession || 
+			(kind == ast.UsageSuccession && p.isAnonymousSuccession()) || 
 			(kind == ast.UsageConnector && p.atKeyword("from"))
 		if !skipIdentification {
 			u.Ident = p.parseIdentification()
@@ -706,7 +728,12 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	postIdRels, postConj := p.parseRelationships(true)
 	u.Relationships = append(preRels, postIdRels...)
 	u.IsConjugated = conjugated || postConj
-	u.Multiplicity = p.parseMultiplicity()
+	
+	// For anonymous succession/flow, skip multiplicity parsing - it belongs to connector ends
+	skipMultiplicity := (kind == ast.UsageSuccession || kind == ast.UsageFlow) && u.Ident.Name == ""
+	if !skipMultiplicity {
+		u.Multiplicity = p.parseMultiplicity()
+	}
 	
 	// Parse post-multiplicity modifiers (ordered/nonunique)
 	postMods := p.parsePostModifiers()
@@ -1231,6 +1258,10 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 		return
 	}
 	// Binary form: end keyword end (where keyword is "to" for connection, "then" for succession).
+	// For succession, support optional "first" keyword: first end then end
+	if u.Kind == ast.UsageSuccession {
+		p.acceptKeyword("first") // optional "first" before first end
+	}
 	from := p.parseConnectorEnd()
 	if from == nil {
 		return
