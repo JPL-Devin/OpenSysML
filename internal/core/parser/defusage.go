@@ -640,9 +640,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return al
 	}
 	
-	// Check for enum literal pattern: identifier = expr;
-	// Example: low = 0.25;
-	if p.atName() && p.peekN(1).Kind == lexer.Eq {
+	// Check for enum literal pattern: identifier = expr; OR identifier;
+	// Examples: low = 0.25; or pass;
+	nextKind := p.peekN(1).Kind
+	if p.atName() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon) {
 		var id ast.Identification
 		tok := p.advance()
 		if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
@@ -650,9 +651,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 			id.NameSpan = tok.Span
 		}
 		
-		p.expect(lexer.Eq, "expected '=' after enum literal name")
-		value := p.ParseExpression()
-		p.expect(lexer.Semicolon, "expected ';' after enum literal value")
+		var value ast.Node
+		if p.at(lexer.Eq) {
+			p.advance() // consume '='
+			value = p.ParseExpression()
+		}
+		p.expect(lexer.Semicolon, "expected ';' after enum literal")
 		
 		u := &ast.Usage{
 			Kind:  ast.UsageEnumeration,
