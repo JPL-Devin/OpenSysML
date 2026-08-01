@@ -823,9 +823,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Check for enum literal pattern: identifier = expr; OR identifier; OR identifier { body }
 	// Examples: low = 0.25; or pass; or open { doc } or done { doc } (keyword as name)
 	// But exclude usage-only keywords (inv, subject, etc.) - they're declarations, not enum literal names
+	// Also exclude constraint (has both def/usage forms but shouldn't be enum literal name)
 	isUsageOnlyKwForEnum := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
-		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr")
+		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint")
 	if !isUsageOnlyKwForEnum && p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
 		seg, _ := p.parseNameSegmentRelaxed()
 		id := ast.Identification{Name: seg.Text, NameSpan: seg.Span}
