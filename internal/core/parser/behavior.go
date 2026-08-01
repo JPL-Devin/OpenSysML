@@ -784,6 +784,26 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 func (p *Parser) parseRequireMember(start int) ast.Node {
 	// 'require' already consumed
 	
+	// Check for 'require name { body }' pattern
+	// If next token is name and peek+1 is '{', parse as named requirement with body
+	if p.atName() && p.peekN(1).Kind == lexer.LBrace {
+		nameToken := p.peek()
+		name := p.src.Text(nameToken.Span)
+		p.advance() // consume name
+		
+		// Parse body
+		p.expect(lexer.LBrace, "expected '{' after require name")
+		members := p.parseRequirementBody()
+		
+		node := &ast.RequireMember{
+			Name:    name,
+			Body:    members,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Otherwise parse as expression: require <expr>;
 	expr := p.ParseExpression()
 	
 	p.expect(lexer.Semicolon, "expected ';' after require expression")

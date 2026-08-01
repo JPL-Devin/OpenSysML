@@ -214,10 +214,12 @@ type AssumeMember struct {
 }
 
 // RequireMember represents a requirement constraint.
-// Syntax: require <expression>;
+// Syntax: require <expression>; OR require <name> { body }
 type RequireMember struct {
 	NodeBase
-	Expression Node // requirement condition
+	Expression Node   // requirement condition (for expression form)
+	Name       string // optional name (for body form)
+	Body       []Node // optional nested members (for body form)
 }
 
 // ActorMember represents an actor declaration in a requirement/use case.

@@ -209,6 +209,17 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		kids = append(kids, v.Body...)
 		writeChildren(b, depth, kids)
 		return
+	case *RequireMember:
+		if v.Name != "" {
+			// Body form: require name { body }
+			fmt.Fprintf(b, `(RequireMember name=%q`, v.Name)
+			writeChildren(b, depth, v.Body)
+		} else {
+			// Expression form: require expr;
+			b.WriteString(`(RequireMember`)
+			writeChildren(b, depth, []Node{v.Expression})
+		}
+		return
 	default:
 		fmt.Fprintf(b, `(%T)`, n)
 	}
