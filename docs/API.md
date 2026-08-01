@@ -613,4 +613,4 @@ Test fixtures in `testdata/*.sysml`.
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — System architecture and design decisions
 - **[QUICKSTART.md](QUICKSTART.md)** — Getting started guide
-- **[OMG SysML v2 Spec](https://www.omg.org/spec/SysML/20250201)** — Language specification
+- **[OMG SysML v2 Spec](https://www.omg.org/spec/SysML/20250901)** — Language specification
