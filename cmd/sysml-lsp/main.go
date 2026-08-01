@@ -13,8 +13,11 @@ import (
 )
 
 var (
-	// Version is set via ldflags during build
-	Version = "dev"
+	// Version information - set via ldflags during build
+	Version   = "dev"
+	Commit    = "unknown"
+	BuildTime = "unknown"
+	GoVersion = "unknown"
 )
 
 // stdio adapts os.Stdin/os.Stdout into a single io.ReadWriteCloser.
@@ -30,6 +33,9 @@ func main() {
 	// Handle version flag
 	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
 		fmt.Printf("sysml-lsp %s\n", Version)
+		fmt.Printf("  Commit:     %s\n", Commit)
+		fmt.Printf("  Build time: %s\n", BuildTime)
+		fmt.Printf("  Go version: %s\n", GoVersion)
 		os.Exit(0)
 	}
 

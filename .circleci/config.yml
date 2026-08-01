@@ -26,8 +26,13 @@ jobs:
           name: Build binaries
           command: |
             VERSION=${CIRCLE_TAG:-dev}
-            go build -v -ldflags "-X main.Version=$VERSION" -o bin/sysml ./cmd/sysml
-            go build -v -ldflags "-X main.Version=$VERSION" -o bin/sysml-lsp ./cmd/sysml-lsp
+            COMMIT=${CIRCLE_SHA1:-unknown}
+            BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+            GO_VERSION=$(go version | awk '{print $3}')
+            LDFLAGS="-X 'main.Version=$VERSION' -X 'main.Commit=$COMMIT' -X 'main.BuildTime=$BUILD_TIME' -X 'main.GoVersion=$GO_VERSION'"
+            
+            go build -v -ldflags "$LDFLAGS" -o bin/sysml ./cmd/sysml
+            go build -v -ldflags "$LDFLAGS" -o bin/sysml-lsp ./cmd/sysml-lsp
       
       - run:
           name: Verify binaries
@@ -62,9 +67,12 @@ jobs:
             # Create dist directory
             mkdir -p dist
             
-            # Get version from tag
+            # Get build metadata
             VERSION=${CIRCLE_TAG}
-            LDFLAGS="-X main.Version=$VERSION"
+            COMMIT=${CIRCLE_SHA1}
+            BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+            GO_VERSION=$(go version | awk '{print $3}')
+            LDFLAGS="-X 'main.Version=$VERSION' -X 'main.Commit=$COMMIT' -X 'main.BuildTime=$BUILD_TIME' -X 'main.GoVersion=$GO_VERSION'"
             
             # Build for multiple platforms
             GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-linux-amd64 ./cmd/sysml
