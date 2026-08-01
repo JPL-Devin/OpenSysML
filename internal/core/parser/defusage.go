@@ -14,6 +14,7 @@ var definitionKindKeywords = map[string]ast.DefinitionKind{
 	"item":       ast.DefItem,
 	"occurrence": ast.DefOccurrence,
 	"individual": ast.DefIndividual,
+	"metaclass":  ast.DefMetaclass,
 	"metadata":   ast.DefMetadata,
 	"enum":       ast.DefEnumeration,
 	"view":       ast.DefView,

@@ -10,6 +10,7 @@ const (
 	DefItem
 	DefOccurrence
 	DefIndividual
+	DefMetaclass
 	DefMetadata
 	DefEnumeration
 	DefView
@@ -46,6 +47,8 @@ func (k DefinitionKind) String() string {
 		return "occurrence"
 	case DefIndividual:
 		return "individual"
+	case DefMetaclass:
+		return "metaclass"
 	case DefMetadata:
 		return "metadata"
 	case DefEnumeration:
