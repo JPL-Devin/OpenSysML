@@ -108,6 +108,10 @@ type featureMods struct {
 // declaration: a feature-modifier keyword or a kind keyword.
 func (p *Parser) atDefUsageStart() bool {
 	t := p.peek()
+	// Check for relationship tokens that can precede kind keyword (e.g., :>> num)
+	if t.Kind == lexer.ColonGt || t.Kind == lexer.ColonGtGt || t.Kind == lexer.Colon || t.Kind == lexer.Tilde {
+		return true
+	}
 	if t.Kind != lexer.Keyword {
 		return false
 	}
@@ -166,9 +170,39 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 	}
 }
 
+// parsePostModifiers parses feature modifiers that appear after typing/multiplicity.
+// Currently only 'ordered' and 'nonunique' are allowed in this position.
+func (p *Parser) parsePostModifiers() featureMods {
+	var m featureMods
+	for {
+		t := p.peek()
+		if t.Kind != lexer.Keyword {
+			return m
+		}
+		switch t.KeywordID {
+		case "ordered":
+			m.isOrdered = true
+			p.advance()
+		case "nonunique":
+			m.isNonunique = true
+			p.advance()
+		default:
+			return m
+		}
+	}
+}
+
 // parseDefUsage parses a definition or usage declaration. The caller has
 // already established (via atDefUsageStart) that a def/usage begins here.
 func (p *Parser) parseDefUsage(start int) ast.Node {
+	// Check for relationship tokens before modifiers (e.g., :>> x)
+	// These indicate anonymous usages (attribute is default kind)
+	tok := p.peek()
+	if tok.Kind == lexer.ColonGt || tok.Kind == lexer.ColonGtGt || tok.Kind == lexer.Colon {
+		// No modifiers, no kind keyword - parse as anonymous attribute usage
+		return p.parseUsage(start, ast.UsageAttribute, featureMods{})
+	}
+	
 	mods := p.parseFeatureModifiers()
 
 	// Two-word `use case` kind keyword.
@@ -366,15 +400,34 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods) *as
 		IsOrdered:   mods.isOrdered,
 		IsNonunique: mods.isNonunique,
 	}
+	// Parse pre-identification relationships (e.g., :>> target before name)
+	preRels, conjugated := p.parseRelationships(true)
+	
 	// A bare flow shorthand `flow x to y` has no declaration name; the first
 	// name is the `from` end, parsed later by parseFlowEnds.
 	if !(kind == ast.UsageFlow && p.atFlowShorthand()) {
 		u.Ident = p.parseIdentification()
 	}
-	rels, conjugated := p.parseRelationships(true)
-	u.Relationships = rels
-	u.IsConjugated = conjugated
+	
+	// Parse post-identification relationships (e.g., : Type)
+	postIdRels, postConj := p.parseRelationships(true)
+	u.Relationships = append(preRels, postIdRels...)
+	u.IsConjugated = conjugated || postConj
 	u.Multiplicity = p.parseMultiplicity()
+	
+	// Parse post-multiplicity modifiers (ordered/nonunique)
+	postMods := p.parsePostModifiers()
+	if postMods.isOrdered {
+		u.IsOrdered = true
+	}
+	if postMods.isNonunique {
+		u.IsNonunique = true
+	}
+	
+	// Parse additional relationships after modifiers (e.g., :> target)
+	postRels, _ := p.parseRelationships(true)
+	u.Relationships = append(u.Relationships, postRels...)
+	
 	if p.accept2(lexer.Eq) {
 		u.Value = p.ParseExpression()
 	}
