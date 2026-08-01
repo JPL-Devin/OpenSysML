@@ -738,27 +738,27 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return mem
 	}
 	
-	// Check for enum literal pattern: identifier = expr; OR identifier;
-	// Examples: low = 0.25; or pass;
-	if p.atName() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon) {
-		var id ast.Identification
-		tok := p.advance()
-		if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
-			id.Name = p.src.Text(tok.Span)
-			id.NameSpan = tok.Span
-		}
+	// Check for enum literal pattern: identifier = expr; OR identifier; OR identifier { body }
+	// Examples: low = 0.25; or pass; or open { doc } or done { doc } (keyword as name)
+	if p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
+		seg, _ := p.parseNameSegmentRelaxed()
+		id := ast.Identification{Name: seg.Text, NameSpan: seg.Span}
 		
 		var value ast.Node
 		if p.at(lexer.Eq) {
 			p.advance() // consume '='
 			value = p.ParseExpression()
 		}
-		p.expect(lexer.Semicolon, "expected ';' after enum literal")
+		
+		// Parse body or semicolon
+		members, hasBody := p.parseDefUsageBody()
 		
 		u := &ast.Usage{
-			Kind:  ast.UsageEnumeration,
-			Ident: id,
-			Value: value,
+			Kind:    ast.UsageEnumeration,
+			Ident:   id,
+			Value:   value,
+			Members: members,
+			HasBody: hasBody,
 		}
 		u.NodeSpan = p.spanFrom(start)
 		
