@@ -955,11 +955,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// Special case: end shortname [mult] feature name pattern
 		// Example: end self2 [1] feature sameThing: Anything
 		// Also: end [1] feature transferSource (no short name)
+		// Also: end ref source; (no definition keyword, just anonymous feature)
 		// This declares a feature with 'end' modifier, optional short name, and multiplicity
 		if mods.isEnd && (p.atNameOrKeyword() || p.at(lexer.LBracket)) {
 			var shortName string
 			var shortNameSpan source.Span
 			var mult *ast.Multiplicity
+			var hasDefKeyword bool
 			
 			// Parse optional short name (if not starting with '[')
 			if p.atNameOrKeyword() {
@@ -993,6 +995,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 					if p.at(lexer.LBracket) {
 						mult = p.parseMultiplicity()
 					}
+					hasDefKeyword = true
 				}
 			} else if p.at(lexer.LBracket) {
 				// No short name, mult comes directly: end [mult] feature
@@ -1010,12 +1013,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 					
 					if isDefKeyword {
 						mult = p.parseMultiplicity()
+						hasDefKeyword = true
 					}
 				}
 			}
 			
-			// If we parsed short name or mult, parse the definition
-			if shortName != "" || mult != nil {
+			// If we found a definition keyword, parse the full declaration
+			if hasDefKeyword {
 				// Now parse the actual feature/usage declaration
 				// The definition keyword (feature/occurrence/etc) will be consumed by parseDeclaration
 				decl := p.parseDeclaration(start)
@@ -1037,18 +1041,21 @@ func (p *Parser) parseBodyMember() ast.Node {
 				mem.SetLeadingTrivia(trivia)
 				return mem
 			}
+			// If no definition keyword found, fall through to handle as anonymous feature with modifiers
+			// Pattern: end ref name; - will be handled by anonymous feature parsing below
 		}
 		
-		// Check for name + colon (typed) OR direct relationship (anonymous) OR name + relationship
+		// Check for name + colon (typed) OR direct relationship (anonymous) OR name + relationship OR name + semicolon
 		hasNameAndType := p.atName() && p.peekN(1).Kind == lexer.Colon
 		hasRelationship := p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt)
 		hasNameAndRelationship := p.atName() && (p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt)
+		hasNameOnly := p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 		
-		if hasNameAndType || hasRelationship || hasNameAndRelationship {
+		if hasNameAndType || hasRelationship || hasNameAndRelationship || hasNameOnly {
 			var id ast.Identification
 			
 			// Parse optional name
-			if hasNameAndType || hasNameAndRelationship {
+			if hasNameAndType || hasNameAndRelationship || hasNameOnly {
 				tok := p.advance()
 				if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
 					id.Name = p.src.Text(tok.Span)
