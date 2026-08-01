@@ -206,11 +206,67 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 		Ident:       p.parseIdentification(),
 	}
 	def.Relationships, _ = p.parseRelationships(false)
-	members, hasBody := p.parseDefUsageBody()
+	
+	// Dispatch to specialized body parsers based on kind
+	var members []ast.Node
+	var hasBody bool
+	switch kind {
+	case ast.DefAction:
+		// Action def bodies: behavioral OR generic
+		// Lookahead: if body starts with behavioral keyword → parseActionBody
+		// Otherwise → generic parseDefUsageBody
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			if p.isBehavioralKeyword() {
+				members = p.parseActionBody()
+			} else {
+				// Generic body (e.g., { part p; })
+				members = p.parseActionBodyGeneric()
+			}
+			hasBody = true
+		}
+	case ast.DefState:
+		// TODO: Phase C4 — implement parseStateBody
+		members, hasBody = p.parseDefUsageBody()
+	default:
+		members, hasBody = p.parseDefUsageBody()
+	}
+	
 	def.Members = members
 	def.HasBody = hasBody
 	def.NodeSpan = p.spanFrom(start)
 	return def
+}
+
+// parseActionBodyGeneric parses generic action def body (same as parseDefUsageBody internals)
+func (p *Parser) parseActionBodyGeneric() []ast.Node {
+	var members []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
+		m := p.parseBodyMember()
+		if m != nil {
+			members = append(members, m)
+		}
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.advance()
+		}
+	}
+	p.expect(lexer.RBrace, "expected '}' to close body")
+	return members
+}
+
+// isBehavioralKeyword checks if next token is a behavioral keyword
+func (p *Parser) isBehavioralKeyword() bool {
+	if !p.at(lexer.Keyword) {
+		return false
+	}
+	kw := p.peek().KeywordID
+	switch kw {
+	case "first", "done", "fork", "join", "merge", "decision", "action", "then":
+		return true
+	}
+	return false
 }
 
 func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods) *ast.Usage {
