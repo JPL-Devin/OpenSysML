@@ -690,6 +690,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return al
 	}
 	
+	// Check for return statement (result member)
+	// Can appear in calc body, constraint body, or requirement body
+	if p.isResultKeyword() {
+		return p.parseResultMember()
+	}
+	
 	// Check for anonymous feature pattern: name : Type
 	// Examples: private thisClock : Clock :>> self;
 	// This handles features with visibility but no usage kind keyword

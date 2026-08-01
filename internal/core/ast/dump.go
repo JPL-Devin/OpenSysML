@@ -200,6 +200,15 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		writeChildren(b, depth, kids)
 		return
+	case *SubjectMember:
+		fmt.Fprintf(b, `(SubjectMember name=%q type=%q`, v.Name, qnString(v.TypeRef))
+		kids := make([]Node, 0)
+		if v.Multiplicity != nil {
+			kids = append(kids, v.Multiplicity)
+		}
+		kids = append(kids, v.Body...)
+		writeChildren(b, depth, kids)
+		return
 	default:
 		fmt.Fprintf(b, `(%T)`, n)
 	}

@@ -543,7 +543,16 @@ func (p *Parser) parseResultMember() ast.Node {
 			u.Value = p.ParseExpression()
 		}
 		
-		p.expect(lexer.Semicolon, "expected ';' after return parameter")
+		// Check for optional body or semicolon
+		if p.at(lexer.LBrace) {
+			bodyMembers, hasBody := p.parseDefUsageBody()
+			u.Members = bodyMembers
+			if !hasBody {
+				p.expect(lexer.Semicolon, "expected ';' after return parameter")
+			}
+		} else {
+			p.expect(lexer.Semicolon, "expected ';' after return parameter")
+		}
 		u.NodeSpan = p.spanFrom(start)
 		return u
 	}
@@ -661,9 +670,14 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 	return members
 }
 
-// parseRequirementMember parses one requirement member: subject/assume/require/actor
+// parseRequirementMember parses one requirement member: subject/assume/require/actor/doc
 func (p *Parser) parseRequirementMember() ast.Node {
 	start := p.peek().Span.Offset
+	
+	// Check for doc keyword
+	if p.atKeyword("doc") {
+		return p.parseDocumentation(start)
+	}
 	
 	// Check for keyword dispatch
 	if p.acceptKeyword("subject") {
@@ -717,14 +731,38 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// Parse type
 	typeRef := p.parseQualifiedName()
 	
-	p.expect(lexer.Semicolon, "expected ';' after subject declaration")
-	
-	node := &ast.SubjectMember{
-		Name:    name,
-		TypeRef: typeRef,
+	// Parse optional multiplicity
+	var mult *ast.Multiplicity
+	if p.at(lexer.LBracket) {
+		mult = p.parseMultiplicity()
 	}
-	node.NodeSpan = p.spanFrom(start)
-	return node
+	
+	// Parse optional body or expect semicolon
+	if p.at(lexer.LBrace) {
+		// Body present - parse requirement body recursively
+		p.advance() // consume '{'
+		members := p.parseRequirementBody()
+		
+		node := &ast.SubjectMember{
+			Name:         name,
+			TypeRef:      typeRef,
+			Multiplicity: mult,
+			Body:         members,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	} else {
+		// No body - expect semicolon
+		p.expect(lexer.Semicolon, "expected ';' or '{' after subject declaration")
+		
+		node := &ast.SubjectMember{
+			Name:         name,
+			TypeRef:      typeRef,
+			Multiplicity: mult,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
 }
 
 // parseAssumeMember parses: assume <expr>;

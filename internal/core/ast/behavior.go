@@ -200,8 +200,10 @@ type ConstraintMember struct {
 // Syntax: subject <name> : <Type>;
 type SubjectMember struct {
 	NodeBase
-	Name     string
-	TypeRef  *QualifiedName // subject type
+	Name         string
+	TypeRef      *QualifiedName // subject type
+	Multiplicity *Multiplicity  // optional multiplicity
+	Body         []Node         // optional nested members
 }
 
 // AssumeMember represents an assumption in a requirement body.
