@@ -350,7 +350,7 @@ Check `examples/` directory:
 
 - **GitHub Issues:** Report bugs or request features
 - **Discussions:** Ask questions about SysML v2 usage
-- **Spec Reference:** [OMG SysML v2 Specification](https://www.omg.org/spec/SysML/20250901)
+- **Spec Reference:** [OMG SysML v2.0 Specification](https://www.omg.org/spec/SysML/2.0)
 
 ---
 

@@ -131,7 +131,7 @@ github.com/Open-MBEE/Systemica
 - **Language:** Go 1.25+ (goroutines for concurrency, single static binary, proven LSP track record)
 - **Parser:** Hand-written recursive descent (zero overhead, full error recovery, sub-ms parses)
 - **Grammar source:** OMG pilot Xtext grammars (`SysML.xtext` + `KerMLExpressions`)
-- **Spec reference:** [OMG SysML v2 (2025-09-01)](https://www.omg.org/spec/SysML/20250901)
+- **Spec reference:** [OMG SysML v2.0 (September 2025)](https://www.omg.org/spec/SysML/2.0)
 - **CI/CD:** CircleCI for automated builds, tests, and releases
 
 ## Releases

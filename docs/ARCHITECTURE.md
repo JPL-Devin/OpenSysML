@@ -297,7 +297,7 @@ Token-flow execution for actions (Petri-net-like), event-driven state machine st
 
 ## References
 
-- **OMG SysML v2 Spec:** [https://www.omg.org/spec/SysML/20250901](https://www.omg.org/spec/SysML/20250901)
+- **OMG SysML v2.0 Spec:** [https://www.omg.org/spec/SysML/2.0](https://www.omg.org/spec/SysML/2.0)
 - **Pilot Xtext Grammar:** `SysML.xtext` + `KerMLExpressions` (OMG reference implementation)
 - **Metamodel:** OMG SysML v2 metamodel (semantic foundation)
 - **Precedents:** gopls (Go LSP), rust-analyzer (Rust LSP), IPython/Jupyter (REPL design)
