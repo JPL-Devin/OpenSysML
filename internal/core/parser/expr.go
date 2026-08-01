@@ -464,10 +464,18 @@ func (p *Parser) parseInvocationTail(start int, recv ast.Node, typ *ast.Qualifie
 	return inv
 }
 
-// parseBodyExpr parses `{ (in param ;)* resultExpr }`.
+// parseBodyExpr parses `{ [doc] (in param ;)* resultExpr }`.
 func (p *Parser) parseBodyExpr(start int) ast.Node {
 	p.advance() // {
 	b := &ast.BodyExpr{}
+	
+	// Parse optional doc comment at start of body expression
+	if p.atKeyword("doc") {
+		// Skip doc comment - not stored in BodyExpr AST node
+		// Doc is part of the body expression context but not the expression itself
+		p.parseDocumentation(p.peek().Span.Offset)
+	}
+	
 	for p.atKeyword("in") {
 		p.advance() // in
 		var paramType *ast.QualifiedName
