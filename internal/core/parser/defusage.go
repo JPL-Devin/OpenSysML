@@ -620,6 +620,45 @@ func (p *Parser) parseBodyMember() ast.Node {
 		al.SetLeadingTrivia(trivia)
 		return al
 	}
+	
+	// Check for name-before-keyword pattern: <name> <keyword> { ... }
+	// Example: assert constraint { ... }, require constraint { ... }
+	// <name> can be identifier OR keyword used as name
+	if p.atName() || p.at(lexer.Keyword) {
+		next := p.peekN(1)
+		if next.Kind == lexer.Keyword {
+			_, isDef := definitionKindKeywords[next.KeywordID]
+			_, isUsage := usageKindKeywords[next.KeywordID]
+			if isDef || isUsage {
+				// Parse as named usage: consume name token, then proceed with keyword
+				var id ast.Identification
+				tok := p.advance()
+				if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
+					id.Name = p.src.Text(tok.Span)
+					id.NameSpan = tok.Span
+				} else if tok.Kind == lexer.Keyword {
+					// Keyword used as name (e.g., 'assert' in 'assert constraint')
+					id.Name = tok.KeywordID
+					id.NameSpan = tok.Span
+				}
+				inner := p.parseDeclaration(start)
+				if u, ok := inner.(*ast.Usage); ok {
+					u.Ident = id
+				} else if d, ok := inner.(*ast.Definition); ok {
+					d.Ident = id
+				}
+				if inner == nil {
+					en := p.errorNodeSkip(start, "expected a body member")
+					en.SetLeadingTrivia(trivia)
+					return en
+				}
+				mem := &ast.Membership{Visibility: vis, Member: inner}
+				mem.NodeSpan = p.spanFrom(start)
+				mem.SetLeadingTrivia(trivia)
+				return mem
+			}
+		}
+	}
 
 	inner := p.parseDeclaration(start)
 	if inner == nil {
