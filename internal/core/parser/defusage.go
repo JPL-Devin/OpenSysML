@@ -41,9 +41,12 @@ var definitionKindKeywords = map[string]ast.DefinitionKind{
 	"analysis":     ast.DefAnalysisCase,
 	"verification": ast.DefVerificationCase,
 	// KerML structural.
-	"behavior": ast.DefBehavior,
-	"assoc":    ast.DefAssoc,
-	"struct":   ast.DefStruct,
+	"behavior":  ast.DefBehavior,
+	"assoc":     ast.DefAssoc,
+	"struct":    ast.DefStruct,
+	"class":     ast.DefClass,
+	"predicate": ast.DefPredicate,
+	"bool":      ast.DefBool,
 }
 
 // usageKindKeywords maps a single kind keyword to its UsageKind.
@@ -81,9 +84,12 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"analysis":     ast.UsageAnalysisCase,
 	"verification": ast.UsageVerificationCase,
 	// KerML structural.
-	"behavior": ast.UsageBehavior,
-	"assoc":    ast.UsageAssoc,
-	"struct":   ast.UsageStruct,
+	"behavior":  ast.UsageBehavior,
+	"assoc":     ast.UsageAssoc,
+	"struct":    ast.UsageStruct,
+	"class":     ast.UsageClass,
+	"predicate": ast.UsagePredicate,
+	"bool":      ast.UsageBool,
 }
 
 var featureModifierKeywords = map[string]bool{
@@ -107,6 +113,8 @@ var relationshipKeywords = map[string]ast.RelationshipKind{
 	"redefines":   ast.RelRedefines,
 	"references":  ast.RelReferences,
 	"crosses":     ast.RelCrosses,
+	"intersects":  ast.RelIntersects,
+	"disjoint":    ast.RelDisjoint, // followed by 'from' keyword
 }
 
 type featureMods struct {
@@ -729,6 +737,10 @@ func (p *Parser) relationshipClauseKind(isUsage bool) (ast.RelationshipKind, boo
 	if t := p.peek(); t.Kind == lexer.Keyword {
 		if k, ok := relationshipKeywords[t.KeywordID]; ok {
 			p.advance()
+			// 'disjoint' requires 'from' keyword after it
+			if k == ast.RelDisjoint {
+				p.expect2Keyword("from")
+			}
 			return k, true
 		}
 		if t.KeywordID == "defined" {

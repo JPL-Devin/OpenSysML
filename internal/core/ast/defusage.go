@@ -38,6 +38,9 @@ const (
 	DefBehavior
 	DefAssoc
 	DefStruct
+	DefClass
+	DefPredicate
+	DefBool
 )
 
 func (k DefinitionKind) String() string {
@@ -102,6 +105,12 @@ func (k DefinitionKind) String() string {
 		return "assoc"
 	case DefStruct:
 		return "struct"
+	case DefClass:
+		return "class"
+	case DefPredicate:
+		return "predicate"
+	case DefBool:
+		return "bool"
 	default:
 		return "unknown"
 	}
@@ -144,6 +153,9 @@ const (
 	UsageBehavior
 	UsageAssoc
 	UsageStruct
+	UsageClass
+	UsagePredicate
+	UsageBool
 )
 
 func (k UsageKind) String() string {
@@ -206,6 +218,12 @@ func (k UsageKind) String() string {
 		return "assoc"
 	case UsageStruct:
 		return "struct"
+	case UsageClass:
+		return "class"
+	case UsagePredicate:
+		return "predicate"
+	case UsageBool:
+		return "bool"
 	default:
 		return "unknown"
 	}
@@ -222,6 +240,8 @@ const (
 	RelRedefines                           // 'redefines' / ':>>'
 	RelReferences                          // 'references' / '::>'
 	RelCrosses                             // 'crosses' / '=>'
+	RelDisjoint                            // 'disjoint from'
+	RelIntersects                          // 'intersects'
 )
 
 func (k RelationshipKind) String() string {
@@ -238,6 +258,10 @@ func (k RelationshipKind) String() string {
 		return "references"
 	case RelCrosses:
 		return "crosses"
+	case RelDisjoint:
+		return "disjoint"
+	case RelIntersects:
+		return "intersects"
 	default:
 		return "unknown"
 	}

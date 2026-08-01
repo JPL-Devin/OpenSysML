@@ -260,9 +260,12 @@ var declStartKeywords = map[string]bool{
 	"datatype":     true,
 	"feature":      true,
 	// KerML structural.
-	"behavior": true,
-	"assoc":    true,
-	"struct":   true,
+	"behavior":  true,
+	"assoc":     true,
+	"struct":    true,
+	"class":     true,
+	"predicate": true,
+	"bool":      true,
 }
 
 // atMemberSync reports whether the parser sits at a recovery synchronization
