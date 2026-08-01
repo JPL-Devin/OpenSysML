@@ -265,3 +265,26 @@ func TestParseActionUsageIntegration(t *testing.T) {
 		t.Fatalf("edge target: expected endNode, got %+v", edge.Target)
 	}
 }
+
+func TestParseEndModifier(t *testing.T) {
+	// Anonymous usage with end modifier: end source: Anything;
+	u := parseOneMember(t, "end source: Anything;").(*ast.Usage)
+	if !u.IsEnd {
+		t.Fatalf("expected IsEnd = true, got %v", u.IsEnd)
+	}
+	if u.Ident.Name != "source" {
+		t.Fatalf("expected name 'source', got %q", u.Ident.Name)
+	}
+	if u.Kind != ast.UsageAttribute {
+		t.Fatalf("expected UsageAttribute, got %v", u.Kind)
+	}
+
+	// Explicit kind with end modifier: end part x;
+	u2 := parseOneMember(t, "end part x;").(*ast.Usage)
+	if !u2.IsEnd {
+		t.Fatalf("expected IsEnd = true, got %v", u2.IsEnd)
+	}
+	if u2.Ident.Name != "x" {
+		t.Fatalf("expected name 'x', got %q", u2.Ident.Name)
+	}
+}

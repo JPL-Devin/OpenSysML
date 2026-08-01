@@ -96,6 +96,7 @@ var featureModifierKeywords = map[string]bool{
 	"abstract":  true,
 	"variation": true,
 	"ref":       true,
+	"end":       true,
 	"in":        true,
 	"out":       true,
 	"inout":     true,
@@ -121,6 +122,7 @@ type featureMods struct {
 	isAbstract  bool
 	isVariation bool
 	isReference bool
+	isEnd       bool
 	direction   ast.FeatureDirection
 	isComposite bool
 	isDerived   bool
@@ -174,6 +176,8 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			m.isVariation = true
 		case "ref":
 			m.isReference = true
+		case "end":
+			m.isEnd = true
 		case "in":
 			m.direction = ast.DirIn
 		case "out":
@@ -250,8 +254,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	if !ok {
 		// Fallback: if we have modifiers but no kind keyword, assume it's a generic usage (e.g., "in x: Integer;")
 		// This is common for parameters in calc/action bodies.
-		if mods.direction != ast.DirNone || mods.isReference || mods.isComposite || mods.isDerived {
-			return p.parseUsage(start, ast.UsagePart, mods, false)
+		if mods.direction != ast.DirNone || mods.isReference || mods.isEnd || mods.isComposite || mods.isDerived {
+			return p.parseUsage(start, ast.UsageAttribute, mods, false)
 		}
 		return nil
 	}
@@ -435,6 +439,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		IsAbstract:  mods.isAbstract,
 		IsReference: mods.isReference,
 		IsAll:       isAll,
+		IsEnd:       mods.isEnd,
 		Direction:   mods.direction,
 		IsComposite: mods.isComposite,
 		IsDerived:   mods.isDerived,
