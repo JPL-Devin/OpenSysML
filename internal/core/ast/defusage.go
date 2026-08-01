@@ -353,6 +353,7 @@ type Usage struct {
 	IsReference   bool
 	IsAll         bool // 'all' multiplicity propagation modifier
 	IsEnd         bool // 'end' feature modifier
+	IsChain       bool // 'chain' feature modifier
 	Direction     FeatureDirection
 	IsComposite   bool
 	IsDerived     bool

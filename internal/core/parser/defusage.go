@@ -132,6 +132,7 @@ type featureMods struct {
 	isVariation bool
 	isReference bool
 	isEnd       bool
+	isChain     bool
 	direction   ast.FeatureDirection
 	isComposite bool
 	isDerived   bool
@@ -175,6 +176,19 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 	var m featureMods
 	for {
 		t := p.peek()
+		// Handle identifier "chain" as contextual modifier ONLY if followed by name/keyword
+		if t.Kind == lexer.Identifier && p.src.Text(t.Span) == "chain" {
+			next := p.peekN(1)
+			// "chain" is modifier if next token is identifier, keyword, or :: (qualified name)
+			isModifier := next.Kind == lexer.Identifier || next.Kind == lexer.Keyword || next.Kind == lexer.ColonColon
+			if isModifier {
+				m.isChain = true
+				p.advance()
+				continue
+			}
+			// Otherwise "chain" is the declaration name itself - stop parsing modifiers
+			return m
+		}
 		if t.Kind != lexer.Keyword {
 			return m
 		}
@@ -292,11 +306,18 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Parse 'all' modifier if present (appears after keyword, before name)
 	isAll := p.acceptKeyword("all")
 	
+	// Parse 'chain' modifier if present (identifier, not keyword)
+	t2 := p.peek()
+	if t2.Kind == lexer.Identifier && p.src.Text(t2.Span) == "chain" {
+		mods.isChain = true
+		p.advance()
+	}
+	
 	// Parse secondary keyword if present (e.g., 'assoc struct')
 	// Check if next token is also a kind keyword
-	t2 := p.peek()
-	if t2.Kind == lexer.Keyword {
-		if secondKind, ok := definitionKindKeywords[t2.KeywordID]; ok && t2.KeywordID != "def" {
+	t3 := p.peek()
+	if t3.Kind == lexer.Keyword {
+		if secondKind, ok := definitionKindKeywords[t3.KeywordID]; ok && t3.KeywordID != "def" {
 			// Have secondary keyword - use it as primary kind
 			defKind = secondKind
 			p.advance() // consume secondary keyword
@@ -468,6 +489,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		IsReference: mods.isReference,
 		IsAll:       isAll,
 		IsEnd:       mods.isEnd,
+		IsChain:     mods.isChain,
 		Direction:   mods.direction,
 		IsComposite: mods.isComposite,
 		IsDerived:   mods.isDerived,
