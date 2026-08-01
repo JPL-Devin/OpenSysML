@@ -196,6 +196,22 @@ func (p *Parser) parsePrimary() ast.Node {
 	return p.parsePostfixes(start, expr)
 }
 
+// atExprStart reports whether the current token can start an expression.
+func (p *Parser) atExprStart() bool {
+	t := p.peek()
+	return p.atName() || 
+		t.Kind == lexer.Decimal || 
+		t.Kind == lexer.Real || 
+		t.Kind == lexer.String || 
+		t.Kind == lexer.Star || // infinity
+		t.Kind == lexer.LParen || 
+		t.Kind == lexer.LBrace ||
+		p.atKeyword("null") || 
+		p.atKeyword("true") || 
+		p.atKeyword("false") || 
+		p.atKeyword("new")
+}
+
 // parsePostfixes applies zero or more postfix operators to expr.
 func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 	for {
@@ -252,6 +268,10 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 			} else if p.at(lexer.LBrace) {
 				// Function reference given as a body: store as a single arg.
 				inv.Args = []ast.Node{p.parseBodyExpr(p.peek().Span.Offset)}
+			} else if p.atExprStart() {
+				// Single arg without parens (e.g., `reduce '*'`)
+				// Parse only base expression, not full precedence expression
+				inv.Args = []ast.Node{p.parseBase()}
 			}
 			inv.NodeSpan = p.spanFrom(start)
 			expr = inv
