@@ -256,8 +256,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" {
+	// Check for usage-only keywords (subject, objective, succession, inv) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)

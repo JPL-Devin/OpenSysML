@@ -553,7 +553,12 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 	var members []ast.Node
 	
 	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
 		members = append(members, p.parseConstraintMember())
+		// Safety check: if position hasn't advanced, force progress to avoid infinite loop
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.advance()
+		}
 	}
 	
 	p.expect(lexer.RBrace, "expected '}' after constraint body")
