@@ -12,9 +12,26 @@ func (p *Parser) atName() bool {
 	return k == lexer.Identifier || k == lexer.UnrestrictedName
 }
 
+// atNameOrKeyword reports whether the current token can begin a name segment,
+// including keywords used as identifiers (relaxed parsing for identification).
+func (p *Parser) atNameOrKeyword() bool {
+	k := p.peek().Kind
+	return k == lexer.Identifier || k == lexer.UnrestrictedName || k == lexer.Keyword
+}
+
 // parseNameSegment consumes one name token and returns its segment.
 func (p *Parser) parseNameSegment() (ast.NameSegment, bool) {
 	if !p.atName() {
+		return ast.NameSegment{}, false
+	}
+	tok := p.advance()
+	return ast.NameSegment{Text: p.src.Text(tok.Span), Span: tok.Span}, true
+}
+
+// parseNameSegmentRelaxed consumes a name token (including keywords) and returns its segment.
+// Used in contexts where keywords can serve as identifiers (e.g., declaration names).
+func (p *Parser) parseNameSegmentRelaxed() (ast.NameSegment, bool) {
+	if !p.atNameOrKeyword() {
 		return ast.NameSegment{}, false
 	}
 	tok := p.advance()
@@ -54,7 +71,7 @@ func (p *Parser) parseQualifiedName() *ast.QualifiedName {
 			break
 		}
 		p.advance() // ::
-		next, ok := p.parseNameSegment()
+		next, ok := p.parseNameSegmentRelaxed()
 		if !ok {
 			p.error(p.peek().Span, "expected a name after '::'")
 			break
@@ -74,7 +91,7 @@ func (p *Parser) parseIdentification() ast.Identification {
 	var id ast.Identification
 	if p.at(lexer.Lt) {
 		p.advance() // <
-		if seg, ok := p.parseNameSegment(); ok {
+		if seg, ok := p.parseNameSegmentRelaxed(); ok {
 			id.ShortName = seg.Text
 			id.ShortNameSpan = seg.Span
 		} else {
@@ -82,7 +99,7 @@ func (p *Parser) parseIdentification() ast.Identification {
 		}
 		p.expect(lexer.Gt, "expected '>'")
 	}
-	if seg, ok := p.parseNameSegment(); ok {
+	if seg, ok := p.parseNameSegmentRelaxed(); ok {
 		id.Name = seg.Text
 		id.NameSpan = seg.Span
 	}
