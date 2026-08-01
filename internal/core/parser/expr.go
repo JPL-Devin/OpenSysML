@@ -347,6 +347,14 @@ func (p *Parser) parseBase() ast.Node {
 		if p.at(lexer.LParen) {
 			return setBase(p.parseInvocationTail(start, nil, qn))
 		}
+		// Also handle body expression invocations: `forAll { in i; expr }`
+		if p.at(lexer.LBrace) {
+			bodyStart := p.peek().Span.Offset
+			bodyExpr := p.parseBodyExpr(bodyStart)
+			inv := &ast.InvocationExpr{Type: qn, Args: []ast.Node{bodyExpr}}
+			inv.NodeSpan = p.spanFrom(start)
+			return setBase(inv)
+		}
 		fr := &ast.FeatureReference{Name: qn}
 		fr.NodeSpan = p.spanFrom(start)
 		return setBase(fr)
