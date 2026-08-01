@@ -403,7 +403,7 @@ go build -o sysml-lsp ./cmd/sysml-lsp
   "genericLanguageServer.servers": [
     {
       "name": "SysML v2",
-      "command": "/path/to/sysml-lsp",
+      "command": "/absolute/path/to/sysml-lsp",
       "args": [],
       "filetypes": ["sysml", "kerml"]
     }
@@ -411,16 +411,35 @@ go build -o sysml-lsp ./cmd/sysml-lsp
 }
 ```
 
-**Current LSP capabilities:**
-- Document synchronization
-- Basic diagnostics (syntax errors)
+4. Associate file extensions in `.vscode/settings.json`:
+```json
+{
+  "files.associations": {
+    "*.sysml": "sysml",
+    "*.kerml": "kerml"
+  }
+}
+```
 
-**Coming soon:**
-- Hover (type info)
-- Go to definition
-- Completion
-- Workspace symbols
-- References
+**LSP features (all implemented):**
+- ✅ Document synchronization (incremental updates)
+- ✅ Diagnostics (syntax + semantic errors, real-time)
+- ✅ Hover (symbol info, type, multiplicity)
+- ✅ Go-to-definition (cross-document navigation)
+- ✅ Find references (workspace-wide search)
+- ✅ Completion (trigger on `:`, `.`)
+- ✅ Document symbols (outline view)
+- ✅ Workspace symbols (global search)
+
+**Test the server:**
+```bash
+# Check version
+./sysml-lsp --version
+
+# Test with example file
+echo 'part Wheel { attribute diameter = 16.0; }' > test.sysml
+# Open test.sysml in VS Code, hover over "Wheel" to see symbol info
+```
 
 ---
 

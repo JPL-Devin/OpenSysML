@@ -120,7 +120,7 @@ Current: green (Time: 30.0s)
 | **State machine runtime (Tier 5)** | ✅ **Complete** |
 | **REPL debugging commands** | ✅ **Complete** |
 | **Standard library bundling** | ✅ **Complete** |
-| LSP server implementation | 🚧 In progress |
+| **LSP server implementation** | ✅ **Complete** |
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
 **Test coverage:** 116 tests covering parsers, semantics, runtime (actions, states, instances).

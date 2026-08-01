@@ -245,6 +245,94 @@ Parse + model + **execute** all behavioral bodies:
 
 ---
 
+## LSP Server
+
+**Package:** `internal/lsp`  
+**Binary:** `cmd/sysml-lsp`  
+**Status:** ✅ Complete (stdio protocol, 8 LSP features, 41 tests)
+
+### Features
+
+**Lifecycle:**
+- `initialize` — Advertise server capabilities
+- `initialized` — Acknowledge client ready
+- `shutdown` / `exit` — Graceful termination
+
+**Document Synchronization:**
+- `textDocument/didOpen` — Track opened documents
+- `textDocument/didChange` — Incremental updates (UTF-8 byte offsets)
+- `textDocument/didClose` — Remove from workspace
+- `textDocument/didSave` — No-op (diagnostics on change)
+
+**Diagnostics:**
+- Publish on document open/change
+- Syntax errors (parser)
+- Semantic errors (name resolution, type checking, validation passes)
+- Real-time feedback
+
+**Hover (textDocument/hover):**
+- Symbol info: name, kind, type, multiplicity
+- Definition source location
+- Documentation comments (future)
+
+**Go-to-Definition (textDocument/definition):**
+- Navigate to symbol declaration
+- Follows qualified name chains
+- Cross-document navigation
+
+**Find References (textDocument/references):**
+- Find all usages of symbol
+- Workspace-wide search
+- Include declaration option
+
+**Completion (textDocument/completion):**
+- Trigger characters: `:`, `.`
+- Symbol-based suggestions
+- Future: keyword completion, snippet support
+
+**Document Symbols (textDocument/documentSymbol):**
+- Outline view (packages, parts, attributes, actions, states)
+- Hierarchical structure
+- Navigate within file
+
+**Workspace Symbols (workspace/symbol):**
+- Global symbol search
+- Fuzzy matching
+- Aggregates across all documents
+
+### Implementation
+
+**Architecture:**
+- `server.go` — Server lifecycle, stdio transport
+- `base.go` — Stub handlers for unimplemented LSP methods
+- `handler.go` — Custom didChange with pointer-valued Range (full vs incremental edits)
+- `sync.go` — Document synchronization (didOpen/didChange/didClose)
+- `lifecycle.go` — Initialize capabilities advertisement
+- `diagnostics.go` — Error publishing
+- `hover.go`, `completion.go`, `definition.go`, `references.go`, `symbols.go` — Feature implementations
+- `posmap.go` — UTF-8 offset ↔ LSP line/character conversion
+- `walk.go` — AST traversal for symbol extraction
+
+**Testing:**
+- 41 tests covering all features
+- Integration tests with mock clients
+- Incremental sync edge cases (astral plane characters, multi-change, offset-zero insertion)
+
+**Usage:**
+```bash
+go build -o sysml-lsp ./cmd/sysml-lsp
+./sysml-lsp  # stdio mode for editors
+```
+
+**Editor Setup:**
+- VS Code: Generic LSP Client extension + workspace settings
+- Neovim: nvim-lspconfig custom server
+- Emacs: lsp-mode manual server registration
+
+See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
+
+---
+
 ## REPL Integration
 
 **Package:** `internal/repl`  
@@ -343,7 +431,7 @@ Parse + model + **execute** all behavioral bodies:
 | **REPL debugging commands** | ✅ **Complete** |
 | REPL implementation | ✅ Complete |
 | **Standard library bundling** | ✅ **Complete** |
-| LSP server implementation | ⏳ Planned |
+| **LSP server implementation** | ✅ **Complete** |
 
 ---
 
