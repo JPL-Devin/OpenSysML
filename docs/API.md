@@ -339,6 +339,9 @@ Execution runtime (Tiers 1-3).
   - `Eval(expr ast.Node, env map[*symbols.Symbol]Value) (Value, error)` — Evaluate expression
   - `GetSlot(inst *Instance, feature *symbols.Symbol) (Value, bool)` — Read slot
   - `SetSlot(inst *Instance, feature *symbols.Symbol, val Value) error` — Write slot
+  - `InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols.Scope) (Value, error)` — Invoke calculation
+  - `EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope) (bool, error)` — Evaluate constraint
+  - `EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scope) (bool, error)` — Evaluate requirement
 
 **Built-in Functions:**
 
@@ -464,6 +467,9 @@ type LineReader interface {
 - `%help`, `%list`, `%clear`, `%load <file>`
 - `%instantiate <name>`, `%slots <name>`, `%instances`
 - `%eval <expr>`
+- `%calc <name> [args...]` — Invoke calculation with arguments
+- `%constraint <name>` — Evaluate constraint
+- `%requirement <name>` — Evaluate requirement
 
 **Usage:**
 ```go

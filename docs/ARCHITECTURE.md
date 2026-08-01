@@ -178,24 +178,26 @@ Harden `MembersOf` into stable, ordered **effective-feature list** per type:
 
 ### Tier 3 — Expression Evaluator ✅
 
-Full evaluator with **user-defined calc invocation** and **constraint evaluation**:
+Full evaluator with **user-defined calc invocation**, **constraint evaluation**, and **requirement evaluation**:
 - Feature access `x.y.z` resolved against instance slots
 - KerML operator library (`->select`, `->collect`, `size`, string ops)
-- **Calc invocation:** Resolve calc symbol → bind args to parameters → evaluate return expression
-- **Constraint evaluation:** Extract `assert`/`assume` members → evaluate → check satisfaction
+- **Calc invocation:** Resolve calc symbol → extract params/return → bind args to parameters → evaluate return expression
+- **Constraint evaluation:** Extract `assert`/`assume` members → evaluate boolean expressions → check satisfaction (with optional `not` negation)
+- **Requirement evaluation:** Extract `subject`/`assume`/`require`/`actor` members → validate bindings → evaluate conditions
 - **Scoped evaluation:** `EvalContext.scope` for name resolution, frame stack for parameter bindings
-- **Unlocks:** Constraint checking against concrete values, `calc` execution, runtime validation
+- **Membership unwrapping:** Runtime automatically unwraps AST Membership nodes when extracting members
+- **Unlocks:** Constraint checking against concrete values, `calc` execution, requirement validation, runtime behavioral verification
 
 ### Tier 4 — Behavioral AST ✅ (Phase C complete)
 
-Parse + model all behavioral bodies:
-- **C1: Calc bodies** — `return` expressions + mixed parameter declarations
-- **C2: Constraint bodies** — `assert`/`assume` with optional `not` negation
-- **C3: Requirement bodies** — `subject`/`assume`/`require`/`actor` declarations
-- **C4: Action bodies** — Control flow nodes (initial/final/fork/join/merge/decision) + action execution nodes + succession edges
-- **C5: State bodies** — Entry/do/exit behaviors, substates, transitions with triggers/guards/effects
+Parse + model + **execute** all behavioral bodies:
+- **C1: Calc bodies** — `return` expressions + mixed parameter declarations (✅ executable)
+- **C2: Constraint bodies** — `assert`/`assume` with optional `not` negation (✅ executable)
+- **C3: Requirement bodies** — `subject`/`assume`/`require`/`actor` declarations (✅ executable)
+- **C4: Action bodies** — Control flow nodes (initial/final/fork/join/merge/decision) + action execution nodes + succession edges (parsed, not yet executable)
+- **C5: State bodies** — Entry/do/exit behaviors, substates, transitions with triggers/guards/effects (parsed, not yet executable)
 - **Dispatcher:** Lookahead detects specialized vs generic bodies (e.g., `return` → calc, generic → fallback)
-- **Status:** Parsed, calc/constraint **executable**, action/state **not yet executable**
+- **Status:** All Phase C parsers complete. Calc/constraint/requirement **executable via runtime**. Action/state **execution in Tier 5**.
 
 ### Tier 5 — Behavioral Interpreter ⏳ (Future)
 
@@ -228,11 +230,17 @@ Token-flow execution for actions (Petri-net-like), event-driven state machine st
 - `%slots <name>` — Show instance slots with values
 - `%instances` — List all created instances
 
+**Behavioral execution:**
+- `%calc <name> [args...]` — Invoke calculation with literal arguments (e.g., `%calc add 10 20`)
+- `%constraint <name>` — Evaluate constraint, check assert/assume satisfaction
+- `%requirement <name>` — Evaluate requirement, validate subject/require/actor conditions
+
 ### Implementation
 
 - **Session:** Manages document + runtime context + instances
 - **getOrCreateRuntime():** Lazy init, builds index from current document
-- **Runtime commands wire to:** `runtime.Context.Instantiate()`, `runtime.Context.Eval()`, `runtime.Context.GetSlot()`
+- **Runtime commands wire to:** `runtime.Context.Instantiate()`, `runtime.Context.Eval()`, `runtime.Context.InvokeCalc()`, `runtime.Context.EvaluateConstraint()`, `runtime.Context.EvaluateRequirement()`
+- **Argument parsing:** `%calc` parses literal args via wrapper parsing (`part { attribute arg = <expr>; }`) + Membership unwrapping
 
 ---
 
