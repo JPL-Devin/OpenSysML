@@ -441,13 +441,48 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		IsOrdered:   mods.isOrdered,
 		IsNonunique: mods.isNonunique,
 	}
-	// Parse pre-identification relationships (e.g., :>> target before name)
-	preRels, conjugated := p.parseRelationships(true)
 	
-	// A bare flow shorthand `flow x to y` has no declaration name; the first
-	// name is the `from` end, parsed later by parseFlowEnds.
-	if !(kind == ast.UsageFlow && p.atFlowShorthand()) {
-		u.Ident = p.parseIdentification()
+	// Handle shorthand: `feature redefines x` means `feature x redefines x`
+	// Check if relationship keyword followed by name (not symbolic operator)
+	var preRels []*ast.Relationship
+	var conjugated bool
+	if p.at(lexer.Keyword) {
+		if relKind, ok := relationshipKeywords[p.peek().KeywordID]; ok {
+			// Peek ahead to see if name follows
+			nextTok := p.peekN(1)
+			if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.UnrestrictedName {
+				// Shorthand: relationship keyword + name
+				p.advance() // consume relationship keyword
+				u.Ident = p.parseIdentification()
+				// Create implicit relationship targeting same name
+				rel := &ast.Relationship{
+					Kind:   relKind,
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: u.Ident.Name, Span: u.Ident.NameSpan}}},
+				}
+				preRels = append(preRels, rel)
+			} else {
+				// Normal relationship parsing
+				preRels, conjugated = p.parseRelationships(true)
+				// A bare flow shorthand `flow x to y` has no declaration name
+				if !(kind == ast.UsageFlow && p.atFlowShorthand()) {
+					u.Ident = p.parseIdentification()
+				}
+			}
+		} else {
+			// Not a relationship keyword
+			preRels, conjugated = p.parseRelationships(true)
+			// A bare flow shorthand `flow x to y` has no declaration name
+			if !(kind == ast.UsageFlow && p.atFlowShorthand()) {
+				u.Ident = p.parseIdentification()
+			}
+		}
+	} else {
+		// No relationship shorthand
+		preRels, conjugated = p.parseRelationships(true)
+		// A bare flow shorthand `flow x to y` has no declaration name
+		if !(kind == ast.UsageFlow && p.atFlowShorthand()) {
+			u.Ident = p.parseIdentification()
+		}
 	}
 	
 	// Parse post-identification relationships (e.g., : Type)
