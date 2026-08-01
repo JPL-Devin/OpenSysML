@@ -417,3 +417,156 @@ func (p *Parser) parseConstraintMember() ast.Node {
 	node.NodeSpan = p.spanFrom(start)
 	return node
 }
+
+// Phase C2: Requirement Bodies
+
+// parseRequirementBody parses the body of a requirement usage.
+// Expects '{' already consumed, returns list of requirement members.
+// Syntax: requirement example { subject x : Type; assume x > 0; require x.valid; actor a : Actor; }
+func (p *Parser) parseRequirementBody() []ast.Node {
+	var members []ast.Node
+	
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		members = append(members, p.parseRequirementMember())
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after requirement body")
+	return members
+}
+
+// parseRequirementMember parses one requirement member: subject/assume/require/actor
+func (p *Parser) parseRequirementMember() ast.Node {
+	start := p.peek().Span.Offset
+	
+	// Check for keyword dispatch
+	if p.acceptKeyword("subject") {
+		return p.parseSubjectMember(start)
+	} else if p.acceptKeyword("assume") {
+		return p.parseAssumeMember(start)
+	} else if p.acceptKeyword("require") {
+		return p.parseRequireMember(start)
+	} else if p.acceptKeyword("actor") {
+		return p.parseActorMember(start)
+	}
+	
+	// Unknown member type
+	p.error(p.peek().Span, "expected 'subject', 'assume', 'require', or 'actor' in requirement body")
+	en := &ast.ErrorNode{Message: "expected requirement member keyword"}
+	if !p.atEOF() && !p.at(lexer.RBrace) {
+		p.advance() // ensure progress
+	}
+	en.NodeSpan = p.spanFrom(start)
+	return en
+}
+
+// parseSubjectMember parses: subject <name> : <Type>;
+func (p *Parser) parseSubjectMember(start int) ast.Node {
+	// 'subject' already consumed
+	
+	// Expect identifier
+	if !p.at(lexer.Identifier) {
+		p.error(p.peek().Span, "expected identifier after 'subject'")
+		en := &ast.ErrorNode{Message: "expected identifier after 'subject'"}
+		if !p.atEOF() && !p.at(lexer.RBrace) {
+			p.advance()
+		}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	nameToken := p.peek()
+	name := p.src.Text(nameToken.Span)
+	p.advance()
+	
+	// Expect ':'
+	if !p.at(lexer.Colon) {
+		p.error(p.peek().Span, "expected ':' after subject name")
+		en := &ast.ErrorNode{Message: "expected ':' after subject name"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	p.advance() // consume ':'
+	
+	// Parse type
+	typeRef := p.parseQualifiedName()
+	
+	p.expect(lexer.Semicolon, "expected ';' after subject declaration")
+	
+	node := &ast.SubjectMember{
+		Name:    name,
+		TypeRef: typeRef,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseAssumeMember parses: assume <expr>;
+func (p *Parser) parseAssumeMember(start int) ast.Node {
+	// 'assume' already consumed
+	
+	expr := p.ParseExpression()
+	
+	p.expect(lexer.Semicolon, "expected ';' after assume expression")
+	
+	node := &ast.AssumeMember{
+		Expression: expr,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseRequireMember parses: require <expr>;
+func (p *Parser) parseRequireMember(start int) ast.Node {
+	// 'require' already consumed
+	
+	expr := p.ParseExpression()
+	
+	p.expect(lexer.Semicolon, "expected ';' after require expression")
+	
+	node := &ast.RequireMember{
+		Expression: expr,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseActorMember parses: actor <name> : <Type>;
+func (p *Parser) parseActorMember(start int) ast.Node {
+	// 'actor' already consumed
+	
+	// Expect identifier
+	if !p.at(lexer.Identifier) {
+		p.error(p.peek().Span, "expected identifier after 'actor'")
+		en := &ast.ErrorNode{Message: "expected identifier after 'actor'"}
+		if !p.atEOF() && !p.at(lexer.RBrace) {
+			p.advance()
+		}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	nameToken := p.peek()
+	name := p.src.Text(nameToken.Span)
+	p.advance()
+	
+	// Expect ':'
+	if !p.at(lexer.Colon) {
+		p.error(p.peek().Span, "expected ':' after actor name")
+		en := &ast.ErrorNode{Message: "expected ':' after actor name"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	p.advance() // consume ':'
+	
+	// Parse type
+	typeRef := p.parseQualifiedName()
+	
+	p.expect(lexer.Semicolon, "expected ';' after actor declaration")
+	
+	node := &ast.ActorMember{
+		Name:    name,
+		TypeRef: typeRef,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}

@@ -193,3 +193,35 @@ type ConstraintMember struct {
 	IsNegated  bool // true if 'not' keyword present (assert not expr)
 	Expression Node // the constraint expression
 }
+
+// Phase C2: Requirement Body Members
+
+// SubjectMember represents the subject declaration in a requirement body.
+// Syntax: subject <name> : <Type>;
+type SubjectMember struct {
+	NodeBase
+	Name     string
+	TypeRef  *QualifiedName // subject type
+}
+
+// AssumeMember represents an assumption in a requirement body.
+// Syntax: assume <expression>;
+type AssumeMember struct {
+	NodeBase
+	Expression Node // assumption condition
+}
+
+// RequireMember represents a requirement constraint.
+// Syntax: require <expression>;
+type RequireMember struct {
+	NodeBase
+	Expression Node // requirement condition
+}
+
+// ActorMember represents an actor declaration in a requirement/use case.
+// Syntax: actor <name> : <Type>;
+type ActorMember struct {
+	NodeBase
+	Name     string
+	TypeRef  *QualifiedName // actor type
+}

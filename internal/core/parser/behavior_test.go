@@ -372,3 +372,148 @@ func TestParseConstraintBody_Multiple(t *testing.T) {
 		}
 	}
 }
+
+// Phase C2: Requirement Body Tests
+
+// parseRequirementBodyTest is a helper that parses a requirement body from test input.
+func parseRequirementBodyTest(t *testing.T, input string) []ast.Node {
+	src := source.New("test.sysml", []byte(input))
+	p := New(src)
+
+	// Consume opening brace
+	_, ok := p.accept(lexer.LBrace)
+	if !ok {
+		t.Fatalf("expected '{', got %v", p.peek().Kind)
+	}
+
+	return p.parseRequirementBody()
+}
+
+func TestParseRequirementBody_Subject(t *testing.T) {
+	input := `{
+		subject vehicle : Vehicle;
+	}`
+
+	nodes := parseRequirementBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	subject, ok := nodes[0].(*ast.SubjectMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.SubjectMember, got %T", nodes[0])
+	} else {
+		if subject.Name != "vehicle" {
+			t.Errorf("SubjectMember.Name: expected 'vehicle', got '%s'", subject.Name)
+		}
+		if subject.TypeRef == nil {
+			t.Errorf("SubjectMember.TypeRef is nil")
+		} else if len(subject.TypeRef.Parts) != 1 || subject.TypeRef.Parts[0].Text != "Vehicle" {
+			t.Errorf("SubjectMember.TypeRef: expected 'Vehicle', got %+v", subject.TypeRef.Parts)
+		}
+	}
+}
+
+func TestParseRequirementBody_Assume(t *testing.T) {
+	input := `{
+		assume x > 0;
+	}`
+
+	nodes := parseRequirementBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	assume, ok := nodes[0].(*ast.AssumeMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.AssumeMember, got %T", nodes[0])
+	} else {
+		if assume.Expression == nil {
+			t.Errorf("AssumeMember.Expression is nil")
+		}
+	}
+}
+
+func TestParseRequirementBody_Require(t *testing.T) {
+	input := `{
+		require brakes.functional;
+	}`
+
+	nodes := parseRequirementBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	require, ok := nodes[0].(*ast.RequireMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.RequireMember, got %T", nodes[0])
+	} else {
+		if require.Expression == nil {
+			t.Errorf("RequireMember.Expression is nil")
+		}
+	}
+}
+
+func TestParseRequirementBody_Actor(t *testing.T) {
+	input := `{
+		actor driver : Driver;
+	}`
+
+	nodes := parseRequirementBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	actor, ok := nodes[0].(*ast.ActorMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.ActorMember, got %T", nodes[0])
+	} else {
+		if actor.Name != "driver" {
+			t.Errorf("ActorMember.Name: expected 'driver', got '%s'", actor.Name)
+		}
+		if actor.TypeRef == nil {
+			t.Errorf("ActorMember.TypeRef is nil")
+		} else if len(actor.TypeRef.Parts) != 1 || actor.TypeRef.Parts[0].Text != "Driver" {
+			t.Errorf("ActorMember.TypeRef: expected 'Driver', got %+v", actor.TypeRef.Parts)
+		}
+	}
+}
+
+func TestParseRequirementBody_Complete(t *testing.T) {
+	input := `{
+		subject vehicle : Vehicle;
+		assume vehicle.speed > 0;
+		require vehicle.brakes.functional;
+		actor driver : Driver;
+	}`
+
+	nodes := parseRequirementBodyTest(t, input)
+
+	if len(nodes) != 4 {
+		t.Fatalf("expected 4 nodes, got %d", len(nodes))
+	}
+
+	// Check subject
+	if _, ok := nodes[0].(*ast.SubjectMember); !ok {
+		t.Errorf("node 0: expected *ast.SubjectMember, got %T", nodes[0])
+	}
+
+	// Check assume
+	if _, ok := nodes[1].(*ast.AssumeMember); !ok {
+		t.Errorf("node 1: expected *ast.AssumeMember, got %T", nodes[1])
+	}
+
+	// Check require
+	if _, ok := nodes[2].(*ast.RequireMember); !ok {
+		t.Errorf("node 2: expected *ast.RequireMember, got %T", nodes[2])
+	}
+
+	// Check actor
+	if _, ok := nodes[3].(*ast.ActorMember); !ok {
+		t.Errorf("node 3: expected *ast.ActorMember, got %T", nodes[3])
+	}
+}
