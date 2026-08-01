@@ -517,3 +517,217 @@ func TestParseRequirementBody_Complete(t *testing.T) {
 		t.Errorf("node 3: expected *ast.ActorMember, got %T", nodes[3])
 	}
 }
+
+// Phase C4: State Body Tests
+
+func parseStateBodyTest(t *testing.T, input string) []ast.Node {
+	t.Helper()
+	src := source.New("test.sysml", []byte(input))
+	p := New(src)
+
+	// Consume opening brace
+	_, ok := p.accept(lexer.LBrace)
+	if !ok {
+		t.Fatalf("expected '{', got %v", p.peek().Kind)
+	}
+
+	return p.parseStateBody()
+}
+
+func TestParseStateBody_Entry(t *testing.T) {
+	input := `{
+		entry { action initialize; }
+	}`
+
+	nodes := parseStateBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	entry, ok := nodes[0].(*ast.EntryMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.EntryMember, got %T", nodes[0])
+	} else {
+		if len(entry.Actions) != 1 {
+			t.Errorf("EntryMember.Actions: expected 1 action, got %d", len(entry.Actions))
+		}
+	}
+}
+
+func TestParseStateBody_Do(t *testing.T) {
+	input := `{
+		do { action process; }
+	}`
+
+	nodes := parseStateBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	do, ok := nodes[0].(*ast.DoMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.DoMember, got %T", nodes[0])
+	} else {
+		if len(do.Actions) != 1 {
+			t.Errorf("DoMember.Actions: expected 1 action, got %d", len(do.Actions))
+		}
+	}
+}
+
+func TestParseStateBody_Exit(t *testing.T) {
+	input := `{
+		exit { action cleanup; }
+	}`
+
+	nodes := parseStateBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	exit, ok := nodes[0].(*ast.ExitMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.ExitMember, got %T", nodes[0])
+	} else {
+		if len(exit.Actions) != 1 {
+			t.Errorf("ExitMember.Actions: expected 1 action, got %d", len(exit.Actions))
+		}
+	}
+}
+
+func TestParseStateBody_Substate(t *testing.T) {
+	input := `{
+		state Active;
+		state Idle;
+	}`
+
+	nodes := parseStateBodyTest(t, input)
+
+	if len(nodes) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(nodes))
+	}
+
+	substate1, ok := nodes[0].(*ast.SubstateMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.SubstateMember, got %T", nodes[0])
+	} else {
+		if substate1.Name != "Active" {
+			t.Errorf("SubstateMember.Name: expected 'Active', got '%s'", substate1.Name)
+		}
+	}
+
+	substate2, ok := nodes[1].(*ast.SubstateMember)
+	if !ok {
+		t.Errorf("node 1: expected *ast.SubstateMember, got %T", nodes[1])
+	} else {
+		if substate2.Name != "Idle" {
+			t.Errorf("SubstateMember.Name: expected 'Idle', got '%s'", substate2.Name)
+		}
+	}
+}
+
+func TestParseStateBody_Transition(t *testing.T) {
+	input := `{
+		transition Active to Idle when timeout;
+	}`
+
+	nodes := parseStateBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	transition, ok := nodes[0].(*ast.TransitionMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.TransitionMember, got %T", nodes[0])
+	} else {
+		if transition.Source == nil {
+			t.Errorf("TransitionMember.Source is nil")
+		} else if len(transition.Source.Parts) != 1 || transition.Source.Parts[0].Text != "Active" {
+			t.Errorf("TransitionMember.Source: expected 'Active', got %+v", transition.Source.Parts)
+		}
+
+		if transition.Target == nil {
+			t.Errorf("TransitionMember.Target is nil")
+		} else if len(transition.Target.Parts) != 1 || transition.Target.Parts[0].Text != "Idle" {
+			t.Errorf("TransitionMember.Target: expected 'Idle', got %+v", transition.Target.Parts)
+		}
+
+		if transition.Trigger == nil {
+			t.Errorf("TransitionMember.Trigger is nil (expected timeout)")
+		}
+	}
+}
+
+func TestParseStateBody_TransitionWithGuardAndEffect(t *testing.T) {
+	input := `{
+		transition Running to Stopped if ready do { action finalize; };
+	}`
+
+	nodes := parseStateBodyTest(t, input)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+
+	transition, ok := nodes[0].(*ast.TransitionMember)
+	if !ok {
+		t.Errorf("node 0: expected *ast.TransitionMember, got %T", nodes[0])
+	} else {
+		if transition.Guard == nil {
+			t.Errorf("TransitionMember.Guard is nil")
+		}
+
+		if len(transition.Effect) != 1 {
+			t.Errorf("TransitionMember.Effect: expected 1 action, got %d", len(transition.Effect))
+		}
+	}
+}
+
+func TestParseStateBody_Complete(t *testing.T) {
+	input := `{
+		entry { action initialize; }
+		do { action process; }
+		exit { action cleanup; }
+		state Active;
+		state Idle;
+		transition Active to Idle when timeout;
+	}`
+
+	nodes := parseStateBodyTest(t, input)
+
+	if len(nodes) != 6 {
+		t.Fatalf("expected 6 nodes, got %d", len(nodes))
+	}
+
+	// Check entry
+	if _, ok := nodes[0].(*ast.EntryMember); !ok {
+		t.Errorf("node 0: expected *ast.EntryMember, got %T", nodes[0])
+	}
+
+	// Check do
+	if _, ok := nodes[1].(*ast.DoMember); !ok {
+		t.Errorf("node 1: expected *ast.DoMember, got %T", nodes[1])
+	}
+
+	// Check exit
+	if _, ok := nodes[2].(*ast.ExitMember); !ok {
+		t.Errorf("node 2: expected *ast.ExitMember, got %T", nodes[2])
+	}
+
+	// Check substates
+	if _, ok := nodes[3].(*ast.SubstateMember); !ok {
+		t.Errorf("node 3: expected *ast.SubstateMember, got %T", nodes[3])
+	}
+	if _, ok := nodes[4].(*ast.SubstateMember); !ok {
+		t.Errorf("node 4: expected *ast.SubstateMember, got %T", nodes[4])
+	}
+
+	// Check transition
+	if _, ok := nodes[5].(*ast.TransitionMember); !ok {
+		t.Errorf("node 5: expected *ast.TransitionMember, got %T", nodes[5])
+	}
+}
+

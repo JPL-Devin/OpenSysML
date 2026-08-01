@@ -570,3 +570,234 @@ func (p *Parser) parseActorMember(start int) ast.Node {
 	node.NodeSpan = p.spanFrom(start)
 	return node
 }
+
+// Phase C4: State Body Parsing
+
+// parseStateBody parses the body of a state usage.
+// Expects '{' already consumed, returns list of state members.
+func (p *Parser) parseStateBody() []ast.Node {
+	var members []ast.Node
+	
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		members = append(members, p.parseStateMember())
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after state body")
+	return members
+}
+
+// parseStateMember parses one state member: entry/do/exit/state/transition.
+func (p *Parser) parseStateMember() ast.Node {
+	start := p.peek().Span.Offset
+	
+	// Must be keyword
+	if !p.at(lexer.Keyword) {
+		p.error(p.peek().Span, "expected state keyword (entry/do/exit/state/transition)")
+		en := &ast.ErrorNode{Message: "expected state keyword"}
+		if !p.atEOF() && !p.at(lexer.RBrace) {
+			p.advance()
+		}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	tok := p.advance()
+	kw := tok.KeywordID
+	
+	switch kw {
+	case "entry":
+		return p.parseEntryMember(start)
+	case "do":
+		return p.parseDoMember(start)
+	case "exit":
+		return p.parseExitMember(start)
+	case "state":
+		return p.parseSubstateMember(start)
+	case "transition":
+		return p.parseTransitionMember(start)
+	default:
+		p.error(tok.Span, "unknown state keyword: "+kw)
+		en := &ast.ErrorNode{Message: "unknown state keyword: " + kw}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+}
+
+// parseEntryMember parses: entry { <actions> }
+func (p *Parser) parseEntryMember(start int) ast.Node {
+	// 'entry' already consumed
+	
+	// Expect '{'
+	if !p.at(lexer.LBrace) {
+		p.error(p.peek().Span, "expected '{' after 'entry'")
+		en := &ast.ErrorNode{Message: "expected '{' after 'entry'"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	p.advance() // consume '{'
+	
+	// Parse action sequence (reuse action body parsing logic)
+	var actions []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		actions = append(actions, p.parseActionMember())
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after entry actions")
+	
+	node := &ast.EntryMember{
+		Actions: actions,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseDoMember parses: do { <actions> }
+func (p *Parser) parseDoMember(start int) ast.Node {
+	// 'do' already consumed
+	
+	// Expect '{'
+	if !p.at(lexer.LBrace) {
+		p.error(p.peek().Span, "expected '{' after 'do'")
+		en := &ast.ErrorNode{Message: "expected '{' after 'do'"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	p.advance() // consume '{'
+	
+	// Parse action sequence
+	var actions []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		actions = append(actions, p.parseActionMember())
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after do actions")
+	
+	node := &ast.DoMember{
+		Actions: actions,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseExitMember parses: exit { <actions> }
+func (p *Parser) parseExitMember(start int) ast.Node {
+	// 'exit' already consumed
+	
+	// Expect '{'
+	if !p.at(lexer.LBrace) {
+		p.error(p.peek().Span, "expected '{' after 'exit'")
+		en := &ast.ErrorNode{Message: "expected '{' after 'exit'"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	p.advance() // consume '{'
+	
+	// Parse action sequence
+	var actions []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		actions = append(actions, p.parseActionMember())
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after exit actions")
+	
+	node := &ast.ExitMember{
+		Actions: actions,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseSubstateMember parses: state <name>;
+func (p *Parser) parseSubstateMember(start int) ast.Node {
+	// 'state' already consumed
+	
+	// Expect identifier
+	if !p.at(lexer.Identifier) {
+		p.error(p.peek().Span, "expected identifier after 'state'")
+		en := &ast.ErrorNode{Message: "expected identifier after 'state'"}
+		if !p.atEOF() && !p.at(lexer.RBrace) {
+			p.advance()
+		}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	nameToken := p.peek()
+	name := p.src.Text(nameToken.Span)
+	p.advance()
+	
+	p.expect(lexer.Semicolon, "expected ';' after state name")
+	
+	node := &ast.SubstateMember{
+		Name: name,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseTransitionMember parses: transition <source> to <target> [when <trigger>] [if <guard>] [do { <effect> }];
+func (p *Parser) parseTransitionMember(start int) ast.Node {
+	// 'transition' already consumed
+	
+	// Parse source state
+	source := p.parseQualifiedName()
+	
+	// Expect 'to'
+	if !p.atKeyword("to") {
+		p.error(p.peek().Span, "expected 'to' after transition source")
+		en := &ast.ErrorNode{Message: "expected 'to' after transition source"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	p.advance() // consume 'to'
+	
+	// Parse target state
+	target := p.parseQualifiedName()
+	
+	// Optional: when <trigger>
+	var trigger ast.Node
+	if p.atKeyword("when") {
+		p.advance() // consume 'when'
+		trigger = p.ParseExpression() // simplified: parse as expression (could be time/change/accept/call)
+	}
+	
+	// Optional: if <guard>
+	var guard ast.Node
+	if p.atKeyword("if") {
+		p.advance() // consume 'if'
+		guard = p.ParseExpression()
+	}
+	
+	// Optional: do { <effect> }
+	var effect []ast.Node
+	if p.atKeyword("do") {
+		p.advance() // consume 'do'
+		
+		if !p.at(lexer.LBrace) {
+			p.error(p.peek().Span, "expected '{' after 'do'")
+			en := &ast.ErrorNode{Message: "expected '{' after 'do'"}
+			en.NodeSpan = p.spanFrom(start)
+			return en
+		}
+		p.advance() // consume '{'
+		
+		// Parse effect actions
+		for !p.at(lexer.RBrace) && !p.atEOF() {
+			effect = append(effect, p.parseActionMember())
+		}
+		
+		p.expect(lexer.RBrace, "expected '}' after effect actions")
+	}
+	
+	p.expect(lexer.Semicolon, "expected ';' after transition")
+	
+	node := &ast.TransitionMember{
+		Source:  source,
+		Target:  target,
+		Trigger: trigger,
+		Guard:   guard,
+		Effect:  effect,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}

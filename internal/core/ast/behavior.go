@@ -225,3 +225,44 @@ type ActorMember struct {
 	Name     string
 	TypeRef  *QualifiedName // actor type
 }
+
+// Phase C4: State Body Members
+
+// EntryMember represents entry behavior in a state body.
+// Syntax: entry { <actions> }
+type EntryMember struct {
+	NodeBase
+	Actions []Node // action sequence
+}
+
+// DoMember represents ongoing activity in a state body.
+// Syntax: do { <actions> }
+type DoMember struct {
+	NodeBase
+	Actions []Node // action sequence
+}
+
+// ExitMember represents exit behavior in a state body.
+// Syntax: exit { <actions> }
+type ExitMember struct {
+	NodeBase
+	Actions []Node // action sequence
+}
+
+// SubstateMember represents a nested state declaration.
+// Syntax: state <name>;
+type SubstateMember struct {
+	NodeBase
+	Name string // substate name
+}
+
+// TransitionMember represents a state transition in textual form.
+// Syntax: transition <source> to <target> [when <trigger>] [if <guard>] [do { <effect> }];
+type TransitionMember struct {
+	NodeBase
+	Source  *QualifiedName // source state
+	Target  *QualifiedName // target state
+	Trigger Node           // optional trigger event (TimeEvent/ChangeEvent/etc)
+	Guard   Node           // optional guard expression
+	Effect  []Node         // optional effect actions
+}
