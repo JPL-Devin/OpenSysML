@@ -64,6 +64,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"calc":         ast.UsageCalc,
 	"function":     ast.UsageCalc, // synonym for calc
 	"constraint":   ast.UsageConstraint,
+	"inv":          ast.UsageConstraint, // synonym for constraint (invariant)
 	"requirement":  ast.UsageRequirement,
 	"case":         ast.UsageCase,
 	"analysis":     ast.UsageAnalysisCase,

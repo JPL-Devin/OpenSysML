@@ -445,25 +445,22 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 }
 
 // parseConstraintMember parses one constraint member: assert/assume [not] <expr>;
+// Also supports bare expressions (implicit assert): inv name { expr }
 func (p *Parser) parseConstraintMember() ast.Node {
 	start := p.peek().Span.Offset
 	
 	var isAssert bool
 	var isNegated bool
 	
-	// Expect 'assert' or 'assume' keyword
+	// Check for 'assert' or 'assume' keyword
 	if p.acceptKeyword("assert") {
 		isAssert = true
 	} else if p.acceptKeyword("assume") {
 		isAssert = false
 	} else {
-		p.error(p.peek().Span, "expected 'assert' or 'assume' in constraint body")
-		en := &ast.ErrorNode{Message: "expected 'assert' or 'assume' in constraint body"}
-		if !p.atEOF() && !p.at(lexer.RBrace) {
-			p.advance() // ensure progress
-		}
-		en.NodeSpan = p.spanFrom(start)
-		return en
+		// Bare expression (implicit assert) - common in invariants
+		// Example: inv piPrecision { RealFunctions::round(pi * 1E20) == 314159265358979323846.0 }
+		isAssert = true // Default to assert for bare expressions
 	}
 	
 	// Check for optional 'not' keyword
