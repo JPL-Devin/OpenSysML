@@ -514,8 +514,9 @@ func (p *Parser) parseResultMember() ast.Node {
 		return u
 	}
 	
-	// Check for Pattern 4: return [kind] [modifiers] name = expr (result parameter with initializer, no type)
-	if p.atName() && p.peekN(1).Kind == lexer.Eq {
+	// Check for Pattern 4: return [kind] [modifiers] name [mult] = expr (result parameter with initializer, no type)
+	// Lookahead: name followed by '[' or '='
+	if p.atName() && (p.peekN(1).Kind == lexer.Eq || p.peekN(1).Kind == lexer.LBracket) {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
@@ -528,8 +529,20 @@ func (p *Parser) parseResultMember() ast.Node {
 			IsNonunique: mods.isNonunique,
 		}
 		u.Ident = p.parseIdentification()
-		p.advance() // consume '='
-		u.Value = p.ParseExpression()
+		
+		// Parse optional multiplicity '[n..m]'
+		if p.at(lexer.LBracket) {
+			u.Multiplicity = p.parseMultiplicity()
+		}
+		
+		// Must be followed by '='
+		if !p.at(lexer.Eq) {
+			p.error(p.peek().Span, "expected '=' after return parameter name")
+		} else {
+			p.advance() // consume '='
+			u.Value = p.ParseExpression()
+		}
+		
 		p.expect(lexer.Semicolon, "expected ';' after return parameter")
 		u.NodeSpan = p.spanFrom(start)
 		return u
