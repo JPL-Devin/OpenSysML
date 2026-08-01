@@ -147,6 +147,7 @@ const (
 	UsageCalc
 	UsageConstraint
 	UsageRequirement
+	UsageSatisfy // satisfy requirement ... by ...
 	UsageSubject
 	UsageObjective
 	UsageCase
@@ -212,6 +213,8 @@ func (k UsageKind) String() string {
 		return "constraint"
 	case UsageRequirement:
 		return "requirement"
+	case UsageSatisfy:
+		return "satisfy"
 	case UsageSubject:
 		return "subject"
 	case UsageObjective:

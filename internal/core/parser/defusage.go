@@ -84,6 +84,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"constraint":   ast.UsageConstraint,
 	"inv":          ast.UsageConstraint, // synonym for constraint (invariant)
 	"requirement":  ast.UsageRequirement,
+	"satisfy":      ast.UsageSatisfy,
 	"subject":      ast.UsageSubject,
 	"objective":    ast.UsageObjective,
 	"case":         ast.UsageCase,
@@ -265,8 +266,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv, connector) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" {
+	// Check for usage-only keywords (subject, objective, succession, inv, connector, satisfy) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "satisfy" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
@@ -470,6 +471,44 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		IsDerived:   mods.isDerived,
 		IsOrdered:   mods.isOrdered,
 		IsNonunique: mods.isNonunique,
+	}
+	
+	// Handle UsageSatisfy special syntax: satisfy requirement <name> by <name> { body }
+	if kind == ast.UsageSatisfy {
+		// Expect: requirement <name> by <name>
+		if !p.acceptKeyword("requirement") {
+			p.error(p.peek().Span, "expected 'requirement' keyword after 'satisfy'")
+			u.NodeSpan = p.spanFrom(start)
+			return u
+		}
+		reqName := p.parseQualifiedName()
+		if reqName != nil {
+			// Store as typing relationship
+			u.Relationships = append(u.Relationships, &ast.Relationship{
+				Kind:   ast.RelTyping,
+				Target: reqName,
+			})
+		}
+		if !p.acceptKeyword("by") {
+			p.error(p.peek().Span, "expected 'by' keyword after requirement reference")
+			u.NodeSpan = p.spanFrom(start)
+			return u
+		}
+		subjName := p.parseQualifiedName()
+		if subjName != nil {
+			// Store subject as identification (or could be relationship)
+			// For now, use as identification name
+			if len(subjName.Parts) > 0 {
+				u.Ident.Name = subjName.Parts[0].Text
+				u.Ident.NameSpan = subjName.Parts[0].Span
+			}
+		}
+		// Parse body (requirement body)
+		members, hasBody := p.parseDefUsageBody()
+		u.Members = members
+		u.HasBody = hasBody
+		u.NodeSpan = p.spanFrom(start)
+		return u
 	}
 	
 	// Handle shorthand: `feature redefines x` means `feature x redefines x`
@@ -685,7 +724,11 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Check for name-before-keyword pattern: <name> <keyword> { ... }
 	// Example: assert constraint { ... }, require constraint { ... }
 	// <name> can be identifier OR keyword used as name
-	if p.atName() || p.at(lexer.Keyword) {
+	// But exclude usage-only keywords (they're declarations, not names)
+	isUsageOnlyKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
+		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
+		p.peek().KeywordID == "satisfy")
+	if !isUsageOnlyKw && (p.atName() || p.at(lexer.Keyword)) {
 		next := p.peekN(1)
 		if next.Kind == lexer.Keyword {
 			_, isDef := definitionKindKeywords[next.KeywordID]
