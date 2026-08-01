@@ -21,14 +21,16 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			// Try parsing as body member (parameters, doc, import, etc.)
 			// Body member expects: visibility + declaration keyword, or special patterns
 			// If we see expression-start that's NOT a declaration, parse as implicit return expression
-			// Heuristic: if next token after name is NOT ':', ';', or keyword, it's likely expression
+			// Check if current position looks like expression start (name, literal, if, etc.)
+			// but not a declaration pattern (name followed by colon/semicolon/keyword/bracket)
 			peek1 := p.peek()
 			peek2 := p.peekN(1)
-			isLikelyExpr := (peek1.Kind == lexer.Identifier || peek1.Kind == lexer.UnrestrictedName) &&
-				peek2.Kind != lexer.Colon && peek2.Kind != lexer.Semicolon && peek2.Kind != lexer.Keyword &&
-				peek2.Kind != lexer.LBracket
+			isNameDecl := (peek1.Kind == lexer.Identifier || peek1.Kind == lexer.UnrestrictedName) &&
+				(peek2.Kind == lexer.Colon || peek2.Kind == lexer.Semicolon || 
+				 peek2.Kind == lexer.Keyword || peek2.Kind == lexer.LBracket)
 			
-			if isLikelyExpr {
+			// If expression-start but NOT name-declaration pattern, parse as implicit return
+			if p.atExprStart() && !isNameDecl {
 				// Parse as implicit return expression
 				expr := p.ParseExpression()
 				if expr != nil {

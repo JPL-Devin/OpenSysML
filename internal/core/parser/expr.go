@@ -209,7 +209,8 @@ func (p *Parser) atExprStart() bool {
 		p.atKeyword("null") || 
 		p.atKeyword("true") || 
 		p.atKeyword("false") || 
-		p.atKeyword("new")
+		p.atKeyword("new") ||
+		p.atKeyword("if")
 }
 
 // parsePostfixes applies zero or more postfix operators to expr.
