@@ -217,7 +217,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	tok := p.peek()
 	if tok.Kind == lexer.ColonGt || tok.Kind == lexer.ColonGtGt || tok.Kind == lexer.Colon {
 		// No modifiers, no kind keyword - parse as anonymous attribute usage
-		return p.parseUsage(start, ast.UsageAttribute, featureMods{})
+		return p.parseUsage(start, ast.UsageAttribute, featureMods{}, false)
 	}
 	
 	mods := p.parseFeatureModifiers()
@@ -228,9 +228,9 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		p.advance() // 'case'
 		if p.atKeyword("def") {
 			p.advance() // 'def'
-			return p.parseDefinition(start, ast.DefUseCase, mods)
+			return p.parseDefinition(start, ast.DefUseCase, mods, false)
 		}
-		return p.parseUsage(start, ast.UsageUseCase, mods)
+		return p.parseUsage(start, ast.UsageUseCase, mods, false)
 	}
 
 	t := p.peek()
@@ -243,24 +243,28 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// Fallback: if we have modifiers but no kind keyword, assume it's a generic usage (e.g., "in x: Integer;")
 		// This is common for parameters in calc/action bodies.
 		if mods.direction != ast.DirNone || mods.isReference || mods.isComposite || mods.isDerived {
-			return p.parseUsage(start, ast.UsagePart, mods)
+			return p.parseUsage(start, ast.UsagePart, mods, false)
 		}
 		return nil
 	}
 	p.advance() // consume the kind keyword
+	
+	// Parse 'all' modifier if present (appears after keyword, before name)
+	isAll := p.acceptKeyword("all")
 
 	if p.atKeyword("def") {
 		p.advance() // consume 'def'
-		return p.parseDefinition(start, defKind, mods)
+		return p.parseDefinition(start, defKind, mods, isAll)
 	}
-	return p.parseUsage(start, usageKindKeywords[kw], mods)
+	return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
 }
 
-func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featureMods) *ast.Definition {
+func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featureMods, isAll bool) *ast.Definition {
 	def := &ast.Definition{
 		Kind:        kind,
 		IsAbstract:  mods.isAbstract,
 		IsVariation: mods.isVariation,
+		IsAll:       isAll,
 		Ident:       p.parseIdentification(),
 	}
 	def.Relationships, _ = p.parseRelationships(false)
@@ -406,11 +410,12 @@ func (p *Parser) isStateKeyword() bool {
 	return kw == "entry" || kw == "do" || kw == "exit" || kw == "state" || kw == "transition"
 }
 
-func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods) *ast.Usage {
+func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isAll bool) *ast.Usage {
 	u := &ast.Usage{
 		Kind:        kind,
 		IsAbstract:  mods.isAbstract,
 		IsReference: mods.isReference,
+		IsAll:       isAll,
 		Direction:   mods.direction,
 		IsComposite: mods.isComposite,
 		IsDerived:   mods.isDerived,

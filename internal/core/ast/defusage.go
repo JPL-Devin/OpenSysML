@@ -292,6 +292,7 @@ type Definition struct {
 	Kind          DefinitionKind
 	IsAbstract    bool
 	IsVariation   bool
+	IsAll         bool // 'all' multiplicity propagation modifier
 	Ident         Identification
 	Relationships []*Relationship
 	Members       []Node
@@ -305,6 +306,7 @@ type Usage struct {
 	Kind          UsageKind
 	IsAbstract    bool
 	IsReference   bool
+	IsAll         bool // 'all' multiplicity propagation modifier
 	Direction     FeatureDirection
 	IsComposite   bool
 	IsDerived     bool
