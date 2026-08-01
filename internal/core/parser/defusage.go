@@ -639,6 +639,33 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return al
 	}
 	
+	// Check for enum literal pattern: identifier = expr;
+	// Example: low = 0.25;
+	if p.atName() && p.peekN(1).Kind == lexer.Eq {
+		var id ast.Identification
+		tok := p.advance()
+		if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
+			id.Name = p.src.Text(tok.Span)
+			id.NameSpan = tok.Span
+		}
+		
+		p.expect(lexer.Eq, "expected '=' after enum literal name")
+		value := p.ParseExpression()
+		p.expect(lexer.Semicolon, "expected ';' after enum literal value")
+		
+		u := &ast.Usage{
+			Kind:  ast.UsageEnumeration,
+			Ident: id,
+			Value: value,
+		}
+		u.NodeSpan = p.spanFrom(start)
+		
+		mem := &ast.Membership{Visibility: vis, Member: u}
+		mem.NodeSpan = p.spanFrom(start)
+		mem.SetLeadingTrivia(trivia)
+		return mem
+	}
+	
 	// Check for name-before-keyword pattern: <name> <keyword> { ... }
 	// Example: assert constraint { ... }, require constraint { ... }
 	// <name> can be identifier OR keyword used as name

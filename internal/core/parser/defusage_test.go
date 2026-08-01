@@ -288,3 +288,65 @@ func TestParseEndModifier(t *testing.T) {
 		t.Fatalf("expected name 'x', got %q", u2.Ident.Name)
 	}
 }
+
+func TestParseEnumLiterals(t *testing.T) {
+	src := `enum def LevelEnum {
+    low = 0.25;
+    medium = 0.50;
+    high = 0.75;
+}`
+	p := New(source.New("test.sysml", []byte(src)))
+	f := p.ParseFile()
+	
+	if len(p.Diagnostics) > 0 {
+		for _, d := range p.Diagnostics {
+			t.Logf("diagnostic: %s", d.Message)
+		}
+		t.Fatalf("parse failed with %d diagnostics", len(p.Diagnostics))
+	}
+	
+	// Check enum def
+	if len(f.Members) != 1 {
+		t.Fatalf("expected 1 member, got %d", len(f.Members))
+	}
+	
+	mem, ok := f.Members[0].(*ast.Membership)
+	if !ok {
+		t.Fatalf("expected Membership, got %T", f.Members[0])
+	}
+	
+	def, ok := mem.Member.(*ast.Definition)
+	if !ok {
+		t.Fatalf("expected Definition, got %T", mem.Member)
+	}
+	
+	if def.Kind != ast.DefEnumeration {
+		t.Fatalf("expected DefEnumeration, got %v", def.Kind)
+	}
+	
+	// Check enum literals
+	if len(def.Members) != 3 {
+		t.Fatalf("expected 3 body members, got %d", len(def.Members))
+	}
+	
+	t.Logf("enum body: %#v", def.Members)
+}
+
+func TestParseEnumLiteralsWithTyping(t *testing.T) {
+	src := `enum def LevelEnum :> Level {
+    low = 0.25;
+    medium = 0.50;
+    high = 0.75;
+}`
+	p := New(source.New("test.sysml", []byte(src)))
+	_ = p.ParseFile()
+	
+	if len(p.Diagnostics) > 0 {
+		for _, d := range p.Diagnostics {
+			t.Logf("diagnostic: %s", d.Message)
+		}
+		t.Fatalf("parse failed with %d diagnostics", len(p.Diagnostics))
+	}
+	
+	t.Logf("parsed cleanly")
+}

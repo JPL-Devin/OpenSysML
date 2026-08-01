@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 func dumpExpr(t *testing.T, src string) string {
@@ -278,4 +279,19 @@ func TestPostfixArrowThenChain(t *testing.T) {
 	if _, ok := e.Operand.(*ast.InvocationExpr); !ok {
 		t.Fatalf("operand = %#v", e.Operand)
 	}
+}
+
+func TestConstructorNamedArgs(t *testing.T) {
+	src := `feature x = new RiskLevel(probability = LevelEnum::low);`
+	p := New(source.New("test.sysml", []byte(src)))
+	f := p.ParseFile()
+	
+	if len(p.Diagnostics) > 0 {
+		for _, d := range p.Diagnostics {
+			t.Logf("diagnostic: %s", d.Message)
+		}
+		t.Fatalf("parse failed with %d diagnostics", len(p.Diagnostics))
+	}
+	
+	t.Logf("parsed: %d members", len(f.Members))
 }
