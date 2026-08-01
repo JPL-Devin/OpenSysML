@@ -392,7 +392,9 @@ func (p *Parser) parseResultMember() ast.Node {
 	// Pattern 1: return name: Type[mult];  (named result parameter)
 	// Pattern 2: return : Type[mult];      (anonymous result parameter)
 	// Pattern 3: return expr;              (computed result)
-	if p.at(lexer.Colon) || p.atName() {
+	// Pattern 4: return name = expr;       (computed result with binding)
+	// Use lookahead to distinguish Pattern 1 from Pattern 4
+	if p.at(lexer.Colon) || (p.atName() && p.peekN(1).Kind == lexer.Colon) {
 		// Parse as result parameter (named or anonymous usage with typing)
 		u := &ast.Usage{
 			Kind:      ast.UsageAttribute, // result parameter
@@ -433,6 +435,20 @@ func (p *Parser) parseResultMember() ast.Node {
 		
 		p.expect(lexer.Semicolon, "expected ';' after return parameter")
 		
+		u.NodeSpan = p.spanFrom(start)
+		return u
+	}
+	
+	// Check for Pattern 4: return name = expr (result parameter with initializer, no type)
+	if p.atName() && p.peekN(1).Kind == lexer.Eq {
+		u := &ast.Usage{
+			Kind:      ast.UsageAttribute, // result parameter
+			Direction: ast.DirOut,
+		}
+		u.Ident = p.parseIdentification()
+		p.advance() // consume '='
+		u.Value = p.ParseExpression()
+		p.expect(lexer.Semicolon, "expected ';' after return parameter")
 		u.NodeSpan = p.spanFrom(start)
 		return u
 	}
