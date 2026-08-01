@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+	
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 )
@@ -67,6 +69,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"concern":    ast.UsageConcern,
 	// Tier B.
 	"connection": ast.UsageConnection,
+	"succession": ast.UsageSuccession,
 	"flow":       ast.UsageFlow,
 	"port":       ast.UsagePort,
 	"interface":  ast.UsageInterface,
@@ -253,8 +256,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective) that never have def forms
-	if kw == "subject" || kw == "objective" {
+	// Check for usage-only keywords (subject, objective, succession) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
@@ -478,24 +481,24 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			} else {
 				// Normal relationship parsing
 				preRels, conjugated = p.parseRelationships(true)
-				// A bare flow shorthand `flow x to y` has no declaration name
-				if !(kind == ast.UsageFlow && p.atFlowShorthand()) {
+				// A bare flow shorthand `flow x to y` and succession `succession x then y` have no declaration name
+				if !(kind == ast.UsageFlow && p.atFlowShorthand()) && kind != ast.UsageSuccession {
 					u.Ident = p.parseIdentification()
 				}
 			}
 		} else {
 			// Not a relationship keyword
 			preRels, conjugated = p.parseRelationships(true)
-			// A bare flow shorthand `flow x to y` has no declaration name
-			if !(kind == ast.UsageFlow && p.atFlowShorthand()) {
+			// A bare flow shorthand `flow x to y` and succession `succession x then y` have no declaration name
+			if !(kind == ast.UsageFlow && p.atFlowShorthand()) && kind != ast.UsageSuccession {
 				u.Ident = p.parseIdentification()
 			}
 		}
 	} else {
 		// No relationship shorthand
 		preRels, conjugated = p.parseRelationships(true)
-		// A bare flow shorthand `flow x to y` has no declaration name
-		if !(kind == ast.UsageFlow && p.atFlowShorthand()) {
+		// A bare flow shorthand `flow x to y` and succession `succession x then y` have no declaration name
+		if !(kind == ast.UsageFlow && p.atFlowShorthand()) && kind != ast.UsageSuccession {
 			u.Ident = p.parseIdentification()
 		}
 	}
@@ -721,6 +724,8 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 	switch kind {
 	case ast.UsageConnection, ast.UsageInterface:
 		p.parseConnectorEnds(u, "connect")
+	case ast.UsageSuccession:
+		p.parseConnectorEnds(u, "") // succession has no intermediate keyword
 	case ast.UsageAllocation:
 		p.parseConnectorEnds(u, "allocate")
 	case ast.UsageFlow:
@@ -730,12 +735,17 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 
 // parseConnectorEnds parses `<kw> end to end` (binary) or
 // `<kw> ( end , end , ... )` (n-ary), where <kw> is `connect` or `allocate`.
+// For succession, kw is empty and the pattern is directly `end then end`.
 // Each end can optionally have a multiplicity: `[mult] end`.
 // The connector clause is optional. On a malformed end, it records a diagnostic,
 // keeps the ends parsed so far, and stops (the declaration remains a Usage).
 func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
-	if !p.acceptKeyword(kw) {
-		return
+	// For connection/allocation, expect intermediate keyword ('connect'/'allocate')
+	// For succession, no intermediate keyword (kw is empty)
+	if kw != "" {
+		if !p.acceptKeyword(kw) {
+			return
+		}
 	}
 	if p.at(lexer.LParen) {
 		p.advance() // '('
@@ -752,14 +762,24 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 		p.expect(lexer.RParen, "expected ')' to close connector ends")
 		return
 	}
-	// Binary form: end to end.
+	// Binary form: end keyword end (where keyword is "to" for connection, "then" for succession).
 	from := p.parseConnectorEnd()
 	if from == nil {
 		return
 	}
 	u.ConnectorEnds = append(u.ConnectorEnds, from)
-	if !p.acceptKeyword("to") {
-		p.error(p.peek().Span, "expected 'to' between connector ends")
+	
+	// Determine expected keyword based on usage kind
+	var expectedKeyword string
+	switch u.Kind {
+	case ast.UsageSuccession:
+		expectedKeyword = "then"
+	default:
+		expectedKeyword = "to"
+	}
+	
+	if !p.acceptKeyword(expectedKeyword) {
+		p.error(p.peek().Span, fmt.Sprintf("expected '%s' between connector ends", expectedKeyword))
 		return
 	}
 	to := p.parseConnectorEnd()

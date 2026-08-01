@@ -134,6 +134,7 @@ const (
 	UsageConcern
 	// Tier B.
 	UsageConnection
+	UsageSuccession
 	UsageFlow
 	UsagePort
 	UsageInterface
@@ -186,6 +187,8 @@ func (k UsageKind) String() string {
 		return "concern"
 	case UsageConnection:
 		return "connection"
+	case UsageSuccession:
+		return "succession"
 	case UsageFlow:
 		return "flow"
 	case UsagePort:
