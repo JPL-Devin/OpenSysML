@@ -2,6 +2,18 @@
 
 A complete, production-grade SysML v2 implementation in Go—spanning the full lifecycle from authoring to execution, delivering the integrated tooling experience systems engineers expect from modern language ecosystems.
 
+## Quick Start
+
+**Get started in 5 minutes:** [Quick Start Guide](docs/QUICKSTART.md)
+
+```bash
+# Build and run the REPL
+go build ./cmd/sysml
+./sysml
+```
+
+---
+
 ## What is This?
 
 **Think Python/Rust/Go tooling, but for SysML v2:**
@@ -30,9 +42,9 @@ A complete, production-grade SysML v2 implementation in Go—spanning the full l
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
 | Behavioral parser (actions/states) | ✅ Phase C3 integrated |
+| **REPL implementation** | ✅ **Complete** |
 | Standard library bundling & caching | 🚧 In progress |
-| LSP server implementation | ⏳ Planned |
-| REPL implementation | ⏳ Planned |
+| LSP server implementation | 🚧 In progress |
 | Behavioral execution (Tiers 4-5) | 🔮 Future |
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
@@ -111,10 +123,9 @@ go build -o bin/sysml ./cmd/sysml
 
 ## Documentation
 
-- **Design spec:** [`docs/superpowers/specs/2026-07-25-sysml-v2-go-design.md`](docs/superpowers/specs/2026-07-25-sysml-v2-go-design.md)
-- **Runtime architecture:** [`runtime/AGENTS.md`](runtime/AGENTS.md)
-- **Behavioral grammar design:** [`docs/superpowers/specs/2026-07-30-tier-c-behavioral-grammar-design.md`](docs/superpowers/specs/2026-07-30-tier-c-behavioral-grammar-design.md)
-- **Validation design:** [`docs/superpowers/specs/2026-07-30-validation-depth-c-design.md`](docs/superpowers/specs/2026-07-30-validation-depth-c-design.md)
+- **[Quick Start Guide](docs/QUICKSTART.md)** — Get up and running in 5 minutes
+- **[Architecture](docs/ARCHITECTURE.md)** — Complete system architecture, core pipeline, runtime tiers
+- **[Examples](examples/)** — Runtime demos and behavioral model examples
 
 ## License
 
