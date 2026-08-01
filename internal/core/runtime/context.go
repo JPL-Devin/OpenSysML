@@ -141,3 +141,84 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 	
 	return true, nil
 }
+
+// EvaluateRequirement evaluates a requirement definition/usage.
+// Returns (satisfied, error). Validates subject/actor types and evaluates assume/require expressions.
+// Assume members always pass (trusted), require members must evaluate to true.
+func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scope) (bool, error) {
+	// Extract requirement members
+	var members []ast.Node
+	
+	switch decl := sym.Decl.(type) {
+	case *ast.Definition:
+		if decl.Kind != ast.DefRequirement {
+			return false, fmt.Errorf("not a requirement definition: %s", sym.Name)
+		}
+		members = decl.Members
+	case *ast.Usage:
+		if decl.Kind != ast.UsageRequirement {
+			return false, fmt.Errorf("not a requirement usage: %s", sym.Name)
+		}
+		members = decl.Members
+	default:
+		return false, fmt.Errorf("invalid requirement symbol: %s (%T)", sym.Name, sym.Decl)
+	}
+	
+	// Evaluate each requirement member
+	for _, member := range members {
+		// Unwrap Membership
+		node := member
+		if membership, ok := member.(*ast.Membership); ok {
+			node = membership.Member
+		}
+		
+		// Handle different requirement member types
+		switch rm := node.(type) {
+		case *ast.SubjectMember:
+			// Subject: validate that subject binding exists in scope
+			// For now, just check if name is resolvable
+			if rm.Name != "" {
+				_, ok := scope.LookupLocal(rm.Name)
+				if !ok {
+					return false, fmt.Errorf("requirement %s: subject '%s' not found in scope", sym.Name, rm.Name)
+				}
+			}
+			
+		case *ast.ActorMember:
+			// Actor: validate that actor binding exists in scope
+			// For now, just check if name is resolvable
+			if rm.Name != "" {
+				_, ok := scope.LookupLocal(rm.Name)
+				if !ok {
+					return false, fmt.Errorf("requirement %s: actor '%s' not found in scope", sym.Name, rm.Name)
+				}
+			}
+			
+		case *ast.AssumeMember:
+			// Assume: always pass (trusted assumption)
+			// Optionally could evaluate to check it's a valid expression
+			continue
+			
+		case *ast.RequireMember:
+			// Require: must evaluate to true
+			result, err := ctx.EvalWithScope(rm.Expression, scope)
+			if err != nil {
+				return false, fmt.Errorf("requirement %s: require evaluation failed: %w", sym.Name, err)
+			}
+			
+			// Extract boolean value
+			satisfied := false
+			if result.Kind == ValConst && result.Const.Kind == semantics.ValBool {
+				satisfied = result.Const.Bool
+			} else {
+				return false, fmt.Errorf("requirement %s: require expression must evaluate to boolean, got %v", sym.Name, result.Kind)
+			}
+			
+			if !satisfied {
+				return false, fmt.Errorf("requirement %s: require condition failed", sym.Name)
+			}
+		}
+	}
+	
+	return true, nil
+}
