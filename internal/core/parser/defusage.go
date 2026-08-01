@@ -537,15 +537,18 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	}
 	
 	// Handle shorthand: `feature redefines x` means `feature x redefines x`
-	// Check if relationship keyword followed by name (not symbolic operator)
+	// Check if relationship keyword followed by simple name (not qualified name or feature chain)
 	var preRels []*ast.Relationship
 	var conjugated bool
 	if p.at(lexer.Keyword) {
 		if relKind, ok := relationshipKeywords[p.peek().KeywordID]; ok {
-			// Peek ahead to see if name follows
+			// Peek ahead to see if simple name follows (not :: or .)
 			nextTok := p.peekN(1)
-			if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.UnrestrictedName {
-				// Shorthand: relationship keyword + name
+			nextNext := p.peekN(2)
+			isSimpleName := (nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.UnrestrictedName) &&
+				(nextNext.Kind != lexer.ColonColon && nextNext.Kind != lexer.Dot)
+			if isSimpleName {
+				// Shorthand: relationship keyword + simple name
 				p.advance() // consume relationship keyword
 				u.Ident = p.parseIdentification()
 				// Create implicit relationship targeting same name
@@ -554,8 +557,19 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: u.Ident.Name, Span: u.Ident.NameSpan}}},
 				}
 				preRels = append(preRels, rel)
+				// Check for additional comma-separated targets (e.g., `feature redefines x, y, z`)
+				// Even in shorthand form, we can have multiple targets after the first
+				for p.accept2(lexer.Comma) {
+					target := p.parseRelationshipTarget()
+					if target != nil {
+						r := &ast.Relationship{Kind: relKind, Target: target}
+						preRels = append(preRels, r)
+					} else {
+						break
+					}
+				}
 			} else {
-				// Normal relationship parsing
+				// Normal relationship parsing (qualified names, feature chains, or no name after keyword)
 				preRels, conjugated = p.parseRelationships(true)
 				// A bare flow shorthand `flow x to y` and succession `succession x then y` have no declaration name
 				if !(kind == ast.UsageFlow && p.atFlowShorthand()) && kind != ast.UsageSuccession {
