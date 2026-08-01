@@ -572,7 +572,15 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 	
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
-		members = append(members, p.parseConstraintMember())
+		
+		// Check for doc keyword → parse as documentation
+		if p.atKeyword("doc") {
+			members = append(members, p.parseDocumentation(before))
+		} else {
+			// Parse constraint expression (assert/assume/bare expression)
+			members = append(members, p.parseConstraintMember())
+		}
+		
 		// Safety check: if position hasn't advanced, force progress to avoid infinite loop
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
 			p.advance()
