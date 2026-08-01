@@ -1,35 +1,44 @@
 package libs
 
 import (
+	"testing"
+
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"testing"
 )
 
-func TestSingleFile_Occurrences_Details(t *testing.T) {
+func TestOccurrencesRedefinesStatement(t *testing.T) {
 	src := &embedSource{}
 	data, err := src.Read("Kernel Libraries/Kernel Semantic Library/Occurrences.kerml")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("failed to read file: %v", err)
 	}
 
 	sf := source.New("Occurrences.kerml", data)
 	p := parser.New(sf)
-	_ = p.ParseFile()
+	root := p.ParseFile()
 
-	if len(p.Diagnostics) > 0 {
-		t.Logf("Parse diagnostics (%d):", len(p.Diagnostics))
-		for i, d := range p.Diagnostics {
-			if i >= 20 {
-				break
+	if root == nil {
+		t.Fatal("root is nil")
+	}
+
+	diags := p.Diagnostics
+	t.Logf("Total diagnostics: %d", len(diags))
+
+	// Focus on "redefines innerSpaceDimension = 0" line
+	for _, d := range diags {
+		if d.Span.Offset >= 5900 && d.Span.Offset <= 6100 {
+			// Get context
+			start := d.Span.Offset - 50
+			if start < 0 {
+				start = 0
 			}
-			text := sf.Text(d.Span)
-			if len(text) > 50 {
-				text = text[:50] + "..."
+			end := d.Span.Offset + 50
+			if end > len(data) {
+				end = len(data)
 			}
-			t.Logf("  [%d] offset %d: %s [near: %q]", i+1, d.Span.Offset, d.Message, text)
+			context := string(data[start:end])
+			t.Logf("[Offset %d] %s\n  Context: %q", d.Span.Offset, d.Message, context)
 		}
-	} else {
-		t.Log("Parsed cleanly!")
 	}
 }
