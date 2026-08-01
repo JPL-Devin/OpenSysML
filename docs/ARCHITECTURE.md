@@ -51,8 +51,7 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 github.com/Open-MBEE/Systemica
 ├── cmd/
 │   ├── sysml-lsp/          # LSP server binary
-│   ├── sysml/              # Interactive REPL binary
-│   └── runtime-demo/       # Runtime demo binary
+│   └── sysml/              # Interactive REPL binary
 ├── internal/core/
 │   ├── source/             # Source files, spans, line indexing
 │   ├── lexer/              # Hand-written scanner (~200 keywords)
