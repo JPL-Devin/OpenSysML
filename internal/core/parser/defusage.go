@@ -78,6 +78,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"interaction": ast.UsageInteraction,
 	"allocation":  ast.UsageAllocation,
 	"binding":    ast.UsageBinding,
+	"bind":       ast.UsageBinding, // shorthand for binding
 	// Tier C.
 	"action":       ast.UsageAction,
 	"state":        ast.UsageState,
@@ -304,8 +305,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv, connector, satisfy, step, expr, interaction) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "satisfy" || kw == "step" || kw == "expr" || kw == "interaction" {
+	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "step" || kw == "expr" || kw == "interaction" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
