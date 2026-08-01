@@ -553,6 +553,64 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		return u
 	}
 	
+	// Handle UsageBinding special syntax: binding [mult] name = [mult] target; OR binding name of [mult] target = [mult] value;
+	if kind == ast.UsageBinding {
+		// Check for multiplicity before name: binding [mult] name ...
+		if p.at(lexer.LBracket) {
+			u.Multiplicity = p.parseMultiplicity()
+		}
+		
+		// Parse source (name or feature chain like x.field)
+		// Check if simple name or feature chain
+		if p.atName() && p.peekN(1).Kind != lexer.Dot {
+			// Simple name - use as identification
+			u.Ident = p.parseIdentification()
+		} else {
+			// Feature chain or qualified name - parse as relationship target
+			// Store in relationships as source (redefines relationship to indicate binding source)
+			source := p.parseRelationshipTarget()
+			if source != nil {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelRedefines, // Use redefines to mark binding source
+					Target: source,
+				})
+			}
+		}
+		
+		// Check for "of" keyword (binding name of [mult] target = value)
+		if p.acceptKeyword("of") {
+			// Parse source multiplicity and target
+			if p.at(lexer.LBracket) {
+				// Store source multiplicity somewhere - for now skip or use relationships
+				p.parseMultiplicity() // consume but don't store separately
+			}
+			// Parse target as typing relationship
+			target := p.parseRelationshipTarget()
+			if target != nil {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelTyping,
+					Target: target,
+				})
+			}
+		}
+		
+		// Parse value: = [mult] expr
+		if p.accept2(lexer.Eq) {
+			// Optional multiplicity before value expression
+			if p.at(lexer.LBracket) {
+				p.parseMultiplicity() // consume multiplicity prefix in value
+			}
+			u.Value = p.ParseExpression()
+		}
+		
+		// Parse body or semicolon
+		members, hasBody := p.parseDefUsageBody()
+		u.Members = members
+		u.HasBody = hasBody
+		u.NodeSpan = p.spanFrom(start)
+		return u
+	}
+	
 	// Handle shorthand: `feature redefines x` means `feature x redefines x`
 	// Check if relationship keyword followed by simple name (not qualified name or feature chain)
 	var preRels []*ast.Relationship
