@@ -342,8 +342,18 @@ func (p *Parser) parseBase() ast.Node {
 	case p.at(lexer.LBrace):
 		return setBase(p.parseBodyExpr(start))
 
-	case p.atName():
-		qn := p.parseQualifiedName()
+	case p.atName(), p.at(lexer.Keyword):
+		// Parse qualified name or keyword-as-name
+		var qn *ast.QualifiedName
+		if p.at(lexer.Keyword) {
+			// Keywords can be used as feature references (e.g., `excluding(do)`)
+			tok := p.advance()
+			seg := ast.NameSegment{Text: tok.KeywordID, Span: tok.Span}
+			qn = &ast.QualifiedName{Parts: []ast.NameSegment{seg}}
+			qn.NodeSpan = tok.Span
+		} else {
+			qn = p.parseQualifiedName()
+		}
 		// A bare `Type(args)` invocation with no receiver is recognized here.
 		if p.at(lexer.LParen) {
 			return setBase(p.parseInvocationTail(start, nil, qn))
