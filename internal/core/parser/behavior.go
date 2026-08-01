@@ -388,23 +388,35 @@ func (p *Parser) parseResultMember() ast.Node {
 		return en
 	}
 	
-	// Check for ': Type[mult] default expr;' syntax (result parameter, no computed expression)
-	if p.at(lexer.Colon) {
-		// Parse as anonymous usage with typing
+	// Check for named or anonymous result parameter syntax
+	// Pattern 1: return name: Type[mult];  (named result parameter)
+	// Pattern 2: return : Type[mult];      (anonymous result parameter)
+	// Pattern 3: return expr;              (computed result)
+	if p.at(lexer.Colon) || p.atName() {
+		// Parse as result parameter (named or anonymous usage with typing)
 		u := &ast.Usage{
-			Kind:      ast.UsageAttribute, // anonymous result parameter
+			Kind:      ast.UsageAttribute, // result parameter
 			Direction: ast.DirOut,
 		}
 		
-		// Parse typing relationship ': Type'
-		p.advance() // consume ':'
+		// Check if named (identifier before colon)
+		if p.atName() {
+			u.Ident = p.parseIdentification()
+		}
 		
-		// Parse type name directly (QualifiedName)
-		qn := p.parseQualifiedName()
-		if qn != nil {
-			rel := &ast.Relationship{Kind: ast.RelTyping, Target: qn}
-			rel.NodeSpan = qn.NodeSpan
-			u.Relationships = append(u.Relationships, rel)
+		// Parse typing relationship ': Type'
+		if !p.at(lexer.Colon) {
+			p.error(p.peek().Span, "expected ':' after result parameter name")
+		} else {
+			p.advance() // consume ':'
+			
+			// Parse type name directly (QualifiedName)
+			qn := p.parseQualifiedName()
+			if qn != nil {
+				rel := &ast.Relationship{Kind: ast.RelTyping, Target: qn}
+				rel.NodeSpan = qn.NodeSpan
+				u.Relationships = append(u.Relationships, rel)
+			}
 		}
 		
 		// Parse optional multiplicity '[n..m]'
@@ -412,12 +424,14 @@ func (p *Parser) parseResultMember() ast.Node {
 			u.Multiplicity = p.parseMultiplicity()
 		}
 		
-		// Parse optional default value 'default expr'
+		// Parse optional default value 'default expr' or '= expr'
 		if p.acceptKeyword("default") {
+			u.Value = p.ParseExpression()
+		} else if p.accept2(lexer.Eq) {
 			u.Value = p.ParseExpression()
 		}
 		
-		p.expect(lexer.Semicolon, "expected ';' after return type")
+		p.expect(lexer.Semicolon, "expected ';' after return parameter")
 		
 		u.NodeSpan = p.spanFrom(start)
 		return u
