@@ -2,6 +2,26 @@
 
 Comprehensive demos for SysML v2 execution environment features.
 
+## Parser Features
+
+### Parser Features Demos
+**Files:** `parser_features_demo_*.kerml`  
+**Documentation:** [PARSER_FEATURES_DEMOS.md](PARSER_FEATURES_DEMOS.md)
+
+Demonstrates new SysML v2/KerML parser features that enable **81.1% coverage** of the official standard library:
+- **Relationships:** `inverse of`, `unions`, `chains`
+- **Modifiers:** `public`/`protected`/`private`, `readonly`, `constant`, `ordered`/`nonunique`
+- **Binding:** Complex binding patterns with source expressions
+- **Connectors:** Connection `connect` keyword, succession `first`/`then` keywords
+- **Default Values:** `default` keyword as alternative to `=`
+
+All patterns extracted from real stdlib usage. See [PARSER_FEATURES_DEMOS.md](PARSER_FEATURES_DEMOS.md) for details.
+
+**Test:**
+```bash
+go test ./examples -run '^TestParserFeaturesDemos$' -v
+```
+
 ## Behavioral Execution
 
 ### Action Execution (Petri-Net Token Flow)
