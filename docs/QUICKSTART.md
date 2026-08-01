@@ -4,28 +4,58 @@ Get up and running with Systemica in 5 minutes.
 
 ## Installation
 
-### Prerequisites
+### Option 1: Download Pre-built Binaries (Recommended)
 
-- Go 1.25 or later
-- Git
+Download the latest release for your platform from [GitHub Releases](https://github.com/Open-MBEE/Systemica/releases):
 
-### Build from Source
-
+**Linux (x64):**
 ```bash
-git clone https://github.com/Open-MBEE/Systemica.git
-cd Systemica
-go build ./cmd/sysml
-go build ./cmd/sysml-lsp
+wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-linux-amd64.tar.gz
+tar xzf sysml-linux-amd64.tar.gz
+sudo mv sysml-linux-amd64 /usr/local/bin/sysml
+chmod +x /usr/local/bin/sysml
 ```
 
-This produces two binaries:
+**macOS (Apple Silicon):**
+```bash
+wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-darwin-arm64.tar.gz
+tar xzf sysml-darwin-arm64.tar.gz
+sudo mv sysml-darwin-arm64 /usr/local/bin/sysml
+chmod +x /usr/local/bin/sysml
+```
+
+**macOS (Intel):**
+```bash
+wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-darwin-amd64.tar.gz
+tar xzf sysml-darwin-amd64.tar.gz
+sudo mv sysml-darwin-amd64 /usr/local/bin/sysml
+chmod +x /usr/local/bin/sysml
+```
+
+**Windows:**
+Download `sysml-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/Systemica/releases/latest), extract, and add to PATH.
+
+**Available binaries:**
 - `sysml` — Interactive REPL
 - `sysml-lsp` — Language Server Protocol server
 
-Optional: Add to PATH:
+### Option 2: Build from Source
+
+**Prerequisites:**
+- Go 1.25 or later
+- Git
+
+**Build:**
 ```bash
-# Add to ~/.bashrc or ~/.zshrc
-export PATH="$PATH:/path/to/Systemica"
+git clone https://github.com/Open-MBEE/Systemica.git
+cd Systemica
+go build -o sysml ./cmd/sysml
+go build -o sysml-lsp ./cmd/sysml-lsp
+```
+
+**Install (optional):**
+```bash
+sudo mv sysml sysml-lsp /usr/local/bin/
 ```
 
 ---

@@ -6,10 +6,36 @@ A complete, production-grade SysML v2 implementation in Go—spanning the full l
 
 **Get started in 5 minutes:** [Quick Start Guide](docs/QUICKSTART.md)
 
+### Install
+
+**Download pre-built binaries:**
 ```bash
-# Build and run the REPL
-go build ./cmd/sysml
+# Linux x64
+wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-linux-amd64.tar.gz
+tar xzf sysml-linux-amd64.tar.gz && sudo mv sysml-linux-amd64 /usr/local/bin/sysml
+
+# macOS (see Quick Start for all platforms)
+```
+
+**Or build from source:**
+```bash
+go build -o sysml ./cmd/sysml
 ./sysml
+```
+
+### Try it
+
+```bash
+$ sysml
+sysml> part Wheel { attribute diameter = 16.0; }
+✓ Wheel
+
+sysml> %instantiate Wheel
+Created instance: Wheel (ID: 1)
+
+sysml> %slots Wheel
+Instance: Wheel (ID: 1)
+  diameter: 16.0
 ```
 
 ---
@@ -104,6 +130,20 @@ github.com/Open-MBEE/Systemica
 - **Parser:** Hand-written recursive descent (zero overhead, full error recovery, sub-ms parses)
 - **Grammar source:** OMG pilot Xtext grammars (`SysML.xtext` + `KerMLExpressions`)
 - **Spec reference:** [OMG SysML v2 (2025-02-01)](https://www.omg.org/spec/SysML/20250201)
+- **CI/CD:** CircleCI for automated builds, tests, and releases
+
+## Releases
+
+Pre-built binaries for Linux, macOS, and Windows are available on the [Releases page](https://github.com/Open-MBEE/Systemica/releases).
+
+**Supported platforms:**
+- Linux (x64, ARM64)
+- macOS (Intel, Apple Silicon)
+- Windows (x64)
+
+**Release process:**
+- Every commit: Build + test
+- Tagged releases (`v*`): Multi-platform binaries published to GitHub Releases
 
 ## Building
 

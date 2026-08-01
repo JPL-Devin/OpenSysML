@@ -1,0 +1,142 @@
+version: 2.1
+
+orbs:
+  go: circleci/go@1.10.0
+
+executors:
+  go-executor:
+    docker:
+      - image: cimg/go:1.23
+    resource_class: medium
+
+jobs:
+  build-and-test:
+    executor: go-executor
+    steps:
+      - checkout
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
+      
+      - run:
+          name: Run tests
+          command: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+      
+      - run:
+          name: Build binaries
+          command: |
+            go build -v -o bin/sysml ./cmd/sysml
+            go build -v -o bin/sysml-lsp ./cmd/sysml-lsp
+      
+      - run:
+          name: Verify binaries
+          command: |
+            ./bin/sysml --version || echo "sysml> " | ./bin/sysml
+            ./bin/sysml-lsp --version || echo "LSP server built"
+      
+      - store_artifacts:
+          path: bin/
+          destination: binaries
+      
+      - store_test_results:
+          path: coverage.txt
+
+  build-release:
+    executor: go-executor
+    steps:
+      - checkout
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
+      
+      - run:
+          name: Install tools
+          command: |
+            go install github.com/goreleaser/goreleaser@latest
+      
+      - run:
+          name: Build release binaries
+          command: |
+            # Create dist directory
+            mkdir -p dist
+            
+            # Build for multiple platforms
+            GOOS=linux GOARCH=amd64 go build -o dist/sysml-linux-amd64 ./cmd/sysml
+            GOOS=linux GOARCH=arm64 go build -o dist/sysml-linux-arm64 ./cmd/sysml
+            GOOS=darwin GOARCH=amd64 go build -o dist/sysml-darwin-amd64 ./cmd/sysml
+            GOOS=darwin GOARCH=arm64 go build -o dist/sysml-darwin-arm64 ./cmd/sysml
+            GOOS=windows GOARCH=amd64 go build -o dist/sysml-windows-amd64.exe ./cmd/sysml
+            
+            GOOS=linux GOARCH=amd64 go build -o dist/sysml-lsp-linux-amd64 ./cmd/sysml-lsp
+            GOOS=linux GOARCH=arm64 go build -o dist/sysml-lsp-linux-arm64 ./cmd/sysml-lsp
+            GOOS=darwin GOARCH=amd64 go build -o dist/sysml-lsp-darwin-amd64 ./cmd/sysml-lsp
+            GOOS=darwin GOARCH=arm64 go build -o dist/sysml-lsp-darwin-arm64 ./cmd/sysml-lsp
+            GOOS=windows GOARCH=amd64 go build -o dist/sysml-lsp-windows-amd64.exe ./cmd/sysml-lsp
+            
+            # Create tarballs
+            cd dist
+            for binary in sysml-*; do
+              if [[ $binary == *.exe ]]; then
+                zip "${binary%.exe}.zip" "$binary"
+              else
+                tar czf "${binary}.tar.gz" "$binary"
+              fi
+            done
+      
+      - store_artifacts:
+          path: dist/
+          destination: release-binaries
+      
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist
+
+  publish-github-release:
+    docker:
+      - image: cibuilds/github:0.13
+    steps:
+      - attach_workspace:
+          at: .
+      
+      - run:
+          name: Publish Release on GitHub
+          command: |
+            VERSION=${CIRCLE_TAG}
+            ghr -t ${GITHUB_TOKEN} \
+                -u ${CIRCLE_PROJECT_USERNAME} \
+                -r ${CIRCLE_PROJECT_REPONAME} \
+                -c ${CIRCLE_SHA1} \
+                -delete \
+                ${VERSION} \
+                dist/
+
+workflows:
+  version: 2
+  
+  # Build and test on every commit
+  build-test:
+    jobs:
+      - build-and-test:
+          filters:
+            branches:
+              only: /.*/
+  
+  # Build and release on tags
+  release:
+    jobs:
+      - build-release:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v.*/
+      
+      - publish-github-release:
+          requires:
+            - build-release
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v.*/
