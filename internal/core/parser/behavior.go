@@ -52,6 +52,11 @@ func (p *Parser) parseActionBody() []ast.Node {
 func (p *Parser) parseActionMember() ast.Node {
 	start := p.peek().Span.Offset
 	
+	// Handle doc keyword specially (parseDocumentation consumes it)
+	if p.atKeyword("doc") {
+		return p.parseDocumentation(start)
+	}
+	
 	// Check for keyword dispatch
 	if tok, ok := p.accept(lexer.Keyword); ok {
 		kw := tok.KeywordID
@@ -653,6 +658,11 @@ func (p *Parser) parseStateBody() []ast.Node {
 // parseStateMember parses one state member: entry/do/exit/state/transition.
 func (p *Parser) parseStateMember() ast.Node {
 	start := p.peek().Span.Offset
+	
+	// Handle doc keyword specially (parseDocumentation consumes it)
+	if p.atKeyword("doc") {
+		return p.parseDocumentation(start)
+	}
 	
 	// Must be keyword
 	if !p.at(lexer.Keyword) {

@@ -1,0 +1,25 @@
+package libs
+
+import (
+	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"testing"
+)
+
+func TestActionsFile(t *testing.T) {
+	src := &embedSource{}
+	data, _ := src.Read("Systems Library/Actions.sysml")
+	p := parser.New(source.New("Actions.sysml", data))
+	_ = p.ParseFile()
+	
+	if len(p.Diagnostics) > 0 {
+		t.Logf("Actions.sysml has %d errors:", len(p.Diagnostics))
+		for i, d := range p.Diagnostics {
+			if i >= 10 { break }
+			t.Logf("  %s", d.Message)
+		}
+		t.Fail()
+	} else {
+		t.Log("Actions.sysml PASS")
+	}
+}

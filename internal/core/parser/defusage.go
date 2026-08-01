@@ -440,11 +440,18 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods) *as
 	var hasBody bool
 	switch kind {
 	case ast.UsageAction:
-		// Action bodies: { first x; action y; then x y; ... }
+		// Action usage bodies: behavioral OR generic
+		// Lookahead: if body starts with behavioral keyword → parseActionBody
+		// Otherwise → generic parseActionBodyGeneric
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
-			members = p.parseActionBody() // parseActionBody expects '{' already consumed
+			if p.isBehavioralKeyword() {
+				members = p.parseActionBody()
+			} else {
+				// Generic body (e.g., { doc /* ... */; })
+				members = p.parseActionBodyGeneric()
+			}
 			hasBody = true
 		}
 	case ast.UsageCalc:
@@ -472,11 +479,18 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods) *as
 			hasBody = true
 		}
 	case ast.UsageState:
-		// State bodies: { entry/do/exit/state/transition ... }
+		// State usage bodies: state body OR generic
+		// Lookahead: if body starts with state keywords → parseStateBody
+		// Otherwise → generic parseActionBodyGeneric
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
-			members = p.parseStateBody()
+			if p.isStateKeyword() {
+				members = p.parseStateBody()
+			} else {
+				// Generic body (e.g., { doc /* ... */; })
+				members = p.parseActionBodyGeneric()
+			}
 			hasBody = true
 		}
 	default:
