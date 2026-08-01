@@ -171,7 +171,7 @@ go build -o bin/sysml ./cmd/sysml
 
 ## License
 
-[To be determined]
+Apache 2.0
 
 ## Contributing
 
