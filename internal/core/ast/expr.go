@@ -169,6 +169,7 @@ type BodyExpr struct {
 // BodyParam is `in name` inside a body expression.
 type BodyParam struct {
 	Name string
+	Type *QualifiedName // optional type annotation (e.g., in x : Type)
 	Span source.Span
 }
 

@@ -90,6 +90,20 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		return
 	case *BodyExpr:
 		b.WriteString(`(BodyExpr`)
+		if len(v.Params) > 0 {
+			b.WriteString(` params=[`)
+			for i, p := range v.Params {
+				if i > 0 {
+					b.WriteString(`,`)
+				}
+				b.WriteString(p.Name)
+				if p.Type != nil {
+					b.WriteString(`:`)
+					b.WriteString(qnString(p.Type))
+				}
+			}
+			b.WriteString(`]`)
+		}
 		var kids []Node
 		if v.Result != nil {
 			kids = append(kids, v.Result)
