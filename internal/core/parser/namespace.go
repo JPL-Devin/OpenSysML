@@ -100,10 +100,14 @@ func (p *Parser) parseIdentification() ast.Identification {
 		p.expect(lexer.Gt, "expected '>'")
 	}
 	// Parse name, but exclude keywords that have special syntax meaning in declaration context
-	// (e.g., "default" introduces a value expression, not a name)
-	if p.at(lexer.Keyword) && p.peek().KeywordID == "default" {
-		// "default" is value keyword, not a valid identifier
-		return id
+	// (e.g., "default" introduces a value expression, "connect"/"allocate" introduce connector ends)
+	if p.at(lexer.Keyword) {
+		kw := p.peek().KeywordID
+		switch kw {
+		case "default", "connect", "allocate", "from", "to", "then":
+			// These keywords have special syntax meaning, not valid as identifier names here
+			return id
+		}
 	}
 	if seg, ok := p.parseNameSegmentRelaxed(); ok {
 		id.Name = seg.Text

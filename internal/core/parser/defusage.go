@@ -568,10 +568,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		
 		// Parse source (name or feature chain like x.field)
 		// Check if simple name or feature chain
-		if p.atName() && p.peekN(1).Kind != lexer.Dot && p.peekN(1).Kind != lexer.LBracket {
+		// Note: use atNameOrKeyword to allow "bind" keyword as identifier name
+		if p.atNameOrKeyword() && p.peekN(1).Kind != lexer.Dot && p.peekN(1).Kind != lexer.LBracket {
 			// Simple name - use as identification
 			u.Ident = p.parseIdentification()
-		} else if p.atName() && p.peekN(1).Kind == lexer.LBracket {
+		} else if p.atNameOrKeyword() && p.peekN(1).Kind == lexer.LBracket {
 			// Name with multiplicity after it: name[mult]
 			// Parse as identification first
 			u.Ident = p.parseIdentification()
@@ -591,6 +592,19 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		// Check for multiplicity after name (before "of"): name[mult] of ...
 		if p.at(lexer.LBracket) {
 			u.Multiplicity = p.parseMultiplicity()
+		}
+		
+		// Check for source expression: binding [mult] name[mult2] source = target
+		// If we have name[mult] and next token is NOT "of" or "=", parse source expression
+		if u.Ident.Name != "" && !p.atKeyword("of") && !p.at(lexer.Eq) && (p.atName() || p.atNameOrKeyword()) {
+			// Parse source as relationship target
+			source := p.parseRelationshipTarget()
+			if source != nil {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelRedefines, // Use redefines to mark binding source
+					Target: source,
+				})
+			}
 		}
 		
 		// Check for "of" keyword (binding name of [mult] target = value)
