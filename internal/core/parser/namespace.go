@@ -256,6 +256,8 @@ var declStartKeywords = map[string]bool{
 	"analysis":     true,
 	"verification": true,
 	"use":          true,
+	"datatype":     true,
+	"feature":      true,
 }
 
 // atMemberSync reports whether the parser sits at a recovery synchronization

@@ -10,6 +10,8 @@ import (
 var definitionKindKeywords = map[string]ast.DefinitionKind{
 	"part":      ast.DefPart,
 	"attribute": ast.DefAttribute,
+	"datatype":  ast.DefAttribute,
+	"feature":   ast.DefAttribute,
 	// Tier A.
 	"item":       ast.DefItem,
 	"occurrence": ast.DefOccurrence,
@@ -43,6 +45,8 @@ var definitionKindKeywords = map[string]ast.DefinitionKind{
 var usageKindKeywords = map[string]ast.UsageKind{
 	"part":      ast.UsagePart,
 	"attribute": ast.UsageAttribute,
+	"datatype":  ast.UsageAttribute,
+	"feature":   ast.UsageAttribute,
 	// Tier A.
 	"item":       ast.UsageItem,
 	"occurrence": ast.UsageOccurrence,
@@ -124,7 +128,8 @@ func (p *Parser) atDefUsageStart() bool {
 		return p.atUseCase()
 	}
 	_, isDef := definitionKindKeywords[t.KeywordID]
-	return isDef
+	_, isUsage := usageKindKeywords[t.KeywordID]
+	return isDef || isUsage
 }
 
 // atUseCase reports whether the current token is `use` immediately followed by
