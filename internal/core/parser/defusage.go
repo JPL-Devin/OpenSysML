@@ -730,6 +730,7 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 
 // parseConnectorEnds parses `<kw> end to end` (binary) or
 // `<kw> ( end , end , ... )` (n-ary), where <kw> is `connect` or `allocate`.
+// Each end can optionally have a multiplicity: `[mult] end`.
 // The connector clause is optional. On a malformed end, it records a diagnostic,
 // keeps the ends parsed so far, and stops (the declaration remains a Usage).
 func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
@@ -739,11 +740,11 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 	if p.at(lexer.LParen) {
 		p.advance() // '('
 		for {
-			qn := p.parseQualifiedName()
-			if qn == nil {
-				return // parseQualifiedName recorded the diagnostic; keep partial ends
+			ce := p.parseConnectorEnd()
+			if ce == nil {
+				return // parseConnectorEnd recorded the diagnostic; keep partial ends
 			}
-			u.ConnectorEnds = append(u.ConnectorEnds, qn)
+			u.ConnectorEnds = append(u.ConnectorEnds, ce)
 			if !p.accept2(lexer.Comma) {
 				break
 			}
@@ -752,7 +753,7 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 		return
 	}
 	// Binary form: end to end.
-	from := p.parseQualifiedName()
+	from := p.parseConnectorEnd()
 	if from == nil {
 		return
 	}
@@ -761,11 +762,31 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 		p.error(p.peek().Span, "expected 'to' between connector ends")
 		return
 	}
-	to := p.parseQualifiedName()
+	to := p.parseConnectorEnd()
 	if to == nil {
 		return
 	}
 	u.ConnectorEnds = append(u.ConnectorEnds, to)
+}
+
+// parseConnectorEnd parses a single connector end: optional multiplicity followed by qualified name.
+func (p *Parser) parseConnectorEnd() *ast.ConnectorEnd {
+	start := p.peek().Span.Offset
+	ce := &ast.ConnectorEnd{}
+	
+	// Optional multiplicity
+	if p.at(lexer.LBracket) {
+		ce.Multiplicity = p.parseMultiplicity()
+	}
+	
+	// Qualified name (required)
+	ce.Target = p.parseQualifiedName()
+	if ce.Target == nil {
+		return nil
+	}
+	
+	ce.NodeSpan = p.spanFrom(start)
+	return ce
 }
 
 // atFlowShorthand reports whether the parser sits at a bare flow shorthand

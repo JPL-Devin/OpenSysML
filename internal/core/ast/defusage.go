@@ -352,7 +352,7 @@ type Usage struct {
 
 	// Tier B connection/flow/port grammar. These are nil/zero for kinds
 	// that do not use them.
-	ConnectorEnds []*QualifiedName // connection / interface / allocation usage ends
+	ConnectorEnds []*ConnectorEnd  // connection / interface / allocation usage ends
 	FlowEnds      *FlowEnds        // flow usage ends
 	IsConjugated  bool             // `~` conjugation on port / interface
 }
@@ -365,4 +365,11 @@ type FlowEnds struct {
 	From    *QualifiedName
 	To      *QualifiedName
 	Payload *QualifiedName // optional; from the `of` clause
+}
+
+// ConnectorEnd represents a single connector end with optional multiplicity.
+type ConnectorEnd struct {
+	NodeBase
+	Target       *QualifiedName
+	Multiplicity *Multiplicity
 }

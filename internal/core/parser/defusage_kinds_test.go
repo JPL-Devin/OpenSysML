@@ -109,7 +109,7 @@ func TestParseConnectionBinaryEnds(t *testing.T) {
 	if len(u.ConnectorEnds) != 2 {
 		t.Fatalf("expected 2 ends, got %d", len(u.ConnectorEnds))
 	}
-	if u.ConnectorEnds[0].Parts[0].Text != "a" || u.ConnectorEnds[1].Parts[0].Text != "b" {
+	if u.ConnectorEnds[0].Target.Parts[0].Text != "a" || u.ConnectorEnds[1].Target.Parts[0].Text != "b" {
 		t.Fatalf("ends = %v", u.ConnectorEnds)
 	}
 }

@@ -152,13 +152,18 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.IsConjugated {
 			b.WriteString(` conjugated=true`)
 		}
-		if len(v.ConnectorEnds) > 0 {
-			fmt.Fprintf(b, ` ends=%q`, qnList(v.ConnectorEnds))
-		}
 		writeChildren(b, depth, usageChildren(v))
 		return
 	case *FlowEnds:
 		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q)`, qnString(v.From), qnString(v.To), qnString(v.Payload))
+	case *ConnectorEnd:
+		fmt.Fprintf(b, `(ConnectorEnd target=%q`, qnString(v.Target))
+		var kids []Node
+		if v.Multiplicity != nil {
+			kids = append(kids, v.Multiplicity)
+		}
+		writeChildren(b, depth, kids)
+		return
 	case *Relationship:
 		fmt.Fprintf(b, `(Relationship kind=%q target=%q)`, v.Kind.String(), qnString(v.Target))
 	case *Multiplicity:
@@ -279,7 +284,7 @@ func defusageChildren(prefixes []*PrefixMetadata, rels []*Relationship, mult *Mu
 }
 
 // usageChildren is defusageChildren for a Usage, additionally emitting the
-// optional FlowEnds node (after value, before members).
+// optional ConnectorEnd and FlowEnds nodes (after value, before members).
 func usageChildren(v *Usage) []Node {
 	kids := make([]Node, 0)
 	for _, pm := range v.Prefixes {
@@ -293,6 +298,9 @@ func usageChildren(v *Usage) []Node {
 	}
 	if v.Value != nil {
 		kids = append(kids, v.Value)
+	}
+	for _, ce := range v.ConnectorEnds {
+		kids = append(kids, ce)
 	}
 	if v.FlowEnds != nil {
 		kids = append(kids, v.FlowEnds)
