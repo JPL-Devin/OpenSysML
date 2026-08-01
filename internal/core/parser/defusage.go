@@ -71,10 +71,11 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"connection": ast.UsageConnection,
 	"connector":  ast.UsageConnector,
 	"succession": ast.UsageSuccession,
-	"flow":       ast.UsageFlow,
-	"port":       ast.UsagePort,
-	"interface":  ast.UsageInterface,
-	"allocation": ast.UsageAllocation,
+	"flow":        ast.UsageFlow,
+	"port":        ast.UsagePort,
+	"interface":   ast.UsageInterface,
+	"interaction": ast.UsageInteraction,
+	"allocation":  ast.UsageAllocation,
 	"binding":    ast.UsageBinding,
 	// Tier C.
 	"action":       ast.UsageAction,
@@ -282,8 +283,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv, connector, satisfy, step, expr) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "satisfy" || kw == "step" || kw == "expr" {
+	// Check for usage-only keywords (subject, objective, succession, inv, connector, satisfy, step, expr, interaction) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "satisfy" || kw == "step" || kw == "expr" || kw == "interaction" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
@@ -837,7 +838,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Also exclude constraint (has both def/usage forms but shouldn't be enum literal name)
 	isUsageOnlyKwForEnum := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
-		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint")
+		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint" || p.peek().KeywordID == "interaction")
 	if !isUsageOnlyKwForEnum && p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
 		seg, _ := p.parseNameSegmentRelaxed()
 		id := ast.Identification{Name: seg.Text, NameSpan: seg.Span}
@@ -873,7 +874,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Also exclude direction modifiers (in/out - they're modifiers, not names)
 	isUsageOnlyKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
-		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr")
+		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "interaction")
 	isDirectionKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "in" || p.peek().KeywordID == "out")
 	if !isUsageOnlyKw && !isDirectionKw && (p.atName() || p.at(lexer.Keyword)) {
 		next := p.peekN(1)

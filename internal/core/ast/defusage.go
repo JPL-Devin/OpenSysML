@@ -139,6 +139,7 @@ const (
 	UsageFlow
 	UsagePort
 	UsageInterface
+	UsageInteraction
 	UsageAllocation
 	UsageBinding
 	// Tier C.
@@ -201,6 +202,8 @@ func (k UsageKind) String() string {
 		return "port"
 	case UsageInterface:
 		return "interface"
+	case UsageInteraction:
+		return "interaction"
 	case UsageAllocation:
 		return "allocation"
 	case UsageBinding:
