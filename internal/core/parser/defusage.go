@@ -1307,7 +1307,12 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 	case ast.UsageConnection, ast.UsageInterface:
 		p.parseConnectorEnds(u, "connect")
 	case ast.UsageConnector:
-		p.parseConnectorFromTo(u)
+		// Connector can use either "from X to Y" or "connect X to Y" syntax
+		if p.atKeyword("connect") {
+			p.parseConnectorEnds(u, "connect")
+		} else {
+			p.parseConnectorFromTo(u)
+		}
 	case ast.UsageSuccession:
 		p.parseConnectorEnds(u, "") // succession has no intermediate keyword
 	case ast.UsageAllocation:
@@ -1357,6 +1362,15 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 	}
 	u.ConnectorEnds = append(u.ConnectorEnds, from)
 	
+	// Check for optional "references" keyword after first end
+	// Pattern: end X references Y to end Z
+	if p.acceptKeyword("references") {
+		refTarget := p.parseRelationshipTarget()
+		if refTarget != nil {
+			from.Reference = refTarget
+		}
+	}
+	
 	// Determine expected keyword based on usage kind
 	var expectedKeyword string
 	switch u.Kind {
@@ -1375,6 +1389,14 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 		return
 	}
 	u.ConnectorEnds = append(u.ConnectorEnds, to)
+	
+	// Check for optional "references" keyword after second end
+	if p.acceptKeyword("references") {
+		refTarget := p.parseRelationshipTarget()
+		if refTarget != nil {
+			to.Reference = refTarget
+		}
+	}
 }
 
 // parseConnectorEnd parses a single connector end: optional multiplicity followed by qualified name.
@@ -1399,7 +1421,7 @@ func (p *Parser) parseConnectorEnd() *ast.ConnectorEnd {
 }
 
 // parseConnectorFromTo parses the `from x to y` pattern for connector usages.
-// Pattern: `from <end> to <end>` (binary form only).
+// Pattern: `from <end> [references <target>] to <end> [references <target>]` (binary form only).
 func (p *Parser) parseConnectorFromTo(u *ast.Usage) {
 	if !p.acceptKeyword("from") {
 		return // Optional connector clause
@@ -1411,6 +1433,14 @@ func (p *Parser) parseConnectorFromTo(u *ast.Usage) {
 	}
 	u.ConnectorEnds = append(u.ConnectorEnds, from)
 	
+	// Check for optional "references" keyword after from end
+	if p.acceptKeyword("references") {
+		refTarget := p.parseRelationshipTarget()
+		if refTarget != nil {
+			from.Reference = refTarget
+		}
+	}
+	
 	if !p.acceptKeyword("to") {
 		p.error(p.peek().Span, "expected 'to' between connector ends")
 		return
@@ -1421,6 +1451,14 @@ func (p *Parser) parseConnectorFromTo(u *ast.Usage) {
 		return
 	}
 	u.ConnectorEnds = append(u.ConnectorEnds, to)
+	
+	// Check for optional "references" keyword after to end
+	if p.acceptKeyword("references") {
+		refTarget := p.parseRelationshipTarget()
+		if refTarget != nil {
+			to.Reference = refTarget
+		}
+	}
 }
 
 // atFlowShorthand reports whether the parser sits at a bare flow shorthand
