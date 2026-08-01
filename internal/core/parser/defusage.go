@@ -115,6 +115,10 @@ var featureModifierKeywords = map[string]bool{
 	"derived":   true,
 	"ordered":   true,
 	"nonunique": true,
+	"public":    true,
+	"protected": true,
+	"private":   true,
+	"readonly":  true,
 }
 
 // relationshipKeywords maps a spelled-out relationship keyword to its kind.
@@ -126,6 +130,7 @@ var relationshipKeywords = map[string]ast.RelationshipKind{
 	"crosses":     ast.RelCrosses,
 	"intersects":  ast.RelIntersects,
 	"disjoint":    ast.RelDisjoint, // followed by 'from' keyword
+	"unions":      ast.RelUnions,
 }
 
 type featureMods struct {
@@ -134,9 +139,11 @@ type featureMods struct {
 	isReference bool
 	isEnd       bool
 	isChain     bool
+	visibility  ast.Visibility
 	direction   ast.FeatureDirection
 	isComposite bool
 	isDerived   bool
+	isReadonly  bool
 	isOrdered   bool
 	isNonunique bool
 }
@@ -202,6 +209,12 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			m.isReference = true
 		case "end":
 			m.isEnd = true
+		case "public":
+			m.visibility = ast.VisibilityPublic
+		case "protected":
+			m.visibility = ast.VisibilityProtected
+		case "private":
+			m.visibility = ast.VisibilityPrivate
 		case "in":
 			m.direction = ast.DirIn
 		case "out":
@@ -210,6 +223,8 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			m.direction = ast.DirInOut
 		case "composite", "portion":
 			m.isComposite = true
+		case "readonly":
+			m.isReadonly = true
 		case "derived":
 			m.isDerived = true
 		case "ordered":
@@ -338,6 +353,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 		IsAbstract:  mods.isAbstract,
 		IsVariation: mods.isVariation,
 		IsAll:       isAll,
+		Visibility:  mods.visibility,
 		Ident:       p.parseIdentification(),
 	}
 	def.Relationships, _ = p.parseRelationships(false)
@@ -491,6 +507,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		IsAll:       isAll,
 		IsEnd:       mods.isEnd,
 		IsChain:     mods.isChain,
+		Visibility:  mods.visibility,
 		Direction:   mods.direction,
 		IsComposite: mods.isComposite,
 		IsDerived:   mods.isDerived,
@@ -758,31 +775,42 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// This handles features with visibility but no usage kind keyword
 	nextKind := p.peekN(1).Kind
 	
-	// Check for modifier + (name + colon OR relationship) pattern
-	if p.atKeyword("ref") || p.atKeyword("readonly") || p.atKeyword("derived") || p.atKeyword("composite") || p.atKeyword("portion") {
+	// Check for (visibility OR modifier) + (name + colon OR relationship) pattern
+	hasVisibility := vis != ast.VisibilityDefault
+	hasModifier := p.atKeyword("ref") || p.atKeyword("readonly") || p.atKeyword("derived") || p.atKeyword("composite") || p.atKeyword("portion")
+	
+	if hasVisibility || hasModifier {
 		mods := p.parseFeatureModifiers()
+		// Merge visibility into mods if it was parsed earlier
+		if hasVisibility {
+			mods.visibility = vis
+		}
 		
-		// Check for name + colon (typed) OR direct relationship (anonymous)
+		// Check for name + colon (typed) OR direct relationship (anonymous) OR name + relationship
 		hasNameAndType := p.atName() && p.peekN(1).Kind == lexer.Colon
 		hasRelationship := p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt)
+		hasNameAndRelationship := p.atName() && (p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt)
 		
-		if hasNameAndType || hasRelationship {
+		if hasNameAndType || hasRelationship || hasNameAndRelationship {
 			var id ast.Identification
 			
 			// Parse optional name
-			if hasNameAndType {
+			if hasNameAndType || hasNameAndRelationship {
 				tok := p.advance()
 				if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
 					id.Name = p.src.Text(tok.Span)
 					id.NameSpan = tok.Span
 				}
-				p.advance() // consume ':'
+				if hasNameAndType {
+					p.advance() // consume ':'
+				}
 			}
 			
 			// Parse as anonymous usage (attribute by default)
 			u := &ast.Usage{
 				Kind:          ast.UsageAttribute,
 				Ident:         id,
+				Visibility:    mods.visibility,
 				IsReference:   mods.isReference,
 				IsDerived:     mods.isDerived,
 				IsComposite:   mods.isComposite,
@@ -806,10 +834,24 @@ func (p *Parser) parseBodyMember() ast.Node {
 				u.Multiplicity = p.parseMultiplicity()
 			}
 			
+			// Parse post-multiplicity modifiers (ordered/nonunique)
+			postMods := p.parsePostModifiers()
+			if postMods.isOrdered {
+				u.IsOrdered = true
+			}
+			if postMods.isNonunique {
+				u.IsNonunique = true
+			}
+			
 			// Parse additional relationships
 			moreRels, conjugated := p.parseRelationships(true)
 			u.Relationships = append(u.Relationships, moreRels...)
 			u.IsConjugated = conjugated
+			
+			// Parse optional value (= expr or default expr)
+			if p.accept2(lexer.Eq) || p.acceptKeyword("default") {
+				u.Value = p.ParseExpression()
+			}
 			
 			// Parse body or semicolon
 			members, hasBody := p.parseDefUsageBody()
@@ -847,10 +889,29 @@ func (p *Parser) parseBodyMember() ast.Node {
 			Target: p.parseQualifiedName(),
 		})
 		
+		// Parse optional multiplicity
+		if p.at(lexer.LBracket) {
+			u.Multiplicity = p.parseMultiplicity()
+		}
+		
+		// Parse post-multiplicity modifiers (ordered/nonunique)
+		postMods := p.parsePostModifiers()
+		if postMods.isOrdered {
+			u.IsOrdered = true
+		}
+		if postMods.isNonunique {
+			u.IsNonunique = true
+		}
+		
 		// Parse additional relationships
 		moreRels, conjugated := p.parseRelationships(true)
 		u.Relationships = append(u.Relationships, moreRels...)
 		u.IsConjugated = conjugated
+		
+		// Parse optional value (= expr or default expr)
+		if p.accept2(lexer.Eq) || p.acceptKeyword("default") {
+			u.Value = p.ParseExpression()
+		}
 		
 		// Parse body or semicolon
 		members, hasBody := p.parseDefUsageBody()
@@ -1222,6 +1283,11 @@ func (p *Parser) relationshipClauseKind(isUsage bool) (ast.RelationshipKind, boo
 			p.advance()
 			p.expect2Keyword("by")
 			return ast.RelTyping, true
+		}
+		if t.KeywordID == "inverse" {
+			p.advance()
+			p.expect2Keyword("of")
+			return ast.RelInverseOf, true
 		}
 	}
 	switch p.peek().Kind {

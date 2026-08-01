@@ -266,6 +266,8 @@ const (
 	RelCrosses                             // 'crosses' / '=>'
 	RelDisjoint                            // 'disjoint from'
 	RelIntersects                          // 'intersects'
+	RelInverseOf                           // 'inverse of'
+	RelUnions                              // 'unions'
 )
 
 func (k RelationshipKind) String() string {
@@ -286,6 +288,10 @@ func (k RelationshipKind) String() string {
 		return "disjoint"
 	case RelIntersects:
 		return "intersects"
+	case RelInverseOf:
+		return "inverse"
+	case RelUnions:
+		return "unions"
 	default:
 		return "unknown"
 	}
@@ -341,6 +347,7 @@ type Definition struct {
 	IsAbstract    bool
 	IsVariation   bool
 	IsAll         bool // 'all' multiplicity propagation modifier
+	Visibility    Visibility
 	Ident         Identification
 	Relationships []*Relationship
 	Members       []Node
@@ -357,6 +364,7 @@ type Usage struct {
 	IsAll         bool // 'all' multiplicity propagation modifier
 	IsEnd         bool // 'end' feature modifier
 	IsChain       bool // 'chain' feature modifier
+	Visibility    Visibility
 	Direction     FeatureDirection
 	IsComposite   bool
 	IsDerived     bool
