@@ -66,8 +66,8 @@ A complete, production-grade SysML v2 implementation in Go—spanning the full l
 ```
 github.com/Open-MBEE/Systemica
 ├── cmd/
-│   ├── sysml-lsp/          # LSP server binary
-│   └── sysml-repl/         # Interactive REPL binary
+│   ├── systemica-lsp/      # LSP server binary
+│   └── systemica-repl/     # Interactive REPL binary
 ├── internal/core/
 │   ├── source/             # Source files, spans, line indexing
 │   ├── lexer/              # Hand-written scanner
@@ -103,10 +103,10 @@ go build ./...
 go test ./...
 
 # Build LSP server
-go build -o bin/sysml-lsp ./cmd/sysml-lsp
+go build -o bin/systemica-lsp ./cmd/systemica-lsp
 
 # Build REPL
-go build -o bin/sysml-repl ./cmd/sysml-repl
+go build -o bin/systemica-repl ./cmd/systemica-repl
 ```
 
 ## Documentation

@@ -10,8 +10,8 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 
 ### Core Components
 
-1. **Language Server (`sysml-lsp`)** — IDE support with live diagnostics, semantic hover, go-to-definition, intelligent completion, and workspace-wide symbol search
-2. **Interactive REPL (`sysml-repl`)** — Exploratory modeling: define models incrementally, evaluate expressions, instantiate parts, inspect runtime state
+1. **Language Server (`systemica-lsp`)** — IDE support with live diagnostics, semantic hover, go-to-definition, intelligent completion, and workspace-wide symbol search
+2. **Interactive REPL (`systemica-repl`)** — Exploratory modeling: define models incrementally, evaluate expressions, instantiate parts, inspect runtime state
 3. **Execution Runtime** — Instantiate parts, evaluate constraints, execute calc/analysis cases, simulate behavioral models
 4. **Toolchain** — Workspace management, dependency resolution, incremental compilation, bundled stdlib, persistent caches
 
@@ -50,8 +50,8 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 ```
 github.com/Open-MBEE/Systemica
 ├── cmd/
-│   ├── sysml-lsp/          # LSP server binary
-│   ├── sysml-repl/         # Interactive REPL binary
+│   ├── systemica-lsp/      # LSP server binary
+│   ├── systemica-repl/     # Interactive REPL binary
 │   └── runtime-demo/       # Runtime demo binary
 ├── internal/core/
 │   ├── source/             # Source files, spans, line indexing
@@ -208,7 +208,7 @@ Token-flow execution for actions (Petri-net-like), event-driven state machine st
 ## REPL Integration
 
 **Package:** `internal/repl`  
-**Binary:** `cmd/sysml-repl`
+**Binary:** `cmd/systemica-repl`
 
 ### Commands
 
