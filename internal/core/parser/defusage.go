@@ -5,6 +5,7 @@ import (
 	
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 // definitionKindKeywords maps a single kind keyword to its DefinitionKind.
@@ -893,13 +894,100 @@ func (p *Parser) parseBodyMember() ast.Node {
 	
 	// Check for (visibility OR modifier) + (name + colon OR relationship) pattern
 	hasVisibility := vis != ast.VisibilityDefault
-	hasModifier := p.atKeyword("ref") || p.atKeyword("readonly") || p.atKeyword("derived") || p.atKeyword("composite") || p.atKeyword("portion")
+	hasModifier := p.atKeyword("ref") || p.atKeyword("readonly") || p.atKeyword("derived") || p.atKeyword("composite") || p.atKeyword("portion") || p.atKeyword("end")
 	
 	if hasVisibility || hasModifier {
 		mods := p.parseFeatureModifiers()
 		// Merge visibility into mods if it was parsed earlier
 		if hasVisibility {
 			mods.visibility = vis
+		}
+		
+		// Special case: end shortname [mult] feature name pattern
+		// Example: end self2 [1] feature sameThing: Anything
+		// Also: end [1] feature transferSource (no short name)
+		// This declares a feature with 'end' modifier, optional short name, and multiplicity
+		if mods.isEnd && (p.atNameOrKeyword() || p.at(lexer.LBracket)) {
+			var shortName string
+			var shortNameSpan source.Span
+			var mult *ast.Multiplicity
+			
+			// Parse optional short name (if not starting with '[')
+			if p.atNameOrKeyword() {
+				// Check if pattern matches: name [mult] (feature|occurrence|item|...)
+				// OR: [mult] (feature|occurrence|...)
+				ahead := 1
+				if p.peekN(ahead).Kind == lexer.LBracket {
+					// Skip past multiplicity to check for definition keyword
+					ahead++
+					for ahead < 20 && p.peekN(ahead).Kind != lexer.RBracket && p.peekN(ahead).Kind != lexer.EOF {
+						ahead++
+					}
+					if p.peekN(ahead).Kind == lexer.RBracket {
+						ahead++ // past ]
+					}
+				}
+				// Check if next token after (optional) multiplicity is a definition keyword
+				nextTok := p.peekN(ahead)
+				isDefKeyword := nextTok.KeywordID == "feature" || nextTok.KeywordID == "occurrence" || 
+								nextTok.KeywordID == "item" || nextTok.KeywordID == "part" ||
+								nextTok.KeywordID == "attribute"
+				
+				if isDefKeyword {
+					tok := p.advance()
+					if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName || tok.Kind == lexer.Keyword {
+						shortName = p.src.Text(tok.Span)
+						shortNameSpan = tok.Span
+					}
+					
+					// Parse optional multiplicity before the definition keyword
+					if p.at(lexer.LBracket) {
+						mult = p.parseMultiplicity()
+					}
+				}
+			} else if p.at(lexer.LBracket) {
+				// No short name, mult comes directly: end [mult] feature
+				// Check if after mult there's a definition keyword
+				ahead := 1
+				for ahead < 20 && p.peekN(ahead).Kind != lexer.RBracket && p.peekN(ahead).Kind != lexer.EOF {
+					ahead++
+				}
+				if p.peekN(ahead).Kind == lexer.RBracket {
+					ahead++ // past ]
+					nextTok := p.peekN(ahead)
+					isDefKeyword := nextTok.KeywordID == "feature" || nextTok.KeywordID == "occurrence" || 
+									nextTok.KeywordID == "item" || nextTok.KeywordID == "part" ||
+									nextTok.KeywordID == "attribute"
+					
+					if isDefKeyword {
+						mult = p.parseMultiplicity()
+					}
+				}
+			}
+			
+			// If we parsed short name or mult, parse the definition
+			if shortName != "" || mult != nil {
+				// Now parse the actual feature/usage declaration
+				// The definition keyword (feature/occurrence/etc) will be consumed by parseDeclaration
+				decl := p.parseDeclaration(start)
+				
+				// If it's a usage, apply the short name, multiplicity, and end modifier
+				if u, ok := decl.(*ast.Usage); ok {
+					u.Ident.ShortName = shortName
+					u.Ident.ShortNameSpan = shortNameSpan
+					if mult != nil && u.Multiplicity == nil {
+						u.Multiplicity = mult
+					}
+					u.IsEnd = true
+					u.Visibility = mods.visibility
+				}
+				
+				// Wrap in membership
+				mem := &ast.Membership{Visibility: vis, Member: decl}
+				mem.NodeSpan = p.spanFrom(start)
+				mem.SetLeadingTrivia(trivia)
+				return mem
+			}
 		}
 		
 		// Check for name + colon (typed) OR direct relationship (anonymous) OR name + relationship
