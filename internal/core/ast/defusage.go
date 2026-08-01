@@ -145,6 +145,8 @@ const (
 	UsageCalc
 	UsageConstraint
 	UsageRequirement
+	UsageSubject
+	UsageObjective
 	UsageCase
 	UsageAnalysisCase
 	UsageVerificationCase
@@ -204,6 +206,10 @@ func (k UsageKind) String() string {
 		return "constraint"
 	case UsageRequirement:
 		return "requirement"
+	case UsageSubject:
+		return "subject"
+	case UsageObjective:
+		return "objective"
 	case UsageCase:
 		return "case"
 	case UsageAnalysisCase:

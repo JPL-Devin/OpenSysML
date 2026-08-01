@@ -80,6 +80,8 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"constraint":   ast.UsageConstraint,
 	"inv":          ast.UsageConstraint, // synonym for constraint (invariant)
 	"requirement":  ast.UsageRequirement,
+	"subject":      ast.UsageSubject,
+	"objective":    ast.UsageObjective,
 	"case":         ast.UsageCase,
 	"analysis":     ast.UsageAnalysisCase,
 	"verification": ast.UsageVerificationCase,
@@ -250,6 +252,14 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	if t.Kind == lexer.Keyword {
 		kw = t.KeywordID
 	}
+	
+	// Check for usage-only keywords (subject, objective) that never have def forms
+	if kw == "subject" || kw == "objective" {
+		p.advance() // consume the kind keyword
+		isAll := p.acceptKeyword("all")
+		return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
+	}
+	
 	defKind, ok := definitionKindKeywords[kw]
 	if !ok {
 		// Fallback: if we have modifiers but no kind keyword, assume it's a generic usage (e.g., "in x: Integer;")
