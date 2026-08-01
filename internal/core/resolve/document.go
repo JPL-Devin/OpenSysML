@@ -87,16 +87,21 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	case *ast.Usage:
 		r.resolvePrefixes(scope, d.Prefixes)
 		r.resolveRelationships(scope, d.Relationships)
-		if d.Multiplicity != nil {
-			r.resolveExpr(scope, d.Multiplicity.Lower)
-			r.resolveExpr(scope, d.Multiplicity.Upper)
+	if d.Multiplicity != nil {
+		r.resolveExpr(scope, d.Multiplicity.Lower)
+		r.resolveExpr(scope, d.Multiplicity.Upper)
+	}
+	r.resolveExpr(scope, d.Value)
+	for _, end := range d.ConnectorEnds {
+		// ConnectorEnd.Target is Node (QualifiedName or Expression)
+		if qn, ok := end.Target.(*ast.QualifiedName); ok {
+			r.ResolveQualified(scope, qn)
+		} else {
+			r.resolveExpr(scope, end.Target)
 		}
-		r.resolveExpr(scope, d.Value)
-		for _, end := range d.ConnectorEnds {
-			r.ResolveQualified(scope, end)
-		}
-		if d.FlowEnds != nil {
-			r.ResolveQualified(scope, d.FlowEnds.From)
+	}
+	if d.FlowEnds != nil {
+		r.ResolveQualified(scope, d.FlowEnds.From)
 			r.ResolveQualified(scope, d.FlowEnds.To)
 			r.ResolveQualified(scope, d.FlowEnds.Payload)
 		}
