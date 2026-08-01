@@ -720,10 +720,63 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return p.parseResultMember()
 	}
 	
-	// Check for anonymous feature pattern: name : Type
-	// Examples: private thisClock : Clock :>> self;
+	// Check for anonymous feature pattern: [modifiers] name : Type
+	// Examples: private thisClock : Clock :>> self; or ref stateSpace: StateSpace;
 	// This handles features with visibility but no usage kind keyword
 	nextKind := p.peekN(1).Kind
+	
+	// Check for modifier + name + colon pattern (e.g., ref name : Type)
+	if p.atKeyword("ref") || p.atKeyword("readonly") || p.atKeyword("derived") || p.atKeyword("composite") || p.atKeyword("portion") {
+		mods := p.parseFeatureModifiers()
+		if p.atName() && p.peekN(1).Kind == lexer.Colon {
+			var id ast.Identification
+			tok := p.advance()
+			if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
+				id.Name = p.src.Text(tok.Span)
+				id.NameSpan = tok.Span
+			}
+			
+			// Parse as anonymous usage (attribute by default)
+			u := &ast.Usage{
+				Kind:          ast.UsageAttribute,
+				Ident:         id,
+				IsReference:   mods.isReference,
+				IsDerived:     mods.isDerived,
+				IsComposite:   mods.isComposite,
+				IsEnd:         mods.isEnd,
+				IsChain:       mods.isChain,
+				Direction:     mods.direction,
+				IsOrdered:     mods.isOrdered,
+				IsNonunique:   mods.isNonunique,
+			}
+			
+			// Parse typing/relationships
+			p.advance() // consume ':'
+			u.Relationships = append(u.Relationships, &ast.Relationship{
+				Kind:   ast.RelTyping,
+				Target: p.parseQualifiedName(),
+			})
+			
+			// Parse additional relationships
+			moreRels, conjugated := p.parseRelationships(true)
+			u.Relationships = append(u.Relationships, moreRels...)
+			u.IsConjugated = conjugated
+			
+			// Parse body or semicolon
+			members, hasBody := p.parseDefUsageBody()
+			u.Members = members
+			u.HasBody = hasBody
+			
+			u.NodeSpan = p.spanFrom(start)
+			mem := &ast.Membership{Visibility: vis, Member: u}
+			mem.NodeSpan = p.spanFrom(start)
+			mem.SetLeadingTrivia(trivia)
+			return mem
+		}
+		// If not anonymous feature pattern, fallback to parseDeclaration below
+	}
+	
+	// Check for anonymous feature pattern without modifiers: name : Type
 	if p.atName() && nextKind == lexer.Colon {
 		var id ast.Identification
 		tok := p.advance()

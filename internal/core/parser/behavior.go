@@ -463,6 +463,10 @@ func (p *Parser) parseResultMember() ast.Node {
 			}
 		}
 		
+		// Parse additional relationships (e.g., :>> redefines)
+		additionalRels, _ := p.parseRelationships(false)
+		u.Relationships = append(u.Relationships, additionalRels...)
+		
 		// Parse optional multiplicity '[n..m]'
 		if p.at(lexer.LBracket) {
 			u.Multiplicity = p.parseMultiplicity()
@@ -514,9 +518,8 @@ func (p *Parser) parseResultMember() ast.Node {
 		return u
 	}
 	
-	// Check for Pattern 4: return [kind] [modifiers] name [mult] = expr (result parameter with initializer, no type)
-	// Lookahead: name followed by '[' or '='
-	if p.atName() && (p.peekN(1).Kind == lexer.Eq || p.peekN(1).Kind == lexer.LBracket) {
+	// Check for Pattern 5: return [kind] [modifiers] name [mult] [body/semicolon] (no type, no value)
+	if p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
@@ -535,15 +538,13 @@ func (p *Parser) parseResultMember() ast.Node {
 			u.Multiplicity = p.parseMultiplicity()
 		}
 		
-		// Must be followed by '='
-		if !p.at(lexer.Eq) {
-			p.error(p.peek().Span, "expected '=' after return parameter name")
-		} else {
+		// If followed by '=', this is Pattern 4 (value), not Pattern 5 (no value)
+		if p.at(lexer.Eq) {
 			p.advance() // consume '='
 			u.Value = p.ParseExpression()
 		}
 		
-		// Check for optional body or semicolon
+		// Check for body or semicolon
 		if p.at(lexer.LBrace) {
 			bodyMembers, hasBody := p.parseDefUsageBody()
 			u.Members = bodyMembers
@@ -553,12 +554,14 @@ func (p *Parser) parseResultMember() ast.Node {
 		} else {
 			p.expect(lexer.Semicolon, "expected ';' after return parameter")
 		}
+		
 		u.NodeSpan = p.spanFrom(start)
 		return u
 	}
 	
-	// Check for Pattern 5: return [kind] [modifiers] name; (no type, no value)
-	if p.atName() && p.peekN(1).Kind == lexer.Semicolon {
+	// Check for Pattern 4: return [kind] [modifiers] name = expr [body] (result parameter with initializer, no type, no mult)
+	// Lookahead: name followed by '=' directly
+	if p.atName() && p.peekN(1).Kind == lexer.Eq {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
@@ -571,7 +574,19 @@ func (p *Parser) parseResultMember() ast.Node {
 			IsNonunique: mods.isNonunique,
 		}
 		u.Ident = p.parseIdentification()
-		p.expect(lexer.Semicolon, "expected ';' after return parameter")
+		p.advance() // consume '='
+		u.Value = p.ParseExpression()
+		
+		// Check for optional body or semicolon
+		if p.at(lexer.LBrace) {
+			bodyMembers, hasBody := p.parseDefUsageBody()
+			u.Members = bodyMembers
+			if !hasBody {
+				p.expect(lexer.Semicolon, "expected ';' after return parameter")
+			}
+		} else {
+			p.expect(lexer.Semicolon, "expected ';' after return parameter")
+		}
 		u.NodeSpan = p.spanFrom(start)
 		return u
 	}
