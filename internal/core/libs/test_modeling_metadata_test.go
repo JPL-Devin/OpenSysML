@@ -20,13 +20,12 @@ func TestSingleFile_ModelingMetadata(t *testing.T) {
 	
 	if len(p.Diagnostics) > 0 {
 		t.Logf("Parse diagnostics (%d):", len(p.Diagnostics))
-		for i, d := range p.Diagnostics {
-			if i >= 15 { break }
+		for _, d := range p.Diagnostics {
 			text := sf.Text(d.Span)
 			if len(text) > 50 {
 				text = text[:50] + "..."
 			}
-			t.Logf("  [%d] offset %d: %s [near: %q]", i+1, d.Span.Offset, d.Message, text)
+			t.Logf("  Line %d, offset %d: %s [near: %q]", 0, d.Span.Offset, d.Message, text)
 		}
 	} else {
 		t.Log("Parsed cleanly!")

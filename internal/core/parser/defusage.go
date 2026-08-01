@@ -757,6 +757,11 @@ func (p *Parser) parseBodyMember() ast.Node {
 				Target: p.parseQualifiedName(),
 			})
 			
+			// Parse optional multiplicity
+			if p.at(lexer.LBracket) {
+				u.Multiplicity = p.parseMultiplicity()
+			}
+			
 			// Parse additional relationships
 			moreRels, conjugated := p.parseRelationships(true)
 			u.Relationships = append(u.Relationships, moreRels...)
