@@ -476,7 +476,8 @@ func (p *Parser) parseConstraintMember() ast.Node {
 	// Parse expression
 	expr := p.ParseExpression()
 	
-	p.expect(lexer.Semicolon, "expected ';' after constraint expression")
+	// Semicolon is optional for constraint expressions (especially in inv bodies)
+	p.accept2(lexer.Semicolon)
 	
 	node := &ast.ConstraintMember{
 		IsAssert:   isAssert,

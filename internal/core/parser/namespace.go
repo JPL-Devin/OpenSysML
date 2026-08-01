@@ -266,6 +266,9 @@ var declStartKeywords = map[string]bool{
 	"class":     true,
 	"predicate": true,
 	"bool":      true,
+	// Usage-only synonyms.
+	"inv":      true, // synonym for constraint (invariant)
+	"function": true, // synonym for calc
 }
 
 // atMemberSync reports whether the parser sits at a recovery synchronization
