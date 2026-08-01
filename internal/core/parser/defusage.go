@@ -574,7 +574,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		// No relationship shorthand
 		preRels, conjugated = p.parseRelationships(true)
 		// A bare flow shorthand `flow x to y` and succession `succession x then y` have no declaration name
-		if !(kind == ast.UsageFlow && p.atFlowShorthand()) && kind != ast.UsageSuccession {
+		// Anonymous connector starts with 'from' keyword (e.g., `connector : X from y to z`)
+		skipIdentification := (kind == ast.UsageFlow && p.atFlowShorthand()) || 
+			kind == ast.UsageSuccession || 
+			(kind == ast.UsageConnector && p.atKeyword("from"))
+		if !skipIdentification {
 			u.Ident = p.parseIdentification()
 		}
 	}
@@ -1085,7 +1089,8 @@ func (p *Parser) parseConnectorEnd() *ast.ConnectorEnd {
 	}
 	
 	// Target expression (qualified name or feature chain)
-	ce.Target = p.ParseExpression()
+	// Use parseRelationshipTarget to avoid consuming connector keywords (from/to)
+	ce.Target = p.parseRelationshipTarget()
 	if ce.Target == nil {
 		return nil
 	}
