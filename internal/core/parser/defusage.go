@@ -79,6 +79,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	// Tier C.
 	"action":       ast.UsageAction,
 	"state":        ast.UsageState,
+	"step":         ast.UsageStep,
 	"calc":         ast.UsageCalc,
 	"function":     ast.UsageCalc, // synonym for calc
 	"constraint":   ast.UsageConstraint,
@@ -266,8 +267,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv, connector, satisfy) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "satisfy" {
+	// Check for usage-only keywords (subject, objective, succession, inv, connector, satisfy, step) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "satisfy" || kw == "step" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
@@ -774,7 +775,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// But exclude usage-only keywords (they're declarations, not names)
 	isUsageOnlyKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
-		p.peek().KeywordID == "satisfy")
+		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step")
 	if !isUsageOnlyKw && (p.atName() || p.at(lexer.Keyword)) {
 		next := p.peekN(1)
 		if next.Kind == lexer.Keyword {
