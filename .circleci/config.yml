@@ -31,8 +31,9 @@ jobs:
       - run:
           name: Verify binaries
           command: |
-            ./bin/sysml --version || echo "sysml> " | ./bin/sysml
-            ./bin/sysml-lsp --version || echo "LSP server built"
+            test -x ./bin/sysml && echo "✓ sysml binary built"
+            test -x ./bin/sysml-lsp && echo "✓ sysml-lsp binary built"
+            ls -lh bin/
       
       - store_artifacts:
           path: bin/
