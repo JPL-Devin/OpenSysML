@@ -2357,6 +2357,25 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 		}
 	case ast.UsageFlow:
 		p.parseFlowEnds(u)
+	case ast.UsageMetadata:
+		// Metadata usage syntax: metadata Name about target1, target2, ...;
+		// The 'about' clause specifies what elements this metadata annotates
+		if p.acceptKeyword("about") {
+			// Parse comma-separated list of targets
+			for {
+				target := p.parseRelationshipTarget()
+				if target != nil {
+					// Store as references relationship (metadata references/annotates target)
+					u.Relationships = append(u.Relationships, &ast.Relationship{
+						Kind:   ast.RelReferences,
+						Target: target,
+					})
+				}
+				if !p.accept2(lexer.Comma) {
+					break
+				}
+			}
+		}
 	}
 }
 
