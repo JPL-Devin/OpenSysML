@@ -262,6 +262,21 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		isRef = true
 	}
 	
+	// Check for optional individual/snapshot/event modifiers
+	isIndividual := false
+	isSnapshot := false
+	isEvent := false
+	if p.atKeyword("individual") {
+		p.advance()
+		isIndividual = true
+	} else if p.atKeyword("snapshot") {
+		p.advance()
+		isSnapshot = true
+	} else if p.atKeyword("event") {
+		p.advance()
+		isEvent = true
+	}
+	
 	// Parse optional kind keyword (item, feature, port, etc)
 	// If next token is keyword and recognized kind, consume it
 	// Otherwise treat next token as name (kind defaults to generic feature)
@@ -363,7 +378,10 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		Direction:     direction,
 		IsOrdered:     postMods.isOrdered,
 		IsNonunique:   postMods.isNonunique,
+		IsEvent:       isEvent,
 	}
+	// Note: isIndividual, isSnapshot consumed but not stored in AST (no fields yet)
+	_, _ = isIndividual, isSnapshot
 	usage.NodeSpan = p.spanFrom(start)
 	
 	// Wrap in Membership
