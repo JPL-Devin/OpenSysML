@@ -44,12 +44,13 @@ var definitionKindKeywords = map[string]ast.DefinitionKind{
 	"analysis":     ast.DefAnalysisCase,
 	"verification": ast.DefVerificationCase,
 	// KerML structural.
-	"behavior":  ast.DefBehavior,
-	"assoc":     ast.DefAssoc,
-	"struct":    ast.DefStruct,
-	"class":     ast.DefClass,
-	"predicate": ast.DefPredicate,
-	"bool":      ast.DefBool,
+	"behavior":   ast.DefBehavior,
+	"assoc":      ast.DefAssoc,
+	"struct":     ast.DefStruct,
+	"class":      ast.DefClass,
+	"classifier": ast.DefClass, // synonym for class
+	"predicate":  ast.DefPredicate,
+	"bool":       ast.DefBool,
 }
 
 // usageKindKeywords maps a single kind keyword to its UsageKind.
