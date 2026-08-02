@@ -2,12 +2,14 @@
 
 ## Summary
 - Total examples: 57 files
-- Clean (no errors): 30 files (53%)
-- Parser errors: 27 files (47%)
+- Clean (no errors): 37 files (65%)
+- Parser errors: 20 files (35%)
+
+**Latest update:** Fixed requirement constraint body syntax, reducing errors from 27 → 20 files.
 
 ## Parser Feature Gaps
 
-### 1. State Machine Syntax (8 files affected)
+### 1. State Machine Syntax (3 files affected) ⚠️ NEEDS WORK
 **Missing features:**
 - State transitions: `first <state> then <state>;`
 - Accept transitions: `accept <signal> then <state>;`
@@ -23,25 +25,18 @@
 - Add handlers in `parseStateMember()` for succession/transition syntax
 - Parse `entry`/`do`/`exit` with action reference (not just block)
 
-### 2. Requirement Body Syntax (19 files affected)
-**Missing features:**
-- `assume constraint { <body> }` - constraint body after assume
-- `require constraint { <body> }` - constraint body after require
-- Nested constraint definitions in requirement bodies
+### 2. Requirement Body Syntax ✅ FIXED
+**Status:** Fixed in commit c077e33
 
-**Affected files:**
-- 32. Requirements/*.sysml (4 files)
-- 33. Analysis/*.sysml (3 files)  
-- 31. Constraints/*.sysml (10 files)
-- 30. Calculations/*.sysml (1 file)
-- 29. Expressions/*.sysml (1 file)
+**Features implemented:**
+- `assume constraint { <body> }` - constraint body after assume ✅
+- `require constraint { <body> }` - constraint body after require ✅
+- `subject = <expr>;` - subject binding form ✅
+- Nested constraint definitions in requirement bodies ✅
 
-**Implementation needed:**
-- Modify `parseAssumeMember()` to check for `constraint` keyword
-- Parse constraint body (with doc, nested expressions)
-- Same for `parseRequireMember()`
+**Files fixed:** 19 files across requirements, analysis, constraints directories
 
-### 3. Connection Syntax (1 file affected)
+### 3. Connection Syntax (1 file affected) ⚠️ NEEDS WORK
 **Missing feature:**
 - `connect [mult] <end> to [mult] <end>;` - multiplicity on ends
 
@@ -52,7 +47,7 @@
 - Parse optional multiplicity before connector ends
 - Update ConnectorEnd AST to store multiplicity
 
-### 4. Flow Syntax (1 file affected)
+### 4. Flow Syntax (1 file affected) ⚠️ NEEDS WORK
 **Missing feature:**
 - `flow from <ref> to <ref>;` - parser expects different keyword
 
@@ -62,7 +57,7 @@
 **Implementation needed:**
 - Debug flow statement parsing (may be partially implemented)
 
-### 5. Semantic Errors (6 files)
+### 5. Semantic Errors (4 files) ⚠️ NEEDS INVESTIGATION
 **Issue:**
 - `item cannot be typed by partDef (kind mismatch)`
 - `<symbol> participates in specialization cycle`
@@ -76,15 +71,33 @@
 
 **Note:** These are semantic validation errors, not parser issues. May indicate model issues or overly strict checks.
 
-## Working Examples (30 files)
+### 6. Other Syntax Issues (11 files) ⚠️ NEEDS ANALYSIS
+**Errors:**
+- "expected a body member" in constraint/analysis contexts
+- "expected 'requirement' keyword after 'satisfy'"
+
+**Affected files:**
+- 31. Constraints/*.sysml (7 files)
+- 32. Requirements/Requirement Satisfaction.sysml
+- 33. Analysis/*.sysml (2 files)
+- 29. Expressions/MassRollup2.sysml
+
+## Working Examples (37 files)
 All examples in these directories parse successfully:
-- 01. Packages (3/3 files)
-- 02. Part Definitions (1/1 file)  
-- Plus many others
+- 01. Packages (3/3 files) ✅
+- 02. Part Definitions (1/1 file) ✅
+- 03-06, 08, 11-14, 16-23, 25-28, 30, 34-35 (various) ✅
+
+## Progress Summary
+- ✅ **Fixed:** Requirement constraint body syntax (19 files)
+- ⚠️ **TODO:** State machine syntax (3 files)
+- ⚠️ **TODO:** Connection/flow syntax (2 files)
+- ⚠️ **TODO:** Other body member issues (11 files)
+- ⚠️ **TODO:** Semantic validation errors (4 files)
 
 ## Recommendations
 1. **High priority:** State machine syntax (enables 3 files, common feature)
-2. **High priority:** Requirement constraint bodies (enables 19 files)
+2. **Medium priority:** Investigate "expected body member" errors in constraints/analysis (11 files)
 3. **Medium priority:** Connection/flow syntax tweaks (enables 2 files)
 4. **Low priority:** Investigate semantic errors (may be spec-compliant validation)
 
