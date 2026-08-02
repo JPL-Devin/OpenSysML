@@ -68,6 +68,7 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkSubsettingMultiplicity(sym)
 	cc.checkConnectorEnds(sym)
 	cc.checkTypingConformance(sym)
+	cc.checkRedefinition(sym)
 }
 
 // checkSpecializationCycle flags a symbol that participates in a specialization
@@ -315,4 +316,226 @@ func (cc *constraintChecker) checkTypingConformance(sym *symbols.Symbol) {
 			})
 		}
 	}
+}
+
+// checkRedefinition flags a usage that redefines a member without proper
+// inheritance, type conformance, or multiplicity bounds. SysML constraints:
+// (1) redefined member must be inherited, (2) redefining usage must have a type
+// that conforms to the redefined usage's type, (3) multiplicity bounds must be
+// compatible (lower >= redefined.lower, upper <= redefined.upper).
+func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
+	rels := semantics.RelationshipsOf(sym)
+	if len(rels) == 0 {
+		return // No relationships
+	}
+	
+	// Find owner symbol (the definition/usage that declares sym).
+	// This traverses OwnerScope.Parent() to find the symbol whose Decl matches
+	// sym's declaring scope node. If scope hierarchy is complex (nested blocks,
+	// synthetic scopes), owner lookup may fail - we skip validation gracefully.
+	var owner *symbols.Symbol
+	if sym.OwnerScope != nil {
+		ownerNode := sym.OwnerScope.Node()
+		if ownerNode != nil {
+			// Search parent scope for symbol with matching Decl
+			parentScope := sym.OwnerScope.Parent()
+			if parentScope != nil {
+				for _, name := range parentScope.MemberNames() {
+					for _, candidate := range parentScope.LookupLocalAll(name) {
+						if candidate != nil && candidate.Decl == ownerNode {
+							owner = candidate
+							break
+						}
+					}
+					if owner != nil {
+						break
+					}
+				}
+			}
+		}
+	}
+	
+	if owner == nil {
+		// Cannot determine owner (complex scope hierarchy or internal structure).
+		// Skip validation gracefully rather than reporting false positives.
+		return
+	}
+	
+	// Extract all redefines relationships
+	for _, rel := range rels {
+		if rel == nil {
+			continue
+		}
+		if rel.Kind != ast.RelRedefines {
+			continue
+		}
+		if rel.Target == nil {
+			continue
+		}
+		
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, isQN := targetNode.(*ast.QualifiedName)
+		if !isQN {
+			continue
+		}
+		redefined, resolved := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
+		if !resolved || redefined == nil {
+			continue
+		}
+		
+		// Check that redefined member is inherited (not locally declared in owner)
+		inherited := false
+		locallyDeclared := false
+		
+		// Check if redefined is locally declared in owner's scope
+		if owner.Scope != nil {
+			for _, memberName := range owner.Scope.MemberNames() {
+				for _, localMember := range owner.Scope.LookupLocalAll(memberName) {
+					if localMember == redefined {
+						locallyDeclared = true
+						break
+					}
+				}
+				if locallyDeclared {
+					break
+				}
+			}
+		}
+		
+		// If not locally declared, check if it's inherited from supertypes
+		if !locallyDeclared {
+			for _, supertype := range cc.model.AllSupertypes(owner) {
+				if supertype.Scope != nil {
+					for _, memberName := range supertype.Scope.MemberNames() {
+						for _, inheritedMember := range supertype.Scope.LookupLocalAll(memberName) {
+							if inheritedMember == redefined {
+								inherited = true
+								break
+							}
+						}
+						if inherited {
+							break
+						}
+					}
+				}
+				if inherited {
+					break
+				}
+			}
+		}
+		
+		if !inherited {
+			cc.diags = append(cc.diags, Diagnostic{
+				Severity: SeverityError,
+				Span:     rel.Target.Span(),
+				Message: fmt.Sprintf(
+					"%s redefines %s, but %s is not an inherited member of %s",
+					sym.Name, redefined.Name, redefined.Name, owner.Name),
+				Code:   "redefinition-no-inherited",
+				Source: "constraint",
+			})
+			continue
+		}
+		
+		// Check type conformance
+		usageType := extractUsageType(cc, sym)
+		redefinedType := extractUsageType(cc, redefined)
+		
+		if usageType != nil && redefinedType != nil {
+			if !cc.model.Conforms(usageType, redefinedType) {
+				cc.diags = append(cc.diags, Diagnostic{
+					Severity: SeverityError,
+					Span:     rel.Target.Span(),
+					Message: fmt.Sprintf(
+						"%s (typed by %s) redefines %s (typed by %s): types do not conform",
+						sym.Name, usageType.Name, redefined.Name, redefinedType.Name),
+					Code:   "redefinition-type-mismatch",
+					Source: "constraint",
+				})
+			}
+		}
+		
+		// Check multiplicity bounds (SysML: redefining multiplicity must tighten)
+		symMult, symOk := cc.model.MultiplicityOf(sym)
+		redefinedMult, redefinedOk := cc.model.MultiplicityOf(redefined)
+		
+		// Only validate if both multiplicities are known and evaluable.
+		// MultiplicityOf returns ok=false for non-usages or missing multiplicity.
+		// Bound.Known=false means expression is not model-level-evaluable.
+		// This guards against nil/uninitialized bounds and non-evaluable expressions.
+		if symOk && redefinedOk && symMult.Lower.Known && symMult.Upper.Known && 
+		   redefinedMult.Lower.Known && redefinedMult.Upper.Known {
+			// Lower bound must be >= redefined lower bound
+			lowerViolated := false
+			if !symMult.Lower.Infinite && !redefinedMult.Lower.Infinite {
+				lowerViolated = symMult.Lower.Value < redefinedMult.Lower.Value
+			}
+			
+			// Upper bound must be <= redefined upper bound (or both unbounded)
+			upperViolated := false
+			if !redefinedMult.Upper.Infinite { // redefined has finite upper bound
+				if symMult.Upper.Infinite { // sym is unbounded
+					upperViolated = true
+				} else if symMult.Upper.Value > redefinedMult.Upper.Value {
+					upperViolated = true
+				}
+			}
+			
+			if lowerViolated || upperViolated {
+				cc.diags = append(cc.diags, Diagnostic{
+					Severity: SeverityError,
+					Span:     rel.Target.Span(),
+					Message: fmt.Sprintf(
+						"%s [%s..%s] redefines %s [%s..%s]: multiplicity bounds incompatible",
+						sym.Name, formatBound(symMult.Lower), formatBound(symMult.Upper),
+						redefined.Name, formatBound(redefinedMult.Lower), formatBound(redefinedMult.Upper)),
+					Code:   "redefinition-multiplicity",
+					Source: "constraint",
+				})
+			}
+		}
+	}
+}
+
+// extractUsageType extracts the type of a usage via its RelTyping relationship.
+// Returns nil if no explicit type is found.
+func extractUsageType(cc *constraintChecker, sym *symbols.Symbol) *symbols.Symbol {
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Target == nil || rel.Kind != ast.RelTyping {
+			continue
+		}
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		if qn, ok := targetNode.(*ast.QualifiedName); ok {
+			resolved, ok := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
+			if ok && resolved != nil {
+				return resolved
+			}
+		}
+	}
+	return nil
+}
+
+// formatUpper formats an upper bound for display (-1 = "*", else numeric).
+func formatUpper(upper int) string {
+	if upper < 0 {
+		return "*"
+	}
+	return fmt.Sprintf("%d", upper)
+}
+
+// formatBound formats a Bound for display (infinite = "*", else numeric value).
+func formatBound(b semantics.Bound) string {
+	if b.Infinite {
+		return "*"
+	}
+	if b.Known {
+		return fmt.Sprintf("%d", b.Value)
+	}
+	return "?"
 }

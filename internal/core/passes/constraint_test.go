@@ -211,3 +211,70 @@ func TestConstraint_TypingConformanceInvalid(t *testing.T) {
 		t.Fatalf("expected typing-conformance diagnostic, got %v", diags)
 	}
 }
+
+// --- V-C4 Track 4 Task 14: redefinition validation ---
+
+func TestConstraint_RedefinitionValid(t *testing.T) {
+	src := `
+		attribute def SpeedType;
+		attribute def Vehicle {
+			attribute speed : SpeedType;
+		}
+		attribute def Car specializes Vehicle {
+			attribute speed : SpeedType :>> Vehicle::speed;
+		}
+	`
+	diags := constraintDiags(t, src)
+	if hasCode(diags, "redefinition-no-inherited") || hasCode(diags, "redefinition-type-mismatch") {
+		t.Fatalf("expected no redefinition diagnostic for valid redefinition, got %v", diags)
+	}
+}
+
+func TestConstraint_RedefinitionNoInheritedMember(t *testing.T) {
+	src := `
+		attribute def SpeedType;
+		attribute def Vehicle {
+			attribute speed : SpeedType;
+		}
+		attribute def Car {
+			attribute speed : SpeedType :>> Vehicle::speed;
+		}
+	`
+	diags := constraintDiags(t, src)
+	if !hasCode(diags, "redefinition-no-inherited") {
+		t.Fatalf("expected redefinition-no-inherited diagnostic, got %v", diags)
+	}
+}
+
+func TestConstraint_RedefinitionTypeMismatch(t *testing.T) {
+	src := `
+		attribute def SpeedType;
+		attribute def NameType;
+		attribute def Vehicle {
+			attribute speed : SpeedType;
+		}
+		attribute def Car specializes Vehicle {
+			attribute speed : NameType :>> Vehicle::speed;
+		}
+	`
+	diags := constraintDiags(t, src)
+	if !hasCode(diags, "redefinition-type-mismatch") {
+		t.Fatalf("expected redefinition-type-mismatch diagnostic, got %v", diags)
+	}
+}
+
+func TestConstraint_RedefinitionMultiplicityInvalid(t *testing.T) {
+	src := `
+		attribute def SpeedType;
+		part def Vehicle {
+			attribute speed : SpeedType[1..2];
+		}
+		part def Car specializes Vehicle {
+			attribute speed : SpeedType[0..5] :>> Vehicle::speed;
+		}
+	`
+	diags := constraintDiags(t, src)
+	if !hasCode(diags, "redefinition-multiplicity") {
+		t.Fatalf("expected redefinition-multiplicity diagnostic, got %v", diags)
+	}
+}
