@@ -1513,6 +1513,51 @@ func (p *Parser) parseBodyMember() ast.Node {
 		}
 	}
 	
+	// Check for inline allocate statement: allocate X to Y;
+	// This is anonymous allocation usage
+	// Distinguish from allocation declarations: allocation : Type ... or allocation name : Type ...
+	if p.atKeyword("allocate") {
+		// Lookahead: allocate <id/featureChain> to ... = inline allocate
+		//            allocate : Type ... = allocation usage declaration
+		//            allocate <name> : Type ... = allocation usage declaration
+		nextTok := p.peekN(1)
+		isInlineAllocate := false
+		if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.Keyword {
+			// Could be allocation name or source
+			// Check if followed by 'to' (inline) vs colon/relationship (declaration)
+			tok2 := p.peekN(2)
+			if tok2.Kind == lexer.Keyword && tok2.KeywordID == "to" {
+				isInlineAllocate = true
+			} else if tok2.Kind == lexer.Dot || tok2.Kind == lexer.ColonColon {
+				// Feature chain - likely inline allocate
+				isInlineAllocate = true
+			}
+		}
+		
+		if isInlineAllocate {
+			p.advance() // consume 'allocate'
+			
+			u := &ast.Usage{
+				Kind: ast.UsageAllocation,
+			}
+			u.NodeBase.NodeSpan = p.spanFrom(start)
+			u.SetLeadingTrivia(trivia)
+			
+			// Parse allocation ends: source to target
+			p.parseTierBEnds(u, ast.UsageAllocation)
+			
+			p.expect(lexer.Semicolon, "expected ';' after allocate statement")
+			
+			m := &ast.Membership{
+				Visibility: vis,
+				Member:     u,
+			}
+			m.NodeBase.NodeSpan = u.Span()
+			m.SetLeadingTrivia(trivia)
+			return m
+		}
+	}
+	
 	// Check for accept action syntax: action <name> accept <param> : Type [via <port>];
 	// Pattern: action trigger accept scene : Scene;
 	// Pattern: action trigger accept scene : Scene via viewPort;
