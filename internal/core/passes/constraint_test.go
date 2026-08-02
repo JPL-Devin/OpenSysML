@@ -278,3 +278,79 @@ func TestConstraint_RedefinitionMultiplicityInvalid(t *testing.T) {
 		t.Fatalf("expected redefinition-multiplicity diagnostic, got %v", diags)
 	}
 }
+
+// --- V-C4 Track 4 Integration: typing conformance + redefinition ---
+
+func TestConstraint_Track4Integration(t *testing.T) {
+	tests := []struct {
+		name    string
+		src     string
+		wantErr bool
+		codes   []string
+	}{
+		{
+			name: "valid redefinition with multiplicity narrowing",
+			src: `
+				attribute def SpeedType;
+				attribute def Vehicle {
+					attribute speed : SpeedType[1..2];
+				}
+				attribute def Car specializes Vehicle {
+					attribute speed : SpeedType[1..1] :>> Vehicle::speed;
+				}
+				attribute myCar : Car;
+			`,
+			wantErr: false,
+		},
+		{
+			name: "redefinition without inheritance",
+			src: `
+				attribute def SpeedType;
+				attribute def Animal {
+					attribute speed : SpeedType;
+				}
+				attribute def Vehicle {
+					attribute speed : SpeedType;
+				}
+				attribute def Car specializes Vehicle {
+					attribute speed : SpeedType redefines Animal::speed;
+				}
+				attribute myCar : Car;
+			`,
+			wantErr: true,
+			codes:   []string{"redefinition-no-inherited"},
+		},
+		{
+			name: "redefinition multiplicity violation",
+			src: `
+				attribute def SpeedType;
+				attribute def Vehicle {
+					attribute speed : SpeedType[1..2];
+				}
+				attribute def Car specializes Vehicle {
+					attribute speed : SpeedType[0..5] :>> Vehicle::speed;
+				}
+				attribute myCar : Car;
+			`,
+			wantErr: true,
+			codes:   []string{"redefinition-multiplicity"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diags := constraintDiags(t, tt.src)
+			hasError := len(diags) > 0
+			if hasError != tt.wantErr {
+				t.Fatalf("wantErr=%v, got diagnostics: %v", tt.wantErr, diags)
+			}
+			if tt.wantErr {
+				for _, code := range tt.codes {
+					if !hasCode(diags, code) {
+						t.Errorf("expected code %q, got: %v", code, diags)
+					}
+				}
+			}
+		})
+	}
+}
