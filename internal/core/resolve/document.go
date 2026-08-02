@@ -140,8 +140,9 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relati
 			}
 			if qn, ok := target.(*ast.QualifiedName); ok {
 				r.ResolveQualified(scope, qn)
+			} else if fc, ok := target.(*ast.FeatureChainExpr); ok {
+				r.resolveFeatureChain(scope, fc)
 			}
-			// Note: Other target types (FeatureChainExpr, etc.) not yet supported in resolution
 		}
 	}
 }
@@ -206,7 +207,7 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 }
 
 // resolveFeatureChain resolves a FeatureChainExpr by resolving the operand
-// then looking up the member in the operand's scope.
+// then walking each member part explicitly, assigning symbols to each part.
 func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr) {
 	// Resolve operand first
 	r.resolveExpr(scope, fc.Operand)
@@ -226,8 +227,53 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 		return
 	}
 	
-	// Resolve member as qualified name in operand's scope
-	r.ResolveQualified(operandSym.Scope, fc.Member)
+	// Walk member parts explicitly, assigning symbols to each part
+	r.resolveMemberChain(operandSym.Scope, fc.Member)
+}
+
+// resolveMemberChain walks a qualified name member-by-member in the given scope,
+// assigning each part's symbol explicitly (for feature chain member access).
+func (r *Resolver) resolveMemberChain(scope *symbols.Scope, qn *ast.QualifiedName) {
+	if qn == nil || len(qn.Parts) == 0 {
+		return
+	}
+	
+	// Resolve first part in given scope
+	cur, ok := scope.LookupLocal(qn.Parts[0].Text)
+	if !ok {
+		r.Diagnostics = append(r.Diagnostics, Diagnostic{
+			Span:    qn.Parts[0].Span,
+			Message: "unresolved member: " + qn.Parts[0].Text,
+		})
+		return
+	}
+	qn.Parts[0].Sym = cur
+	
+	// Walk remaining parts via member lookup
+	for i := 1; i < len(qn.Parts); i++ {
+		if cur.Scope == nil {
+			r.Diagnostics = append(r.Diagnostics, Diagnostic{
+				Span:    qn.Parts[i].Span,
+				Message: "no members in " + cur.Name,
+			})
+			return
+		}
+		
+		next, ok := cur.Scope.LookupLocal(qn.Parts[i].Text)
+		if !ok {
+			r.Diagnostics = append(r.Diagnostics, Diagnostic{
+				Span:    qn.Parts[i].Span,
+				Message: "unresolved member: " + qn.Parts[i].Text + " in " + cur.Name,
+			})
+			return
+		}
+		
+		qn.Parts[i].Sym = next
+		cur = next
+	}
+	
+	// Store final resolution in memo
+	r.memo[qn] = resolution{cur, true}
 }
 
 // getExprSymbol extracts the symbol referenced by an expression, used for

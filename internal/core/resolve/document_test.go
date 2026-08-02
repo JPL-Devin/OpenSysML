@@ -48,72 +48,127 @@ func TestResolveDocumentResolvesExpressionRefs(t *testing.T) {
 }
 
 func TestResolve_FeatureChainExpr(t *testing.T) {
-	tests := []struct {
-		name    string
-		src     string
-		wantErr bool
-	}{
-		{
-			name: "simple chain - two levels",
-			src: `
-				package A {
-					attribute x = 1;
-				}
-				package B {
-					attribute ref : A;
-					attribute test = ref.x;
-				}
-			`,
-			wantErr: false,
-		},
-		{
-			name: "nested chain - three levels",
-			src: `
-				package A {
-					package Inner {
-						attribute value = 42;
-					}
-				}
-				package B {
-					attribute ref : A;
-					attribute test = ref.Inner.value;
-				}
-			`,
-			wantErr: false,
-		},
-		{
-			name: "unresolved first part",
-			src: `
-				package B {
-					attribute test = missing.x;
-				}
-			`,
-			wantErr: true,
-		},
-		{
-			name: "unresolved second part",
-			src: `
-				package A {
-					attribute x = 1;
-				}
-				package B {
-					attribute ref : A;
-					attribute test = ref.missing;
-				}
-			`,
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := resolveDoc(t, "test.sysml", tt.src)
-			hasErr := len(r.Diagnostics) > 0
-			if hasErr != tt.wantErr {
-				t.Errorf("wantErr=%v, got diagnostics: %v", tt.wantErr, r.Diagnostics)
+	t.Run("simple chain - two levels", func(t *testing.T) {
+		src := `
+			package A {
+				attribute x = 1;
 			}
-		})
-	}
+			package B {
+				attribute ref : A;
+				attribute test = ref.x;
+			}
+		`
+		p := parser.New(source.New("test.sysml", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) != 0 {
+			t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+		}
+		
+		idx := symbols.NewIndexFromDoc("test.sysml", root)
+		r := New(idx)
+		r.ResolveDocument("test.sysml", root)
+		
+		if len(r.Diagnostics) != 0 {
+			t.Fatalf("resolve diagnostics: %v", r.Diagnostics)
+		}
+		
+		// Find B::test usage and its chain expression
+		docRoot := idx.DocumentRoot("test.sysml")
+		bSym, _ := docRoot.LookupLocal("B")
+		testSym, _ := bSym.Scope.LookupLocal("test")
+		usage := testSym.Decl.(*ast.Usage)
+		
+		fc := usage.Value.(*ast.FeatureChainExpr)
+		
+		// Verify member (x) has symbol stored
+		if fc.Member == nil || len(fc.Member.Parts) != 1 {
+			t.Fatal("expected single-part member")
+		}
+		if fc.Member.Parts[0].Sym == nil {
+			t.Error("member part 'x' symbol not stored")
+		}
+	})
+	
+	t.Run("nested chain - three levels", func(t *testing.T) {
+		src := `
+			package A {
+				package Inner {
+					attribute value = 42;
+				}
+			}
+			package B {
+				attribute ref : A;
+				attribute test = ref.Inner.value;
+			}
+		`
+		p := parser.New(source.New("test.sysml", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) != 0 {
+			t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+		}
+		
+		idx := symbols.NewIndexFromDoc("test.sysml", root)
+		r := New(idx)
+		r.ResolveDocument("test.sysml", root)
+		
+		if len(r.Diagnostics) != 0 {
+			t.Fatalf("resolve diagnostics: %v", r.Diagnostics)
+		}
+		
+		// Find B::test usage and its chain expression
+		docRoot := idx.DocumentRoot("test.sysml")
+		bSym, _ := docRoot.LookupLocal("B")
+		testSym, _ := bSym.Scope.LookupLocal("test")
+		usage := testSym.Decl.(*ast.Usage)
+		
+		// Outer chain: ref.Inner.value = FeatureChainExpr{Operand: FeatureChainExpr{Operand: ref, Member: Inner}, Member: value}
+		outerChain := usage.Value.(*ast.FeatureChainExpr)
+		
+		// Verify outer member (value) has symbol
+		if outerChain.Member == nil || len(outerChain.Member.Parts) != 1 {
+			t.Fatal("expected outer member 'value'")
+		}
+		if outerChain.Member.Parts[0].Sym == nil {
+			t.Error("outer member part 'value' symbol not stored")
+		}
+		
+		// Verify inner chain member (Inner) has symbol
+		innerChain := outerChain.Operand.(*ast.FeatureChainExpr)
+		if innerChain.Member == nil || len(innerChain.Member.Parts) != 1 {
+			t.Fatal("expected inner member 'Inner'")
+		}
+		if innerChain.Member.Parts[0].Sym == nil {
+			t.Error("inner member part 'Inner' symbol not stored")
+		}
+	})
+	
+	t.Run("unresolved first part", func(t *testing.T) {
+		src := `
+			package B {
+				attribute test = missing.x;
+			}
+		`
+		r := resolveDoc(t, "test.sysml", src)
+		if len(r.Diagnostics) == 0 {
+			t.Error("expected unresolved diagnostic")
+		}
+	})
+	
+	t.Run("unresolved second part", func(t *testing.T) {
+		src := `
+			package A {
+				attribute x = 1;
+			}
+			package B {
+				attribute ref : A;
+				attribute test = ref.missing;
+			}
+		`
+		r := resolveDoc(t, "test.sysml", src)
+		if len(r.Diagnostics) == 0 {
+			t.Error("expected unresolved diagnostic")
+		}
+	})
 }
 
 func TestResolve_QualifiedNamePartsStoreSymbols(t *testing.T) {
