@@ -570,7 +570,7 @@ func (p *Parser) isBehavioralKeyword() bool {
 	kw := p.peek().KeywordID
 	switch kw {
 	case "first", "done", "fork", "join", "merge", "decision", "action", "then",
-		"assign", "perform", "while", "if", "send", "terminate":
+		"assign", "perform", "while", "loop", "if", "send", "terminate":
 		return true
 	}
 	return false

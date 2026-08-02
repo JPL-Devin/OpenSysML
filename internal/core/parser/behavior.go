@@ -393,6 +393,8 @@ func (p *Parser) parseActionMember() ast.Node {
 			return p.parsePerformAction(tok)
 		case "while":
 			return p.parseWhileLoopAction(tok)
+		case "loop":
+			return p.parseLoopAction(tok)
 		case "if":
 			return p.parseIfAction(tok)
 		case "send":
@@ -834,6 +836,64 @@ func (p *Parser) parseWhileLoopAction(tok lexer.Token) ast.Node {
 	return node
 }
 
+func (p *Parser) parseLoopAction(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Loop syntax: loop <body-members> until <condition>;
+	// Body can contain action declarations, succession, etc.
+	// Parse body as mixed content (declarations + behavioral statements)
+	var body []ast.Node
+	
+	// Parse loop body members until 'until' keyword or closing brace
+	for !p.atKeyword("until") && !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
+		
+		// Try direction parameters first
+		if p.isDirectionKeyword() {
+			body = append(body, p.parseDirectionParameter())
+			continue
+		}
+		
+		// Try declarations (action/part/etc)
+		if p.atDefUsageStart() {
+			m := p.parseBodyMember()
+			if m != nil {
+				body = append(body, m)
+			}
+			// Check if no progress (prevent infinite loop)
+			if p.peek().Span.Offset == before {
+				p.advance()
+			}
+			continue
+		}
+		
+		// Parse behavioral statements
+		body = append(body, p.parseActionMember())
+		
+		// Ensure progress
+		if p.peek().Span.Offset == before {
+			p.advance()
+		}
+	}
+	
+	// Parse optional 'until' condition
+	var condition ast.Node
+	if p.acceptKeyword("until") {
+		condition = p.ParseExpression()
+	}
+	
+	p.expect(lexer.Semicolon, "expected ';' after loop")
+	
+	// Reuse WhileLoopActionNode with condition (will be post-condition for 'until')
+	// Alternatively, could add separate LoopActionNode with UntilCondition field
+	node := &ast.WhileLoopActionNode{
+		Condition: condition,
+		Body:      body,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
 // parseIfAction parses: if condition { thenBody } [else { elseBody }]
 func (p *Parser) parseIfAction(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
@@ -870,6 +930,30 @@ func (p *Parser) parseIfAction(tok lexer.Token) ast.Node {
 	// Parse then body statements
 	var thenBody []ast.Node
 	for !p.at(lexer.RBrace) && !p.atEOF() {
+		// Use parseActionBodyMixed to support both declarations and behavioral statements
+		// This allows: if <cond> { action x : Type { body }; first x then y; }
+		before := p.peek().Span.Offset
+		
+		// Try direction parameters first
+		if p.isDirectionKeyword() {
+			thenBody = append(thenBody, p.parseDirectionParameter())
+			continue
+		}
+		
+		// Try declarations (action/part/etc)
+		if p.atDefUsageStart() {
+			m := p.parseBodyMember()
+			if m != nil {
+				thenBody = append(thenBody, m)
+			}
+			// Check if no progress (prevent infinite loop)
+			if p.peek().Span.Offset == before {
+				p.advance()
+			}
+			continue
+		}
+		
+		// Parse behavioral statements
 		thenBody = append(thenBody, p.parseActionMember())
 	}
 	
@@ -883,6 +967,27 @@ func (p *Parser) parseIfAction(tok lexer.Token) ast.Node {
 		} else {
 			p.advance() // consume '{'
 			for !p.at(lexer.RBrace) && !p.atEOF() {
+				before := p.peek().Span.Offset
+				
+				// Try direction parameters first
+				if p.isDirectionKeyword() {
+					elseBody = append(elseBody, p.parseDirectionParameter())
+					continue
+				}
+				
+				// Try declarations
+				if p.atDefUsageStart() {
+					m := p.parseBodyMember()
+					if m != nil {
+						elseBody = append(elseBody, m)
+					}
+					if p.peek().Span.Offset == before {
+						p.advance()
+					}
+					continue
+				}
+				
+				// Parse behavioral statements
 				elseBody = append(elseBody, p.parseActionMember())
 			}
 			p.expect(lexer.RBrace, "expected '}' after else body")
