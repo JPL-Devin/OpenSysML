@@ -1,21 +1,30 @@
 # Action Executor Demo
 
-This file demonstrates the action executor capabilities implemented in Phase 2. Since the public API (Phase 4) and REPL commands (Phase 5) are not yet implemented, this shows the conceptual execution flow using SysML v2 syntax.
+This file demonstrates the action executor capabilities. All features are fully implemented and available via REPL commands and public API.
 
 ## Current Implementation Status
 
 ✅ **Complete:**
-- Token-flow execution engine
+- Token-flow execution engine (Petri-net semantics)
 - All control flow nodes (Initial, Final, Fork, Join, Merge, Decision, Action)
 - Guard evaluation with comparison operators
 - Expression evaluation with token data scoping
-- Comprehensive test coverage (15 ActionExecutor tests)
+- ObjectFlow data routing (pin-to-pin data transfer)
+- Public execution API (`Context.ExecuteAction()`, `Context.CreateActionExecutor()`)
+- REPL debugging commands (`%action`, `%step`, `%continue`, `%tokens`, `%stop`)
+- Step-by-step execution with token inspection
+- RunToCompletion API for non-interactive execution
+- Comprehensive test coverage (26 ActionExecutor tests)
 
-❌ **Not Yet Implemented:**
-- Public execution API (`Context.ExecuteAction()`) - Task 32
-- REPL commands (`%action`, `%step`, `%continue`) - Tasks 35-46
-- ObjectFlow data routing - Task 9
-- Step() and RunToCompletion() APIs - Task 10
+**Try it in REPL:**
+```bash
+$ sysml
+sysml> %load examples/action-executor-demo.sysml
+sysml> %action SimpleSequential
+sysml> %step
+sysml> %tokens
+sysml> %continue
+```
 
 ## Demo Examples
 
