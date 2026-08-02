@@ -225,13 +225,14 @@ type ConstraintMember struct {
 // Phase C2: Requirement Body Members
 
 // SubjectMember represents the subject declaration in a requirement body.
-// Syntax: subject <name> : <Type>;
+// Syntax: subject <name> : <Type>; OR subject = <expr>;
 type SubjectMember struct {
 	NodeBase
 	Name         string
-	TypeRef      *QualifiedName // subject type
+	TypeRef      *QualifiedName // subject type (for declaration form)
 	Multiplicity *Multiplicity  // optional multiplicity
 	Body         []Node         // optional nested members
+	BindingExpr  Node           // binding expression (for binding form: subject = <expr>;)
 }
 
 // AssumeMember represents an assumption in a requirement body.
