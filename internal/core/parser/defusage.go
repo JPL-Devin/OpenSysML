@@ -490,6 +490,15 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				})
 			}
 			
+			// Optional multiplicity after reference
+			if p.at(lexer.LBracket) {
+				u.Multiplicity = p.parseMultiplicity()
+			}
+			
+			// Optional relationships (e.g., :>> target)
+			rels, _ := p.parseRelationships(true)
+			u.Relationships = append(u.Relationships, rels...)
+			
 			// Expect semicolon or body
 			if p.accept2(lexer.Semicolon) {
 				u.HasBody = false

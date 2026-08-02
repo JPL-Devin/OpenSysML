@@ -113,6 +113,23 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 					}
 					continue
 				}
+				// If behavioral keyword after name → declaration with inline statement
+				// Pattern: action <name> send <msg> to <target>;
+				//          action <name> perform <ref>;
+				if tok2.Kind == lexer.Keyword && (tok2.KeywordID == "send" || tok2.KeywordID == "terminate" || 
+					tok2.KeywordID == "perform" || tok2.KeywordID == "bind" || tok2.KeywordID == "assign") {
+					m := p.parseBodyMember()
+					if m != nil {
+						if p.atKeyword("then") {
+							p.advance()
+							if mem, ok := m.(*ast.Membership); ok {
+								mem.HasSuccession = true
+							}
+						}
+						members = append(members, m)
+					}
+					continue
+				}
 				// If brace after name, peek inside
 				if tok2.Kind == lexer.LBrace {
 					firstInBrace := p.peekN(3)
