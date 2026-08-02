@@ -111,8 +111,11 @@ Current: green (Time: 30.0s)
 |-----------|--------|
 | Lexer/Parser (structural + behavioral grammar) | ✅ Complete (100% stdlib coverage) |
 | Symbol resolution & type system | ✅ Complete |
-| Validation passes (syntax → constraints) | ✅ Complete |
+| Semantic layer (operators, builtins, validation) | ✅ Complete |
+| Feature chain resolution (member access) | ✅ Complete |
+| Validation passes (typing conformance, redefinition) | ✅ Complete |
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
+| Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
 | Behavioral parser (Phase C1-5: all behavioral bodies) | ✅ Complete |
 | Calc invocation, constraint & requirement evaluation | ✅ Complete |
@@ -123,8 +126,9 @@ Current: green (Time: 30.0s)
 | LSP server implementation | ✅ Complete |
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
-**Test coverage:** 116 tests covering parsers, semantics, runtime (actions, states, instances).
+**Test coverage:** 722+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation).
 **Parser coverage:** 95 of 95 official SysML v2 standard library files parse cleanly (100% coverage). Full SysML v2 specification compliance achieved. See [examples/PARSER_FEATURES_DEMOS.md](examples/PARSER_FEATURES_DEMOS.md) for feature showcase.
+**Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
 ## Architecture
 
