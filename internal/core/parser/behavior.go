@@ -376,7 +376,13 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 		p.advance()
 	}
 	
-	// Check for succession edge continuation: first X then Y;
+	// Check for succession edge continuation: first X [if <expr>] then Y;
+	var guard ast.Node
+	if p.atKeyword("if") {
+		p.advance() // consume 'if'
+		guard = p.ParseExpression()
+	}
+	
 	if p.atKeyword("then") {
 		p.advance() // consume 'then'
 		target := p.parseQualifiedName()
@@ -387,12 +393,29 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 		if name != "" {
 			source.Parts = []ast.NameSegment{{Text: name}}
 		}
-		node := &ast.SuccessionEdge{
-			Source: source,
-			Target: target,
+		
+		// If guard present, return ControlFlowEdge; otherwise SuccessionEdge
+		if guard != nil {
+			node := &ast.ControlFlowEdge{
+				Source: source,
+				Target: target,
+				Guard:  guard,
+			}
+			node.NodeSpan = p.spanFrom(start)
+			return node
+		} else {
+			node := &ast.SuccessionEdge{
+				Source: source,
+				Target: target,
+			}
+			node.NodeSpan = p.spanFrom(start)
+			return node
 		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
+	}
+	
+	// If if clause present but no then, error
+	if guard != nil {
+		p.error(p.peek().Span, "expected 'then' after guard condition")
 	}
 	
 	p.expect(lexer.Semicolon, "expected ';' after initial node")
@@ -740,6 +763,22 @@ func (p *Parser) parseIfAction(tok lexer.Token) ast.Node {
 	
 	// Parse condition expression
 	condition := p.ParseExpression()
+	
+	// Check for shorthand guard succession: if <expr> then <target>;
+	if p.atKeyword("then") {
+		p.advance() // consume 'then'
+		target := p.parseQualifiedName()
+		p.expect(lexer.Semicolon, "expected ';' after guard succession")
+		
+		// Return ControlFlowEdge with implicit source (decision node) and guard
+		node := &ast.ControlFlowEdge{
+			Source: &ast.QualifiedName{}, // empty source = implicit decision node
+			Target: target,
+			Guard:  condition,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
 	
 	// Expect '{'
 	if !p.at(lexer.LBrace) {
