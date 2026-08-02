@@ -80,6 +80,9 @@ func (ec *EvalContext) Eval(node ast.Node) (Value, error) {
 		return ec.evalSelectExpr(n)
 	case *ast.InvocationExpr:
 		return ec.evalInvocation(n)
+	case *ast.BodyExpr:
+		// BodyExpr is not directly evaluated - wrapped as ValExpr for delayed evaluation
+		return Value{Kind: ValExpr, Expr: n}, nil
 	default:
 		return Value{}, fmt.Errorf("unsupported node type: %T", node)
 	}
