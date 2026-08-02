@@ -118,9 +118,10 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 					isDeclaration := false
 					if firstInBrace.Kind == lexer.Keyword {
 						kw := firstInBrace.KeywordID
-						// Direction keywords or nested declarations suggest declaration body
+						// Direction keywords, behavioral keywords, or nested declarations suggest declaration body
 						if kw == "in" || kw == "out" || kw == "inout" || kw == "action" || 
-							kw == "part" || kw == "item" || kw == "flow" || kw == "doc" {
+							kw == "part" || kw == "item" || kw == "flow" || kw == "doc" ||
+							kw == "perform" || kw == "send" || kw == "assign" || kw == "first" {
 							isDeclaration = true
 						}
 					}
@@ -568,8 +569,9 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 					Message:  "expected '}' after action expression",
 				}
 			}
-		} else if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.ColonColon {
+		} else if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.ColonColon || nextTok.Kind == lexer.Keyword {
 			// Could be name + ref OR just ref (qualified name)
+			// Also handle keywords as refs (e.g., action stop terminate;)
 			// Parse first identifier
 			firstIdToken := p.peek()
 			firstIdSpan := firstIdToken.Span
@@ -595,10 +597,20 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 				}
 				actionRef = &ast.QualifiedName{Parts: parts}
 				actionRef.NodeSpan = p.spanFrom(firstIdSpan.Offset)
-			} else if p.at(lexer.Identifier) {
-				// firstId is name, what follows is actionRef
+			} else if p.at(lexer.Identifier) || p.at(lexer.Keyword) {
+				// firstId is name, what follows is actionRef (identifier or keyword)
 				name = firstId
-				actionRef = p.parseQualifiedName()
+				if p.at(lexer.Keyword) {
+					// Allow keywords as action refs (e.g., 'terminate')
+					kw := p.peek()
+					actionRef = &ast.QualifiedName{
+						Parts: []ast.NameSegment{{Text: kw.KeywordID, Span: kw.Span}},
+					}
+					actionRef.NodeSpan = kw.Span
+					p.advance()
+				} else {
+					actionRef = p.parseQualifiedName()
+				}
 			} else {
 				// firstId is a simple (non-qualified) actionRef
 				actionRef = &ast.QualifiedName{
@@ -650,9 +662,21 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 		}
 	}
 	
-	// Otherwise, parse as named edge: then source target;
-	source := p.parseQualifiedName()
-	target := p.parseQualifiedName()
+	// Otherwise, parse as named edge: then [source] target;
+	// If only one name before semicolon, it's the target (source implicit)
+	first := p.parseQualifiedNameRelaxed() // allow keywords like 'fork', 'join'
+	
+	// Check if there's a second name (explicit source + target)
+	var source, target *ast.QualifiedName
+	if !p.at(lexer.Semicolon) && !p.atKeyword("if") && (p.at(lexer.Identifier) || p.at(lexer.Keyword)) {
+		// Two-name form: then source target;
+		source = first
+		target = p.parseQualifiedNameRelaxed()
+	} else {
+		// One-name form: then target; (source implicit)
+		source = &ast.QualifiedName{} // empty source
+		target = first
+	}
 	
 	// Check for optional guard
 	if p.acceptKeyword("if") {
