@@ -2085,6 +2085,11 @@ func (p *Parser) parseConnectorEnd() *ast.ConnectorEnd {
 		return nil
 	}
 	
+	// Optional relationships (e.g., ::> for interface binding)
+	// Parse relationships until we hit a stopping keyword (to/from/then/references) or terminator
+	rels, _ := p.parseRelationships(true)
+	ce.Relationships = rels
+	
 	ce.NodeSpan = p.spanFrom(start)
 	return ce
 }

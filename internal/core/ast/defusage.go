@@ -410,4 +410,5 @@ type ConnectorEnd struct {
 	Target       Node // QualifiedName or Expression (e.g., FeatureChainExpr for occ.startShot)
 	Multiplicity *Multiplicity
 	Reference    Node // Optional "references X" clause - QualifiedName or FeatureChainExpr
+	Relationships []*Relationship // Optional relationships (e.g., ::> for interface binding)
 }
