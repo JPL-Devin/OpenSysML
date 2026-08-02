@@ -363,3 +363,60 @@ func TestEval_LogicalNot(t *testing.T) {
 		})
 	}
 }
+
+func TestEval_NegationArithmetic(t *testing.T) {
+	tests := []struct {
+		src      string
+		expected int64
+	}{
+		{"-42", -42},
+		{"-(-5)", 5},
+		{"-(3 + 2)", -5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			model, resolver, root := parseAndBuildModel(t, "attribute test = "+tt.src+";")
+			ctx := NewContext(model, resolver, 1000)
+			attrSym := resolveSymbol(t, root, "test")
+			attrDecl := attrSym.Decl.(*ast.Usage)
+			result, err := ctx.Eval(attrDecl.Value)
+			if err != nil {
+				t.Fatalf("Eval failed: %v", err)
+			}
+			if result.Kind != ValConst || result.Const.Kind != semantics.ValInt {
+				t.Fatalf("expected int, got %v", result)
+			}
+			if result.Const.Int != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result.Const.Int)
+			}
+		})
+	}
+}
+
+func TestEval_NegationArithmeticReal(t *testing.T) {
+	tests := []struct {
+		src      string
+		expected float64
+	}{
+		{"-3.14", -3.14},
+		{"-(-2.5)", 2.5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			model, resolver, root := parseAndBuildModel(t, "attribute test = "+tt.src+";")
+			ctx := NewContext(model, resolver, 1000)
+			attrSym := resolveSymbol(t, root, "test")
+			attrDecl := attrSym.Decl.(*ast.Usage)
+			result, err := ctx.Eval(attrDecl.Value)
+			if err != nil {
+				t.Fatalf("Eval failed: %v", err)
+			}
+			if result.Kind != ValConst || result.Const.Kind != semantics.ValReal {
+				t.Fatalf("expected real, got %v", result)
+			}
+			if result.Const.Real != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result.Const.Real)
+			}
+		})
+	}
+}

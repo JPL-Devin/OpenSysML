@@ -389,8 +389,15 @@ func (ec *EvalContext) evalNeg(n *ast.OperatorExpr) (Value, error) {
 		}
 		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: !operand.Const.Bool}}, nil
 	case ast.OpNeg:
-		// Arithmetic negation: -number (handled in Task 3)
-		return Value{}, fmt.Errorf("arithmetic negation not yet implemented")
+		// Arithmetic negation: -number
+		if operand.Kind != ValConst {
+			return Value{}, fmt.Errorf("arithmetic negation requires numeric operand, got %v", operand.Kind)
+		}
+		result, ok := semantics.EvalUnary(ast.OpNeg, operand.Const)
+		if !ok {
+			return Value{}, fmt.Errorf("arithmetic negation failed for %v", operand.Const)
+		}
+		return Value{Kind: ValConst, Const: result}, nil
 	default:
 		return Value{}, fmt.Errorf("unsupported negation operator: %v", n.Operator)
 	}

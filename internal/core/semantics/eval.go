@@ -99,11 +99,9 @@ func evalOperator(e *ast.OperatorExpr) (Value, bool) {
 	}
 }
 
-func evalUnary(op ast.OperatorKind, operand ast.Node) (Value, bool) {
-	v, ok := evalConst(operand)
-	if !ok {
-		return Value{}, false
-	}
+// EvalUnary evaluates a unary operator on a constant value.
+// Returns (result, true) if successful, (zero, false) otherwise.
+func EvalUnary(op ast.OperatorKind, v Value) (Value, bool) {
 	switch op {
 	case ast.OpNeg:
 		if v.Kind == ValInt {
@@ -122,6 +120,14 @@ func evalUnary(op ast.OperatorKind, operand ast.Node) (Value, bool) {
 		}
 	}
 	return Value{}, false
+}
+
+func evalUnary(op ast.OperatorKind, operand ast.Node) (Value, bool) {
+	v, ok := evalConst(operand)
+	if !ok {
+		return Value{}, false
+	}
+	return EvalUnary(op, v)
 }
 
 func evalBinary(op ast.OperatorKind, lhs, rhs ast.Node) (Value, bool) {
