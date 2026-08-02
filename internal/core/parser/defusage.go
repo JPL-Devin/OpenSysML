@@ -1348,12 +1348,19 @@ func (p *Parser) parseBodyMember() ast.Node {
 				IsNonunique:   mods.isNonunique,
 			}
 			
-			// If we consumed a colon, parse typing relationship
+			// If we consumed a colon, parse typing relationship(s)
+			// Support comma-separated types: : Type1, Type2, Type3
 			if hasNameAndType {
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelTyping,
-					Target: p.parseQualifiedName(),
-				})
+				for {
+					u.Relationships = append(u.Relationships, &ast.Relationship{
+						Kind:   ast.RelTyping,
+						Target: p.parseQualifiedName(),
+					})
+					// Check for comma - if present, parse additional type
+					if !p.accept2(lexer.Comma) {
+						break
+					}
+				}
 			}
 			
 			// Parse optional multiplicity
