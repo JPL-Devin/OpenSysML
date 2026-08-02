@@ -67,6 +67,8 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"occurrence": ast.UsageOccurrence,
 	"event":      ast.UsageOccurrence, // event creates occurrence usage (event-driven)
 	"individual": ast.UsageIndividual,
+	"snapshot":   ast.UsageOccurrence, // snapshot occurrence usage
+	"timeslice":  ast.UsageOccurrence, // timeslice occurrence usage (temporal slice)
 	"metadata":   ast.UsageMetadata,
 	"enum":       ast.UsageEnumeration,
 	"view":       ast.UsageView,
@@ -267,8 +269,28 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			}
 			m.isEvent = true
 		case "individual":
+			// Check if standalone def/usage: individual def/occurrence/part ...
+			// If followed by def/usage keyword, it's def/usage keyword, not modifier
+			nextTok := p.peekN(1)
+			if nextTok.Kind == lexer.Keyword {
+				if nextTok.KeywordID == "def" {
+					// individual def → DefIndividual keyword
+					return m
+				}
+				if _, isUsageKw := usageKindKeywords[nextTok.KeywordID]; isUsageKw {
+					// individual <usageKind> → usage keyword, not modifier
+					return m
+				}
+			}
 			m.isIndividual = true
 		case "snapshot":
+			// Check if standalone usage: snapshot <name> ...
+			// If followed by identifier/qualified name, could be usage keyword
+			nextTok := p.peekN(1)
+			if nextTok.Kind == lexer.Identifier || (nextTok.Kind == lexer.Keyword && !isModifierOrKindKeyword(nextTok.KeywordID)) {
+				// Treat as usage keyword, stop consuming modifiers
+				return m
+			}
 			m.isSnapshot = true
 		case "public":
 			m.visibility = ast.VisibilityPublic
@@ -1288,6 +1310,36 @@ func (p *Parser) parseBodyMember() ast.Node {
 		al := p.parseAlias(start, vis)
 		al.SetLeadingTrivia(trivia)
 		return al
+	}
+	
+	// Check for timeslice usage keyword
+	// Creates occurrence usage (temporal slice)
+	if p.atKeyword("timeslice") {
+		inner := p.parseDefUsage(start)
+		if inner != nil {
+			m := &ast.Membership{
+				Visibility: vis,
+				Member:     inner,
+			}
+			m.NodeSpan = p.spanFrom(start)
+			m.SetLeadingTrivia(trivia)
+			return m
+		}
+	}
+	
+	// Check for snapshot usage keyword
+	// Creates occurrence usage (temporal instant)
+	if p.atKeyword("snapshot") {
+		inner := p.parseDefUsage(start)
+		if inner != nil {
+			m := &ast.Membership{
+				Visibility: vis,
+				Member:     inner,
+			}
+			m.NodeSpan = p.spanFrom(start)
+			m.SetLeadingTrivia(trivia)
+			return m
+		}
 	}
 	
 	// Check for behavioral statements in structural contexts (occurrence/part with temporal ordering)
