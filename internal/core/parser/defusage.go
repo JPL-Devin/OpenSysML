@@ -85,6 +85,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"bind":       ast.UsageBinding, // shorthand for binding
 	// Tier C.
 	"action":       ast.UsageAction,
+	"perform":      ast.UsageAction, // perform keyword creates action usage
 	"state":        ast.UsageState,
 	"transition":   ast.UsageTransition,
 	"step":         ast.UsageStep,
@@ -315,8 +316,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" {
+	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require, perform) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		
@@ -332,6 +333,44 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				// For now, treat as semantic annotation - flow inherits succession characteristics
 				// Implementation note: May need dedicated AST flag or relationship for this hybrid
 			}
+			return u
+		}
+		
+		// Special case: perform <ref>; (shorthand without action keyword)
+		// If perform is NOT followed by action keyword, parse as action usage with reference
+		if kw == "perform" && !p.atKeyword("action") {
+			// Parse reference target (can be feature chain like takePhoto.focus)
+			u := &ast.Usage{
+				Kind:        ast.UsageAction,
+				IsAbstract:  mods.isAbstract,
+				IsReference: mods.isReference,
+				IsEnd:       mods.isEnd,
+				Visibility:  mods.visibility,
+				Direction:   mods.direction,
+				IsComposite: mods.isComposite,
+			}
+			u.NodeBase.NodeSpan = p.spanFrom(start)
+			
+			// Parse reference target (qualified name or feature chain)
+			target := p.parseRelationshipTarget()
+			if target != nil {
+				// Add as references relationship
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelReferences,
+					Target: target,
+				})
+			}
+			
+			// Expect semicolon or body
+			if p.accept2(lexer.Semicolon) {
+				u.HasBody = false
+			} else if p.at(lexer.LBrace) {
+				p.advance()
+				u.Members = p.parseActionBodyMixed()
+				u.HasBody = true
+			}
+			
+			u.NodeSpan = p.spanFrom(start)
 			return u
 		}
 		
