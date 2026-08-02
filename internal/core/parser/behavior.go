@@ -1049,6 +1049,32 @@ func (p *Parser) parseResultMember() ast.Node {
 	// Parse optional feature modifiers after kind keyword
 	mods := p.parseFeatureModifiers()
 	
+	// Check for leading relationship operators before name (e.g., return ::> result : Type)
+	// In this context, relationships apply to the parameter being defined (not to external target)
+	// So we consume the operator but DON'T parse target yet
+	var leadingRels []*ast.Relationship
+	for p.at(lexer.ColonGtGt) || p.at(lexer.ColonGt) || p.at(lexer.ColonColonGt) || p.at(lexer.ColonColon) {
+		tok := p.peek()
+		p.advance() // consume relationship operator
+		
+		// Map token to relationship kind
+		var kind ast.RelationshipKind
+		switch tok.Kind {
+		case lexer.ColonGtGt:
+			kind = ast.RelRedefines
+		case lexer.ColonGt:
+			kind = ast.RelSpecializes
+		case lexer.ColonColonGt:
+			kind = ast.RelReferences
+		case lexer.ColonColon:
+			kind = ast.RelTyping // or namespace qualification - context dependent
+		}
+		
+		// Create relationship with nil target (will be filled by parent scope context)
+		rel := &ast.Relationship{Kind: kind, Target: nil}
+		leadingRels = append(leadingRels, rel)
+	}
+	
 	// Check for named or anonymous result parameter syntax
 	// Pattern 1: return [modifiers] name: Type[mult];  (named result parameter)
 	// Pattern 2: return [modifiers] : Type[mult];      (anonymous result parameter)
@@ -1056,8 +1082,9 @@ func (p *Parser) parseResultMember() ast.Node {
 	// Pattern 4: return name = expr;       (computed result with binding)
 	// Pattern 5: return [modifiers] name;  (named result parameter, no type)
 	// Pattern 6: return [modifiers] name : Type { body } (with body)
+	// Pattern 7: return :>> name : Type = expr; (leading relationships before name)
 	// Use lookahead to distinguish Pattern 1 from Pattern 4
-	if p.at(lexer.Colon) || (p.atName() && p.peekN(1).Kind == lexer.Colon) {
+	if len(leadingRels) > 0 || p.at(lexer.Colon) || (p.atName() && p.peekN(1).Kind == lexer.Colon) {
 		// Parse as result parameter (named or anonymous usage with typing)
 		u := &ast.Usage{
 			Kind:        usageKind,
@@ -1071,6 +1098,9 @@ func (p *Parser) parseResultMember() ast.Node {
 			IsOrdered:   mods.isOrdered,
 			IsNonunique: mods.isNonunique,
 		}
+		
+		// Add leading relationships if any (e.g., ::> from `return ::> result`)
+		u.Relationships = append(u.Relationships, leadingRels...)
 		
 		// Check if named (identifier before colon)
 		if p.atName() {
