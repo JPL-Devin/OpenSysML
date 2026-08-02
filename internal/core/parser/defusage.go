@@ -97,6 +97,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"require":      ast.UsageConstraint, // synonym for constraint (required condition)
 	"requirement":  ast.UsageRequirement,
 	"satisfy":      ast.UsageSatisfy,
+	"verify":       ast.UsageSatisfy, // verify is alias for satisfy
 	"subject":      ast.UsageSubject,
 	"objective":    ast.UsageObjective,
 	"case":         ast.UsageCase,
@@ -317,7 +318,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	}
 	
 	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require, perform) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" {
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		
@@ -755,14 +756,13 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		IsNonunique: mods.isNonunique,
 	}
 	
-	// Handle UsageSatisfy special syntax: satisfy requirement <name> by <name> { body }
+	// Handle UsageSatisfy special syntax: 
+	// Full form: satisfy requirement <name> by <name> { body }
+	// Short form: satisfy/verify <name>;
 	if kind == ast.UsageSatisfy {
-		// Expect: requirement <name> by <name>
-		if !p.acceptKeyword("requirement") {
-			p.error(p.peek().Span, "expected 'requirement' keyword after 'satisfy'")
-			u.NodeSpan = p.spanFrom(start)
-			return u
-		}
+		// Optional: requirement keyword
+		hasRequirementKeyword := p.acceptKeyword("requirement")
+		
 		reqName := p.parseQualifiedName()
 		if reqName != nil {
 			// Store as typing relationship
@@ -771,21 +771,25 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 				Target: reqName,
 			})
 		}
-		if !p.acceptKeyword("by") {
-			p.error(p.peek().Span, "expected 'by' keyword after requirement reference")
-			u.NodeSpan = p.spanFrom(start)
-			return u
-		}
-		subjName := p.parseQualifiedName()
-		if subjName != nil {
-			// Store subject as identification (or could be relationship)
-			// For now, use as identification name
-			if len(subjName.Parts) > 0 {
-				u.Ident.Name = subjName.Parts[0].Text
-				u.Ident.NameSpan = subjName.Parts[0].Span
+		
+		// If we had "requirement" keyword, expect "by" clause
+		if hasRequirementKeyword {
+			if !p.acceptKeyword("by") {
+				p.error(p.peek().Span, "expected 'by' keyword after requirement reference")
+				u.NodeSpan = p.spanFrom(start)
+				return u
+			}
+			subjName := p.parseQualifiedName()
+			if subjName != nil {
+				// Store subject as identification
+				if len(subjName.Parts) > 0 {
+					u.Ident.Name = subjName.Parts[0].Text
+					u.Ident.NameSpan = subjName.Parts[0].Span
+				}
 			}
 		}
-		// Parse body (requirement body)
+		
+		// Parse body (requirement body) or semicolon
 		members, hasBody := p.parseDefUsageBody()
 		u.Members = members
 		u.HasBody = hasBody
@@ -1933,7 +1937,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Also exclude constraint (has both def/usage forms but shouldn't be enum literal name)
 	isUsageOnlyKwForEnum := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
-		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint" || 
+		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "verify" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint" || 
 		p.peek().KeywordID == "interaction" || p.peek().KeywordID == "bool" || p.peek().KeywordID == "assoc" || p.peek().KeywordID == "struct" || 
 		p.peek().KeywordID == "class" || p.peek().KeywordID == "predicate")
 	if !isUsageOnlyKwForEnum && p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
