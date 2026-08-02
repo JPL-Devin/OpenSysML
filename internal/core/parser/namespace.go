@@ -226,6 +226,8 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		return p.parseDocumentation(start)
 	case p.atKeyword("rep"), p.atKeyword("language"):
 		return p.parseTextualRepresentation(start)
+	case p.atKeyword("multiplicity"):
+		return p.parseMultiplicityDecl(start)
 	case p.atKeyword("filter"):
 		return p.parseFilter(start)
 	case p.atDefUsageStart():
@@ -645,4 +647,31 @@ func (p *Parser) parseFilter(start int) ast.Node {
 	f := &ast.FilterMember{Condition: expr}
 	f.NodeSpan = p.spanFrom(start)
 	return f
+}
+
+// parseMultiplicityDecl parses `multiplicity <id> [range] ;|{ members }`.
+// Declares a named multiplicity range (e.g., exactlyOne [1..1]).
+func (p *Parser) parseMultiplicityDecl(start int) ast.Node {
+	p.advance() // multiplicity
+	
+	// Parse identification (name)
+	ident := p.parseIdentification()
+	
+	// Parse optional multiplicity range [lower..upper]
+	var mult *ast.Multiplicity
+	if p.at(lexer.LBracket) {
+		mult = p.parseMultiplicity()
+	}
+	
+	// Parse body or semicolon
+	members, hasBody := p.parseNamespaceBody()
+	
+	md := &ast.MultiplicityDecl{
+		Ident:   ident,
+		Range:   mult,
+		Members: members,
+		HasBody: hasBody,
+	}
+	md.NodeSpan = p.spanFrom(start)
+	return md
 }

@@ -97,6 +97,14 @@ func (p *Parser) parseActionMember() ast.Node {
 			return p.parseActionExecutionNode(tok)
 		case "then":
 			return p.parseSuccessionEdge(tok)
+		case "assign":
+			return p.parseAssignmentAction(tok)
+		case "perform":
+			return p.parsePerformAction(tok)
+		case "while":
+			return p.parseWhileLoopAction(tok)
+		case "if":
+			return p.parseIfAction(tok)
 		default:
 			// Unknown keyword, return ErrorNode
 			p.error(tok.Span, "unknown action keyword: "+kw)
@@ -342,10 +350,23 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 	return node
 }
 
-// parseSuccessionEdge parses: then source target [if guard] ;
+// parseSuccessionEdge parses: 
+// 1. then source target [if guard] ; (control flow edge between named nodes)
+// 2. then statement (inline statement succession)
 func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	
+	// Check if this is inline statement succession (then followed by behavioral keyword)
+	// Pattern: then assign x := 1; OR then perform foo;
+	if p.at(lexer.Keyword) {
+		kw := p.peek().KeywordID
+		if kw == "assign" || kw == "perform" || kw == "while" || kw == "if" || kw == "action" {
+			// This is inline succession: parse following statement
+			return p.parseActionMember()
+		}
+	}
+	
+	// Otherwise, parse as named edge: then source target;
 	source := p.parseQualifiedName()
 	target := p.parseQualifiedName()
 	
@@ -372,6 +393,133 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 		Source:   source,
 		Target:   target,
 	}
+	return node
+}
+
+// parseAssignmentAction parses: assign target := value;
+func (p *Parser) parseAssignmentAction(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse target (feature reference or qualified name)
+	target := p.ParseExpression()
+	
+	// Expect ':=' operator
+	if !p.at(lexer.ColonEq) {
+		p.error(p.peek().Span, "expected ':=' after assignment target")
+		return &ast.ErrorNode{
+			NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
+			Message:  "expected ':=' after assignment target",
+		}
+	}
+	p.advance() // consume ':='
+	
+	// Parse value expression
+	value := p.ParseExpression()
+	
+	p.expect(lexer.Semicolon, "expected ';' after assignment")
+	
+	node := &ast.AssignmentActionNode{
+		Target: target,
+		Value:  value,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parsePerformAction parses: perform action;
+func (p *Parser) parsePerformAction(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse action reference (qualified name or invocation)
+	actionRef := p.ParseExpression()
+	
+	p.expect(lexer.Semicolon, "expected ';' after perform statement")
+	
+	node := &ast.PerformActionNode{
+		ActionRef: actionRef,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseWhileLoopAction parses: while condition { statements }
+func (p *Parser) parseWhileLoopAction(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse condition expression
+	condition := p.ParseExpression()
+	
+	// Expect '{'
+	if !p.at(lexer.LBrace) {
+		p.error(p.peek().Span, "expected '{' after while condition")
+		return &ast.ErrorNode{
+			NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
+			Message:  "expected '{' after while condition",
+		}
+	}
+	p.advance() // consume '{'
+	
+	// Parse body statements
+	var body []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		body = append(body, p.parseActionMember())
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after while body")
+	
+	node := &ast.WhileLoopActionNode{
+		Condition: condition,
+		Body:      body,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseIfAction parses: if condition { thenBody } [else { elseBody }]
+func (p *Parser) parseIfAction(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse condition expression
+	condition := p.ParseExpression()
+	
+	// Expect '{'
+	if !p.at(lexer.LBrace) {
+		p.error(p.peek().Span, "expected '{' after if condition")
+		return &ast.ErrorNode{
+			NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
+			Message:  "expected '{' after if condition",
+		}
+	}
+	p.advance() // consume '{'
+	
+	// Parse then body statements
+	var thenBody []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		thenBody = append(thenBody, p.parseActionMember())
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after if body")
+	
+	// Check for optional 'else' clause
+	var elseBody []ast.Node
+	if p.acceptKeyword("else") {
+		if !p.at(lexer.LBrace) {
+			p.error(p.peek().Span, "expected '{' after else")
+		} else {
+			p.advance() // consume '{'
+			for !p.at(lexer.RBrace) && !p.atEOF() {
+				elseBody = append(elseBody, p.parseActionMember())
+			}
+			p.expect(lexer.RBrace, "expected '}' after else body")
+		}
+	}
+	
+	node := &ast.IfActionNode{
+		Condition: condition,
+		ThenBody:  thenBody,
+		ElseBody:  elseBody,
+	}
+	node.NodeSpan = p.spanFrom(start)
 	return node
 }
 

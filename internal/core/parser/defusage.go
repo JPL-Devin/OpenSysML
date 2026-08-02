@@ -470,7 +470,8 @@ func (p *Parser) isBehavioralKeyword() bool {
 	}
 	kw := p.peek().KeywordID
 	switch kw {
-	case "first", "done", "fork", "join", "merge", "decision", "action", "then":
+	case "first", "done", "fork", "join", "merge", "decision", "action", "then",
+		"assign", "perform", "while", "if":
 		return true
 	}
 	return false
@@ -874,18 +875,35 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	switch kind {
 	case ast.UsageAction:
 		// Action usage bodies: behavioral OR generic
-		// Lookahead: if body starts with behavioral keyword → parseActionBody
-		// Otherwise → generic parseActionBodyGeneric
+		// Support THREE forms:
+		// 1. action name; (no body)
+		// 2. action name { statements } (braced body)
+		// 3. action name \n statements (inline behavioral body without braces)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
-			if p.isBehavioralKeyword() {
-				members = p.parseActionBody()
-			} else {
-				// Generic body (e.g., { doc /* ... */; })
-				members = p.parseActionBodyGeneric()
+		} else if p.at(lexer.LBrace) {
+			// Braced body
+			_, ok := p.expect(lexer.LBrace, "expected '{'")
+			if ok {
+				if p.isBehavioralKeyword() {
+					members = p.parseActionBody()
+				} else {
+					// Generic body (e.g., { doc /* ... */; })
+					members = p.parseActionBodyGeneric()
+				}
+				hasBody = true
+			}
+		} else if p.isBehavioralKeyword() {
+			// Inline behavioral body without braces: action name\n assign ...;
+			// Parse statements until we hit something that's NOT a behavioral statement
+			// Typically one statement, but could be multiple connected with 'then'
+			for p.isBehavioralKeyword() && !p.atEOF() {
+				members = append(members, p.parseActionMember())
 			}
 			hasBody = true
+		} else {
+			// Expected ';' or '{' or behavioral keyword
+			p.error(p.peek().Span, "expected '{' or ';' after action declaration")
 		}
 	case ast.UsageCalc:
 		// Calculation usage bodies: mixed (parameters + return statements)

@@ -105,6 +105,16 @@ type Alias struct {
 	HasBody    bool
 }
 
+// MultiplicityDecl is `multiplicity <id> [range] ;|{}`.
+// Declares a named multiplicity range like exactlyOne [1..1].
+type MultiplicityDecl struct {
+	NodeBase
+	Ident       Identification
+	Range       *Multiplicity // optional - range bounds
+	Members     []Node        // optional - body members (typically doc comments)
+	HasBody     bool          // true if has {}, false if just ;
+}
+
 // Dependency is `dependency [<id> from] clients to suppliers ;|{}`.
 type Dependency struct {
 	NodeBase
