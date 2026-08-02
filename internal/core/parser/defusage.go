@@ -85,6 +85,8 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"allocation":  ast.UsageAllocation,
 	"allocate":    ast.UsageAllocation, // Short form for allocation usage
 	"binding":    ast.UsageBinding,
+	"actor":      ast.UsageAttribute, // Use case actor
+	"render":     ast.UsageAttribute, // View rendering
 	"bind":       ast.UsageBinding, // shorthand for binding
 	// Tier C.
 	"action":       ast.UsageAction,
@@ -357,8 +359,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require, perform, event, stakeholder, frame) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" {
+	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require, perform, event, stakeholder, frame, actor, expose, render) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		
@@ -1424,6 +1426,61 @@ func (p *Parser) parseBodyMember() ast.Node {
 		}
 	}
 	
+	// Check for expose statement: expose <path>::**[filter];
+	// View-specific member for exposing elements from a namespace
+	if p.atKeyword("expose") {
+		p.advance() // consume 'expose'
+		
+		// Parse import path with wildcard (similar to import parsing)
+		// Pattern: <namespace>::** or <namespace>::**[filter]
+		path := p.parseQualifiedName()
+		if path == nil {
+			p.error(p.peek().Span, "expected namespace path after 'expose'")
+			return &ast.ErrorNode{Message: "expected namespace path"}
+		}
+		
+		// Check for wildcard tail: :: * or :: **
+		isRecursive := false
+		if p.at(lexer.ColonColon) {
+			nk := p.peekN(1).Kind
+			if nk == lexer.Star {
+				p.advance() // ::
+				p.advance() // *
+				// Check for recursive: :: **
+				if p.at(lexer.ColonColon) && p.peekN(1).Kind == lexer.StarStar {
+					p.advance() // ::
+					p.advance() // **
+					isRecursive = true
+				}
+			} else if nk == lexer.StarStar {
+				p.advance()     // ::
+				p.advance()     // **
+				isRecursive = true
+			}
+		}
+		
+		// Check for optional filter expression: [filter]
+		var filterExpr ast.Node
+		if p.accept2(lexer.LBracket) {
+			filterExpr = p.ParseExpression()
+			p.expect(lexer.RBracket, "expected ']' after filter expression")
+		}
+		
+		// Create Import node (expose uses similar semantics to import)
+		// Store filter in FilterExpr field if present
+		imp := &ast.Import{
+			Imported:    path,
+			IsRecursive: isRecursive,
+			FilterExpr:  filterExpr,
+		}
+		imp.NodeBase.NodeSpan = p.spanFrom(start)
+		imp.SetLeadingTrivia(trivia)
+		
+		p.expect(lexer.Semicolon, "expected ';' after expose statement")
+		
+		return imp
+	}
+	
 	// Check for inline connector statement: connect [mult] X to [mult] Y;
 	// This is anonymous connection usage
 	if p.atKeyword("connect") {
@@ -2181,7 +2238,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 	isUsageOnlyKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
 		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "interaction" ||
-		p.peek().KeywordID == "stakeholder" || p.peek().KeywordID == "frame")
+		p.peek().KeywordID == "stakeholder" || p.peek().KeywordID == "frame" || p.peek().KeywordID == "actor" || p.peek().KeywordID == "expose" || p.peek().KeywordID == "render")
 	isDirectionKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "in" || p.peek().KeywordID == "out")
 	if !isUsageOnlyKw && !isDirectionKw && (p.atName() || p.at(lexer.Keyword)) {
 		next := p.peekN(1)
