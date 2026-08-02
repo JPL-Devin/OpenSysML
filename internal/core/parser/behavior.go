@@ -146,6 +146,27 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 		}
 		
 		// Try parsing as behavioral statement
+		// Special case: 'then action' could be succession OR declaration with succession
+		// Check if it's 'then action name : Type' (declaration) vs 'then action ref' (behavioral)
+		if p.atKeyword("then") && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "action" {
+			// Lookahead: then action <id> : → declaration with succession
+			if p.peekN(2).Kind == lexer.Identifier {
+				tok3 := p.peekN(3)
+				if tok3.Kind == lexer.Colon || (tok3.Kind == lexer.LBrace && p.peekN(4).Kind == lexer.Keyword) {
+					// It's declaration: consume 'then', parse declaration, mark succession
+					p.advance() // consume 'then'
+					m := p.parseBodyMember()
+					if m != nil {
+						if mem, ok := m.(*ast.Membership); ok {
+							mem.HasSuccession = true
+						}
+						members = append(members, m)
+					}
+					continue
+				}
+			}
+		}
+		
 		if p.isBehavioralKeyword() {
 			members = append(members, p.parseActionMember())
 			continue
