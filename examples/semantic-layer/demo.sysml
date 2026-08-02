@@ -1,6 +1,6 @@
 // =============================================================================
 // Semantic Layer Feature Demo
-// Demonstrates runtime operators, resolution, and validation
+// Demonstrates runtime operators, feature chains, and validation
 // =============================================================================
 
 package SemanticLayerDemo {
@@ -18,8 +18,8 @@ package SemanticLayerDemo {
     
     // Logical operators with short-circuit evaluation
     attribute andTrue = (5 > 3) & (10 < 20);   // true
-    attribute andFalse = (5 < 3) & (10 < 20);  // false (short-circuits)
-    attribute orTrue = (5 > 3) | (10 > 20);    // true (short-circuits)
+    attribute andFalse = (5 < 3) & (10 < 20);  // false
+    attribute orTrue = (5 > 3) | (10 > 20);    // true
     attribute orFalse = (5 < 3) | (10 > 20);   // false
     attribute notTrue = not (5 < 3);           // true
     attribute notFalse = not (5 > 3);          // false
@@ -53,163 +53,88 @@ package SemanticLayerDemo {
     attribute expr5 = not ((5 < 3) & (10 > 20));        // true
 
     // =========================================================================
-    // Track 3: Feature Chain Resolution
+    // Track 2: Feature Chain Resolution
     // =========================================================================
     
     // Simple feature chains - member access
     part def Container {
-        attribute value;
-        attribute name;
+        attribute value = 0;
+        attribute name = "default";
     }
     
-    part def Nested {
-        part inner : Container;
-        attribute id;
-    }
-    
-    part myContainer : Container {
-        attribute redefines value = 42;
-        attribute redefines name = "test";
-    }
-    
-    part myNested : Nested {
-        attribute redefines id = 1;
-        part redefines inner : Container {
-            attribute redefines value = 100;
-        }
-    }
+    part myContainer : Container;
     
     // Simple chain: object.member
-    attribute simpleValue = myContainer.value;          // 42
-    attribute simpleName = myContainer.name;            // "test"
+    attribute simpleValue = myContainer.value;          // 0
+    attribute simpleName = myContainer.name;            // "default"
     
-    // Nested chains: object.member.member
-    attribute nestedValue = myNested.inner.value;       // 100
-    attribute nestedId = myNested.id;                   // 1
-    
-    // Feature chains in relationships - subsetting
-    part def Point {
-        attribute x;
-        attribute y;
+    // Nested chains
+    part def Nested {
+        part inner : Container;
+        attribute id = 0;
     }
     
-    part def Shape {
-        part origin : Point;
-    }
+    part myNested : Nested;
     
-    part def Rectangle specializes Shape {
-        part topLeft : Point;
-    }
-    
-    // Feature chains in redefinitions
-    part def Component {
-        part config : Container;
-    }
-    
-    part def AdvancedComponent specializes Component {
-        part redefines config : Container {
-            attribute redefines value = 200;
-        }
-    }
+    attribute nestedValue = myNested.inner.value;       // 0
+    attribute nestedId = myNested.id;                   // 0
 
     // =========================================================================
-    // Track 4: Semantic Validation
+    // Track 3: Semantic Validation
     // =========================================================================
     
-    // Typing conformance - subsetting must respect type hierarchy
+    // Typing conformance - valid specialization
     attribute def SpeedType;
     
     part def Vehicle {
-        attribute speed : SpeedType[1..2];
+        attribute speed : SpeedType;
     }
     
     part def Car specializes Vehicle {
-        // Valid: Car.speed type conforms to Vehicle.speed
-        // Multiplicity [1..1] is within [1..2]
-        attribute redefines speed : SpeedType[1..1];
+        // Valid: Car.speed inherits Vehicle.speed type
     }
     
+    // Valid subsetting - Car specializes Vehicle
     part allVehicles : Vehicle[*];
-    
-    // Valid: Car conforms to Vehicle (Car specializes Vehicle)
-    part myCar : Car subsets allVehicles;
-    
-    // Redefinition validation - must follow SysML rules
-    part def Engine {
-        attribute power[100..500];
-        attribute efficiency[0..1];
-    }
-    
-    part def ElectricEngine specializes Engine {
-        // Both redefinitions valid:
-        // - Inherited from Engine ✓
-        // - Multiplicity bounds valid ✓
-        attribute redefines power[200..400];       // Narrows range
-        attribute redefines efficiency[0.8..0.95];    // Narrows range
-    }
-    
-    part def HybridEngine specializes Engine {
-        // Valid redefinitions maintaining constraints
-        attribute redefines power[150..450];
-        attribute redefines efficiency[0.75..0.98];
-    }
+    part myCar : Car subsets allVehicles;  // OK: Car conforms to Vehicle
 
     // =========================================================================
-    // Comprehensive Integration Example
+    // Integration Example
     // =========================================================================
     
-    // Realistic scenario combining all features
-    namespace VehicleSystem {
-        
+    namespace Integration {
         part def Sensor {
-            attribute reading;
-            attribute threshold;
+            attribute reading = 0.0;
+            attribute threshold = 100.0;
         }
         
-        part def MonitoringSystem {
-            part tempSensor : Sensor;
-            part pressureSensor : Sensor;
-        }
-        
-        part def AdvancedMonitoring specializes MonitoringSystem {
-            // Redefinitions with validation
-            part redefines tempSensor : Sensor {
-                attribute redefines threshold = 100.0;
-            }
-            
-            part redefines pressureSensor : Sensor {
-                attribute redefines threshold = 50.0;
-            }
-        }
-        
-        part system : AdvancedMonitoring;
+        part tempSensor : Sensor;
+        part pressureSensor : Sensor;
         
         // Feature chains to access nested values
-        attribute tempThreshold = system.tempSensor.threshold;       // 100.0
-        attribute pressureThreshold = system.pressureSensor.threshold; // 50.0
+        attribute tempValue = tempSensor.reading;       // 0.0
+        attribute tempLimit = tempSensor.threshold;     // 100.0
+        attribute pressureValue = pressureSensor.reading;   // 0.0
+        attribute pressureLimit = pressureSensor.threshold; // 100.0
         
         // Operators on chain results
-        attribute isHighTemp = tempThreshold > 90.0;                // true
-        attribute isLowPressure = pressureThreshold < 60.0;         // true
+        attribute isHighTemp = tempValue > 90.0;           // false
+        attribute isNormalPressure = pressureValue < 200.0;  // true
         
         // Combined logic
-        attribute alertNeeded = isHighTemp & isLowPressure;         // true
-        attribute systemOK = not alertNeeded;                       // false
-        
-        // Qualified names with operators
-        attribute compared = tempThreshold == SemanticLayerDemo::MathConstants::Derived::twoPi; // false
+        attribute systemOK = (not isHighTemp) & isNormalPressure;  // true
     }
     
     // =========================================================================
-    // Edge Cases and Advanced Usage
+    // Edge Cases
     // =========================================================================
     
     // Negation of comparison results
-    attribute notEqual = not (42 == 43);                    // true
+    attribute notEqual = not (42 == 43);                // true
     
     // Chained comparisons with negation
-    attribute complex1 = -(5) < 0;                          // true
-    attribute complex2 = -(-10) == 10;                      // true
+    attribute complex1 = -(5) < 0;                      // true
+    attribute complex2 = -(-10) == 10;                  // true
     
     // Multiple logical operators
     attribute multiLogic = (true & false) | (true & true);  // true
