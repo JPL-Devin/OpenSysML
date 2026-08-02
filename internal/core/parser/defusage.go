@@ -920,7 +920,24 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			members = p.parseCalcBody()
 			hasBody = true
 		}
-	case ast.UsageConstraint, ast.UsageBool, ast.UsagePredicate:
+	case ast.UsageBool:
+		// Bool usage bodies: can be calc-style (with return) OR constraint-style (single expression)
+		// Lookahead: if body starts with 'in' or 'return' → calcBody, otherwise → constraint-style expression
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			// Peek at first token in body
+			firstTok := p.peek()
+			if (firstTok.Kind == lexer.Keyword && (firstTok.KeywordID == "in" || firstTok.KeywordID == "return")) {
+				// Structured calc body with parameters/return
+				members = p.parseCalcBody()
+			} else {
+				// Single expression body (constraint-style)
+				members = p.parseConstraintBody()
+			}
+			hasBody = true
+		}
+	case ast.UsageConstraint, ast.UsagePredicate:
 		// Constraint bodies: { assert/assume expr; ... }
 		// Bool and predicate usages also use constraint-style bodies with expressions
 		// Special case: if body starts with 'in' keyword, parse as body expression (constraint with input parameters)
