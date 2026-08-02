@@ -140,8 +140,9 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relati
 			}
 			if qn, ok := target.(*ast.QualifiedName); ok {
 				r.ResolveQualified(scope, qn)
+			} else if fc, ok := target.(*ast.FeatureChainExpr); ok {
+				r.resolveFeatureChain(scope, fc)
 			}
-			// Note: Other target types (FeatureChainExpr, etc.) not yet supported in resolution
 		}
 	}
 }
@@ -162,10 +163,7 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			r.ResolveQualified(scope, v.TypeRef)
 		}
 	case *ast.FeatureChainExpr:
-		r.resolveExpr(scope, v.Operand)
-		if v.Member != nil {
-			r.ResolveQualified(scope, v.Member)
-		}
+		r.resolveFeatureChain(scope, v)
 	case *ast.IndexExpr:
 		r.resolveExpr(scope, v.Operand)
 		r.resolveExpr(scope, v.Index)
@@ -206,4 +204,172 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 		r.ResolveQualified(scope, v.Ref)
 	}
 	// Literals (LiteralBool/String/Integer/Real/Infinity, NullExpr) have no refs.
+}
+
+// resolveFeatureChain resolves a FeatureChainExpr by resolving the operand
+// then walking each member part explicitly, assigning symbols to each part.
+func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr) {
+	// Resolve operand first
+	r.resolveExpr(scope, fc.Operand)
+	
+	// Get symbol of operand to find its member scope
+	operandSym := r.getExprSymbol(scope, fc.Operand)
+	if operandSym == nil || fc.Member == nil {
+		return
+	}
+	
+	// Walk member parts explicitly, assigning symbols to each part
+	r.resolveMemberChain(operandSym, fc.Member)
+}
+
+// resolveMemberChain walks a qualified name member-by-member in the given scope,
+// assigning each part's symbol explicitly (for feature chain member access).
+func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName) {
+	if qn == nil || len(qn.Parts) == 0 {
+		return
+	}
+	
+	// Resolve first part using model.LookupMember if available, else scope.LookupLocal
+	var cur *symbols.Symbol
+	var ok bool
+	
+	if r.model != nil {
+		// Use inheritance-aware lookup via semantics.Model
+		type modelLookup interface {
+			LookupMember(*symbols.Symbol, string) (*symbols.Symbol, bool)
+		}
+		if m, hasMethod := r.model.(modelLookup); hasMethod {
+			cur, ok = m.LookupMember(parentSym, qn.Parts[0].Text)
+		}
+	}
+	
+	if !ok {
+		// Fall back to local scope lookup if model unavailable
+		if parentSym.Scope == nil {
+			r.Diagnostics = append(r.Diagnostics, Diagnostic{
+				Span:    qn.Parts[0].Span,
+				Message: "no scope for member lookup in " + parentSym.Name,
+			})
+			return
+		}
+		cur, ok = parentSym.Scope.LookupLocal(qn.Parts[0].Text)
+	}
+	
+	if !ok {
+		r.Diagnostics = append(r.Diagnostics, Diagnostic{
+			Span:    qn.Parts[0].Span,
+			Message: "unresolved member: " + qn.Parts[0].Text,
+		})
+		return
+	}
+	qn.Parts[0].Sym = cur
+	
+	// Walk remaining parts via member lookup
+	for i := 1; i < len(qn.Parts); i++ {
+		var next *symbols.Symbol
+		var found bool
+		
+		if r.model != nil {
+			type modelLookup interface {
+				LookupMember(*symbols.Symbol, string) (*symbols.Symbol, bool)
+			}
+			if m, hasMethod := r.model.(modelLookup); hasMethod {
+				next, found = m.LookupMember(cur, qn.Parts[i].Text)
+			}
+		}
+		
+		if !found {
+			// Fall back to local scope lookup
+			if cur.Scope == nil {
+				r.Diagnostics = append(r.Diagnostics, Diagnostic{
+					Span:    qn.Parts[i].Span,
+					Message: "no members in " + cur.Name,
+				})
+				return
+			}
+			next, found = cur.Scope.LookupLocal(qn.Parts[i].Text)
+		}
+		
+		if !found {
+			r.Diagnostics = append(r.Diagnostics, Diagnostic{
+				Span:    qn.Parts[i].Span,
+				Message: "unresolved member: " + qn.Parts[i].Text + " in " + cur.Name,
+			})
+			return
+		}
+		
+		qn.Parts[i].Sym = next
+		cur = next
+	}
+	
+	// Store final resolution in memo
+	r.memo[qn] = resolution{cur, true}
+}
+
+// getExprSymbol extracts the symbol referenced by an expression, used for
+// member access chains. Returns nil if expression doesn't resolve to a symbol.
+// For typed usages, returns the type's symbol (following typing relationships).
+func (r *Resolver) getExprSymbol(scope *symbols.Scope, e ast.Node) *symbols.Symbol {
+	switch v := e.(type) {
+	case *ast.FeatureReference:
+		if v.Name == nil {
+			return nil
+		}
+		sym, ok := r.ResolveQualified(scope, v.Name)
+		if !ok {
+			return nil
+		}
+		// If this is a typed usage, follow the type
+		if usage, isUsage := sym.Decl.(*ast.Usage); isUsage {
+			typeSym := r.getUsageType(sym.OwnerScope, usage)
+			if typeSym != nil {
+				return typeSym
+			}
+		}
+		return sym
+	case *ast.FeatureChainExpr:
+		// For chained access, get the final member's symbol
+		if v.Member == nil {
+			return nil
+		}
+		// First resolve the chain
+		r.resolveFeatureChain(scope, v)
+		// Get the operand's symbol, then lookup member
+		operandSym := r.getExprSymbol(scope, v.Operand)
+		if operandSym == nil || operandSym.Scope == nil {
+			return nil
+		}
+		memberSym, ok := r.ResolveQualified(operandSym.Scope, v.Member)
+		if !ok {
+			return nil
+		}
+		// Follow type if member is usage
+		if usage, isUsage := memberSym.Decl.(*ast.Usage); isUsage {
+			typeSym := r.getUsageType(memberSym.OwnerScope, usage)
+			if typeSym != nil {
+				return typeSym
+			}
+		}
+		return memberSym
+	default:
+		return nil
+	}
+}
+
+// getUsageType returns the type symbol of a usage by resolving its typing relationship.
+func (r *Resolver) getUsageType(scope *symbols.Scope, usage *ast.Usage) *symbols.Symbol {
+	for _, rel := range usage.Relationships {
+		if rel.Kind == ast.RelTyping && rel.Target != nil {
+			// Unwrap FeatureReference if needed
+			target := rel.Target
+			if fr, ok := target.(*ast.FeatureReference); ok {
+				target = fr.Name
+			}
+			if qn, ok := target.(*ast.QualifiedName); ok {
+				typeSym, _ := r.ResolveQualified(scope, qn)
+				return typeSym
+			}
+		}
+	}
+	return nil
 }

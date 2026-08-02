@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 )
 
@@ -17,6 +18,7 @@ const (
 	ValInstance
 	ValSequence
 	ValSet
+	ValExpr              // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
 )
 
 // Value is a runtime-evaluable value.
@@ -27,6 +29,7 @@ type Value struct {
 	Instance int64           // ValInstance: instance ID
 	Sequence *Sequence       // ValSequence
 	Set      *Set            // ValSet
+	Expr     ast.Node        // ValExpr: unevaluated AST for delayed evaluation
 }
 
 // Sequence is an ordered collection (slice-backed).

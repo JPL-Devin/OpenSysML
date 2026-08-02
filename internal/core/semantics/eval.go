@@ -99,11 +99,9 @@ func evalOperator(e *ast.OperatorExpr) (Value, bool) {
 	}
 }
 
-func evalUnary(op ast.OperatorKind, operand ast.Node) (Value, bool) {
-	v, ok := evalConst(operand)
-	if !ok {
-		return Value{}, false
-	}
+// EvalUnary evaluates a unary operator on a constant value.
+// Returns (result, true) if successful, (zero, false) otherwise.
+func EvalUnary(op ast.OperatorKind, v Value) (Value, bool) {
 	switch op {
 	case ast.OpNeg:
 		if v.Kind == ValInt {
@@ -124,6 +122,14 @@ func evalUnary(op ast.OperatorKind, operand ast.Node) (Value, bool) {
 	return Value{}, false
 }
 
+func evalUnary(op ast.OperatorKind, operand ast.Node) (Value, bool) {
+	v, ok := evalConst(operand)
+	if !ok {
+		return Value{}, false
+	}
+	return EvalUnary(op, v)
+}
+
 func evalBinary(op ast.OperatorKind, lhs, rhs ast.Node) (Value, bool) {
 	l, ok := evalConst(lhs)
 	if !ok {
@@ -140,7 +146,26 @@ func evalBinary(op ast.OperatorKind, lhs, rhs ast.Node) (Value, bool) {
 			return Value{}, false
 		}
 		return evalBoolOp(op, l.Bool, r.Bool), true
-	case ast.OpEq, ast.OpNeq, ast.OpEqEqEq, ast.OpNeqEqEq:
+	case ast.OpEq, ast.OpNeq:
+		return evalEquality(op, l, r)
+	case ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe:
+		return evalComparison(op, l, r)
+	case ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpDiv, ast.OpMod, ast.OpPow:
+		return evalArithmetic(op, l, r)
+	}
+	return Value{}, false
+}
+
+// EvalBinary evaluates a binary operator on two constant values.
+// Returns (result, true) if successful, (zero, false) otherwise.
+func EvalBinary(op ast.OperatorKind, l, r Value) (Value, bool) {
+	switch op {
+	case ast.OpAnd, ast.OpConditionalAnd, ast.OpOr, ast.OpConditionalOr, ast.OpXor, ast.OpImplies:
+		if l.Kind != ValBool || r.Kind != ValBool {
+			return Value{}, false
+		}
+		return evalBoolOp(op, l.Bool, r.Bool), true
+	case ast.OpEq, ast.OpNeq:
 		return evalEquality(op, l, r)
 	case ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe:
 		return evalComparison(op, l, r)
@@ -175,7 +200,7 @@ func evalEquality(op ast.OperatorKind, l, r Value) (Value, bool) {
 	default:
 		return Value{}, false
 	}
-	if op == ast.OpNeq || op == ast.OpNeqEqEq {
+	if op == ast.OpNeq {
 		eq = !eq
 	}
 	return Value{Kind: ValBool, Bool: eq}, true

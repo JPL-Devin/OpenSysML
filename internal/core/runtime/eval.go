@@ -80,6 +80,9 @@ func (ec *EvalContext) Eval(node ast.Node) (Value, error) {
 		return ec.evalSelectExpr(n)
 	case *ast.InvocationExpr:
 		return ec.evalInvocation(n)
+	case *ast.BodyExpr:
+		// BodyExpr is not directly evaluated - wrapped as ValExpr for delayed evaluation
+		return Value{Kind: ValExpr, Expr: n}, nil
 	default:
 		return Value{}, fmt.Errorf("unsupported node type: %T", node)
 	}
@@ -147,8 +150,48 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		return Value{}, fmt.Errorf("unresolved feature: %s", name)
 	}
 	
-	// Multi-part qualified names (e.g., "Vehicle::speed") not yet supported
-	return Value{}, fmt.Errorf("qualified feature reference not yet supported: %s", qualifiedNameToString(n.Name))
+	// Multi-part qualified names: A::B::x
+	// Spec-compliant: Use model.LookupMember for member traversal.
+	// Use resolver logic for first part (handles scope, imports, global index),
+	// then walk remaining parts with model.LookupMember for inherited members.
+	
+	// Build single-segment qualified name for first part resolution via resolver
+	firstName := n.Name.Parts[0]
+	firstQN := &ast.QualifiedName{
+		Global: n.Name.Global,
+		Parts:  []ast.NameSegment{firstName},
+	}
+	firstQN.NodeBase = n.Name.NodeBase
+	
+	// Resolve first part using resolver's qualified-name logic (handles global index)
+	currentSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, firstQN)
+	if !ok {
+		return Value{}, fmt.Errorf("unresolved first part of qualified name: %s", firstName.Text)
+	}
+	
+	// Walk remaining parts using model.LookupMember (spec requirement)
+	for i := 1; i < len(n.Name.Parts); i++ {
+		memberName := n.Name.Parts[i].Text
+		nextSym, found := ec.ctx.model.LookupMember(currentSym, memberName)
+		if !found {
+			return Value{}, fmt.Errorf("member %s not found in %s", memberName, currentSym.Name)
+		}
+		currentSym = nextSym
+	}
+	
+	// Evaluate the final symbol's declaration
+	switch decl := currentSym.Decl.(type) {
+	case *ast.Usage:
+		if decl.Value != nil {
+			return ec.Eval(decl.Value)
+		}
+		return Value{}, fmt.Errorf("usage %s has no value", qualifiedNameToString(n.Name))
+	case *ast.Definition:
+		// Definitions are types, not values
+		return Value{}, fmt.Errorf("cannot evaluate definition %s", qualifiedNameToString(n.Name))
+	default:
+		return Value{}, fmt.Errorf("cannot evaluate element type %T", decl)
+	}
 }
 
 
@@ -169,10 +212,8 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 		return ec.evalComparison(n)
 	case ast.OpAnd, ast.OpOr:
 		return ec.evalLogical(n)
-	case ast.OpNeg:
+	case ast.OpNeg, ast.OpNot:
 		return ec.evalNeg(n)
-	case ast.OpNot:
-		return ec.evalNot(n)
 	default:
 		return Value{}, fmt.Errorf("unsupported operator: %v", n.Operator)
 	}
@@ -243,7 +284,27 @@ func toReal(v semantics.Value) float64 {
 
 // evalEquality evaluates equality operators (==, !=).
 func (ec *EvalContext) evalEquality(n *ast.OperatorExpr) (Value, error) {
-	return Value{}, fmt.Errorf("equality not yet implemented")
+	if len(n.Operands) != 2 {
+		return Value{}, fmt.Errorf("equality requires 2 operands, got %d", len(n.Operands))
+	}
+	
+	left, err := ec.Eval(n.Operands[0])
+	if err != nil {
+		return Value{}, err
+	}
+	right, err := ec.Eval(n.Operands[1])
+	if err != nil {
+		return Value{}, err
+	}
+	
+	equal := valueEqual(left, right)
+	
+	// Handle != operator
+	if n.Operator == ast.OpNeq {
+		equal = !equal
+	}
+	
+	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: equal}}, nil
 }
 
 // evalComparison evaluates comparison operators (<, <=, >, >=).
@@ -304,19 +365,85 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: result}}, nil
 }
 
-// evalLogical evaluates logical operators (&&, ||).
+// evalLogical evaluates logical operators (&&, ||) with short-circuit.
 func (ec *EvalContext) evalLogical(n *ast.OperatorExpr) (Value, error) {
-	return Value{}, fmt.Errorf("logical not yet implemented")
+	if len(n.Operands) != 2 {
+		return Value{}, fmt.Errorf("logical operator requires 2 operands, got %d", len(n.Operands))
+	}
+	
+	// Evaluate left operand
+	left, err := ec.Eval(n.Operands[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if left.Kind != ValConst || left.Const.Kind != semantics.ValBool {
+		return Value{}, fmt.Errorf("logical operator requires bool operands, got %v", left.Kind)
+	}
+	
+	// Short-circuit for &&: if left is false, return false
+	if n.Operator == ast.OpAnd && !left.Const.Bool {
+		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: false}}, nil
+	}
+	
+	// Short-circuit for ||: if left is true, return true
+	if n.Operator == ast.OpOr && left.Const.Bool {
+		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: true}}, nil
+	}
+	
+	// Evaluate right operand
+	right, err := ec.Eval(n.Operands[1])
+	if err != nil {
+		return Value{}, err
+	}
+	if right.Kind != ValConst || right.Const.Kind != semantics.ValBool {
+		return Value{}, fmt.Errorf("logical operator requires bool operands, got %v", right.Kind)
+	}
+	
+	// Compute result
+	var result bool
+	switch n.Operator {
+	case ast.OpAnd:
+		result = left.Const.Bool && right.Const.Bool
+	case ast.OpOr:
+		result = left.Const.Bool || right.Const.Bool
+	default:
+		return Value{}, fmt.Errorf("unsupported logical operator: %v", n.Operator)
+	}
+	
+	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: result}}, nil
 }
 
-// evalNeg evaluates unary negation (-).
+// evalNeg evaluates unary negation (-, not).
 func (ec *EvalContext) evalNeg(n *ast.OperatorExpr) (Value, error) {
-	return Value{}, fmt.Errorf("negation not yet implemented")
-}
-
-// evalNot evaluates logical not (!).
-func (ec *EvalContext) evalNot(n *ast.OperatorExpr) (Value, error) {
-	return Value{}, fmt.Errorf("not not yet implemented")
+	if len(n.Operands) != 1 {
+		return Value{}, fmt.Errorf("negation requires 1 operand, got %d", len(n.Operands))
+	}
+	
+	operand, err := ec.Eval(n.Operands[0])
+	if err != nil {
+		return Value{}, err
+	}
+	
+	switch n.Operator {
+	case ast.OpNot:
+		// Logical not: not bool
+		if operand.Kind != ValConst || operand.Const.Kind != semantics.ValBool {
+			return Value{}, fmt.Errorf("logical not requires bool operand, got %v", operand.Kind)
+		}
+		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: !operand.Const.Bool}}, nil
+	case ast.OpNeg:
+		// Arithmetic negation: -number
+		if operand.Kind != ValConst {
+			return Value{}, fmt.Errorf("arithmetic negation requires numeric operand, got %v", operand.Kind)
+		}
+		result, ok := semantics.EvalUnary(ast.OpNeg, operand.Const)
+		if !ok {
+			return Value{}, fmt.Errorf("arithmetic negation failed for %v", operand.Const)
+		}
+		return Value{Kind: ValConst, Const: result}, nil
+	default:
+		return Value{}, fmt.Errorf("unsupported negation operator: %v", n.Operator)
+	}
 }
 
 // evalSequenceExpr evaluates a sequence expression (1, 2, 3).
@@ -503,5 +630,64 @@ func qualifiedNameToString(qn *ast.QualifiedName) string {
 		}
 	}
 	return strings.Join(parts, "::")
+}
+
+// valueEqual checks deep equality of two runtime values.
+func valueEqual(a, b Value) bool {
+	if a.Kind != b.Kind {
+		return false
+	}
+	switch a.Kind {
+	case ValConst:
+		// Delegate to semantics layer for const equality
+		result, ok := semantics.EvalBinary(ast.OpEq, a.Const, b.Const)
+		return ok && result.Kind == semantics.ValBool && result.Bool
+	case ValString:
+		return a.Str == b.Str
+	case ValNull:
+		return true
+	case ValInstance:
+		return a.Instance == b.Instance
+	case ValSequence:
+		return sequenceEqual(a.Sequence, b.Sequence)
+	case ValSet:
+		return setEqual(a.Set, b.Set)
+	default:
+		return false
+	}
+}
+
+// sequenceEqual checks structural equality of sequences (element-wise).
+func sequenceEqual(a, b *Sequence) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.Size() != b.Size() {
+		return false
+	}
+	for i := 0; i < a.Size(); i++ {
+		aElem, _ := a.At(i)
+		bElem, _ := b.At(i)
+		if !valueEqual(aElem, bElem) {
+			return false
+		}
+	}
+	return true
+}
+
+// setEqual checks set equality (same keys via valueKey).
+func setEqual(a, b *Set) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.Size() != b.Size() {
+		return false
+	}
+	for key := range a.elements {
+		if _, exists := b.elements[key]; !exists {
+			return false
+		}
+	}
+	return true
 }
 

@@ -41,7 +41,16 @@ func main() {
 
 	ws := model.NewWorkspace()
 	srv := lsp.NewServer(ws)
-	if err := srv.Run(context.Background(), stdio{}); err != nil {
-		log.Fatalf("sysml-lsp: %v", err)
+	err := srv.Run(context.Background(), stdio{})
+	
+	// LSP spec: Exit after Shutdown should return 0, Exit without Shutdown should return 1
+	if err != nil {
+		// Ignore "file already closed" from clean exit
+		if !errors.Is(err, os.ErrClosed) && err.Error() != "failed reading header line: read /dev/stdin: file already closed" {
+			log.Fatalf("sysml-lsp: %v", err)
+		}
 	}
+	
+	// Exit code handled by Exit() calling conn.Close()
+	os.Exit(0)
 }

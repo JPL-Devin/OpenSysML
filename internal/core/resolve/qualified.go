@@ -7,7 +7,8 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// walkQualified resolves a qualified name segment-by-segment.
+// walkQualified resolves a qualified name segment-by-segment, storing each
+// segment's resolved symbol in Parts[i].Sym.
 func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) resolution {
 	if len(qn.Parts) == 0 {
 		return resolution{nil, false}
@@ -36,9 +37,10 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 		r.unresolved(qn)
 		return resolution{nil, false}
 	}
+	qn.Parts[0].Sym = cur
 
 	// Walk remaining segments as local members of the current symbol's scope.
-	for _, seg := range qn.Parts[1:] {
+	for i, seg := range qn.Parts[1:] {
 		if cur.Scope == nil {
 			r.unresolved(qn)
 			return resolution{nil, false}
@@ -53,6 +55,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 			return resolution{nil, false}
 		}
 		cur = all[0]
+		qn.Parts[i+1].Sym = cur
 	}
 	return resolution{cur, true}
 }
