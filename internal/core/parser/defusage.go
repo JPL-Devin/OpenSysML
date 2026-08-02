@@ -462,6 +462,16 @@ func (p *Parser) parseActionBodyGeneric() []ast.Node {
 		before := p.peek().Span.Offset
 		m := p.parseBodyMember()
 		if m != nil {
+			// Check for namespace-level succession: 'then' after member
+			if p.atKeyword("then") {
+				p.advance() // consume 'then'
+				
+				// Apply succession to membership node
+				if mem, ok := m.(*ast.Membership); ok {
+					mem.HasSuccession = true
+					// Target will be next member parsed in loop
+				}
+			}
 			members = append(members, m)
 		}
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
@@ -934,7 +944,25 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			// Inline behavioral body without braces: action name\n assign ...;
 			// Parse statements until we hit something that's NOT a behavioral statement
 			// Typically one statement, but could be multiple connected with 'then'
+			// EXCEPT: if 'then' is followed by a declaration keyword (action/feature/etc),
+			// it's namespace-level succession, not behavioral succession - stop parsing body
 			for p.isBehavioralKeyword() && !p.atEOF() {
+				// Check if 'then' is namespace succession (then <visibility>? <defKeyword>)
+				if p.atKeyword("then") {
+					next := p.peekN(1)
+					// If followed by visibility or definition/usage keyword, it's namespace succession - stop
+					if next.Kind == lexer.Keyword {
+						if _, isVis := map[string]bool{"public": true, "private": true, "protected": true}[next.KeywordID]; isVis {
+							break // namespace succession
+						}
+						if _, isDef := definitionKindKeywords[next.KeywordID]; isDef {
+							break // namespace succession
+						}
+						if _, isUsage := usageKindKeywords[next.KeywordID]; isUsage {
+							break // namespace succession
+						}
+					}
+				}
 				members = append(members, p.parseActionMember())
 			}
 			hasBody = true
@@ -1046,6 +1074,18 @@ func (p *Parser) parseDefUsageBody() (members []ast.Node, hasBody bool) {
 		before := p.peek().Span.Offset
 		m := p.parseBodyMember()
 		if m != nil {
+			// Check for namespace-level succession: 'then' after member
+			if p.atKeyword("then") {
+				p.advance() // consume 'then'
+				
+				// Apply succession to membership node
+				if mem, ok := m.(*ast.Membership); ok {
+					mem.HasSuccession = true
+					// Optional: parse guard condition if present
+					// For now, store target will be resolved during semantic analysis
+					// We just mark that this member has a succession edge
+				}
+			}
 			members = append(members, m)
 		}
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
