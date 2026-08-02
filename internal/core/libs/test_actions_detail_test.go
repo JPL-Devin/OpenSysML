@@ -2,33 +2,46 @@ package libs
 
 import (
 	"testing"
-	
+
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
-func TestSingleFile_Actions_Details(t *testing.T) {
+func TestActionsDetail(t *testing.T) {
 	src := &embedSource{}
 	data, err := src.Read("Systems Library/Actions.sysml")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to load: %v", err)
 	}
-	
-	sf := source.New("Actions.sysml", data)
-	p := parser.New(sf)
+
+	p := parser.New(source.New("Actions.sysml", data))
 	_ = p.ParseFile()
+
+	t.Logf("Actions.sysml: %d diagnostics", len(p.Diagnostics))
 	
-	if len(p.Diagnostics) > 0 {
-		t.Logf("Parse diagnostics (%d):", len(p.Diagnostics))
-		for i, d := range p.Diagnostics {
-			if i >= 10 { break }
-			text := sf.Text(d.Span)
-			if len(text) > 50 {
-				text = text[:50] + "..."
-			}
-			t.Logf("  [%d] offset %d: %s [near: %q]", i+1, d.Span.Offset, d.Message, text)
+	code := string(data)
+	for i, d := range p.Diagnostics {
+		t.Logf("\n=== Error %d: %s ===", i+1, d.Message)
+		t.Logf("Offset: %d", d.Span.Offset)
+		
+		// Show context around error
+		start := d.Span.Offset - 80
+		if start < 0 {
+			start = 0
 		}
-	} else {
-		t.Log("Parsed cleanly!")
+		end := d.Span.Offset + 80
+		if end > len(code) {
+			end = len(code)
+		}
+		
+		context := code[start:end]
+		markerPos := d.Span.Offset - start
+		
+		t.Logf("Context:\n%s", context)
+		t.Logf("Marker: %s^", string(make([]byte, markerPos)))
+		
+		if d.Span.Offset < len(code) {
+			t.Logf("Character at offset: %q", code[d.Span.Offset])
+		}
 	}
 }

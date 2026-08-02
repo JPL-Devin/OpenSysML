@@ -1285,15 +1285,23 @@ func (p *Parser) parseBodyMember() ast.Node {
 		hasRelationship := p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt)
 		hasNameAndRelationship := p.atName() && (p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt)
 		hasNameOnly := p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
+		// Allow 'var' keyword as name for anonymous features (common in actions/loops)
+		hasVarKeyword := p.atKeyword("var") && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon || 
+			p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt ||
+			p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 		
-		if hasNameAndType || hasRelationship || hasNameAndRelationship || hasNameOnly {
+		if hasNameAndType || hasRelationship || hasNameAndRelationship || hasNameOnly || hasVarKeyword {
 			var id ast.Identification
 			
 			// Parse optional name
-			if hasNameAndType || hasNameAndRelationship || hasNameOnly {
+			if hasNameAndType || hasNameAndRelationship || hasNameOnly || hasVarKeyword {
 				tok := p.advance()
 				if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
 					id.Name = p.src.Text(tok.Span)
+					id.NameSpan = tok.Span
+				} else if tok.Kind == lexer.Keyword && tok.KeywordID == "var" {
+					// Allow 'var' keyword as feature name
+					id.Name = "var"
 					id.NameSpan = tok.Span
 				}
 				if hasNameAndType {
