@@ -487,6 +487,37 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 		p.parseDocumentation(p.peek().Span.Offset)
 	}
 	
+	// Check for shorthand param syntax: {name : Type; expr} without "in" keyword
+	// Common in collection operators like ->exists{p : Point; condition}
+	hasShorthandParam := false
+	if p.atName() && p.peekN(1).Kind == lexer.Colon {
+		hasShorthandParam = true
+	}
+	
+	if hasShorthandParam {
+		// Parse single param without "in" keyword
+		var paramType *ast.QualifiedName
+		var paramMult *ast.Multiplicity
+		
+		if seg, ok := p.parseNameSegment(); ok {
+			if p.at(lexer.Colon) {
+				p.advance() // :
+				paramType = p.parseQualifiedName()
+				// Parse optional multiplicity after type
+				if p.at(lexer.LBracket) {
+					paramMult = p.parseMultiplicity()
+				}
+			}
+			b.Params = append(b.Params, ast.BodyParam{
+				Name:         seg.Text,
+				Type:         paramType,
+				Multiplicity: paramMult,
+				Span:         seg.Span,
+			})
+		}
+		p.expect(lexer.Semicolon, "expected ';' after body parameter")
+	}
+	
 	for p.atKeyword("in") {
 		p.advance() // in
 		var paramType *ast.QualifiedName
