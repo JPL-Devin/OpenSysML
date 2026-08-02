@@ -1263,6 +1263,50 @@ func (p *Parser) parseBodyMember() ast.Node {
 		}
 	}
 	
+	// Check for inline connector statement: connect [mult] X to [mult] Y;
+	// This is anonymous connection usage
+	if p.atKeyword("connect") {
+		p.advance() // consume 'connect'
+		
+		u := &ast.Usage{
+			Kind: ast.UsageConnection,
+		}
+		u.NodeBase.NodeSpan = p.spanFrom(start)
+		u.SetLeadingTrivia(trivia)
+		
+		// Parse connector ends with optional multiplicity
+		// First end
+		firstEnd := p.parseConnectorEnd()
+		if firstEnd == nil {
+			p.error(p.peek().Span, "expected connector end after 'connect'")
+			return &ast.ErrorNode{Message: "expected connector end"}
+		}
+		u.ConnectorEnds = append(u.ConnectorEnds, firstEnd)
+		
+		// Expect 'to' keyword
+		if !p.acceptKeyword("to") {
+			p.error(p.peek().Span, "expected 'to' after first connector end")
+		}
+		
+		// Second end
+		secondEnd := p.parseConnectorEnd()
+		if secondEnd == nil {
+			p.error(p.peek().Span, "expected connector end after 'to'")
+		} else {
+			u.ConnectorEnds = append(u.ConnectorEnds, secondEnd)
+		}
+		
+		p.expect(lexer.Semicolon, "expected ';' after connect statement")
+		
+		m := &ast.Membership{
+			Visibility: vis,
+			Member:     u,
+		}
+		m.NodeBase.NodeSpan = u.Span()
+		m.SetLeadingTrivia(trivia)
+		return m
+	}
+	
 	// Check for anonymous feature pattern: [modifiers] [name] : Type OR [modifiers] :>> relationships
 	// Examples: private thisClock : Clock :>> self; or ref stateSpace: StateSpace; or ref :>> x
 	// This handles features with visibility but no usage kind keyword
@@ -2056,19 +2100,19 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 	hasOf := p.acceptKeyword("of")
 	if hasOf {
 		fe = &ast.FlowEnds{}
-		fe.Payload = p.parseQualifiedName()
+		fe.Payload = p.parseRelationshipTarget() // Allow feature chains, not just qualified names
 	}
 	switch {
 	case p.acceptKeyword("from"):
 		if fe == nil {
 			fe = &ast.FlowEnds{}
 		}
-		fe.From = p.parseQualifiedName()
+		fe.From = p.parseRelationshipTarget() // Allow feature chains
 		p.parseFlowTo(fe)
 	case !hasOf && p.atName():
 		// Shorthand `x to y`.
 		fe = &ast.FlowEnds{}
-		fe.From = p.parseQualifiedName()
+		fe.From = p.parseRelationshipTarget() // Allow feature chains
 		p.parseFlowTo(fe)
 	}
 	if fe != nil {
@@ -2081,7 +2125,7 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 // `to` is absent.
 func (p *Parser) parseFlowTo(fe *ast.FlowEnds) {
 	if p.acceptKeyword("to") {
-		fe.To = p.parseQualifiedName()
+		fe.To = p.parseRelationshipTarget() // Allow feature chains
 		return
 	}
 	p.error(p.peek().Span, "expected 'to' between flow ends")

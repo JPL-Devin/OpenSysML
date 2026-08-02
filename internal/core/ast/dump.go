@@ -178,7 +178,31 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		writeChildren(b, depth, usageChildren(v))
 		return
 	case *FlowEnds:
-		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q)`, qnString(v.From), qnString(v.To), qnString(v.Payload))
+		fromStr := "nil"
+		toStr := "nil"
+		payloadStr := "nil"
+		if v.From != nil {
+			if qn, ok := v.From.(*QualifiedName); ok {
+				fromStr = qnString(qn)
+			} else {
+				fromStr = fmt.Sprintf("%T", v.From)
+			}
+		}
+		if v.To != nil {
+			if qn, ok := v.To.(*QualifiedName); ok {
+				toStr = qnString(qn)
+			} else {
+				toStr = fmt.Sprintf("%T", v.To)
+			}
+		}
+		if v.Payload != nil {
+			if qn, ok := v.Payload.(*QualifiedName); ok {
+				payloadStr = qnString(qn)
+			} else {
+				payloadStr = fmt.Sprintf("%T", v.Payload)
+			}
+		}
+		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q)`, fromStr, toStr, payloadStr)
 	case *ConnectorEnd:
 		targetStr := ""
 		if qn, ok := v.Target.(*QualifiedName); ok {

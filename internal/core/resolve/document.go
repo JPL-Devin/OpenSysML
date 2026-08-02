@@ -101,10 +101,10 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 	}
 	if d.FlowEnds != nil {
-		r.ResolveQualified(scope, d.FlowEnds.From)
-			r.ResolveQualified(scope, d.FlowEnds.To)
-			r.ResolveQualified(scope, d.FlowEnds.Payload)
-		}
+		r.resolveExpr(scope, d.FlowEnds.From)
+		r.resolveExpr(scope, d.FlowEnds.To)
+		r.resolveExpr(scope, d.FlowEnds.Payload)
+	}
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 		}
