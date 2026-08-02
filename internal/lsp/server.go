@@ -15,8 +15,10 @@ import (
 // serves the Language Server Protocol over a jsonrpc2 stream.
 type Server struct {
 	baseServer
-	ws     *model.Workspace
-	client protocol.Client
+	ws           *model.Workspace
+	client       protocol.Client
+	conn         jsonrpc2.Conn
+	shutdownDone bool
 }
 
 // NewServer returns a Server bound to ws.
@@ -30,6 +32,7 @@ func (s *Server) Run(ctx context.Context, rwc io.ReadWriteCloser) error {
 	stream := jsonrpc2.NewStream(rwc)
 	ctx, conn, client := protocol.NewServer(ctx, s, stream, zap.NewNop())
 	s.client = client
+	s.conn = conn
 	conn.Go(ctx, s.changeHandler(protocol.ServerHandler(s, jsonrpc2.MethodNotFoundHandler)))
 	<-conn.Done()
 	return conn.Err()

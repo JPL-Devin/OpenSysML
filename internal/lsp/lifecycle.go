@@ -36,7 +36,16 @@ func (s *Server) Initialized(ctx context.Context, params *protocol.InitializedPa
 }
 
 // Shutdown prepares the server for exit.
-func (s *Server) Shutdown(ctx context.Context) error { return nil }
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.shutdownDone = true
+	return nil
+}
 
-// Exit terminates the server process handling.
-func (s *Server) Exit(ctx context.Context) error { return nil }
+// Exit terminates the server process. Per LSP spec, exit notification ends the process.
+func (s *Server) Exit(ctx context.Context) error {
+	// Close the jsonrpc2 connection to trigger graceful shutdown
+	if s.conn != nil {
+		return s.conn.Close()
+	}
+	return nil
+}
