@@ -87,6 +87,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"action":       ast.UsageAction,
 	"perform":      ast.UsageAction, // perform keyword creates action usage
 	"state":        ast.UsageState,
+	"exhibit":      ast.UsageState, // exhibit references state usage (state exhibition)
 	"transition":   ast.UsageTransition,
 	"step":         ast.UsageStep,
 	"calc":         ast.UsageCalc,
@@ -119,6 +120,8 @@ var featureModifierKeywords = map[string]bool{
 	"end":       true,
 	"constant":  true,
 	"event":     true, // event-driven occurrence modifier
+	"individual": true, // individual occurrence/part modifier
+	"snapshot":   true, // snapshot occurrence/part modifier
 	"in":        true,
 	"out":       true,
 	"inout":     true,
@@ -154,6 +157,8 @@ type featureMods struct {
 	isChain     bool
 	isConstant  bool
 	isEvent     bool // event modifier for occurrences
+	isIndividual bool // individual modifier for individuals/snapshots
+	isSnapshot  bool // snapshot modifier for snapshots
 	visibility  ast.Visibility
 	direction   ast.FeatureDirection
 	isComposite bool
@@ -228,6 +233,10 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			m.isConstant = true
 		case "event":
 			m.isEvent = true
+		case "individual":
+			m.isIndividual = true
+		case "snapshot":
+			m.isSnapshot = true
 		case "public":
 			m.visibility = ast.VisibilityPublic
 		case "protected":
@@ -318,7 +327,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	}
 	
 	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require, perform) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" {
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		
