@@ -169,10 +169,8 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 		return ec.evalComparison(n)
 	case ast.OpAnd, ast.OpOr:
 		return ec.evalLogical(n)
-	case ast.OpNeg:
+	case ast.OpNeg, ast.OpNot:
 		return ec.evalNeg(n)
-	case ast.OpNot:
-		return ec.evalNot(n)
 	default:
 		return Value{}, fmt.Errorf("unsupported operator: %v", n.Operator)
 	}
@@ -324,19 +322,78 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: result}}, nil
 }
 
-// evalLogical evaluates logical operators (&&, ||).
+// evalLogical evaluates logical operators (&&, ||) with short-circuit.
 func (ec *EvalContext) evalLogical(n *ast.OperatorExpr) (Value, error) {
-	return Value{}, fmt.Errorf("logical not yet implemented")
+	if len(n.Operands) != 2 {
+		return Value{}, fmt.Errorf("logical operator requires 2 operands, got %d", len(n.Operands))
+	}
+	
+	// Evaluate left operand
+	left, err := ec.Eval(n.Operands[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if left.Kind != ValConst || left.Const.Kind != semantics.ValBool {
+		return Value{}, fmt.Errorf("logical operator requires bool operands, got %v", left.Kind)
+	}
+	
+	// Short-circuit for &&: if left is false, return false
+	if n.Operator == ast.OpAnd && !left.Const.Bool {
+		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: false}}, nil
+	}
+	
+	// Short-circuit for ||: if left is true, return true
+	if n.Operator == ast.OpOr && left.Const.Bool {
+		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: true}}, nil
+	}
+	
+	// Evaluate right operand
+	right, err := ec.Eval(n.Operands[1])
+	if err != nil {
+		return Value{}, err
+	}
+	if right.Kind != ValConst || right.Const.Kind != semantics.ValBool {
+		return Value{}, fmt.Errorf("logical operator requires bool operands, got %v", right.Kind)
+	}
+	
+	// Compute result
+	var result bool
+	switch n.Operator {
+	case ast.OpAnd:
+		result = left.Const.Bool && right.Const.Bool
+	case ast.OpOr:
+		result = left.Const.Bool || right.Const.Bool
+	default:
+		return Value{}, fmt.Errorf("unsupported logical operator: %v", n.Operator)
+	}
+	
+	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: result}}, nil
 }
 
-// evalNeg evaluates unary negation (-).
+// evalNeg evaluates unary negation (-, not).
 func (ec *EvalContext) evalNeg(n *ast.OperatorExpr) (Value, error) {
-	return Value{}, fmt.Errorf("negation not yet implemented")
-}
-
-// evalNot evaluates logical not (!).
-func (ec *EvalContext) evalNot(n *ast.OperatorExpr) (Value, error) {
-	return Value{}, fmt.Errorf("not not yet implemented")
+	if len(n.Operands) != 1 {
+		return Value{}, fmt.Errorf("negation requires 1 operand, got %d", len(n.Operands))
+	}
+	
+	operand, err := ec.Eval(n.Operands[0])
+	if err != nil {
+		return Value{}, err
+	}
+	
+	switch n.Operator {
+	case ast.OpNot:
+		// Logical not: not bool
+		if operand.Kind != ValConst || operand.Const.Kind != semantics.ValBool {
+			return Value{}, fmt.Errorf("logical not requires bool operand, got %v", operand.Kind)
+		}
+		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: !operand.Const.Bool}}, nil
+	case ast.OpNeg:
+		// Arithmetic negation: -number (handled in Task 3)
+		return Value{}, fmt.Errorf("arithmetic negation not yet implemented")
+	default:
+		return Value{}, fmt.Errorf("unsupported negation operator: %v", n.Operator)
+	}
 }
 
 // evalSequenceExpr evaluates a sequence expression (1, 2, 3).

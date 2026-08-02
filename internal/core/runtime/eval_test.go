@@ -274,3 +274,92 @@ func TestEval_EqualityCrossKind(t *testing.T) {
 		})
 	}
 }
+
+func TestEval_LogicalAnd(t *testing.T) {
+	tests := []struct {
+		src      string
+		expected bool
+	}{
+		{"true & true", true},
+		{"true & false", false},
+		{"false & true", false},
+		{"false & false", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			model, resolver, root := parseAndBuildModel(t, "attribute test = "+tt.src+";")
+			ctx := NewContext(model, resolver, 1000)
+			attrSym := resolveSymbol(t, root, "test")
+			attrDecl := attrSym.Decl.(*ast.Usage)
+			result, err := ctx.Eval(attrDecl.Value)
+			if err != nil {
+				t.Fatalf("Eval failed: %v", err)
+			}
+			if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
+				t.Fatalf("expected bool, got %v", result)
+			}
+			if result.Const.Bool != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result.Const.Bool)
+			}
+		})
+	}
+}
+
+func TestEval_LogicalOr(t *testing.T) {
+	tests := []struct {
+		src      string
+		expected bool
+	}{
+		{"true | true", true},
+		{"true | false", true},
+		{"false | true", true},
+		{"false | false", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			model, resolver, root := parseAndBuildModel(t, "attribute test = "+tt.src+";")
+			ctx := NewContext(model, resolver, 1000)
+			attrSym := resolveSymbol(t, root, "test")
+			attrDecl := attrSym.Decl.(*ast.Usage)
+			result, err := ctx.Eval(attrDecl.Value)
+			if err != nil {
+				t.Fatalf("Eval failed: %v", err)
+			}
+			if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
+				t.Fatalf("expected bool, got %v", result)
+			}
+			if result.Const.Bool != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result.Const.Bool)
+			}
+		})
+	}
+}
+
+func TestEval_LogicalNot(t *testing.T) {
+	tests := []struct {
+		src      string
+		expected bool
+	}{
+		{"not true", false},
+		{"not false", true},
+		{"not not true", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			model, resolver, root := parseAndBuildModel(t, "attribute test = "+tt.src+";")
+			ctx := NewContext(model, resolver, 1000)
+			attrSym := resolveSymbol(t, root, "test")
+			attrDecl := attrSym.Decl.(*ast.Usage)
+			result, err := ctx.Eval(attrDecl.Value)
+			if err != nil {
+				t.Fatalf("Eval failed: %v", err)
+			}
+			if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
+				t.Fatalf("expected bool, got %v", result)
+			}
+			if result.Const.Bool != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result.Const.Bool)
+			}
+		})
+	}
+}
