@@ -17,7 +17,8 @@ func TestDumpDefinition(t *testing.T) {
 	}
 	got := Dump(def)
 	want := "(Definition kind=\"part\" abstract=true variation=false name=\"Vehicle\"\n" +
-		"  (Relationship kind=\"specializes\" target=\"Base\")\n" +
+		"  (Relationship kind=\"specializes\" target=Base\n" +
+		"    (*ast.QualifiedName))\n" +
 		"  (Usage kind=\"part\" name=\"engine\" ref=false direction=\"none\" composite=false derived=false ordered=false nonunique=false))"
 	if got != want {
 		t.Fatalf("Dump mismatch:\ngot:\n%s\nwant:\n%s", got, want)
@@ -36,7 +37,8 @@ func TestDumpUsageWithMultiplicityAndValue(t *testing.T) {
 	}
 	got := Dump(u)
 	want := "(Usage kind=\"attribute\" name=\"mass\" ref=false direction=\"none\" composite=false derived=false ordered=false nonunique=false\n" +
-		"  (Relationship kind=\"typing\" target=\"Real\")\n" +
+		"  (Relationship kind=\"typing\" target=Real\n" +
+		"    (*ast.QualifiedName))\n" +
 		"  (Multiplicity range=false\n" +
 		"    (LiteralInteger value=\"4\"))\n" +
 		"  (LiteralInteger value=\"42\"))"

@@ -16,7 +16,11 @@ func TestDumpConnectorEnds(t *testing.T) {
 		},
 	}
 	got := Dump(u)
-	want := `(Usage kind="connection" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false ends="a, b")`
+	want := "(Usage kind=\"connection\" name=\"c\" ref=false direction=\"none\" composite=false derived=false ordered=false nonunique=false\n" +
+		"  (ConnectorEnd target=\"a\"\n" +
+		"    (*ast.QualifiedName))\n" +
+		"  (ConnectorEnd target=\"b\"\n" +
+		"    (*ast.QualifiedName)))"
 	if got != want {
 		t.Fatalf("Dump mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}

@@ -8,15 +8,14 @@
 package EdgeCasesAndAdvanced {
     
     // ===== Keywords as Feature Names in Expressions (Task 70) =====
-    // From StatePerformances.kerml
+    // From StatePerformances.kerml line 77-90
+    // Keywords like 'exit', 'entry' can appear in feature chain expressions
     
-    feature StateWithKeywordNames {
-        feature entry: Action;
-        feature exit: Action;
-        feature do: Action;
-        
-        feature entryHandler = state.entry;
-        feature exitHandler = state.exit;
+    function testKeywordAccess {
+        in oSP: Performance;
+        in thatSP: Performance;
+        return result: Boolean = 
+            oSP.exit == thatSP.exit;
     }
     
     // ===== Identifier-Based Multiplicities (Task 70) =====
