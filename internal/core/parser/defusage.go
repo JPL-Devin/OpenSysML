@@ -466,17 +466,11 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 			hasBody = true
 		}
 	case ast.DefConstraint:
-		// Constraint def bodies: constraint body OR generic
-		// Lookahead: if body starts with 'assert'/'assume' → parseConstraintBody
-		// Otherwise → generic parseDefUsageBody
+		// Constraint def bodies: always use parseConstraintBody (handles assert/assume/bare expressions)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
-			if p.isConstraintKeyword() {
-				members = p.parseConstraintBody()
-			} else {
-				members = p.parseActionBodyGeneric()
-			}
+			members = p.parseConstraintBody()
 			hasBody = true
 		}
 	case ast.DefRequirement:
