@@ -97,6 +97,21 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 					}
 					continue
 				}
+				// If 'accept' keyword after name → declaration (accept action)
+				// Pattern: action <name> accept <param> : Type [via <port>];
+				if tok2.Kind == lexer.Keyword && tok2.KeywordID == "accept" {
+					m := p.parseBodyMember()
+					if m != nil {
+						if p.atKeyword("then") {
+							p.advance()
+							if mem, ok := m.(*ast.Membership); ok {
+								mem.HasSuccession = true
+							}
+						}
+						members = append(members, m)
+					}
+					continue
+				}
 				// If brace after name, peek inside
 				if tok2.Kind == lexer.LBrace {
 					firstInBrace := p.peekN(3)
@@ -326,6 +341,10 @@ func (p *Parser) parseActionMember() ast.Node {
 			return p.parseWhileLoopAction(tok)
 		case "if":
 			return p.parseIfAction(tok)
+		case "send":
+			return p.parseSendStatement(tok)
+		case "terminate":
+			return p.parseTerminateStatement(tok)
 		default:
 			// Unknown keyword, return ErrorNode
 			p.error(tok.Span, "unknown action keyword: "+kw)
@@ -1761,6 +1780,48 @@ func (p *Parser) parseTransitionMember(start int) ast.Node {
 		Trigger: trigger,
 		Guard:   guard,
 		Effect:  effect,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseSendStatement parses: send <message> to <target>;
+// parseSendStatement parses: send <message> to <target>; OR send <message> via <port>;
+func (p *Parser) parseSendStatement(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse message expression
+	message := p.ParseExpression()
+	
+	// Expect 'to' or 'via' keyword
+	if !p.acceptKeyword("to") && !p.acceptKeyword("via") {
+		p.error(p.peek().Span, "expected 'to' or 'via' after send message")
+	}
+	
+	// Parse target expression
+	target := p.ParseExpression()
+	
+	p.expect(lexer.Semicolon, "expected ';' after send statement")
+	
+	node := &ast.SendStatement{
+		Message: message,
+		Target:  target,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseTerminateStatement parses: terminate <target>;
+func (p *Parser) parseTerminateStatement(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse target expression
+	target := p.ParseExpression()
+	
+	p.expect(lexer.Semicolon, "expected ';' after terminate statement")
+	
+	node := &ast.TerminateStatement{
+		Target: target,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node

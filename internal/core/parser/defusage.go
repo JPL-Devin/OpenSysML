@@ -552,7 +552,7 @@ func (p *Parser) isBehavioralKeyword() bool {
 	kw := p.peek().KeywordID
 	switch kw {
 	case "first", "done", "fork", "join", "merge", "decision", "action", "then",
-		"assign", "perform", "while", "if":
+		"assign", "perform", "while", "if", "send", "terminate":
 		return true
 	}
 	return false
@@ -1402,6 +1402,89 @@ func (p *Parser) parseBodyMember() ast.Node {
 			m.NodeBase.NodeSpan = u.Span()
 			m.SetLeadingTrivia(trivia)
 			return m
+		}
+	}
+	
+	// Check for accept action syntax: action <name> accept <param> : Type [via <port>];
+	// Pattern: action trigger accept scene : Scene;
+	// Pattern: action trigger accept scene : Scene via viewPort;
+	if p.atKeyword("action") {
+		// Lookahead for accept pattern: action <id> accept <id> : Type
+		if p.peekN(1).Kind == lexer.Identifier {
+			tok2 := p.peekN(2)
+			if tok2.Kind == lexer.Keyword && tok2.KeywordID == "accept" {
+				// Accept action syntax - create simple action with output feature
+				p.advance() // consume 'action'
+				actionName := p.src.Text(p.peek().Span)
+				p.advance() // consume name
+				p.advance() // consume 'accept'
+				
+				// Parse param: name : Type
+				paramName := ""
+				var paramType *ast.QualifiedName
+				if p.at(lexer.Identifier) {
+					paramName = p.src.Text(p.peek().Span)
+					p.advance()
+				}
+				if p.accept2(lexer.Colon) {
+					paramType = p.parseQualifiedName()
+				}
+				
+				// Optional 'via' port
+				var viaPort *ast.QualifiedName
+				if p.acceptKeyword("via") {
+					viaPort = p.parseQualifiedName()
+				}
+				
+				// Create action usage with output attribute member
+				actionUsage := &ast.Usage{
+					Kind: ast.UsageAction,
+					Ident: ast.Identification{
+						Name:     actionName,
+						NameSpan: source.Span{}, // fill from token if needed
+					},
+				}
+				
+				// Add output parameter as attribute member
+				if paramName != "" && paramType != nil {
+					paramUsage := &ast.Usage{
+						Kind: ast.UsageAttribute,
+						Ident: ast.Identification{
+							Name:     paramName,
+							NameSpan: source.Span{},
+						},
+						Relationships: []*ast.Relationship{
+							{Kind: ast.RelTyping, Target: paramType},
+						},
+						Direction: ast.DirOut,
+					}
+					paramUsage.NodeSpan = p.spanFrom(start)
+					actionUsage.Members = append(actionUsage.Members, &ast.Membership{
+						Member: paramUsage,
+					})
+				}
+				
+				// Add via port as reference relationship
+				if viaPort != nil {
+					actionUsage.Relationships = append(actionUsage.Relationships, &ast.Relationship{
+						Kind:   ast.RelReferences,
+						Target: viaPort,
+					})
+				}
+				
+				p.expect(lexer.Semicolon, "expected ';' after accept action")
+				
+				actionUsage.NodeSpan = p.spanFrom(start)
+				actionUsage.SetLeadingTrivia(trivia)
+				
+				m := &ast.Membership{
+					Visibility: vis,
+					Member:     actionUsage,
+				}
+				m.NodeSpan = actionUsage.Span()
+				m.SetLeadingTrivia(trivia)
+				return m
+			}
 		}
 	}
 	
