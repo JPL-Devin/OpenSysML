@@ -18,7 +18,7 @@ func TestEmbedLoadEndToEnd(t *testing.T) {
 	}
 	ld := NewLoader(DefaultSource(), cache)
 	idx := symbols.NewIndex()
-	if err := ld.Load("ScalarValues.kerml", idx); err != nil {
+	if err := ld.Load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if len(idx.LookupQualified("ScalarValues::Real")) != 1 {
@@ -44,7 +44,7 @@ func TestSysmlLibraryPathOverride(t *testing.T) {
 		t.Fatal("SYSML_LIBRARY_PATH override did not load Custom::Widget")
 	}
 	// The bundled library must NOT be visible under the override source.
-	if _, err := DefaultSource().Read("ScalarValues.kerml"); err == nil {
+	if _, err := DefaultSource().Read("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml"); err == nil {
 		t.Fatal("override source unexpectedly served bundled ScalarValues.kerml")
 	}
 }

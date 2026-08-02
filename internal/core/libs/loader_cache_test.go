@@ -28,7 +28,7 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	ld := NewLoader(cs, cache)
 
 	idx1 := symbols.NewIndex()
-	if err := ld.Load("ScalarValues.kerml", idx1); err != nil {
+	if err := ld.Load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx1); err != nil {
 		t.Fatalf("first Load: %v", err)
 	}
 	if cs.reads != 1 {
@@ -49,7 +49,7 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	}
 
 	idx2 := symbols.NewIndex()
-	if err := ld.Load("ScalarValues.kerml", idx2); err != nil {
+	if err := ld.Load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx2); err != nil {
 		t.Fatalf("second Load: %v", err)
 	}
 	if len(idx2.LookupQualified("ScalarValues")) != 1 ||
