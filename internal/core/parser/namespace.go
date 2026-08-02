@@ -85,6 +85,53 @@ func (p *Parser) parseQualifiedName() *ast.QualifiedName {
 	return qn
 }
 
+// parseQualifiedNameRelaxed parses `[$::] Name (:: Name)*` allowing keywords as identifiers.
+// Used in contexts where feature chains can start with keywords (e.g., do.startShot).
+func (p *Parser) parseQualifiedNameRelaxed() *ast.QualifiedName {
+	start := p.peek().Span.Offset
+	trivia := p.takeTrivia()
+
+	global := false
+	if p.at(lexer.Dollar) && p.peekN(1).Kind == lexer.ColonColon {
+		p.advance() // $
+		p.advance() // ::
+		global = true
+	}
+
+	seg, ok := p.parseNameSegmentRelaxed()
+	if !ok {
+		if global {
+			// `$::` with no following name — still a (degenerate) global name.
+			qn := &ast.QualifiedName{Global: true}
+			qn.NodeSpan = p.spanFrom(start)
+			qn.SetLeadingTrivia(trivia)
+			return qn
+		}
+		p.error(p.peek().Span, "expected a name")
+		return nil
+	}
+
+	parts := []ast.NameSegment{seg}
+	for p.at(lexer.ColonColon) {
+		// Do not consume `::` if it introduces `*`/`**` (namespace import wildcard).
+		if nk := p.peekN(1).Kind; nk == lexer.Star || nk == lexer.StarStar {
+			break
+		}
+		p.advance() // ::
+		next, ok := p.parseNameSegmentRelaxed()
+		if !ok {
+			p.error(p.peek().Span, "expected a name after '::'")
+			break
+		}
+		parts = append(parts, next)
+	}
+
+	qn := &ast.QualifiedName{Global: global, Parts: parts}
+	qn.NodeSpan = p.spanFrom(start)
+	qn.SetLeadingTrivia(trivia)
+	return qn
+}
+
 // parseIdentification parses `<shortName> name?` or `name` or nothing.
 // A missing identification yields a zero-value Identification (no diagnostic).
 func (p *Parser) parseIdentification() ast.Identification {
@@ -100,11 +147,11 @@ func (p *Parser) parseIdentification() ast.Identification {
 		p.expect(lexer.Gt, "expected '>'")
 	}
 	// Parse name, but exclude keywords that have special syntax meaning in declaration context
-	// (e.g., "default" introduces a value expression, "connect"/"allocate" introduce connector ends, "first" for succession)
+	// (e.g., "default" introduces a value expression, "connect"/"allocate" introduce connector ends, "first"/"do" for succession)
 	if p.at(lexer.Keyword) {
 		kw := p.peek().KeywordID
 		switch kw {
-		case "default", "connect", "allocate", "from", "to", "then", "first":
+		case "default", "connect", "allocate", "from", "to", "then", "first", "do":
 			// These keywords have special syntax meaning, not valid as identifier names here
 			return id
 		}

@@ -512,6 +512,8 @@ func (p *Parser) isStateKeyword() bool {
 // - `succession [mult] x then y` - starts with multiplicity
 // - `succession first [mult] x then y` - starts with "first" keyword
 // - `succession x then y` - identifier followed by "then" (not name, but first connector end)
+// - `succession x.y then z` - feature chain followed by "then" (not name, but first connector end)
+// - `succession [mult] x.y then [mult] z` - multiplicity + feature chain + then
 func (p *Parser) isAnonymousSuccession() bool {
 	if p.at(lexer.LBracket) {
 		return true // starts with multiplicity
@@ -519,11 +521,30 @@ func (p *Parser) isAnonymousSuccession() bool {
 	if p.atKeyword("first") {
 		return true // starts with "first" keyword
 	}
-	// Check for pattern: identifier + "then" (means identifier is connector end, not name)
-	if p.atName() || p.atNameOrKeyword() {
-		nextTok := p.peekN(1)
-		if nextTok.Kind == lexer.Keyword && nextTok.KeywordID == "then" {
-			return true
+	// Check for pattern: identifier/feature chain + "then" (means identifier is connector end, not name)
+	if p.atName() || p.atNameOrKeyword() || p.at(lexer.Keyword) {
+		// Lookahead to find "then" keyword, skipping identifiers, keywords, dots, ::, and multiplicities for feature chains
+		for i := 1; i < 30; i++ { // reasonable lookahead limit (increased for multiplicity)
+			tok := p.peekN(i)
+			if tok.Kind == lexer.EOF {
+				return false
+			}
+			if tok.Kind == lexer.Keyword && tok.KeywordID == "then" {
+				return true // found "then" keyword after potential feature chain
+			}
+			// Skip over multiplicity syntax: [, numbers, .., *, ]
+			if tok.Kind == lexer.LBracket || tok.Kind == lexer.RBracket || 
+			   tok.Kind == lexer.Decimal || tok.Kind == lexer.DotDot || tok.Kind == lexer.Star {
+				continue
+			}
+			// Skip whitespace (parser usually skips but peekN might show it)
+			if tok.Kind == lexer.Whitespace {
+				continue
+			}
+			// If not identifier, keyword, dot, or ::, and not "then", it's not anonymous succession pattern
+			if tok.Kind != lexer.Identifier && tok.Kind != lexer.Keyword && tok.Kind != lexer.Dot && tok.Kind != lexer.ColonColon {
+				return false
+			}
 		}
 	}
 	return false
@@ -1288,7 +1309,8 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 	start := p.peek().Span.Offset
 	
 	// Start with qualified name (handles A::B::C)
-	base := p.parseQualifiedName()
+	// Use parseQualifiedNameRelaxed to allow keywords like "do" in feature chains (e.g., do.startShot)
+	base := p.parseQualifiedNameRelaxed()
 	if base == nil {
 		return nil
 	}
