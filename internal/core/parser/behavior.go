@@ -324,9 +324,9 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 	// Parse post-multiplicity modifiers (ordered/nonunique)
 	postMods := p.parsePostModifiers()
 	
-	// Optional value (= expr or default expr)
+	// Optional value (= expr, := expr, or default expr)
 	var value ast.Node
-	if p.accept2(lexer.Eq) || p.acceptKeyword("default") {
+	if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
 		value = p.ParseExpression()
 	}
 	
@@ -412,6 +412,8 @@ func (p *Parser) parseActionMember() ast.Node {
 			return p.parseWhileLoopAction(tok)
 		case "loop":
 			return p.parseLoopAction(tok)
+		case "for":
+			return p.parseForAction(tok)
 		case "if":
 			return p.parseIfAction(tok)
 		case "send":
@@ -905,6 +907,95 @@ func (p *Parser) parseLoopAction(tok lexer.Token) ast.Node {
 	// Alternatively, could add separate LoopActionNode with UntilCondition field
 	node := &ast.WhileLoopActionNode{
 		Condition: condition,
+		Body:      body,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseForAction parses: for <variable> in <collection> { <body> }
+func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse iteration variable name
+	varTok, ok := p.expect(lexer.Identifier, "expected variable name after 'for'")
+	if !ok {
+		en := &ast.ErrorNode{Message: "expected variable name"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	// Expect 'in' keyword
+	if !p.acceptKeyword("in") {
+		p.error(p.peek().Span, "expected 'in' keyword after for variable")
+		en := &ast.ErrorNode{Message: "expected 'in'"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	// Parse collection expression
+	collection := p.ParseExpression()
+	
+	// Parse body (braced)
+	if _, ok := p.expect(lexer.LBrace, "expected '{' for for-loop body"); !ok {
+		en := &ast.ErrorNode{Message: "expected '{'"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	// Parse body as mixed content (declarations + behavioral statements)
+	var body []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
+		
+		// Try direction parameters
+		if p.isDirectionKeyword() {
+			body = append(body, p.parseDirectionParameter())
+			continue
+		}
+		
+		// Try declarations
+		if p.atDefUsageStart() {
+			m := p.parseBodyMember()
+			if m != nil {
+				body = append(body, m)
+			}
+			if p.peek().Span.Offset == before {
+				p.advance()
+			}
+			continue
+		}
+		
+		// Parse behavioral statements
+		body = append(body, p.parseActionMember())
+		
+		// Ensure progress
+		if p.peek().Span.Offset == before {
+			p.advance()
+		}
+	}
+	
+	p.expect(lexer.RBrace, "expected '}'")
+	
+	// Create ForLoopActionNode AST node
+	// Since this doesn't exist yet, reuse WhileLoopActionNode structure
+	// Store variable name and collection in condition (hack - proper impl would add ForLoopActionNode)
+	// For now, create simple FeatureReference for variable and store as body member
+	varUsage := &ast.Usage{
+		Kind: ast.UsageAttribute,
+		Ident: ast.Identification{
+			Name:     p.src.Text(varTok.Span),
+			NameSpan: varTok.Span,
+		},
+		Value: collection, // Store collection as value
+	}
+	varUsage.NodeSpan = varTok.Span
+	
+	// Prepend variable usage to body
+	body = append([]ast.Node{varUsage}, body...)
+	
+	node := &ast.WhileLoopActionNode{
+		Condition: nil, // No explicit condition (iteration driven)
 		Body:      body,
 	}
 	node.NodeSpan = p.spanFrom(start)

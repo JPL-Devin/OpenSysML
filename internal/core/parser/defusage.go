@@ -730,7 +730,7 @@ func (p *Parser) isBehavioralKeyword() bool {
 	kw := p.peek().KeywordID
 	switch kw {
 	case "first", "done", "fork", "join", "merge", "decision", "action", "then",
-		"assign", "perform", "while", "loop", "if", "send", "terminate":
+		"assign", "perform", "while", "loop", "if", "send", "terminate", "for":
 		return true
 	}
 	return false
@@ -1173,7 +1173,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	postRels, _ := p.parseRelationships(true)
 	u.Relationships = append(u.Relationships, postRels...)
 	
-	if p.accept2(lexer.Eq) || p.acceptKeyword("default") {
+	if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
 		u.Value = p.ParseExpression()
 	}
 	p.parseTierBEnds(u, kind)
