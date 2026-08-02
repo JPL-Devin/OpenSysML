@@ -643,26 +643,37 @@ func (p *Parser) isAnonymousSuccession() bool {
 			return false // NAMED succession
 		}
 		
-		// Lookahead to find "then" keyword, skipping identifiers, keywords, dots, ::, and multiplicities for feature chains
-		for i := 1; i < 30; i++ { // reasonable lookahead limit (increased for multiplicity)
+		// Count identifiers before "then" to distinguish:
+		// - succession name end1 then end2 (2 identifiers) - NAMED
+		// - succession end1 then end2 (1 identifier) - ANONYMOUS
+		identCount := 1 // current identifier (at position 0)
+		for i := 1; i < 30; i++ {
 			tok := p.peekN(i)
 			if tok.Kind == lexer.EOF {
 				return false
 			}
 			if tok.Kind == lexer.Keyword && tok.KeywordID == "then" {
-				return true // found "then" keyword after potential feature chain
+				// Found "then" - check identifier count
+				// If 1 identifier before "then", it's anonymous (identifier is connector end)
+				// If 2+ identifiers, first is name, second is connector end - NAMED
+				return identCount == 1
 			}
-			// Skip over multiplicity syntax: [, numbers, .., *, ]
+			// Count identifiers (simple names, not part of feature chains)
+			// Only count as separate identifier if preceded by whitespace/nothing, not dot/::
+			if (tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName) {
+				prevTok := p.peekN(i-1)
+				if prevTok.Kind != lexer.Dot && prevTok.Kind != lexer.ColonColon {
+					identCount++
+				}
+			}
+			// Skip over multiplicity syntax, dots, :: for feature chains
 			if tok.Kind == lexer.LBracket || tok.Kind == lexer.RBracket || 
-			   tok.Kind == lexer.Decimal || tok.Kind == lexer.DotDot || tok.Kind == lexer.Star {
+			   tok.Kind == lexer.Decimal || tok.Kind == lexer.DotDot || tok.Kind == lexer.Star ||
+			   tok.Kind == lexer.Dot || tok.Kind == lexer.ColonColon || tok.Kind == lexer.Whitespace {
 				continue
 			}
-			// Skip whitespace (parser usually skips but peekN might show it)
-			if tok.Kind == lexer.Whitespace {
-				continue
-			}
-			// If not identifier, keyword, dot, or ::, and not "then", it's not anonymous succession pattern
-			if tok.Kind != lexer.Identifier && tok.Kind != lexer.Keyword && tok.Kind != lexer.Dot && tok.Kind != lexer.ColonColon {
+			// If not identifier/keyword and not "then", stop searching
+			if tok.Kind != lexer.Identifier && tok.Kind != lexer.UnrestrictedName && tok.Kind != lexer.Keyword {
 				return false
 			}
 		}

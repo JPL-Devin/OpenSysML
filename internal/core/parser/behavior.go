@@ -675,7 +675,10 @@ func (p *Parser) parseResultMember() ast.Node {
 	}
 	
 	// Check for Pattern 5: return [kind] [modifiers] name [mult] [body/semicolon] (no type, no value)
-	if p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
+	// Only match if modifiers present - bare 'return name;' is computed result (Pattern 3)
+	hasModifiers := mods.isAbstract || mods.isReference || mods.isEnd || mods.isConstant ||
+		mods.isComposite || mods.isDerived || mods.isReadonly || mods.isOrdered || mods.isNonunique
+	if hasModifiers && p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
@@ -849,7 +852,7 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 	return members
 }
 
-// parseRequirementMember parses one requirement member: subject/assume/require/actor/doc
+// parseRequirementMember parses one requirement member: subject/assume/require/actor/doc or general body members
 func (p *Parser) parseRequirementMember() ast.Node {
 	start := p.peek().Span.Offset
 	
@@ -858,7 +861,7 @@ func (p *Parser) parseRequirementMember() ast.Node {
 		return p.parseDocumentation(start)
 	}
 	
-	// Check for keyword dispatch
+	// Check for requirement-specific keyword dispatch
 	if p.acceptKeyword("subject") {
 		return p.parseSubjectMember(start)
 	} else if p.acceptKeyword("assume") {
@@ -869,8 +872,13 @@ func (p *Parser) parseRequirementMember() ast.Node {
 		return p.parseActorMember(start)
 	}
 	
+	// Check for general body members (nested requirements, features, etc.)
+	if p.atDefUsageStart() {
+		return p.parseBodyMember()
+	}
+	
 	// Unknown member type
-	p.error(p.peek().Span, "expected 'subject', 'assume', 'require', or 'actor' in requirement body")
+	p.error(p.peek().Span, "expected 'subject', 'assume', 'require', 'actor', or definition/usage keyword in requirement body")
 	en := &ast.ErrorNode{Message: "expected requirement member keyword"}
 	if !p.atEOF() && !p.at(lexer.RBrace) {
 		p.advance() // ensure progress
