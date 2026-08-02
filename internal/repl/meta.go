@@ -19,6 +19,47 @@ func isMeta(line string) bool {
 	return strings.HasPrefix(strings.TrimSpace(line), "%")
 }
 
+// parseArgs splits a command line into arguments, handling quoted strings.
+// This allows file paths and expressions with spaces to be properly parsed.
+// Example: `%load "path with spaces/file.sysml"` -> ["%load", "path with spaces/file.sysml"]
+func parseArgs(line string) []string {
+	var args []string
+	var current strings.Builder
+	inQuote := false
+	escaped := false
+
+	for _, r := range line {
+		switch {
+		case escaped:
+			// Previous char was backslash - add this char literally
+			current.WriteRune(r)
+			escaped = false
+		case r == '\\':
+			// Escape next character
+			escaped = true
+		case r == '"':
+			// Toggle quote mode
+			inQuote = !inQuote
+		case (r == ' ' || r == '\t') && !inQuote:
+			// Whitespace outside quotes - end current arg
+			if current.Len() > 0 {
+				args = append(args, current.String())
+				current.Reset()
+			}
+		default:
+			// Regular character - add to current arg
+			current.WriteRune(r)
+		}
+	}
+
+	// Add final argument if any
+	if current.Len() > 0 {
+		args = append(args, current.String())
+	}
+
+	return args
+}
+
 var helpText = []string{
 	"%help               show this help",
 	"%list               list current session declarations",
@@ -60,7 +101,7 @@ func (s *Session) RunMeta(line string) (out []string, quit bool, err error) {
 }
 
 func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
-	fields := strings.Fields(strings.TrimSpace(line))
+	fields := parseArgs(strings.TrimSpace(line))
 	if len(fields) == 0 {
 		return nil, false, nil
 	}
