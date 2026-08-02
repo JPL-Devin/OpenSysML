@@ -490,6 +490,7 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 	for p.atKeyword("in") {
 		p.advance() // in
 		var paramType *ast.QualifiedName
+		var paramMult *ast.Multiplicity
 		var paramValue ast.Node
 		var isRef bool
 		
@@ -503,12 +504,23 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 			if p.at(lexer.Colon) {
 				p.advance() // :
 				paramType = p.parseQualifiedName()
+				// Parse optional multiplicity after type
+				if p.at(lexer.LBracket) {
+					paramMult = p.parseMultiplicity()
+				}
 			}
 			if p.at(lexer.Eq) {
 				p.advance() // =
 				paramValue = p.ParseExpression()
 			}
-			b.Params = append(b.Params, ast.BodyParam{Name: seg.Text, Type: paramType, Value: paramValue, IsReference: isRef, Span: seg.Span})
+			b.Params = append(b.Params, ast.BodyParam{
+				Name:         seg.Text,
+				Type:         paramType,
+				Multiplicity: paramMult,
+				Value:        paramValue,
+				IsReference:  isRef,
+				Span:         seg.Span,
+			})
 		}
 		p.expect(lexer.Semicolon, "expected ';' after body parameter")
 	}
