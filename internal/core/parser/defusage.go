@@ -967,14 +967,24 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			hasBody = false
 		} else if p.at(lexer.LBrace) {
 			// Check if this is a typed predicate with input/return parameters
-			// Peek ahead past the '{' to see if it starts with 'in' or 'return'
-			firstTok := p.peekN(1)
-			if firstTok.KeywordID == "in" || firstTok.KeywordID == "return" {
+			// Peek ahead past the '{' and any 'doc' keywords to see if body has 'in' or 'return'
+			hasCalcBody := false
+			for i := 1; i < 10; i++ {  // Look ahead up to 10 tokens
+				tok := p.peekN(i)
+				if tok.KeywordID == "doc" {
+					continue  // Skip doc keywords
+				}
+				if tok.KeywordID == "in" || tok.KeywordID == "return" {
+					hasCalcBody = true
+				}
+				break  // Stop at first non-doc keyword
+			}
+			
+			p.advance() // {
+			if hasCalcBody {
 				// Parse as calc body with structured parameters
-				p.advance() // {
 				members = p.parseCalcBody()
 			} else {
-				p.advance() // {
 				members = p.parseConstraintBody()
 			}
 			hasBody = true
