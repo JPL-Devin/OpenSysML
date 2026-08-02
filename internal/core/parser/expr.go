@@ -343,6 +343,17 @@ func (p *Parser) parseBase() ast.Node {
 	case p.at(lexer.LBrace):
 		return setBase(p.parseBodyExpr(start))
 
+	case p.at(lexer.At):
+		// Metadata selector: @MetadataType
+		// Used in filter expressions: filter @Safety;
+		p.advance() // consume '@'
+		metaType := p.parseQualifiedName()
+		fr := &ast.FeatureReference{Name: metaType}
+		fr.NodeSpan = p.spanFrom(start)
+		// Wrap in unary op to preserve @ semantics?
+		// For now, treat as feature reference to metadata type
+		return setBase(fr)
+
 	case p.atName(), p.at(lexer.Keyword):
 		// Parse qualified name or keyword-as-name
 		var qn *ast.QualifiedName

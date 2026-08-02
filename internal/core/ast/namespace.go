@@ -58,6 +58,7 @@ type RootNamespace struct {
 type PrefixMetadata struct {
 	NodeBase
 	Type *QualifiedName
+	Body []Node // optional body with property initializers: @Meta{prop = value;}
 }
 
 // Namespace is `namespace <id> { ... }`.

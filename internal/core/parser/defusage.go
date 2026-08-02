@@ -1200,6 +1200,25 @@ func (p *Parser) parseBodyMember() ast.Node {
 	trivia := p.takeTrivia()
 	vis := p.parseVisibility()
 
+	// Check for metadata annotation: @Type{props}
+	// This creates a metadata usage (annotation statement)
+	if p.at(lexer.At) {
+		metadata := p.parseMetadataAnnotations()
+		if len(metadata) > 0 {
+			// Wrap first metadata in membership
+			// (Multiple annotations would need different representation)
+			pm := metadata[0]
+			pm.SetLeadingTrivia(trivia)
+			m := &ast.Membership{
+				Visibility: vis,
+				Member:     pm,
+			}
+			m.NodeSpan = p.spanFrom(start)
+			m.SetLeadingTrivia(trivia)
+			return m
+		}
+	}
+
 	if p.atKeyword("import") {
 		imp := p.parseImport(start, vis)
 		imp.SetLeadingTrivia(trivia)
@@ -2577,4 +2596,52 @@ func (p *Parser) parseMultiplicityBound() ast.Node {
 		return inf
 	}
 	return p.parseBinary(precAdditive)
+}
+
+// parseMetadataAnnotations parses optional metadata annotations: @Type{props}
+// Can appear multiple times. Returns slice of PrefixMetadata nodes.
+func (p *Parser) parseMetadataAnnotations() []*ast.PrefixMetadata {
+	var metadata []*ast.PrefixMetadata
+	
+	for p.at(lexer.At) {
+		start := p.peek().Span.Offset
+		p.advance() // consume '@'
+		
+		// Parse metadata type
+		metaType := p.parseQualifiedName()
+		if metaType == nil {
+			p.error(p.peek().Span, "expected metadata type after '@'")
+			break
+		}
+		
+		pm := &ast.PrefixMetadata{
+			Type: metaType,
+		}
+		
+		// Optional body: {prop = value; ...}
+		if p.at(lexer.LBrace) {
+			p.advance() // consume '{'
+			// Parse body as generic members (assignments/nested declarations)
+			var body []ast.Node
+			for !p.at(lexer.RBrace) && !p.atEOF() {
+				// Parse as body member or expression statement
+				m := p.parseBodyMember()
+				if m != nil {
+					body = append(body, m)
+				} else {
+					// Try expression + semicolon
+					expr := p.ParseExpression()
+					p.accept2(lexer.Semicolon)
+					body = append(body, expr)
+				}
+			}
+			p.expect(lexer.RBrace, "expected '}' after metadata body")
+			pm.Body = body
+		}
+		
+		pm.NodeSpan = p.spanFrom(start)
+		metadata = append(metadata, pm)
+	}
+	
+	return metadata
 }
