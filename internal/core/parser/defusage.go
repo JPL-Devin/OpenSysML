@@ -1307,6 +1307,56 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return m
 	}
 	
+	// Check for inline flow statement: flow [from] X to Y;
+	// This is anonymous flow usage
+	// Distinguish from flow declarations: flow : Type ... or flow name : Type ...
+	// If next token after 'flow' is identifier (not colon), it's inline flow
+	if p.atKeyword("flow") {
+		// Lookahead: flow <id/featureChain> to ... = inline flow
+		//            flow : Type ... = flow usage declaration
+		//            flow <name> : Type ... = flow usage declaration
+		nextTok := p.peekN(1)
+		isInlineFlow := false
+		if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.Keyword {
+			// Could be flow name or flow source
+			// Check if followed by 'to' or 'from' (inline) vs colon/relationship (declaration)
+			tok2 := p.peekN(2)
+			if tok2.Kind == lexer.Keyword && (tok2.KeywordID == "to" || tok2.KeywordID == "from") {
+				isInlineFlow = true
+			} else if tok2.Kind == lexer.Dot || tok2.Kind == lexer.ColonColon {
+				// Feature chain - likely inline flow
+				isInlineFlow = true
+			}
+		}
+		
+		if isInlineFlow {
+			p.advance() // consume 'flow'
+			
+			u := &ast.Usage{
+				Kind: ast.UsageFlow,
+			}
+			u.NodeBase.NodeSpan = p.spanFrom(start)
+			u.SetLeadingTrivia(trivia)
+			
+			// Check for optional 'from' keyword
+			optionalFrom := p.acceptKeyword("from")
+			_ = optionalFrom // both forms valid
+			
+			// Parse flow ends: source to target
+			p.parseTierBEnds(u, ast.UsageFlow)
+			
+			p.expect(lexer.Semicolon, "expected ';' after flow statement")
+			
+			m := &ast.Membership{
+				Visibility: vis,
+				Member:     u,
+			}
+			m.NodeBase.NodeSpan = u.Span()
+			m.SetLeadingTrivia(trivia)
+			return m
+		}
+	}
+	
 	// Check for anonymous feature pattern: [modifiers] [name] : Type OR [modifiers] :>> relationships
 	// Examples: private thisClock : Clock :>> self; or ref stateSpace: StateSpace; or ref :>> x
 	// This handles features with visibility but no usage kind keyword
