@@ -3,6 +3,7 @@ package resolve
 import (
 	"testing"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -112,5 +113,84 @@ func TestResolve_FeatureChainExpr(t *testing.T) {
 				t.Errorf("wantErr=%v, got diagnostics: %v", tt.wantErr, r.Diagnostics)
 			}
 		})
+	}
+}
+
+func TestResolve_QualifiedNamePartsStoreSymbols(t *testing.T) {
+	p := parser.New(source.New("test.sysml", []byte(`
+		package A {
+			package B {
+				attribute x = 1;
+			}
+		}
+		package C {
+			attribute test : A::B;
+		}
+	`)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	
+	idx := symbols.NewIndexFromDoc("test.sysml", root)
+	r := New(idx)
+	r.ResolveDocument("test.sysml", root)
+	
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("resolve diagnostics: %v", r.Diagnostics)
+	}
+	
+	// Find C::test usage and verify its typing relationship's QN parts have symbols
+	cScope := idx.DocumentRoot("test.sysml")
+	cSym, ok := cScope.LookupLocal("C")
+	if !ok {
+		t.Fatal("package C not found")
+	}
+	testSym, ok := cSym.Scope.LookupLocal("test")
+	if !ok {
+		t.Fatal("C::test not found")
+	}
+	
+	usage := testSym.Decl.(*ast.Usage)
+	if len(usage.Relationships) == 0 {
+		t.Fatal("test has no relationships")
+	}
+	
+	rel := usage.Relationships[0]
+	if rel.Kind != ast.RelTyping {
+		t.Fatalf("expected typing relationship, got %v", rel.Kind)
+	}
+	
+	var qn *ast.QualifiedName
+	switch target := rel.Target.(type) {
+	case *ast.FeatureReference:
+		qn = target.Name
+	case *ast.QualifiedName:
+		qn = target
+	default:
+		t.Fatalf("unexpected target type: %T", rel.Target)
+	}
+	
+	if len(qn.Parts) != 2 {
+		t.Fatalf("expected 2 parts in A::B, got %d", len(qn.Parts))
+	}
+	
+	// Verify each part has resolved symbol
+	if qn.Parts[0].Sym == nil {
+		t.Error("Part 0 (A) symbol not set")
+	}
+	if qn.Parts[1].Sym == nil {
+		t.Error("Part 1 (B) symbol not set")
+	}
+	
+	// Verify symbols are correct
+	aSym := qn.Parts[0].Sym.(*symbols.Symbol)
+	if aSym.Name != "A" {
+		t.Errorf("Part 0 symbol name = %q, want A", aSym.Name)
+	}
+	
+	bSym := qn.Parts[1].Sym.(*symbols.Symbol)
+	if bSym.Name != "B" {
+		t.Errorf("Part 1 symbol name = %q, want B", bSym.Name)
 	}
 }
