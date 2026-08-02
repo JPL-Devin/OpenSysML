@@ -53,6 +53,12 @@ var helpText = []string{
 
 // runMeta executes a meta command line. Returns lines to print, whether to quit,
 // and an error only for unrecoverable I/O (unknown commands print guidance).
+// RunMeta executes a meta-command (e.g., %eval, %load) and returns the output lines,
+// a quit flag, and any error encountered.
+func (s *Session) RunMeta(line string) (out []string, quit bool, err error) {
+	return s.runMeta(line)
+}
+
 func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	fields := strings.Fields(strings.TrimSpace(line))
 	if len(fields) == 0 {
