@@ -162,3 +162,62 @@ func TestBuiltin_ControlSelect_NonBooleanPredicate(t *testing.T) {
 		t.Errorf("expected predicate type error, got: %v", err)
 	}
 }
+
+func TestBuiltin_Track2Integration(t *testing.T) {
+	tests := []struct {
+		name     string
+		src      string
+		expected bool
+	}{
+		{
+			name: "includes + select",
+			src: `attribute test = SequenceFunctions::includes(
+				ControlFunctions::select((1, 2, 3, 4, 5), { in x; x > 2 }),
+				4
+			);`,
+			expected: true,
+		},
+		{
+			name: "collect + includes",
+			src: `attribute test = SequenceFunctions::includes(
+				ControlFunctions::collect((1, 2, 3), { in x; x * 2 }),
+				6
+			);`,
+			expected: true,
+		},
+		{
+			name: "select + collect + includes",
+			src: `attribute test = SequenceFunctions::includes(
+				ControlFunctions::collect(
+					ControlFunctions::select((1, 2, 3, 4, 5), { in x; x > 2 }),
+					{ in x; x * 10 }
+				),
+				30
+			);`,
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model, resolver, root := parseAndBuildModel(t, tt.src)
+			ctx := NewContext(model, resolver, 1000)
+
+			testSym := resolveSymbol(t, root, "test")
+			testDecl := testSym.Decl.(*ast.Usage)
+
+			result, err := ctx.Eval(testDecl.Value)
+			if err != nil {
+				t.Fatalf("Eval() error: %v", err)
+			}
+
+			if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
+				t.Fatalf("expected bool, got %v", result)
+			}
+
+			if result.Const.Bool != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result.Const.Bool)
+			}
+		})
+	}
+}
