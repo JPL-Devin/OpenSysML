@@ -188,3 +188,10 @@ type MetadataAccessExpr struct {
 	NodeBase
 	Ref *QualifiedName
 }
+
+// CastExpr represents a type cast: (as Type) or (as Type[mult])
+type CastExpr struct {
+	NodeBase
+	TargetType   *QualifiedName
+	Multiplicity *Multiplicity
+}

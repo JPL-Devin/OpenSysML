@@ -397,6 +397,25 @@ func (p *Parser) parseBase() ast.Node {
 // parseParenOrSequence parses `( )`, `( expr )`, or `( expr, expr, ... )`.
 func (p *Parser) parseParenOrSequence(start int) ast.Node {
 	p.advance() // (
+	
+	// Check for cast expression: (as Type) or (as Type[mult])
+	if p.atKeyword("as") {
+		p.advance() // consume 'as'
+		targetType := p.parseQualifiedName()
+		var mult *ast.Multiplicity
+		if p.at(lexer.LBracket) {
+			mult = p.parseMultiplicity()
+		}
+		p.expect(lexer.RParen, "expected ')' after cast type")
+		cast := &ast.CastExpr{
+			TargetType:   targetType,
+			Multiplicity: mult,
+		}
+		cast.NodeSpan = p.spanFrom(start)
+		return cast
+	}
+	
+	// Regular parenthesized expression or sequence
 	var elems []ast.Node
 	if !p.at(lexer.RParen) {
 		elems = append(elems, p.ParseExpression())
