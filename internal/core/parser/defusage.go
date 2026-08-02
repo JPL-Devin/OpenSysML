@@ -962,17 +962,17 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	case ast.UsageConstraint, ast.UsagePredicate:
 		// Constraint bodies: { assert/assume expr; ... }
 		// Bool and predicate usages also use constraint-style bodies with expressions
-		// Special case: if body starts with 'in' keyword, parse as body expression (constraint with input parameters)
+		// Special case: if body starts with 'in' or 'return' keyword, parse as calc body (structured parameters)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if p.at(lexer.LBrace) {
-			start := p.peek().Span.Offset
-			// Check if this is a typed constraint with input parameters
-			// Peek ahead past the '{' to see if it starts with 'in'
-			if p.peekN(1).KeywordID == "in" {
-				// Parse as body expression: { in x = expr; in y = expr; result }
-				bodyExpr := p.parseBodyExpr(start)
-				members = []ast.Node{bodyExpr}
+			// Check if this is a typed predicate with input/return parameters
+			// Peek ahead past the '{' to see if it starts with 'in' or 'return'
+			firstTok := p.peekN(1)
+			if firstTok.KeywordID == "in" || firstTok.KeywordID == "return" {
+				// Parse as calc body with structured parameters
+				p.advance() // {
+				members = p.parseCalcBody()
 			} else {
 				p.advance() // {
 				members = p.parseConstraintBody()
