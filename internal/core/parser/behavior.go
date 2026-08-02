@@ -888,10 +888,29 @@ func (p *Parser) parseRequirementMember() ast.Node {
 	return en
 }
 
-// parseSubjectMember parses: subject <name> : <Type>;
+// parseSubjectMember parses: subject <name> : <Type>; OR subject = <expr>;
 func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// 'subject' already consumed
 	
+	// Check for binding pattern: subject = <expr>;
+	if p.at(lexer.Eq) {
+		p.advance() // consume '='
+		
+		// Parse value expression
+		value := p.ParseExpression()
+		
+		// Expect semicolon
+		p.expect(lexer.Semicolon, "expected ';' after subject binding")
+		
+		node := &ast.SubjectMember{
+			Name:        "", // Empty name means binding inherited subject
+			BindingExpr: value,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Otherwise expect typed declaration: subject <name> : <Type>;
 	// Expect identifier
 	if !p.at(lexer.Identifier) {
 		p.error(p.peek().Span, "expected identifier after 'subject'")
@@ -957,6 +976,43 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 func (p *Parser) parseAssumeMember(start int) ast.Node {
 	// 'assume' already consumed
 	
+	// Check for 'assume constraint { body }' pattern
+	if p.atKeyword("constraint") {
+		p.advance() // consume 'constraint'
+		
+		// Parse constraint body (expect '{')
+		if !p.at(lexer.LBrace) {
+			p.error(p.peek().Span, "expected '{' after 'assume constraint'")
+			en := &ast.ErrorNode{Message: "expected '{' after assume constraint"}
+			en.NodeSpan = p.spanFrom(start)
+			return en
+		}
+		p.advance() // consume '{'
+		
+		// Parse constraint body members (expressions, doc, etc.)
+		var expr ast.Node
+		for !p.at(lexer.RBrace) && !p.atEOF() {
+			// Allow doc comments
+			if p.atKeyword("doc") {
+				p.parseDocumentation(p.peek().Span.Offset)
+				continue
+			}
+			// Parse constraint expression (store last one)
+			constraintMember := p.parseConstraintMember()
+			if c, ok := constraintMember.(*ast.ConstraintMember); ok && c.Expression != nil {
+				expr = c.Expression
+			}
+		}
+		p.expect(lexer.RBrace, "expected '}' after constraint body")
+		
+		node := &ast.AssumeMember{
+			Expression: expr,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Otherwise parse as simple expression
 	expr := p.ParseExpression()
 	
 	p.expect(lexer.Semicolon, "expected ';' after assume expression")
@@ -971,6 +1027,42 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 // parseRequireMember parses: require <expr>;
 func (p *Parser) parseRequireMember(start int) ast.Node {
 	// 'require' already consumed
+	
+	// Check for 'require constraint { body }' pattern
+	if p.atKeyword("constraint") {
+		p.advance() // consume 'constraint'
+		
+		// Parse constraint body (expect '{')
+		if !p.at(lexer.LBrace) {
+			p.error(p.peek().Span, "expected '{' after 'require constraint'")
+			en := &ast.ErrorNode{Message: "expected '{' after require constraint"}
+			en.NodeSpan = p.spanFrom(start)
+			return en
+		}
+		p.advance() // consume '{'
+		
+		// Parse constraint body members (expressions, doc, etc.)
+		var expr ast.Node
+		for !p.at(lexer.RBrace) && !p.atEOF() {
+			// Allow doc comments
+			if p.atKeyword("doc") {
+				p.parseDocumentation(p.peek().Span.Offset)
+				continue
+			}
+			// Parse constraint expression (store last one)
+			constraintMember := p.parseConstraintMember()
+			if c, ok := constraintMember.(*ast.ConstraintMember); ok && c.Expression != nil {
+				expr = c.Expression
+			}
+		}
+		p.expect(lexer.RBrace, "expected '}' after constraint body")
+		
+		node := &ast.RequireMember{
+			Expression: expr,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
 	
 	// Check for 'require name { body }' pattern
 	// If next token is name and peek+1 is '{', parse as named requirement with body

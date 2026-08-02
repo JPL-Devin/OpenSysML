@@ -10,17 +10,18 @@ import (
 
 // formatVersion is the on-disk index record format version. Bump it whenever
 // the persisted shape changes; a mismatch invalidates all cached records.
-const formatVersion = 1
+const formatVersion = 2
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.
 // It deliberately excludes the AST-backed Decl and the Scope/OwnerScope
 // pointers, persisting only the fields the resolver needs to answer
 // qualified-name lookups.
 type symRecord struct {
-	FQN    string
-	Kind   symbols.SymbolKind
-	Span   source.Span
-	Supers []string // raw target text of specializes/subsets/redefines edges
+	FQN            string
+	Kind           symbols.SymbolKind
+	Span           source.Span
+	Supers         []string // raw target text of specializes/subsets/redefines edges
+	WildcardImports []string // for packages: FQNs of wildcard-imported packages
 }
 
 // IndexRecord is the serializable snapshot of one library document's symbols.
@@ -50,10 +51,11 @@ func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord) {
 			fqn = prefix + "::" + sym.Name
 		}
 		rec.Symbols = append(rec.Symbols, symRecord{
-			FQN:    fqn,
-			Kind:   sym.Kind,
-			Span:   sym.DeclSpan,
-			Supers: supersOf(sym.Decl),
+			FQN:             fqn,
+			Kind:            sym.Kind,
+			Span:            sym.DeclSpan,
+			Supers:          supersOf(sym.Decl),
+			WildcardImports: wildcardImportsOf(sym.Decl),
 		})
 		if sym.Scope != nil {
 			collectScope(sym.Scope, fqn, rec)
@@ -108,4 +110,28 @@ func qualifiedNameText(qn *ast.QualifiedName) string {
 		b.WriteString(seg.Text)
 	}
 	return b.String()
+}
+
+// wildcardImportsOf extracts FQNs of wildcard-imported packages from a Package/Namespace.
+// Returns nil for non-namespace nodes.
+func wildcardImportsOf(decl ast.Node) []string {
+	var members []ast.Node
+	switch d := decl.(type) {
+	case *ast.Package:
+		members = d.Members
+	case *ast.Namespace:
+		members = d.Members
+	default:
+		return nil
+	}
+	
+	var out []string
+	for _, m := range members {
+		imp, ok := m.(*ast.Import)
+		if !ok || imp.Kind != ast.ImportNamespace || imp.Imported == nil {
+			continue
+		}
+		out = append(out, qualifiedNameText(imp.Imported))
+	}
+	return out
 }
