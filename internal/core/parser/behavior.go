@@ -1602,7 +1602,36 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 	}
 	
 	// Parse signal type reference (use relaxed parsing to allow keywords as names)
-	signalType := p.parseQualifiedNameRelaxed()
+	// Could be event type OR temporal expression (at <time>)
+	var signalType ast.Node
+	var isTemporalTransition bool
+	if p.atKeyword("at") {
+		// Temporal transition: accept at <timeExpr> then <state>
+		p.advance() // consume 'at'
+		signalType = p.ParseExpression()
+		isTemporalTransition = true
+	} else {
+		// Event transition: accept <signal> then <state>
+		signalType = p.parseQualifiedNameRelaxed()
+	}
+	_ = isTemporalTransition // might be useful for AST differentiation
+	
+	// Optional guard condition: if <expr>
+	var guardExpr ast.Node
+	if p.acceptKeyword("if") {
+		guardExpr = p.ParseExpression()
+	}
+	
+	// Optional effect action: do <action>
+	var effectAction ast.Node
+	if p.acceptKeyword("do") {
+		// Parse effect action - could be:
+		// 1. send statement: do send <message> to <target>
+		// 2. action invocation: do actionName(args)
+		// 3. assignment: do x = expr
+		// Use parseActionMember to handle all behavioral statements
+		effectAction = p.parseActionMember()
+	}
 	
 	// Expect 'then' keyword
 	if !p.acceptKeyword("then") {
@@ -1628,6 +1657,16 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 			{Reference: targetState}, // target
 		},
 	}
+	
+	// Store guard and effect in Members (could extend AST for proper transition fields)
+	if guardExpr != nil {
+		// Wrap guard in membership for now
+		transition.Members = append(transition.Members, guardExpr)
+	}
+	if effectAction != nil {
+		transition.Members = append(transition.Members, effectAction)
+	}
+	
 	transition.NodeSpan = p.spanFrom(start)
 	return transition
 }
@@ -1887,7 +1926,10 @@ func (p *Parser) parseSendStatement(tok lexer.Token) ast.Node {
 	// Parse target expression
 	target := p.ParseExpression()
 	
-	p.expect(lexer.Semicolon, "expected ';' after send statement")
+	// Semicolon is optional if followed by transition keyword (then/if/do)
+	if !p.atKeyword("then") && !p.atKeyword("if") && !p.atKeyword("do") {
+		p.expect(lexer.Semicolon, "expected ';' after send statement")
+	}
 	
 	node := &ast.SendStatement{
 		Message: message,
@@ -1904,7 +1946,10 @@ func (p *Parser) parseTerminateStatement(tok lexer.Token) ast.Node {
 	// Parse target expression
 	target := p.ParseExpression()
 	
-	p.expect(lexer.Semicolon, "expected ';' after terminate statement")
+	// Semicolon is optional if followed by transition keyword (then/if/do)
+	if !p.atKeyword("then") && !p.atKeyword("if") && !p.atKeyword("do") {
+		p.expect(lexer.Semicolon, "expected ';' after terminate statement")
+	}
 	
 	node := &ast.TerminateStatement{
 		Target: target,
