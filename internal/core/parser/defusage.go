@@ -106,6 +106,8 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"verify":       ast.UsageSatisfy, // verify is alias for satisfy
 	"subject":      ast.UsageSubject,
 	"objective":    ast.UsageObjective,
+	"stakeholder":  ast.UsageAttribute, // stakeholder in viewpoints/concerns
+	"frame":        ast.UsageAttribute, // frame in viewpoints/views
 	"case":         ast.UsageCase,
 	"analysis":     ast.UsageAnalysisCase,
 	"verification": ast.UsageVerificationCase,
@@ -355,8 +357,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require, perform, event) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" {
+	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require, perform, event, stakeholder, frame) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		
@@ -2178,7 +2180,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Also exclude direction modifiers (in/out - they're modifiers, not names)
 	isUsageOnlyKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
-		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "interaction")
+		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "interaction" ||
+		p.peek().KeywordID == "stakeholder" || p.peek().KeywordID == "frame")
 	isDirectionKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "in" || p.peek().KeywordID == "out")
 	if !isUsageOnlyKw && !isDirectionKw && (p.atName() || p.at(lexer.Keyword)) {
 		next := p.peekN(1)
