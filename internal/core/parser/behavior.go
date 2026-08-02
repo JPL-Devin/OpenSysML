@@ -18,10 +18,30 @@ func (p *Parser) parseCalcBody() []ast.Node {
 		if p.isResultKeyword() {
 			members = append(members, p.parseResultMember())
 		} else {
-			// Parse as generic body member (parameters, etc.)
-			m := p.parseBodyMember()
-			if m != nil {
-				members = append(members, m)
+			// Try parsing as body member (parameters, doc, import, etc.)
+			// Body member expects: visibility + declaration keyword, or special patterns
+			// If we see expression-start that's NOT a declaration, parse as implicit return expression
+			// Check if current position looks like expression start (name, literal, if, etc.)
+			// but not a declaration pattern (name followed by colon/semicolon/keyword/bracket)
+			peek1 := p.peek()
+			peek2 := p.peekN(1)
+			isNameDecl := (peek1.Kind == lexer.Identifier || peek1.Kind == lexer.UnrestrictedName) &&
+				(peek2.Kind == lexer.Colon || peek2.Kind == lexer.Semicolon || 
+				 peek2.Kind == lexer.Keyword || peek2.Kind == lexer.LBracket)
+			
+			// If expression-start but NOT name-declaration pattern, parse as implicit return
+			if p.atExprStart() && !isNameDecl {
+				// Parse as implicit return expression
+				expr := p.ParseExpression()
+				if expr != nil {
+					members = append(members, expr)
+				}
+			} else {
+				// Parse as generic body member (parameters, etc.)
+				m := p.parseBodyMember()
+				if m != nil {
+					members = append(members, m)
+				}
 			}
 		}
 		
@@ -52,6 +72,11 @@ func (p *Parser) parseActionBody() []ast.Node {
 func (p *Parser) parseActionMember() ast.Node {
 	start := p.peek().Span.Offset
 	
+	// Handle doc keyword specially (parseDocumentation consumes it)
+	if p.atKeyword("doc") {
+		return p.parseDocumentation(start)
+	}
+	
 	// Check for keyword dispatch
 	if tok, ok := p.accept(lexer.Keyword); ok {
 		kw := tok.KeywordID
@@ -72,6 +97,14 @@ func (p *Parser) parseActionMember() ast.Node {
 			return p.parseActionExecutionNode(tok)
 		case "then":
 			return p.parseSuccessionEdge(tok)
+		case "assign":
+			return p.parseAssignmentAction(tok)
+		case "perform":
+			return p.parsePerformAction(tok)
+		case "while":
+			return p.parseWhileLoopAction(tok)
+		case "if":
+			return p.parseIfAction(tok)
 		default:
 			// Unknown keyword, return ErrorNode
 			p.error(tok.Span, "unknown action keyword: "+kw)
@@ -317,10 +350,23 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 	return node
 }
 
-// parseSuccessionEdge parses: then source target [if guard] ;
+// parseSuccessionEdge parses: 
+// 1. then source target [if guard] ; (control flow edge between named nodes)
+// 2. then statement (inline statement succession)
 func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	
+	// Check if this is inline statement succession (then followed by behavioral keyword)
+	// Pattern: then assign x := 1; OR then perform foo;
+	if p.at(lexer.Keyword) {
+		kw := p.peek().KeywordID
+		if kw == "assign" || kw == "perform" || kw == "while" || kw == "if" || kw == "action" {
+			// This is inline succession: parse following statement
+			return p.parseActionMember()
+		}
+	}
+	
+	// Otherwise, parse as named edge: then source target;
 	source := p.parseQualifiedName()
 	target := p.parseQualifiedName()
 	
@@ -350,6 +396,133 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 	return node
 }
 
+// parseAssignmentAction parses: assign target := value;
+func (p *Parser) parseAssignmentAction(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse target (feature reference or qualified name)
+	target := p.ParseExpression()
+	
+	// Expect ':=' operator
+	if !p.at(lexer.ColonEq) {
+		p.error(p.peek().Span, "expected ':=' after assignment target")
+		return &ast.ErrorNode{
+			NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
+			Message:  "expected ':=' after assignment target",
+		}
+	}
+	p.advance() // consume ':='
+	
+	// Parse value expression
+	value := p.ParseExpression()
+	
+	p.expect(lexer.Semicolon, "expected ';' after assignment")
+	
+	node := &ast.AssignmentActionNode{
+		Target: target,
+		Value:  value,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parsePerformAction parses: perform action;
+func (p *Parser) parsePerformAction(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse action reference (qualified name or invocation)
+	actionRef := p.ParseExpression()
+	
+	p.expect(lexer.Semicolon, "expected ';' after perform statement")
+	
+	node := &ast.PerformActionNode{
+		ActionRef: actionRef,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseWhileLoopAction parses: while condition { statements }
+func (p *Parser) parseWhileLoopAction(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse condition expression
+	condition := p.ParseExpression()
+	
+	// Expect '{'
+	if !p.at(lexer.LBrace) {
+		p.error(p.peek().Span, "expected '{' after while condition")
+		return &ast.ErrorNode{
+			NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
+			Message:  "expected '{' after while condition",
+		}
+	}
+	p.advance() // consume '{'
+	
+	// Parse body statements
+	var body []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		body = append(body, p.parseActionMember())
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after while body")
+	
+	node := &ast.WhileLoopActionNode{
+		Condition: condition,
+		Body:      body,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseIfAction parses: if condition { thenBody } [else { elseBody }]
+func (p *Parser) parseIfAction(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse condition expression
+	condition := p.ParseExpression()
+	
+	// Expect '{'
+	if !p.at(lexer.LBrace) {
+		p.error(p.peek().Span, "expected '{' after if condition")
+		return &ast.ErrorNode{
+			NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
+			Message:  "expected '{' after if condition",
+		}
+	}
+	p.advance() // consume '{'
+	
+	// Parse then body statements
+	var thenBody []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		thenBody = append(thenBody, p.parseActionMember())
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after if body")
+	
+	// Check for optional 'else' clause
+	var elseBody []ast.Node
+	if p.acceptKeyword("else") {
+		if !p.at(lexer.LBrace) {
+			p.error(p.peek().Span, "expected '{' after else")
+		} else {
+			p.advance() // consume '{'
+			for !p.at(lexer.RBrace) && !p.atEOF() {
+				elseBody = append(elseBody, p.parseActionMember())
+			}
+			p.expect(lexer.RBrace, "expected '}' after else body")
+		}
+	}
+	
+	node := &ast.IfActionNode{
+		Condition: condition,
+		ThenBody:  thenBody,
+		ElseBody:  elseBody,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
 // Phase C1: Calculation and Constraint Bodies
 
 // parseResultBody parses the body of a calculation usage.
@@ -366,7 +539,9 @@ func (p *Parser) parseResultBody() []ast.Node {
 	return members
 }
 
-// parseResultMember parses one result member: return <expr>;
+// parseResultMember parses one result member: 
+//   return <expr>;         -- computed result
+//   return : Type[mult];   -- result parameter (anonymous, type-only)
 func (p *Parser) parseResultMember() ast.Node {
 	start := p.peek().Span.Offset
 	
@@ -381,7 +556,204 @@ func (p *Parser) parseResultMember() ast.Node {
 		return en
 	}
 	
-	// Parse expression
+	// Parse optional usage kind keyword (e.g., 'attribute')
+	// Default to UsageAttribute if not specified
+	usageKind := ast.UsageAttribute
+	if p.at(lexer.Keyword) {
+		if kind, ok := usageKindKeywords[p.peek().KeywordID]; ok {
+			usageKind = kind
+			p.advance() // consume kind keyword
+		}
+	}
+	
+	// Parse optional feature modifiers after kind keyword
+	mods := p.parseFeatureModifiers()
+	
+	// Check for named or anonymous result parameter syntax
+	// Pattern 1: return [modifiers] name: Type[mult];  (named result parameter)
+	// Pattern 2: return [modifiers] : Type[mult];      (anonymous result parameter)
+	// Pattern 3: return expr;              (computed result)
+	// Pattern 4: return name = expr;       (computed result with binding)
+	// Pattern 5: return [modifiers] name;  (named result parameter, no type)
+	// Pattern 6: return [modifiers] name : Type { body } (with body)
+	// Use lookahead to distinguish Pattern 1 from Pattern 4
+	if p.at(lexer.Colon) || (p.atName() && p.peekN(1).Kind == lexer.Colon) {
+		// Parse as result parameter (named or anonymous usage with typing)
+		u := &ast.Usage{
+			Kind:        usageKind,
+			Direction:   ast.DirOut,
+			IsAbstract:  mods.isAbstract,
+			IsReference: mods.isReference,
+			IsEnd:       mods.isEnd,
+			IsConstant:  mods.isConstant,
+			IsComposite: mods.isComposite,
+			IsDerived:   mods.isDerived,
+			IsOrdered:   mods.isOrdered,
+			IsNonunique: mods.isNonunique,
+		}
+		
+		// Check if named (identifier before colon)
+		if p.atName() {
+			u.Ident = p.parseIdentification()
+		}
+		
+		// Parse typing relationship ': Type'
+		if !p.at(lexer.Colon) {
+			p.error(p.peek().Span, "expected ':' after result parameter name")
+		} else {
+			p.advance() // consume ':'
+			
+			// Parse type name directly (QualifiedName)
+			qn := p.parseQualifiedName()
+			if qn != nil {
+				rel := &ast.Relationship{Kind: ast.RelTyping, Target: qn}
+				rel.NodeSpan = qn.NodeSpan
+				u.Relationships = append(u.Relationships, rel)
+			}
+		}
+		
+		// Parse additional relationships (e.g., :>> redefines)
+		additionalRels, _ := p.parseRelationships(false)
+		u.Relationships = append(u.Relationships, additionalRels...)
+		
+		// Parse optional multiplicity '[n..m]'
+		if p.at(lexer.LBracket) {
+			u.Multiplicity = p.parseMultiplicity()
+		}
+		
+		// Parse additional feature modifiers after multiplicity (e.g., 'nonunique')
+		// Stdlib pattern: return : Type[mult] nonunique;
+		mods2 := p.parseFeatureModifiers()
+		if mods2.isAbstract {
+			u.IsAbstract = true
+		}
+		if mods2.isReference {
+			u.IsReference = true
+		}
+		if mods2.isEnd {
+			u.IsEnd = true
+		}
+		if mods2.isComposite {
+			u.IsComposite = true
+		}
+		if mods2.isDerived {
+			u.IsDerived = true
+		}
+		if mods2.isOrdered {
+			u.IsOrdered = true
+		}
+		if mods2.isNonunique {
+			u.IsNonunique = true
+		}
+		
+		// Parse additional relationships after post-modifiers (e.g., redefines result redefines values)
+		postModRels, postConj := p.parseRelationships(true)
+		u.Relationships = append(u.Relationships, postModRels...)
+		if postConj {
+			u.IsConjugated = true
+		}
+		
+		// Parse optional default value 'default expr' or '= expr'
+		if p.acceptKeyword("default") {
+			u.Value = p.ParseExpression()
+		} else if p.accept2(lexer.Eq) {
+			u.Value = p.ParseExpression()
+		}
+		
+		// Check for body or semicolon
+		if p.at(lexer.LBrace) || p.at(lexer.Semicolon) {
+			members, hasBody := p.parseDefUsageBody()
+			u.Members = members
+			u.HasBody = hasBody
+		} else {
+			// Neither body nor semicolon → error
+			p.error(p.peek().Span, "expected '{' or ';' after return parameter")
+		}
+		
+		u.NodeSpan = p.spanFrom(start)
+		return u
+	}
+	
+	// Check for Pattern 5: return [kind] [modifiers] name [mult] [body/semicolon] (no type, no value)
+	// Only match if modifiers present OR followed by multiplicity - bare 'return name;' is computed result (Pattern 3)
+	hasModifiers := mods.isAbstract || mods.isReference || mods.isEnd || mods.isConstant ||
+		mods.isComposite || mods.isDerived || mods.isReadonly || mods.isOrdered || mods.isNonunique
+	hasMultiplicity := p.peekN(1).Kind == lexer.LBracket
+	if (hasModifiers || hasMultiplicity) && p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
+		u := &ast.Usage{
+			Kind:        usageKind,
+			Direction:   ast.DirOut,
+			IsAbstract:  mods.isAbstract,
+			IsReference: mods.isReference,
+			IsEnd:       mods.isEnd,
+			IsConstant:  mods.isConstant,
+			IsComposite: mods.isComposite,
+			IsDerived:   mods.isDerived,
+			IsOrdered:   mods.isOrdered,
+			IsNonunique: mods.isNonunique,
+		}
+		u.Ident = p.parseIdentification()
+		
+		// Parse optional multiplicity '[n..m]'
+		if p.at(lexer.LBracket) {
+			u.Multiplicity = p.parseMultiplicity()
+		}
+		
+		// If followed by '=', this is Pattern 4 (value), not Pattern 5 (no value)
+		if p.at(lexer.Eq) {
+			p.advance() // consume '='
+			u.Value = p.ParseExpression()
+		}
+		
+		// Check for body or semicolon
+		if p.at(lexer.LBrace) {
+			bodyMembers, hasBody := p.parseDefUsageBody()
+			u.Members = bodyMembers
+			if !hasBody {
+				p.expect(lexer.Semicolon, "expected ';' after return parameter")
+			}
+		} else {
+			p.expect(lexer.Semicolon, "expected ';' after return parameter")
+		}
+		
+		u.NodeSpan = p.spanFrom(start)
+		return u
+	}
+	
+	// Check for Pattern 4: return [kind] [modifiers] name = expr [body] (result parameter with initializer, no type, no mult)
+	// Lookahead: name followed by '=' directly
+	if p.atName() && p.peekN(1).Kind == lexer.Eq {
+		u := &ast.Usage{
+			Kind:        usageKind,
+			Direction:   ast.DirOut,
+			IsAbstract:  mods.isAbstract,
+			IsReference: mods.isReference,
+			IsEnd:       mods.isEnd,
+			IsConstant:  mods.isConstant,
+			IsComposite: mods.isComposite,
+			IsDerived:   mods.isDerived,
+			IsOrdered:   mods.isOrdered,
+			IsNonunique: mods.isNonunique,
+		}
+		u.Ident = p.parseIdentification()
+		p.advance() // consume '='
+		u.Value = p.ParseExpression()
+		
+		// Check for optional body or semicolon
+		if p.at(lexer.LBrace) {
+			bodyMembers, hasBody := p.parseDefUsageBody()
+			u.Members = bodyMembers
+			if !hasBody {
+				p.expect(lexer.Semicolon, "expected ';' after return parameter")
+			}
+		} else {
+			p.expect(lexer.Semicolon, "expected ';' after return parameter")
+		}
+		u.NodeSpan = p.spanFrom(start)
+		return u
+	}
+	
+	// Otherwise parse as computed result (expression)
 	expr := p.ParseExpression()
 	
 	p.expect(lexer.Semicolon, "expected ';' after return expression")
@@ -400,7 +772,26 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 	var members []ast.Node
 	
 	for !p.at(lexer.RBrace) && !p.atEOF() {
-		members = append(members, p.parseConstraintMember())
+		before := p.peek().Span.Offset
+		
+		// Check for doc keyword → parse as documentation
+		if p.atKeyword("doc") {
+			members = append(members, p.parseDocumentation(before))
+		} else if p.atKeyword("assert") || p.atKeyword("assume") {
+			// Parse constraint expression (assert/assume)
+			members = append(members, p.parseConstraintMember())
+		} else if p.atDefUsageStart() {
+			// Definition/usage keyword - parse as body member
+			members = append(members, p.parseBodyMember())
+		} else {
+			// Default: parse as constraint expression (bare expression)
+			members = append(members, p.parseConstraintMember())
+		}
+		
+		// Safety check: if position hasn't advanced, force progress to avoid infinite loop
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.advance()
+		}
 	}
 	
 	p.expect(lexer.RBrace, "expected '}' after constraint body")
@@ -408,25 +799,22 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 }
 
 // parseConstraintMember parses one constraint member: assert/assume [not] <expr>;
+// Also supports bare expressions (implicit assert): inv name { expr }
 func (p *Parser) parseConstraintMember() ast.Node {
 	start := p.peek().Span.Offset
 	
 	var isAssert bool
 	var isNegated bool
 	
-	// Expect 'assert' or 'assume' keyword
+	// Check for 'assert' or 'assume' keyword
 	if p.acceptKeyword("assert") {
 		isAssert = true
 	} else if p.acceptKeyword("assume") {
 		isAssert = false
 	} else {
-		p.error(p.peek().Span, "expected 'assert' or 'assume' in constraint body")
-		en := &ast.ErrorNode{Message: "expected 'assert' or 'assume' in constraint body"}
-		if !p.atEOF() && !p.at(lexer.RBrace) {
-			p.advance() // ensure progress
-		}
-		en.NodeSpan = p.spanFrom(start)
-		return en
+		// Bare expression (implicit assert) - common in invariants
+		// Example: inv piPrecision { RealFunctions::round(pi * 1E20) == 314159265358979323846.0 }
+		isAssert = true // Default to assert for bare expressions
 	}
 	
 	// Check for optional 'not' keyword
@@ -437,7 +825,8 @@ func (p *Parser) parseConstraintMember() ast.Node {
 	// Parse expression
 	expr := p.ParseExpression()
 	
-	p.expect(lexer.Semicolon, "expected ';' after constraint expression")
+	// Semicolon is optional for constraint expressions (especially in inv bodies)
+	p.accept2(lexer.Semicolon)
 	
 	node := &ast.ConstraintMember{
 		IsAssert:   isAssert,
@@ -464,11 +853,16 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 	return members
 }
 
-// parseRequirementMember parses one requirement member: subject/assume/require/actor
+// parseRequirementMember parses one requirement member: subject/assume/require/actor/doc or general body members
 func (p *Parser) parseRequirementMember() ast.Node {
 	start := p.peek().Span.Offset
 	
-	// Check for keyword dispatch
+	// Check for doc keyword
+	if p.atKeyword("doc") {
+		return p.parseDocumentation(start)
+	}
+	
+	// Check for requirement-specific keyword dispatch
 	if p.acceptKeyword("subject") {
 		return p.parseSubjectMember(start)
 	} else if p.acceptKeyword("assume") {
@@ -479,8 +873,13 @@ func (p *Parser) parseRequirementMember() ast.Node {
 		return p.parseActorMember(start)
 	}
 	
+	// Check for general body members (nested requirements, features, etc.)
+	if p.atDefUsageStart() {
+		return p.parseBodyMember()
+	}
+	
 	// Unknown member type
-	p.error(p.peek().Span, "expected 'subject', 'assume', 'require', or 'actor' in requirement body")
+	p.error(p.peek().Span, "expected 'subject', 'assume', 'require', 'actor', or definition/usage keyword in requirement body")
 	en := &ast.ErrorNode{Message: "expected requirement member keyword"}
 	if !p.atEOF() && !p.at(lexer.RBrace) {
 		p.advance() // ensure progress
@@ -520,14 +919,38 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// Parse type
 	typeRef := p.parseQualifiedName()
 	
-	p.expect(lexer.Semicolon, "expected ';' after subject declaration")
-	
-	node := &ast.SubjectMember{
-		Name:    name,
-		TypeRef: typeRef,
+	// Parse optional multiplicity
+	var mult *ast.Multiplicity
+	if p.at(lexer.LBracket) {
+		mult = p.parseMultiplicity()
 	}
-	node.NodeSpan = p.spanFrom(start)
-	return node
+	
+	// Parse optional body or expect semicolon
+	if p.at(lexer.LBrace) {
+		// Body present - parse requirement body recursively
+		p.advance() // consume '{'
+		members := p.parseRequirementBody()
+		
+		node := &ast.SubjectMember{
+			Name:         name,
+			TypeRef:      typeRef,
+			Multiplicity: mult,
+			Body:         members,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	} else {
+		// No body - expect semicolon
+		p.expect(lexer.Semicolon, "expected ';' or '{' after subject declaration")
+		
+		node := &ast.SubjectMember{
+			Name:         name,
+			TypeRef:      typeRef,
+			Multiplicity: mult,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
 }
 
 // parseAssumeMember parses: assume <expr>;
@@ -549,6 +972,26 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 func (p *Parser) parseRequireMember(start int) ast.Node {
 	// 'require' already consumed
 	
+	// Check for 'require name { body }' pattern
+	// If next token is name and peek+1 is '{', parse as named requirement with body
+	if p.atName() && p.peekN(1).Kind == lexer.LBrace {
+		nameToken := p.peek()
+		name := p.src.Text(nameToken.Span)
+		p.advance() // consume name
+		
+		// Parse body
+		p.expect(lexer.LBrace, "expected '{' after require name")
+		members := p.parseRequirementBody()
+		
+		node := &ast.RequireMember{
+			Name:    name,
+			Body:    members,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Otherwise parse as expression: require <expr>;
 	expr := p.ParseExpression()
 	
 	p.expect(lexer.Semicolon, "expected ';' after require expression")
@@ -616,41 +1059,51 @@ func (p *Parser) parseStateBody() []ast.Node {
 	return members
 }
 
-// parseStateMember parses one state member: entry/do/exit/state/transition.
+// parseStateMember parses one state member: entry/do/exit/state/transition, or general body member.
 func (p *Parser) parseStateMember() ast.Node {
 	start := p.peek().Span.Offset
 	
-	// Must be keyword
-	if !p.at(lexer.Keyword) {
-		p.error(p.peek().Span, "expected state keyword (entry/do/exit/state/transition)")
-		en := &ast.ErrorNode{Message: "expected state keyword"}
-		if !p.atEOF() && !p.at(lexer.RBrace) {
+	// Handle doc keyword specially (parseDocumentation consumes it)
+	if p.atKeyword("doc") {
+		return p.parseDocumentation(start)
+	}
+	
+	// Check for state-specific keywords first
+	if p.at(lexer.Keyword) {
+		tok := p.peek()
+		kw := tok.KeywordID
+		
+		switch kw {
+		case "entry":
 			p.advance()
+			return p.parseEntryMember(start)
+		case "do":
+			p.advance()
+			return p.parseDoMember(start)
+		case "exit":
+			p.advance()
+			return p.parseExitMember(start)
+		case "state":
+			p.advance()
+			return p.parseSubstateMember(start)
+		case "transition":
+			// Lookahead to distinguish:
+			// 1. State machine transition: transition source to target (no name)
+			// 2. Transition usage: transition name first ... (has name + connector syntax)
+			// Check if followed by identifier + "first" keyword
+			if p.peekN(1).Kind == lexer.Identifier && p.peekN(2).Kind == lexer.Keyword && p.peekN(2).KeywordID == "first" {
+				// Transition usage - parse as general body member (declaration)
+				return p.parseBodyMember()
+			}
+			// State machine transition
+			p.advance()
+			return p.parseTransitionMember(start)
 		}
-		en.NodeSpan = p.spanFrom(start)
-		return en
 	}
 	
-	tok := p.advance()
-	kw := tok.KeywordID
-	
-	switch kw {
-	case "entry":
-		return p.parseEntryMember(start)
-	case "do":
-		return p.parseDoMember(start)
-	case "exit":
-		return p.parseExitMember(start)
-	case "state":
-		return p.parseSubstateMember(start)
-	case "transition":
-		return p.parseTransitionMember(start)
-	default:
-		p.error(tok.Span, "unknown state keyword: "+kw)
-		en := &ast.ErrorNode{Message: "unknown state keyword: " + kw}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
+	// Not a state-specific keyword - try parsing as general body member
+	// This allows succession, binding, feature declarations, etc. in state bodies
+	return p.parseBodyMember()
 }
 
 // parseEntryMember parses: entry { <actions> }

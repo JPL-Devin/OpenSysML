@@ -109,8 +109,11 @@ func TestParseConnectionBinaryEnds(t *testing.T) {
 	if len(u.ConnectorEnds) != 2 {
 		t.Fatalf("expected 2 ends, got %d", len(u.ConnectorEnds))
 	}
-	if u.ConnectorEnds[0].Parts[0].Text != "a" || u.ConnectorEnds[1].Parts[0].Text != "b" {
-		t.Fatalf("ends = %v", u.ConnectorEnds)
+	// After stdlib coverage work: parseConnectorEnd uses parseRelationshipTarget, producing QualifiedName
+	qn0, ok0 := u.ConnectorEnds[0].Target.(*ast.QualifiedName)
+	qn1, ok1 := u.ConnectorEnds[1].Target.(*ast.QualifiedName)
+	if !ok0 || !ok1 || qn0.Parts[0].Text != "a" || qn1.Parts[0].Text != "b" {
+		t.Fatalf("ends: %T / %T", u.ConnectorEnds[0].Target, u.ConnectorEnds[1].Target)
 	}
 }
 
@@ -178,8 +181,10 @@ func TestParseMalformedConnectorEndRecovers(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *ast.Usage even on malformed end, got %T", node)
 	}
+	// After stdlib coverage work: parseConnectorEnd returns nil for invalid end
+	// Parser keeps only valid ends
 	if len(u.ConnectorEnds) != 1 {
-		t.Fatalf("expected 1 partial end kept, got %d", len(u.ConnectorEnds))
+		t.Fatalf("expected 1 end (only valid end kept), got %d", len(u.ConnectorEnds))
 	}
 	if len(diags) == 0 {
 		t.Fatalf("expected a parse diagnostic for the missing end")

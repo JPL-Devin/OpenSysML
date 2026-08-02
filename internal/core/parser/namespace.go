@@ -12,9 +12,26 @@ func (p *Parser) atName() bool {
 	return k == lexer.Identifier || k == lexer.UnrestrictedName
 }
 
+// atNameOrKeyword reports whether the current token can begin a name segment,
+// including keywords used as identifiers (relaxed parsing for identification).
+func (p *Parser) atNameOrKeyword() bool {
+	k := p.peek().Kind
+	return k == lexer.Identifier || k == lexer.UnrestrictedName || k == lexer.Keyword
+}
+
 // parseNameSegment consumes one name token and returns its segment.
 func (p *Parser) parseNameSegment() (ast.NameSegment, bool) {
 	if !p.atName() {
+		return ast.NameSegment{}, false
+	}
+	tok := p.advance()
+	return ast.NameSegment{Text: p.src.Text(tok.Span), Span: tok.Span}, true
+}
+
+// parseNameSegmentRelaxed consumes a name token (including keywords) and returns its segment.
+// Used in contexts where keywords can serve as identifiers (e.g., declaration names).
+func (p *Parser) parseNameSegmentRelaxed() (ast.NameSegment, bool) {
+	if !p.atNameOrKeyword() {
 		return ast.NameSegment{}, false
 	}
 	tok := p.advance()
@@ -54,7 +71,54 @@ func (p *Parser) parseQualifiedName() *ast.QualifiedName {
 			break
 		}
 		p.advance() // ::
-		next, ok := p.parseNameSegment()
+		next, ok := p.parseNameSegmentRelaxed()
+		if !ok {
+			p.error(p.peek().Span, "expected a name after '::'")
+			break
+		}
+		parts = append(parts, next)
+	}
+
+	qn := &ast.QualifiedName{Global: global, Parts: parts}
+	qn.NodeSpan = p.spanFrom(start)
+	qn.SetLeadingTrivia(trivia)
+	return qn
+}
+
+// parseQualifiedNameRelaxed parses `[$::] Name (:: Name)*` allowing keywords as identifiers.
+// Used in contexts where feature chains can start with keywords (e.g., do.startShot).
+func (p *Parser) parseQualifiedNameRelaxed() *ast.QualifiedName {
+	start := p.peek().Span.Offset
+	trivia := p.takeTrivia()
+
+	global := false
+	if p.at(lexer.Dollar) && p.peekN(1).Kind == lexer.ColonColon {
+		p.advance() // $
+		p.advance() // ::
+		global = true
+	}
+
+	seg, ok := p.parseNameSegmentRelaxed()
+	if !ok {
+		if global {
+			// `$::` with no following name — still a (degenerate) global name.
+			qn := &ast.QualifiedName{Global: true}
+			qn.NodeSpan = p.spanFrom(start)
+			qn.SetLeadingTrivia(trivia)
+			return qn
+		}
+		p.error(p.peek().Span, "expected a name")
+		return nil
+	}
+
+	parts := []ast.NameSegment{seg}
+	for p.at(lexer.ColonColon) {
+		// Do not consume `::` if it introduces `*`/`**` (namespace import wildcard).
+		if nk := p.peekN(1).Kind; nk == lexer.Star || nk == lexer.StarStar {
+			break
+		}
+		p.advance() // ::
+		next, ok := p.parseNameSegmentRelaxed()
 		if !ok {
 			p.error(p.peek().Span, "expected a name after '::'")
 			break
@@ -74,7 +138,7 @@ func (p *Parser) parseIdentification() ast.Identification {
 	var id ast.Identification
 	if p.at(lexer.Lt) {
 		p.advance() // <
-		if seg, ok := p.parseNameSegment(); ok {
+		if seg, ok := p.parseNameSegmentRelaxed(); ok {
 			id.ShortName = seg.Text
 			id.ShortNameSpan = seg.Span
 		} else {
@@ -82,7 +146,17 @@ func (p *Parser) parseIdentification() ast.Identification {
 		}
 		p.expect(lexer.Gt, "expected '>'")
 	}
-	if seg, ok := p.parseNameSegment(); ok {
+	// Parse name, but exclude keywords that have special syntax meaning in declaration context
+	// (e.g., "default" introduces a value expression, "connect"/"allocate" introduce connector ends, "first"/"do" for succession)
+	if p.at(lexer.Keyword) {
+		kw := p.peek().KeywordID
+		switch kw {
+		case "default", "connect", "allocate", "from", "to", "then", "first", "do":
+			// These keywords have special syntax meaning, not valid as identifier names here
+			return id
+		}
+	}
+	if seg, ok := p.parseNameSegmentRelaxed(); ok {
 		id.Name = seg.Text
 		id.NameSpan = seg.Span
 	}
@@ -152,6 +226,8 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		return p.parseDocumentation(start)
 	case p.atKeyword("rep"), p.atKeyword("language"):
 		return p.parseTextualRepresentation(start)
+	case p.atKeyword("multiplicity"):
+		return p.parseMultiplicityDecl(start)
 	case p.atKeyword("filter"):
 		return p.parseFilter(start)
 	case p.atDefUsageStart():
@@ -247,6 +323,7 @@ var declStartKeywords = map[string]bool{
 	"port":         true,
 	"interface":    true,
 	"allocation":   true,
+	"binding":      true,
 	"action":       true,
 	"state":        true,
 	"calc":         true,
@@ -256,6 +333,18 @@ var declStartKeywords = map[string]bool{
 	"analysis":     true,
 	"verification": true,
 	"use":          true,
+	"datatype":     true,
+	"feature":      true,
+	// KerML structural.
+	"behavior":  true,
+	"assoc":     true,
+	"struct":    true,
+	"class":     true,
+	"predicate": true,
+	"bool":      true,
+	// Usage-only synonyms.
+	"inv":      true, // synonym for constraint (invariant)
+	"function": true, // synonym for calc
 }
 
 // atMemberSync reports whether the parser sits at a recovery synchronization
@@ -319,7 +408,10 @@ func (p *Parser) parseComment(start int) ast.Node {
 func (p *Parser) parseDocumentation(start int) ast.Node {
 	p.advance() // 'doc'
 	d := &ast.Documentation{}
-	if p.atName() && !p.atKeyword("locale") {
+	
+	// Parse optional identification only if there's no pending comment
+	// Pattern: `doc name /* comment */` vs `doc /* comment */` (comment belongs to doc, not name)
+	if p.atName() && !p.atKeyword("locale") && !p.hasPendingComment {
 		d.Ident = p.parseIdentification()
 	}
 	if p.acceptKeyword("locale") {
@@ -555,4 +647,31 @@ func (p *Parser) parseFilter(start int) ast.Node {
 	f := &ast.FilterMember{Condition: expr}
 	f.NodeSpan = p.spanFrom(start)
 	return f
+}
+
+// parseMultiplicityDecl parses `multiplicity <id> [range] ;|{ members }`.
+// Declares a named multiplicity range (e.g., exactlyOne [1..1]).
+func (p *Parser) parseMultiplicityDecl(start int) ast.Node {
+	p.advance() // multiplicity
+	
+	// Parse identification (name)
+	ident := p.parseIdentification()
+	
+	// Parse optional multiplicity range [lower..upper]
+	var mult *ast.Multiplicity
+	if p.at(lexer.LBracket) {
+		mult = p.parseMultiplicity()
+	}
+	
+	// Parse body or semicolon
+	members, hasBody := p.parseNamespaceBody()
+	
+	md := &ast.MultiplicityDecl{
+		Ident:   ident,
+		Range:   mult,
+		Members: members,
+		HasBody: hasBody,
+	}
+	md.NodeSpan = p.spanFrom(start)
+	return md
 }

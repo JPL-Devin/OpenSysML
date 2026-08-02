@@ -90,7 +90,30 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		return
 	case *BodyExpr:
 		b.WriteString(`(BodyExpr`)
+		if len(v.Params) > 0 {
+			b.WriteString(` params=[`)
+			for i, p := range v.Params {
+				if i > 0 {
+					b.WriteString(`,`)
+				}
+				b.WriteString(p.Name)
+				if p.Type != nil {
+					b.WriteString(`:`)
+					b.WriteString(qnString(p.Type))
+				}
+				if p.Value != nil {
+					b.WriteString(`=...`)
+				}
+			}
+			b.WriteString(`]`)
+		}
 		var kids []Node
+		// Add param values to children
+		for _, p := range v.Params {
+			if p.Value != nil {
+				kids = append(kids, p.Value)
+			}
+		}
 		if v.Result != nil {
 			kids = append(kids, v.Result)
 		}
@@ -152,15 +175,43 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.IsConjugated {
 			b.WriteString(` conjugated=true`)
 		}
-		if len(v.ConnectorEnds) > 0 {
-			fmt.Fprintf(b, ` ends=%q`, qnList(v.ConnectorEnds))
-		}
 		writeChildren(b, depth, usageChildren(v))
 		return
 	case *FlowEnds:
 		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q)`, qnString(v.From), qnString(v.To), qnString(v.Payload))
+	case *ConnectorEnd:
+		targetStr := ""
+		if qn, ok := v.Target.(*QualifiedName); ok {
+			targetStr = qnString(qn)
+		} else {
+			targetStr = fmt.Sprintf("%T", v.Target) // fallback: show type
+		}
+		fmt.Fprintf(b, `(ConnectorEnd target=%q`, targetStr)
+		var kids []Node
+		if v.Multiplicity != nil {
+			kids = append(kids, v.Multiplicity)
+		}
+		if v.Target != nil {
+			kids = append(kids, v.Target)
+		}
+		writeChildren(b, depth, kids)
+		return
 	case *Relationship:
-		fmt.Fprintf(b, `(Relationship kind=%q target=%q)`, v.Kind.String(), qnString(v.Target))
+		targetStr := "nil"
+		if v.Target != nil {
+			if qn, ok := v.Target.(*QualifiedName); ok {
+				targetStr = qnString(qn)
+			} else {
+				targetStr = "(expr)"
+			}
+		}
+		fmt.Fprintf(b, `(Relationship kind=%q target=%s`, v.Kind.String(), targetStr)
+		var kids []Node
+		if v.Target != nil {
+			kids = append(kids, v.Target)
+		}
+		writeChildren(b, depth, kids)
+		return
 	case *Multiplicity:
 		fmt.Fprintf(b, `(Multiplicity range=%t`, v.IsRange)
 		var kids []Node
@@ -171,6 +222,26 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			kids = append(kids, v.Upper)
 		}
 		writeChildren(b, depth, kids)
+		return
+	case *SubjectMember:
+		fmt.Fprintf(b, `(SubjectMember name=%q type=%q`, v.Name, qnString(v.TypeRef))
+		kids := make([]Node, 0)
+		if v.Multiplicity != nil {
+			kids = append(kids, v.Multiplicity)
+		}
+		kids = append(kids, v.Body...)
+		writeChildren(b, depth, kids)
+		return
+	case *RequireMember:
+		if v.Name != "" {
+			// Body form: require name { body }
+			fmt.Fprintf(b, `(RequireMember name=%q`, v.Name)
+			writeChildren(b, depth, v.Body)
+		} else {
+			// Expression form: require expr;
+			b.WriteString(`(RequireMember`)
+			writeChildren(b, depth, []Node{v.Expression})
+		}
 		return
 	default:
 		fmt.Fprintf(b, `(%T)`, n)
@@ -279,7 +350,7 @@ func defusageChildren(prefixes []*PrefixMetadata, rels []*Relationship, mult *Mu
 }
 
 // usageChildren is defusageChildren for a Usage, additionally emitting the
-// optional FlowEnds node (after value, before members).
+// optional ConnectorEnd and FlowEnds nodes (after value, before members).
 func usageChildren(v *Usage) []Node {
 	kids := make([]Node, 0)
 	for _, pm := range v.Prefixes {
@@ -293,6 +364,9 @@ func usageChildren(v *Usage) []Node {
 	}
 	if v.Value != nil {
 		kids = append(kids, v.Value)
+	}
+	for _, ce := range v.ConnectorEnds {
+		kids = append(kids, ce)
 	}
 	if v.FlowEnds != nil {
 		kids = append(kids, v.FlowEnds)

@@ -2,6 +2,37 @@
 
 Comprehensive demos for SysML v2 execution environment features.
 
+## Parser Features
+
+### Parser Features Demos
+**Files:** `parser_features_demo_*.kerml` and `parser_features_demo_*.sysml`  
+**Documentation:** [PARSER_FEATURES_DEMOS.md](PARSER_FEATURES_DEMOS.md)
+
+Demonstrates SysML v2/KerML parser features that enable **100% coverage** of the official standard library (95/95 files):
+
+**Original Features (Sessions 2-3):**
+- **Relationships:** `inverse of`, `unions`, `chains`
+- **Modifiers:** `public`/`protected`/`private`, `readonly`, `constant`, `ordered`/`nonunique`
+- **Binding:** Complex binding patterns with source expressions
+- **Connectors:** Connection `connect` keyword, succession `first`/`then` keywords
+- **Default Values:** `default` keyword as alternative to `=`
+
+**Advanced Features (Sessions 4-5 - 37 tasks):**
+- **Connector Enhancements:** end modifiers, references, single-end typing, transition usage
+- **Action Semantics:** assign, perform, while, if/else, namespace succession
+- **Advanced Bodies:** predicate/bool returns, shorthand params, constraint members
+- **Messages & Events:** message/event keywords, ref with body
+- **Declarations:** multiplicity, classifier/subclassifier, multiple typing, subset/disjoint
+- **Edge Cases:** keywords in expressions, identifier multiplicities, bind/require/step shortcuts
+
+All patterns extracted from real stdlib usage. See [PARSER_FEATURES_DEMOS.md](PARSER_FEATURES_DEMOS.md) for complete details.
+
+**Test:**
+```bash
+go test ./examples -run '^TestParserFeaturesDemos$' -v
+go test ./examples -run '^TestAllParserFeaturesDemos$' -v  # All 11 demos
+```
+
 ## Behavioral Execution
 
 ### Action Execution (Petri-Net Token Flow)

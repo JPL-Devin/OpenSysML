@@ -63,7 +63,16 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 		if rel == nil || rel.Target == nil {
 			continue
 		}
-		sym, ok := tc.resolver.ResolveQualified(scope, rel.Target)
+		// Unwrap FeatureReference if needed
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, isQN := targetNode.(*ast.QualifiedName)
+		if !isQN {
+			continue
+		}
+		sym, ok := tc.resolver.ResolveQualified(scope, qn)
 		if !ok || sym == nil {
 			continue // unresolved: name-resolution tier owns this
 		}

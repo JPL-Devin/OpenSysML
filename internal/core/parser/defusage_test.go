@@ -73,11 +73,21 @@ func relTargets(rels []*ast.Relationship) []string {
 	out := make([]string, len(rels))
 	for i, r := range rels {
 		var parts string
-		for j, seg := range r.Target.Parts {
-			if j > 0 {
-				parts += "::"
+		// Unwrap FeatureReference to get underlying QualifiedName
+		target := r.Target
+		if ref, ok := target.(*ast.FeatureReference); ok {
+			target = ref.Name
+		}
+		
+		if qn, ok := target.(*ast.QualifiedName); ok {
+			for j, seg := range qn.Parts {
+				if j > 0 {
+					parts += "::"
+				}
+				parts += seg.Text
 			}
-			parts += seg.Text
+		} else {
+			parts = "(expr)"
 		}
 		out[i] = parts
 	}
@@ -264,4 +274,89 @@ func TestParseActionUsageIntegration(t *testing.T) {
 	if len(edge.Target.Parts) == 0 || edge.Target.Parts[0].Text != "endNode" {
 		t.Fatalf("edge target: expected endNode, got %+v", edge.Target)
 	}
+}
+
+func TestParseEndModifier(t *testing.T) {
+	// Anonymous usage with end modifier: end source: Anything;
+	u := parseOneMember(t, "end source: Anything;").(*ast.Usage)
+	if !u.IsEnd {
+		t.Fatalf("expected IsEnd = true, got %v", u.IsEnd)
+	}
+	if u.Ident.Name != "source" {
+		t.Fatalf("expected name 'source', got %q", u.Ident.Name)
+	}
+	if u.Kind != ast.UsageAttribute {
+		t.Fatalf("expected UsageAttribute, got %v", u.Kind)
+	}
+
+	// Explicit kind with end modifier: end part x;
+	u2 := parseOneMember(t, "end part x;").(*ast.Usage)
+	if !u2.IsEnd {
+		t.Fatalf("expected IsEnd = true, got %v", u2.IsEnd)
+	}
+	if u2.Ident.Name != "x" {
+		t.Fatalf("expected name 'x', got %q", u2.Ident.Name)
+	}
+}
+
+func TestParseEnumLiterals(t *testing.T) {
+	src := `enum def LevelEnum {
+    low = 0.25;
+    medium = 0.50;
+    high = 0.75;
+}`
+	p := New(source.New("test.sysml", []byte(src)))
+	f := p.ParseFile()
+	
+	if len(p.Diagnostics) > 0 {
+		for _, d := range p.Diagnostics {
+			t.Logf("diagnostic: %s", d.Message)
+		}
+		t.Fatalf("parse failed with %d diagnostics", len(p.Diagnostics))
+	}
+	
+	// Check enum def
+	if len(f.Members) != 1 {
+		t.Fatalf("expected 1 member, got %d", len(f.Members))
+	}
+	
+	mem, ok := f.Members[0].(*ast.Membership)
+	if !ok {
+		t.Fatalf("expected Membership, got %T", f.Members[0])
+	}
+	
+	def, ok := mem.Member.(*ast.Definition)
+	if !ok {
+		t.Fatalf("expected Definition, got %T", mem.Member)
+	}
+	
+	if def.Kind != ast.DefEnumeration {
+		t.Fatalf("expected DefEnumeration, got %v", def.Kind)
+	}
+	
+	// Check enum literals
+	if len(def.Members) != 3 {
+		t.Fatalf("expected 3 body members, got %d", len(def.Members))
+	}
+	
+	t.Logf("enum body: %#v", def.Members)
+}
+
+func TestParseEnumLiteralsWithTyping(t *testing.T) {
+	src := `enum def LevelEnum :> Level {
+    low = 0.25;
+    medium = 0.50;
+    high = 0.75;
+}`
+	p := New(source.New("test.sysml", []byte(src)))
+	_ = p.ParseFile()
+	
+	if len(p.Diagnostics) > 0 {
+		for _, d := range p.Diagnostics {
+			t.Logf("diagnostic: %s", d.Message)
+		}
+		t.Fatalf("parse failed with %d diagnostics", len(p.Diagnostics))
+	}
+	
+	t.Logf("parsed cleanly")
 }

@@ -196,6 +196,23 @@ func (p *Parser) parsePrimary() ast.Node {
 	return p.parsePostfixes(start, expr)
 }
 
+// atExprStart reports whether the current token can start an expression.
+func (p *Parser) atExprStart() bool {
+	t := p.peek()
+	return p.atName() || 
+		t.Kind == lexer.Decimal || 
+		t.Kind == lexer.Real || 
+		t.Kind == lexer.String || 
+		t.Kind == lexer.Star || // infinity
+		t.Kind == lexer.LParen || 
+		t.Kind == lexer.LBrace ||
+		p.atKeyword("null") || 
+		p.atKeyword("true") || 
+		p.atKeyword("false") || 
+		p.atKeyword("new") ||
+		p.atKeyword("if")
+}
+
 // parsePostfixes applies zero or more postfix operators to expr.
 func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 	for {
@@ -210,7 +227,8 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 				expr = c
 				continue
 			}
-			member := p.parseQualifiedName()
+			// Use relaxed parsing to allow keywords as feature names (e.g., oSP.exit, state.entry)
+			member := p.parseQualifiedNameRelaxed()
 			fc := &ast.FeatureChainExpr{Operand: expr, Member: member}
 			fc.NodeSpan = p.spanFrom(start)
 			expr = fc
@@ -252,6 +270,10 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 			} else if p.at(lexer.LBrace) {
 				// Function reference given as a body: store as a single arg.
 				inv.Args = []ast.Node{p.parseBodyExpr(p.peek().Span.Offset)}
+			} else if p.atExprStart() {
+				// Single arg without parens (e.g., `reduce '*'`)
+				// Parse only base expression, not full precedence expression
+				inv.Args = []ast.Node{p.parseBase()}
 			}
 			inv.NodeSpan = p.spanFrom(start)
 			expr = inv
@@ -321,11 +343,30 @@ func (p *Parser) parseBase() ast.Node {
 	case p.at(lexer.LBrace):
 		return setBase(p.parseBodyExpr(start))
 
-	case p.atName():
-		qn := p.parseQualifiedName()
+	case p.atName(), p.at(lexer.Keyword):
+		// Parse qualified name or keyword-as-name
+		var qn *ast.QualifiedName
+		if p.at(lexer.Keyword) {
+			// Keywords can be used as feature references (e.g., `excluding(do)`)
+			tok := p.advance()
+			seg := ast.NameSegment{Text: tok.KeywordID, Span: tok.Span}
+			qn = &ast.QualifiedName{Parts: []ast.NameSegment{seg}}
+			qn.NodeSpan = tok.Span
+		} else {
+			qn = p.parseQualifiedName()
+		}
 		// A bare `Type(args)` invocation with no receiver is recognized here.
 		if p.at(lexer.LParen) {
 			return setBase(p.parseInvocationTail(start, nil, qn))
+		}
+		// Handle body expression invocations: `forAll { in i; expr }`
+		// Only if LBrace followed by 'in' keyword (body expression parameter)
+		if p.at(lexer.LBrace) && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "in" {
+			bodyStart := p.peek().Span.Offset
+			bodyExpr := p.parseBodyExpr(bodyStart)
+			inv := &ast.InvocationExpr{Type: qn, Args: []ast.Node{bodyExpr}}
+			inv.NodeSpan = p.spanFrom(start)
+			return setBase(inv)
 		}
 		fr := &ast.FeatureReference{Name: qn}
 		fr.NodeSpan = p.spanFrom(start)
@@ -434,16 +475,98 @@ func (p *Parser) parseInvocationTail(start int, recv ast.Node, typ *ast.Qualifie
 	return inv
 }
 
-// parseBodyExpr parses `{ (in param ;)* resultExpr }`.
+// parseBodyExpr parses `{ [doc] (in param ;)* resultExpr }`.
 func (p *Parser) parseBodyExpr(start int) ast.Node {
 	p.advance() // {
 	b := &ast.BodyExpr{}
-	for p.atKeyword("in") {
-		p.advance() // in
+	
+	// Parse optional doc comment at start of body expression
+	if p.atKeyword("doc") {
+		// Skip doc comment - not stored in BodyExpr AST node
+		// Doc is part of the body expression context but not the expression itself
+		p.parseDocumentation(p.peek().Span.Offset)
+	}
+	
+	// Check for shorthand param syntax: {name : Type; expr} without "in" keyword
+	// Common in collection operators like ->exists{p : Point; condition}
+	hasShorthandParam := false
+	if p.atName() && p.peekN(1).Kind == lexer.Colon {
+		hasShorthandParam = true
+	}
+	
+	if hasShorthandParam {
+		// Parse single param without "in" keyword
+		var paramType *ast.QualifiedName
+		var paramMult *ast.Multiplicity
+		
 		if seg, ok := p.parseNameSegment(); ok {
-			b.Params = append(b.Params, ast.BodyParam{Name: seg.Text, Span: seg.Span})
+			if p.at(lexer.Colon) {
+				p.advance() // :
+				paramType = p.parseQualifiedName()
+				// Parse optional multiplicity after type
+				if p.at(lexer.LBracket) {
+					paramMult = p.parseMultiplicity()
+				}
+			}
+			b.Params = append(b.Params, ast.BodyParam{
+				Name:         seg.Text,
+				Type:         paramType,
+				Multiplicity: paramMult,
+				Span:         seg.Span,
+			})
 		}
 		p.expect(lexer.Semicolon, "expected ';' after body parameter")
+	}
+	
+	for p.atKeyword("in") {
+		p.advance() // in
+		var paramType *ast.QualifiedName
+		var paramMult *ast.Multiplicity
+		var paramValue ast.Node
+		var isRef bool
+		
+		// Check for 'ref' modifier after 'in'
+		if p.atKeyword("ref") {
+			p.advance()
+			isRef = true
+		}
+		
+		if seg, ok := p.parseNameSegment(); ok {
+			var paramMembers []ast.Node
+			if p.at(lexer.Colon) {
+				p.advance() // :
+				paramType = p.parseQualifiedName()
+				// Parse optional multiplicity after type
+				if p.at(lexer.LBracket) {
+					paramMult = p.parseMultiplicity()
+				}
+			}
+			if p.at(lexer.Eq) {
+				p.advance() // =
+				paramValue = p.ParseExpression()
+			}
+			// Parse optional body members: in ref a { doc ... }
+			if p.at(lexer.LBrace) {
+				p.advance() // {
+				for !p.at(lexer.RBrace) && !p.atEOF() {
+					paramMembers = append(paramMembers, p.parseBodyMember())
+				}
+				p.expect(lexer.RBrace, "expected '}'")
+			}
+			b.Params = append(b.Params, ast.BodyParam{
+				Name:         seg.Text,
+				Type:         paramType,
+				Multiplicity: paramMult,
+				Value:        paramValue,
+				IsReference:  isRef,
+				Members:      paramMembers,
+				Span:         seg.Span,
+			})
+		}
+		// No semicolon expected if param has body
+		if len(b.Params) == 0 || len(b.Params[len(b.Params)-1].Members) == 0 {
+			p.expect(lexer.Semicolon, "expected ';' after body parameter")
+		}
 	}
 	if !p.at(lexer.RBrace) {
 		b.Result = p.ParseExpression()

@@ -55,6 +55,10 @@ func (lx *Lexer) Next() Token {
 			lx.pos += 2
 			return Token{Kind: ColonColon, Span: lx.span(start)}
 		}
+		if lx.peek(1) == '=' {
+			lx.pos += 2
+			return Token{Kind: ColonEq, Span: lx.span(start)}
+		}
 		if lx.peek(1) == '>' {
 			if lx.peek(2) == '>' {
 				lx.pos += 3

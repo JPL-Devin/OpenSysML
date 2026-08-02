@@ -419,7 +419,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 
 | Component | Status |
 |-----------|--------|
-| Lexer/Parser (structural + behavioral) | ✅ Complete |
+| Lexer/Parser (structural + behavioral) | ✅ Complete (81.1% stdlib coverage) |
 | Symbol resolution & type system | ✅ Complete |
 | Validation passes (syntax → constraints) | ✅ Complete |
 | Expression evaluator & instance model (Tiers 1-3) | ✅ Complete |
@@ -432,6 +432,8 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 | REPL implementation | ✅ Complete |
 | **Standard library bundling** | ✅ **Complete** |
 | **LSP server implementation** | ✅ **Complete** |
+
+**Parser coverage:** 77 of 95 official SysML v2 standard library files parse cleanly (81.1%). Remaining files contain architectural edge cases (connector end + feature hybrids, constraint statements). See [examples/PARSER_FEATURES_DEMOS.md](../examples/PARSER_FEATURES_DEMOS.md) for feature showcase.
 
 ---
 

@@ -130,7 +130,16 @@ func (cc *constraintChecker) checkSubsettingMultiplicity(sym *symbols.Symbol) {
 		if rel == nil || rel.Target == nil || rel.Kind != ast.RelSubsets {
 			continue
 		}
-		target, resolved := cc.resolver.ResolveQualified(sym.OwnerScope, rel.Target)
+		// Unwrap FeatureReference if needed
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, isQN := targetNode.(*ast.QualifiedName)
+		if !isQN {
+			continue
+		}
+		target, resolved := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
 		if !resolved || target == nil {
 			continue
 		}

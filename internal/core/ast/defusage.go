@@ -10,6 +10,7 @@ const (
 	DefItem
 	DefOccurrence
 	DefIndividual
+	DefMetaclass
 	DefMetadata
 	DefEnumeration
 	DefView
@@ -22,6 +23,7 @@ const (
 	DefPort
 	DefInterface
 	DefAllocation
+	DefBinding
 	// Tier C — nested behavioral bodies (generic body this cycle).
 	DefAction
 	DefState
@@ -32,6 +34,13 @@ const (
 	DefAnalysisCase
 	DefVerificationCase
 	DefUseCase
+	// KerML structural kinds
+	DefBehavior
+	DefAssoc
+	DefStruct
+	DefClass
+	DefPredicate
+	DefBool
 )
 
 func (k DefinitionKind) String() string {
@@ -46,6 +55,8 @@ func (k DefinitionKind) String() string {
 		return "occurrence"
 	case DefIndividual:
 		return "individual"
+	case DefMetaclass:
+		return "metaclass"
 	case DefMetadata:
 		return "metadata"
 	case DefEnumeration:
@@ -68,6 +79,8 @@ func (k DefinitionKind) String() string {
 		return "interface"
 	case DefAllocation:
 		return "allocation"
+	case DefBinding:
+		return "binding"
 	case DefAction:
 		return "action"
 	case DefState:
@@ -86,6 +99,18 @@ func (k DefinitionKind) String() string {
 		return "verification case"
 	case DefUseCase:
 		return "use case"
+	case DefBehavior:
+		return "behavior"
+	case DefAssoc:
+		return "assoc"
+	case DefStruct:
+		return "struct"
+	case DefClass:
+		return "class"
+	case DefPredicate:
+		return "predicate"
+	case DefBool:
+		return "bool"
 	default:
 		return "unknown"
 	}
@@ -109,20 +134,37 @@ const (
 	UsageConcern
 	// Tier B.
 	UsageConnection
+	UsageConnector
+	UsageSuccession
 	UsageFlow
 	UsagePort
 	UsageInterface
+	UsageInteraction
 	UsageAllocation
+	UsageBinding
 	// Tier C.
 	UsageAction
 	UsageState
+	UsageTransition
+	UsageStep
 	UsageCalc
+	UsageExpr
 	UsageConstraint
 	UsageRequirement
+	UsageSatisfy // satisfy requirement ... by ...
+	UsageSubject
+	UsageObjective
 	UsageCase
 	UsageAnalysisCase
 	UsageVerificationCase
 	UsageUseCase
+	// KerML structural kinds
+	UsageBehavior
+	UsageAssoc
+	UsageStruct
+	UsageClass
+	UsagePredicate
+	UsageBool
 )
 
 func (k UsageKind) String() string {
@@ -151,24 +193,44 @@ func (k UsageKind) String() string {
 		return "concern"
 	case UsageConnection:
 		return "connection"
+	case UsageConnector:
+		return "connector"
+	case UsageSuccession:
+		return "succession"
 	case UsageFlow:
 		return "flow"
 	case UsagePort:
 		return "port"
 	case UsageInterface:
 		return "interface"
+	case UsageInteraction:
+		return "interaction"
 	case UsageAllocation:
 		return "allocation"
+	case UsageBinding:
+		return "binding"
 	case UsageAction:
 		return "action"
 	case UsageState:
 		return "state"
+	case UsageTransition:
+		return "transition"
+	case UsageStep:
+		return "step"
 	case UsageCalc:
 		return "calc"
+	case UsageExpr:
+		return "expr"
 	case UsageConstraint:
 		return "constraint"
 	case UsageRequirement:
 		return "requirement"
+	case UsageSatisfy:
+		return "satisfy"
+	case UsageSubject:
+		return "subject"
+	case UsageObjective:
+		return "objective"
 	case UsageCase:
 		return "case"
 	case UsageAnalysisCase:
@@ -177,6 +239,18 @@ func (k UsageKind) String() string {
 		return "verification case"
 	case UsageUseCase:
 		return "use case"
+	case UsageBehavior:
+		return "behavior"
+	case UsageAssoc:
+		return "assoc"
+	case UsageStruct:
+		return "struct"
+	case UsageClass:
+		return "class"
+	case UsagePredicate:
+		return "predicate"
+	case UsageBool:
+		return "bool"
 	default:
 		return "unknown"
 	}
@@ -193,6 +267,11 @@ const (
 	RelRedefines                           // 'redefines' / ':>>'
 	RelReferences                          // 'references' / '::>'
 	RelCrosses                             // 'crosses' / '=>'
+	RelDisjoint                            // 'disjoint from'
+	RelIntersects                          // 'intersects'
+	RelInverseOf                           // 'inverse of'
+	RelUnions                              // 'unions'
+	RelChains                              // 'chains'
 )
 
 func (k RelationshipKind) String() string {
@@ -209,6 +288,16 @@ func (k RelationshipKind) String() string {
 		return "references"
 	case RelCrosses:
 		return "crosses"
+	case RelDisjoint:
+		return "disjoint"
+	case RelIntersects:
+		return "intersects"
+	case RelInverseOf:
+		return "inverse"
+	case RelUnions:
+		return "unions"
+	case RelChains:
+		return "chains"
 	default:
 		return "unknown"
 	}
@@ -243,7 +332,7 @@ func (d FeatureDirection) String() string {
 type Relationship struct {
 	NodeBase
 	Kind   RelationshipKind
-	Target *QualifiedName
+	Target Node // QualifiedName or Expression (e.g., FeatureChainExpr for interfacingPorts.incomingTransfers)
 }
 
 // Multiplicity is a `[n]` / `[lo..hi]` / `[*]` bound on a usage. Bounds are
@@ -263,6 +352,10 @@ type Definition struct {
 	Kind          DefinitionKind
 	IsAbstract    bool
 	IsVariation   bool
+	IsAll         bool // 'all' multiplicity propagation modifier
+	IsConstant    bool // 'constant' feature modifier
+	IsEvent       bool // 'event' modifier for event-driven occurrences
+	Visibility    Visibility
 	Ident         Identification
 	Relationships []*Relationship
 	Members       []Node
@@ -276,6 +369,12 @@ type Usage struct {
 	Kind          UsageKind
 	IsAbstract    bool
 	IsReference   bool
+	IsAll         bool // 'all' multiplicity propagation modifier
+	IsEnd         bool // 'end' feature modifier
+	IsChain       bool // 'chain' feature modifier
+	IsConstant    bool // 'constant' feature modifier
+	IsEvent       bool // 'event' modifier for event-driven occurrences
+	Visibility    Visibility
 	Direction     FeatureDirection
 	IsComposite   bool
 	IsDerived     bool
@@ -290,7 +389,7 @@ type Usage struct {
 
 	// Tier B connection/flow/port grammar. These are nil/zero for kinds
 	// that do not use them.
-	ConnectorEnds []*QualifiedName // connection / interface / allocation usage ends
+	ConnectorEnds []*ConnectorEnd  // connection / interface / allocation usage ends
 	FlowEnds      *FlowEnds        // flow usage ends
 	IsConjugated  bool             // `~` conjugation on port / interface
 }
@@ -303,4 +402,12 @@ type FlowEnds struct {
 	From    *QualifiedName
 	To      *QualifiedName
 	Payload *QualifiedName // optional; from the `of` clause
+}
+
+// ConnectorEnd represents a single connector end with optional multiplicity.
+type ConnectorEnd struct {
+	NodeBase
+	Target       Node // QualifiedName or Expression (e.g., FeatureChainExpr for occ.startShot)
+	Multiplicity *Multiplicity
+	Reference    Node // Optional "references X" clause - QualifiedName or FeatureChainExpr
 }

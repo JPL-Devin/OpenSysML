@@ -63,6 +63,7 @@ const (
 	RBrace      // }
 	Semicolon   // ;
 	Colon       // :
+	ColonEq     // :=
 
 	ColonGt      // :>
 	ColonGtGt    // :>>
@@ -88,7 +89,7 @@ var kindNames = map[Kind]string{
 	Hash: "#", LParen: "(", RParen: ")", LBracket: "[", RBracket: "]",
 	Arrow: "->", DotQuestion: ".?", Comma: ",", ColonColon: "::",
 	Dollar: "$", Eq: "=", LBrace: "{", RBrace: "}", Semicolon: ";", Colon: ":",
-	ColonGt: ":>", ColonGtGt: ":>>", ColonColonGt: "::>", EqGt: "=>",
+	ColonEq: ":=", ColonGt: ":>", ColonGtGt: ":>>", ColonColonGt: "::>", EqGt: "=>",
 	Keyword: "Keyword", Error: "Error",
 }
 

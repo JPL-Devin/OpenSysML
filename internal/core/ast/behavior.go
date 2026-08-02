@@ -48,6 +48,34 @@ type ActionExecutionNode struct {
 	Expression Node            // inline expression (mutually exclusive with ActionRef)
 }
 
+// AssignmentActionNode represents an assignment statement: assign target := value;
+type AssignmentActionNode struct {
+	NodeBase
+	Target Node // feature reference or qualified name
+	Value  Node // expression to assign
+}
+
+// PerformActionNode represents a perform statement: perform action;
+type PerformActionNode struct {
+	NodeBase
+	ActionRef Node // qualified name or invocation expression
+}
+
+// WhileLoopActionNode represents a while loop: while condition { body }
+type WhileLoopActionNode struct {
+	NodeBase
+	Condition Node   // boolean expression
+	Body      []Node // statements in loop body
+}
+
+// IfActionNode represents conditional: if condition { thenBody } else { elseBody }
+type IfActionNode struct {
+	NodeBase
+	Condition Node   // boolean expression
+	ThenBody  []Node // statements in then branch
+	ElseBody  []Node // statements in else branch (optional)
+}
+
 // StateNode represents a state in a state machine (simple, composite, or orthogonal).
 type StateNode struct {
 	NodeBase
@@ -200,8 +228,10 @@ type ConstraintMember struct {
 // Syntax: subject <name> : <Type>;
 type SubjectMember struct {
 	NodeBase
-	Name     string
-	TypeRef  *QualifiedName // subject type
+	Name         string
+	TypeRef      *QualifiedName // subject type
+	Multiplicity *Multiplicity  // optional multiplicity
+	Body         []Node         // optional nested members
 }
 
 // AssumeMember represents an assumption in a requirement body.
@@ -212,10 +242,12 @@ type AssumeMember struct {
 }
 
 // RequireMember represents a requirement constraint.
-// Syntax: require <expression>;
+// Syntax: require <expression>; OR require <name> { body }
 type RequireMember struct {
 	NodeBase
-	Expression Node // requirement condition
+	Expression Node   // requirement condition (for expression form)
+	Name       string // optional name (for body form)
+	Body       []Node // optional nested members (for body form)
 }
 
 // ActorMember represents an actor declaration in a requirement/use case.

@@ -109,7 +109,7 @@ Current: green (Time: 30.0s)
 
 | Component | Status |
 |-----------|--------|
-| Lexer/Parser (structural + behavioral grammar) | ✅ Complete |
+| Lexer/Parser (structural + behavioral grammar) | ✅ Complete (81.1% stdlib coverage) |
 | Symbol resolution & type system | ✅ Complete |
 | Validation passes (syntax → constraints) | ✅ Complete |
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
@@ -124,6 +124,7 @@ Current: green (Time: 30.0s)
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
 **Test coverage:** 116 tests covering parsers, semantics, runtime (actions, states, instances).
+**Parser coverage:** 77 of 95 official SysML v2 standard library files parse cleanly (81.1%). See [examples/PARSER_FEATURES_DEMOS.md](examples/PARSER_FEATURES_DEMOS.md) for feature showcase.
 
 ## Architecture
 

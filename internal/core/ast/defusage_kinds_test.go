@@ -10,10 +10,17 @@ func TestDumpConnectorEnds(t *testing.T) {
 	u := &Usage{
 		Kind:          UsageConnection,
 		Ident:         Identification{Name: "c"},
-		ConnectorEnds: []*QualifiedName{qn("a"), qn("b")},
+		ConnectorEnds: []*ConnectorEnd{
+			{Target: qn("a")},
+			{Target: qn("b")},
+		},
 	}
 	got := Dump(u)
-	want := `(Usage kind="connection" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false ends="a, b")`
+	want := "(Usage kind=\"connection\" name=\"c\" ref=false direction=\"none\" composite=false derived=false ordered=false nonunique=false\n" +
+		"  (ConnectorEnd target=\"a\"\n" +
+		"    (*ast.QualifiedName))\n" +
+		"  (ConnectorEnd target=\"b\"\n" +
+		"    (*ast.QualifiedName)))"
 	if got != want {
 		t.Fatalf("Dump mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}

@@ -81,7 +81,16 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		if rel == nil || rel.Target == nil || !GeneralizationKind(rel.Kind) {
 			continue
 		}
-		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, rel.Target)
+		// Unwrap FeatureReference if needed
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, isQN := targetNode.(*ast.QualifiedName)
+		if !isQN {
+			continue
+		}
+		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
 		if !ok || target == nil {
 			continue
 		}
