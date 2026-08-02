@@ -56,7 +56,12 @@ func (l *Loader) Load(name string, idx *symbols.Index) error {
 func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
 	out := make([]symbols.RecordEntry, len(rec.Symbols))
 	for i, s := range rec.Symbols {
-		out[i] = symbols.RecordEntry{FQN: s.FQN, Kind: s.Kind, Span: s.Span}
+		out[i] = symbols.RecordEntry{
+			FQN:             s.FQN,
+			Kind:            s.Kind,
+			Span:            s.Span,
+			WildcardImports: s.WildcardImports,
+		}
 	}
 	return out
 }

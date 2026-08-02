@@ -1,12 +1,14 @@
 package resolve
 
 import (
+	"strings"
+	
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // walkUnqualified searches the scope and its ancestors for a local match or an
-// imported match, then falls back to the document root.
+// imported match, then falls back to the document root and finally the global index.
 func (r *Resolver) walkUnqualified(scope *symbols.Scope, name string) resolution {
 	for s := scope; s != nil; s = s.Parent() {
 		if sym, ok := s.LookupLocal(name); ok {
@@ -20,6 +22,10 @@ func (r *Resolver) walkUnqualified(scope *symbols.Scope, name string) resolution
 		if sym, ok := root.LookupLocal(name); ok {
 			return resolution{sym: sym, ok: true}
 		}
+	}
+	// Final fallback: check global index (cross-document top-level names)
+	if sym, n := r.lookupGlobalTop(name); n == 1 {
+		return resolution{sym: sym, ok: true}
 	}
 	return resolution{}
 }
@@ -69,7 +75,12 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 	}
 	if imp.Kind == ast.ImportMembership {
 		// The imported member itself (last segment) is visible by its own name.
-		if target.Name == name {
+		// For FQN-indexed symbols (stdlib), target.Name may be the full FQN, so extract last segment.
+		targetName := target.Name
+		if idx := strings.LastIndex(targetName, "::"); idx >= 0 {
+			targetName = targetName[idx+2:]
+		}
+		if targetName == name {
 			return target, true
 		}
 		if imp.IsRecursive && target.Scope != nil {
@@ -81,6 +92,20 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 	}
 	// Namespace import: visible members of the target's scope are surfaced.
 	if target.Scope == nil {
+		// Stdlib packages don't have populated Scopes - fall back to FQN index
+		if r.idx != nil {
+			children := r.idx.LookupDirectChildren(target.Name)
+			for _, sym := range children {
+				// Extract short name from FQN for comparison
+				symName := sym.Name
+				if idx := strings.LastIndex(symName, "::"); idx >= 0 {
+					symName = symName[idx+2:]
+				}
+				if symName == name && visibleThroughImport(imp, sym) {
+					return sym, true
+				}
+			}
+		}
 		return nil, false
 	}
 	if sym, ok := target.Scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) {

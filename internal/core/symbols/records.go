@@ -5,9 +5,10 @@ import "github.com/Open-MBEE/Systemica/internal/core/source"
 // RecordEntry is a minimal, AST-less description of a symbol, used to populate
 // the index from a persisted cache record instead of a parsed document.
 type RecordEntry struct {
-	FQN  string
-	Kind SymbolKind
-	Span source.Span
+	FQN             string
+	Kind            SymbolKind
+	Span            source.Span
+	WildcardImports []string // for packages: FQNs of wildcard-imported targets
 }
 
 // AddRecords registers synthetic, AST-less symbols for a document directly by
@@ -21,5 +22,9 @@ func (idx *Index) AddRecords(name string, entries []RecordEntry) {
 		sym := &Symbol{Name: e.FQN, Kind: e.Kind, DeclSpan: e.Span}
 		idx.fqn[e.FQN] = append(idx.fqn[e.FQN], sym)
 		idx.contributions[name] = append(idx.contributions[name], fqnEntry{fqn: e.FQN, sym: sym})
+		// Store wildcard import metadata
+		if len(e.WildcardImports) > 0 {
+			idx.wildcardMeta[e.FQN] = e.WildcardImports
+		}
 	}
 }

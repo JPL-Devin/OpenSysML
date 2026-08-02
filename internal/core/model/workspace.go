@@ -60,6 +60,9 @@ func loadStdlib(idx *symbols.Index) {
 			_ = err // TODO: add logging when available
 		}
 	}
+	
+	// Expand wildcard imports (facade packages like ISQ re-exporting ISQMechanics)
+	idx.ExpandWildcardImports()
 }
 
 // Open registers an authoritative open buffer for name and reindexes.

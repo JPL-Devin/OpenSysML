@@ -14,6 +14,19 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 		return resolution{nil, false}
 	}
 
+	// Single-segment qualified names (like type references) should use full
+	// unqualified lookup (including imports), not just outward scope lookup.
+	// Fall back to normal qualified lookup if scope is nil.
+	if len(qn.Parts) == 1 && !qn.Global && scope != nil {
+		res := r.walkUnqualified(scope, qn.Parts[0].Text)
+		if res.ok {
+			qn.Parts[0].Sym = res.sym
+		} else {
+			r.unresolved(qn)
+		}
+		return res
+	}
+
 	// Resolve the first segment. A non-global name first searches the enclosing
 	// scope chain; a global ($::) name starts at the document root. When the
 	// local scope tree has no match, fall back to the global qualified-name

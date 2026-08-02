@@ -17,6 +17,7 @@ type resolution struct {
 type Resolver struct {
 	idx         *symbols.Index
 	memo        map[ast.Node]resolution
+	resolving   map[ast.Node]bool // cycle detection
 	Diagnostics []Diagnostic
 	model       interface{} // Optional *semantics.Model for inheritance-aware member lookup
 }
@@ -24,8 +25,9 @@ type Resolver struct {
 // New creates a resolver over the given index.
 func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
-		idx:  idx,
-		memo: make(map[ast.Node]resolution),
+		idx:       idx,
+		memo:      make(map[ast.Node]resolution),
+		resolving: make(map[ast.Node]bool),
 	}
 }
 
@@ -45,7 +47,14 @@ func (r *Resolver) ResolveQualified(scope *symbols.Scope, qn *ast.QualifiedName)
 	if res, done := r.memo[qn]; done {
 		return res.sym, res.ok
 	}
+	// Detect resolution cycles
+	if r.resolving[qn] {
+		// Cycle detected, fail resolution
+		return nil, false
+	}
+	r.resolving[qn] = true
 	res := r.doResolveQualified(scope, qn)
+	delete(r.resolving, qn)
 	r.memo[qn] = res
 	return res.sym, res.ok
 }

@@ -17,6 +17,7 @@ type Index struct {
 	docRoots      map[string]*Scope     // document name -> root scope
 	fqn           map[string][]*Symbol  // fully-qualified name -> symbols
 	contributions map[string][]fqnEntry // document name -> entries it added
+	wildcardMeta  map[string][]string   // package FQN -> target FQNs for wildcard imports
 }
 
 // NewIndex creates an empty index.
@@ -25,6 +26,7 @@ func NewIndex() *Index {
 		docRoots:      make(map[string]*Scope),
 		fqn:           make(map[string][]*Symbol),
 		contributions: make(map[string][]fqnEntry),
+		wildcardMeta:  make(map[string][]string),
 	}
 }
 
@@ -37,6 +39,52 @@ func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 	SetDocName(rs, name)
 	idx.docRoots[name] = rs
 	idx.indexScope(name, rs, "")
+}
+
+// ExpandWildcardImports performs a post-indexing pass to add re-exported symbols.
+// For each package with wildcard imports like `import ISQMechanics::*`, this adds
+// ISQMechanics members as visible through the importing package's FQN.
+// Call this after all documents are indexed.
+func (idx *Index) ExpandWildcardImports() {
+	// Use metadata from wildcard imports
+	for pkgFQN, targets := range idx.wildcardMeta {
+		for _, targetFQN := range targets {
+			targetChildren := idx.LookupDirectChildren(targetFQN)
+			for _, child := range targetChildren {
+				// Extract child's short name
+				childName := child.Name
+				if i := lastIndex(childName, "::"); i >= 0 {
+					childName = childName[i+2:]
+				}
+				// Add child under importing package's FQN
+				reexportFQN := pkgFQN + "::" + childName
+				// Don't add duplicates
+				if !idx.hasFQN(reexportFQN, child) {
+					idx.fqn[reexportFQN] = append(idx.fqn[reexportFQN], child)
+					// Note: not added to contributions - these are synthetic
+				}
+			}
+		}
+	}
+}
+
+func (idx *Index) hasFQN(fqn string, sym *Symbol) bool {
+	for _, s := range idx.fqn[fqn] {
+		if s == sym {
+			return true
+		}
+	}
+	return false
+}
+
+func lastIndex(s, substr string) int {
+	result := -1
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			result = i
+		}
+	}
+	return result
 }
 
 // RemoveDocument drops all of the named document's contributions from the
@@ -94,6 +142,40 @@ func joinFQN(prefix, name string) string {
 // fully-qualified name.
 func (idx *Index) LookupQualified(fqn string) []*Symbol {
 	return idx.fqn[fqn]
+}
+
+// LookupDirectChildren returns all symbols whose FQN is exactly prefix::name
+// (direct children of the given prefix). This supports wildcard imports from
+// packages that don't have populated Scopes.
+func (idx *Index) LookupDirectChildren(prefix string) []*Symbol {
+	var out []*Symbol
+	seen := make(map[*Symbol]bool)
+	targetPrefix := prefix + "::"
+	for fqn, syms := range idx.fqn {
+		// Check if this FQN starts with prefix:: and has no further :: after that
+		if len(fqn) > len(targetPrefix) && fqn[:len(targetPrefix)] == targetPrefix {
+			remainder := fqn[len(targetPrefix):]
+			// Only include if remainder has no "::" (direct child)
+			if !containsString(remainder, "::") {
+				for _, sym := range syms {
+					if !seen[sym] {
+						seen[sym] = true
+						out = append(out, sym)
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
+func containsString(s, substr string) bool {
+	for i := 0; i+len(substr) <= len(s); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 // DocumentRoot returns the root scope for the named document, or nil.
