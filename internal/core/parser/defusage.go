@@ -957,6 +957,81 @@ func (p *Parser) parseBodyMember() ast.Node {
 		}
 	}
 	
+	// Check for subset/disjoint constraint statements
+	// Pattern: subset X subsets Y; OR disjoint X from Y;
+	// These are anonymous features with relationships
+	if p.atKeyword("subset") || p.atKeyword("disjoint") {
+		isDisjoint := p.atKeyword("disjoint")
+		p.advance() // skip "subset" or "disjoint"
+		
+		// Parse first target (source)
+		source := p.parseRelationshipTarget()
+		
+		if isDisjoint {
+			// Pattern: disjoint X from Y;
+			if !p.acceptKeyword("from") {
+				p.error(p.peek().Span, "expected 'from' after disjoint target")
+			}
+			target := p.parseRelationshipTarget()
+			p.accept2(lexer.Semicolon)
+			
+			u := &ast.Usage{
+				Kind: ast.UsagePart, // Generic feature
+				Relationships: []*ast.Relationship{
+					{
+						Kind:   ast.RelDisjoint,
+						Target: source,
+					},
+					{
+						Kind:   ast.RelDisjoint,
+						Target: target,
+					},
+				},
+			}
+			u.NodeBase.NodeSpan = p.spanFrom(start)
+			u.SetLeadingTrivia(trivia)
+			
+			m := &ast.Membership{
+				Visibility: vis,
+				Member:     u,
+			}
+			m.NodeBase.NodeSpan = u.Span()
+			m.SetLeadingTrivia(trivia)
+			return m
+		} else {
+			// Pattern: subset X subsets Y;
+			if !p.acceptKeyword("subsets") {
+				p.error(p.peek().Span, "expected 'subsets' after subset source")
+			}
+			target := p.parseRelationshipTarget()
+			p.accept2(lexer.Semicolon)
+			
+			u := &ast.Usage{
+				Kind: ast.UsagePart, // Generic feature
+				Relationships: []*ast.Relationship{
+					{
+						Kind:   ast.RelSubsets,
+						Target: source,
+					},
+					{
+						Kind:   ast.RelSubsets,
+						Target: target,
+					},
+				},
+			}
+			u.NodeBase.NodeSpan = p.spanFrom(start)
+			u.SetLeadingTrivia(trivia)
+			
+			m := &ast.Membership{
+				Visibility: vis,
+				Member:     u,
+			}
+			m.NodeBase.NodeSpan = u.Span()
+			m.SetLeadingTrivia(trivia)
+			return m
+		}
+	}
+	
 	// Check for anonymous feature pattern: [modifiers] [name] : Type OR [modifiers] :>> relationships
 	// Examples: private thisClock : Clock :>> self; or ref stateSpace: StateSpace; or ref :>> x
 	// This handles features with visibility but no usage kind keyword
