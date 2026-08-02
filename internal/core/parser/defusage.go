@@ -597,6 +597,11 @@ func (p *Parser) isAnonymousSuccession() bool {
 	}
 	// Check for pattern: identifier/feature chain + "then" (means identifier is connector end, not name)
 	if p.atName() || p.atNameOrKeyword() || p.at(lexer.Keyword) {
+		// Special case: if identifier immediately followed by "first", it's a NAMED succession
+		// Pattern: succession name first [mult] x then y
+		if p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "first" {
+			return false // NAMED succession
+		}
 		// Lookahead to find "then" keyword, skipping identifiers, keywords, dots, ::, and multiplicities for feature chains
 		for i := 1; i < 30; i++ { // reasonable lookahead limit (increased for multiplicity)
 			tok := p.peekN(i)

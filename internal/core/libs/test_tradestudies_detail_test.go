@@ -1,35 +1,43 @@
 package libs
 
 import (
+	"testing"
+
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"testing"
 )
 
-func TestSingleFile_TradeStudies_Details(t *testing.T) {
+func TestTradeStudiesDetail(t *testing.T) {
 	src := &embedSource{}
 	data, err := src.Read("Domain Libraries/Analysis/TradeStudies.sysml")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to load TradeStudies.sysml: %v", err)
 	}
 
-	sf := source.New("TradeStudies.sysml", data)
-	p := parser.New(sf)
+	p := parser.New(source.New("TradeStudies.sysml", data))
 	_ = p.ParseFile()
 
-	if len(p.Diagnostics) > 0 {
-		t.Logf("Parse diagnostics (%d):", len(p.Diagnostics))
-		for i, d := range p.Diagnostics {
-			if i >= 15 {
-				break
-			}
-			text := sf.Text(d.Span)
-			if len(text) > 50 {
-				text = text[:50] + "..."
-			}
-			t.Logf("  [%d] offset %d: %s [near: %q]", i+1, d.Span.Offset, d.Message, text)
+	t.Logf("TradeStudies.sysml: %d diagnostics", len(p.Diagnostics))
+	
+	for i, d := range p.Diagnostics {
+		byteOffset := d.Span.Offset
+		char := ""
+		if byteOffset < len(data) {
+			char = string(data[byteOffset])
 		}
-	} else {
-		t.Log("Parsed cleanly!")
+		
+		// Show 40 chars of context around error
+		contextStart := byteOffset - 20
+		if contextStart < 0 {
+			contextStart = 0
+		}
+		contextEnd := byteOffset + 20
+		if contextEnd > len(data) {
+			contextEnd = len(data)
+		}
+		context := string(data[contextStart:contextEnd])
+		
+		t.Logf("  %d. offset=%d (char=%q): %s", i+1, byteOffset, char, d.Message)
+		t.Logf("     context: %q", context)
 	}
 }
