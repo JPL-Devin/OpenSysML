@@ -539,7 +539,7 @@ func (p *Parser) isStateKeyword() bool {
 		return false
 	}
 	kw := p.peek().KeywordID
-	return kw == "entry" || kw == "do" || kw == "exit" || kw == "state" || kw == "transition"
+	return kw == "entry" || kw == "do" || kw == "exit" || kw == "state" || kw == "transition" || kw == "first" || kw == "accept"
 }
 
 // parseUsageIdentification parses identification for usage declarations, with special handling
@@ -1061,18 +1061,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			hasBody = true
 		}
 	case ast.UsageState:
-		// State usage bodies: state body OR generic
-		// Lookahead: if body starts with state keywords → parseStateBody
-		// Otherwise → generic parseActionBodyGeneric
+		// State usage bodies: always use parseStateBody (it handles both state-specific and generic members)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
-			if p.isStateKeyword() {
-				members = p.parseStateBody()
-			} else {
-				// Generic body (e.g., { doc /* ... */; })
-				members = p.parseActionBodyGeneric()
-			}
+			members = p.parseStateBody()
 			hasBody = true
 		}
 	default:

@@ -1176,8 +1176,15 @@ func (p *Parser) parseStateMember() ast.Node {
 			p.advance()
 			return p.parseExitMember(start)
 		case "state":
-			p.advance()
-			return p.parseSubstateMember(start)
+			// Check if this is a simple declaration (state name;) or full usage (state name { ... })
+			// Lookahead: state followed by identifier and semicolon → SubstateMember
+			// Otherwise → full state usage declaration
+			if p.peekN(1).Kind == lexer.Identifier && p.peekN(2).Kind == lexer.Semicolon {
+				p.advance()
+				return p.parseSubstateMember(start)
+			}
+			// Full state usage - parse as body member
+			return p.parseBodyMember()
 		case "transition":
 			// Lookahead to distinguish:
 			// 1. State machine transition: transition source to target (no name)
@@ -1190,6 +1197,12 @@ func (p *Parser) parseStateMember() ast.Node {
 			// State machine transition
 			p.advance()
 			return p.parseTransitionMember(start)
+		case "first":
+			// Succession statement: first <state> then <state>;
+			return p.parseSuccessionStatement(start)
+		case "accept":
+			// Accept transition: accept <signal> then <state>;
+			return p.parseAcceptTransition(start)
 		}
 	}
 	
@@ -1198,41 +1211,166 @@ func (p *Parser) parseStateMember() ast.Node {
 	return p.parseBodyMember()
 }
 
-// parseEntryMember parses: entry { <actions> }
-func (p *Parser) parseEntryMember(start int) ast.Node {
-	// 'entry' already consumed
+// parseSuccessionStatement parses: first <state> then <state>;
+// This is a succession statement in state body context (defines initial state flow)
+func (p *Parser) parseSuccessionStatement(start int) ast.Node {
+	// 'first' keyword should be consumed by caller, but check if we're at it
+	if p.atKeyword("first") {
+		p.advance()
+	}
 	
-	// Expect '{'
-	if !p.at(lexer.LBrace) {
-		p.error(p.peek().Span, "expected '{' after 'entry'")
-		en := &ast.ErrorNode{Message: "expected '{' after 'entry'"}
+	// Parse first state reference
+	firstState := p.parseQualifiedName()
+	
+	// Expect 'then' keyword
+	if !p.acceptKeyword("then") {
+		p.error(p.peek().Span, "expected 'then' after first state")
+		en := &ast.ErrorNode{Message: "expected 'then' keyword"}
 		en.NodeSpan = p.spanFrom(start)
 		return en
 	}
-	p.advance() // consume '{'
 	
-	// Parse action sequence (reuse action body parsing logic)
-	var actions []ast.Node
-	for !p.at(lexer.RBrace) && !p.atEOF() {
-		actions = append(actions, p.parseActionMember())
+	// Parse second state reference
+	secondState := p.parseQualifiedName()
+	
+	// Expect semicolon
+	p.expect(lexer.Semicolon, "expected ';' after succession statement")
+	
+	// Create succession usage (reuse existing AST node)
+	succession := &ast.Usage{
+		Kind: ast.UsageSuccession,
+		ConnectorEnds: []*ast.ConnectorEnd{
+			{Reference: firstState},
+			{Reference: secondState},
+		},
+	}
+	succession.NodeSpan = p.spanFrom(start)
+	return succession
+}
+
+// parseAcceptTransition parses: accept <signal> then <state>;
+// This is a state transition triggered by accepting a signal
+func (p *Parser) parseAcceptTransition(start int) ast.Node {
+	// 'accept' keyword should be consumed by caller
+	if p.atKeyword("accept") {
+		p.advance() // consume 'accept' if not already consumed
 	}
 	
-	p.expect(lexer.RBrace, "expected '}' after entry actions")
+	// Parse signal type reference (use relaxed parsing to allow keywords as names)
+	signalType := p.parseQualifiedNameRelaxed()
 	
+	// Expect 'then' keyword
+	if !p.acceptKeyword("then") {
+		p.error(p.peek().Span, "expected 'then' after signal type")
+		en := &ast.ErrorNode{Message: "expected 'then' keyword"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	// Parse target state reference (use relaxed parsing to allow keywords like 'on' as names)
+	targetState := p.parseQualifiedNameRelaxed()
+	
+	// Expect semicolon
+	p.expect(lexer.Semicolon, "expected ';' after accept transition")
+	
+	// Create transition usage with accept trigger
+	// For now, represent as transition usage (specialized connector)
+	transition := &ast.Usage{
+		Kind: ast.UsageTransition,
+		// Store signal type as first connector end, target state as second
+		ConnectorEnds: []*ast.ConnectorEnd{
+			{Reference: signalType},  // trigger
+			{Reference: targetState}, // target
+		},
+	}
+	transition.NodeSpan = p.spanFrom(start)
+	return transition
+}
+
+// parseEntryMember parses: entry { <actions> } OR entry <actionRef> OR entry action <def>
+func (p *Parser) parseEntryMember(start int) ast.Node {
+	// 'entry' already consumed
+	
+	// Check for action reference or inline definition
+	// Patterns:
+	// 1. entry { ... } - action block
+	// 2. entry actionName { ... } - action reference with invocation
+	// 3. entry action name { ... } - inline action definition
+	
+	if p.at(lexer.LBrace) {
+		// Pattern 1: entry { ... }
+		p.advance() // consume '{'
+		
+		// Parse action sequence (reuse action body parsing logic)
+		var actions []ast.Node
+		for !p.at(lexer.RBrace) && !p.atEOF() {
+			actions = append(actions, p.parseActionMember())
+		}
+		
+		p.expect(lexer.RBrace, "expected '}' after entry actions")
+		
+		node := &ast.EntryMember{
+			Actions: actions,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Check for 'action' keyword (inline definition)
+	if p.atKeyword("action") {
+		// Pattern 3: entry action name { ... }
+		// Parse as action usage/definition
+		action := p.parseBodyMember()
+		node := &ast.EntryMember{
+			Actions: []ast.Node{action},
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Pattern 2: entry actionName { ... } - action reference
+	// Parse action reference (qualified name) and optional invocation arguments
+	actionRef := p.parseQualifiedName()
+	
+	// Check for invocation arguments body
+	if p.at(lexer.LBrace) {
+		// Parse invocation body (feature bindings): { in vehicle = operatingVehicle; }
+		// For now, skip the body (semantic layer will handle invocation)
+		p.advance() // consume '{'
+		
+		for !p.at(lexer.RBrace) && !p.atEOF() {
+			// Parse and discard feature bindings
+			p.parseBodyMember()
+		}
+		p.expect(lexer.RBrace, "expected '}' after action invocation")
+	}
+	
+	// Create entry member with action reference
 	node := &ast.EntryMember{
-		Actions: actions,
+		Actions: []ast.Node{actionRef}, // Store reference directly for now
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
 }
 
-// parseDoMember parses: do { <actions> }
+// parseDoMember parses: do { <actions> } OR do action <def>
 func (p *Parser) parseDoMember(start int) ast.Node {
 	// 'do' already consumed
 	
-	// Expect '{'
+	// Check for 'action' keyword (inline definition)
+	if p.atKeyword("action") {
+		// do action name { ... } - inline action definition
+		action := p.parseBodyMember()
+		node := &ast.DoMember{
+			Actions: []ast.Node{action},
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Otherwise expect block: do { ... }
 	if !p.at(lexer.LBrace) {
-		p.error(p.peek().Span, "expected '{' after 'do'")
+		p.error(p.peek().Span, "expected '{' or 'action' after 'do'")
 		en := &ast.ErrorNode{Message: "expected '{' after 'do'"}
 		en.NodeSpan = p.spanFrom(start)
 		return en
@@ -1254,13 +1392,24 @@ func (p *Parser) parseDoMember(start int) ast.Node {
 	return node
 }
 
-// parseExitMember parses: exit { <actions> }
+// parseExitMember parses: exit { <actions> } OR exit action <def>
 func (p *Parser) parseExitMember(start int) ast.Node {
 	// 'exit' already consumed
 	
-	// Expect '{'
+	// Check for 'action' keyword (inline definition)
+	if p.atKeyword("action") {
+		// exit action name { ... } - inline action definition
+		action := p.parseBodyMember()
+		node := &ast.ExitMember{
+			Actions: []ast.Node{action},
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Otherwise expect block: exit { ... }
 	if !p.at(lexer.LBrace) {
-		p.error(p.peek().Span, "expected '{' after 'exit'")
+		p.error(p.peek().Span, "expected '{' or 'action' after 'exit'")
 		en := &ast.ErrorNode{Message: "expected '{' after 'exit'"}
 		en.NodeSpan = p.spanFrom(start)
 		return en
