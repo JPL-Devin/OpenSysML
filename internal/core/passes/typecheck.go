@@ -95,6 +95,10 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if !isDef {
 			return "only a definition may specialize; found a usage"
 		}
+		// Skip validation if target is unresolved
+		if target == symbols.SymbolUnknown {
+			return "" // Unresolved reference already reported elsewhere
+		}
 		if !isDefKind(target) {
 			return fmt.Sprintf("%s cannot specialize %s (target is not a definition)", defKind, target)
 		}
@@ -265,6 +269,7 @@ var defSymbolKinds = map[symbols.SymbolKind]bool{
 	symbols.SymbolAnalysisCaseDef:     true,
 	symbols.SymbolVerificationCaseDef: true,
 	symbols.SymbolUseCaseDef:          true,
+	symbols.SymbolAlias:               true, // Aliases can be used as types
 }
 
 // usageSymbolKinds is the set of SymbolKinds that classify a usage.
@@ -294,6 +299,7 @@ var usageSymbolKinds = map[symbols.SymbolKind]bool{
 	symbols.SymbolAnalysisCaseUsage:     true,
 	symbols.SymbolVerificationCaseUsage: true,
 	symbols.SymbolUseCaseUsage:          true,
+	symbols.SymbolAlias:                 true, // Aliases can be subsetting targets
 }
 
 func isDefKind(k symbols.SymbolKind) bool {
