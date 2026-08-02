@@ -81,7 +81,8 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 			// - action { expr } = behavioral node
 			// - action <id>; = behavioral node (reference)
 			// Check for typing colon OR declaration-like body content
-			if p.peekN(1).Kind == lexer.Identifier {
+			tok1 := p.peekN(1)
+			if tok1.Kind == lexer.Identifier || tok1.Kind == lexer.Keyword {
 				tok2 := p.peekN(2)
 				// If colon after name → definitely declaration (typing)
 				if tok2.Kind == lexer.Colon {
@@ -282,14 +283,18 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 	
 	// Optional name (can be anonymous: "in item;")
 	var ident ast.Identification
-	if p.atName() && !p.at(lexer.Colon) && !p.at(lexer.Eq) && !p.at(lexer.Semicolon) {
+	// Skip name if next token is relationship operator, value assignment, or semicolon
+	isRelationshipNext := p.at(lexer.Colon) || p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || 
+		p.at(lexer.ColonColonGt) || p.at(lexer.ColonEq)
+	if p.atName() && !isRelationshipNext && !p.at(lexer.Eq) && !p.at(lexer.Semicolon) {
 		ident = p.parseIdentification()
 	}
 	
-	// Optional typing and relationships (: Type, :> SuperType, etc)
+	// Optional typing and relationships (: Type, :> SuperType, ::> Redefines, etc)
 	var relationships []*ast.Relationship
 	var multiplicity *ast.Multiplicity
-	if p.at(lexer.Colon) || p.at(lexer.ColonGt) {
+	if p.at(lexer.Colon) || p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || 
+		p.at(lexer.ColonColonGt) || p.at(lexer.ColonEq) {
 		rels, _ := p.parseRelationships(true)
 		relationships = append(relationships, rels...)
 	}
@@ -299,13 +304,34 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		multiplicity = p.parseMultiplicity()
 	}
 	
+	// Parse post-multiplicity modifiers (ordered/nonunique)
+	postMods := p.parsePostModifiers()
+	
 	// Optional value (= expr or default expr)
 	var value ast.Node
 	if p.accept2(lexer.Eq) || p.acceptKeyword("default") {
 		value = p.ParseExpression()
 	}
 	
-	p.expect(lexer.Semicolon, "expected ';' after parameter")
+	// Optional body or semicolon
+	var members []ast.Node
+	var hasBody bool
+	if p.accept2(lexer.Semicolon) {
+		hasBody = false
+	} else if p.at(lexer.LBrace) {
+		p.advance() // consume '{'
+		// Parse body members generically
+		for !p.at(lexer.RBrace) && !p.atEOF() {
+			m := p.parseBodyMember()
+			if m != nil {
+				members = append(members, m)
+			}
+		}
+		p.expect(lexer.RBrace, "expected '}'")
+		hasBody = true
+	} else {
+		p.error(p.peek().Span, "expected ';' or '{' after parameter")
+	}
 	
 	// Create Usage node with direction
 	usage := &ast.Usage{
@@ -314,8 +340,12 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		Relationships: relationships,
 		Multiplicity:  multiplicity,
 		Value:         value,
+		Members:       members,
+		HasBody:       hasBody,
 		IsReference:   isRef,
 		Direction:     direction,
+		IsOrdered:     postMods.isOrdered,
+		IsNonunique:   postMods.isNonunique,
 	}
 	usage.NodeSpan = p.spanFrom(start)
 	
