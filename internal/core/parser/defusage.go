@@ -171,6 +171,7 @@ type featureMods struct {
 	isReadonly  bool
 	isOrdered   bool
 	isNonunique bool
+	earlyMultiplicity *ast.Multiplicity // for "end [mult] ref ..." syntax
 }
 
 // atDefUsageStart reports whether the current token begins a def/usage
@@ -234,6 +235,13 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			m.isReference = true
 		case "end":
 			m.isEnd = true
+			// Check for early multiplicity: end [mult] ref ...
+			// Peek ahead without advancing to see if next token is '['
+			p.advance() // consume "end"
+			if p.at(lexer.LBracket) {
+				m.earlyMultiplicity = p.parseMultiplicity()
+			}
+			continue
 		case "constant":
 			m.isConstant = true
 		case "event":
@@ -770,6 +778,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		IsNonunique: mods.isNonunique,
 	}
 	
+	// Apply early multiplicity if present (for "end [mult] ref ..." syntax)
+	if mods.earlyMultiplicity != nil {
+		u.Multiplicity = mods.earlyMultiplicity
+	}
+	
 	// Handle UsageSatisfy special syntax: 
 	// Full form: satisfy [requirement] <name> by <name> { body }
 	// Short form: satisfy/verify <name>;
@@ -788,12 +801,20 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		
 		// Check for optional "by" clause
 		if p.acceptKeyword("by") {
-			subjName := p.parseQualifiedName()
-			if subjName != nil {
-				// Store subject as identification
-				if len(subjName.Parts) > 0 {
-					u.Ident.Name = subjName.Parts[0].Text
-					u.Ident.NameSpan = subjName.Parts[0].Span
+			subjTarget := p.parseRelationshipTarget()
+			if subjTarget != nil {
+				// Store subject as identification or relationship depending on node type
+				// If it's a simple qualified name, use as identification
+				// If it's a feature chain or other expression, store as relationship
+				if qn, ok := subjTarget.(*ast.QualifiedName); ok && len(qn.Parts) > 0 {
+					u.Ident.Name = qn.Parts[0].Text
+					u.Ident.NameSpan = qn.Parts[0].Span
+				} else {
+					// Store as references relationship for complex expressions
+					u.Relationships = append(u.Relationships, &ast.Relationship{
+						Kind:   ast.RelReferences,
+						Target: subjTarget,
+					})
 				}
 			}
 		}
