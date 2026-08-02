@@ -249,6 +249,9 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		if p.leadingPrefixIsNamespace() {
 			return p.parseNamespace(start)
 		}
+		if p.leadingPrefixIsDefUsage() {
+			return p.parseDefUsage(start)
+		}
 		return nil
 	default:
 		return nil
@@ -634,13 +637,16 @@ func (p *Parser) prefixLookahead() int {
 	for p.peekN(i).Kind == lexer.Hash {
 		i++ // '#'
 		// QualifiedName: Name (:: Name)*
-		if k := p.peekN(i).Kind; k != lexer.Identifier && k != lexer.UnrestrictedName {
+		// Allow keywords as metadata type names (e.g., #scenario, #cause)
+		k := p.peekN(i).Kind
+		if k != lexer.Identifier && k != lexer.UnrestrictedName && k != lexer.Keyword {
 			return i
 		}
 		i++
 		for p.peekN(i).Kind == lexer.ColonColon {
 			i++
-			if k := p.peekN(i).Kind; k != lexer.Identifier && k != lexer.UnrestrictedName {
+			k := p.peekN(i).Kind
+			if k != lexer.Identifier && k != lexer.UnrestrictedName && k != lexer.Keyword {
 				return i
 			}
 			i++
@@ -657,6 +663,21 @@ func (p *Parser) leadingPrefixIsPackage() bool {
 func (p *Parser) leadingPrefixIsNamespace() bool {
 	t := p.peekN(p.prefixLookahead())
 	return t.Kind == lexer.Keyword && t.KeywordID == "namespace"
+}
+
+func (p *Parser) leadingPrefixIsDefUsage() bool {
+	i := p.prefixLookahead() // skip past all #QualifiedName prefixes
+	t := p.peekN(i)
+	if t.Kind != lexer.Keyword {
+		return false
+	}
+	// Check if keyword is def/usage keyword OR 'def' modifier
+	if t.KeywordID == "def" {
+		return true // explicit 'def' after prefixes
+	}
+	_, isDef := definitionKindKeywords[t.KeywordID]
+	_, isUsage := usageKindKeywords[t.KeywordID]
+	return isDef || isUsage
 }
 
 // parseFilter parses `filter OwnedExpression ;` (ElementFilterMember).

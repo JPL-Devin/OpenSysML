@@ -355,12 +355,39 @@ func (p *Parser) parsePostModifiers() featureMods {
 // parseDefUsage parses a definition or usage declaration. The caller has
 // already established (via atDefUsageStart) that a def/usage begins here.
 func (p *Parser) parseDefUsage(start int) ast.Node {
+	// Parse optional `#MetadataType` prefixes (user-defined keywords)
+	var prefixes []*ast.PrefixMetadata
+	for p.at(lexer.Hash) {
+		p.advance() // consume #
+		// Allow keywords as metadata type names (e.g., #scenario, #cause)
+		metaName := p.parseQualifiedNameRelaxed()
+		if metaName != nil {
+			prefixes = append(prefixes, &ast.PrefixMetadata{
+				Type: metaName,
+			})
+		}
+	}
+	
+	// Helper to apply prefixes to result node
+	applyPrefixes := func(node ast.Node) ast.Node {
+		if len(prefixes) == 0 {
+			return node
+		}
+		if u, ok := node.(*ast.Usage); ok {
+			u.Prefixes = append(prefixes, u.Prefixes...)
+		} else if d, ok := node.(*ast.Definition); ok {
+			d.Prefixes = append(prefixes, d.Prefixes...)
+		}
+		return node
+	}
+	
 	// Check for relationship tokens before modifiers (e.g., :>> x)
 	// These indicate anonymous usages (attribute is default kind)
 	tok := p.peek()
 	if tok.Kind == lexer.ColonGt || tok.Kind == lexer.ColonGtGt || tok.Kind == lexer.Colon {
 		// No modifiers, no kind keyword - parse as anonymous attribute usage
-		return p.parseUsage(start, ast.UsageAttribute, featureMods{}, false)
+		u := p.parseUsage(start, ast.UsageAttribute, featureMods{}, false)
+		return applyPrefixes(u)
 	}
 	
 	mods := p.parseFeatureModifiers()
@@ -371,9 +398,9 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		p.advance() // 'case'
 		if p.atKeyword("def") {
 			p.advance() // 'def'
-			return p.parseDefinition(start, ast.DefUseCase, mods, false)
+			return applyPrefixes(p.parseDefinition(start, ast.DefUseCase, mods, false))
 		}
-		return p.parseUsage(start, ast.UsageUseCase, mods, false)
+		return applyPrefixes(p.parseUsage(start, ast.UsageUseCase, mods, false))
 	}
 
 	t := p.peek()
@@ -408,7 +435,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 					}, u.Relationships...)
 				}
 			}
-			return u
+			return applyPrefixes(u)
 		}
 		
 		// Special case: succession flow from X to Y
@@ -423,7 +450,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				// For now, treat as semantic annotation - flow inherits succession characteristics
 				// Implementation note: May need dedicated AST flag or relationship for this hybrid
 			}
-			return u
+			return applyPrefixes(u)
 		}
 		
 		// Special case: perform <ref>; (shorthand without action keyword)
@@ -461,7 +488,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			}
 			
 			u.NodeSpan = p.spanFrom(start)
-			return u
+			return applyPrefixes(u)
 		}
 		
 		// Special case: event <ref>; (shorthand event occurrence reference)
@@ -510,7 +537,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			}
 		
 		u.NodeSpan = p.spanFrom(start)
-		return u
+		return applyPrefixes(u)
 	}
 	
 	// Special case: include <ref>; (shorthand for use case with includes relationship)
@@ -554,10 +581,18 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 		
 		u.NodeSpan = p.spanFrom(start)
-		return u
+		return applyPrefixes(u)
 	}
 	
-	return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
+	return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], mods, isAll))
+	}
+	
+	// Special case: if current token is 'def' (after prefixes/modifiers), parse as generic definition
+	// This handles patterns like `#scenario def X` where prefix acts as semantic annotation
+	if p.atKeyword("def") {
+		p.advance() // consume 'def'
+		// Use generic definition kind (or could extract from prefix)
+		return applyPrefixes(p.parseDefinition(start, ast.DefClass, mods, false))
 	}
 	
 	defKind, ok := definitionKindKeywords[kw]
@@ -568,9 +603,9 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		hasModifiers := mods.direction != ast.DirNone || mods.isReference || mods.isEnd || mods.isComposite || mods.isDerived
 		hasNameWithMultOrMods := p.atNameOrKeyword() && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon || isPostModifierKeyword(p.peekN(1)))
 		if hasModifiers || hasNameWithMultOrMods {
-			return p.parseUsage(start, ast.UsageAttribute, mods, false)
+			return applyPrefixes(p.parseUsage(start, ast.UsageAttribute, mods, false))
 		}
-		return nil
+		return applyPrefixes(nil)
 	}
 	p.advance() // consume the kind keyword
 	
@@ -597,7 +632,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 
 	if p.atKeyword("def") {
 		p.advance() // consume 'def'
-		return p.parseDefinition(start, defKind, mods, isAll)
+		return applyPrefixes(p.parseDefinition(start, defKind, mods, isAll))
 	}
 	
 	// Special handling for 'datatype' keyword: at package/namespace level without
@@ -608,11 +643,11 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		nextTok := p.peek()
 		if nextTok.Kind != lexer.Colon {
 			// No typing colon - treat as definition shorthand
-			return p.parseDefinition(start, defKind, mods, isAll)
+			return applyPrefixes(p.parseDefinition(start, defKind, mods, isAll))
 		}
 	}
 	
-	return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
+	return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], mods, isAll))
 }
 
 func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featureMods, isAll bool) *ast.Definition {
@@ -1372,6 +1407,25 @@ func (p *Parser) parseBodyMember() ast.Node {
 			mem.HasSuccession = true
 		}
 		return innerMember
+	}
+
+	// Check for `#MetadataType` prefix (user-defined keyword)
+	// Parse prefixes and then parse def/usage declaration
+	if p.at(lexer.Hash) {
+		// Delegate to parseDefUsage which handles prefixes
+		inner := p.parseDefUsage(start)
+		if inner == nil {
+			return nil
+		}
+		// Wrap in membership if not already wrapped
+		if m, ok := inner.(*ast.Membership); ok {
+			m.SetLeadingTrivia(trivia)
+			return m
+		}
+		m := &ast.Membership{Visibility: vis, Member: inner}
+		m.NodeSpan = p.spanFrom(start)
+		m.SetLeadingTrivia(trivia)
+		return m
 	}
 
 	// Check for metadata annotation: @Type{props}
