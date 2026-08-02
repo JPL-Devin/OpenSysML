@@ -155,3 +155,122 @@ func TestEval_StepLimit(t *testing.T) {
 	t.Error("expected ErrStepLimitExceeded but got none")
 }
 
+func TestEval_EqualityConst(t *testing.T) {
+	tests := []struct {
+		src      string
+		expected bool
+	}{
+		{"42 == 42", true},
+		{"42 == 43", false},
+		{"3.14 == 3.14", true},
+		{"3.14 != 3.15", true},
+		{"true == true", true},
+		{"true == false", false},
+		{"false != true", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			model, resolver, root := parseAndBuildModel(t, "attribute test = "+tt.src+";")
+			ctx := NewContext(model, resolver, 1000)
+			attrSym := resolveSymbol(t, root, "test")
+			attrDecl := attrSym.Decl.(*ast.Usage)
+			result, err := ctx.Eval(attrDecl.Value)
+			if err != nil {
+				t.Fatalf("Eval failed: %v", err)
+			}
+			if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
+				t.Fatalf("expected bool, got %v", result)
+			}
+			if result.Const.Bool != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result.Const.Bool)
+			}
+		})
+	}
+}
+
+func TestEval_EqualityString(t *testing.T) {
+	tests := []struct {
+		src      string
+		expected bool
+	}{
+		{`"hello" == "hello"`, true},
+		{`"hello" == "world"`, false},
+		{`"foo" != "bar"`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			model, resolver, root := parseAndBuildModel(t, "attribute test = "+tt.src+";")
+			ctx := NewContext(model, resolver, 1000)
+			attrSym := resolveSymbol(t, root, "test")
+			attrDecl := attrSym.Decl.(*ast.Usage)
+			result, err := ctx.Eval(attrDecl.Value)
+			if err != nil {
+				t.Fatalf("Eval failed: %v", err)
+			}
+			if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
+				t.Fatalf("expected bool, got %v", result)
+			}
+			if result.Const.Bool != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result.Const.Bool)
+			}
+		})
+	}
+}
+
+func TestEval_EqualityNull(t *testing.T) {
+	tests := []struct {
+		src      string
+		expected bool
+	}{
+		{"null == null", true},
+		{"null != null", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			model, resolver, root := parseAndBuildModel(t, "attribute test = "+tt.src+";")
+			ctx := NewContext(model, resolver, 1000)
+			attrSym := resolveSymbol(t, root, "test")
+			attrDecl := attrSym.Decl.(*ast.Usage)
+			result, err := ctx.Eval(attrDecl.Value)
+			if err != nil {
+				t.Fatalf("Eval failed: %v", err)
+			}
+			if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
+				t.Fatalf("expected bool, got %v", result)
+			}
+			if result.Const.Bool != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result.Const.Bool)
+			}
+		})
+	}
+}
+
+func TestEval_EqualityCrossKind(t *testing.T) {
+	tests := []struct {
+		src      string
+		expected bool
+	}{
+		{"42 == null", false},
+		{`"hello" == 42`, false},
+		{`"hello" != 42`, true},
+		{"null != 42", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			model, resolver, root := parseAndBuildModel(t, "attribute test = "+tt.src+";")
+			ctx := NewContext(model, resolver, 1000)
+			attrSym := resolveSymbol(t, root, "test")
+			attrDecl := attrSym.Decl.(*ast.Usage)
+			result, err := ctx.Eval(attrDecl.Value)
+			if err != nil {
+				t.Fatalf("Eval failed: %v", err)
+			}
+			if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
+				t.Fatalf("expected bool, got %v", result)
+			}
+			if result.Const.Bool != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result.Const.Bool)
+			}
+		})
+	}
+}

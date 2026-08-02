@@ -243,7 +243,27 @@ func toReal(v semantics.Value) float64 {
 
 // evalEquality evaluates equality operators (==, !=).
 func (ec *EvalContext) evalEquality(n *ast.OperatorExpr) (Value, error) {
-	return Value{}, fmt.Errorf("equality not yet implemented")
+	if len(n.Operands) != 2 {
+		return Value{}, fmt.Errorf("equality requires 2 operands, got %d", len(n.Operands))
+	}
+	
+	left, err := ec.Eval(n.Operands[0])
+	if err != nil {
+		return Value{}, err
+	}
+	right, err := ec.Eval(n.Operands[1])
+	if err != nil {
+		return Value{}, err
+	}
+	
+	equal := valueEqual(left, right)
+	
+	// Handle != operator
+	if n.Operator == ast.OpNeq {
+		equal = !equal
+	}
+	
+	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: equal}}, nil
 }
 
 // evalComparison evaluates comparison operators (<, <=, >, >=).
@@ -503,5 +523,64 @@ func qualifiedNameToString(qn *ast.QualifiedName) string {
 		}
 	}
 	return strings.Join(parts, "::")
+}
+
+// valueEqual checks deep equality of two runtime values.
+func valueEqual(a, b Value) bool {
+	if a.Kind != b.Kind {
+		return false
+	}
+	switch a.Kind {
+	case ValConst:
+		// Delegate to semantics layer for const equality
+		result, ok := semantics.EvalBinary(ast.OpEq, a.Const, b.Const)
+		return ok && result.Kind == semantics.ValBool && result.Bool
+	case ValString:
+		return a.Str == b.Str
+	case ValNull:
+		return true
+	case ValInstance:
+		return a.Instance == b.Instance
+	case ValSequence:
+		return sequenceEqual(a.Sequence, b.Sequence)
+	case ValSet:
+		return setEqual(a.Set, b.Set)
+	default:
+		return false
+	}
+}
+
+// sequenceEqual checks structural equality of sequences (element-wise).
+func sequenceEqual(a, b *Sequence) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.Size() != b.Size() {
+		return false
+	}
+	for i := 0; i < a.Size(); i++ {
+		aElem, _ := a.At(i)
+		bElem, _ := b.At(i)
+		if !valueEqual(aElem, bElem) {
+			return false
+		}
+	}
+	return true
+}
+
+// setEqual checks set equality (same keys via valueKey).
+func setEqual(a, b *Set) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.Size() != b.Size() {
+		return false
+	}
+	for key := range a.elements {
+		if _, exists := b.elements[key]; !exists {
+			return false
+		}
+	}
+	return true
 }
 
