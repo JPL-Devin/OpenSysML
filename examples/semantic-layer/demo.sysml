@@ -10,32 +10,26 @@ package SemanticLayerDemo {
     // =========================================================================
     
     // Equality operators
-    attribute equalityDemo {
-        attribute intEquality = 42 == 42;          // true
-        attribute intInequality = 42 != 43;        // true
-        attribute realEquality = 3.14 == 3.14;     // true
-        attribute nullEquality = null == null;     // true
-        attribute crossKindCheck = 42 == null;     // false
-    }
+    attribute intEquality = 42 == 42;          // true
+    attribute intInequality = 42 != 43;        // true
+    attribute realEquality = 3.14 == 3.14;     // true
+    attribute nullEquality = null == null;     // true
+    attribute crossKindCheck = 42 == null;     // false
     
     // Logical operators with short-circuit evaluation
-    attribute logicalDemo {
-        attribute andTrue = (5 > 3) & (10 < 20);   // true
-        attribute andFalse = (5 < 3) & (10 < 20);  // false (short-circuits)
-        attribute orTrue = (5 > 3) | (10 > 20);    // true (short-circuits)
-        attribute orFalse = (5 < 3) | (10 > 20);   // false
-        attribute notTrue = not (5 < 3);           // true
-        attribute notFalse = not (5 > 3);          // false
-        attribute doubleNot = not (not true);      // true
-    }
+    attribute andTrue = (5 > 3) & (10 < 20);   // true
+    attribute andFalse = (5 < 3) & (10 < 20);  // false (short-circuits)
+    attribute orTrue = (5 > 3) | (10 > 20);    // true (short-circuits)
+    attribute orFalse = (5 < 3) | (10 > 20);   // false
+    attribute notTrue = not (5 < 3);           // true
+    attribute notFalse = not (5 > 3);          // false
+    attribute doubleNot = not (not true);      // true
     
     // Arithmetic negation
-    attribute negationDemo {
-        attribute negInt = -42;                    // -42
-        attribute negReal = -3.14;                 // -3.14
-        attribute doubleNeg = -(-5);               // 5
-        attribute negExpr = -(3 + 2);              // -5
-    }
+    attribute negInt = -42;                    // -42
+    attribute negReal = -3.14;                 // -3.14
+    attribute doubleNeg = -(-5);               // 5
+    attribute negExpr = -(3 + 2);              // -5
     
     // Qualified name lookup - multi-part names
     namespace MathConstants {
@@ -47,20 +41,16 @@ package SemanticLayerDemo {
         }
     }
     
-    attribute qualifiedDemo {
-        attribute usePi = MathConstants::pi;                 // 3.14159
-        attribute useE = MathConstants::e;                   // 2.71828
-        attribute nestedLookup = MathConstants::Derived::twoPi;  // 6.28318
-    }
+    attribute usePi = MathConstants::pi;                 // 3.14159
+    attribute useE = MathConstants::e;                   // 2.71828
+    attribute nestedLookup = MathConstants::Derived::twoPi;  // 6.28318
     
     // Combined operators - realistic expressions
-    attribute combinedDemo {
-        attribute expr1 = (42 == 42) & (100 != 99);          // true
-        attribute expr2 = MathConstants::pi > 3;             // true
-        attribute expr3 = -(MathConstants::e) < 0;           // true
-        attribute expr4 = (10 > 5) | (3 == 2);              // true
-        attribute expr5 = not ((5 < 3) & (10 > 20));        // true
-    }
+    attribute expr1 = (42 == 42) & (100 != 99);          // true
+    attribute expr2 = MathConstants::pi > 3;             // true
+    attribute expr3 = -(MathConstants::e) < 0;           // true
+    attribute expr4 = (10 > 5) | (3 == 2);              // true
+    attribute expr5 = not ((5 < 3) & (10 > 20));        // true
 
     // =========================================================================
     // Track 3: Feature Chain Resolution
@@ -77,27 +67,25 @@ package SemanticLayerDemo {
         attribute id;
     }
     
-    attribute chainDemo {
-        part myContainer : Container {
-            attribute redefines value = 42;
-            attribute redefines name = "test";
-        }
-        
-        part myNested : Nested {
-            attribute redefines id = 1;
-            part redefines inner : Container {
-                attribute redefines value = 100;
-            }
-        }
-        
-        // Simple chain: object.member
-        attribute simpleValue = myContainer.value;          // 42
-        attribute simpleName = myContainer.name;            // "test"
-        
-        // Nested chains: object.member.member
-        attribute nestedValue = myNested.inner.value;       // 100
-        attribute nestedId = myNested.id;                   // 1
+    part myContainer : Container {
+        attribute redefines value = 42;
+        attribute redefines name = "test";
     }
+    
+    part myNested : Nested {
+        attribute redefines id = 1;
+        part redefines inner : Container {
+            attribute redefines value = 100;
+        }
+    }
+    
+    // Simple chain: object.member
+    attribute simpleValue = myContainer.value;          // 42
+    attribute simpleName = myContainer.name;            // "test"
+    
+    // Nested chains: object.member.member
+    attribute nestedValue = myNested.inner.value;       // 100
+    attribute nestedId = myNested.id;                   // 1
     
     // Feature chains in relationships - subsetting
     part def Point {
@@ -110,9 +98,7 @@ package SemanticLayerDemo {
     }
     
     part def Rectangle specializes Shape {
-        // Feature chain subsetting (origin inherited from Shape)
         part topLeft : Point;
-        // Note: Direct subsetting of inherited members requires qualified name
     }
     
     // Feature chains in redefinitions
@@ -121,7 +107,6 @@ package SemanticLayerDemo {
     }
     
     part def AdvancedComponent specializes Component {
-        // Redefines with feature chain
         part redefines config : Container {
             attribute redefines value = 200;
         }
@@ -144,12 +129,10 @@ package SemanticLayerDemo {
         attribute redefines speed : SpeedType[1..1];
     }
     
-    attribute validationDemo {
-        attribute allVehicles : Vehicle[*];
-        
-        // Valid: Car conforms to Vehicle (Car specializes Vehicle)
-        attribute myCar : Car subsets allVehicles;
-    }
+    part allVehicles : Vehicle[*];
+    
+    // Valid: Car conforms to Vehicle (Car specializes Vehicle)
+    part myCar : Car subsets allVehicles;
     
     // Redefinition validation - must follow SysML rules
     part def Engine {
@@ -199,42 +182,38 @@ package SemanticLayerDemo {
             }
         }
         
-        attribute analysis {
-            part system : AdvancedMonitoring;
-            
-            // Feature chains to access nested values
-            attribute tempThreshold = system.tempSensor.threshold;       // 100.0
-            attribute pressureThreshold = system.pressureSensor.threshold; // 50.0
-            
-            // Operators on chain results
-            attribute isHighTemp = tempThreshold > 90.0;                // true
-            attribute isLowPressure = pressureThreshold < 60.0;         // true
-            
-            // Combined logic
-            attribute alertNeeded = isHighTemp & isLowPressure;         // true
-            attribute systemOK = not alertNeeded;                       // false
-            
-            // Qualified names with operators
-            attribute compared = tempThreshold == MathConstants::Derived::twoPi; // false
-        }
+        part system : AdvancedMonitoring;
+        
+        // Feature chains to access nested values
+        attribute tempThreshold = system.tempSensor.threshold;       // 100.0
+        attribute pressureThreshold = system.pressureSensor.threshold; // 50.0
+        
+        // Operators on chain results
+        attribute isHighTemp = tempThreshold > 90.0;                // true
+        attribute isLowPressure = pressureThreshold < 60.0;         // true
+        
+        // Combined logic
+        attribute alertNeeded = isHighTemp & isLowPressure;         // true
+        attribute systemOK = not alertNeeded;                       // false
+        
+        // Qualified names with operators
+        attribute compared = tempThreshold == SemanticLayerDemo::MathConstants::Derived::twoPi; // false
     }
     
     // =========================================================================
     // Edge Cases and Advanced Usage
     // =========================================================================
     
-    attribute edgeCases {
-        // Negation of comparison results
-        attribute notEqual = not (42 == 43);                    // true
-        
-        // Chained comparisons with negation
-        attribute complex1 = -(5) < 0;                          // true
-        attribute complex2 = -(-10) == 10;                      // true
-        
-        // Multiple logical operators
-        attribute multiLogic = (true & false) | (true & true);  // true
-        
-        // Parenthesized expressions
-        attribute grouped = ((5 > 3) & (10 < 20)) | (1 == 2);  // true
-    }
+    // Negation of comparison results
+    attribute notEqual = not (42 == 43);                    // true
+    
+    // Chained comparisons with negation
+    attribute complex1 = -(5) < 0;                          // true
+    attribute complex2 = -(-10) == 10;                      // true
+    
+    // Multiple logical operators
+    attribute multiLogic = (true & false) | (true & true);  // true
+    
+    // Parenthesized expressions
+    attribute grouped = ((5 > 3) & (10 < 20)) | (1 == 2);  // true
 }
