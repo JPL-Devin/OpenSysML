@@ -773,8 +773,14 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 		// Check for doc keyword → parse as documentation
 		if p.atKeyword("doc") {
 			members = append(members, p.parseDocumentation(before))
+		} else if p.atKeyword("assert") || p.atKeyword("assume") {
+			// Parse constraint expression (assert/assume)
+			members = append(members, p.parseConstraintMember())
+		} else if p.atDefUsageStart() {
+			// Definition/usage keyword - parse as body member
+			members = append(members, p.parseBodyMember())
 		} else {
-			// Parse constraint expression (assert/assume/bare expression)
+			// Default: parse as constraint expression (bare expression)
 			members = append(members, p.parseConstraintMember())
 		}
 		
