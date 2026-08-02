@@ -49,12 +49,14 @@ sysml -l "examples/sysml-v2-training/30. Calculations/Calculation Example.sysml"
 go test ./internal/core/parser -v -run TestTrainingExamples
 ```
 
-## Source
+## License
 
 These examples are from the OMG SysML v2 Pilot Implementation 2026-05 release:
-- **License:** Eclipse Public License 2.0 (EPL-2.0)
+- **License:** Eclipse Public License 2.0 (EPL-2.0) — see `LICENSE` and `NOTICE` files
 - **Source:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation
 - **Release:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/releases/tag/2026-05
+
+These files are kept **verbatim** (unmodified) from the upstream release to serve as authoritative test cases for Systemica's SysML v2 compliance. The EPL-2.0 license is compatible with Systemica's Apache-2.0 license.
 
 ## Systemica Compatibility
 
