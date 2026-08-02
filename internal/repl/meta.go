@@ -204,10 +204,11 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	
 	// Try simple feature reference lookup (e.g., "%eval x")
 	if isSimpleIdentifier(expr) {
-		sym, ok := doc.Scope.LookupLocal(expr)
-		if ok && sym != nil {
+		sym := lookupInScopeTree(doc.Scope, expr)
+		if sym != nil {
 			if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
-				val, err := ctx.Eval(usage.Value)
+				// Evaluate with the symbol's owner scope for proper name resolution
+				val, err := ctx.EvalWithScope(usage.Value, sym.OwnerScope)
 				if err != nil {
 					return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
 				}
@@ -884,4 +885,25 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 	}
 	
 	return out, false, nil
+}
+
+// lookupInScopeTree recursively searches scope and all nested scopes for a symbol.
+func lookupInScopeTree(scope *symbols.Scope, name string) *symbols.Symbol {
+	if scope == nil {
+		return nil
+	}
+	
+	// Try local lookup first
+	if sym, ok := scope.LookupLocal(name); ok && sym != nil {
+		return sym
+	}
+	
+	// Recursively search nested scopes
+	for _, child := range scope.Children() {
+		if sym := lookupInScopeTree(child, name); sym != nil {
+			return sym
+		}
+	}
+	
+	return nil
 }

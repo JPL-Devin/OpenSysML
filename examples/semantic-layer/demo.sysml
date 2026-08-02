@@ -1,6 +1,6 @@
 // =============================================================================
 // Semantic Layer Feature Demo
-// Demonstrates runtime operators, resolution, and validation
+// Demonstrates runtime operators, feature chains, and validation
 // =============================================================================
 
 package SemanticLayerDemo {
@@ -10,32 +10,26 @@ package SemanticLayerDemo {
     // =========================================================================
     
     // Equality operators
-    attribute equalityDemo {
-        attribute intEquality = 42 == 42;          // true
-        attribute intInequality = 42 != 43;        // true
-        attribute realEquality = 3.14 == 3.14;     // true
-        attribute nullEquality = null == null;     // true
-        attribute crossKindCheck = 42 == null;     // false
-    }
+    attribute intEquality = 42 == 42;          // true
+    attribute intInequality = 42 != 43;        // true
+    attribute realEquality = 3.14 == 3.14;     // true
+    attribute nullEquality = null == null;     // true
+    attribute crossKindCheck = 42 == null;     // false
     
     // Logical operators with short-circuit evaluation
-    attribute logicalDemo {
-        attribute andTrue = (5 > 3) & (10 < 20);   // true
-        attribute andFalse = (5 < 3) & (10 < 20);  // false (short-circuits)
-        attribute orTrue = (5 > 3) | (10 > 20);    // true (short-circuits)
-        attribute orFalse = (5 < 3) | (10 > 20);   // false
-        attribute notTrue = not (5 < 3);           // true
-        attribute notFalse = not (5 > 3);          // false
-        attribute doubleNot = not (not true);      // true
-    }
+    attribute andTrue = (5 > 3) & (10 < 20);   // true
+    attribute andFalse = (5 < 3) & (10 < 20);  // false
+    attribute orTrue = (5 > 3) | (10 > 20);    // true
+    attribute orFalse = (5 < 3) | (10 > 20);   // false
+    attribute notTrue = not (5 < 3);           // true
+    attribute notFalse = not (5 > 3);          // false
+    attribute doubleNot = not (not true);      // true
     
     // Arithmetic negation
-    attribute negationDemo {
-        attribute negInt = -42;                    // -42
-        attribute negReal = -3.14;                 // -3.14
-        attribute doubleNeg = -(-5);               // 5
-        attribute negExpr = -(3 + 2);              // -5
-    }
+    attribute negInt = -42;                    // -42
+    attribute negReal = -3.14;                 // -3.14
+    attribute doubleNeg = -(-5);               // 5
+    attribute negExpr = -(3 + 2);              // -5
     
     // Qualified name lookup - multi-part names
     namespace MathConstants {
@@ -47,194 +41,104 @@ package SemanticLayerDemo {
         }
     }
     
-    attribute qualifiedDemo {
-        attribute usePi = MathConstants::pi;                 // 3.14159
-        attribute useE = MathConstants::e;                   // 2.71828
-        attribute nestedLookup = MathConstants::Derived::twoPi;  // 6.28318
-    }
+    attribute usePi = MathConstants::pi;                 // 3.14159
+    attribute useE = MathConstants::e;                   // 2.71828
+    attribute nestedLookup = MathConstants::Derived::twoPi;  // 6.28318
     
     // Combined operators - realistic expressions
-    attribute combinedDemo {
-        attribute expr1 = (42 == 42) & (100 != 99);          // true
-        attribute expr2 = MathConstants::pi > 3;             // true
-        attribute expr3 = -(MathConstants::e) < 0;           // true
-        attribute expr4 = (10 > 5) | (3 == 2);              // true
-        attribute expr5 = not ((5 < 3) & (10 > 20));        // true
-    }
+    attribute expr1 = (42 == 42) & (100 != 99);          // true
+    attribute expr2 = MathConstants::pi > 3;             // true
+    attribute expr3 = -(MathConstants::e) < 0;           // true
+    attribute expr4 = (10 > 5) | (3 == 2);              // true
+    attribute expr5 = not ((5 < 3) & (10 > 20));        // true
 
     // =========================================================================
-    // Track 3: Feature Chain Resolution
+    // Track 2: Feature Chain Resolution
     // =========================================================================
     
     // Simple feature chains - member access
     part def Container {
-        attribute value;
-        attribute name;
+        attribute value = 0;
+        attribute name = "default";
     }
     
+    part myContainer : Container;
+    
+    // Simple chain: object.member
+    attribute simpleValue = myContainer.value;          // 0
+    attribute simpleName = myContainer.name;            // "default"
+    
+    // Nested chains
     part def Nested {
         part inner : Container;
-        attribute id;
+        attribute id = 0;
     }
     
-    attribute chainDemo {
-        part myContainer : Container {
-            attribute redefines value = 42;
-            attribute redefines name = "test";
-        }
-        
-        part myNested : Nested {
-            attribute redefines id = 1;
-            part redefines inner : Container {
-                attribute redefines value = 100;
-            }
-        }
-        
-        // Simple chain: object.member
-        attribute simpleValue = myContainer.value;          // 42
-        attribute simpleName = myContainer.name;            // "test"
-        
-        // Nested chains: object.member.member
-        attribute nestedValue = myNested.inner.value;       // 100
-        attribute nestedId = myNested.id;                   // 1
-    }
+    part myNested : Nested;
     
-    // Feature chains in relationships - subsetting
-    part def Point {
-        attribute x;
-        attribute y;
-    }
-    
-    part def Shape {
-        part origin : Point;
-    }
-    
-    part def Rectangle specializes Shape {
-        // Feature chain subsetting (origin inherited from Shape)
-        part topLeft : Point;
-        // Note: Direct subsetting of inherited members requires qualified name
-    }
-    
-    // Feature chains in redefinitions
-    part def Component {
-        part config : Container;
-    }
-    
-    part def AdvancedComponent specializes Component {
-        // Redefines with feature chain
-        part redefines config : Container {
-            attribute redefines value = 200;
-        }
-    }
+    attribute nestedValue = myNested.inner.value;       // 0
+    attribute nestedId = myNested.id;                   // 0
 
     // =========================================================================
-    // Track 4: Semantic Validation
+    // Track 3: Semantic Validation
     // =========================================================================
     
-    // Typing conformance - subsetting must respect type hierarchy
+    // Typing conformance - valid specialization
     attribute def SpeedType;
     
     part def Vehicle {
-        attribute speed : SpeedType[1..2];
+        attribute speed : SpeedType;
     }
     
     part def Car specializes Vehicle {
-        // Valid: Car.speed type conforms to Vehicle.speed
-        // Multiplicity [1..1] is within [1..2]
-        attribute redefines speed : SpeedType[1..1];
+        // Valid: Car.speed inherits Vehicle.speed type
     }
     
-    attribute validationDemo {
-        attribute allVehicles : Vehicle[*];
-        
-        // Valid: Car conforms to Vehicle (Car specializes Vehicle)
-        attribute myCar : Car subsets allVehicles;
-    }
-    
-    // Redefinition validation - must follow SysML rules
-    part def Engine {
-        attribute power[100..500];
-        attribute efficiency[0..1];
-    }
-    
-    part def ElectricEngine specializes Engine {
-        // Both redefinitions valid:
-        // - Inherited from Engine ✓
-        // - Multiplicity bounds valid ✓
-        attribute redefines power[200..400];       // Narrows range
-        attribute redefines efficiency[0.8..0.95];    // Narrows range
-    }
-    
-    part def HybridEngine specializes Engine {
-        // Valid redefinitions maintaining constraints
-        attribute redefines power[150..450];
-        attribute redefines efficiency[0.75..0.98];
-    }
+    // Valid subsetting - Car specializes Vehicle
+    part allVehicles : Vehicle[*];
+    part myCar : Car subsets allVehicles;  // OK: Car conforms to Vehicle
 
     // =========================================================================
-    // Comprehensive Integration Example
+    // Integration Example
     // =========================================================================
     
-    // Realistic scenario combining all features
-    namespace VehicleSystem {
-        
+    namespace Integration {
         part def Sensor {
-            attribute reading;
-            attribute threshold;
+            attribute reading = 0.0;
+            attribute threshold = 100.0;
         }
         
-        part def MonitoringSystem {
-            part tempSensor : Sensor;
-            part pressureSensor : Sensor;
-        }
+        part tempSensor : Sensor;
+        part pressureSensor : Sensor;
         
-        part def AdvancedMonitoring specializes MonitoringSystem {
-            // Redefinitions with validation
-            part redefines tempSensor : Sensor {
-                attribute redefines threshold = 100.0;
-            }
-            
-            part redefines pressureSensor : Sensor {
-                attribute redefines threshold = 50.0;
-            }
-        }
+        // Feature chains to access nested values
+        attribute tempValue = tempSensor.reading;       // 0.0
+        attribute tempLimit = tempSensor.threshold;     // 100.0
+        attribute pressureValue = pressureSensor.reading;   // 0.0
+        attribute pressureLimit = pressureSensor.threshold; // 100.0
         
-        attribute analysis {
-            part system : AdvancedMonitoring;
-            
-            // Feature chains to access nested values
-            attribute tempThreshold = system.tempSensor.threshold;       // 100.0
-            attribute pressureThreshold = system.pressureSensor.threshold; // 50.0
-            
-            // Operators on chain results
-            attribute isHighTemp = tempThreshold > 90.0;                // true
-            attribute isLowPressure = pressureThreshold < 60.0;         // true
-            
-            // Combined logic
-            attribute alertNeeded = isHighTemp & isLowPressure;         // true
-            attribute systemOK = not alertNeeded;                       // false
-            
-            // Qualified names with operators
-            attribute compared = tempThreshold == MathConstants::Derived::twoPi; // false
-        }
+        // Operators on chain results
+        attribute isHighTemp = tempValue > 90.0;           // false
+        attribute isNormalPressure = pressureValue < 200.0;  // true
+        
+        // Combined logic
+        attribute systemOK = (not isHighTemp) & isNormalPressure;  // true
     }
     
     // =========================================================================
-    // Edge Cases and Advanced Usage
+    // Edge Cases
     // =========================================================================
     
-    attribute edgeCases {
-        // Negation of comparison results
-        attribute notEqual = not (42 == 43);                    // true
-        
-        // Chained comparisons with negation
-        attribute complex1 = -(5) < 0;                          // true
-        attribute complex2 = -(-10) == 10;                      // true
-        
-        // Multiple logical operators
-        attribute multiLogic = (true & false) | (true & true);  // true
-        
-        // Parenthesized expressions
-        attribute grouped = ((5 > 3) & (10 < 20)) | (1 == 2);  // true
-    }
+    // Negation of comparison results
+    attribute notEqual = not (42 == 43);                // true
+    
+    // Chained comparisons with negation
+    attribute complex1 = -(5) < 0;                      // true
+    attribute complex2 = -(-10) == 10;                  // true
+    
+    // Multiple logical operators
+    attribute multiLogic = (true & false) | (true & true);  // true
+    
+    // Parenthesized expressions
+    attribute grouped = ((5 > 3) & (10 < 20)) | (1 == 2);  // true
 }

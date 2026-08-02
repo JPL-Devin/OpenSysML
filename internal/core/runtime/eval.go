@@ -70,6 +70,8 @@ func (ec *EvalContext) Eval(node ast.Node) (Value, error) {
 		return ec.evalNull(n)
 	case *ast.FeatureReference:
 		return ec.evalFeatureReference(n)
+	case *ast.FeatureChainExpr:
+		return ec.evalFeatureChain(n)
 	case *ast.OperatorExpr:
 		return ec.evalOperator(n)
 	case *ast.SequenceExpr:
@@ -141,11 +143,20 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		return Value{}, fmt.Errorf("empty feature reference")
 	}
 	
-	// Simple case: single-part name lookup in frame stack
+	// Simple case: single-part name lookup in frame stack or scope
 	if len(n.Name.Parts) == 1 {
 		name := n.Name.Parts[0].Text
+		// Try frame stack first (local bindings from calc/lambda params)
 		if val, ok := ec.Lookup(name); ok {
 			return val, nil
+		}
+		// Try scope lookup (sibling attributes, inherited members)
+		if ec.scope != nil {
+			if sym, ok := ec.scope.LookupLocal(name); ok && sym != nil {
+				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+					return ec.Eval(usage.Value)
+				}
+			}
 		}
 		return Value{}, fmt.Errorf("unresolved feature: %s", name)
 	}
@@ -192,6 +203,63 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 	default:
 		return Value{}, fmt.Errorf("cannot evaluate element type %T", decl)
 	}
+}
+
+
+// evalFeatureChain evaluates a feature chain expression (e.g., obj.member.submember).
+func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) {
+	// Evaluate the operand (left side of the chain)
+	operand, err := ec.Eval(n.Operand)
+	if err != nil {
+		return Value{}, err
+	}
+	
+	// Feature chains only work on instances
+	if operand.Kind != ValInstance {
+		return Value{}, fmt.Errorf("feature chain requires instance, got %v", operand.Kind)
+	}
+	
+	// Get the instance
+	inst, ok := ec.ctx.instances[operand.Instance]
+	if !ok {
+		return Value{}, fmt.Errorf("instance ID %d not found", operand.Instance)
+	}
+	
+	// Walk the member chain
+	if n.Member == nil || len(n.Member.Parts) == 0 {
+		return Value{}, fmt.Errorf("empty member chain")
+	}
+	
+	// Navigate through the chain
+	currentInst := inst
+	for i, part := range n.Member.Parts {
+		memberName := part.Text
+		slot, ok := currentInst.Slots[memberName]
+		if !ok {
+			return Value{}, fmt.Errorf("member %s not found in instance", memberName)
+		}
+		
+		// Get the slot's value
+		slotVal := slot.Value
+		
+		// If this is the last part, return the value
+		if i == len(n.Member.Parts)-1 {
+			return slotVal, nil
+		}
+		
+		// Otherwise, navigate to the next instance
+		if slotVal.Kind != ValInstance {
+			return Value{}, fmt.Errorf("cannot chain through non-instance member %s", memberName)
+		}
+		
+		nextInst, ok := ec.ctx.instances[slotVal.Instance]
+		if !ok {
+			return Value{}, fmt.Errorf("instance ID %d not found for member %s", slotVal.Instance, memberName)
+		}
+		currentInst = nextInst
+	}
+	
+	return Value{}, fmt.Errorf("unexpected: fell through feature chain evaluation")
 }
 
 
