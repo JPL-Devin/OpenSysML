@@ -1158,6 +1158,14 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 		} else if p.atDefUsageStart() {
 			// Definition/usage keyword - parse as body member
 			members = append(members, p.parseBodyMember())
+		} else if p.atKeyword("redefines") || p.atKeyword("subsets") || p.atKeyword("specializes") || p.atKeyword("references") {
+			// Relationship keyword (e.g., redefines partMasses = expr;)
+			// Parse as body member (handles bare relationship statements)
+			members = append(members, p.parseBodyMember())
+		} else if p.at(lexer.Colon) || p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt) {
+			// Relationship keyword without name (e.g., :>> x = value;)
+			// Parse as anonymous feature with relationship
+			members = append(members, p.parseBodyMember())
 		} else {
 			// Default: parse as constraint expression (bare expression)
 			members = append(members, p.parseConstraintMember())

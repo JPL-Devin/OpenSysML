@@ -1373,6 +1373,59 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return m
 	}
 	
+	// Check for bare redefines/subsets/specializes statement (no visibility/modifiers)
+	// Pattern: redefines <target> = <value>;
+	if p.atKeyword("redefines") || p.atKeyword("subsets") || p.atKeyword("specializes") {
+		relKind := ast.RelRedefines
+		if p.atKeyword("subsets") {
+			relKind = ast.RelSubsets
+		} else if p.atKeyword("specializes") {
+			relKind = ast.RelSpecializes
+		}
+		
+		// Lookahead: check if pattern is `<rel> <target> = <value>`
+		hasEq := false
+		for i := 1; i < 10; i++ {
+			tk := p.peekN(i)
+			if tk.Kind == lexer.Eq {
+				hasEq = true
+				break
+			}
+			if tk.Kind != lexer.Identifier && tk.Kind != lexer.Keyword && tk.Kind != lexer.Dot && tk.Kind != lexer.ColonColon {
+				break
+			}
+		}
+		
+		if hasEq {
+			p.advance() // skip relationship keyword
+			target := p.parseRelationshipTarget()
+			p.expect(lexer.Eq, "expected '=' in relationship statement")
+			value := p.ParseExpression()
+			p.accept2(lexer.Semicolon)
+			
+			u := &ast.Usage{
+				Kind: ast.UsagePart,
+				Relationships: []*ast.Relationship{
+					{
+						Kind:   relKind,
+						Target: target,
+					},
+				},
+				Value: value,
+			}
+			u.NodeBase.NodeSpan = p.spanFrom(start)
+			u.SetLeadingTrivia(trivia)
+			
+			m := &ast.Membership{
+				Visibility: vis,
+				Member:     u,
+			}
+			m.NodeBase.NodeSpan = u.Span()
+			m.SetLeadingTrivia(trivia)
+			return m
+		}
+	}
+	
 	// Check for inline flow statement: flow [from] X to Y;
 	// This is anonymous flow usage
 	// Distinguish from flow declarations: flow : Type ... or flow name : Type ...
