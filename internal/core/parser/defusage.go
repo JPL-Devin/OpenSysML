@@ -1800,9 +1800,20 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 	case ast.UsageConnection, ast.UsageInterface:
 		p.parseConnectorEnds(u, "connect")
 	case ast.UsageConnector:
-		// Connector can use either "from X to Y" or "connect X to Y" syntax
+		// Connector can use three syntaxes:
+		// 1. "connect X to Y" - standard connector ends
+		// 2. "from X to Y" - from/to syntax
+		// 3. "to [mult] target" - single end typing (shorthand)
 		if p.atKeyword("connect") {
 			p.parseConnectorEnds(u, "connect")
+		} else if p.atKeyword("to") {
+			// Single-end connector: "connector name to [mult] target"
+			// This is shorthand for a connector with one implicit end
+			p.advance() // consume "to"
+			end := p.parseConnectorEnd()
+			if end != nil {
+				u.ConnectorEnds = append(u.ConnectorEnds, end)
+			}
 		} else {
 			p.parseConnectorFromTo(u)
 		}
