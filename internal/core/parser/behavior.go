@@ -1718,6 +1718,22 @@ func (p *Parser) parseStateMember() ast.Node {
 		case "first":
 			// Succession statement: first <state> then <state>;
 			return p.parseSuccessionStatement(start)
+		case "then":
+			// Standalone succession: then <state>; (implicit source, typically from entry)
+			p.advance() // consume 'then'
+			targetState := p.parseQualifiedName()
+			p.expect(lexer.Semicolon, "expected ';' after succession target")
+			
+			// Create succession with nil source (implicit)
+			succession := &ast.Usage{
+				Kind: ast.UsageSuccession,
+				ConnectorEnds: []*ast.ConnectorEnd{
+					nil, // implicit source
+					{Target: targetState},
+				},
+			}
+			succession.NodeSpan = p.spanFrom(start)
+			return succession
 		case "accept":
 			// Accept transition: accept <signal> then <state>;
 			return p.parseAcceptTransition(start)
@@ -1885,6 +1901,27 @@ func (p *Parser) parseEntryMember(start int) ast.Node {
 		return node
 	}
 	
+	// Check for bare semicolon (empty entry action)
+	if p.at(lexer.Semicolon) {
+		p.advance() // consume ';'
+		node := &ast.EntryMember{
+			Actions: nil, // empty
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Check for behavioral statement (assign, send, bind, etc.)
+	// Pattern: entry assign x := expr;
+	if p.isBehavioralKeyword() {
+		stmt := p.parseActionMember()
+		node := &ast.EntryMember{
+			Actions: []ast.Node{stmt},
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
 	// Pattern 2: entry actionName { ... } - action reference
 	// Parse action reference (qualified name) and optional invocation arguments
 	actionRef := p.parseQualifiedName()
@@ -1925,6 +1962,16 @@ func (p *Parser) parseDoMember(start int) ast.Node {
 		return node
 	}
 	
+	// Check for bare semicolon (empty do action)
+	if p.at(lexer.Semicolon) {
+		p.advance() // consume ';'
+		node := &ast.DoMember{
+			Actions: nil, // empty
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
 	// Otherwise expect block: do { ... }
 	if !p.at(lexer.LBrace) {
 		p.error(p.peek().Span, "expected '{' or 'action' after 'do'")
@@ -1959,6 +2006,16 @@ func (p *Parser) parseExitMember(start int) ast.Node {
 		action := p.parseBodyMember()
 		node := &ast.ExitMember{
 			Actions: []ast.Node{action},
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Check for bare semicolon (empty exit action)
+	if p.at(lexer.Semicolon) {
+		p.advance() // consume ';'
+		node := &ast.ExitMember{
+			Actions: nil, // empty
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
