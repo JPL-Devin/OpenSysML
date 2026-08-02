@@ -90,6 +90,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"function":     ast.UsageCalc, // synonym for calc
 	"constraint":   ast.UsageConstraint,
 	"inv":          ast.UsageConstraint, // synonym for constraint (invariant)
+	"require":      ast.UsageConstraint, // synonym for constraint (required condition)
 	"requirement":  ast.UsageRequirement,
 	"satisfy":      ast.UsageSatisfy,
 	"subject":      ast.UsageSubject,
@@ -307,8 +308,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "step" || kw == "expr" || kw == "interaction" {
+	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
@@ -1306,7 +1307,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		
 		// Check for name + colon (typed) OR direct relationship (anonymous) OR name + relationship OR name + semicolon
 		hasNameAndType := p.atName() && p.peekN(1).Kind == lexer.Colon
-		hasRelationship := p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt)
+		hasRelationship := p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt) || p.atRelationshipKeyword()
 		hasNameAndRelationship := p.atName() && (p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt)
 		hasNameOnly := p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 		// Allow 'var' keyword as name for anonymous features (common in actions/loops)
@@ -1841,6 +1842,20 @@ func (p *Parser) parseFlowTo(fe *ast.FlowEnds) {
 		return
 	}
 	p.error(p.peek().Span, "expected 'to' between flow ends")
+}
+
+// atRelationshipKeyword checks if current token is a relationship keyword (redefines, subsets, etc.).
+func (p *Parser) atRelationshipKeyword() bool {
+	if t := p.peek(); t.Kind == lexer.Keyword {
+		if _, ok := relationshipKeywords[t.KeywordID]; ok {
+			return true
+		}
+		// Special multi-word keywords
+		if t.KeywordID == "defined" || t.KeywordID == "inverse" {
+			return true
+		}
+	}
+	return false
 }
 
 // relationshipClauseKind consumes the operator/keyword that begins a
