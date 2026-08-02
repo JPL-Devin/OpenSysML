@@ -153,8 +153,12 @@ func TestParseFlowWithPayload(t *testing.T) {
 	if u.FlowEnds == nil || u.FlowEnds.Payload == nil {
 		t.Fatalf("expected payload, got %+v", u.FlowEnds)
 	}
-	if u.FlowEnds.Payload.Parts[0].Text != "Fuel" {
-		t.Fatalf("payload = %v", u.FlowEnds.Payload)
+	qn, ok := u.FlowEnds.Payload.(*ast.QualifiedName)
+	if !ok {
+		t.Fatalf("payload expected QualifiedName, got %T", u.FlowEnds.Payload)
+	}
+	if qn.Parts[0].Text != "Fuel" {
+		t.Fatalf("payload = %v", qn)
 	}
 }
 

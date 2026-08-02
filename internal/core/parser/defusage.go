@@ -539,7 +539,7 @@ func (p *Parser) isStateKeyword() bool {
 		return false
 	}
 	kw := p.peek().KeywordID
-	return kw == "entry" || kw == "do" || kw == "exit" || kw == "state" || kw == "transition"
+	return kw == "entry" || kw == "do" || kw == "exit" || kw == "state" || kw == "transition" || kw == "first" || kw == "accept"
 }
 
 // parseUsageIdentification parses identification for usage declarations, with special handling
@@ -1061,18 +1061,16 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			hasBody = true
 		}
 	case ast.UsageState:
-		// State usage bodies: state body OR generic
-		// Lookahead: if body starts with state keywords → parseStateBody
-		// Otherwise → generic parseActionBodyGeneric
+		// State usage bodies: always use parseStateBody (it handles both state-specific and generic members)
+		// Optional: parallel or exclusive keyword before body
+		if p.atKeyword("parallel") || p.atKeyword("exclusive") {
+			// Consume keyword (could store in AST if needed)
+			p.advance()
+		}
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
-			if p.isStateKeyword() {
-				members = p.parseStateBody()
-			} else {
-				// Generic body (e.g., { doc /* ... */; })
-				members = p.parseActionBodyGeneric()
-			}
+			members = p.parseStateBody()
 			hasBody = true
 		}
 	default:
@@ -1268,6 +1266,50 @@ func (p *Parser) parseBodyMember() ast.Node {
 			m.SetLeadingTrivia(trivia)
 			return m
 		}
+	}
+	
+	// Check for inline connector statement: connect [mult] X to [mult] Y;
+	// This is anonymous connection usage
+	if p.atKeyword("connect") {
+		p.advance() // consume 'connect'
+		
+		u := &ast.Usage{
+			Kind: ast.UsageConnection,
+		}
+		u.NodeBase.NodeSpan = p.spanFrom(start)
+		u.SetLeadingTrivia(trivia)
+		
+		// Parse connector ends with optional multiplicity
+		// First end
+		firstEnd := p.parseConnectorEnd()
+		if firstEnd == nil {
+			p.error(p.peek().Span, "expected connector end after 'connect'")
+			return &ast.ErrorNode{Message: "expected connector end"}
+		}
+		u.ConnectorEnds = append(u.ConnectorEnds, firstEnd)
+		
+		// Expect 'to' keyword
+		if !p.acceptKeyword("to") {
+			p.error(p.peek().Span, "expected 'to' after first connector end")
+		}
+		
+		// Second end
+		secondEnd := p.parseConnectorEnd()
+		if secondEnd == nil {
+			p.error(p.peek().Span, "expected connector end after 'to'")
+		} else {
+			u.ConnectorEnds = append(u.ConnectorEnds, secondEnd)
+		}
+		
+		p.expect(lexer.Semicolon, "expected ';' after connect statement")
+		
+		m := &ast.Membership{
+			Visibility: vis,
+			Member:     u,
+		}
+		m.NodeBase.NodeSpan = u.Span()
+		m.SetLeadingTrivia(trivia)
+		return m
 	}
 	
 	// Check for anonymous feature pattern: [modifiers] [name] : Type OR [modifiers] :>> relationships
@@ -2063,19 +2105,19 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 	hasOf := p.acceptKeyword("of")
 	if hasOf {
 		fe = &ast.FlowEnds{}
-		fe.Payload = p.parseQualifiedName()
+		fe.Payload = p.parseRelationshipTarget() // Allow feature chains, not just qualified names
 	}
 	switch {
 	case p.acceptKeyword("from"):
 		if fe == nil {
 			fe = &ast.FlowEnds{}
 		}
-		fe.From = p.parseQualifiedName()
+		fe.From = p.parseRelationshipTarget() // Allow feature chains
 		p.parseFlowTo(fe)
 	case !hasOf && p.atName():
 		// Shorthand `x to y`.
 		fe = &ast.FlowEnds{}
-		fe.From = p.parseQualifiedName()
+		fe.From = p.parseRelationshipTarget() // Allow feature chains
 		p.parseFlowTo(fe)
 	}
 	if fe != nil {
@@ -2088,7 +2130,7 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 // `to` is absent.
 func (p *Parser) parseFlowTo(fe *ast.FlowEnds) {
 	if p.acceptKeyword("to") {
-		fe.To = p.parseQualifiedName()
+		fe.To = p.parseRelationshipTarget() // Allow feature chains
 		return
 	}
 	p.error(p.peek().Span, "expected 'to' between flow ends")

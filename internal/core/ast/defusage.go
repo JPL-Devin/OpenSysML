@@ -399,9 +399,9 @@ type Usage struct {
 // only ever reached through the *ast.Usage traversal case.
 type FlowEnds struct {
 	NodeBase
-	From    *QualifiedName
-	To      *QualifiedName
-	Payload *QualifiedName // optional; from the `of` clause
+	From    Node // Flow source (qualified name or feature chain)
+	To      Node // Flow target (qualified name or feature chain)
+	Payload Node // optional; from the `of` clause (qualified name or feature chain)
 }
 
 // ConnectorEnd represents a single connector end with optional multiplicity.
