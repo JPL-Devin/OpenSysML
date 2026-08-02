@@ -155,6 +155,39 @@ func TestEval_StepLimit(t *testing.T) {
 	t.Error("expected ErrStepLimitExceeded but got none")
 }
 
+func TestEval_QualifiedNameLookup(t *testing.T) {
+	tests := []struct {
+		src      string
+		expected int64
+	}{
+		// Qualified name: nested namespace
+		{"package A { attribute x = 42; } attribute test = A::x;", 42},
+		// Qualified name: nested definition
+		{"part def Vehicle { attribute speed = 100; } attribute test = Vehicle::speed;", 100},
+		// Multi-level qualified name
+		{"package A { package B { attribute val = 7; } } attribute test = A::B::val;", 7},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			model, resolver, root := parseAndBuildModel(t, tt.src)
+			ctx := NewContext(model, resolver, 1000)
+			
+			testSym := resolveSymbol(t, root, "test")
+			testDecl := testSym.Decl.(*ast.Usage)
+			
+			result, err := ctx.Eval(testDecl.Value)
+			if err != nil {
+				t.Fatalf("Eval failed: %v", err)
+			}
+			
+			if result.Kind != ValConst || result.Const.Kind != semantics.ValInt || result.Const.Int != tt.expected {
+				t.Errorf("expected int %d, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
 func TestEval_EqualityConst(t *testing.T) {
 	tests := []struct {
 		src      string

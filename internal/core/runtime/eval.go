@@ -147,8 +147,48 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		return Value{}, fmt.Errorf("unresolved feature: %s", name)
 	}
 	
-	// Multi-part qualified names (e.g., "Vehicle::speed") not yet supported
-	return Value{}, fmt.Errorf("qualified feature reference not yet supported: %s", qualifiedNameToString(n.Name))
+	// Multi-part qualified names: A::B::x
+	// Spec-compliant: Use model.LookupMember for member traversal.
+	// Use resolver logic for first part (handles scope, imports, global index),
+	// then walk remaining parts with model.LookupMember for inherited members.
+	
+	// Build single-segment qualified name for first part resolution via resolver
+	firstName := n.Name.Parts[0]
+	firstQN := &ast.QualifiedName{
+		Global: n.Name.Global,
+		Parts:  []ast.NameSegment{firstName},
+	}
+	firstQN.NodeBase = n.Name.NodeBase
+	
+	// Resolve first part using resolver's qualified-name logic (handles global index)
+	currentSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, firstQN)
+	if !ok {
+		return Value{}, fmt.Errorf("unresolved first part of qualified name: %s", firstName.Text)
+	}
+	
+	// Walk remaining parts using model.LookupMember (spec requirement)
+	for i := 1; i < len(n.Name.Parts); i++ {
+		memberName := n.Name.Parts[i].Text
+		nextSym, found := ec.ctx.model.LookupMember(currentSym, memberName)
+		if !found {
+			return Value{}, fmt.Errorf("member %s not found in %s", memberName, currentSym.Name)
+		}
+		currentSym = nextSym
+	}
+	
+	// Evaluate the final symbol's declaration
+	switch decl := currentSym.Decl.(type) {
+	case *ast.Usage:
+		if decl.Value != nil {
+			return ec.Eval(decl.Value)
+		}
+		return Value{}, fmt.Errorf("usage %s has no value", qualifiedNameToString(n.Name))
+	case *ast.Definition:
+		// Definitions are types, not values
+		return Value{}, fmt.Errorf("cannot evaluate definition %s", qualifiedNameToString(n.Name))
+	default:
+		return Value{}, fmt.Errorf("cannot evaluate element type %T", decl)
+	}
 }
 
 
