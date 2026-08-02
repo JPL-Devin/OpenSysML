@@ -449,8 +449,9 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 	var members []ast.Node
 	var hasBody bool
 	switch kind {
-	case ast.DefAction:
-		// Action def bodies: mixed (declarations + behavioral statements)
+	case ast.DefAction, ast.DefOccurrence:
+		// Action/occurrence def bodies: mixed (declarations + behavioral statements)
+		// Occurrence defs support temporal ordering of messages/events (interactions)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
@@ -1174,6 +1175,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 		al := p.parseAlias(start, vis)
 		al.SetLeadingTrivia(trivia)
 		return al
+	}
+	
+	// Check for behavioral statements in structural contexts (occurrence/part with temporal ordering)
+	// These include: first/then succession edges for snapshot ordering
+	if p.atKeyword("first") {
+		firstTok := p.advance()
+		return p.parseInitialNode(firstTok)
 	}
 	
 	// Check for return statement (result member)
