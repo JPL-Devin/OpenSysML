@@ -272,6 +272,7 @@ const (
 	RelInverseOf                           // 'inverse of'
 	RelUnions                              // 'unions'
 	RelChains                              // 'chains'
+	RelIncludes                            // 'includes' (use case inclusion)
 )
 
 func (k RelationshipKind) String() string {
@@ -298,6 +299,8 @@ func (k RelationshipKind) String() string {
 		return "unions"
 	case RelChains:
 		return "chains"
+	case RelIncludes:
+		return "includes"
 	default:
 		return "unknown"
 	}

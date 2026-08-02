@@ -108,6 +108,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"requirement":  ast.UsageRequirement,
 	"satisfy":      ast.UsageSatisfy,
 	"verify":       ast.UsageSatisfy, // verify is alias for satisfy
+	"include":      ast.UsageUseCase, // include creates use case usage with includes relationship
 	"subject":      ast.UsageSubject,
 	"objective":    ast.UsageObjective,
 	"stakeholder":  ast.UsageAttribute, // stakeholder in viewpoints/concerns
@@ -381,10 +382,34 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require, perform, event, stakeholder, frame, actor, expose, render, timeslice, snapshot) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" || kw == "timeslice" || kw == "snapshot" {
+	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, verify, include, step, expr, interaction, require, perform, event, stakeholder, frame, actor, expose, render, timeslice, snapshot) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "include" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" || kw == "timeslice" || kw == "snapshot" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
+		
+		// Special case: include use case <name> (full form)
+		// If include is followed by "use case", consume them and parse as use case with includes relationship
+		if kw == "include" && p.atUseCase() {
+			p.advance() // consume 'use'
+			p.advance() // consume 'case'
+			u := p.parseUsage(start, ast.UsageUseCase, mods, isAll)
+			if u != nil {
+				// Add includes relationship to first typing target
+				// Actually, include use case <name> : Type means: create use case usage <name> typed by Type, with includes semantics
+				// The includes relationship is implicit in the 'include' keyword context
+				// For now, we'll add an includes relationship with nil target (self-referential)
+				// Or use a special flag. But spec may expect includes to target the typing.
+				// Simplest: add includes relationship AFTER typing parsed
+				if len(u.Relationships) > 0 && u.Relationships[0].Kind == ast.RelTyping {
+					// Insert includes relationship pointing to typing target
+					typing := u.Relationships[0].Target
+					u.Relationships = append([]*ast.Relationship{
+						{Kind: ast.RelIncludes, Target: typing},
+					}, u.Relationships...)
+				}
+			}
+			return u
+		}
 		
 		// Special case: succession flow from X to Y
 		// If succession is followed by flow keyword, parse as flow usage with succession typing
@@ -474,12 +499,56 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				u.Members = members
 				u.HasBody = hasBody
 			}
-			
-			u.NodeSpan = p.spanFrom(start)
-			return u
+		
+		u.NodeSpan = p.spanFrom(start)
+		return u
+	}
+	
+	// Special case: include <ref>; (shorthand for use case with includes relationship)
+	// If include is NOT followed by "use case", parse as use case usage with includes
+	// Pattern: include <ref>[mult] { body };
+	if kw == "include" && !p.atUseCase() {
+		u := &ast.Usage{
+			Kind:        ast.UsageUseCase,
+			IsAbstract:  mods.isAbstract,
+			IsReference: mods.isReference,
+			IsEnd:       mods.isEnd,
+			Visibility:  mods.visibility,
+			Direction:   mods.direction,
+			IsComposite: mods.isComposite,
+		}
+		u.NodeBase.NodeSpan = p.spanFrom(start)
+		
+		// Parse reference target
+		target := p.parseRelationshipTarget()
+		if target != nil {
+			// Add as includes relationship
+			u.Relationships = append(u.Relationships, &ast.Relationship{
+				Kind:   ast.RelIncludes,
+				Target: target,
+			})
 		}
 		
-		return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
+		// Optional multiplicity after reference
+		if p.at(lexer.LBracket) {
+			u.Multiplicity = p.parseMultiplicity()
+		}
+		
+		// Expect semicolon or body
+		if p.accept2(lexer.Semicolon) {
+			u.HasBody = false
+		} else if p.at(lexer.LBrace) {
+			p.advance()
+			members, hasBody := p.parseDefUsageBody()
+			u.Members = members
+			u.HasBody = hasBody
+		}
+		
+		u.NodeSpan = p.spanFrom(start)
+		return u
+	}
+	
+	return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
 	}
 	
 	defKind, ok := definitionKindKeywords[kw]
@@ -1281,6 +1350,20 @@ func (p *Parser) parseBodyMember() ast.Node {
 	start := p.peek().Span.Offset
 	trivia := p.takeTrivia()
 	vis := p.parseVisibility()
+
+	// Check for 'then' prefix (namespace-level succession marker)
+	// Pattern: then include use case ...; OR then done;
+	// Consume 'then', parse declaration, mark with HasSuccession
+	if p.atKeyword("then") {
+		p.advance() // consume 'then'
+		
+		// Recursively parse the member after 'then'
+		innerMember := p.parseBodyMember()
+		if mem, ok := innerMember.(*ast.Membership); ok {
+			mem.HasSuccession = true
+		}
+		return innerMember
+	}
 
 	// Check for metadata annotation: @Type{props}
 	// This creates a metadata usage (annotation statement)
