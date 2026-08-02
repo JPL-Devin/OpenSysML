@@ -50,8 +50,44 @@ func builtinSequenceIsEmpty(ec *EvalContext, args []Value) (Value, error) {
 }
 
 func builtinSequenceIncludes(ec *EvalContext, args []Value) (Value, error) {
-	// Stub: check if seq1 includes seq2 (all elements of seq2 in seq1)
-	return Value{}, errors.New("SequenceFunctions::includes: not yet implemented")
+	if len(args) != 2 {
+		return Value{}, errors.New("SequenceFunctions::includes: expected 2 arguments")
+	}
+
+	seq := args[0]
+	target := args[1]
+
+	if seq.Kind != ValSequence {
+		return Value{}, errors.New("SequenceFunctions::includes: first argument must be a sequence")
+	}
+
+	// Empty sequence contains nothing
+	if seq.Sequence == nil {
+		return boolValue(false), nil
+	}
+
+	// Check each element
+	for i := 0; i < seq.Sequence.Size(); i++ {
+		elem, err := seq.Sequence.At(i)
+		if err != nil {
+			return Value{}, err
+		}
+		if valueEqual(elem, target) {
+			return boolValue(true), nil
+		}
+	}
+
+	return boolValue(false), nil
+}
+
+func boolValue(b bool) Value {
+	return Value{
+		Kind: ValConst,
+		Const: semantics.Value{
+			Kind: semantics.ValBool,
+			Bool: b,
+		},
+	}
 }
 
 func builtinCollectionSize(ec *EvalContext, args []Value) (Value, error) {
