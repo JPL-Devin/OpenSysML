@@ -524,14 +524,67 @@ func (p *Parser) parseUsageIdentification(kind ast.UsageKind) ast.Identification
 
 // isAnonymousSuccession checks if we're at the start of anonymous succession ends (no name).
 // Anonymous succession patterns:
-// - `succession [mult] x then y` - starts with multiplicity
+// - `succession [mult] first [mult] x then y` - mult + "first" keyword (NO name between)
 // - `succession first [mult] x then y` - starts with "first" keyword
 // - `succession x then y` - identifier followed by "then" (not name, but first connector end)
 // - `succession x.y then z` - feature chain followed by "then" (not name, but first connector end)
-// - `succession [mult] x.y then [mult] z` - multiplicity + feature chain + then
+// Named succession patterns (NOT anonymous):
+// - `succession [mult] name first [mult] x then y` - mult + identifier + "first" (identifier is NAME)
+// - `succession name first [mult] x then y` - identifier + "first"
 func (p *Parser) isAnonymousSuccession() bool {
 	if p.at(lexer.LBracket) {
-		return true // starts with multiplicity
+		// Starts with multiplicity - lookahead past it to check what follows
+		i := 1
+		// Skip multiplicity tokens: [, numbers, .., *, ]
+		for i < 30 {
+			tok := p.peekN(i)
+			if tok.Kind == lexer.RBracket {
+				// Found closing bracket, check next token
+				i++
+				break
+			}
+			if tok.Kind == lexer.Decimal || tok.Kind == lexer.DotDot || tok.Kind == lexer.Star {
+				i++
+				continue
+			}
+			// Unexpected token in multiplicity
+			return false
+		}
+		// After closing bracket, check next token
+		nextTok := p.peekN(i)
+		if nextTok.Kind == lexer.Keyword && nextTok.KeywordID == "first" {
+			// Pattern: `succession [mult] first ...` - anonymous
+			return true
+		}
+		// Pattern: `succession [mult] identifier ...` - could be named or anonymous
+		// Check if identifier followed by "first" keyword (named) or "then" keyword (anonymous)
+		if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.UnrestrictedName || nextTok.Kind == lexer.Keyword {
+			i++
+			// Skip feature chain (dots, identifiers)
+			for i < 30 {
+				tok := p.peekN(i)
+				if tok.Kind == lexer.Keyword && tok.KeywordID == "first" {
+					// Pattern: `succession [mult] name first ...` - NAMED succession
+					return false
+				}
+				if tok.Kind == lexer.Keyword && tok.KeywordID == "then" {
+					// Pattern: `succession [mult] x.y then ...` - anonymous (x.y is connector end)
+					return true
+				}
+				if tok.Kind == lexer.LBracket || tok.Kind == lexer.RBracket || tok.Kind == lexer.Decimal || tok.Kind == lexer.DotDot || tok.Kind == lexer.Star {
+					i++
+					continue // skip multiplicity
+				}
+				if tok.Kind == lexer.Dot || tok.Kind == lexer.ColonColon || tok.Kind == lexer.Identifier || tok.Kind == lexer.Keyword {
+					i++
+					continue // skip feature chain parts
+				}
+				// Unknown token, assume named
+				return false
+			}
+		}
+		// Couldn't determine, assume named
+		return false
 	}
 	if p.atKeyword("first") {
 		return true // starts with "first" keyword
@@ -702,6 +755,20 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		return u
 	}
 	
+	// Handle succession/connector/flow with multiplicity before name/first keyword
+	// Pattern: `succession [mult] name first [mult] x then [mult] y`
+	// Pattern: `succession [mult] first [mult] x then [mult] y` (anonymous)
+	// Pattern: `connector [mult] name from [mult] x to [mult] y`
+	// Check for anonymous succession BEFORE consuming multiplicity
+	var earlyMultiplicity *ast.Multiplicity
+	var isAnonymous bool
+	if kind == ast.UsageSuccession {
+		isAnonymous = p.isAnonymousSuccession()
+	}
+	if (kind == ast.UsageSuccession || kind == ast.UsageConnector || kind == ast.UsageFlow) && p.at(lexer.LBracket) {
+		earlyMultiplicity = p.parseMultiplicity()
+	}
+	
 	// Handle shorthand: `feature redefines x` means `feature x redefines x`
 	// Check if relationship keyword followed by simple name (not qualified name or feature chain)
 	var preRels []*ast.Relationship
@@ -738,7 +805,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 				// Normal relationship parsing (qualified names, feature chains, or no name after keyword)
 				preRels, conjugated = p.parseRelationships(true)
 				// A bare flow shorthand `flow x to y` and succession `succession x then y` have no declaration name
-				if !(kind == ast.UsageFlow && p.atFlowShorthand()) && !(kind == ast.UsageSuccession && p.isAnonymousSuccession()) {
+				if !(kind == ast.UsageFlow && p.atFlowShorthand()) && !(kind == ast.UsageSuccession && isAnonymous) {
 					u.Ident = p.parseUsageIdentification(kind)
 				}
 			}
@@ -746,7 +813,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			// Not a relationship keyword
 			preRels, conjugated = p.parseRelationships(true)
 			// A bare flow shorthand `flow x to y` and anonymous succession `succession x then y` have no declaration name
-			if !(kind == ast.UsageFlow && p.atFlowShorthand()) && !(kind == ast.UsageSuccession && p.isAnonymousSuccession()) {
+			if !(kind == ast.UsageFlow && p.atFlowShorthand()) && !(kind == ast.UsageSuccession && isAnonymous) {
 				u.Ident = p.parseUsageIdentification(kind)
 			}
 		}
@@ -756,7 +823,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		// A bare flow shorthand `flow x to y` and anonymous succession `succession x then y` have no declaration name
 		// Anonymous connector starts with 'from' keyword (e.g., `connector : X from y to z`)
 		skipIdentification := (kind == ast.UsageFlow && p.atFlowShorthand()) || 
-			(kind == ast.UsageSuccession && p.isAnonymousSuccession()) || 
+			(kind == ast.UsageSuccession && isAnonymous) || 
 			(kind == ast.UsageConnector && p.atKeyword("from"))
 		if !skipIdentification {
 			u.Ident = p.parseUsageIdentification(kind)
@@ -769,9 +836,14 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	u.IsConjugated = conjugated || postConj
 	
 	// For anonymous succession/flow, skip multiplicity parsing - it belongs to connector ends
-	skipMultiplicity := (kind == ast.UsageSuccession || kind == ast.UsageFlow) && u.Ident.Name == ""
+	// UNLESS earlyMultiplicity was already parsed (e.g., `succession [mult] first ...`)
+	skipMultiplicity := (kind == ast.UsageSuccession || kind == ast.UsageFlow) && u.Ident.Name == "" && earlyMultiplicity == nil
 	if !skipMultiplicity {
-		u.Multiplicity = p.parseMultiplicity()
+		if earlyMultiplicity != nil {
+			u.Multiplicity = earlyMultiplicity
+		} else {
+			u.Multiplicity = p.parseMultiplicity()
+		}
 	}
 	
 	// Parse post-multiplicity modifiers (ordered/nonunique)

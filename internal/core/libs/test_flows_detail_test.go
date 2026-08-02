@@ -1,35 +1,23 @@
 package libs
 
 import (
+	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"testing"
 )
 
-func TestSingleFile_Flows_Details(t *testing.T) {
+func TestFlowsDetail(t *testing.T) {
 	src := &embedSource{}
 	data, err := src.Read("Systems Library/Flows.sysml")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Read: %v", err)
 	}
-
-	sf := source.New("Flows.sysml", data)
-	p := parser.New(sf)
+	
+	p := parser.New(source.New("Flows.sysml", data))
 	_ = p.ParseFile()
-
-	if len(p.Diagnostics) > 0 {
-		t.Logf("Parse diagnostics (%d):", len(p.Diagnostics))
-		for i, d := range p.Diagnostics {
-			if i >= 15 {
-				break
-			}
-			text := sf.Text(d.Span)
-			if len(text) > 50 {
-				text = text[:50] + "..."
-			}
-			t.Logf("  [%d] offset %d: %s [near: %q]", i+1, d.Span.Offset, d.Message, text)
-		}
-	} else {
-		t.Log("Parsed cleanly!")
+	
+	t.Logf("Flows.sysml: %d diagnostics", len(p.Diagnostics))
+	for _, d := range p.Diagnostics {
+		t.Logf("  offset %d: %s", d.Span.Offset, d.Message)
 	}
 }
