@@ -1135,6 +1135,54 @@ func (p *Parser) parseBodyMember() ast.Node {
 			mods.visibility = vis
 		}
 		
+		// Check for redefines statement after modifiers: `portion redefines name = expr;`
+		// This is shorthand for anonymous feature with modifiers + redefines relationship + value
+		if p.atKeyword("redefines") {
+			// Lookahead: check if pattern is `redefines <target> = <value>`
+			i := 1
+			for i < 10 {
+				tk := p.peekN(i)
+				if tk.Kind == lexer.Eq {
+					// Found '=' - this is a redefines statement
+					p.advance() // skip "redefines"
+					target := p.parseRelationshipTarget()
+					p.expect(lexer.Eq, "expected '=' in redefines statement")
+					value := p.ParseExpression()
+					p.accept2(lexer.Semicolon)
+					
+					u := &ast.Usage{
+						Kind: ast.UsagePart,
+						IsComposite: mods.isComposite,
+						IsReference: mods.isReference,
+						IsDerived: mods.isDerived,
+						IsEnd: mods.isEnd,
+						Relationships: []*ast.Relationship{
+							{
+								Kind:   ast.RelRedefines,
+								Target: target,
+							},
+						},
+						Value: value,
+					}
+					u.NodeBase.NodeSpan = p.spanFrom(start)
+					u.SetLeadingTrivia(trivia)
+					
+					m := &ast.Membership{
+						Visibility: mods.visibility,
+						Member:     u,
+					}
+					m.NodeBase.NodeSpan = u.Span()
+					m.SetLeadingTrivia(trivia)
+					return m
+				}
+				if tk.Kind == lexer.Identifier || tk.Kind == lexer.Keyword || tk.Kind == lexer.Dot || tk.Kind == lexer.ColonColon {
+					i++
+					continue
+				}
+				break
+			}
+		}
+		
 		// Special case: end shortname [mult] feature name pattern
 		// Example: end self2 [1] feature sameThing: Anything
 		// Also: end [1] feature transferSource (no short name)
