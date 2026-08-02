@@ -218,28 +218,43 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 		return
 	}
 	
-	// If operand has no scope (not namespace-like), member lookup fails
-	if operandSym.Scope == nil {
-		r.Diagnostics = append(r.Diagnostics, Diagnostic{
-			Span:    spanOf(fc.Member),
-			Message: "no members in " + operandSym.Name,
-		})
-		return
-	}
-	
 	// Walk member parts explicitly, assigning symbols to each part
-	r.resolveMemberChain(operandSym.Scope, fc.Member)
+	r.resolveMemberChain(operandSym, fc.Member)
 }
 
 // resolveMemberChain walks a qualified name member-by-member in the given scope,
 // assigning each part's symbol explicitly (for feature chain member access).
-func (r *Resolver) resolveMemberChain(scope *symbols.Scope, qn *ast.QualifiedName) {
+func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName) {
 	if qn == nil || len(qn.Parts) == 0 {
 		return
 	}
 	
-	// Resolve first part in given scope
-	cur, ok := scope.LookupLocal(qn.Parts[0].Text)
+	// Resolve first part using model.LookupMember if available, else scope.LookupLocal
+	var cur *symbols.Symbol
+	var ok bool
+	
+	if r.model != nil {
+		// Use inheritance-aware lookup via semantics.Model
+		type modelLookup interface {
+			LookupMember(*symbols.Symbol, string) (*symbols.Symbol, bool)
+		}
+		if m, hasMethod := r.model.(modelLookup); hasMethod {
+			cur, ok = m.LookupMember(parentSym, qn.Parts[0].Text)
+		}
+	}
+	
+	if !ok {
+		// Fall back to local scope lookup if model unavailable
+		if parentSym.Scope == nil {
+			r.Diagnostics = append(r.Diagnostics, Diagnostic{
+				Span:    qn.Parts[0].Span,
+				Message: "no scope for member lookup in " + parentSym.Name,
+			})
+			return
+		}
+		cur, ok = parentSym.Scope.LookupLocal(qn.Parts[0].Text)
+	}
+	
 	if !ok {
 		r.Diagnostics = append(r.Diagnostics, Diagnostic{
 			Span:    qn.Parts[0].Span,
@@ -251,16 +266,31 @@ func (r *Resolver) resolveMemberChain(scope *symbols.Scope, qn *ast.QualifiedNam
 	
 	// Walk remaining parts via member lookup
 	for i := 1; i < len(qn.Parts); i++ {
-		if cur.Scope == nil {
-			r.Diagnostics = append(r.Diagnostics, Diagnostic{
-				Span:    qn.Parts[i].Span,
-				Message: "no members in " + cur.Name,
-			})
-			return
+		var next *symbols.Symbol
+		var found bool
+		
+		if r.model != nil {
+			type modelLookup interface {
+				LookupMember(*symbols.Symbol, string) (*symbols.Symbol, bool)
+			}
+			if m, hasMethod := r.model.(modelLookup); hasMethod {
+				next, found = m.LookupMember(cur, qn.Parts[i].Text)
+			}
 		}
 		
-		next, ok := cur.Scope.LookupLocal(qn.Parts[i].Text)
-		if !ok {
+		if !found {
+			// Fall back to local scope lookup
+			if cur.Scope == nil {
+				r.Diagnostics = append(r.Diagnostics, Diagnostic{
+					Span:    qn.Parts[i].Span,
+					Message: "no members in " + cur.Name,
+				})
+				return
+			}
+			next, found = cur.Scope.LookupLocal(qn.Parts[i].Text)
+		}
+		
+		if !found {
 			r.Diagnostics = append(r.Diagnostics, Diagnostic{
 				Span:    qn.Parts[i].Span,
 				Message: "unresolved member: " + qn.Parts[i].Text + " in " + cur.Name,

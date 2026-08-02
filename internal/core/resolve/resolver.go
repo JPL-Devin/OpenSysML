@@ -18,6 +18,7 @@ type Resolver struct {
 	idx         *symbols.Index
 	memo        map[ast.Node]resolution
 	Diagnostics []Diagnostic
+	model       interface{} // Optional *semantics.Model for inheritance-aware member lookup
 }
 
 // New creates a resolver over the given index.
@@ -26,6 +27,12 @@ func New(idx *symbols.Index) *Resolver {
 		idx:  idx,
 		memo: make(map[ast.Node]resolution),
 	}
+}
+
+// SetModel attaches a semantic model for inheritance-aware member resolution.
+// Must be called before resolving feature chains if inherited members are needed.
+func (r *Resolver) SetModel(model interface{}) {
+	r.model = model
 }
 
 // ResolveQualified resolves a qualified-name reference against the given scope.
