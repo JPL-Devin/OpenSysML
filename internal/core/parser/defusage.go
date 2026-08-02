@@ -1475,10 +1475,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 						// Skip relationship target (identifier/qualified name)
 						for ahead < 40 {
 							t := p.peekN(ahead)
-							// Stop if we hit a definition keyword
-							if t.Kind == lexer.Keyword && (t.KeywordID == "feature" || t.KeywordID == "occurrence" || 
-								t.KeywordID == "item" || t.KeywordID == "part" || t.KeywordID == "attribute") {
-								break
+							// Stop if we hit a definition or usage keyword
+							if t.Kind == lexer.Keyword {
+								_, isDef := definitionKindKeywords[t.KeywordID]
+								_, isUsage := usageKindKeywords[t.KeywordID]
+								if isDef || isUsage {
+									break
+								}
 							}
 							if t.Kind == lexer.Identifier || t.Kind == lexer.Keyword || t.Kind == lexer.Dot || t.Kind == lexer.ColonColon {
 								ahead++
@@ -1497,11 +1500,14 @@ func (p *Parser) parseBodyMember() ast.Node {
 					}
 				}
 				
-				// Check if next token after (optional) multiplicity and relationships is a definition keyword
+				// Check if next token after (optional) multiplicity and relationships is a definition or usage keyword
 				nextTok := p.peekN(ahead)
-				isDefKeyword := nextTok.KeywordID == "feature" || nextTok.KeywordID == "occurrence" || 
-								nextTok.KeywordID == "item" || nextTok.KeywordID == "part" ||
-								nextTok.KeywordID == "attribute"
+				isDefKeyword := false
+				if nextTok.Kind == lexer.Keyword {
+					_, isDef := definitionKindKeywords[nextTok.KeywordID]
+					_, isUsage := usageKindKeywords[nextTok.KeywordID]
+					isDefKeyword = isDef || isUsage
+				}
 				
 				if isDefKeyword {
 					tok := p.advance()
@@ -1555,10 +1561,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 							}
 							for ahead < 40 {
 								t := p.peekN(ahead)
-								// Stop if we hit a definition keyword
-								if t.Kind == lexer.Keyword && (t.KeywordID == "feature" || t.KeywordID == "occurrence" || 
-									t.KeywordID == "item" || t.KeywordID == "part" || t.KeywordID == "attribute") {
-									break
+								// Stop if we hit a definition or usage keyword
+								if t.Kind == lexer.Keyword {
+									_, isDef := definitionKindKeywords[t.KeywordID]
+									_, isUsage := usageKindKeywords[t.KeywordID]
+									if isDef || isUsage {
+										break
+									}
 								}
 								if t.Kind == lexer.Identifier || t.Kind == lexer.Keyword || t.Kind == lexer.Dot || t.Kind == lexer.ColonColon {
 									ahead++
@@ -1577,9 +1586,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 					}
 					
 					nextTok := p.peekN(ahead)
-					isDefKeyword := nextTok.KeywordID == "feature" || nextTok.KeywordID == "occurrence" || 
-									nextTok.KeywordID == "item" || nextTok.KeywordID == "part" ||
-									nextTok.KeywordID == "attribute"
+					isDefKeyword := false
+					if nextTok.Kind == lexer.Keyword {
+						_, isDef := definitionKindKeywords[nextTok.KeywordID]
+						_, isUsage := usageKindKeywords[nextTok.KeywordID]
+						isDefKeyword = isDef || isUsage
+					}
 					
 					if isDefKeyword {
 						mult = p.parseMultiplicity()
