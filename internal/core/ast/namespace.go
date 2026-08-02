@@ -98,6 +98,7 @@ type Import struct {
 	Kind        ImportKind
 	Imported    *QualifiedName
 	IsRecursive bool // `::**`
+	FilterExpr  Node // Optional filter expression [<expr>]
 	Body        []Node
 	HasBody     bool
 }

@@ -485,6 +485,17 @@ func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
 			imp.IsRecursive = true // recursive membership import; Kind stays ImportMembership
 		}
 	}
+	
+	// Optional filter expression: [<expr>]
+	// Pattern: import Package::*[@MetadataType];
+	// Pattern: import Package::**[@MetadataType and condition];
+	if p.at(lexer.LBracket) {
+		p.advance() // consume '['
+		imp.FilterExpr = p.ParseExpression()
+		if _, ok := p.expect(lexer.RBracket, "expected ']' after import filter expression"); !ok {
+			// Error already recorded
+		}
+	}
 
 	imp.Body, imp.HasBody = p.parseNamespaceBody()
 	imp.NodeSpan = p.spanFrom(start)
