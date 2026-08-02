@@ -508,6 +508,20 @@ func (p *Parser) isStateKeyword() bool {
 	return kw == "entry" || kw == "do" || kw == "exit" || kw == "state" || kw == "transition"
 }
 
+// parseUsageIdentification parses identification for usage declarations, with special handling
+// for step usage to allow "do" keyword as identifier name (since "do" is a valid step name like entry/exit).
+func (p *Parser) parseUsageIdentification(kind ast.UsageKind) ast.Identification {
+	// Special case: step usage allows "do" as identifier
+	if kind == ast.UsageStep && p.atKeyword("do") {
+		tok := p.advance()
+		return ast.Identification{
+			Name: tok.KeywordID,
+		}
+	}
+	// Default: use standard identification parsing
+	return p.parseIdentification()
+}
+
 // isAnonymousSuccession checks if we're at the start of anonymous succession ends (no name).
 // Anonymous succession patterns:
 // - `succession [mult] x then y` - starts with multiplicity
@@ -725,7 +739,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 				preRels, conjugated = p.parseRelationships(true)
 				// A bare flow shorthand `flow x to y` and succession `succession x then y` have no declaration name
 				if !(kind == ast.UsageFlow && p.atFlowShorthand()) && !(kind == ast.UsageSuccession && p.isAnonymousSuccession()) {
-					u.Ident = p.parseIdentification()
+					u.Ident = p.parseUsageIdentification(kind)
 				}
 			}
 		} else {
@@ -733,7 +747,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			preRels, conjugated = p.parseRelationships(true)
 			// A bare flow shorthand `flow x to y` and anonymous succession `succession x then y` have no declaration name
 			if !(kind == ast.UsageFlow && p.atFlowShorthand()) && !(kind == ast.UsageSuccession && p.isAnonymousSuccession()) {
-				u.Ident = p.parseIdentification()
+				u.Ident = p.parseUsageIdentification(kind)
 			}
 		}
 	} else {
@@ -745,7 +759,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			(kind == ast.UsageSuccession && p.isAnonymousSuccession()) || 
 			(kind == ast.UsageConnector && p.atKeyword("from"))
 		if !skipIdentification {
-			u.Ident = p.parseIdentification()
+			u.Ident = p.parseUsageIdentification(kind)
 		}
 	}
 	
