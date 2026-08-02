@@ -45,3 +45,72 @@ func TestResolveDocumentResolvesExpressionRefs(t *testing.T) {
 		t.Fatalf("expected unresolved diagnostic for expression ref Undefined")
 	}
 }
+
+func TestResolve_FeatureChainExpr(t *testing.T) {
+	tests := []struct {
+		name    string
+		src     string
+		wantErr bool
+	}{
+		{
+			name: "simple chain - two levels",
+			src: `
+				package A {
+					attribute x = 1;
+				}
+				package B {
+					attribute ref : A;
+					attribute test = ref.x;
+				}
+			`,
+			wantErr: false,
+		},
+		{
+			name: "nested chain - three levels",
+			src: `
+				package A {
+					package Inner {
+						attribute value = 42;
+					}
+				}
+				package B {
+					attribute ref : A;
+					attribute test = ref.Inner.value;
+				}
+			`,
+			wantErr: false,
+		},
+		{
+			name: "unresolved first part",
+			src: `
+				package B {
+					attribute test = missing.x;
+				}
+			`,
+			wantErr: true,
+		},
+		{
+			name: "unresolved second part",
+			src: `
+				package A {
+					attribute x = 1;
+				}
+				package B {
+					attribute ref : A;
+					attribute test = ref.missing;
+				}
+			`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := resolveDoc(t, "test.sysml", tt.src)
+			hasErr := len(r.Diagnostics) > 0
+			if hasErr != tt.wantErr {
+				t.Errorf("wantErr=%v, got diagnostics: %v", tt.wantErr, r.Diagnostics)
+			}
+		})
+	}
+}

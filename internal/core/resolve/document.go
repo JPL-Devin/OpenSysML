@@ -162,10 +162,7 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			r.ResolveQualified(scope, v.TypeRef)
 		}
 	case *ast.FeatureChainExpr:
-		r.resolveExpr(scope, v.Operand)
-		if v.Member != nil {
-			r.ResolveQualified(scope, v.Member)
-		}
+		r.resolveFeatureChain(scope, v)
 	case *ast.IndexExpr:
 		r.resolveExpr(scope, v.Operand)
 		r.resolveExpr(scope, v.Index)
@@ -206,4 +203,97 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 		r.ResolveQualified(scope, v.Ref)
 	}
 	// Literals (LiteralBool/String/Integer/Real/Infinity, NullExpr) have no refs.
+}
+
+// resolveFeatureChain resolves a FeatureChainExpr by resolving the operand
+// then looking up the member in the operand's scope.
+func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr) {
+	// Resolve operand first
+	r.resolveExpr(scope, fc.Operand)
+	
+	// Get symbol of operand to find its member scope
+	operandSym := r.getExprSymbol(scope, fc.Operand)
+	if operandSym == nil || fc.Member == nil {
+		return
+	}
+	
+	// If operand has no scope (not namespace-like), member lookup fails
+	if operandSym.Scope == nil {
+		r.Diagnostics = append(r.Diagnostics, Diagnostic{
+			Span:    spanOf(fc.Member),
+			Message: "no members in " + operandSym.Name,
+		})
+		return
+	}
+	
+	// Resolve member as qualified name in operand's scope
+	r.ResolveQualified(operandSym.Scope, fc.Member)
+}
+
+// getExprSymbol extracts the symbol referenced by an expression, used for
+// member access chains. Returns nil if expression doesn't resolve to a symbol.
+// For typed usages, returns the type's symbol (following typing relationships).
+func (r *Resolver) getExprSymbol(scope *symbols.Scope, e ast.Node) *symbols.Symbol {
+	switch v := e.(type) {
+	case *ast.FeatureReference:
+		if v.Name == nil {
+			return nil
+		}
+		sym, ok := r.ResolveQualified(scope, v.Name)
+		if !ok {
+			return nil
+		}
+		// If this is a typed usage, follow the type
+		if usage, isUsage := sym.Decl.(*ast.Usage); isUsage {
+			typeSym := r.getUsageType(sym.OwnerScope, usage)
+			if typeSym != nil {
+				return typeSym
+			}
+		}
+		return sym
+	case *ast.FeatureChainExpr:
+		// For chained access, get the final member's symbol
+		if v.Member == nil {
+			return nil
+		}
+		// First resolve the chain
+		r.resolveFeatureChain(scope, v)
+		// Get the operand's symbol, then lookup member
+		operandSym := r.getExprSymbol(scope, v.Operand)
+		if operandSym == nil || operandSym.Scope == nil {
+			return nil
+		}
+		memberSym, ok := r.ResolveQualified(operandSym.Scope, v.Member)
+		if !ok {
+			return nil
+		}
+		// Follow type if member is usage
+		if usage, isUsage := memberSym.Decl.(*ast.Usage); isUsage {
+			typeSym := r.getUsageType(memberSym.OwnerScope, usage)
+			if typeSym != nil {
+				return typeSym
+			}
+		}
+		return memberSym
+	default:
+		return nil
+	}
+}
+
+// getUsageType returns the type symbol of a usage by resolving its typing relationship.
+func (r *Resolver) getUsageType(scope *symbols.Scope, usage *ast.Usage) *symbols.Symbol {
+	for _, rel := range usage.Relationships {
+		if rel.Kind == ast.RelTyping && rel.Target != nil {
+			// Unwrap FeatureReference if needed
+			target := rel.Target
+			if fr, ok := target.(*ast.FeatureReference); ok {
+				target = fr.Name
+			}
+			if qn, ok := target.(*ast.QualifiedName); ok {
+				typeSym, _ := r.ResolveQualified(scope, qn)
+				return typeSym
+			}
+		}
+	}
+	return nil
 }
