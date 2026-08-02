@@ -351,6 +351,7 @@ type Definition struct {
 	IsVariation   bool
 	IsAll         bool // 'all' multiplicity propagation modifier
 	IsConstant    bool // 'constant' feature modifier
+	IsEvent       bool // 'event' modifier for event-driven occurrences
 	Visibility    Visibility
 	Ident         Identification
 	Relationships []*Relationship
@@ -369,6 +370,7 @@ type Usage struct {
 	IsEnd         bool // 'end' feature modifier
 	IsChain       bool // 'chain' feature modifier
 	IsConstant    bool // 'constant' feature modifier
+	IsEvent       bool // 'event' modifier for event-driven occurrences
 	Visibility    Visibility
 	Direction     FeatureDirection
 	IsComposite   bool

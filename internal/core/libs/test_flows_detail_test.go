@@ -2,22 +2,34 @@ package libs
 
 import (
 	"testing"
+
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 func TestFlowsDetail(t *testing.T) {
-	src := &embedSource{}
-	data, err := src.Read("Systems Library/Flows.sysml")
+	embedSrc := &embedSource{}
+	data, err := embedSrc.Read("Systems Library/Flows.sysml")
 	if err != nil {
-		t.Fatalf("Read: %v", err)
+		t.Fatalf("Failed to load: %v", err)
 	}
-	
-	p := parser.New(source.New("Flows.sysml", data))
+
+	src := source.New("Flows.sysml", data)
+	p := parser.New(src)
 	_ = p.ParseFile()
-	
+
 	t.Logf("Flows.sysml: %d diagnostics", len(p.Diagnostics))
-	for _, d := range p.Diagnostics {
-		t.Logf("  offset %d: %s", d.Span.Offset, d.Message)
+	for i, d := range p.Diagnostics {
+		byteOffset := d.Span.Offset
+		char := ""
+		if byteOffset < len(data) {
+			char = string(data[byteOffset])
+		}
+		context := ""
+		if byteOffset >= 20 && byteOffset+20 < len(data) {
+			context = string(data[byteOffset-20 : byteOffset+20])
+		}
+		t.Logf("  %d. offset=%d (char=%q): %s", i+1, byteOffset, char, d.Message)
+		t.Logf("     context: %q", context)
 	}
 }

@@ -29,6 +29,7 @@ var definitionKindKeywords = map[string]ast.DefinitionKind{
 	// Tier B.
 	"connection": ast.DefConnection,
 	"flow":       ast.DefFlow,
+	"message":    ast.DefFlow, // message is synonym for flow
 	"port":       ast.DefPort,
 	"interface":  ast.DefInterface,
 	"allocation": ast.DefAllocation,
@@ -74,8 +75,9 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"connection": ast.UsageConnection,
 	"connector":  ast.UsageConnector,
 	"succession": ast.UsageSuccession,
-	"flow":        ast.UsageFlow,
-	"port":        ast.UsagePort,
+	"flow":       ast.UsageFlow,
+	"message":    ast.UsageFlow, // message is synonym for flow
+	"port":       ast.UsagePort,
 	"interface":   ast.UsageInterface,
 	"interaction": ast.UsageInteraction,
 	"allocation":  ast.UsageAllocation,
@@ -113,6 +115,7 @@ var featureModifierKeywords = map[string]bool{
 	"ref":       true,
 	"end":       true,
 	"constant":  true,
+	"event":     true, // event-driven occurrence modifier
 	"in":        true,
 	"out":       true,
 	"inout":     true,
@@ -147,6 +150,7 @@ type featureMods struct {
 	isEnd       bool
 	isChain     bool
 	isConstant  bool
+	isEvent     bool // event modifier for occurrences
 	visibility  ast.Visibility
 	direction   ast.FeatureDirection
 	isComposite bool
@@ -219,6 +223,8 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			m.isEnd = true
 		case "constant":
 			m.isConstant = true
+		case "event":
+			m.isEvent = true
 		case "public":
 			m.visibility = ast.VisibilityPublic
 		case "protected":
@@ -364,6 +370,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 		IsVariation: mods.isVariation,
 		IsAll:       isAll,
 		IsConstant:  mods.isConstant,
+		IsEvent:     mods.isEvent,
 		Visibility:  mods.visibility,
 		Ident:       p.parseIdentification(),
 	}
@@ -655,13 +662,14 @@ func (p *Parser) isAnonymousSuccession() bool {
 func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isAll bool) *ast.Usage {
 	u := &ast.Usage{
 		Kind:        kind,
-		IsAbstract:  mods.isAbstract,
-		IsReference: mods.isReference,
-		IsAll:       isAll,
-		IsEnd:       mods.isEnd,
-		IsChain:     mods.isChain,
-		IsConstant:  mods.isConstant,
-		Visibility:  mods.visibility,
+	IsAbstract:  mods.isAbstract,
+	IsReference: mods.isReference,
+	IsAll:       isAll,
+	IsEnd:       mods.isEnd,
+	IsChain:     mods.isChain,
+	IsConstant:  mods.isConstant,
+	IsEvent:     mods.isEvent,
+	Visibility:  mods.visibility,
 		Direction:   mods.direction,
 		IsComposite: mods.isComposite,
 		IsDerived:   mods.isDerived,
@@ -1466,21 +1474,22 @@ func (p *Parser) parseBodyMember() ast.Node {
 			// Pattern: end ref name; - will be handled by anonymous feature parsing below
 		}
 		
-		// Check for name + colon (typed) OR direct relationship (anonymous) OR name + relationship OR name + semicolon
+		// Check for name + colon (typed) OR direct relationship (anonymous) OR name + relationship OR name + semicolon OR name + multiplicity
 		hasNameAndType := p.atName() && p.peekN(1).Kind == lexer.Colon
 		hasRelationship := p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt) || p.atRelationshipKeyword()
 		hasNameAndRelationship := p.atName() && (p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt)
 		hasNameOnly := p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
+		hasNameAndMult := p.atName() && p.peekN(1).Kind == lexer.LBracket // name with multiplicity (e.g., ref payload [0..*])
 		// Allow 'var' keyword as name for anonymous features (common in actions/loops)
 		hasVarKeyword := p.atKeyword("var") && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon || 
 			p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt ||
 			p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 		
-		if hasNameAndType || hasRelationship || hasNameAndRelationship || hasNameOnly || hasVarKeyword {
+		if hasNameAndType || hasRelationship || hasNameAndRelationship || hasNameOnly || hasNameAndMult || hasVarKeyword {
 			var id ast.Identification
 			
 			// Parse optional name
-			if hasNameAndType || hasNameAndRelationship || hasNameOnly || hasVarKeyword {
+			if hasNameAndType || hasNameAndRelationship || hasNameOnly || hasNameAndMult || hasVarKeyword {
 				tok := p.advance()
 				if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
 					id.Name = p.src.Text(tok.Span)
