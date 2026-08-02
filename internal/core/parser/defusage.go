@@ -946,23 +946,18 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	var hasBody bool
 	switch kind {
 	case ast.UsageAction:
-		// Action usage bodies: behavioral OR generic
+		// Action usage bodies: mixed (declarations + behavioral statements)
 		// Support THREE forms:
 		// 1. action name; (no body)
-		// 2. action name { statements } (braced body)
+		// 2. action name { in item x; action nested {...}; first ...; } (braced mixed body)
 		// 3. action name \n statements (inline behavioral body without braces)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if p.at(lexer.LBrace) {
-			// Braced body
+			// Braced body - use mixed parser (handles declarations + behavioral)
 			_, ok := p.expect(lexer.LBrace, "expected '{'")
 			if ok {
-				if p.isBehavioralKeyword() {
-					members = p.parseActionBody()
-				} else {
-					// Generic body (e.g., { doc /* ... */; })
-					members = p.parseActionBodyGeneric()
-				}
+				members = p.parseActionBodyMixed()
 				hasBody = true
 			}
 		} else if p.isBehavioralKeyword() {

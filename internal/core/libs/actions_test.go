@@ -16,7 +16,7 @@ func TestActionsFile(t *testing.T) {
 		t.Logf("Actions.sysml has %d errors:", len(p.Diagnostics))
 		for i, d := range p.Diagnostics {
 			if i >= 10 { break }
-			t.Logf("  %s", d.Message)
+			t.Logf("  offset=%d: %s", d.Span.Offset, d.Message)
 		}
 		t.Fail()
 	} else {
