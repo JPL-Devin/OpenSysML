@@ -646,6 +646,13 @@ func (p *Parser) parseResultMember() ast.Node {
 			u.IsNonunique = true
 		}
 		
+		// Parse additional relationships after post-modifiers (e.g., redefines result redefines values)
+		postModRels, postConj := p.parseRelationships(true)
+		u.Relationships = append(u.Relationships, postModRels...)
+		if postConj {
+			u.IsConjugated = true
+		}
+		
 		// Parse optional default value 'default expr' or '= expr'
 		if p.acceptKeyword("default") {
 			u.Value = p.ParseExpression()
