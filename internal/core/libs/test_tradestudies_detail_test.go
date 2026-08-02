@@ -14,11 +14,11 @@ func TestTradeStudiesDetail(t *testing.T) {
 		t.Fatalf("Failed to load TradeStudies.sysml: %v", err)
 	}
 
-	p := parser.New(source.New("TradeStudies.sysml", data))
+	sf := source.New("Domain Libraries/Analysis/TradeStudies.sysml", data)
+	p := parser.New(sf)
 	_ = p.ParseFile()
 
 	t.Logf("TradeStudies.sysml: %d diagnostics", len(p.Diagnostics))
-	
 	for i, d := range p.Diagnostics {
 		byteOffset := d.Span.Offset
 		char := ""
@@ -26,18 +26,22 @@ func TestTradeStudiesDetail(t *testing.T) {
 			char = string(data[byteOffset])
 		}
 		
-		// Show 40 chars of context around error
-		contextStart := byteOffset - 20
-		if contextStart < 0 {
-			contextStart = 0
+		// Get context (20 chars before/after)
+		start := byteOffset - 20
+		if start < 0 {
+			start = 0
 		}
-		contextEnd := byteOffset + 20
-		if contextEnd > len(data) {
-			contextEnd = len(data)
+		end := byteOffset + 20
+		if end > len(data) {
+			end = len(data)
 		}
-		context := string(data[contextStart:contextEnd])
+		context := string(data[start:end])
 		
 		t.Logf("  %d. offset=%d (char=%q): %s", i+1, byteOffset, char, d.Message)
-		t.Logf("     context: %q", context)
+		t.Logf("      context: %q", context)
+	}
+
+	if len(p.Diagnostics) > 0 {
+		t.Errorf("Expected clean parse, got %d errors", len(p.Diagnostics))
 	}
 }

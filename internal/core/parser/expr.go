@@ -532,6 +532,7 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 		}
 		
 		if seg, ok := p.parseNameSegment(); ok {
+			var paramMembers []ast.Node
 			if p.at(lexer.Colon) {
 				p.advance() // :
 				paramType = p.parseQualifiedName()
@@ -544,16 +545,28 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 				p.advance() // =
 				paramValue = p.ParseExpression()
 			}
+			// Parse optional body members: in ref a { doc ... }
+			if p.at(lexer.LBrace) {
+				p.advance() // {
+				for !p.at(lexer.RBrace) && !p.atEOF() {
+					paramMembers = append(paramMembers, p.parseBodyMember())
+				}
+				p.expect(lexer.RBrace, "expected '}'")
+			}
 			b.Params = append(b.Params, ast.BodyParam{
 				Name:         seg.Text,
 				Type:         paramType,
 				Multiplicity: paramMult,
 				Value:        paramValue,
 				IsReference:  isRef,
+				Members:      paramMembers,
 				Span:         seg.Span,
 			})
 		}
-		p.expect(lexer.Semicolon, "expected ';' after body parameter")
+		// No semicolon expected if param has body
+		if len(b.Params) == 0 || len(b.Params[len(b.Params)-1].Members) == 0 {
+			p.expect(lexer.Semicolon, "expected ';' after body parameter")
+		}
 	}
 	if !p.at(lexer.RBrace) {
 		b.Result = p.ParseExpression()

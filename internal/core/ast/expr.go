@@ -173,6 +173,7 @@ type BodyParam struct {
 	Multiplicity *Multiplicity  // optional multiplicity after type (e.g., in x : Type [1])
 	Value        Node           // optional default value (e.g., in x = expr)
 	IsReference  bool           // true if 'ref' modifier present
+	Members      []Node         // optional body members (e.g., in x { doc ... })
 	Span         source.Span
 }
 
