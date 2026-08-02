@@ -92,6 +92,18 @@ func main() {
 	}
 }
 
+// quoteArg quotes an argument for shell-style parsing if it contains spaces.
+// This ensures paths with spaces are treated as single arguments.
+func quoteArg(s string) string {
+	// If the string contains spaces, quote it
+	if strings.Contains(s, " ") || strings.Contains(s, "\t") {
+		// Escape any existing quotes
+		s = strings.ReplaceAll(s, `"`, `\"`)
+		return `"` + s + `"`
+	}
+	return s
+}
+
 func runInteractive() error {
 	histPath := filepath.Join(os.TempDir(), "sysml-repl.history")
 	rl, err := readline.NewEx(&readline.Config{
@@ -114,10 +126,12 @@ func runNonInteractive() error {
 	// Build command sequence
 	var commands []string
 	for _, file := range loadFiles {
-		commands = append(commands, "%load "+file)
+		// Quote the file path to preserve spaces
+		commands = append(commands, "%load "+quoteArg(file))
 	}
 	for _, expr := range evalExprs {
-		commands = append(commands, "%eval "+expr)
+		// Quote the expression to preserve spaces
+		commands = append(commands, "%eval "+quoteArg(expr))
 	}
 	
 	// Execute commands
