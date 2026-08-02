@@ -181,3 +181,33 @@ func TestConstraintFlowMissingEndsFails(t *testing.T) {
 		t.Fatalf("expected flow-ends diagnostic for payload-only flow, got %v", diags)
 	}
 }
+
+// --- V-C4 Track 4 Task 13: typing conformance ---
+
+func TestConstraint_TypingConformanceValid(t *testing.T) {
+	src := `
+		attribute def Vehicle;
+		attribute def Car specializes Vehicle;
+		
+		attribute vehicles : Vehicle[*];
+		attribute myCar : Car subsets vehicles;
+	`
+	diags := constraintDiags(t, src)
+	if hasCode(diags, "typing-conformance") {
+		t.Fatalf("expected no typing-conformance diagnostic for valid conformance, got %v", diags)
+	}
+}
+
+func TestConstraint_TypingConformanceInvalid(t *testing.T) {
+	src := `
+		attribute def Vehicle;
+		attribute def Animal;
+		
+		attribute vehicles : Vehicle[*];
+		attribute myPet : Animal subsets vehicles;
+	`
+	diags := constraintDiags(t, src)
+	if !hasCode(diags, "typing-conformance") {
+		t.Fatalf("expected typing-conformance diagnostic, got %v", diags)
+	}
+}

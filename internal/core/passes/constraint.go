@@ -67,6 +67,7 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkMultiplicityRange(sym)
 	cc.checkSubsettingMultiplicity(sym)
 	cc.checkConnectorEnds(sym)
+	cc.checkTypingConformance(sym)
 }
 
 // checkSpecializationCycle flags a symbol that participates in a specialization
@@ -230,4 +231,88 @@ func (cc *constraintChecker) addConnectorEndsDiag(sym *symbols.Symbol, u *ast.Us
 		Code:     "connector-ends",
 		Source:   "constraint",
 	})
+}
+
+// checkTypingConformance flags a usage whose type does not conform to the type
+// of a usage it subsets (SysML spec: a subsetting usage must have a type that
+// conforms to the type of the subsetted usage). Uses model.Conforms for type
+// conformance checking.
+func (cc *constraintChecker) checkTypingConformance(sym *symbols.Symbol) {
+	// Extract usage typing (via typing relationship)
+	var usageType *symbols.Symbol
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Target == nil || rel.Kind != ast.RelTyping {
+			continue
+		}
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		if qn, ok := targetNode.(*ast.QualifiedName); ok {
+			resolved, ok := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
+			if ok && resolved != nil {
+				usageType = resolved
+				break
+			}
+		}
+	}
+	
+	if usageType == nil {
+		return // No explicit type, skip
+	}
+	
+	// Check all subsets relationships
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Target == nil || rel.Kind != ast.RelSubsets {
+			continue
+		}
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, isQN := targetNode.(*ast.QualifiedName)
+		if !isQN {
+			continue
+		}
+		subsetted, resolved := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
+		if !resolved || subsetted == nil {
+			continue
+		}
+		
+		// Extract type of subsetted usage
+		var subsettedType *symbols.Symbol
+		for _, subRel := range semantics.RelationshipsOf(subsetted) {
+			if subRel == nil || subRel.Target == nil || subRel.Kind != ast.RelTyping {
+				continue
+			}
+			subTargetNode := subRel.Target
+			if fr, ok := subTargetNode.(*ast.FeatureReference); ok {
+				subTargetNode = fr.Name
+			}
+			if subQn, ok := subTargetNode.(*ast.QualifiedName); ok {
+				subResolved, ok := cc.resolver.ResolveQualified(subsetted.OwnerScope, subQn)
+				if ok && subResolved != nil {
+					subsettedType = subResolved
+					break
+				}
+			}
+		}
+		
+		if subsettedType == nil {
+			continue // Subsetted usage has no explicit type, skip
+		}
+		
+		// Check conformance: usageType must conform to subsettedType
+		if !cc.model.Conforms(usageType, subsettedType) {
+			cc.diags = append(cc.diags, Diagnostic{
+				Severity: SeverityError,
+				Span:     rel.Target.Span(),
+				Message: fmt.Sprintf(
+					"%s (typed by %s) subsets %s (typed by %s): types do not conform",
+					sym.Name, usageType.Name, subsetted.Name, subsettedType.Name),
+				Code:   "typing-conformance",
+				Source: "constraint",
+			})
+		}
+	}
 }
