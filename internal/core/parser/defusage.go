@@ -65,6 +65,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	// Tier A.
 	"item":       ast.UsageItem,
 	"occurrence": ast.UsageOccurrence,
+	"event":      ast.UsageOccurrence, // event creates occurrence usage (event-driven)
 	"individual": ast.UsageIndividual,
 	"metadata":   ast.UsageMetadata,
 	"enum":       ast.UsageEnumeration,
@@ -206,6 +207,14 @@ func (p *Parser) atUseCase() bool {
 	return n.Kind == lexer.Keyword && n.KeywordID == "case"
 }
 
+// isModifierOrKindKeyword checks if keyword is a modifier or def/usage kind keyword
+func isModifierOrKindKeyword(kw string) bool {
+	_, isMod := featureModifierKeywords[kw]
+	_, isDef := definitionKindKeywords[kw]
+	_, isUsage := usageKindKeywords[kw]
+	return isMod || isDef || isUsage
+}
+
 func (p *Parser) parseFeatureModifiers() featureMods {
 	var m featureMods
 	for {
@@ -245,6 +254,13 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 		case "constant":
 			m.isConstant = true
 		case "event":
+			// Check if standalone usage: event <name>; (no typing/body)
+			// If followed by identifier/qualified name (not keyword), it's usage keyword
+			nextTok := p.peekN(1)
+			if nextTok.Kind == lexer.Identifier || (nextTok.Kind == lexer.Keyword && !isModifierOrKindKeyword(nextTok.KeywordID)) {
+				// Treat as usage keyword, stop consuming modifiers
+				return m
+			}
 			m.isEvent = true
 		case "individual":
 			m.isIndividual = true
@@ -339,8 +355,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require, perform) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" {
+	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require, perform, event) that never have def forms
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		
@@ -391,6 +407,46 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				p.advance()
 				u.Members = p.parseActionBodyMixed()
 				u.HasBody = true
+			}
+			
+			u.NodeSpan = p.spanFrom(start)
+			return u
+		}
+		
+		// Special case: event <ref>; (shorthand event occurrence reference)
+		// If event is NOT followed by occurrence keyword or typing colon, parse as occurrence usage with reference
+		if kw == "event" && !p.atKeyword("occurrence") && !p.at(lexer.Colon) {
+			// Parse reference target (qualified name like driver::setSpeedSent)
+			u := &ast.Usage{
+				Kind:        ast.UsageOccurrence,
+				IsEvent:     true,
+				IsAbstract:  mods.isAbstract,
+				IsReference: mods.isReference,
+				IsEnd:       mods.isEnd,
+				Visibility:  mods.visibility,
+				Direction:   mods.direction,
+				IsComposite: mods.isComposite,
+			}
+			u.NodeBase.NodeSpan = p.spanFrom(start)
+			
+			// Parse reference target (qualified name or feature chain)
+			target := p.parseRelationshipTarget()
+			if target != nil {
+				// Add as references relationship
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelReferences,
+					Target: target,
+				})
+			}
+			
+			// Expect semicolon or body
+			if p.accept2(lexer.Semicolon) {
+				u.HasBody = false
+			} else if p.at(lexer.LBrace) {
+				p.advance()
+				members, hasBody := p.parseDefUsageBody()
+				u.Members = members
+				u.HasBody = hasBody
 			}
 			
 			u.NodeSpan = p.spanFrom(start)
