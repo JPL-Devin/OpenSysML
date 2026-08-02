@@ -1062,6 +1062,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		}
 	case ast.UsageState:
 		// State usage bodies: always use parseStateBody (it handles both state-specific and generic members)
+		// Optional: parallel or exclusive keyword before body
+		if p.atKeyword("parallel") || p.atKeyword("exclusive") {
+			// Consume keyword (could store in AST if needed)
+			p.advance()
+		}
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
