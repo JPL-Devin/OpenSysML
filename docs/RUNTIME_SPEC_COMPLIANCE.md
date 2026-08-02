@@ -4,6 +4,14 @@
 
 ### What's Implemented
 
+**Semantic Layer (COMPLETE):**
+- ✅ Runtime operators: equality (`==`, `!=`), logical (`&`, `|`, `not`), negation (`-`)
+- ✅ Qualified name lookup: multi-part names (`A::B::C`) with inheritance-aware resolution
+- ✅ Feature chain resolution: member access chains (`obj.member.submember`)
+- ✅ Semantic validation: typing conformance, redefinition validation
+- ✅ Collection builtins: `includes`, `select`, `collect` (with BodyExpr support)
+- ✅ ~97 runtime tests, ~58 validation tests (constraint_test.go, eval_test.go)
+
 **Tier 5 - Behavioral Execution (COMPLETE):**
 - ✅ Action executor with token-flow semantics (Petri-net style)
 - ✅ State executor with event-driven transitions
@@ -12,6 +20,12 @@
 - ✅ ~5000 lines of runtime tests (action_executor_test.go, state_executor_test.go)
 
 **Test Coverage:**
+- Equality operators (all value kinds: const, string, null, instance, sequence, set)
+- Logical operators (short-circuit evaluation)
+- Qualified names (nested namespaces, multi-level lookup)
+- Feature chains (simple, nested, in relationships)
+- Typing conformance (subsetting validation)
+- Redefinition validation (inheritance, type, multiplicity)
 - Initial/Final nodes
 - Fork/Join (parallel execution with barrier synchronization)
 - Merge nodes (non-deterministic choice)
