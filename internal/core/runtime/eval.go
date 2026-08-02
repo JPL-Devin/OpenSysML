@@ -143,11 +143,20 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		return Value{}, fmt.Errorf("empty feature reference")
 	}
 	
-	// Simple case: single-part name lookup in frame stack
+	// Simple case: single-part name lookup in frame stack or scope
 	if len(n.Name.Parts) == 1 {
 		name := n.Name.Parts[0].Text
+		// Try frame stack first (local bindings from calc/lambda params)
 		if val, ok := ec.Lookup(name); ok {
 			return val, nil
+		}
+		// Try scope lookup (sibling attributes, inherited members)
+		if ec.scope != nil {
+			if sym, ok := ec.scope.LookupLocal(name); ok && sym != nil {
+				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+					return ec.Eval(usage.Value)
+				}
+			}
 		}
 		return Value{}, fmt.Errorf("unresolved feature: %s", name)
 	}
