@@ -453,3 +453,49 @@ func TestEval_NegationArithmeticReal(t *testing.T) {
 		})
 	}
 }
+
+func TestEval_Track1Integration(t *testing.T) {
+	// Test combining equality, logical, negation, and qualified names
+	tests := []struct {
+		src      string
+		expected interface{} // bool or int64
+	}{
+		// Equality + logical operators
+		{"attribute test = (42 == 42) & (100 != 99);", true},
+		{"attribute test = (10 == 11) | (5 == 5);", true},
+		{"attribute test = not (42 == 43);", true},
+
+		// Qualified names + operators
+		{"package A { attribute x = 42; } attribute test = A::x == 42;", true},
+		{"package A { attribute x = 10; } attribute test = -(A::x);", int64(-10)},
+
+		// Complex nested expression
+		{"package A { attribute x = 5; attribute y = 10; } attribute test = (A::x < A::y) & (A::y == 10);", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			model, resolver, root := parseAndBuildModel(t, tt.src)
+			ctx := NewContext(model, resolver, 1000)
+
+			testSym := resolveSymbol(t, root, "test")
+			testDecl := testSym.Decl.(*ast.Usage)
+
+			result, err := ctx.Eval(testDecl.Value)
+			if err != nil {
+				t.Fatalf("Eval failed: %v", err)
+			}
+
+			switch exp := tt.expected.(type) {
+			case bool:
+				if result.Kind != ValConst || result.Const.Kind != semantics.ValBool || result.Const.Bool != exp {
+					t.Errorf("expected bool %v, got %v", exp, result)
+				}
+			case int64:
+				if result.Kind != ValConst || result.Const.Kind != semantics.ValInt || result.Const.Int != exp {
+					t.Errorf("expected int %d, got %v", exp, result)
+				}
+			}
+		})
+	}
+}
