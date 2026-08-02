@@ -41,11 +41,32 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 
 	// Walk remaining segments as local members of the current symbol's scope.
 	for i, seg := range qn.Parts[1:] {
-		if cur.Scope == nil {
-			r.unresolved(qn)
-			return resolution{nil, false}
+		var all []*symbols.Symbol
+		
+		// Try local scope lookup first if available
+		if cur.Scope != nil {
+			all = cur.Scope.LookupLocalAll(seg.Text)
 		}
-		all := cur.Scope.LookupLocalAll(seg.Text)
+		
+		// If local lookup fails (or no scope), try building the FQN and looking in the global index.
+		// This handles cases like ScalarValues::Real where ScalarValues is a package
+		// from stdlib that was indexed with full FQNs but doesn't have a populated Scope.
+		if len(all) == 0 && r.idx != nil {
+			// For the simple 2-part case (most common), build FQN from current symbol + segment
+			if i == 0 && cur != nil {
+				// First segment after the initial lookup: cur::seg
+				fqn := cur.Name + "::" + seg.Text
+				candidates := r.idx.LookupQualified(fqn)
+				if len(candidates) == 1 {
+					all = candidates
+				} else if len(candidates) > 1 {
+					r.ambiguous(qn, len(candidates))
+					return resolution{nil, false}
+				}
+			}
+			// TODO: Handle deeper nesting if needed
+		}
+		
 		if len(all) == 0 {
 			r.unresolved(qn)
 			return resolution{nil, false}

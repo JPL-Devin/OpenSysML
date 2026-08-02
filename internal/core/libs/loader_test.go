@@ -11,7 +11,7 @@ func TestLoaderLoadsBundledLibraryIntoIndex(t *testing.T) {
 	ld := NewLoader(DefaultSource(), c)
 	idx := symbols.NewIndex()
 
-	if err := ld.Load("ScalarValues.kerml", idx); err != nil {
+	if err := ld.Load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if got := idx.LookupQualified("ScalarValues"); len(got) != 1 {

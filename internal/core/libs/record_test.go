@@ -31,13 +31,13 @@ func fqnSet(rec *IndexRecord) map[string]symbols.SymbolKind {
 }
 
 func TestRecordFromIndexCollectsReducedSymbols(t *testing.T) {
-	idx := indexOf(t, "ScalarValues.kerml",
+	idx := indexOf(t, "Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml",
 		"standard library package ScalarValues { namespace Boolean; namespace Real; }")
-	rec := recordFromIndex("ScalarValues.kerml", idx)
+	rec := recordFromIndex("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx)
 	if rec == nil {
 		t.Fatal("recordFromIndex returned nil")
 	}
-	if rec.Name != "ScalarValues.kerml" {
+	if rec.Name != "Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml" {
 		t.Fatalf("Name = %q", rec.Name)
 	}
 	got := fqnSet(rec)

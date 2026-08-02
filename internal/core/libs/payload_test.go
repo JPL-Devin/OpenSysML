@@ -58,14 +58,14 @@ func min(a, b int) int {
 
 func TestBundledScalarValuesHasMembers(t *testing.T) {
 	src := &embedSource{}
-	data, err := src.Read("ScalarValues.kerml")
+	data, err := src.Read("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := parser.New(source.New("ScalarValues.kerml", data))
+	p := parser.New(source.New("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", data))
 	root := p.ParseFile()
 	idx := symbols.NewIndex()
-	idx.AddDocument("ScalarValues.kerml", root)
+	idx.AddDocument("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", root)
 	if len(idx.LookupQualified("ScalarValues::Boolean")) != 1 {
 		t.Fatal("expected ScalarValues::Boolean to be indexed")
 	}

@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/libs"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -22,14 +23,42 @@ type Workspace struct {
 	diagCache map[string][]passes.Diagnostic
 }
 
-// NewWorkspace returns an empty workspace with a fresh index.
+// NewWorkspace returns a workspace with stdlib pre-loaded into the global index.
+// Stdlib files are loaded from embedded sources (or SYSML_LIBRARY_PATH if set).
 func NewWorkspace() *Workspace {
+	idx := symbols.NewIndex()
+	
+	// Load stdlib into global index
+	loadStdlib(idx)
+	
 	return &Workspace{
 		docs:      map[string]*Document{},
 		onDisk:    map[string][]byte{},
 		open:      map[string]bool{},
-		index:     symbols.NewIndex(),
+		index:     idx,
 		diagCache: map[string][]passes.Diagnostic{},
+	}
+}
+
+// loadStdlib loads all SysML/KerML standard library files into the given index.
+// Uses cached symbols when available for fast loading. Failures are non-fatal
+// (logged but workspace still usable for non-stdlib models).
+func loadStdlib(idx *symbols.Index) {
+	src := libs.DefaultSource()
+	cache, err := libs.NewCache()
+	if err != nil {
+		// Cache initialization failed - continue without caching
+		cache = nil
+	}
+	loader := libs.NewLoader(src, cache)
+	
+	// Load all stdlib files
+	for _, name := range src.List() {
+		if err := loader.Load(name, idx); err != nil {
+			// Non-fatal: log but continue (allows REPL to work without stdlib)
+			// In production this might want more robust error handling
+			_ = err // TODO: add logging when available
+		}
 	}
 }
 
