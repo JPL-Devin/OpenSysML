@@ -1261,11 +1261,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 			var shortNameSpan source.Span
 			var mult *ast.Multiplicity
 			var hasDefKeyword bool
+			var endRels []*ast.Relationship // relationships parsed before definition keyword
 			
 			// Parse optional short name (if not starting with '[')
 			if p.atNameOrKeyword() {
 				// Check if pattern matches: name [mult] (feature|occurrence|item|...)
 				// OR: [mult] (feature|occurrence|...)
+				// Also: name [mult] subsets X feature name (with relationship clause)
 				ahead := 1
 				if p.peekN(ahead).Kind == lexer.LBracket {
 					// Skip past multiplicity to check for definition keyword
@@ -1277,7 +1279,55 @@ func (p *Parser) parseBodyMember() ast.Node {
 						ahead++ // past ]
 					}
 				}
-				// Check if next token after (optional) multiplicity is a definition keyword
+				
+				// Skip optional relationship clauses before definition keyword
+				// Pattern: end name[mult] subsets X feature Y
+				for ahead < 40 {
+					tok := p.peekN(ahead)
+					if tok.Kind == lexer.EOF {
+						break
+					}
+					// Check if this is a relationship keyword
+					isRelKeyword := false
+					if tok.Kind == lexer.Keyword {
+						_, isRelKeyword = relationshipKeywords[tok.KeywordID]
+						if !isRelKeyword && (tok.KeywordID == "defined" || tok.KeywordID == "inverse") {
+							isRelKeyword = true
+						}
+					}
+					if isRelKeyword {
+						// Skip relationship keyword
+						ahead++
+						// Skip potential "of" after "inverse"
+						if p.peekN(ahead).KeywordID == "of" {
+							ahead++
+						}
+						// Skip relationship target (identifier/qualified name)
+						for ahead < 40 {
+							t := p.peekN(ahead)
+							// Stop if we hit a definition keyword
+							if t.Kind == lexer.Keyword && (t.KeywordID == "feature" || t.KeywordID == "occurrence" || 
+								t.KeywordID == "item" || t.KeywordID == "part" || t.KeywordID == "attribute") {
+								break
+							}
+							if t.Kind == lexer.Identifier || t.Kind == lexer.Keyword || t.Kind == lexer.Dot || t.Kind == lexer.ColonColon {
+								ahead++
+							} else {
+								break
+							}
+						}
+						// Skip comma for multiple targets
+						if p.peekN(ahead).Kind == lexer.Comma {
+							ahead++
+						} else {
+							break // no more relationship clauses
+						}
+					} else {
+						break // not a relationship keyword
+					}
+				}
+				
+				// Check if next token after (optional) multiplicity and relationships is a definition keyword
 				nextTok := p.peekN(ahead)
 				isDefKeyword := nextTok.KeywordID == "feature" || nextTok.KeywordID == "occurrence" || 
 								nextTok.KeywordID == "item" || nextTok.KeywordID == "part" ||
@@ -1294,10 +1344,19 @@ func (p *Parser) parseBodyMember() ast.Node {
 					if p.at(lexer.LBracket) {
 						mult = p.parseMultiplicity()
 					}
+					
+					// Parse optional relationship clauses before definition keyword
+					// Pattern: end shortname[mult] subsets X feature Y
+					for p.atRelationshipKeyword() {
+						rel, _ := p.parseRelationships(true)
+						endRels = append(endRels, rel...)
+					}
+					
 					hasDefKeyword = true
 				}
 			} else if p.at(lexer.LBracket) {
 				// No short name, mult comes directly: end [mult] feature
+				// Also: end [mult] subsets X feature (with relationship)
 				// Check if after mult there's a definition keyword
 				ahead := 1
 				for ahead < 20 && p.peekN(ahead).Kind != lexer.RBracket && p.peekN(ahead).Kind != lexer.EOF {
@@ -1305,6 +1364,48 @@ func (p *Parser) parseBodyMember() ast.Node {
 				}
 				if p.peekN(ahead).Kind == lexer.RBracket {
 					ahead++ // past ]
+					
+					// Skip optional relationship clauses before definition keyword
+					for ahead < 40 {
+						tok := p.peekN(ahead)
+						if tok.Kind == lexer.EOF {
+							break
+						}
+						isRelKeyword := false
+						if tok.Kind == lexer.Keyword {
+							_, isRelKeyword = relationshipKeywords[tok.KeywordID]
+							if !isRelKeyword && (tok.KeywordID == "defined" || tok.KeywordID == "inverse") {
+								isRelKeyword = true
+							}
+						}
+						if isRelKeyword {
+							ahead++
+							if p.peekN(ahead).KeywordID == "of" {
+								ahead++
+							}
+							for ahead < 40 {
+								t := p.peekN(ahead)
+								// Stop if we hit a definition keyword
+								if t.Kind == lexer.Keyword && (t.KeywordID == "feature" || t.KeywordID == "occurrence" || 
+									t.KeywordID == "item" || t.KeywordID == "part" || t.KeywordID == "attribute") {
+									break
+								}
+								if t.Kind == lexer.Identifier || t.Kind == lexer.Keyword || t.Kind == lexer.Dot || t.Kind == lexer.ColonColon {
+									ahead++
+								} else {
+									break
+								}
+							}
+							if p.peekN(ahead).Kind == lexer.Comma {
+								ahead++
+							} else {
+								break
+							}
+						} else {
+							break
+						}
+					}
+					
 					nextTok := p.peekN(ahead)
 					isDefKeyword := nextTok.KeywordID == "feature" || nextTok.KeywordID == "occurrence" || 
 									nextTok.KeywordID == "item" || nextTok.KeywordID == "part" ||
@@ -1312,6 +1413,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 					
 					if isDefKeyword {
 						mult = p.parseMultiplicity()
+						
+						// Parse optional relationship clauses before definition keyword
+						for p.atRelationshipKeyword() {
+							rel, _ := p.parseRelationships(true)
+							endRels = append(endRels, rel...)
+						}
+						
 						hasDefKeyword = true
 					}
 				}
@@ -1323,12 +1431,16 @@ func (p *Parser) parseBodyMember() ast.Node {
 				// The definition keyword (feature/occurrence/etc) will be consumed by parseDeclaration
 				decl := p.parseDeclaration(start)
 				
-				// If it's a usage, apply the short name, multiplicity, and end modifier
+				// If it's a usage, apply the short name, multiplicity, relationships, and end modifier
 				if u, ok := decl.(*ast.Usage); ok {
 					u.Ident.ShortName = shortName
 					u.Ident.ShortNameSpan = shortNameSpan
 					if mult != nil && u.Multiplicity == nil {
 						u.Multiplicity = mult
+					}
+					// Prepend relationships parsed before definition keyword
+					if len(endRels) > 0 {
+						u.Relationships = append(endRels, u.Relationships...)
 					}
 					u.IsEnd = true
 					u.Visibility = mods.visibility

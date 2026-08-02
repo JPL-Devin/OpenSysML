@@ -1,53 +1,45 @@
 package libs
 
 import (
-	"fmt"
+	"strings"
 	"testing"
-
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 func TestOccurrencesContext(t *testing.T) {
 	src := &embedSource{}
-	data, err := src.Read("Kernel Libraries/Kernel Semantic Library/Occurrences.kerml")
-	if err != nil {
-		t.Fatal(err)
-	}
+	content, _ := src.Read("Kernel Libraries/Kernel Semantic Library/Occurrences.kerml")
 	
-	p := parser.New(source.New("Occurrences.kerml", data))
-	_ = p.ParseFile()
-	
-	// Get context for first 3 unique offset errors
-	offsets := []int{25224, 25336, 28079}
-	
+	offsets := []int{25224, 28079, 30619, 31030}
 	for _, offset := range offsets {
-		start := offset - 80
-		if start < 0 {
-			start = 0
-		}
-		end := offset + 80
-		if end > len(data) {
-			end = len(data)
-		}
-		
-		context := string(data[start:end])
-		char := ""
-		if offset < len(data) {
-			char = string(data[offset])
-		}
-		
-		t.Logf("\nOffset %d (char=%q):", offset, char)
-		t.Logf("Context: %q", context)
-		
-		// Find line number
 		lineNum := 1
-		for i := 0; i < offset && i < len(data); i++ {
-			if data[i] == '\n' {
+		for i := 0; i < offset && i < len(content); i++ {
+			if content[i] == '\n' {
 				lineNum++
 			}
 		}
-		t.Logf("Line ~%d", lineNum)
-		fmt.Println()
+		
+		lines := strings.Split(string(content), "\n")
+		contextStart := lineNum - 3
+		if contextStart < 0 {
+			contextStart = 0
+		}
+		contextEnd := lineNum + 3
+		if contextEnd > len(lines) {
+			contextEnd = len(lines)
+		}
+		
+		char := ""
+		if offset < len(content) {
+			char = string(content[offset])
+		}
+		
+		t.Logf("\n=== Offset %d (char=%q, line %d) ===", offset, char, lineNum)
+		for i := contextStart; i < contextEnd && i < len(lines); i++ {
+			marker := " "
+			if i == lineNum-1 {
+				marker = ">"
+			}
+			t.Logf("%s %4d: %s", marker, i+1, lines[i])
+		}
 	}
 }
