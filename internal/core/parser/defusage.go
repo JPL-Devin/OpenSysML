@@ -361,6 +361,19 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		p.advance() // consume 'def'
 		return p.parseDefinition(start, defKind, mods, isAll)
 	}
+	
+	// Special handling for 'datatype' keyword: at package/namespace level without
+	// typing colon, it should default to definition (shorthand for 'attribute def')
+	// rather than usage. This matches SysML v2 stdlib conventions.
+	if kw == "datatype" {
+		// Check if next token is a colon (typing relationship) - if so, it's a usage
+		nextTok := p.peek()
+		if nextTok.Kind != lexer.Colon {
+			// No typing colon - treat as definition shorthand
+			return p.parseDefinition(start, defKind, mods, isAll)
+		}
+	}
+	
 	return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
 }
 
