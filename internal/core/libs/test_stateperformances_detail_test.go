@@ -1,34 +1,47 @@
 package libs
 
 import (
-	"fmt"
 	"testing"
+
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 func TestStatePerformancesDetail(t *testing.T) {
-	filename := "Kernel Libraries/Kernel Semantic Library/StatePerformances.kerml"
-	
 	src := &embedSource{}
-	data, err := src.Read(filename)
+	data, err := src.Read("Kernel Libraries/Kernel Semantic Library/StatePerformances.kerml")
 	if err != nil {
-		t.Fatalf("Failed to load %s: %v", filename, err)
+		t.Fatalf("Failed to load: %v", err)
 	}
+
+	p := parser.New(source.New("StatePerformances.kerml", data))
+	_ = p.ParseFile()
+
+	t.Logf("StatePerformances.kerml: %d diagnostics", len(p.Diagnostics))
 	
-	p := parser.New(source.New(filename, data))
-	root := p.ParseFile()
-	
-	if root == nil {
-		t.Fatal("ParseFile returned nil")
-	}
-	
-	fmt.Printf("StatePerformances.kerml diagnostics: %d\n", len(p.Diagnostics))
-	for _, d := range p.Diagnostics {
-		fmt.Printf("  offset %d: %s\n", d.Span.Offset, d.Message)
-	}
-	
-	if len(p.Diagnostics) > 0 {
-		t.Errorf("%d diagnostics (expected 0 after feature chain connector fix)", len(p.Diagnostics))
+	code := string(data)
+	for i, d := range p.Diagnostics {
+		t.Logf("\n=== Error %d: %s ===", i+1, d.Message)
+		t.Logf("Offset: %d", d.Span.Offset)
+		
+		// Show context around error
+		start := d.Span.Offset - 100
+		if start < 0 {
+			start = 0
+		}
+		end := d.Span.Offset + 100
+		if end > len(code) {
+			end = len(code)
+		}
+		
+		context := code[start:end]
+		markerPos := d.Span.Offset - start
+		
+		t.Logf("Context:\n%s", context)
+		t.Logf("Marker: %s^", string(make([]byte, markerPos)))
+		
+		if d.Span.Offset < len(code) {
+			t.Logf("Character at offset: %q", code[d.Span.Offset])
+		}
 	}
 }

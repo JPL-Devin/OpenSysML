@@ -227,7 +227,8 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 				expr = c
 				continue
 			}
-			member := p.parseQualifiedName()
+			// Use relaxed parsing to allow keywords as feature names (e.g., oSP.exit, state.entry)
+			member := p.parseQualifiedNameRelaxed()
 			fc := &ast.FeatureChainExpr{Operand: expr, Member: member}
 			fc.NodeSpan = p.spanFrom(start)
 			expr = fc

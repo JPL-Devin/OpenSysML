@@ -535,20 +535,24 @@ func (p *Parser) isAnonymousSuccession() bool {
 	if p.at(lexer.LBracket) {
 		// Starts with multiplicity - lookahead past it to check what follows
 		i := 1
-		// Skip multiplicity tokens: [, numbers, .., *, ]
-		for i < 30 {
+		// Skip multiplicity tokens: [, expressions (identifiers, numbers, operators), .., *, ]
+		depth := 1 // track bracket nesting for complex expressions
+		for i < 30 && depth > 0 {
 			tok := p.peekN(i)
 			if tok.Kind == lexer.RBracket {
-				// Found closing bracket, check next token
-				i++
-				break
+				depth--
+				if depth == 0 {
+					// Found closing bracket, check next token
+					i++
+					break
+				}
 			}
-			if tok.Kind == lexer.Decimal || tok.Kind == lexer.DotDot || tok.Kind == lexer.Star {
-				i++
-				continue
+			if tok.Kind == lexer.LBracket {
+				depth++
 			}
-			// Unexpected token in multiplicity
-			return false
+			// Allow any token inside multiplicity (expressions can be complex)
+			// Just skip to matching closing bracket
+			i++
 		}
 		// After closing bracket, check next token
 		nextTok := p.peekN(i)
