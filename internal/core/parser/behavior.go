@@ -675,10 +675,11 @@ func (p *Parser) parseResultMember() ast.Node {
 	}
 	
 	// Check for Pattern 5: return [kind] [modifiers] name [mult] [body/semicolon] (no type, no value)
-	// Only match if modifiers present - bare 'return name;' is computed result (Pattern 3)
+	// Only match if modifiers present OR followed by multiplicity - bare 'return name;' is computed result (Pattern 3)
 	hasModifiers := mods.isAbstract || mods.isReference || mods.isEnd || mods.isConstant ||
 		mods.isComposite || mods.isDerived || mods.isReadonly || mods.isOrdered || mods.isNonunique
-	if hasModifiers && p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
+	hasMultiplicity := p.peekN(1).Kind == lexer.LBracket
+	if (hasModifiers || hasMultiplicity) && p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
