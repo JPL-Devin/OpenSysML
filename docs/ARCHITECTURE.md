@@ -452,7 +452,8 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 
 ## References
 
-- **OMG SysML v2.0 Spec:** [https://www.omg.org/spec/SysML/2.0](https://www.omg.org/spec/SysML/2.0)
+- **OMG SysML v2.1 Beta 1 Spec:** [https://www.omg.org/spec/SysML/2.0](https://www.omg.org/spec/SysML/2.0) (2026-05 release)
+- **Pilot Implementation:** [SysML-v2-Pilot-Implementation 2026-05](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/releases/tag/2026-05)
 - **Pilot Xtext Grammar:** `SysML.xtext` + `KerMLExpressions` (OMG reference implementation)
 - **Metamodel:** OMG SysML v2 metamodel (semantic foundation)
 - **Precedents:** gopls (Go LSP), rust-analyzer (Rust LSP), IPython/Jupyter (REPL design)
