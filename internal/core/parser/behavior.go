@@ -264,16 +264,17 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		ident = p.parseIdentification()
 	}
 	
-	// Optional typing (: Type)
+	// Optional typing and relationships (: Type, :> SuperType, etc)
 	var relationships []*ast.Relationship
-	if p.accept2(lexer.Colon) {
-		typeName := p.parseQualifiedName()
-		if typeName != nil {
-			relationships = append(relationships, &ast.Relationship{
-				Kind:   ast.RelTyping,
-				Target: typeName,
-			})
-		}
+	var multiplicity *ast.Multiplicity
+	if p.at(lexer.Colon) || p.at(lexer.ColonGt) {
+		rels, _ := p.parseRelationships(true)
+		relationships = append(relationships, rels...)
+	}
+	
+	// Optional multiplicity after relationships (e.g., : Type[*])
+	if p.at(lexer.LBracket) {
+		multiplicity = p.parseMultiplicity()
 	}
 	
 	// Optional value (= expr or default expr)
@@ -289,6 +290,7 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		Kind:          kind,
 		Ident:         ident,
 		Relationships: relationships,
+		Multiplicity:  multiplicity,
 		Value:         value,
 		IsReference:   isRef,
 		Direction:     direction,
