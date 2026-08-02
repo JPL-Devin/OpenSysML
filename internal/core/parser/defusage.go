@@ -2218,7 +2218,12 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 		p.parseConnectorEnds(u, "") // succession has no intermediate keyword
 	case ast.UsageAllocation:
 		// Allocation usage syntax: allocate X to Y (no intermediate keyword, like succession)
-		// The 'allocate' keyword is the kind keyword, already consumed
+		// Can be:
+		// 1. `allocate X to Y` - 'allocate' is kind keyword
+		// 2. `allocation name : Type allocate X to Y` - 'allocation' is kind keyword, 'allocate' is intermediate
+		// Check for optional 'allocate' keyword (when kind keyword was 'allocation' not 'allocate')
+		p.acceptKeyword("allocate")
+		
 		if p.atKeyword("to") {
 			// Single-end form: allocate to target
 			p.advance() // consume "to"
