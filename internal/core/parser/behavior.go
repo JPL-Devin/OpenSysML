@@ -1918,6 +1918,7 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 	
 	// Parse signal type reference (use relaxed parsing to allow keywords as names)
 	// Could be event type OR temporal expression (at <time>) OR change trigger (when <cond>) OR relative time (after <duration>)
+	// OR typed parameter (name : Type)
 	var signalType ast.Node
 	var isTemporalTransition bool
 	var isChangeTransition bool
@@ -1937,8 +1938,28 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 		signalType = p.ParseExpression()
 		isChangeTransition = true
 	} else {
-		// Event transition: accept <signal> then <state>
-		signalType = p.parseQualifiedNameRelaxed()
+		// Event transition: accept <signal> OR accept <name> : Type
+		// Lookahead: if identifier followed by colon, parse as typed parameter
+		if (p.at(lexer.Identifier) || p.at(lexer.Keyword)) && p.peekN(1).Kind == lexer.Colon {
+			// Typed trigger: parse name + typing
+			paramStart := p.peek().Span.Offset
+			ident := p.parseIdentification()
+			
+			// Parse typing
+			rels, _ := p.parseRelationships(true)
+			
+			// Create attribute usage to represent typed trigger
+			usage := &ast.Usage{
+				Kind:          ast.UsageAttribute,
+				Ident:         ident,
+				Relationships: rels,
+			}
+			usage.NodeSpan = p.spanFrom(paramStart)
+			signalType = usage
+		} else {
+			// Simple signal reference
+			signalType = p.parseQualifiedNameRelaxed()
+		}
 	}
 	_ = isTemporalTransition // might be useful for AST differentiation
 	_ = isChangeTransition
@@ -1958,6 +1979,12 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 		// 3. assignment: do x = expr
 		// Use parseActionMember to handle all behavioral statements
 		effectAction = p.parseActionMember()
+	}
+	
+	// Optional via clause: via <port>
+	var viaPort ast.Node
+	if p.acceptKeyword("via") {
+		viaPort = p.parseQualifiedNameRelaxed()
 	}
 	
 	// Expect 'then' keyword
@@ -1985,13 +2012,17 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 		},
 	}
 	
-	// Store guard and effect in Members (could extend AST for proper transition fields)
+	// Store guard, effect, and via in Members (could extend AST for proper transition fields)
 	if guardExpr != nil {
 		// Wrap guard in membership for now
 		transition.Members = append(transition.Members, guardExpr)
 	}
 	if effectAction != nil {
 		transition.Members = append(transition.Members, effectAction)
+	}
+	if viaPort != nil {
+		// Store via port as member (could use relationship or dedicated field)
+		transition.Members = append(transition.Members, viaPort)
 	}
 	
 	transition.NodeSpan = p.spanFrom(start)
