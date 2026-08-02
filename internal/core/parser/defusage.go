@@ -271,8 +271,12 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			m.isEvent = true
 		case "individual":
 			// Check if standalone def/usage: individual def/occurrence/part ...
-			// If followed by def/usage keyword, it's def/usage keyword, not modifier
+			// If followed by def/usage keyword OR typing colon, it's def/usage keyword, not modifier
 			nextTok := p.peekN(1)
+			if nextTok.Kind == lexer.Colon || nextTok.Kind == lexer.ColonGt || nextTok.Kind == lexer.ColonGtGt {
+				// individual : Type → anonymous usage
+				return m
+			}
 			if nextTok.Kind == lexer.Keyword {
 				if nextTok.KeywordID == "def" {
 					// individual def → DefIndividual keyword
