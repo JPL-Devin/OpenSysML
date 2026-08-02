@@ -298,3 +298,119 @@ func TestResolve_QualifiedNamePartsStoreSymbols(t *testing.T) {
 		t.Errorf("Part 1 symbol name = %q, want B", bSym.Name)
 	}
 }
+
+func TestResolve_RelationshipTargetChain(t *testing.T) {
+	t.Run("subsetting with feature chain", func(t *testing.T) {
+		src := `
+			package Outer {
+				attribute x = 1;
+			}
+			attribute ref : Outer;
+			attribute test subsets ref.x;
+		`
+		p := parser.New(source.New("test.sysml", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) != 0 {
+			t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+		}
+		
+		idx := symbols.NewIndexFromDoc("test.sysml", root)
+		r := New(idx)
+		r.ResolveDocument("test.sysml", root)
+		
+		// Should resolve without errors
+		if len(r.Diagnostics) != 0 {
+			t.Errorf("expected no diagnostics, got: %v", r.Diagnostics)
+		}
+		
+		// Verify symbols set in chain
+		docRoot := idx.DocumentRoot("test.sysml")
+		testSym, ok := docRoot.LookupLocal("test")
+		if !ok {
+			t.Fatal("test symbol not found")
+		}
+		
+		usage := testSym.Decl.(*ast.Usage)
+		if len(usage.Relationships) == 0 {
+			t.Fatal("test has no relationships")
+		}
+		
+		rel := usage.Relationships[0]
+		fc, ok := rel.Target.(*ast.FeatureChainExpr)
+		if !ok {
+			t.Fatalf("expected FeatureChainExpr target, got %T", rel.Target)
+		}
+		
+		// Verify member (x) resolved
+		if fc.Member == nil || len(fc.Member.Parts) != 1 {
+			t.Fatal("expected single-part member 'x'")
+		}
+		if fc.Member.Parts[0].Sym == nil {
+			t.Error("member part 'x' symbol not stored - chain not resolved")
+		}
+	})
+	
+	t.Run("redefines with nested chain", func(t *testing.T) {
+		src := `
+			package A {
+				package B {
+					attribute value;
+				}
+			}
+			attribute base : A;
+			attribute derived :> base.B.value;
+		`
+		p := parser.New(source.New("test.sysml", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) != 0 {
+			t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+		}
+		
+		idx := symbols.NewIndexFromDoc("test.sysml", root)
+		r := New(idx)
+		r.ResolveDocument("test.sysml", root)
+		
+		// Should resolve without errors
+		if len(r.Diagnostics) != 0 {
+			t.Errorf("expected no diagnostics, got: %v", r.Diagnostics)
+		}
+		
+		// Verify symbols set in nested chain
+		docRoot := idx.DocumentRoot("test.sysml")
+		derivedSym, ok := docRoot.LookupLocal("derived")
+		if !ok {
+			t.Fatal("derived symbol not found")
+		}
+		
+		usage := derivedSym.Decl.(*ast.Usage)
+		if len(usage.Relationships) == 0 {
+			t.Fatal("derived has no relationships")
+		}
+		
+		rel := usage.Relationships[0]
+		outerChain, ok := rel.Target.(*ast.FeatureChainExpr)
+		if !ok {
+			t.Fatalf("expected FeatureChainExpr target, got %T", rel.Target)
+		}
+		
+		// Verify outer member (value) resolved
+		if outerChain.Member == nil || len(outerChain.Member.Parts) != 1 {
+			t.Fatal("expected outer member 'value'")
+		}
+		if outerChain.Member.Parts[0].Sym == nil {
+			t.Error("outer member 'value' symbol not stored")
+		}
+		
+		// Verify inner chain member (B) resolved
+		innerChain, ok := outerChain.Operand.(*ast.FeatureChainExpr)
+		if !ok {
+			t.Fatalf("expected inner FeatureChainExpr, got %T", outerChain.Operand)
+		}
+		if innerChain.Member == nil || len(innerChain.Member.Parts) != 1 {
+			t.Fatal("expected inner member 'B'")
+		}
+		if innerChain.Member.Parts[0].Sym == nil {
+			t.Error("inner member 'B' symbol not stored")
+		}
+	})
+}
