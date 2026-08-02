@@ -195,3 +195,10 @@ type CastExpr struct {
 	TargetType   *QualifiedName
 	Multiplicity *Multiplicity
 }
+
+// LambdaExpr represents a lambda/closure: {in param :> Type; body}
+type LambdaExpr struct {
+	NodeBase
+	Parameters []Node // Body parameters (direction params)
+	Body       Node   // Expression body
+}
