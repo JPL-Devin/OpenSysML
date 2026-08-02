@@ -96,6 +96,8 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"constraint":   ast.UsageConstraint,
 	"inv":          ast.UsageConstraint, // synonym for constraint (invariant)
 	"require":      ast.UsageConstraint, // synonym for constraint (required condition)
+	"assert":       ast.UsageConstraint, // assert creates constraint usage (assertion)
+	"assume":       ast.UsageConstraint, // assume creates constraint usage (assumption)
 	"requirement":  ast.UsageRequirement,
 	"satisfy":      ast.UsageSatisfy,
 	"verify":       ast.UsageSatisfy, // verify is alias for satisfy
@@ -328,7 +330,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	}
 	
 	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require, perform) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" {
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		
