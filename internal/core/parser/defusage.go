@@ -33,6 +33,7 @@ var definitionKindKeywords = map[string]ast.DefinitionKind{
 	"port":       ast.DefPort,
 	"interface":  ast.DefInterface,
 	"allocation": ast.DefAllocation,
+	"allocate":   ast.DefAllocation, // Short form for allocation def
 	"binding":    ast.DefBinding,
 	// Tier C.
 	"action":       ast.DefAction,
@@ -81,6 +82,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"interface":   ast.UsageInterface,
 	"interaction": ast.UsageInteraction,
 	"allocation":  ast.UsageAllocation,
+	"allocate":    ast.UsageAllocation, // Short form for allocation usage
 	"binding":    ast.UsageBinding,
 	"bind":       ast.UsageBinding, // shorthand for binding
 	// Tier C.
@@ -769,11 +771,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	}
 	
 	// Handle UsageSatisfy special syntax: 
-	// Full form: satisfy requirement <name> by <name> { body }
+	// Full form: satisfy [requirement] <name> by <name> { body }
 	// Short form: satisfy/verify <name>;
 	if kind == ast.UsageSatisfy {
 		// Optional: requirement keyword
-		hasRequirementKeyword := p.acceptKeyword("requirement")
+		p.acceptKeyword("requirement")
 		
 		reqName := p.parseQualifiedName()
 		if reqName != nil {
@@ -784,13 +786,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			})
 		}
 		
-		// If we had "requirement" keyword, expect "by" clause
-		if hasRequirementKeyword {
-			if !p.acceptKeyword("by") {
-				p.error(p.peek().Span, "expected 'by' keyword after requirement reference")
-				u.NodeSpan = p.spanFrom(start)
-				return u
-			}
+		// Check for optional "by" clause
+		if p.acceptKeyword("by") {
 			subjName := p.parseQualifiedName()
 			if subjName != nil {
 				// Store subject as identification
@@ -2199,7 +2196,19 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 	case ast.UsageSuccession:
 		p.parseConnectorEnds(u, "") // succession has no intermediate keyword
 	case ast.UsageAllocation:
-		p.parseConnectorEnds(u, "allocate")
+		// Allocation usage syntax: allocate X to Y (no intermediate keyword, like succession)
+		// The 'allocate' keyword is the kind keyword, already consumed
+		if p.atKeyword("to") {
+			// Single-end form: allocate to target
+			p.advance() // consume "to"
+			end := p.parseConnectorEnd()
+			if end != nil {
+				u.ConnectorEnds = append(u.ConnectorEnds, end)
+			}
+		} else {
+			// Binary form: allocate source to target
+			p.parseConnectorEnds(u, "") // no intermediate keyword
+		}
 	case ast.UsageFlow:
 		p.parseFlowEnds(u)
 	}
