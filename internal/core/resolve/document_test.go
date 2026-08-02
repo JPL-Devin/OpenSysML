@@ -414,3 +414,71 @@ func TestResolve_RelationshipTargetChain(t *testing.T) {
 		}
 	})
 }
+
+func TestResolve_Track3Integration(t *testing.T) {
+	tests := []struct {
+		name    string
+		src     string
+		wantErr bool
+	}{
+		{
+			name: "feature chain in subsetting",
+			src: `
+				package Outer {
+					package Inner {
+						attribute value = 42;
+					}
+				}
+				attribute ref : Outer;
+				attribute test subsets ref.Inner.value;
+			`,
+			wantErr: false,
+		},
+		{
+			name: "nested feature chains in redefines",
+			src: `
+				package A {
+					attribute x = 1;
+				}
+				package B {
+					attribute y = 2;
+				}
+				attribute refA : A;
+				attribute refB : B;
+				attribute derived :> refA.x redefines refB.y;
+			`,
+			wantErr: false,
+		},
+		{
+			name: "feature chain with typing",
+			src: `
+				part def Vehicle {
+					attribute speed;
+				}
+				part myVehicle : Vehicle;
+				attribute test : myVehicle.speed;
+			`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parser.New(source.New("test.sysml", []byte(tt.src)))
+			root := p.ParseFile()
+			if len(p.Diagnostics) != 0 {
+				t.Fatalf("Parse() error: %v", p.Diagnostics)
+			}
+
+			idx := symbols.NewIndexFromDoc("test.sysml", root)
+			r := New(idx)
+			r.ResolveDocument("test.sysml", root)
+
+			hasError := len(r.Diagnostics) > 0
+
+			if hasError != tt.wantErr {
+				t.Errorf("wantErr=%v, got error=%v, diagnostics: %v", tt.wantErr, hasError, r.Diagnostics)
+			}
+		})
+	}
+}
