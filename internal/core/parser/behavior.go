@@ -1078,6 +1078,15 @@ func (p *Parser) parseStateMember() ast.Node {
 			p.advance()
 			return p.parseSubstateMember(start)
 		case "transition":
+			// Lookahead to distinguish:
+			// 1. State machine transition: transition source to target (no name)
+			// 2. Transition usage: transition name first ... (has name + connector syntax)
+			// Check if followed by identifier + "first" keyword
+			if p.peekN(1).Kind == lexer.Identifier && p.peekN(2).Kind == lexer.Keyword && p.peekN(2).KeywordID == "first" {
+				// Transition usage - parse as general body member (declaration)
+				return p.parseBodyMember()
+			}
+			// State machine transition
 			p.advance()
 			return p.parseTransitionMember(start)
 		}

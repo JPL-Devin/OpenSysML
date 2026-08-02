@@ -145,6 +145,7 @@ const (
 	// Tier C.
 	UsageAction
 	UsageState
+	UsageTransition
 	UsageStep
 	UsageCalc
 	UsageExpr
@@ -212,6 +213,8 @@ func (k UsageKind) String() string {
 		return "action"
 	case UsageState:
 		return "state"
+	case UsageTransition:
+		return "transition"
 	case UsageStep:
 		return "step"
 	case UsageCalc:

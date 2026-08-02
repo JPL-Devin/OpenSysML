@@ -86,6 +86,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	// Tier C.
 	"action":       ast.UsageAction,
 	"state":        ast.UsageState,
+	"transition":   ast.UsageTransition,
 	"step":         ast.UsageStep,
 	"calc":         ast.UsageCalc,
 	"expr":         ast.UsageExpr, // expression parameter (lambda/closure)
@@ -315,7 +316,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	}
 	
 	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" {
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		return p.parseUsage(start, usageKindKeywords[kw], mods, isAll)
@@ -1866,6 +1867,10 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 		} else {
 			p.parseConnectorFromTo(u)
 		}
+	case ast.UsageTransition:
+		// Transition usage syntax: first <end> accept <param> via <end> then <end>
+		// Pattern: transition name first start accept payload: Type via receiver then done;
+		p.parseTransitionUsageEnds(u)
 	case ast.UsageSuccession:
 		p.parseConnectorEnds(u, "") // succession has no intermediate keyword
 	case ast.UsageAllocation:
@@ -2063,6 +2068,56 @@ func (p *Parser) parseFlowTo(fe *ast.FlowEnds) {
 		return
 	}
 	p.error(p.peek().Span, "expected 'to' between flow ends")
+}
+
+// parseTransitionUsageEnds parses transition usage connector-like ends with special keywords.
+// Pattern: first <end> accept <param> via <end> then <end>
+// Example: transition t first start accept payload: Type via receiver then done;
+func (p *Parser) parseTransitionUsageEnds(u *ast.Usage) {
+	// Parse "first <end>" if present
+	if p.acceptKeyword("first") {
+		end := p.parseConnectorEnd()
+		if end != nil {
+			u.ConnectorEnds = append(u.ConnectorEnds, end)
+		}
+	}
+	
+	// Parse "accept <param>" - this is body parameter, not connector end
+	if p.acceptKeyword("accept") {
+		// Parse parameter with optional name and type
+		var paramName string
+		var paramType *ast.QualifiedName
+		
+		if seg, ok := p.parseNameSegment(); ok {
+			paramName = seg.Text
+			if p.at(lexer.Colon) {
+				p.advance() // :
+				paramType = p.parseQualifiedName()
+			}
+		}
+		
+		// Store as body parameter in Members (similar to calc/function params)
+		// For now, create simple documentation node as placeholder
+		// Full implementation would need BodyParam support in Usage.Members
+		_ = paramName // use later when we extend AST
+		_ = paramType
+	}
+	
+	// Parse "via <end>" if present  
+	if p.acceptKeyword("via") {
+		end := p.parseConnectorEnd()
+		if end != nil {
+			u.ConnectorEnds = append(u.ConnectorEnds, end)
+		}
+	}
+	
+	// Parse "then <end>"
+	if p.acceptKeyword("then") {
+		end := p.parseConnectorEnd()
+		if end != nil {
+			u.ConnectorEnds = append(u.ConnectorEnds, end)
+		}
+	}
 }
 
 // atRelationshipKeyword checks if current token is a relationship keyword (redefines, subsets, etc.).
