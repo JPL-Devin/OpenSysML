@@ -239,12 +239,6 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		return p.parseMultiplicityDecl(start)
 	case p.atKeyword("filter"):
 		return p.parseFilter(start)
-	case p.atKeyword("timeslice"):
-		// Explicit check for timeslice (occurrence usage keyword)
-		return p.parseDefUsage(start)
-	case p.atKeyword("snapshot"):
-		// Explicit check for snapshot (occurrence usage keyword)
-		return p.parseDefUsage(start)
 	case p.atDefUsageStart():
 		return p.parseDefUsage(start)
 	case p.at(lexer.Hash):
