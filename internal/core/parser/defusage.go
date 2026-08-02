@@ -104,6 +104,7 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"case":         ast.UsageCase,
 	"analysis":     ast.UsageAnalysisCase,
 	"verification": ast.UsageVerificationCase,
+	"variant":      ast.UsagePart, // variant keyword creates variant membership
 	// KerML structural.
 	"behavior":  ast.UsageBehavior,
 	"assoc":     ast.UsageAssoc,
@@ -327,7 +328,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	}
 	
 	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, step, expr, interaction, require, perform) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" {
+	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" {
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		
