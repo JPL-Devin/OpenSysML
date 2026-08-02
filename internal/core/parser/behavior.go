@@ -1791,19 +1791,31 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 	}
 	
 	// Parse signal type reference (use relaxed parsing to allow keywords as names)
-	// Could be event type OR temporal expression (at <time>)
+	// Could be event type OR temporal expression (at <time>) OR change trigger (when <cond>) OR relative time (after <duration>)
 	var signalType ast.Node
 	var isTemporalTransition bool
+	var isChangeTransition bool
 	if p.atKeyword("at") {
 		// Temporal transition: accept at <timeExpr> then <state>
 		p.advance() // consume 'at'
 		signalType = p.ParseExpression()
 		isTemporalTransition = true
+	} else if p.atKeyword("after") {
+		// Relative time transition: accept after <duration> then <state>
+		p.advance() // consume 'after'
+		signalType = p.ParseExpression()
+		isTemporalTransition = true
+	} else if p.atKeyword("when") {
+		// Change transition: accept when <condition> then <state>
+		p.advance() // consume 'when'
+		signalType = p.ParseExpression()
+		isChangeTransition = true
 	} else {
 		// Event transition: accept <signal> then <state>
 		signalType = p.parseQualifiedNameRelaxed()
 	}
 	_ = isTemporalTransition // might be useful for AST differentiation
+	_ = isChangeTransition
 	
 	// Optional guard condition: if <expr>
 	var guardExpr ast.Node
@@ -1967,6 +1979,17 @@ func (p *Parser) parseDoMember(start int) ast.Node {
 		p.advance() // consume ';'
 		node := &ast.DoMember{
 			Actions: nil, // empty
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Check for action reference: do actionName;
+	if p.atName() {
+		actionRef := p.parseQualifiedName()
+		p.expect(lexer.Semicolon, "expected ';' after action reference")
+		node := &ast.DoMember{
+			Actions: []ast.Node{actionRef},
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
