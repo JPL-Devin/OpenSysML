@@ -2376,6 +2376,12 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 				}
 			}
 		}
+	case ast.UsageOccurrence:
+		// Occurrence usage (message) syntax: message name of payload : Type from sender to receiver;
+		// The 'from X to Y' connector ends specify sender and receiver
+		if p.atKeyword("from") || p.atKeyword("to") {
+			p.parseConnectorFromTo(u)
+		}
 	}
 }
 
@@ -2543,7 +2549,47 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 	hasOf := p.acceptKeyword("of")
 	if hasOf {
 		fe = &ast.FlowEnds{}
-		fe.Payload = p.parseRelationshipTarget() // Allow feature chains, not just qualified names
+		// Payload can be:
+		// 1. Simple reference: of Type
+		// 2. Typed declaration: of name : Type
+		// Check for (name + colon) pattern to distinguish
+		if p.atName() && p.peekN(1).Kind == lexer.Colon {
+			// Typed declaration - parse as nested member
+			// Create a usage for the payload declaration
+			payloadUsage := &ast.Usage{
+				Kind:   ast.UsageAttribute, // default to attribute
+			}
+			payloadUsage.Ident = p.parseIdentification()
+			
+			// Parse typing relationship
+			if p.accept2(lexer.Colon) {
+				typeName := p.parseQualifiedName()
+				if typeName != nil {
+					payloadUsage.Relationships = append(payloadUsage.Relationships, &ast.Relationship{
+						Kind:   ast.RelTyping,
+						Target: typeName,
+					})
+				}
+			}
+			
+			// Parse optional value assignment: = expr
+			if p.accept2(lexer.Eq) {
+				payloadUsage.Value = p.ParseExpression()
+			}
+			
+			// Store payload usage as member (nested in flow)
+			u.Members = append(u.Members, payloadUsage)
+			// Also store reference in FlowEnds for compatibility (create QualifiedName from identifier)
+			qn := &ast.QualifiedName{
+				Parts: []ast.NameSegment{
+					{Text: payloadUsage.Ident.Name, Span: payloadUsage.Ident.NameSpan},
+				},
+			}
+			fe.Payload = qn
+		} else {
+			// Simple reference
+			fe.Payload = p.parseRelationshipTarget() // Allow feature chains, not just qualified names
+		}
 	}
 	
 	switch {
