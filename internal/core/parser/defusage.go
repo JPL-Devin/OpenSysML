@@ -395,18 +395,11 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 	var hasBody bool
 	switch kind {
 	case ast.DefAction:
-		// Action def bodies: behavioral OR generic
-		// Lookahead: if body starts with behavioral keyword → parseActionBody
-		// Otherwise → generic parseDefUsageBody
+		// Action def bodies: mixed (declarations + behavioral statements)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
-			if p.isBehavioralKeyword() {
-				members = p.parseActionBody()
-			} else {
-				// Generic body (e.g., { part p; })
-				members = p.parseActionBodyGeneric()
-			}
+			members = p.parseActionBodyMixed()
 			hasBody = true
 		}
 	case ast.DefCalc:

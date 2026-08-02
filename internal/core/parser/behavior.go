@@ -351,10 +351,29 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
 	
-	if p.at(lexer.Identifier) {
+	if p.at(lexer.Identifier) || p.atNameOrKeyword() {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
 		p.advance()
+	}
+	
+	// Check for succession edge continuation: first X then Y;
+	if p.atKeyword("then") {
+		p.advance() // consume 'then'
+		target := p.parseQualifiedName()
+		p.expect(lexer.Semicolon, "expected ';' after succession edge")
+		
+		// Return succession edge from initial node (name) to target
+		source := &ast.QualifiedName{}
+		if name != "" {
+			source.Parts = []ast.NameSegment{{Text: name}}
+		}
+		node := &ast.SuccessionEdge{
+			Source: source,
+			Target: target,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
 	}
 	
 	p.expect(lexer.Semicolon, "expected ';' after initial node")
