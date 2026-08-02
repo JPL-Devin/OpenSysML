@@ -2169,6 +2169,7 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 		fe = &ast.FlowEnds{}
 		fe.Payload = p.parseRelationshipTarget() // Allow feature chains, not just qualified names
 	}
+	
 	switch {
 	case p.acceptKeyword("from"):
 		if fe == nil {
