@@ -582,10 +582,18 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		if p.accept2(lexer.Semicolon) {
 			u.HasBody = false
 		} else if p.at(lexer.LBrace) {
-			p.advance()
-			members, hasBody := p.parseDefUsageBody()
+			p.advance() // consume '{'
+			// Parse body members
+			var members []ast.Node
+			for !p.at(lexer.RBrace) && !p.atEOF() {
+				m := p.parseBodyMember()
+				if m != nil {
+					members = append(members, m)
+				}
+			}
+			p.expect(lexer.RBrace, "expected '}' to close body")
 			u.Members = members
-			u.HasBody = hasBody
+			u.HasBody = true
 		}
 		
 		u.NodeSpan = p.spanFrom(start)
