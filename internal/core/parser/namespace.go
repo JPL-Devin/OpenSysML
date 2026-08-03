@@ -230,6 +230,30 @@ func (p *Parser) parseMember() ast.Node {
 	return m
 }
 
+// tryParseDeclaration attempts to parse a declaration without committing.
+// Returns the parsed node if successful, nil if current position doesn't start a declaration.
+// Uses backtracking to avoid consuming tokens on failure.
+func (p *Parser) tryParseDeclaration() ast.Node {
+	start := p.peek().Span.Offset
+	cp := p.checkpoint()
+	
+	node := p.parseDeclaration(start)
+	
+	// Check if parse succeeded (node returned, not ErrorNode, position advanced)
+	if node == nil {
+		p.restore(cp)
+		return nil
+	}
+	
+	if _, isError := node.(*ast.ErrorNode); isError {
+		p.restore(cp)
+		return nil
+	}
+	
+	// Success: keep the parsed node
+	return node
+}
+
 // parseDeclaration dispatches on the leading keyword to a declaration parser.
 // Returns nil if the current token starts no known (in-scope) declaration.
 func (p *Parser) parseDeclaration(start int) ast.Node {
