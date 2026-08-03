@@ -1,0 +1,9 @@
+(RootNamespace
+  (Import visibility="default" all=false kind=membership recursive=false imported="ScalarValues::Real")
+  (Alias visibility="default" name="Distance" for="Real")
+  (Membership visibility="default"
+    (Definition kind="part" abstract=false variation=false name="Engine"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="power" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName)))))))

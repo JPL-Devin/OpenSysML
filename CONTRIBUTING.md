@@ -61,6 +61,15 @@ make test-short
 go test ./internal/core/parser
 ```
 
+**Parser-specific tests:** When modifying the parser, ensure the four-layer test contract passes:
+
+1. **Conformance gate:** `go test -run TestStdlibConformance ./internal/core/libs`
+2. **Golden ASTs:** `go test -run TestGolden ./internal/core/parser`
+3. **Negative tests:** `go test -run TestNegativeParsing ./internal/core/parser`
+4. **Update goldens** (after intentional changes): `go test -run TestGolden -update ./internal/core/parser`
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#parser-test-contract) for full details on the parser testing contract.
+
 ### Code Style
 
 - Use `gofmt` (enforced by CI)

@@ -322,17 +322,22 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		ident = p.parseIdentification()
 	}
 	
+	// Optional multiplicity before relationships (e.g., name[mult]: Type)
+	var multiplicity *ast.Multiplicity
+	if p.at(lexer.LBracket) {
+		multiplicity = p.parseMultiplicity()
+	}
+	
 	// Optional typing and relationships (: Type, :> SuperType, ::> Redefines, etc)
 	var relationships []*ast.Relationship
-	var multiplicity *ast.Multiplicity
 	if p.at(lexer.Colon) || p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || 
 		p.at(lexer.ColonColonGt) || p.at(lexer.ColonEq) {
 		rels, _ := p.parseRelationships(true)
 		relationships = append(relationships, rels...)
 	}
 	
-	// Optional multiplicity after relationships (e.g., : Type[*])
-	if p.at(lexer.LBracket) {
+	// Optional multiplicity after relationships if not already parsed (e.g., :> target[mult])
+	if multiplicity == nil && p.at(lexer.LBracket) {
 		multiplicity = p.parseMultiplicity()
 	}
 	
@@ -1436,6 +1441,10 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 		} else if p.atKeyword("assert") || p.atKeyword("assume") {
 			// Parse constraint expression (assert/assume)
 			members = append(members, p.parseConstraintMember())
+		} else if p.atKeyword("return") {
+			// Parse return member (for constraint defs that return result)
+			// Example: return result = expr { doc }
+			members = append(members, p.parseBodyMember())
 		} else if p.atDefUsageStart() {
 			// Definition/usage keyword - parse as body member
 			members = append(members, p.parseBodyMember())
@@ -1574,21 +1583,27 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		return node
 	}
 	
-	// Otherwise expect typed declaration: subject <name> : <Type>;
-	// Expect identifier
-	if !p.at(lexer.Identifier) {
-		p.error(p.peek().Span, "expected identifier after 'subject'")
-		en := &ast.ErrorNode{Message: "expected identifier after 'subject'"}
-		if !p.atEOF() && !p.at(lexer.RBrace) {
-			p.advance()
+	// Otherwise expect typed declaration: subject <name> : <Type>; OR anonymous: subject: <Type>;
+	// Check for anonymous pattern (subject: Type;)
+	var name string
+	if p.at(lexer.Colon) {
+		// Anonymous subject
+		name = ""
+	} else {
+		// Named subject - expect identifier
+		if !p.at(lexer.Identifier) {
+			p.error(p.peek().Span, "expected identifier or ':' after 'subject'")
+			en := &ast.ErrorNode{Message: "expected identifier or ':' after 'subject'"}
+			if !p.atEOF() && !p.at(lexer.RBrace) {
+				p.advance()
+			}
+			en.NodeSpan = p.spanFrom(start)
+			return en
 		}
-		en.NodeSpan = p.spanFrom(start)
-		return en
+		nameToken := p.peek()
+		name = p.src.Text(nameToken.Span)
+		p.advance()
 	}
-	
-	nameToken := p.peek()
-	name := p.src.Text(nameToken.Span)
-	p.advance()
 	
 	// Expect ':'
 	if !p.at(lexer.Colon) {

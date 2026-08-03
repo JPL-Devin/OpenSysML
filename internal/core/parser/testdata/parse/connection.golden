@@ -1,0 +1,19 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="connection" abstract=false variation=false name="WireConnection"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="supplierPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Port
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="consumerPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Port
+            (*ast.QualifiedName))))))
+  (Membership visibility="default"
+    (Usage kind="connector" name="wire" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+      (Relationship kind="typing" target=WireConnection
+        (*ast.QualifiedName))
+      (ConnectorEnd target="a"
+        (*ast.QualifiedName))
+      (ConnectorEnd target="b"
+        (*ast.QualifiedName)))))
