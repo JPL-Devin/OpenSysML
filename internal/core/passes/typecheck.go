@@ -111,6 +111,10 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if !isDefKind(target) {
 			return fmt.Sprintf("%s cannot specialize %s (target is not a definition)", defKind, target)
 		}
+		// Enums can specialize attribute defs (per SysML v2 spec: GradePoints :> Real)
+		if defKind == ast.DefEnumeration && target == symbols.SymbolAttributeDef {
+			return ""
+		}
 		if target != want {
 			return fmt.Sprintf("%s cannot specialize %s (kind mismatch)", defKind, target)
 		}
