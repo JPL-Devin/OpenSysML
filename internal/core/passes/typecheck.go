@@ -329,22 +329,26 @@ func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, d
 	}
 	
 	// Attributes can be typed by any structural def (for parameters, properties)
-	// This allows: in scene : Scene (attribute : itemDef)
+	// Also allow enumDef for typed enumerations
+	// This allows: in scene : Scene (attribute : itemDef), verdict : VerdictKind (attribute : enumDef)
 	if useKind == ast.UsageAttribute {
 		return defKind == symbols.SymbolPartDef ||
 			defKind == symbols.SymbolAttributeDef ||
 			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef
+			defKind == symbols.SymbolOccurrenceDef ||
+			defKind == symbols.SymbolEnumerationDef
 	}
 	
 	// Parameters (in/out/inout) can cross-type to any structural def
-	// This allows: in power : PowerValue (part : attributeDef)
+	// Also allow enumDef for typed enumerations
+	// This allows: in power : PowerValue (part : attributeDef), out verdict : VerdictKind (part : enumDef)
 	hasDirection := direction != ast.DirNone
 	if hasDirection {
 		return defKind == symbols.SymbolPartDef ||
 			defKind == symbols.SymbolAttributeDef ||
 			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef
+			defKind == symbols.SymbolOccurrenceDef ||
+			defKind == symbols.SymbolEnumerationDef
 	}
 	
 	// Items can be typed by any structural def (structural hierarchy)
