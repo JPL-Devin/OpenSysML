@@ -8,33 +8,43 @@ Start the REPL with no arguments:
 sysml
 ```
 
+Load files and enter interactive mode:
+
+```bash
+sysml model.sysml
+sysml types.sysml instances.sysml
+```
+
 ## Non-Interactive Mode
 
-Execute commands and exit without entering interactive mode.
+Execute expressions and exit without entering interactive mode.
 
 ### Basic Evaluation
 
-Load a model and evaluate an expression:
+Evaluate an expression:
 
 ```bash
-sysml --load model.sysml --eval someAttribute
-# Output: value of someAttribute
+sysml -e "5 + 3"
+# Output: ✓ 5 + 3
+#           = 8
 ```
 
-### Short Flags
+### Load Files and Evaluate
 
-Use abbreviated flags for convenience:
+Load a model first, then evaluate:
 
 ```bash
-sysml -l model.sysml -e x
+sysml -e "someAttribute" model.sysml
 ```
+
+**Note:** Options (`-e`) must come BEFORE positional arguments (files).
 
 ### Multiple Evaluations
 
 Evaluate multiple expressions in sequence:
 
 ```bash
-sysml -l model.sysml -e x -e y -e z
+sysml -e "x" -e "y" -e "z" model.sysml
 ```
 
 ### Multiple Files
@@ -42,52 +52,51 @@ sysml -l model.sysml -e x -e y -e z
 Load multiple files before evaluating:
 
 ```bash
-sysml -l types.sysml -l instances.sysml -e result
-```
-
-### Quiet Mode
-
-Suppress prompts and decorations for clean output (useful for scripting):
-
-```bash
-sysml --quiet --load model.sysml --eval result
-# Output: only the value
-
-sysml -q -l model.sysml -e output > result.txt
+sysml -e "result" types.sysml instances.sysml
 ```
 
 ## Real-World Examples
 
-### 1. Validate Model and Check Constraint
+### 1. Quick Calculation
 
 ```bash
-sysml -l vehicle-model.sysml -e "speedLimit < 120"
+sysml -e "10 * 2 + 5"
+# Output: ✓ 10 * 2 + 5
+#           = 25
 ```
 
-### 2. Extract Calculated Values
+### 2. Validate Model and Check Constraint
+
+```bash
+sysml -e "speedLimit < 120" vehicle-model.sysml
+```
+
+### 3. Extract Calculated Values
 
 ```bash
 # model.sysml contains: attribute totalCost = partCost + laborCost;
-sysml -q -l model.sysml -e totalCost
-# Output: 1500.00
+sysml -e "totalCost" model.sysml
+# Output: ✓ totalCost
+#           = 1500.00
 ```
 
-### 3. Batch Processing
+### 4. Batch Processing
 
 ```bash
 #!/bin/bash
 for model in models/*.sysml; do
-    result=$(sysml -q -l "$model" -e result)
+    result=$(sysml -e "result" "$model" 2>&1 | grep "=" | awk '{print $2}')
     echo "$model: $result"
 done
 ```
 
-### 4. CI/CD Integration
+### 5. CI/CD Integration
 
 ```bash
 # Check that calculated value matches expected
 expected=42
-actual=$(sysml -q -l design.sysml -e designParameter)
+output=$(sysml -e "designParameter" design.sysml)
+actual=$(echo "$output" | grep "=" | awk '{print $2}')
 if [ "$actual" = "$expected" ]; then
     echo "✓ Design parameter validated"
     exit 0
@@ -97,83 +106,105 @@ else
 fi
 ```
 
-### 5. Semantic Layer Demo
+### 6. Use REPL Meta Commands
+
+Load a file and use meta commands:
 
 ```bash
-# Evaluate operators and expressions
-sysml -l examples/semantic-layer/demo.sysml -e intEquality -e usePi -e expr1
-
-# Quiet mode for scripting
-sysml -q -l examples/semantic-layer/demo.sysml -e intEquality
-# Output:   = true
+echo "%load model.sysml
+%instantiate Vehicle
+%slots Vehicle
+%eval speedLimit" | sysml
 ```
 
 ## Command Reference
 
 | Flag | Shorthand | Description |
 |------|-----------|-------------|
-| `--load <file>` | `-l` | Load a SysML file (repeatable) |
-| `--eval <expr>` | `-e` | Evaluate an expression (repeatable) |
-| `--quiet` | `-q` | Suppress prompts and decorations |
+| `--eval <expr>` | `-e` | Evaluate expression and exit (repeatable) |
 | `--version` | `-v` | Show version information |
-| `--help` | | Show usage information |
+| `--help` | `-h` | Show usage information |
 
-## Output Modes
+**Arguments:**
+- `[file...]` - SysML files to load (loaded in order)
 
-### Normal Mode (default)
-
-Includes prompts, checkmarks, and decorative output:
-
-```bash
-$ sysml -l demo.sysml -e x
-package Demo
-✓ x
-  = 42
+**Usage pattern:**
+```
+sysml [options] [file...]
 ```
 
-### Quiet Mode
-
-Only essential output:
+## Examples
 
 ```bash
-$ sysml -q -l demo.sysml -e x
-  = 42
+# Interactive REPL
+sysml
+
+# Load file and start REPL
+sysml model.sysml
+
+# Evaluate and exit
+sysml -e "5 + 3"
+
+# Load file, evaluate, and exit
+sysml -e "expr" file.sysml
+
+# Multiple evaluations
+sysml -e "x" -e "y" file.sysml
+
+# Multiple files
+sysml -e "result" file1.sysml file2.sysml
+```
+
+## Output Format
+
+All evaluations include checkmark and result:
+
+```bash
+$ sysml -e "10 * 2"
+✓ 10 * 2
+  = 20
+```
+
+For file loads, declarations are summarized:
+
+```bash
+$ sysml demo.sysml
+package Demo
+  part def Vehicle {
+    attribute speed : Real;
+  }
+SysML v2 REPL — %help for commands, Ctrl-D to exit
+sysml> 
 ```
 
 ## Error Handling
 
-Errors are written to stderr:
+Errors are written to stderr with exit code 1:
 
 ```bash
-sysml -l missing.sysml -e x
-# stderr: sysml: load missing.sysml: no such file or directory
+sysml missing.sysml
+# stderr: error loading missing.sysml: open missing.sysml: no such file or directory
 # exit code: 1
 
-sysml -q -l model.sysml -e nonexistent 2> errors.log
+sysml -e "nonexistent" model.sysml 2> errors.log
 # stderr written to errors.log
-```
-
-## Piping (Alternative to --load/--eval)
-
-You can still use stdin piping for interactive-style input:
-
-```bash
-echo "%load model.sysml" | sysml
-echo -e "%load model.sysml\n%eval x" | sysml
 ```
 
 ## Use Cases
 
-1. **Automated Testing**: Run model evaluations in CI/CD pipelines
-2. **Scripting**: Extract calculated values for other tools
-3. **Validation**: Check model properties without manual interaction
-4. **Batch Processing**: Process multiple models programmatically
-5. **Integration**: Use SysML as a calculation engine for other systems
+1. **Quick Calculations**: Use as a calculator with `-e`
+2. **Automated Testing**: Run model evaluations in CI/CD pipelines
+3. **Scripting**: Extract calculated values for other tools
+4. **Validation**: Check model properties without manual interaction
+5. **Batch Processing**: Process multiple models programmatically
+6. **Interactive Development**: Load files and explore in REPL
 
 ## Tips
 
-- Use `-q` for clean output when piping to other tools
+- Put options (`-e`, `-v`) **before** file arguments
+- Use `%help` in REPL to see all meta commands
 - Combine multiple `-e` flags to evaluate related expressions
-- Load common definitions with `-l` before custom models
+- Load common definitions before custom models
 - Check exit codes: 0 = success, 1 = error
 - Redirect stderr separately from stdout for error handling
+- Use shell pipes for REPL automation: `echo "%load file.sysml" | sysml`

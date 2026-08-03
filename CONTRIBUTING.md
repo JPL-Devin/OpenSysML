@@ -6,25 +6,45 @@ Thank you for your interest in contributing to Systemica!
 
 ### Prerequisites
 
-- Go 1.25 or later
+- Go 1.23 or later
 - Git
-- Make (optional, for build automation)
+- Make (recommended for build automation)
 
 ### Clone and Build
 
 ```bash
 git clone https://github.com/Open-MBEE/Systemica.git
 cd Systemica
-go build ./...
-go test ./...
+make build  # builds bin/sysml and bin/sysml-lsp with version info
+make test   # runs all tests
 ```
 
 ## Development Workflow
 
+### Building
+
+```bash
+# Build all binaries with version info
+make build
+
+# Build specific binary
+make build-sysml
+make build-lsp
+
+# Install to $GOPATH/bin
+make install
+
+# Clean build artifacts
+make clean
+```
+
 ### Running Tests
 
 ```bash
-# All tests
+# All tests (using Makefile)
+make test
+
+# All tests (direct)
 go test ./...
 
 # With coverage
@@ -33,6 +53,9 @@ go tool cover -html=coverage.out
 
 # With race detector
 go test -race ./...
+
+# Short tests (faster, no race detector)
+make test-short
 
 # Specific package
 go test ./internal/core/parser

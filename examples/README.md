@@ -172,12 +172,14 @@ Demonstrates behavioral AST parsing:
 
 1. **Build the REPL:**
    ```bash
-   go build -o sysml ./cmd/sysml
+   make build
    ```
 
 2. **Load an example:**
    ```bash
-   ./sysml
+   ./bin/sysml examples/action-executor-demo.sysml
+   # OR use REPL command:
+   ./bin/sysml
    sysml> %load examples/action-executor-demo.sysml
    ```
 
