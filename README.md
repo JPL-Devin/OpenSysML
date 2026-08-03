@@ -127,7 +127,7 @@ Current: green (Time: 30.0s)
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
 **Test coverage:** 722+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation).
-**Parser coverage:** 95 of 95 official SysML v2 standard library files parse cleanly (100% coverage). Full SysML v2 specification compliance achieved. See [examples/PARSER_FEATURES_DEMOS.md](examples/PARSER_FEATURES_DEMOS.md) for feature showcase.
+**Parser coverage:** 94 official SysML v2 standard library files parse cleanly (100% coverage). Full SysML v2 specification compliance achieved. See [examples/PARSER_FEATURES_DEMOS.md](examples/PARSER_FEATURES_DEMOS.md) for feature showcase.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
 ## Architecture
@@ -181,11 +181,11 @@ github.com/Open-MBEE/Systemica
 
 ## Technology
 
-- **Language:** Go 1.25+ (goroutines for concurrency, single static binary, proven LSP track record)
+- **Language:** Go 1.23+ (goroutines for concurrency, single static binary, proven LSP track record)
 - **Parser:** Hand-written recursive descent (zero overhead, full error recovery, sub-ms parses)
 - **Grammar source:** OMG pilot Xtext grammars (`SysML.xtext` + `KerMLExpressions`)
 - **Spec compliance:** [OMG SysML v2.1 Beta 1 / KerML 1.1](https://www.omg.org/spec/SysML/2.0) (2026-05 release)
-- **Standard library:** 95/95 files from [SysML v2 Pilot Implementation 2026-05](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/releases/tag/2026-05)
+- **Standard library:** 94 files from [SysML v2 Pilot Implementation 2026-05](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/releases/tag/2026-05)
 - **CI/CD:** CircleCI for automated builds, tests, and releases
 
 ## Releases
