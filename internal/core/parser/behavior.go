@@ -1521,6 +1521,10 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 func (p *Parser) parseRequirementMember() ast.Node {
 	start := p.peek().Span.Offset
 	
+	// Debug: log current token
+	tok := p.peek()
+	_ = tok // Keep for debugging if needed
+	
 	// Check for doc keyword
 	if p.atKeyword("doc") {
 		return p.parseDocumentation(start)

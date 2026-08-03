@@ -105,6 +105,17 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		seen[target] = true
 		out = append(out, target)
 	}
+	
+	// SubjectMember has TypeRef instead of Relationships - handle separately
+	if subj, ok := sym.Decl.(*ast.SubjectMember); ok && subj.TypeRef != nil {
+		if target, ok := m.resolver.ResolveQualified(sym.OwnerScope, subj.TypeRef); ok && target != nil {
+			if !seen[target] {
+				seen[target] = true
+				out = append(out, target)
+			}
+		}
+	}
+	
 	m.directSupers[sym] = out
 	return out
 }

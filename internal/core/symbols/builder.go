@@ -95,6 +95,17 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		sym := newSymbol(id, SymbolStateUsage, d, vis, child, scope, trivia)
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
+	case *ast.SubjectMember:
+		// SubjectMember represents requirement subject: subject <name> : <Type>;
+		// Create a part usage symbol (subject is structural usage like part)
+		id := ast.Identification{Name: d.Name}
+		child := NewScope(scope, d)
+		sym := newSymbol(id, SymbolPartUsage, d, vis, child, scope, trivia)
+		defineIdent(scope, id, sym)
+		scope.AddChild(child)
+		if len(d.Body) > 0 {
+			buildMembers(child, d.Body)
+		}
 	case *ast.Import, *ast.FilterMember, *ast.ErrorNode:
 		// Imports are processed during resolution; filters hold expressions;
 		// error nodes have no declaration. Nothing to register here.
@@ -252,6 +263,12 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 		return SymbolVerificationCaseUsage
 	case ast.UsageUseCase:
 		return SymbolUseCaseUsage
+	case ast.UsageSubject:
+		// Subject is a requirement parameter - treat as part usage for structural purposes
+		return SymbolPartUsage
+	case ast.UsageObjective:
+		// Objective is a requirement parameter - treat as part usage for structural purposes
+		return SymbolPartUsage
 	default:
 		return SymbolUnknown
 	}

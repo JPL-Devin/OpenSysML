@@ -807,7 +807,7 @@ func (p *Parser) isRequirementKeyword() bool {
 		return false
 	}
 	kw := p.peek().KeywordID
-	return kw == "subject" || kw == "assume" || kw == "require" || kw == "actor"
+	return kw == "subject" || kw == "assume" || kw == "require" || kw == "actor" || kw == "doc"
 }
 
 // isStateKeyword checks if next token is state body keyword

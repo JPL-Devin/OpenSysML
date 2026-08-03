@@ -122,6 +122,19 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 		}
+	case *ast.SubjectMember:
+		// Resolve subject type reference
+		if d.TypeRef != nil {
+			r.ResolveQualified(scope, d.TypeRef)
+		}
+		if d.Multiplicity != nil {
+			r.resolveExpr(scope, d.Multiplicity.Lower)
+			r.resolveExpr(scope, d.Multiplicity.Upper)
+		}
+		r.resolveExpr(scope, d.BindingExpr)
+		if child := r.childScope(scope, d); child != nil {
+			r.walkMembers(child, d.Body)
+		}
 	}
 }
 
