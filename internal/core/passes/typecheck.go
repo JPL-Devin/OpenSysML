@@ -119,7 +119,7 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if !isDefKind(target) {
 			return fmt.Sprintf("type must be a definition, found %s", target)
 		}
-		if target != usageWantsDefKind(useKind) {
+		if !isCompatibleTyping(useKind, target) {
 			return fmt.Sprintf("%s cannot be typed by %s (kind mismatch)", useKind, target)
 		}
 	case ast.RelReferences, ast.RelCrosses:
@@ -308,6 +308,36 @@ func isDefKind(k symbols.SymbolKind) bool {
 
 func isUsageKind(k symbols.SymbolKind) bool {
 	return usageSymbolKinds[k]
+}
+
+// isCompatibleTyping checks if a usage kind can be typed by a definition kind.
+// Allows structural compatibility: part/attribute/item/occurrence can cross-type
+// since they're all structural classifiers in SysML.
+func isCompatibleTyping(useKind ast.UsageKind, defKind symbols.SymbolKind) bool {
+	// Exact match always allowed
+	if defKind == usageWantsDefKind(useKind) {
+		return true
+	}
+	
+	// Structural kinds can cross-type (part, attribute, item, occurrence)
+	structuralUsages := map[ast.UsageKind]bool{
+		ast.UsagePart:       true,
+		ast.UsageAttribute:  true,
+		ast.UsageItem:       true,
+		ast.UsageOccurrence: true,
+	}
+	structuralDefs := map[symbols.SymbolKind]bool{
+		symbols.SymbolPartDef:       true,
+		symbols.SymbolAttributeDef:  true,
+		symbols.SymbolItemDef:       true,
+		symbols.SymbolOccurrenceDef: true,
+	}
+	
+	if structuralUsages[useKind] && structuralDefs[defKind] {
+		return true
+	}
+	
+	return false
 }
 
 func unwrapType(n ast.Node) ast.Node {
