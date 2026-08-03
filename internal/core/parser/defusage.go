@@ -1221,6 +1221,10 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		u.IsNonunique = true
 	}
 	
+	// DEBUG: trace token after post-modifiers
+	// fmt.Printf("DEBUG parseUsage after postMods: tok=%v keyword=%q offset=%d\n", 
+	//     p.peek().Kind, p.peek().KeywordID, p.peek().Span.Offset)
+	
 	// Parse additional relationships after modifiers (e.g., :> target)
 	postRels, _ := p.parseRelationships(true)
 	u.Relationships = append(u.Relationships, postRels...)
@@ -2616,6 +2620,7 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 		// Can be:
 		// 1. `allocate X to Y` - 'allocate' is kind keyword
 		// 2. `allocation name : Type allocate X to Y` - 'allocation' is kind keyword, 'allocate' is intermediate
+		// 3. `allocation name : Type { body }` - simple allocation with body, no connector ends
 		// Check for optional 'allocate' keyword (when kind keyword was 'allocation' not 'allocate')
 		p.acceptKeyword("allocate")
 		
@@ -2626,10 +2631,12 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 			if end != nil {
 				u.ConnectorEnds = append(u.ConnectorEnds, end)
 			}
-		} else {
+		} else if !p.at(lexer.LBrace) && !p.at(lexer.Semicolon) {
 			// Binary form: allocate source to target
+			// Only parse connector ends if NOT at body start
 			p.parseConnectorEnds(u, "") // no intermediate keyword
 		}
+		// If at LBrace or Semicolon, skip connector ends (simple allocation with body)
 	case ast.UsageFlow:
 		p.parseFlowEnds(u)
 	case ast.UsageMetadata:

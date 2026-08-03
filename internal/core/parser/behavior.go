@@ -322,17 +322,22 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		ident = p.parseIdentification()
 	}
 	
+	// Optional multiplicity before relationships (e.g., name[mult]: Type)
+	var multiplicity *ast.Multiplicity
+	if p.at(lexer.LBracket) {
+		multiplicity = p.parseMultiplicity()
+	}
+	
 	// Optional typing and relationships (: Type, :> SuperType, ::> Redefines, etc)
 	var relationships []*ast.Relationship
-	var multiplicity *ast.Multiplicity
 	if p.at(lexer.Colon) || p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || 
 		p.at(lexer.ColonColonGt) || p.at(lexer.ColonEq) {
 		rels, _ := p.parseRelationships(true)
 		relationships = append(relationships, rels...)
 	}
 	
-	// Optional multiplicity after relationships (e.g., : Type[*])
-	if p.at(lexer.LBracket) {
+	// Optional multiplicity after relationships if not already parsed (e.g., :> target[mult])
+	if multiplicity == nil && p.at(lexer.LBracket) {
 		multiplicity = p.parseMultiplicity()
 	}
 	
@@ -1436,6 +1441,10 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 		} else if p.atKeyword("assert") || p.atKeyword("assume") {
 			// Parse constraint expression (assert/assume)
 			members = append(members, p.parseConstraintMember())
+		} else if p.atKeyword("return") {
+			// Parse return member (for constraint defs that return result)
+			// Example: return result = expr { doc }
+			members = append(members, p.parseBodyMember())
 		} else if p.atDefUsageStart() {
 			// Definition/usage keyword - parse as body member
 			members = append(members, p.parseBodyMember())
