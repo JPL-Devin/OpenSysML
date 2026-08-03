@@ -115,6 +115,10 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if defKind == ast.DefEnumeration && target == symbols.SymbolAttributeDef {
 			return ""
 		}
+		// Metadata defs can specialize metaclasses (per SysML v2 spec: situation :> SemanticMetadata)
+		if defKind == ast.DefMetadata && target == symbols.SymbolMetaclass {
+			return ""
+		}
 		if target != want {
 			return fmt.Sprintf("%s cannot specialize %s (kind mismatch)", defKind, target)
 		}
