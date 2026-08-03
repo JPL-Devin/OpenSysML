@@ -417,8 +417,55 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		kw = t.KeywordID
 	}
 	
-	// Check for usage-only keywords (subject, objective, succession, inv, connector, bind, satisfy, verify, include, step, expr, interaction, require, perform, event, stakeholder, frame, actor, expose, render, timeslice, snapshot) that never have def forms
-	if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "include" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" || kw == "timeslice" || kw == "snapshot" {
+	// Special case: perform action <name> (declaration form)
+	// Pattern: perform action generateTorque: GenerateTorque;
+	// Skip "perform" and parse as regular "action" usage
+	if kw == "perform" && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "action" {
+		p.advance() // consume 'perform'
+		kw = "action"  // treat as regular action keyword
+		// Continue to dual-keyword path (don't enter usage-only block)
+	} else if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "include" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" || kw == "timeslice" || kw == "snapshot" {
+		// Check for usage-only keywords that never have def forms
+		
+		// Special case: perform <ref>; (shorthand without action keyword)
+		// Must check BEFORE consuming keyword token
+		if kw == "perform" && !p.atKeyword("action") {
+			p.advance() // consume 'perform'
+			// Parse reference target (can be feature chain like takePhoto.focus)
+			u := &ast.Usage{
+				Kind:        ast.UsageAction,
+				IsAbstract:  mods.isAbstract,
+				IsReference: mods.isReference,
+				IsEnd:       mods.isEnd,
+				Visibility:  mods.visibility,
+				Direction:   mods.direction,
+				IsComposite: mods.isComposite,
+			}
+			u.NodeBase.NodeSpan = p.spanFrom(start)
+			
+			// Parse reference target (qualified name or feature chain)
+			target := p.parseRelationshipTarget()
+			if target != nil {
+				// Add as references relationship
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelReferences,
+					Target: target,
+				})
+			}
+			
+			// Expect semicolon or body
+			if p.accept2(lexer.Semicolon) {
+				u.HasBody = false
+			} else if p.at(lexer.LBrace) {
+				p.advance()
+				u.Members = p.parseActionBodyMixed()
+				u.HasBody = true
+			}
+			
+			u.NodeSpan = p.spanFrom(start)
+			return applyPrefixes(u)
+		}
+		
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
 		
@@ -458,44 +505,6 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				// For now, treat as semantic annotation - flow inherits succession characteristics
 				// Implementation note: May need dedicated AST flag or relationship for this hybrid
 			}
-			return applyPrefixes(u)
-		}
-		
-		// Special case: perform <ref>; (shorthand without action keyword)
-		// If perform is NOT followed by action keyword, parse as action usage with reference
-		if kw == "perform" && !p.atKeyword("action") {
-			// Parse reference target (can be feature chain like takePhoto.focus)
-			u := &ast.Usage{
-				Kind:        ast.UsageAction,
-				IsAbstract:  mods.isAbstract,
-				IsReference: mods.isReference,
-				IsEnd:       mods.isEnd,
-				Visibility:  mods.visibility,
-				Direction:   mods.direction,
-				IsComposite: mods.isComposite,
-			}
-			u.NodeBase.NodeSpan = p.spanFrom(start)
-			
-			// Parse reference target (qualified name or feature chain)
-			target := p.parseRelationshipTarget()
-			if target != nil {
-				// Add as references relationship
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelReferences,
-					Target: target,
-				})
-			}
-			
-			// Expect semicolon or body
-			if p.accept2(lexer.Semicolon) {
-				u.HasBody = false
-			} else if p.at(lexer.LBrace) {
-				p.advance()
-				u.Members = p.parseActionBodyMixed()
-				u.HasBody = true
-			}
-			
-			u.NodeSpan = p.spanFrom(start)
 			return applyPrefixes(u)
 		}
 		
@@ -2453,7 +2462,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 	isUsageOnlyKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
 		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "interaction" ||
-		p.peek().KeywordID == "stakeholder" || p.peek().KeywordID == "frame" || p.peek().KeywordID == "actor" || p.peek().KeywordID == "expose" || p.peek().KeywordID == "render")
+		p.peek().KeywordID == "stakeholder" || p.peek().KeywordID == "frame" || p.peek().KeywordID == "actor" || p.peek().KeywordID == "expose" || p.peek().KeywordID == "render" ||
+		p.peek().KeywordID == "perform")
 	isDirectionKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "in" || p.peek().KeywordID == "out")
 	if !isUsageOnlyKw && !isDirectionKw && (p.atName() || p.at(lexer.Keyword)) {
 		next := p.peekN(1)
