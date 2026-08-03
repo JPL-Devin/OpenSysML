@@ -18,7 +18,7 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 ### Design Principles
 
 - **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
-- **Completeness:** Full OMG SysML v2 spec compliance (textual notation + KerML)
+- **Completeness:** SysML v2 textual notation support (94/94 stdlib files parse clean)
 - **Executable models:** Not just validation—runtime that instantiates, evaluates, simulates
 - **Incremental & lazy:** Parse immediately, resolve semantics on-demand (gopls/rust-analyzer precedent)
 - **Immutable AST:** All semantic state lives in side tables keyed by node/symbol
@@ -422,7 +422,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 
 | Component | Status |
 |-----------|--------|
-| Lexer/Parser (structural + behavioral) | ✅ Complete (100% stdlib coverage) |
+| Lexer/Parser (structural + behavioral) | ✅ Operational (94/94 stdlib clean - see [conformance gate](../internal/core/libs/stdlib_conformance_test.go)) |
 | Symbol resolution & type system | ✅ Complete |
 | Validation passes (syntax → constraints) | ✅ Complete |
 | Expression evaluator & instance model (Tiers 1-3) | ✅ Complete |
@@ -436,17 +436,87 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
 
-**Parser coverage:** 95 of 95 official SysML v2 standard library files parse cleanly (100% coverage). Full SysML v2 specification compliance achieved. See [examples/PARSER_FEATURES_DEMOS.md](../examples/PARSER_FEATURES_DEMOS.md) for feature showcase.
+**Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](../internal/core/libs/stdlib_conformance_test.go). Grammar alignment documented in [grammar/PRODUCTION_MAP.md](grammar/PRODUCTION_MAP.md). Parser strategy documented in [ADR 0001](adr/0001-parser-strategy.md).
 
 ---
 
 ## Testing Strategy
 
+### Parser Test Contract
+
+New grammar features require a **four-layer test contract** to ensure correctness and prevent regressions:
+
+#### 1. Conformance Gate
+- **Purpose:** Ensure stdlib continues to parse cleanly
+- **Location:** `internal/core/libs/stdlib_conformance_test.go`
+- **Test:** `TestStdlibConformance` loads all 94 stdlib files
+- **Acceptance:** 94/94 files parse without errors
+- **Allowlist:** `testdata/stdlib_known_failures.txt` (currently empty)
+- **Failure mode:** Regression breaks previously-working stdlib files
+
+**Usage:**
+```bash
+go test -v -run TestStdlibConformance ./internal/core/libs
+```
+
+#### 2. Golden AST Snapshots
+- **Purpose:** Verify AST structure matches expected output
+- **Location:** `internal/core/parser/golden_test.go`
+- **Fixtures:** `testdata/parse/*.sysml` (9 representative files)
+- **Goldens:** `testdata/parse/*.ast.txt` (AST dumps)
+- **Acceptance:** Parse output matches golden file
+- **Update flag:** `go test -run TestGolden -update` (regenerate goldens after intentional changes)
+
+**Coverage:**
+- Package/namespace declarations
+- Part/attribute definitions and usages
+- Connections and relationships
+- Requirements and constraints
+- State machines
+- Calculations
+- Enumerations
+- Imports and aliases
+- Metadata annotations
+
+#### 3. Round-Trip Serialization
+- **Status:** Explicitly deferred (no faithful SysML printer exists)
+- **Rationale:** `ast.Dump()` is debug-only, not spec-compliant
+- **Future work:** If SysML printer added, verify `parse(print(parse(input))) == parse(input)`
+
+#### 4. Negative Test Suite
+- **Purpose:** Verify parser rejects malformed input gracefully
+- **Location:** `internal/core/parser/negative_test.go`
+- **Test:** `TestNegativeParsing` with 9 malformed inputs
+- **Acceptance:** Each case produces diagnostics (doesn't panic)
+- **Coverage:** Unclosed blocks, unexpected tokens, invalid syntax
+
+**Example:**
+```go
+{
+    name: "unclosed_package",
+    input: "package Foo {",
+    wantError: true,
+},
+```
+
+### Unit & Integration Tests
 - **Unit tests:** Per-package test coverage (lexer, parser, semantics, runtime)
 - **Integration tests:** End-to-end REPL/runtime scenarios
 - **Test fixtures:** `testdata/*.sysml`, `testdata/*.kerml`
 - **Golden files:** Expected parse/resolve/diagnostic outputs
 - **Verification:** `go test ./...` (all tests pass), `go build ./...` (clean build)
+
+### Contributing New Grammar Features
+
+When adding parser support for new SysML v2 constructs:
+
+1. ✅ Add representative example to `testdata/parse/*.sysml`
+2. ✅ Run `go test -run TestGolden -update` to generate golden
+3. ✅ Verify `TestStdlibConformance` still passes (no regressions)
+4. ✅ Add negative test case if construct has error conditions
+5. ✅ Update `docs/grammar/PRODUCTION_MAP.md` with grammar mapping
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for full contribution guidelines.
 
 ---
 

@@ -1,0 +1,13 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="requirement" abstract=false variation=false name="SafetyRequirement"
+      (Membership visibility="default"
+        (Usage kind="subject" name="doc" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Vehicle
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="condition" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.ConstraintMember)))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="require" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.ConstraintMember))))))

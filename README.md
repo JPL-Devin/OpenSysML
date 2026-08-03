@@ -99,7 +99,7 @@ Current: green (Time: 30.0s)
 ## Goals
 
 - **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
-- **Completeness:** Full OMG SysML v2 spec compliance (textual notation + KerML)
+- **Completeness:** SysML v2 textual notation support (94/94 stdlib files parse clean)
 - **Executable models:** Instantiate, evaluate, simulate—turn specifications into running systems
 - **Real-world ergonomics:** Multi-file projects, incremental analysis, rich diagnostics
 
@@ -109,7 +109,7 @@ Current: green (Time: 30.0s)
 
 | Component | Status |
 |-----------|--------|
-| Lexer/Parser (structural + behavioral grammar) | ✅ Complete (100% stdlib coverage) |
+| Lexer/Parser (structural + behavioral grammar) | ✅ Operational (94/94 stdlib clean - see [conformance gate](internal/core/libs/stdlib_conformance_test.go)) |
 | Symbol resolution & type system | ✅ Complete |
 | Semantic layer (operators, builtins, validation) | ✅ Complete |
 | Feature chain resolution (member access) | ✅ Complete |
@@ -127,7 +127,7 @@ Current: green (Time: 30.0s)
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
 **Test coverage:** 722+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation).
-**Parser coverage:** 94 official SysML v2 standard library files parse cleanly (100% coverage). Full SysML v2 specification compliance achieved. See [examples/PARSER_FEATURES_DEMOS.md](examples/PARSER_FEATURES_DEMOS.md) for feature showcase.
+**Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar alignment documented in [PRODUCTION_MAP.md](docs/grammar/PRODUCTION_MAP.md).
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
 ## Architecture

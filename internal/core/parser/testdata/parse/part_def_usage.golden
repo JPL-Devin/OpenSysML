@@ -1,0 +1,16 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="part" abstract=false variation=false name="Engine"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="mass" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))))
+  (Membership visibility="default"
+    (Usage kind="part" name="vehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+      (Relationship kind="typing" target=Engine
+        (*ast.QualifiedName))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="count" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Integer
+            (*ast.QualifiedName))
+          (LiteralInteger value="1"))))))

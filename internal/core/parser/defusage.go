@@ -660,17 +660,10 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		return applyPrefixes(p.parseDefinition(start, defKind, mods, isAll))
 	}
 	
-	// Special handling for 'datatype' keyword: at package/namespace level without
-	// typing colon, it should default to definition (shorthand for 'attribute def')
-	// rather than usage. This matches SysML v2 stdlib conventions.
-	if kw == "datatype" {
-		// Check if next token is a colon (typing relationship) - if so, it's a usage
-		nextTok := p.peek()
-		if nextTok.Kind != lexer.Colon {
-			// No typing colon - treat as definition shorthand
-			return applyPrefixes(p.parseDefinition(start, defKind, mods, isAll))
-		}
-	}
+	// Note: 'datatype' is treated uniformly as a usage keyword by the parser.
+	// Semantic classification (def vs usage) is deferred to the symbol builder
+	// and semantics passes, which have full context (relationships, body structure).
+	// This follows Phase 4 principle: parse syntax uniformly, classify semantically.
 	
 	return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], mods, isAll))
 }
@@ -1229,6 +1222,10 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	if postMods.isNonunique {
 		u.IsNonunique = true
 	}
+	
+	// DEBUG: trace token after post-modifiers
+	// fmt.Printf("DEBUG parseUsage after postMods: tok=%v keyword=%q offset=%d\n", 
+	//     p.peek().Kind, p.peek().KeywordID, p.peek().Span.Offset)
 	
 	// Parse additional relationships after modifiers (e.g., :> target)
 	postRels, _ := p.parseRelationships(true)
@@ -2626,6 +2623,7 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 		// Can be:
 		// 1. `allocate X to Y` - 'allocate' is kind keyword
 		// 2. `allocation name : Type allocate X to Y` - 'allocation' is kind keyword, 'allocate' is intermediate
+		// 3. `allocation name : Type { body }` - simple allocation with body, no connector ends
 		// Check for optional 'allocate' keyword (when kind keyword was 'allocation' not 'allocate')
 		p.acceptKeyword("allocate")
 		
@@ -2636,10 +2634,12 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 			if end != nil {
 				u.ConnectorEnds = append(u.ConnectorEnds, end)
 			}
-		} else {
+		} else if !p.at(lexer.LBrace) && !p.at(lexer.Semicolon) {
 			// Binary form: allocate source to target
+			// Only parse connector ends if NOT at body start
 			p.parseConnectorEnds(u, "") // no intermediate keyword
 		}
+		// If at LBrace or Semicolon, skip connector ends (simple allocation with body)
 	case ast.UsageFlow:
 		p.parseFlowEnds(u)
 	case ast.UsageMetadata:

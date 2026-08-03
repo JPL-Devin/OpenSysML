@@ -1,0 +1,3 @@
+# Stdlib Known Parse Failures
+# Per PARSER_ROBUSTNESS_PLAN.md Phase 1
+# Files with known parse errors - must shrink to zero through Phase 3
