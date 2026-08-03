@@ -1574,21 +1574,27 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		return node
 	}
 	
-	// Otherwise expect typed declaration: subject <name> : <Type>;
-	// Expect identifier
-	if !p.at(lexer.Identifier) {
-		p.error(p.peek().Span, "expected identifier after 'subject'")
-		en := &ast.ErrorNode{Message: "expected identifier after 'subject'"}
-		if !p.atEOF() && !p.at(lexer.RBrace) {
-			p.advance()
+	// Otherwise expect typed declaration: subject <name> : <Type>; OR anonymous: subject: <Type>;
+	// Check for anonymous pattern (subject: Type;)
+	var name string
+	if p.at(lexer.Colon) {
+		// Anonymous subject
+		name = ""
+	} else {
+		// Named subject - expect identifier
+		if !p.at(lexer.Identifier) {
+			p.error(p.peek().Span, "expected identifier or ':' after 'subject'")
+			en := &ast.ErrorNode{Message: "expected identifier or ':' after 'subject'"}
+			if !p.atEOF() && !p.at(lexer.RBrace) {
+				p.advance()
+			}
+			en.NodeSpan = p.spanFrom(start)
+			return en
 		}
-		en.NodeSpan = p.spanFrom(start)
-		return en
+		nameToken := p.peek()
+		name = p.src.Text(nameToken.Span)
+		p.advance()
 	}
-	
-	nameToken := p.peek()
-	name := p.src.Text(nameToken.Span)
-	p.advance()
 	
 	// Expect ':'
 	if !p.at(lexer.Colon) {
