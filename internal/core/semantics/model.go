@@ -116,6 +116,21 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 	}
 	
+	// Flow usages (message/flow keywords) need implicit typing from stdlib Message/Flow
+	// even when explicitly typed "of Type". This allows accessing stdlib members like
+	// sourceEvent/targetEvent in messages typed by payload item defs.
+	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind == ast.UsageFlow {
+		// Look up stdlib Message flow def directly from index (FQN: Flows::Message)
+		messageDefs := m.resolver.Index().LookupQualified("Flows::Message")
+		if len(messageDefs) > 0 && messageDefs[0] != nil {
+			messageDef := messageDefs[0]
+			if !seen[messageDef] {
+				seen[messageDef] = true
+				out = append(out, messageDef)
+			}
+		}
+	}
+	
 	m.directSupers[sym] = out
 	return out
 }

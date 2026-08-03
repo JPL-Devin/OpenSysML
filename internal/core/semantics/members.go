@@ -57,13 +57,51 @@ func (m *Model) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol,
 			return s, true
 		}
 	}
-	for _, sup := range m.AllSupertypes(sym) {
-		if sup.Scope == nil {
-			continue
+	// If no scope (cached stdlib symbol), query index for direct children
+	if sym.Scope == nil {
+		idx := m.resolver.Index()
+		children := idx.LookupDirectChildren(sym.Name)
+		for _, child := range children {
+			// Extract leaf name from child FQN
+			leafName := child.Name
+			if lastIdx := lastDoubleColon(child.Name); lastIdx >= 0 {
+				leafName = child.Name[lastIdx+2:]
+			}
+			if leafName == name {
+				return child, true
+			}
 		}
-		if s, ok := sup.Scope.LookupLocal(name); ok {
-			return s, true
+	}
+	for _, sup := range m.AllSupertypes(sym) {
+		if sup.Scope != nil {
+			if s, ok := sup.Scope.LookupLocal(name); ok {
+				return s, true
+			}
+		}
+		// Also check index for cached supertypes with nil Scope
+		if sup.Scope == nil {
+			idx := m.resolver.Index()
+			children := idx.LookupDirectChildren(sup.Name)
+			for _, child := range children {
+				leafName := child.Name
+				if lastIdx := lastDoubleColon(child.Name); lastIdx >= 0 {
+					leafName = child.Name[lastIdx+2:]
+				}
+				if leafName == name {
+					return child, true
+				}
+			}
 		}
 	}
 	return nil, false
+}
+
+// lastDoubleColon returns the index of the last "::" in s, or -1 if not found.
+func lastDoubleColon(s string) int {
+	for i := len(s) - 1; i > 0; i-- {
+		if s[i-1:i+1] == "::" {
+			return i - 1
+		}
+	}
+	return -1
 }

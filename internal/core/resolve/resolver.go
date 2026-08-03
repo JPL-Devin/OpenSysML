@@ -33,9 +33,14 @@ type Resolver struct {
 func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
 		idx:       idx,
-		memo:      make(map[ast.Node]resolution),
-		resolving: make(map[ast.Node]bool),
+		memo:      map[ast.Node]resolution{},
+		resolving: map[ast.Node]bool{},
 	}
+}
+
+// Index returns the symbol index this resolver operates over.
+func (r *Resolver) Index() *symbols.Index {
+	return r.idx
 }
 
 // SetModel attaches a semantic model for inheritance-aware member resolution.
