@@ -321,22 +321,13 @@ func isCompatibleTyping(useKind ast.UsageKind, defKind symbols.SymbolKind) bool 
 		return true
 	}
 	
-	// Structural kinds can cross-type (part, attribute, item, occurrence)
-	structuralUsages := map[ast.UsageKind]bool{
-		ast.UsagePart:       true,
-		ast.UsageAttribute:  true,
-		ast.UsageItem:       true,
-		ast.UsageOccurrence: true,
-	}
-	structuralDefs := map[symbols.SymbolKind]bool{
-		symbols.SymbolPartDef:       true,
-		symbols.SymbolAttributeDef:  true,
-		symbols.SymbolItemDef:       true,
-		symbols.SymbolOccurrenceDef: true,
-	}
-	
-	if structuralUsages[useKind] && structuralDefs[defKind] {
-		return true
+	// Attributes can be typed by any structural def (for parameters, properties)
+	// This allows: in scene : Scene (attribute : itemDef)
+	if useKind == ast.UsageAttribute {
+		return defKind == symbols.SymbolPartDef ||
+			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef
 	}
 	
 	return false

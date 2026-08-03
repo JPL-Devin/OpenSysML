@@ -1136,15 +1136,16 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	
 	// Handle shorthand: `feature redefines x` means `feature x redefines x`
 	// Check if relationship keyword followed by simple name (not qualified name or feature chain)
+	// BUT NOT if followed by multiplicity (e.g., `part redefines cyl[4]` is anonymous redefining cyl, not shorthand)
 	var preRels []*ast.Relationship
 	var conjugated bool
 	if p.at(lexer.Keyword) {
 		if relKind, ok := relationshipKeywords[p.peek().KeywordID]; ok {
-			// Peek ahead to see if simple name follows (not :: or .)
+			// Peek ahead to see if simple name follows (not :: or . or [)
 			nextTok := p.peekN(1)
 			nextNext := p.peekN(2)
 			isSimpleName := (nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.UnrestrictedName) &&
-				(nextNext.Kind != lexer.ColonColon && nextNext.Kind != lexer.Dot)
+				(nextNext.Kind != lexer.ColonColon && nextNext.Kind != lexer.Dot && nextNext.Kind != lexer.LBracket)
 			if isSimpleName {
 				// Shorthand: relationship keyword + simple name
 				p.advance() // consume relationship keyword
