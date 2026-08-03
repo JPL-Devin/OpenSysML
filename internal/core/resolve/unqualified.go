@@ -93,6 +93,10 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		if targetName == name {
 			return target, true
 		}
+		// Also check short name (e.g., "kg" for "kilogram")
+		if target.ShortName != "" && target.ShortName == name {
+			return target, true
+		}
 		if imp.IsRecursive && target.Scope != nil {
 			if sym, ok := lookupInSubtree(target.Scope, name, map[*symbols.Scope]bool{}); ok {
 				return sym, true

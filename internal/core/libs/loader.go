@@ -58,6 +58,7 @@ func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
 	for i, s := range rec.Symbols {
 		out[i] = symbols.RecordEntry{
 			FQN:             s.FQN,
+			ShortName:       s.ShortName,
 			Kind:            s.Kind,
 			Span:            s.Span,
 			WildcardImports: s.WildcardImports,

@@ -169,4 +169,8 @@ type Symbol struct {
 	// ("alias X for Y" → "Y"), populated for cached stdlib aliases where Decl=nil.
 	// Empty for non-aliases or live-parsed aliases (which use Decl instead).
 	AliasTargetFQN string
+	
+	// ShortName is the short name from Identification (e.g., "kg" for "kilogram").
+	// Populated for cached symbols where Decl=nil. Empty if no short name.
+	ShortName string
 }

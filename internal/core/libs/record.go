@@ -10,19 +10,20 @@ import (
 
 // formatVersion is the on-disk index record format version. Bump it whenever
 // the persisted shape changes; a mismatch invalidates all cached records.
-const formatVersion = 3
+const formatVersion = 4
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.
 // It deliberately excludes the AST-backed Decl and the Scope/OwnerScope
 // pointers, persisting only the fields the resolver needs to answer
 // qualified-name lookups.
 type symRecord struct {
-	FQN            string
-	Kind           symbols.SymbolKind
-	Span           source.Span
-	Supers         []string // raw target text of specializes/subsets/redefines edges
+	FQN             string
+	ShortName       string   // short name (e.g., "kg" for "kilogram"), empty if none
+	Kind            symbols.SymbolKind
+	Span            source.Span
+	Supers          []string // raw target text of specializes/subsets/redefines edges
 	WildcardImports []string // for packages: FQNs of wildcard-imported packages
-	AliasTarget    string   // for aliases: raw target text of "alias X for Y"
+	AliasTarget     string   // for aliases: raw target text of "alias X for Y"
 }
 
 // IndexRecord is the serializable snapshot of one library document's symbols.
@@ -53,6 +54,7 @@ func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord) {
 		}
 		rec.Symbols = append(rec.Symbols, symRecord{
 			FQN:             fqn,
+			ShortName:       shortNameOf(sym.Decl),
 			Kind:            sym.Kind,
 			Span:            sym.DeclSpan,
 			Supers:          supersOf(sym.Decl),
@@ -146,4 +148,23 @@ func aliasTargetOf(decl ast.Node) string {
 		return ""
 	}
 	return qualifiedNameText(al.For)
+}
+
+// shortNameOf extracts the short name from a declaration's Identification.
+// Returns "" if the node has no Identification or no short name.
+func shortNameOf(decl ast.Node) string {
+	switch d := decl.(type) {
+	case *ast.Package:
+		return d.Ident.ShortName
+	case *ast.Namespace:
+		return d.Ident.ShortName
+	case *ast.Definition:
+		return d.Ident.ShortName
+	case *ast.Usage:
+		return d.Ident.ShortName
+	case *ast.Alias:
+		return d.Ident.ShortName
+	default:
+		return ""
+	}
 }

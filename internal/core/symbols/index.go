@@ -126,9 +126,23 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 				continue // symbol registered under both short and primary key
 			}
 			seen[sym] = true
+			
+			// Index under primary FQN
 			fqn := joinFQN(prefix, sym.Name)
 			idx.fqn[fqn] = append(idx.fqn[fqn], sym)
 			idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: fqn, sym: sym})
+			
+			// Also index under short name FQN if different
+			// Try cached shortName first (for stdlib), fallback to extracting from Decl
+			shortName := sym.ShortName
+			if shortName == "" {
+				shortName = shortNameOf(sym.Decl)
+			}
+			if shortName != "" && shortName != sym.Name {
+				shortFQN := joinFQN(prefix, shortName)
+				idx.fqn[shortFQN] = append(idx.fqn[shortFQN], sym)
+				idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: shortFQN, sym: sym})
+			}
 			
 			// Extract wildcard imports from packages/namespaces
 			if sym.Kind == SymbolPackage || sym.Kind == SymbolNamespace {
@@ -200,6 +214,25 @@ func joinQualifiedName(parts []string) string {
 		result += part
 	}
 	return result
+}
+
+// shortNameOf extracts the short name from a declaration's Identification.
+// Returns "" if the node has no Identification or no short name.
+func shortNameOf(decl ast.Node) string {
+	switch d := decl.(type) {
+	case *ast.Package:
+		return d.Ident.ShortName
+	case *ast.Namespace:
+		return d.Ident.ShortName
+	case *ast.Definition:
+		return d.Ident.ShortName
+	case *ast.Usage:
+		return d.Ident.ShortName
+	case *ast.Alias:
+		return d.Ident.ShortName
+	default:
+		return ""
+	}
 }
 
 // LookupQualified returns all symbols registered under the exact
