@@ -318,7 +318,13 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 		return nil, false
 	}
 	
-	usage, ok := root.Members[0].(*ast.Usage)
+	member := root.Members[0]
+	// Unwrap Membership if present
+	if mem, ok := member.(*ast.Membership); ok {
+		member = mem.Member
+	}
+	
+	usage, ok := member.(*ast.Usage)
 	if !ok || usage.Value == nil {
 		return nil, false
 	}
