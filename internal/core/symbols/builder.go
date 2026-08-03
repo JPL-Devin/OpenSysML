@@ -319,8 +319,8 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 // Builder classifies based on semantic context (relationships, body structure).
 //
 // Classification rules:
-// - Attribute usage with specializes/subsets but NO typing → AttributeDef
-// - Attribute usage with typing → AttributeUsage
+// - Attribute usage with specializes (but NO typing/subsets) → AttributeDef
+// - Attribute usage with typing or subsets/redefines → AttributeUsage
 // - All other usages → use usageSymbolKind directly
 func classifyUsage(u *ast.Usage) SymbolKind {
 	// Only classify attribute usages (datatype, attribute, feature keywords)
@@ -331,19 +331,23 @@ func classifyUsage(u *ast.Usage) SymbolKind {
 	// Check relationships to determine if this is def-like or usage-like
 	hasTyping := false
 	hasSpecializes := false
+	hasSubsetsOrRedefines := false
 	
 	for _, rel := range u.Relationships {
 		switch rel.Kind {
 		case ast.RelTyping:
 			hasTyping = true
-		case ast.RelSpecializes, ast.RelSubsets:
+		case ast.RelSpecializes:
 			hasSpecializes = true
+		case ast.RelSubsets, ast.RelRedefines:
+			hasSubsetsOrRedefines = true
 		}
 	}
 	
-	// Attribute usage with specialization but no typing → classify as definition
+	// Attribute usage with ONLY specializes (no typing/subsets) → classify as definition
 	// Pattern: datatype Real specializes Complex;
-	if hasSpecializes && !hasTyping {
+	// NOT: datatype MyReal :>> Real; (this has subsets, stays as usage)
+	if hasSpecializes && !hasTyping && !hasSubsetsOrRedefines {
 		return SymbolAttributeDef
 	}
 	

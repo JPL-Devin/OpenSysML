@@ -126,8 +126,11 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if isDef {
 			return fmt.Sprintf("a definition may not %s a feature", rel)
 		}
-		if !isUsageKind(target) {
-			return fmt.Sprintf("%s target must be a usage, found %s", rel, target)
+		// Usages can subset/redefine other usages OR definitions
+		// Example: datatype MyReal :>> Real (usage redefines attributeDef)
+		// The check for isUsageKind OR isDefKind allows both patterns
+		if !isUsageKind(target) && !isDefKind(target) {
+			return fmt.Sprintf("%s target must be a usage or definition, found %s", rel, target)
 		}
 	case ast.RelTyping:
 		if isDef {
