@@ -94,6 +94,11 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		if !ok || target == nil {
 			continue
 		}
+		// Skip self-reference ONLY for redefines (nested feature case)
+		// Preserve self-reference for specializes/typing to detect cycles
+		if target == sym && rel.Kind == ast.RelRedefines {
+			continue
+		}
 		if seen[target] {
 			continue
 		}
