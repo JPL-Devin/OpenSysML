@@ -39,12 +39,12 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		switch d := unwrapType(m).(type) {
 		case *ast.Definition:
-			tc.checkRelationships(scope, d.Relationships, true, d.Kind, 0)
+			tc.checkRelationships(scope, d.Relationships, true, d.Kind, 0, ast.DirNone)
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
 		case *ast.Usage:
-			tc.checkRelationships(scope, d.Relationships, false, 0, d.Kind)
+			tc.checkRelationships(scope, d.Relationships, false, 0, d.Kind, d.Direction)
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
@@ -60,7 +60,7 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 	}
 }
 
-func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Relationship, isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind) {
+func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Relationship, isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind, direction ast.FeatureDirection) {
 	for _, rel := range rels {
 		if rel == nil || rel.Target == nil {
 			continue
@@ -85,7 +85,7 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 				targetSym = resolved
 			}
 		}
-		if msg := compatMessage(isDef, defKind, useKind, rel.Kind, targetSym.Kind); msg != "" {
+		if msg := compatMessage(isDef, defKind, useKind, direction, rel.Kind, targetSym.Kind); msg != "" {
 			tc.diags = append(tc.diags, Diagnostic{
 				Severity: SeverityError,
 				Span:     rel.Target.Span(),
@@ -97,7 +97,7 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 	}
 }
 
-func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind, rel ast.RelationshipKind, target symbols.SymbolKind) string {
+func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind, direction ast.FeatureDirection, rel ast.RelationshipKind, target symbols.SymbolKind) string {
 	switch rel {
 	case ast.RelSpecializes:
 		want := defSymbolKind(defKind)
@@ -128,7 +128,7 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if !isDefKind(target) {
 			return fmt.Sprintf("type must be a definition, found %s", target)
 		}
-		if !isCompatibleTyping(useKind, target) {
+		if !isCompatibleTyping(useKind, direction, target) {
 			return fmt.Sprintf("%s cannot be typed by %s (kind mismatch)", useKind, target)
 		}
 	case ast.RelReferences, ast.RelCrosses:
@@ -322,7 +322,7 @@ func isUsageKind(k symbols.SymbolKind) bool {
 // isCompatibleTyping checks if a usage kind can be typed by a definition kind.
 // Allows structural compatibility: part/attribute/item/occurrence can cross-type
 // since they're all structural classifiers in SysML.
-func isCompatibleTyping(useKind ast.UsageKind, defKind symbols.SymbolKind) bool {
+func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, defKind symbols.SymbolKind) bool {
 	// Exact match always allowed
 	if defKind == usageWantsDefKind(useKind) {
 		return true
@@ -331,6 +331,32 @@ func isCompatibleTyping(useKind ast.UsageKind, defKind symbols.SymbolKind) bool 
 	// Attributes can be typed by any structural def (for parameters, properties)
 	// This allows: in scene : Scene (attribute : itemDef)
 	if useKind == ast.UsageAttribute {
+		return defKind == symbols.SymbolPartDef ||
+			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef
+	}
+	
+	// Parameters (in/out/inout) can cross-type to any structural def
+	// This allows: in power : PowerValue (part : attributeDef)
+	hasDirection := direction != ast.DirNone
+	if hasDirection {
+		return defKind == symbols.SymbolPartDef ||
+			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef
+	}
+	
+	// Items can be typed by any structural def (structural hierarchy)
+	if useKind == ast.UsageItem {
+		return defKind == symbols.SymbolPartDef ||
+			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef
+	}
+	
+	// Occurrences can be typed by any structural def
+	if useKind == ast.UsageOccurrence {
 		return defKind == symbols.SymbolPartDef ||
 			defKind == symbols.SymbolAttributeDef ||
 			defKind == symbols.SymbolItemDef ||
