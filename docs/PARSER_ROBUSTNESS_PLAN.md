@@ -255,3 +255,20 @@ go test ./internal/core/parser/ -run TestGolden -update
 - **Status:** Task 2.1 DONE
 
 **Next:** Task 2.2 (round-trip) - defer if no source printer exists, Task 2.3 (negative tests)
+
+**Phase 2.2 - Round-trip (deferred):**
+- Checked for source printer: `ast.Dump` is debug-only, no faithful SysML printer exists
+- Per plan: "If no faithful source printer exists... record round-trip as deferred"
+- **Decision:** DEFERRED - no source printer to implement round-trip parse→print→parse test
+- Rationale: ast.Dump not valid SysML, building printer solely for this task not in scope
+- **Status:** Task 2.2 DEFERRED (documented)
+
+**Phase 2.3 - Negative tests:**
+- Created `internal/core/parser/negative_test.go` with 9 malformed input cases
+- All cases correctly report ≥1 diagnostic (parser rejects garbage)
+- Removed initially-included "empty enum" (actually valid SysML - empty body legal)
+- **Status:** Task 2.3 DONE
+
+**Phase 2 complete:** Golden ASTs + negative tests green, round-trip explicitly deferred with rationale
+
+**Next:** Phase 3 - Unify member/body parsing (root-cause fix for the 3 allowlist failures)
