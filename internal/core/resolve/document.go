@@ -93,14 +93,25 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	}
 	r.resolveExpr(scope, d.Value)
 	for _, end := range d.ConnectorEnds {
-		// ConnectorEnd.Target is Node (QualifiedName or Expression)
-		if end == nil || end.Target == nil {
+		// ConnectorEnd has both Target and Reference fields
+		// Target: primary connector target (part being connected)
+		// Reference: optional "references X" clause, or state transition target
+		if end == nil {
 			continue
 		}
-		if qn, ok := end.Target.(*ast.QualifiedName); ok {
-			r.ResolveQualified(scope, qn)
-		} else {
-			r.resolveExpr(scope, end.Target)
+		if end.Target != nil {
+			if qn, ok := end.Target.(*ast.QualifiedName); ok {
+				r.ResolveQualified(scope, qn)
+			} else {
+				r.resolveExpr(scope, end.Target)
+			}
+		}
+		if end.Reference != nil {
+			if qn, ok := end.Reference.(*ast.QualifiedName); ok {
+				r.ResolveQualified(scope, qn)
+			} else {
+				r.resolveExpr(scope, end.Reference)
+			}
 		}
 	}
 	if d.FlowEnds != nil {

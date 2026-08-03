@@ -87,6 +87,14 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		defineIdent(scope, d.Ident, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
+	case *ast.SubstateMember:
+		// SubstateMember represents simple state declaration: state <name>;
+		// Create a state usage symbol for it
+		id := ast.Identification{Name: d.Name}
+		child := NewScope(scope, d)
+		sym := newSymbol(id, SymbolStateUsage, d, vis, child, scope, trivia)
+		defineIdent(scope, id, sym)
+		scope.AddChild(child)
 	case *ast.Import, *ast.FilterMember, *ast.ErrorNode:
 		// Imports are processed during resolution; filters hold expressions;
 		// error nodes have no declaration. Nothing to register here.

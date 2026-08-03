@@ -1841,9 +1841,11 @@ func (p *Parser) parseStateMember() ast.Node {
 			return p.parseExitMember(start)
 		case "state":
 			// Check if this is a simple declaration (state name;) or full usage (state name { ... })
-			// Lookahead: state followed by identifier and semicolon → SubstateMember
+			// Lookahead: state followed by name/keyword and semicolon → SubstateMember
 			// Otherwise → full state usage declaration
-			if p.peekN(1).Kind == lexer.Identifier && p.peekN(2).Kind == lexer.Semicolon {
+			nextTok := p.peekN(1)
+			isNameOrKeyword := nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.Keyword
+			if isNameOrKeyword && p.peekN(2).Kind == lexer.Semicolon {
 				p.advance()
 				return p.parseSubstateMember(start)
 			}
@@ -1899,8 +1901,8 @@ func (p *Parser) parseSuccessionStatement(start int) ast.Node {
 		p.advance()
 	}
 	
-	// Parse first state reference
-	firstState := p.parseQualifiedName()
+	// Parse first state reference (use relaxed parsing to allow keywords like 'off' as names)
+	firstState := p.parseQualifiedNameRelaxed()
 	
 	// Expect 'then' keyword
 	if !p.acceptKeyword("then") {
@@ -1910,8 +1912,8 @@ func (p *Parser) parseSuccessionStatement(start int) ast.Node {
 		return en
 	}
 	
-	// Parse second state reference
-	secondState := p.parseQualifiedName()
+	// Parse second state reference (use relaxed parsing to allow keywords like 'on' as names)
+	secondState := p.parseQualifiedNameRelaxed()
 	
 	// Expect semicolon
 	p.expect(lexer.Semicolon, "expected ';' after succession statement")
@@ -2295,9 +2297,9 @@ func (p *Parser) parseExitMember(start int) ast.Node {
 func (p *Parser) parseSubstateMember(start int) ast.Node {
 	// 'state' already consumed
 	
-	// Expect identifier
-	if !p.at(lexer.Identifier) {
-		p.error(p.peek().Span, "expected identifier after 'state'")
+	// Expect identifier or keyword (for state names like 'off', 'on', 'normal')
+	if !p.atNameOrKeyword() {
+		p.error(p.peek().Span, "expected identifier or keyword after 'state'")
 		en := &ast.ErrorNode{Message: "expected identifier after 'state'"}
 		if !p.atEOF() && !p.at(lexer.RBrace) {
 			p.advance()
