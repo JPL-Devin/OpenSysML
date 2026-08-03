@@ -118,6 +118,10 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 				if symName == name && visibleThroughImport(imp, sym) {
 					return sym, true
 				}
+				// Also check short name (e.g., "kg" for "kilogram")
+				if sym.ShortName != "" && sym.ShortName == name && visibleThroughImport(imp, sym) {
+					return sym, true
+				}
 			}
 		}
 		return nil, false

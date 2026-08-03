@@ -57,7 +57,7 @@ func (idx *Index) ExpandWildcardImports() {
 		for _, targetFQN := range targets {
 			targetChildren := idx.LookupDirectChildren(targetFQN)
 			for _, child := range targetChildren {
-				// Extract child's short name
+				// Extract child's primary name
 				childName := child.Name
 				if i := lastIndex(childName, "::"); i >= 0 {
 					childName = childName[i+2:]
@@ -68,6 +68,14 @@ func (idx *Index) ExpandWildcardImports() {
 				if !idx.hasFQN(reexportFQN, child) {
 					idx.fqn[reexportFQN] = append(idx.fqn[reexportFQN], child)
 					// Note: not added to contributions - these are synthetic
+				}
+				
+				// Also re-export under short name if different from primary name
+				if child.ShortName != "" && child.ShortName != childName {
+					shortReexportFQN := joinFQN(pkgFQN, child.ShortName)
+					if !idx.hasFQN(shortReexportFQN, child) {
+						idx.fqn[shortReexportFQN] = append(idx.fqn[shortReexportFQN], child)
+					}
 				}
 			}
 		}
