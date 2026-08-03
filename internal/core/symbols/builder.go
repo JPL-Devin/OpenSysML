@@ -83,7 +83,10 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		buildMembers(child, d.Members)
 	case *ast.Usage:
 		child := NewScope(scope, d)
-		sym := newSymbol(d.Ident, usageSymbolKind(d.Kind), d, vis, child, scope, trivia)
+		// Phase 4: Parser treats 'datatype' uniformly as usage. Builder classifies based on context.
+		// If usage is attribute kind with specializes/subsets but no typing, treat as definition.
+		kind := classifyUsage(d)
+		sym := newSymbol(d.Ident, kind, d, vis, child, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
@@ -202,6 +205,8 @@ func definitionSymbolKind(k ast.DefinitionKind) SymbolKind {
 		return SymbolIndividualDef
 	case ast.DefMetadata:
 		return SymbolMetadataDef
+	case ast.DefMetaclass:
+		return SymbolMetaclass
 	case ast.DefEnumeration:
 		return SymbolEnumerationDef
 	case ast.DefView:
@@ -307,4 +312,41 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 	default:
 		return SymbolUnknown
 	}
+}
+
+// classifyUsage determines the correct symbol kind for a usage AST node.
+// Per Phase 4: Parser treats some keywords (like 'datatype') uniformly as usage.
+// Builder classifies based on semantic context (relationships, body structure).
+//
+// Classification rules:
+// - Attribute usage with specializes/subsets but NO typing → AttributeDef
+// - Attribute usage with typing → AttributeUsage
+// - All other usages → use usageSymbolKind directly
+func classifyUsage(u *ast.Usage) SymbolKind {
+	// Only classify attribute usages (datatype, attribute, feature keywords)
+	if u.Kind != ast.UsageAttribute {
+		return usageSymbolKind(u.Kind)
+	}
+	
+	// Check relationships to determine if this is def-like or usage-like
+	hasTyping := false
+	hasSpecializes := false
+	
+	for _, rel := range u.Relationships {
+		switch rel.Kind {
+		case ast.RelTyping:
+			hasTyping = true
+		case ast.RelSpecializes, ast.RelSubsets:
+			hasSpecializes = true
+		}
+	}
+	
+	// Attribute usage with specialization but no typing → classify as definition
+	// Pattern: datatype Real specializes Complex;
+	if hasSpecializes && !hasTyping {
+		return SymbolAttributeDef
+	}
+	
+	// Default: treat as usage
+	return SymbolAttributeUsage
 }

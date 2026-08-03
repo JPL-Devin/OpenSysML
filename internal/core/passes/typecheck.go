@@ -263,6 +263,7 @@ var defSymbolKinds = map[symbols.SymbolKind]bool{
 	symbols.SymbolOccurrenceDef:       true,
 	symbols.SymbolIndividualDef:       true,
 	symbols.SymbolMetadataDef:         true,
+	symbols.SymbolMetaclass:           true, // KerML metaclass definitions
 	symbols.SymbolEnumerationDef:      true,
 	symbols.SymbolViewDef:             true,
 	symbols.SymbolViewpointDef:        true,

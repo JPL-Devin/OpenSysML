@@ -660,6 +660,15 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		return applyPrefixes(p.parseDefinition(start, defKind, mods, isAll))
 	}
 	
+	// Check if this is a definition-only keyword (not in usageKindKeywords)
+	// Examples: metaclass, struct, class, predicate, bool
+	// These keywords don't require "def" suffix and can't be used as usages
+	_, hasUsageForm := usageKindKeywords[kw]
+	if !hasUsageForm {
+		// Definition-only keyword - parse as definition directly
+		return applyPrefixes(p.parseDefinition(start, defKind, mods, isAll))
+	}
+	
 	// Note: 'datatype' is treated uniformly as a usage keyword by the parser.
 	// Semantic classification (def vs usage) is deferred to the symbol builder
 	// and semantics passes, which have full context (relationships, body structure).

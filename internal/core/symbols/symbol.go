@@ -28,6 +28,7 @@ const (
 	SymbolOccurrenceDef
 	SymbolIndividualDef
 	SymbolMetadataDef
+	SymbolMetaclass      // KerML metaclass (similar to metadata def)
 	SymbolEnumerationDef
 	SymbolViewDef
 	SymbolViewpointDef
@@ -94,6 +95,7 @@ var symbolKindNames = map[SymbolKind]string{
 	SymbolOccurrenceDef:         "occurrenceDef",
 	SymbolIndividualDef:         "individualDef",
 	SymbolMetadataDef:           "metadataDef",
+	SymbolMetaclass:             "metaclass",
 	SymbolEnumerationDef:        "enumDef",
 	SymbolViewDef:               "viewDef",
 	SymbolViewpointDef:          "viewpointDef",
