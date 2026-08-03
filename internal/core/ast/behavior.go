@@ -299,3 +299,27 @@ type TransitionMember struct {
 	Guard   Node           // optional guard expression
 	Effect  []Node         // optional effect actions
 }
+
+// SendStatement sends a message to a target.
+// Syntax: send <message> to <target>;
+type SendStatement struct {
+	NodeBase
+	Message Node // message expression (often NewExpression)
+	Target  Node // target expression (action/part reference)
+}
+
+// TerminateStatement terminates an action or lifecycle.
+// Syntax: terminate <target>;
+type TerminateStatement struct {
+	NodeBase
+	Target Node // target to terminate (action/part reference)
+}
+
+// AcceptActionUsage represents an action that waits for a signal.
+// Syntax: action <name> accept <param> : Type;
+type AcceptActionUsage struct {
+	NodeBase
+	Name       string
+	ParamName  string
+	ParamType  *QualifiedName
+}

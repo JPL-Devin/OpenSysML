@@ -1,6 +1,8 @@
 package symbols
 
-import "github.com/Open-MBEE/Systemica/internal/core/ast"
+import (
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+)
 
 // Build constructs the immutable scope tree for a parsed document.
 func Build(root *ast.RootNamespace) *Scope {
@@ -109,6 +111,10 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 		OwnerScope:    owner,
 		LeadingTrivia: trivia,
 	}
+	// Set scope's owner back-reference for inheritance lookup
+	if scope != nil {
+		scope.SetOwner(sym)
+	}
 	return sym
 }
 
@@ -120,6 +126,10 @@ func defineIdent(scope *Scope, id ast.Identification, sym *Symbol) {
 	}
 	if id.Name != "" {
 		scope.Define(id.Name, sym)
+	}
+	// If both names empty, register as anonymous
+	if id.ShortName == "" && id.Name == "" {
+		scope.DefineAnonymous(sym)
 	}
 }
 

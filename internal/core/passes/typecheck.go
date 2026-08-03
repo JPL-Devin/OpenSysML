@@ -23,6 +23,8 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	if rootScope == nil {
 		return nil
 	}
+	// Initialize model to enable inheritance-aware resolution
+	_ = ctx.Model()
 	tc := &typeChecker{resolver: ctx.Resolver()}
 	tc.walk(rootScope, root.Members)
 	return tc.diags
@@ -95,6 +97,10 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if !isDef {
 			return "only a definition may specialize; found a usage"
 		}
+		// Skip validation if target is unresolved
+		if target == symbols.SymbolUnknown {
+			return "" // Unresolved reference already reported elsewhere
+		}
 		if !isDefKind(target) {
 			return fmt.Sprintf("%s cannot specialize %s (target is not a definition)", defKind, target)
 		}
@@ -115,7 +121,7 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if !isDefKind(target) {
 			return fmt.Sprintf("type must be a definition, found %s", target)
 		}
-		if target != usageWantsDefKind(useKind) {
+		if !isCompatibleTyping(useKind, target) {
 			return fmt.Sprintf("%s cannot be typed by %s (kind mismatch)", useKind, target)
 		}
 	case ast.RelReferences, ast.RelCrosses:
@@ -265,6 +271,7 @@ var defSymbolKinds = map[symbols.SymbolKind]bool{
 	symbols.SymbolAnalysisCaseDef:     true,
 	symbols.SymbolVerificationCaseDef: true,
 	symbols.SymbolUseCaseDef:          true,
+	symbols.SymbolAlias:               true, // Aliases can be used as types
 }
 
 // usageSymbolKinds is the set of SymbolKinds that classify a usage.
@@ -294,6 +301,7 @@ var usageSymbolKinds = map[symbols.SymbolKind]bool{
 	symbols.SymbolAnalysisCaseUsage:     true,
 	symbols.SymbolVerificationCaseUsage: true,
 	symbols.SymbolUseCaseUsage:          true,
+	symbols.SymbolAlias:                 true, // Aliases can be subsetting targets
 }
 
 func isDefKind(k symbols.SymbolKind) bool {
@@ -302,6 +310,27 @@ func isDefKind(k symbols.SymbolKind) bool {
 
 func isUsageKind(k symbols.SymbolKind) bool {
 	return usageSymbolKinds[k]
+}
+
+// isCompatibleTyping checks if a usage kind can be typed by a definition kind.
+// Allows structural compatibility: part/attribute/item/occurrence can cross-type
+// since they're all structural classifiers in SysML.
+func isCompatibleTyping(useKind ast.UsageKind, defKind symbols.SymbolKind) bool {
+	// Exact match always allowed
+	if defKind == usageWantsDefKind(useKind) {
+		return true
+	}
+	
+	// Attributes can be typed by any structural def (for parameters, properties)
+	// This allows: in scene : Scene (attribute : itemDef)
+	if useKind == ast.UsageAttribute {
+		return defKind == symbols.SymbolPartDef ||
+			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef
+	}
+	
+	return false
 }
 
 func unwrapType(n ast.Node) ast.Node {

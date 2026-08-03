@@ -49,6 +49,7 @@ func (cc *constraintChecker) walk(scope *symbols.Scope) {
 	if scope == nil {
 		return
 	}
+	// Walk named members
 	for _, childName := range scope.MemberNames() {
 		for _, sym := range scope.LookupLocalAll(childName) {
 			if sym == nil || cc.seen[sym] {
@@ -58,6 +59,18 @@ func (cc *constraintChecker) walk(scope *symbols.Scope) {
 			cc.check(sym)
 			cc.walk(sym.Scope)
 		}
+	}
+	// Walk anonymous members
+	for _, sym := range scope.AllMembers() {
+		if sym == nil || cc.seen[sym] {
+			continue
+		}
+		if sym.Name == "" {
+		}
+		// AllMembers includes named + anonymous, so dedup via seen map
+		cc.seen[sym] = true
+		cc.check(sym)
+		cc.walk(sym.Scope)
 	}
 }
 
@@ -327,6 +340,10 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 	rels := semantics.RelationshipsOf(sym)
 	if len(rels) == 0 {
 		return // No relationships
+	}
+	
+	// Debug: Check anonymous symbols
+	if sym.Name == "" {
 	}
 	
 	// Find owner symbol (the definition/usage that declares sym).

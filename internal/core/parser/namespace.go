@@ -25,7 +25,12 @@ func (p *Parser) parseNameSegment() (ast.NameSegment, bool) {
 		return ast.NameSegment{}, false
 	}
 	tok := p.advance()
-	return ast.NameSegment{Text: p.src.Text(tok.Span), Span: tok.Span}, true
+	text := p.src.Text(tok.Span)
+	// Strip quotes from unrestricted names
+	if tok.Kind == lexer.UnrestrictedName && len(text) >= 2 && text[0] == '\'' && text[len(text)-1] == '\'' {
+		text = text[1 : len(text)-1]
+	}
+	return ast.NameSegment{Text: text, Span: tok.Span}, true
 }
 
 // parseNameSegmentRelaxed consumes a name token (including keywords) and returns its segment.
@@ -35,7 +40,12 @@ func (p *Parser) parseNameSegmentRelaxed() (ast.NameSegment, bool) {
 		return ast.NameSegment{}, false
 	}
 	tok := p.advance()
-	return ast.NameSegment{Text: p.src.Text(tok.Span), Span: tok.Span}, true
+	text := p.src.Text(tok.Span)
+	// Strip quotes from unrestricted names
+	if tok.Kind == lexer.UnrestrictedName && len(text) >= 2 && text[0] == '\'' && text[len(text)-1] == '\'' {
+		text = text[1 : len(text)-1]
+	}
+	return ast.NameSegment{Text: text, Span: tok.Span}, true
 }
 
 // parseQualifiedName parses `[$::] Name (:: Name)*`. It returns nil and
@@ -147,11 +157,11 @@ func (p *Parser) parseIdentification() ast.Identification {
 		p.expect(lexer.Gt, "expected '>'")
 	}
 	// Parse name, but exclude keywords that have special syntax meaning in declaration context
-	// (e.g., "default" introduces a value expression, "connect"/"allocate" introduce connector ends, "first"/"do" for succession)
+	// (e.g., "default" introduces a value expression, "connect"/"allocate" introduce connector ends, "first"/"do" for succession, "of" for flow payload)
 	if p.at(lexer.Keyword) {
 		kw := p.peek().KeywordID
 		switch kw {
-		case "default", "connect", "allocate", "from", "to", "then", "first", "do":
+		case "default", "connect", "allocate", "from", "to", "then", "first", "do", "of":
 			// These keywords have special syntax meaning, not valid as identifier names here
 			return id
 		}
@@ -205,6 +215,15 @@ func (p *Parser) parseMember() ast.Node {
 		return en
 	}
 	m := &ast.Membership{Visibility: vis, Member: inner}
+	
+	// Parse optional metadata annotations: @Type{props}
+	// Apply to Usage/Definition nodes
+	if u, ok := inner.(*ast.Usage); ok {
+		u.Prefixes = append(u.Prefixes, p.parseMetadataAnnotations()...)
+	} else if d, ok := inner.(*ast.Definition); ok {
+		d.Prefixes = append(d.Prefixes, p.parseMetadataAnnotations()...)
+	}
+	
 	m.NodeSpan = p.spanFrom(start)
 	m.SetLeadingTrivia(trivia)
 	return m
@@ -239,6 +258,9 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		}
 		if p.leadingPrefixIsNamespace() {
 			return p.parseNamespace(start)
+		}
+		if p.leadingPrefixIsDefUsage() {
+			return p.parseDefUsage(start)
 		}
 		return nil
 	default:
@@ -476,6 +498,17 @@ func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
 			imp.IsRecursive = true // recursive membership import; Kind stays ImportMembership
 		}
 	}
+	
+	// Optional filter expression: [<expr>]
+	// Pattern: import Package::*[@MetadataType];
+	// Pattern: import Package::**[@MetadataType and condition];
+	if p.at(lexer.LBracket) {
+		p.advance() // consume '['
+		imp.FilterExpr = p.ParseExpression()
+		if _, ok := p.expect(lexer.RBracket, "expected ']' after import filter expression"); !ok {
+			// Error already recorded
+		}
+	}
 
 	imp.Body, imp.HasBody = p.parseNamespaceBody()
 	imp.NodeSpan = p.spanFrom(start)
@@ -614,13 +647,16 @@ func (p *Parser) prefixLookahead() int {
 	for p.peekN(i).Kind == lexer.Hash {
 		i++ // '#'
 		// QualifiedName: Name (:: Name)*
-		if k := p.peekN(i).Kind; k != lexer.Identifier && k != lexer.UnrestrictedName {
+		// Allow keywords as metadata type names (e.g., #scenario, #cause)
+		k := p.peekN(i).Kind
+		if k != lexer.Identifier && k != lexer.UnrestrictedName && k != lexer.Keyword {
 			return i
 		}
 		i++
 		for p.peekN(i).Kind == lexer.ColonColon {
 			i++
-			if k := p.peekN(i).Kind; k != lexer.Identifier && k != lexer.UnrestrictedName {
+			k := p.peekN(i).Kind
+			if k != lexer.Identifier && k != lexer.UnrestrictedName && k != lexer.Keyword {
 				return i
 			}
 			i++
@@ -637,6 +673,21 @@ func (p *Parser) leadingPrefixIsPackage() bool {
 func (p *Parser) leadingPrefixIsNamespace() bool {
 	t := p.peekN(p.prefixLookahead())
 	return t.Kind == lexer.Keyword && t.KeywordID == "namespace"
+}
+
+func (p *Parser) leadingPrefixIsDefUsage() bool {
+	i := p.prefixLookahead() // skip past all #QualifiedName prefixes
+	t := p.peekN(i)
+	if t.Kind != lexer.Keyword {
+		return false
+	}
+	// Check if keyword is def/usage keyword OR 'def' modifier
+	if t.KeywordID == "def" {
+		return true // explicit 'def' after prefixes
+	}
+	_, isDef := definitionKindKeywords[t.KeywordID]
+	_, isUsage := usageKindKeywords[t.KeywordID]
+	return isDef || isUsage
 }
 
 // parseFilter parses `filter OwnedExpression ;` (ElementFilterMember).

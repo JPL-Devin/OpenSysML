@@ -1,16 +1,20 @@
 package symbols
 
-import "github.com/Open-MBEE/Systemica/internal/core/ast"
+import (
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+)
 
 // Scope is a node in the immutable per-document scope tree. It owns the
 // symbols declared directly within a namespace-like construct and links to
 // its parent and child scopes.
 type Scope struct {
-	parent      *Scope
-	node        ast.Node             // the owning declaration node (nil for the doc root)
-	members     map[string][]*Symbol // name key -> symbols defined under that key (in definition order)
-	memberOrder []string             // name keys in first-seen order (for deterministic enumeration)
-	children    []*Scope
+	parent           *Scope
+	owner            *Symbol              // the symbol that owns this scope (for inheritance lookup)
+	node             ast.Node             // the owning declaration node (nil for the doc root)
+	members          map[string][]*Symbol // name key -> symbols defined under that key (in definition order)
+	memberOrder      []string             // name keys in first-seen order (for deterministic enumeration)
+	anonymousMembers []*Symbol            // anonymous symbols (no name) that aren't in members map
+	children         []*Scope
 }
 
 // NewScope creates an empty scope with the given parent and owning node.
@@ -24,6 +28,12 @@ func NewScope(parent *Scope, node ast.Node) *Scope {
 
 // Parent returns the enclosing scope, or nil for the document root.
 func (s *Scope) Parent() *Scope { return s.parent }
+
+// Owner returns the symbol that owns this scope, or nil if not set.
+func (s *Scope) Owner() *Symbol { return s.owner }
+
+// SetOwner sets the symbol that owns this scope (for inheritance lookup).
+func (s *Scope) SetOwner(sym *Symbol) { s.owner = sym }
 
 // Node returns the AST node that owns this scope, or nil for the document root.
 func (s *Scope) Node() ast.Node { return s.node }
@@ -46,6 +56,11 @@ func (s *Scope) Define(name string, sym *Symbol) {
 	s.members[name] = append(s.members[name], sym)
 }
 
+// DefineAnonymous adds an anonymous symbol (without name) to this scope.
+func (s *Scope) DefineAnonymous(sym *Symbol) {
+	s.anonymousMembers = append(s.anonymousMembers, sym)
+}
+
 // LookupLocal returns the first symbol defined under name in this scope only.
 func (s *Scope) LookupLocal(name string) (*Symbol, bool) {
 	syms := s.members[name]
@@ -65,4 +80,14 @@ func (s *Scope) MemberNames() []string {
 	out := make([]string, len(s.memberOrder))
 	copy(out, s.memberOrder)
 	return out
+}
+
+// AllMembers returns all symbols in this scope (including anonymous members).
+func (s *Scope) AllMembers() []*Symbol {
+	var all []*Symbol
+	for _, syms := range s.members {
+		all = append(all, syms...)
+	}
+	all = append(all, s.anonymousMembers...)
+	return all
 }

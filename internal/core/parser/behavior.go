@@ -57,6 +57,164 @@ func (p *Parser) parseCalcBody() []ast.Node {
 
 // parseActionBody parses the body of an action usage.
 // Expects '{' already consumed, returns list of action nodes + edges.
+// parseActionBodyMixed handles action bodies with BOTH declarations and behavioral statements
+// Syntax: { in item x; action nested {...}; first nested then ...; flow ...; }
+func (p *Parser) parseActionBodyMixed() []ast.Node {
+	var members []ast.Node
+	
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
+		
+		// Try parsing as direction parameter (in/out/inout item/accept/via)
+		if p.isDirectionKeyword() {
+			members = append(members, p.parseDirectionParameter())
+			continue
+		}
+		
+		// Check for nested action DECLARATION (action name : Type {...} or action name {...})
+		// vs behavioral action node (action ref or action {expr})
+		if p.atKeyword("action") {
+			// Lookahead to distinguish:
+			// - action <id> : Type { ... } = declaration (typing)
+			// - action <id> { stmts } = declaration (multi-statement body)
+			// - action <id> { expr } = behavioral node (inline expression)
+			// - action { expr } = behavioral node
+			// - action <id>; = behavioral node (reference)
+			// Check for typing colon OR declaration-like body content
+			tok1 := p.peekN(1)
+			if tok1.Kind == lexer.Identifier || tok1.Kind == lexer.Keyword {
+				tok2 := p.peekN(2)
+				// If colon after name → definitely declaration (typing)
+				if tok2.Kind == lexer.Colon {
+					m := p.parseBodyMember()
+					if m != nil {
+						if p.atKeyword("then") {
+							p.advance()
+							if mem, ok := m.(*ast.Membership); ok {
+								mem.HasSuccession = true
+							}
+						}
+						members = append(members, m)
+					}
+					continue
+				}
+				// If 'accept' keyword after name → declaration (accept action)
+				// Pattern: action <name> accept <param> : Type [via <port>];
+				if tok2.Kind == lexer.Keyword && tok2.KeywordID == "accept" {
+					m := p.parseBodyMember()
+					if m != nil {
+						if p.atKeyword("then") {
+							p.advance()
+							if mem, ok := m.(*ast.Membership); ok {
+								mem.HasSuccession = true
+							}
+						}
+						members = append(members, m)
+					}
+					continue
+				}
+				// If behavioral keyword after name → declaration with inline statement
+				// Pattern: action <name> send <msg> to <target>;
+				//          action <name> perform <ref>;
+				if tok2.Kind == lexer.Keyword && (tok2.KeywordID == "send" || tok2.KeywordID == "terminate" || 
+					tok2.KeywordID == "perform" || tok2.KeywordID == "bind" || tok2.KeywordID == "assign") {
+					m := p.parseBodyMember()
+					if m != nil {
+						if p.atKeyword("then") {
+							p.advance()
+							if mem, ok := m.(*ast.Membership); ok {
+								mem.HasSuccession = true
+							}
+						}
+						members = append(members, m)
+					}
+					continue
+				}
+				// If brace after name, peek inside
+				if tok2.Kind == lexer.LBrace {
+					firstInBrace := p.peekN(3)
+					isDeclaration := false
+					if firstInBrace.Kind == lexer.Keyword {
+						kw := firstInBrace.KeywordID
+						// Direction keywords, behavioral keywords, or nested declarations suggest declaration body
+						if kw == "in" || kw == "out" || kw == "inout" || kw == "action" || 
+							kw == "part" || kw == "item" || kw == "flow" || kw == "doc" ||
+							kw == "perform" || kw == "send" || kw == "assign" || kw == "first" {
+							isDeclaration = true
+						}
+					}
+					if isDeclaration {
+						m := p.parseBodyMember()
+						if m != nil {
+							if p.atKeyword("then") {
+								p.advance()
+								if mem, ok := m.(*ast.Membership); ok {
+									mem.HasSuccession = true
+								}
+							}
+							members = append(members, m)
+						}
+						continue
+					}
+				}
+			}
+			// Otherwise: treat as behavioral action node
+			members = append(members, p.parseActionMember())
+			continue
+		}
+		
+		// Try parsing as behavioral statement
+		// Special case: 'then action' could be succession OR declaration with succession
+		// Check if it's 'then action name : Type' (declaration) vs 'then action ref' (behavioral)
+		if p.atKeyword("then") && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "action" {
+			// Lookahead: then action <id> : → declaration with succession
+			if p.peekN(2).Kind == lexer.Identifier {
+				tok3 := p.peekN(3)
+				if tok3.Kind == lexer.Colon || (tok3.Kind == lexer.LBrace && p.peekN(4).Kind == lexer.Keyword) {
+					// It's declaration: consume 'then', parse declaration, mark succession
+					p.advance() // consume 'then'
+					m := p.parseBodyMember()
+					if m != nil {
+						if mem, ok := m.(*ast.Membership); ok {
+							mem.HasSuccession = true
+						}
+						members = append(members, m)
+					}
+					continue
+				}
+			}
+		}
+		
+		if p.isBehavioralKeyword() {
+			members = append(members, p.parseActionMember())
+			continue
+		}
+		
+		// Try parsing as body member (nested declarations)
+		m := p.parseBodyMember()
+		if m != nil {
+			// Check for namespace-level succession: 'then' after member
+			if p.atKeyword("then") {
+				p.advance() // consume 'then'
+				if mem, ok := m.(*ast.Membership); ok {
+					mem.HasSuccession = true
+				}
+			}
+			members = append(members, m)
+		}
+		
+		// Ensure progress
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.error(p.peek().Span, "expected a body member")
+			p.advance()
+		}
+	}
+	
+	p.expect(lexer.RBrace, "expected '}' after action body")
+	return members
+}
+
+// parseActionBody handles pure behavioral bodies (legacy - for inline action statements)
 func (p *Parser) parseActionBody() []ast.Node {
 	var members []ast.Node
 	
@@ -66,6 +224,173 @@ func (p *Parser) parseActionBody() []ast.Node {
 	
 	p.expect(lexer.RBrace, "expected '}' after action body")
 	return members
+}
+
+// isDirectionKeyword checks if current token is in/out/inout
+func (p *Parser) isDirectionKeyword() bool {
+	if !p.at(lexer.Keyword) {
+		return false
+	}
+	kw := p.peek().KeywordID
+	return kw == "in" || kw == "out" || kw == "inout"
+}
+
+// parseDirectionParameter parses: <direction> [ref] [<kind>] [<name>] [: <type>] [= <value>];
+// Examples: in item scene; out feature x; in ref item x : Foo = bar; in item; in target;
+// Kind keyword is optional - defaults to generic feature
+func (p *Parser) parseDirectionParameter() ast.Node {
+	start := p.peek().Span.Offset
+	
+	// Parse direction (in/out/inout)
+	dirTok, _ := p.expect(lexer.Keyword, "expected direction keyword")
+	var direction ast.FeatureDirection
+	switch dirTok.KeywordID {
+	case "in":
+		direction = ast.DirIn
+	case "out":
+		direction = ast.DirOut
+	case "inout":
+		direction = ast.DirInOut
+	default:
+		direction = ast.DirNone
+	}
+	
+	// Check for optional 'ref' modifier
+	isRef := false
+	if p.atKeyword("ref") {
+		p.advance()
+		isRef = true
+	}
+	
+	// Check for optional individual/snapshot/event modifiers
+	isIndividual := false
+	isSnapshot := false
+	isEvent := false
+	if p.atKeyword("individual") {
+		p.advance()
+		isIndividual = true
+	} else if p.atKeyword("snapshot") {
+		p.advance()
+		isSnapshot = true
+	} else if p.atKeyword("event") {
+		p.advance()
+		isEvent = true
+	}
+	
+	// Parse optional kind keyword (item, feature, port, etc)
+	// If next token is keyword and recognized kind, consume it
+	// Otherwise treat next token as name (kind defaults to generic feature)
+	var kind ast.UsageKind = ast.UsagePart // default to generic feature
+	if p.at(lexer.Keyword) {
+		kindKeyword := p.peek().KeywordID
+		recognized := false
+		switch kindKeyword {
+		case "item":
+			kind = ast.UsageItem
+			recognized = true
+		case "feature":
+			kind = ast.UsagePart
+			recognized = true
+		case "port":
+			kind = ast.UsagePort
+			recognized = true
+		case "part":
+			kind = ast.UsagePart
+			recognized = true
+		case "attribute":
+			kind = ast.UsageAttribute
+			recognized = true
+		case "occurrence":
+			kind = ast.UsageOccurrence
+			recognized = true
+		case "action":
+			kind = ast.UsageAction
+			recognized = true
+		}
+		if recognized {
+			p.advance() // consume kind keyword
+		}
+		// If not recognized, leave it as name (kind stays default)
+	}
+	
+	// Optional name (can be anonymous: "in item;")
+	var ident ast.Identification
+	// Skip name if next token is relationship operator, value assignment, or semicolon
+	isRelationshipNext := p.at(lexer.Colon) || p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || 
+		p.at(lexer.ColonColonGt) || p.at(lexer.ColonEq)
+	if p.atName() && !isRelationshipNext && !p.at(lexer.Eq) && !p.at(lexer.Semicolon) {
+		ident = p.parseIdentification()
+	}
+	
+	// Optional typing and relationships (: Type, :> SuperType, ::> Redefines, etc)
+	var relationships []*ast.Relationship
+	var multiplicity *ast.Multiplicity
+	if p.at(lexer.Colon) || p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || 
+		p.at(lexer.ColonColonGt) || p.at(lexer.ColonEq) {
+		rels, _ := p.parseRelationships(true)
+		relationships = append(relationships, rels...)
+	}
+	
+	// Optional multiplicity after relationships (e.g., : Type[*])
+	if p.at(lexer.LBracket) {
+		multiplicity = p.parseMultiplicity()
+	}
+	
+	// Parse post-multiplicity modifiers (ordered/nonunique)
+	postMods := p.parsePostModifiers()
+	
+	// Optional value (= expr, := expr, or default expr)
+	var value ast.Node
+	if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
+		value = p.ParseExpression()
+	}
+	
+	// Optional body or semicolon
+	var members []ast.Node
+	var hasBody bool
+	if p.accept2(lexer.Semicolon) {
+		hasBody = false
+	} else if p.at(lexer.LBrace) {
+		p.advance() // consume '{'
+		// Parse body members generically
+		for !p.at(lexer.RBrace) && !p.atEOF() {
+			m := p.parseBodyMember()
+			if m != nil {
+				members = append(members, m)
+			}
+		}
+		p.expect(lexer.RBrace, "expected '}'")
+		hasBody = true
+	} else {
+		p.error(p.peek().Span, "expected ';' or '{' after parameter")
+	}
+	
+	// Create Usage node with direction
+	usage := &ast.Usage{
+		Kind:          kind,
+		Ident:         ident,
+		Relationships: relationships,
+		Multiplicity:  multiplicity,
+		Value:         value,
+		Members:       members,
+		HasBody:       hasBody,
+		IsReference:   isRef,
+		Direction:     direction,
+		IsOrdered:     postMods.isOrdered,
+		IsNonunique:   postMods.isNonunique,
+		IsEvent:       isEvent,
+	}
+	// Note: isIndividual, isSnapshot consumed but not stored in AST (no fields yet)
+	_, _ = isIndividual, isSnapshot
+	usage.NodeSpan = p.spanFrom(start)
+	
+	// Wrap in Membership
+	membership := &ast.Membership{
+		Member: usage,
+	}
+	membership.NodeSpan = usage.NodeSpan
+	
+	return membership
 }
 
 // parseActionMember parses one action member: node or edge.
@@ -103,14 +428,42 @@ func (p *Parser) parseActionMember() ast.Node {
 			return p.parsePerformAction(tok)
 		case "while":
 			return p.parseWhileLoopAction(tok)
+		case "loop":
+			return p.parseLoopAction(tok)
+		case "for":
+			return p.parseForAction(tok)
 		case "if":
 			return p.parseIfAction(tok)
+		case "send":
+			return p.parseSendStatement(tok)
+		case "terminate":
+			return p.parseTerminateStatement(tok)
 		default:
 			// Unknown keyword, return ErrorNode
 			p.error(tok.Span, "unknown action keyword: "+kw)
 			en := &ast.ErrorNode{Message: "unknown action keyword: " + kw}
 			en.NodeSpan = p.spanFrom(start)
 			return en
+		}
+	}
+	
+	// Check for bare assignment: identifier = expr; or identifier := expr;
+	// This is shorthand for assign identifier = expr;
+	if p.at(lexer.Identifier) {
+		nextTok := p.peekN(1)
+		if nextTok.Kind == lexer.Eq || nextTok.Kind == lexer.ColonEq {
+			// Parse as assignment
+			target := p.parseQualifiedName()
+			p.advance() // consume = or :=
+			value := p.ParseExpression()
+			p.expect(lexer.Semicolon, "expected ';' after assignment")
+			
+			node := &ast.AssignmentActionNode{
+				Target: target,
+				Value:  value,
+			}
+			node.NodeSpan = p.spanFrom(start)
+			return node
 		}
 	}
 	
@@ -130,10 +483,52 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
 	
-	if p.at(lexer.Identifier) {
+	if p.at(lexer.Identifier) || p.atNameOrKeyword() {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
 		p.advance()
+	}
+	
+	// Check for succession edge continuation: first X [if <expr>] then Y;
+	var guard ast.Node
+	if p.atKeyword("if") {
+		p.advance() // consume 'if'
+		guard = p.ParseExpression()
+	}
+	
+	if p.atKeyword("then") {
+		p.advance() // consume 'then'
+		target := p.parseQualifiedName()
+		p.expect(lexer.Semicolon, "expected ';' after succession edge")
+		
+		// Return succession edge from initial node (name) to target
+		source := &ast.QualifiedName{}
+		if name != "" {
+			source.Parts = []ast.NameSegment{{Text: name}}
+		}
+		
+		// If guard present, return ControlFlowEdge; otherwise SuccessionEdge
+		if guard != nil {
+			node := &ast.ControlFlowEdge{
+				Source: source,
+				Target: target,
+				Guard:  guard,
+			}
+			node.NodeSpan = p.spanFrom(start)
+			return node
+		} else {
+			node := &ast.SuccessionEdge{
+				Source: source,
+				Target: target,
+			}
+			node.NodeSpan = p.spanFrom(start)
+			return node
+		}
+	}
+	
+	// If if clause present but no then, error
+	if guard != nil {
+		p.error(p.peek().Span, "expected 'then' after guard condition")
 	}
 	
 	p.expect(lexer.Semicolon, "expected ';' after initial node")
@@ -284,8 +679,9 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 					Message:  "expected '}' after action expression",
 				}
 			}
-		} else if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.ColonColon {
+		} else if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.ColonColon || nextTok.Kind == lexer.Keyword {
 			// Could be name + ref OR just ref (qualified name)
+			// Also handle keywords as refs (e.g., action stop terminate;)
 			// Parse first identifier
 			firstIdToken := p.peek()
 			firstIdSpan := firstIdToken.Span
@@ -311,10 +707,20 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 				}
 				actionRef = &ast.QualifiedName{Parts: parts}
 				actionRef.NodeSpan = p.spanFrom(firstIdSpan.Offset)
-			} else if p.at(lexer.Identifier) {
-				// firstId is name, what follows is actionRef
+			} else if p.at(lexer.Identifier) || p.at(lexer.Keyword) {
+				// firstId is name, what follows is actionRef (identifier or keyword)
 				name = firstId
-				actionRef = p.parseQualifiedName()
+				if p.at(lexer.Keyword) {
+					// Allow keywords as action refs (e.g., 'terminate')
+					kw := p.peek()
+					actionRef = &ast.QualifiedName{
+						Parts: []ast.NameSegment{{Text: kw.KeywordID, Span: kw.Span}},
+					}
+					actionRef.NodeSpan = kw.Span
+					p.advance()
+				} else {
+					actionRef = p.parseQualifiedName()
+				}
 			} else {
 				// firstId is a simple (non-qualified) actionRef
 				actionRef = &ast.QualifiedName{
@@ -366,9 +772,21 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 		}
 	}
 	
-	// Otherwise, parse as named edge: then source target;
-	source := p.parseQualifiedName()
-	target := p.parseQualifiedName()
+	// Otherwise, parse as named edge: then [source] target;
+	// If only one name before semicolon, it's the target (source implicit)
+	first := p.parseQualifiedNameRelaxed() // allow keywords like 'fork', 'join'
+	
+	// Check if there's a second name (explicit source + target)
+	var source, target *ast.QualifiedName
+	if !p.at(lexer.Semicolon) && !p.atKeyword("if") && (p.at(lexer.Identifier) || p.at(lexer.Keyword)) {
+		// Two-name form: then source target;
+		source = first
+		target = p.parseQualifiedNameRelaxed()
+	} else {
+		// One-name form: then target; (source implicit)
+		source = &ast.QualifiedName{} // empty source
+		target = first
+	}
 	
 	// Check for optional guard
 	if p.acceptKeyword("if") {
@@ -475,12 +893,175 @@ func (p *Parser) parseWhileLoopAction(tok lexer.Token) ast.Node {
 	return node
 }
 
+func (p *Parser) parseLoopAction(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Loop syntax: loop <body-members> until <condition>;
+	// Body can contain action declarations, succession, etc.
+	// Parse body as mixed content (declarations + behavioral statements)
+	var body []ast.Node
+	
+	// Parse loop body members until 'until' keyword or closing brace
+	for !p.atKeyword("until") && !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
+		
+		// Try direction parameters first
+		if p.isDirectionKeyword() {
+			body = append(body, p.parseDirectionParameter())
+			continue
+		}
+		
+		// Try declarations (action/part/etc)
+		if p.atDefUsageStart() {
+			m := p.parseBodyMember()
+			if m != nil {
+				body = append(body, m)
+			}
+			// Check if no progress (prevent infinite loop)
+			if p.peek().Span.Offset == before {
+				p.advance()
+			}
+			continue
+		}
+		
+		// Parse behavioral statements
+		body = append(body, p.parseActionMember())
+		
+		// Ensure progress
+		if p.peek().Span.Offset == before {
+			p.advance()
+		}
+	}
+	
+	// Parse optional 'until' condition
+	var condition ast.Node
+	if p.acceptKeyword("until") {
+		condition = p.ParseExpression()
+	}
+	
+	p.expect(lexer.Semicolon, "expected ';' after loop")
+	
+	// Reuse WhileLoopActionNode with condition (will be post-condition for 'until')
+	// Alternatively, could add separate LoopActionNode with UntilCondition field
+	node := &ast.WhileLoopActionNode{
+		Condition: condition,
+		Body:      body,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseForAction parses: for <variable> in <collection> { <body> }
+func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse iteration variable name
+	varTok, ok := p.expect(lexer.Identifier, "expected variable name after 'for'")
+	if !ok {
+		en := &ast.ErrorNode{Message: "expected variable name"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	// Expect 'in' keyword
+	if !p.acceptKeyword("in") {
+		p.error(p.peek().Span, "expected 'in' keyword after for variable")
+		en := &ast.ErrorNode{Message: "expected 'in'"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	// Parse collection expression
+	collection := p.ParseExpression()
+	
+	// Parse body (braced)
+	if _, ok := p.expect(lexer.LBrace, "expected '{' for for-loop body"); !ok {
+		en := &ast.ErrorNode{Message: "expected '{'"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	// Parse body as mixed content (declarations + behavioral statements)
+	var body []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
+		
+		// Try direction parameters
+		if p.isDirectionKeyword() {
+			body = append(body, p.parseDirectionParameter())
+			continue
+		}
+		
+		// Try declarations
+		if p.atDefUsageStart() {
+			m := p.parseBodyMember()
+			if m != nil {
+				body = append(body, m)
+			}
+			if p.peek().Span.Offset == before {
+				p.advance()
+			}
+			continue
+		}
+		
+		// Parse behavioral statements
+		body = append(body, p.parseActionMember())
+		
+		// Ensure progress
+		if p.peek().Span.Offset == before {
+			p.advance()
+		}
+	}
+	
+	p.expect(lexer.RBrace, "expected '}'")
+	
+	// Create ForLoopActionNode AST node
+	// Since this doesn't exist yet, reuse WhileLoopActionNode structure
+	// Store variable name and collection in condition (hack - proper impl would add ForLoopActionNode)
+	// For now, create simple FeatureReference for variable and store as body member
+	varUsage := &ast.Usage{
+		Kind: ast.UsageAttribute,
+		Ident: ast.Identification{
+			Name:     p.src.Text(varTok.Span),
+			NameSpan: varTok.Span,
+		},
+		Value: collection, // Store collection as value
+	}
+	varUsage.NodeSpan = varTok.Span
+	
+	// Prepend variable usage to body
+	body = append([]ast.Node{varUsage}, body...)
+	
+	node := &ast.WhileLoopActionNode{
+		Condition: nil, // No explicit condition (iteration driven)
+		Body:      body,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
 // parseIfAction parses: if condition { thenBody } [else { elseBody }]
 func (p *Parser) parseIfAction(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	
 	// Parse condition expression
 	condition := p.ParseExpression()
+	
+	// Check for shorthand guard succession: if <expr> then <target>;
+	if p.atKeyword("then") {
+		p.advance() // consume 'then'
+		target := p.parseQualifiedName()
+		p.expect(lexer.Semicolon, "expected ';' after guard succession")
+		
+		// Return ControlFlowEdge with implicit source (decision node) and guard
+		node := &ast.ControlFlowEdge{
+			Source: &ast.QualifiedName{}, // empty source = implicit decision node
+			Target: target,
+			Guard:  condition,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
 	
 	// Expect '{'
 	if !p.at(lexer.LBrace) {
@@ -495,6 +1076,30 @@ func (p *Parser) parseIfAction(tok lexer.Token) ast.Node {
 	// Parse then body statements
 	var thenBody []ast.Node
 	for !p.at(lexer.RBrace) && !p.atEOF() {
+		// Use parseActionBodyMixed to support both declarations and behavioral statements
+		// This allows: if <cond> { action x : Type { body }; first x then y; }
+		before := p.peek().Span.Offset
+		
+		// Try direction parameters first
+		if p.isDirectionKeyword() {
+			thenBody = append(thenBody, p.parseDirectionParameter())
+			continue
+		}
+		
+		// Try declarations (action/part/etc)
+		if p.atDefUsageStart() {
+			m := p.parseBodyMember()
+			if m != nil {
+				thenBody = append(thenBody, m)
+			}
+			// Check if no progress (prevent infinite loop)
+			if p.peek().Span.Offset == before {
+				p.advance()
+			}
+			continue
+		}
+		
+		// Parse behavioral statements
 		thenBody = append(thenBody, p.parseActionMember())
 	}
 	
@@ -508,6 +1113,27 @@ func (p *Parser) parseIfAction(tok lexer.Token) ast.Node {
 		} else {
 			p.advance() // consume '{'
 			for !p.at(lexer.RBrace) && !p.atEOF() {
+				before := p.peek().Span.Offset
+				
+				// Try direction parameters first
+				if p.isDirectionKeyword() {
+					elseBody = append(elseBody, p.parseDirectionParameter())
+					continue
+				}
+				
+				// Try declarations
+				if p.atDefUsageStart() {
+					m := p.parseBodyMember()
+					if m != nil {
+						elseBody = append(elseBody, m)
+					}
+					if p.peek().Span.Offset == before {
+						p.advance()
+					}
+					continue
+				}
+				
+				// Parse behavioral statements
 				elseBody = append(elseBody, p.parseActionMember())
 			}
 			p.expect(lexer.RBrace, "expected '}' after else body")
@@ -569,6 +1195,32 @@ func (p *Parser) parseResultMember() ast.Node {
 	// Parse optional feature modifiers after kind keyword
 	mods := p.parseFeatureModifiers()
 	
+	// Check for leading relationship operators before name (e.g., return ::> result : Type)
+	// In this context, relationships apply to the parameter being defined (not to external target)
+	// So we consume the operator but DON'T parse target yet
+	var leadingRels []*ast.Relationship
+	for p.at(lexer.ColonGtGt) || p.at(lexer.ColonGt) || p.at(lexer.ColonColonGt) || p.at(lexer.ColonColon) {
+		tok := p.peek()
+		p.advance() // consume relationship operator
+		
+		// Map token to relationship kind
+		var kind ast.RelationshipKind
+		switch tok.Kind {
+		case lexer.ColonGtGt:
+			kind = ast.RelRedefines
+		case lexer.ColonGt:
+			kind = ast.RelSpecializes
+		case lexer.ColonColonGt:
+			kind = ast.RelReferences
+		case lexer.ColonColon:
+			kind = ast.RelTyping // or namespace qualification - context dependent
+		}
+		
+		// Create relationship with nil target (will be filled by parent scope context)
+		rel := &ast.Relationship{Kind: kind, Target: nil}
+		leadingRels = append(leadingRels, rel)
+	}
+	
 	// Check for named or anonymous result parameter syntax
 	// Pattern 1: return [modifiers] name: Type[mult];  (named result parameter)
 	// Pattern 2: return [modifiers] : Type[mult];      (anonymous result parameter)
@@ -576,8 +1228,9 @@ func (p *Parser) parseResultMember() ast.Node {
 	// Pattern 4: return name = expr;       (computed result with binding)
 	// Pattern 5: return [modifiers] name;  (named result parameter, no type)
 	// Pattern 6: return [modifiers] name : Type { body } (with body)
+	// Pattern 7: return :>> name : Type = expr; (leading relationships before name)
 	// Use lookahead to distinguish Pattern 1 from Pattern 4
-	if p.at(lexer.Colon) || (p.atName() && p.peekN(1).Kind == lexer.Colon) {
+	if len(leadingRels) > 0 || p.at(lexer.Colon) || (p.atName() && p.peekN(1).Kind == lexer.Colon) {
 		// Parse as result parameter (named or anonymous usage with typing)
 		u := &ast.Usage{
 			Kind:        usageKind,
@@ -591,6 +1244,9 @@ func (p *Parser) parseResultMember() ast.Node {
 			IsOrdered:   mods.isOrdered,
 			IsNonunique: mods.isNonunique,
 		}
+		
+		// Add leading relationships if any (e.g., ::> from `return ::> result`)
+		u.Relationships = append(u.Relationships, leadingRels...)
 		
 		// Check if named (identifier before colon)
 		if p.atName() {
@@ -782,6 +1438,14 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 			members = append(members, p.parseConstraintMember())
 		} else if p.atDefUsageStart() {
 			// Definition/usage keyword - parse as body member
+			members = append(members, p.parseBodyMember())
+		} else if p.atKeyword("redefines") || p.atKeyword("subsets") || p.atKeyword("specializes") || p.atKeyword("references") {
+			// Relationship keyword (e.g., redefines partMasses = expr;)
+			// Parse as body member (handles bare relationship statements)
+			members = append(members, p.parseBodyMember())
+		} else if p.at(lexer.Colon) || p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt) {
+			// Relationship keyword without name (e.g., :>> x = value;)
+			// Parse as anonymous feature with relationship
 			members = append(members, p.parseBodyMember())
 		} else {
 			// Default: parse as constraint expression (bare expression)
@@ -1200,6 +1864,22 @@ func (p *Parser) parseStateMember() ast.Node {
 		case "first":
 			// Succession statement: first <state> then <state>;
 			return p.parseSuccessionStatement(start)
+		case "then":
+			// Standalone succession: then <state>; (implicit source, typically from entry)
+			p.advance() // consume 'then'
+			targetState := p.parseQualifiedName()
+			p.expect(lexer.Semicolon, "expected ';' after succession target")
+			
+			// Create succession with nil source (implicit)
+			succession := &ast.Usage{
+				Kind: ast.UsageSuccession,
+				ConnectorEnds: []*ast.ConnectorEnd{
+					nil, // implicit source
+					{Target: targetState},
+				},
+			}
+			succession.NodeSpan = p.spanFrom(start)
+			return succession
 		case "accept":
 			// Accept transition: accept <signal> then <state>;
 			return p.parseAcceptTransition(start)
@@ -1257,7 +1937,75 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 	}
 	
 	// Parse signal type reference (use relaxed parsing to allow keywords as names)
-	signalType := p.parseQualifiedNameRelaxed()
+	// Could be event type OR temporal expression (at <time>) OR change trigger (when <cond>) OR relative time (after <duration>)
+	// OR typed parameter (name : Type)
+	var signalType ast.Node
+	var isTemporalTransition bool
+	var isChangeTransition bool
+	if p.atKeyword("at") {
+		// Temporal transition: accept at <timeExpr> then <state>
+		p.advance() // consume 'at'
+		signalType = p.ParseExpression()
+		isTemporalTransition = true
+	} else if p.atKeyword("after") {
+		// Relative time transition: accept after <duration> then <state>
+		p.advance() // consume 'after'
+		signalType = p.ParseExpression()
+		isTemporalTransition = true
+	} else if p.atKeyword("when") {
+		// Change transition: accept when <condition> then <state>
+		p.advance() // consume 'when'
+		signalType = p.ParseExpression()
+		isChangeTransition = true
+	} else {
+		// Event transition: accept <signal> OR accept <name> : Type
+		// Lookahead: if identifier followed by colon, parse as typed parameter
+		if (p.at(lexer.Identifier) || p.at(lexer.Keyword)) && p.peekN(1).Kind == lexer.Colon {
+			// Typed trigger: parse name + typing
+			paramStart := p.peek().Span.Offset
+			ident := p.parseIdentification()
+			
+			// Parse typing
+			rels, _ := p.parseRelationships(true)
+			
+			// Create attribute usage to represent typed trigger
+			usage := &ast.Usage{
+				Kind:          ast.UsageAttribute,
+				Ident:         ident,
+				Relationships: rels,
+			}
+			usage.NodeSpan = p.spanFrom(paramStart)
+			signalType = usage
+		} else {
+			// Simple signal reference
+			signalType = p.parseQualifiedNameRelaxed()
+		}
+	}
+	_ = isTemporalTransition // might be useful for AST differentiation
+	_ = isChangeTransition
+	
+	// Optional guard condition: if <expr>
+	var guardExpr ast.Node
+	if p.acceptKeyword("if") {
+		guardExpr = p.ParseExpression()
+	}
+	
+	// Optional effect action: do <action>
+	var effectAction ast.Node
+	if p.acceptKeyword("do") {
+		// Parse effect action - could be:
+		// 1. send statement: do send <message> to <target>
+		// 2. action invocation: do actionName(args)
+		// 3. assignment: do x = expr
+		// Use parseActionMember to handle all behavioral statements
+		effectAction = p.parseActionMember()
+	}
+	
+	// Optional via clause: via <port>
+	var viaPort ast.Node
+	if p.acceptKeyword("via") {
+		viaPort = p.parseQualifiedNameRelaxed()
+	}
 	
 	// Expect 'then' keyword
 	if !p.acceptKeyword("then") {
@@ -1283,6 +2031,20 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 			{Reference: targetState}, // target
 		},
 	}
+	
+	// Store guard, effect, and via in Members (could extend AST for proper transition fields)
+	if guardExpr != nil {
+		// Wrap guard in membership for now
+		transition.Members = append(transition.Members, guardExpr)
+	}
+	if effectAction != nil {
+		transition.Members = append(transition.Members, effectAction)
+	}
+	if viaPort != nil {
+		// Store via port as member (could use relationship or dedicated field)
+		transition.Members = append(transition.Members, viaPort)
+	}
+	
 	transition.NodeSpan = p.spanFrom(start)
 	return transition
 }
@@ -1328,6 +2090,50 @@ func (p *Parser) parseEntryMember(start int) ast.Node {
 		return node
 	}
 	
+	// Check for bare semicolon (empty entry action)
+	if p.at(lexer.Semicolon) {
+		p.advance() // consume ';'
+		node := &ast.EntryMember{
+			Actions: nil, // empty
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Check for behavioral statement (assign, send, bind, etc.)
+	// Pattern: entry assign x := expr;
+	if p.isBehavioralKeyword() {
+		stmt := p.parseActionMember()
+		node := &ast.EntryMember{
+			Actions: []ast.Node{stmt},
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Check for 'do' keyword followed by braced block: entry do { ... }
+	if p.atKeyword("do") {
+		p.advance() // consume 'do'
+		if p.at(lexer.LBrace) {
+			p.advance() // consume '{'
+			
+			// Parse action sequence
+			var actions []ast.Node
+			for !p.at(lexer.RBrace) && !p.atEOF() {
+				actions = append(actions, p.parseActionMember())
+			}
+			
+			p.expect(lexer.RBrace, "expected '}' after entry actions")
+			
+			node := &ast.EntryMember{
+				Actions: actions,
+			}
+			node.NodeSpan = p.spanFrom(start)
+			return node
+		}
+		// Fall through to parse action reference after 'do'
+	}
+	
 	// Pattern 2: entry actionName { ... } - action reference
 	// Parse action reference (qualified name) and optional invocation arguments
 	actionRef := p.parseQualifiedName()
@@ -1363,6 +2169,27 @@ func (p *Parser) parseDoMember(start int) ast.Node {
 		action := p.parseBodyMember()
 		node := &ast.DoMember{
 			Actions: []ast.Node{action},
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Check for bare semicolon (empty do action)
+	if p.at(lexer.Semicolon) {
+		p.advance() // consume ';'
+		node := &ast.DoMember{
+			Actions: nil, // empty
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Check for action reference: do actionName;
+	if p.atName() {
+		actionRef := p.parseQualifiedName()
+		p.expect(lexer.Semicolon, "expected ';' after action reference")
+		node := &ast.DoMember{
+			Actions: []ast.Node{actionRef},
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -1405,6 +2232,39 @@ func (p *Parser) parseExitMember(start int) ast.Node {
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
+	}
+	
+	// Check for bare semicolon (empty exit action)
+	if p.at(lexer.Semicolon) {
+		p.advance() // consume ';'
+		node := &ast.ExitMember{
+			Actions: nil, // empty
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Check for 'do' keyword followed by braced block: exit do { ... }
+	if p.atKeyword("do") {
+		p.advance() // consume 'do'
+		if p.at(lexer.LBrace) {
+			p.advance() // consume '{'
+			
+			// Parse action sequence
+			var actions []ast.Node
+			for !p.at(lexer.RBrace) && !p.atEOF() {
+				actions = append(actions, p.parseActionMember())
+			}
+			
+			p.expect(lexer.RBrace, "expected '}' after exit actions")
+			
+			node := &ast.ExitMember{
+				Actions: actions,
+			}
+			node.NodeSpan = p.spanFrom(start)
+			return node
+		}
+		// Fall through if no brace after 'do'
 	}
 	
 	// Otherwise expect block: exit { ... }
@@ -1521,6 +2381,54 @@ func (p *Parser) parseTransitionMember(start int) ast.Node {
 		Trigger: trigger,
 		Guard:   guard,
 		Effect:  effect,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseSendStatement parses: send <message> to <target>;
+// parseSendStatement parses: send <message> to <target>; OR send <message> via <port>;
+func (p *Parser) parseSendStatement(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse message expression
+	message := p.ParseExpression()
+	
+	// Expect 'to' or 'via' keyword
+	if !p.acceptKeyword("to") && !p.acceptKeyword("via") {
+		p.error(p.peek().Span, "expected 'to' or 'via' after send message")
+	}
+	
+	// Parse target expression
+	target := p.ParseExpression()
+	
+	// Semicolon is optional if followed by transition keyword (then/if/do)
+	if !p.atKeyword("then") && !p.atKeyword("if") && !p.atKeyword("do") {
+		p.expect(lexer.Semicolon, "expected ';' after send statement")
+	}
+	
+	node := &ast.SendStatement{
+		Message: message,
+		Target:  target,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseTerminateStatement parses: terminate <target>;
+func (p *Parser) parseTerminateStatement(tok lexer.Token) ast.Node {
+	start := tok.Span.Offset
+	
+	// Parse target expression
+	target := p.ParseExpression()
+	
+	// Semicolon is optional if followed by transition keyword (then/if/do)
+	if !p.atKeyword("then") && !p.atKeyword("if") && !p.atKeyword("do") {
+		p.expect(lexer.Semicolon, "expected ';' after terminate statement")
+	}
+	
+	node := &ast.TerminateStatement{
+		Target: target,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node

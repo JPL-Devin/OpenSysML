@@ -58,6 +58,7 @@ type RootNamespace struct {
 type PrefixMetadata struct {
 	NodeBase
 	Type *QualifiedName
+	Body []Node // optional body with property initializers: @Meta{prop = value;}
 }
 
 // Namespace is `namespace <id> { ... }`.
@@ -97,6 +98,7 @@ type Import struct {
 	Kind        ImportKind
 	Imported    *QualifiedName
 	IsRecursive bool // `::**`
+	FilterExpr  Node // Optional filter expression [<expr>]
 	Body        []Node
 	HasBody     bool
 }

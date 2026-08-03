@@ -234,12 +234,85 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 			expr = fc
 
 		case p.at(lexer.DotQuestion):
-			// `.?{ body }` (select).
+			// `.?{ body }` (select) or `.?{in param; expr}` (filter with lambda).
 			p.advance() // .?
-			body := p.parseBodyExpr(p.peek().Span.Offset)
-			s := &ast.SelectExpr{Operand: expr, Body: body}
-			s.NodeSpan = p.spanFrom(start)
-			expr = s
+			
+			// Lookahead: if '{' followed by direction keyword (in/out), parse as lambda
+			// Otherwise parse as body expr (select)
+			if p.at(lexer.LBrace) {
+				next := p.peekN(1)
+				if next.Kind == lexer.Keyword && (next.KeywordID == "in" || next.KeywordID == "out" || next.KeywordID == "inout") {
+					// Lambda expression
+					lambdaStart := p.peek().Span.Offset
+					p.advance() // consume '{'
+					
+					// Parse parameters (simplified direction params without bodies)
+					var params []ast.Node
+					for p.at(lexer.Keyword) && (p.peek().KeywordID == "in" || p.peek().KeywordID == "out" || p.peek().KeywordID == "inout") {
+						paramStart := p.peek().Span.Offset
+						
+						// Parse direction
+						dirTok := p.advance()
+						var direction ast.FeatureDirection
+						switch dirTok.KeywordID {
+						case "in":
+							direction = ast.DirIn
+						case "out":
+							direction = ast.DirOut
+						case "inout":
+							direction = ast.DirInOut
+						}
+						
+						// Parse name
+						ident := p.parseIdentification()
+						
+						// Parse optional typing/relationships
+						rels, _ := p.parseRelationships(true)
+						
+						// Create attribute usage for lambda parameter
+						param := &ast.Usage{
+							Kind:          ast.UsageAttribute,
+							Ident:         ident,
+							Relationships: rels,
+							Direction:     direction,
+						}
+						param.NodeSpan = p.spanFrom(paramStart)
+						
+						params = append(params, param)
+						
+						// Expect semicolon between params and body
+						if !p.accept2(lexer.Semicolon) {
+							break
+						}
+					}
+					
+					// Parse body expression
+					body := p.ParseExpression()
+					
+					p.expect(lexer.RBrace, "expected '}' after lambda body")
+					
+					lambda := &ast.LambdaExpr{
+						Parameters: params,
+						Body:       body,
+					}
+					lambda.NodeSpan = p.spanFrom(lambdaStart)
+					
+					// Wrap in select expression (filter operator applied to lambda)
+					s := &ast.SelectExpr{Operand: expr, Body: lambda}
+					s.NodeSpan = p.spanFrom(start)
+					expr = s
+				} else {
+					// Regular body expr (select)
+					body := p.parseBodyExpr(p.peek().Span.Offset)
+					s := &ast.SelectExpr{Operand: expr, Body: body}
+					s.NodeSpan = p.spanFrom(start)
+					expr = s
+				}
+			} else {
+				// No brace, error
+				p.error(p.peek().Span, "expected '{' after '.?'")
+				return expr
+			}
 
 		case p.at(lexer.Hash):
 			// `#( index )` sequence index.
@@ -343,6 +416,17 @@ func (p *Parser) parseBase() ast.Node {
 	case p.at(lexer.LBrace):
 		return setBase(p.parseBodyExpr(start))
 
+	case p.at(lexer.At):
+		// Metadata selector: @MetadataType
+		// Used in filter expressions: filter @Safety;
+		p.advance() // consume '@'
+		metaType := p.parseQualifiedName()
+		fr := &ast.FeatureReference{Name: metaType}
+		fr.NodeSpan = p.spanFrom(start)
+		// Wrap in unary op to preserve @ semantics?
+		// For now, treat as feature reference to metadata type
+		return setBase(fr)
+
 	case p.atName(), p.at(lexer.Keyword):
 		// Parse qualified name or keyword-as-name
 		var qn *ast.QualifiedName
@@ -386,6 +470,25 @@ func (p *Parser) parseBase() ast.Node {
 // parseParenOrSequence parses `( )`, `( expr )`, or `( expr, expr, ... )`.
 func (p *Parser) parseParenOrSequence(start int) ast.Node {
 	p.advance() // (
+	
+	// Check for cast expression: (as Type) or (as Type[mult])
+	if p.atKeyword("as") {
+		p.advance() // consume 'as'
+		targetType := p.parseQualifiedName()
+		var mult *ast.Multiplicity
+		if p.at(lexer.LBracket) {
+			mult = p.parseMultiplicity()
+		}
+		p.expect(lexer.RParen, "expected ')' after cast type")
+		cast := &ast.CastExpr{
+			TargetType:   targetType,
+			Multiplicity: mult,
+		}
+		cast.NodeSpan = p.spanFrom(start)
+		return cast
+	}
+	
+	// Regular parenthesized expression or sequence
 	var elems []ast.Node
 	if !p.at(lexer.RParen) {
 		elems = append(elems, p.ParseExpression())
