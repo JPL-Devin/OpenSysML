@@ -164,4 +164,9 @@ type Symbol struct {
 	LeadingTrivia []ast.Trivia
 
 	DocName string // name of the document that declares this symbol (stamped after Build)
+	
+	// AliasTargetFQN is the raw qualified name text of the alias target
+	// ("alias X for Y" → "Y"), populated for cached stdlib aliases where Decl=nil.
+	// Empty for non-aliases or live-parsed aliases (which use Decl instead).
+	AliasTargetFQN string
 }

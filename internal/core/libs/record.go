@@ -10,7 +10,7 @@ import (
 
 // formatVersion is the on-disk index record format version. Bump it whenever
 // the persisted shape changes; a mismatch invalidates all cached records.
-const formatVersion = 2
+const formatVersion = 3
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.
 // It deliberately excludes the AST-backed Decl and the Scope/OwnerScope
@@ -22,6 +22,7 @@ type symRecord struct {
 	Span           source.Span
 	Supers         []string // raw target text of specializes/subsets/redefines edges
 	WildcardImports []string // for packages: FQNs of wildcard-imported packages
+	AliasTarget    string   // for aliases: raw target text of "alias X for Y"
 }
 
 // IndexRecord is the serializable snapshot of one library document's symbols.
@@ -56,6 +57,7 @@ func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord) {
 			Span:            sym.DeclSpan,
 			Supers:          supersOf(sym.Decl),
 			WildcardImports: wildcardImportsOf(sym.Decl),
+			AliasTarget:     aliasTargetOf(sym.Decl),
 		})
 		if sym.Scope != nil {
 			collectScope(sym.Scope, fqn, rec)
@@ -134,4 +136,14 @@ func wildcardImportsOf(decl ast.Node) []string {
 		out = append(out, qualifiedNameText(imp.Imported))
 	}
 	return out
+}
+
+// aliasTargetOf extracts the raw qualified-name text of an alias's target
+// ("alias X for Y" → "Y"). Returns "" for non-alias nodes.
+func aliasTargetOf(decl ast.Node) string {
+	al, ok := decl.(*ast.Alias)
+	if !ok || al.For == nil {
+		return ""
+	}
+	return qualifiedNameText(al.For)
 }

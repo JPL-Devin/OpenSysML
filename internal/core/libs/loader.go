@@ -61,6 +61,7 @@ func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
 			Kind:            s.Kind,
 			Span:            s.Span,
 			WildcardImports: s.WildcardImports,
+			AliasTarget:     s.AliasTarget,
 		}
 	}
 	return out
