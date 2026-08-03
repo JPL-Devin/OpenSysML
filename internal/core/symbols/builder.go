@@ -106,10 +106,45 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		if len(d.Body) > 0 {
 			buildMembers(child, d.Body)
 		}
+	case *ast.ResultMember:
+		// ResultMember represents calc/function result: return <expr>; or return <name>;
+		// If expression is a simple identifier/reference, create attribute usage symbol
+		// so the result can be accessed via feature chain (e.g., calc.resultName)
+		name := extractResultName(d.Expression)
+		if name != "" {
+			id := ast.Identification{Name: name}
+			child := NewScope(scope, d)
+			sym := newSymbol(id, SymbolAttributeUsage, d, vis, child, scope, trivia)
+			defineIdent(scope, id, sym)
+			scope.AddChild(child)
+		}
 	case *ast.Import, *ast.FilterMember, *ast.ErrorNode:
 		// Imports are processed during resolution; filters hold expressions;
 		// error nodes have no declaration. Nothing to register here.
 	}
+}
+
+// extractResultName attempts to extract a simple identifier name from a result expression.
+// Returns empty string if expression is complex or not a simple name reference.
+func extractResultName(expr ast.Node) string {
+	if expr == nil {
+		return ""
+	}
+	
+	// Handle FeatureReference wrapper
+	if fr, ok := expr.(*ast.FeatureReference); ok {
+		expr = fr.Name
+	}
+	
+	// Extract name from QualifiedName
+	if qn, ok := expr.(*ast.QualifiedName); ok {
+		// Only accept single-part names (simple identifiers)
+		if len(qn.Parts) == 1 {
+			return qn.Parts[0].Text
+		}
+	}
+	
+	return ""
 }
 
 // newSymbol builds a Symbol from an identification. scope is the child scope the
