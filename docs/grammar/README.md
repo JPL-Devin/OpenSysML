@@ -27,7 +27,26 @@ These grammar files serve as the **authoritative source of truth** for parser im
 
 ## License
 
-The grammar files are part of the OMG SysML v2 specification and follow the OMG licensing terms. See the pilot implementation repository for details.
+**Eclipse Public License v2.0 (EPL-2.0)**
+
+The grammar files retain their original EPL-2.0 license from the SysML v2 Pilot Implementation:
+
+```
+Copyright (c) 2018-2025 Model Driven Solutions, Inc.
+Copyright (c) 2018 IncQuery Labs Ltd.
+Copyright (c) 2019 Maplesoft (Waterloo Maple, Inc.)
+Copyright (c) 2019 Mgnite Inc.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the Eclipse Public License as published by
+the Eclipse Foundation, version 2 of the License.
+```
+
+Full license text: https://www.eclipse.org/legal/epl-2.0/
+
+**SPDX-License-Identifier:** EPL-2.0
+
+These files are vendored unmodified from the upstream repository for reference purposes only. Our Go parser implementation is independent and licensed under Apache 2.0 (see project root LICENSE).
 
 ## TODO
 
