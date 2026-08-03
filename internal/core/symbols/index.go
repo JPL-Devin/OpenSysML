@@ -39,6 +39,12 @@ func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 	SetDocName(rs, name)
 	idx.docRoots[name] = rs
 	idx.indexScope(name, rs, "")
+	
+	// Extract wildcard imports from root namespace itself
+	// (root is not a symbol, so indexScope won't process its imports)
+	if wildcards := extractWildcardImports(root); len(wildcards) > 0 {
+		idx.wildcardMeta[""] = wildcards
+	}
 }
 
 // ExpandWildcardImports performs a post-indexing pass to add re-exported symbols.
@@ -57,7 +63,7 @@ func (idx *Index) ExpandWildcardImports() {
 					childName = childName[i+2:]
 				}
 				// Add child under importing package's FQN
-				reexportFQN := pkgFQN + "::" + childName
+				reexportFQN := joinFQN(pkgFQN, childName)
 				// Don't add duplicates
 				if !idx.hasFQN(reexportFQN, child) {
 					idx.fqn[reexportFQN] = append(idx.fqn[reexportFQN], child)
@@ -123,6 +129,14 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 			fqn := joinFQN(prefix, sym.Name)
 			idx.fqn[fqn] = append(idx.fqn[fqn], sym)
 			idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: fqn, sym: sym})
+			
+			// Extract wildcard imports from packages/namespaces
+			if sym.Kind == SymbolPackage || sym.Kind == SymbolNamespace {
+				if wildcards := extractWildcardImports(sym.Decl); len(wildcards) > 0 {
+					idx.wildcardMeta[fqn] = wildcards
+				}
+			}
+			
 			if sym.Scope != nil {
 				idx.indexScope(doc, sym.Scope, fqn)
 			}
@@ -136,6 +150,56 @@ func joinFQN(prefix, name string) string {
 		return name
 	}
 	return prefix + "::" + name
+}
+
+// extractWildcardImports extracts the target names of wildcard imports from a Package, Namespace, or RootNamespace AST node.
+// Returns the raw qualified name text (e.g., "ISQBase") for each `import <name>::*` statement.
+func extractWildcardImports(decl ast.Node) []string {
+	var members []ast.Node
+	switch d := decl.(type) {
+	case *ast.Package:
+		members = d.Members
+	case *ast.Namespace:
+		members = d.Members
+	case *ast.RootNamespace:
+		members = d.Members
+	default:
+		return nil
+	}
+	
+	var out []string
+	for _, m := range members {
+		imp, ok := m.(*ast.Import)
+		if !ok || imp.Kind != ast.ImportNamespace || imp.Imported == nil {
+			continue
+		}
+		out = append(out, qualifiedNameText(imp.Imported))
+	}
+	return out
+}
+
+// qualifiedNameText renders a QualifiedName as "A::B::C".
+func qualifiedNameText(qn *ast.QualifiedName) string {
+	if qn == nil {
+		return ""
+	}
+	var parts []string
+	for _, seg := range qn.Parts {
+		parts = append(parts, seg.Text)
+	}
+	return joinQualifiedName(parts)
+}
+
+// joinQualifiedName joins parts with "::".
+func joinQualifiedName(parts []string) string {
+	result := ""
+	for i, part := range parts {
+		if i > 0 {
+			result += "::"
+		}
+		result += part
+	}
+	return result
 }
 
 // LookupQualified returns all symbols registered under the exact
