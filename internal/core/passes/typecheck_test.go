@@ -62,3 +62,17 @@ func TestTypeCheckUnresolvedTargetSkipped(t *testing.T) {
 		t.Fatalf("expected no type diagnostics (gated), got %v", diags)
 	}
 }
+
+func TestTypeCheckTypingByAliasOK(t *testing.T) {
+	src := `
+		attribute def PowerValue;
+		alias PowerAlias for PowerValue;
+		calc def Test {
+			attribute p : PowerAlias;
+		}
+	`
+	diags := typeDiags(t, src)
+	if len(diags) != 0 {
+		t.Fatalf("expected no type diagnostics for alias typing, got %v", diags)
+	}
+}

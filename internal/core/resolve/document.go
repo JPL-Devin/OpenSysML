@@ -94,6 +94,9 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	r.resolveExpr(scope, d.Value)
 	for _, end := range d.ConnectorEnds {
 		// ConnectorEnd.Target is Node (QualifiedName or Expression)
+		if end == nil || end.Target == nil {
+			continue
+		}
 		if qn, ok := end.Target.(*ast.QualifiedName); ok {
 			r.ResolveQualified(scope, qn)
 		} else {

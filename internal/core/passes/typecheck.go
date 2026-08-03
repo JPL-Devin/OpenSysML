@@ -78,7 +78,14 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 		if !ok || sym == nil {
 			continue // unresolved: name-resolution tier owns this
 		}
-		if msg := compatMessage(isDef, defKind, useKind, rel.Kind, sym.Kind); msg != "" {
+		// Resolve aliases to their underlying types for typing relationships
+		targetSym := sym
+		if rel.Kind == ast.RelTyping && sym.Kind == symbols.SymbolAlias {
+			if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
+				targetSym = resolved
+			}
+		}
+		if msg := compatMessage(isDef, defKind, useKind, rel.Kind, targetSym.Kind); msg != "" {
 			tc.diags = append(tc.diags, Diagnostic{
 				Severity: SeverityError,
 				Span:     rel.Target.Span(),
