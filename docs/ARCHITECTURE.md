@@ -2,7 +2,7 @@
 
 **Status:** Active Development  
 **Module:** `github.com/Open-MBEE/Systemica`  
-**Language:** Go 1.25+
+**Language:** Go 1.23+
 
 ## Overview
 

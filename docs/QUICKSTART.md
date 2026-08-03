@@ -473,7 +473,7 @@ Check `examples/` directory:
 
 **Import errors after build:**
 - Run `go mod tidy`
-- Verify Go version: `go version` (need 1.25+)
+- Verify Go version: `go version` (need 1.23+)
 
 **Syntax errors:**
 - SysML v2 textual notation only (no graphical/XMI)
