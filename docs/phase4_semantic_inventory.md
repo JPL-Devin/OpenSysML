@@ -23,11 +23,11 @@
 
 ## Summary
 
-**MOVE to semantics (2 decisions):**
-1. **datatype def-vs-usage inference** (defusage.go:654-664): Parser should create uniform node, semantics decides
-2. **`:>` relationship kind** (defusage.go:2998-3003): Parser should mark as `:>` relationship, semantics interprets as subsets vs specializes
+**MOVE to semantics (1 decision):**
+1. **datatype def-vs-usage inference** (defusage.go:654-664): Parser should create uniform node, semantics decides → **COMPLETED in Phase 4.2a**
 
-**KEEP in parser (8 decisions):**
+**KEEP in parser (9 decisions):**
+- **`:>` relationship kind** (defusage.go:2998-3003): Context-sensitive grammar rule, NOT semantic inference. Parser has syntactic context (Definition vs Usage AST node) to disambiguate correctly. Downstream code requires distinct RelSubsets/RelSpecializes kinds.
 - Multi-word keyword patterns (include, succession, event, perform)
 - Grammar-level exceptions (step "do" identifier)
 - Lookahead disambiguation (named succession)
@@ -37,10 +37,8 @@
 **REVIEW (1 decision):**
 - `perform X` shorthand - borderline case, keyword is syntactic but bare usage without `action` keyword might be semantic inference
 
-## Recommendation
+## Revised Recommendation
 
-Focus Phase 4.2 on the 2 clear **MOVE** cases:
-1. Datatype inference
-2. `:>` operator meaning
+Phase 4.2 complete with datatype fix. The `:>` operator interpretation is NOT a semantic decision - it's a context-sensitive grammar rule that belongs in parser. Parser correctly uses AST node type (Definition vs Usage) to disambiguate the overloaded `:>` syntax.
 
-These are unambiguous semantic decisions currently made in parser. Moving them downstream will make parser more uniform and semantics more explicit.
+**No further moves needed for Phase 4.2**. Proceed to Phase 4.3 verification.
