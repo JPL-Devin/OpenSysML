@@ -651,17 +651,10 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		return applyPrefixes(p.parseDefinition(start, defKind, mods, isAll))
 	}
 	
-	// Special handling for 'datatype' keyword: at package/namespace level without
-	// typing colon, it should default to definition (shorthand for 'attribute def')
-	// rather than usage. This matches SysML v2 stdlib conventions.
-	if kw == "datatype" {
-		// Check if next token is a colon (typing relationship) - if so, it's a usage
-		nextTok := p.peek()
-		if nextTok.Kind != lexer.Colon {
-			// No typing colon - treat as definition shorthand
-			return applyPrefixes(p.parseDefinition(start, defKind, mods, isAll))
-		}
-	}
+	// Note: 'datatype' is treated uniformly as a usage keyword by the parser.
+	// Semantic classification (def vs usage) is deferred to the symbol builder
+	// and semantics passes, which have full context (relationships, body structure).
+	// This follows Phase 4 principle: parse syntax uniformly, classify semantically.
 	
 	return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], mods, isAll))
 }
