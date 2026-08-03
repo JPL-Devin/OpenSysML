@@ -271,4 +271,44 @@ go test ./internal/core/parser/ -run TestGolden -update
 
 **Phase 2 complete:** Golden ASTs + negative tests green, round-trip explicitly deferred with rationale
 
-**Next:** Phase 3 - Unify member/body parsing (root-cause fix for the 3 allowlist failures)
+### 2026-08-03 - Phase 3 complete
+
+**Phase 3 - Unify member/body parsing:**
+- Goal: Stdlib 94/94 clean, allowlist empty
+- Fixed all 3 stdlib parse failures through incremental parser improvements
+
+**Fix 1 - Anonymous subject syntax (Requirements.sysml:112):**
+- Pattern: `subject: Type;` without explicit name in requirement bodies
+- Root cause: parseSubjectMember required identifier (behavior.go:1580)
+- Solution: Added colon lookahead to detect anonymous pattern, set name="" (behavior.go:1577-1601)
+- Commit: b4b8bf5
+
+**Fix 2 - Constraint body return members (Requirements.sysml:41):**
+- Pattern: `return result = expr { doc }` in constraint def bodies
+- Root cause: parseConstraintBody whitelist didn't include "return" keyword
+- Solution: Added "return" → parseBodyMember fallback (behavior.go:1444-1448)
+- Commit: (included in final)
+
+**Fix 3 - Parameter multiplicity ordering (States.sysml:87, Actions.sysml:195):**
+- Pattern A (States): `in name[mult]: Type :>> target` - mult BEFORE relationships
+- Pattern B (Actions): `in :>> target [mult];` - relationships BEFORE mult
+- Root cause: parseDirectionParameter parsed relationships then multiplicity (line 335)
+- Solution: Check multiplicity BOTH before AND after relationships (behavior.go:325-343)
+- Both stdlib patterns now supported
+
+**Fix 4 - Allocation body syntax (Allocations.sysml:23):**
+- Pattern: `allocation x: Type[mult] nonunique :> y { }` with modifiers after multiplicity
+- Root cause: parseTierBEnds assumed all allocations without "allocate" keyword had connector ends
+- Solution: Skip connector end parsing when at LBrace/Semicolon (defusage.go:2634)
+
+**Phase 3 exit criteria met:**
+- Stdlib conformance: **94/94 files clean** (was 91/94)
+- Allowlist: **0 entries** (was 3)
+- All 722+ tests pass
+- Golden AST suite passes
+- Negative test suite passes
+- Commit: 2c9e6ac
+
+**Key insight:** Stdlib uses multiple valid syntax variations (mult before/after relationships, anonymous typed members). Parser now supports both orderings flexibly.
+
+**Next:** Phase 4 - Syntax/Semantics separation
