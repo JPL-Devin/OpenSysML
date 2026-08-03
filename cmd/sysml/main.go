@@ -38,9 +38,7 @@ func (r *rlReader) ReadLine(prompt string) (string, error) {
 
 // CLI flags
 var (
-	loadFiles  stringSlice
-	evalExprs  stringSlice
-	quietMode  bool
+	evalExprs   stringSlice
 	showVersion bool
 )
 
@@ -57,12 +55,8 @@ func (s *stringSlice) Set(value string) error {
 }
 
 func main() {
-	flag.Var(&loadFiles, "load", "Load SysML file (can be specified multiple times)")
-	flag.Var(&loadFiles, "l", "Load SysML file (shorthand)")
-	flag.Var(&evalExprs, "eval", "Evaluate expression (can be specified multiple times)")
-	flag.Var(&evalExprs, "e", "Evaluate expression (shorthand)")
-	flag.BoolVar(&quietMode, "quiet", false, "Quiet mode: suppress prompts and decorations")
-	flag.BoolVar(&quietMode, "q", false, "Quiet mode (shorthand)")
+	flag.Var(&evalExprs, "eval", "Evaluate expression and exit (can be specified multiple times)")
+	flag.Var(&evalExprs, "e", "Evaluate expression and exit (shorthand)")
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
 	flag.Parse()
@@ -76,17 +70,38 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Non-interactive mode: execute commands and exit
-	if len(loadFiles) > 0 || len(evalExprs) > 0 {
-		if err := runNonInteractive(); err != nil {
+	// Get positional arguments (files to load)
+	args := flag.Args()
+	
+	// Non-interactive mode: files + eval expressions, execute and exit
+	if len(args) > 0 && len(evalExprs) > 0 {
+		if err := runNonInteractive(args, evalExprs); err != nil {
 			fmt.Fprintln(os.Stderr, "sysml:", err)
 			os.Exit(1)
 		}
 		return
 	}
-
-	// Interactive mode (default)
-	if err := runInteractive(); err != nil {
+	
+	// Eval-only mode: just evaluate expressions and exit
+	if len(evalExprs) > 0 {
+		if err := runNonInteractive(nil, evalExprs); err != nil {
+			fmt.Fprintln(os.Stderr, "sysml:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	
+	if len(args) == 0 {
+		// No files: interactive REPL
+		if err := runInteractive(); err != nil {
+			fmt.Fprintln(os.Stderr, "sysml:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	
+	// Files provided: load and enter interactive mode
+	if err := runInteractiveWithFiles(args); err != nil {
 		fmt.Fprintln(os.Stderr, "sysml:", err)
 		os.Exit(1)
 	}
@@ -105,6 +120,10 @@ func quoteArg(s string) string {
 }
 
 func runInteractive() error {
+	return runInteractiveWithFiles(nil)
+}
+
+func runInteractiveWithFiles(files []string) error {
 	histPath := filepath.Join(os.TempDir(), "sysml-repl.history")
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          "sysml> ",
@@ -116,59 +135,51 @@ func runInteractive() error {
 		return err
 	}
 	defer rl.Close()
-	fmt.Println("SysML v2 REPL — %help for commands, Ctrl-D to exit")
-	return repl.Loop(&rlReader{rl: rl}, os.Stdout, repl.NewSession())
-}
-
-func runNonInteractive() error {
+	
 	sess := repl.NewSession()
 	
-	// Build command sequence
-	var commands []string
-	for _, file := range loadFiles {
-		// Quote the file path to preserve spaces
-		commands = append(commands, "%load "+quoteArg(file))
-	}
-	for _, expr := range evalExprs {
-		// Quote the expression to preserve spaces
-		commands = append(commands, "%eval "+quoteArg(expr))
-	}
-	
-	// Execute commands
-	for _, cmd := range commands {
-		output, quit, err := sess.RunMeta(cmd)
+	// Load files before starting interactive loop
+	for _, file := range files {
+		output, _, err := sess.RunMeta("%load " + file)
 		if err != nil {
-			if quietMode {
-				fmt.Fprintln(os.Stderr, err)
-			} else {
-				fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			}
+			fmt.Fprintf(os.Stderr, "error loading %s: %v\n", file, err)
 			return err
 		}
-		
-		// Print output
-		if quietMode {
-			// Quiet mode: only print actual results, strip decorations
-			for _, line := range output {
-				trimmed := strings.TrimSpace(line)
-				// Skip empty lines, checkmarks, package declarations
-				if trimmed == "" || 
-				   strings.HasPrefix(trimmed, "✓") || 
-				   strings.HasPrefix(trimmed, "sysml>") ||
-				   strings.HasPrefix(trimmed, "package ") {
-					continue
-				}
-				fmt.Println(line)
-			}
-		} else {
-			// Normal mode: print everything
-			for _, line := range output {
-				fmt.Println(line)
-			}
+		// Print load results
+		for _, line := range output {
+			fmt.Println(line)
 		}
-		
-		if quit {
-			break
+	}
+	
+	fmt.Println("SysML v2 REPL — %help for commands, Ctrl-D to exit")
+	return repl.Loop(&rlReader{rl: rl}, os.Stdout, sess)
+}
+
+func runNonInteractive(files []string, exprs []string) error {
+	sess := repl.NewSession()
+	
+	// Load files first
+	for _, file := range files {
+		output, _, err := sess.RunMeta("%load " + file)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error loading %s: %v\n", file, err)
+			return err
+		}
+		// Print load results
+		for _, line := range output {
+			fmt.Println(line)
+		}
+	}
+	
+	// Then evaluate expressions
+	for _, expr := range exprs {
+		output, _, err := sess.RunMeta("%eval " + expr)
+		if err != nil {
+			return err
+		}
+		// Print evaluation results
+		for _, line := range output {
+			fmt.Println(line)
 		}
 	}
 	
