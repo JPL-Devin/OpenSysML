@@ -363,6 +363,24 @@ func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, d
 			defKind == symbols.SymbolOccurrenceDef
 	}
 	
+	// Individuals can be typed by any structural def
+	if useKind == ast.UsageIndividual {
+		return defKind == symbols.SymbolPartDef ||
+			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef ||
+			defKind == symbols.SymbolIndividualDef
+	}
+	
+	// Subject/objective are structural usages (requirement elements)
+	if useKind == ast.UsageSubject || useKind == ast.UsageObjective {
+		return defKind == symbols.SymbolPartDef ||
+			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef ||
+			defKind == symbols.SymbolIndividualDef
+	}
+	
 	return false
 }
 
