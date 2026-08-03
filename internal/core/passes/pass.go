@@ -74,6 +74,8 @@ func (c *Context) Resolver() *resolve.Resolver {
 func (c *Context) Model() *semantics.Model {
 	if c.model == nil {
 		c.model = semantics.NewModel(c.Resolver())
+		// Attach model to resolver for inheritance-aware member resolution
+		c.Resolver().SetModel(c.model)
 	}
 	return c.model
 }

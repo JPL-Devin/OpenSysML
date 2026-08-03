@@ -18,6 +18,8 @@ func (NameResolutionPass) Run(ctx *Context, name string, root *ast.RootNamespace
 	if ctx == nil || ctx.Index == nil || root == nil {
 		return nil
 	}
+	// Initialize model to enable inheritance-aware resolution
+	_ = ctx.Model()
 	r := ctx.Resolver()
 	r.ResolveDocument(name, root)
 	rd := r.Diagnostics

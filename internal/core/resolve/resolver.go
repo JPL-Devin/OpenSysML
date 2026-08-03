@@ -6,6 +6,13 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
+// MemberLookup interface abstracts semantic model for inheritance-aware member resolution.
+// Implemented by *semantics.Model.
+type MemberLookup interface {
+	// LookupMember searches for a member by name in sym's scope and inherited scopes.
+	LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool)
+}
+
 // resolution is a memoized lookup outcome.
 type resolution struct {
 	sym *symbols.Symbol

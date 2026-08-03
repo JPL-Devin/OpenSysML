@@ -23,6 +23,8 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	if rootScope == nil {
 		return nil
 	}
+	// Initialize model to enable inheritance-aware resolution
+	_ = ctx.Model()
 	tc := &typeChecker{resolver: ctx.Resolver()}
 	tc.walk(rootScope, root.Members)
 	return tc.diags

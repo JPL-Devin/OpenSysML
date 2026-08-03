@@ -7,6 +7,7 @@ import "github.com/Open-MBEE/Systemica/internal/core/ast"
 // its parent and child scopes.
 type Scope struct {
 	parent      *Scope
+	owner       *Symbol              // the symbol that owns this scope (for inheritance lookup)
 	node        ast.Node             // the owning declaration node (nil for the doc root)
 	members     map[string][]*Symbol // name key -> symbols defined under that key (in definition order)
 	memberOrder []string             // name keys in first-seen order (for deterministic enumeration)
@@ -24,6 +25,12 @@ func NewScope(parent *Scope, node ast.Node) *Scope {
 
 // Parent returns the enclosing scope, or nil for the document root.
 func (s *Scope) Parent() *Scope { return s.parent }
+
+// Owner returns the symbol that owns this scope, or nil if not set.
+func (s *Scope) Owner() *Symbol { return s.owner }
+
+// SetOwner sets the symbol that owns this scope (for inheritance lookup).
+func (s *Scope) SetOwner(sym *Symbol) { s.owner = sym }
 
 // Node returns the AST node that owns this scope, or nil for the document root.
 func (s *Scope) Node() ast.Node { return s.node }

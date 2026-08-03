@@ -109,6 +109,10 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 		OwnerScope:    owner,
 		LeadingTrivia: trivia,
 	}
+	// Set scope's owner back-reference for inheritance lookup
+	if scope != nil {
+		scope.SetOwner(sym)
+	}
 	return sym
 }
 
