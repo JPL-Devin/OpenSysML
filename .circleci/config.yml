@@ -27,12 +27,10 @@ jobs:
           command: |
             VERSION=${CIRCLE_TAG:-dev}
             COMMIT=${CIRCLE_SHA1:-unknown}
-            BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+            BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
             GO_VERSION=$(go version | awk '{print $3}')
-            LDFLAGS="-X 'main.Version=$VERSION' -X 'main.Commit=$COMMIT' -X 'main.BuildTime=$BUILD_TIME' -X 'main.GoVersion=$GO_VERSION'"
             
-            go build -v -ldflags "$LDFLAGS" -o bin/sysml ./cmd/sysml
-            go build -v -ldflags "$LDFLAGS" -o bin/sysml-lsp ./cmd/sysml-lsp
+            make build VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
       
       - run:
           name: Verify binaries
@@ -64,28 +62,43 @@ jobs:
       - run:
           name: Build release binaries
           command: |
-            # Create dist directory
-            mkdir -p dist
-            
-            # Get build metadata
             VERSION=${CIRCLE_TAG}
             COMMIT=${CIRCLE_SHA1}
-            BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+            BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
             GO_VERSION=$(go version | awk '{print $3}')
-            LDFLAGS="-X 'main.Version=$VERSION' -X 'main.Commit=$COMMIT' -X 'main.BuildTime=$BUILD_TIME' -X 'main.GoVersion=$GO_VERSION'"
             
-            # Build for multiple platforms
-            GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-linux-amd64 ./cmd/sysml
-            GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/sysml-linux-arm64 ./cmd/sysml
-            GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-darwin-amd64 ./cmd/sysml
-            GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/sysml-darwin-arm64 ./cmd/sysml
-            GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-windows-amd64.exe ./cmd/sysml
+            # Build for multiple platforms using make
+            mkdir -p dist
             
-            GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-lsp-linux-amd64 ./cmd/sysml-lsp
-            GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/sysml-lsp-linux-arm64 ./cmd/sysml-lsp
-            GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-lsp-darwin-amd64 ./cmd/sysml-lsp
-            GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/sysml-lsp-darwin-arm64 ./cmd/sysml-lsp
-            GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sysml-lsp-windows-amd64.exe ./cmd/sysml-lsp
+            GOOS=linux GOARCH=amd64 make build-sysml VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml dist/sysml-linux-amd64
+            
+            GOOS=linux GOARCH=arm64 make build-sysml VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml dist/sysml-linux-arm64
+            
+            GOOS=darwin GOARCH=amd64 make build-sysml VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml dist/sysml-darwin-amd64
+            
+            GOOS=darwin GOARCH=arm64 make build-sysml VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml dist/sysml-darwin-arm64
+            
+            GOOS=windows GOARCH=amd64 make build-sysml VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml dist/sysml-windows-amd64.exe
+            
+            GOOS=linux GOARCH=amd64 make build-lsp VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-lsp dist/sysml-lsp-linux-amd64
+            
+            GOOS=linux GOARCH=arm64 make build-lsp VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-lsp dist/sysml-lsp-linux-arm64
+            
+            GOOS=darwin GOARCH=amd64 make build-lsp VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-lsp dist/sysml-lsp-darwin-amd64
+            
+            GOOS=darwin GOARCH=arm64 make build-lsp VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-lsp dist/sysml-lsp-darwin-arm64
+            
+            GOOS=windows GOARCH=amd64 make build-lsp VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-lsp dist/sysml-lsp-windows-amd64.exe
             
             # Create tarballs
             cd dist
