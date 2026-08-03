@@ -447,6 +447,26 @@ func (p *Parser) parseActionMember() ast.Node {
 		}
 	}
 	
+	// Check for bare assignment: identifier = expr; or identifier := expr;
+	// This is shorthand for assign identifier = expr;
+	if p.at(lexer.Identifier) {
+		nextTok := p.peekN(1)
+		if nextTok.Kind == lexer.Eq || nextTok.Kind == lexer.ColonEq {
+			// Parse as assignment
+			target := p.parseQualifiedName()
+			p.advance() // consume = or :=
+			value := p.ParseExpression()
+			p.expect(lexer.Semicolon, "expected ';' after assignment")
+			
+			node := &ast.AssignmentActionNode{
+				Target: target,
+				Value:  value,
+			}
+			node.NodeSpan = p.spanFrom(start)
+			return node
+		}
+	}
+	
 	// Not a keyword — for now, return ErrorNode (Task 11 will handle edges)
 	p.error(p.peek().Span, "expected action node or edge keyword")
 	en := &ast.ErrorNode{Message: "expected action node or edge keyword"}
@@ -2091,6 +2111,29 @@ func (p *Parser) parseEntryMember(start int) ast.Node {
 		return node
 	}
 	
+	// Check for 'do' keyword followed by braced block: entry do { ... }
+	if p.atKeyword("do") {
+		p.advance() // consume 'do'
+		if p.at(lexer.LBrace) {
+			p.advance() // consume '{'
+			
+			// Parse action sequence
+			var actions []ast.Node
+			for !p.at(lexer.RBrace) && !p.atEOF() {
+				actions = append(actions, p.parseActionMember())
+			}
+			
+			p.expect(lexer.RBrace, "expected '}' after entry actions")
+			
+			node := &ast.EntryMember{
+				Actions: actions,
+			}
+			node.NodeSpan = p.spanFrom(start)
+			return node
+		}
+		// Fall through to parse action reference after 'do'
+	}
+	
 	// Pattern 2: entry actionName { ... } - action reference
 	// Parse action reference (qualified name) and optional invocation arguments
 	actionRef := p.parseQualifiedName()
@@ -2199,6 +2242,29 @@ func (p *Parser) parseExitMember(start int) ast.Node {
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
+	}
+	
+	// Check for 'do' keyword followed by braced block: exit do { ... }
+	if p.atKeyword("do") {
+		p.advance() // consume 'do'
+		if p.at(lexer.LBrace) {
+			p.advance() // consume '{'
+			
+			// Parse action sequence
+			var actions []ast.Node
+			for !p.at(lexer.RBrace) && !p.atEOF() {
+				actions = append(actions, p.parseActionMember())
+			}
+			
+			p.expect(lexer.RBrace, "expected '}' after exit actions")
+			
+			node := &ast.ExitMember{
+				Actions: actions,
+			}
+			node.NodeSpan = p.spanFrom(start)
+			return node
+		}
+		// Fall through if no brace after 'do'
 	}
 	
 	// Otherwise expect block: exit { ... }
