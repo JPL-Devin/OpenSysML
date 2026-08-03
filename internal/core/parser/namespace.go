@@ -25,7 +25,12 @@ func (p *Parser) parseNameSegment() (ast.NameSegment, bool) {
 		return ast.NameSegment{}, false
 	}
 	tok := p.advance()
-	return ast.NameSegment{Text: p.src.Text(tok.Span), Span: tok.Span}, true
+	text := p.src.Text(tok.Span)
+	// Strip quotes from unrestricted names
+	if tok.Kind == lexer.UnrestrictedName && len(text) >= 2 && text[0] == '\'' && text[len(text)-1] == '\'' {
+		text = text[1 : len(text)-1]
+	}
+	return ast.NameSegment{Text: text, Span: tok.Span}, true
 }
 
 // parseNameSegmentRelaxed consumes a name token (including keywords) and returns its segment.
@@ -35,7 +40,12 @@ func (p *Parser) parseNameSegmentRelaxed() (ast.NameSegment, bool) {
 		return ast.NameSegment{}, false
 	}
 	tok := p.advance()
-	return ast.NameSegment{Text: p.src.Text(tok.Span), Span: tok.Span}, true
+	text := p.src.Text(tok.Span)
+	// Strip quotes from unrestricted names
+	if tok.Kind == lexer.UnrestrictedName && len(text) >= 2 && text[0] == '\'' && text[len(text)-1] == '\'' {
+		text = text[1 : len(text)-1]
+	}
+	return ast.NameSegment{Text: text, Span: tok.Span}, true
 }
 
 // parseQualifiedName parses `[$::] Name (:: Name)*`. It returns nil and
