@@ -311,4 +311,138 @@ go test ./internal/core/parser/ -run TestGolden -update
 
 **Key insight:** Stdlib uses multiple valid syntax variations (mult before/after relationships, anonymous typed members). Parser now supports both orderings flexibly.
 
-**Next:** Phase 4 - Syntax/Semantics separation
+---
+
+## Phase 4 - Syntax/Semantics Separation - COMPLETE
+
+**Exit criteria:**
+- ✅ Semantic decisions inventoried
+- ✅ Semantic inference moved downstream
+- ✅ All tests pass
+- ✅ Stdlib conformance maintained
+
+**Commits:** 3eee3d4, cd5c162
+
+**Phase 4.1 - Inventory:**
+- Created `docs/phase4_semantic_inventory.md` with decision table
+- Identified 1 genuine semantic decision: datatype def-vs-usage inference
+- Classified 8 other decisions as syntactic (multi-word keywords, grammar exceptions)
+
+**Phase 4.2 - Datatype fix:**
+- Root cause: defusage.go:654-664 lookahead logic was BACKWARDS
+- Bug was dormant (stdlib only uses `datatype X specializes Y` pattern)
+- Solution: Removed broken special case - treat `datatype` uniformly as usage keyword
+- Commit: 3eee3d4
+
+**Phase 4.2 revision - `:>` reclassification:**
+- Initially flagged `:>` operator (specializes vs subsets) as semantic inference
+- Analysis: Used 2091× in stdlib, behavior depends on Definition vs Usage context
+- **Decision:** This is context-sensitive grammar, NOT semantic inference
+- Parser has syntactic context (AST node type) to disambiguate correctly
+- Downstream code requires distinct RelSubsets/RelSpecializes kinds
+- **Keep in parser** (not move to semantics)
+
+**Phase 4.3 - Verification:**
+- All 722+ tests pass
+- Stdlib: 94/94 clean
+- Golden AST suite: Pass
+- Negative tests: Pass
+
+---
+
+## Phase 5 - Grammar Traceability - COMPLETE
+
+**Exit criteria:**
+- ✅ Grammar vendored from OMG pilot
+- ✅ Production map created
+- ✅ Parser strategy ADR written
+
+**Commit:** 8bfaf0c (3912 insertions)
+
+**Phase 5.1 - Vendor grammar:**
+- Located SysML-v2-Pilot-Implementation (2026-05 release, commit 4c289b926)
+- Copied KerML.xtext (28KB) and SysML.xtext (61KB) to docs/grammar/
+- Created docs/grammar/README.md with provenance + EPL-2.0 license attribution
+
+**Phase 5.2 - Production map:**
+- Created docs/grammar/PRODUCTION_MAP.md with 50+ mappings
+- Key findings:
+  - Core structures: ✅ Faithful implementation
+  - Relationships: ✅ All operators supported
+  - Expressions: ✅ Full expression grammar
+  - Behavioral: ⚠️ State transitions approximate (acceptable)
+- Documented parser strengths and review areas
+
+**Phase 5.3 - ADR:**
+- Created docs/adr/0001-parser-strategy.md
+- Decision: Continue with hand-written recursive descent parser
+- Rationale: LSP error recovery needs, existing investment, grammar alignment, debugging
+- Alternatives rejected: ANTLR 4, Participle, Pigeon, Xtext
+- Review triggers: error recovery degrades, maintenance burden increases
+
+---
+
+## Phase 6 - Reconcile Documentation - COMPLETE
+
+**Exit criteria:**
+- ✅ Status claims updated to measured reality
+- ✅ Four-layer test contract documented
+- ✅ Contributing guidelines reference contract
+
+**Commit:** f18af39
+
+**Phase 6.1 - Status claims updated:**
+- README.md: Changed "Full OMG SysML v2 spec compliance" → "94/94 stdlib files parse clean"
+- README.md: Updated parser status "100% coverage" → "Operational (94/94 stdlib clean)"
+- README.md: Linked to conformance gate test and PRODUCTION_MAP.md
+- ARCHITECTURE.md: Same updates, added conformance gate links
+- docs/grammar/README.md: Added explicit EPL-2.0 license attribution
+
+**Phase 6.2 - Test contract documented:**
+- ARCHITECTURE.md: Added comprehensive "Parser Test Contract" section
+- Documented four layers:
+  1. Conformance gate (stdlib_conformance_test.go)
+  2. Golden AST snapshots (golden_test.go + testdata/parse/*.ast.txt)
+  3. Round-trip serialization (explicitly deferred with rationale)
+  4. Negative tests (negative_test.go - 9 malformed inputs)
+- Added "Contributing New Grammar Features" checklist
+- CONTRIBUTING.md: Referenced test contract with quick commands
+
+**Documentation now reflects measured reality:**
+- 94/94 stdlib conformance (not "100% compliance")
+- Links to verification tests (not unverifiable superlatives)
+- Clear testing contract for future grammar work
+
+---
+
+## Plan Complete - All 6 Phases Done
+
+**Summary:**
+1. ✅ Phase 1: Conformance gate (91/94 → 94/94 clean)
+2. ✅ Phase 2: Golden ASTs (9 fixtures) + negative tests (9 cases)
+3. ✅ Phase 3: Unified member parsing (fixed 4 stdlib issues)
+4. ✅ Phase 4: Removed semantic inference (datatype bug)
+5. ✅ Phase 5: Grammar traceability (vendored, mapped, ADR)
+6. ✅ Phase 6: Documentation reconciliation (measured claims, test contract)
+
+**Global acceptance criteria met:**
+- `go test ./...` green (722+ tests pass)
+- `go build ./...` clean
+- Stdlib: 94/94 clean, empty allowlist
+- Golden AST + negative suites exist and pass
+- Round-trip explicitly deferred with rationale
+- No semantic disambiguation in parser (Phase 4 resolved)
+- Grammar vendored + production map + ADR present
+- Docs reflect measured coverage
+
+**Parser robustness achieved:**
+- Conformance gate prevents regressions
+- Golden ASTs verify structure
+- Negative tests ensure graceful error handling
+- Grammar alignment documented
+- Parser strategy justified via ADR
+- Testing contract ensures future quality
+
+**Branch:** feat/parser-robustness
+**Total commits:** 8
+**Total changes:** 4000+ insertions across 20+ files
