@@ -54,7 +54,13 @@ func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 func (idx *Index) ExpandWildcardImports() {
 	// Use metadata from wildcard imports
 	for pkgFQN, targets := range idx.wildcardMeta {
-		for _, targetFQN := range targets {
+		for _, targetText := range targets {
+			// Resolve target FQN: may be absolute (ISQMechanics) or relative (Systems)
+			targetFQN := idx.resolveWildcardTarget(pkgFQN, targetText)
+			if targetFQN == "" {
+				continue // Target not found
+			}
+			
 			targetChildren := idx.LookupDirectChildren(targetFQN)
 			for _, child := range targetChildren {
 				// Extract child's primary name
@@ -80,6 +86,29 @@ func (idx *Index) ExpandWildcardImports() {
 			}
 		}
 	}
+}
+
+// resolveWildcardTarget resolves a wildcard import target name to its FQN.
+// Handles both absolute references (ISQMechanics) and relative references (Systems within SysML).
+// Returns the resolved FQN or empty string if not found.
+func (idx *Index) resolveWildcardTarget(pkgFQN, targetText string) string {
+	// Try absolute lookup first
+	candidates := idx.LookupQualified(targetText)
+	if len(candidates) == 1 {
+		return candidates[0].Name
+	}
+	
+	// Try relative to importing package
+	if pkgFQN != "" {
+		relativeFQN := pkgFQN + "::" + targetText
+		candidates = idx.LookupQualified(relativeFQN)
+		if len(candidates) == 1 {
+			return candidates[0].Name
+		}
+	}
+	
+	// Target not found or ambiguous
+	return ""
 }
 
 func (idx *Index) hasFQN(fqn string, sym *Symbol) bool {
