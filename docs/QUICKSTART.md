@@ -42,20 +42,25 @@ Download `sysml-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/
 ### Option 2: Build from Source
 
 **Prerequisites:**
-- Go 1.25 or later
+- Go 1.23 or later
 - Git
+- Make (optional but recommended)
 
 **Build:**
 ```bash
 git clone https://github.com/Open-MBEE/Systemica.git
 cd Systemica
+make build       # builds bin/sysml and bin/sysml-lsp
+# OR
 go build -o sysml ./cmd/sysml
 go build -o sysml-lsp ./cmd/sysml-lsp
 ```
 
 **Install (optional):**
 ```bash
-sudo mv sysml sysml-lsp /usr/local/bin/
+make install     # installs to $GOPATH/bin
+# OR
+sudo mv bin/sysml bin/sysml-lsp /usr/local/bin/
 ```
 
 ---

@@ -55,6 +55,17 @@ func (s *stringSlice) Set(value string) error {
 }
 
 func main() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: sysml [options] [file...]\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  sysml                     # Start interactive REPL\n")
+		fmt.Fprintf(os.Stderr, "  sysml -e \"5 + 3\"          # Evaluate and exit\n")
+		fmt.Fprintf(os.Stderr, "  sysml -e \"expr\" file.sysml # Load file, evaluate, and exit\n")
+		fmt.Fprintf(os.Stderr, "  sysml file.sysml          # Load file and start REPL\n")
+	}
+	
 	flag.Var(&evalExprs, "eval", "Evaluate expression and exit (can be specified multiple times)")
 	flag.Var(&evalExprs, "e", "Evaluate expression and exit (shorthand)")
 	flag.BoolVar(&showVersion, "version", false, "Show version information")

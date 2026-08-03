@@ -19,8 +19,8 @@ tar xzf sysml-linux-amd64.tar.gz && sudo mv sysml-linux-amd64 /usr/local/bin/sys
 
 **Or build from source:**
 ```bash
-go build -o sysml ./cmd/sysml
-./sysml
+make build
+./bin/sysml
 ```
 
 ### Try it
