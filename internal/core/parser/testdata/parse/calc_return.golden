@@ -1,0 +1,35 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="calc" abstract=false variation=false name="AdvancedCalculation"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="y" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="calc" name="inner" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Real
+              (*ast.QualifiedName))
+            (OperatorExpr operator="*"
+              (FeatureReference name="a")
+              (LiteralInteger value="2")))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="temp" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+        (Relationship kind="typing" target=Real
+          (*ast.QualifiedName))
+        (Membership visibility="default"
+          (Usage kind="enum" name="temp" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (InvocationExpr type="inner"
+              (FeatureReference name="x"))))
+        (*ast.ResultMember)))))

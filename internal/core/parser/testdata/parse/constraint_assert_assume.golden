@@ -1,0 +1,18 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="constraint" abstract=false variation=false name="SystemConstraints"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="pressure" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="temp" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (*ast.ConstraintMember)
+      (*ast.ConstraintMember)
+      (*ast.ConstraintMember)
+      (*ast.ConstraintMember)
+      (*ast.ConstraintMember)
+      (*ast.ConstraintMember)
+      (*ast.ConstraintMember))))

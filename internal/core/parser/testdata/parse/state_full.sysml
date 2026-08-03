@@ -1,0 +1,30 @@
+state def VehicleLifecycle {
+	entry action initSystem;
+	do action monitorHealth;
+	exit action shutdown;
+	
+	state Off {
+		entry action logOff;
+	}
+	
+	state Idle {
+		entry action logIdle;
+		exit action logIdleExit;
+	}
+	
+	state Active {
+		entry action startEngine;
+		do action runEngine;
+		exit action stopEngine;
+		
+		state Accelerating;
+		state Cruising;
+		state Braking;
+		
+		transition Accelerating to Cruising when stable;
+	}
+	
+	transition Off to Idle when powerOn;
+	transition Idle to Active when start;
+	transition Active to Off when shutdown;
+}

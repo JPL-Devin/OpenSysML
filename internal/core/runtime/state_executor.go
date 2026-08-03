@@ -13,6 +13,7 @@ type StateExecutor struct {
 	ctx          *Context
 	stateMachine *symbols.Symbol
 	state        ExecutionState
+	trace        *TraceRecorder // Optional trace recorder for testing
 	
 	// State machine execution state
 	currentState *ast.StateNode
@@ -331,6 +332,20 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 		e.state = StateCompleted
 	}
 	
+	// Record trace
+	if e.trace != nil {
+		fromName := ""
+		if e.currentState != nil {
+			fromName = e.currentState.Name
+		}
+		eventName := ""
+		if trans.Trigger != nil {
+			// Extract event name from trigger (simplified)
+			eventName = fmt.Sprintf("%v", trans.Trigger)
+		}
+		e.trace.RecordStateTransition(fromName, targetState.Name, eventName)
+	}
+	
 	return nil
 }
 // initialize sets current state to initial state and enters it.
@@ -413,6 +428,11 @@ func (e *StateExecutor) enterState(state *ast.StateNode) error {
 		return nil
 	}
 	
+	// Record trace
+	if e.trace != nil {
+		e.trace.RecordStateEntry(state.Name, len(state.Entry) > 0)
+	}
+	
 	// Execute entry actions
 	for _, action := range state.Entry {
 		if err := e.executeAction(action); err != nil {
@@ -427,6 +447,11 @@ func (e *StateExecutor) enterState(state *ast.StateNode) error {
 func (e *StateExecutor) exitState(state *ast.StateNode) error {
 	if state == nil {
 		return nil
+	}
+	
+	// Record trace
+	if e.trace != nil {
+		e.trace.RecordStateExit(state.Name, len(state.Exit) > 0)
 	}
 	
 	// Execute exit actions
@@ -517,6 +542,11 @@ func (e *StateExecutor) StateData() map[string]Value {
 		data[k] = v
 	}
 	return data
+}
+
+// SetTrace sets the trace recorder for this executor.
+func (e *StateExecutor) SetTrace(trace *TraceRecorder) {
+	e.trace = trace
 }
 
 // EventQueue returns the event queue (not copied - read-only access).
