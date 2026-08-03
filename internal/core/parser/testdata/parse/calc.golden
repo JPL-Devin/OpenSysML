@@ -1,0 +1,29 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="calc" abstract=false variation=false name="Distance"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="v0" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="a" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="dt" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+        (Relationship kind="typing" target=Real
+          (*ast.QualifiedName))
+        (OperatorExpr operator="+"
+          (OperatorExpr operator="*"
+            (FeatureReference name="v0")
+            (FeatureReference name="dt"))
+          (OperatorExpr operator="*"
+            (OperatorExpr operator="*"
+              (OperatorExpr operator="*"
+                (LiteralReal value="0.5")
+                (FeatureReference name="a"))
+              (FeatureReference name="dt"))
+            (FeatureReference name="dt")))))))
