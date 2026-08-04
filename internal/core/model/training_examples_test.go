@@ -10,9 +10,14 @@ import (
 )
 
 func TestTrainingExamplesSemanticErrors(t *testing.T) {
-	ws := NewWorkspace()
-
 	trainingDir := filepath.Join("..", "..", "..", "examples", "sysml-v2-training")
+	
+	// Skip if training examples not downloaded
+	if _, err := os.Stat(trainingDir); os.IsNotExist(err) {
+		t.Skip("Training examples not downloaded (run ./scripts/download-training-examples.sh)")
+	}
+	
+	ws := NewWorkspace()
 	var files []string
 
 	err := filepath.Walk(trainingDir, func(path string, info os.FileInfo, err error) error {
