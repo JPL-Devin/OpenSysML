@@ -75,8 +75,8 @@ func TestStateExecutor_Initialize(t *testing.T) {
 	}
 	
 	// Verify current state set to initial
-	if exec.currentState != initialState {
-		t.Errorf("expected current state to be initialState, got %v", exec.currentState)
+	if exec.getCurrentState() != initialState {
+		t.Errorf("expected current state to be initialState, got %v", exec.getCurrentState())
 	}
 	
 	if exec.state != StateRunning {
@@ -253,8 +253,8 @@ func TestStateExecutor_TimeEvent(t *testing.T) {
 	}
 	
 	// Current state should be stateA
-	if exec.currentState != stateA {
-		t.Errorf("expected current state stateA, got %v", exec.currentState)
+	if exec.getCurrentState() != stateA {
+		t.Errorf("expected current state stateA, got %v", exec.getCurrentState())
 	}
 	
 	// TimeEvent should be scheduled
@@ -278,8 +278,8 @@ func TestStateExecutor_TimeEvent(t *testing.T) {
 	}
 	
 	// Should transition to stateB
-	if exec.currentState != stateB {
-		t.Errorf("expected current state stateB, got %v", exec.currentState)
+	if exec.getCurrentState() != stateB {
+		t.Errorf("expected current state stateB, got %v", exec.getCurrentState())
 	}
 	
 	// Time should advance
@@ -340,8 +340,8 @@ func TestStateExecutor_ChangeEvent(t *testing.T) {
 	}
 	
 	// Should remain in stateA (condition false)
-	if exec.currentState != stateA {
-		t.Errorf("expected current state stateA, got %v", exec.currentState)
+	if exec.getCurrentState() != stateA {
+		t.Errorf("expected current state stateA, got %v", exec.getCurrentState())
 	}
 	
 	// Change x = 10 (condition true)
@@ -354,8 +354,8 @@ func TestStateExecutor_ChangeEvent(t *testing.T) {
 	}
 	
 	// Should transition to stateB
-	if exec.currentState != stateB {
-		t.Errorf("expected current state stateB after condition true, got %v", exec.currentState)
+	if exec.getCurrentState() != stateB {
+		t.Errorf("expected current state stateB after condition true, got %v", exec.getCurrentState())
 	}
 }
 
@@ -418,8 +418,8 @@ func TestStateExecutor_GuardCondition(t *testing.T) {
 	}
 	
 	// Should remain in stateA (guard blocked transition)
-	if exec.currentState != stateA {
-		t.Errorf("expected current state stateA (guard false), got %v", exec.currentState)
+	if exec.getCurrentState() != stateA {
+		t.Errorf("expected current state stateA (guard false), got %v", exec.getCurrentState())
 	}
 	
 	// Set x = 10 (guard true), schedule new event
@@ -438,8 +438,8 @@ func TestStateExecutor_GuardCondition(t *testing.T) {
 	}
 	
 	// Should transition to stateB
-	if exec.currentState != stateB {
-		t.Errorf("expected current state stateB (guard true), got %v", exec.currentState)
+	if exec.getCurrentState() != stateB {
+		t.Errorf("expected current state stateB (guard true), got %v", exec.getCurrentState())
 	}
 }
 
@@ -485,8 +485,8 @@ func TestStateExecutor_Integration_SimpleTransitions(t *testing.T) {
 	}
 	
 	// Should start in idle
-	if exec.currentState != idle {
-		t.Errorf("expected idle, got %v", exec.currentState)
+	if exec.getCurrentState() != idle {
+		t.Errorf("expected idle, got %v", exec.getCurrentState())
 	}
 	
 	// Process first event (idle → working at t=5)
@@ -495,8 +495,8 @@ func TestStateExecutor_Integration_SimpleTransitions(t *testing.T) {
 		t.Fatalf("process event 1: %v", err)
 	}
 	
-	if exec.currentState != working {
-		t.Errorf("expected working, got %v", exec.currentState)
+	if exec.getCurrentState() != working {
+		t.Errorf("expected working, got %v", exec.getCurrentState())
 	}
 	if exec.currentTime != 5.0 {
 		t.Errorf("expected time 5.0, got %f", exec.currentTime)
@@ -508,8 +508,8 @@ func TestStateExecutor_Integration_SimpleTransitions(t *testing.T) {
 		t.Fatalf("process event 2: %v", err)
 	}
 	
-	if exec.currentState != done {
-		t.Errorf("expected done, got %v", exec.currentState)
+	if exec.getCurrentState() != done {
+		t.Errorf("expected done, got %v", exec.getCurrentState())
 	}
 	if exec.currentTime != 15.0 {
 		t.Errorf("expected time 15.0, got %f", exec.currentTime)
@@ -572,8 +572,8 @@ func TestStateExecutor_Integration_TransitionEffects(t *testing.T) {
 		t.Errorf("expected incrementCounter = 42, got %v", val)
 	}
 	
-	if exec.currentState != stateB {
-		t.Errorf("expected stateB, got %v", exec.currentState)
+	if exec.getCurrentState() != stateB {
+		t.Errorf("expected stateB, got %v", exec.getCurrentState())
 	}
 }
 
@@ -771,8 +771,8 @@ func TestStateExecutor_HierarchicalEntryExit(t *testing.T) {
 	}
 	
 	// Verify final state
-	if exec.currentState != siblingState {
-		t.Errorf("expected siblingState, got %v", exec.currentState)
+	if exec.getCurrentState() != siblingState {
+		t.Errorf("expected siblingState, got %v", exec.getCurrentState())
 	}
 }
 
@@ -860,8 +860,8 @@ func TestStateExecutor_StateStackTracking(t *testing.T) {
 		t.Errorf("expected stateStack[0] = standalone, got %s", exec.stateStack[0].Name)
 	}
 	
-	if exec.currentState != standalone {
-		t.Errorf("expected currentState = standalone, got %s", exec.currentState.Name)
+	if exec.getCurrentState() != standalone {
+		t.Errorf("expected currentState = standalone, got %s", exec.getCurrentState().Name)
 	}
 }
 
@@ -985,8 +985,8 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 	}
 	
 	// Verify initial state: workflow/ready
-	if exec.currentState != ready {
-		t.Errorf("expected ready, got %s", exec.currentState.Name)
+	if exec.getCurrentState() != ready {
+		t.Errorf("expected ready, got %s", exec.getCurrentState().Name)
 	}
 	
 	if _, ok := exec.stateData["readyEntry"]; !ok {
@@ -999,8 +999,8 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 		t.Fatalf("transition 1: %v", err)
 	}
 	
-	if exec.currentState != validate {
-		t.Errorf("expected validate, got %s", exec.currentState.Name)
+	if exec.getCurrentState() != validate {
+		t.Errorf("expected validate, got %s", exec.getCurrentState().Name)
 	}
 	
 	// Should have entered processing then validate
@@ -1023,8 +1023,8 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 		t.Fatalf("transition 2: %v", err)
 	}
 	
-	if exec.currentState != execute {
-		t.Errorf("expected execute, got %s", exec.currentState.Name)
+	if exec.getCurrentState() != execute {
+		t.Errorf("expected execute, got %s", exec.getCurrentState().Name)
 	}
 	
 	if _, ok := exec.stateData["executeEntry"]; !ok {
@@ -1042,8 +1042,8 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 		t.Fatalf("transition 3: %v", err)
 	}
 	
-	if exec.currentState != done {
-		t.Errorf("expected done, got %s", exec.currentState.Name)
+	if exec.getCurrentState() != done {
+		t.Errorf("expected done, got %s", exec.getCurrentState().Name)
 	}
 	
 	// Should have exited processing
@@ -1149,8 +1149,8 @@ func TestStateExecutor_Integration_TrafficLight(t *testing.T) {
 	}
 	
 	// Should start in red
-	if exec.currentState != red {
-		t.Errorf("expected red state, got %s", exec.currentState.Name)
+	if exec.getCurrentState() != red {
+		t.Errorf("expected red state, got %s", exec.getCurrentState().Name)
 	}
 	
 	if exec.currentTime != 0.0 {
@@ -1168,8 +1168,8 @@ func TestStateExecutor_Integration_TrafficLight(t *testing.T) {
 		t.Fatalf("event 1: %v", err)
 	}
 	
-	if exec.currentState != green {
-		t.Errorf("expected green, got %s", exec.currentState.Name)
+	if exec.getCurrentState() != green {
+		t.Errorf("expected green, got %s", exec.getCurrentState().Name)
 	}
 	
 	if exec.currentTime != 30.0 {
@@ -1182,8 +1182,8 @@ func TestStateExecutor_Integration_TrafficLight(t *testing.T) {
 		t.Fatalf("event 2: %v", err)
 	}
 	
-	if exec.currentState != yellow {
-		t.Errorf("expected yellow, got %s", exec.currentState.Name)
+	if exec.getCurrentState() != yellow {
+		t.Errorf("expected yellow, got %s", exec.getCurrentState().Name)
 	}
 	
 	if exec.currentTime != 55.0 {
@@ -1196,8 +1196,8 @@ func TestStateExecutor_Integration_TrafficLight(t *testing.T) {
 		t.Fatalf("event 3: %v", err)
 	}
 	
-	if exec.currentState != off {
-		t.Errorf("expected off, got %s", exec.currentState.Name)
+	if exec.getCurrentState() != off {
+		t.Errorf("expected off, got %s", exec.getCurrentState().Name)
 	}
 	
 	if exec.currentTime != 60.0 {

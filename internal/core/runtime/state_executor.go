@@ -8,6 +8,18 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
+// StateConfiguration represents the active state configuration (simple or multi-region).
+type StateConfiguration struct {
+	// For simple states (no regions): single active state
+	simpleState *ast.StateNode
+	
+	// For composite states with regions: map of region → active state in that region
+	regionStates map[*ast.StateRegion]*ast.StateNode
+	
+	// Hierarchical parent chain (for history and LCA calculations)
+	hierarchyStack []*ast.StateNode
+}
+
 // StateExecutor executes state machines using event-driven semantics.
 type StateExecutor struct {
 	ctx          *Context
@@ -16,18 +28,21 @@ type StateExecutor struct {
 	trace        *TraceRecorder // Optional trace recorder for testing
 	
 	// State machine execution state
-	currentState *ast.StateNode
+	activeConfig *StateConfiguration  // Active state configuration (simple or multi-region)
 	currentTime  float64
 	eventQueue   *EventQueue
 	stateData    map[string]Value // State machine local variables
 	
 	// Graph structure
-	states      []*ast.StateNode
-	transitions map[*ast.StateNode][]*ast.TransitionEdge
+	states         []*ast.StateNode
+	transitions    map[*ast.StateNode][]*ast.TransitionEdge
+	compositeStates map[*ast.StateNode][]*ast.StateRegion  // States with orthogonal regions
+	regionInitials map[*ast.StateRegion]*ast.StateNode     // Initial state per region
 	
 	// Hierarchical state support
-	stateStack  []*ast.StateNode            // Active state configuration (for nested states)
-	parentState map[*ast.StateNode]*ast.StateNode // Child -> parent mapping
+	stateStack  []*ast.StateNode                        // Active state configuration (for nested states)
+	parentState map[*ast.StateNode]*ast.StateNode       // Child -> parent mapping
+	regionOwner map[*ast.StateRegion]*ast.StateNode    // Region -> parent state
 }
 
 // newStateExecutor creates a state executor.
@@ -37,15 +52,21 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 	}
 	
 	exec := &StateExecutor{
-		ctx:          ctx,
-		stateMachine: stateMachine,
-		state:        StateReady,
-		currentTime:  0.0,
-		eventQueue:   NewEventQueue(),
-		stateData:    make(map[string]Value),
-		transitions:  make(map[*ast.StateNode][]*ast.TransitionEdge),
-		stateStack:   make([]*ast.StateNode, 0),
-		parentState:  make(map[*ast.StateNode]*ast.StateNode),
+		ctx:             ctx,
+		stateMachine:    stateMachine,
+		state:           StateReady,
+		currentTime:     0.0,
+		eventQueue:      NewEventQueue(),
+		stateData:       make(map[string]Value),
+		transitions:     make(map[*ast.StateNode][]*ast.TransitionEdge),
+		compositeStates: make(map[*ast.StateNode][]*ast.StateRegion),
+		regionInitials:  make(map[*ast.StateRegion]*ast.StateNode),
+		stateStack:      make([]*ast.StateNode, 0),
+		parentState:     make(map[*ast.StateNode]*ast.StateNode),
+		regionOwner:     make(map[*ast.StateRegion]*ast.StateNode),
+		activeConfig: &StateConfiguration{
+			regionStates: make(map[*ast.StateRegion]*ast.StateNode),
+		},
 	}
 	
 	// Extract graph structure from AST
@@ -201,7 +222,11 @@ func (e *StateExecutor) findStateByName(qname *ast.QualifiedName) *ast.StateNode
 
 // scheduleTransitionEvents schedules TimeEvents for outgoing transitions from current state.
 func (e *StateExecutor) scheduleTransitionEvents() error {
-	transitions := e.transitions[e.currentState]
+	currentState := e.getCurrentState()
+	if currentState == nil {
+		return nil // Multi-region state, skip for now (would need per-region scheduling)
+	}
+	transitions := e.transitions[currentState]
 	
 	for _, trans := range transitions {
 		if timeEvent, ok := trans.Trigger.(*ast.TimeEvent); ok {
@@ -298,9 +323,10 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 	}
 	
 	// Exit current state hierarchy up to LCA
-	lca := e.getLCA(e.currentState, targetState)
+	currentState := e.getCurrentState()
+	lca := e.getLCA(currentState, targetState)
 	statesToExit := make([]*ast.StateNode, 0)
-	current := e.currentState
+	current := currentState
 	for current != nil && current != lca {
 		statesToExit = append(statesToExit, current)
 		current = e.parentState[current]
@@ -336,7 +362,7 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 	}
 	
 	// Update current state and rebuild stateStack with full active configuration
-	e.currentState = targetState
+	e.setCurrentState(targetState)
 	e.stateStack = e.getParentChain(targetState)
 	// Reverse to root→leaf order for stateStack
 	for i, j := 0, len(e.stateStack)-1; i < j; i, j = i+1, j-1 {
@@ -356,8 +382,9 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 	// Record trace
 	if e.trace != nil {
 		fromName := ""
-		if e.currentState != nil {
-			fromName = e.currentState.Name
+		currentState := e.getCurrentState()
+		if currentState != nil {
+			fromName = currentState.Name
 		}
 		eventName := ""
 		if trans.Trigger != nil {
@@ -379,7 +406,7 @@ func (e *StateExecutor) initialize() error {
 	}
 	
 	// Enter initial state hierarchy (parent to child)
-	e.currentState = initialState
+	e.setCurrentState(initialState)
 	e.state = StateRunning
 	
 	// Build stateStack with full active configuration (root → leaf)
@@ -521,7 +548,11 @@ func (e *StateExecutor) executeAction(action ast.Node) error {
 // pollChangeEvents checks ChangeEvent conditions for outgoing transitions.
 // Fires transition immediately if condition becomes true.
 func (e *StateExecutor) pollChangeEvents() error {
-	transitions := e.transitions[e.currentState]
+	currentState := e.getCurrentState()
+	if currentState == nil {
+		return nil // Multi-region state, skip for now
+	}
+	transitions := e.transitions[currentState]
 	
 	for _, trans := range transitions {
 		if changeEvent, ok := trans.Trigger.(*ast.ChangeEvent); ok {
@@ -555,7 +586,28 @@ func (e *StateExecutor) pollChangeEvents() error {
 
 // CurrentState returns the current active state node.
 func (e *StateExecutor) CurrentState() ast.Node {
-	return e.currentState
+	// For backward compatibility: return simple state if no regions active
+	if e.activeConfig.simpleState != nil {
+		return e.activeConfig.simpleState
+	}
+	// If multi-region, return nil (caller should check regions individually)
+	return nil
+}
+
+// getCurrentState returns the active simple state (nil if multi-region).
+func (e *StateExecutor) getCurrentState() *ast.StateNode {
+	return e.activeConfig.simpleState
+}
+
+// setCurrentState sets the active simple state (for non-region states).
+func (e *StateExecutor) setCurrentState(state *ast.StateNode) {
+	e.activeConfig.simpleState = state
+	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode) // Clear regions
+}
+
+// isMultiRegion checks if currently in a composite state with regions.
+func (e *StateExecutor) isMultiRegion() bool {
+	return len(e.activeConfig.regionStates) > 0
 }
 
 // StateStack returns a copy of the state stack (active configuration).
