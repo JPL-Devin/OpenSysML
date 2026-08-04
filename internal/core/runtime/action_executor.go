@@ -754,6 +754,29 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		return fmt.Errorf("expected Usage, got %T", token.Location)
 	}
 	
+	// Check for accept parameters and consume messages
+	for _, member := range usage.Members {
+		actualMember := member
+		if membership, ok := member.(*ast.Membership); ok {
+			actualMember = membership.Member
+		}
+		
+		if paramUsage, ok := actualMember.(*ast.Usage); ok && paramUsage.IsAccept {
+			// Accept action: consume message from queue
+			if len(e.messageQueue) == 0 {
+				return fmt.Errorf("accept action %s: no messages in queue", paramUsage.Ident.Name)
+			}
+			
+			// Dequeue first message (FIFO)
+			msg := e.messageQueue[0]
+			e.messageQueue = e.messageQueue[1:]
+			
+			// Bind message to parameter name in token data
+			paramName := paramUsage.Ident.Name
+			token.Data[paramName] = msg.Payload["value"]
+		}
+	}
+	
 	// Execute nested action members (assignments, send statements, expressions)
 	for _, member := range usage.Members {
 		// Unwrap Membership if present

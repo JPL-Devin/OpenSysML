@@ -1955,6 +1955,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 							{Kind: ast.RelTyping, Target: paramType},
 						},
 						Direction: ast.DirOut,
+						IsAccept:  true, // Mark as accept parameter
 					}
 					paramUsage.NodeSpan = p.spanFrom(start)
 					actionUsage.Members = append(actionUsage.Members, &ast.Membership{
