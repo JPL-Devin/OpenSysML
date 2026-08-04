@@ -43,7 +43,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 **Purpose:** Verify AST structure matches expected output
 
 - **Test:** `TestGolden` (internal/core/parser/)
-- **Fixtures:** `testdata/parse/*.sysml` (19 representative files)
+- **Fixtures:** `testdata/parse/*.sysml` (16 representative files)
 - **Goldens:** `testdata/parse/*.golden` (AST dumps)
 - **Acceptance:** Parse output matches golden file
 

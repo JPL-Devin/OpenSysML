@@ -26,7 +26,7 @@ Grammar conformance is validated through parsing **OMG's own files**:
    - Download: `./scripts/download-training-examples.sh`
    - See: `docs/TRAINING_EXAMPLES.md`
 
-3. **Golden AST Tests** - 19 fixtures with expected AST output
+3. **Golden AST Tests** - 16 fixtures with expected AST output
    - See: `internal/core/parser/testdata/parse/`
 
 4. **Negative Tests** - 16 test cases for error recovery
