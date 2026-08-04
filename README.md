@@ -93,7 +93,7 @@ Current: green (Time: 30.0s)
 
 - **Language Server** — First-class IDE support (VS Code, IntelliJ, Emacs, etc.) with live diagnostics, semantic hover, go-to-definition, intelligent completion, and workspace-wide symbol search.
 - **Interactive REPL** — Exploratory modeling environment: define models incrementally, evaluate expressions on-the-fly, instantiate parts, run calculations, inspect runtime state—like IPython/Jupyter for systems engineering.
-- **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (fork/join parallelism, decision guards, hierarchical states, TimeEvent/ChangeEvent). See [BEHAVIOR_SEMANTICS_MAP.md](docs/BEHAVIOR_SEMANTICS_MAP.md) for measured behavioral coverage.
+- **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (fork/join parallelism, decision guards, hierarchical states, TimeEvent/ChangeEvent). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured behavioral coverage.
 - **Modern Toolchain** — Dependency management (local + remote git), incremental compilation, bundled standard library, persistent semantic caches—`cargo`/`go mod` ergonomics for systems modeling.
 
 ## Goals
@@ -117,19 +117,19 @@ Current: green (Time: 30.0s)
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (19 golden ASTs, 16 negative tests) |
+| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (16 golden ASTs, 16 negative tests) |
 | Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 9/9 passing) |
-| Action execution engine (Tier 5) | ✅ Complete (26 unit tests, 18/18 conformance passing) |
-| State machine runtime (Tier 5) | ✅ Complete (15 unit tests, 18/18 conformance passing) |
+| Action execution engine (Tier 5) | ✅ Complete (26 unit tests, 20/20 conformance passing) |
+| State machine runtime (Tier 5) | ✅ Complete (15 unit tests, 20/20 conformance passing) |
 | REPL debugging commands | ✅ Complete |
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
-**Test coverage:** 890+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 19 golden ASTs, 16 negatives, 18 conformance cases, 6 robustness tests.
-**Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar alignment documented in [PRODUCTION_MAP.md](docs/grammar/PRODUCTION_MAP.md).
-**Behavioral execution:** Calc/constraint/requirement fully functional (9/9 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (18/18 conformance tests passing). See [BEHAVIOR_SEMANTICS_MAP.md](docs/BEHAVIOR_SEMANTICS_MAP.md) for measured compliance (~98% faithful implementation).
-**Training examples:** 69/100 files clean. Download from [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
+**Test coverage:** 890+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 16 golden ASTs, 16 negatives, 20 conformance cases, 6 robustness tests.
+**Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
+**Behavioral execution:** Calc/constraint/requirement fully functional (9/9 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (18/18 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
+**Training examples:** 63/100 files clean. Download from [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
 ## Architecture

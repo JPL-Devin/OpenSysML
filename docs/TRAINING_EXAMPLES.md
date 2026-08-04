@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 69/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 31/100 files have semantic errors (85 total errors)  
+**Status:** 63/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 37/100 files have semantic errors (85 total errors)  
 
 These training examples are from the official OMG pilot implementation. Download the directory above to test locally.
 
@@ -128,7 +128,7 @@ This generates error frequency analysis and per-file diagnostics.
 
 ## Conclusion
 
-**Implementation Status**: Core behavioral semantics complete (18/18 conformance tests passing).
+**Implementation Status**: Core behavioral semantics complete (20/20 conformance tests passing).
 
 **Training Example Status**: 63% clean, 85% clean after filtering pedagogical gaps. Remaining errors are primarily:
 1. Missing local declarations in pedagogical examples

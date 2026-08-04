@@ -43,7 +43,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 **Purpose:** Verify AST structure matches expected output
 
 - **Test:** `TestGolden` (internal/core/parser/)
-- **Fixtures:** `testdata/parse/*.sysml` (19 representative files)
+- **Fixtures:** `testdata/parse/*.sysml` (16 representative files)
 - **Goldens:** `testdata/parse/*.golden` (AST dumps)
 - **Acceptance:** Parse output matches golden file
 
@@ -192,7 +192,6 @@ When adding parser support for new SysML v2 constructs:
 2. ✅ Run `go test -run TestGolden -update` to generate golden
 3. ✅ Verify `TestStdlibConformance` still passes (no regressions)
 4. ✅ Add negative test case if construct has error conditions
-5. ✅ Update `docs/grammar/PRODUCTION_MAP.md` with grammar mapping
 
 ### Behavioral Features
 

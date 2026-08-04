@@ -201,8 +201,8 @@ Parse + model all behavioral bodies with unified fallback grammar:
 ### Tier 5 — Behavioral Interpreter ✅ Complete
 
 **Package:** `internal/core/runtime`  
-**Status:** Complete with 890+ tests. Conformance gate: 18/18 cases passing (calc/constraint/requirement/action/state all functional).  
-**Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [BEHAVIOR_SEMANTICS_MAP.md](BEHAVIOR_SEMANTICS_MAP.md) for detailed compliance mapping (~98% faithful implementation).
+**Status:** Complete with 890+ tests. Conformance gate: 20/20 cases passing (calc/constraint/requirement/action/state all functional).  
+**Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for detailed compliance mapping (~98% faithful implementation).
 
 **Architecture:**
 
@@ -248,12 +248,12 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - **Golden ASTs**: 19 behavioral fixtures - `internal/core/parser/testdata/parse/`
 - **Negative tests**: 16 cases - `internal/core/parser/negative_test.go`
 - **Unit tests**: 41 tests (26 action, 15 state) - `action_executor_test.go`, `state_executor_test.go`
-- **Conformance gate**: 18 cases (all passing: calc×4, constraint×3, requirement×5, action×4, state×2) - `conformance_test.go`
+- **Conformance gate**: 20 cases (all passing: calc×4, constraint×3, requirement×5, action×4, state×2) - `conformance_test.go`
 - **Golden traces**: Infrastructure ready (no .trace.golden files yet) - `trace_test.go`
 - **Robustness**: 6 failure-mode tests (deadlock, unbound params, missing features, dangling transitions, step budget) - `robustness_test.go`
 - **Coverage**: All behavioral types fully functional. Action: 14/14 features ✅. State: 13/13 features ✅. Calc: 8/8 ✅. Constraint: 5/5 ✅. Requirement: 5/5 ✅. Evaluation: 7/7 ✅.
 
-**Measured Compliance:** See [BEHAVIOR_SEMANTICS_MAP.md](BEHAVIOR_SEMANTICS_MAP.md) for semantic rule → implementation → test case mapping with status (✅ faithful / ⚠️ approximate / ❌ not yet implemented).
+**Measured Compliance:** See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for semantic rule → implementation → test case mapping with status (✅ faithful / ⚠️ approximate / ❌ not yet implemented).
 
 ### Tier 6 — Analysis & Verification Drivers ⏳ (Future)
 
@@ -451,7 +451,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
 
-**Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](../internal/core/libs/stdlib_conformance_test.go). Grammar alignment documented in [grammar/PRODUCTION_MAP.md](grammar/PRODUCTION_MAP.md). Parser strategy documented in [ADR 0001](adr/0001-parser-strategy.md).
+**Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 
 ---
 
@@ -590,7 +590,7 @@ go test -v -run TestRuntimeRobustness -timeout 60s ./internal/core/runtime
 
 ### Behavioral Semantics Map
 
-**See:** [BEHAVIOR_SEMANTICS_MAP.md](BEHAVIOR_SEMANTICS_MAP.md) for UML/KerML semantic rule → implementation → test case → status mapping.
+**See:** [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for UML/KerML semantic rule → implementation → test case → status mapping.
 
 Every behavioral feature must have:
 - Semantic rule reference (UML 2.5.1 / KerML / SysML v2)
@@ -619,7 +619,6 @@ When adding parser support for new SysML v2 constructs:
 2. ✅ Run `go test -run TestGolden -update` to generate golden
 3. ✅ Verify `TestStdlibConformance` still passes (no regressions)
 4. ✅ Add negative test case if construct has error conditions
-5. ✅ Update `docs/grammar/PRODUCTION_MAP.md` with grammar mapping
 
 ### Contributing New Behavioral Features
 
@@ -630,7 +629,7 @@ When adding execution support for behavioral constructs (actions, states, calc, 
 3. ✅ Add conformance case: `.sysml` + `.expected.json` in `internal/core/runtime/testdata/conformance/`
 4. ✅ Add golden trace case: `.trace.golden` for ordering-sensitive features (fork/join, transitions)
 5. ✅ Add robustness test for failure modes (deadlock, unbound params, missing refs)
-6. ✅ Update `docs/BEHAVIOR_SEMANTICS_MAP.md` with semantic rule → implementation → test → status
+6. ✅ Update `docs/SPEC_COMPLIANCE.md` with semantic rule → implementation → test → status
 7. ✅ Verify all tests pass: `go test ./internal/core/parser/ ./internal/core/runtime/`
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for full contribution guidelines.
