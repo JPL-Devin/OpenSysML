@@ -15,8 +15,10 @@ type ActionExecutor struct {
 	tokens      []Token
 	state       ExecutionState
 	nextTokenID int64
+	stepCount   int              // Current step number for tracing
 	breakpoints map[string]bool
 	results     map[string]Value // Accumulated results from consumed final tokens
+	trace       *TraceRecorder   // Optional trace recorder for testing
 	
 	// Graph structure
 	nodes       []ast.Node
@@ -126,6 +128,14 @@ func (e *ActionExecutor) Step() error {
 	// If no progress and tokens remain, deadlock detected
 	if !progressMade && len(e.tokens) > 0 {
 		return fmt.Errorf("deadlock detected: %d token(s) stuck, no progress made", len(e.tokens))
+	}
+	
+	// Increment step count
+	e.stepCount++
+	
+	// Record trace after step completes
+	if e.trace != nil {
+		e.trace.RecordActionStep(e.stepCount, e.tokens)
 	}
 	
 	return nil
@@ -691,6 +701,11 @@ func (e *ActionExecutor) SetBreakpoint(nodeName string) {
 // ClearBreakpoints removes all breakpoints.
 func (e *ActionExecutor) ClearBreakpoints() {
 	e.breakpoints = make(map[string]bool)
+}
+
+// SetTrace sets the trace recorder for this executor.
+func (e *ActionExecutor) SetTrace(trace *TraceRecorder) {
+	e.trace = trace
 }
 
 // ActionSymbol returns the action being executed.

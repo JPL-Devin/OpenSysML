@@ -83,14 +83,71 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		buildMembers(child, d.Members)
 	case *ast.Usage:
 		child := NewScope(scope, d)
-		sym := newSymbol(d.Ident, usageSymbolKind(d.Kind), d, vis, child, scope, trivia)
+		// Phase 4: Parser treats 'datatype' uniformly as usage. Builder classifies based on context.
+		// If usage is attribute kind with specializes/subsets but no typing, treat as definition.
+		kind := classifyUsage(d)
+		sym := newSymbol(d.Ident, kind, d, vis, child, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
+	case *ast.SubstateMember:
+		// SubstateMember represents simple state declaration: state <name>;
+		// Create a state usage symbol for it
+		id := ast.Identification{Name: d.Name}
+		child := NewScope(scope, d)
+		sym := newSymbol(id, SymbolStateUsage, d, vis, child, scope, trivia)
+		defineIdent(scope, id, sym)
+		scope.AddChild(child)
+	case *ast.SubjectMember:
+		// SubjectMember represents requirement subject: subject <name> : <Type>;
+		// Create a part usage symbol (subject is structural usage like part)
+		id := ast.Identification{Name: d.Name}
+		child := NewScope(scope, d)
+		sym := newSymbol(id, SymbolPartUsage, d, vis, child, scope, trivia)
+		defineIdent(scope, id, sym)
+		scope.AddChild(child)
+		if len(d.Body) > 0 {
+			buildMembers(child, d.Body)
+		}
+	case *ast.ResultMember:
+		// ResultMember represents calc/function result: return <expr>; or return <name>;
+		// If expression is a simple identifier/reference, create attribute usage symbol
+		// so the result can be accessed via feature chain (e.g., calc.resultName)
+		name := extractResultName(d.Expression)
+		if name != "" {
+			id := ast.Identification{Name: name}
+			child := NewScope(scope, d)
+			sym := newSymbol(id, SymbolAttributeUsage, d, vis, child, scope, trivia)
+			defineIdent(scope, id, sym)
+			scope.AddChild(child)
+		}
 	case *ast.Import, *ast.FilterMember, *ast.ErrorNode:
 		// Imports are processed during resolution; filters hold expressions;
 		// error nodes have no declaration. Nothing to register here.
 	}
+}
+
+// extractResultName attempts to extract a simple identifier name from a result expression.
+// Returns empty string if expression is complex or not a simple name reference.
+func extractResultName(expr ast.Node) string {
+	if expr == nil {
+		return ""
+	}
+	
+	// Handle FeatureReference wrapper
+	if fr, ok := expr.(*ast.FeatureReference); ok {
+		expr = fr.Name
+	}
+	
+	// Extract name from QualifiedName
+	if qn, ok := expr.(*ast.QualifiedName); ok {
+		// Only accept single-part names (simple identifiers)
+		if len(qn.Parts) == 1 {
+			return qn.Parts[0].Text
+		}
+	}
+	
+	return ""
 }
 
 // newSymbol builds a Symbol from an identification. scope is the child scope the
@@ -148,6 +205,8 @@ func definitionSymbolKind(k ast.DefinitionKind) SymbolKind {
 		return SymbolIndividualDef
 	case ast.DefMetadata:
 		return SymbolMetadataDef
+	case ast.DefMetaclass:
+		return SymbolMetaclass
 	case ast.DefEnumeration:
 		return SymbolEnumerationDef
 	case ast.DefView:
@@ -244,7 +303,54 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 		return SymbolVerificationCaseUsage
 	case ast.UsageUseCase:
 		return SymbolUseCaseUsage
+	case ast.UsageSubject:
+		// Subject is a requirement parameter - treat as part usage for structural purposes
+		return SymbolPartUsage
+	case ast.UsageObjective:
+		// Objective is a requirement parameter - treat as part usage for structural purposes
+		return SymbolPartUsage
 	default:
 		return SymbolUnknown
 	}
+}
+
+// classifyUsage determines the correct symbol kind for a usage AST node.
+// Per Phase 4: Parser treats some keywords (like 'datatype') uniformly as usage.
+// Builder classifies based on semantic context (relationships, body structure).
+//
+// Classification rules:
+// - Attribute usage with specializes (but NO typing/subsets) → AttributeDef
+// - Attribute usage with typing or subsets/redefines → AttributeUsage
+// - All other usages → use usageSymbolKind directly
+func classifyUsage(u *ast.Usage) SymbolKind {
+	// Only classify attribute usages (datatype, attribute, feature keywords)
+	if u.Kind != ast.UsageAttribute {
+		return usageSymbolKind(u.Kind)
+	}
+	
+	// Check relationships to determine if this is def-like or usage-like
+	hasTyping := false
+	hasSpecializes := false
+	hasSubsetsOrRedefines := false
+	
+	for _, rel := range u.Relationships {
+		switch rel.Kind {
+		case ast.RelTyping:
+			hasTyping = true
+		case ast.RelSpecializes:
+			hasSpecializes = true
+		case ast.RelSubsets, ast.RelRedefines:
+			hasSubsetsOrRedefines = true
+		}
+	}
+	
+	// Attribute usage with ONLY specializes (no typing/subsets) → classify as definition
+	// Pattern: datatype Real specializes Complex;
+	// NOT: datatype MyReal :>> Real; (this has subsets, stays as usage)
+	if hasSpecializes && !hasTyping && !hasSubsetsOrRedefines {
+		return SymbolAttributeDef
+	}
+	
+	// Default: treat as usage
+	return SymbolAttributeUsage
 }

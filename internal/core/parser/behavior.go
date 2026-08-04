@@ -398,9 +398,14 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 	return membership
 }
 
-// parseActionMember parses one action member: node or edge.
+// parseActionMember parses one action member: node, edge, or nested declaration.
 func (p *Parser) parseActionMember() ast.Node {
 	start := p.peek().Span.Offset
+	
+	// Try general declaration first (nested actions, features, etc.)
+	if node := p.tryParseDeclaration(); node != nil {
+		return node
+	}
 	
 	// Handle doc keyword specially (parseDocumentation consumes it)
 	if p.atKeyword("doc") {
@@ -444,7 +449,8 @@ func (p *Parser) parseActionMember() ast.Node {
 		case "terminate":
 			return p.parseTerminateStatement(tok)
 		default:
-			// Unknown keyword, return ErrorNode
+			// Unknown keyword - try as general body member
+			// Restore checkpoint since we consumed keyword
 			p.error(tok.Span, "unknown action keyword: "+kw)
 			en := &ast.ErrorNode{Message: "unknown action keyword: " + kw}
 			en.NodeSpan = p.spanFrom(start)
@@ -472,11 +478,16 @@ func (p *Parser) parseActionMember() ast.Node {
 		}
 	}
 	
-	// Not a keyword — for now, return ErrorNode (Task 11 will handle edges)
-	p.error(p.peek().Span, "expected action node or edge keyword")
-	en := &ast.ErrorNode{Message: "expected action node or edge keyword"}
+	// Graceful fallback: try parseBodyMember for remaining constructs
+	if node := p.parseBodyMember(); node != nil {
+		return node
+	}
+	
+	// Last resort: report error but don't crash
+	p.error(p.peek().Span, "expected action member")
+	en := &ast.ErrorNode{Message: "expected action member"}
 	if !p.atEOF() && !p.at(lexer.RBrace) {
-		p.advance() // ensure progress (consume even semicolons to prevent infinite loop)
+		p.advance() // ensure progress
 	}
 	en.NodeSpan = p.spanFrom(start)
 	return en
@@ -1530,35 +1541,74 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 func (p *Parser) parseRequirementMember() ast.Node {
 	start := p.peek().Span.Offset
 	
-	// Check for doc keyword
-	if p.atKeyword("doc") {
-		return p.parseDocumentation(start)
-	}
-	
-	// Check for requirement-specific keyword dispatch
+	// Check for requirement-specific keywords FIRST (before tryParseDeclaration)
+	// These keywords have special meaning in requirement context that differs from general usage
 	if p.acceptKeyword("subject") {
 		return p.parseSubjectMember(start)
-	} else if p.acceptKeyword("assume") {
+	}
+	if p.acceptKeyword("assume") {
 		return p.parseAssumeMember(start)
-	} else if p.acceptKeyword("require") {
+	}
+	if p.acceptKeyword("require") {
 		return p.parseRequireMember(start)
-	} else if p.acceptKeyword("actor") {
+	}
+	if p.acceptKeyword("actor") {
 		return p.parseActorMember(start)
 	}
 	
-	// Check for general body members (nested requirements, features, etc.)
-	if p.atDefUsageStart() {
-		return p.parseBodyMember()
+	// Try general declaration (nested requirements, features, etc.)
+	if node := p.tryParseDeclaration(); node != nil {
+		// Validate that tryParseDeclaration didn't just accept garbage
+		// Example: "require ;" gets parsed as anonymous constraint usage by tryParseDeclaration
+		if usage, ok := node.(*ast.Usage); ok {
+			hasName := usage.Ident.Name != ""
+			hasType := len(usage.Relationships) > 0
+			if hasType && usage.Relationships[0].Kind != ast.RelTyping {
+				hasType = false
+			}
+			hasValue := usage.Value != nil
+			hasMembers := len(usage.Members) > 0
+			
+			// Anonymous usage with nothing meaningful - likely a keyword we should handle specially
+			if !hasName && !hasType && !hasValue && !hasMembers {
+				// Don't accept this, fall through to fallback below
+			} else {
+				return node // Valid declaration, use it
+			}
+		} else {
+			return node // Non-usage node, trust it
+		}
 	}
 	
-	// Unknown member type
-	p.error(p.peek().Span, "expected 'subject', 'assume', 'require', 'actor', or definition/usage keyword in requirement body")
-	en := &ast.ErrorNode{Message: "expected requirement member keyword"}
-	if !p.atEOF() && !p.at(lexer.RBrace) {
-		p.advance() // ensure progress
+	// Graceful fallback: parse as general body member (expression, statement, etc.)
+	// This handles any legal construct we haven't explicitly enumerated
+	node := p.parseBodyMember()
+	
+	// Validate fallback didn't just accept garbage
+	// If we got an ErrorNode, the parser already diagnosed it
+	if _, isError := node.(*ast.ErrorNode); isError {
+		return node
 	}
-	en.NodeSpan = p.spanFrom(start)
-	return en
+	
+	// If fallback produced something suspicious, diagnose it
+	// Example: anonymous usage with no relationships (like bare "require ;")
+	if usage, ok := node.(*ast.Usage); ok {
+		hasName := usage.Ident.Name != ""
+		hasType := len(usage.Relationships) > 0
+		if hasType && usage.Relationships[0].Kind != ast.RelTyping {
+			hasType = false // Only count typing relationships
+		}
+		hasValue := usage.Value != nil
+		hasMembers := len(usage.Members) > 0
+		
+		// An anonymous usage with no type, no value, no members is likely garbage
+		if !hasName && !hasType && !hasValue && !hasMembers {
+			p.error(node.Span(), "expected 'subject', 'assume', 'require', 'actor', or a valid body member")
+			return &ast.ErrorNode{Message: "unexpected requirement member"}
+		}
+	}
+	
+	return node
 }
 
 // parseSubjectMember parses: subject <name> : <Type>; OR subject = <expr>;
@@ -1856,9 +1906,11 @@ func (p *Parser) parseStateMember() ast.Node {
 			return p.parseExitMember(start)
 		case "state":
 			// Check if this is a simple declaration (state name;) or full usage (state name { ... })
-			// Lookahead: state followed by identifier and semicolon → SubstateMember
+			// Lookahead: state followed by name/keyword and semicolon → SubstateMember
 			// Otherwise → full state usage declaration
-			if p.peekN(1).Kind == lexer.Identifier && p.peekN(2).Kind == lexer.Semicolon {
+			nextTok := p.peekN(1)
+			isNameOrKeyword := nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.Keyword
+			if isNameOrKeyword && p.peekN(2).Kind == lexer.Semicolon {
 				p.advance()
 				return p.parseSubstateMember(start)
 			}
@@ -1914,8 +1966,8 @@ func (p *Parser) parseSuccessionStatement(start int) ast.Node {
 		p.advance()
 	}
 	
-	// Parse first state reference
-	firstState := p.parseQualifiedName()
+	// Parse first state reference (use relaxed parsing to allow keywords like 'off' as names)
+	firstState := p.parseQualifiedNameRelaxed()
 	
 	// Expect 'then' keyword
 	if !p.acceptKeyword("then") {
@@ -1925,8 +1977,8 @@ func (p *Parser) parseSuccessionStatement(start int) ast.Node {
 		return en
 	}
 	
-	// Parse second state reference
-	secondState := p.parseQualifiedName()
+	// Parse second state reference (use relaxed parsing to allow keywords like 'on' as names)
+	secondState := p.parseQualifiedNameRelaxed()
 	
 	// Expect semicolon
 	p.expect(lexer.Semicolon, "expected ';' after succession statement")
@@ -2310,9 +2362,9 @@ func (p *Parser) parseExitMember(start int) ast.Node {
 func (p *Parser) parseSubstateMember(start int) ast.Node {
 	// 'state' already consumed
 	
-	// Expect identifier
-	if !p.at(lexer.Identifier) {
-		p.error(p.peek().Span, "expected identifier after 'state'")
+	// Expect identifier or keyword (for state names like 'off', 'on', 'normal')
+	if !p.atNameOrKeyword() {
+		p.error(p.peek().Span, "expected identifier or keyword after 'state'")
 		en := &ast.ErrorNode{Message: "expected identifier after 'state'"}
 		if !p.atEOF() && !p.at(lexer.RBrace) {
 			p.advance()

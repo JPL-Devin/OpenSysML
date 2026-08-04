@@ -5,5 +5,4 @@
       (*ast.DoMember)
       (*ast.ExitMember)
       (*ast.SubstateMember)
-      (Membership visibility="default"
-        (Usage kind="state" name="on" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))))
+      (*ast.SubstateMember))))

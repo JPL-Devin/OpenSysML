@@ -39,6 +39,12 @@ func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 	SetDocName(rs, name)
 	idx.docRoots[name] = rs
 	idx.indexScope(name, rs, "")
+	
+	// Extract wildcard imports from root namespace itself
+	// (root is not a symbol, so indexScope won't process its imports)
+	if wildcards := extractWildcardImports(root); len(wildcards) > 0 {
+		idx.wildcardMeta[""] = wildcards
+	}
 }
 
 // ExpandWildcardImports performs a post-indexing pass to add re-exported symbols.
@@ -48,24 +54,61 @@ func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 func (idx *Index) ExpandWildcardImports() {
 	// Use metadata from wildcard imports
 	for pkgFQN, targets := range idx.wildcardMeta {
-		for _, targetFQN := range targets {
+		for _, targetText := range targets {
+			// Resolve target FQN: may be absolute (ISQMechanics) or relative (Systems)
+			targetFQN := idx.resolveWildcardTarget(pkgFQN, targetText)
+			if targetFQN == "" {
+				continue // Target not found
+			}
+			
 			targetChildren := idx.LookupDirectChildren(targetFQN)
 			for _, child := range targetChildren {
-				// Extract child's short name
+				// Extract child's primary name
 				childName := child.Name
 				if i := lastIndex(childName, "::"); i >= 0 {
 					childName = childName[i+2:]
 				}
 				// Add child under importing package's FQN
-				reexportFQN := pkgFQN + "::" + childName
+				reexportFQN := joinFQN(pkgFQN, childName)
 				// Don't add duplicates
 				if !idx.hasFQN(reexportFQN, child) {
 					idx.fqn[reexportFQN] = append(idx.fqn[reexportFQN], child)
 					// Note: not added to contributions - these are synthetic
 				}
+				
+				// Also re-export under short name if different from primary name
+				if child.ShortName != "" && child.ShortName != childName {
+					shortReexportFQN := joinFQN(pkgFQN, child.ShortName)
+					if !idx.hasFQN(shortReexportFQN, child) {
+						idx.fqn[shortReexportFQN] = append(idx.fqn[shortReexportFQN], child)
+					}
+				}
 			}
 		}
 	}
+}
+
+// resolveWildcardTarget resolves a wildcard import target name to its FQN.
+// Handles both absolute references (ISQMechanics) and relative references (Systems within SysML).
+// Returns the resolved FQN or empty string if not found.
+func (idx *Index) resolveWildcardTarget(pkgFQN, targetText string) string {
+	// Try absolute lookup first
+	candidates := idx.LookupQualified(targetText)
+	if len(candidates) == 1 {
+		return candidates[0].Name
+	}
+	
+	// Try relative to importing package
+	if pkgFQN != "" {
+		relativeFQN := pkgFQN + "::" + targetText
+		candidates = idx.LookupQualified(relativeFQN)
+		if len(candidates) == 1 {
+			return candidates[0].Name
+		}
+	}
+	
+	// Target not found or ambiguous
+	return ""
 }
 
 func (idx *Index) hasFQN(fqn string, sym *Symbol) bool {
@@ -120,9 +163,31 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 				continue // symbol registered under both short and primary key
 			}
 			seen[sym] = true
+			
+			// Index under primary FQN
 			fqn := joinFQN(prefix, sym.Name)
 			idx.fqn[fqn] = append(idx.fqn[fqn], sym)
 			idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: fqn, sym: sym})
+			
+			// Also index under short name FQN if different
+			// Try cached shortName first (for stdlib), fallback to extracting from Decl
+			shortName := sym.ShortName
+			if shortName == "" {
+				shortName = shortNameOf(sym.Decl)
+			}
+			if shortName != "" && shortName != sym.Name {
+				shortFQN := joinFQN(prefix, shortName)
+				idx.fqn[shortFQN] = append(idx.fqn[shortFQN], sym)
+				idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: shortFQN, sym: sym})
+			}
+			
+			// Extract wildcard imports from packages/namespaces
+			if sym.Kind == SymbolPackage || sym.Kind == SymbolNamespace {
+				if wildcards := extractWildcardImports(sym.Decl); len(wildcards) > 0 {
+					idx.wildcardMeta[fqn] = wildcards
+				}
+			}
+			
 			if sym.Scope != nil {
 				idx.indexScope(doc, sym.Scope, fqn)
 			}
@@ -136,6 +201,75 @@ func joinFQN(prefix, name string) string {
 		return name
 	}
 	return prefix + "::" + name
+}
+
+// extractWildcardImports extracts the target names of wildcard imports from a Package, Namespace, or RootNamespace AST node.
+// Returns the raw qualified name text (e.g., "ISQBase") for each `import <name>::*` statement.
+func extractWildcardImports(decl ast.Node) []string {
+	var members []ast.Node
+	switch d := decl.(type) {
+	case *ast.Package:
+		members = d.Members
+	case *ast.Namespace:
+		members = d.Members
+	case *ast.RootNamespace:
+		members = d.Members
+	default:
+		return nil
+	}
+	
+	var out []string
+	for _, m := range members {
+		imp, ok := m.(*ast.Import)
+		if !ok || imp.Kind != ast.ImportNamespace || imp.Imported == nil {
+			continue
+		}
+		out = append(out, qualifiedNameText(imp.Imported))
+	}
+	return out
+}
+
+// qualifiedNameText renders a QualifiedName as "A::B::C".
+func qualifiedNameText(qn *ast.QualifiedName) string {
+	if qn == nil {
+		return ""
+	}
+	var parts []string
+	for _, seg := range qn.Parts {
+		parts = append(parts, seg.Text)
+	}
+	return joinQualifiedName(parts)
+}
+
+// joinQualifiedName joins parts with "::".
+func joinQualifiedName(parts []string) string {
+	result := ""
+	for i, part := range parts {
+		if i > 0 {
+			result += "::"
+		}
+		result += part
+	}
+	return result
+}
+
+// shortNameOf extracts the short name from a declaration's Identification.
+// Returns "" if the node has no Identification or no short name.
+func shortNameOf(decl ast.Node) string {
+	switch d := decl.(type) {
+	case *ast.Package:
+		return d.Ident.ShortName
+	case *ast.Namespace:
+		return d.Ident.ShortName
+	case *ast.Definition:
+		return d.Ident.ShortName
+	case *ast.Usage:
+		return d.Ident.ShortName
+	case *ast.Alias:
+		return d.Ident.ShortName
+	default:
+		return ""
+	}
 }
 
 // LookupQualified returns all symbols registered under the exact

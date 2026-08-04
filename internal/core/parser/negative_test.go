@@ -22,6 +22,14 @@ func TestNegative(t *testing.T) {
 		{"incomplete_connection", "connector c connect a"},
 		{"unterminated_string", `part p { doc /* comment `},
 		{"double_colon_only", "attribute ::x;"},
+		
+		// Behavioral negatives (Phase B1.2)
+		{"state_entry_no_keyword", "state s { entry }"},
+		{"action_dangling_fork", "action a { fork }"},
+		{"transition_then_only", "transition first then"},
+		{"requirement_empty_require", "requirement r { require }"},
+		{"calc_empty_return", "calc c { return }"},
+		{"constraint_incomplete", "constraint c { assert }"},
 	}
 
 	for _, tt := range tests {

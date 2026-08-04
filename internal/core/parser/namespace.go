@@ -1,6 +1,7 @@
 package parser
 
 import (
+	
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -227,6 +228,30 @@ func (p *Parser) parseMember() ast.Node {
 	m.NodeSpan = p.spanFrom(start)
 	m.SetLeadingTrivia(trivia)
 	return m
+}
+
+// tryParseDeclaration attempts to parse a declaration without committing.
+// Returns the parsed node if successful, nil if current position doesn't start a declaration.
+// Uses backtracking to avoid consuming tokens on failure.
+func (p *Parser) tryParseDeclaration() ast.Node {
+	start := p.peek().Span.Offset
+	cp := p.checkpoint()
+	
+	node := p.parseDeclaration(start)
+	
+	// Check if parse succeeded (node returned, not ErrorNode, position advanced)
+	if node == nil {
+		p.restore(cp)
+		return nil
+	}
+	
+	if _, isError := node.(*ast.ErrorNode); isError {
+		p.restore(cp)
+		return nil
+	}
+	
+	// Success: keep the parsed node
+	return node
 }
 
 // parseDeclaration dispatches on the leading keyword to a declaration parser.

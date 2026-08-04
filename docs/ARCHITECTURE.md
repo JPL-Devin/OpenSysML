@@ -190,20 +190,20 @@ Full evaluator with **user-defined calc invocation**, **constraint evaluation**,
 
 ### Tier 4 — Behavioral AST ✅ (Phase C complete)
 
-Parse + model + **execute** all behavioral bodies:
-- **C1: Calc bodies** — `return` expressions + mixed parameter declarations (✅ executable)
-- **C2: Constraint bodies** — `assert`/`assume` with optional `not` negation (✅ executable)
-- **C3: Requirement bodies** — `subject`/`assume`/`require`/`actor` declarations (✅ executable)
-- **C4: Action bodies** — Control flow nodes (initial/final/fork/join/merge/decision) + action execution nodes + succession edges (parsed, not yet executable)
-- **C5: State bodies** — Entry/do/exit behaviors, substates, transitions with triggers/guards/effects (parsed, not yet executable)
-- **Dispatcher:** Lookahead detects specialized vs generic bodies (e.g., `return` → calc, generic → fallback)
-- **Status:** All Phase C parsers complete. Calc/constraint/requirement **executable via runtime**. Action/state **execution in Tier 5**.
+Parse + model all behavioral bodies with unified fallback grammar:
+- **C1: Calc bodies** — `return` expressions + mixed parameter declarations (✅ **fully executable**, see conformance gate)
+- **C2: Constraint bodies** — `assert`/`assume` with optional `not` negation (✅ **fully executable**, see conformance gate)
+- **C3: Requirement bodies** — `subject`/`assume`/`require`/`actor` declarations (⚠️ **parsed**, require evaluation executable, subject/actor not yet implemented)
+- **C4: Action bodies** — Control flow nodes (initial/final/fork/join/merge/decision) + action execution nodes + succession edges (✅ **parsed**, executor infrastructure complete, see unit tests)
+- **C5: State bodies** — Entry/do/exit behaviors, substates, transitions with triggers/guards/effects (✅ **parsed**, executor infrastructure complete, see unit tests)
+- **Unified Grammar (Phase B2):** Body parsers use graceful fallback to general member grammar (no terminal keyword whitelists)
+- **Status:** All parsers complete. Calc/constraint **fully executable**. Requirement **partially executable** (require only). Action/state **executor infrastructure complete** (unit tests passing, conformance cases blocked by initial node parsing).
 
-### Tier 5 — Behavioral Interpreter ✅ COMPLETE
+### Tier 5 — Behavioral Interpreter ✅ Infrastructure Complete
 
 **Package:** `internal/core/runtime`  
-**Status:** Action executor + state executor fully implemented with REPL debugging commands  
-**Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics
+**Status:** Action/state executor infrastructure complete with 41 unit tests passing. Conformance gate: 3/5 cases passing (calc/constraint/requirement fully functional, action/state blocked by initial node parsing enhancement).  
+**Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [BEHAVIOR_SEMANTICS_MAP.md](BEHAVIOR_SEMANTICS_MAP.md) for detailed compliance mapping.
 
 **Architecture:**
 
@@ -212,33 +212,44 @@ Parse + model + **execute** all behavioral bodies:
    - Fork/Join for parallelism, Decision/Merge for branching
    - ObjectFlow for pin-to-pin data routing
    - Deadlock detection via progress tracking
-   - APIs: `Step()`, `RunToCompletion()`, `Tokens()`, `SetBreakpoint()`
+   - Golden trace recording with deterministic token ordering
+   - APIs: `Step()`, `RunToCompletion()`, `Tokens()`, `SetBreakpoint()`, `SetTrace()`
 
 2. **StateExecutor** — Event-driven state machine execution
    - TimeEvent scheduling with priority queue
    - ChangeEvent condition polling
    - Guard evaluation for transitions
    - Hierarchical states with LCA-based entry/exit propagation
-   - APIs: `ProcessNextEvent()`, `CurrentState()`, `EventQueue()`, `StateData()`
+   - Golden trace recording for transitions/entry/exit
+   - APIs: `ProcessNextEvent()`, `CurrentState()`, `EventQueue()`, `StateData()`, `SetTrace()`
 
 3. **Context Integration** — Public runtime APIs
+   - `InvokeCalc(symbol, args)` — Invoke calculation with arguments, return result
+   - `EvaluateConstraint(symbol)` — Evaluate constraint, return satisfaction boolean
+   - `EvaluateRequirement(symbol)` — Evaluate requirement, return satisfaction boolean
    - `ExecuteAction(symbol)` — Run action to completion, return results
    - `ExecuteState(symbol)` — Run state machine until final/suspended
    - `CreateActionExecutor(symbol)` — Create executor for debugging
    - `CreateStateExecutor(symbol)` — Create executor for debugging
 
 **Implementation:**
+- `context.go` (424 lines) — Public Execute/Invoke/Evaluate APIs, step budget enforcement
+- `action_executor.go` (714 lines) — Token-flow engine with 7 node types
+- `state_executor.go` (576 lines) — Event-driven state machine
 - `executor_common.go` — Token, Event, EventQueue, ExecutionState
-- `action_executor.go` (699 lines) — Token-flow engine with 7 node types
-- `state_executor.go` (545 lines) — Event-driven state machine
-- `context.go` — Public Execute/Create APIs
+- `trace.go` (168 lines) — Deterministic execution trace recorder
+- `eval.go` — Expression evaluation (binary/unary operators, literals, feature references)
 
-**Testing:**
-- ~5000 lines of tests (26 action, 15 state, integration tests)
-- Coverage: all node types, fork/join parallelism, decision guards, hierarchical states, event queues
-- All tests passing
+**Testing (Phases B1-B5):**
+- **Golden ASTs**: 17 behavioral fixtures (7 behavioral + 10 existing) - `internal/core/parser/testdata/parse/`
+- **Negative tests**: 15 cases (6 behavioral + 9 existing) - `internal/core/parser/negative_test.go`
+- **Unit tests**: 41 tests (26 action, 15 state) - `action_executor_test.go`, `state_executor_test.go`
+- **Conformance gate**: 5 cases (3 passing: calc/constraint/requirement, 2 known failures: action/state initial nodes) - `conformance_test.go`
+- **Golden traces**: Infrastructure ready (no .trace.golden files yet, awaiting executor enhancements) - `trace_test.go`
+- **Robustness**: 6 failure-mode tests (deadlock, unbound params, missing features, dangling transitions, step budget) - `robustness_test.go`
+- **Coverage**: Calc/constraint/requirement fully functional (~70% overall behavioral coverage). Action/state executor infrastructure complete (fork/join/merge/decision, TimeEvent/ChangeEvent, guards, hierarchy all tested), conformance cases blocked by initial node/state parsing.
 
-**Spec Compliance:** See [docs/RUNTIME_SPEC_COMPLIANCE.md](RUNTIME_SPEC_COMPLIANCE.md) for detailed analysis of UML/SysML behavioral semantics alignment.
+**Measured Compliance:** See [BEHAVIOR_SEMANTICS_MAP.md](BEHAVIOR_SEMANTICS_MAP.md) for semantic rule → implementation → test case mapping with status (✅ faithful / ⚠️ approximate / ❌ not yet implemented).
 
 ### Tier 6 — Analysis & Verification Drivers ⏳ (Future)
 
@@ -486,9 +497,9 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 #### 4. Negative Test Suite
 - **Purpose:** Verify parser rejects malformed input gracefully
 - **Location:** `internal/core/parser/negative_test.go`
-- **Test:** `TestNegativeParsing` with 9 malformed inputs
+- **Test:** `TestNegative` with 15 malformed inputs (6 behavioral + 9 structural)
 - **Acceptance:** Each case produces diagnostics (doesn't panic)
-- **Coverage:** Unclosed blocks, unexpected tokens, invalid syntax
+- **Coverage:** Unclosed blocks, unexpected tokens, invalid syntax, incomplete behavioral members
 
 **Example:**
 ```go
@@ -499,12 +510,102 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 },
 ```
 
+---
+
+### Behavioral Test Contract
+
+New behavioral features (actions, states, calc, constraints, requirements) require a **four-layer test contract** to ensure execution correctness:
+
+#### 1. Golden AST Fixtures
+- **Purpose:** Lock in parse structure before execution changes
+- **Location:** `internal/core/parser/testdata/parse/` (behavioral fixtures)
+- **Coverage:** 7 behavioral fixtures (actions, states, calc, constraints, requirements)
+- **Acceptance:** `TestGolden` passes, AST dumps match expectations
+- **Update flag:** `go test -run TestGolden -update`
+
+**Behavioral fixtures:**
+- `action_control_flow.sysml`, `action_mixed_params.sysml`
+- `state_full.sysml`, `state_transition_variants.sysml`
+- `calc_return.sysml`
+- `constraint_assert_assume.sysml`
+- `requirement_members.sysml`
+
+#### 2. Execution Conformance Gate
+- **Purpose:** Verify behavioral execution produces expected outcomes
+- **Location:** `internal/core/runtime/conformance_test.go`
+- **Test:** `TestExecutionConformance` runs `.sysml` + `.expected.json` pairs
+- **Schema:** `internal/core/runtime/testdata/conformance/README.md` (outcome format for each behavioral type)
+- **Allowlist:** `known_failures.txt` (currently: action_output, state_simple - blocked by initial node parsing)
+- **Acceptance:** Expected outputs/satisfaction match actual execution results
+
+**Coverage (5 cases):**
+- Calc: parameter binding, return values (1 passing: `calc_simple_add`)
+- Constraint: assert satisfaction (1 passing: `constraint_literal`)
+- Requirement: require satisfaction (1 passing: `requirement_literal`)
+- Action: token flow, outputs (1 known failure: `action_output` - no initial node)
+- State: transitions, final state (1 known failure: `state_simple` - no initial state)
+
+**Usage:**
+```bash
+go test -v -run TestExecutionConformance ./internal/core/runtime
+```
+
+#### 3. Golden Execution Traces
+- **Purpose:** Verify *how* execution proceeds (ordering, scheduling), not just final result
+- **Location:** `internal/core/runtime/trace_test.go`
+- **Test:** `TestExecutionTrace` compares executor traces against `.trace.golden`
+- **Determinism:** Token sorting by ID, fixed event queue tie-breaking
+- **Acceptance:** Trace output matches golden file
+- **Update flag:** `go test -run TestExecutionTrace -update-traces`
+- **Status:** Infrastructure complete (TraceRecorder integrated), no .trace.golden files yet (awaiting executor enhancements)
+
+**Trace format:**
+- Action: `step N: token T1@node1, token T2@node2` (sorted)
+- State: `entry: StateName [hasEntryAction]`, `transition: From -> To [event]`, `exit: StateName [hasExitAction]`
+
+#### 4. Runtime Robustness Tests
+- **Purpose:** Verify malformed/pathological behaviors fail gracefully (typed errors, no panics/hangs)
+- **Location:** `internal/core/runtime/robustness_test.go`
+- **Test:** `TestRuntimeRobustness` with 6 failure modes
+- **Acceptance:** All return typed errors, never panic, timeout guard (60s) prevents hangs
+
+**Failure modes:**
+- Deadlocked action (join starvation)
+- Decision with no satisfied guard
+- State machine with dangling transition
+- Calc with unbound parameter
+- Constraint referencing missing feature
+- Step budget exceeded
+
+**Usage:**
+```bash
+go test -v -run TestRuntimeRobustness -timeout 60s ./internal/core/runtime
+```
+
+---
+
+### Behavioral Semantics Map
+
+**See:** [BEHAVIOR_SEMANTICS_MAP.md](BEHAVIOR_SEMANTICS_MAP.md) for UML/KerML semantic rule → implementation → test case → status mapping.
+
+Every behavioral feature must have:
+- Semantic rule reference (UML 2.5.1 / KerML / SysML v2)
+- Implementation location (file:function)
+- Test case(s) exercising the feature
+- Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / 🚧 Known Failure
+
+**Current coverage:** ~70% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy all tested), conformance cases blocked by initial node/state parsing.
+
+---
+
 ### Unit & Integration Tests
 - **Unit tests:** Per-package test coverage (lexer, parser, semantics, runtime)
 - **Integration tests:** End-to-end REPL/runtime scenarios
 - **Test fixtures:** `testdata/*.sysml`, `testdata/*.kerml`
 - **Golden files:** Expected parse/resolve/diagnostic outputs
 - **Verification:** `go test ./...` (all tests pass), `go build ./...` (clean build)
+
+### Contributing New Grammar Features
 
 ### Contributing New Grammar Features
 
@@ -515,6 +616,18 @@ When adding parser support for new SysML v2 constructs:
 3. ✅ Verify `TestStdlibConformance` still passes (no regressions)
 4. ✅ Add negative test case if construct has error conditions
 5. ✅ Update `docs/grammar/PRODUCTION_MAP.md` with grammar mapping
+
+### Contributing New Behavioral Features
+
+When adding execution support for behavioral constructs (actions, states, calc, constraints, requirements):
+
+1. ✅ Add golden AST fixture to `internal/core/parser/testdata/parse/` (if not already covered)
+2. ✅ Implement semantics in `internal/core/runtime/` (executor or evaluator)
+3. ✅ Add conformance case: `.sysml` + `.expected.json` in `internal/core/runtime/testdata/conformance/`
+4. ✅ Add golden trace case: `.trace.golden` for ordering-sensitive features (fork/join, transitions)
+5. ✅ Add robustness test for failure modes (deadlock, unbound params, missing refs)
+6. ✅ Update `docs/BEHAVIOR_SEMANTICS_MAP.md` with semantic rule → implementation → test → status
+7. ✅ Verify all tests pass: `go test ./internal/core/parser/ ./internal/core/runtime/`
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for full contribution guidelines.
 

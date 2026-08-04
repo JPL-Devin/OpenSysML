@@ -39,12 +39,12 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		switch d := unwrapType(m).(type) {
 		case *ast.Definition:
-			tc.checkRelationships(scope, d.Relationships, true, d.Kind, 0)
+			tc.checkRelationships(scope, d.Relationships, true, d.Kind, 0, ast.DirNone)
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
 		case *ast.Usage:
-			tc.checkRelationships(scope, d.Relationships, false, 0, d.Kind)
+			tc.checkRelationships(scope, d.Relationships, false, 0, d.Kind, d.Direction)
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
@@ -60,7 +60,7 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 	}
 }
 
-func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Relationship, isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind) {
+func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Relationship, isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind, direction ast.FeatureDirection) {
 	for _, rel := range rels {
 		if rel == nil || rel.Target == nil {
 			continue
@@ -78,7 +78,14 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 		if !ok || sym == nil {
 			continue // unresolved: name-resolution tier owns this
 		}
-		if msg := compatMessage(isDef, defKind, useKind, rel.Kind, sym.Kind); msg != "" {
+		// Resolve aliases to their underlying types for typing relationships
+		targetSym := sym
+		if rel.Kind == ast.RelTyping && sym.Kind == symbols.SymbolAlias {
+			if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
+				targetSym = resolved
+			}
+		}
+		if msg := compatMessage(isDef, defKind, useKind, direction, rel.Kind, targetSym.Kind); msg != "" {
 			tc.diags = append(tc.diags, Diagnostic{
 				Severity: SeverityError,
 				Span:     rel.Target.Span(),
@@ -90,7 +97,7 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 	}
 }
 
-func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind, rel ast.RelationshipKind, target symbols.SymbolKind) string {
+func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind, direction ast.FeatureDirection, rel ast.RelationshipKind, target symbols.SymbolKind) string {
 	switch rel {
 	case ast.RelSpecializes:
 		want := defSymbolKind(defKind)
@@ -104,6 +111,14 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if !isDefKind(target) {
 			return fmt.Sprintf("%s cannot specialize %s (target is not a definition)", defKind, target)
 		}
+		// Enums can specialize attribute defs (per SysML v2 spec: GradePoints :> Real)
+		if defKind == ast.DefEnumeration && target == symbols.SymbolAttributeDef {
+			return ""
+		}
+		// Metadata defs can specialize metaclasses (per SysML v2 spec: situation :> SemanticMetadata)
+		if defKind == ast.DefMetadata && target == symbols.SymbolMetaclass {
+			return ""
+		}
 		if target != want {
 			return fmt.Sprintf("%s cannot specialize %s (kind mismatch)", defKind, target)
 		}
@@ -111,8 +126,11 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if isDef {
 			return fmt.Sprintf("a definition may not %s a feature", rel)
 		}
-		if !isUsageKind(target) {
-			return fmt.Sprintf("%s target must be a usage, found %s", rel, target)
+		// Usages can subset/redefine other usages OR definitions
+		// Example: datatype MyReal :>> Real (usage redefines attributeDef)
+		// The check for isUsageKind OR isDefKind allows both patterns
+		if !isUsageKind(target) && !isDefKind(target) {
+			return fmt.Sprintf("%s target must be a usage or definition, found %s", rel, target)
 		}
 	case ast.RelTyping:
 		if isDef {
@@ -121,7 +139,7 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if !isDefKind(target) {
 			return fmt.Sprintf("type must be a definition, found %s", target)
 		}
-		if !isCompatibleTyping(useKind, target) {
+		if !isCompatibleTyping(useKind, direction, target) {
 			return fmt.Sprintf("%s cannot be typed by %s (kind mismatch)", useKind, target)
 		}
 	case ast.RelReferences, ast.RelCrosses:
@@ -252,6 +270,7 @@ var defSymbolKinds = map[symbols.SymbolKind]bool{
 	symbols.SymbolOccurrenceDef:       true,
 	symbols.SymbolIndividualDef:       true,
 	symbols.SymbolMetadataDef:         true,
+	symbols.SymbolMetaclass:           true, // KerML metaclass definitions
 	symbols.SymbolEnumerationDef:      true,
 	symbols.SymbolViewDef:             true,
 	symbols.SymbolViewpointDef:        true,
@@ -315,19 +334,67 @@ func isUsageKind(k symbols.SymbolKind) bool {
 // isCompatibleTyping checks if a usage kind can be typed by a definition kind.
 // Allows structural compatibility: part/attribute/item/occurrence can cross-type
 // since they're all structural classifiers in SysML.
-func isCompatibleTyping(useKind ast.UsageKind, defKind symbols.SymbolKind) bool {
+func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, defKind symbols.SymbolKind) bool {
 	// Exact match always allowed
 	if defKind == usageWantsDefKind(useKind) {
 		return true
 	}
 	
 	// Attributes can be typed by any structural def (for parameters, properties)
-	// This allows: in scene : Scene (attribute : itemDef)
+	// Also allow enumDef for typed enumerations
+	// This allows: in scene : Scene (attribute : itemDef), verdict : VerdictKind (attribute : enumDef)
 	if useKind == ast.UsageAttribute {
 		return defKind == symbols.SymbolPartDef ||
 			defKind == symbols.SymbolAttributeDef ||
 			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef ||
+			defKind == symbols.SymbolEnumerationDef
+	}
+	
+	// Parameters (in/out/inout) can cross-type to any structural def
+	// Also allow enumDef for typed enumerations
+	// This allows: in power : PowerValue (part : attributeDef), out verdict : VerdictKind (part : enumDef)
+	hasDirection := direction != ast.DirNone
+	if hasDirection {
+		return defKind == symbols.SymbolPartDef ||
+			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef ||
+			defKind == symbols.SymbolEnumerationDef
+	}
+	
+	// Items can be typed by any structural def (structural hierarchy)
+	if useKind == ast.UsageItem {
+		return defKind == symbols.SymbolPartDef ||
+			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
 			defKind == symbols.SymbolOccurrenceDef
+	}
+	
+	// Occurrences can be typed by any structural def
+	if useKind == ast.UsageOccurrence {
+		return defKind == symbols.SymbolPartDef ||
+			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef
+	}
+	
+	// Individuals can be typed by any structural def
+	if useKind == ast.UsageIndividual {
+		return defKind == symbols.SymbolPartDef ||
+			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef ||
+			defKind == symbols.SymbolIndividualDef
+	}
+	
+	// Subject/objective are structural usages (requirement elements)
+	if useKind == ast.UsageSubject || useKind == ast.UsageObjective {
+		return defKind == symbols.SymbolPartDef ||
+			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef ||
+			defKind == symbols.SymbolIndividualDef
 	}
 	
 	return false

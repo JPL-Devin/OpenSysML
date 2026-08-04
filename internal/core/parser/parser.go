@@ -20,6 +20,15 @@ type Parser struct {
 	hasPendingComment bool
 }
 
+// parseCheckpoint captures parser state for backtracking.
+type parseCheckpoint struct {
+	bufLen        int
+	trivLen       int
+	diagnosticLen int
+	pendingSpan   source.Span
+	hadPending    bool
+}
+
 // New creates a Parser for the given source file.
 func New(sf *source.SourceFile) *Parser {
 	return &Parser{src: sf, lx: lexer.New(sf)}
@@ -175,4 +184,25 @@ func (p *Parser) ParseFile() *ast.RootNamespace {
 	}
 	root.NodeSpan = p.spanFrom(start)
 	return root
+}
+
+// checkpoint captures current parser state for backtracking.
+func (p *Parser) checkpoint() parseCheckpoint {
+	return parseCheckpoint{
+		bufLen:        len(p.buf),
+		trivLen:       len(p.triv),
+		diagnosticLen: len(p.Diagnostics),
+		pendingSpan:   p.pendingComment,
+		hadPending:    p.hasPendingComment,
+	}
+}
+
+// restore rewinds parser to a previous checkpoint, discarding consumed tokens
+// and diagnostics. Used for try-parse patterns.
+func (p *Parser) restore(cp parseCheckpoint) {
+	p.buf = p.buf[:cp.bufLen]
+	p.triv = p.triv[:cp.trivLen]
+	p.Diagnostics = p.Diagnostics[:cp.diagnosticLen]
+	p.pendingComment = cp.pendingSpan
+	p.hasPendingComment = cp.hadPending
 }

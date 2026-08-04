@@ -1,0 +1,25 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="state" abstract=false variation=false name="VehicleLifecycle"
+      (*ast.EntryMember)
+      (*ast.DoMember)
+      (*ast.ExitMember)
+      (Membership visibility="default"
+        (Usage kind="state" name="Off" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.EntryMember)))
+      (Membership visibility="default"
+        (Usage kind="state" name="Idle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.EntryMember)
+          (*ast.ExitMember)))
+      (Membership visibility="default"
+        (Usage kind="state" name="Active" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.EntryMember)
+          (*ast.DoMember)
+          (*ast.ExitMember)
+          (*ast.SubstateMember)
+          (*ast.SubstateMember)
+          (*ast.SubstateMember)
+          (*ast.TransitionMember)))
+      (*ast.TransitionMember)
+      (*ast.TransitionMember)
+      (*ast.TransitionMember))))

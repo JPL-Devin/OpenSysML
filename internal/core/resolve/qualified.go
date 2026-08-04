@@ -31,12 +31,18 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 	// scope chain; a global ($::) name starts at the document root. When the
 	// local scope tree has no match, fall back to the global qualified-name
 	// index so top-level names declared in other documents resolve.
+	//
+	// For non-global names, use import-aware unqualified lookup so that
+	// multi-segment names like TrafficLightColor::green can resolve the first
+	// segment via wildcard imports (e.g., import Def1::*).
 	first := qn.Parts[0].Text
 	var cur *symbols.Symbol
 	if qn.Global {
 		cur = r.lookupInRoot(scope, first)
 	} else {
-		cur = r.lookupOutward(scope, first)
+		// Use import-aware lookup for first segment of multi-part names
+		res := r.walkUnqualified(scope, first)
+		cur = res.sym
 	}
 	if cur == nil {
 		sym, n := r.lookupGlobalTop(first)

@@ -94,12 +94,58 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		if !ok || target == nil {
 			continue
 		}
+		// Skip self-reference ONLY for redefines (nested feature case)
+		// Preserve self-reference for specializes/typing to detect cycles
+		if target == sym && rel.Kind == ast.RelRedefines {
+			continue
+		}
 		if seen[target] {
 			continue
 		}
 		seen[target] = true
 		out = append(out, target)
 	}
+	
+	// SubjectMember has TypeRef instead of Relationships - handle separately
+	if subj, ok := sym.Decl.(*ast.SubjectMember); ok && subj.TypeRef != nil {
+		if target, ok := m.resolver.ResolveQualified(sym.OwnerScope, subj.TypeRef); ok && target != nil {
+			if !seen[target] {
+				seen[target] = true
+				out = append(out, target)
+			}
+		}
+	}
+	
+	// Flow usages (message/flow keywords) need implicit typing from stdlib Message/Flow
+	// even when explicitly typed "of Type". This allows accessing stdlib members like
+	// sourceEvent/targetEvent in messages typed by payload item defs.
+	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind == ast.UsageFlow {
+		// Look up stdlib Message flow def directly from index (FQN: Flows::Message)
+		messageDefs := m.resolver.Index().LookupQualified("Flows::Message")
+		if len(messageDefs) > 0 && messageDefs[0] != nil {
+			messageDef := messageDefs[0]
+			if !seen[messageDef] {
+				seen[messageDef] = true
+				out = append(out, messageDef)
+			}
+		}
+	}
+	
+	// Action usages containing send statements need implicit SendAction typing
+	// to provide access to sentMessage member
+	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind == ast.UsageAction {
+		if hasSendStatement(usage) {
+			sendActionDefs := m.resolver.Index().LookupQualified("Actions::SendAction")
+			if len(sendActionDefs) > 0 && sendActionDefs[0] != nil {
+				sendActionDef := sendActionDefs[0]
+				if !seen[sendActionDef] {
+					seen[sendActionDef] = true
+					out = append(out, sendActionDef)
+				}
+			}
+		}
+	}
+	
 	m.directSupers[sym] = out
 	return out
 }
@@ -165,6 +211,16 @@ func (m *Model) HasSpecializationCycle(sym *symbols.Symbol) bool {
 			if up == sym {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// hasSendStatement checks if an action usage contains a send statement in its body
+func hasSendStatement(usage *ast.Usage) bool {
+	for _, member := range usage.Members {
+		if _, ok := member.(*ast.SendStatement); ok {
+			return true
 		}
 	}
 	return false

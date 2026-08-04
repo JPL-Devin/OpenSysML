@@ -398,7 +398,7 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 		if !isQN {
 			continue
 		}
-		redefined, resolved := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
+		redefined, resolved := cc.resolveInheritedMember(owner, qn)
 		if !resolved || redefined == nil {
 			continue
 		}
@@ -536,6 +536,28 @@ func extractUsageType(cc *constraintChecker, sym *symbols.Symbol) *symbols.Symbo
 		}
 	}
 	return nil
+}
+
+// resolveInheritedMember resolves a qualified name from owner's inherited scopes only,
+// excluding locally declared members. Used for redefines validation where target
+// must be inherited, not local.
+func (cc *constraintChecker) resolveInheritedMember(owner *symbols.Symbol, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	// For single-part names, search inherited scopes directly
+	if len(qn.Parts) == 1 {
+		name := qn.Parts[0].Text
+		// Search all supertypes for the member
+		for _, supertype := range cc.model.AllSupertypes(owner) {
+			if supertype.Scope != nil {
+				if members := supertype.Scope.LookupLocalAll(name); len(members) > 0 {
+					return members[0], true
+				}
+			}
+		}
+		return nil, false
+	}
+	
+	// For multi-part names, resolve normally (qualifiers won't be local members)
+	return cc.resolver.ResolveQualified(owner.Scope, qn)
 }
 
 // formatUpper formats an upper bound for display (-1 = "*", else numeric).

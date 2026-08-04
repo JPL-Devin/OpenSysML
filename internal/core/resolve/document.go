@@ -93,11 +93,25 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	}
 	r.resolveExpr(scope, d.Value)
 	for _, end := range d.ConnectorEnds {
-		// ConnectorEnd.Target is Node (QualifiedName or Expression)
-		if qn, ok := end.Target.(*ast.QualifiedName); ok {
-			r.ResolveQualified(scope, qn)
-		} else {
-			r.resolveExpr(scope, end.Target)
+		// ConnectorEnd has both Target and Reference fields
+		// Target: primary connector target (part being connected)
+		// Reference: optional "references X" clause, or state transition target
+		if end == nil {
+			continue
+		}
+		if end.Target != nil {
+			if qn, ok := end.Target.(*ast.QualifiedName); ok {
+				r.ResolveQualified(scope, qn)
+			} else {
+				r.resolveExpr(scope, end.Target)
+			}
+		}
+		if end.Reference != nil {
+			if qn, ok := end.Reference.(*ast.QualifiedName); ok {
+				r.ResolveQualified(scope, qn)
+			} else {
+				r.resolveExpr(scope, end.Reference)
+			}
 		}
 	}
 	if d.FlowEnds != nil {
@@ -107,6 +121,19 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	}
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
+		}
+	case *ast.SubjectMember:
+		// Resolve subject type reference
+		if d.TypeRef != nil {
+			r.ResolveQualified(scope, d.TypeRef)
+		}
+		if d.Multiplicity != nil {
+			r.resolveExpr(scope, d.Multiplicity.Lower)
+			r.resolveExpr(scope, d.Multiplicity.Upper)
+		}
+		r.resolveExpr(scope, d.BindingExpr)
+		if child := r.childScope(scope, d); child != nil {
+			r.walkMembers(child, d.Body)
 		}
 	}
 }
@@ -212,8 +239,8 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 	// Resolve operand first
 	r.resolveExpr(scope, fc.Operand)
 	
-	// Get symbol of operand to find its member scope
-	operandSym := r.getExprSymbol(scope, fc.Operand)
+	// Get operand symbol WITHOUT following type (we need usage scope for inline members)
+	operandSym := r.getOperandSymbol(scope, fc.Operand)
 	if operandSym == nil || fc.Member == nil {
 		return
 	}
@@ -345,6 +372,64 @@ func (r *Resolver) getExprSymbol(scope *symbols.Scope, e ast.Node) *symbols.Symb
 		}
 		// Follow type if member is usage
 		if usage, isUsage := memberSym.Decl.(*ast.Usage); isUsage {
+			typeSym := r.getUsageType(memberSym.OwnerScope, usage)
+			if typeSym != nil {
+				return typeSym
+			}
+		}
+		return memberSym
+	default:
+		return nil
+	}
+}
+
+// getOperandSymbol returns the symbol of an expression operand WITHOUT following
+// type relationships. Used in feature chains to access usage inline members.
+func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.Symbol {
+	switch v := e.(type) {
+	case *ast.FeatureReference:
+		if v.Name == nil {
+			return nil
+		}
+		sym, ok := r.ResolveQualified(scope, v.Name)
+		if !ok {
+			return nil
+		}
+		// If usage has inline members (scope), return it to access those members
+		// Otherwise follow type for inherited members
+		if usage, isUsage := sym.Decl.(*ast.Usage); isUsage {
+			if sym.Scope != nil && len(sym.Scope.Members()) > 0 {
+				// Usage has inline members, return usage symbol
+				return sym
+			}
+			// No inline members, follow type
+			typeSym := r.getUsageType(sym.OwnerScope, usage)
+			if typeSym != nil {
+				return typeSym
+			}
+		}
+		return sym
+	case *ast.FeatureChainExpr:
+		// For chained access, get the final member's symbol
+		if v.Member == nil {
+			return nil
+		}
+		// First resolve the chain
+		r.resolveFeatureChain(scope, v)
+		// Get the operand's symbol, then lookup member
+		operandSym := r.getOperandSymbol(scope, v.Operand)
+		if operandSym == nil || operandSym.Scope == nil {
+			return nil
+		}
+		memberSym, ok := r.ResolveQualified(operandSym.Scope, v.Member)
+		if !ok {
+			return nil
+		}
+		// Same logic: check if member has inline content
+		if usage, isUsage := memberSym.Decl.(*ast.Usage); isUsage {
+			if memberSym.Scope != nil && len(memberSym.Scope.Members()) > 0 {
+				return memberSym
+			}
 			typeSym := r.getUsageType(memberSym.OwnerScope, usage)
 			if typeSym != nil {
 				return typeSym

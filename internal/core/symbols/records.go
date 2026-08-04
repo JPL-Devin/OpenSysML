@@ -6,9 +6,11 @@ import "github.com/Open-MBEE/Systemica/internal/core/source"
 // the index from a persisted cache record instead of a parsed document.
 type RecordEntry struct {
 	FQN             string
+	ShortName       string   // short name (e.g., "kg" for "kilogram"), empty if none
 	Kind            SymbolKind
 	Span            source.Span
 	WildcardImports []string // for packages: FQNs of wildcard-imported targets
+	AliasTarget     string   // for aliases: raw target text of "alias X for Y"
 }
 
 // AddRecords registers synthetic, AST-less symbols for a document directly by
@@ -19,12 +21,56 @@ type RecordEntry struct {
 func (idx *Index) AddRecords(name string, entries []RecordEntry) {
 	idx.RemoveDocument(name)
 	for _, e := range entries {
-		sym := &Symbol{Name: e.FQN, Kind: e.Kind, DeclSpan: e.Span}
+		sym := &Symbol{
+			Name:           e.FQN,
+			ShortName:      e.ShortName,
+			Kind:           e.Kind,
+			DeclSpan:       e.Span,
+			AliasTargetFQN: e.AliasTarget,
+		}
 		idx.fqn[e.FQN] = append(idx.fqn[e.FQN], sym)
 		idx.contributions[name] = append(idx.contributions[name], fqnEntry{fqn: e.FQN, sym: sym})
+		
+		// Also index under short name FQN if different
+		if e.ShortName != "" && e.ShortName != shortLeafName(e.FQN) {
+			shortFQN := replaceLeafName(e.FQN, e.ShortName)
+			idx.fqn[shortFQN] = append(idx.fqn[shortFQN], sym)
+			idx.contributions[name] = append(idx.contributions[name], fqnEntry{fqn: shortFQN, sym: sym})
+		}
+		
 		// Store wildcard import metadata
 		if len(e.WildcardImports) > 0 {
 			idx.wildcardMeta[e.FQN] = e.WildcardImports
 		}
 	}
+}
+
+// shortLeafName extracts the leaf name from FQN ("A::B::C" → "C").
+func shortLeafName(fqn string) string {
+	lastIdx := -1
+	for i := len(fqn) - 1; i >= 1; i-- {
+		if fqn[i-1:i+1] == "::" {
+			lastIdx = i + 1
+			break
+		}
+	}
+	if lastIdx < 0 {
+		return fqn
+	}
+	return fqn[lastIdx:]
+}
+
+// replaceLeafName replaces the leaf name in FQN ("A::B::C", "D" → "A::B::D").
+func replaceLeafName(fqn, newLeaf string) string {
+	lastIdx := -1
+	for i := len(fqn) - 1; i >= 1; i-- {
+		if fqn[i-1:i+1] == "::" {
+			lastIdx = i + 1
+			break
+		}
+	}
+	if lastIdx < 0 {
+		return newLeaf
+	}
+	return fqn[:lastIdx] + newLeaf
 }

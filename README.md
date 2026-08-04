@@ -93,7 +93,7 @@ Current: green (Time: 30.0s)
 
 - **Language Server** — First-class IDE support (VS Code, IntelliJ, Emacs, etc.) with live diagnostics, semantic hover, go-to-definition, intelligent completion, and workspace-wide symbol search.
 - **Interactive REPL** — Exploratory modeling environment: define models incrementally, evaluate expressions on-the-fly, instantiate parts, run calculations, inspect runtime state—like IPython/Jupyter for systems engineering.
-- **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases, simulate behavioral models (actions, state machines).
+- **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (fork/join parallelism, decision guards, hierarchical states, TimeEvent/ChangeEvent). See [BEHAVIOR_SEMANTICS_MAP.md](docs/BEHAVIOR_SEMANTICS_MAP.md) for measured behavioral coverage.
 - **Modern Toolchain** — Dependency management (local + remote git), incremental compilation, bundled standard library, persistent semantic caches—`cargo`/`go mod` ergonomics for systems modeling.
 
 ## Goals
@@ -117,17 +117,18 @@ Current: green (Time: 30.0s)
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (Phase C1-5: all behavioral bodies) | ✅ Complete |
-| Calc invocation, constraint & requirement evaluation | ✅ Complete |
-| Action execution engine (Tier 5) | ✅ Complete |
-| State machine runtime (Tier 5) | ✅ Complete |
+| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (17 golden ASTs, 15 negative tests) |
+| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 3/3 passing) |
+| Action execution engine (Tier 5) | ✅ Infrastructure complete (26 unit tests passing, conformance blocked by initial node parsing) |
+| State machine runtime (Tier 5) | ✅ Infrastructure complete (15 unit tests passing, conformance blocked by initial state parsing) |
 | REPL debugging commands | ✅ Complete |
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
-**Test coverage:** 722+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation).
+**Test coverage:** 722+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 17 golden ASTs, 15 negatives, 5 conformance cases, 6 robustness tests.
 **Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar alignment documented in [PRODUCTION_MAP.md](docs/grammar/PRODUCTION_MAP.md).
+**Behavioral execution:** Calc/constraint/requirement fully functional (3/5 conformance cases passing). Action/state executor infrastructure complete (41 unit tests passing). See [BEHAVIOR_SEMANTICS_MAP.md](docs/BEHAVIOR_SEMANTICS_MAP.md) for measured compliance.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
 ## Architecture

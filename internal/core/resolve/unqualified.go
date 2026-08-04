@@ -93,6 +93,10 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		if targetName == name {
 			return target, true
 		}
+		// Also check short name (e.g., "kg" for "kilogram")
+		if target.ShortName != "" && target.ShortName == name {
+			return target, true
+		}
 		if imp.IsRecursive && target.Scope != nil {
 			if sym, ok := lookupInSubtree(target.Scope, name, map[*symbols.Scope]bool{}); ok {
 				return sym, true
@@ -101,25 +105,29 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		return nil, false
 	}
 	// Namespace import: visible members of the target's scope are surfaced.
-	if target.Scope == nil {
-		// Stdlib packages don't have populated Scopes - fall back to FQN index
-		if r.idx != nil {
-			children := r.idx.LookupDirectChildren(target.Name)
-			for _, sym := range children {
-				// Extract short name from FQN for comparison
-				symName := sym.Name
-				if idx := strings.LastIndex(symName, "::"); idx >= 0 {
-					symName = symName[idx+2:]
-				}
-				if symName == name && visibleThroughImport(imp, sym) {
-					return sym, true
-				}
+	// Check scope first if available
+	if target.Scope != nil {
+		if sym, ok := target.Scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) {
+			return sym, true
+		}
+	}
+	// Also check FQN index for re-exported symbols (wildcard imports populate index, not scope)
+	if r.idx != nil {
+		children := r.idx.LookupDirectChildren(target.Name)
+		for _, sym := range children {
+			// Extract short name from FQN for comparison
+			symName := sym.Name
+			if idx := strings.LastIndex(symName, "::"); idx >= 0 {
+				symName = symName[idx+2:]
+			}
+			if symName == name && visibleThroughImport(imp, sym) {
+				return sym, true
+			}
+			// Also check short name (e.g., "kg" for "kilogram")
+			if sym.ShortName != "" && sym.ShortName == name && visibleThroughImport(imp, sym) {
+				return sym, true
 			}
 		}
-		return nil, false
-	}
-	if sym, ok := target.Scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) {
-		return sym, true
 	}
 	if imp.IsRecursive {
 		if sym, ok := lookupInSubtree(target.Scope, name, map[*symbols.Scope]bool{}); ok && visibleThroughImport(imp, sym) {
