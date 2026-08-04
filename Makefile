@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp test clean install help
+.PHONY: all build build-sysml build-lsp build-grpc test clean install help
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -17,7 +17,7 @@ BIN_DIR := bin
 
 all: build test ## Build and test everything
 
-build: build-sysml build-lsp ## Build all binaries
+build: build-sysml build-lsp build-grpc ## Build all binaries
 
 build-sysml: ## Build sysml binary
 	@echo "Building sysml..."
@@ -31,6 +31,12 @@ build-lsp: ## Build sysml-lsp binary
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/sysml-lsp ./cmd/sysml-lsp
 	@echo "✓ Built $(BIN_DIR)/sysml-lsp ($(VERSION))"
 
+build-grpc: ## Build sysml-grpc binary
+	@echo "Building sysml-grpc..."
+	@mkdir -p $(BIN_DIR)
+	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/sysml-grpc ./cmd/sysml-grpc
+	@echo "✓ Built $(BIN_DIR)/sysml-grpc ($(VERSION))"
+
 test: ## Run all tests
 	@echo "Running tests..."
 	go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
@@ -43,13 +49,14 @@ clean: ## Remove build artifacts
 	@echo "Cleaning..."
 	rm -rf $(BIN_DIR)
 	rm -f coverage.txt
-	rm -f sysml sysml-lsp
+	rm -f sysml sysml-lsp sysml-grpc
 	@echo "✓ Cleaned"
 
 install: build ## Install binaries to $GOPATH/bin
 	@echo "Installing to $(shell go env GOPATH)/bin..."
 	go install -ldflags "$(LDFLAGS)" ./cmd/sysml
 	go install -ldflags "$(LDFLAGS)" ./cmd/sysml-lsp
+	go install -ldflags "$(LDFLAGS)" ./cmd/sysml-grpc
 	@echo "✓ Installed"
 
 version: ## Show version information
