@@ -32,13 +32,13 @@ type StateExecutor struct {
 	graph *lower.StateGraph
 
 	// State machine execution state
-	activeConfig  *StateConfiguration // Active state configuration (simple or multi-region)
-	currentTime   float64
-	nextEventID   int64     // Monotonic counter for unique event IDs
-	eventQueue    *EventQueue
-	stateData     map[string]Value     // State machine local variables
-	stateVisits   []string             // Ordered list of visited state names
-	stateStack    []*ast.StateNode     // Active state configuration (for nested states)
+	activeConfig *StateConfiguration // Active state configuration (simple or multi-region)
+	currentTime  float64
+	nextEventID  int64 // Monotonic counter for unique event IDs
+	eventQueue   *EventQueue
+	stateData    map[string]Value // State machine local variables
+	stateVisits  []string         // Ordered list of visited state names
+	stateStack   []*ast.StateNode // Active state configuration (for nested states)
 }
 
 // newStateExecutor creates a state executor.
@@ -229,7 +229,7 @@ func (e *StateExecutor) scheduleTransitionsForState(state *ast.StateNode) error 
 				if err != nil {
 					return fmt.Errorf("eval completion guard: %w", err)
 				}
-				
+
 				if guardVal.Kind == ValConst && guardVal.Const.Kind == semantics.ValBool {
 					guardSatisfied = guardVal.Const.Bool
 				} else {
@@ -271,13 +271,13 @@ func (e *StateExecutor) scheduleTransitionsForState(state *ast.StateNode) error 
 			}
 
 			// Schedule event (generate unique ID using current queue length)
-		e.eventQueue.Push(Event{
-			ID:        e.nextEventID,
-			Type:      EventTime,
-			Timestamp: e.currentTime + duration,
-			Payload:   trans, // Store transition reference
-		})
-		e.nextEventID++
+			e.eventQueue.Push(Event{
+				ID:        e.nextEventID,
+				Type:      EventTime,
+				Timestamp: e.currentTime + duration,
+				Payload:   trans, // Store transition reference
+			})
+			e.nextEventID++
 		}
 	}
 
