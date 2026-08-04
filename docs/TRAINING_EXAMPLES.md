@@ -27,12 +27,36 @@ These errors are **not implementation gaps** - the training files reference name
 
 ### Training Example Bugs (Incorrect Code in OMG Materials)
 
-- `start`, `done` (2× lifecycle snapshots): Two files use incorrect lifecycle snapshot names:
-  - `27. Occurrences/Time Slice and Snapshot Example.sysml` lines 16, 25
-  - `28. Individuals/Individuals and Time Slices.sysml` lines 12, 16
-  - Files use `snapshot sale = start` and `snapshot junked = done`
-  - **Correct names per KerML spec**: `startShot` and `endShot` (defined in Occurrences.kerml:348, 364)
-  - These are errors in the OMG training materials, not parser bugs
+**Lifecycle snapshots - wrong feature names (2 files, 4 errors):**
+- Files: `27. Occurrences/Time Slice and Snapshot Example.sysml` lines 16, 25; `28. Individuals/Individuals and Time Slices.sysml` lines 12, 16
+- **Error**: `unresolved reference: start` (2×), `unresolved reference: done` (2×)
+- **Cause**: Files use `snapshot sale = start` and `snapshot junked = done` but KerML defines these as `startShot` and `endShot` (Occurrences.kerml:348, 364)
+- **Fix**: Change `start` → `startShot`, `done` → `endShot`
+
+**Missing imports (3 files, 3 errors):**
+- Files: Verification examples
+- **Error**: `unresolved reference: VerdictKind` (2×), `unresolved reference: PassIf` (1×)
+- **Cause**: Files reference verification features without importing VerificationCases package
+- **Fix**: Add `private import VerificationCases::*;` at package level (imports must be at package level, not inside verification def)
+
+**Scope resolution - missing imports/qualifiers (3 files, 3 errors):**
+- **Error**: `unresolved reference: localClock` (1×)
+  - **Cause**: Exists in `Domain Libraries/Geometry/SpatialItems.sysml` but not imported/qualified
+- **Error**: `unresolved reference: payload` (1×)
+  - **Cause**: Exists in `Kernel Libraries/Kernel Semantic Library/Transfers.kerml` but not imported
+- **Error**: `unresolved reference: probability` (1×)
+  - **Cause**: Exists in `Domain Libraries/Cause and Effect/CauseAndEffect.sysml` but not imported
+
+**Typos (1 file, 1 error):**
+- **Error**: `unresolved reference: alternative` (1×)
+- **Cause**: Feature is named `alternatives` (plural) in `Domain Libraries/Analysis/TradeStudies.sysml`
+- **Fix**: Change `alternative` → `alternatives`
+
+**Package reference issues (2-3 files):**
+- **Error**: `unresolved reference: Requirement Usages` (1×), `unresolved reference: Variation Usages` (1×)
+- **Cause**: Package name references need proper qualification/import path
+
+**Summary**: 11-13 files have bugs in OMG training materials (incorrect feature names, missing imports, typos). All referenced features exist in stdlib - these are authoring errors in training examples, not implementation gaps.
 
 ### Stdlib/Import Errors
 
