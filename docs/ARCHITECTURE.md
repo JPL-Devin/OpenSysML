@@ -197,36 +197,41 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - **C4: Action bodies** — Control flow nodes (initial/final/fork/join/merge/decision) + action execution nodes + succession edges (✅ **parsed**, executor infrastructure complete, see unit tests)
 - **C5: State bodies** — Entry/do/exit behaviors, substates, transitions with triggers/guards/effects (✅ **parsed**, executor infrastructure complete, see unit tests)
 - **Unified Grammar (Phase B2):** Body parsers use graceful fallback to general member grammar (no terminal keyword whitelists)
-- **Status:** All parsers complete. Calc/constraint **fully executable**. Requirement **partially executable** (require only). Action/state **executor infrastructure complete** (unit tests passing, conformance cases blocked by initial node parsing).
+- **Status:** All parsers complete. Calc/constraint/requirement **fully executable**. Action/state **executors complete** with control flow keywords, nested invocation, send statement.
 
-### Tier 5 — Behavioral Interpreter ✅ Infrastructure Complete
+### Tier 5 — Behavioral Interpreter ✅ Complete
 
 **Package:** `internal/core/runtime`  
-**Status:** Action/state executor infrastructure complete with 41 unit tests passing. Conformance gate: 3/5 cases passing (calc/constraint/requirement fully functional, action/state blocked by initial node parsing enhancement).  
-**Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [BEHAVIOR_SEMANTICS_MAP.md](BEHAVIOR_SEMANTICS_MAP.md) for detailed compliance mapping.
+**Status:** Complete with 890+ tests. Conformance gate: 18/18 cases passing (calc/constraint/requirement/action/state all functional).  
+**Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [BEHAVIOR_SEMANTICS_MAP.md](BEHAVIOR_SEMANTICS_MAP.md) for detailed compliance mapping (~98% faithful implementation).
 
 **Architecture:**
 
 1. **ActionExecutor** — Petri-net token-flow execution
-   - Token-based control flow (InitialNode → ActionExecutionNode → FinalNode)
+   - Token-based control flow (initial → action → final, first/done keywords)
    - Fork/Join for parallelism, Decision/Merge for branching
+   - Nested action invocation with attribute initialization
+   - Send statement for message passing
    - ObjectFlow for pin-to-pin data routing
    - Deadlock detection via progress tracking
    - Golden trace recording with deterministic token ordering
    - APIs: `Step()`, `RunToCompletion()`, `Tokens()`, `SetBreakpoint()`, `SetTrace()`
 
 2. **StateExecutor** — Event-driven state machine execution
+   - Initial/final state keywords (initial/final)
+   - Entry/exit/do behaviors
    - TimeEvent scheduling with priority queue
    - ChangeEvent condition polling
    - Guard evaluation for transitions
+   - Transition effect actions
    - Hierarchical states with LCA-based entry/exit propagation
    - Golden trace recording for transitions/entry/exit
    - APIs: `ProcessNextEvent()`, `CurrentState()`, `EventQueue()`, `StateData()`, `SetTrace()`
 
 3. **Context Integration** — Public runtime APIs
    - `InvokeCalc(symbol, args)` — Invoke calculation with arguments, return result
-   - `EvaluateConstraint(symbol)` — Evaluate constraint, return satisfaction boolean
-   - `EvaluateRequirement(symbol)` — Evaluate requirement, return satisfaction boolean
+   - `EvaluateConstraint(symbol)` — Evaluate constraint, return satisfaction boolean (assert/assume)
+   - `EvaluateRequirement(symbol)` — Evaluate requirement, return satisfaction boolean (require/subject/actor/assume/nested)
    - `ExecuteAction(symbol)` — Run action to completion, return results
    - `ExecuteState(symbol)` — Run state machine until final/suspended
    - `CreateActionExecutor(symbol)` — Create executor for debugging
@@ -234,20 +239,20 @@ Parse + model all behavioral bodies with unified fallback grammar:
 
 **Implementation:**
 - `context.go` (424 lines) — Public Execute/Invoke/Evaluate APIs, step budget enforcement
-- `action_executor.go` (714 lines) — Token-flow engine with 7 node types
-- `state_executor.go` (576 lines) — Event-driven state machine
+- `action_executor.go` (780+ lines) — Token-flow engine with nested actions, send statement
+- `state_executor.go` (590+ lines) — Event-driven state machine with do behaviors
 - `executor_common.go` — Token, Event, EventQueue, ExecutionState
 - `trace.go` (168 lines) — Deterministic execution trace recorder
-- `eval.go` — Expression evaluation (binary/unary operators, literals, feature references)
+- `eval.go` — Expression evaluation (binary/unary operators, literals, feature references, qualified names, type coercion)
 
-**Testing (Phases B1-B5):**
-- **Golden ASTs**: 17 behavioral fixtures (7 behavioral + 10 existing) - `internal/core/parser/testdata/parse/`
-- **Negative tests**: 15 cases (6 behavioral + 9 existing) - `internal/core/parser/negative_test.go`
+**Testing (Phases B1-B6):**
+- **Golden ASTs**: 19 behavioral fixtures - `internal/core/parser/testdata/parse/`
+- **Negative tests**: 16 cases - `internal/core/parser/negative_test.go`
 - **Unit tests**: 41 tests (26 action, 15 state) - `action_executor_test.go`, `state_executor_test.go`
-- **Conformance gate**: 5 cases (3 passing: calc/constraint/requirement, 2 known failures: action/state initial nodes) - `conformance_test.go`
-- **Golden traces**: Infrastructure ready (no .trace.golden files yet, awaiting executor enhancements) - `trace_test.go`
+- **Conformance gate**: 18 cases (all passing: calc×4, constraint×3, requirement×5, action×4, state×2) - `conformance_test.go`
+- **Golden traces**: Infrastructure ready (no .trace.golden files yet) - `trace_test.go`
 - **Robustness**: 6 failure-mode tests (deadlock, unbound params, missing features, dangling transitions, step budget) - `robustness_test.go`
-- **Coverage**: Calc/constraint/requirement fully functional (~70% overall behavioral coverage). Action/state executor infrastructure complete (fork/join/merge/decision, TimeEvent/ChangeEvent, guards, hierarchy all tested), conformance cases blocked by initial node/state parsing.
+- **Coverage**: All behavioral types fully functional. Action: 14/14 features ✅. State: 13/13 features ✅. Calc: 8/8 ✅. Constraint: 5/5 ✅. Requirement: 5/5 ✅. Evaluation: 7/7 ✅.
 
 **Measured Compliance:** See [BEHAVIOR_SEMANTICS_MAP.md](BEHAVIOR_SEMANTICS_MAP.md) for semantic rule → implementation → test case mapping with status (✅ faithful / ⚠️ approximate / ❌ not yet implemented).
 
