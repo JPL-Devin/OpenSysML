@@ -192,7 +192,6 @@ When adding parser support for new SysML v2 constructs:
 2. ✅ Run `go test -run TestGolden -update` to generate golden
 3. ✅ Verify `TestStdlibConformance` still passes (no regressions)
 4. ✅ Add negative test case if construct has error conditions
-5. ✅ Update `docs/grammar/PRODUCTION_MAP.md` with grammar mapping
 
 ### Behavioral Features
 
