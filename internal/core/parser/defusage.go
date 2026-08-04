@@ -827,7 +827,7 @@ func (p *Parser) isStateKeyword() bool {
 		return false
 	}
 	kw := p.peek().KeywordID
-	return kw == "entry" || kw == "do" || kw == "exit" || kw == "state" || kw == "transition" || kw == "first" || kw == "accept"
+	return kw == "entry" || kw == "do" || kw == "exit" || kw == "state" || kw == "region" || kw == "transition" || kw == "first" || kw == "accept"
 }
 
 // parseUsageIdentification parses identification for usage declarations, with special handling
