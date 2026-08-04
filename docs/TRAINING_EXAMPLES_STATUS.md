@@ -69,17 +69,6 @@ These errors are **not implementation gaps** - the training files reference name
 
 ---
 
-## Recent Fixes (This Branch)
-
-1. **Named argument resolution** (ff70654): Fixed `vehicle = testVehicle` syntax in requirement invocations
-2. **Control flow node registration** (875834d): Parser creates InitialNode/FinalNode and registers them in scope
-3. **Nested actions** (5325d3f): Implemented nested action invocation with attribute initialization
-4. **Send/accept messaging** (8349133, b0959bf): Message passing with accept action and basic port support
-
-**Impact**: Eliminated all parameter binding errors and control flow reference errors.
-
----
-
 ## Remaining Work for Full Training Example Support
 
 ### Priority 1: Stdlib Import Improvements
