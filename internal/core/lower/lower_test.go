@@ -137,3 +137,189 @@ func TestToStateGraph_Simple(t *testing.T) {
 		t.Error("no state marked as initial")
 	}
 }
+
+func TestToActionGraph_ForkJoinMergeDecision(t *testing.T) {
+	src := `
+		action parallel {
+			first start;
+			fork f;
+			action a1;
+			action a2;
+			join j;
+			done end;
+			
+			then start f;
+			then f a1;
+			then f a2;
+			then a1 j;
+			then a2 j;
+			then j end;
+		}
+	`
+	
+	file := source.New("test.sysml", []byte(src))
+	p := parser.New(file)
+	root := p.ParseFile()
+	
+	if len(p.Diagnostics) > 0 {
+		t.Fatalf("parse errors: %v", p.Diagnostics)
+	}
+	
+	var actionUsage *ast.Usage
+	for _, member := range root.Members {
+		if membership, ok := member.(*ast.Membership); ok {
+			if usage, ok := membership.Member.(*ast.Usage); ok && usage.Kind == ast.UsageAction {
+				actionUsage = usage
+				break
+			}
+		}
+	}
+	
+	graph, err := ToActionGraph(actionUsage)
+	if err != nil {
+		t.Fatalf("ToActionGraph failed: %v", err)
+	}
+	
+	// Should have: initial, fork, 2 actions, join, final = 6 nodes
+	if len(graph.Nodes) < 6 {
+		t.Errorf("expected at least 6 nodes, got %d", len(graph.Nodes))
+	}
+	
+	// Fork should have 2 outgoing edges
+	var forkNode ast.Node
+	for _, node := range graph.Nodes {
+		if fn, ok := node.(*ast.ForkNode); ok {
+			forkNode = fn
+			break
+		}
+	}
+	
+	if forkNode == nil {
+		t.Fatal("no fork node found")
+	}
+	
+	if len(graph.Edges[forkNode]) != 2 {
+		t.Errorf("fork should have 2 outgoing edges, got %d", len(graph.Edges[forkNode]))
+	}
+}
+
+func TestToStateGraph_Regions(t *testing.T) {
+	src := `
+		package test {
+			state TrafficLight {
+				region vehicle {
+					initial v_start;
+					state Red;
+					state Green;
+					v_start then Red;
+					Red then Green;
+				}
+				
+				region pedestrian {
+					initial p_start;
+					state Walk;
+					state DontWalk;
+					p_start then Walk;
+					Walk then DontWalk;
+				}
+			}
+		}
+	`
+	
+	file := source.New("test.sysml", []byte(src))
+	p := parser.New(file)
+	root := p.ParseFile()
+	
+	if len(p.Diagnostics) > 0 {
+		t.Fatalf("parse errors: %v", p.Diagnostics)
+	}
+	
+	var stateUsage *ast.Usage
+	for _, member := range root.Members {
+		if membership, ok := member.(*ast.Membership); ok {
+			if pkg, ok := membership.Member.(*ast.Package); ok {
+				for _, pkgMember := range pkg.Members {
+					if pkgMembership, ok := pkgMember.(*ast.Membership); ok {
+						if usage, ok := pkgMembership.Member.(*ast.Usage); ok && usage.Kind == ast.UsageState {
+							stateUsage = usage
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	graph, err := ToStateGraph(stateUsage)
+	if err != nil {
+		t.Fatalf("ToStateGraph failed: %v", err)
+	}
+	
+	// Should have 2 regions with initial states
+	if len(graph.RegionInitials) != 2 {
+		t.Errorf("expected 2 region initials, got %d", len(graph.RegionInitials))
+	}
+	
+	// Should have 4 states (Red, Green, Walk, DontWalk) + 2 initials = 6
+	if len(graph.States) < 6 {
+		t.Errorf("expected at least 6 states, got %d", len(graph.States))
+	}
+}
+
+func TestToStateGraph_Pseudostates(t *testing.T) {
+	src := `
+		package test {
+			state Router {
+				initial start;
+				choice c;
+				state lowPriority;
+				state highPriority;
+				
+				start then c;
+			}
+		}
+	`
+	
+	file := source.New("test.sysml", []byte(src))
+	p := parser.New(file)
+	root := p.ParseFile()
+	
+	if len(p.Diagnostics) > 0 {
+		t.Fatalf("parse errors: %v", p.Diagnostics)
+	}
+	
+	var stateUsage *ast.Usage
+	for _, member := range root.Members {
+		if membership, ok := member.(*ast.Membership); ok {
+			if pkg, ok := membership.Member.(*ast.Package); ok {
+				for _, pkgMember := range pkg.Members {
+					if pkgMembership, ok := pkgMember.(*ast.Membership); ok {
+						if usage, ok := pkgMembership.Member.(*ast.Usage); ok && usage.Kind == ast.UsageState {
+							stateUsage = usage
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	graph, err := ToStateGraph(stateUsage)
+	if err != nil {
+		t.Fatalf("ToStateGraph failed: %v", err)
+	}
+	
+	// Should have 1 choice pseudostate
+	if len(graph.Pseudostates) != 1 {
+		t.Errorf("expected 1 pseudostate, got %d", len(graph.Pseudostates))
+	}
+	
+	choiceNode := graph.Pseudostates["c"]
+	if choiceNode == nil {
+		t.Fatal("choice pseudostate 'c' not found")
+	}
+	
+	if choiceNode.Kind != ast.PseudostateChoice {
+		t.Errorf("expected choice pseudostate, got %v", choiceNode.Kind)
+	}
+}

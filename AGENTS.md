@@ -11,6 +11,7 @@ It provides a hand-written lexer/parser, semantic engine, execution runtime, LSP
 ## 1. Golden Rules
 
 1. **Correctness over expedience.** No shortcuts, no stubs left behind, no lossy conversions. If a proper fix is large, do it properly or stop and flag it.
+   - **For features specifically: do not minimize code changes or dodge complexity.** Implement the feature fully and correctly even if it touches many files, adds new types, or requires refactoring. Completeness beats diff size. See §9.
 2. **Root-cause first.** Before editing, confirm *why* something fails (read the code, add a temporary debug print, write a focused test). Then make the minimal correct change.
 3. **Never regress.** `main` is green. Any test passing on `main` must still pass on your branch. Diff against `main` if unsure: `git stash && git checkout main && go test ./... ; git checkout - && git stash pop`.
 4. **Respect the architecture invariants** (see §4). The AST is immutable; semantics live in side tables; execution consumes lowered IR — do not bypass these.
