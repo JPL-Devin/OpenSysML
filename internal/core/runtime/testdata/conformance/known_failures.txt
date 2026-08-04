@@ -1,5 +1,3 @@
 # Known failures for behavioral execution conformance tests
 # Remove entries when implementation is complete
 
-action_output
-state_simple

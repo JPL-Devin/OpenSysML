@@ -416,9 +416,9 @@ func (p *Parser) parseActionMember() ast.Node {
 	if tok, ok := p.accept(lexer.Keyword); ok {
 		kw := tok.KeywordID
 		switch kw {
-		case "first":
+		case "first", "initial":
 			return p.parseInitialNode(tok)
-		case "done":
+		case "done", "final":
 			return p.parseFinalNode(tok)
 		case "fork":
 			return p.parseForkNode(tok)
@@ -560,7 +560,7 @@ func (p *Parser) parseFinalNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
 	
-	if p.at(lexer.Identifier) {
+	if p.atNameOrKeyword() {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
 		p.advance()
@@ -1611,12 +1611,13 @@ func (p *Parser) parseRequirementMember() ast.Node {
 	return node
 }
 
-// parseSubjectMember parses: subject <name> : <Type>; OR subject = <expr>;
+// parseSubjectMember parses: subject <name> : <Type>; OR subject = <expr>; OR subject <name> = <expr>;
 func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// 'subject' already consumed
 	
-	// Check for binding pattern: subject = <expr>;
+	// Check for binding pattern: subject = <expr>; OR subject <name> = <expr>;
 	if p.at(lexer.Eq) {
+		// Anonymous binding: subject = <expr>;
 		p.advance() // consume '='
 		
 		// Parse value expression
@@ -1633,35 +1634,52 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		return node
 	}
 	
-	// Otherwise expect typed declaration: subject <name> : <Type>; OR anonymous: subject: <Type>;
-	// Check for anonymous pattern (subject: Type;)
+	// Check if next is identifier (could be name + binding or typed declaration)
 	var name string
-	if p.at(lexer.Colon) {
-		// Anonymous subject
-		name = ""
-	} else {
-		// Named subject - expect identifier
-		if !p.at(lexer.Identifier) {
-			p.error(p.peek().Span, "expected identifier or ':' after 'subject'")
-			en := &ast.ErrorNode{Message: "expected identifier or ':' after 'subject'"}
-			if !p.atEOF() && !p.at(lexer.RBrace) {
-				p.advance()
-			}
-			en.NodeSpan = p.spanFrom(start)
-			return en
-		}
+	if p.at(lexer.Identifier) {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
 		p.advance()
-	}
-	
-	// Expect ':'
-	if !p.at(lexer.Colon) {
-		p.error(p.peek().Span, "expected ':' after subject name")
-		en := &ast.ErrorNode{Message: "expected ':' after subject name"}
+		
+		// Check if followed by '=' (named binding: subject <name> = <expr>;)
+		if p.at(lexer.Eq) {
+			p.advance() // consume '='
+			
+			// Parse value expression
+			value := p.ParseExpression()
+			
+			// Expect semicolon
+			p.expect(lexer.Semicolon, "expected ';' after subject binding")
+			
+			node := &ast.SubjectMember{
+				Name:        name,
+				BindingExpr: value,
+			}
+			node.NodeSpan = p.spanFrom(start)
+			return node
+		}
+		
+		// Otherwise expect ':' for typed declaration
+		if !p.at(lexer.Colon) {
+			p.error(p.peek().Span, "expected ':' or '=' after subject name")
+			en := &ast.ErrorNode{Message: "expected ':' or '=' after subject name"}
+			en.NodeSpan = p.spanFrom(start)
+			return en
+		}
+	} else if p.at(lexer.Colon) {
+		// Anonymous typed subject: subject: <Type>;
+		name = ""
+	} else {
+		p.error(p.peek().Span, "expected identifier or ':' after 'subject'")
+		en := &ast.ErrorNode{Message: "expected identifier or ':' after 'subject'"}
+		if !p.atEOF() && !p.at(lexer.RBrace) {
+			p.advance()
+		}
 		en.NodeSpan = p.spanFrom(start)
 		return en
 	}
+	
+	// Typed declaration: subject [<name>] : <Type>;
 	p.advance() // consume ':'
 	
 	// Parse type
@@ -1824,7 +1842,7 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 	return node
 }
 
-// parseActorMember parses: actor <name> : <Type>;
+// parseActorMember parses: actor <name> : <Type>; OR actor <name> = <expr>;
 func (p *Parser) parseActorMember(start int) ast.Node {
 	// 'actor' already consumed
 	
@@ -1843,10 +1861,28 @@ func (p *Parser) parseActorMember(start int) ast.Node {
 	name := p.src.Text(nameToken.Span)
 	p.advance()
 	
-	// Expect ':'
+	// Check if followed by '=' (binding form: actor <name> = <expr>;)
+	if p.at(lexer.Eq) {
+		p.advance() // consume '='
+		
+		// Parse value expression
+		value := p.ParseExpression()
+		
+		// Expect semicolon
+		p.expect(lexer.Semicolon, "expected ';' after actor binding")
+		
+		node := &ast.ActorMember{
+			Name:        name,
+			BindingExpr: value,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Otherwise expect ':' for typed declaration
 	if !p.at(lexer.Colon) {
-		p.error(p.peek().Span, "expected ':' after actor name")
-		en := &ast.ErrorNode{Message: "expected ':' after actor name"}
+		p.error(p.peek().Span, "expected ':' or '=' after actor name")
+		en := &ast.ErrorNode{Message: "expected ':' or '=' after actor name"}
 		en.NodeSpan = p.spanFrom(start)
 		return en
 	}
@@ -1895,6 +1931,12 @@ func (p *Parser) parseStateMember() ast.Node {
 		kw := tok.KeywordID
 		
 		switch kw {
+		case "initial":
+			p.advance()
+			return p.parseInitialState(start)
+		case "final":
+			p.advance()
+			return p.parseFinalState(start)
 		case "entry":
 			p.advance()
 			return p.parseEntryMember(start)
@@ -2381,6 +2423,64 @@ func (p *Parser) parseSubstateMember(start int) ast.Node {
 	
 	node := &ast.SubstateMember{
 		Name: name,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseInitialState parses: initial <name>;
+func (p *Parser) parseInitialState(start int) ast.Node {
+	// 'initial' already consumed
+	
+	// Expect identifier or keyword for state name
+	if !p.atNameOrKeyword() {
+		p.error(p.peek().Span, "expected identifier after 'initial'")
+		en := &ast.ErrorNode{Message: "expected identifier after 'initial'"}
+		if !p.atEOF() && !p.at(lexer.RBrace) {
+			p.advance()
+		}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	nameToken := p.peek()
+	name := p.src.Text(nameToken.Span)
+	p.advance()
+	
+	p.expect(lexer.Semicolon, "expected ';' after initial state name")
+	
+	node := &ast.StateNode{
+		Name:      name,
+		IsInitial: true,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseFinalState parses: final <name>;
+func (p *Parser) parseFinalState(start int) ast.Node {
+	// 'final' already consumed
+	
+	// Expect identifier or keyword for state name
+	if !p.atNameOrKeyword() {
+		p.error(p.peek().Span, "expected identifier after 'final'")
+		en := &ast.ErrorNode{Message: "expected identifier after 'final'"}
+		if !p.atEOF() && !p.at(lexer.RBrace) {
+			p.advance()
+		}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	nameToken := p.peek()
+	name := p.src.Text(nameToken.Span)
+	p.advance()
+	
+	p.expect(lexer.Semicolon, "expected ';' after final state name")
+	
+	node := &ast.StateNode{
+		Name:    name,
+		IsFinal: true,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
