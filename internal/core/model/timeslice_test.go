@@ -6,9 +6,15 @@ import (
 )
 
 func TestTimeSliceExample(t *testing.T) {
-	ws := NewWorkspace()
+	path := "../../../examples/sysml-v2-training/27. Occurrences/Time Slice and Snapshot Example.sysml"
 	
-	data, err := os.ReadFile("../../../examples/sysml-v2-training/27. Occurrences/Time Slice and Snapshot Example.sysml")
+	// Skip if training examples not downloaded
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Skip("Training examples not downloaded (run ./scripts/download-training-examples.sh)")
+	}
+	
+	ws := NewWorkspace()
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
