@@ -9,7 +9,7 @@ package test {
         
         init then active;
         transition active to done do {
-            assign counter := counter + 1;
+            counter = counter + 1;
         };
     }
 }
