@@ -187,15 +187,15 @@ Full evaluator with **user-defined calc invocation**, **constraint evaluation**,
 - **Membership unwrapping:** Runtime automatically unwraps AST Membership nodes when extracting members
 - **Unlocks:** Constraint checking against concrete values, `calc` execution, requirement validation, runtime behavioral verification
 
-### Tier 4 — Behavioral AST ✅ (Phase C complete)
+### Tier 4 — Behavioral AST ✅
 
 Parse + model all behavioral bodies with unified fallback grammar:
-- **C1: Calc bodies** — `return` expressions + mixed parameter declarations (✅ **fully executable**, see conformance gate)
-- **C2: Constraint bodies** — `assert`/`assume` with optional `not` negation (✅ **fully executable**, see conformance gate)
-- **C3: Requirement bodies** — `subject`/`assume`/`require`/`actor` declarations (⚠️ **parsed**, require evaluation executable, subject/actor not yet implemented)
-- **C4: Action bodies** — Control flow nodes (initial/final/fork/join/merge/decision) + action execution nodes + succession edges (✅ **parsed**, executor infrastructure complete, see unit tests)
-- **C5: State bodies** — Entry/do/exit behaviors, substates, transitions with triggers/guards/effects (✅ **parsed**, executor infrastructure complete, see unit tests)
-- **Unified Grammar (Phase B2):** Body parsers use graceful fallback to general member grammar (no terminal keyword whitelists)
+- **Calc bodies** — `return` expressions + mixed parameter declarations (✅ **fully executable**)
+- **Constraint bodies** — `assert`/`assume` with optional `not` negation (✅ **fully executable**)
+- **Requirement bodies** — `subject`/`assume`/`require`/`actor` declarations (✅ **fully executable**)
+- **Action bodies** — Control flow nodes (initial/final/fork/join/merge/decision) + action execution nodes + succession edges (✅ **parsed**, executor infrastructure complete)
+- **State bodies** — Entry/do/exit behaviors, substates, transitions with triggers/guards/effects (✅ **parsed**, executor infrastructure complete)
+- **Unified Grammar:** Body parsers use graceful fallback to general member grammar (no terminal keyword whitelists)
 - **Status:** All parsers complete. Calc/constraint/requirement **fully executable**. Action/state **executors complete** with control flow keywords, nested invocation, send statement.
 
 ### Tier 5 — Behavioral Interpreter ✅ Complete
@@ -244,7 +244,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - `trace.go` (168 lines) — Deterministic execution trace recorder
 - `eval.go` — Expression evaluation (binary/unary operators, literals, feature references, qualified names, type coercion)
 
-**Testing (Phases B1-B6):**
+**Testing:**
 - **Golden ASTs**: 19 behavioral fixtures - `internal/core/parser/testdata/parse/`
 - **Negative tests**: 16 cases - `internal/core/parser/negative_test.go`
 - **Unit tests**: 41 tests (26 action, 15 state) - `action_executor_test.go`, `state_executor_test.go`
@@ -442,7 +442,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 | Validation passes (syntax → constraints) | ✅ Complete |
 | Expression evaluator & instance model (Tiers 1-3) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (Phase C1-5: all behavioral bodies) | ✅ Complete |
+| Behavioral parser (all behavioral bodies) | ✅ Complete |
 | Calc invocation & constraint evaluation | ✅ Complete |
 | Action execution engine (Tier 5) | ✅ Complete |
 | State machine runtime (Tier 5) | ✅ Complete |

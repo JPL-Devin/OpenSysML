@@ -2,10 +2,10 @@
 
 ## Overview
 
-**Source:** [SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release) (2026-05 release)  
+**Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** Run `./scripts/download-training-examples.sh` to fetch examples  
-**Status:** 63/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 37/100 files have semantic errors  
+**Status:** 69/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 31/100 files have semantic errors (85 total errors)  
 
 These training examples are from the official [SysML v2 Training Materials](https://github.com/Systems-Modeling/SysML-v2-Training).
 
@@ -39,14 +39,11 @@ These errors are **not implementation gaps** - the training files reference name
 - **Cause**: Files reference verification features without importing VerificationCases package
 - **Fix**: Add `private import VerificationCases::*;` at package level (imports must be at package level, not inside verification def)
 
-**Scope resolution - missing inherited feature resolution (3 files, 3 errors):**
-- **Error**: `unresolved reference: localClock` (1×), `unresolved reference: payload` (1×), `unresolved reference: probability` (1×)
-- **Cause**: These are **inherited features** being redefined (`:>> featureName`). Features like `payload` are inherited from parent definitions (e.g., `Transfer` → `Message` → `Flow`), but our resolver doesn't yet look up the inheritance chain when resolving redefinition targets.
-- **Root cause**: Implementation limitation - redefinition target resolution doesn't follow specialization relationships to find inherited features.
-- **Files affected**:
-  - `13. Flows/Flow Definition Example.sysml`: `ref :>> payload : Fuel;` (payload inherited from Transfer)
-  - Similar patterns in Connections and probability examples
-- **Status**: This is a missing feature in our resolver, not a training example bug. Requires implementing inherited member lookup.
+**Scope resolution - inherited feature resolution (FIXED ✅):**
+- **Previous errors**: `unresolved reference: localClock`, `unresolved reference: payload` (4 total)
+- **Cause**: Features inherited from parent definitions (Part → Item → Occurrence, Flow → Message → Transfer)
+- **Fix**: Implemented inherited feature resolution in commits 8304f03, c683bc8
+- **Status**: All localClock and payload errors eliminated
 
 **Typos (1 file, 1 error):**
 - **Error**: `unresolved reference: alternative` (1×)
@@ -57,13 +54,14 @@ These errors are **not implementation gaps** - the training files reference name
 - **Error**: `unresolved reference: Requirement Usages` (1×), `unresolved reference: Variation Usages` (1×)
 - **Cause**: Package name references need proper qualification/import path
 
-**Summary**: 11-13 files have bugs in OMG training materials (incorrect feature names, missing imports, typos). All referenced features exist in stdlib - these are authoring errors in training examples, not implementation gaps.
+**Summary**: 8-10 files have bugs in OMG training materials (incorrect feature names, missing imports, typos). All referenced features exist in stdlib - these are authoring errors in training examples, not implementation gaps.
 
 ### Stdlib/Import Errors
 
 **Resolved ✅:**
 - `VerdictKind`, `PassIf`: Fixed by ensuring imports at package level (not inside definitions)
-- Named argument resolution: Fixed in ff70654
+- Named argument resolution: Fixed in ff70654 (named args don't resolve parameter names)
+- `localClock`, `payload`: Fixed in 8304f03, c683bc8 (inherited feature resolution)
 
 **Still present:**
 - `annotatedElement` (2×): Metadata feature - likely needs ModelingMetadata import
