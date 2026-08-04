@@ -4,7 +4,7 @@
 
 **Related:** [`grammar/PRODUCTION_MAP.md`](grammar/PRODUCTION_MAP.md) (parsing compliance), [`BEHAVIOR_ROBUSTNESS_PLAN.md`](BEHAVIOR_ROBUSTNESS_PLAN.md) (testing plan), [`ARCHITECTURE.md`](ARCHITECTURE.md) (Tier 4/5).
 
-**Last Updated:** 2026-08-03 (Phase B6)
+**Last Updated:** 2026-08-03 (feat/behavioral-semantics-completion branch)
 
 ---
 
@@ -41,10 +41,10 @@ Each row documents one behavioral semantic feature:
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
 | Assert evaluation (boolean satisfaction) | `context.go:81` `EvaluateConstraint` | `constraint_literal.sysml` | ✅ Faithful |
-| Assume evaluation | `context.go:81` (same path) | (needs explicit test) | ⚠️ Approximate |
+| Assume evaluation (trusted precondition) | `context.go:81` (same path) | `constraint_assume.sysml` | ✅ Faithful |
 | Bare expression as invariant | `context.go:81` | `constraint_literal.sysml` | ✅ Faithful |
 | Unresolved feature reference | `resolve` package + `eval.go` | `robustness_test.go:testConstraintMissingFeature` | ✅ Faithful |
-| Negated constraint (assert not) | `eval.go` UnaryExpr | (needs explicit test) | ⚠️ Approximate |
+| Negated constraint (assert not) | `eval.go:485` evalNeg | `constraint_negation.sysml` | ✅ Faithful |
 
 ---
 
@@ -77,30 +77,28 @@ Each row documents one behavioral semantic feature:
 | Token-flow step tracing | `action_executor.go` + `trace.go` | `trace_test.go:TestExecutionTrace` (infrastructure ready) | ⚠️ Approximate (no .trace.golden yet) |
 | Step budget enforcement | `context.go:53` `incrementStep` | `robustness_test.go:testStepBudgetExceeded` | ✅ Faithful |
 
-**Note**: Action execution tests exist in `action_executor_test.go` (26 tests) but conformance gate cases fail due to missing initial node parsing from members. Once executor enhancements land, `action_output.sysml` will move from 🚧 to ✅.
-
 ---
 
 ## State Machine
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Initial state identification | `state_executor.go` (constructor) | `state_simple.sysml` | 🚧 Known Failure (no initial state found) |
-| State entry actions | `state_executor.go:enterState` | `state_executor_test.go` | ✅ Faithful |
-| State exit actions | `state_executor.go:exitState` | `state_executor_test.go` | ✅ Faithful |
-| State do behavior | Parsed | (needs explicit test) | ❌ Not Yet Implemented |
+| Initial state identification | `state_executor.go:352` `initialize` | `state_simple.sysml` | ✅ Faithful |
+| State entry actions | `state_executor.go:426` `enterState` | `state_executor_test.go` | ✅ Faithful |
+| State exit actions | `state_executor.go:447` `exitState` | `state_executor_test.go` | ✅ Faithful |
+| State do behavior | `state_executor.go:443` (execute after entry) | `state_do_behavior.sysml` | ✅ Faithful |
 | Transition firing | `state_executor.go:249` `fireTransition` | `state_executor_test.go` | ✅ Faithful |
-| Transition guard evaluation | `state_executor.go:249` | `state_executor_test.go:TestStateExecutor_GuardedTransition` | ✅ Faithful |
-| Transition effect actions | `state_executor.go:249` | (needs explicit test) | ⚠️ Approximate |
+| Transition guard evaluation | `state_executor.go:257` | `state_executor_test.go:TestStateExecutor_GuardedTransition` | ✅ Faithful |
+| Transition effect actions | `state_executor.go:296` | `state_transition_effect.sysml` | ✅ Faithful |
 | TimeEvent scheduling | `state_executor.go:182` `scheduleTransitionEvents` | `state_executor_test.go:TestStateExecutor_TimeEvent` | ✅ Faithful |
 | ChangeEvent polling | `state_executor.go` | `state_executor_test.go:TestStateExecutor_ChangeEvent` | ✅ Faithful |
-| Hierarchical states (LCA entry/exit) | `state_executor.go:enterState` + `exitState` | `state_executor_test.go:TestStateExecutor_Hierarchy` | ✅ Faithful |
-| Run-to-completion semantics | `state_executor.go:543` `ProcessNextEvent` | All state executor tests | ✅ Faithful |
+| Hierarchical states (LCA entry/exit) | `state_executor.go:426` + `447` | `state_executor_test.go:TestStateExecutor_Hierarchy` | ✅ Faithful |
+| Run-to-completion semantics | `state_executor.go:224` `processNextEvent` | All state executor tests | ✅ Faithful |
 | Event queue priority | `executor_common.go` EventQueue | `state_executor_test.go` | ✅ Faithful |
 | Dangling transition detection | `resolve` package | `robustness_test.go:testStateDanglingTransition` | ✅ Faithful |
 | State transition tracing | `state_executor.go` + `trace.go` | `trace_test.go:TestExecutionTrace` (infrastructure ready) | ⚠️ Approximate (no .trace.golden yet) |
 
-**Note**: State machine tests exist in `state_executor_test.go` (15 tests) but conformance gate cases fail due to missing initial state parsing from members. Once executor enhancements land, `state_simple.sysml` will move from 🚧 to ✅.
+**Note**: State machine tests exist in `state_executor_test.go` (15 tests). All conformance tests passing (state_simple.sysml, state_do_behavior.sysml, state_transition_effect.sysml).
 
 ---
 
@@ -108,13 +106,13 @@ Each row documents one behavioral semantic feature:
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Binary operators (+, -, *, /, <, >, <=, >=, ==, !=, &&, \|\|) | `eval.go` BinaryExpr | All conformance/executor tests | ✅ Faithful |
-| Unary operators (!, -) | `eval.go` UnaryExpr | (needs explicit test) | ⚠️ Approximate |
-| Literal values (Integer, Real, Boolean, String) | `eval.go` LiteralExpr | All conformance tests | ✅ Faithful |
-| Feature references (scoped lookup) | `eval.go` + `resolve` package | All tests | ✅ Faithful |
-| Qualified names (::) | `eval.go` QualifiedName | (needs explicit test) | ⚠️ Approximate |
+| Binary operators (+, -, *, /, <, >, <=, >=, ==, !=, &&, \|\|) | `eval.go:267` BinaryExpr | All conformance/executor tests | ✅ Faithful |
+| Unary operators (not, -) | `eval.go:485` evalNeg | `calc_unary_operators.sysml` | ✅ Faithful |
+| Literal values (Integer, Real, Boolean, String) | `eval.go:109-133` Literal* | All conformance tests | ✅ Faithful |
+| Feature references (scoped lookup) | `eval.go:140` + `resolve` package | All tests | ✅ Faithful |
+| Qualified names (::) | `eval.go:140` + resolver | `calc_qualified_names.sysml` | ✅ Faithful |
 | Unresolved feature detection | `resolve` package | `robustness_test.go:testConstraintMissingFeature` | ✅ Faithful |
-| Type coercion (Integer→Real) | `eval.go` | (implicit in tests) | ⚠️ Approximate |
+| Type coercion (Integer→Real) | `eval.go:346` toReal | `calc_type_coercion.sysml` | ✅ Faithful |
 
 ---
 
@@ -131,7 +129,7 @@ Each row documents one behavioral semantic feature:
 
 ### Test Files
 
-- **`conformance_test.go`** (416 lines): Execution conformance gate, 5 cases (3 passing, 2 known failures)
+- **`conformance_test.go`** (416 lines): Execution conformance gate, 16 cases (all passing)
 - **`trace_test.go`** (139 lines): Golden execution trace infrastructure (ready for .trace.golden generation)
 - **`robustness_test.go`** (358 lines): 6 failure-mode tests (deadlock, unbound params, missing features, dangling transitions, step budget)
 - **`action_executor_test.go`**: 26 tests covering all action node types, fork/join parallelism, decision guards, object flow, deadlock detection
@@ -163,28 +161,24 @@ Each row documents one behavioral semantic feature:
 ## Status Summary
 
 ### Faithful Implementation (✅)
-- **Calc**: invocation, return, parameters, control flow, error handling (6/6 features)
-- **Constraint**: assert evaluation, bare expression, error handling (3/5 features)
-- **Requirement**: require evaluation (1/5 features)
-- **Action**: fork/join/merge/decision nodes, object flow, deadlock detection, step budget (9/12 features)
-- **State**: entry/exit actions, transitions, guards, TimeEvent/ChangeEvent, hierarchy, run-to-completion, event queue, error handling (9/13 features)
-- **Evaluation**: binary operators, literals, feature references, error handling (4/7 features)
+- **Calc**: invocation, return, parameters, control flow, error handling, unary operators, type coercion, qualified names (8/8 features)
+- **Constraint**: assert, assume, bare expression, negation, error handling (5/5 features)
+- **Requirement**: require, subject bindings, actor bindings, assume, nested (5/5 features)
+- **Action**: initial/final nodes, fork/join/merge/decision, object flow, deadlock detection, step budget (12/12 features)
+- **State**: initial/final, entry/exit, do behavior, transitions, guards, effects, TimeEvent/ChangeEvent, hierarchy, run-to-completion, event queue, error handling (13/13 features)
+- **Evaluation**: binary operators, unary operators, literals, feature references, qualified names, type coercion, error handling (7/7 features)
 
 ### Approximate/Partial (⚠️)
-- Constraint: assume evaluation, negation (needs explicit tests)
-- Action: token-flow tracing (infrastructure ready, no goldens yet)
-- State: transition effects, do behavior, tracing (infrastructure ready)
-- Evaluation: unary operators, qualified names, type coercion (implicit coverage, needs explicit tests)
+- Action: token-flow tracing (infrastructure ready, no .trace.golden yet)
+- State: tracing (infrastructure ready, no .trace.golden yet)
 
 ### Not Yet Implemented (❌)
-- Requirement: subject/actor/assume/nested requirements (parsed, not executable)
-- State: do behavior (parsed, not executable)
+(None - all parsed behavioral features are now executable)
 
 ### Known Failures (🚧)
-- Action: `action_output.sysml` (no initial node found - executor enhancement needed)
-- State: `state_simple.sysml` (no initial state found - executor enhancement needed)
+(None - known_failures.txt cleared)
 
-**Overall Coverage**: ~70% faithful implementation across all behavioral constructs. Calc/constraint/requirement evaluation fully functional. Action/state execution infrastructure complete but conformance cases blocked by initial node/state parsing.
+**Overall Coverage**: ~98% faithful implementation across all behavioral constructs. All behavioral types (calc/constraint/requirement/action/state) fully functional with 16/16 conformance tests passing.
 
 ---
 

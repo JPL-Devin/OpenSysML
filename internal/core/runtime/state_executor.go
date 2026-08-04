@@ -440,6 +440,15 @@ func (e *StateExecutor) enterState(state *ast.StateNode) error {
 		}
 	}
 	
+	// Execute do activities (ongoing behavior)
+	// Simplified: execute immediately like entry actions
+	// Full UML semantics: concurrent execution with state lifetime
+	for _, action := range state.Do {
+		if err := e.executeAction(action); err != nil {
+			return fmt.Errorf("do action: %w", err)
+		}
+	}
+	
 	return nil
 }
 
