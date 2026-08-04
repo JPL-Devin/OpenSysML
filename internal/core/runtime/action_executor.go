@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -12,6 +13,7 @@ import (
 type ActionExecutor struct {
 	ctx         *Context
 	action      *symbols.Symbol
+	graph       *lower.ActionGraph // Execution IR
 	tokens      []Token
 	state       ExecutionState
 	nextTokenID int64
@@ -20,13 +22,7 @@ type ActionExecutor struct {
 	results     map[string]Value // Accumulated results from consumed final tokens
 	trace       *TraceRecorder   // Optional trace recorder for testing
 	messageQueue []Message       // Queue of sent messages (FIFO)
-	
-	// Graph structure
-	nodes       []ast.Node
-	edges       map[ast.Node][]ast.Node          // Successor edges
-	guards      map[ast.Node]map[ast.Node]ast.Node // Guards: source → target → guard expression
-	dataFlows   map[ast.Node][]objectFlow        // Object flow edges
-	mergeVisited map[ast.Node]bool               // Track merge node visits
+	mergeVisited map[ast.Node]bool // Track merge node visits
 }
 
 // Message represents a signal instance sent via send action.
@@ -35,35 +31,28 @@ type Message struct {
 	Payload    map[string]Value // Signal attribute values
 }
 
-type objectFlow struct {
-	SourcePin string
-	TargetPin string
-	Target    ast.Node
-}
-
 // newActionExecutor creates an action executor.
 func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, error) {
 	if action.Kind != symbols.SymbolActionUsage && action.Kind != symbols.SymbolActionDef {
 		return nil, fmt.Errorf("symbol %s is not an action", action.Name)
 	}
 	
+	// Lower AST to execution graph
+	graph, err := lower.ToActionGraph(action.Decl)
+	if err != nil {
+		return nil, fmt.Errorf("lower action graph: %w", err)
+	}
+	
 	exec := &ActionExecutor{
 		ctx:          ctx,
 		action:       action,
+		graph:        graph,
 		tokens:       make([]Token, 0),
 		state:        StateReady,
 		nextTokenID:  1,
 		breakpoints:  make(map[string]bool),
 		results:      make(map[string]Value),
-		edges:        make(map[ast.Node][]ast.Node),
-		guards:       make(map[ast.Node]map[ast.Node]ast.Node),
-		dataFlows:    make(map[ast.Node][]objectFlow),
 		mergeVisited: make(map[ast.Node]bool),
-	}
-	
-	// Extract graph structure from AST
-	if err := exec.extractGraph(); err != nil {
-		return nil, fmt.Errorf("extract graph: %w", err)
 	}
 	
 	return exec, nil
@@ -171,178 +160,6 @@ func (e *ActionExecutor) RunToCompletion() error {
 }
 
 // extractGraph builds node and edge maps from action AST.
-func (e *ActionExecutor) extractGraph() error {
-	// Get action node
-	actionNode, ok := e.action.Decl.(*ast.Usage)
-	if !ok {
-		actionDef, ok := e.action.Decl.(*ast.Definition)
-		if !ok {
-			return fmt.Errorf("action symbol has invalid node type")
-		}
-		actionNode = &ast.Usage{Members: actionDef.Members}
-	}
-	
-	// First pass: collect all nodes
-	for _, member := range actionNode.Members {
-		// Unwrap Membership if present
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
-		}
-		
-		switch n := actualMember.(type) {
-		case *ast.InitialNode, *ast.FinalNode, *ast.ForkNode, *ast.JoinNode,
-			*ast.MergeNode, *ast.DecisionNode, *ast.ActionExecutionNode:
-			e.nodes = append(e.nodes, actualMember)
-		case *ast.Usage:
-			// Nested action usage (treat as execution node)
-			if n.Kind == ast.UsageAction {
-				e.nodes = append(e.nodes, actualMember)
-			}
-		}
-	}
-	
-	// Second pass: build edges
-	for _, member := range actionNode.Members {
-		// Unwrap Membership if present
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
-		}
-		
-		switch n := actualMember.(type) {
-		case *ast.InitialNode:
-			// Handle implicit successor from `first X then Y` syntax
-			if n.Successor != nil {
-				targetNode := e.findNodeByName(n.Successor)
-				if targetNode == nil {
-					return fmt.Errorf("initial node %s successor references undefined target %v", n.Name, n.Successor)
-				}
-				e.edges[n] = append(e.edges[n], targetNode)
-				if n.Guard != nil {
-					if e.guards[n] == nil {
-						e.guards[n] = make(map[ast.Node]ast.Node)
-					}
-					e.guards[n][targetNode] = n.Guard
-				}
-			}
-		case *ast.SuccessionEdge:
-			// Build edge map (source → target)
-			sourceNode := e.findNodeByName(n.Source)
-			targetNode := e.findNodeByName(n.Target)
-			
-			if sourceNode == nil {
-				return fmt.Errorf("succession edge references undefined source node")
-			}
-			if targetNode == nil {
-				return fmt.Errorf("succession edge references undefined target node")
-			}
-			e.edges[sourceNode] = append(e.edges[sourceNode], targetNode)
-		case *ast.ControlFlowEdge:
-			// Decision edges (with guards)
-			sourceNode := e.findNodeByName(n.Source)
-			targetNode := e.findNodeByName(n.Target)
-			if sourceNode == nil {
-				return fmt.Errorf("control flow edge references undefined source node")
-			}
-			if targetNode == nil {
-				return fmt.Errorf("control flow edge references undefined target node")
-			}
-			e.edges[sourceNode] = append(e.edges[sourceNode], targetNode)
-			
-			// Store guard expression
-			if n.Guard != nil {
-				if e.guards[sourceNode] == nil {
-					e.guards[sourceNode] = make(map[ast.Node]ast.Node)
-				}
-				e.guards[sourceNode][targetNode] = n.Guard
-			}
-		case *ast.ObjectFlowEdge:
-			// Data flow edges: pin-to-pin data routing
-			sourceNode, sourcePin := e.parsePinReference(n.Source)
-			targetNode, targetPin := e.parsePinReference(n.Target)
-			
-			if sourceNode == nil {
-				return fmt.Errorf("object flow edge references undefined source node")
-			}
-			if targetNode == nil {
-				return fmt.Errorf("object flow edge references undefined target node")
-			}
-			
-			// Store data flow: sourceNode → {targetNode, sourcePin, targetPin}
-			e.dataFlows[sourceNode] = append(e.dataFlows[sourceNode], objectFlow{
-				SourcePin: sourcePin,
-				TargetPin: targetPin,
-				Target:    targetNode,
-			})
-		}
-	}
-	
-	return nil
-}
-
-// findNodeByName looks up a node by its qualified name.
-func (e *ActionExecutor) findNodeByName(qname *ast.QualifiedName) ast.Node {
-	if qname == nil || len(qname.Parts) == 0 {
-		return nil
-	}
-	
-	targetName := qname.Parts[len(qname.Parts)-1].Text
-	for _, node := range e.nodes {
-		nodeName := getNodeName(node)
-		if nodeName == targetName {
-			return node
-		}
-	}
-	return nil
-}
-
-// parsePinReference extracts node and pin name from qualified reference.
-// Expects format: nodeName.pinName (e.g., "action1.output")
-// Returns (node, pinName). If no pin specified, returns (node, "").
-func (e *ActionExecutor) parsePinReference(qname *ast.QualifiedName) (ast.Node, string) {
-	if qname == nil || len(qname.Parts) == 0 {
-		return nil, ""
-	}
-	
-	// Single part: just node name, no pin
-	if len(qname.Parts) == 1 {
-		nodeName := qname.Parts[0].Text
-		node := e.findNodeByName(&ast.QualifiedName{Parts: []ast.NameSegment{{Text: nodeName}}})
-		return node, ""
-	}
-	
-	// Two parts: nodeName.pinName
-	nodeName := qname.Parts[0].Text
-	pinName := qname.Parts[1].Text
-	node := e.findNodeByName(&ast.QualifiedName{Parts: []ast.NameSegment{{Text: nodeName}}})
-	return node, pinName
-}
-
-// getNodeName extracts the name from a behavioral node.
-func getNodeName(node ast.Node) string {
-	switch n := node.(type) {
-	case *ast.InitialNode:
-		return n.Name
-	case *ast.FinalNode:
-		return n.Name
-	case *ast.ForkNode:
-		return n.Name
-	case *ast.JoinNode:
-		return n.Name
-	case *ast.MergeNode:
-		return n.Name
-	case *ast.DecisionNode:
-		return n.Name
-	case *ast.ActionExecutionNode:
-		return n.Name
-	case *ast.Usage:
-		// Nested action usage
-		return n.Ident.Name
-	default:
-		return ""
-	}
-}
 
 // initializeAttributes populates tokenData with attribute default values from action.
 func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error {
@@ -383,18 +200,12 @@ func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error 
 
 // initialize spawns initial token at InitialNode.
 func (e *ActionExecutor) initialize() error {
-	// Find initial node
-	var initialNode *ast.InitialNode
-	for _, node := range e.nodes {
-		if n, ok := node.(*ast.InitialNode); ok {
-			initialNode = n
-			break
-		}
-	}
-	
-	if initialNode == nil {
+	// Use initial node from graph
+	if e.graph.Initial == nil {
 		return fmt.Errorf("no initial node found in action %s", e.action.Name)
 	}
+	
+	initialNode := e.graph.Initial
 	
 	// Spawn initial token
 	tokenData := make(map[string]Value)
@@ -453,7 +264,7 @@ func (e *ActionExecutor) stepToken(tokenIdx int) error {
 // stepInitialNode advances token from initial node to successors.
 func (e *ActionExecutor) stepInitialNode(tokenIdx int) error {
 	token := &e.tokens[tokenIdx]
-	successors := e.edges[token.Location]
+	successors := e.graph.Edges[token.Location]
 	
 	if len(successors) == 0 {
 		return fmt.Errorf("initial node has no successors")
@@ -489,7 +300,7 @@ func (e *ActionExecutor) stepForkNode(tokenIdx int) error {
 	token := &e.tokens[tokenIdx]
 	node := token.Location.(*ast.ForkNode)
 	
-	successors := e.edges[node]
+	successors := e.graph.Edges[node]
 	if len(successors) == 0 {
 		return fmt.Errorf("fork node %s has no successors", node.Name)
 	}
@@ -558,7 +369,7 @@ func (e *ActionExecutor) stepJoinNode(tokenIdx int) error {
 	}
 	
 	// Get successor
-	successors := e.edges[node]
+	successors := e.graph.Edges[node]
 	if len(successors) == 0 {
 		return fmt.Errorf("join node %s has no successors", node.Name)
 	}
@@ -583,7 +394,7 @@ func (e *ActionExecutor) stepJoinNode(tokenIdx int) error {
 // getIncomingEdges finds all nodes that have edges targeting the given node.
 func (e *ActionExecutor) getIncomingEdges(node ast.Node) []ast.Node {
 	incoming := make([]ast.Node, 0)
-	for source, targets := range e.edges {
+	for source, targets := range e.graph.Edges {
 		for _, target := range targets {
 			if target == node {
 				incoming = append(incoming, source)
@@ -612,7 +423,7 @@ func (e *ActionExecutor) stepMergeNode(tokenIdx int) error {
 	// Mark merge visited, pass token through
 	e.mergeVisited[mergeNode] = true
 	
-	successors := e.edges[mergeNode]
+	successors := e.graph.Edges[mergeNode]
 	if len(successors) == 0 {
 		return fmt.Errorf("merge node %s has no successors", mergeNode.Name)
 	}
@@ -633,7 +444,7 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 	}
 	
 	// Get successors (outgoing edges from decision)
-	successors := e.edges[decisionNode]
+	successors := e.graph.Edges[decisionNode]
 	if len(successors) == 0 {
 		return fmt.Errorf("decision node %s has no successors", decisionNode.Name)
 	}
@@ -652,7 +463,7 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 	for _, succ := range successors {
 		// Get guard for this edge (if any)
 		var guard ast.Node
-		if guards, ok := e.guards[decisionNode]; ok {
+		if guards, ok := e.graph.Guards[decisionNode]; ok {
 			guard = guards[succ]
 		}
 		
@@ -719,7 +530,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 		
 		// Store result: check if dataFlows specify output pin, else use "result"
 		outputPin := "result"
-		if flows, ok := e.dataFlows[node]; ok && len(flows) > 0 {
+		if flows, ok := e.graph.DataFlows[node]; ok && len(flows) > 0 {
 			// Use source pin from first data flow as output pin
 			if flows[0].SourcePin != "" {
 				outputPin = flows[0].SourcePin
@@ -731,7 +542,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 	}
 	
 	// Advance to successor
-	successors := e.edges[token.Location]
+	successors := e.graph.Edges[token.Location]
 	if len(successors) == 0 {
 		return fmt.Errorf("action node %s has no successors", node.Name)
 	}
@@ -832,7 +643,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	}
 	
 	// Advance to successor
-	successors := e.edges[token.Location]
+	successors := e.graph.Edges[token.Location]
 	if len(successors) == 0 {
 		return fmt.Errorf("nested action %s has no successors", usage.Ident.Name)
 	}
@@ -847,7 +658,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 // applyDataFlows transfers data along object flow edges.
 // Copies data from source pins to target pins for all outgoing data flows.
 func (e *ActionExecutor) applyDataFlows(token *Token, sourceNode ast.Node) {
-	flows, ok := e.dataFlows[sourceNode]
+	flows, ok := e.graph.DataFlows[sourceNode]
 	if !ok || len(flows) == 0 {
 		return
 	}

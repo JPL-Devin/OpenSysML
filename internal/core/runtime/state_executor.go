@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -27,23 +28,17 @@ type StateExecutor struct {
 	state        ExecutionState
 	trace        *TraceRecorder // Optional trace recorder for testing
 	
+	// Lowered graph (source of truth)
+	graph *lower.StateGraph
+	
 	// State machine execution state
 	activeConfig *StateConfiguration  // Active state configuration (simple or multi-region)
 	currentTime  float64
 	eventQueue   *EventQueue
 	stateData    map[string]Value // State machine local variables
 	
-	// Graph structure
-	states         []*ast.StateNode
-	pseudostates   map[string]*ast.PseudostateNode          // Pseudostates by name
-	transitions    map[*ast.StateNode][]*ast.TransitionEdge
-	compositeStates map[*ast.StateNode][]*ast.StateRegion  // States with orthogonal regions
-	regionInitials map[*ast.StateRegion]*ast.StateNode     // Initial state per region
-	
-	// Hierarchical state support
-	stateStack  []*ast.StateNode                        // Active state configuration (for nested states)
-	parentState map[*ast.StateNode]*ast.StateNode       // Child -> parent mapping
-	regionOwner map[*ast.StateRegion]*ast.StateNode    // Region -> parent state
+	// Active state tracking
+	stateStack  []*ast.StateNode  // Active state configuration (for nested states)
 }
 
 // newStateExecutor creates a state executor.
@@ -52,143 +47,39 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 		return nil, fmt.Errorf("symbol %s is not a state machine", stateMachine.Name)
 	}
 	
+	// Lower to StateGraph
+	graph, err := lower.ToStateGraph(stateMachine.Decl)
+	if err != nil {
+		return nil, fmt.Errorf("lower state machine: %w", err)
+	}
+	
 	exec := &StateExecutor{
 		ctx:             ctx,
 		stateMachine:    stateMachine,
 		state:           StateReady,
+		graph:           graph,
 		currentTime:     0.0,
 		eventQueue:      NewEventQueue(),
 		stateData:       make(map[string]Value),
-		pseudostates:    make(map[string]*ast.PseudostateNode),
-		transitions:     make(map[*ast.StateNode][]*ast.TransitionEdge),
-		compositeStates: make(map[*ast.StateNode][]*ast.StateRegion),
-		regionInitials:  make(map[*ast.StateRegion]*ast.StateNode),
 		stateStack:      make([]*ast.StateNode, 0),
-		parentState:     make(map[*ast.StateNode]*ast.StateNode),
-		regionOwner:     make(map[*ast.StateRegion]*ast.StateNode),
 		activeConfig: &StateConfiguration{
 			regionStates: make(map[*ast.StateRegion]*ast.StateNode),
 		},
 	}
 	
-	// Extract graph structure from AST
-	if err := exec.extractGraph(); err != nil {
-		return nil, fmt.Errorf("extract graph: %w", err)
-	}
-	
 	return exec, nil
 }
 
-// extractGraph builds state and transition maps from state machine AST.
-func (e *StateExecutor) extractGraph() error {
-	// Get state machine node
-	stateUsage, ok := e.stateMachine.Decl.(*ast.Usage)
-	if !ok {
-		stateDef, ok := e.stateMachine.Decl.(*ast.Definition)
-		if !ok {
-			return fmt.Errorf("state machine symbol has invalid node type")
-		}
-		stateUsage = &ast.Usage{Members: stateDef.Members}
+// getNodeName returns the name of a StateNode or PseudostateNode.
+func getNodeName(node ast.Node) string {
+	switch n := node.(type) {
+	case *ast.StateNode:
+		return n.Name
+	case *ast.PseudostateNode:
+		return n.Name
+	default:
+		return ""
 	}
-	
-	// First pass: collect states and pseudostates
-	for _, member := range stateUsage.Members {
-		// Unwrap Membership if present
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
-		}
-		
-		if state, ok := actualMember.(*ast.StateNode); ok {
-			e.collectStates(state, nil) // Recursively collect substates
-		} else if ps, ok := actualMember.(*ast.PseudostateNode); ok {
-			// Collect pseudostate
-			e.pseudostates[ps.Name] = ps
-		}
-	}
-	
-	// Second pass: identify composite states with regions and find initial states
-	for _, state := range e.states {
-		if len(state.Regions) > 0 {
-			// Mark as composite state
-			e.compositeStates[state] = state.Regions
-			
-			// Track region ownership
-			for _, region := range state.Regions {
-				e.regionOwner[region] = state
-				
-				// Find initial state in this region
-				initialState := e.findInitialStateInRegion(region)
-				if initialState == nil {
-					return fmt.Errorf("region %s in state %s has no initial state", region.Name, state.Name)
-				}
-				e.regionInitials[region] = initialState
-			}
-		}
-	}
-	
-	// Third pass: collect transitions and handle initial node successors
-	for _, member := range stateUsage.Members {
-		// Unwrap Membership if present
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
-		}
-		
-		switch n := actualMember.(type) {
-		case *ast.InitialNode:
-			// Handle `first X then Y` syntax - create implicit transition from initial to target
-			if n.Successor != nil {
-				targetState := e.findStateByName(n.Successor)
-				if targetState != nil {
-					// Mark target as initial state
-					targetState.IsInitial = true
-					// If guard present, could store it, but for now initial transitions are unguarded in states
-				}
-			}
-		case *ast.TransitionEdge:
-			// Collect transitions (will be mapped after all states collected)
-			if err := e.collectTransition(n); err != nil {
-				return err
-			}
-		}
-	}
-	
-	return nil
-}
-
-// collectStates recursively collects states and builds parent relationships.
-func (e *StateExecutor) collectStates(state *ast.StateNode, parent *ast.StateNode) {
-	e.states = append(e.states, state)
-	if parent != nil {
-		e.parentState[state] = parent
-	}
-	
-	// Recursively collect substates
-	for _, substate := range state.Substates {
-		if childState, ok := substate.(*ast.StateNode); ok {
-			e.collectStates(childState, state)
-		}
-	}
-	
-	// Collect states in orthogonal regions
-	for _, region := range state.Regions {
-		for _, regionState := range region.States {
-			if childState, ok := regionState.(*ast.StateNode); ok {
-				e.collectStates(childState, state)
-			}
-		}
-	}
-}
-
-// collectTransition maps a transition to its source state.
-func (e *StateExecutor) collectTransition(trans *ast.TransitionEdge) error {
-	sourceState := e.findStateByName(trans.Source)
-	if sourceState == nil {
-		return fmt.Errorf("transition references undefined source state")
-	}
-	e.transitions[sourceState] = append(e.transitions[sourceState], trans)
-	return nil
 }
 
 // getParentChain returns all ancestor states from child to root (inclusive).
@@ -197,7 +88,7 @@ func (e *StateExecutor) getParentChain(state *ast.StateNode) []*ast.StateNode {
 	chain := []*ast.StateNode{state}
 	current := state
 	for {
-		parent, hasParent := e.parentState[current]
+		parent, hasParent := e.graph.ParentState[current]
 		if !hasParent {
 			break
 		}
@@ -236,7 +127,7 @@ func (e *StateExecutor) findStateByName(qname *ast.QualifiedName) *ast.StateNode
 	}
 	
 	targetName := qname.Parts[len(qname.Parts)-1].Text
-	for _, state := range e.states {
+	for _, state := range e.graph.States {
 		if state.Name == targetName {
 			return state
 		}
@@ -263,7 +154,7 @@ func (e *StateExecutor) scheduleTransitionEvents() error {
 	if currentState == nil {
 		return nil // Multi-region state, skip for now (would need per-region scheduling)
 	}
-	transitions := e.transitions[currentState]
+	transitions := e.graph.Transitions[currentState]
 	
 	for _, trans := range transitions {
 		if timeEvent, ok := trans.Trigger.(*ast.TimeEvent); ok {
@@ -317,12 +208,43 @@ func (e *StateExecutor) processNextEvent() error {
 	// Process event by type
 	switch event.Type {
 	case EventTime:
-		// Fire transition
-		transition, ok := event.Payload.(*ast.TransitionEdge)
-		if !ok {
-			return fmt.Errorf("invalid TimeEvent payload")
+		// Fire transition - handle both old (TransitionEdge) and new (lower.Transition) for backward compatibility
+		if lowerTrans, ok := event.Payload.(*lower.Transition); ok {
+			return e.fireTransition(lowerTrans)
 		}
-		return e.fireTransition(transition)
+		
+		// Fallback for tests that use TransitionEdge directly
+		if edge, ok := event.Payload.(*ast.TransitionEdge); ok {
+		// Convert TransitionEdge to lower.Transition
+		// Need to find source/target states by name
+		var sourceState, targetState *ast.StateNode
+		for _, state := range e.graph.States {
+			if edge.Source != nil && len(edge.Source.Parts) > 0 {
+				if state.Name == edge.Source.Parts[len(edge.Source.Parts)-1].Text {
+					sourceState = state
+				}
+			}
+			if edge.Target != nil && len(edge.Target.Parts) > 0 {
+					if state.Name == edge.Target.Parts[len(edge.Target.Parts)-1].Text {
+						targetState = state
+					}
+				}
+			}
+			if sourceState == nil || targetState == nil {
+				return fmt.Errorf("could not find source/target states for transition")
+			}
+			
+			lowerTrans := &lower.Transition{
+				Source:  sourceState,
+				Target:  targetState,
+				Trigger: edge.Trigger,
+				Guard:   edge.Guard,
+				Effect:  edge.Effect,
+			}
+			return e.fireTransition(lowerTrans)
+		}
+		
+		return fmt.Errorf("invalid TimeEvent payload: expected *lower.Transition or *ast.TransitionEdge")
 	default:
 		// For general events, broadcast to all active regions
 		return e.broadcastEvent(&event)
@@ -336,7 +258,7 @@ func (e *StateExecutor) broadcastEvent(event *Event) error {
 		// Broadcast event to each region independently
 		for region, regionState := range e.activeConfig.regionStates {
 			// Find transitions from this region's active state
-			transitions := e.transitions[regionState]
+			transitions := e.graph.Transitions[regionState]
 			for _, trans := range transitions {
 				if e.matchesEvent(trans, event) {
 					// Fire transition within this region
@@ -356,7 +278,7 @@ func (e *StateExecutor) broadcastEvent(event *Event) error {
 		return nil // No active state
 	}
 	
-	transitions := e.transitions[currentState]
+	transitions := e.graph.Transitions[currentState]
 	for _, trans := range transitions {
 		if e.matchesEvent(trans, event) {
 			return e.fireTransition(trans)
@@ -367,18 +289,18 @@ func (e *StateExecutor) broadcastEvent(event *Event) error {
 }
 
 // matchesEvent checks if a transition matches the given event.
-func (e *StateExecutor) matchesEvent(trans *ast.TransitionEdge, event *Event) bool {
+func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool {
 	// For now, simplified: no explicit event matching
 	// In full UML, would match SignalEvent, ChangeEvent, etc.
 	return true
 }
 
 // fireTransitionInRegion fires a transition within a specific region.
-func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *ast.TransitionEdge) error {
-	// Find target state
-	targetState := e.findStateByName(trans.Target)
-	if targetState == nil {
-		return fmt.Errorf("transition target state not found")
+func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *lower.Transition) error {
+	// Target should be a StateNode (pseudostates not supported in region transitions yet)
+	targetState, ok := trans.Target.(*ast.StateNode)
+	if !ok {
+		return fmt.Errorf("transition target must be a state node, got %T", trans.Target)
 	}
 	
 	// Get current state in this region
@@ -438,31 +360,30 @@ func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *a
 }
 
 // fireTransition executes a state transition.
-func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
-	// Check if target is a pseudostate (choice or junction)
+func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
+	// Target can be StateNode or PseudostateNode
 	var targetState *ast.StateNode
-	if trans.Target != nil && len(trans.Target.Parts) > 0 {
-		targetName := trans.Target.Parts[len(trans.Target.Parts)-1].Text
-		
-		// Check if it's a pseudostate first
-		if ps, exists := e.pseudostates[targetName]; exists {
-			var err error
-			switch ps.Kind {
-			case ast.PseudostateChoice:
-				targetState, err = e.evaluateChoicePseudostate(ps)
-			case ast.PseudostateJunction:
-				targetState, err = e.evaluateJunctionPseudostate(ps)
-			default:
-				return fmt.Errorf("unsupported pseudostate kind: %v", ps.Kind)
-			}
-			
-			if err != nil {
-				return fmt.Errorf("evaluate pseudostate: %w", err)
-			}
-		} else {
-			// Normal state target
-			targetState = e.findStateByName(trans.Target)
+	
+	// Type assert to determine target type
+	switch target := trans.Target.(type) {
+	case *ast.StateNode:
+		targetState = target
+	case *ast.PseudostateNode:
+		// Evaluate pseudostate to get final target state
+		var err error
+		switch target.Kind {
+		case ast.PseudostateChoice:
+			targetState, err = e.evaluateChoicePseudostate(target)
+		case ast.PseudostateJunction:
+			targetState, err = e.evaluateJunctionPseudostate(target)
+		default:
+			return fmt.Errorf("unsupported pseudostate kind: %v", target.Kind)
 		}
+		if err != nil {
+			return fmt.Errorf("evaluate pseudostate: %w", err)
+		}
+	default:
+		return fmt.Errorf("transition target must be StateNode or PseudostateNode, got %T", trans.Target)
 	}
 	
 	if targetState == nil {
@@ -499,7 +420,7 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 	current := currentState
 	for current != nil && current != lca {
 		statesToExit = append(statesToExit, current)
-		current = e.parentState[current]
+		current = e.graph.ParentState[current]
 	}
 	
 	// Exit states (deepest to shallowest)
@@ -521,7 +442,7 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 	current = targetState
 	for current != nil && current != lca {
 		statesToEnter = append(statesToEnter, current)
-		current = e.parentState[current]
+		current = e.graph.ParentState[current]
 	}
 	
 	// Reverse statesToEnter (shallowest to deepest)
@@ -568,117 +489,60 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 }
 // initialize sets current state to initial state and enters it.
 func (e *StateExecutor) initialize() error {
-	// Check if state machine itself has regions (no top-level states, just regions)
-	stateUsage, ok := e.stateMachine.Decl.(*ast.Usage)
-	if !ok {
-		stateDef, ok := e.stateMachine.Decl.(*ast.Definition)
-		if !ok {
-			return fmt.Errorf("state machine symbol has invalid node type")
-		}
-		stateUsage = &ast.Usage{Members: stateDef.Members}
-	}
-	
-	// Find StateRegion members at top level
-	var topLevelRegions []*ast.StateRegion
-	for _, member := range stateUsage.Members {
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
-		}
-		if region, ok := actualMember.(*ast.StateRegion); ok {
-			topLevelRegions = append(topLevelRegions, region)
-		}
-	}
-	
-	// If state machine has top-level regions, enter all initial states
-	if len(topLevelRegions) > 0 {
-		e.state = StateRunning
-		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
-		e.activeConfig.simpleState = nil
+	// Use initial state from graph
+	if e.graph.Initial != nil {
+		// Simple state machine with single initial state
+		initialState := e.graph.Initial
 		
-		for _, region := range topLevelRegions {
-			initialState := e.findInitialStateInRegion(region)
-			if initialState == nil {
-				return fmt.Errorf("region %s has no initial state", region.Name)
-			}
-			e.activeConfig.regionStates[region] = initialState
-			if err := e.enterState(initialState); err != nil {
-				return fmt.Errorf("enter initial state in region %s: %w", region.Name, err)
+		// Enter initial state hierarchy (parent to child)
+		e.setCurrentState(initialState)
+		e.state = StateRunning
+		
+		// Build stateStack with full active configuration (root → leaf)
+		chain := e.getParentChain(initialState)
+		// Reverse to root→leaf order
+		for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
+			chain[i], chain[j] = chain[j], chain[i]
+		}
+		e.stateStack = chain
+		
+		// Enter states from root to initial state
+		for _, state := range e.stateStack {
+			if err := e.enterState(state); err != nil {
+				return fmt.Errorf("enter state %s: %w", state.Name, err)
 			}
 		}
+		
+		// Schedule events for outgoing transitions
+		if err := e.scheduleTransitionEvents(); err != nil {
+			return fmt.Errorf("schedule events: %w", err)
+		}
+		
 		return nil
 	}
 	
-	// Find initial state (deepest in hierarchy) for simple state machines
-	initialState := e.findDeepestInitialState()
-	
-	if initialState == nil {
+	// State machine has orthogonal regions at top level
+	// Find regions from composite states map (graph has already extracted them)
+	if len(e.graph.RegionInitials) == 0 {
 		return fmt.Errorf("no initial state found in state machine %s", e.stateMachine.Name)
 	}
 	
-	// Enter initial state hierarchy (parent to child)
-	e.setCurrentState(initialState)
 	e.state = StateRunning
+	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
+	e.activeConfig.simpleState = nil
 	
-	// Build stateStack with full active configuration (root → leaf)
-	chain := e.getParentChain(initialState)
-	// Reverse to root→leaf order
-	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
-		chain[i], chain[j] = chain[j], chain[i]
-	}
-	e.stateStack = chain
-	
-	// Enter states from root to initial state
-	for _, state := range e.stateStack {
-		if err := e.enterState(state); err != nil {
-			return fmt.Errorf("enter state %s: %w", state.Name, err)
+	// Enter initial states for all regions
+	for region, initialState := range e.graph.RegionInitials {
+		if initialState == nil {
+			return fmt.Errorf("region %s has no initial state", region.Name)
 		}
-	}
-	
-	// Schedule events for outgoing transitions
-	if err := e.scheduleTransitionEvents(); err != nil {
-		return fmt.Errorf("schedule events: %w", err)
+		e.activeConfig.regionStates[region] = initialState
+		if err := e.enterState(initialState); err != nil {
+			return fmt.Errorf("enter initial state in region %s: %w", region.Name, err)
+		}
 	}
 	
 	return nil
-}
-
-// findDeepestInitialState finds initial state, following nested initial states.
-func (e *StateExecutor) findDeepestInitialState() *ast.StateNode {
-	// Find top-level initial state (no parent or parent not initial)
-	var current *ast.StateNode
-	for _, state := range e.states {
-		if !state.IsInitial {
-			continue
-		}
-		// Check if parent exists and is initial - skip if so (we want root initial)
-		parent := e.parentState[state]
-		if parent == nil || !parent.IsInitial {
-			current = state
-			break
-		}
-	}
-	
-	if current == nil {
-		return nil
-	}
-	
-	// Follow nested initial states down to deepest level
-	for {
-		foundNested := false
-		for _, state := range e.states {
-			if state.IsInitial && e.parentState[state] == current {
-				current = state
-				foundNested = true
-				break
-			}
-		}
-		if !foundNested {
-			break
-		}
-	}
-	
-	return current
 }
 
 // enterState executes entry behaviors when entering a state.
@@ -700,14 +564,14 @@ func (e *StateExecutor) enterState(state *ast.StateNode) error {
 	}
 	
 	// Check if this is a composite state with regions
-	if regions, isComposite := e.compositeStates[state]; isComposite {
+	if regions, isComposite := e.graph.CompositeStates[state]; isComposite {
 		// Entering composite state with orthogonal regions
 		// Initialize active configuration for all regions
 		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
 		e.activeConfig.simpleState = nil // Clear simple state
 		
 		for _, region := range regions {
-			initialState := e.regionInitials[region]
+			initialState := e.graph.RegionInitials[region]
 			e.activeConfig.regionStates[region] = initialState
 			// Recursively enter initial state in each region
 			if err := e.enterState(initialState); err != nil {
@@ -798,7 +662,7 @@ func (e *StateExecutor) pollChangeEvents() error {
 	if currentState == nil {
 		return nil // Multi-region state, skip for now
 	}
-	transitions := e.transitions[currentState]
+	transitions := e.graph.Transitions[currentState]
 	
 	for _, trans := range transitions {
 		if changeEvent, ok := trans.Trigger.(*ast.ChangeEvent); ok {
@@ -951,33 +815,32 @@ func (e *StateExecutor) evaluateJunctionPseudostate(junction *ast.PseudostateNod
 
 // findTransitionsFromPseudostate finds all outgoing transitions from a pseudostate.
 func (e *StateExecutor) findTransitionsFromPseudostate(ps *ast.PseudostateNode) []*ast.TransitionEdge {
-	var result []*ast.TransitionEdge
-	
-	// Search all transitions in state machine
-	stateUsage, ok := e.stateMachine.Decl.(*ast.Usage)
+	// Look up transitions from graph (already lowered)
+	lowerTransitions, ok := e.graph.Transitions[ps]
 	if !ok {
-		stateDef, ok := e.stateMachine.Decl.(*ast.Definition)
-		if !ok {
-			return result
-		}
-		stateUsage = &ast.Usage{Members: stateDef.Members}
+		return nil
 	}
 	
-	for _, member := range stateUsage.Members {
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
+	// Convert lower.Transition back to TransitionEdge for compatibility
+	result := make([]*ast.TransitionEdge, 0, len(lowerTransitions))
+	for _, lowerTrans := range lowerTransitions {
+		sourceName := getNodeName(lowerTrans.Source)
+		targetName := getNodeName(lowerTrans.Target)
+		
+		edge := &ast.TransitionEdge{
+			Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: sourceName}}},
+			Target:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: targetName}}},
+			Guard:   lowerTrans.Guard,
+			Effect:  lowerTrans.Effect,
 		}
 		
-		if trans, ok := actualMember.(*ast.TransitionEdge); ok {
-			// Check if source matches pseudostate name
-			if trans.Source != nil && len(trans.Source.Parts) > 0 {
-				sourceName := trans.Source.Parts[len(trans.Source.Parts)-1].Text
-				if sourceName == ps.Name {
-					result = append(result, trans)
-				}
+		if lowerTrans.Trigger != nil {
+			if triggerEvent, ok := lowerTrans.Trigger.(ast.TriggerEvent); ok {
+				edge.Trigger = triggerEvent
 			}
 		}
+		
+		result = append(result, edge)
 	}
 	
 	return result

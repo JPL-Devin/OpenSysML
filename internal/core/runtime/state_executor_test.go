@@ -4,9 +4,21 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
+
+// Helper to convert TransitionEdge to lower.Transition for backward-compatible tests
+func edgeToTransition(edge *ast.TransitionEdge, sourceState, targetState *ast.StateNode) *lower.Transition {
+	return &lower.Transition{
+		Source:  sourceState,
+		Target:  targetState,
+		Trigger: edge.Trigger,
+		Guard:   edge.Guard,
+		Effect:  edge.Effect,
+	}
+}
 
 func TestStateExecutor_Creation(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
@@ -205,8 +217,8 @@ func TestStateExecutor_ExitBehavior(t *testing.T) {
 	
 	// Execute transition (will test in later tasks)
 	// For now just verify structure
-	if len(exec.transitions[stateA]) != 1 {
-		t.Errorf("expected 1 transition from stateA, got %d", len(exec.transitions[stateA]))
+	if len(exec.graph.Transitions[stateA]) != 1 {
+		t.Errorf("expected 1 transition from stateA, got %d", len(exec.graph.Transitions[stateA]))
 	}
 }
 
@@ -620,24 +632,24 @@ func TestStateExecutor_HierarchicalStates(t *testing.T) {
 	}
 	
 	// Verify all states collected
-	if len(exec.states) != 4 {
-		t.Errorf("expected 4 states (composite, childA, childB, standalone), got %d", len(exec.states))
+	if len(exec.graph.States) != 4 {
+		t.Errorf("expected 4 states (composite, childA, childB, standalone), got %d", len(exec.graph.States))
 	}
 	
 	// Verify parent relationships
-	if parent := exec.parentState[childA]; parent != composite {
+	if parent := exec.graph.ParentState[childA]; parent != composite {
 		t.Errorf("expected childA parent = composite, got %v", parent)
 	}
 	
-	if parent := exec.parentState[childB]; parent != composite {
+	if parent := exec.graph.ParentState[childB]; parent != composite {
 		t.Errorf("expected childB parent = composite, got %v", parent)
 	}
 	
-	if _, hasParent := exec.parentState[composite]; hasParent {
+	if _, hasParent := exec.graph.ParentState[composite]; hasParent {
 		t.Error("expected composite to have no parent")
 	}
 	
-	if _, hasParent := exec.parentState[standalone]; hasParent {
+	if _, hasParent := exec.graph.ParentState[standalone]; hasParent {
 		t.Error("expected standalone to have no parent")
 	}
 	
