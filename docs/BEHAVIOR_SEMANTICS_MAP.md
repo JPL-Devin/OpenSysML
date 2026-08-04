@@ -52,11 +52,11 @@ Each row documents one behavioral semantic feature:
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Require expression evaluation | `context.go:148` `EvaluateRequirement` | `requirement_literal.sysml` | ✅ Faithful |
-| Subject declaration | Parsed (`behavior.go:parseRequirementMember`) | `requirement_members.sysml` (AST only) | ❌ Not Yet Implemented |
-| Actor declaration | Parsed (`behavior.go:parseRequirementMember`) | `requirement_members.sysml` (AST only) | ❌ Not Yet Implemented |
-| Assume declaration | Parsed (`behavior.go:parseRequirementMember`) | (needs explicit test) | ❌ Not Yet Implemented |
-| Nested requirements | Parsed | `requirement_members.sysml` (AST only) | ❌ Not Yet Implemented |
+| Require expression evaluation | `context.go:219` `RequireMember` case | `requirement_literal.sysml` | ✅ Faithful |
+| Subject binding evaluation | `context.go:178` `SubjectMember` + reqBindings | `requirement_subject.sysml` | ✅ Faithful |
+| Actor binding evaluation | `context.go:195` `ActorMember` + reqBindings | `requirement_actor.sysml` | ✅ Faithful |
+| Assume expression evaluation | `context.go:211` `AssumeMember` (trusted, non-failing) | `requirement_assume.sysml` | ✅ Faithful |
+| Nested requirements | `context.go:168` recursive member evaluation | `requirement_nested.sysml` | ✅ Faithful |
 
 ---
 
@@ -64,8 +64,8 @@ Each row documents one behavioral semantic feature:
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Initial node token placement | `action_executor.go:361` `stepInitialNode` | `action_output.sysml` | 🚧 Known Failure (no initial node found) |
-| Final node token consumption | `action_executor.go:375` `stepFinalNode` | `action_output.sysml` | 🚧 Known Failure |
+| Initial node token placement | `action_executor.go:361` `stepInitialNode` | `action_output.sysml` | ✅ Faithful |
+| Final node token consumption | `action_executor.go:375` `stepFinalNode` | `action_output.sysml` | ✅ Faithful |
 | Fork node (1→N parallelism) | `action_executor.go:395` `stepForkNode` | `action_executor_test.go:TestActionExecutor_Fork` | ✅ Faithful |
 | Join node (N→1 synchronization) | `action_executor.go:425` `stepJoinNode` | `action_executor_test.go:TestActionExecutor_Join` | ✅ Faithful |
 | Merge node (N→1 non-blocking) | `action_executor.go:505` `stepMergeNode` | `action_executor_test.go:TestActionExecutor_Merge` | ✅ Faithful |
