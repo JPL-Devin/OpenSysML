@@ -64,6 +64,21 @@ func TestFindDoneStartErrors(t *testing.T) {
 	}
 	
 	if len(doneErrors) > 0 || len(startErrors) > 0 {
-		t.Errorf("Found %d 'done' errors and %d 'start' errors", len(doneErrors), len(startErrors))
+		// Known OMG training bugs (documented in docs/TRAINING_EXAMPLES.md)
+		knownBugs := map[string]bool{
+			"27. Occurrences/Time Slice and Snapshot Example.sysml": true,
+			"28. Individuals/Individuals and Time Slices.sysml":      true,
+		}
+		
+		for _, f := range append(doneErrors, startErrors...) {
+			if !knownBugs[f] {
+				t.Errorf("Unexpected error in: %s", f)
+			}
+		}
+		
+		// Expect exactly 2 files with these errors (both have done + start)
+		if len(doneErrors) != 2 || len(startErrors) != 2 {
+			t.Errorf("Expected 2 'done' and 2 'start' errors (known OMG bugs), got %d and %d", len(doneErrors), len(startErrors))
+		}
 	}
 }
