@@ -3,6 +3,7 @@ package grpc
 import (
 	pb "github.com/Open-MBEE/Systemica/api/proto"
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -12,7 +13,7 @@ import (
 // This is the public API for gRPC service use.
 func SymbolToProto(sym *symbols.Symbol, idx *symbols.Index) *pb.SymbolInfo {
 	info := &pb.SymbolInfo{
-		Id:       sym.Name, // Fully qualified name
+		Id:       idx.GetFQN(sym), // Fully qualified name
 		Name:     sym.Name,
 		Kind:     sym.Kind.String(),
 		Metadata: make(map[string]string),
@@ -28,7 +29,7 @@ func SymbolToProto(sym *symbols.Symbol, idx *symbols.Index) *pb.SymbolInfo {
 	if sym.Scope != nil {
 		var childIDs []string
 		for _, childSym := range sym.Scope.AllMembers() {
-			childIDs = append(childIDs, childSym.Name)
+			childIDs = append(childIDs, idx.GetFQN(childSym))
 		}
 		info.ChildIds = childIDs
 	}
@@ -58,6 +59,25 @@ func DiagnosticToProto(diag passes.Diagnostic, sf *source.SourceFile) *pb.Diagno
 	}
 }
 
+// ParserDiagnosticToProto converts a parser.Diagnostic to protobuf.
+func ParserDiagnosticToProto(diag parser.Diagnostic, sf *source.SourceFile) *pb.Diagnostic {
+	li := sf.Lines()
+	start := li.PosAt(diag.Span.Offset)
+	end := li.PosAt(diag.Span.End())
+
+	return &pb.Diagnostic{
+		Severity: "error", // Parser diagnostics are always errors
+		Message:  diag.Message,
+		Span: &pb.Span{
+			File:      sf.Name(),
+			StartLine: int32(start.Line),
+			StartCol:  int32(start.Col),
+			EndLine:   int32(end.Line),
+			EndCol:    int32(end.Col),
+		},
+	}
+}
+
 // convertSpan converts source.Span → proto.Span.
 // Requires the SourceFile and LineIndex to map byte offsets to line:col.
 func convertSpan(sp source.Span, sf *source.SourceFile, li *source.LineIndex) *pb.Span {
@@ -70,31 +90,6 @@ func convertSpan(sp source.Span, sf *source.SourceFile, li *source.LineIndex) *p
 		EndLine:   int32(end.Line),
 		EndCol:    int32(end.Col),
 	}
-}
-
-// convertSymbol converts symbols.Symbol → proto.SymbolInfo.
-// Does NOT recurse into children (caller controls depth).
-func convertSymbol(sym *symbols.Symbol, sf *source.SourceFile, li *source.LineIndex) *pb.SymbolInfo {
-	pbSym := &pb.SymbolInfo{
-		Id:       sym.Name, // Fully qualified name
-		Name:     sym.Name,
-		Kind:     sym.Kind.String(),
-		Metadata: make(map[string]string),
-	}
-
-	// Extract metadata from AST node
-	extractMetadata(sym, pbSym.Metadata)
-
-	// Populate child_ids if this symbol has a scope
-	if sym.Scope != nil {
-		var childIDs []string
-		for _, childSym := range sym.Scope.AllMembers() {
-			childIDs = append(childIDs, childSym.Name)
-		}
-		pbSym.ChildIds = childIDs
-	}
-
-	return pbSym
 }
 
 // extractMetadata populates the metadata map from the symbol's AST node.

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -92,18 +93,24 @@ func TestConvertSpan(t *testing.T) {
 
 // TestConvertSymbolBasic verifies Symbol → SymbolInfo conversion for a simple part def.
 func TestConvertSymbolBasic(t *testing.T) {
-	// Mock symbol
-	sym := &symbols.Symbol{
-		Name:     "MyPart",
-		Kind:     symbols.SymbolPartDef,
-		DeclSpan: source.Span{Offset: 0, Len: 10},
-	}
-	sf := source.New("test.sysml", []byte("part MyPart{}"))
-	li := sf.Lines()
+	// Parse real model to get symbol with proper structure
+	content := `package Test { part def MyPart; }`
+	sf := source.New("test.sysml", []byte(content))
+	p := parser.New(sf)
+	root := p.ParseFile()
 
-	pbSym := convertSymbol(sym, sf, li)
-	if pbSym.Id != "MyPart" {
-		t.Errorf("Id: got %q, want %q", pbSym.Id, "MyPart")
+	idx := symbols.NewIndex()
+	idx.AddDocument("test.sysml", root)
+
+	// Lookup MyPart symbol
+	syms := idx.LookupQualified("Test::MyPart")
+	if len(syms) == 0 {
+		t.Fatal("MyPart symbol not found")
+	}
+
+	pbSym := SymbolToProto(syms[0], idx)
+	if pbSym.Id != "Test::MyPart" {
+		t.Errorf("Id: got %q, want %q", pbSym.Id, "Test::MyPart")
 	}
 	if pbSym.Name != "MyPart" {
 		t.Errorf("Name: got %q, want %q", pbSym.Name, "MyPart")
@@ -113,87 +120,127 @@ func TestConvertSymbolBasic(t *testing.T) {
 	}
 }
 
-// TestConvertSymbolWithChildren verifies child_ids population.
+// TestConvertSymbolWithChildren verifies child_ids population with FQNs.
 func TestConvertSymbolWithChildren(t *testing.T) {
-	// Parent with a scope containing two children
-	parent := &symbols.Symbol{
-		Name:     "Parent",
-		Kind:     symbols.SymbolPackage,
-		DeclSpan: source.Span{Offset: 0, Len: 5},
-	}
-	child1 := &symbols.Symbol{
-		Name:     "Parent::Child1",
-		Kind:     symbols.SymbolPartDef,
-		DeclSpan: source.Span{Offset: 10, Len: 5},
-	}
-	child2 := &symbols.Symbol{
-		Name:     "Parent::Child2",
-		Kind:     symbols.SymbolAttributeDef,
-		DeclSpan: source.Span{Offset: 20, Len: 5},
-	}
-	scope := symbols.NewScope(nil, nil)
-	scope.Define("Child1", child1)
-	scope.Define("Child2", child2)
-	parent.Scope = scope
+	// Parse model with nested symbols
+	content := `package Parent { part def Child1; attribute def Child2; }`
+	sf := source.New("test.sysml", []byte(content))
+	p := parser.New(sf)
+	root := p.ParseFile()
 
-	sf := source.New("test.sysml", []byte("package Parent { part Child1; attribute Child2; }"))
-	li := sf.Lines()
+	idx := symbols.NewIndex()
+	idx.AddDocument("test.sysml", root)
 
-	pbSym := convertSymbol(parent, sf, li)
+	// Lookup Parent symbol
+	parents := idx.LookupQualified("Parent")
+	if len(parents) == 0 {
+		t.Fatal("Parent symbol not found")
+	}
+
+	pbSym := SymbolToProto(parents[0], idx)
 	if len(pbSym.ChildIds) != 2 {
 		t.Fatalf("ChildIds: got %d, want 2", len(pbSym.ChildIds))
 	}
-	// Order not guaranteed, check both are present
+
+	// Verify FQNs are present
 	found := map[string]bool{}
 	for _, id := range pbSym.ChildIds {
 		found[id] = true
 	}
 	if !found["Parent::Child1"] {
-		t.Errorf("Missing Parent::Child1 in ChildIds")
+		t.Errorf("Missing Parent::Child1 in ChildIds, got: %v", pbSym.ChildIds)
 	}
 	if !found["Parent::Child2"] {
-		t.Errorf("Missing Parent::Child2 in ChildIds")
+		t.Errorf("Missing Parent::Child2 in ChildIds, got: %v", pbSym.ChildIds)
 	}
 }
 
 // TestConvertSymbolMetadata verifies metadata extraction from Usage node.
 func TestConvertSymbolMetadata(t *testing.T) {
-	// Usage with multiplicity and typing
-	usage := &ast.Usage{
-		Kind: ast.UsageAttribute,
-		Ident: ast.Identification{
-			Name: "mass",
-		},
-		Multiplicity: &ast.Multiplicity{
-			Lower:   &ast.LiteralInteger{Value: "1"},
-			Upper:   &ast.LiteralInteger{Value: "1"},
-			IsRange: true,
-		},
-		Relationships: []*ast.Relationship{
-			{
-				Kind: ast.RelTyping,
-				Target: &ast.QualifiedName{
-					Parts: []ast.NameSegment{{Text: "Real"}},
-				},
-			},
-		},
-	}
-	sym := &symbols.Symbol{
-		Name:     "MyPart::mass",
-		Kind:     symbols.SymbolAttributeUsage,
-		Decl:     usage,
-		DeclSpan: source.Span{Offset: 0, Len: 10},
-	}
-	sf := source.New("test.sysml", []byte("attribute mass : Real [1];"))
-	li := sf.Lines()
+	// Parse model with typed attribute
+	content := `package MyPart { attribute mass : Real [1]; }`
+	sf := source.New("test.sysml", []byte(content))
+	p := parser.New(sf)
+	root := p.ParseFile()
 
-	pbSym := convertSymbol(sym, sf, li)
+	idx := symbols.NewIndex()
+	idx.AddDocument("test.sysml", root)
 
-	// Check metadata
-	if pbSym.Metadata["multiplicity"] != "1..1" {
-		t.Errorf("Metadata[multiplicity]: got %q, want %q", pbSym.Metadata["multiplicity"], "1..1")
+	// Lookup mass symbol
+	syms := idx.LookupQualified("MyPart::mass")
+	if len(syms) == 0 {
+		t.Fatal("mass symbol not found")
+	}
+
+	pbSym := SymbolToProto(syms[0], idx)
+
+	// Check metadata (parser produces "1" for single value, not "1..1")
+	if pbSym.Metadata["multiplicity"] != "1" {
+		t.Errorf("Metadata[multiplicity]: got %q, want %q", pbSym.Metadata["multiplicity"], "1")
 	}
 	if pbSym.Metadata["type"] != "Real" {
 		t.Errorf("Metadata[type]: got %q, want %q", pbSym.Metadata["type"], "Real")
+	}
+}
+
+// TestSymbolIdIsFQN verifies Symbol.Id contains fully-qualified names for nested symbols.
+func TestSymbolIdIsFQN(t *testing.T) {
+	// Parse nested model
+	content := `
+package Vehicle {
+  part def Engine {
+    part combustionChamber;
+  }
+}
+`
+	sf := source.New("test.sysml", []byte(content))
+	p := parser.New(sf)
+	root := p.ParseFile()
+
+	idx := symbols.NewIndex()
+	idx.AddDocument("test.sysml", root)
+
+	// Verify Vehicle has correct FQN
+	vehicles := idx.LookupQualified("Vehicle")
+	if len(vehicles) == 0 {
+		t.Fatal("Vehicle symbol not found")
+	}
+	vehiclePb := SymbolToProto(vehicles[0], idx)
+	if vehiclePb.Id != "Vehicle" {
+		t.Errorf("Vehicle Id: got %q, want %q", vehiclePb.Id, "Vehicle")
+	}
+
+	// Verify Engine has FQN "Vehicle::Engine"
+	engines := idx.LookupQualified("Vehicle::Engine")
+	if len(engines) == 0 {
+		t.Fatal("Vehicle::Engine symbol not found")
+	}
+	enginePb := SymbolToProto(engines[0], idx)
+	if enginePb.Id != "Vehicle::Engine" {
+		t.Errorf("Engine Id: got %q, want %q", enginePb.Id, "Vehicle::Engine")
+	}
+	if enginePb.Name != "Engine" {
+		t.Errorf("Engine Name: got %q, want %q", enginePb.Name, "Engine")
+	}
+
+	// Verify combustionChamber has FQN "Vehicle::Engine::combustionChamber"
+	chambers := idx.LookupQualified("Vehicle::Engine::combustionChamber")
+	if len(chambers) == 0 {
+		t.Fatal("Vehicle::Engine::combustionChamber symbol not found")
+	}
+	chamberPb := SymbolToProto(chambers[0], idx)
+	if chamberPb.Id != "Vehicle::Engine::combustionChamber" {
+		t.Errorf("combustionChamber Id: got %q, want %q", chamberPb.Id, "Vehicle::Engine::combustionChamber")
+	}
+	if chamberPb.Name != "combustionChamber" {
+		t.Errorf("combustionChamber Name: got %q, want %q", chamberPb.Name, "combustionChamber")
+	}
+
+	// Verify Engine.ChildIds contains FQN
+	if len(enginePb.ChildIds) != 1 {
+		t.Fatalf("Engine ChildIds count: got %d, want 1", len(enginePb.ChildIds))
+	}
+	if enginePb.ChildIds[0] != "Vehicle::Engine::combustionChamber" {
+		t.Errorf("Engine ChildIds[0]: got %q, want %q", enginePb.ChildIds[0], "Vehicle::Engine::combustionChamber")
 	}
 }

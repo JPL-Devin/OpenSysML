@@ -14,8 +14,8 @@ func TestCachePutGet(t *testing.T) {
 
 	hash1 := "abc123"
 	model1 := &CachedModel{
-		Root:   &ast.RootNamespace{},
-		SymTab: symbols.NewScope(nil, nil),
+		Root:  &ast.RootNamespace{},
+		Index: symbols.NewIndex(),
 	}
 
 	cache.Put(hash1, model1)
