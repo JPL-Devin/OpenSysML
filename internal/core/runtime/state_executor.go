@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -27,13 +28,16 @@ type StateExecutor struct {
 	state        ExecutionState
 	trace        *TraceRecorder // Optional trace recorder for testing
 	
+	// Lowered graph (source of truth)
+	graph *lower.StateGraph
+	
 	// State machine execution state
 	activeConfig *StateConfiguration  // Active state configuration (simple or multi-region)
 	currentTime  float64
 	eventQueue   *EventQueue
 	stateData    map[string]Value // State machine local variables
 	
-	// Graph structure
+	// Graph structure (populated from graph for backward compatibility)
 	states         []*ast.StateNode
 	pseudostates   map[string]*ast.PseudostateNode          // Pseudostates by name
 	transitions    map[*ast.StateNode][]*ast.TransitionEdge
@@ -52,10 +56,17 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 		return nil, fmt.Errorf("symbol %s is not a state machine", stateMachine.Name)
 	}
 	
+	// Lower to StateGraph
+	graph, err := lower.ToStateGraph(stateMachine.Decl)
+	if err != nil {
+		return nil, fmt.Errorf("lower state machine: %w", err)
+	}
+	
 	exec := &StateExecutor{
 		ctx:             ctx,
 		stateMachine:    stateMachine,
 		state:           StateReady,
+		graph:           graph,
 		currentTime:     0.0,
 		eventQueue:      NewEventQueue(),
 		stateData:       make(map[string]Value),
@@ -71,123 +82,67 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 		},
 	}
 	
-	// Extract graph structure from AST
-	if err := exec.extractGraph(); err != nil {
-		return nil, fmt.Errorf("extract graph: %w", err)
+	// Populate internal structures from graph for backward compatibility
+	if err := exec.populateFromGraph(); err != nil {
+		return nil, fmt.Errorf("populate from graph: %w", err)
 	}
 	
 	return exec, nil
 }
 
-// extractGraph builds state and transition maps from state machine AST.
-func (e *StateExecutor) extractGraph() error {
-	// Get state machine node
-	stateUsage, ok := e.stateMachine.Decl.(*ast.Usage)
-	if !ok {
-		stateDef, ok := e.stateMachine.Decl.(*ast.Definition)
-		if !ok {
-			return fmt.Errorf("state machine symbol has invalid node type")
-		}
-		stateUsage = &ast.Usage{Members: stateDef.Members}
+// populateFromGraph populates internal structures from the lowered StateGraph.
+// This is a temporary bridge - eventually all code should use e.graph directly.
+func (e *StateExecutor) populateFromGraph() error {
+	// Copy states
+	e.states = e.graph.States
+	
+	// Copy pseudostates
+	for name, ps := range e.graph.Pseudostates {
+		e.pseudostates[name] = ps
 	}
 	
-	// First pass: collect states and pseudostates
-	for _, member := range stateUsage.Members {
-		// Unwrap Membership if present
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
-		}
+	// Copy composite states and regions
+	for state, regions := range e.graph.CompositeStates {
+		e.compositeStates[state] = regions
 		
-		if state, ok := actualMember.(*ast.StateNode); ok {
-			e.collectStates(state, nil) // Recursively collect substates
-		} else if ps, ok := actualMember.(*ast.PseudostateNode); ok {
-			// Collect pseudostate
-			e.pseudostates[ps.Name] = ps
-		}
-	}
-	
-	// Second pass: identify composite states with regions and find initial states
-	for _, state := range e.states {
-		if len(state.Regions) > 0 {
-			// Mark as composite state
-			e.compositeStates[state] = state.Regions
+		// Track region ownership
+		for _, region := range regions {
+			e.regionOwner[region] = state
 			
-			// Track region ownership
-			for _, region := range state.Regions {
-				e.regionOwner[region] = state
-				
-				// Find initial state in this region
-				initialState := e.findInitialStateInRegion(region)
-				if initialState == nil {
-					return fmt.Errorf("region %s in state %s has no initial state", region.Name, state.Name)
-				}
+			// Find initial state in this region
+			if initialState, ok := e.graph.RegionInitials[region]; ok {
 				e.regionInitials[region] = initialState
 			}
 		}
 	}
 	
-	// Third pass: collect transitions and handle initial node successors
-	for _, member := range stateUsage.Members {
-		// Unwrap Membership if present
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
-		}
-		
-		switch n := actualMember.(type) {
-		case *ast.InitialNode:
-			// Handle `first X then Y` syntax - create implicit transition from initial to target
-			if n.Successor != nil {
-				targetState := e.findStateByName(n.Successor)
-				if targetState != nil {
-					// Mark target as initial state
-					targetState.IsInitial = true
-					// If guard present, could store it, but for now initial transitions are unguarded in states
+	// Copy parent state mappings
+	for child, parent := range e.graph.ParentState {
+		e.parentState[child] = parent
+	}
+	
+	// Convert lower.Transition back to TransitionEdge for backward compatibility
+	// TODO: Eventually migrate all transition-handling code to use lower.Transition
+	for sourceState, transList := range e.graph.Transitions {
+		for _, lowerTrans := range transList {
+			// Create TransitionEdge for backward compatibility
+			edge := &ast.TransitionEdge{
+				Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: lowerTrans.Source.Name}}},
+				Target:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: lowerTrans.Target.Name}}},
+				Guard:   lowerTrans.Guard,
+			}
+			
+			// Type assert Trigger to TriggerEvent (TimeEvent, ChangeEvent, etc. implement this interface)
+			if lowerTrans.Trigger != nil {
+				if triggerEvent, ok := lowerTrans.Trigger.(ast.TriggerEvent); ok {
+					edge.Trigger = triggerEvent
 				}
 			}
-		case *ast.TransitionEdge:
-			// Collect transitions (will be mapped after all states collected)
-			if err := e.collectTransition(n); err != nil {
-				return err
-			}
+			
+			e.transitions[sourceState] = append(e.transitions[sourceState], edge)
 		}
 	}
 	
-	return nil
-}
-
-// collectStates recursively collects states and builds parent relationships.
-func (e *StateExecutor) collectStates(state *ast.StateNode, parent *ast.StateNode) {
-	e.states = append(e.states, state)
-	if parent != nil {
-		e.parentState[state] = parent
-	}
-	
-	// Recursively collect substates
-	for _, substate := range state.Substates {
-		if childState, ok := substate.(*ast.StateNode); ok {
-			e.collectStates(childState, state)
-		}
-	}
-	
-	// Collect states in orthogonal regions
-	for _, region := range state.Regions {
-		for _, regionState := range region.States {
-			if childState, ok := regionState.(*ast.StateNode); ok {
-				e.collectStates(childState, state)
-			}
-		}
-	}
-}
-
-// collectTransition maps a transition to its source state.
-func (e *StateExecutor) collectTransition(trans *ast.TransitionEdge) error {
-	sourceState := e.findStateByName(trans.Source)
-	if sourceState == nil {
-		return fmt.Errorf("transition references undefined source state")
-	}
-	e.transitions[sourceState] = append(e.transitions[sourceState], trans)
 	return nil
 }
 
@@ -568,76 +523,53 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 }
 // initialize sets current state to initial state and enters it.
 func (e *StateExecutor) initialize() error {
-	// Check if state machine itself has regions (no top-level states, just regions)
-	stateUsage, ok := e.stateMachine.Decl.(*ast.Usage)
-	if !ok {
-		stateDef, ok := e.stateMachine.Decl.(*ast.Definition)
-		if !ok {
-			return fmt.Errorf("state machine symbol has invalid node type")
-		}
-		stateUsage = &ast.Usage{Members: stateDef.Members}
-	}
-	
-	// Find StateRegion members at top level
-	var topLevelRegions []*ast.StateRegion
-	for _, member := range stateUsage.Members {
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
-		}
-		if region, ok := actualMember.(*ast.StateRegion); ok {
-			topLevelRegions = append(topLevelRegions, region)
-		}
-	}
-	
-	// If state machine has top-level regions, enter all initial states
-	if len(topLevelRegions) > 0 {
-		e.state = StateRunning
-		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
-		e.activeConfig.simpleState = nil
+	// Use initial state from graph
+	if e.graph.Initial != nil {
+		// Simple state machine with single initial state
+		initialState := e.graph.Initial
 		
-		for _, region := range topLevelRegions {
-			initialState := e.findInitialStateInRegion(region)
-			if initialState == nil {
-				return fmt.Errorf("region %s has no initial state", region.Name)
-			}
-			e.activeConfig.regionStates[region] = initialState
-			if err := e.enterState(initialState); err != nil {
-				return fmt.Errorf("enter initial state in region %s: %w", region.Name, err)
+		// Enter initial state hierarchy (parent to child)
+		e.setCurrentState(initialState)
+		e.state = StateRunning
+		
+		// Build stateStack with full active configuration (root → leaf)
+		chain := e.getParentChain(initialState)
+		// Reverse to root→leaf order
+		for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
+			chain[i], chain[j] = chain[j], chain[i]
+		}
+		e.stateStack = chain
+		
+		// Enter states from root to initial state
+		for _, state := range e.stateStack {
+			if err := e.enterState(state); err != nil {
+				return fmt.Errorf("enter state %s: %w", state.Name, err)
 			}
 		}
+		
+		// Schedule events for outgoing transitions
+		if err := e.scheduleTransitionEvents(); err != nil {
+			return fmt.Errorf("schedule events: %w", err)
+		}
+		
 		return nil
 	}
 	
-	// Find initial state (deepest in hierarchy) for simple state machines
-	initialState := e.findDeepestInitialState()
-	
-	if initialState == nil {
-		return fmt.Errorf("no initial state found in state machine %s", e.stateMachine.Name)
-	}
-	
-	// Enter initial state hierarchy (parent to child)
-	e.setCurrentState(initialState)
+	// State machine has orthogonal regions at top level
+	// Find regions from composite states map (graph has already extracted them)
 	e.state = StateRunning
+	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
+	e.activeConfig.simpleState = nil
 	
-	// Build stateStack with full active configuration (root → leaf)
-	chain := e.getParentChain(initialState)
-	// Reverse to root→leaf order
-	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
-		chain[i], chain[j] = chain[j], chain[i]
-	}
-	e.stateStack = chain
-	
-	// Enter states from root to initial state
-	for _, state := range e.stateStack {
-		if err := e.enterState(state); err != nil {
-			return fmt.Errorf("enter state %s: %w", state.Name, err)
+	// Enter initial states for all regions
+	for region, initialState := range e.graph.RegionInitials {
+		if initialState == nil {
+			return fmt.Errorf("region %s has no initial state", region.Name)
 		}
-	}
-	
-	// Schedule events for outgoing transitions
-	if err := e.scheduleTransitionEvents(); err != nil {
-		return fmt.Errorf("schedule events: %w", err)
+		e.activeConfig.regionStates[region] = initialState
+		if err := e.enterState(initialState); err != nil {
+			return fmt.Errorf("enter initial state in region %s: %w", region.Name, err)
+		}
 	}
 	
 	return nil
