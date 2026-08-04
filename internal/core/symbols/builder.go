@@ -143,6 +143,16 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 			defineIdent(scope, id, sym)
 			scope.AddChild(child)
 		}
+	case *ast.StateNode:
+		// Register state node by name (including initial/final pseudostates)
+		// so transitions and successions can reference it
+		if d.Name != "" {
+			id := ast.Identification{Name: d.Name}
+			child := NewScope(scope, d)
+			sym := newSymbol(id, SymbolStateUsage, d, vis, child, scope, trivia)
+			defineIdent(scope, id, sym)
+			scope.AddChild(child)
+		}
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		// Control flow nodes without explicit names in AST - skip indexing
 		// (If these nodes gain name fields in future, register them here)
