@@ -50,22 +50,28 @@
 - Token-flow tracing (infrastructure ready)
 - Step budget enforcement
 
-**State Machines (16/16 features):**
+**State Machines (22/22 features):**
 - Initial/final state identification
 - State entry/exit actions
 - State do behavior (simplified immediate execution)
 - Transition firing
 - Transition guard evaluation
 - Transition effect actions
-- Event triggers (ChangeEvent, TimeEvent, SignalEvent)
-- Hierarchical states
-- State history (shallow)
+- AcceptEvent triggers (when signal)
+- ChangeEvent triggers (when expression)
+- TimeEvent triggers (after duration)
+- Signal discrimination (name matching)
+- Unmatched signal dropped
+- Completion transitions (nil trigger with guard evaluation)
+- Hierarchical substates
+- Orthogonal regions (concurrent states)
+- Choice pseudostates (dynamic branching)
+- Junction pseudostates (static branching)
 - Run-to-completion semantics
 - Event queue management
-- Orthogonal regions (concurrent substates with event broadcasting)
-- Choice pseudostates (dynamic conditional branching)
-- Junction pseudostates (static merge/branch)
 - Dangling transition detection
+- State visits tracking
+- Multi-region event broadcasting
 - Control flow node registration (initial/final/first/done)
 
 **Expression Evaluation (7/7 features):**
@@ -168,18 +174,25 @@ Each row documents one behavioral semantic feature:
 |--------------|----------------|-----------|--------|
 | Initial state identification | `state_executor.go:71-109` extractGraph | `state_simple.sysml` | ✅ Faithful |
 | Final state termination | `state_executor.go:184` ProcessNextEvent | `state_simple.sysml` | ✅ Faithful |
-| State entry actions | `state_executor.go:429` enterState | `state_full.sysml` | ✅ Faithful |
-| State exit actions | `state_executor.go:460` exitState | `state_full.sysml` | ✅ Faithful |
-| State do behavior (immediate) | `state_executor.go:443` enterState | `state_do_behavior.sysml` | ✅ Faithful |
-| Transition firing | `state_executor.go:269` fireTransition | `state_full.sysml` | ✅ Faithful |
-| Transition guard evaluation | `state_executor.go:217` ProcessNextEvent | `state_full.sysml` | ✅ Faithful |
-| Transition effect actions | `state_executor.go:296` fireTransition | `state_transition_effect.sysml` | ✅ Faithful |
-| ChangeEvent triggers (when) | `state_executor.go:196` ProcessNextEvent | `state_executor_test.go:TestStateChangeEvent` | ✅ Faithful |
-| TimeEvent triggers (after/at) | `state_executor.go:196` ProcessNextEvent | `state_executor_test.go:TestStateTimeEvent` | ✅ Faithful |
+| State entry actions | `state_executor.go:731` enterState | `state_full.sysml` | ✅ Faithful |
+| State exit actions | `state_executor.go:806` exitState | `state_full.sysml` | ✅ Faithful |
+| State do behavior (immediate) | `state_executor.go:750` enterState | `state_do_behavior.sysml` | ✅ Faithful |
+| Transition firing | `state_executor.go:561` fireTransition | `state_full.sysml` | ✅ Faithful |
+| Transition guard evaluation | `state_executor.go:225` scheduleTransitionEvents | `state_choice_pseudostate.sysml` | ✅ Faithful |
+| Transition effect actions | `state_executor.go:586` fireTransition | `state_transition_effect.sysml` | ✅ Faithful |
+| AcceptEvent triggers (when signal) | `state_executor.go:292` matchesEvent | `state_signal_discriminate.sysml` | ✅ Faithful |
+| ChangeEvent triggers (when expr) | `state_executor.go:292` matchesEvent | `state_executor_test.go:TestStateChangeEvent` | ✅ Faithful |
+| TimeEvent triggers (after/at) | `state_executor.go:292` matchesEvent | `state_executor_test.go:TestStateTimeEvent` | ✅ Faithful |
+| Signal discrimination | `state_executor.go:308` matchesEvent signal name | `state_signal_discriminate.sysml` | ✅ Faithful |
+| Unmatched signal dropped | `state_executor.go:292` matchesEvent | `state_signal_unmatched.sysml` | ✅ Faithful |
 | Hierarchical substates | `state_executor.go:121` findInitialState | `state_full.sysml` | ✅ Faithful |
-| Run-to-completion semantics | `state_executor.go:184` ProcessNextEvent | `state_executor_test.go:TestStateRunToCompletion` | ✅ Faithful |
+| Orthogonal regions | `state_executor.go:194` scheduleTransitionsForState | `state_orthogonal_regions.sysml` | ✅ Faithful |
+| Choice pseudostates | `state_executor.go:395` evaluateChoicePseudostate | `state_choice_pseudostate.sysml` | ✅ Faithful |
+| Junction pseudostates | `state_executor.go:420` evaluateJunctionPseudostate | `state_junction_pseudostate.sysml` | ✅ Faithful |
+| Run-to-completion semantics | `state_executor.go:276` ProcessNextEvent | `state_executor_test.go:TestStateRunToCompletion` | ✅ Faithful |
 | Event queue management | `state_executor.go:50` eventQueue | `state_executor_test.go` | ✅ Faithful |
 | Dangling transition detection | resolve phase | `robustness_test.go:testStateDanglingTransition` | ✅ Faithful |
+| Completion transitions | `state_executor.go:222` scheduleTransitionEvents nil trigger | `state_simple.sysml` | ✅ Faithful |
 
 ### Expression Evaluation
 
@@ -269,7 +282,7 @@ Each row documents one behavioral semantic feature:
 | `eval.go` | Expression evaluation (operators, literals, features) | ~600 |
 | `value.go` | Runtime value representation (ValConst, ValString, ValInstance) | ~150 |
 | `trace.go` | Deterministic execution trace recording | ~170 |
-| `conformance_test.go` | Conformance gate (23 cases) | ~420 |
+| `conformance_test.go` | Conformance gate (25 cases) | ~470 |
 | `robustness_test.go` | Failure-mode tests (6 cases) | ~360 |
 | `trace_test.go` | Golden trace test infrastructure | ~140 |
 

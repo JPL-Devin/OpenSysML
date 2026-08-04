@@ -9,36 +9,36 @@ import (
 type StateGraph struct {
 	// States in the machine (flat list, includes nested)
 	States []*ast.StateNode
-	
+
 	// Pseudostates (choice, junction, etc.)
 	Pseudostates map[string]*ast.PseudostateNode
-	
+
 	// Transitions: source node (StateNode or PseudostateNode) → list of transitions
 	Transitions map[ast.Node][]*Transition
-	
+
 	// CompositeStates: state → regions
 	CompositeStates map[*ast.StateNode][]*ast.StateRegion
-	
+
 	// RegionInitials: region → initial state
 	RegionInitials map[*ast.StateRegion]*ast.StateNode
-	
+
 	// ParentState: child → parent
 	ParentState map[*ast.StateNode]*ast.StateNode
-	
+
 	// RegionOwner: region → owning composite state
 	RegionOwner map[*ast.StateRegion]*ast.StateNode
-	
+
 	// InitialState (required for simple machines, nil for multi-region)
 	Initial *ast.StateNode
 }
 
 // Transition represents a state transition (lowered from TransitionEdge or TransitionMember).
 type Transition struct {
-	Source  ast.Node           // *ast.StateNode or *ast.PseudostateNode
-	Target  ast.Node           // *ast.StateNode or *ast.PseudostateNode
-	Trigger ast.Node           // TimeEvent, ChangeEvent, SignalEvent, CallEvent, nil = completion
-	Guard   ast.Node           // guard expression, nil = no guard
-	Effect  []ast.Node         // effect actions
+	Source  ast.Node   // *ast.StateNode or *ast.PseudostateNode
+	Target  ast.Node   // *ast.StateNode or *ast.PseudostateNode
+	Trigger ast.Node   // TimeEvent, ChangeEvent, SignalEvent, CallEvent, nil = completion
+	Guard   ast.Node   // guard expression, nil = no guard
+	Effect  []ast.Node // effect actions
 }
 
 // ToStateGraph converts a state machine AST (Usage or Definition) to a StateGraph.
@@ -52,7 +52,7 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 		ParentState:     make(map[*ast.StateNode]*ast.StateNode),
 		RegionOwner:     make(map[*ast.StateRegion]*ast.StateNode),
 	}
-	
+
 	// Extract members
 	var members []ast.Node
 	switch n := stateMachineDecl.(type) {
@@ -63,14 +63,24 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 	default:
 		return nil, fmt.Errorf("state machine must be Usage or Definition, got %T", stateMachineDecl)
 	}
-	
+
 	// First pass: collect states and pseudostates
 	for _, member := range members {
 		actualMember := unwrapMembership(member)
-		
+
 		switch n := actualMember.(type) {
 		case *ast.StateNode:
 			collectStates(graph, n, nil)
+		case *ast.Usage:
+			// Handle state usages: state declarations parsed as Usage with Kind=UsageState
+			if n.Kind == ast.UsageState {
+				// Create a StateNode from the usage
+				stateNode := &ast.StateNode{
+					Name: n.Ident.Name,
+				}
+				stateNode.NodeSpan = n.NodeSpan
+				collectStates(graph, stateNode, nil)
+			}
 		case *ast.SubstateMember:
 			// Substate declarations: state <name>;
 			// Create a StateNode from the name
@@ -96,7 +106,7 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 			graph.Pseudostates[n.Name] = n
 		}
 	}
-	
+
 	// Second pass: identify composite states with regions AND handle top-level regions
 	// Check for top-level regions (state machine itself has regions as members)
 	for _, member := range members {
@@ -110,15 +120,15 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 			graph.RegionInitials[region] = initialState
 		}
 	}
-	
+
 	// Also handle states that have regions as sub-members
 	for _, state := range graph.States {
 		if len(state.Regions) > 0 {
 			graph.CompositeStates[state] = state.Regions
-			
+
 			for _, region := range state.Regions {
 				graph.RegionOwner[region] = state
-				
+
 				initialState := findInitialStateInRegion(graph, region)
 				if initialState == nil {
 					return nil, fmt.Errorf("region %s in state %s has no initial state", region.Name, state.Name)
@@ -127,40 +137,12 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 			}
 		}
 	}
-	
+
 	// Third pass: collect transitions
-	for _, member := range members {
-		actualMember := unwrapMembership(member)
-		
-		switch n := actualMember.(type) {
-		case *ast.ErrorNode:
-			// Skip error nodes
-			continue
-		case *ast.InitialNode:
-			// Handle `first X then Y` syntax
-			if n.Successor != nil {
-				targetState := findStateByName(graph.States, n.Successor)
-				if targetState != nil {
-					targetState.IsInitial = true
-				}
-			}
-		case *ast.TransitionEdge:
-			// Legacy: explicit TransitionEdge nodes (from hand-built tests)
-			trans, err := lowerTransitionEdge(graph, n)
-			if err != nil {
-				return nil, err
-			}
-			graph.Transitions[trans.Source] = append(graph.Transitions[trans.Source], trans)
-		case *ast.TransitionMember:
-			// New: TransitionMember from parser (declarative)
-			trans, err := lowerTransitionMember(graph, n)
-			if err != nil {
-				return nil, err
-			}
-			graph.Transitions[trans.Source] = append(graph.Transitions[trans.Source], trans)
-		}
+	if err := collectTransitions(graph, members, nil); err != nil {
+		return nil, err
 	}
-	
+
 	// Find initial state (for simple machines - machines without top-level regions)
 	if len(graph.RegionInitials) == 0 {
 		// Find the leaf initial state (deepest in a chain of initials)
@@ -168,12 +150,12 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 		var selectedInitial *ast.StateNode
 		minRootDepth := 999999
 		maxLeafDepth := -1
-		
+
 		for _, state := range graph.States {
 			if !state.IsInitial {
 				continue
 			}
-			
+
 			// Calculate depth (distance from root)
 			depth := 0
 			current := state
@@ -185,7 +167,7 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 				depth++
 				current = parent
 			}
-			
+
 			// Find the root of the initial chain (topmost initial ancestor)
 			chainRoot := state
 			for {
@@ -195,7 +177,7 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 				}
 				chainRoot = parent
 			}
-			
+
 			// Calculate chain root depth
 			rootDepth := 0
 			current = chainRoot
@@ -207,7 +189,7 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 				rootDepth++
 				current = parent
 			}
-			
+
 			// Prefer chain with shallowest root, then deepest leaf within that chain
 			if rootDepth < minRootDepth || (rootDepth == minRootDepth && depth > maxLeafDepth) {
 				selectedInitial = state
@@ -215,17 +197,19 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 				maxLeafDepth = depth
 			}
 		}
-		
-		if selectedInitial != nil {
+
+		// Only set Initial if there are no top-level regions
+		// (executor will use RegionInitials for orthogonal region machines)
+		if selectedInitial != nil && len(graph.RegionInitials) == 0 {
 			graph.Initial = selectedInitial
 		}
 	}
 	// If there are top-level regions, Initial stays nil (executor will use RegionInitials instead)
-	
+
 	// Note: Initial state is optional at graph construction time.
 	// The executor's initialize() will validate and return the error if missing.
 	// Top-level regions are also valid (no single initial state).
-	
+
 	return graph, nil
 }
 
@@ -235,14 +219,14 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 	if parent != nil {
 		graph.ParentState[state] = parent
 	}
-	
+
 	// Recursively collect substates
 	for _, substate := range state.Substates {
 		if childState, ok := substate.(*ast.StateNode); ok {
 			collectStates(graph, childState, state)
 		}
 	}
-	
+
 	// Collect states in orthogonal regions
 	for _, region := range state.Regions {
 		for _, regionState := range region.States {
@@ -270,7 +254,7 @@ func findStateByName(states []*ast.StateNode, qname *ast.QualifiedName) *ast.Sta
 	if qname == nil || len(qname.Parts) == 0 {
 		return nil
 	}
-	
+
 	targetName := qname.Parts[len(qname.Parts)-1].Text
 	for _, state := range states {
 		if state.Name == targetName {
@@ -286,12 +270,12 @@ func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge) (*Transiti
 	if sourceState == nil {
 		return nil, fmt.Errorf("transition edge references undefined source state %v", edge.Source)
 	}
-	
+
 	targetState := findStateByName(graph.States, edge.Target)
 	if targetState == nil {
 		return nil, fmt.Errorf("transition edge references undefined target state %v", edge.Target)
 	}
-	
+
 	return &Transition{
 		Source:  sourceState,
 		Target:  targetState,
@@ -305,7 +289,7 @@ func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge) (*Transiti
 func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember) (*Transition, error) {
 	// TransitionMember has: Source (QualifiedName), Target (QualifiedName), Trigger, Guard, Effect ([]Node)
 	// Source and Target can be StateNode or PseudostateNode
-	
+
 	// Try to find source as state
 	var source ast.Node
 	sourceState := findStateByName(graph.States, member.Source)
@@ -318,7 +302,7 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember) (*Tr
 			source = ps
 		}
 	}
-	
+
 	if source == nil {
 		// Debug: print available states and pseudostates
 		var stateNames []string
@@ -328,10 +312,10 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember) (*Tr
 		for name := range graph.Pseudostates {
 			stateNames = append(stateNames, name+" (pseudostate)")
 		}
-		return nil, fmt.Errorf("transition member references undefined source %q (available: %v)", 
+		return nil, fmt.Errorf("transition member references undefined source %q (available: %v)",
 			member.Source.Parts[len(member.Source.Parts)-1].Text, stateNames)
 	}
-	
+
 	// Try to find target as state or pseudostate
 	var target ast.Node
 	targetState := findStateByName(graph.States, member.Target)
@@ -344,7 +328,7 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember) (*Tr
 			target = ps
 		}
 	}
-	
+
 	if target == nil {
 		var stateNames []string
 		for _, s := range graph.States {
@@ -353,15 +337,200 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember) (*Tr
 		for name := range graph.Pseudostates {
 			stateNames = append(stateNames, name+" (pseudostate)")
 		}
-		return nil, fmt.Errorf("transition member references undefined target %q (available: %v)", 
+		return nil, fmt.Errorf("transition member references undefined target %q (available: %v)",
 			member.Target.Parts[len(member.Target.Parts)-1].Text, stateNames)
 	}
-	
+
 	return &Transition{
 		Source:  source,
 		Target:  target,
-		Trigger: member.Trigger,
+		Trigger: classifyTrigger(member.Trigger),
 		Guard:   member.Guard,
 		Effect:  member.Effect,
 	}, nil
+}
+
+// classifyTrigger converts a raw trigger expression into a typed TriggerEvent.
+// Classification rules (syntactic/structural):
+// - nil → nil (completion transition)
+// - *ast.TimeEvent → keep as-is (already typed from hand-built tests)
+// - *ast.ChangeEvent → keep as-is
+// - *ast.AcceptEvent → keep as-is
+// - *ast.CallEvent → keep as-is
+// - QualifiedName (bare name) → AcceptEvent{SignalType: qname} (signal trigger)
+// - Expression with operators → ChangeEvent{Condition: expr} (guard-like condition)
+//
+// This is a syntactic heuristic - full signal vs feature disambiguation
+// requires type system integration. Adequate for current SysML v2 syntax.
+func classifyTrigger(trigger ast.Node) ast.Node {
+	if trigger == nil {
+		return nil
+	}
+
+	// Already typed events pass through
+	switch trigger.(type) {
+	case *ast.TimeEvent, *ast.ChangeEvent, *ast.AcceptEvent, *ast.CallEvent:
+		return trigger
+	}
+
+	// FeatureReference (bare name) → extract QualifiedName and treat as signal trigger
+	if featureRef, ok := trigger.(*ast.FeatureReference); ok {
+		return &ast.AcceptEvent{
+			SignalType: featureRef.Name,
+		}
+	}
+
+	// QualifiedName (bare name, though parser usually wraps in FeatureReference) → signal trigger
+	if qname, ok := trigger.(*ast.QualifiedName); ok {
+		return &ast.AcceptEvent{
+			SignalType: qname,
+		}
+	}
+
+	// Any other expression → change event (guard-like condition)
+	return &ast.ChangeEvent{
+		Condition: trigger,
+	}
+}
+
+// collectTransitions recursively processes member lists to collect transitions.
+// Handles top-level members and region members.
+// regionStates limits state lookup to states within a specific region (nil = all states).
+func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates []*ast.StateNode) error {
+
+	for _, member := range memberList {
+		actualMember := unwrapMembership(member)
+
+		switch n := actualMember.(type) {
+		case *ast.ErrorNode:
+			// Skip error nodes
+			continue
+		case *ast.Usage:
+			// Handle succession usages: succession statements parsed as Usage with Kind=UsageSuccession
+			if n.Kind == ast.UsageSuccession {
+
+				if len(n.ConnectorEnds) == 2 {
+					// ConnectorEnds[0] is source, ConnectorEnds[1] is target
+					// States could be in Target field OR Reference field
+
+					// Try Target first, then Reference
+					var sourceQName, targetQName *ast.QualifiedName
+
+					if n.ConnectorEnds[0].Target != nil {
+						sourceQName, _ = n.ConnectorEnds[0].Target.(*ast.QualifiedName)
+					} else if n.ConnectorEnds[0].Reference != nil {
+						sourceQName, _ = n.ConnectorEnds[0].Reference.(*ast.QualifiedName)
+					}
+
+					if n.ConnectorEnds[1].Target != nil {
+						targetQName, _ = n.ConnectorEnds[1].Target.(*ast.QualifiedName)
+					} else if n.ConnectorEnds[1].Reference != nil {
+						targetQName, _ = n.ConnectorEnds[1].Reference.(*ast.QualifiedName)
+					}
+
+					if sourceQName != nil && targetQName != nil {
+
+						// Use regionStates for scoped lookup if provided, otherwise all states
+						searchScope := regionStates
+						if searchScope == nil {
+							searchScope = graph.States
+						}
+
+						sourceState := findStateByName(searchScope, sourceQName)
+						targetState := findStateByName(searchScope, targetQName)
+
+						if sourceState != nil && targetState != nil {
+							trans := &Transition{
+								Source:  sourceState,
+								Target:  targetState,
+								Trigger: nil, // Completion transition
+								Guard:   nil,
+								Effect:  nil,
+							}
+							graph.Transitions[sourceState] = append(graph.Transitions[sourceState], trans)
+						}
+					}
+				}
+			}
+		case *ast.InitialNode:
+			// Handle `initial X then Y` syntax:
+			// This means "initial pseudostate transitions to state Y"
+			// Mark Y as the initial state (no intermediate state for the initial node)
+			if n.Successor != nil {
+				searchScope := regionStates
+				if searchScope == nil {
+					searchScope = graph.States
+				}
+				targetState := findStateByName(searchScope, n.Successor)
+				if targetState != nil {
+					targetState.IsInitial = true
+				}
+			}
+		case *ast.SuccessionEdge:
+			// Handle succession statements: `source then target;`
+			// Create completion transition from source to target
+			searchScope := regionStates
+			if searchScope == nil {
+				searchScope = graph.States
+			}
+
+			sourceState := findStateByName(searchScope, n.Source)
+			targetState := findStateByName(searchScope, n.Target)
+
+			if sourceState != nil && targetState != nil {
+				trans := &Transition{
+					Source:  sourceState,
+					Target:  targetState,
+					Trigger: nil, // Completion transition
+					Guard:   nil,
+					Effect:  nil,
+				}
+				graph.Transitions[sourceState] = append(graph.Transitions[sourceState], trans)
+			}
+		case *ast.TransitionEdge:
+			// Legacy: explicit TransitionEdge nodes (from hand-built tests)
+			trans, err := lowerTransitionEdge(graph, n)
+			if err != nil {
+				return err
+			}
+			graph.Transitions[trans.Source] = append(graph.Transitions[trans.Source], trans)
+		case *ast.TransitionMember:
+			// New: TransitionMember from parser (declarative)
+			trans, err := lowerTransitionMember(graph, n)
+			if err != nil {
+				return err
+			}
+			graph.Transitions[trans.Source] = append(graph.Transitions[trans.Source], trans)
+		case *ast.StateRegion:
+			// Collect states that belong to this region
+			// We need to find which states in graph.States came from this region
+			var statesInRegion []*ast.StateNode
+			for _, regionMember := range n.States {
+				actualRegionMember := unwrapMembership(regionMember)
+				if stateNode, ok := actualRegionMember.(*ast.StateNode); ok {
+					// This state is directly in the region
+					for _, graphState := range graph.States {
+						if graphState == stateNode {
+							statesInRegion = append(statesInRegion, graphState)
+							break
+						}
+					}
+				} else if substate, ok := actualRegionMember.(*ast.SubstateMember); ok {
+					// Find the corresponding StateNode created from this SubstateMember
+					for _, graphState := range graph.States {
+						if graphState.Name == substate.Name {
+							statesInRegion = append(statesInRegion, graphState)
+							break
+						}
+					}
+				}
+			}
+
+			// Recurse into region members with scoped state list
+			if err := collectTransitions(graph, n.States, statesInRegion); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

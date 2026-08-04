@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -21,6 +22,12 @@ type ExpectedValue struct {
 	Value interface{} `json:"value"`
 }
 
+// ExpectedEvent represents a signal event to inject during state machine execution
+type ExpectedEvent struct {
+	Signal string                   `json:"signal"`         // Signal type name
+	Args   map[string]ExpectedValue `json:"args,omitempty"` // Signal arguments
+}
+
 // ExpectedOutcome represents expected execution result
 type ExpectedOutcome struct {
 	Type string `json:"type"` // "action", "state", "calc", "constraint", "requirement"
@@ -30,8 +37,9 @@ type ExpectedOutcome struct {
 	TokenCount *int                     `json:"tokenCount,omitempty"`
 
 	// State fields
-	FinalState  string   `json:"finalState,omitempty"`
-	StateVisits []string `json:"stateVisits,omitempty"`
+	Events      []ExpectedEvent `json:"events,omitempty"` // Events to inject
+	FinalState  string          `json:"finalState,omitempty"`
+	StateVisits []string        `json:"stateVisits,omitempty"`
 
 	// Calc fields
 	Inputs []ExpectedValue `json:"inputs,omitempty"`
@@ -196,28 +204,109 @@ func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path st
 	rootScope := idx.DocumentRoot(path)
 	stateSym := findBehavioralSymbol(t, rootScope, ast.DefState, ast.UsageState)
 
-	// Execute state machine
-	outputs, err := ctx.ExecuteState(stateSym)
+	// Create executor manually to inject events
+	exec, err := newStateExecutor(ctx, stateSym)
 	if err != nil {
-		t.Fatalf("ExecuteState failed: %v", err)
+		t.Fatalf("create state executor: %v", err)
+	}
+
+	// Initialize (enters initial state)
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize state machine: %v", err)
+	}
+
+	// Inject events from schema
+	for _, event := range expected.Events {
+		args := make(map[string]Value, len(event.Args))
+		for name, val := range event.Args {
+			args[name] = expectedToRuntimeValue(t, val)
+		}
+		exec.SendSignal(event.Signal, args)
+	}
+
+	// Process events until completion or suspension
+	const maxEvents = 10000
+	eventCount := 0
+
+	for exec.state == StateRunning {
+		if exec.eventQueue.Len() == 0 {
+			exec.state = StateSuspended
+			break
+		}
+
+		if eventCount >= maxEvents {
+			t.Fatalf("state machine exceeded max events (%d), possible infinite loop", maxEvents)
+		}
+
+		if err := exec.processNextEvent(); err != nil {
+			t.Fatalf("process event: %v", err)
+		}
+
+		eventCount++
 	}
 
 	// Validate final state
 	if expected.FinalState != "" {
-		// Extract final state from executor (requires instrumentation)
-		// For now, log and skip
-		t.Logf("finalState validation not yet implemented (expected %s)", expected.FinalState)
+		// Get final state from executor
+		// For orthogonal regions, build "State1+State2+..." string (sorted by region name)
+		var finalState string
+		if len(exec.activeConfig.regionStates) > 0 {
+			// Multi-region: collect all region states, sort by region name
+			type regionStatePair struct {
+				regionName string
+				stateName  string
+			}
+			var pairs []regionStatePair
+			for region, regionState := range exec.activeConfig.regionStates {
+				pairs = append(pairs, regionStatePair{region.Name, regionState.Name})
+			}
+			sort.Slice(pairs, func(i, j int) bool {
+				return pairs[i].regionName < pairs[j].regionName
+			})
+			var stateNames []string
+			for _, pair := range pairs {
+				stateNames = append(stateNames, pair.stateName)
+			}
+			finalState = strings.Join(stateNames, "+")
+		} else {
+			// Simple state
+			finalStateNode := exec.CurrentState()
+			if finalStateNode == nil {
+				finalState = ""
+			} else if stateNode, ok := finalStateNode.(*ast.StateNode); ok {
+				finalState = stateNode.Name
+			} else {
+				t.Errorf("expected StateNode, got %T", finalStateNode)
+			}
+		}
+
+		if finalState == "" {
+			t.Errorf("expected finalState %q, got empty", expected.FinalState)
+		} else if finalState != expected.FinalState {
+			t.Errorf("finalState mismatch: expected %q, got %q", expected.FinalState, finalState)
+		}
 	}
 
 	// Validate state visits
 	if len(expected.StateVisits) > 0 {
-		t.Logf("stateVisits validation not yet implemented")
+		actual := exec.GetStateVisits()
+		if len(actual) != len(expected.StateVisits) {
+			t.Errorf("stateVisits length mismatch: expected %d, got %d", len(expected.StateVisits), len(actual))
+			t.Logf("  expected: %v", expected.StateVisits)
+			t.Logf("  actual:   %v", actual)
+		} else {
+			for i, expectedName := range expected.StateVisits {
+				if actual[i] != expectedName {
+					t.Errorf("stateVisits[%d] mismatch: expected %q, got %q", i, expectedName, actual[i])
+				}
+			}
+		}
 	}
 
 	// Validate outputs
 	if expected.Outputs != nil {
 		for name, expectedVal := range expected.Outputs {
-			actual, ok := outputs[name]
+			actual, ok := exec.stateData[name]
 			if !ok {
 				t.Errorf("missing output %q", name)
 				continue
@@ -415,4 +504,3 @@ func validateValue(t *testing.T, name string, expected ExpectedValue, actual Val
 		t.Errorf("%s: unknown expected type %s", name, expected.Type)
 	}
 }
-

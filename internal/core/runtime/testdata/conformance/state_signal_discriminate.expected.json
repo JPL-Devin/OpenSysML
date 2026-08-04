@@ -1,0 +1,9 @@
+{
+  "type": "state",
+  "events": [
+    {"signal": "sigB", "args": null}
+  ],
+  "finalState": "done",
+  "stateVisits": ["start", "waiting", "pathB", "done"],
+  "outputs": {}
+}
