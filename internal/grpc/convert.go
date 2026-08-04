@@ -1,0 +1,211 @@
+package grpc
+
+import (
+	pb "github.com/Open-MBEE/Systemica/api/proto"
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
+
+// SymbolToProto converts a Symbol to protobuf SymbolInfo.
+// This is the public API for gRPC service use.
+func SymbolToProto(sym *symbols.Symbol, idx *symbols.Index) *pb.SymbolInfo {
+	info := &pb.SymbolInfo{
+		Id:       sym.Name, // Fully qualified name
+		Name:     sym.Name,
+		Kind:     sym.Kind.String(),
+		Metadata: make(map[string]string),
+	}
+
+	// Extract metadata from AST node
+	extractMetadata(sym, info.Metadata)
+
+	// Add visibility to metadata
+	info.Metadata["visibility"] = visibilityToString(sym.Visibility)
+
+	// Collect child IDs
+	if sym.Scope != nil {
+		var childIDs []string
+		for _, childSym := range sym.Scope.AllMembers() {
+			childIDs = append(childIDs, childSym.Name)
+		}
+		info.ChildIds = childIDs
+	}
+
+	// Attributes populated later when semantic layer ready
+	info.Attributes = []*pb.AttributeInfo{}
+
+	return info
+}
+
+// DiagnosticToProto converts a passes.Diagnostic to protobuf.
+func DiagnosticToProto(diag passes.Diagnostic, sf *source.SourceFile) *pb.Diagnostic {
+	li := sf.Lines()
+	start := li.PosAt(diag.Span.Offset)
+	end := li.PosAt(diag.Span.End())
+
+	return &pb.Diagnostic{
+		Severity: diag.Severity.String(),
+		Message:  diag.Message,
+		Span: &pb.Span{
+			File:      sf.Name(),
+			StartLine: int32(start.Line),
+			StartCol:  int32(start.Col),
+			EndLine:   int32(end.Line),
+			EndCol:    int32(end.Col),
+		},
+	}
+}
+
+// convertSpan converts source.Span → proto.Span.
+// Requires the SourceFile and LineIndex to map byte offsets to line:col.
+func convertSpan(sp source.Span, sf *source.SourceFile, li *source.LineIndex) *pb.Span {
+	start := li.PosAt(sp.Offset)
+	end := li.PosAt(sp.End())
+	return &pb.Span{
+		File:      sf.Name(),
+		StartLine: int32(start.Line),
+		StartCol:  int32(start.Col),
+		EndLine:   int32(end.Line),
+		EndCol:    int32(end.Col),
+	}
+}
+
+// convertSymbol converts symbols.Symbol → proto.SymbolInfo.
+// Does NOT recurse into children (caller controls depth).
+func convertSymbol(sym *symbols.Symbol, sf *source.SourceFile, li *source.LineIndex) *pb.SymbolInfo {
+	pbSym := &pb.SymbolInfo{
+		Id:       sym.Name, // Fully qualified name
+		Name:     sym.Name,
+		Kind:     sym.Kind.String(),
+		Metadata: make(map[string]string),
+	}
+
+	// Extract metadata from AST node
+	extractMetadata(sym, pbSym.Metadata)
+
+	// Populate child_ids if this symbol has a scope
+	if sym.Scope != nil {
+		var childIDs []string
+		for _, childSym := range sym.Scope.AllMembers() {
+			childIDs = append(childIDs, childSym.Name)
+		}
+		pbSym.ChildIds = childIDs
+	}
+
+	return pbSym
+}
+
+// extractMetadata populates the metadata map from the symbol's AST node.
+// Extracts: multiplicity, type, direction, abstract.
+func extractMetadata(sym *symbols.Symbol, meta map[string]string) {
+	if sym.Decl == nil {
+		return
+	}
+
+	switch decl := sym.Decl.(type) {
+	case *ast.Usage:
+		// Multiplicity
+		if decl.Multiplicity != nil {
+			meta["multiplicity"] = formatMultiplicity(decl.Multiplicity)
+		}
+		// Type (first typing relationship)
+		for _, rel := range decl.Relationships {
+			if rel.Kind == ast.RelTyping {
+				if qn, ok := rel.Target.(*ast.QualifiedName); ok {
+					meta["type"] = formatQualifiedName(qn)
+					break
+				}
+			}
+		}
+		// Direction
+		if decl.Direction != ast.DirNone {
+			meta["direction"] = decl.Direction.String()
+		}
+		// Abstract
+		if decl.IsAbstract {
+			meta["abstract"] = "true"
+		}
+
+	case *ast.Definition:
+		// Abstract
+		if decl.IsAbstract {
+			meta["abstract"] = "true"
+		}
+		// Type (first specializes relationship for definitions)
+		for _, rel := range decl.Relationships {
+			if rel.Kind == ast.RelSpecializes {
+				if qn, ok := rel.Target.(*ast.QualifiedName); ok {
+					meta["specializes"] = formatQualifiedName(qn)
+					break
+				}
+			}
+		}
+	}
+}
+
+// formatMultiplicity renders Multiplicity as "lower..upper" or "value".
+func formatMultiplicity(m *ast.Multiplicity) string {
+	if !m.IsRange {
+		return formatMultiplicityBound(m.Lower)
+	}
+	lower := formatMultiplicityBound(m.Lower)
+	upper := formatMultiplicityBound(m.Upper)
+	return lower + ".." + upper
+}
+
+// formatMultiplicityBound renders a multiplicity bound node as a string.
+func formatMultiplicityBound(n ast.Node) string {
+	if n == nil {
+		return ""
+	}
+	switch v := n.(type) {
+	case *ast.LiteralInteger:
+		return v.Value
+	case *ast.LiteralInfinity:
+		return "*"
+	default:
+		return "?"
+	}
+}
+
+// formatQualifiedName renders QualifiedName as "A::B::C".
+func formatQualifiedName(qn *ast.QualifiedName) string {
+	if qn == nil {
+		return ""
+	}
+	var parts []string
+	for _, seg := range qn.Parts {
+		parts = append(parts, seg.Text)
+	}
+	return joinParts(parts, "::")
+}
+
+// joinParts joins parts with separator.
+func joinParts(parts []string, sep string) string {
+	result := ""
+	for i, part := range parts {
+		if i > 0 {
+			result += sep
+		}
+		result += part
+	}
+	return result
+}
+
+// visibilityToString converts ast.Visibility to string.
+func visibilityToString(v ast.Visibility) string {
+	switch v {
+	case ast.VisibilityPublic:
+		return "public"
+	case ast.VisibilityPrivate:
+		return "private"
+	case ast.VisibilityProtected:
+		return "protected"
+	case ast.VisibilityDefault:
+		return "default"
+	default:
+		return "default"
+	}
+}
