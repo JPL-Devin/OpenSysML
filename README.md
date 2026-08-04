@@ -118,17 +118,17 @@ Current: green (Time: 30.0s)
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
 | Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (17 golden ASTs, 15 negative tests) |
-| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 3/3 passing) |
-| Action execution engine (Tier 5) | ✅ Infrastructure complete (26 unit tests passing, conformance blocked by initial node parsing) |
-| State machine runtime (Tier 5) | ✅ Infrastructure complete (15 unit tests passing, conformance blocked by initial state parsing) |
+| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 9/9 passing) |
+| Action execution engine (Tier 5) | ✅ Complete (26 unit tests, conformance passing) |
+| State machine runtime (Tier 5) | ✅ Complete (15 unit tests, conformance passing) |
 | REPL debugging commands | ✅ Complete |
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
-**Test coverage:** 722+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 17 golden ASTs, 15 negatives, 5 conformance cases, 6 robustness tests.
+**Test coverage:** 722+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 17 golden ASTs, 15 negatives, 9 conformance cases, 6 robustness tests.
 **Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar alignment documented in [PRODUCTION_MAP.md](docs/grammar/PRODUCTION_MAP.md).
-**Behavioral execution:** Calc/constraint/requirement fully functional (3/5 conformance cases passing). Action/state executor infrastructure complete (41 unit tests passing). See [BEHAVIOR_SEMANTICS_MAP.md](docs/BEHAVIOR_SEMANTICS_MAP.md) for measured compliance.
+**Behavioral execution:** Calc/constraint/requirement fully functional with complete conformance coverage (9/9 tests passing). Action/state executors complete with control flow keyword support. See [BEHAVIOR_SEMANTICS_MAP.md](docs/BEHAVIOR_SEMANTICS_MAP.md) for measured compliance.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
 ## Architecture
