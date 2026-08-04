@@ -21,20 +21,16 @@ These errors are **not implementation gaps** - the training files reference name
 **Most common:**
 - `simpleMass`, `MassedThing`, etc.: References to definitions not in file
 - Port/interface references: `supplierPort`, `consumerPort`, message endpoints
+- `testVehicle` (2×): Missing test fixture declarations
 
 ### Training Example Bugs (Incorrect Code in OMG Materials)
 
-**Fixed via parser improvements ✅:**
-- `start`, `done` (10× control flow): Training examples used these as control flow node names in state machines. Our parser now correctly creates InitialNode/FinalNode and registers them for transition references. (Commits: 875834d)
-
-**Still present - bugs in training files ❌:**
-- `start`, `done` (2× lifecycle): Two files use incorrect lifecycle snapshot names:
-  - `27. Occurrences/Time Slice and Snapshot Example.sysml` line 16, 25
-  - `28. Individuals/Individuals and Time Slices.sysml` line 12, 16
+- `start`, `done` (2× lifecycle snapshots): Two files use incorrect lifecycle snapshot names:
+  - `27. Occurrences/Time Slice and Snapshot Example.sysml` lines 16, 25
+  - `28. Individuals/Individuals and Time Slices.sysml` lines 12, 16
   - Files use `snapshot sale = start` and `snapshot junked = done`
   - **Correct names per KerML spec**: `startShot` and `endShot` (defined in Occurrences.kerml:348, 364)
-  - These are **errors in the OMG training materials**, not parser bugs
-- `testVehicle` (2×): Missing test fixture declarations
+  - These are errors in the OMG training materials, not parser bugs
 
 ### Stdlib/Import Errors
 
@@ -76,14 +72,11 @@ These errors are **not implementation gaps** - the training files reference name
 ## Recent Fixes (This Branch)
 
 1. **Named argument resolution** (ff70654): Fixed `vehicle = testVehicle` syntax in requirement invocations
-2. **Control flow node registration** (875834d): Parser creates InitialNode/FinalNode and registers them in scope so transitions can reference them
-   - Fixed 10× `unresolved reference: start` errors in state machines
-   - Training examples like `first start then off; transition t first start accept Signal then off;` now work
-3. **Initial/final keywords** (7e9600f): Parser handles `first X then Y` syntax properly in state bodies
-4. **Nested actions** (5325d3f): Implemented nested action invocation with attribute initialization
-5. **Send/accept messaging** (8349133, b0959bf): Message passing with accept action and basic port support
+2. **Control flow node registration** (875834d): Parser creates InitialNode/FinalNode and registers them in scope
+3. **Nested actions** (5325d3f): Implemented nested action invocation with attribute initialization
+4. **Send/accept messaging** (8349133, b0959bf): Message passing with accept action and basic port support
 
-**Impact**: Eliminated all parameter binding errors and control flow reference errors that were implementation bugs. Remaining 2× `start`/`done` errors are bugs in OMG training materials (use wrong lifecycle snapshot names).
+**Impact**: Eliminated all parameter binding errors and control flow reference errors.
 
 ---
 
