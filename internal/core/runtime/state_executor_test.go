@@ -632,24 +632,24 @@ func TestStateExecutor_HierarchicalStates(t *testing.T) {
 	}
 	
 	// Verify all states collected
-	if len(exec.states) != 4 {
-		t.Errorf("expected 4 states (composite, childA, childB, standalone), got %d", len(exec.states))
+	if len(exec.graph.States) != 4 {
+		t.Errorf("expected 4 states (composite, childA, childB, standalone), got %d", len(exec.graph.States))
 	}
 	
 	// Verify parent relationships
-	if parent := exec.parentState[childA]; parent != composite {
+	if parent := exec.graph.ParentState[childA]; parent != composite {
 		t.Errorf("expected childA parent = composite, got %v", parent)
 	}
 	
-	if parent := exec.parentState[childB]; parent != composite {
+	if parent := exec.graph.ParentState[childB]; parent != composite {
 		t.Errorf("expected childB parent = composite, got %v", parent)
 	}
 	
-	if _, hasParent := exec.parentState[composite]; hasParent {
+	if _, hasParent := exec.graph.ParentState[composite]; hasParent {
 		t.Error("expected composite to have no parent")
 	}
 	
-	if _, hasParent := exec.parentState[standalone]; hasParent {
+	if _, hasParent := exec.graph.ParentState[standalone]; hasParent {
 		t.Error("expected standalone to have no parent")
 	}
 	

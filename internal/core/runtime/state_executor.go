@@ -37,16 +37,8 @@ type StateExecutor struct {
 	eventQueue   *EventQueue
 	stateData    map[string]Value // State machine local variables
 	
-	// Graph structure (populated from graph)
-	states         []*ast.StateNode
-	pseudostates   map[string]*ast.PseudostateNode          // Pseudostates by name
-	compositeStates map[*ast.StateNode][]*ast.StateRegion  // States with orthogonal regions
-	regionInitials map[*ast.StateRegion]*ast.StateNode     // Initial state per region
-	
-	// Hierarchical state support
-	stateStack  []*ast.StateNode                        // Active state configuration (for nested states)
-	parentState map[*ast.StateNode]*ast.StateNode       // Child -> parent mapping
-	regionOwner map[*ast.StateRegion]*ast.StateNode    // Region -> parent state
+	// Active state tracking
+	stateStack  []*ast.StateNode  // Active state configuration (for nested states)
 }
 
 // newStateExecutor creates a state executor.
@@ -69,57 +61,13 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 		currentTime:     0.0,
 		eventQueue:      NewEventQueue(),
 		stateData:       make(map[string]Value),
-		pseudostates:    make(map[string]*ast.PseudostateNode),
-		compositeStates: make(map[*ast.StateNode][]*ast.StateRegion),
-		regionInitials:  make(map[*ast.StateRegion]*ast.StateNode),
 		stateStack:      make([]*ast.StateNode, 0),
-		parentState:     make(map[*ast.StateNode]*ast.StateNode),
-		regionOwner:     make(map[*ast.StateRegion]*ast.StateNode),
 		activeConfig: &StateConfiguration{
 			regionStates: make(map[*ast.StateRegion]*ast.StateNode),
 		},
 	}
 	
-	// Populate internal structures from graph
-	if err := exec.populateFromGraph(); err != nil {
-		return nil, fmt.Errorf("populate from graph: %w", err)
-	}
-	
 	return exec, nil
-}
-
-// populateFromGraph populates internal structures from the lowered StateGraph.
-// This is a temporary bridge - eventually all code should use e.graph directly.
-func (e *StateExecutor) populateFromGraph() error {
-	// Copy states
-	e.states = e.graph.States
-	
-	// Copy pseudostates
-	for name, ps := range e.graph.Pseudostates {
-		e.pseudostates[name] = ps
-	}
-	
-	// Copy composite states and regions
-	for state, regions := range e.graph.CompositeStates {
-		e.compositeStates[state] = regions
-		
-		// Track region ownership
-		for _, region := range regions {
-			e.regionOwner[region] = state
-			
-			// Find initial state in this region
-			if initialState, ok := e.graph.RegionInitials[region]; ok {
-				e.regionInitials[region] = initialState
-			}
-		}
-	}
-	
-	// Copy parent state mappings
-	for child, parent := range e.graph.ParentState {
-		e.parentState[child] = parent
-	}
-	
-	return nil
 }
 
 // getNodeName returns the name of a StateNode or PseudostateNode.
@@ -140,7 +88,7 @@ func (e *StateExecutor) getParentChain(state *ast.StateNode) []*ast.StateNode {
 	chain := []*ast.StateNode{state}
 	current := state
 	for {
-		parent, hasParent := e.parentState[current]
+		parent, hasParent := e.graph.ParentState[current]
 		if !hasParent {
 			break
 		}
@@ -179,7 +127,7 @@ func (e *StateExecutor) findStateByName(qname *ast.QualifiedName) *ast.StateNode
 	}
 	
 	targetName := qname.Parts[len(qname.Parts)-1].Text
-	for _, state := range e.states {
+	for _, state := range e.graph.States {
 		if state.Name == targetName {
 			return state
 		}
@@ -267,16 +215,16 @@ func (e *StateExecutor) processNextEvent() error {
 		
 		// Fallback for tests that use TransitionEdge directly
 		if edge, ok := event.Payload.(*ast.TransitionEdge); ok {
-			// Convert TransitionEdge to lower.Transition
-			// Need to find source/target states by name
-			var sourceState, targetState *ast.StateNode
-			for _, state := range e.states {
-				if edge.Source != nil && len(edge.Source.Parts) > 0 {
-					if state.Name == edge.Source.Parts[len(edge.Source.Parts)-1].Text {
-						sourceState = state
-					}
+		// Convert TransitionEdge to lower.Transition
+		// Need to find source/target states by name
+		var sourceState, targetState *ast.StateNode
+		for _, state := range e.graph.States {
+			if edge.Source != nil && len(edge.Source.Parts) > 0 {
+				if state.Name == edge.Source.Parts[len(edge.Source.Parts)-1].Text {
+					sourceState = state
 				}
-				if edge.Target != nil && len(edge.Target.Parts) > 0 {
+			}
+			if edge.Target != nil && len(edge.Target.Parts) > 0 {
 					if state.Name == edge.Target.Parts[len(edge.Target.Parts)-1].Text {
 						targetState = state
 					}
@@ -472,7 +420,7 @@ func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
 	current := currentState
 	for current != nil && current != lca {
 		statesToExit = append(statesToExit, current)
-		current = e.parentState[current]
+		current = e.graph.ParentState[current]
 	}
 	
 	// Exit states (deepest to shallowest)
@@ -494,7 +442,7 @@ func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
 	current = targetState
 	for current != nil && current != lca {
 		statesToEnter = append(statesToEnter, current)
-		current = e.parentState[current]
+		current = e.graph.ParentState[current]
 	}
 	
 	// Reverse statesToEnter (shallowest to deepest)
@@ -616,14 +564,14 @@ func (e *StateExecutor) enterState(state *ast.StateNode) error {
 	}
 	
 	// Check if this is a composite state with regions
-	if regions, isComposite := e.compositeStates[state]; isComposite {
+	if regions, isComposite := e.graph.CompositeStates[state]; isComposite {
 		// Entering composite state with orthogonal regions
 		// Initialize active configuration for all regions
 		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
 		e.activeConfig.simpleState = nil // Clear simple state
 		
 		for _, region := range regions {
-			initialState := e.regionInitials[region]
+			initialState := e.graph.RegionInitials[region]
 			e.activeConfig.regionStates[region] = initialState
 			// Recursively enter initial state in each region
 			if err := e.enterState(initialState); err != nil {
