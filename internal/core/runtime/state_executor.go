@@ -35,6 +35,7 @@ type StateExecutor struct {
 	
 	// Graph structure
 	states         []*ast.StateNode
+	pseudostates   map[string]*ast.PseudostateNode          // Pseudostates by name
 	transitions    map[*ast.StateNode][]*ast.TransitionEdge
 	compositeStates map[*ast.StateNode][]*ast.StateRegion  // States with orthogonal regions
 	regionInitials map[*ast.StateRegion]*ast.StateNode     // Initial state per region
@@ -58,6 +59,7 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 		currentTime:     0.0,
 		eventQueue:      NewEventQueue(),
 		stateData:       make(map[string]Value),
+		pseudostates:    make(map[string]*ast.PseudostateNode),
 		transitions:     make(map[*ast.StateNode][]*ast.TransitionEdge),
 		compositeStates: make(map[*ast.StateNode][]*ast.StateRegion),
 		regionInitials:  make(map[*ast.StateRegion]*ast.StateNode),
@@ -89,7 +91,7 @@ func (e *StateExecutor) extractGraph() error {
 		stateUsage = &ast.Usage{Members: stateDef.Members}
 	}
 	
-	// First pass: collect states
+	// First pass: collect states and pseudostates
 	for _, member := range stateUsage.Members {
 		// Unwrap Membership if present
 		actualMember := member
@@ -99,6 +101,9 @@ func (e *StateExecutor) extractGraph() error {
 		
 		if state, ok := actualMember.(*ast.StateNode); ok {
 			e.collectStates(state, nil) // Recursively collect substates
+		} else if ps, ok := actualMember.(*ast.PseudostateNode); ok {
+			// Collect pseudostate
+			e.pseudostates[ps.Name] = ps
 		}
 	}
 	
@@ -434,8 +439,32 @@ func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *a
 
 // fireTransition executes a state transition.
 func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
-	// Find target state
-	targetState := e.findStateByName(trans.Target)
+	// Check if target is a pseudostate (choice or junction)
+	var targetState *ast.StateNode
+	if trans.Target != nil && len(trans.Target.Parts) > 0 {
+		targetName := trans.Target.Parts[len(trans.Target.Parts)-1].Text
+		
+		// Check if it's a pseudostate first
+		if ps, exists := e.pseudostates[targetName]; exists {
+			var err error
+			switch ps.Kind {
+			case ast.PseudostateChoice:
+				targetState, err = e.evaluateChoicePseudostate(ps)
+			case ast.PseudostateJunction:
+				targetState, err = e.evaluateJunctionPseudostate(ps)
+			default:
+				return fmt.Errorf("unsupported pseudostate kind: %v", ps.Kind)
+			}
+			
+			if err != nil {
+				return fmt.Errorf("evaluate pseudostate: %w", err)
+			}
+		} else {
+			// Normal state target
+			targetState = e.findStateByName(trans.Target)
+		}
+	}
+	
 	if targetState == nil {
 		return fmt.Errorf("transition target state not found")
 	}
@@ -820,6 +849,138 @@ func (e *StateExecutor) getCurrentState() *ast.StateNode {
 func (e *StateExecutor) setCurrentState(state *ast.StateNode) {
 	e.activeConfig.simpleState = state
 	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode) // Clear regions
+}
+
+// evaluateChoicePseudostate evaluates a choice pseudostate dynamically.
+// Returns the target state based on guard evaluation at runtime.
+func (e *StateExecutor) evaluateChoicePseudostate(choice *ast.PseudostateNode) (*ast.StateNode, error) {
+	// Find all outgoing transitions from this choice
+	outgoing := e.findTransitionsFromPseudostate(choice)
+	if len(outgoing) == 0 {
+		return nil, fmt.Errorf("choice %s has no outgoing transitions", choice.Name)
+	}
+	
+	// Evaluate guards dynamically in order
+	for _, trans := range outgoing {
+		if trans.Guard == nil {
+			// Else branch (unguarded transition)
+			targetState := e.findStateByName(trans.Target)
+			if targetState == nil {
+				targetName := "<unknown>"
+				if trans.Target != nil && len(trans.Target.Parts) > 0 {
+					targetName = trans.Target.Parts[len(trans.Target.Parts)-1].Text
+				}
+				return nil, fmt.Errorf("choice target state not found: %s", targetName)
+			}
+			return targetState, nil
+		}
+		
+		// Evaluate guard
+		ec := NewEvalContext(e.ctx, nil)
+		ec.Push(e.stateData)
+		guardVal, err := ec.Eval(trans.Guard)
+		if err != nil {
+			return nil, fmt.Errorf("eval choice guard: %w", err)
+		}
+		
+		// Check boolean
+		if guardVal.Kind == ValConst && guardVal.Const.Kind == semantics.ValBool && guardVal.Const.Bool {
+			targetState := e.findStateByName(trans.Target)
+			if targetState == nil {
+				targetName := "<unknown>"
+				if trans.Target != nil && len(trans.Target.Parts) > 0 {
+					targetName = trans.Target.Parts[len(trans.Target.Parts)-1].Text
+				}
+				return nil, fmt.Errorf("choice target state not found: %s", targetName)
+			}
+			return targetState, nil
+		}
+	}
+	
+	return nil, fmt.Errorf("choice %s: no guard evaluated to true", choice.Name)
+}
+
+// evaluateJunctionPseudostate evaluates a junction pseudostate statically.
+// Returns the target state based on static guard evaluation (pre-evaluated).
+func (e *StateExecutor) evaluateJunctionPseudostate(junction *ast.PseudostateNode) (*ast.StateNode, error) {
+	// Find all outgoing transitions from this junction
+	outgoing := e.findTransitionsFromPseudostate(junction)
+	if len(outgoing) == 0 {
+		return nil, fmt.Errorf("junction %s has no outgoing transitions", junction.Name)
+	}
+	
+	// Evaluate guards statically in order
+	for _, trans := range outgoing {
+		if trans.Guard == nil {
+			// Else branch (unguarded transition)
+			targetState := e.findStateByName(trans.Target)
+			if targetState == nil {
+				targetName := "<unknown>"
+				if trans.Target != nil && len(trans.Target.Parts) > 0 {
+					targetName = trans.Target.Parts[len(trans.Target.Parts)-1].Text
+				}
+				return nil, fmt.Errorf("junction target state not found: %s", targetName)
+			}
+			return targetState, nil
+		}
+		
+		// Static evaluation (same as dynamic for now, but conceptually earlier)
+		ec := NewEvalContext(e.ctx, nil)
+		ec.Push(e.stateData)
+		guardVal, err := ec.Eval(trans.Guard)
+		if err != nil {
+			return nil, fmt.Errorf("eval junction guard: %w", err)
+		}
+		
+		// Check boolean
+		if guardVal.Kind == ValConst && guardVal.Const.Kind == semantics.ValBool && guardVal.Const.Bool {
+			targetState := e.findStateByName(trans.Target)
+			if targetState == nil {
+				targetName := "<unknown>"
+				if trans.Target != nil && len(trans.Target.Parts) > 0 {
+					targetName = trans.Target.Parts[len(trans.Target.Parts)-1].Text
+				}
+				return nil, fmt.Errorf("junction target state not found: %s", targetName)
+			}
+			return targetState, nil
+		}
+	}
+	
+	return nil, fmt.Errorf("junction %s: no guard evaluated to true", junction.Name)
+}
+
+// findTransitionsFromPseudostate finds all outgoing transitions from a pseudostate.
+func (e *StateExecutor) findTransitionsFromPseudostate(ps *ast.PseudostateNode) []*ast.TransitionEdge {
+	var result []*ast.TransitionEdge
+	
+	// Search all transitions in state machine
+	stateUsage, ok := e.stateMachine.Decl.(*ast.Usage)
+	if !ok {
+		stateDef, ok := e.stateMachine.Decl.(*ast.Definition)
+		if !ok {
+			return result
+		}
+		stateUsage = &ast.Usage{Members: stateDef.Members}
+	}
+	
+	for _, member := range stateUsage.Members {
+		actualMember := member
+		if membership, ok := member.(*ast.Membership); ok {
+			actualMember = membership.Member
+		}
+		
+		if trans, ok := actualMember.(*ast.TransitionEdge); ok {
+			// Check if source matches pseudostate name
+			if trans.Source != nil && len(trans.Source.Parts) > 0 {
+				sourceName := trans.Source.Parts[len(trans.Source.Parts)-1].Text
+				if sourceName == ps.Name {
+					result = append(result, trans)
+				}
+			}
+		}
+	}
+	
+	return result
 }
 
 // isMultiRegion checks if currently in a composite state with regions.

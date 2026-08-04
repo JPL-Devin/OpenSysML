@@ -1939,6 +1939,12 @@ func (p *Parser) parseStateMember() ast.Node {
 		case "region":
 			p.advance()
 			return p.parseRegionMember(start)
+		case "choice":
+			p.advance()
+			return p.parseChoicePseudostate(start)
+		case "junction":
+			p.advance()
+			return p.parseJunctionPseudostate(start)
 		case "transition":
 			// Lookahead to distinguish:
 			// 1. State machine transition: transition source to target (no name)
@@ -1956,16 +1962,31 @@ func (p *Parser) parseStateMember() ast.Node {
 			p.advance() // consume 'first'
 			return p.parseInitialNode(p.peek())
 		case "then":
-			// Standalone succession: then <state>; (implicit source, typically from entry)
+			// Standalone succession: then <source> <target>; or then <target>; (implicit source)
 			p.advance() // consume 'then'
-			targetState := p.parseQualifiedName()
+			
+			// Parse first qualified name
+			firstState := p.parseQualifiedName()
+			
+			// Check if there's a second state name (explicit source → target)
+			var sourceState, targetState *ast.QualifiedName
+			if p.at(lexer.Identifier) || p.atNameOrKeyword() {
+				// Two states: then source target;
+				sourceState = firstState
+				targetState = p.parseQualifiedName()
+			} else {
+				// One state: then target; (implicit source)
+				sourceState = nil
+				targetState = firstState
+			}
+			
 			p.expect(lexer.Semicolon, "expected ';' after succession target")
 			
-			// Create succession with nil source (implicit)
+			// Create succession
 			succession := &ast.Usage{
 				Kind: ast.UsageSuccession,
 				ConnectorEnds: []*ast.ConnectorEnd{
-					nil, // implicit source
+					{Target: sourceState},
 					{Target: targetState},
 				},
 			}
@@ -1975,6 +1996,12 @@ func (p *Parser) parseStateMember() ast.Node {
 			// Accept transition: accept <signal> then <state>;
 			return p.parseAcceptTransition(start)
 		}
+	}
+	
+	// Check for succession statement: <name> then <name>;
+	// Lookahead: identifier followed by 'then' keyword
+	if p.at(lexer.Identifier) && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "then" {
+		return p.parseSuccessionStatement(start)
 	}
 	
 	// Not a state-specific keyword - try parsing as general body member
@@ -2516,6 +2543,60 @@ func (p *Parser) parseRegionMember(start int) ast.Node {
 	}
 	region.NodeSpan = p.spanFrom(start)
 	return region
+}
+
+// parseChoicePseudostate parses: choice <name>;
+func (p *Parser) parseChoicePseudostate(start int) ast.Node {
+	// 'choice' already consumed
+	
+	// Expect pseudostate name
+	if !p.at(lexer.Identifier) && !p.at(lexer.Keyword) {
+		p.error(p.peek().Span, "expected name after 'choice'")
+		en := &ast.ErrorNode{Message: "expected choice name"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	nameToken := p.peek()
+	name := p.src.Text(nameToken.Span)
+	p.advance()
+	
+	// Expect semicolon
+	p.expect(lexer.Semicolon, "expected ';' after choice name")
+	
+	ps := &ast.PseudostateNode{
+		Kind: ast.PseudostateChoice,
+		Name: name,
+	}
+	ps.NodeSpan = p.spanFrom(start)
+	return ps
+}
+
+// parseJunctionPseudostate parses: junction <name>;
+func (p *Parser) parseJunctionPseudostate(start int) ast.Node {
+	// 'junction' already consumed
+	
+	// Expect pseudostate name
+	if !p.at(lexer.Identifier) && !p.at(lexer.Keyword) {
+		p.error(p.peek().Span, "expected name after 'junction'")
+		en := &ast.ErrorNode{Message: "expected junction name"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	nameToken := p.peek()
+	name := p.src.Text(nameToken.Span)
+	p.advance()
+	
+	// Expect semicolon
+	p.expect(lexer.Semicolon, "expected ';' after junction name")
+	
+	ps := &ast.PseudostateNode{
+		Kind: ast.PseudostateJunction,
+		Name: name,
+	}
+	ps.NodeSpan = p.spanFrom(start)
+	return ps
 }
 
 // parseTransitionMember parses: transition <source> to <target> [when <trigger>] [if <guard>] [do { <effect> }];

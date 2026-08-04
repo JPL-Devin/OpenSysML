@@ -50,7 +50,7 @@
 - Token-flow tracing (infrastructure ready)
 - Step budget enforcement
 
-**State Machines (14/14 features):**
+**State Machines (16/16 features):**
 - Initial/final state identification
 - State entry/exit actions
 - State do behavior (simplified immediate execution)
@@ -63,6 +63,8 @@
 - Run-to-completion semantics
 - Event queue management
 - Orthogonal regions (concurrent substates with event broadcasting)
+- Choice pseudostates (dynamic conditional branching)
+- Junction pseudostates (static merge/branch)
 - Dangling transition detection
 - Control flow node registration (initial/final/first/done)
 
@@ -82,10 +84,10 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 21 conformance cases (all passing)
+- 23 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×6)
 - 6 robustness tests (deadlock, guards, budgets)
 - 41 unit tests
-- 19 golden AST fixtures (including 1 region parsing test)
+- 19 golden AST fixtures (including pseudostate parsing tests)
 - 16 negative parser tests
 - 900+ total tests passing
 
@@ -214,7 +216,6 @@ Each row documents one behavioral semantic feature:
 - Structured activities with pin connectors
 
 **State Machines (Advanced):**
-- Choice/junction pseudostates
 - History pseudostates (deep)
 - Deferred events
 - Protocol state machines
@@ -252,7 +253,6 @@ Each row documents one behavioral semantic feature:
 **Implementable But Not Yet Done:**
 - Port binding with message routing (spec exists, requires routing graph)
 - Interruptible regions (spec exists, needs token cancellation)
-- Choice/junction pseudostates (spec exists, needs control flow extension)
 - Exception handlers (spec exists, needs exception propagation)
 
 ---
@@ -265,11 +265,11 @@ Each row documents one behavioral semantic feature:
 |------|---------|-------|
 | `context.go` | Execution context, calc/constraint/requirement evaluation | ~500 |
 | `action_executor.go` | Token-flow semantics, control flow nodes, nested actions | ~850 |
-| `state_executor.go` | Event-driven state machines, transitions, hierarchical states | ~550 |
+| `state_executor.go` | Event-driven state machines, transitions, hierarchical states, pseudostates | ~1000 |
 | `eval.go` | Expression evaluation (operators, literals, features) | ~600 |
 | `value.go` | Runtime value representation (ValConst, ValString, ValInstance) | ~150 |
 | `trace.go` | Deterministic execution trace recording | ~170 |
-| `conformance_test.go` | Conformance gate (20 cases) | ~420 |
+| `conformance_test.go` | Conformance gate (23 cases) | ~420 |
 | `robustness_test.go` | Failure-mode tests (6 cases) | ~360 |
 | `trace_test.go` | Golden trace test infrastructure | ~140 |
 
