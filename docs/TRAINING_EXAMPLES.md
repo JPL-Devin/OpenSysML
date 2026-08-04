@@ -39,13 +39,14 @@ These errors are **not implementation gaps** - the training files reference name
 - **Cause**: Files reference verification features without importing VerificationCases package
 - **Fix**: Add `private import VerificationCases::*;` at package level (imports must be at package level, not inside verification def)
 
-**Scope resolution - missing imports/qualifiers (3 files, 3 errors):**
-- **Error**: `unresolved reference: localClock` (1×)
-  - **Cause**: Exists in `Domain Libraries/Geometry/SpatialItems.sysml` but not imported/qualified
-- **Error**: `unresolved reference: payload` (1×)
-  - **Cause**: Exists in `Kernel Libraries/Kernel Semantic Library/Transfers.kerml` but not imported
-- **Error**: `unresolved reference: probability` (1×)
-  - **Cause**: Exists in `Domain Libraries/Cause and Effect/CauseAndEffect.sysml` but not imported
+**Scope resolution - missing inherited feature resolution (3 files, 3 errors):**
+- **Error**: `unresolved reference: localClock` (1×), `unresolved reference: payload` (1×), `unresolved reference: probability` (1×)
+- **Cause**: These are **inherited features** being redefined (`:>> featureName`). Features like `payload` are inherited from parent definitions (e.g., `Transfer` → `Message` → `Flow`), but our resolver doesn't yet look up the inheritance chain when resolving redefinition targets.
+- **Root cause**: Implementation limitation - redefinition target resolution doesn't follow specialization relationships to find inherited features.
+- **Files affected**:
+  - `13. Flows/Flow Definition Example.sysml`: `ref :>> payload : Fuel;` (payload inherited from Transfer)
+  - Similar patterns in Connections and probability examples
+- **Status**: This is a missing feature in our resolver, not a training example bug. Requires implementing inherited member lookup.
 
 **Typos (1 file, 1 error):**
 - **Error**: `unresolved reference: alternative` (1×)
