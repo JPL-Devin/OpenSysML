@@ -4,9 +4,21 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
+
+// Helper to convert TransitionEdge to lower.Transition for backward-compatible tests
+func edgeToTransition(edge *ast.TransitionEdge, sourceState, targetState *ast.StateNode) *lower.Transition {
+	return &lower.Transition{
+		Source:  sourceState,
+		Target:  targetState,
+		Trigger: edge.Trigger,
+		Guard:   edge.Guard,
+		Effect:  edge.Effect,
+	}
+}
 
 func TestStateExecutor_Creation(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
@@ -205,8 +217,8 @@ func TestStateExecutor_ExitBehavior(t *testing.T) {
 	
 	// Execute transition (will test in later tasks)
 	// For now just verify structure
-	if len(exec.transitions[stateA]) != 1 {
-		t.Errorf("expected 1 transition from stateA, got %d", len(exec.transitions[stateA]))
+	if len(exec.graph.Transitions[stateA]) != 1 {
+		t.Errorf("expected 1 transition from stateA, got %d", len(exec.graph.Transitions[stateA]))
 	}
 }
 

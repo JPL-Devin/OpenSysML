@@ -37,10 +37,9 @@ type StateExecutor struct {
 	eventQueue   *EventQueue
 	stateData    map[string]Value // State machine local variables
 	
-	// Graph structure (populated from graph for backward compatibility)
+	// Graph structure (populated from graph)
 	states         []*ast.StateNode
 	pseudostates   map[string]*ast.PseudostateNode          // Pseudostates by name
-	transitions    map[*ast.StateNode][]*ast.TransitionEdge
 	compositeStates map[*ast.StateNode][]*ast.StateRegion  // States with orthogonal regions
 	regionInitials map[*ast.StateRegion]*ast.StateNode     // Initial state per region
 	
@@ -71,7 +70,6 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 		eventQueue:      NewEventQueue(),
 		stateData:       make(map[string]Value),
 		pseudostates:    make(map[string]*ast.PseudostateNode),
-		transitions:     make(map[*ast.StateNode][]*ast.TransitionEdge),
 		compositeStates: make(map[*ast.StateNode][]*ast.StateRegion),
 		regionInitials:  make(map[*ast.StateRegion]*ast.StateNode),
 		stateStack:      make([]*ast.StateNode, 0),
@@ -82,7 +80,7 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 		},
 	}
 	
-	// Populate internal structures from graph for backward compatibility
+	// Populate internal structures from graph
 	if err := exec.populateFromGraph(); err != nil {
 		return nil, fmt.Errorf("populate from graph: %w", err)
 	}
@@ -119,39 +117,6 @@ func (e *StateExecutor) populateFromGraph() error {
 	// Copy parent state mappings
 	for child, parent := range e.graph.ParentState {
 		e.parentState[child] = parent
-	}
-	
-	// Convert lower.Transition back to TransitionEdge for backward compatibility
-	// TODO: Eventually migrate all transition-handling code to use lower.Transition
-	for sourceNode, transList := range e.graph.Transitions {
-		// Type assert source to StateNode (skip pseudostates for now - they're handled separately)
-		sourceState, ok := sourceNode.(*ast.StateNode)
-		if !ok {
-			continue // Skip transitions from pseudostates (handled by evaluateChoicePseudostate etc.)
-		}
-		
-		for _, lowerTrans := range transList {
-			// Get source/target names (handle both StateNode and PseudostateNode)
-			sourceName := getNodeName(lowerTrans.Source)
-			targetName := getNodeName(lowerTrans.Target)
-			
-			// Create TransitionEdge for backward compatibility
-			edge := &ast.TransitionEdge{
-				Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: sourceName}}},
-				Target:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: targetName}}},
-				Guard:   lowerTrans.Guard,
-				Effect:  lowerTrans.Effect,
-			}
-			
-			// Type assert Trigger to TriggerEvent (TimeEvent, ChangeEvent, etc. implement this interface)
-			if lowerTrans.Trigger != nil {
-				if triggerEvent, ok := lowerTrans.Trigger.(ast.TriggerEvent); ok {
-					edge.Trigger = triggerEvent
-				}
-			}
-			
-			e.transitions[sourceState] = append(e.transitions[sourceState], edge)
-		}
 	}
 	
 	return nil
@@ -241,7 +206,7 @@ func (e *StateExecutor) scheduleTransitionEvents() error {
 	if currentState == nil {
 		return nil // Multi-region state, skip for now (would need per-region scheduling)
 	}
-	transitions := e.transitions[currentState]
+	transitions := e.graph.Transitions[currentState]
 	
 	for _, trans := range transitions {
 		if timeEvent, ok := trans.Trigger.(*ast.TimeEvent); ok {
@@ -295,12 +260,43 @@ func (e *StateExecutor) processNextEvent() error {
 	// Process event by type
 	switch event.Type {
 	case EventTime:
-		// Fire transition
-		transition, ok := event.Payload.(*ast.TransitionEdge)
-		if !ok {
-			return fmt.Errorf("invalid TimeEvent payload")
+		// Fire transition - handle both old (TransitionEdge) and new (lower.Transition) for backward compatibility
+		if lowerTrans, ok := event.Payload.(*lower.Transition); ok {
+			return e.fireTransition(lowerTrans)
 		}
-		return e.fireTransition(transition)
+		
+		// Fallback for tests that use TransitionEdge directly
+		if edge, ok := event.Payload.(*ast.TransitionEdge); ok {
+			// Convert TransitionEdge to lower.Transition
+			// Need to find source/target states by name
+			var sourceState, targetState *ast.StateNode
+			for _, state := range e.states {
+				if edge.Source != nil && len(edge.Source.Parts) > 0 {
+					if state.Name == edge.Source.Parts[len(edge.Source.Parts)-1].Text {
+						sourceState = state
+					}
+				}
+				if edge.Target != nil && len(edge.Target.Parts) > 0 {
+					if state.Name == edge.Target.Parts[len(edge.Target.Parts)-1].Text {
+						targetState = state
+					}
+				}
+			}
+			if sourceState == nil || targetState == nil {
+				return fmt.Errorf("could not find source/target states for transition")
+			}
+			
+			lowerTrans := &lower.Transition{
+				Source:  sourceState,
+				Target:  targetState,
+				Trigger: edge.Trigger,
+				Guard:   edge.Guard,
+				Effect:  edge.Effect,
+			}
+			return e.fireTransition(lowerTrans)
+		}
+		
+		return fmt.Errorf("invalid TimeEvent payload: expected *lower.Transition or *ast.TransitionEdge")
 	default:
 		// For general events, broadcast to all active regions
 		return e.broadcastEvent(&event)
@@ -314,7 +310,7 @@ func (e *StateExecutor) broadcastEvent(event *Event) error {
 		// Broadcast event to each region independently
 		for region, regionState := range e.activeConfig.regionStates {
 			// Find transitions from this region's active state
-			transitions := e.transitions[regionState]
+			transitions := e.graph.Transitions[regionState]
 			for _, trans := range transitions {
 				if e.matchesEvent(trans, event) {
 					// Fire transition within this region
@@ -334,7 +330,7 @@ func (e *StateExecutor) broadcastEvent(event *Event) error {
 		return nil // No active state
 	}
 	
-	transitions := e.transitions[currentState]
+	transitions := e.graph.Transitions[currentState]
 	for _, trans := range transitions {
 		if e.matchesEvent(trans, event) {
 			return e.fireTransition(trans)
@@ -345,18 +341,18 @@ func (e *StateExecutor) broadcastEvent(event *Event) error {
 }
 
 // matchesEvent checks if a transition matches the given event.
-func (e *StateExecutor) matchesEvent(trans *ast.TransitionEdge, event *Event) bool {
+func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool {
 	// For now, simplified: no explicit event matching
 	// In full UML, would match SignalEvent, ChangeEvent, etc.
 	return true
 }
 
 // fireTransitionInRegion fires a transition within a specific region.
-func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *ast.TransitionEdge) error {
-	// Find target state
-	targetState := e.findStateByName(trans.Target)
-	if targetState == nil {
-		return fmt.Errorf("transition target state not found")
+func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *lower.Transition) error {
+	// Target should be a StateNode (pseudostates not supported in region transitions yet)
+	targetState, ok := trans.Target.(*ast.StateNode)
+	if !ok {
+		return fmt.Errorf("transition target must be a state node, got %T", trans.Target)
 	}
 	
 	// Get current state in this region
@@ -416,31 +412,30 @@ func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *a
 }
 
 // fireTransition executes a state transition.
-func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
-	// Check if target is a pseudostate (choice or junction)
+func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
+	// Target can be StateNode or PseudostateNode
 	var targetState *ast.StateNode
-	if trans.Target != nil && len(trans.Target.Parts) > 0 {
-		targetName := trans.Target.Parts[len(trans.Target.Parts)-1].Text
-		
-		// Check if it's a pseudostate first
-		if ps, exists := e.pseudostates[targetName]; exists {
-			var err error
-			switch ps.Kind {
-			case ast.PseudostateChoice:
-				targetState, err = e.evaluateChoicePseudostate(ps)
-			case ast.PseudostateJunction:
-				targetState, err = e.evaluateJunctionPseudostate(ps)
-			default:
-				return fmt.Errorf("unsupported pseudostate kind: %v", ps.Kind)
-			}
-			
-			if err != nil {
-				return fmt.Errorf("evaluate pseudostate: %w", err)
-			}
-		} else {
-			// Normal state target
-			targetState = e.findStateByName(trans.Target)
+	
+	// Type assert to determine target type
+	switch target := trans.Target.(type) {
+	case *ast.StateNode:
+		targetState = target
+	case *ast.PseudostateNode:
+		// Evaluate pseudostate to get final target state
+		var err error
+		switch target.Kind {
+		case ast.PseudostateChoice:
+			targetState, err = e.evaluateChoicePseudostate(target)
+		case ast.PseudostateJunction:
+			targetState, err = e.evaluateJunctionPseudostate(target)
+		default:
+			return fmt.Errorf("unsupported pseudostate kind: %v", target.Kind)
 		}
+		if err != nil {
+			return fmt.Errorf("evaluate pseudostate: %w", err)
+		}
+	default:
+		return fmt.Errorf("transition target must be StateNode or PseudostateNode, got %T", trans.Target)
 	}
 	
 	if targetState == nil {
@@ -719,7 +714,7 @@ func (e *StateExecutor) pollChangeEvents() error {
 	if currentState == nil {
 		return nil // Multi-region state, skip for now
 	}
-	transitions := e.transitions[currentState]
+	transitions := e.graph.Transitions[currentState]
 	
 	for _, trans := range transitions {
 		if changeEvent, ok := trans.Trigger.(*ast.ChangeEvent); ok {
