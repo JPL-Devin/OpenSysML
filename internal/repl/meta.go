@@ -457,8 +457,9 @@ func (s *Session) doCalc(args []string) ([]string, bool, error) {
 		return []string{"error: no declarations loaded"}, false, nil
 	}
 	
-	sym, ok := doc.Scope.LookupLocal(calcName)
-	if !ok || sym == nil {
+	// Use lookupInScopeTree to search nested scopes (e.g., package members)
+	sym := lookupInScopeTree(doc.Scope, calcName)
+	if sym == nil {
 		return []string{fmt.Sprintf("error: calc %q not found", calcName)}, false, nil
 	}
 	
@@ -542,8 +543,9 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 		return []string{"error: no declarations loaded"}, false, nil
 	}
 	
-	sym, ok := doc.Scope.LookupLocal(name)
-	if !ok || sym == nil {
+	// Use lookupInScopeTree to search nested scopes
+	sym := lookupInScopeTree(doc.Scope, name)
+	if sym == nil {
 		return []string{fmt.Sprintf("error: constraint %q not found", name)}, false, nil
 	}
 	
@@ -572,8 +574,9 @@ func (s *Session) doRequirement(name string) ([]string, bool, error) {
 		return []string{"error: no declarations loaded"}, false, nil
 	}
 	
-	sym, ok := doc.Scope.LookupLocal(name)
-	if !ok || sym == nil {
+	// Use lookupInScopeTree to search nested scopes
+	sym := lookupInScopeTree(doc.Scope, name)
+	if sym == nil {
 		return []string{fmt.Sprintf("error: requirement %q not found", name)}, false, nil
 	}
 	
@@ -609,8 +612,9 @@ func (s *Session) doAction(name string) ([]string, bool, error) {
 		return []string{"error: no declarations loaded"}, false, nil
 	}
 	
-	sym, ok := doc.Scope.LookupLocal(name)
-	if !ok || sym == nil {
+	// Use lookupInScopeTree to search nested scopes
+	sym := lookupInScopeTree(doc.Scope, name)
+	if sym == nil {
 		return []string{fmt.Sprintf("error: action %q not found", name)}, false, nil
 	}
 	
@@ -798,8 +802,9 @@ func (s *Session) doStateMachine(name string) ([]string, bool, error) {
 		return []string{"error: no declarations loaded"}, false, nil
 	}
 	
-	sym, ok := doc.Scope.LookupLocal(name)
-	if !ok || sym == nil {
+	// Use lookupInScopeTree to search nested scopes
+	sym := lookupInScopeTree(doc.Scope, name)
+	if sym == nil {
 		return []string{fmt.Sprintf("error: state machine %q not found", name)}, false, nil
 	}
 	
