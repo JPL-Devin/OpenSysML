@@ -602,44 +602,6 @@ func (e *StateExecutor) initialize() error {
 	return nil
 }
 
-// findDeepestInitialState finds initial state, following nested initial states.
-func (e *StateExecutor) findDeepestInitialState() *ast.StateNode {
-	// Find top-level initial state (no parent or parent not initial)
-	var current *ast.StateNode
-	for _, state := range e.states {
-		if !state.IsInitial {
-			continue
-		}
-		// Check if parent exists and is initial - skip if so (we want root initial)
-		parent := e.parentState[state]
-		if parent == nil || !parent.IsInitial {
-			current = state
-			break
-		}
-	}
-	
-	if current == nil {
-		return nil
-	}
-	
-	// Follow nested initial states down to deepest level
-	for {
-		foundNested := false
-		for _, state := range e.states {
-			if state.IsInitial && e.parentState[state] == current {
-				current = state
-				foundNested = true
-				break
-			}
-		}
-		if !foundNested {
-			break
-		}
-	}
-	
-	return current
-}
-
 // enterState executes entry behaviors when entering a state.
 func (e *StateExecutor) enterState(state *ast.StateNode) error {
 	if state == nil {

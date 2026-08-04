@@ -31,12 +31,6 @@ type Message struct {
 	Payload    map[string]Value // Signal attribute values
 }
 
-type objectFlow struct {
-	SourcePin string
-	TargetPin string
-	Target    ast.Node
-}
-
 // newActionExecutor creates an action executor.
 func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, error) {
 	if action.Kind != symbols.SymbolActionUsage && action.Kind != symbols.SymbolActionDef {
