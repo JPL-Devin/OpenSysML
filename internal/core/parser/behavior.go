@@ -1936,6 +1936,9 @@ func (p *Parser) parseStateMember() ast.Node {
 			}
 			// Full state usage - parse as body member
 			return p.parseBodyMember()
+		case "region":
+			p.advance()
+			return p.parseRegionMember(start)
 		case "transition":
 			// Lookahead to distinguish:
 			// 1. State machine transition: transition source to target (no name)
@@ -2463,6 +2466,56 @@ func (p *Parser) parseFinalState(start int) ast.Node {
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
+}
+
+// parseRegionMember parses: region <name> { <states> }
+func (p *Parser) parseRegionMember(start int) ast.Node {
+	// 'region' already consumed
+	
+	// Expect region name
+	if !p.at(lexer.Identifier) && !p.at(lexer.Keyword) {
+		p.error(p.peek().Span, "expected region name after 'region'")
+		en := &ast.ErrorNode{Message: "expected region name"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	nameToken := p.peek()
+	name := p.src.Text(nameToken.Span)
+	p.advance()
+	
+	// Expect opening brace
+	if !p.at(lexer.LBrace) {
+		p.error(p.peek().Span, "expected '{' after region name")
+		en := &ast.ErrorNode{Message: "expected '{'"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	p.advance() // consume '{'
+	
+	// Parse state members within region
+	var states []ast.Node
+	for !p.at(lexer.RBrace) && !p.at(lexer.EOF) {
+		member := p.parseStateMember()
+		if member != nil {
+			states = append(states, member)
+		}
+	}
+	
+	if !p.at(lexer.RBrace) {
+		p.error(p.peek().Span, "expected '}' to close region body")
+		en := &ast.ErrorNode{Message: "expected '}'"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	p.advance() // consume '}'
+	
+	region := &ast.StateRegion{
+		Name:   name,
+		States: states,
+	}
+	region.NodeSpan = p.spanFrom(start)
+	return region
 }
 
 // parseTransitionMember parses: transition <source> to <target> [when <trigger>] [if <guard>] [do { <effect> }];

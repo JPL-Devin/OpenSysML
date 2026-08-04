@@ -50,7 +50,7 @@
 - Token-flow tracing (infrastructure ready)
 - Step budget enforcement
 
-**State Machines (13/13 features):**
+**State Machines (14/14 features):**
 - Initial/final state identification
 - State entry/exit actions
 - State do behavior (simplified immediate execution)
@@ -62,6 +62,7 @@
 - State history (shallow)
 - Run-to-completion semantics
 - Event queue management
+- Orthogonal regions (concurrent substates with event broadcasting)
 - Dangling transition detection
 - Control flow node registration (initial/final/first/done)
 
@@ -81,10 +82,10 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 20 conformance cases (all passing)
+- 21 conformance cases (all passing)
 - 6 robustness tests (deadlock, guards, budgets)
 - 41 unit tests
-- 19 golden AST fixtures
+- 19 golden AST fixtures (including 1 region parsing test)
 - 16 negative parser tests
 - 900+ total tests passing
 
@@ -217,7 +218,7 @@ Each row documents one behavioral semantic feature:
 - History pseudostates (deep)
 - Deferred events
 - Protocol state machines
-- Orthogonal regions (concurrent substates)
+- Fork/join transitions (cross-region)
 
 **Object Model:**
 - Dynamic object creation/destruction

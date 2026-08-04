@@ -8,6 +8,18 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
+// StateConfiguration represents the active state configuration (simple or multi-region).
+type StateConfiguration struct {
+	// For simple states (no regions): single active state
+	simpleState *ast.StateNode
+	
+	// For composite states with regions: map of region → active state in that region
+	regionStates map[*ast.StateRegion]*ast.StateNode
+	
+	// Hierarchical parent chain (for history and LCA calculations)
+	hierarchyStack []*ast.StateNode
+}
+
 // StateExecutor executes state machines using event-driven semantics.
 type StateExecutor struct {
 	ctx          *Context
@@ -16,18 +28,21 @@ type StateExecutor struct {
 	trace        *TraceRecorder // Optional trace recorder for testing
 	
 	// State machine execution state
-	currentState *ast.StateNode
+	activeConfig *StateConfiguration  // Active state configuration (simple or multi-region)
 	currentTime  float64
 	eventQueue   *EventQueue
 	stateData    map[string]Value // State machine local variables
 	
 	// Graph structure
-	states      []*ast.StateNode
-	transitions map[*ast.StateNode][]*ast.TransitionEdge
+	states         []*ast.StateNode
+	transitions    map[*ast.StateNode][]*ast.TransitionEdge
+	compositeStates map[*ast.StateNode][]*ast.StateRegion  // States with orthogonal regions
+	regionInitials map[*ast.StateRegion]*ast.StateNode     // Initial state per region
 	
 	// Hierarchical state support
-	stateStack  []*ast.StateNode            // Active state configuration (for nested states)
-	parentState map[*ast.StateNode]*ast.StateNode // Child -> parent mapping
+	stateStack  []*ast.StateNode                        // Active state configuration (for nested states)
+	parentState map[*ast.StateNode]*ast.StateNode       // Child -> parent mapping
+	regionOwner map[*ast.StateRegion]*ast.StateNode    // Region -> parent state
 }
 
 // newStateExecutor creates a state executor.
@@ -37,15 +52,21 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 	}
 	
 	exec := &StateExecutor{
-		ctx:          ctx,
-		stateMachine: stateMachine,
-		state:        StateReady,
-		currentTime:  0.0,
-		eventQueue:   NewEventQueue(),
-		stateData:    make(map[string]Value),
-		transitions:  make(map[*ast.StateNode][]*ast.TransitionEdge),
-		stateStack:   make([]*ast.StateNode, 0),
-		parentState:  make(map[*ast.StateNode]*ast.StateNode),
+		ctx:             ctx,
+		stateMachine:    stateMachine,
+		state:           StateReady,
+		currentTime:     0.0,
+		eventQueue:      NewEventQueue(),
+		stateData:       make(map[string]Value),
+		transitions:     make(map[*ast.StateNode][]*ast.TransitionEdge),
+		compositeStates: make(map[*ast.StateNode][]*ast.StateRegion),
+		regionInitials:  make(map[*ast.StateRegion]*ast.StateNode),
+		stateStack:      make([]*ast.StateNode, 0),
+		parentState:     make(map[*ast.StateNode]*ast.StateNode),
+		regionOwner:     make(map[*ast.StateRegion]*ast.StateNode),
+		activeConfig: &StateConfiguration{
+			regionStates: make(map[*ast.StateRegion]*ast.StateNode),
+		},
 	}
 	
 	// Extract graph structure from AST
@@ -81,7 +102,27 @@ func (e *StateExecutor) extractGraph() error {
 		}
 	}
 	
-	// Second pass: collect transitions and handle initial node successors
+	// Second pass: identify composite states with regions and find initial states
+	for _, state := range e.states {
+		if len(state.Regions) > 0 {
+			// Mark as composite state
+			e.compositeStates[state] = state.Regions
+			
+			// Track region ownership
+			for _, region := range state.Regions {
+				e.regionOwner[region] = state
+				
+				// Find initial state in this region
+				initialState := e.findInitialStateInRegion(region)
+				if initialState == nil {
+					return fmt.Errorf("region %s in state %s has no initial state", region.Name, state.Name)
+				}
+				e.regionInitials[region] = initialState
+			}
+		}
+	}
+	
+	// Third pass: collect transitions and handle initial node successors
 	for _, member := range stateUsage.Members {
 		// Unwrap Membership if present
 		actualMember := member
@@ -199,9 +240,25 @@ func (e *StateExecutor) findStateByName(qname *ast.QualifiedName) *ast.StateNode
 	return nil
 }
 
+// findInitialStateInRegion finds the initial state within a region.
+func (e *StateExecutor) findInitialStateInRegion(region *ast.StateRegion) *ast.StateNode {
+	for _, member := range region.States {
+		if state, ok := member.(*ast.StateNode); ok {
+			if state.IsInitial {
+				return state
+			}
+		}
+	}
+	return nil
+}
+
 // scheduleTransitionEvents schedules TimeEvents for outgoing transitions from current state.
 func (e *StateExecutor) scheduleTransitionEvents() error {
-	transitions := e.transitions[e.currentState]
+	currentState := e.getCurrentState()
+	if currentState == nil {
+		return nil // Multi-region state, skip for now (would need per-region scheduling)
+	}
+	transitions := e.transitions[currentState]
 	
 	for _, trans := range transitions {
 		if timeEvent, ok := trans.Trigger.(*ast.TimeEvent); ok {
@@ -262,8 +319,117 @@ func (e *StateExecutor) processNextEvent() error {
 		}
 		return e.fireTransition(transition)
 	default:
-		return fmt.Errorf("unsupported event type: %v", event.Type)
+		// For general events, broadcast to all active regions
+		return e.broadcastEvent(&event)
 	}
+}
+
+// broadcastEvent sends an event to all active regions (or single state if no regions).
+func (e *StateExecutor) broadcastEvent(event *Event) error {
+	// If in composite state with regions, broadcast to all
+	if len(e.activeConfig.regionStates) > 0 {
+		// Broadcast event to each region independently
+		for region, regionState := range e.activeConfig.regionStates {
+			// Find transitions from this region's active state
+			transitions := e.transitions[regionState]
+			for _, trans := range transitions {
+				if e.matchesEvent(trans, event) {
+					// Fire transition within this region
+					if err := e.fireTransitionInRegion(region, trans); err != nil {
+						return fmt.Errorf("fire transition in region %s: %w", region.Name, err)
+					}
+					break // Run-to-completion: one transition per region per event
+				}
+			}
+		}
+		return nil
+	}
+	
+	// Simple state (no regions) - existing logic
+	currentState := e.getCurrentState()
+	if currentState == nil {
+		return nil // No active state
+	}
+	
+	transitions := e.transitions[currentState]
+	for _, trans := range transitions {
+		if e.matchesEvent(trans, event) {
+			return e.fireTransition(trans)
+		}
+	}
+	
+	return nil // Event not consumed
+}
+
+// matchesEvent checks if a transition matches the given event.
+func (e *StateExecutor) matchesEvent(trans *ast.TransitionEdge, event *Event) bool {
+	// For now, simplified: no explicit event matching
+	// In full UML, would match SignalEvent, ChangeEvent, etc.
+	return true
+}
+
+// fireTransitionInRegion fires a transition within a specific region.
+func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *ast.TransitionEdge) error {
+	// Find target state
+	targetState := e.findStateByName(trans.Target)
+	if targetState == nil {
+		return fmt.Errorf("transition target state not found")
+	}
+	
+	// Get current state in this region
+	sourceState := e.activeConfig.regionStates[region]
+	
+	// Evaluate guard if present
+	if trans.Guard != nil {
+		ec := NewEvalContext(e.ctx, nil)
+		ec.Push(e.stateData)
+		guardVal, err := ec.Eval(trans.Guard)
+		if err != nil {
+			return fmt.Errorf("eval guard: %w", err)
+		}
+		
+		guardPass := false
+		if guardVal.Kind == ValConst && guardVal.Const.Kind == semantics.ValBool {
+			guardPass = guardVal.Const.Bool
+		} else {
+			return fmt.Errorf("guard must be boolean, got %v", guardVal.Kind)
+		}
+		
+		if !guardPass {
+			return nil // Guard failed, remain in current state
+		}
+	}
+	
+	// Exit current state in this region
+	if err := e.exitState(sourceState); err != nil {
+		return fmt.Errorf("exit state: %w", err)
+	}
+	
+	// Execute transition effect
+	for _, action := range trans.Effect {
+		if err := e.executeAction(action); err != nil {
+			return fmt.Errorf("transition effect: %w", err)
+		}
+	}
+	
+	// Enter target state in this region
+	if err := e.enterState(targetState); err != nil {
+		return fmt.Errorf("enter state: %w", err)
+	}
+	
+	// Update active state for this region
+	e.activeConfig.regionStates[region] = targetState
+	
+	// Record trace
+	if e.trace != nil {
+		eventName := ""
+		if trans.Trigger != nil {
+			eventName = fmt.Sprintf("%v", trans.Trigger)
+		}
+		e.trace.RecordStateTransition(sourceState.Name, targetState.Name, eventName)
+	}
+	
+	return nil
 }
 
 // fireTransition executes a state transition.
@@ -298,9 +464,10 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 	}
 	
 	// Exit current state hierarchy up to LCA
-	lca := e.getLCA(e.currentState, targetState)
+	currentState := e.getCurrentState()
+	lca := e.getLCA(currentState, targetState)
 	statesToExit := make([]*ast.StateNode, 0)
-	current := e.currentState
+	current := currentState
 	for current != nil && current != lca {
 		statesToExit = append(statesToExit, current)
 		current = e.parentState[current]
@@ -336,7 +503,7 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 	}
 	
 	// Update current state and rebuild stateStack with full active configuration
-	e.currentState = targetState
+	e.setCurrentState(targetState)
 	e.stateStack = e.getParentChain(targetState)
 	// Reverse to root→leaf order for stateStack
 	for i, j := 0, len(e.stateStack)-1; i < j; i, j = i+1, j-1 {
@@ -356,8 +523,9 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 	// Record trace
 	if e.trace != nil {
 		fromName := ""
-		if e.currentState != nil {
-			fromName = e.currentState.Name
+		currentState := e.getCurrentState()
+		if currentState != nil {
+			fromName = currentState.Name
 		}
 		eventName := ""
 		if trans.Trigger != nil {
@@ -371,7 +539,48 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 }
 // initialize sets current state to initial state and enters it.
 func (e *StateExecutor) initialize() error {
-	// Find initial state (deepest in hierarchy)
+	// Check if state machine itself has regions (no top-level states, just regions)
+	stateUsage, ok := e.stateMachine.Decl.(*ast.Usage)
+	if !ok {
+		stateDef, ok := e.stateMachine.Decl.(*ast.Definition)
+		if !ok {
+			return fmt.Errorf("state machine symbol has invalid node type")
+		}
+		stateUsage = &ast.Usage{Members: stateDef.Members}
+	}
+	
+	// Find StateRegion members at top level
+	var topLevelRegions []*ast.StateRegion
+	for _, member := range stateUsage.Members {
+		actualMember := member
+		if membership, ok := member.(*ast.Membership); ok {
+			actualMember = membership.Member
+		}
+		if region, ok := actualMember.(*ast.StateRegion); ok {
+			topLevelRegions = append(topLevelRegions, region)
+		}
+	}
+	
+	// If state machine has top-level regions, enter all initial states
+	if len(topLevelRegions) > 0 {
+		e.state = StateRunning
+		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
+		e.activeConfig.simpleState = nil
+		
+		for _, region := range topLevelRegions {
+			initialState := e.findInitialStateInRegion(region)
+			if initialState == nil {
+				return fmt.Errorf("region %s has no initial state", region.Name)
+			}
+			e.activeConfig.regionStates[region] = initialState
+			if err := e.enterState(initialState); err != nil {
+				return fmt.Errorf("enter initial state in region %s: %w", region.Name, err)
+			}
+		}
+		return nil
+	}
+	
+	// Find initial state (deepest in hierarchy) for simple state machines
 	initialState := e.findDeepestInitialState()
 	
 	if initialState == nil {
@@ -379,7 +588,7 @@ func (e *StateExecutor) initialize() error {
 	}
 	
 	// Enter initial state hierarchy (parent to child)
-	e.currentState = initialState
+	e.setCurrentState(initialState)
 	e.state = StateRunning
 	
 	// Build stateStack with full active configuration (root → leaf)
@@ -461,6 +670,27 @@ func (e *StateExecutor) enterState(state *ast.StateNode) error {
 		}
 	}
 	
+	// Check if this is a composite state with regions
+	if regions, isComposite := e.compositeStates[state]; isComposite {
+		// Entering composite state with orthogonal regions
+		// Initialize active configuration for all regions
+		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
+		e.activeConfig.simpleState = nil // Clear simple state
+		
+		for _, region := range regions {
+			initialState := e.regionInitials[region]
+			e.activeConfig.regionStates[region] = initialState
+			// Recursively enter initial state in each region
+			if err := e.enterState(initialState); err != nil {
+				return fmt.Errorf("enter initial state in region %s: %w", region.Name, err)
+			}
+		}
+	} else {
+		// Simple state (no regions)
+		e.activeConfig.simpleState = state
+		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode) // Clear regions
+	}
+	
 	// Execute do activities (ongoing behavior)
 	// Simplified: execute immediately like entry actions
 	// Full UML semantics: concurrent execution with state lifetime
@@ -479,6 +709,17 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 		return nil
 	}
 	
+	// If this is a composite state with regions, exit all active region states first
+	if len(e.activeConfig.regionStates) > 0 {
+		for _, regionState := range e.activeConfig.regionStates {
+			if err := e.exitState(regionState); err != nil {
+				return fmt.Errorf("exit region state: %w", err)
+			}
+		}
+		// Clear region configuration
+		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
+	}
+	
 	// Record trace
 	if e.trace != nil {
 		e.trace.RecordStateExit(state.Name, len(state.Exit) > 0)
@@ -490,6 +731,9 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 			return fmt.Errorf("exit action: %w", err)
 		}
 	}
+	
+	// Clear simple state
+	e.activeConfig.simpleState = nil
 	
 	return nil
 }
@@ -521,7 +765,11 @@ func (e *StateExecutor) executeAction(action ast.Node) error {
 // pollChangeEvents checks ChangeEvent conditions for outgoing transitions.
 // Fires transition immediately if condition becomes true.
 func (e *StateExecutor) pollChangeEvents() error {
-	transitions := e.transitions[e.currentState]
+	currentState := e.getCurrentState()
+	if currentState == nil {
+		return nil // Multi-region state, skip for now
+	}
+	transitions := e.transitions[currentState]
 	
 	for _, trans := range transitions {
 		if changeEvent, ok := trans.Trigger.(*ast.ChangeEvent); ok {
@@ -555,7 +803,28 @@ func (e *StateExecutor) pollChangeEvents() error {
 
 // CurrentState returns the current active state node.
 func (e *StateExecutor) CurrentState() ast.Node {
-	return e.currentState
+	// For backward compatibility: return simple state if no regions active
+	if e.activeConfig.simpleState != nil {
+		return e.activeConfig.simpleState
+	}
+	// If multi-region, return nil (caller should check regions individually)
+	return nil
+}
+
+// getCurrentState returns the active simple state (nil if multi-region).
+func (e *StateExecutor) getCurrentState() *ast.StateNode {
+	return e.activeConfig.simpleState
+}
+
+// setCurrentState sets the active simple state (for non-region states).
+func (e *StateExecutor) setCurrentState(state *ast.StateNode) {
+	e.activeConfig.simpleState = state
+	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode) // Clear regions
+}
+
+// isMultiRegion checks if currently in a composite state with regions.
+func (e *StateExecutor) isMultiRegion() bool {
+	return len(e.activeConfig.regionStates) > 0
 }
 
 // StateStack returns a copy of the state stack (active configuration).
