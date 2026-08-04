@@ -35,6 +35,7 @@ type StateExecutor struct {
 	
 	// Graph structure
 	states         []*ast.StateNode
+	pseudostates   map[string]*ast.PseudostateNode          // Pseudostates by name
 	transitions    map[*ast.StateNode][]*ast.TransitionEdge
 	compositeStates map[*ast.StateNode][]*ast.StateRegion  // States with orthogonal regions
 	regionInitials map[*ast.StateRegion]*ast.StateNode     // Initial state per region
@@ -58,6 +59,7 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 		currentTime:     0.0,
 		eventQueue:      NewEventQueue(),
 		stateData:       make(map[string]Value),
+		pseudostates:    make(map[string]*ast.PseudostateNode),
 		transitions:     make(map[*ast.StateNode][]*ast.TransitionEdge),
 		compositeStates: make(map[*ast.StateNode][]*ast.StateRegion),
 		regionInitials:  make(map[*ast.StateRegion]*ast.StateNode),
@@ -89,7 +91,7 @@ func (e *StateExecutor) extractGraph() error {
 		stateUsage = &ast.Usage{Members: stateDef.Members}
 	}
 	
-	// First pass: collect states
+	// First pass: collect states and pseudostates
 	for _, member := range stateUsage.Members {
 		// Unwrap Membership if present
 		actualMember := member
@@ -99,6 +101,9 @@ func (e *StateExecutor) extractGraph() error {
 		
 		if state, ok := actualMember.(*ast.StateNode); ok {
 			e.collectStates(state, nil) // Recursively collect substates
+		} else if ps, ok := actualMember.(*ast.PseudostateNode); ok {
+			// Collect pseudostate
+			e.pseudostates[ps.Name] = ps
 		}
 	}
 	
