@@ -2,7 +2,9 @@
 
 ## Overview
 
-**Status**: 63/100 files parse and resolve cleanly (0 semantic errors)  
+**Source:** [SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release) (2026-05 release)  
+**Download:** Run `./scripts/download-training-examples.sh` to fetch examples  
+**Status:** 63/100 files parse and resolve cleanly (0 semantic errors)  
 **Errors**: 37/100 files have semantic errors  
 
 These training examples are from the official [SysML v2 Training Materials](https://github.com/Systems-Modeling/SysML-v2-Training).

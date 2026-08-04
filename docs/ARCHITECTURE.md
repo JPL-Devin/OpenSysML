@@ -1,6 +1,5 @@
 # SysML v2 Execution Environment — Architecture
 
-**Status:** Active Development  
 **Module:** `github.com/Open-MBEE/Systemica`  
 **Language:** Go 1.23+
 
