@@ -1962,16 +1962,31 @@ func (p *Parser) parseStateMember() ast.Node {
 			p.advance() // consume 'first'
 			return p.parseInitialNode(p.peek())
 		case "then":
-			// Standalone succession: then <state>; (implicit source, typically from entry)
+			// Standalone succession: then <source> <target>; or then <target>; (implicit source)
 			p.advance() // consume 'then'
-			targetState := p.parseQualifiedName()
+			
+			// Parse first qualified name
+			firstState := p.parseQualifiedName()
+			
+			// Check if there's a second state name (explicit source → target)
+			var sourceState, targetState *ast.QualifiedName
+			if p.at(lexer.Identifier) || p.atNameOrKeyword() {
+				// Two states: then source target;
+				sourceState = firstState
+				targetState = p.parseQualifiedName()
+			} else {
+				// One state: then target; (implicit source)
+				sourceState = nil
+				targetState = firstState
+			}
+			
 			p.expect(lexer.Semicolon, "expected ';' after succession target")
 			
-			// Create succession with nil source (implicit)
+			// Create succession
 			succession := &ast.Usage{
 				Kind: ast.UsageSuccession,
 				ConnectorEnds: []*ast.ConnectorEnd{
-					nil, // implicit source
+					{Target: sourceState},
 					{Target: targetState},
 				},
 			}
