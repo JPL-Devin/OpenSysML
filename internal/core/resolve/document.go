@@ -1,7 +1,6 @@
 package resolve
 
 import (
-	"fmt"
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -355,8 +354,12 @@ func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featur
 	
 	// Map of known implicit parents (this is a hack, but works for common cases)
 	implicitParents := map[string][]string{
-		"Flows::Flow": {"Flows::Message", "Flows::FlowTransfer"},
-		"Flows::Message": {"Transfers::Transfer"},
+		"Flows::Flow":         {"Flows::Message", "Flows::FlowTransfer"},
+		"Flows::Message":      {"Transfers::Transfer"},
+		"Parts::Part":         {"Items::Item"},
+		"Items::Item":         {"Occurrences::Occurrence"},
+		"Connections::Connection": {"Links::Link", "Connectors::Connector"},
+		"Links::Link":         {"Occurrences::Occurrence"},
 		// Add more as needed
 	}
 	
@@ -375,7 +378,12 @@ func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featur
 			}
 		}
 		
-		// Recurse further (not implemented yet)
+		// Feature not found in this grandparent - recurse further
+		// Create a dummy symbol with just the name for recursive lookup
+		gpSym := &symbols.Symbol{Name: gpName}
+		if r.searchInheritedFeatureViaIndex(gpSym, featureName, qn) {
+			return true
+		}
 	}
 	
 	return false
@@ -386,33 +394,32 @@ func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featur
 func (r *Resolver) findImplicitSpecializations(scope *symbols.Scope, def *ast.Definition) []*symbols.Symbol {
 	var parents []*symbols.Symbol
 	
-	// Map definition kinds to their implicit base types (just the name, not FQN)
-	var baseName string
+	// Map definition kind to base type FQN
+	var baseFQN string
 	switch def.Kind {
+	case ast.DefPart:
+		baseFQN = "Parts::Part"
+	case ast.DefItem:
+		baseFQN = "Items::Item"
 	case ast.DefFlow:
-		baseName = "Flow"
+		baseFQN = "Flows::Flow"
 	case ast.DefConnection:
-		baseName = "Connection"
+		baseFQN = "Connections::Connection"
 	case ast.DefInterface:
-		baseName = "Interface"
+		baseFQN = "Interfaces::Interface"
 	case ast.DefAllocation:
-		baseName = "Allocation"
+		baseFQN = "Allocations::Allocation"
 	// Add more as needed
 	default:
 		return nil
 	}
 	
-	// Create a simple QualifiedName to resolve
-	qn := &ast.QualifiedName{
-		Parts: []ast.NameSegment{{Text: baseName}},
-	}
-	
-	if sym, ok := r.ResolveQualified(scope, qn); ok && sym != nil {
-		if sym.Scope != nil {
-			fmt.Printf("  Scope node: %T, members: %v\n", sym.Scope.Node(), sym.Scope.MemberNames())
+	// Look up base type in index
+	if r.idx != nil {
+		candidates := r.idx.LookupQualified(baseFQN)
+		if len(candidates) == 1 {
+			parents = append(parents, candidates[0])
 		}
-		parents = append(parents, sym)
-	} else {
 	}
 	
 	return parents
