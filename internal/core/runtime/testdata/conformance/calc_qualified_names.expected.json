@@ -1,0 +1,5 @@
+{
+    "type": "calc",
+    "inputs": [],
+    "result": {"type": "Integer", "value": 42}
+}

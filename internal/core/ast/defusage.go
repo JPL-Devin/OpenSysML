@@ -377,6 +377,7 @@ type Usage struct {
 	IsChain       bool // 'chain' feature modifier
 	IsConstant    bool // 'constant' feature modifier
 	IsEvent       bool // 'event' modifier for event-driven occurrences
+	IsAccept      bool // 'accept' action for message consumption
 	Visibility    Visibility
 	Direction     FeatureDirection
 	IsComposite   bool

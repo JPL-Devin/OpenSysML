@@ -7,7 +7,9 @@ package ast
 // InitialNode is the entry point for action execution.
 type InitialNode struct {
 	NodeBase
-	Name string // optional identifier for edge referencing
+	Name      string          // optional identifier for edge referencing
+	Successor *QualifiedName  // optional target for implicit succession (from `first X then Y` syntax)
+	Guard     Node            // optional guard condition for succession
 }
 
 // FinalNode is the termination point for action execution.

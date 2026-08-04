@@ -68,7 +68,20 @@ func (e *StateExecutor) extractGraph() error {
 		stateUsage = &ast.Usage{Members: stateDef.Members}
 	}
 	
-	// Extract states and transitions (recursively for hierarchical states)
+	// First pass: collect states
+	for _, member := range stateUsage.Members {
+		// Unwrap Membership if present
+		actualMember := member
+		if membership, ok := member.(*ast.Membership); ok {
+			actualMember = membership.Member
+		}
+		
+		if state, ok := actualMember.(*ast.StateNode); ok {
+			e.collectStates(state, nil) // Recursively collect substates
+		}
+	}
+	
+	// Second pass: collect transitions and handle initial node successors
 	for _, member := range stateUsage.Members {
 		// Unwrap Membership if present
 		actualMember := member
@@ -77,8 +90,16 @@ func (e *StateExecutor) extractGraph() error {
 		}
 		
 		switch n := actualMember.(type) {
-		case *ast.StateNode:
-			e.collectStates(n, nil) // Recursively collect substates
+		case *ast.InitialNode:
+			// Handle `first X then Y` syntax - create implicit transition from initial to target
+			if n.Successor != nil {
+				targetState := e.findStateByName(n.Successor)
+				if targetState != nil {
+					// Mark target as initial state
+					targetState.IsInitial = true
+					// If guard present, could store it, but for now initial transitions are unguarded in states
+				}
+			}
 		case *ast.TransitionEdge:
 			// Collect transitions (will be mapped after all states collected)
 			if err := e.collectTransition(n); err != nil {
@@ -437,6 +458,15 @@ func (e *StateExecutor) enterState(state *ast.StateNode) error {
 	for _, action := range state.Entry {
 		if err := e.executeAction(action); err != nil {
 			return fmt.Errorf("entry action: %w", err)
+		}
+	}
+	
+	// Execute do activities (ongoing behavior)
+	// Simplified: execute immediately like entry actions
+	// Full UML semantics: concurrent execution with state lifetime
+	for _, action := range state.Do {
+		if err := e.executeAction(action); err != nil {
+			return fmt.Errorf("do action: %w", err)
 		}
 	}
 	

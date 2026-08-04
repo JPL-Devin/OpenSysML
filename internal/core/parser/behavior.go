@@ -512,45 +512,23 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 		guard = p.ParseExpression()
 	}
 	
+	var successor *ast.QualifiedName
 	if p.atKeyword("then") {
 		p.advance() // consume 'then'
-		target := p.parseQualifiedName()
-		p.expect(lexer.Semicolon, "expected ';' after succession edge")
-		
-		// Return succession edge from initial node (name) to target
-		source := &ast.QualifiedName{}
-		if name != "" {
-			source.Parts = []ast.NameSegment{{Text: name}}
-		}
-		
-		// If guard present, return ControlFlowEdge; otherwise SuccessionEdge
-		if guard != nil {
-			node := &ast.ControlFlowEdge{
-				Source: source,
-				Target: target,
-				Guard:  guard,
-			}
-			node.NodeSpan = p.spanFrom(start)
-			return node
-		} else {
-			node := &ast.SuccessionEdge{
-				Source: source,
-				Target: target,
-			}
-			node.NodeSpan = p.spanFrom(start)
-			return node
-		}
+		successor = p.parseQualifiedName()
 	}
 	
-	// If if clause present but no then, error
-	if guard != nil {
+	// If guard present but no then, error
+	if guard != nil && successor == nil {
 		p.error(p.peek().Span, "expected 'then' after guard condition")
 	}
 	
 	p.expect(lexer.Semicolon, "expected ';' after initial node")
 	
 	node := &ast.InitialNode{
-		Name: name,
+		Name:      name,
+		Successor: successor,
+		Guard:     guard,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -1971,8 +1949,9 @@ func (p *Parser) parseStateMember() ast.Node {
 			p.advance()
 			return p.parseTransitionMember(start)
 		case "first":
-			// Succession statement: first <state> then <state>;
-			return p.parseSuccessionStatement(start)
+			// Initial node: first <name> then <target>;
+			p.advance() // consume 'first'
+			return p.parseInitialNode(p.peek())
 		case "then":
 			// Standalone succession: then <state>; (implicit source, typically from entry)
 			p.advance() // consume 'then'

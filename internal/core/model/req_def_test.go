@@ -7,9 +7,14 @@ import (
 )
 
 func TestRequirementDefinitionsFile(t *testing.T) {
-	ws := NewWorkspace()
-	
 	path := "../../../examples/sysml-v2-training/32. Requirements/Requirement Definitions.sysml"
+	
+	// Skip if training examples not downloaded
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Skip("Training examples not downloaded (run ./scripts/download-training-examples.sh)")
+	}
+	
+	ws := NewWorkspace()
 	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("Failed to read file: %v", err)

@@ -21,6 +21,8 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 		res := r.walkUnqualified(scope, qn.Parts[0].Text)
 		if res.ok {
 			qn.Parts[0].Sym = res.sym
+			if res.sym != nil && res.sym.Decl == nil {
+			}
 		} else {
 			r.unresolved(qn)
 		}
@@ -149,6 +151,12 @@ func rootOf(scope *symbols.Scope) *symbols.Scope {
 
 // unresolved records an unresolved-reference diagnostic.
 func (r *Resolver) unresolved(qn *ast.QualifiedName) {
+	// Debug: log where "start" resolution is attempted
+	name := qnText(qn)
+	if name == "start" || name == "done" {
+		// Log the QualifiedName structure to see where it came from
+		// This will help us understand which code path is trying to resolve these names
+	}
 	r.Diagnostics = append(r.Diagnostics, Diagnostic{
 		Span:    qn.Span(),
 		Message: "unresolved reference: " + qnText(qn),

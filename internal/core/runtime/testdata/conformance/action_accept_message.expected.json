@@ -1,0 +1,6 @@
+{
+	"type": "action",
+	"outputs": {
+		"receivedValue": {"type": "Integer", "value": 42}
+	}
+}
