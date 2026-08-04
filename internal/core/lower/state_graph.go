@@ -361,7 +361,7 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember) (*Tr
 // - Expression with operators → ChangeEvent{Condition: expr} (guard-like condition)
 //
 // This is a syntactic heuristic - full signal vs feature disambiguation
-// requires type system integration (marked as ⚠️ approximate in SPEC_COMPLIANCE.md).
+// requires type system integration. Adequate for current SysML v2 syntax.
 func classifyTrigger(trigger ast.Node) ast.Node {
 	if trigger == nil {
 		return nil

@@ -27,10 +27,10 @@ type rlReader struct{ rl *readline.Instance }
 func (r *rlReader) ReadLine(prompt string) (string, error) {
 	r.rl.SetPrompt(prompt)
 	line, err := r.rl.Readline()
-	if err == readline.ErrInterrupt { // Ctrl-C clears the current line, not EOF
+	if err == readline.ErrInterrupt { // Ctrl-C clears line (continue REPL)
 		return "", nil
 	}
-	if err == io.EOF {
+	if err == io.EOF { // Ctrl-D exits REPL
 		return "", io.EOF
 	}
 	return line, err
@@ -65,7 +65,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  sysml -e \"expr\" file.sysml # Load file, evaluate, and exit\n")
 		fmt.Fprintf(os.Stderr, "  sysml file.sysml          # Load file and start REPL\n")
 	}
-	
+
 	flag.Var(&evalExprs, "eval", "Evaluate expression and exit (can be specified multiple times)")
 	flag.Var(&evalExprs, "e", "Evaluate expression and exit (shorthand)")
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
@@ -83,7 +83,7 @@ func main() {
 
 	// Get positional arguments (files to load)
 	args := flag.Args()
-	
+
 	// Non-interactive mode: files + eval expressions, execute and exit
 	if len(args) > 0 && len(evalExprs) > 0 {
 		if err := runNonInteractive(args, evalExprs); err != nil {
@@ -92,7 +92,7 @@ func main() {
 		}
 		return
 	}
-	
+
 	// Eval-only mode: just evaluate expressions and exit
 	if len(evalExprs) > 0 {
 		if err := runNonInteractive(nil, evalExprs); err != nil {
@@ -101,7 +101,7 @@ func main() {
 		}
 		return
 	}
-	
+
 	if len(args) == 0 {
 		// No files: interactive REPL
 		if err := runInteractive(); err != nil {
@@ -110,7 +110,7 @@ func main() {
 		}
 		return
 	}
-	
+
 	// Files provided: load and enter interactive mode
 	if err := runInteractiveWithFiles(args); err != nil {
 		fmt.Fprintln(os.Stderr, "sysml:", err)
@@ -146,9 +146,9 @@ func runInteractiveWithFiles(files []string) error {
 		return err
 	}
 	defer rl.Close()
-	
+
 	sess := repl.NewSession()
-	
+
 	// Load files before starting interactive loop
 	for _, file := range files {
 		output, _, err := sess.RunMeta("%load " + file)
@@ -161,14 +161,14 @@ func runInteractiveWithFiles(files []string) error {
 			fmt.Println(line)
 		}
 	}
-	
+
 	fmt.Println("SysML v2 REPL — %help for commands, Ctrl-D to exit")
 	return repl.Loop(&rlReader{rl: rl}, os.Stdout, sess)
 }
 
 func runNonInteractive(files []string, exprs []string) error {
 	sess := repl.NewSession()
-	
+
 	// Load files first
 	for _, file := range files {
 		output, _, err := sess.RunMeta("%load " + file)
@@ -181,7 +181,7 @@ func runNonInteractive(files []string, exprs []string) error {
 			fmt.Println(line)
 		}
 	}
-	
+
 	// Then evaluate expressions
 	for _, expr := range exprs {
 		output, _, err := sess.RunMeta("%eval " + expr)
@@ -193,6 +193,6 @@ func runNonInteractive(files []string, exprs []string) error {
 			fmt.Println(line)
 		}
 	}
-	
+
 	return nil
 }

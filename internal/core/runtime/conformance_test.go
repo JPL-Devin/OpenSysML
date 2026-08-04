@@ -210,25 +210,9 @@ func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path st
 		t.Fatalf("create state executor: %v", err)
 	}
 
-	// DEBUG: Log graph structure
-	t.Logf("Graph: Initial=%v, RegionInitials=%d", exec.graph.Initial, len(exec.graph.RegionInitials))
-	for region, state := range exec.graph.RegionInitials {
-		t.Logf("  Graph region %s: initial = %s", region.Name, state.Name)
-	}
-
 	// Initialize (enters initial state)
 	if err := exec.initialize(); err != nil {
 		t.Fatalf("initialize state machine: %v", err)
-	}
-
-	t.Logf("After initialize: queue length = %d, current state = %v", exec.eventQueue.Len(), exec.getCurrentState())
-
-	// DEBUG: Log region states and transitions
-	t.Logf("Region states: %d", len(exec.activeConfig.regionStates))
-	for region, state := range exec.activeConfig.regionStates {
-		t.Logf("  Region %s: state = %s", region.Name, state.Name)
-		trans := exec.graph.Transitions[state]
-		t.Logf("    Transitions from %s: %d", state.Name, len(trans))
 	}
 
 	// Inject events from schema
@@ -254,19 +238,12 @@ func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path st
 			t.Fatalf("state machine exceeded max events (%d), possible infinite loop", maxEvents)
 		}
 
-		t.Logf("Event %d: queue length = %d, simpleState = %v, regionStates = %d",
-			eventCount, exec.eventQueue.Len(),
-			exec.activeConfig.simpleState, len(exec.activeConfig.regionStates))
-
 		if err := exec.processNextEvent(); err != nil {
 			t.Fatalf("process event: %v", err)
 		}
 
 		eventCount++
 	}
-
-	t.Logf("After event loop: eventCount = %d, simpleState = %v, regionStates = %d",
-		eventCount, exec.activeConfig.simpleState, len(exec.activeConfig.regionStates))
 
 	// Validate final state
 	if expected.FinalState != "" {
