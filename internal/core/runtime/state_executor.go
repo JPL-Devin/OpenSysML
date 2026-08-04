@@ -102,7 +102,27 @@ func (e *StateExecutor) extractGraph() error {
 		}
 	}
 	
-	// Second pass: collect transitions and handle initial node successors
+	// Second pass: identify composite states with regions and find initial states
+	for _, state := range e.states {
+		if len(state.Regions) > 0 {
+			// Mark as composite state
+			e.compositeStates[state] = state.Regions
+			
+			// Track region ownership
+			for _, region := range state.Regions {
+				e.regionOwner[region] = state
+				
+				// Find initial state in this region
+				initialState := e.findInitialStateInRegion(region)
+				if initialState == nil {
+					return fmt.Errorf("region %s in state %s has no initial state", region.Name, state.Name)
+				}
+				e.regionInitials[region] = initialState
+			}
+		}
+	}
+	
+	// Third pass: collect transitions and handle initial node successors
 	for _, member := range stateUsage.Members {
 		// Unwrap Membership if present
 		actualMember := member
@@ -217,6 +237,18 @@ func (e *StateExecutor) findStateByName(qname *ast.QualifiedName) *ast.StateNode
 		}
 	}
 	
+	return nil
+}
+
+// findInitialStateInRegion finds the initial state within a region.
+func (e *StateExecutor) findInitialStateInRegion(region *ast.StateRegion) *ast.StateNode {
+	for _, member := range region.States {
+		if state, ok := member.(*ast.StateNode); ok {
+			if state.IsInitial {
+				return state
+			}
+		}
+	}
 	return nil
 }
 
@@ -488,6 +520,27 @@ func (e *StateExecutor) enterState(state *ast.StateNode) error {
 		}
 	}
 	
+	// Check if this is a composite state with regions
+	if regions, isComposite := e.compositeStates[state]; isComposite {
+		// Entering composite state with orthogonal regions
+		// Initialize active configuration for all regions
+		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
+		e.activeConfig.simpleState = nil // Clear simple state
+		
+		for _, region := range regions {
+			initialState := e.regionInitials[region]
+			e.activeConfig.regionStates[region] = initialState
+			// Recursively enter initial state in each region
+			if err := e.enterState(initialState); err != nil {
+				return fmt.Errorf("enter initial state in region %s: %w", region.Name, err)
+			}
+		}
+	} else {
+		// Simple state (no regions)
+		e.activeConfig.simpleState = state
+		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode) // Clear regions
+	}
+	
 	// Execute do activities (ongoing behavior)
 	// Simplified: execute immediately like entry actions
 	// Full UML semantics: concurrent execution with state lifetime
@@ -506,6 +559,17 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 		return nil
 	}
 	
+	// If this is a composite state with regions, exit all active region states first
+	if len(e.activeConfig.regionStates) > 0 {
+		for _, regionState := range e.activeConfig.regionStates {
+			if err := e.exitState(regionState); err != nil {
+				return fmt.Errorf("exit region state: %w", err)
+			}
+		}
+		// Clear region configuration
+		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
+	}
+	
 	// Record trace
 	if e.trace != nil {
 		e.trace.RecordStateExit(state.Name, len(state.Exit) > 0)
@@ -517,6 +581,9 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 			return fmt.Errorf("exit action: %w", err)
 		}
 	}
+	
+	// Clear simple state
+	e.activeConfig.simpleState = nil
 	
 	return nil
 }
