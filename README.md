@@ -129,7 +129,7 @@ Current: green (Time: 30.0s)
 **Test coverage:** 890+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 19 golden ASTs, 16 negatives, 18 conformance cases, 6 robustness tests.
 **Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar alignment documented in [PRODUCTION_MAP.md](docs/grammar/PRODUCTION_MAP.md).
 **Behavioral execution:** Calc/constraint/requirement fully functional (9/9 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (18/18 conformance tests passing). See [BEHAVIOR_SEMANTICS_MAP.md](docs/BEHAVIOR_SEMANTICS_MAP.md) for measured compliance (~98% faithful implementation).
-**Training examples:** 63/100 files clean. Run `./scripts/download-training-examples.sh` to fetch OMG training materials. See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
+**Training examples:** 69/100 files clean. Download from [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
 ## Architecture
