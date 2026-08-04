@@ -539,7 +539,48 @@ func (e *StateExecutor) fireTransition(trans *ast.TransitionEdge) error {
 }
 // initialize sets current state to initial state and enters it.
 func (e *StateExecutor) initialize() error {
-	// Find initial state (deepest in hierarchy)
+	// Check if state machine itself has regions (no top-level states, just regions)
+	stateUsage, ok := e.stateMachine.Decl.(*ast.Usage)
+	if !ok {
+		stateDef, ok := e.stateMachine.Decl.(*ast.Definition)
+		if !ok {
+			return fmt.Errorf("state machine symbol has invalid node type")
+		}
+		stateUsage = &ast.Usage{Members: stateDef.Members}
+	}
+	
+	// Find StateRegion members at top level
+	var topLevelRegions []*ast.StateRegion
+	for _, member := range stateUsage.Members {
+		actualMember := member
+		if membership, ok := member.(*ast.Membership); ok {
+			actualMember = membership.Member
+		}
+		if region, ok := actualMember.(*ast.StateRegion); ok {
+			topLevelRegions = append(topLevelRegions, region)
+		}
+	}
+	
+	// If state machine has top-level regions, enter all initial states
+	if len(topLevelRegions) > 0 {
+		e.state = StateRunning
+		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
+		e.activeConfig.simpleState = nil
+		
+		for _, region := range topLevelRegions {
+			initialState := e.findInitialStateInRegion(region)
+			if initialState == nil {
+				return fmt.Errorf("region %s has no initial state", region.Name)
+			}
+			e.activeConfig.regionStates[region] = initialState
+			if err := e.enterState(initialState); err != nil {
+				return fmt.Errorf("enter initial state in region %s: %w", region.Name, err)
+			}
+		}
+		return nil
+	}
+	
+	// Find initial state (deepest in hierarchy) for simple state machines
 	initialState := e.findDeepestInitialState()
 	
 	if initialState == nil {
