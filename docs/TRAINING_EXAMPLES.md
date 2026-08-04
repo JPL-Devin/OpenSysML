@@ -3,11 +3,11 @@
 ## Overview
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
-**Download:** Run `./scripts/download-training-examples.sh` to fetch examples  
+**Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
 **Status:** 69/100 files parse and resolve cleanly (0 semantic errors)  
 **Errors**: 31/100 files have semantic errors (85 total errors)  
 
-These training examples are from the official [SysML v2 Training Materials](https://github.com/Systems-Modeling/SysML-v2-Training).
+These training examples are from the official OMG pilot implementation. Download the directory above to test locally.
 
 ---
 
