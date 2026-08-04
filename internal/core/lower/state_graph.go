@@ -163,14 +163,61 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 	
 	// Find initial state (for simple machines - machines without top-level regions)
 	if len(graph.RegionInitials) == 0 {
-		// No top-level regions, find the simple initial state
+		// Find the leaf initial state (deepest in a chain of initials)
+		// When multiple initial chains exist in different branches, prefer the shallowest branch root
+		var selectedInitial *ast.StateNode
+		minRootDepth := 999999
+		maxLeafDepth := -1
+		
 		for _, state := range graph.States {
-			if state.IsInitial && graph.ParentState[state] == nil {
-				if graph.Initial != nil {
-					return nil, fmt.Errorf("state machine has multiple top-level initial states")
-				}
-				graph.Initial = state
+			if !state.IsInitial {
+				continue
 			}
+			
+			// Calculate depth (distance from root)
+			depth := 0
+			current := state
+			for {
+				parent, hasParent := graph.ParentState[current]
+				if !hasParent {
+					break
+				}
+				depth++
+				current = parent
+			}
+			
+			// Find the root of the initial chain (topmost initial ancestor)
+			chainRoot := state
+			for {
+				parent, hasParent := graph.ParentState[chainRoot]
+				if !hasParent || !parent.IsInitial {
+					break
+				}
+				chainRoot = parent
+			}
+			
+			// Calculate chain root depth
+			rootDepth := 0
+			current = chainRoot
+			for {
+				parent, hasParent := graph.ParentState[current]
+				if !hasParent {
+					break
+				}
+				rootDepth++
+				current = parent
+			}
+			
+			// Prefer chain with shallowest root, then deepest leaf within that chain
+			if rootDepth < minRootDepth || (rootDepth == minRootDepth && depth > maxLeafDepth) {
+				selectedInitial = state
+				minRootDepth = rootDepth
+				maxLeafDepth = depth
+			}
+		}
+		
+		if selectedInitial != nil {
+			graph.Initial = selectedInitial
 		}
 	}
 	// If there are top-level regions, Initial stays nil (executor will use RegionInitials instead)
@@ -250,15 +297,12 @@ func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge) (*Transiti
 		Target:  targetState,
 		Trigger: edge.Trigger,
 		Guard:   edge.Guard,
-		Effect:  nil, // TransitionEdge has no effect field
+		Effect:  edge.Effect,
 	}, nil
 }
 
 // lowerTransitionMember converts a TransitionMember (parser output) to a Transition.
 func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember) (*Transition, error) {
-	// Debug
-	fmt.Printf("DEBUG lowerTransitionMember: Source=%v, Target=%v\n", member.Source, member.Target)
-	
 	// TransitionMember has: Source (QualifiedName), Target (QualifiedName), Trigger, Guard, Effect ([]Node)
 	// Source and Target can be StateNode or PseudostateNode
 	

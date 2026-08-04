@@ -11,7 +11,7 @@ It provides a hand-written lexer/parser, semantic engine, execution runtime, LSP
 ## 1. Golden Rules
 
 1. **Correctness over expedience.** No shortcuts, no stubs left behind, no lossy conversions. If a proper fix is large, do it properly or stop and flag it.
-   - **For features specifically: do not minimize code changes or dodge complexity.** Implement the feature fully and correctly even if it touches many files, adds new types, or requires refactoring. Completeness beats diff size. See §9.
+   - **For features specifically: do not minimize code changes or dodge complexity.** Implement the feature fully and correctly even if it touches many files, adds new types, or requires refactoring. Completeness beats diff size. See §8.
 2. **Root-cause first.** Before editing, confirm *why* something fails (read the code, add a temporary debug print, write a focused test). Then make the minimal correct change.
 3. **Never regress.** `main` is green. Any test passing on `main` must still pass on your branch. Diff against `main` if unsure: `git stash && git checkout main && go test ./... ; git checkout - && git stash pop`.
 4. **Respect the architecture invariants** (see §4). The AST is immutable; semantics live in side tables; execution consumes lowered IR — do not bypass these.
@@ -120,7 +120,7 @@ Then update `docs/SPEC_COMPLIANCE.md` mapping: semantic rule → implementation 
 1. **Understand first.** Grep/read the relevant package and its tests. Diff the branch against `main` to see what changed and why.
 2. **Reproduce.** Run the failing test(s) and read the exact error before changing anything.
 3. **Locate the root cause** in the correct layer (lexer vs parser vs lower vs runtime). Bugs in specialized layers are often upstream of where they surface.
-4. **Implement the minimal correct fix.** Keep edits scoped; match existing style; keep imports at the top.
+4. **Implement the correct fix.** For bug fixes, keep edits minimal and scoped. For features, implement completely (see §8) — "minimal" means *no unrelated changes*, never *under-built*. Match existing style; keep imports at the top.
 5. **Add/adjust tests** to lock in the fix and cover the failure mode.
 6. **Verify** with the full gate in §2. Remove any temporary debug code and dead code.
 7. **Commit** using Conventional Commits (see §7). Keep PRs focused (one feature/fix each).
@@ -137,7 +137,37 @@ Then update `docs/SPEC_COMPLIANCE.md` mapping: semantic rule → implementation 
 
 ---
 
-## 8. Common Pitfalls
+## 8. Implementing Features & Complex Tasks
+
+Bug-fix discipline (small, scoped diffs) does **not** apply to feature work. For features, the goal is a **complete, correct, production-grade implementation** — not the smallest possible change.
+
+**Do not:**
+- Minimize the diff at the expense of correctness or completeness.
+- Avoid touching many files, adding new types, or refactoring when the feature genuinely needs it.
+- Stub, fake, hardcode, or special-case a path to make a demo/test pass while leaving the general case unhandled.
+- Bridge/adapter around the real design (e.g. copying IR back into legacy fields) to avoid a proper migration — this drifts and loses data.
+- Silently narrow scope. If you implement only part of a feature, that is a **known limitation** that must be called out, not hidden.
+
+**Do:**
+- **Implement the whole feature**, including the hard cases (nesting, hierarchy, orthogonal regions, error/edge paths), not just the happy path.
+- **Follow the layering.** Put logic in the correct layer (lexer → parser → lower → runtime). If a feature needs new IR, extend `internal/core/lower` losslessly rather than re-deriving data downstream.
+- **Refactor when the design requires it.** If the clean implementation needs a new type, an interface change, or migrating existing callers, do that — and migrate *all* callers, deleting the superseded code.
+- **Prefer completeness over diff size** every time the two conflict.
+
+**Workflow for a complex/multi-part feature:**
+1. **Plan and decompose.** Break the feature into ordered, independently-verifiable steps. State the plan before large edits. For long-horizon work, keep a short scratch note (e.g. `progress.txt`) of steps done / remaining — but don't leave it in the final PR.
+2. **Design the data first.** Decide the AST/IR/side-table shape before wiring behavior. Getting the representation right avoids downstream shortcuts.
+3. **Write the test contract up front** (§5). Add the conformance/golden/robustness cases that define "done" *before or alongside* the code, including the hard cases — so you can't accidentally under-build.
+4. **Implement layer by layer**, keeping `go build ./...` and `go vet ./...` green at each step.
+5. **Handle all cases explicitly.** Every unsupported path returns a typed error with a clear message — never a silent no-op, panic, or wrong result.
+6. **Remove interim scaffolding** (bridges, temporary fields, debug prints, dead code) before finishing.
+7. **Verify the full gate** (§2) and **update `docs/SPEC_COMPLIANCE.md`** with honest status flags.
+
+**When a feature is genuinely too large to finish correctly in one pass:** stop and flag it. Deliver a correct, complete *subset* with the remaining scope explicitly documented as known limitations + failing/`t.Skip`-with-reason tests or a `known_failures` entry. Never fake completeness.
+
+---
+
+## 9. Common Pitfalls
 
 - **Bridge/adapter shims that copy IR back into legacy fields** — these drift and lose data (e.g. dropping a transition's `Effect`). Migrate consumers to the IR instead.
 - **Re-parsing `symbol.Decl` inside executors** — bypasses the lowering layer; use the graph.
