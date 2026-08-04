@@ -1,0 +1,7 @@
+{
+  "type": "requirement",
+  "bindings": {
+    "subj": {"type": "Real", "value": 50.0}
+  },
+  "satisfied": true
+}

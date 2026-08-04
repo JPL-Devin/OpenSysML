@@ -284,13 +284,8 @@ func runRequirementConformance(t *testing.T, ctx *Context, idx *symbols.Index, p
 	rootScope := idx.DocumentRoot(path)
 	reqSym := findBehavioralSymbol(t, rootScope, ast.DefRequirement, ast.UsageRequirement)
 
-	// Apply bindings (if any)
-	if expected.Bindings != nil {
-		t.Logf("requirement bindings application not yet implemented")
-	}
-
-	// Evaluate requirement
-	satisfied, err := ctx.EvaluateRequirement(reqSym, rootScope)
+	// Evaluate requirement using symbol's defining scope (where sibling features visible)
+	satisfied, err := ctx.EvaluateRequirement(reqSym, reqSym.OwnerScope)
 	if err != nil {
 		t.Fatalf("EvaluateRequirement failed: %v", err)
 	}

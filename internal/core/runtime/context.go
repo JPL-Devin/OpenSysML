@@ -164,7 +164,12 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 		return false, fmt.Errorf("invalid requirement symbol: %s (%T)", sym.Name, sym.Decl)
 	}
 	
-	// Evaluate each requirement member
+	// Create evaluation context with frame for requirement-local bindings
+	evalCtx := NewEvalContext(ctx, scope)
+	reqBindings := make(map[string]Value)
+	evalCtx.Push(reqBindings)
+	
+	// First pass: process subject/actor bindings
 	for _, member := range members {
 		// Unwrap Membership
 		node := member
@@ -172,36 +177,48 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 			node = membership.Member
 		}
 		
-		// Handle different requirement member types
+		// Handle binding declarations
 		switch rm := node.(type) {
 		case *ast.SubjectMember:
-			// Subject: validate that subject binding exists in scope
-			// For now, just check if name is resolvable
-			if rm.Name != "" {
-				_, ok := scope.LookupLocal(rm.Name)
-				if !ok {
-					return false, fmt.Errorf("requirement %s: subject '%s' not found in scope", sym.Name, rm.Name)
+			// Subject binding: subject <name> = <expr>;
+			if rm.BindingExpr != nil {
+				// Evaluate binding expression
+				value, err := evalCtx.Eval(rm.BindingExpr)
+				if err != nil {
+					return false, fmt.Errorf("requirement %s: subject binding evaluation failed: %w", sym.Name, err)
 				}
+				
+				// Add binding to evaluation frame
+				reqBindings[rm.Name] = value
 			}
 			
 		case *ast.ActorMember:
-			// Actor: validate that actor binding exists in scope
-			// For now, just check if name is resolvable
-			if rm.Name != "" {
-				_, ok := scope.LookupLocal(rm.Name)
-				if !ok {
-					return false, fmt.Errorf("requirement %s: actor '%s' not found in scope", sym.Name, rm.Name)
-				}
-			}
-			
+			// Actor: for now, actors are declarative (not evaluated as bindings)
+			// Full implementation would handle actor bindings similarly to subject
+		}
+	}
+	
+	// Second pass: evaluate assume/require expressions
+	for _, member := range members {
+		// Unwrap Membership
+		node := member
+		if membership, ok := member.(*ast.Membership); ok {
+			node = membership.Member
+		}
+		
+		// Handle requirement constraints
+		switch rm := node.(type) {
 		case *ast.AssumeMember:
-			// Assume: always pass (trusted assumption)
-			// Optionally could evaluate to check it's a valid expression
-			continue
+			// Assume: evaluate expression (should be true, but doesn't fail requirement)
+			_, err := evalCtx.Eval(rm.Expression)
+			if err != nil {
+				return false, fmt.Errorf("requirement %s: assume evaluation failed: %w", sym.Name, err)
+			}
+			// Assumptions always pass (trusted)
 			
 		case *ast.RequireMember:
 			// Require: must evaluate to true
-			result, err := ctx.EvalWithScope(rm.Expression, scope)
+			result, err := evalCtx.Eval(rm.Expression)
 			if err != nil {
 				return false, fmt.Errorf("requirement %s: require evaluation failed: %w", sym.Name, err)
 			}
