@@ -319,8 +319,117 @@ func (e *StateExecutor) processNextEvent() error {
 		}
 		return e.fireTransition(transition)
 	default:
-		return fmt.Errorf("unsupported event type: %v", event.Type)
+		// For general events, broadcast to all active regions
+		return e.broadcastEvent(&event)
 	}
+}
+
+// broadcastEvent sends an event to all active regions (or single state if no regions).
+func (e *StateExecutor) broadcastEvent(event *Event) error {
+	// If in composite state with regions, broadcast to all
+	if len(e.activeConfig.regionStates) > 0 {
+		// Broadcast event to each region independently
+		for region, regionState := range e.activeConfig.regionStates {
+			// Find transitions from this region's active state
+			transitions := e.transitions[regionState]
+			for _, trans := range transitions {
+				if e.matchesEvent(trans, event) {
+					// Fire transition within this region
+					if err := e.fireTransitionInRegion(region, trans); err != nil {
+						return fmt.Errorf("fire transition in region %s: %w", region.Name, err)
+					}
+					break // Run-to-completion: one transition per region per event
+				}
+			}
+		}
+		return nil
+	}
+	
+	// Simple state (no regions) - existing logic
+	currentState := e.getCurrentState()
+	if currentState == nil {
+		return nil // No active state
+	}
+	
+	transitions := e.transitions[currentState]
+	for _, trans := range transitions {
+		if e.matchesEvent(trans, event) {
+			return e.fireTransition(trans)
+		}
+	}
+	
+	return nil // Event not consumed
+}
+
+// matchesEvent checks if a transition matches the given event.
+func (e *StateExecutor) matchesEvent(trans *ast.TransitionEdge, event *Event) bool {
+	// For now, simplified: no explicit event matching
+	// In full UML, would match SignalEvent, ChangeEvent, etc.
+	return true
+}
+
+// fireTransitionInRegion fires a transition within a specific region.
+func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *ast.TransitionEdge) error {
+	// Find target state
+	targetState := e.findStateByName(trans.Target)
+	if targetState == nil {
+		return fmt.Errorf("transition target state not found")
+	}
+	
+	// Get current state in this region
+	sourceState := e.activeConfig.regionStates[region]
+	
+	// Evaluate guard if present
+	if trans.Guard != nil {
+		ec := NewEvalContext(e.ctx, nil)
+		ec.Push(e.stateData)
+		guardVal, err := ec.Eval(trans.Guard)
+		if err != nil {
+			return fmt.Errorf("eval guard: %w", err)
+		}
+		
+		guardPass := false
+		if guardVal.Kind == ValConst && guardVal.Const.Kind == semantics.ValBool {
+			guardPass = guardVal.Const.Bool
+		} else {
+			return fmt.Errorf("guard must be boolean, got %v", guardVal.Kind)
+		}
+		
+		if !guardPass {
+			return nil // Guard failed, remain in current state
+		}
+	}
+	
+	// Exit current state in this region
+	if err := e.exitState(sourceState); err != nil {
+		return fmt.Errorf("exit state: %w", err)
+	}
+	
+	// Execute transition effect
+	for _, action := range trans.Effect {
+		if err := e.executeAction(action); err != nil {
+			return fmt.Errorf("transition effect: %w", err)
+		}
+	}
+	
+	// Enter target state in this region
+	if err := e.enterState(targetState); err != nil {
+		return fmt.Errorf("enter state: %w", err)
+	}
+	
+	// Update active state for this region
+	e.activeConfig.regionStates[region] = targetState
+	
+	// Record trace
+	if e.trace != nil {
+		eventName := ""
+		if trans.Trigger != nil {
+			eventName = fmt.Sprintf("%v", trans.Trigger)
+		}
+		e.trace.RecordStateTransition(sourceState.Name, targetState.Name, eventName)
+	}
+	
+	return nil
 }
 
 // fireTransition executes a state transition.
