@@ -140,6 +140,7 @@ func (e *StateExecutor) populateFromGraph() error {
 				Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: sourceName}}},
 				Target:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: targetName}}},
 				Guard:   lowerTrans.Guard,
+				Effect:  lowerTrans.Effect,
 			}
 			
 			// Type assert Trigger to TriggerEvent (TimeEvent, ChangeEvent, etc. implement this interface)
