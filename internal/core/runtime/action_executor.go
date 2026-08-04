@@ -182,7 +182,7 @@ func (e *ActionExecutor) extractGraph() error {
 		actionNode = &ast.Usage{Members: actionDef.Members}
 	}
 	
-	// Extract nodes and edges from members
+	// First pass: collect all nodes
 	for _, member := range actionNode.Members {
 		// Unwrap Membership if present
 		actualMember := member
@@ -199,10 +199,38 @@ func (e *ActionExecutor) extractGraph() error {
 			if n.Kind == ast.UsageAction {
 				e.nodes = append(e.nodes, actualMember)
 			}
+		}
+	}
+	
+	// Second pass: build edges
+	for _, member := range actionNode.Members {
+		// Unwrap Membership if present
+		actualMember := member
+		if membership, ok := member.(*ast.Membership); ok {
+			actualMember = membership.Member
+		}
+		
+		switch n := actualMember.(type) {
+		case *ast.InitialNode:
+			// Handle implicit successor from `first X then Y` syntax
+			if n.Successor != nil {
+				targetNode := e.findNodeByName(n.Successor)
+				if targetNode == nil {
+					return fmt.Errorf("initial node %s successor references undefined target %v", n.Name, n.Successor)
+				}
+				e.edges[n] = append(e.edges[n], targetNode)
+				if n.Guard != nil {
+					if e.guards[n] == nil {
+						e.guards[n] = make(map[ast.Node]ast.Node)
+					}
+					e.guards[n][targetNode] = n.Guard
+				}
+			}
 		case *ast.SuccessionEdge:
 			// Build edge map (source → target)
 			sourceNode := e.findNodeByName(n.Source)
 			targetNode := e.findNodeByName(n.Target)
+			
 			if sourceNode == nil {
 				return fmt.Errorf("succession edge references undefined source node")
 			}
