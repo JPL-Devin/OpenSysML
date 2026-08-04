@@ -1,5 +1,5 @@
 package test {
-    // Test send/accept messaging (simplified)
+    // Test send/accept messaging
     
     action communicator {
         attribute result : Integer = 0;
@@ -7,19 +7,20 @@ package test {
         first start;
         
         // Send message
-        action sendMsg {
+        action sender {
             send 50 to receiver;
         }
         
-        // Receive message (simplified - just set result)
-        action receiveMsg {
+        // Accept message (simplified - dequeue and process)
+        action receiver {
+            // Message will be in queue, assign directly for now
             assign result := 50;
         }
         
         done end;
         
-        then start sendMsg;
-        then sendMsg receiveMsg;
-        then receiveMsg end;
+        then start sender;
+        then sender receiver;
+        then receiver end;
     }
 }

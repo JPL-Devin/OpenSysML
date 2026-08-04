@@ -19,6 +19,7 @@ type ActionExecutor struct {
 	breakpoints map[string]bool
 	results     map[string]Value // Accumulated results from consumed final tokens
 	trace       *TraceRecorder   // Optional trace recorder for testing
+	messageQueue []Message       // Queue of sent messages (FIFO)
 	
 	// Graph structure
 	nodes       []ast.Node
@@ -26,6 +27,12 @@ type ActionExecutor struct {
 	guards      map[ast.Node]map[ast.Node]ast.Node // Guards: source → target → guard expression
 	dataFlows   map[ast.Node][]objectFlow        // Object flow edges
 	mergeVisited map[ast.Node]bool               // Track merge node visits
+}
+
+// Message represents a signal instance sent via send action.
+type Message struct {
+	SignalType string           // Signal type name
+	Payload    map[string]Value // Signal attribute values
 }
 
 type objectFlow struct {
@@ -719,12 +726,32 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		return fmt.Errorf("expected Usage, got %T", token.Location)
 	}
 	
-	// Execute nested action members (assignments, expressions)
+	// Execute nested action members (assignments, send statements, expressions)
 	for _, member := range usage.Members {
 		// Unwrap Membership if present
 		actualMember := member
 		if membership, ok := member.(*ast.Membership); ok {
 			actualMember = membership.Member
+		}
+		
+		// Execute send statements
+		if send, ok := actualMember.(*ast.SendStatement); ok {
+			ec := NewEvalContext(e.ctx, nil)
+			ec.Push(token.Data) // Token data available for evaluation
+			
+			// Evaluate message expression
+			msgValue, err := ec.Eval(send.Message)
+			if err != nil {
+				return fmt.Errorf("eval send message: %w", err)
+			}
+			
+			// Queue message (simple FIFO queue)
+			msg := Message{
+				SignalType: "GenericSignal", // TODO: extract from message type
+				Payload:    map[string]Value{"value": msgValue},
+			}
+			e.messageQueue = append(e.messageQueue, msg)
+			continue
 		}
 		
 		// Execute assignment actions
