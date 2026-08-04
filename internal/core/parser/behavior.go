@@ -1939,6 +1939,12 @@ func (p *Parser) parseStateMember() ast.Node {
 		case "region":
 			p.advance()
 			return p.parseRegionMember(start)
+		case "choice":
+			p.advance()
+			return p.parseChoicePseudostate(start)
+		case "junction":
+			p.advance()
+			return p.parseJunctionPseudostate(start)
 		case "transition":
 			// Lookahead to distinguish:
 			// 1. State machine transition: transition source to target (no name)
@@ -2516,6 +2522,60 @@ func (p *Parser) parseRegionMember(start int) ast.Node {
 	}
 	region.NodeSpan = p.spanFrom(start)
 	return region
+}
+
+// parseChoicePseudostate parses: choice <name>;
+func (p *Parser) parseChoicePseudostate(start int) ast.Node {
+	// 'choice' already consumed
+	
+	// Expect pseudostate name
+	if !p.at(lexer.Identifier) && !p.at(lexer.Keyword) {
+		p.error(p.peek().Span, "expected name after 'choice'")
+		en := &ast.ErrorNode{Message: "expected choice name"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	nameToken := p.peek()
+	name := p.src.Text(nameToken.Span)
+	p.advance()
+	
+	// Expect semicolon
+	p.expect(lexer.Semicolon, "expected ';' after choice name")
+	
+	ps := &ast.PseudostateNode{
+		Kind: ast.PseudostateChoice,
+		Name: name,
+	}
+	ps.NodeSpan = p.spanFrom(start)
+	return ps
+}
+
+// parseJunctionPseudostate parses: junction <name>;
+func (p *Parser) parseJunctionPseudostate(start int) ast.Node {
+	// 'junction' already consumed
+	
+	// Expect pseudostate name
+	if !p.at(lexer.Identifier) && !p.at(lexer.Keyword) {
+		p.error(p.peek().Span, "expected name after 'junction'")
+		en := &ast.ErrorNode{Message: "expected junction name"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	nameToken := p.peek()
+	name := p.src.Text(nameToken.Span)
+	p.advance()
+	
+	// Expect semicolon
+	p.expect(lexer.Semicolon, "expected ';' after junction name")
+	
+	ps := &ast.PseudostateNode{
+		Kind: ast.PseudostateJunction,
+		Name: name,
+	}
+	ps.NodeSpan = p.spanFrom(start)
+	return ps
 }
 
 // parseTransitionMember parses: transition <source> to <target> [when <trigger>] [if <guard>] [do { <effect> }];
