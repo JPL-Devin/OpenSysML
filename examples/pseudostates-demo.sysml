@@ -13,7 +13,7 @@ package PseudostatesDemo {
         state pathB;
         state pathC;
         
-        then start idle;
+        start then idle;
         transition idle to evaluate;
         transition evaluate to pathA;
         transition evaluate to pathB;
@@ -30,7 +30,7 @@ package PseudostatesDemo {
         state normalPriority;
         state lowPriority;
         
-        then start receiving;
+        start then receiving;
         transition receiving to route;
         transition route to highPriority;
         transition route to normalPriority;

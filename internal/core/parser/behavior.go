@@ -1998,6 +1998,12 @@ func (p *Parser) parseStateMember() ast.Node {
 		}
 	}
 	
+	// Check for succession statement: <name> then <name>;
+	// Lookahead: identifier followed by 'then' keyword
+	if p.at(lexer.Identifier) && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "then" {
+		return p.parseSuccessionStatement(start)
+	}
+	
 	// Not a state-specific keyword - try parsing as general body member
 	// This allows succession, binding, feature declarations, etc. in state bodies
 	return p.parseBodyMember()
