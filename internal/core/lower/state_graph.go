@@ -13,8 +13,8 @@ type StateGraph struct {
 	// Pseudostates (choice, junction, etc.)
 	Pseudostates map[string]*ast.PseudostateNode
 	
-	// Transitions: source state → list of transitions
-	Transitions map[*ast.StateNode][]*Transition
+	// Transitions: source node (StateNode or PseudostateNode) → list of transitions
+	Transitions map[ast.Node][]*Transition
 	
 	// CompositeStates: state → regions
 	CompositeStates map[*ast.StateNode][]*ast.StateRegion
@@ -34,8 +34,8 @@ type StateGraph struct {
 
 // Transition represents a state transition (lowered from TransitionEdge or TransitionMember).
 type Transition struct {
-	Source  *ast.StateNode
-	Target  *ast.StateNode
+	Source  ast.Node           // *ast.StateNode or *ast.PseudostateNode
+	Target  ast.Node           // *ast.StateNode or *ast.PseudostateNode
 	Trigger ast.Node           // TimeEvent, ChangeEvent, SignalEvent, CallEvent, nil = completion
 	Guard   ast.Node           // guard expression, nil = no guard
 	Effect  []ast.Node         // effect actions
@@ -46,7 +46,7 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 	graph := &StateGraph{
 		States:          make([]*ast.StateNode, 0),
 		Pseudostates:    make(map[string]*ast.PseudostateNode),
-		Transitions:     make(map[*ast.StateNode][]*Transition),
+		Transitions:     make(map[ast.Node][]*Transition),
 		CompositeStates: make(map[*ast.StateNode][]*ast.StateRegion),
 		RegionInitials:  make(map[*ast.StateRegion]*ast.StateNode),
 		ParentState:     make(map[*ast.StateNode]*ast.StateNode),
@@ -229,30 +229,62 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember) (*Tr
 	fmt.Printf("DEBUG lowerTransitionMember: Source=%v, Target=%v\n", member.Source, member.Target)
 	
 	// TransitionMember has: Source (QualifiedName), Target (QualifiedName), Trigger, Guard, Effect ([]Node)
+	// Source and Target can be StateNode or PseudostateNode
+	
+	// Try to find source as state
+	var source ast.Node
 	sourceState := findStateByName(graph.States, member.Source)
-	if sourceState == nil {
-		// Debug: print available states
+	if sourceState != nil {
+		source = sourceState
+	} else {
+		// Try pseudostate
+		sourceName := member.Source.Parts[len(member.Source.Parts)-1].Text
+		if ps, ok := graph.Pseudostates[sourceName]; ok {
+			source = ps
+		}
+	}
+	
+	if source == nil {
+		// Debug: print available states and pseudostates
 		var stateNames []string
 		for _, s := range graph.States {
 			stateNames = append(stateNames, s.Name)
 		}
-		return nil, fmt.Errorf("transition member references undefined source state %q (available: %v)", 
+		for name := range graph.Pseudostates {
+			stateNames = append(stateNames, name+" (pseudostate)")
+		}
+		return nil, fmt.Errorf("transition member references undefined source %q (available: %v)", 
 			member.Source.Parts[len(member.Source.Parts)-1].Text, stateNames)
 	}
 	
+	// Try to find target as state or pseudostate
+	var target ast.Node
 	targetState := findStateByName(graph.States, member.Target)
-	if targetState == nil {
+	if targetState != nil {
+		target = targetState
+	} else {
+		// Try pseudostate
+		targetName := member.Target.Parts[len(member.Target.Parts)-1].Text
+		if ps, ok := graph.Pseudostates[targetName]; ok {
+			target = ps
+		}
+	}
+	
+	if target == nil {
 		var stateNames []string
 		for _, s := range graph.States {
 			stateNames = append(stateNames, s.Name)
 		}
-		return nil, fmt.Errorf("transition member references undefined target state %q (available: %v)", 
-			member.Target, stateNames)
+		for name := range graph.Pseudostates {
+			stateNames = append(stateNames, name+" (pseudostate)")
+		}
+		return nil, fmt.Errorf("transition member references undefined target %q (available: %v)", 
+			member.Target.Parts[len(member.Target.Parts)-1].Text, stateNames)
 	}
 	
 	return &Transition{
-		Source:  sourceState,
-		Target:  targetState,
+		Source:  source,
+		Target:  target,
 		Trigger: member.Trigger,
 		Guard:   member.Guard,
 		Effect:  member.Effect,

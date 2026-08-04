@@ -123,12 +123,22 @@ func (e *StateExecutor) populateFromGraph() error {
 	
 	// Convert lower.Transition back to TransitionEdge for backward compatibility
 	// TODO: Eventually migrate all transition-handling code to use lower.Transition
-	for sourceState, transList := range e.graph.Transitions {
+	for sourceNode, transList := range e.graph.Transitions {
+		// Type assert source to StateNode (skip pseudostates for now - they're handled separately)
+		sourceState, ok := sourceNode.(*ast.StateNode)
+		if !ok {
+			continue // Skip transitions from pseudostates (handled by evaluateChoicePseudostate etc.)
+		}
+		
 		for _, lowerTrans := range transList {
+			// Get source/target names (handle both StateNode and PseudostateNode)
+			sourceName := getNodeName(lowerTrans.Source)
+			targetName := getNodeName(lowerTrans.Target)
+			
 			// Create TransitionEdge for backward compatibility
 			edge := &ast.TransitionEdge{
-				Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: lowerTrans.Source.Name}}},
-				Target:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: lowerTrans.Target.Name}}},
+				Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: sourceName}}},
+				Target:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: targetName}}},
 				Guard:   lowerTrans.Guard,
 			}
 			
@@ -144,6 +154,18 @@ func (e *StateExecutor) populateFromGraph() error {
 	}
 	
 	return nil
+}
+
+// getNodeName returns the name of a StateNode or PseudostateNode.
+func getNodeName(node ast.Node) string {
+	switch n := node.(type) {
+	case *ast.StateNode:
+		return n.Name
+	case *ast.PseudostateNode:
+		return n.Name
+	default:
+		return ""
+	}
 }
 
 // getParentChain returns all ancestor states from child to root (inclusive).

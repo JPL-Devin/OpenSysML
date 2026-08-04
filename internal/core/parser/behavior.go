@@ -2603,8 +2603,8 @@ func (p *Parser) parseJunctionPseudostate(start int) ast.Node {
 func (p *Parser) parseTransitionMember(start int) ast.Node {
 	// 'transition' already consumed
 	
-	// Parse source state
-	source := p.parseQualifiedName()
+	// Parse source state (allow keywords like 'done', 'active' as state names)
+	source := p.parseQualifiedNameRelaxed()
 	
 	// Expect 'to'
 	if !p.atKeyword("to") {
@@ -2615,8 +2615,8 @@ func (p *Parser) parseTransitionMember(start int) ast.Node {
 	}
 	p.advance() // consume 'to'
 	
-	// Parse target state
-	target := p.parseQualifiedName()
+	// Parse target state (allow keywords like 'done', 'active' as state names)
+	target := p.parseQualifiedNameRelaxed()
 	
 	// Optional: when <trigger>
 	var trigger ast.Node
