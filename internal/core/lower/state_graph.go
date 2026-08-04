@@ -68,10 +68,19 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 	for _, member := range members {
 		actualMember := unwrapMembership(member)
 		
-		if state, ok := actualMember.(*ast.StateNode); ok {
-			collectStates(graph, state, nil)
-		} else if ps, ok := actualMember.(*ast.PseudostateNode); ok {
-			graph.Pseudostates[ps.Name] = ps
+		switch n := actualMember.(type) {
+		case *ast.StateNode:
+			collectStates(graph, n, nil)
+		case *ast.SubstateMember:
+			// Substate declarations: state <name>;
+			// Create a StateNode from the name
+			stateNode := &ast.StateNode{
+				Name: n.Name,
+			}
+			stateNode.NodeSpan = n.NodeSpan
+			collectStates(graph, stateNode, nil)
+		case *ast.PseudostateNode:
+			graph.Pseudostates[n.Name] = n
 		}
 	}
 	
@@ -97,6 +106,9 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 		actualMember := unwrapMembership(member)
 		
 		switch n := actualMember.(type) {
+		case *ast.ErrorNode:
+			// Skip error nodes
+			continue
 		case *ast.InitialNode:
 			// Handle `first X then Y` syntax
 			if n.Successor != nil {
@@ -132,18 +144,9 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 		}
 	}
 	
-	// Validate: must have initial state OR top-level regions
-	hasTopLevelRegions := false
-	for _, state := range graph.States {
-		if graph.ParentState[state] == nil && len(state.Regions) > 0 {
-			hasTopLevelRegions = true
-			break
-		}
-	}
-	
-	if graph.Initial == nil && !hasTopLevelRegions {
-		return nil, fmt.Errorf("state machine has no initial state")
-	}
+	// Note: Initial state is optional at graph construction time.
+	// The executor's initialize() will validate and return the error if missing.
+	// Top-level regions are also valid (no single initial state).
 	
 	return graph, nil
 }
@@ -222,15 +225,29 @@ func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge) (*Transiti
 
 // lowerTransitionMember converts a TransitionMember (parser output) to a Transition.
 func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember) (*Transition, error) {
+	// Debug
+	fmt.Printf("DEBUG lowerTransitionMember: Source=%v, Target=%v\n", member.Source, member.Target)
+	
 	// TransitionMember has: Source (QualifiedName), Target (QualifiedName), Trigger, Guard, Effect ([]Node)
 	sourceState := findStateByName(graph.States, member.Source)
 	if sourceState == nil {
-		return nil, fmt.Errorf("transition member references undefined source state %v", member.Source)
+		// Debug: print available states
+		var stateNames []string
+		for _, s := range graph.States {
+			stateNames = append(stateNames, s.Name)
+		}
+		return nil, fmt.Errorf("transition member references undefined source state %q (available: %v)", 
+			member.Source.Parts[len(member.Source.Parts)-1].Text, stateNames)
 	}
 	
 	targetState := findStateByName(graph.States, member.Target)
 	if targetState == nil {
-		return nil, fmt.Errorf("transition member references undefined target state %v", member.Target)
+		var stateNames []string
+		for _, s := range graph.States {
+			stateNames = append(stateNames, s.Name)
+		}
+		return nil, fmt.Errorf("transition member references undefined target state %q (available: %v)", 
+			member.Target, stateNames)
 	}
 	
 	return &Transition{

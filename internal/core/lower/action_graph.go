@@ -83,10 +83,8 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 		}
 	}
 	
-	// Validate: must have initial node
-	if graph.Initial == nil {
-		return nil, fmt.Errorf("action has no initial node")
-	}
+	// Note: Initial node is optional at graph construction time.
+	// The executor's initialize() will validate and return the error if missing.
 	
 	// Second pass: build edges
 	for _, member := range members {

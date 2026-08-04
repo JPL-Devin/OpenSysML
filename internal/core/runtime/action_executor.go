@@ -206,18 +206,12 @@ func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error 
 
 // initialize spawns initial token at InitialNode.
 func (e *ActionExecutor) initialize() error {
-	// Find initial node
-	var initialNode *ast.InitialNode
-	for _, node := range e.graph.Nodes {
-		if n, ok := node.(*ast.InitialNode); ok {
-			initialNode = n
-			break
-		}
-	}
-	
-	if initialNode == nil {
+	// Use initial node from graph
+	if e.graph.Initial == nil {
 		return fmt.Errorf("no initial node found in action %s", e.action.Name)
 	}
+	
+	initialNode := e.graph.Initial
 	
 	// Spawn initial token
 	tokenData := make(map[string]Value)

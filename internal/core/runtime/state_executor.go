@@ -557,6 +557,10 @@ func (e *StateExecutor) initialize() error {
 	
 	// State machine has orthogonal regions at top level
 	// Find regions from composite states map (graph has already extracted them)
+	if len(e.graph.RegionInitials) == 0 {
+		return fmt.Errorf("no initial state found in state machine %s", e.stateMachine.Name)
+	}
+	
 	e.state = StateRunning
 	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
 	e.activeConfig.simpleState = nil
