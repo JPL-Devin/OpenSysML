@@ -71,6 +71,7 @@ Each row documents one behavioral semantic feature:
 | Merge node (N→1 non-blocking) | `action_executor.go:505` `stepMergeNode` | `action_executor_test.go:TestActionExecutor_Merge` | ✅ Faithful |
 | Decision node (guarded branching) | `action_executor.go:535` `stepDecisionNode` | `action_executor_test.go:TestActionExecutor_Decision` | ✅ Faithful |
 | Action execution node | `action_executor.go:611` `stepActionExecutionNode` | `action_executor_test.go` | ✅ Faithful |
+| Nested action invocation | `action_executor.go:717` `stepNestedAction` | `action_nested_invocation.sysml` | ✅ Faithful |
 | Object flow (pin-to-pin data) | `action_executor.go:658` `applyDataFlows` | `action_executor_test.go:TestActionExecutor_ObjectFlow` | ✅ Faithful |
 | Succession edges | `action_executor.go:66` `Step` (edge traversal) | All action executor tests | ✅ Faithful |
 | Deadlock detection | `action_executor.go:136` `RunToCompletion` | `action_executor_test.go:TestActionExecutor_Deadlock_JoinStarvation` + `robustness_test.go:testDeadlockJoinStarvation` | ✅ Faithful |
@@ -129,7 +130,7 @@ Each row documents one behavioral semantic feature:
 
 ### Test Files
 
-- **`conformance_test.go`** (416 lines): Execution conformance gate, 16 cases (all passing)
+- **`conformance_test.go`** (416 lines): Execution conformance gate, 17 cases (all passing)
 - **`trace_test.go`** (139 lines): Golden execution trace infrastructure (ready for .trace.golden generation)
 - **`robustness_test.go`** (358 lines): 6 failure-mode tests (deadlock, unbound params, missing features, dangling transitions, step budget)
 - **`action_executor_test.go`**: 26 tests covering all action node types, fork/join parallelism, decision guards, object flow, deadlock detection
@@ -164,7 +165,7 @@ Each row documents one behavioral semantic feature:
 - **Calc**: invocation, return, parameters, control flow, error handling, unary operators, type coercion, qualified names (8/8 features)
 - **Constraint**: assert, assume, bare expression, negation, error handling (5/5 features)
 - **Requirement**: require, subject bindings, actor bindings, assume, nested (5/5 features)
-- **Action**: initial/final nodes, fork/join/merge/decision, object flow, deadlock detection, step budget (12/12 features)
+- **Action**: initial/final nodes, fork/join/merge/decision, nested invocation, object flow, deadlock detection, step budget (13/13 features)
 - **State**: initial/final, entry/exit, do behavior, transitions, guards, effects, TimeEvent/ChangeEvent, hierarchy, run-to-completion, event queue, error handling (13/13 features)
 - **Evaluation**: binary operators, unary operators, literals, feature references, qualified names, type coercion, error handling (7/7 features)
 
@@ -178,7 +179,7 @@ Each row documents one behavioral semantic feature:
 ### Known Failures (🚧)
 (None - known_failures.txt cleared)
 
-**Overall Coverage**: ~98% faithful implementation across all behavioral constructs. All behavioral types (calc/constraint/requirement/action/state) fully functional with 16/16 conformance tests passing.
+**Overall Coverage**: ~98% faithful implementation across all behavioral constructs. All behavioral types (calc/constraint/requirement/action/state) fully functional with 17/17 conformance tests passing.
 
 ---
 
