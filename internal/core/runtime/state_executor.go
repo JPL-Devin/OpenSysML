@@ -910,33 +910,32 @@ func (e *StateExecutor) evaluateJunctionPseudostate(junction *ast.PseudostateNod
 
 // findTransitionsFromPseudostate finds all outgoing transitions from a pseudostate.
 func (e *StateExecutor) findTransitionsFromPseudostate(ps *ast.PseudostateNode) []*ast.TransitionEdge {
-	var result []*ast.TransitionEdge
-	
-	// Search all transitions in state machine
-	stateUsage, ok := e.stateMachine.Decl.(*ast.Usage)
+	// Look up transitions from graph (already lowered)
+	lowerTransitions, ok := e.graph.Transitions[ps]
 	if !ok {
-		stateDef, ok := e.stateMachine.Decl.(*ast.Definition)
-		if !ok {
-			return result
-		}
-		stateUsage = &ast.Usage{Members: stateDef.Members}
+		return nil
 	}
 	
-	for _, member := range stateUsage.Members {
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
+	// Convert lower.Transition back to TransitionEdge for compatibility
+	result := make([]*ast.TransitionEdge, 0, len(lowerTransitions))
+	for _, lowerTrans := range lowerTransitions {
+		sourceName := getNodeName(lowerTrans.Source)
+		targetName := getNodeName(lowerTrans.Target)
+		
+		edge := &ast.TransitionEdge{
+			Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: sourceName}}},
+			Target:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: targetName}}},
+			Guard:   lowerTrans.Guard,
+			Effect:  lowerTrans.Effect,
 		}
 		
-		if trans, ok := actualMember.(*ast.TransitionEdge); ok {
-			// Check if source matches pseudostate name
-			if trans.Source != nil && len(trans.Source.Parts) > 0 {
-				sourceName := trans.Source.Parts[len(trans.Source.Parts)-1].Text
-				if sourceName == ps.Name {
-					result = append(result, trans)
-				}
+		if lowerTrans.Trigger != nil {
+			if triggerEvent, ok := lowerTrans.Trigger.(ast.TriggerEvent); ok {
+				edge.Trigger = triggerEvent
 			}
 		}
+		
+		result = append(result, edge)
 	}
 	
 	return result
