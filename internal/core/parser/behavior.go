@@ -416,9 +416,9 @@ func (p *Parser) parseActionMember() ast.Node {
 	if tok, ok := p.accept(lexer.Keyword); ok {
 		kw := tok.KeywordID
 		switch kw {
-		case "first":
+		case "first", "initial":
 			return p.parseInitialNode(tok)
-		case "done":
+		case "done", "final":
 			return p.parseFinalNode(tok)
 		case "fork":
 			return p.parseForkNode(tok)
@@ -560,7 +560,7 @@ func (p *Parser) parseFinalNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
 	
-	if p.at(lexer.Identifier) {
+	if p.atNameOrKeyword() {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
 		p.advance()
@@ -1895,6 +1895,12 @@ func (p *Parser) parseStateMember() ast.Node {
 		kw := tok.KeywordID
 		
 		switch kw {
+		case "initial":
+			p.advance()
+			return p.parseInitialState(start)
+		case "final":
+			p.advance()
+			return p.parseFinalState(start)
 		case "entry":
 			p.advance()
 			return p.parseEntryMember(start)
@@ -2381,6 +2387,64 @@ func (p *Parser) parseSubstateMember(start int) ast.Node {
 	
 	node := &ast.SubstateMember{
 		Name: name,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseInitialState parses: initial <name>;
+func (p *Parser) parseInitialState(start int) ast.Node {
+	// 'initial' already consumed
+	
+	// Expect identifier or keyword for state name
+	if !p.atNameOrKeyword() {
+		p.error(p.peek().Span, "expected identifier after 'initial'")
+		en := &ast.ErrorNode{Message: "expected identifier after 'initial'"}
+		if !p.atEOF() && !p.at(lexer.RBrace) {
+			p.advance()
+		}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	nameToken := p.peek()
+	name := p.src.Text(nameToken.Span)
+	p.advance()
+	
+	p.expect(lexer.Semicolon, "expected ';' after initial state name")
+	
+	node := &ast.StateNode{
+		Name:      name,
+		IsInitial: true,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseFinalState parses: final <name>;
+func (p *Parser) parseFinalState(start int) ast.Node {
+	// 'final' already consumed
+	
+	// Expect identifier or keyword for state name
+	if !p.atNameOrKeyword() {
+		p.error(p.peek().Span, "expected identifier after 'final'")
+		en := &ast.ErrorNode{Message: "expected identifier after 'final'"}
+		if !p.atEOF() && !p.at(lexer.RBrace) {
+			p.advance()
+		}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+	
+	nameToken := p.peek()
+	name := p.src.Text(nameToken.Span)
+	p.advance()
+	
+	p.expect(lexer.Semicolon, "expected ';' after final state name")
+	
+	node := &ast.StateNode{
+		Name:    name,
+		IsFinal: true,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node

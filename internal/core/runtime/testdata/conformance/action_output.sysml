@@ -2,8 +2,8 @@ package test {
 	action compute {
 		out result: Integer;
 		
-		initial start;
-		final end;
-		start then end;
+		first start;
+		done end;
+		then start end;
 	}
 }
