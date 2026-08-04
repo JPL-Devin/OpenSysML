@@ -1842,7 +1842,7 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 	return node
 }
 
-// parseActorMember parses: actor <name> : <Type>;
+// parseActorMember parses: actor <name> : <Type>; OR actor <name> = <expr>;
 func (p *Parser) parseActorMember(start int) ast.Node {
 	// 'actor' already consumed
 	
@@ -1861,10 +1861,28 @@ func (p *Parser) parseActorMember(start int) ast.Node {
 	name := p.src.Text(nameToken.Span)
 	p.advance()
 	
-	// Expect ':'
+	// Check if followed by '=' (binding form: actor <name> = <expr>;)
+	if p.at(lexer.Eq) {
+		p.advance() // consume '='
+		
+		// Parse value expression
+		value := p.ParseExpression()
+		
+		// Expect semicolon
+		p.expect(lexer.Semicolon, "expected ';' after actor binding")
+		
+		node := &ast.ActorMember{
+			Name:        name,
+			BindingExpr: value,
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+	
+	// Otherwise expect ':' for typed declaration
 	if !p.at(lexer.Colon) {
-		p.error(p.peek().Span, "expected ':' after actor name")
-		en := &ast.ErrorNode{Message: "expected ':' after actor name"}
+		p.error(p.peek().Span, "expected ':' or '=' after actor name")
+		en := &ast.ErrorNode{Message: "expected ':' or '=' after actor name"}
 		en.NodeSpan = p.spanFrom(start)
 		return en
 	}

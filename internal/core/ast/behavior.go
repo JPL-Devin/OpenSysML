@@ -252,11 +252,12 @@ type RequireMember struct {
 }
 
 // ActorMember represents an actor declaration in a requirement/use case.
-// Syntax: actor <name> : <Type>;
+// Syntax: actor <name> : <Type>; OR actor <name> = <expr>;
 type ActorMember struct {
 	NodeBase
-	Name     string
-	TypeRef  *QualifiedName // actor type
+	Name        string
+	TypeRef     *QualifiedName // actor type (for declaration form)
+	BindingExpr Node           // binding expression (for binding form: actor = <expr>;)
 }
 
 // Phase C4: State Body Members

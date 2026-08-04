@@ -1,0 +1,7 @@
+{
+  "type": "requirement",
+  "bindings": {
+    "user": {"type": "Integer", "value": 42}
+  },
+  "satisfied": true
+}

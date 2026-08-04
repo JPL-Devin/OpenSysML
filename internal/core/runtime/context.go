@@ -193,8 +193,17 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 			}
 			
 		case *ast.ActorMember:
-			// Actor: for now, actors are declarative (not evaluated as bindings)
-			// Full implementation would handle actor bindings similarly to subject
+			// Actor binding: actor <name> = <expr>;
+			if rm.BindingExpr != nil {
+				// Evaluate binding expression
+				value, err := evalCtx.Eval(rm.BindingExpr)
+				if err != nil {
+					return false, fmt.Errorf("requirement %s: actor binding evaluation failed: %w", sym.Name, err)
+				}
+				
+				// Add binding to evaluation frame
+				reqBindings[rm.Name] = value
+			}
 		}
 	}
 	
