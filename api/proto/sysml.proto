@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package sysml;
+
+option go_package = "github.com/Open-MBEE/Systemica/api/proto";
+
+// SysMLService provides programmatic access to Systemica's parser and runtime
+service SysMLService {
+  // Parse a SysML file and return model hash for subsequent queries
+  rpc ParseFile(ParseFileRequest) returns (ParseFileResponse);
+  
+  // Get symbol information by qualified name
+  rpc GetSymbol(GetSymbolRequest) returns (SymbolResponse);
+  
+  // Get all diagnostics for a parsed model
+  rpc GetDiagnostics(DiagnosticsRequest) returns (DiagnosticsResponse);
+}
+
+// ParseFileRequest specifies the source to parse
+message ParseFileRequest {
+  oneof source {
+    string file_path = 1;
+    string content = 2;
+  }
+  string content_hash = 3;  // sha256 for cache lookup
+}
+
+// ParseFileResponse contains parsed model info
+message ParseFileResponse {
+  string model_hash = 1;     // Cache key for subsequent requests
+  SymbolInfo root = 2;       // Root namespace
+  repeated Diagnostic diagnostics = 3;
+  string error = 4;          // Critical failure message if any
+}
+
+// GetSymbolRequest queries for a specific symbol
+message GetSymbolRequest {
+  string model_hash = 1;
+  string symbol_id = 2;  // Fully qualified name
+}
+
+// SymbolResponse contains symbol information
+message SymbolResponse {
+  SymbolInfo symbol = 1;
+  string error = 2;
+}
+
+// DiagnosticsRequest gets all diagnostics for a model
+message DiagnosticsRequest {
+  string model_hash = 1;
+}
+
+// DiagnosticsResponse contains diagnostic list
+message DiagnosticsResponse {
+  repeated Diagnostic diagnostics = 1;
+  string error = 2;
+}
+
+// SymbolInfo represents any SysML element
+message SymbolInfo {
+  string id = 1;             // Unique identifier (fully qualified name)
+  string name = 2;
+  string kind = 3;           // "PartDefinition", "AttributeUsage", etc
+  map<string, string> metadata = 4;  // multiplicity, type, etc
+  repeated string child_ids = 5;     // References to children
+  repeated AttributeInfo attributes = 6;
+}
+
+// AttributeInfo represents an attribute with its value
+message AttributeInfo {
+  string name = 1;
+  string type = 2;
+  Value value = 3;
+  string unit = 4;
+}
+
+// Value represents a literal value
+message Value {
+  oneof value {
+    double number = 1;
+    string text = 2;
+    bool boolean = 3;
+    int64 integer = 4;
+  }
+}
+
+// Diagnostic represents a parse/semantic error or warning
+message Diagnostic {
+  string severity = 1;  // "error", "warning", "info"
+  string message = 2;
+  Span span = 3;
+}
+
+// Span represents a source location
+message Span {
+  string file = 1;
+  int32 start_line = 2;
+  int32 start_col = 3;
+  int32 end_line = 4;
+  int32 end_col = 5;
+}
