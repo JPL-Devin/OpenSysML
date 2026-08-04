@@ -135,6 +135,16 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Body)
 		}
+	case *ast.InitialNode:
+		// Only resolve successor, not the name (which is just a label)
+		if d.Successor != nil {
+			r.ResolveQualified(scope, d.Successor)
+		}
+		r.resolveExpr(scope, d.Guard)
+	case *ast.FinalNode:
+		// Final nodes have no references
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		// Control flow nodes have no references to resolve (names are just labels)
 	}
 }
 

@@ -124,6 +124,28 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	case *ast.Import, *ast.FilterMember, *ast.ErrorNode:
 		// Imports are processed during resolution; filters hold expressions;
 		// error nodes have no declaration. Nothing to register here.
+	case *ast.InitialNode:
+		// Register initial node by name so transitions can reference it
+		if d.Name != "" {
+			id := ast.Identification{Name: d.Name}
+			child := NewScope(scope, d)
+			// Use attribute usage kind (control flow nodes are structural members)
+			sym := newSymbol(id, SymbolAttributeUsage, d, vis, child, scope, trivia)
+			defineIdent(scope, id, sym)
+			scope.AddChild(child)
+		}
+	case *ast.FinalNode:
+		// Register final node by name so transitions can reference it
+		if d.Name != "" {
+			id := ast.Identification{Name: d.Name}
+			child := NewScope(scope, d)
+			sym := newSymbol(id, SymbolAttributeUsage, d, vis, child, scope, trivia)
+			defineIdent(scope, id, sym)
+			scope.AddChild(child)
+		}
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		// Control flow nodes without explicit names in AST - skip indexing
+		// (If these nodes gain name fields in future, register them here)
 	}
 }
 

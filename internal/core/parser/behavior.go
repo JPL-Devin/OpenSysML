@@ -1949,8 +1949,9 @@ func (p *Parser) parseStateMember() ast.Node {
 			p.advance()
 			return p.parseTransitionMember(start)
 		case "first":
-			// Succession statement: first <state> then <state>;
-			return p.parseSuccessionStatement(start)
+			// Initial node: first <name> then <target>;
+			p.advance() // consume 'first'
+			return p.parseInitialNode(p.peek())
 		case "then":
 			// Standalone succession: then <state>; (implicit source, typically from entry)
 			p.advance() // consume 'then'
