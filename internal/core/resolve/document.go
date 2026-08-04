@@ -203,9 +203,8 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			r.resolveExpr(scope, a)
 		}
 		for _, na := range v.NamedArgs {
-			if na.Name != nil {
-				r.ResolveQualified(scope, na.Name)
-			}
+			// Named argument names are parameter identifiers, not references
+			// Don't resolve na.Name - it's looked up in callee's parameter list
 			r.resolveExpr(scope, na.Value)
 		}
 	case *ast.CollectExpr:
