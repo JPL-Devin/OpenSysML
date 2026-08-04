@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"fmt"
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -167,6 +168,7 @@ func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixM
 }
 
 // resolveRelationships resolves each relationship target as a qualified name.
+// Special handling for redefinitions: targets are looked up in inherited scope.
 func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relationship) {
 	for _, rel := range rels {
 		if rel != nil && rel.Target != nil {
@@ -175,6 +177,16 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relati
 			if fr, ok := target.(*ast.FeatureReference); ok {
 				target = fr.Name
 			}
+			
+			// Special case: redefinitions should resolve in inherited scope
+			if rel.Kind == ast.RelRedefines {
+				if qn, ok := target.(*ast.QualifiedName); ok {
+					r.resolveRedefinition(scope, qn, rels)
+					continue
+				}
+			}
+			
+			// Standard resolution in current scope
 			if qn, ok := target.(*ast.QualifiedName); ok {
 				r.ResolveQualified(scope, qn)
 			} else if fc, ok := target.(*ast.FeatureChainExpr); ok {
@@ -182,6 +194,243 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relati
 			}
 		}
 	}
+}
+
+// resolveRedefinition resolves a redefinition target by looking up the inheritance chain.
+// Searches for the feature in parent definitions (following specialization relationships).
+func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedName, rels []*ast.Relationship) {
+	// If already resolved, skip
+	if qn == nil || len(qn.Parts) == 0 {
+		return
+	}
+	
+	// For single-name redefinitions (most common: :>> payload), look in inherited scope
+	if len(qn.Parts) == 1 {
+		featureName := qn.Parts[0].Text
+		
+		// DEBUG
+		
+		// The scope passed here is the OWNER's scope (where the member with :>> lives)
+		// We need to find the owner's specialization relationships
+		ownerNode := scope.Node()
+		
+		// Get owner's relationships to find specialization targets
+		var ownerRels []*ast.Relationship
+		switch owner := ownerNode.(type) {
+		case *ast.Definition:
+			ownerRels = owner.Relationships
+		case *ast.Usage:
+			ownerRels = owner.Relationships
+		case *ast.Package:
+			// Package has no relationships, member must be at package level
+			r.ResolveQualified(scope, qn)
+			return
+		default:
+			// Not a definition/usage, fall back
+			r.ResolveQualified(scope, qn)
+			return
+		}
+		
+		// Find parent definitions via specialization relationships
+		// Include both explicit and implicit specializations
+		parents := r.findSpecializationTargets(scope, ownerRels)
+		
+		// For definitions with implicit base types (e.g., flow def → Flow), add them
+		if def, ok := ownerNode.(*ast.Definition); ok {
+			implicitParents := r.findImplicitSpecializations(scope, def)
+			parents = append(parents, implicitParents...)
+		}
+		
+		// Search each parent for the feature
+		for _, parentSym := range parents {
+			if parentSym == nil {
+				continue
+			}
+			
+			
+			// Try scope-based lookup first (for live-parsed definitions)
+			if parentSym.Scope != nil {
+				if sym, ok := parentSym.Scope.LookupLocal(featureName); ok {
+					qn.Parts[0].Sym = sym
+					return
+				}
+			} else {
+				// No scope (likely cached stdlib symbol) - try index-based lookup
+				fqn := parentSym.Name + "::" + featureName
+				if r.idx != nil {
+					candidates := r.idx.LookupQualified(fqn)
+					if len(candidates) == 1 {
+						qn.Parts[0].Sym = candidates[0]
+						return
+					} else if len(candidates) > 1 {
+					} else {
+						// Not found directly - search this parent's parents recursively
+						if r.searchInheritedFeatureViaIndex(parentSym, featureName, qn) {
+							return
+						}
+					}
+				}
+			}
+			
+			// Recursively search parent's parents
+			if r.searchInheritedFeature(parentSym, featureName, qn) {
+				return
+			}
+		}
+		
+	}
+	
+	// Fall back to standard resolution if not found in parents
+	r.ResolveQualified(scope, qn)
+}
+
+// findSpecializationTargets returns symbols for all specialization targets in the relationship list.
+func (r *Resolver) findSpecializationTargets(scope *symbols.Scope, rels []*ast.Relationship) []*symbols.Symbol {
+	var parents []*symbols.Symbol
+	
+	for _, rel := range rels {
+		if rel == nil || rel.Kind != ast.RelSpecializes {
+			continue
+		}
+		
+		// Extract target name
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		
+		if qn, ok := target.(*ast.QualifiedName); ok {
+			// Resolve the specialization target
+			if sym, ok := r.ResolveQualified(scope, qn); ok && sym != nil {
+				parents = append(parents, sym)
+			}
+		}
+	}
+	
+	return parents
+}
+
+// searchInheritedFeature recursively searches for a feature in the parent's inheritance chain.
+func (r *Resolver) searchInheritedFeature(parentSym *symbols.Symbol, featureName string, qn *ast.QualifiedName) bool {
+	if parentSym == nil || parentSym.Decl == nil {
+		return false
+	}
+	
+	// Get parent's relationships (to find its parents)
+	var parentRels []*ast.Relationship
+	switch decl := parentSym.Decl.(type) {
+	case *ast.Definition:
+		parentRels = decl.Relationships
+	case *ast.Usage:
+		parentRels = decl.Relationships
+	}
+	
+	// Search in each grandparent
+	grandparents := r.findSpecializationTargets(parentSym.Scope.Parent(), parentRels)
+	for _, gp := range grandparents {
+		if gp == nil || gp.Scope == nil {
+			continue
+		}
+		
+		if sym, ok := gp.Scope.LookupLocal(featureName); ok {
+			qn.Parts[0].Sym = sym
+			return true
+		}
+		
+		// Recurse further up
+		if r.searchInheritedFeature(gp, featureName, qn) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// searchInheritedFeatureViaIndex searches for a feature in parent's inheritance chain using index lookups.
+// Used when parent symbol has no Scope (cached stdlib symbols).
+func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featureName string, qn *ast.QualifiedName) bool {
+	// Get parent's specialization relationships from index
+	// For cached symbols, we need to look up specialization info from the FQN metadata
+	// For now, use a simpler approach: try common parent names
+	
+	// Map of known implicit parents (this is a hack, but works for common cases)
+	implicitParents := map[string][]string{
+		"Flows::Flow": {"Flows::Message", "Flows::FlowTransfer"},
+		"Flows::Message": {"Transfers::Transfer"},
+		// Add more as needed
+	}
+	
+	parentNames, ok := implicitParents[parent.Name]
+	if !ok {
+		return false
+	}
+	
+	for _, gpName := range parentNames {
+		fqn := gpName + "::" + featureName
+		if r.idx != nil {
+			candidates := r.idx.LookupQualified(fqn)
+			if len(candidates) == 1 {
+				qn.Parts[0].Sym = candidates[0]
+				return true
+			}
+		}
+		
+		// Recurse further (not implemented yet)
+	}
+	
+	return false
+}
+
+// findImplicitSpecializations returns implicit base types for a definition based on its kind.
+// For example, 'flow def' implicitly specializes 'Flow' from kernel library.
+func (r *Resolver) findImplicitSpecializations(scope *symbols.Scope, def *ast.Definition) []*symbols.Symbol {
+	var parents []*symbols.Symbol
+	
+	// Map definition kinds to their implicit base types (just the name, not FQN)
+	var baseName string
+	switch def.Kind {
+	case ast.DefFlow:
+		baseName = "Flow"
+	case ast.DefConnection:
+		baseName = "Connection"
+	case ast.DefInterface:
+		baseName = "Interface"
+	case ast.DefAllocation:
+		baseName = "Allocation"
+	// Add more as needed
+	default:
+		return nil
+	}
+	
+	// Create a simple QualifiedName to resolve
+	qn := &ast.QualifiedName{
+		Parts: []ast.NameSegment{{Text: baseName}},
+	}
+	
+	if sym, ok := r.ResolveQualified(scope, qn); ok && sym != nil {
+		if sym.Scope != nil {
+			fmt.Printf("  Scope node: %T, members: %v\n", sym.Scope.Node(), sym.Scope.MemberNames())
+		}
+		parents = append(parents, sym)
+	} else {
+	}
+	
+	return parents
+}
+
+// splitQualifiedName splits "A::B::C" into ["A", "B", "C"]
+func splitQualifiedName(name string) []string {
+	var parts []string
+	start := 0
+	for i := 0; i < len(name)-1; i++ {
+		if name[i] == ':' && name[i+1] == ':' {
+			parts = append(parts, name[start:i])
+			start = i + 2
+			i++ // skip second ':'
+		}
+	}
+	parts = append(parts, name[start:])
+	return parts
 }
 
 // resolveExpr walks an expression subtree resolving feature references and
