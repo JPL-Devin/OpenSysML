@@ -187,6 +187,11 @@ func (e *ActionExecutor) extractGraph() error {
 		case *ast.InitialNode, *ast.FinalNode, *ast.ForkNode, *ast.JoinNode,
 			*ast.MergeNode, *ast.DecisionNode, *ast.ActionExecutionNode:
 			e.nodes = append(e.nodes, actualMember)
+		case *ast.Usage:
+			// Nested action usage (treat as execution node)
+			if n.Kind == ast.UsageAction {
+				e.nodes = append(e.nodes, actualMember)
+			}
 		case *ast.SuccessionEdge:
 			// Build edge map (source → target)
 			sourceNode := e.findNodeByName(n.Source)
@@ -296,9 +301,49 @@ func getNodeName(node ast.Node) string {
 		return n.Name
 	case *ast.ActionExecutionNode:
 		return n.Name
+	case *ast.Usage:
+		// Nested action usage
+		return n.Ident.Name
 	default:
 		return ""
 	}
+}
+
+// initializeAttributes populates tokenData with attribute default values from action.
+func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error {
+	// Get action node
+	actionNode, ok := e.action.Decl.(*ast.Usage)
+	if !ok {
+		actionDef, ok := e.action.Decl.(*ast.Definition)
+		if !ok {
+			return fmt.Errorf("action symbol has invalid node type")
+		}
+		actionNode = &ast.Usage{Members: actionDef.Members}
+	}
+	
+	// Extract attribute defaults
+	for _, member := range actionNode.Members {
+		// Unwrap Membership if present
+		actualMember := member
+		if membership, ok := member.(*ast.Membership); ok {
+			actualMember = membership.Member
+		}
+		
+		// Check for attribute with value
+		if usage, ok := actualMember.(*ast.Usage); ok && usage.Kind == ast.UsageAttribute {
+			if usage.Value != nil && usage.Ident.Name != "" {
+				// Evaluate default value
+				ec := NewEvalContext(e.ctx, nil)
+				value, err := ec.Eval(usage.Value)
+				if err != nil {
+					return fmt.Errorf("eval attribute default %s: %w", usage.Ident.Name, err)
+				}
+				tokenData[usage.Ident.Name] = value
+			}
+		}
+	}
+	
+	return nil
 }
 
 // initialize spawns initial token at InitialNode.
@@ -317,10 +362,17 @@ func (e *ActionExecutor) initialize() error {
 	}
 	
 	// Spawn initial token
+	tokenData := make(map[string]Value)
+	
+	// Initialize with action attribute defaults
+	if err := e.initializeAttributes(tokenData); err != nil {
+		return fmt.Errorf("initialize attributes: %w", err)
+	}
+	
 	token := Token{
 		ID:       e.nextTokenID,
 		Location: initialNode,
-		Data:     make(map[string]Value),
+		Data:     tokenData,
 	}
 	e.nextTokenID++
 	e.tokens = append(e.tokens, token)
@@ -352,6 +404,12 @@ func (e *ActionExecutor) stepToken(tokenIdx int) error {
 		return e.stepDecisionNode(tokenIdx)
 	case *ast.ActionExecutionNode:
 		return e.stepActionExecutionNode(tokenIdx)
+	case *ast.Usage:
+		// Nested action invocation
+		if node.Kind == ast.UsageAction {
+			return e.stepNestedAction(tokenIdx)
+		}
+		return fmt.Errorf("unsupported usage kind in action: %v", node.Kind)
 	default:
 		return fmt.Errorf("unsupported node type: %T", node)
 	}
@@ -648,6 +706,61 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 	
 	// Apply data flows: transfer data from this node's output pins to target input pins
 	e.applyDataFlows(token, node)
+	
+	token.Location = successors[0]
+	return nil
+}
+
+// stepNestedAction executes a nested action usage.
+func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
+	token := &e.tokens[tokenIdx]
+	usage, ok := token.Location.(*ast.Usage)
+	if !ok {
+		return fmt.Errorf("expected Usage, got %T", token.Location)
+	}
+	
+	// Execute nested action members (assignments, expressions)
+	for _, member := range usage.Members {
+		// Unwrap Membership if present
+		actualMember := member
+		if membership, ok := member.(*ast.Membership); ok {
+			actualMember = membership.Member
+		}
+		
+		// Execute assignment actions
+		if assign, ok := actualMember.(*ast.AssignmentActionNode); ok {
+			ec := NewEvalContext(e.ctx, nil)
+			ec.Push(token.Data) // Token data available for RHS evaluation
+			
+			// Evaluate RHS
+			value, err := ec.Eval(assign.Value)
+			if err != nil {
+				return fmt.Errorf("eval assignment RHS: %w", err)
+			}
+			
+			// Store in token data (updates shared state)
+			// Target can be QualifiedName or FeatureReference
+			var targetName string
+			if qname, ok := assign.Target.(*ast.QualifiedName); ok && len(qname.Parts) > 0 {
+				targetName = qname.Parts[len(qname.Parts)-1].Text
+			} else if fref, ok := assign.Target.(*ast.FeatureReference); ok && fref.Name != nil && len(fref.Name.Parts) > 0 {
+				targetName = fref.Name.Parts[len(fref.Name.Parts)-1].Text
+			}
+			
+			if targetName != "" {
+				token.Data[targetName] = value
+			}
+		}
+	}
+	
+	// Advance to successor
+	successors := e.edges[token.Location]
+	if len(successors) == 0 {
+		return fmt.Errorf("nested action %s has no successors", usage.Ident.Name)
+	}
+	if len(successors) > 1 {
+		return fmt.Errorf("nested action %s has multiple successors", usage.Ident.Name)
+	}
 	
 	token.Location = successors[0]
 	return nil

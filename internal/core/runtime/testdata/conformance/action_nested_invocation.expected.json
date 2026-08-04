@@ -1,0 +1,9 @@
+{
+    "type": "action",
+    "outputs": {
+        "result": {
+            "type": "Integer",
+            "value": 5
+        }
+    }
+}
