@@ -79,12 +79,39 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 			}
 			stateNode.NodeSpan = n.NodeSpan
 			collectStates(graph, stateNode, nil)
+		case *ast.StateRegion:
+			// Top-level region: collect states within region
+			for _, regionMember := range n.States {
+				if state, ok := regionMember.(*ast.StateNode); ok {
+					collectStates(graph, state, nil)
+				} else if substate, ok := regionMember.(*ast.SubstateMember); ok {
+					stateNode := &ast.StateNode{Name: substate.Name}
+					stateNode.NodeSpan = substate.NodeSpan
+					collectStates(graph, stateNode, nil)
+				}
+			}
+			// Store the region for later processing
+			// (We'll handle RegionInitials after collecting all states)
 		case *ast.PseudostateNode:
 			graph.Pseudostates[n.Name] = n
 		}
 	}
 	
-	// Second pass: identify composite states with regions
+	// Second pass: identify composite states with regions AND handle top-level regions
+	// Check for top-level regions (state machine itself has regions as members)
+	for _, member := range members {
+		actualMember := unwrapMembership(member)
+		if region, ok := actualMember.(*ast.StateRegion); ok {
+			// Top-level region
+			initialState := findInitialStateInRegion(graph, region)
+			if initialState == nil {
+				return nil, fmt.Errorf("top-level region %s has no initial state", region.Name)
+			}
+			graph.RegionInitials[region] = initialState
+		}
+	}
+	
+	// Also handle states that have regions as sub-members
 	for _, state := range graph.States {
 		if len(state.Regions) > 0 {
 			graph.CompositeStates[state] = state.Regions
@@ -134,15 +161,19 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 		}
 	}
 	
-	// Find initial state (for simple machines)
-	for _, state := range graph.States {
-		if state.IsInitial && graph.ParentState[state] == nil {
-			if graph.Initial != nil {
-				return nil, fmt.Errorf("state machine has multiple top-level initial states")
+	// Find initial state (for simple machines - machines without top-level regions)
+	if len(graph.RegionInitials) == 0 {
+		// No top-level regions, find the simple initial state
+		for _, state := range graph.States {
+			if state.IsInitial && graph.ParentState[state] == nil {
+				if graph.Initial != nil {
+					return nil, fmt.Errorf("state machine has multiple top-level initial states")
+				}
+				graph.Initial = state
 			}
-			graph.Initial = state
 		}
 	}
+	// If there are top-level regions, Initial stays nil (executor will use RegionInitials instead)
 	
 	// Note: Initial state is optional at graph construction time.
 	// The executor's initialize() will validate and return the error if missing.
