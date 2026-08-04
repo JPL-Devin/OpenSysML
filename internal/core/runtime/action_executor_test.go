@@ -65,11 +65,11 @@ func TestActionExecutor_GraphExtraction(t *testing.T) {
 		t.Fatalf("create executor: %v", err)
 	}
 	
-	if len(exec.nodes) != 2 {
-		t.Errorf("expected 2 nodes, got %d", len(exec.nodes))
+	if len(exec.graph.Nodes) != 2 {
+		t.Errorf("expected 2 nodes, got %d", len(exec.graph.Nodes))
 	}
 	
-	successors, ok := exec.edges[initial]
+	successors, ok := exec.graph.Edges[initial]
 	if !ok || len(successors) != 1 || successors[0] != final {
 		t.Error("expected edge from initial to final")
 	}
@@ -1345,11 +1345,11 @@ func TestActionExecutor_ObjectFlow(t *testing.T) {
 	}
 	
 	// Verify ObjectFlowEdge extracted
-	if len(exec.dataFlows) == 0 {
+	if len(exec.graph.DataFlows) == 0 {
 		t.Fatal("expected dataFlows map to be populated")
 	}
 	
-	flows := exec.dataFlows[action1]
+	flows := exec.graph.DataFlows[action1]
 	if len(flows) != 1 {
 		t.Fatalf("expected 1 object flow from action1, got %d", len(flows))
 	}
