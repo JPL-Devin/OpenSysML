@@ -40,6 +40,29 @@ func applyRename(t *testing.T, ws *model.Workspace, name, cursorAt, newName stri
 	return out, nil
 }
 
+// renameEdits runs Rename at the first occurrence of cursor and returns the
+// edits for that document.
+func renameEdits(t *testing.T, ws *model.Workspace, name, cursorAt, newName string) []protocol.TextEdit {
+	t.Helper()
+	s := NewServer(ws)
+	doc := ws.Document(name)
+	off := strings.Index(string(doc.Content), cursorAt)
+	if off < 0 {
+		t.Fatalf("cursor anchor %q not found", cursorAt)
+	}
+	edit, err := s.Rename(context.Background(), &protocol.RenameParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition(doc.Content, off),
+		},
+		NewName: newName,
+	})
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	return edit.Changes[nameToURI(name)]
+}
+
 // applyEdits applies non-overlapping edits back-to-front, as a client would.
 func applyEdits(t *testing.T, content string, edits []protocol.TextEdit) string {
 	t.Helper()
@@ -216,5 +239,43 @@ func TestRenameAcrossDocuments(t *testing.T) {
 	}
 	if want := "import P::M;\n"; got[refName] != want {
 		t.Errorf("referencing document:\ngot:  %q\nwant: %q", got[refName], want)
+	}
+}
+
+// A shorthand redefinition (`part redefines x;`) carries a parser-synthesised
+// relationship target sharing the declaration's identifier span, so the
+// declaration and reference edits land on the same range.
+func TestRenameShorthandRedefinitionEditsOnce(t *testing.T) {
+	ws := model.NewWorkspace()
+	src := `package P {
+	part def Base { part x [1]; }
+	part def Sub :> Base { part redefines x; }
+}
+`
+	name := openRenameDoc(t, ws, "/tmp/rename_shorthand.sysml", src)
+
+	edits := renameEdits(t, ws, name, "x; }", "renamed") // the redefining member
+	assertNoOverlap(t, edits)
+
+	got, err := applyRename(t, ws, name, "x; }", "renamed")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "part redefines renamed;") {
+		t.Errorf("shorthand redefinition not renamed cleanly:\n%s", got[name])
+	}
+}
+
+// assertNoOverlap fails when two edits cover the same characters: clients reject
+// a workspace edit with overlapping ranges outright.
+func assertNoOverlap(t *testing.T, edits []protocol.TextEdit) {
+	t.Helper()
+	for i := range edits {
+		for j := i + 1; j < len(edits); j++ {
+			a, b := edits[i].Range, edits[j].Range
+			if a.Start.Line == b.Start.Line && a.Start.Character == b.Start.Character {
+				t.Fatalf("overlapping edits at %v: %d edits total %v", a.Start, len(edits), edits)
+			}
+		}
 	}
 }

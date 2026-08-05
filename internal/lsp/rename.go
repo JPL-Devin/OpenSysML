@@ -37,8 +37,19 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 	}
 
 	changes := map[protocol.DocumentURI][]protocol.TextEdit{}
+	// One name occurrence is edited once however many times it is collected: a
+	// shorthand redefinition (`part redefines x;`) is both the declaration and a
+	// reference at the same span, and clients reject overlapping edits.
+	edited := map[protocol.DocumentURI]map[source.Span]bool{}
 	addEdit := func(docName string, content []byte, span source.Span) {
 		uri := nameToURI(docName)
+		if edited[uri] == nil {
+			edited[uri] = map[source.Span]bool{}
+		}
+		if edited[uri][span] {
+			return
+		}
+		edited[uri][span] = true
 		changes[uri] = append(changes[uri], protocol.TextEdit{
 			Range:   spanToRange(content, span),
 			NewText: params.NewName,

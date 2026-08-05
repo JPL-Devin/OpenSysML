@@ -158,3 +158,35 @@ func checkStable(t *testing.T, name string, content []byte) {
 		t.Errorf("%s: formatting is not idempotent", name)
 	}
 }
+
+// A CRLF document keeps CRLF everywhere, including after a line comment (whose
+// token text carries its own terminator) and at the end of the file.
+func TestSourceKeepsWindowsLineEndings(t *testing.T) {
+	src := "package P {\r\n// note\r\nattribute x = 1;\r\n}\r\n"
+	out, err := Source("crlf.sysml", []byte(src), DefaultOptions)
+	if err != nil {
+		t.Fatalf("Source err = %v", err)
+	}
+	got := string(out)
+	if strings.Contains(strings.ReplaceAll(got, "\r\n", ""), "\n") {
+		t.Errorf("mixed line endings in output: %q", got)
+	}
+	if !strings.HasSuffix(got, "\r\n") || strings.HasSuffix(got, "\r\r\n") {
+		t.Errorf("bad trailing line ending: %q", got)
+	}
+	if !strings.Contains(got, "    attribute x = 1;\r\n") {
+		t.Errorf("not re-indented: %q", got)
+	}
+}
+
+// A file that is mostly LF is normalized to LF rather than left mixed.
+func TestSourceNormalizesMixedLineEndingsToLF(t *testing.T) {
+	src := "package P {\n// note\r\nattribute x = 1;\n}\n"
+	out, err := Source("mixed.sysml", []byte(src), DefaultOptions)
+	if err != nil {
+		t.Fatalf("Source err = %v", err)
+	}
+	if got := string(out); strings.Contains(got, "\r") {
+		t.Errorf("carriage return survived: %q", got)
+	}
+}

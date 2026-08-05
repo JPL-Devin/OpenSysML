@@ -9,7 +9,8 @@
 // The rules are deliberately conservative: line breaks the author wrote are
 // preserved, so the formatter never joins or splits a line. It fixes
 // indentation, trailing whitespace, runs of blank lines, and the padding just
-// inside brackets and before separators.
+// inside brackets and before separators. Line endings are emitted in the
+// document's own dominant style, so a CRLF file stays CRLF throughout.
 package format
 
 import (
@@ -44,11 +45,21 @@ func Source(name string, src []byte, opts Options) ([]byte, error) {
 	if opts.IndentWidth <= 0 {
 		opts.IndentWidth = DefaultOptions.IndentWidth
 	}
-	out := (&formatter{src: src, opts: opts}).run(tokenize(name, src))
+	out := (&formatter{src: src, opts: opts, nl: dominantNewline(src)}).run(tokenize(name, src))
 	if !sameTokens(name, src, out) {
 		return src, ErrNotIdempotent
 	}
 	return out, nil
+}
+
+// dominantNewline reports the line ending to emit: CRLF only when the document
+// already uses it more than bare LF.
+func dominantNewline(src []byte) string {
+	crlf := bytes.Count(src, []byte("\r\n"))
+	if crlf > bytes.Count(src, []byte("\n"))-crlf {
+		return "\r\n"
+	}
+	return "\n"
 }
 
 func tokenize(name string, src []byte) []lexer.Token {
@@ -69,6 +80,7 @@ type formatter struct {
 
 	buf   bytes.Buffer
 	depth int
+	nl    string // line ending to emit
 
 	atLineStart bool // nothing written on the current line yet
 	pendingNL   int  // newlines seen since the last emitted token
@@ -95,7 +107,7 @@ func (f *formatter) run(toks []lexer.Token) []byte {
 	if f.started {
 		// Exactly one trailing newline, whether or not the last token was a line
 		// comment that carried its own.
-		out = append(bytes.TrimRight(out, "\n"), '\n')
+		out = append(bytes.TrimRight(out, "\r\n"), f.nl...)
 	}
 	return out
 }
@@ -120,7 +132,7 @@ func (f *formatter) emit(tok lexer.Token) {
 				want = 2
 			}
 			for have := f.trailingNewlines(); have < want; have++ {
-				f.buf.WriteByte('\n')
+				f.buf.WriteString(f.nl)
 			}
 		}
 		f.atLineStart = true
@@ -132,7 +144,7 @@ func (f *formatter) emit(tok lexer.Token) {
 	if f.atLineStart {
 		f.writeIndent()
 	}
-	text := f.text(tok)
+	text := normalizeNewlines(f.text(tok), f.nl)
 	f.buf.WriteString(text)
 
 	if tok.Kind == lexer.LBrace {
@@ -146,15 +158,25 @@ func (f *formatter) emit(tok lexer.Token) {
 	}
 }
 
-// trailingNewlines counts the newlines already at the end of the buffer; a line
-// comment token includes its terminating newline in its own text.
+// trailingNewlines counts the line endings already at the end of the buffer; a
+// line comment token includes its terminating newline in its own text.
 func (f *formatter) trailingNewlines() int {
 	b := f.buf.Bytes()
 	n := 0
-	for i := len(b) - 1; i >= 0 && b[i] == '\n'; i-- {
+	for bytes.HasSuffix(b, []byte(f.nl)) {
+		b = b[:len(b)-len(f.nl)]
 		n++
 	}
 	return n
+}
+
+// normalizeNewlines rewrites the line endings inside a token's own text — a
+// multi-line note, or a line comment carrying its terminator — to nl.
+func normalizeNewlines(text, nl string) string {
+	if !strings.Contains(text, "\n") {
+		return text
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\n", nl)
 }
 
 // wantSpace reports whether whitespace the author wrote before tok is kept.
@@ -206,7 +228,10 @@ func significant(name string, src []byte) []string {
 		if tok.Kind == lexer.Whitespace {
 			continue
 		}
-		out = append(out, tok.Kind.String()+" "+string(src[tok.Span.Offset:tok.Span.End()]))
+		// Compared with line endings normalized, since emitting the document's
+		// dominant ending is an intended rewrite.
+		text := normalizeNewlines(string(src[tok.Span.Offset:tok.Span.End()]), "\n")
+		out = append(out, tok.Kind.String()+" "+text)
 	}
 	return out
 }
