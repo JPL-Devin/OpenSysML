@@ -229,7 +229,7 @@ go build -o bin/sysml-grpc ./cmd/sysml-grpc
 **Installation:**
 ```bash
 # Install from source (development mode)
-pip install -e pysysml/
+pip install -e python/
 ```
 
 **Quick example:**
@@ -254,7 +254,7 @@ print(instance.slots["mass"])
 - Automatic service lifecycle management
 - Full runtime API access (eval, instantiate, execute actions/states)
 
-See [pysysml/INSTALL.md](pysysml/INSTALL.md) for detailed installation and usage instructions.
+See [python/INSTALL.md](python/INSTALL.md) for detailed installation and usage instructions.
 
 ## Documentation
 
