@@ -1,7 +1,7 @@
 """Tests for pysysml module-level convenience API."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 import pysysml
 
 
@@ -153,3 +153,117 @@ class TestModuleLevelAPI:
             assert result1 == mock_conn1
             assert result2 == mock_conn2
             assert result1 != result2
+    
+    def test_pysysml_eval_with_file(self):
+        """Test module-level eval() loads file."""
+        with patch('pysysml.Connection') as MockConnection:
+            mock_conn = Mock()
+            MockConnection.return_value = mock_conn
+            
+            # Clear cached connection
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
+            
+            mock_model = Mock()
+            mock_model.hash = "model-abc"
+            mock_conn.load.return_value = mock_model
+            mock_conn.eval.return_value = 42
+            
+            result = pysysml.eval("6 * 7", file_path="test.sysml")
+            
+            assert result == 42
+            mock_conn.load.assert_called_once_with("test.sysml")
+            mock_conn.eval.assert_called_once_with("6 * 7", "model-abc", None)
+    
+    def test_pysysml_instantiate_with_hash(self):
+        """Test module-level instantiate() with model_hash."""
+        with patch('pysysml.Connection') as MockConnection:
+            mock_conn = Mock()
+            MockConnection.return_value = mock_conn
+            
+            # Clear cached connection
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
+            
+            mock_instance = Mock()
+            mock_instance.id = 999
+            mock_conn.instantiate.return_value = mock_instance
+            
+            result = pysysml.instantiate("Part", model_hash="hash-xyz")
+            
+            assert result.id == 999
+            mock_conn.instantiate.assert_called_once_with("Part", "hash-xyz")
+    
+    def test_pysysml_eval_missing_both_params(self):
+        """Test eval() raises ValueError if neither file_path nor model_hash."""
+        with patch('pysysml.Connection') as MockConnection:
+            mock_conn = Mock()
+            MockConnection.return_value = mock_conn
+            
+            # Clear cached connection
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
+            
+            with pytest.raises(ValueError, match="Must provide either"):
+                pysysml.eval("2 + 2")
+    
+    def test_pysysml_eval_with_both_params(self):
+        """Test eval() raises ValueError when both file_path and model_hash provided."""
+        with patch('pysysml.Connection') as MockConnection:
+            mock_conn = Mock()
+            MockConnection.return_value = mock_conn
+            
+            # Clear cached connection
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
+            
+            with pytest.raises(ValueError, match="Provide either file_path or model_hash, not both"):
+                pysysml.eval("2 + 2", file_path="test.sysml", model_hash="hash-abc")
+    
+    def test_pysysml_eval_with_context(self):
+        """Test eval() passes context_symbol_id through to conn.eval()."""
+        with patch('pysysml.Connection') as MockConnection:
+            mock_conn = Mock()
+            MockConnection.return_value = mock_conn
+            
+            # Clear cached connection
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
+            
+            mock_model = Mock()
+            mock_model.hash = "model-xyz"
+            mock_conn.load.return_value = mock_model
+            mock_conn.eval.return_value = 100
+            
+            result = pysysml.eval("x + y", file_path="test.sysml", context_symbol_id="ctx-123")
+            
+            assert result == 100
+            mock_conn.load.assert_called_once_with("test.sysml")
+            # Verify context_symbol_id passes through
+            mock_conn.eval.assert_called_once_with("x + y", "model-xyz", "ctx-123")
+    
+    def test_pysysml_instantiate_missing_both_params(self):
+        """Test instantiate() raises ValueError if neither file_path nor model_hash."""
+        with patch('pysysml.Connection') as MockConnection:
+            mock_conn = Mock()
+            MockConnection.return_value = mock_conn
+            
+            # Clear cached connection
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
+            
+            with pytest.raises(ValueError, match="Must provide either"):
+                pysysml.instantiate("Part")
+    
+    def test_pysysml_instantiate_with_both_params(self):
+        """Test instantiate() raises ValueError when both file_path and model_hash provided."""
+        with patch('pysysml.Connection') as MockConnection:
+            mock_conn = Mock()
+            MockConnection.return_value = mock_conn
+            
+            # Clear cached connection
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
+            
+            with pytest.raises(ValueError, match="Provide either file_path or model_hash, not both"):
+                pysysml.instantiate("Part", file_path="test.sysml", model_hash="hash-abc")

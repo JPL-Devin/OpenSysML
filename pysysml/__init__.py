@@ -6,8 +6,15 @@ from pysysml.connection import Connection
 from pysysml.model import Model
 from pysysml.symbol import Symbol
 from pysysml.diagnostic import Diagnostic
+from pysysml.instance import Instance
+from pysysml.errors import RuntimeError
 
-__all__ = ["Connection", "Model", "Symbol", "Diagnostic", "load", "connect"]
+__all__ = [
+    "Connection", "Model", "Symbol", "Diagnostic", "Instance",
+    "RuntimeError",
+    "load", "connect",
+    "eval", "instantiate"
+]
 
 # Module-level default connection (lazy singleton)
 _default_connection = None
@@ -74,3 +81,76 @@ def connect(host='localhost', port=50051, auto_start=True):
         Connection: New connection instance
     """
     return Connection(host, port, auto_start=auto_start)
+
+
+def eval(expression, file_path=None, model_hash=None, context_symbol_id=None):
+    """Evaluate a SysML expression (module-level convenience).
+    
+    Args:
+        expression (str): SysML expression
+        file_path (str, optional): Parse this file first, get model_hash
+        model_hash (str, optional): Use existing model hash
+        context_symbol_id (str, optional): Context for evaluation
+        
+    Returns:
+        Evaluated value
+        
+    Raises:
+        ValueError: If neither file_path nor model_hash provided, or if both provided
+        RuntimeError: If evaluation fails
+        
+    Example:
+        >>> import pysysml
+        >>> result = pysysml.eval("2 + 2", file_path="test.sysml")
+        >>> print(result)  # 4
+    """
+    conn = _get_default_connection()
+    
+    # Validate params: exactly one of file_path or model_hash required
+    if file_path and model_hash:
+        raise ValueError("Provide either file_path or model_hash, not both")
+    
+    if not file_path and not model_hash:
+        raise ValueError("Must provide either file_path or model_hash")
+    
+    if file_path:
+        model = conn.load(file_path)
+        model_hash = model.hash
+    
+    return conn.eval(expression, model_hash, context_symbol_id)
+
+
+def instantiate(symbol_id, file_path=None, model_hash=None):
+    """Instantiate a part/usage (module-level convenience).
+    
+    Args:
+        symbol_id (str): FQN of symbol to instantiate
+        file_path (str, optional): Parse this file first
+        model_hash (str, optional): Use existing model hash
+        
+    Returns:
+        Instance: Instance object
+        
+    Raises:
+        ValueError: If neither file_path nor model_hash provided, or if both provided
+        RuntimeError: If instantiation fails
+        
+    Example:
+        >>> import pysysml
+        >>> instance = pysysml.instantiate("SPACECRAFT_WET", file_path="A1.sysml")
+        >>> print(instance.id)
+    """
+    conn = _get_default_connection()
+    
+    # Validate params: exactly one of file_path or model_hash required
+    if file_path and model_hash:
+        raise ValueError("Provide either file_path or model_hash, not both")
+    
+    if not file_path and not model_hash:
+        raise ValueError("Must provide either file_path or model_hash")
+    
+    if file_path:
+        model = conn.load(file_path)
+        model_hash = model.hash
+    
+    return conn.instantiate(symbol_id, model_hash)
