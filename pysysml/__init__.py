@@ -7,11 +7,11 @@ from pysysml.model import Model
 from pysysml.symbol import Symbol
 from pysysml.diagnostic import Diagnostic
 from pysysml.instance import Instance
-from pysysml.errors import RuntimeError
+from pysysml.errors import PySysMLError, ConnectionError, RuntimeError
 
 __all__ = [
     "Connection", "Model", "Symbol", "Diagnostic", "Instance",
-    "RuntimeError",
+    "PySysMLError", "ConnectionError", "RuntimeError",
     "load", "connect",
     "eval", "instantiate"
 ]

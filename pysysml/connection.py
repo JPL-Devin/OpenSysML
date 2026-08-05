@@ -10,6 +10,7 @@ from filelock import FileLock, Timeout
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
 from pysysml.binary import ensure_binary
+from pysysml.errors import ConnectionError
 
 
 def _get_lockfile_path():
@@ -295,10 +296,10 @@ class Connection:
         elif isinstance(py_value, str):
             return sysml_pb2.Value(string_value=py_value)
         elif py_value is None:
-            return sysml_pb2.Value(null=True)
+            return sysml_pb2.Value(null="")
         elif isinstance(py_value, list):
             elements = [self._python_to_value(v) for v in py_value]
-            return sysml_pb2.Value(sequence=sysml_pb2.Sequence(elements=elements))
+            return sysml_pb2.Value(sequence=sysml_pb2.ValueSequence(elements=elements))
         else:
             raise ValueError(f"Unsupported Python type: {type(py_value)}")
     
@@ -378,7 +379,7 @@ class Connection:
                 # Get binary path
                 binary_path = ensure_binary()
                 if not os.path.exists(binary_path):
-                    raise RuntimeError(f"Binary not found after download: {binary_path}")
+                    raise ConnectionError(f"Binary not found after download: {binary_path}")
                 
                 # Start service
                 process = subprocess.Popen(
@@ -419,10 +420,10 @@ class Connection:
                         self._process.kill()
                         self._process.wait()
                     self._process = None
-                raise RuntimeError(f"Service failed to start within {max_retries * retry_delay}s")
+                raise ConnectionError(f"Service failed to start within {max_retries * retry_delay}s")
                 
         except Timeout:
-            raise RuntimeError(
+            raise ConnectionError(
                 f"Timeout acquiring service lockfile after 30s. "
                 f"Another process may be starting the service."
             )

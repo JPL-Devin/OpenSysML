@@ -6,6 +6,7 @@ import platform
 import stat
 import urllib.error
 import urllib.request
+from pysysml.errors import ConnectionError
 
 
 def detect_platform():
@@ -24,7 +25,7 @@ def detect_platform():
     elif system == 'windows':
         os_name = 'windows'
     else:
-        raise RuntimeError(f"Unsupported operating system: {system}")
+        raise ConnectionError(f"Unsupported operating system: {system}")
     
     # Map Python machine architecture to Go GOARCH
     machine = platform.machine().lower()
@@ -33,7 +34,7 @@ def detect_platform():
     elif machine in ('aarch64', 'arm64'):
         arch = 'arm64'
     else:
-        raise RuntimeError(f"Unsupported architecture: {machine}")
+        raise ConnectionError(f"Unsupported architecture: {machine}")
     
     return os_name, arch
 
@@ -103,7 +104,7 @@ def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
         # Verify checksum
         if not verify_checksum(temp_path, expected_checksum):
             os.remove(temp_path)
-            raise RuntimeError(
+            raise ConnectionError(
                 f"Checksum mismatch for {binary_name}. "
                 f"Expected {expected_checksum}, but download does not match. "
                 f"Binary may be corrupted or tampered with."
@@ -118,7 +119,7 @@ def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
         return binary_path
         
     except urllib.error.URLError as e:
-        raise RuntimeError(f"Failed to download binary from {binary_url}: {e}")
+        raise ConnectionError(f"Failed to download binary from {binary_url}: {e}")
 
 
 def verify_checksum(binary_path, expected_sha256):
