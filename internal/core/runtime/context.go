@@ -18,6 +18,10 @@ type Context struct {
 	maxSteps  int64
 	instances map[int64]*Instance
 	features  map[*symbols.Symbol][]EffectiveFeature
+
+	// actionDepth is the number of action invocations currently on the stack,
+	// bounding recursion across nested action executors.
+	actionDepth int
 }
 
 // NewContext creates a runtime context backed by the given semantic model.

@@ -844,6 +844,20 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 	return nil
 }
 
+// invokeNested performs an action from a state's entry/exit/effect behavior,
+// passing state data in through the callee's input parameters and merging its
+// output parameters back into state data.
+func (e *StateExecutor) invokeNested(inv actionInvocation) error {
+	outputs, err := invokeAction(e.ctx, e.stateMachine.Scope, inv, e.stateData)
+	if err != nil {
+		return err
+	}
+	for name, value := range outputs {
+		e.stateData[name] = value
+	}
+	return nil
+}
+
 // executeAction executes a single action (used for entry/exit/effect actions).
 func (e *StateExecutor) executeAction(action ast.Node) error {
 	switch node := action.(type) {
@@ -859,9 +873,18 @@ func (e *StateExecutor) executeAction(action ast.Node) error {
 			// Store result in state data with action name
 			e.stateData[node.Name] = result
 		} else if node.ActionRef != nil {
-			return fmt.Errorf("nested action invocation not yet implemented")
+			return e.invokeNested(actionInvocation{target: node.ActionRef})
 		}
 		return nil
+
+	case *ast.Usage:
+		// An entry/exit/effect action that performs another action:
+		// perform X; / action a : X; / action a = X(...);
+		inv, ok := nestedInvocation(node)
+		if !ok {
+			return fmt.Errorf("state action %s performs no action", node.Ident.Name)
+		}
+		return e.invokeNested(inv)
 
 	case *ast.AssignmentActionNode:
 		// Handle assignment (e.g., counter = counter + 1)

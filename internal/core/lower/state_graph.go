@@ -74,12 +74,7 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 		case *ast.Usage:
 			// Handle state usages: state declarations parsed as Usage with Kind=UsageState
 			if n.Kind == ast.UsageState {
-				// Create a StateNode from the usage
-				stateNode := &ast.StateNode{
-					Name: n.Ident.Name,
-				}
-				stateNode.NodeSpan = n.NodeSpan
-				collectStates(graph, stateNode, nil)
+				collectStates(graph, stateNodeFromUsage(n), nil)
 			}
 		case *ast.SubstateMember:
 			// Substate declarations: state <name>;
@@ -211,6 +206,26 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 	// Top-level regions are also valid (no single initial state).
 
 	return graph, nil
+}
+
+// stateNodeFromUsage builds the state node for `state <name> { ... }`, carrying
+// over the entry/do/exit behaviors declared in the body so the executor runs
+// them; without this the body's behaviors are silently dropped.
+func stateNodeFromUsage(usage *ast.Usage) *ast.StateNode {
+	state := &ast.StateNode{Name: usage.Ident.Name}
+	state.NodeSpan = usage.NodeSpan
+
+	for _, member := range usage.Members {
+		switch m := unwrapMembership(member).(type) {
+		case *ast.EntryMember:
+			state.Entry = append(state.Entry, m.Actions...)
+		case *ast.DoMember:
+			state.Do = append(state.Do, m.Actions...)
+		case *ast.ExitMember:
+			state.Exit = append(state.Exit, m.Actions...)
+		}
+	}
+	return state
 }
 
 // collectStates recursively collects states and builds parent relationships.
