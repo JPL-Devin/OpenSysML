@@ -206,7 +206,7 @@ jobs:
                 -c "${CIRCLE_SHA1}" \
                 -delete \
                 "${VERSION}" \
-                dist/
+                dist/*.tar.gz
 
 workflows:
   version: 2
