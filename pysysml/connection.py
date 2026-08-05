@@ -3,6 +3,7 @@
 import atexit
 import grpc
 import os
+import psutil
 import subprocess
 import time
 from filelock import FileLock, Timeout
@@ -16,6 +17,51 @@ def _get_lockfile_path():
     pysysml_dir = os.path.expanduser('~/.pysysml')
     os.makedirs(pysysml_dir, exist_ok=True)
     return os.path.join(pysysml_dir, 'sysml-grpc.lock')
+
+
+def _get_pidfile_path():
+    """Get path to service PID file."""
+    pysysml_dir = os.path.expanduser('~/.pysysml')
+    return os.path.join(pysysml_dir, 'sysml-grpc.pid')
+
+
+def _get_refcount_path():
+    """Get path to service reference count file."""
+    pysysml_dir = os.path.expanduser('~/.pysysml')
+    return os.path.join(pysysml_dir, 'sysml-grpc.refcount')
+
+
+def _increment_refcount():
+    """Increment service reference count. Caller must hold lockfile."""
+    refcount_path = _get_refcount_path()
+    if os.path.exists(refcount_path):
+        with open(refcount_path, 'r') as f:
+            count = int(f.read().strip())
+    else:
+        count = 0
+    
+    count += 1
+    with open(refcount_path, 'w') as f:
+        f.write(str(count))
+    return count
+
+
+def _decrement_refcount():
+    """Decrement service reference count. Caller must hold lockfile."""
+    refcount_path = _get_refcount_path()
+    if not os.path.exists(refcount_path):
+        return 0
+    
+    with open(refcount_path, 'r') as f:
+        count = int(f.read().strip())
+    
+    count = max(0, count - 1)
+    if count > 0:
+        with open(refcount_path, 'w') as f:
+            f.write(str(count))
+    else:
+        os.remove(refcount_path)
+    return count
 
 
 class Connection:
@@ -40,6 +86,7 @@ class Connection:
         self.port = port
         self._address = f"{host}:{port}"
         self._process = None
+        self._cleaned_up = False
         
         # Auto-start service if requested
         if auto_start:
@@ -49,9 +96,10 @@ class Connection:
         self._stub = sysml_pb2_grpc.SysMLServiceStub(self._channel)
     
     def close(self):
-        """Close the gRPC channel."""
+        """Close the gRPC channel and decrement refcount."""
         if self._channel:
             self._channel.close()
+        self._cleanup_service()
     
     def __enter__(self):
         """Context manager entry."""
@@ -147,6 +195,9 @@ class Connection:
             with lock:
                 # Check if service already running (another process may have started it)
                 if self._probe_service(self.host, self.port):
+                    # Service running - increment refcount and return
+                    _increment_refcount()
+                    atexit.register(self._cleanup_service)
                     return
                 
                 # Get binary path
@@ -171,12 +222,28 @@ class Connection:
                 for attempt in range(max_retries):
                     time.sleep(retry_delay)
                     if self._probe_service(self.host, self.port, timeout=2.0):
+                        # Write PID file for reference counting
+                        pidfile_path = _get_pidfile_path()
+                        with open(pidfile_path, 'w') as f:
+                            f.write(f"{process.pid}\n")
+                        
+                        # Increment refcount
+                        _increment_refcount()
+                        
                         # Register cleanup
                         atexit.register(self._cleanup_service)
                         return
                 
                 # Service didn't start in time
-                self._cleanup_service()
+                # Cleanup without decrementing refcount (service never became healthy)
+                if self._process:
+                    self._process.terminate()
+                    try:
+                        self._process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        self._process.kill()
+                        self._process.wait()
+                    self._process = None
                 raise RuntimeError(f"Service failed to start within {max_retries * retry_delay}s")
                 
         except Timeout:
@@ -186,12 +253,54 @@ class Connection:
             )
     
     def _cleanup_service(self):
-        """Terminate subprocess if it was started by this Connection."""
+        """Clean up service process with reference counting."""
+        if self._cleaned_up:
+            return
+        self._cleaned_up = True
+        
+        lockfile_path = _get_lockfile_path()
+        lock = FileLock(lockfile_path, timeout=5)
+        
+        with lock:
+            new_count = _decrement_refcount()
+            
+            if new_count == 0:
+                # Last connection - shut down service
+                pidfile_path = _get_pidfile_path()
+                
+                if os.path.exists(pidfile_path):
+                    with open(pidfile_path, 'r') as f:
+                        pid = int(f.read().strip())
+                    
+                    process = None
+                    try:
+                        process = psutil.Process(pid)
+                        
+                        # Verify this is our process before terminating
+                        cmdline = process.cmdline()
+                        if not any('sysml-grpc' in arg for arg in cmdline):
+                            # Stale PID file - process is not sysml-grpc
+                            os.remove(pidfile_path)
+                            return
+                        
+                        # Safe to terminate
+                        process.terminate()
+                        process.wait(timeout=5)
+                    except psutil.AccessDenied:
+                        # Can't access process - clean up file
+                        os.remove(pidfile_path)
+                        return
+                    except (psutil.NoSuchProcess, psutil.TimeoutExpired) as e:
+                        if process and isinstance(e, psutil.TimeoutExpired):
+                            try:
+                                if process.is_running():
+                                    process.kill()
+                            except psutil.NoSuchProcess:
+                                pass
+                    
+                    # Clean up PID file
+                    os.remove(pidfile_path)
+        
+        # Clean up instance state
         if self._process:
-            self._process.terminate()
-            try:
-                self._process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._process.kill()
-                self._process.wait()
             self._process = None

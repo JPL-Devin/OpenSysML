@@ -300,17 +300,22 @@ def test_ensure_service_timeout():
 
 
 def test_cleanup_service():
-    """Test _cleanup_service terminates subprocess."""
+    """Test _cleanup_service decrements refcount."""
     with patch('grpc.insecure_channel'):
         with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             conn = Connection(auto_start=False)
             
-            mock_process = Mock()
-            conn._process = mock_process
-            
-            conn._cleanup_service()
-            
-            mock_process.terminate.assert_called_once()
+            # Mock refcount file
+            with patch('pysysml.connection._decrement_refcount') as mock_decr:
+                mock_decr.return_value = 1  # Not last connection
+                
+                conn._cleanup_service()
+                
+                # Should decrement refcount
+                mock_decr.assert_called_once()
+                
+                # Instance state should be cleared
+                assert conn._process is None
 
 
 def test_auto_start_enabled():

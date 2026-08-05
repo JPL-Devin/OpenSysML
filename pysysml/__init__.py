@@ -31,6 +31,9 @@ def _get_default_connection(host='localhost', port=50051):
     
     # Create new connection if params changed or no connection exists
     if _default_connection is None or _default_connection_params != params:
+        # Close old connection to avoid refcount leak
+        if _default_connection is not None:
+            _default_connection.close()
         _default_connection = Connection(host, port, auto_start=True)
         _default_connection_params = params
     

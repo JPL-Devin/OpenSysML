@@ -11,6 +11,7 @@ setup(
         "grpcio>=1.83.0",
         "protobuf>=7.35.1",
         "filelock>=3.0.0",
+        "psutil>=5.9.0",
     ],
     extras_require={
         "dev": [
