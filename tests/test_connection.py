@@ -242,29 +242,30 @@ def test_ensure_service_starts_when_needed():
         with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             # Patch ensure_binary at module level before creating Connection
             with patch('pysysml.connection.ensure_binary', return_value='/path/to/sysml-grpc'):
-                conn = Connection(auto_start=False)
-                
-                # Mock _probe_service: False initially, then True after start
-                probe_results = [False, True]
-                with patch.object(conn, '_probe_service', side_effect=probe_results):
-                    with patch('subprocess.Popen') as mock_popen:
-                        mock_process = Mock()
-                        mock_popen.return_value = mock_process
-                        
-                        with patch('atexit.register') as mock_atexit:
-                            conn._ensure_service()
+                with patch('os.path.exists', return_value=True):  # Mock binary exists
+                    conn = Connection(auto_start=False)
+                    
+                    # Mock _probe_service: False initially, then True after start
+                    probe_results = [False, True]
+                    with patch.object(conn, '_probe_service', side_effect=probe_results):
+                        with patch('subprocess.Popen') as mock_popen:
+                            mock_process = Mock()
+                            mock_popen.return_value = mock_process
                             
-                            # Should start subprocess
-                            mock_popen.assert_called_once()
-                            args = mock_popen.call_args
-                            assert args[0][0] == ['/path/to/sysml-grpc', '-port', '50051']
-                            assert args[1]['start_new_session'] is True
-                            
-                            # Should register cleanup
-                            mock_atexit.assert_called_once()
-                            
-                            # Should store process
-                            assert conn._process == mock_process
+                            with patch('atexit.register') as mock_atexit:
+                                conn._ensure_service()
+                                
+                                # Should start subprocess
+                                mock_popen.assert_called_once()
+                                args = mock_popen.call_args
+                                assert args[0][0] == ['/path/to/sysml-grpc', '-port', '50051']
+                                assert args[1]['start_new_session'] is True
+                                
+                                # Should register cleanup
+                                mock_atexit.assert_called_once()
+                                
+                                # Should store process
+                                assert conn._process == mock_process
 
 
 def test_ensure_service_timeout():
@@ -273,17 +274,18 @@ def test_ensure_service_timeout():
         with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             # Patch ensure_binary at module level before creating Connection
             with patch('pysysml.connection.ensure_binary', return_value='/path/to/sysml-grpc'):
-                conn = Connection(auto_start=False)
-                
-                # Mock _probe_service: always returns False (never starts)
-                with patch.object(conn, '_probe_service', return_value=False):
-                    with patch('subprocess.Popen'):
-                        with patch('time.sleep'):  # Speed up test
-                            try:
-                                conn._ensure_service()
-                                assert False, "Expected RuntimeError"
-                            except RuntimeError as e:
-                                assert "Failed to start" in str(e)
+                with patch('os.path.exists', return_value=True):  # Mock binary exists
+                    conn = Connection(auto_start=False)
+                    
+                    # Mock _probe_service: always returns False (never starts)
+                    with patch.object(conn, '_probe_service', return_value=False):
+                        with patch('subprocess.Popen'):
+                            with patch('time.sleep'):  # Speed up test
+                                try:
+                                    conn._ensure_service()
+                                    assert False, "Expected RuntimeError"
+                                except RuntimeError as e:
+                                    assert "Failed to start" in str(e)
 
 
 def test_cleanup_service():
