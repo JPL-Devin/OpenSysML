@@ -188,7 +188,19 @@ jobs:
             fi
             echo "Publishing release $VERSION"
             ls -la dist/
-            ghr -t "${GITHUB_TOKEN}" \
+            
+            # Debug: Check available token variables
+            echo "Checking for GitHub tokens..."
+            env | grep -i "github\|circle" | grep -i token || echo "No tokens found in env"
+            
+            # Try different token variable names
+            TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-${CIRCLE_TOKEN}}}"
+            if [ -z "$TOKEN" ]; then
+              echo "Error: No GitHub token found. Tried GITHUB_TOKEN, GH_TOKEN, CIRCLE_TOKEN"
+              exit 1
+            fi
+            
+            ghr -t "${TOKEN}" \
                 -u "${CIRCLE_PROJECT_USERNAME}" \
                 -r "${CIRCLE_PROJECT_REPONAME}" \
                 -c "${CIRCLE_SHA1}" \
