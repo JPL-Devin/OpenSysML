@@ -257,3 +257,47 @@ package JunctionTest {
 - UML 2.5.1 §14.2.3.4.3 (Choice Pseudostates)
 - UML 2.5.1 §14.2.3.4.4 (Junction Pseudostates)
 - SysML v2 Pilot Implementation (state machine examples)
+
+## Fork and Join
+
+Fork and join are declared like choice and junction:
+
+```sysml
+state Machine {
+    initial init;
+    state idle;
+    state running {
+        region left  { initial ls; state working;  then ls working; }
+        region right { initial rs; state watching; then rs watching; }
+    }
+    fork split;
+    join sync;
+    final done;
+
+    init then idle;
+    transition idle to split;
+    transition split to working;    // one branch per region
+    transition split to watching;
+    transition working to sync;
+    transition watching to sync;
+    transition sync to done;
+}
+```
+
+**Fork** (`fireForkTransition`): every outgoing branch is taken at once. Branches
+must be unguarded and must target states in distinct orthogonal regions of one
+composite state; that composite state is entered and each region's active state
+becomes its branch target instead of the region's initial state.
+
+**Join** (`fireJoinTransition`): the transition only proceeds once the source
+state of every incoming branch is active. A branch that arrives early leaves its
+source state active and waits, so the join synchronizes the regions before the
+composite state is exited.
+
+**Entry/exit points** (`ast.PseudostateEntry`, `ast.PseudostateExit`) are routed
+like a junction — the transition continues along the point's own outgoing
+transition — but there is no textual notation for them, so they can only be built
+programmatically.
+
+**History** pseudostates are not implemented: there is no `PseudostateKind` for
+them, so a notation and a stored prior configuration would both be needed.

@@ -75,39 +75,37 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 	rootScope := idx.DocumentRoot(sysmlPath)
 
 	// Try action execution
-	if actionSym := findBehavioralSymbol(t, rootScope, ast.DefAction, ast.UsageAction); actionSym != nil {
+	if actionSym := lookupBehavioralSymbol(rootScope, ast.DefAction, ast.UsageAction); actionSym != nil {
 		exec, err := ctx.CreateActionExecutor(actionSym)
 		if err != nil {
 			t.Fatalf("create action executor: %v", err)
 		}
 		exec.SetTrace(trace)
 
-		outputs, err := ctx.ExecuteAction(actionSym)
-		if err != nil {
+		// Drive the traced executor itself: ctx.ExecuteAction would build a
+		// second, untraced one and leave the recorder empty.
+		if err := exec.RunToCompletion(); err != nil {
 			t.Logf("action execution error (may be expected): %v", err)
 		}
-		_ = outputs
 		traceOutput = trace.String()
 	}
 
 	// Try state execution
-	if stateSym := findBehavioralSymbol(t, rootScope, ast.DefState, ast.UsageState); stateSym != nil {
+	if stateSym := lookupBehavioralSymbol(rootScope, ast.DefState, ast.UsageState); stateSym != nil {
 		exec, err := ctx.CreateStateExecutor(stateSym)
 		if err != nil {
 			t.Fatalf("create state executor: %v", err)
 		}
 		exec.SetTrace(trace)
 
-		outputs, err := ctx.ExecuteState(stateSym)
-		if err != nil {
+		if err := exec.RunToCompletion(); err != nil {
 			t.Logf("state execution error (may be expected): %v", err)
 		}
-		_ = outputs
 		traceOutput = trace.String()
 	}
 
 	// Try calc execution
-	if calcSym := findBehavioralSymbol(t, rootScope, ast.DefCalc, ast.UsageCalc); calcSym != nil {
+	if calcSym := lookupBehavioralSymbol(rootScope, ast.DefCalc, ast.UsageCalc); calcSym != nil {
 		// Calc execution doesn't use executors, no trace support yet
 		t.Skip("calc tracing not yet implemented")
 	}

@@ -18,6 +18,10 @@ type Context struct {
 	maxSteps  int64
 	instances map[int64]*Instance
 	features  map[*symbols.Symbol][]EffectiveFeature
+
+	// actionDepth is the number of action invocations currently on the stack,
+	// bounding recursion across nested action executors.
+	actionDepth int
 }
 
 // NewContext creates a runtime context backed by the given semantic model.
@@ -401,28 +405,8 @@ func (ctx *Context) ExecuteStateWithEvents(stateMachine *symbols.Symbol, events 
 		exec.SendSignal(event, nil)
 	}
 
-	// Process events until completion or suspension
-	const maxEvents = 10000
-	eventCount := 0
-
-	for exec.state == StateRunning {
-		// Check for pending events
-		if exec.eventQueue.Len() == 0 {
-			exec.state = StateSuspended
-			break
-		}
-
-		// Check step limit
-		if eventCount >= maxEvents {
-			return nil, nil, fmt.Errorf("state machine exceeded max events (%d), possible infinite loop", maxEvents)
-		}
-
-		// Process next event
-		if err := exec.processNextEvent(); err != nil {
-			return nil, nil, fmt.Errorf("process event: %w", err)
-		}
-
-		eventCount++
+	if err := exec.RunToCompletion(); err != nil {
+		return nil, nil, err
 	}
 
 	// Return state machine data and the real ordered visit trace
