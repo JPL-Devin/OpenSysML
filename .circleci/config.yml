@@ -211,19 +211,23 @@ jobs:
 workflows:
   version: 2
   
-  # Build and test on every commit
+  # Build and test on every commit (but not tags)
   build-test:
     jobs:
       - build-and-test:
           filters:
             branches:
               only: /.*/
+            tags:
+              ignore: /.*/
       - python-test:
           requires:
             - build-and-test
           filters:
             branches:
               only: /.*/
+            tags:
+              ignore: /.*/
   
   # Build and release on tags
   release:
