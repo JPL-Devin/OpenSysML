@@ -164,3 +164,19 @@ def test_connection_get_symbol_not_found():
             
             # Should return None when error is set
             assert pb_result is None
+
+
+def test_connection_context_manager():
+    """Test that context manager returns self and calls close() on exit."""
+    with patch('grpc.insecure_channel') as mock_channel:
+        mock_chan_instance = Mock()
+        mock_channel.return_value = mock_chan_instance
+        
+        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+            with Connection() as conn:
+                # __enter__ should return self
+                assert conn is not None
+                assert isinstance(conn, Connection)
+            
+            # __exit__ should have called close() which closes the channel
+            mock_chan_instance.close.assert_called_once()
