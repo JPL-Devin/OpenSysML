@@ -10,6 +10,13 @@ func init() {
 	}
 }
 
+// IsKeyword reports whether s is a KerML or SysML keyword, and so cannot be
+// used where a plain identifier is expected.
+func IsKeyword(s string) bool {
+	_, ok := keywords[s]
+	return ok
+}
+
 var keywordList = []string{
 	// KerML + SysML union (deduplicated). Contextual keywords included;
 	// parser disambiguates identifier usage.

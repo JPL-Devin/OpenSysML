@@ -249,7 +249,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 			// Try scope-based lookup first (for live-parsed definitions)
 			if parentSym.Scope != nil {
 				if sym, ok := parentSym.Scope.LookupLocal(featureName); ok {
-					qn.Parts[0].Sym = sym
+					r.recordPart(qn, 0, sym)
 					return
 				}
 			} else {
@@ -258,7 +258,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 				if r.idx != nil {
 					candidates := r.idx.LookupQualified(fqn)
 					if len(candidates) == 1 {
-						qn.Parts[0].Sym = candidates[0]
+						r.recordPart(qn, 0, candidates[0])
 						return
 					} else if len(candidates) > 1 {
 					} else {
@@ -331,7 +331,7 @@ func (r *Resolver) searchInheritedFeature(parentSym *symbols.Symbol, featureName
 		}
 
 		if sym, ok := gp.Scope.LookupLocal(featureName); ok {
-			qn.Parts[0].Sym = sym
+			r.recordPart(qn, 0, sym)
 			return true
 		}
 
@@ -372,7 +372,7 @@ func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featur
 		if r.idx != nil {
 			candidates := r.idx.LookupQualified(fqn)
 			if len(candidates) == 1 {
-				qn.Parts[0].Sym = candidates[0]
+				r.recordPart(qn, 0, candidates[0])
 				return true
 			}
 		}
@@ -553,7 +553,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 		})
 		return
 	}
-	qn.Parts[0].Sym = cur
+	r.recordPart(qn, 0, cur)
 
 	// Walk remaining parts via member lookup
 	for i := 1; i < len(qn.Parts); i++ {
@@ -589,7 +589,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 			return
 		}
 
-		qn.Parts[i].Sym = next
+		r.recordPart(qn, i, next)
 		cur = next
 	}
 
