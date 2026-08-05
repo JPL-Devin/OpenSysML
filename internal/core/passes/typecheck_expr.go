@@ -114,9 +114,13 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 	case *ast.LiteralString:
 		return semantics.PrimString
 	case *ast.LiteralInteger:
-		return semantics.PrimInteger
+		// The grammar has no negative literals (negation is a unary operator),
+		// so an integer literal is always a Natural and conforms upward.
+		return semantics.PrimNatural
 	case *ast.LiteralReal:
-		return semantics.PrimReal
+		// A decimal literal denotes an exact ratio, so it conforms to Rational
+		// as well as Real.
+		return semantics.PrimRational
 	case *ast.FeatureReference:
 		return ec.inferQualified(scope, e.Name)
 	case *ast.QualifiedName:
@@ -196,6 +200,10 @@ func (ec *exprChecker) checkUnaryNumeric(scope *symbols.Scope, e *ast.OperatorEx
 	if !got.IsNumeric() {
 		ec.errorf(e.Span(), "operator '%s' requires a numeric operand, found %s", e.Operator, got)
 		return semantics.PrimUnknown
+	}
+	if e.Operator == ast.OpNeg {
+		// Negation leaves the naturals.
+		return semantics.PrimWiden(got, semantics.PrimInteger)
 	}
 	return got
 }
@@ -280,7 +288,11 @@ func (ec *exprChecker) checkEquality(scope *symbols.Scope, e *ast.OperatorExpr) 
 		return semantics.PrimBoolean
 	}
 	if !semantics.PrimConforms(lhs, rhs) && !semantics.PrimConforms(rhs, lhs) {
-		ec.warnf(e.Span(), "comparing %s with %s is always false", lhs, rhs)
+		result := "false"
+		if e.Operator == ast.OpNeq {
+			result = "true"
+		}
+		ec.warnf(e.Span(), "comparing %s with %s is always %s", lhs, rhs, result)
 	}
 	return semantics.PrimBoolean
 }
@@ -306,9 +318,14 @@ func (ec *exprChecker) operands(scope *symbols.Scope, e *ast.OperatorExpr) (sema
 }
 
 // inferInvocation checks the argument list of a calc/action invocation against
-// the invoked behavior's `in` parameters.
+// the invoked behavior's `in` parameters. In the arrow form `x->f(a)` the
+// receiver binds to the first parameter, so it is prepended to the arguments.
 func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationExpr) semantics.PrimType {
-	for _, arg := range e.Args {
+	args := e.Args
+	if e.Operand != nil {
+		args = append([]ast.Node{e.Operand}, args...)
+	}
+	for _, arg := range args {
 		ec.infer(scope, arg)
 	}
 	for _, arg := range e.NamedArgs {
@@ -321,15 +338,15 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	if !ok || sym == nil || !isBehaviorKind(sym.Kind) {
 		return semantics.PrimUnknown
 	}
-	params := inParameters(sym)
-	if params == nil {
+	params, owner, ok := ec.inParameters(sym)
+	if !ok {
 		return semantics.PrimUnknown
 	}
-	ec.checkArguments(scope, e, sym, params)
+	ec.checkArguments(scope, e, sym, owner, args, params)
 	return semantics.PrimUnknown
 }
 
-func (ec *exprChecker) checkArguments(scope *symbols.Scope, e *ast.InvocationExpr, sym *symbols.Symbol, params []*ast.Usage) {
+func (ec *exprChecker) checkArguments(scope *symbols.Scope, e *ast.InvocationExpr, sym, owner *symbols.Symbol, args []ast.Node, params []*ast.Usage) {
 	if len(e.NamedArgs) > 0 {
 		names := make(map[string]bool, len(params))
 		for _, p := range params {
@@ -352,18 +369,20 @@ func (ec *exprChecker) checkArguments(scope *symbols.Scope, e *ast.InvocationExp
 		}
 	}
 	switch {
-	case len(e.Args) > len(params):
-		ec.errorf(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(e.Args))
+	case len(args) > len(params):
+		ec.errorf(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args))
 		return
-	case len(e.Args) < required:
-		ec.errorf(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(e.Args))
+	case len(args) < required:
+		ec.errorf(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
 		return
 	}
-	calleeScope := sym.Scope
+	// Parameter types are named in the scope of the behavior that declares
+	// them, which is not the invoking one.
+	calleeScope := owner.Scope
 	if calleeScope == nil {
-		calleeScope = sym.OwnerScope
+		calleeScope = owner.OwnerScope
 	}
-	for i, arg := range e.Args {
+	for i, arg := range args {
 		want := ec.declaredPrimType(calleeScope, params[i].Relationships)
 		got := ec.infer(scope, arg)
 		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
@@ -385,8 +404,31 @@ func isBehaviorKind(k symbols.SymbolKind) bool {
 	return false
 }
 
-// inParameters returns the declared `in` parameters of a calc/action, in order.
-func inParameters(sym *symbols.Symbol) []*ast.Usage {
+// inParameters returns the `in` parameters a calc/action is invoked with, in
+// declaration order. A behavior that declares none inherits its signature from
+// the type it specializes or is typed by, so the nearest supertype that does
+// declare parameters supplies them. It also returns the symbol that declares
+// them, whose scope their type names resolve in. ok is false when no signature
+// can be determined, in which case the invocation is left unchecked.
+func (ec *exprChecker) inParameters(sym *symbols.Symbol) ([]*ast.Usage, *symbols.Symbol, bool) {
+	if params := declaredInParameters(sym); len(params) > 0 {
+		return params, sym, true
+	}
+	supers := ec.model.AllSupertypes(sym)
+	for _, super := range supers {
+		if params := declaredInParameters(super); len(params) > 0 {
+			return params, super, true
+		}
+	}
+	// A parameterless declaration with no supertypes really takes no
+	// arguments; with supertypes the signature may live somewhere the checker
+	// cannot see, so stay silent.
+	return nil, sym, len(supers) == 0 && sym.Decl != nil
+}
+
+// declaredInParameters returns the `in`/`inout` features declared directly by a
+// symbol's def/usage declaration.
+func declaredInParameters(sym *symbols.Symbol) []*ast.Usage {
 	var members []ast.Node
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
@@ -396,7 +438,7 @@ func inParameters(sym *symbols.Symbol) []*ast.Usage {
 	default:
 		return nil
 	}
-	params := []*ast.Usage{}
+	var params []*ast.Usage
 	for _, m := range members {
 		u, ok := unwrapType(m).(*ast.Usage)
 		if !ok {

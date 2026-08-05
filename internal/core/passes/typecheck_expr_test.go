@@ -55,7 +55,7 @@ func TestExprBindStringToIntegerAttribute(t *testing.T) {
 func TestExprBindRealToIntegerAttribute(t *testing.T) {
 	wantOneDiag(t,
 		`package P { attribute x : ScalarValues::Integer = 5.5; }`,
-		"cannot bind Real value to a feature typed by Integer")
+		"cannot bind Rational value to a feature typed by Integer")
 }
 
 func TestExprBindIntegerToRealAttributeOK(t *testing.T) {
@@ -86,7 +86,7 @@ func TestExprUntypedFeatureBindingSkipped(t *testing.T) {
 func TestExprAddIntegerAndStringRejected(t *testing.T) {
 	wantOneDiag(t,
 		`package P { calc def c { return 1 + "s"; } }`,
-		"operator '+' is not defined for Integer and String")
+		"operator '+' is not defined for Natural and String")
 }
 
 func TestExprStringConcatenationOK(t *testing.T) {
@@ -131,6 +131,16 @@ func TestExprEqualityAcrossDisjointTypesWarns(t *testing.T) {
 	}
 }
 
+func TestExprInequalityAcrossDisjointTypesWarnsAlwaysTrue(t *testing.T) {
+	diags := exprDiags(t, `package P { calc def c { return 1 != "a"; } }`)
+	if len(diags) != 1 {
+		t.Fatalf("expected exactly one type diagnostic, got %v", diags)
+	}
+	if !strings.Contains(diags[0].Message, "always true") {
+		t.Fatalf("expected an always-true warning, got %q", diags[0].Message)
+	}
+}
+
 func TestExprNumericEqualityOK(t *testing.T) {
 	wantNoDiags(t, `package P { calc def c { return 1 == 2.0; } }`)
 }
@@ -138,7 +148,7 @@ func TestExprNumericEqualityOK(t *testing.T) {
 func TestExprConstraintMustBeBoolean(t *testing.T) {
 	wantOneDiag(t,
 		`package P { constraint def c { 1 + 2 } }`,
-		"constraint expression must be Boolean, found Integer")
+		"constraint expression must be Boolean, found Natural")
 }
 
 func TestExprBooleanConstraintOK(t *testing.T) {
@@ -219,6 +229,52 @@ func TestExprInvocationUnknownNamedArgument(t *testing.T) {
 
 func TestExprInvocationNamedArgumentsOK(t *testing.T) {
 	wantNoDiags(t, `package P { `+calcAdd+` calc c { return add(a = 1, b = 2); } }`)
+}
+
+func TestExprLiteralConformsToNatural(t *testing.T) {
+	wantNoDiags(t, `package P {
+		attribute n : ScalarValues::Natural = 3;
+		attribute r : ScalarValues::Rational = 1.5;
+	}`)
+}
+
+func TestExprNegatedLiteralIsNotNatural(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute n : ScalarValues::Natural = -3; }`,
+		"cannot bind Integer value to a feature typed by Natural")
+}
+
+func TestExprArrowFormReceiverCountsAsFirstArgument(t *testing.T) {
+	wantNoDiags(t, `package P { `+calcAdd+` calc c { return 1->add(2); } }`)
+}
+
+func TestExprArrowFormArityStillChecked(t *testing.T) {
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { return 1->add(2, 3); } }`,
+		"add takes 2 argument(s), found 3")
+}
+
+func TestExprInheritedParametersCounted(t *testing.T) {
+	wantNoDiags(t, `package P {
+		`+calcAdd+`
+		calc def Add2 :> add;
+		calc c { return Add2(1, 2); }
+	}`)
+}
+
+func TestExprTypedCalcUsageInheritsParameters(t *testing.T) {
+	wantNoDiags(t, `package P {
+		`+calcAdd+`
+		calc myAdd : add;
+		calc c { return myAdd(1, 2); }
+	}`)
+}
+
+func TestExprParameterlessCalcRejectsArguments(t *testing.T) {
+	wantOneDiag(t, `package P {
+		calc def zero { return 0; }
+		calc c { return zero(1); }
+	}`, "zero takes 0 argument(s), found 1")
 }
 
 func TestExprUnresolvedNameProducesNoTypeDiagnostic(t *testing.T) {
