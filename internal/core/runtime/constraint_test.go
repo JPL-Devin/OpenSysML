@@ -19,21 +19,21 @@ func TestConstraintEvaluation_Assert(t *testing.T) {
 			}
 		}
 	`
-	
+
 	// Parse
 	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
-	
+
 	// Build symbol index
 	idx := symbols.NewIndex()
 	idx.AddDocument("test.sysml", file)
-	
+
 	// Create resolver and semantic model
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	
+
 	// Create runtime context
 	ctx := NewContext(model, resolver, 10000)
-	
+
 	// Resolve constraint
 	rootScope := idx.DocumentRoot("test.sysml")
 	testPkg := rootScope.Children()[0]
@@ -41,14 +41,14 @@ func TestConstraintEvaluation_Assert(t *testing.T) {
 	if !ok {
 		t.Fatal("PositiveValue constraint not found")
 	}
-	
+
 	// Note: This test will fail because 'value' is unbound
 	// In real usage, constraints are evaluated with bindings
 	_, err := ctx.EvaluateConstraint(constraintSym, testPkg)
 	if err == nil {
 		t.Fatal("Expected error for unbound 'value'")
 	}
-	
+
 	if !strings.Contains(err.Error(), "unresolved feature") {
 		t.Logf("✓ Got expected error: %v", err)
 	}
@@ -66,31 +66,31 @@ func TestConstraintEvaluation_AssertWithLiteral(t *testing.T) {
 			}
 		}
 	`
-	
+
 	// Parse
 	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
-	
+
 	// Build symbol index
 	idx := symbols.NewIndex()
 	idx.AddDocument("test.sysml", file)
-	
+
 	// Create resolver and semantic model
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	
+
 	// Create runtime context
 	ctx := NewContext(model, resolver, 10000)
-	
+
 	// Resolve constraints
 	rootScope := idx.DocumentRoot("test.sysml")
 	testPkg := rootScope.Children()[0]
-	
+
 	// Test AlwaysTrue
 	alwaysTrue, ok := testPkg.LookupLocal("AlwaysTrue")
 	if !ok {
 		t.Fatal("AlwaysTrue not found")
 	}
-	
+
 	satisfied, err := ctx.EvaluateConstraint(alwaysTrue, testPkg)
 	if err != nil {
 		t.Fatalf("AlwaysTrue evaluation failed: %v", err)
@@ -99,13 +99,13 @@ func TestConstraintEvaluation_AssertWithLiteral(t *testing.T) {
 		t.Fatal("AlwaysTrue should be satisfied")
 	}
 	t.Logf("✓ AlwaysTrue: assertion passed")
-	
+
 	// Test AlwaysFalse
 	alwaysFalse, ok := testPkg.LookupLocal("AlwaysFalse")
 	if !ok {
 		t.Fatal("AlwaysFalse not found")
 	}
-	
+
 	satisfied, err = ctx.EvaluateConstraint(alwaysFalse, testPkg)
 	if err == nil {
 		t.Fatal("AlwaysFalse should fail")
@@ -124,21 +124,21 @@ func TestConstraintEvaluation_Assume(t *testing.T) {
 			}
 		}
 	`
-	
+
 	// Parse
 	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
-	
+
 	// Build symbol index
 	idx := symbols.NewIndex()
 	idx.AddDocument("test.sysml", file)
-	
+
 	// Create resolver and semantic model
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	
+
 	// Create runtime context
 	ctx := NewContext(model, resolver, 10000)
-	
+
 	// Resolve constraint
 	rootScope := idx.DocumentRoot("test.sysml")
 	testPkg := rootScope.Children()[0]
@@ -146,7 +146,7 @@ func TestConstraintEvaluation_Assume(t *testing.T) {
 	if !ok {
 		t.Fatal("WithAssumption not found")
 	}
-	
+
 	// Evaluate - should pass even though assumption is false
 	satisfied, err := ctx.EvaluateConstraint(constraintSym, testPkg)
 	if err != nil {
@@ -166,21 +166,21 @@ func TestConstraintEvaluation_Negation(t *testing.T) {
 			}
 		}
 	`
-	
+
 	// Parse
 	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
-	
+
 	// Build symbol index
 	idx := symbols.NewIndex()
 	idx.AddDocument("test.sysml", file)
-	
+
 	// Create resolver and semantic model
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	
+
 	// Create runtime context
 	ctx := NewContext(model, resolver, 10000)
-	
+
 	// Resolve constraint
 	rootScope := idx.DocumentRoot("test.sysml")
 	testPkg := rootScope.Children()[0]
@@ -188,7 +188,7 @@ func TestConstraintEvaluation_Negation(t *testing.T) {
 	if !ok {
 		t.Fatal("NotNegative not found")
 	}
-	
+
 	// Evaluate - assert not (3 < 0) → assert not false → assert true → pass
 	satisfied, err := ctx.EvaluateConstraint(constraintSym, testPkg)
 	if err != nil {

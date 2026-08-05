@@ -1,0 +1,323 @@
+package grpc
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	pb "github.com/Open-MBEE/Systemica/api/proto"
+)
+
+// TestParseFile_ValidSyntax verifies ParseFile on well-formed input
+func TestParseFile_ValidSyntax(t *testing.T) {
+	srv := NewService(10) // Cache size 10
+
+	content := `
+package Vehicle {
+  part def Engine;
+  part def VehicleDef;
+  part vehicle : VehicleDef;
+}
+`
+
+	req := &pb.ParseFileRequest{
+		Source:      &pb.ParseFileRequest_Content{Content: content},
+		ContentHash: "test-hash-1",
+	}
+
+	resp, err := srv.ParseFile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+
+	if resp.ModelHash == "" {
+		t.Error("expected non-empty model_hash")
+	}
+
+	if resp.Root == nil {
+		t.Fatal("expected Root to be populated")
+	}
+
+	if len(resp.Diagnostics) != 0 {
+		t.Errorf("expected no diagnostics, got %d", len(resp.Diagnostics))
+	}
+
+	if resp.Error != "" {
+		t.Errorf("expected no error, got: %s", resp.Error)
+	}
+}
+
+// TestParseFile_SyntaxErrors verifies ParseFile handles malformed input gracefully
+func TestParseFile_SyntaxErrors(t *testing.T) {
+	srv := NewService(10)
+
+	content := `
+package Vehicle {
+  part def Engine  // Missing semicolon
+  invalid syntax here @#$
+}
+`
+
+	req := &pb.ParseFileRequest{
+		Source:      &pb.ParseFileRequest_Content{Content: content},
+		ContentHash: "test-hash-error",
+	}
+
+	resp, err := srv.ParseFile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("ParseFile should not return gRPC error, got: %v", err)
+	}
+
+	if resp.ModelHash == "" {
+		t.Error("expected model_hash even with syntax errors")
+	}
+
+	if len(resp.Diagnostics) == 0 {
+		t.Error("expected diagnostics for syntax errors")
+	}
+
+	// Verify diagnostic structure
+	for _, diag := range resp.Diagnostics {
+		if diag.Severity == "" {
+			t.Error("diagnostic missing severity")
+		}
+		if diag.Message == "" {
+			t.Error("diagnostic missing message")
+		}
+		if diag.Span == nil {
+			t.Error("diagnostic missing span")
+		}
+	}
+}
+
+// TestParseFile_FileNotFound verifies ParseFile returns error when file doesn't exist
+func TestParseFile_FileNotFound(t *testing.T) {
+	srv := NewService(10)
+
+	req := &pb.ParseFileRequest{
+		Source:      &pb.ParseFileRequest_FilePath{FilePath: "/nonexistent/file.sysml"},
+		ContentHash: "test-hash-notfound",
+	}
+
+	resp, err := srv.ParseFile(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected gRPC error for missing file")
+	}
+
+	if resp != nil {
+		t.Error("expected nil response on file error")
+	}
+}
+
+// TestParseFile_CacheHit verifies cache reuses parsed models
+func TestParseFile_CacheHit(t *testing.T) {
+	srv := NewService(10)
+
+	content := `package Test { part def A; }`
+	req := &pb.ParseFileRequest{
+		Source:      &pb.ParseFileRequest_Content{Content: content},
+		ContentHash: "cache-test-hash",
+	}
+
+	// First call - cache miss
+	resp1, err := srv.ParseFile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("first ParseFile failed: %v", err)
+	}
+
+	// Second call - cache hit
+	resp2, err := srv.ParseFile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("second ParseFile failed: %v", err)
+	}
+
+	if resp1.ModelHash != resp2.ModelHash {
+		t.Error("expected same model_hash on cache hit")
+	}
+}
+
+// TestGetSymbol_Found verifies GetSymbol retrieves known symbols
+func TestGetSymbol_Found(t *testing.T) {
+	srv := NewService(10)
+
+	// First parse a model
+	content := `
+package Vehicle {
+  part def Engine;
+}
+`
+	parseReq := &pb.ParseFileRequest{
+		Source:      &pb.ParseFileRequest_Content{Content: content},
+		ContentHash: "symbol-test-hash",
+	}
+
+	parseResp, err := srv.ParseFile(context.Background(), parseReq)
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+
+	// Query for the Engine symbol
+	symReq := &pb.GetSymbolRequest{
+		ModelHash: parseResp.ModelHash,
+		SymbolId:  "Vehicle::Engine",
+	}
+
+	symResp, err := srv.GetSymbol(context.Background(), symReq)
+	if err != nil {
+		t.Fatalf("GetSymbol failed: %v", err)
+	}
+
+	if symResp.Error != "" {
+		t.Errorf("expected no error, got: %s", symResp.Error)
+	}
+
+	if symResp.Symbol == nil {
+		t.Fatal("expected symbol to be populated")
+	}
+
+	// Symbol kind from symbols.Kind.String() - check it's a definition
+	if symResp.Symbol.Kind != "partDef" {
+		t.Errorf("expected partDef, got: %s", symResp.Symbol.Kind)
+	}
+}
+
+// TestGetSymbol_NotFound verifies GetSymbol handles missing symbols
+func TestGetSymbol_NotFound(t *testing.T) {
+	srv := NewService(10)
+
+	// Parse a model
+	content := `package Vehicle { part def Engine; }`
+	parseReq := &pb.ParseFileRequest{
+		Source:      &pb.ParseFileRequest_Content{Content: content},
+		ContentHash: "symbol-notfound-hash",
+	}
+
+	parseResp, err := srv.ParseFile(context.Background(), parseReq)
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+
+	// Query for non-existent symbol
+	symReq := &pb.GetSymbolRequest{
+		ModelHash: parseResp.ModelHash,
+		SymbolId:  "NonExistent::Symbol",
+	}
+
+	symResp, err := srv.GetSymbol(context.Background(), symReq)
+	if err != nil {
+		t.Fatalf("GetSymbol should not return gRPC error, got: %v", err)
+	}
+
+	if symResp.Error == "" {
+		t.Error("expected error field to be populated for missing symbol")
+	}
+
+	if symResp.Symbol != nil {
+		t.Error("expected symbol to be nil when not found")
+	}
+}
+
+// TestGetSymbol_InvalidModelHash verifies GetSymbol fails on unknown model hash
+func TestGetSymbol_InvalidModelHash(t *testing.T) {
+	srv := NewService(10)
+
+	req := &pb.GetSymbolRequest{
+		ModelHash: "invalid-hash-not-in-cache",
+		SymbolId:  "SomeSymbol",
+	}
+
+	resp, err := srv.GetSymbol(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected gRPC error for invalid model hash")
+	}
+
+	if resp != nil {
+		t.Error("expected nil response on model not found")
+	}
+}
+
+// TestGetDiagnostics verifies diagnostics retrieval
+func TestGetDiagnostics(t *testing.T) {
+	srv := NewService(10)
+
+	// Parse model with errors
+	content := `package Bad { invalid }`
+	parseReq := &pb.ParseFileRequest{
+		Source:      &pb.ParseFileRequest_Content{Content: content},
+		ContentHash: "diag-test-hash",
+	}
+
+	parseResp, err := srv.ParseFile(context.Background(), parseReq)
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+
+	// Get diagnostics
+	diagReq := &pb.DiagnosticsRequest{
+		ModelHash: parseResp.ModelHash,
+	}
+
+	diagResp, err := srv.GetDiagnostics(context.Background(), diagReq)
+	if err != nil {
+		t.Fatalf("GetDiagnostics failed: %v", err)
+	}
+
+	if diagResp.Error != "" {
+		t.Errorf("expected no error, got: %s", diagResp.Error)
+	}
+
+	if len(diagResp.Diagnostics) == 0 {
+		t.Error("expected diagnostics to be populated")
+	}
+}
+
+// TestGetDiagnostics_InvalidModelHash verifies error on unknown model
+func TestGetDiagnostics_InvalidModelHash(t *testing.T) {
+	srv := NewService(10)
+
+	req := &pb.DiagnosticsRequest{
+		ModelHash: "unknown-hash",
+	}
+
+	resp, err := srv.GetDiagnostics(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected gRPC error for invalid model hash")
+	}
+
+	if resp != nil {
+		t.Error("expected nil response")
+	}
+}
+
+// TestParseFile_FromFile verifies ParseFile can read from filesystem
+func TestParseFile_FromFile(t *testing.T) {
+	srv := NewService(10)
+
+	// Create temp file
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.sysml")
+	content := `package FromFile { part def TestPart; }`
+
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	req := &pb.ParseFileRequest{
+		Source:      &pb.ParseFileRequest_FilePath{FilePath: testFile},
+		ContentHash: "file-test-hash",
+	}
+
+	resp, err := srv.ParseFile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("ParseFile from file failed: %v", err)
+	}
+
+	if resp.ModelHash == "" {
+		t.Error("expected model_hash")
+	}
+
+	if len(resp.Diagnostics) != 0 {
+		t.Errorf("expected no diagnostics, got %d", len(resp.Diagnostics))
+	}
+}

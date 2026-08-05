@@ -12,9 +12,9 @@ import (
 
 // EvalContext is the lexical environment during evaluation (Tier 3).
 type EvalContext struct {
-	ctx    *Context             // runtime context
-	scope  *symbols.Scope       // scope context for name resolution
-	frames []map[string]Value   // stack of local bindings (innermost = frames[len-1])
+	ctx    *Context           // runtime context
+	scope  *symbols.Scope     // scope context for name resolution
+	frames []map[string]Value // stack of local bindings (innermost = frames[len-1])
 }
 
 // NewEvalContext creates an evaluation context with an empty frame stack.
@@ -55,7 +55,7 @@ func (ec *EvalContext) Eval(node ast.Node) (Value, error) {
 	if err := ec.ctx.incrementStep(); err != nil {
 		return Value{}, err
 	}
-	
+
 	// Dispatch by node type (scaffolding; full implementation in later tasks)
 	switch n := node.(type) {
 	case *ast.LiteralInteger:
@@ -142,7 +142,7 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 	if n.Name == nil || len(n.Name.Parts) == 0 {
 		return Value{}, fmt.Errorf("empty feature reference")
 	}
-	
+
 	// Simple case: single-part name lookup in frame stack or scope
 	if len(n.Name.Parts) == 1 {
 		name := n.Name.Parts[0].Text
@@ -160,12 +160,12 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		}
 		return Value{}, fmt.Errorf("unresolved feature: %s", name)
 	}
-	
+
 	// Multi-part qualified names: A::B::x
 	// Spec-compliant: Use model.LookupMember for member traversal.
 	// Use resolver logic for first part (handles scope, imports, global index),
 	// then walk remaining parts with model.LookupMember for inherited members.
-	
+
 	// Build single-segment qualified name for first part resolution via resolver
 	firstName := n.Name.Parts[0]
 	firstQN := &ast.QualifiedName{
@@ -173,13 +173,13 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		Parts:  []ast.NameSegment{firstName},
 	}
 	firstQN.NodeBase = n.Name.NodeBase
-	
+
 	// Resolve first part using resolver's qualified-name logic (handles global index)
 	currentSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, firstQN)
 	if !ok {
 		return Value{}, fmt.Errorf("unresolved first part of qualified name: %s", firstName.Text)
 	}
-	
+
 	// Walk remaining parts using model.LookupMember (spec requirement)
 	for i := 1; i < len(n.Name.Parts); i++ {
 		memberName := n.Name.Parts[i].Text
@@ -189,7 +189,7 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		}
 		currentSym = nextSym
 	}
-	
+
 	// Evaluate the final symbol's declaration
 	switch decl := currentSym.Decl.(type) {
 	case *ast.Usage:
@@ -205,7 +205,6 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 	}
 }
 
-
 // evalFeatureChain evaluates a feature chain expression (e.g., obj.member.submember).
 func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) {
 	// Evaluate the operand (left side of the chain)
@@ -213,23 +212,23 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 	if err != nil {
 		return Value{}, err
 	}
-	
+
 	// Feature chains only work on instances
 	if operand.Kind != ValInstance {
 		return Value{}, fmt.Errorf("feature chain requires instance, got %v", operand.Kind)
 	}
-	
+
 	// Get the instance
 	inst, ok := ec.ctx.instances[operand.Instance]
 	if !ok {
 		return Value{}, fmt.Errorf("instance ID %d not found", operand.Instance)
 	}
-	
+
 	// Walk the member chain
 	if n.Member == nil || len(n.Member.Parts) == 0 {
 		return Value{}, fmt.Errorf("empty member chain")
 	}
-	
+
 	// Navigate through the chain
 	currentInst := inst
 	for i, part := range n.Member.Parts {
@@ -238,30 +237,29 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 		if !ok {
 			return Value{}, fmt.Errorf("member %s not found in instance", memberName)
 		}
-		
+
 		// Get the slot's value
 		slotVal := slot.Value
-		
+
 		// If this is the last part, return the value
 		if i == len(n.Member.Parts)-1 {
 			return slotVal, nil
 		}
-		
+
 		// Otherwise, navigate to the next instance
 		if slotVal.Kind != ValInstance {
 			return Value{}, fmt.Errorf("cannot chain through non-instance member %s", memberName)
 		}
-		
+
 		nextInst, ok := ec.ctx.instances[slotVal.Instance]
 		if !ok {
 			return Value{}, fmt.Errorf("instance ID %d not found for member %s", slotVal.Instance, memberName)
 		}
 		currentInst = nextInst
 	}
-	
+
 	return Value{}, fmt.Errorf("unexpected: fell through feature chain evaluation")
 }
-
 
 // evalOperator evaluates an operator expression.
 func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
@@ -355,7 +353,7 @@ func (ec *EvalContext) evalEquality(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 2 {
 		return Value{}, fmt.Errorf("equality requires 2 operands, got %d", len(n.Operands))
 	}
-	
+
 	left, err := ec.Eval(n.Operands[0])
 	if err != nil {
 		return Value{}, err
@@ -364,14 +362,14 @@ func (ec *EvalContext) evalEquality(n *ast.OperatorExpr) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	
+
 	equal := valueEqual(left, right)
-	
+
 	// Handle != operator
 	if n.Operator == ast.OpNeq {
 		equal = !equal
 	}
-	
+
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: equal}}, nil
 }
 
@@ -380,22 +378,22 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 2 {
 		return Value{}, fmt.Errorf("comparison requires 2 operands, got %d", len(n.Operands))
 	}
-	
+
 	left, err := ec.Eval(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
-	
+
 	right, err := ec.Eval(n.Operands[1])
 	if err != nil {
 		return Value{}, err
 	}
-	
+
 	// Both must be ValConst
 	if left.Kind != ValConst || right.Kind != ValConst {
 		return Value{}, fmt.Errorf("comparison operands must be constants")
 	}
-	
+
 	// Compare integers
 	if left.Const.Kind == semantics.ValInt && right.Const.Kind == semantics.ValInt {
 		var result bool
@@ -413,7 +411,7 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 		}
 		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: result}}, nil
 	}
-	
+
 	// Compare reals (coerce int to real)
 	leftReal := toReal(left.Const)
 	rightReal := toReal(right.Const)
@@ -438,7 +436,7 @@ func (ec *EvalContext) evalLogical(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 2 {
 		return Value{}, fmt.Errorf("logical operator requires 2 operands, got %d", len(n.Operands))
 	}
-	
+
 	// Evaluate left operand
 	left, err := ec.Eval(n.Operands[0])
 	if err != nil {
@@ -447,17 +445,17 @@ func (ec *EvalContext) evalLogical(n *ast.OperatorExpr) (Value, error) {
 	if left.Kind != ValConst || left.Const.Kind != semantics.ValBool {
 		return Value{}, fmt.Errorf("logical operator requires bool operands, got %v", left.Kind)
 	}
-	
+
 	// Short-circuit for &&: if left is false, return false
 	if n.Operator == ast.OpAnd && !left.Const.Bool {
 		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: false}}, nil
 	}
-	
+
 	// Short-circuit for ||: if left is true, return true
 	if n.Operator == ast.OpOr && left.Const.Bool {
 		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: true}}, nil
 	}
-	
+
 	// Evaluate right operand
 	right, err := ec.Eval(n.Operands[1])
 	if err != nil {
@@ -466,7 +464,7 @@ func (ec *EvalContext) evalLogical(n *ast.OperatorExpr) (Value, error) {
 	if right.Kind != ValConst || right.Const.Kind != semantics.ValBool {
 		return Value{}, fmt.Errorf("logical operator requires bool operands, got %v", right.Kind)
 	}
-	
+
 	// Compute result
 	var result bool
 	switch n.Operator {
@@ -477,7 +475,7 @@ func (ec *EvalContext) evalLogical(n *ast.OperatorExpr) (Value, error) {
 	default:
 		return Value{}, fmt.Errorf("unsupported logical operator: %v", n.Operator)
 	}
-	
+
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: result}}, nil
 }
 
@@ -486,12 +484,12 @@ func (ec *EvalContext) evalNeg(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 1 {
 		return Value{}, fmt.Errorf("negation requires 1 operand, got %d", len(n.Operands))
 	}
-	
+
 	operand, err := ec.Eval(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
-	
+
 	switch n.Operator {
 	case ast.OpNot:
 		// Logical not: not bool
@@ -533,7 +531,7 @@ func (ec *EvalContext) evalCollectExpr(n *ast.CollectExpr) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	
+
 	var elements []Value
 	switch operand.Kind {
 	case ValSequence:
@@ -543,7 +541,7 @@ func (ec *EvalContext) evalCollectExpr(n *ast.CollectExpr) (Value, error) {
 	default:
 		return Value{}, fmt.Errorf("%w: collect operand must be collection", ErrTypeMismatch)
 	}
-	
+
 	result := NewSequence()
 	for _, elem := range elements {
 		// Push 'it' binding for body
@@ -555,7 +553,7 @@ func (ec *EvalContext) evalCollectExpr(n *ast.CollectExpr) (Value, error) {
 		}
 		result.Append(val)
 	}
-	
+
 	return Value{Kind: ValSequence, Sequence: result}, nil
 }
 
@@ -565,7 +563,7 @@ func (ec *EvalContext) evalSelectExpr(n *ast.SelectExpr) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	
+
 	var elements []Value
 	switch operand.Kind {
 	case ValSequence:
@@ -575,7 +573,7 @@ func (ec *EvalContext) evalSelectExpr(n *ast.SelectExpr) (Value, error) {
 	default:
 		return Value{}, fmt.Errorf("%w: select operand must be collection", ErrTypeMismatch)
 	}
-	
+
 	result := NewSequence()
 	for _, elem := range elements {
 		ec.Push(map[string]Value{"it": elem})
@@ -584,13 +582,13 @@ func (ec *EvalContext) evalSelectExpr(n *ast.SelectExpr) (Value, error) {
 		if err != nil {
 			return Value{}, err
 		}
-		
+
 		// Check if predicate is true (ValConst boolean)
 		if predVal.Kind == ValConst && predVal.Const.Kind == semantics.ValBool && predVal.Const.Bool {
 			result.Append(elem)
 		}
 	}
-	
+
 	return Value{Kind: ValSequence, Sequence: result}, nil
 }
 
@@ -598,7 +596,7 @@ func (ec *EvalContext) evalSelectExpr(n *ast.SelectExpr) (Value, error) {
 func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	// Build qualified name string for builtin lookup
 	qualName := qualifiedNameToString(n.Type)
-	
+
 	// Eval args
 	args := make([]Value, len(n.Args))
 	for i, arg := range n.Args {
@@ -608,27 +606,27 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 		}
 		args[i] = val
 	}
-	
+
 	// Check builtin registry
 	if fn, ok := builtins[qualName]; ok {
 		return fn(ec, args)
 	}
-	
+
 	// User-defined calc: resolve target symbol
 	// Use evaluation context scope (or fallback to root if nil)
 	calcSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.Type)
 	if !ok || calcSym == nil {
 		return Value{}, fmt.Errorf("unresolved calc: %s", qualName)
 	}
-	
+
 	// Ensure it's a calc definition or usage
 	calcDef, isCalcDef := calcSym.Decl.(*ast.Definition)
 	calcUsage, isCalcUsage := calcSym.Decl.(*ast.Usage)
-	
+
 	if !isCalcDef && !isCalcUsage {
 		return Value{}, fmt.Errorf("not a calc: %s (%T)", qualName, calcSym.Decl)
 	}
-	
+
 	var members []ast.Node
 	if isCalcDef && calcDef.Kind == ast.DefCalc {
 		members = calcDef.Members
@@ -637,50 +635,50 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	} else {
 		return Value{}, fmt.Errorf("symbol is not a calc: %s", qualName)
 	}
-	
+
 	// Extract parameters (usages with 'in' direction) and result members
 	params := []string{}
 	var resultExprs []ast.Node
-	
+
 	for _, member := range members {
 		// Unwrap Membership
 		var node ast.Node = member
 		if membership, ok := member.(*ast.Membership); ok {
 			node = membership.Member
 		}
-		
+
 		// Check for parameters (usages with 'in' direction and name)
 		if usage, ok := node.(*ast.Usage); ok {
 			if usage.Ident.Name != "" && (usage.Direction == ast.DirIn || usage.Direction == ast.DirInOut) {
 				params = append(params, usage.Ident.Name)
 			}
 		}
-		
+
 		// Check for ResultMember
 		if resultMember, ok := node.(*ast.ResultMember); ok {
 			resultExprs = append(resultExprs, resultMember.Expression)
 		}
 	}
-	
+
 	// Bind arguments to parameters
 	if len(args) != len(params) {
 		return Value{}, fmt.Errorf("calc %s: expected %d args, got %d", qualName, len(params), len(args))
 	}
-	
+
 	bindings := make(map[string]Value)
 	for i, paramName := range params {
 		bindings[paramName] = args[i]
 	}
-	
+
 	// Push new frame with parameter bindings
 	ec.Push(bindings)
 	defer ec.Pop()
-	
+
 	// Evaluate result expressions (return statements)
 	if len(resultExprs) == 0 {
 		return Value{}, fmt.Errorf("calc %s has no return statement", qualName)
 	}
-	
+
 	// Evaluate the first return expression
 	// (In SysML v2, calcs typically have one return; multiple would need aggregation)
 	return ec.Eval(resultExprs[0])
@@ -758,4 +756,3 @@ func setEqual(a, b *Set) bool {
 	}
 	return true
 }
-

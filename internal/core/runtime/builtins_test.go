@@ -12,15 +12,15 @@ func TestBuiltin_SequenceSize(t *testing.T) {
 	seq := NewSequence()
 	seq.Append(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}})
 	seq.Append(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 2}})
-	
+
 	args := []Value{{Kind: ValSequence, Sequence: seq}}
-	
+
 	fn := builtins["SequenceFunctions::size"]
 	result, err := fn(nil, args)
 	if err != nil {
 		t.Fatalf("size failed: %v", err)
 	}
-	
+
 	if result.Const.Int != 2 {
 		t.Errorf("expected size 2, got %d", result.Const.Int)
 	}
@@ -75,7 +75,7 @@ func TestBuiltin_ControlSelect(t *testing.T) {
 			[]int64{20, 30},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		model, resolver, root := parseAndBuildModel(t, tt.src)
 		ctx := NewContext(model, resolver, 1000)
@@ -85,16 +85,16 @@ func TestBuiltin_ControlSelect(t *testing.T) {
 		if err != nil {
 			t.Fatalf("eval failed for %s: %v", tt.src, err)
 		}
-		
+
 		if result.Kind != ValSequence {
 			t.Fatalf("expected sequence, got %v", result.Kind)
 		}
-		
+
 		elements := result.Sequence.Elements()
 		if len(elements) != len(tt.expected) {
 			t.Fatalf("expected %d elements, got %d: %+v", len(tt.expected), len(elements), elements)
 		}
-		
+
 		for i, expectedInt := range tt.expected {
 			elem := elements[i]
 			if elem.Kind != ValConst || elem.Const.Kind != semantics.ValInt || elem.Const.Int != expectedInt {
@@ -122,7 +122,7 @@ func TestBuiltin_ControlCollect(t *testing.T) {
 			[]int64{},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		model, resolver, root := parseAndBuildModel(t, tt.src)
 		ctx := NewContext(model, resolver, 1000)
@@ -132,16 +132,16 @@ func TestBuiltin_ControlCollect(t *testing.T) {
 		if err != nil {
 			t.Fatalf("eval failed for %s: %v", tt.src, err)
 		}
-		
+
 		if result.Kind != ValSequence {
 			t.Fatalf("expected sequence, got %v", result.Kind)
 		}
-		
+
 		elements := result.Sequence.Elements()
 		if len(elements) != len(tt.expected) {
 			t.Fatalf("expected %d elements, got %d: %+v", len(tt.expected), len(elements), elements)
 		}
-		
+
 		for i, expectedInt := range tt.expected {
 			elem := elements[i]
 			if elem.Kind != ValConst || elem.Const.Kind != semantics.ValInt || elem.Const.Int != expectedInt {

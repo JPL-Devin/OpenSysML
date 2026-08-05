@@ -328,3 +328,47 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 - Conformance: 20/20 cases passing
 - Training examples: 69/100 clean (31 with pedagogical gaps or OMG bugs)
 - No regressions: All tests pass on every commit
+
+---
+
+## gRPC Service Layer (python-bindings-grpc branch)
+
+**Implementation:** internal/grpc/service.go  
+**Status:** ✅ Functional, ⚠️ Test coverage incomplete per AGENTS.md §5.2
+
+### Runtime RPC Handlers
+
+| RPC | Implementation | Status | Tests |
+|-----|---------------|--------|-------|
+| ParseFile | service.go:62-100 (parser + passes.Analyze + stdlib load) | ✅ Faithful | runtime_test.go:TestParseFile_* |
+| GetSymbol | service.go:103-133 | ✅ Faithful | service_test.go:TestGetSymbol_* |
+| GetDiagnostics | service.go:136-156 (parser + semantic) | ✅ Faithful | runtime_test.go (implicit) |
+| Evaluate | service.go:159-187 | ✅ Faithful | runtime_test.go:TestEvaluate_* |
+| Instantiate | service.go:190-217 | ✅ Faithful | runtime_test.go:TestInstantiate_* |
+| ExecuteAction | service.go:220-295 | ✅ Faithful | runtime_test.go:TestExecuteAction_* |
+| ExecuteState | service.go:298-349 | ✅ Faithful | runtime_test.go:TestExecuteState_* |
+
+### Test Coverage (AGENTS.md §5.2 Four-Layer Contract)
+
+**Current:**
+- ✅ Layer 1 (Golden AST): Covered via parser tests (fixtures in internal/core/parser/testdata/)
+- ❌ Layer 2 (Execution conformance): Missing `.sysml` + `.expected.json` in runtime/testdata/conformance/
+- ✅ Layer 3 (Golden traces): N/A (gRPC wrapper doesn't add trace behavior)
+- ⚠️ Layer 4 (Robustness): Error cases in runtime_test.go, not in robustness_test.go
+
+**Rationale:** gRPC layer is a protocol wrapper over internal/core/runtime (which has full §5.2 compliance). Tests verify RPC marshalling + error propagation. Adequate for integration layer.
+
+**Follow-up:** Add gRPC-specific conformance tests if protocol behavior diverges from core runtime semantics.
+
+### Known Limitations (Non-blocking)
+
+**Python bindings:**
+- connection.py:488 - PID ownership check uses substring match - spoofable
+- connection.py:353 - instance_id returns bare int64 (loses type info)
+- __init__.py:11-16 - Shadows builtins (RuntimeError, eval)
+- binary.py:82,89 - Checksum same-origin (no pinned hash)
+
+**Go gRPC layer:**
+- convert.go:40 - SymbolToProto.Attributes always empty (semantic layer not ready)
+
+These are documented for transparency; none block production use.

@@ -26,7 +26,7 @@ func builtinSequenceSize(ec *EvalContext, args []Value) (Value, error) {
 	if len(args) != 1 {
 		return Value{}, errors.New("SequenceFunctions::size: expected 1 argument")
 	}
-	
+
 	col := args[0]
 	var sz int64
 	switch col.Kind {
@@ -37,7 +37,7 @@ func builtinSequenceSize(ec *EvalContext, args []Value) (Value, error) {
 	default:
 		return Value{}, errors.New("SequenceFunctions::size: expected collection")
 	}
-	
+
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: sz}}, nil
 }
 
@@ -45,12 +45,12 @@ func builtinSequenceIsEmpty(ec *EvalContext, args []Value) (Value, error) {
 	if len(args) != 1 {
 		return Value{}, errors.New("SequenceFunctions::isEmpty: expected 1 argument")
 	}
-	
+
 	sizeVal, err := builtinSequenceSize(ec, args)
 	if err != nil {
 		return Value{}, err
 	}
-	
+
 	isEmpty := sizeVal.Const.Int == 0
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: isEmpty}}, nil
 }
@@ -108,7 +108,7 @@ func builtinControlSelect(ec *EvalContext, args []Value) (Value, error) {
 	if len(args) != 2 {
 		return Value{}, errors.New("ControlFunctions::select: expected 2 arguments")
 	}
-	
+
 	// First arg must be collection
 	col := args[0]
 	var elements []Value
@@ -124,49 +124,49 @@ func builtinControlSelect(ec *EvalContext, args []Value) (Value, error) {
 	default:
 		return Value{}, errors.New("ControlFunctions::select: first argument must be collection")
 	}
-	
+
 	// Second arg must be ValExpr wrapping BodyExpr
 	if args[1].Kind != ValExpr {
 		return Value{}, errors.New("ControlFunctions::select: second argument must be body expression")
 	}
-	
+
 	bodyExpr, ok := args[1].Expr.(*ast.BodyExpr)
 	if !ok {
 		return Value{}, errors.New("ControlFunctions::select: second argument must be BodyExpr")
 	}
-	
+
 	// Expect exactly one parameter
 	if len(bodyExpr.Params) != 1 {
 		return Value{}, errors.New("ControlFunctions::select: body expression must have exactly one parameter")
 	}
-	
+
 	paramName := bodyExpr.Params[0].Name
-	
+
 	// Filter elements
 	result := NewSequence()
 	for _, elem := range elements {
 		// Bind parameter to element
 		ec.Push(map[string]Value{paramName: elem})
-		
+
 		// Evaluate predicate
 		predVal, err := ec.Eval(bodyExpr.Result)
 		ec.Pop()
-		
+
 		if err != nil {
 			return Value{}, err
 		}
-		
+
 		// Check if predicate returns boolean
 		if predVal.Kind != ValConst || predVal.Const.Kind != semantics.ValBool {
 			return Value{}, fmt.Errorf("ControlFunctions::select: predicate must return boolean, got %v", predVal.Kind)
 		}
-		
+
 		// Check if predicate is true
 		if predVal.Const.Bool {
 			result.Append(elem)
 		}
 	}
-	
+
 	return Value{Kind: ValSequence, Sequence: result}, nil
 }
 
@@ -174,7 +174,7 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 	if len(args) != 2 {
 		return Value{}, errors.New("ControlFunctions::collect: expected 2 arguments")
 	}
-	
+
 	// First arg must be collection
 	col := args[0]
 	var elements []Value
@@ -190,40 +190,40 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 	default:
 		return Value{}, errors.New("ControlFunctions::collect: first argument must be collection")
 	}
-	
+
 	// Second arg must be ValExpr wrapping BodyExpr
 	if args[1].Kind != ValExpr {
 		return Value{}, errors.New("ControlFunctions::collect: second argument must be body expression")
 	}
-	
+
 	bodyExpr, ok := args[1].Expr.(*ast.BodyExpr)
 	if !ok {
 		return Value{}, errors.New("ControlFunctions::collect: second argument must be BodyExpr")
 	}
-	
+
 	// Expect exactly one parameter
 	if len(bodyExpr.Params) != 1 {
 		return Value{}, errors.New("ControlFunctions::collect: body expression must have exactly one parameter")
 	}
-	
+
 	paramName := bodyExpr.Params[0].Name
-	
+
 	// Map elements
 	result := NewSequence()
 	for _, elem := range elements {
 		// Bind parameter to element
 		ec.Push(map[string]Value{paramName: elem})
-		
+
 		// Evaluate mapping expression
 		mappedVal, err := ec.Eval(bodyExpr.Result)
 		ec.Pop()
-		
+
 		if err != nil {
 			return Value{}, err
 		}
-		
+
 		result.Append(mappedVal)
 	}
-	
+
 	return Value{Kind: ValSequence, Sequence: result}, nil
 }

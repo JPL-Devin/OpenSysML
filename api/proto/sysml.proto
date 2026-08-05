@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package sysml;
+
+option go_package = "github.com/Open-MBEE/Systemica/api/proto";
+
+// SysMLService provides programmatic access to Systemica's parser and runtime
+service SysMLService {
+  // Parse a SysML file and return model hash for subsequent queries
+  rpc ParseFile(ParseFileRequest) returns (ParseFileResponse);
+  
+  // Get symbol information by qualified name
+  rpc GetSymbol(GetSymbolRequest) returns (SymbolResponse);
+  
+  // Get all diagnostics for a parsed model
+  rpc GetDiagnostics(DiagnosticsRequest) returns (DiagnosticsResponse);
+  
+  // Runtime operations (Phase 4)
+  rpc Evaluate(EvaluateRequest) returns (EvaluateResponse);
+  rpc Instantiate(InstantiateRequest) returns (InstantiateResponse);
+  rpc ExecuteAction(ExecuteActionRequest) returns (ExecuteActionResponse);
+  rpc ExecuteState(ExecuteStateRequest) returns (ExecuteStateResponse);
+}
+
+// ParseFileRequest specifies the source to parse
+message ParseFileRequest {
+  oneof source {
+    string file_path = 1;
+    string content = 2;
+  }
+  string content_hash = 3;  // sha256 for cache lookup
+}
+
+// ParseFileResponse contains parsed model info
+message ParseFileResponse {
+  string model_hash = 1;     // Cache key for subsequent requests
+  SymbolInfo root = 2;       // Root namespace
+  repeated Diagnostic diagnostics = 3;
+  string error = 4;          // Critical failure message if any
+}
+
+// GetSymbolRequest queries for a specific symbol
+message GetSymbolRequest {
+  string model_hash = 1;
+  string symbol_id = 2;  // Fully qualified name
+}
+
+// SymbolResponse contains symbol information
+message SymbolResponse {
+  SymbolInfo symbol = 1;
+  string error = 2;
+}
+
+// DiagnosticsRequest gets all diagnostics for a model
+message DiagnosticsRequest {
+  string model_hash = 1;
+}
+
+// DiagnosticsResponse contains diagnostic list
+message DiagnosticsResponse {
+  repeated Diagnostic diagnostics = 1;
+  string error = 2;
+}
+
+// EvaluateRequest requests evaluation of a SysML expression
+message EvaluateRequest {
+  string model_hash = 1;        // from ParseFile response
+  string expression = 2;         // SysML expression string (e.g., "2 + 2")
+  string context_symbol_id = 3; // optional: symbol FQN for context scope
+}
+
+// EvaluateResponse contains evaluation result
+message EvaluateResponse {
+  Value result = 1;
+  string error = 2;              // non-empty if evaluation failed
+  repeated Diagnostic diagnostics = 3;
+}
+
+// Instance represents a runtime instance of a part/usage
+message Instance {
+  int64 id = 1;
+  string type_symbol_id = 2;     // FQN of the def/usage
+  map<string, SlotValue> slots = 3;
+}
+
+// SlotValue represents a feature slot value
+message SlotValue {
+  string feature_name = 1;
+  Value value = 2;               // for scalar slots
+  repeated Value values = 3;     // for collection slots
+  bool materialized = 4;
+}
+
+// InstantiateRequest requests instantiation of a part/usage
+message InstantiateRequest {
+  string model_hash = 1;
+  string symbol_id = 2;          // FQN of part/usage to instantiate
+}
+
+// InstantiateResponse contains the created instance
+message InstantiateResponse {
+  Instance instance = 1;
+  string error = 2;
+  repeated Diagnostic diagnostics = 3;
+}
+
+// ExecuteActionRequest requests action execution
+message ExecuteActionRequest {
+  string model_hash = 1;
+  string action_symbol_id = 2;   // FQN of action def
+  map<string, Value> inputs = 3; // parameter name → value
+}
+
+// ExecuteActionResponse contains action execution results
+message ExecuteActionResponse {
+  map<string, Value> outputs = 1; // output parameter name → value
+  string error = 2;
+  repeated Diagnostic diagnostics = 3;
+}
+
+// ExecuteStateRequest requests state machine execution
+message ExecuteStateRequest {
+  string model_hash = 1;
+  string state_machine_symbol_id = 2;
+  repeated string events = 3;    // sequence of event names to process
+}
+
+// ExecuteStateResponse contains state machine execution trace
+message ExecuteStateResponse {
+  repeated string states_visited = 1; // trace of state names
+  map<string, Value> final_context = 2;
+  string error = 3;
+  repeated Diagnostic diagnostics = 4;
+}
+
+// SymbolInfo represents any SysML element
+message SymbolInfo {
+  string id = 1;             // Unique identifier (fully qualified name)
+  string name = 2;
+  string kind = 3;           // "PartDefinition", "AttributeUsage", etc
+  map<string, string> metadata = 4;  // multiplicity, type, etc
+  repeated string child_ids = 5;     // References to children
+  repeated AttributeInfo attributes = 6;
+}
+
+// AttributeInfo represents an attribute with its value
+message AttributeInfo {
+  string name = 1;
+  string type = 2;
+  Value value = 3;
+  string unit = 4;
+}
+
+// Value represents a runtime-evaluable value
+message Value {
+  oneof kind {
+    int64 int_value = 1;
+    double real_value = 2;
+    bool bool_value = 3;
+    string string_value = 4;
+    int64 instance_id = 5;      // reference to Instance
+    ValueSequence sequence = 6;
+    string null = 7;            // marker for null (empty string)
+  }
+}
+
+message ValueSequence {
+  repeated Value elements = 1;
+}
+
+// Diagnostic represents a parse/semantic error or warning
+message Diagnostic {
+  string severity = 1;  // "error", "warning", "info"
+  string message = 2;
+  Span span = 3;
+}
+
+// Span represents a source location
+message Span {
+  string file = 1;
+  int32 start_line = 2;
+  int32 start_col = 3;
+  int32 end_line = 4;
+  int32 end_col = 5;
+}

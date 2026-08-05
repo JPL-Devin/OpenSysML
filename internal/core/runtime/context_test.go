@@ -14,10 +14,10 @@ func TestContextIDAllocation(t *testing.T) {
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	ctx := NewContext(model, resolver, 100000)
-	
+
 	id1 := ctx.allocateID()
 	id2 := ctx.allocateID()
-	
+
 	if id1 == id2 {
 		t.Error("expected unique IDs, got duplicates")
 	}
@@ -31,13 +31,13 @@ func TestContextStepCounter(t *testing.T) {
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	ctx := NewContext(model, resolver, 10)
-	
+
 	for i := 0; i < 10; i++ {
 		if err := ctx.incrementStep(); err != nil {
 			t.Fatalf("step %d failed: %v", i, err)
 		}
 	}
-	
+
 	// 11th step should error
 	if err := ctx.incrementStep(); err == nil {
 		t.Error("expected step limit error, got nil")
@@ -49,7 +49,7 @@ func TestContext_ExecuteAction(t *testing.T) {
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	ctx := NewContext(model, resolver, 100000)
-	
+
 	// Create simple action: initial → action(x=42) → final
 	initial := &ast.InitialNode{Name: "start"}
 	actionNode := &ast.ActionExecutionNode{
@@ -59,7 +59,7 @@ func TestContext_ExecuteAction(t *testing.T) {
 		},
 	}
 	final := &ast.FinalNode{Name: "end"}
-	
+
 	edge1 := &ast.SuccessionEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "start"}}},
 		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "compute"}}},
@@ -68,7 +68,7 @@ func TestContext_ExecuteAction(t *testing.T) {
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "compute"}}},
 		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
 	}
-	
+
 	actionSym := &symbols.Symbol{
 		Name: "TestAction",
 		Kind: symbols.SymbolActionUsage,
@@ -78,19 +78,19 @@ func TestContext_ExecuteAction(t *testing.T) {
 			Members: []ast.Node{initial, actionNode, final, edge1, edge2},
 		},
 	}
-	
+
 	// Execute
 	result, err := ctx.ExecuteAction(actionSym)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	
+
 	// Verify result contains action output
 	val, ok := result["result"]
 	if !ok {
 		t.Fatal("expected 'result' key in output")
 	}
-	
+
 	if val.Kind != ValConst {
 		t.Errorf("expected ValConst, got %v", val.Kind)
 	}
@@ -107,14 +107,14 @@ func TestContext_ExecuteAction_InvalidSymbol(t *testing.T) {
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	ctx := NewContext(model, resolver, 100000)
-	
+
 	// Pass non-action symbol
 	notAction := &symbols.Symbol{
 		Name: "NotAction",
 		Kind: symbols.SymbolPartUsage,
 		Decl: &ast.Usage{Kind: ast.UsagePart},
 	}
-	
+
 	_, err := ctx.ExecuteAction(notAction)
 	if err == nil {
 		t.Error("expected error for non-action symbol, got nil")
@@ -126,7 +126,7 @@ func TestContext_ExecuteState(t *testing.T) {
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	ctx := NewContext(model, resolver, 100000)
-	
+
 	// Create simple state machine: idle →[after 5]→ done (final)
 	idle := &ast.StateNode{
 		Name:      "idle",
@@ -136,7 +136,7 @@ func TestContext_ExecuteState(t *testing.T) {
 		Name:    "done",
 		IsFinal: true,
 	}
-	
+
 	trans := &ast.TransitionEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "idle"}}},
 		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
@@ -144,7 +144,7 @@ func TestContext_ExecuteState(t *testing.T) {
 			Duration: &ast.LiteralReal{Value: "5.0"},
 		},
 	}
-	
+
 	stateMachineSym := &symbols.Symbol{
 		Name: "TestStateMachine",
 		Kind: symbols.SymbolStateUsage,
@@ -154,13 +154,13 @@ func TestContext_ExecuteState(t *testing.T) {
 			Members: []ast.Node{idle, done, trans},
 		},
 	}
-	
+
 	// Execute
 	result, err := ctx.ExecuteState(stateMachineSym)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	
+
 	// Verify result is stateData map (may be empty for this simple machine)
 	if result == nil {
 		t.Error("expected non-nil result")
@@ -172,14 +172,14 @@ func TestContext_ExecuteState_InvalidSymbol(t *testing.T) {
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	ctx := NewContext(model, resolver, 100000)
-	
+
 	// Pass non-state symbol
 	notState := &symbols.Symbol{
 		Name: "NotState",
 		Kind: symbols.SymbolPartUsage,
 		Decl: &ast.Usage{Kind: ast.UsagePart},
 	}
-	
+
 	_, err := ctx.ExecuteState(notState)
 	if err == nil {
 		t.Error("expected error for non-state symbol, got nil")
@@ -193,7 +193,7 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	ctx := NewContext(model, resolver, 100000)
-	
+
 	// Create a simple action: compute = 10 + 20
 	initial := &ast.InitialNode{
 		Name: "initial",
@@ -219,7 +219,7 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "compute"}}},
 		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "final"}}},
 	}
-	
+
 	actionSym := &symbols.Symbol{
 		Name: "ComputeAction",
 		Kind: symbols.SymbolActionUsage,
@@ -229,13 +229,13 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 			Members: []ast.Node{initial, compute, final, edge1, edge2},
 		},
 	}
-	
+
 	// Execute action standalone first
 	actionResult, err := ctx.ExecuteAction(actionSym)
 	if err != nil {
 		t.Fatalf("action execution failed: %v", err)
 	}
-	
+
 	// Verify action result
 	resultVal, ok := actionResult["result"]
 	if !ok {
@@ -247,7 +247,7 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 	if resultVal.Const.Kind != semantics.ValInt || resultVal.Const.Int != 30 {
 		t.Errorf("expected result=30, got %v", resultVal.Const)
 	}
-	
+
 	// Create state machine with entry action
 	// State 'processing' executes the action on entry
 	processing := &ast.StateNode{
@@ -277,7 +277,7 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 			Duration: &ast.LiteralReal{Value: "1.0"},
 		},
 	}
-	
+
 	stateSym := &symbols.Symbol{
 		Name: "ProcessingStateMachine",
 		Kind: symbols.SymbolStateUsage,
@@ -287,13 +287,13 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 			Members: []ast.Node{processing, done, trans},
 		},
 	}
-	
+
 	// Execute state machine
 	stateResult, err := ctx.ExecuteState(stateSym)
 	if err != nil {
 		t.Fatalf("state machine execution failed: %v", err)
 	}
-	
+
 	// Verify entry action executed (stored in stateData)
 	entryVal, ok := stateResult["entryAction"]
 	if !ok {

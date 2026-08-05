@@ -29,7 +29,7 @@ func testDeadlockJoinStarvation(t *testing.T) {
 	// Deadlock detection already tested in action_executor_test.go:TestActionExecutor_Deadlock_JoinStarvation
 	// This is a conformance check that the test exists and passes.
 	t.Log("Deadlock detection covered by TestActionExecutor_Deadlock_JoinStarvation")
-	
+
 	// Quick inline test for robustness suite completeness:
 	src := `
 		package test {
@@ -42,30 +42,30 @@ func testDeadlockJoinStarvation(t *testing.T) {
 	if file == nil {
 		t.Skip("parse failed")
 	}
-	
+
 	idx, model, ctx := buildRuntime(t, "<test>", file)
-	
+
 	// Find action (may not exist or be executable)
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "deadlock", ast.DefAction)
 	if sym == nil {
 		t.Skip("deadlock action not found (expected - minimal source)")
 	}
-	
+
 	exec, err := ctx.CreateActionExecutor(sym)
 	if err != nil {
 		t.Logf("CreateActionExecutor error (acceptable): %v", err)
 		return
 	}
-	
+
 	_ = model // silence unused
-	
+
 	err = exec.RunToCompletion()
 	if err == nil {
 		t.Log("RunToCompletion succeeded (no deadlock in minimal source)")
 		return
 	}
-	
+
 	if !strings.Contains(err.Error(), "deadlock") {
 		t.Errorf("expected deadlock error, got: %v", err)
 	}
@@ -86,32 +86,32 @@ func testDecisionNoSatisfiedGuard(t *testing.T) {
 	if file == nil {
 		t.Fatal("parse failed")
 	}
-	
+
 	idx, model, ctx := buildRuntime(t, "<test>", file)
-	
+
 	_ = model // silence unused
-	
+
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "noGuard", ast.DefCalc)
 	if sym == nil {
 		t.Fatal("noGuard calc not found")
 	}
-	
+
 	// Invoke with x=5
 	xVal := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 5}}
 	result, err := ctx.InvokeCalc(sym, []Value{xVal}, rootScope)
-	
+
 	// Expect error or null result (implementation-specific)
 	if err != nil {
 		t.Logf("InvokeCalc returned error (acceptable): %v", err)
 		return
 	}
-	
+
 	if result.Kind == ValNull {
 		t.Log("InvokeCalc returned null (no branch taken)")
 		return
 	}
-	
+
 	t.Logf("InvokeCalc returned: %v (no error - implementation allows missing branch)", result)
 }
 
@@ -129,32 +129,32 @@ func testStateDanglingTransition(t *testing.T) {
 	if file == nil {
 		t.Fatal("parse failed")
 	}
-	
+
 	idx, model, ctx := buildRuntime(t, "<test>", file)
-	
+
 	_ = model // silence unused
-	
+
 	// Check diagnostics (resolver should catch missing state)
 	// Note: resolver diagnostics accessed via resolver.Diagnostics field
-	
+
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "Machine", ast.DefState)
 	if sym == nil {
 		t.Fatal("Broken state not found")
 	}
-	
+
 	exec, err := ctx.CreateStateExecutor(sym)
 	if err != nil {
 		t.Logf("CreateStateExecutor error (acceptable): %v", err)
 		return
 	}
-	
+
 	err = exec.ProcessNextEvent()
 	if err != nil {
 		t.Logf("ProcessNextEvent returned error (acceptable): %v", err)
 		return
 	}
-	
+
 	t.Log("ProcessNextEvent succeeded (dangling transition not exercised)")
 }
 
@@ -173,32 +173,32 @@ func testCalcUnboundParameter(t *testing.T) {
 	if file == nil {
 		t.Fatal("parse failed")
 	}
-	
+
 	idx, model, ctx := buildRuntime(t, "<test>", file)
-	
+
 	_ = model // silence unused
-	
+
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "add", ast.DefCalc)
 	if sym == nil {
 		t.Fatal("add calc not found")
 	}
-	
+
 	// Invoke with only 1 argument (missing y)
 	xVal := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
 	result, err := ctx.InvokeCalc(sym, []Value{xVal}, rootScope)
-	
+
 	if err != nil {
 		t.Logf("InvokeCalc returned error (expected): %v", err)
 		return
 	}
-	
+
 	// Some implementations may return null or zero
 	if result.Kind == ValNull {
 		t.Log("InvokeCalc returned null (unbound parameter)")
 		return
 	}
-	
+
 	t.Logf("InvokeCalc returned: %v (no error - implementation tolerates missing param)", result)
 }
 
@@ -215,29 +215,29 @@ func testConstraintMissingFeature(t *testing.T) {
 	if file == nil {
 		t.Fatal("parse failed")
 	}
-	
+
 	idx, model, ctx := buildRuntime(t, "<test>", file)
-	
+
 	_ = model // silence unused
-	
+
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "broken", ast.DefConstraint)
 	if sym == nil {
 		t.Fatal("broken constraint not found")
 	}
-	
+
 	satisfied, err := ctx.EvaluateConstraint(sym, rootScope)
-	
+
 	if err != nil {
 		t.Logf("EvaluateConstraint returned error (expected): %v", err)
 		return
 	}
-	
+
 	if !satisfied {
 		t.Log("EvaluateConstraint returned false (missing feature treated as unsatisfied)")
 		return
 	}
-	
+
 	t.Log("EvaluateConstraint returned true (missing feature tolerated)")
 }
 
@@ -255,24 +255,24 @@ func testStepBudgetExceeded(t *testing.T) {
 	if file == nil {
 		t.Fatal("parse failed")
 	}
-	
+
 	idx, model, ctx := buildRuntime(t, "<test>", file)
-	
+
 	// Set very low step budget
 	ctx.maxSteps = 5
 	ctx.steps = 0
-	
+
 	_ = model // silence unused
-	
+
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "infinite", ast.DefCalc)
 	if sym == nil {
 		t.Skip("infinite calc not found")
 	}
-	
+
 	// Invoke with no args, low step budget
 	_, err := ctx.InvokeCalc(sym, []Value{}, rootScope)
-	
+
 	// For simple calc, step budget may not be exercised
 	if err != nil {
 		if strings.Contains(err.Error(), "step limit") || strings.Contains(err.Error(), "exceeded") {
@@ -282,7 +282,7 @@ func testStepBudgetExceeded(t *testing.T) {
 		t.Logf("InvokeCalc error: %v", err)
 		return
 	}
-	
+
 	t.Log("Step budget not exceeded (calc completed within budget)")
 }
 
@@ -318,7 +318,7 @@ func findSymbolByName(scope *symbols.Scope, name string, kind ast.DefinitionKind
 	case ast.DefRequirement:
 		usageKind = ast.UsageRequirement
 	}
-	
+
 	// Check all child scopes (packages/namespaces)
 	for _, child := range scope.Children() {
 		for _, memberName := range child.MemberNames() {
@@ -326,7 +326,7 @@ func findSymbolByName(scope *symbols.Scope, name string, kind ast.DefinitionKind
 			if sym == nil {
 				continue
 			}
-			
+
 			if sym.Name == name {
 				switch decl := sym.Decl.(type) {
 				case *ast.Definition:
@@ -341,14 +341,14 @@ func findSymbolByName(scope *symbols.Scope, name string, kind ast.DefinitionKind
 			}
 		}
 	}
-	
+
 	// Also check root scope directly
 	for _, memberName := range scope.MemberNames() {
 		sym, _ := scope.LookupLocal(memberName)
 		if sym == nil {
 			continue
 		}
-		
+
 		if sym.Name == name {
 			switch decl := sym.Decl.(type) {
 			case *ast.Definition:

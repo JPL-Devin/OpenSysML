@@ -6,14 +6,14 @@
 //	// Create runtime context
 //	model := semantics.NewModel(resolver)
 //	ctx := runtime.NewContext(model, resolver, 100000)
-//	
+//
 //	// Instantiate a part
 //	partSym := resolveSymbol(root, "MyCar")
 //	inst, err := ctx.Instantiate(partSym)
 //	if err != nil {
 //		log.Fatal(err)
 //	}
-//	
+//
 //	// Evaluate an expression
 //	exprNode := parseExpression("1 + 2")
 //	result, err := ctx.Eval(exprNode)

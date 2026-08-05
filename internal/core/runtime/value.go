@@ -18,7 +18,7 @@ const (
 	ValInstance
 	ValSequence
 	ValSet
-	ValExpr              // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
+	ValExpr // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
 )
 
 // Value is a runtime-evaluable value.

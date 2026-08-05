@@ -10,3 +10,18 @@ sysml-lsp
 
 # Downloaded training examples (run scripts/download-training-examples.sh)
 /examples/sysml-v2-training/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+coverage.txt
+.coverage

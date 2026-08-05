@@ -312,6 +312,41 @@ func containsString(s, substr string) bool {
 	return false
 }
 
+// GetFQN returns the fully-qualified name for a symbol by walking its owner scope chain.
+// Returns the local name if the symbol has no owner scope (root-level symbol).
+func (idx *Index) GetFQN(sym *Symbol) string {
+	if sym == nil {
+		return ""
+	}
+
+	// Collect scope chain from symbol up to root
+	var parts []string
+	parts = append(parts, sym.Name)
+
+	scope := sym.OwnerScope
+	for scope != nil && scope.Owner() != nil {
+		owner := scope.Owner()
+		parts = append(parts, owner.Name)
+		scope = owner.OwnerScope
+	}
+
+	// Reverse parts (collected from leaf to root)
+	for i := 0; i < len(parts)/2; i++ {
+		j := len(parts) - 1 - i
+		parts[i], parts[j] = parts[j], parts[i]
+	}
+
+	// Join with "::"
+	if len(parts) == 0 {
+		return ""
+	}
+	result := parts[0]
+	for i := 1; i < len(parts); i++ {
+		result += "::" + parts[i]
+	}
+	return result
+}
+
 // DocumentRoot returns the root scope for the named document, or nil.
 func (idx *Index) DocumentRoot(name string) *Scope {
 	return idx.docRoots[name]

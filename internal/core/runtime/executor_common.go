@@ -17,10 +17,10 @@ type Token struct {
 type ExecutionState int
 
 const (
-	StateReady      ExecutionState = iota // Not started
-	StateRunning                          // In progress
-	StateCompleted                        // Reached terminal state
-	StateSuspended                        // Paused for debugging
+	StateReady     ExecutionState = iota // Not started
+	StateRunning                         // In progress
+	StateCompleted                       // Reached terminal state
+	StateSuspended                       // Paused for debugging
 )
 
 func (s ExecutionState) String() string {

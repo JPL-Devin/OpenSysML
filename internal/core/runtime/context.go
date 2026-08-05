@@ -81,7 +81,7 @@ func (ctx *Context) registerInstance(inst *Instance) {
 func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope) (bool, error) {
 	// Extract constraint members
 	var members []ast.Node
-	
+
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind != ast.DefConstraint {
@@ -96,7 +96,7 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 	default:
 		return false, fmt.Errorf("invalid constraint symbol: %s (%T)", sym.Name, sym.Decl)
 	}
-	
+
 	// Evaluate each constraint member
 	for _, member := range members {
 		// Unwrap Membership
@@ -104,19 +104,19 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 		if membership, ok := member.(*ast.Membership); ok {
 			node = membership.Member
 		}
-		
+
 		// Check for ConstraintMember
 		constraintMember, ok := node.(*ast.ConstraintMember)
 		if !ok {
 			continue // skip non-constraint members
 		}
-		
+
 		// Evaluate constraint expression
 		result, err := ctx.EvalWithScope(constraintMember.Expression, scope)
 		if err != nil {
 			return false, fmt.Errorf("constraint %s: evaluation failed: %w", sym.Name, err)
 		}
-		
+
 		// Extract boolean value
 		satisfied := false
 		if result.Kind == ValConst && result.Const.Kind == semantics.ValBool {
@@ -124,12 +124,12 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 		} else {
 			return false, fmt.Errorf("constraint %s: expression must evaluate to boolean, got %v", sym.Name, result.Kind)
 		}
-		
+
 		// Apply negation
 		if constraintMember.IsNegated {
 			satisfied = !satisfied
 		}
-		
+
 		// Handle assert vs assume
 		if constraintMember.IsAssert {
 			if !satisfied {
@@ -138,7 +138,7 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 		}
 		// assume: always pass (assumptions are trusted)
 	}
-	
+
 	return true, nil
 }
 
@@ -148,7 +148,7 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scope) (bool, error) {
 	// Extract requirement members
 	var members []ast.Node
-	
+
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind != ast.DefRequirement {
@@ -163,12 +163,12 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 	default:
 		return false, fmt.Errorf("invalid requirement symbol: %s (%T)", sym.Name, sym.Decl)
 	}
-	
+
 	// Create evaluation context with frame for requirement-local bindings
 	evalCtx := NewEvalContext(ctx, scope)
 	reqBindings := make(map[string]Value)
 	evalCtx.Push(reqBindings)
-	
+
 	// First pass: process subject/actor bindings
 	for _, member := range members {
 		// Unwrap Membership
@@ -176,7 +176,7 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 		if membership, ok := member.(*ast.Membership); ok {
 			node = membership.Member
 		}
-		
+
 		// Handle binding declarations
 		switch rm := node.(type) {
 		case *ast.SubjectMember:
@@ -187,11 +187,11 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 				if err != nil {
 					return false, fmt.Errorf("requirement %s: subject binding evaluation failed: %w", sym.Name, err)
 				}
-				
+
 				// Add binding to evaluation frame
 				reqBindings[rm.Name] = value
 			}
-			
+
 		case *ast.ActorMember:
 			// Actor binding: actor <name> = <expr>;
 			if rm.BindingExpr != nil {
@@ -200,13 +200,13 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 				if err != nil {
 					return false, fmt.Errorf("requirement %s: actor binding evaluation failed: %w", sym.Name, err)
 				}
-				
+
 				// Add binding to evaluation frame
 				reqBindings[rm.Name] = value
 			}
 		}
 	}
-	
+
 	// Second pass: evaluate assume/require expressions
 	for _, member := range members {
 		// Unwrap Membership
@@ -214,7 +214,7 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 		if membership, ok := member.(*ast.Membership); ok {
 			node = membership.Member
 		}
-		
+
 		// Handle requirement constraints
 		switch rm := node.(type) {
 		case *ast.AssumeMember:
@@ -224,14 +224,14 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 				return false, fmt.Errorf("requirement %s: assume evaluation failed: %w", sym.Name, err)
 			}
 			// Assumptions always pass (trusted)
-			
+
 		case *ast.RequireMember:
 			// Require: must evaluate to true
 			result, err := evalCtx.Eval(rm.Expression)
 			if err != nil {
 				return false, fmt.Errorf("requirement %s: require evaluation failed: %w", sym.Name, err)
 			}
-			
+
 			// Extract boolean value
 			satisfied := false
 			if result.Kind == ValConst && result.Const.Kind == semantics.ValBool {
@@ -239,13 +239,13 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 			} else {
 				return false, fmt.Errorf("requirement %s: require expression must evaluate to boolean, got %v", sym.Name, result.Kind)
 			}
-			
+
 			if !satisfied {
 				return false, fmt.Errorf("requirement %s: require condition failed", sym.Name)
 			}
 		}
 	}
-	
+
 	return true, nil
 }
 
@@ -255,7 +255,7 @@ func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols
 	if sym == nil || sym.Decl == nil {
 		return Value{}, fmt.Errorf("calc invocation: invalid symbol")
 	}
-	
+
 	var members []ast.Node
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
@@ -265,11 +265,11 @@ func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols
 	default:
 		return Value{}, fmt.Errorf("calc invocation: %q is not a calc definition or usage", sym.Name)
 	}
-	
+
 	if members == nil {
 		return Value{}, fmt.Errorf("calc invocation: %q has no body", sym.Name)
 	}
-	
+
 	// Extract parameters (usages with Direction = DirIn or DirInOut)
 	var params []*ast.Usage
 	for _, m := range members {
@@ -278,19 +278,19 @@ func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols
 		if membership, ok := m.(*ast.Membership); ok {
 			node = membership.Member
 		}
-		
+
 		if usage, ok := node.(*ast.Usage); ok {
 			if usage.Direction == ast.DirIn || usage.Direction == ast.DirInOut {
 				params = append(params, usage)
 			}
 		}
 	}
-	
+
 	// Validate argument count
 	if len(args) != len(params) {
 		return Value{}, fmt.Errorf("calc invocation: expected %d arguments, got %d", len(params), len(args))
 	}
-	
+
 	// Create parameter bindings
 	bindings := make(map[string]Value)
 	for i, param := range params {
@@ -301,7 +301,7 @@ func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols
 		}
 		bindings[name] = args[i]
 	}
-	
+
 	// Extract return member (ResultMember with Expression)
 	var returnExpr ast.Node
 	for _, m := range members {
@@ -310,46 +310,58 @@ func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols
 		if membership, ok := m.(*ast.Membership); ok {
 			node = membership.Member
 		}
-		
+
 		if rm, ok := node.(*ast.ResultMember); ok && rm.Expression != nil {
 			returnExpr = rm.Expression
 			break
 		}
 	}
-	
+
 	if returnExpr == nil {
 		return Value{}, fmt.Errorf("calc invocation: %q has no return expression", sym.Name)
 	}
-	
+
 	// Evaluate return expression with parameter bindings
 	ec := &EvalContext{
 		ctx:    ctx,
 		frames: []map[string]Value{bindings},
 		scope:  scope,
 	}
-	
+
 	return ec.Eval(returnExpr)
 }
 
 // ExecuteAction executes an action definition/usage to completion.
 // Returns final token data from the action's execution.
 func (ctx *Context) ExecuteAction(action *symbols.Symbol) (map[string]Value, error) {
+	return ctx.ExecuteActionWithInputs(action, nil)
+}
+
+// ExecuteActionWithInputs executes an action, seeding the initial token with the
+// provided input parameter bindings (keyed by parameter name). Inputs override
+// action attribute defaults of the same name. Returns final token data.
+func (ctx *Context) ExecuteActionWithInputs(action *symbols.Symbol, inputs map[string]Value) (map[string]Value, error) {
 	// Create executor
 	exec, err := newActionExecutor(ctx, action)
 	if err != nil {
 		return nil, fmt.Errorf("create action executor: %w", err)
 	}
-	
+
+	// Bind inputs before initialization so they seed the initial token.
+	if len(inputs) > 0 {
+		exec.SetInputs(inputs)
+	}
+
 	// Initialize execution (spawns initial token)
 	if err := exec.initialize(); err != nil {
 		return nil, fmt.Errorf("initialize action: %w", err)
 	}
-	
+
 	// Run to completion
 	if err := exec.RunToCompletion(); err != nil {
 		return nil, fmt.Errorf("execute action: %w", err)
 	}
-	
+
 	// Return accumulated results from final nodes
 	return exec.results, nil
 }
@@ -361,43 +373,58 @@ func (ctx *Context) ExecuteAction(action *symbols.Symbol) (map[string]Value, err
 // - Event queue is empty (StateSuspended)
 // - Max event processing steps exceeded (error)
 func (ctx *Context) ExecuteState(stateMachine *symbols.Symbol) (map[string]Value, error) {
+	data, _, err := ctx.ExecuteStateWithEvents(stateMachine, nil)
+	return data, err
+}
+
+// ExecuteStateWithEvents executes a state machine, first injecting the provided
+// signal events (by signal-type name) into the event queue, then processing all
+// events until completion or suspension. Returns the final state data and the
+// ordered list of visited state names.
+func (ctx *Context) ExecuteStateWithEvents(stateMachine *symbols.Symbol, events []string) (map[string]Value, []string, error) {
 	// Create executor
 	exec, err := newStateExecutor(ctx, stateMachine)
 	if err != nil {
-		return nil, fmt.Errorf("create state executor: %w", err)
+		return nil, nil, fmt.Errorf("create state executor: %w", err)
 	}
-	
+
 	// Initialize execution (enters initial state)
 	if err := exec.initialize(); err != nil {
-		return nil, fmt.Errorf("initialize state machine: %w", err)
+		return nil, nil, fmt.Errorf("initialize state machine: %w", err)
 	}
-	
+
+	// Inject external signal events. Each event name is treated as a signal type
+	// with no arguments; matching accept-triggers consume it in order.
+	for _, event := range events {
+		exec.SendSignal(event, nil)
+	}
+
 	// Process events until completion or suspension
 	const maxEvents = 10000
 	eventCount := 0
-	
+
 	for exec.state == StateRunning {
 		// Check for pending events
 		if exec.eventQueue.Len() == 0 {
 			exec.state = StateSuspended
 			break
 		}
-		
+
 		// Check step limit
 		if eventCount >= maxEvents {
-			return nil, fmt.Errorf("state machine exceeded max events (%d), possible infinite loop", maxEvents)
+			return nil, nil, fmt.Errorf("state machine exceeded max events (%d), possible infinite loop", maxEvents)
 		}
-		
+
 		// Process next event
 		if err := exec.processNextEvent(); err != nil {
-			return nil, fmt.Errorf("process event: %w", err)
+			return nil, nil, fmt.Errorf("process event: %w", err)
 		}
-		
+
 		eventCount++
 	}
-	
-	// Return state machine data
-	return exec.stateData, nil
+
+	// Return state machine data and the real ordered visit trace
+	return exec.stateData, exec.GetStateVisits(), nil
 }
 
 // CreateActionExecutor creates an action executor without starting execution.
@@ -407,12 +434,12 @@ func (ctx *Context) CreateActionExecutor(action *symbols.Symbol) (*ActionExecuto
 	if err != nil {
 		return nil, fmt.Errorf("create action executor: %w", err)
 	}
-	
+
 	// Initialize (spawns initial token)
 	if err := exec.initialize(); err != nil {
 		return nil, fmt.Errorf("initialize action: %w", err)
 	}
-	
+
 	return exec, nil
 }
 
@@ -423,11 +450,11 @@ func (ctx *Context) CreateStateExecutor(stateMachine *symbols.Symbol) (*StateExe
 	if err != nil {
 		return nil, fmt.Errorf("create state executor: %w", err)
 	}
-	
+
 	// Initialize (enters initial state, schedules initial events)
 	if err := exec.initialize(); err != nil {
 		return nil, fmt.Errorf("initialize state machine: %w", err)
 	}
-	
+
 	return exec, nil
 }

@@ -8,17 +8,17 @@ import (
 
 // Instance is a runtime-materialized object (Tier 2).
 type Instance struct {
-	ID    int64              // unique identity
-	Type  *symbols.Symbol    // the def/usage symbol this instantiates
-	Slots map[string]*Slot   // feature name → slot
+	ID    int64            // unique identity
+	Type  *symbols.Symbol  // the def/usage symbol this instantiates
+	Slots map[string]*Slot // feature name → slot
 }
 
 // Slot holds the runtime value(s) for one feature.
 type Slot struct {
 	Feature      *EffectiveFeature
-	Value        Value   // scalar slot (multiplicity [1])
-	Values       Value   // collection slot (Sequence or Set)
-	Materialized bool    // lazy flag: has this slot been instantiated?
+	Value        Value // scalar slot (multiplicity [1])
+	Values       Value // collection slot (Sequence or Set)
+	Materialized bool  // lazy flag: has this slot been instantiated?
 }
 
 // Instantiate materializes an instance of the given usage/definition symbol.

@@ -156,6 +156,7 @@ Bug-fix discipline (small, scoped diffs) does **not** apply to feature work. For
 
 **Workflow for a complex/multi-part feature:**
 1. **Plan and decompose.** Break the feature into ordered, independently-verifiable steps. State the plan before large edits. For long-horizon work, keep a short scratch note (e.g. `progress.txt`) of steps done / remaining — but don't leave it in the final PR.
+   - **When writing plans or specs:** Write the outline first (structure, task headers, DoD), then fill in each section completely, one at a time. Never write placeholder TODOs or "fill in later" — complete each section before moving to the next.
 2. **Design the data first.** Decide the AST/IR/side-table shape before wiring behavior. Getting the representation right avoids downstream shortcuts.
 3. **Write the test contract up front** (§5). Add the conformance/golden/robustness cases that define "done" *before or alongside* the code, including the hard cases — so you can't accidentally under-build.
 4. **Implement layer by layer**, keeping `go build ./...` and `go vet ./...` green at each step.
