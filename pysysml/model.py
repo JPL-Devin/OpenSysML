@@ -83,3 +83,38 @@ class Model:
             f"Model(hash={self.hash!r}, root={self.root.name!r}, "
             f"diagnostics={diag_count})"
         )
+    
+    def _repr_html_(self):
+        """IPython rich display: tree view + diagnostic summary."""
+        # Count diagnostics by severity
+        errors = sum(1 for d in self.diagnostics if d.severity == 'error')
+        warnings = sum(1 for d in self.diagnostics if d.severity == 'warning')
+        
+        # Build HTML
+        html = ['<div style="font-family: monospace; padding: 10px; border: 1px solid #ccc;">']
+        html.append(f'<h3>Model: {self.root.name}</h3>')
+        html.append(f'<p><strong>Hash:</strong> <code>{self.hash[:12]}...</code></p>')
+        html.append(f'<p><strong>Root Kind:</strong> {self.root.kind}</p>')
+        
+        # Diagnostic summary
+        if self.diagnostics:
+            html.append('<p><strong>Diagnostics:</strong>')
+            if errors:
+                html.append(f' <span style="color: red;">{errors} error(s)</span>')
+            if warnings:
+                html.append(f' <span style="color: orange;">{warnings} warning(s)</span>')
+            html.append('</p>')
+            
+            # Show first 5 diagnostics
+            html.append('<ul style="margin-top: 5px;">')
+            for diag in self.diagnostics[:5]:
+                color = 'red' if diag.severity == 'error' else 'orange'
+                html.append(f'<li style="color: {color};">{diag.message} (line {diag.span.start_line})</li>')
+            if len(self.diagnostics) > 5:
+                html.append(f'<li>... and {len(self.diagnostics) - 5} more</li>')
+            html.append('</ul>')
+        else:
+            html.append('<p style="color: green;"><strong>✓</strong> No diagnostics</p>')
+        
+        html.append('</div>')
+        return ''.join(html)
