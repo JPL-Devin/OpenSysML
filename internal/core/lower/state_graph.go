@@ -139,7 +139,7 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 	}
 
 	// Third pass: collect transitions
-	if err := collectTransitions(graph, members, nil); err != nil {
+	if err := collectTransitions(graph, members, nil, nil); err != nil {
 		return nil, err
 	}
 
@@ -286,34 +286,44 @@ func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge) (*Transiti
 }
 
 // lowerTransitionMember converts a TransitionMember (parser output) to a Transition.
-func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember) (*Transition, error) {
+// containingState is used as the source when member.Source is nil (sourceless accept...then).
+func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, containingState *ast.StateNode) (*Transition, error) {
 	// TransitionMember has: Source (QualifiedName), Target (QualifiedName), Trigger, Guard, Effect ([]Node)
 	// Source and Target can be StateNode or PseudostateNode
+	// Source can be nil for sourceless transitions (accept...then) - use containingState
 
 	// Try to find source as state
 	var source ast.Node
-	sourceState := findStateByName(graph.States, member.Source)
-	if sourceState != nil {
-		source = sourceState
+	if member.Source == nil {
+		// Sourceless transition - use containing state
+		if containingState == nil {
+			return nil, fmt.Errorf("sourceless transition (accept...then) at top level has no containing state")
+		}
+		source = containingState
 	} else {
-		// Try pseudostate
-		sourceName := member.Source.Parts[len(member.Source.Parts)-1].Text
-		if ps, ok := graph.Pseudostates[sourceName]; ok {
-			source = ps
+		sourceState := findStateByName(graph.States, member.Source)
+		if sourceState != nil {
+			source = sourceState
+		} else {
+			// Try pseudostate
+			sourceName := member.Source.Parts[len(member.Source.Parts)-1].Text
+			if ps, ok := graph.Pseudostates[sourceName]; ok {
+				source = ps
+			}
 		}
-	}
 
-	if source == nil {
-		// Debug: print available states and pseudostates
-		var stateNames []string
-		for _, s := range graph.States {
-			stateNames = append(stateNames, s.Name)
+		if source == nil {
+			// Debug: print available states and pseudostates
+			var stateNames []string
+			for _, s := range graph.States {
+				stateNames = append(stateNames, s.Name)
+			}
+			for name := range graph.Pseudostates {
+				stateNames = append(stateNames, name+" (pseudostate)")
+			}
+			return nil, fmt.Errorf("transition member references undefined source %q (available: %v)",
+				member.Source.Parts[len(member.Source.Parts)-1].Text, stateNames)
 		}
-		for name := range graph.Pseudostates {
-			stateNames = append(stateNames, name+" (pseudostate)")
-		}
-		return nil, fmt.Errorf("transition member references undefined source %q (available: %v)",
-			member.Source.Parts[len(member.Source.Parts)-1].Text, stateNames)
 	}
 
 	// Try to find target as state or pseudostate
@@ -396,7 +406,8 @@ func classifyTrigger(trigger ast.Node) ast.Node {
 // collectTransitions recursively processes member lists to collect transitions.
 // Handles top-level members and region members.
 // regionStates limits state lookup to states within a specific region (nil = all states).
-func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates []*ast.StateNode) error {
+// containingState is the enclosing state for sourceless transitions (nil at top level).
+func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates []*ast.StateNode, containingState *ast.StateNode) error {
 
 	for _, member := range memberList {
 		actualMember := unwrapMembership(member)
@@ -496,11 +507,17 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 			graph.Transitions[trans.Source] = append(graph.Transitions[trans.Source], trans)
 		case *ast.TransitionMember:
 			// New: TransitionMember from parser (declarative)
-			trans, err := lowerTransitionMember(graph, n)
+			trans, err := lowerTransitionMember(graph, n, containingState)
 			if err != nil {
 				return err
 			}
 			graph.Transitions[trans.Source] = append(graph.Transitions[trans.Source], trans)
+		case *ast.StateNode:
+			// Recurse into state substates to collect transitions within the state
+			// Transitions inside this state have this state as their containing state
+			if err := collectTransitions(graph, n.Substates, nil, n); err != nil {
+				return err
+			}
 		case *ast.StateRegion:
 			// Collect states that belong to this region
 			// We need to find which states in graph.States came from this region
@@ -527,7 +544,8 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 			}
 
 			// Recurse into region members with scoped state list
-			if err := collectTransitions(graph, n.States, statesInRegion); err != nil {
+			// Regions are orthogonal - transitions within them don't inherit a containing state
+			if err := collectTransitions(graph, n.States, statesInRegion, nil); err != nil {
 				return err
 			}
 		}

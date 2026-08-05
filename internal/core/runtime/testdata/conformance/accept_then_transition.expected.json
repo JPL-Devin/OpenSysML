@@ -1,0 +1,9 @@
+{
+  "type": "state",
+  "symbol_fqn": "Test::Machine",
+  "events": [
+    {"name": "go"}
+  ],
+  "expected_states_visited": ["waiting", "active"],
+  "expected_final_state": "active"
+}
