@@ -45,7 +45,7 @@ class TestIntegrationRealServer:
 
     def test_connection_to_real_server(self):
         """Verify Connection can reach real sysml-grpc server."""
-        with Connection() as conn:
+        with Connection(auto_start=False) as conn:
             assert conn is not None
             # If we get here without grpc.RpcError, connection works
 
@@ -66,7 +66,7 @@ class TestIntegrationRealServer:
             }
         """)
         
-        with Connection() as conn:
+        with Connection(auto_start=False) as conn:
             # Load file
             model = conn.load(str(test_file))
             
@@ -98,7 +98,7 @@ class TestIntegrationRealServer:
             }
         """)
         
-        with Connection() as conn:
+        with Connection(auto_start=False) as conn:
             model = conn.load(str(test_file))
             
             # Navigate via lazy loading
@@ -126,7 +126,7 @@ class TestIntegrationRealServer:
             }
         """)
         
-        with Connection() as conn:
+        with Connection(auto_start=False) as conn:
             model = conn.load(str(test_file))
             
             # Try to find a symbol
@@ -137,7 +137,7 @@ class TestIntegrationRealServer:
 
     def test_context_manager_cleanup_real_server(self):
         """Verify context manager closes channel properly with real server."""
-        conn = Connection()
+        conn = Connection(auto_start=False)
         with conn:
             # Use connection
             assert conn._channel is not None
@@ -146,7 +146,7 @@ class TestIntegrationRealServer:
 
     def test_load_nonexistent_file_real_server(self):
         """Verify file-not-found errors propagate from real server."""
-        with Connection() as conn:
+        with Connection(auto_start=False) as conn:
             with pytest.raises(grpc.RpcError) as exc_info:
                 conn.load("/nonexistent/path/to/file.sysml")
             
@@ -162,7 +162,7 @@ class TestIntegrationRealServer:
             }
         """)
         
-        with Connection() as conn:
+        with Connection(auto_start=False) as conn:
             model = conn.load(str(test_file))
             
             # Get a child symbol (not root with empty ID)
