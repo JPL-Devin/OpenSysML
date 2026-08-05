@@ -883,14 +883,9 @@ func (e *StateExecutor) orderedRegionStates() []*ast.StateNode {
 	return states
 }
 
-// enterHierarchy enters state's ancestors, outermost first, then state itself,
-// skipping any that are already active.
-func (e *StateExecutor) enterHierarchy(state *ast.StateNode) error {
-	return e.enterHierarchyInto(state, nil)
-}
-
-// enterHierarchyInto is enterHierarchy, except that state's own orthogonal
-// regions start at the given branch targets wherever branches names one.
+// enterHierarchyInto enters state's ancestors, outermost first, then state
+// itself, skipping any that are already active. State's own orthogonal regions
+// start at the given branch targets wherever branches names one.
 func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*ast.StateRegion]*ast.StateNode) error {
 	chain := e.getParentChain(state)
 	for i := len(chain) - 1; i >= 0; i-- {
