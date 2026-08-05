@@ -50,6 +50,7 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 github.com/Open-MBEE/Systemica
 ├── cmd/
 │   ├── sysml-lsp/          # LSP server binary
+│   ├── sysml-grpc/         # gRPC server binary
 │   └── sysml/              # Interactive REPL binary
 ├── internal/core/
 │   ├── source/             # Source files, spans, line indexing
@@ -60,12 +61,16 @@ github.com/Open-MBEE/Systemica
 │   ├── resolve/            # Name resolution (lazy, memoized)
 │   ├── semantics/          # Type system, conformance, multiplicity
 │   ├── passes/             # Validation passes (syntax → constraints)
+│   ├── lower/              # AST → execution IR (ActionGraph/StateGraph)
 │   ├── runtime/            # Execution engine (eval, instances, builtins)
 │   ├── model/              # Workspace, document management
 │   ├── libs/               # Standard library bundling & caching
 │   └── deps/               # Dependency resolution
 ├── internal/lsp/           # LSP protocol implementation
 ├── internal/repl/          # REPL loop implementation
+├── internal/grpc/          # gRPC service implementation
+├── python/                 # Python client bindings (pysysml)
+├── api/proto/              # Protobuf service definitions
 ├── testdata/               # Test fixtures (.sysml, .kerml)
 ├── examples/               # Example models and demos
 └── docs/                   # Documentation
@@ -201,7 +206,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 ### Tier 5 — Behavioral Interpreter ✅ Complete
 
 **Package:** `internal/core/runtime`  
-**Status:** Complete with 890+ tests. Conformance gate: 20/20 cases passing (calc/constraint/requirement/action/state all functional).  
+**Status:** Complete with 890+ tests. Conformance gate: 26/26 cases passing (calc/constraint/requirement/action/state all functional).  
 **Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for detailed compliance mapping (~98% faithful implementation).
 
 **Architecture:**
@@ -218,14 +223,17 @@ Parse + model all behavioral bodies with unified fallback grammar:
 
 2. **StateExecutor** — Event-driven state machine execution
    - Initial/final state keywords (initial/final)
-   - Entry/exit/do behaviors
+   - Entry/exit/do behaviors (⚠️ `do` runs synchronously on entry, not concurrently)
    - TimeEvent scheduling with priority queue
    - ChangeEvent condition polling
    - Guard evaluation for transitions
    - Transition effect actions
    - Hierarchical states with LCA-based entry/exit propagation
+   - Orthogonal regions with multi-region event broadcasting
+   - Choice + Junction pseudostates
    - Golden trace recording for transitions/entry/exit
    - APIs: `ProcessNextEvent()`, `CurrentState()`, `EventQueue()`, `StateData()`, `SetTrace()`
+   - **Known limitations:** Fork/Join/Entry/Exit/History pseudostates return "unsupported pseudostate kind" (`state_executor.go:552`); no deferred events; CallEvent matches any call (`matchesEvent:437` TODO); nested action invocation in behaviors not implemented (`executeAction:862`)
 
 3. **Context Integration** — Public runtime APIs
    - `InvokeCalc(symbol, args)` — Invoke calculation with arguments, return result
@@ -237,20 +245,21 @@ Parse + model all behavioral bodies with unified fallback grammar:
    - `CreateStateExecutor(symbol)` — Create executor for debugging
 
 **Implementation:**
-- `context.go` (424 lines) — Public Execute/Invoke/Evaluate APIs, step budget enforcement
-- `action_executor.go` (780+ lines) — Token-flow engine with nested actions, send statement
-- `state_executor.go` (590+ lines) — Event-driven state machine with do behaviors
+- `context.go` (460 lines) — Public Execute/Invoke/Evaluate APIs, step budget enforcement
+- `action_executor.go` (729 lines) — Token-flow engine with nested actions, send statement
+- `state_executor.go` (1149 lines) — Event-driven state machine with do behaviors
 - `executor_common.go` — Token, Event, EventQueue, ExecutionState
-- `trace.go` (168 lines) — Deterministic execution trace recorder
+- `trace.go` (154 lines) — Deterministic execution trace recorder
 - `eval.go` — Expression evaluation (binary/unary operators, literals, feature references, qualified names, type coercion)
+- Lowering to execution IR lives in `internal/core/lower/` (`ToActionGraph`, `ToStateGraph`)
 
 **Testing:**
-- **Golden ASTs**: 19 behavioral fixtures - `internal/core/parser/testdata/parse/`
-- **Negative tests**: 16 cases - `internal/core/parser/negative_test.go`
-- **Unit tests**: 41 tests (26 action, 15 state) - `action_executor_test.go`, `state_executor_test.go`
-- **Conformance gate**: 20 cases (all passing: calc×4, constraint×3, requirement×5, action×4, state×2) - `conformance_test.go`
+- **Golden ASTs**: 16 behavioral fixtures - `internal/core/parser/testdata/parse/`
+- **Negative tests**: 15 cases - `internal/core/parser/negative_test.go`
+- **Unit tests**: 41 tests (action, state) - `action_executor_test.go`, `state_executor_test.go`
+- **Conformance gate**: 26 cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×9) - `conformance_test.go`
 - **Golden traces**: Infrastructure ready (no .trace.golden files yet) - `trace_test.go`
-- **Robustness**: 6 failure-mode tests (deadlock, unbound params, missing features, dangling transitions, step budget) - `robustness_test.go`
+- **Robustness**: 7 failure-mode tests (deadlock, unbound params, missing features, dangling transitions, sourceless accept, step budget) - `robustness_test.go`
 - **Coverage**: All behavioral types fully functional. Action: 14/14 features ✅. State: 13/13 features ✅. Calc: 8/8 ✅. Constraint: 5/5 ✅. Requirement: 5/5 ✅. Evaluation: 7/7 ✅.
 
 **Measured Compliance:** See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for semantic rule → implementation → test case mapping with status (✅ faithful / ⚠️ approximate / ❌ not yet implemented).
@@ -477,8 +486,8 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 #### 2. Golden AST Snapshots
 - **Purpose:** Verify AST structure matches expected output
 - **Location:** `internal/core/parser/golden_test.go`
-- **Fixtures:** `testdata/parse/*.sysml` (9 representative files)
-- **Goldens:** `testdata/parse/*.ast.txt` (AST dumps)
+- **Fixtures:** `testdata/parse/*.sysml` (16 representative files)
+- **Goldens:** `testdata/parse/*.golden` (AST dumps)
 - **Acceptance:** Parse output matches golden file
 - **Update flag:** `go test -run TestGolden -update` (regenerate goldens after intentional changes)
 
@@ -539,15 +548,15 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 - **Location:** `internal/core/runtime/conformance_test.go`
 - **Test:** `TestExecutionConformance` runs `.sysml` + `.expected.json` pairs
 - **Schema:** `internal/core/runtime/testdata/conformance/README.md` (outcome format for each behavioral type)
-- **Allowlist:** `known_failures.txt` (currently: action_output, state_simple - blocked by initial node parsing)
+- **Allowlist:** `known_failures.txt` (currently empty — all cases pass)
 - **Acceptance:** Expected outputs/satisfaction match actual execution results
 
-**Coverage (5 cases):**
-- Calc: parameter binding, return values (1 passing: `calc_simple_add`)
-- Constraint: assert satisfaction (1 passing: `constraint_literal`)
-- Requirement: require satisfaction (1 passing: `requirement_literal`)
-- Action: token flow, outputs (1 known failure: `action_output` - no initial node)
-- State: transitions, final state (1 known failure: `state_simple` - no initial state)
+**Coverage (26 cases):**
+- Calc: parameter binding, return values, unary operators, type coercion, qualified names (×4)
+- Constraint: assert/assume satisfaction, negation (×3)
+- Requirement: require/subject/actor/assume satisfaction, nested (×5)
+- Action: token flow, outputs, nested invocation, send/accept, port communication (×5)
+- State: simple, do behavior, transition effect, choice/junction pseudostates, orthogonal regions, signal discrimination/unmatched, accept...then (×9)
 
 **Usage:**
 ```bash
@@ -570,13 +579,14 @@ go test -v -run TestExecutionConformance ./internal/core/runtime
 #### 4. Runtime Robustness Tests
 - **Purpose:** Verify malformed/pathological behaviors fail gracefully (typed errors, no panics/hangs)
 - **Location:** `internal/core/runtime/robustness_test.go`
-- **Test:** `TestRuntimeRobustness` with 6 failure modes
+- **Test:** `TestRuntimeRobustness` with 7 failure modes
 - **Acceptance:** All return typed errors, never panic, timeout guard (60s) prevents hangs
 
 **Failure modes:**
 - Deadlocked action (join starvation)
 - Decision with no satisfied guard
 - State machine with dangling transition
+- Sourceless accept...then at top level
 - Calc with unbound parameter
 - Constraint referencing missing feature
 - Step budget exceeded
@@ -598,7 +608,7 @@ Every behavioral feature must have:
 - Test case(s) exercising the feature
 - Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / 🚧 Known Failure
 
-**Current coverage:** ~70% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy all tested), conformance cases blocked by initial node/state parsing.
+**Current coverage:** ~98% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); all 26 conformance cases pass. Advanced state-machine features remain unimplemented (fork/join/history pseudostates, deferred events, concurrent `do`) — see SPEC_COMPLIANCE.md.
 
 ---
 
@@ -608,8 +618,6 @@ Every behavioral feature must have:
 - **Test fixtures:** `testdata/*.sysml`, `testdata/*.kerml`
 - **Golden files:** Expected parse/resolve/diagnostic outputs
 - **Verification:** `go test ./...` (all tests pass), `go build ./...` (clean build)
-
-### Contributing New Grammar Features
 
 ### Contributing New Grammar Features
 

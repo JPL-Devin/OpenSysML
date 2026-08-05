@@ -93,7 +93,7 @@ Current: green (Time: 30.0s)
 
 - **Language Server** — First-class IDE support (VS Code, IntelliJ, Emacs, etc.) with live diagnostics, semantic hover, go-to-definition, intelligent completion, and workspace-wide symbol search.
 - **Interactive REPL** — Exploratory modeling environment: define models incrementally, evaluate expressions on-the-fly, instantiate parts, run calculations, inspect runtime state—like IPython/Jupyter for systems engineering.
-- **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (fork/join parallelism, decision guards, hierarchical states, TimeEvent/ChangeEvent). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured behavioral coverage.
+- **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (activity fork/join parallelism, decision guards, hierarchical/orthogonal states, choice/junction pseudostates, TimeEvent/ChangeEvent). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured behavioral coverage.
 - **Modern Toolchain** — Dependency management (local + remote git), incremental compilation, bundled standard library, persistent semantic caches—`cargo`/`go mod` ergonomics for systems modeling.
 
 ## Goals
@@ -117,18 +117,18 @@ Current: green (Time: 30.0s)
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (16 golden ASTs, 16 negative tests) |
-| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 9/9 passing) |
-| Action execution engine (Tier 5) | ✅ Complete (26 unit tests, 20/20 conformance passing) |
-| State machine runtime (Tier 5) | ✅ Complete (15 unit tests, 20/20 conformance passing) |
+| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (16 golden ASTs, 15 negative tests) |
+| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 12/12 passing) |
+| Action execution engine (Tier 5) | ✅ Complete (5 conformance cases passing) |
+| State machine runtime (Tier 5) | ✅ Complete (9 conformance cases passing) |
 | REPL debugging commands | ✅ Complete |
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
-**Test coverage:** 890+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 16 golden ASTs, 16 negatives, 20 conformance cases, 6 robustness tests.
+**Test coverage:** 890+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 16 golden ASTs, 15 negatives, 26 conformance cases, 7 robustness tests.
 **Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
-**Behavioral execution:** Calc/constraint/requirement fully functional (9/9 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (18/18 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
+**Behavioral execution:** Calc/constraint/requirement fully functional (12/12 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (26/26 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
 **Training examples:** 63/100 files clean. Download from [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
@@ -162,6 +162,7 @@ Current: green (Time: 30.0s)
 github.com/Open-MBEE/Systemica
 ├── cmd/
 │   ├── sysml-lsp/          # LSP server binary
+│   ├── sysml-grpc/         # gRPC server binary (Python bindings)
 │   └── sysml/              # Interactive REPL binary
 ├── internal/core/
 │   ├── source/             # Source files, spans, line indexing
@@ -172,18 +173,21 @@ github.com/Open-MBEE/Systemica
 │   ├── resolve/            # Name resolution (lazy, memoized)
 │   ├── semantics/          # Type system, conformance, multiplicity
 │   ├── passes/             # Validation passes (syntax → constraints)
+│   ├── lower/              # AST → execution IR (ActionGraph/StateGraph)
 │   ├── runtime/            # Execution engine (eval, instances, builtins)
 │   ├── model/              # Workspace, document management
 │   └── libs/               # Standard library bundling & caching
 ├── internal/lsp/           # LSP protocol implementation
+├── internal/grpc/          # gRPC service implementation
 ├── internal/repl/          # REPL loop implementation
+├── python/                 # Python client bindings (pysysml)
 ├── docs/                   # Design specs, architecture docs
 └── testdata/               # Test fixtures (.sysml, .kerml)
 ```
 
 ## Technology
 
-- **Language:** Go 1.23+ (goroutines for concurrency, single static binary, proven LSP track record)
+- **Language:** Go 1.25+ (goroutines for concurrency, single static binary, proven LSP track record)
 - **Parser:** Hand-written recursive descent (zero overhead, full error recovery, sub-ms parses)
 - **Grammar source:** OMG pilot Xtext grammars (`SysML.xtext` + `KerMLExpressions`)
 - **Spec compliance:** [OMG SysML v2.1 Beta 1 / KerML 1.1](https://www.omg.org/spec/SysML/2.0) (2026-05 release)
@@ -268,7 +272,7 @@ Apache 2.0
 
 ## Contributing
 
-Project currently in active development. Contribution guidelines forthcoming.
+Project currently in active development. See [CONTRIBUTING.md](CONTRIBUTING.md) for build, test, and contribution guidelines.
 
 ## Contact
 

@@ -38,11 +38,12 @@ Download `sysml-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/
 **Available binaries:**
 - `sysml` — Interactive REPL
 - `sysml-lsp` — Language Server Protocol server
+- `sysml-grpc` — gRPC service (backs the Python bindings)
 
 ### Option 2: Build from Source
 
 **Prerequisites:**
-- Go 1.23 or later
+- Go 1.25 or later
 - Git
 - Make (optional but recommended)
 
@@ -50,7 +51,7 @@ Download `sysml-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/
 ```bash
 git clone https://github.com/Open-MBEE/Systemica.git
 cd Systemica
-make build       # builds bin/sysml and bin/sysml-lsp
+make build       # builds bin/sysml, bin/sysml-lsp, and bin/sysml-grpc
 # OR
 go build -o sysml ./cmd/sysml
 go build -o sysml-lsp ./cmd/sysml-lsp
@@ -60,7 +61,7 @@ go build -o sysml-lsp ./cmd/sysml-lsp
 ```bash
 make install     # installs to $GOPATH/bin
 # OR
-sudo mv bin/sysml bin/sysml-lsp /usr/local/bin/
+sudo mv bin/sysml bin/sysml-lsp bin/sysml-grpc /usr/local/bin/
 ```
 
 ---
@@ -387,7 +388,7 @@ sysml> %advance
 - `%advance` — Process next event
 - `%stop` — Stop debugging
 
-**See [examples/action-demo.sysml](../examples/action-demo.sysml) and [examples/state-demo.sysml](../examples/state-demo.sysml) for complete workflows.**
+**See [examples/action-executor-demo.sysml](../examples/action-executor-demo.sysml) and [examples/state-machine-demo.sysml](../examples/state-machine-demo.sysml) for complete workflows.**
 
 ---
 
@@ -451,8 +452,9 @@ echo 'part Wheel { attribute diameter = 16.0; }' > test.sysml
 ## Examples
 
 Check `examples/` directory:
-- `runtime_repl_demo.md` — Full runtime walkthrough
-- `behavior_demo.sysml` — Action body examples
+- `repl-behavioral-demo.sysml` — REPL behavioral walkthrough
+- `ACTION-EXECUTOR-DEMO.md` — Action executor walkthrough
+- `CLI_USAGE.md` — CLI usage reference
 
 ---
 
@@ -469,11 +471,11 @@ Check `examples/` directory:
 
 **REPL doesn't show prompt:**
 - Check terminal supports readline (most Unix shells do)
-- History stored in `/tmp/sysml.history`
+- History stored in `$TMPDIR/sysml-repl.history`
 
 **Import errors after build:**
 - Run `go mod tidy`
-- Verify Go version: `go version` (need 1.23+)
+- Verify Go version: `go version` (need 1.25+)
 
 **Syntax errors:**
 - SysML v2 textual notation only (no graphical/XMI)

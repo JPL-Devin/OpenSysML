@@ -19,11 +19,13 @@ github.com/Open-MBEE/Systemica
 │   ├── resolve/            # Name resolution
 │   ├── semantics/          # Type system and semantic queries
 │   ├── passes/             # Validation passes
+│   ├── lower/              # AST → execution IR (ActionGraph/StateGraph)
 │   ├── runtime/            # Execution runtime
 │   ├── model/              # Workspace and document management
 │   ├── libs/               # Standard library handling
 │   └── deps/               # Dependency resolution
 ├── internal/lsp/           # Language Server Protocol
+├── internal/grpc/          # gRPC service implementation
 └── internal/repl/          # Interactive REPL
 ```
 
@@ -202,7 +204,7 @@ Symbol tables and scope trees.
 **Usage:**
 ```go
 idx := symbols.NewIndex()
-idx.Register("example.sysml", root) // root is *ast.RootNamespace
+idx.AddDocument("example.sysml", root) // root is *ast.RootNamespace
 scope := idx.DocumentRoot("example.sysml")
 sym, ok := scope.LookupLocal("Wheel")
 ```
@@ -287,7 +289,7 @@ Higher tiers skip if lower tier fails.
 
 - **`Pass`** — Validation pass interface
   - `Level() PassLevel` — Which tier
-  - `Run(ctx Context, docName string, root *ast.RootNamespace) []Diagnostic`
+  - `Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic`
 
 - **`Context`** — Provides access to resolver and model
   - `Resolver() *resolve.Resolver`
@@ -300,8 +302,8 @@ Higher tiers skip if lower tier fails.
 
 **Usage:**
 ```go
-reg := passes.DefaultRegistry()
-diagnostics := passes.Analyze(ctx, reg, "example.sysml", root)
+// Analyze runs the default pass registry internally.
+diagnostics := passes.Analyze("example.sysml", root, parseDiags, idx)
 ```
 
 ---
@@ -500,14 +502,13 @@ Language Server Protocol implementation.
 
 **Current Capabilities:**
 - Document synchronization (open/change/close)
-- Diagnostics (syntax errors)
-
-**Planned:**
+- Diagnostics (syntax + semantic errors)
 - Hover (type info)
 - Go to definition
-- Completion
-- Workspace symbols
 - References
+- Document symbols
+- Workspace symbols
+- Completion
 
 **Usage:**
 ```go
@@ -584,7 +585,7 @@ import (
 )
 
 idx := symbols.NewIndex()
-idx.Register("example.sysml", root)
+idx.AddDocument("example.sysml", root)
 scope := idx.DocumentRoot("example.sysml")
 sym, ok := scope.LookupLocal("Wheel")
 ```
@@ -619,9 +620,8 @@ import (
     "github.com/Open-MBEE/Systemica/internal/core/passes"
 )
 
-ctx := passes.NewContext(res, model)
-reg := passes.DefaultRegistry()
-diagnostics := passes.Analyze(ctx, reg, "example.sysml", root)
+// Analyze wires up the default pass registry and context internally.
+diagnostics := passes.Analyze("example.sysml", root, parseDiags, idx)
 ```
 
 ### Execute Runtime
@@ -631,10 +631,10 @@ import (
     "github.com/Open-MBEE/Systemica/internal/core/runtime"
 )
 
-rtCtx := runtime.New(model)
+rtCtx := runtime.NewContext(model, resolver, 100000)
 inst, _ := rtCtx.Instantiate(wheelSym)
-diameterVal, _ := rtCtx.GetSlot(inst, diameterFeatureSym)
-fmt.Println(diameterVal) // Value{Kind: ValConst, Real: 16.0}
+diameterSlot, _ := inst.GetSlot(rtCtx, "diameter")
+fmt.Println(diameterSlot.Value) // Value{Kind: ValConst, Real: 16.0}
 ```
 
 ---

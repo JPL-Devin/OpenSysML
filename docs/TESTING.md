@@ -73,7 +73,7 @@ Future work: If SysML printer added, verify `parse(print(parse(input))) == parse
 **Purpose:** Verify parser rejects malformed input gracefully
 
 - **Test:** `TestNegative` (internal/core/parser/)
-- **Coverage:** 16 malformed inputs (7 behavioral + 9 structural)
+- **Coverage:** 15 malformed inputs (6 behavioral + 9 structural)
 - **Acceptance:** Each case produces diagnostics (never panics)
 
 **Examples:**
@@ -112,12 +112,12 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 - **Schema:** `internal/core/runtime/testdata/conformance/README.md`
 - **Allowlist:** `known_failures.txt` (currently empty)
 
-**Coverage (20 cases - all passing):**
-- Calc: parameter binding, return values, unary ops, qualified names, type coercion
-- Constraint: assert, assume, negation
-- Requirement: require, subject, actor, assume, nested
-- Action: token flow, outputs, nested invocation, send/accept, port communication
-- State: transitions, entry/do/exit, final state, transition effects
+**Coverage (26 cases - all passing):**
+- Calc: parameter binding, return values, unary ops, qualified names, type coercion (×4)
+- Constraint: assert, assume, negation (×3)
+- Requirement: require, subject, actor, assume, nested (×5)
+- Action: token flow, outputs, nested invocation, send/accept, port communication (×5)
+- State: simple, do behavior, transition effect, choice/junction pseudostates, orthogonal regions, signal discrimination/unmatched, accept...then (×9)
 
 ```bash
 go test -v -run TestExecutionConformance ./internal/core/runtime
@@ -146,13 +146,14 @@ go test -run TestExecutionTrace -update-traces ./internal/core/runtime
 **Purpose:** Verify malformed/pathological behaviors fail gracefully
 
 - **Test:** `TestRuntimeRobustness` (internal/core/runtime/)
-- **Coverage:** 6 failure modes
+- **Coverage:** 7 failure modes
 - **Acceptance:** Typed errors, never panic, 60s timeout guard
 
 **Failure modes:**
 - Deadlocked action (join starvation)
 - Decision with no satisfied guard
 - State machine with dangling transition
+- Sourceless accept...then at top level
 - Calc with unbound parameter
 - Constraint referencing missing feature
 - Step budget exceeded

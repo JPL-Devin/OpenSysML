@@ -22,14 +22,13 @@ Grammar conformance is validated through parsing **OMG's own files**:
    - See: `internal/core/libs/stdlib_conformance_test.go`
    - These files are the **source of truth** for correct parsing
 
-2. **Training Examples** - 100 OMG training files (69/100 parse clean)
-   - Download: `./scripts/download-training-examples.sh`
+2. **Training Examples** - 100 OMG training files (63/100 parse clean)
    - See: `docs/TRAINING_EXAMPLES.md`
 
 3. **Golden AST Tests** - 16 fixtures with expected AST output
    - See: `internal/core/parser/testdata/parse/`
 
-4. **Negative Tests** - 16 test cases for error recovery
+4. **Negative Tests** - 15 test cases for error recovery
    - See: `internal/core/parser/negative_test.go`
 
 ## Hand-Written Parser
@@ -39,5 +38,3 @@ The parser is hand-written for:
 - **Error Recovery** - Custom ErrorNode insertion for fault tolerance
 - **Control** - Full control over diagnostic messages
 - **Incremental Parsing** - Future LSP support
-
-See `docs/adr/0001-parser-strategy.md` for the decision rationale.

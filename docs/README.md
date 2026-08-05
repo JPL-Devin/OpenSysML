@@ -26,6 +26,6 @@
 ## Quick Links
 
 - **Source:** [github.com/Open-MBEE/Systemica](https://github.com/Open-MBEE/Systemica)
-- **License:** MIT
+- **License:** Apache 2.0
 - **Go Module:** `github.com/Open-MBEE/Systemica`
-- **Go Version:** 1.23+
+- **Go Version:** 1.25+
