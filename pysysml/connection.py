@@ -125,6 +125,19 @@ class Connection:
         response = self._stub.ParseFile(request)
         return Model(response, self)
     
+    def load_from_content(self, content):
+        """Load a model from inline SysML content.
+        
+        Args:
+            content (str): SysML source code
+            
+        Returns:
+            Model: Parsed model object
+        """
+        request = sysml_pb2.ParseFileRequest(content=content)
+        response = self._stub.ParseFile(request)
+        return Model(response, self)
+    
     def get_symbol(self, model_hash, symbol_id):
         """Fetch symbol by ID from cached model.
         
