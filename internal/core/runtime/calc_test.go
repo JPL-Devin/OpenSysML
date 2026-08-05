@@ -18,27 +18,27 @@ func TestCalcInvocation_SimpleCalc(t *testing.T) {
 	// It contains:
 	//   calc add { in x: Integer; in y: Integer; return x + y; }
 	//   part def Result { attribute sum: Integer = add(3, 5); }
-	
+
 	path := filepath.Join("testdata", "simple_calc.sysml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("Failed to read %s: %v", path, err)
 	}
-	
+
 	// Parse
 	file := parser.New(source.New(path, data)).ParseFile()
-	
+
 	// Build symbol index
 	idx := symbols.NewIndex()
 	idx.AddDocument(path, file)
-	
+
 	// Create resolver and semantic model
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	
+
 	// Create runtime context
 	ctx := NewContext(model, resolver, 10000)
-	
+
 	// Find the default value expression from Result.sum
 	// Navigate: root -> test package -> Result part def -> sum attribute -> default expr
 	rootScope := idx.DocumentRoot(path)
@@ -47,13 +47,13 @@ func TestCalcInvocation_SimpleCalc(t *testing.T) {
 	if !ok {
 		t.Fatal("Result part def not found")
 	}
-	
+
 	// Find sum attribute in Result's members
 	resultDef, ok := resultSym.Decl.(*ast.Definition)
 	if !ok {
 		t.Fatal("Result is not a Definition")
 	}
-	
+
 	var invExpr ast.Node
 	for _, member := range resultDef.Members {
 		// Unwrap Membership
@@ -61,24 +61,24 @@ func TestCalcInvocation_SimpleCalc(t *testing.T) {
 		if membership, ok := member.(*ast.Membership); ok {
 			node = membership.Member
 		}
-		
+
 		// Find usage named "sum" with default value
 		if usage, ok := node.(*ast.Usage); ok && usage.Ident.Name == "sum" {
 			invExpr = usage.Value
 			break
 		}
 	}
-	
+
 	if invExpr == nil {
 		t.Fatal("sum default value not found")
 	}
-	
+
 	// Evaluate add(3, 5) with scope context from test package
 	result, err := ctx.EvalWithScope(invExpr, testPkg)
 	if err != nil {
 		t.Fatalf("Eval failed: %v", err)
 	}
-	
+
 	// Check result: add(3, 5) should return 8
 	if result.Kind != ValConst {
 		t.Fatalf("Expected ValConst, got %v", result.Kind)
@@ -89,7 +89,6 @@ func TestCalcInvocation_SimpleCalc(t *testing.T) {
 	if result.Const.Int != 8 {
 		t.Fatalf("Expected 8, got %d", result.Const.Int)
 	}
-	
+
 	t.Logf("✓ add(3, 5) = %d", result.Const.Int)
 }
-

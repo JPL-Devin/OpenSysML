@@ -39,26 +39,26 @@ func (tr *TraceRecorder) RecordActionStep(step int, tokens []Token) {
 	if !tr.enabled {
 		return
 	}
-	
+
 	if len(tokens) == 0 {
 		tr.entries = append(tr.entries, fmt.Sprintf("step %d: no active tokens", step))
 		return
 	}
-	
+
 	// Sort tokens by ID for determinism
 	sorted := make([]Token, len(tokens))
 	copy(sorted, tokens)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].ID < sorted[j].ID
 	})
-	
+
 	// Format: step N: token T1@node1, token T2@node2
 	var parts []string
 	for _, t := range sorted {
 		nodeName := nodeIdentifier(t.Location)
 		parts = append(parts, fmt.Sprintf("token %d@%s", t.ID, nodeName))
 	}
-	
+
 	tr.entries = append(tr.entries, fmt.Sprintf("step %d: %s", step, strings.Join(parts, ", ")))
 }
 
@@ -67,7 +67,7 @@ func (tr *TraceRecorder) RecordStateTransition(fromState, toState string, event 
 	if !tr.enabled {
 		return
 	}
-	
+
 	if event == "" {
 		tr.entries = append(tr.entries, fmt.Sprintf("transition: %s -> %s", fromState, toState))
 	} else {
@@ -80,7 +80,7 @@ func (tr *TraceRecorder) RecordStateEntry(state string, hasEntryAction bool) {
 	if !tr.enabled {
 		return
 	}
-	
+
 	if hasEntryAction {
 		tr.entries = append(tr.entries, fmt.Sprintf("enter: %s (entry action)", state))
 	} else {
@@ -93,7 +93,7 @@ func (tr *TraceRecorder) RecordStateExit(state string, hasExitAction bool) {
 	if !tr.enabled {
 		return
 	}
-	
+
 	if hasExitAction {
 		tr.entries = append(tr.entries, fmt.Sprintf("exit: %s (exit action)", state))
 	} else {
@@ -106,7 +106,7 @@ func (tr *TraceRecorder) RecordEvent(event string, time float64) {
 	if !tr.enabled {
 		return
 	}
-	
+
 	tr.entries = append(tr.entries, fmt.Sprintf("event: %s (t=%.1f)", event, time))
 }
 
@@ -131,7 +131,7 @@ func nodeIdentifier(node ast.Node) string {
 	if node == nil {
 		return "nil"
 	}
-	
+
 	switch n := node.(type) {
 	case *ast.Usage:
 		if n.Ident.Name != "" {

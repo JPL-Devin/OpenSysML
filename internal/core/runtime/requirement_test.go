@@ -23,31 +23,31 @@ func TestRequirementEvaluation_RequireWithLiteral(t *testing.T) {
 			}
 		}
 	`
-	
+
 	// Parse
 	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
-	
+
 	// Build symbol index
 	idx := symbols.NewIndex()
 	idx.AddDocument("test.sysml", file)
-	
+
 	// Create resolver and semantic model
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	
+
 	// Create runtime context
 	ctx := NewContext(model, resolver, 10000)
-	
+
 	// Resolve requirements
 	rootScope := idx.DocumentRoot("test.sysml")
 	testPkg := rootScope.Children()[0]
-	
+
 	// Test SafeSpeed
 	safeSpeed, ok := testPkg.LookupLocal("SafeSpeed")
 	if !ok {
 		t.Fatal("SafeSpeed not found")
 	}
-	
+
 	satisfied, err := ctx.EvaluateRequirement(safeSpeed, testPkg)
 	if err != nil {
 		t.Fatalf("SafeSpeed evaluation failed: %v", err)
@@ -56,13 +56,13 @@ func TestRequirementEvaluation_RequireWithLiteral(t *testing.T) {
 		t.Fatal("SafeSpeed should be satisfied")
 	}
 	t.Logf("✓ SafeSpeed: requirement satisfied")
-	
+
 	// Test UnsafeSpeed
 	unsafeSpeed, ok := testPkg.LookupLocal("UnsafeSpeed")
 	if !ok {
 		t.Fatal("UnsafeSpeed not found")
 	}
-	
+
 	satisfied, err = ctx.EvaluateRequirement(unsafeSpeed, testPkg)
 	if err == nil {
 		t.Fatal("UnsafeSpeed should fail")
@@ -82,21 +82,21 @@ func TestRequirementEvaluation_Assume(t *testing.T) {
 			}
 		}
 	`
-	
+
 	// Parse
 	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
-	
+
 	// Build symbol index
 	idx := symbols.NewIndex()
 	idx.AddDocument("test.sysml", file)
-	
+
 	// Create resolver and semantic model
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	
+
 	// Create runtime context
 	ctx := NewContext(model, resolver, 10000)
-	
+
 	// Resolve requirement
 	rootScope := idx.DocumentRoot("test.sysml")
 	testPkg := rootScope.Children()[0]
@@ -104,7 +104,7 @@ func TestRequirementEvaluation_Assume(t *testing.T) {
 	if !ok {
 		t.Fatal("WithAssumption not found")
 	}
-	
+
 	// Evaluate - should pass even though assumption is false
 	satisfied, err := ctx.EvaluateRequirement(reqSym, testPkg)
 	if err != nil {
@@ -125,21 +125,21 @@ func TestRequirementEvaluation_SubjectNotFound(t *testing.T) {
 			}
 		}
 	`
-	
+
 	// Parse
 	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
-	
+
 	// Build symbol index
 	idx := symbols.NewIndex()
 	idx.AddDocument("test.sysml", file)
-	
+
 	// Create resolver and semantic model
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	
+
 	// Create runtime context
 	ctx := NewContext(model, resolver, 10000)
-	
+
 	// Resolve requirement
 	rootScope := idx.DocumentRoot("test.sysml")
 	testPkg := rootScope.Children()[0]
@@ -147,7 +147,7 @@ func TestRequirementEvaluation_SubjectNotFound(t *testing.T) {
 	if !ok {
 		t.Fatal("NeedsSubject not found")
 	}
-	
+
 	// Evaluate - should fail because 'vehicle' not in scope
 	_, err := ctx.EvaluateRequirement(reqSym, testPkg)
 	if err == nil {
@@ -177,21 +177,21 @@ func TestRequirementEvaluation_Complete(t *testing.T) {
 			}
 		}
 	`
-	
+
 	// Parse
 	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
-	
+
 	// Build symbol index
 	idx := symbols.NewIndex()
 	idx.AddDocument("test.sysml", file)
-	
+
 	// Create resolver and semantic model
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	
+
 	// Create runtime context
 	ctx := NewContext(model, resolver, 10000)
-	
+
 	// Resolve requirement
 	rootScope := idx.DocumentRoot("test.sysml")
 	testPkg := rootScope.Children()[0]
@@ -199,7 +199,7 @@ func TestRequirementEvaluation_Complete(t *testing.T) {
 	if !ok {
 		t.Fatal("SafetyReq not found")
 	}
-	
+
 	// Evaluate - should pass (subject/actor exist, assume passes, require is true)
 	satisfied, err := ctx.EvaluateRequirement(reqSym, testPkg)
 	if err != nil {

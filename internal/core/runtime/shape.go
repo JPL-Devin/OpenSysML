@@ -10,10 +10,10 @@ import (
 // own + inherited − redefined/masked, carrying type + multiplicity + default.
 type EffectiveFeature struct {
 	Name         string
-	OwnerType    *symbols.Symbol         // type that declares this feature (may be supertype)
-	Type         *symbols.Symbol         // resolved type (nil if untyped)
-	Multiplicity semantics.Range         // from MultiplicityOf (default 1..1)
-	DefaultValue ast.Node                // value-binding expression (nil if none)
+	OwnerType    *symbols.Symbol // type that declares this feature (may be supertype)
+	Type         *symbols.Symbol // resolved type (nil if untyped)
+	Multiplicity semantics.Range // from MultiplicityOf (default 1..1)
+	DefaultValue ast.Node        // value-binding expression (nil if none)
 }
 
 // FeaturesOf returns the ordered, deduplicated effective-feature list for the given type symbol.
@@ -22,7 +22,7 @@ func (ctx *Context) FeaturesOf(typeSym *symbols.Symbol) []EffectiveFeature {
 	if typeSym == nil {
 		return nil
 	}
-	
+
 	// Memoization
 	if cached, ok := ctx.features[typeSym]; ok {
 		return cached

@@ -95,23 +95,23 @@ func TestEval_SequenceExpr(t *testing.T) {
 	src := `attribute test = (1, 2, 3);`
 	model, resolver, root := parseAndBuildModel(t, src)
 	ctx := NewContext(model, resolver, 1000)
-	
+
 	attrSym := resolveSymbol(t, root, "test")
 	attrDecl := attrSym.Decl.(*ast.Usage)
 	expr := attrDecl.Value
-	
+
 	result, err := ctx.Eval(expr)
 	if err != nil {
 		t.Fatalf("Eval failed: %v", err)
 	}
-	
+
 	if result.Kind != ValSequence {
 		t.Fatalf("expected ValSequence, got %v", result.Kind)
 	}
 	if result.Sequence.Size() != 3 {
 		t.Errorf("expected size 3, got %d", result.Sequence.Size())
 	}
-	
+
 	// Check elements
 	elem0, _ := result.Sequence.At(0)
 	if elem0.Kind != ValConst || elem0.Const.Int != 1 {
@@ -140,7 +140,7 @@ func TestEval_StepLimit(t *testing.T) {
 	src := `part def Simple {}`
 	model, resolver, _ := parseAndBuildModel(t, src)
 	ctx := NewContext(model, resolver, 5) // very low limit
-	
+
 	// Eval 6 literals → should exceed 5 steps
 	for i := 0; i < 6; i++ {
 		_, err := ctx.Eval(&ast.LiteralInteger{Value: "1"})
@@ -172,15 +172,15 @@ func TestEval_QualifiedNameLookup(t *testing.T) {
 		t.Run(tt.src, func(t *testing.T) {
 			model, resolver, root := parseAndBuildModel(t, tt.src)
 			ctx := NewContext(model, resolver, 1000)
-			
+
 			testSym := resolveSymbol(t, root, "test")
 			testDecl := testSym.Decl.(*ast.Usage)
-			
+
 			result, err := ctx.Eval(testDecl.Value)
 			if err != nil {
 				t.Fatalf("Eval failed: %v", err)
 			}
-			
+
 			if result.Kind != ValConst || result.Const.Kind != semantics.ValInt || result.Const.Int != tt.expected {
 				t.Errorf("expected int %d, got %v", tt.expected, result)
 			}
