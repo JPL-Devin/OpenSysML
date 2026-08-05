@@ -661,6 +661,63 @@ func TestParseStateBody_Transition(t *testing.T) {
 	}
 }
 
+// accept at/after/when carry an expression whose role only the introducing
+// keyword reveals, so the parser records it as a typed trigger event.
+func TestParseStateBody_AcceptTransitionTriggerKinds(t *testing.T) {
+	nodes := parseStateBodyTest(t, `{
+		accept after 10 then Idle;
+		accept at deadline then Idle;
+		accept when temp > 5 then Idle;
+		accept go then Idle;
+	}`)
+
+	if len(nodes) != 4 {
+		t.Fatalf("expected 4 nodes, got %d", len(nodes))
+	}
+	triggers := make([]ast.Node, len(nodes))
+	for i, n := range nodes {
+		trans, ok := n.(*ast.TransitionMember)
+		if !ok {
+			t.Fatalf("node %d: expected *ast.TransitionMember, got %T", i, n)
+		}
+		triggers[i] = trans.Trigger
+	}
+
+	after, ok := triggers[0].(*ast.TimeEvent)
+	if !ok {
+		t.Fatalf("`accept after`: expected *ast.TimeEvent, got %T", triggers[0])
+	}
+	if after.Absolute {
+		t.Error("`accept after` should be a relative TimeEvent")
+	}
+	if after.Duration == nil {
+		t.Error("`accept after`: TimeEvent.Duration is nil")
+	}
+
+	at, ok := triggers[1].(*ast.TimeEvent)
+	if !ok {
+		t.Fatalf("`accept at`: expected *ast.TimeEvent, got %T", triggers[1])
+	}
+	if !at.Absolute {
+		t.Error("`accept at` should be an absolute TimeEvent")
+	}
+
+	change, ok := triggers[2].(*ast.ChangeEvent)
+	if !ok {
+		t.Fatalf("`accept when`: expected *ast.ChangeEvent, got %T", triggers[2])
+	}
+	if change.Condition == nil {
+		t.Error("`accept when`: ChangeEvent.Condition is nil")
+	}
+
+	if _, isTime := triggers[3].(*ast.TimeEvent); isTime {
+		t.Error("`accept <signal>` should not be a TimeEvent")
+	}
+	if _, isChange := triggers[3].(*ast.ChangeEvent); isChange {
+		t.Error("`accept <signal>` should not be a ChangeEvent")
+	}
+}
+
 func TestParseStateBody_TransitionWithGuardAndEffect(t *testing.T) {
 	input := `{
 		transition Running to Stopped if ready do { action finalize; };

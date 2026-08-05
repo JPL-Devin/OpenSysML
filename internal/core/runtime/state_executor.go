@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lower"
@@ -270,11 +271,18 @@ func (e *StateExecutor) scheduleTransitionsForState(state *ast.StateNode) error 
 				return fmt.Errorf("time duration must be constant, got %v", durationVal.Kind)
 			}
 
+			// `accept at t` names an instant, `accept after d` an offset from
+			// entering the state. An instant already past fires immediately.
+			timestamp := e.currentTime + duration
+			if timeEvent.Absolute {
+				timestamp = math.Max(duration, e.currentTime)
+			}
+
 			// Schedule event (generate unique ID using current queue length)
 			e.eventQueue.Push(Event{
 				ID:        e.nextEventID,
 				Type:      EventTime,
-				Timestamp: e.currentTime + duration,
+				Timestamp: timestamp,
 				Payload:   trans, // Store transition reference
 			})
 			e.nextEventID++

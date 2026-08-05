@@ -95,16 +95,19 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 	}
 }
 
-// checkTrigger types a transition trigger that is a change-event condition. The
-// parser leaves such a trigger as a bare expression — only lowering wraps it in
-// an ast.ChangeEvent — while signal and time triggers name an event and carry no
-// condition to check.
+// checkTrigger types a transition trigger. A change event carries a Boolean
+// condition and a time event a duration expression; a signal or call trigger
+// names an event and has nothing to type here. `transition ... when <expr>`
+// leaves the trigger as a bare expression, which is a change-event condition
+// unless it is a bare name — that names a signal.
 func (tc *typeChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
 	switch t := trigger.(type) {
 	case nil:
 	case *ast.ChangeEvent:
 		tc.expr.checkBoolean(scope, t.Condition, "change event condition")
-	case *ast.FeatureReference, *ast.QualifiedName, *ast.TimeEvent, *ast.AcceptEvent, *ast.CallEvent:
+	case *ast.TimeEvent:
+		tc.expr.infer(scope, t.Duration)
+	case *ast.FeatureReference, *ast.QualifiedName, *ast.AcceptEvent, *ast.CallEvent:
 	default:
 		tc.expr.checkBoolean(scope, trigger, "change event condition")
 	}

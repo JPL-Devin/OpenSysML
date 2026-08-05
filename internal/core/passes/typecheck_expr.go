@@ -445,10 +445,9 @@ func (p parameter) scope() *symbols.Scope {
 // signature can be determined, in which case the invocation is left unchecked.
 func (ec *exprChecker) effectiveInParameters(sym *symbols.Symbol) ([]parameter, bool) {
 	var params []parameter
-	supers := ec.model.AllSupertypes(sym)
-	// AllSupertypes is nearest-first, so merge from the most general down.
-	for i := len(supers) - 1; i >= 0; i-- {
-		params = mergeParameters(params, supers[i])
+	supers := ec.supertypeMergeOrder(sym)
+	for _, super := range supers {
+		params = mergeParameters(params, super)
 	}
 	params = mergeParameters(params, sym)
 	if len(params) > 0 {
@@ -458,6 +457,29 @@ func (ec *exprChecker) effectiveInParameters(sym *symbols.Symbol) ([]parameter, 
 	// arguments; with supertypes the signature may live somewhere the checker
 	// cannot see, so stay silent.
 	return nil, len(supers) == 0 && sym.Decl != nil
+}
+
+// supertypeMergeOrder returns sym's transitive supertypes ordered so that a
+// supertype precedes anything that specializes it and siblings keep their
+// declaration order, which is the order positional parameters inherit in. That
+// is a depth-first post-order walk of DirectSupertypes; visiting each symbol
+// once also breaks cycles.
+func (ec *exprChecker) supertypeMergeOrder(sym *symbols.Symbol) []*symbols.Symbol {
+	var order []*symbols.Symbol
+	visited := map[*symbols.Symbol]bool{sym: true}
+	var walk func(*symbols.Symbol)
+	walk = func(s *symbols.Symbol) {
+		for _, super := range ec.model.DirectSupertypes(s) {
+			if visited[super] {
+				continue
+			}
+			visited[super] = true
+			walk(super)
+			order = append(order, super)
+		}
+	}
+	walk(sym)
+	return order
 }
 
 // mergeParameters folds a symbol's own `in` parameters into an inherited list,

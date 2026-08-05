@@ -1,6 +1,7 @@
 package passes
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -222,6 +223,36 @@ func TestExprChangeEventConditionOK(t *testing.T) {
 	}`)
 }
 
+func TestExprTimedTransitionDelayIsNotACondition(t *testing.T) {
+	wantNoDiags(t, `package P {
+		part def M {
+			attribute period : ScalarValues::Integer = 10;
+			state def S {
+				state a {
+					accept after 10 then b;
+				}
+				state b {
+					accept at period then a;
+				}
+			}
+		}
+	}`)
+}
+
+func TestExprAcceptWhenConditionMustBeBoolean(t *testing.T) {
+	wantOneDiag(t, `package P {
+		part def M {
+			attribute temp : ScalarValues::Integer = 3;
+			state def S {
+				state a {
+					accept when temp then b;
+				}
+				state b;
+			}
+		}
+	}`, "change event condition must be Boolean, found Integer")
+}
+
 func TestExprTransitionGuardComparisonOK(t *testing.T) {
 	wantNoDiags(t, `package P {
 		part def M {
@@ -333,6 +364,22 @@ func TestExprPartiallyRedefinedParametersKeepInheritedSignature(t *testing.T) {
 		}
 		calc c { return AddPositive(1, 2); }
 	}`)
+}
+
+// Parameters inherited from several supertypes keep the order the supertypes
+// were declared in, so `first` precedes `second` here.
+func TestExprMultipleSupertypesKeepDeclarationOrder(t *testing.T) {
+	const model = `package P {
+		calc def First { in first : ScalarValues::String; }
+		calc def Second { in second : ScalarValues::Integer; }
+		calc def Both :> First, Second;
+		calc c { return Both(%s); }
+	}`
+	wantNoDiags(t, fmt.Sprintf(model, `"s", 1`))
+	// Were the supertypes folded in reverse, `second` would come first and the
+	// String would be reported against it as argument 1 instead.
+	wantOneDiag(t, fmt.Sprintf(model, `1, "s"`),
+		"argument 2 of Both expects Integer, found String")
 }
 
 // A redefined parameter's own type is what its argument is checked against.
