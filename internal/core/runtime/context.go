@@ -405,28 +405,8 @@ func (ctx *Context) ExecuteStateWithEvents(stateMachine *symbols.Symbol, events 
 		exec.SendSignal(event, nil)
 	}
 
-	// Process events until completion or suspension
-	const maxEvents = 10000
-	eventCount := 0
-
-	for exec.state == StateRunning {
-		// Check for pending events
-		if exec.eventQueue.Len() == 0 {
-			exec.state = StateSuspended
-			break
-		}
-
-		// Check step limit
-		if eventCount >= maxEvents {
-			return nil, nil, fmt.Errorf("state machine exceeded max events (%d), possible infinite loop", maxEvents)
-		}
-
-		// Process next event
-		if err := exec.processNextEvent(); err != nil {
-			return nil, nil, fmt.Errorf("process event: %w", err)
-		}
-
-		eventCount++
+	if err := exec.RunToCompletion(); err != nil {
+		return nil, nil, err
 	}
 
 	// Return state machine data and the real ordered visit trace

@@ -308,10 +308,12 @@ func (e *StateExecutor) processNextEvent() error {
 					sourceState = stateNode
 				}
 
-				// Transitions leaving a region for a pseudostate (a join, say)
-				// change the whole configuration, so they are not region-local.
-				_, targetIsState := lowerTrans.Target.(*ast.StateNode)
-				if sourceState != nil && targetIsState {
+				// A fork or join rewrites the whole active configuration, so a
+				// transition into one is not region-local. Every other target
+				// stays region-local, where fireTransitionInRegion handles it or
+				// rejects it — routing it out of the region instead would drop
+				// the sibling regions silently.
+				if sourceState != nil && !isSynchronizationTarget(lowerTrans.Target) {
 					// Check if this state is active in any region
 					for region, activeState := range e.activeConfig.regionStates {
 						if activeState == sourceState {
@@ -595,6 +597,11 @@ func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
 func (e *StateExecutor) transitionTo(trans *lower.Transition, targetState *ast.StateNode) error {
 	// Exit current state hierarchy up to LCA
 	currentState := e.getCurrentState()
+	// The trace's source name has to be read before the move, not after it.
+	fromName := ""
+	if currentState != nil {
+		fromName = currentState.Name
+	}
 	lca := e.getLCA(currentState, targetState)
 	statesToExit := make([]*ast.StateNode, 0)
 	current := currentState
@@ -652,11 +659,6 @@ func (e *StateExecutor) transitionTo(trans *lower.Transition, targetState *ast.S
 
 	// Record trace
 	if e.trace != nil {
-		fromName := ""
-		currentState := e.getCurrentState()
-		if currentState != nil {
-			fromName = currentState.Name
-		}
 		eventName := ""
 		if trans.Trigger != nil {
 			// Extract event name from trigger (simplified)
@@ -666,6 +668,13 @@ func (e *StateExecutor) transitionTo(trans *lower.Transition, targetState *ast.S
 	}
 
 	return nil
+}
+
+// isSynchronizationTarget reports whether a transition target is a fork or join
+// pseudostate, the two kinds that replace the entire active configuration.
+func isSynchronizationTarget(target ast.Node) bool {
+	ps, ok := target.(*ast.PseudostateNode)
+	return ok && (ps.Kind == ast.PseudostateFork || ps.Kind == ast.PseudostateJoin)
 }
 
 // passesGuard reports whether a transition's guard allows it to fire. A nil
@@ -737,20 +746,15 @@ func (e *StateExecutor) fireForkTransition(trans *lower.Transition, fork *ast.Ps
 		}
 	}
 
-	// Enter the composite state's own hierarchy, then override each region's
-	// active state with the branch target instead of the region's initial state.
-	if owner != nil {
-		if err := e.enterHierarchy(owner); err != nil {
-			return err
-		}
+	// Enter the composite state's own hierarchy, activating each targeted region
+	// at its branch target rather than at the region's initial state: an explicit
+	// fork bypasses the initial pseudostate, so that state's entry and do
+	// behaviors must not run. Regions the fork does not target start normally.
+	if owner == nil {
+		return fmt.Errorf("fork %s: branch targets have no owning composite state", fork.Name)
 	}
-	e.activeConfig.simpleState = nil
-	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode, len(targets))
-	for region, target := range targets {
-		e.activeConfig.regionStates[region] = target
-		if err := e.enterState(target); err != nil {
-			return fmt.Errorf("enter fork branch %s: %w", target.Name, err)
-		}
+	if err := e.enterHierarchyInto(owner, targets); err != nil {
+		return err
 	}
 
 	if err := e.scheduleTransitionEvents(); err != nil {
@@ -806,19 +810,24 @@ func (e *StateExecutor) fireJoinTransition(trans *lower.Transition, join *ast.Ps
 	return e.transitionTo(trans, target)
 }
 
-// joinSources returns the source state of every transition into join.
+// joinSources returns the source state of every transition into join, in state
+// declaration order. That order is observable — it is the order the branches are
+// exited in — so it comes from graph.States rather than from the graph.Transitions
+// map, whose iteration order varies between runs.
 func (e *StateExecutor) joinSources(join *ast.PseudostateNode) ([]*ast.StateNode, error) {
 	var sources []*ast.StateNode
-	for _, transitions := range e.graph.Transitions {
-		for _, trans := range transitions {
-			if trans.Target != ast.Node(join) {
-				continue
+	for _, state := range e.graph.States {
+		for _, trans := range e.graph.Transitions[state] {
+			if trans.Target == ast.Node(join) {
+				sources = append(sources, state)
 			}
-			source, ok := trans.Source.(*ast.StateNode)
-			if !ok {
+		}
+	}
+	for _, ps := range e.graph.Pseudostates {
+		for _, trans := range e.graph.Transitions[ps] {
+			if trans.Target == ast.Node(join) {
 				return nil, fmt.Errorf("join %s: incoming source must be a state, got %T", join.Name, trans.Source)
 			}
-			sources = append(sources, source)
 		}
 	}
 	if len(sources) < 2 {
@@ -842,7 +851,7 @@ func (e *StateExecutor) isActive(state *ast.StateNode) bool {
 
 // exitToward exits the active configuration up to, but not including, stop.
 func (e *StateExecutor) exitToward(stop *ast.StateNode) error {
-	for _, active := range e.activeConfig.regionStates {
+	for _, active := range e.orderedRegionStates() {
 		if err := e.exitState(active); err != nil {
 			return fmt.Errorf("exit state: %w", err)
 		}
@@ -858,16 +867,73 @@ func (e *StateExecutor) exitToward(stop *ast.StateNode) error {
 	return nil
 }
 
+// orderedRegionStates returns the active state of each orthogonal region in
+// region declaration order, since exit behaviors run in the order returned and
+// activeConfig.regionStates is a map.
+func (e *StateExecutor) orderedRegionStates() []*ast.StateNode {
+	states := make([]*ast.StateNode, 0, len(e.activeConfig.regionStates))
+	seen := make(map[*ast.StateRegion]bool, len(e.activeConfig.regionStates))
+	for _, state := range e.graph.States {
+		for _, region := range e.graph.CompositeStates[state] {
+			seen[region] = true
+			if active, ok := e.activeConfig.regionStates[region]; ok {
+				states = append(states, active)
+			}
+		}
+	}
+	// A region whose owner is absent from graph.States still has to be exited.
+	for region, active := range e.activeConfig.regionStates {
+		if !seen[region] {
+			states = append(states, active)
+		}
+	}
+	return states
+}
+
 // enterHierarchy enters state's ancestors, outermost first, then state itself,
 // skipping any that are already active.
 func (e *StateExecutor) enterHierarchy(state *ast.StateNode) error {
+	return e.enterHierarchyInto(state, nil)
+}
+
+// enterHierarchyInto is enterHierarchy, except that state's own orthogonal
+// regions start at the given branch targets wherever branches names one.
+func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*ast.StateRegion]*ast.StateNode) error {
 	chain := e.getParentChain(state)
 	for i := len(chain) - 1; i >= 0; i-- {
 		if e.isActive(chain[i]) {
 			continue
 		}
-		if err := e.enterState(chain[i]); err != nil {
+		var err error
+		if chain[i] == state {
+			err = e.enterStateInto(state, branches)
+		} else {
+			err = e.enterState(chain[i])
+		}
+		if err != nil {
 			return fmt.Errorf("enter state %s: %w", chain[i].Name, err)
+		}
+	}
+	return nil
+}
+
+// maxStateEvents bounds a single run of the event loop so a cyclic machine
+// reports a typed error instead of spinning forever.
+const maxStateEvents = 10000
+
+// RunToCompletion processes queued events until the machine completes or has no
+// event left to process, at which point it suspends.
+func (e *StateExecutor) RunToCompletion() error {
+	for events := 0; e.state == StateRunning; events++ {
+		if e.eventQueue.Len() == 0 {
+			e.state = StateSuspended
+			return nil
+		}
+		if events >= maxStateEvents {
+			return fmt.Errorf("state machine exceeded max events (%d), possible infinite loop", maxStateEvents)
+		}
+		if err := e.processNextEvent(); err != nil {
+			return fmt.Errorf("process event: %w", err)
 		}
 	}
 	return nil
@@ -960,6 +1026,14 @@ func (e *StateExecutor) initialize() error {
 
 // enterState executes entry behaviors when entering a state.
 func (e *StateExecutor) enterState(state *ast.StateNode) error {
+	return e.enterStateInto(state, nil)
+}
+
+// enterStateInto enters state, starting each of its orthogonal regions at
+// branches[region] where branches names one and at the region's initial state
+// otherwise. A fork supplies branches: it enters its targets directly instead of
+// the regions' initial states, whose entry and do behaviors it bypasses.
+func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.StateRegion]*ast.StateNode) error {
 	if state == nil {
 		return nil
 	}
@@ -987,11 +1061,14 @@ func (e *StateExecutor) enterState(state *ast.StateNode) error {
 		e.activeConfig.simpleState = nil // Clear simple state
 
 		for _, region := range regions {
-			initialState := e.graph.RegionInitials[region]
-			e.activeConfig.regionStates[region] = initialState
-			// Recursively enter initial state in each region
-			if err := e.enterState(initialState); err != nil {
-				return fmt.Errorf("enter initial state in region %s: %w", region.Name, err)
+			entry, targeted := branches[region]
+			if !targeted {
+				entry = e.graph.RegionInitials[region]
+			}
+			e.activeConfig.regionStates[region] = entry
+			// Recursively enter each region's starting state
+			if err := e.enterState(entry); err != nil {
+				return fmt.Errorf("enter starting state in region %s: %w", region.Name, err)
 			}
 		}
 	} else {

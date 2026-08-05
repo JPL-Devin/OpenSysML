@@ -30,6 +30,8 @@ func TestNegative(t *testing.T) {
 		{"requirement_empty_require", "requirement r { require }"},
 		{"calc_empty_return", "calc c { return }"},
 		{"constraint_incomplete", "constraint c { assert }"},
+		{"state_fork_no_name", "state s { fork ; }"},
+		{"state_join_no_semicolon", "state s { join sync state t; }"},
 	}
 
 	for _, tt := range tests {

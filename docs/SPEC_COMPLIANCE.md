@@ -95,11 +95,12 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 26 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×9)
-- 7 robustness tests (deadlock, guards, budgets, sourceless accept)
+- 27 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×10)
+- 10 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join and region-local pseudostate misuse)
 - 41 unit tests
-- 19 golden AST fixtures (including pseudostate parsing tests)
-- 16 negative parser tests
+- 17 golden AST fixtures (including pseudostate parsing tests)
+- 1 golden execution trace (fork/join branch ordering)
+- 17 negative parser tests
 - 900+ total tests passing
 
 ---
@@ -195,10 +196,11 @@ Each row documents one behavioral semantic feature:
 | Orthogonal regions | `state_executor.go:364` broadcastEvent, `:466` fireTransitionInRegion | `state_orthogonal_regions.sysml` | ✅ Faithful |
 | Choice pseudostates | `state_executor.go:971` evaluateChoicePseudostate | `state_choice_pseudostate.sysml` | ✅ Faithful |
 | Junction pseudostates | `state_executor.go:1020` evaluateJunctionPseudostate | `state_junction_pseudostate.sysml` | ✅ Faithful |
-| Fork pseudostates | `state_executor.go:692` fireForkTransition | `pseudostate_test.go:TestForkAndJoinPseudostates` | ✅ Faithful |
-| Join pseudostates | `state_executor.go:768` fireJoinTransition | `pseudostate_test.go:TestJoinWaitsForEveryBranch` | ✅ Faithful |
+| Fork pseudostates (bypass targeted regions' initial states) | `state_executor.go:706` fireForkTransition, `:1028` enterStateInto | `state_fork_join.sysml` golden, `state_fork_join_pseudostate.trace.golden`, `fork_join_test.go:TestForkBypassesTargetedRegionInitials` | ✅ Faithful |
+| Join pseudostates | `state_executor.go:782` fireJoinTransition, `:827` joinSources (declaration order) | `pseudostate_test.go:TestJoinWaitsForEveryBranch`, `fork_join_test.go:TestForkJoinVisitOrderIsDeterministic` | ✅ Faithful |
 | Entry/exit point pseudostates | `state_executor.go:538` fireTransition (routed like a junction) | `pseudostate_test.go:TestEntryAndExitPointPseudostates` | ⚠️ Approximate (AST kinds only; no textual notation) |
 | History pseudostates | — | — | ❌ Not Yet Implemented (no `ast.PseudostateKind` for history) |
+| Choice/junction/entry/exit reached from inside an orthogonal region | `state_executor.go:316` processNextEvent, `:471` fireTransitionInRegion | `robustness_test.go:region_local_junction_target`, `fork_join_test.go:TestRegionLocalChoiceTargetIsRejected` | ❌ Not Yet Implemented (typed error; sibling regions would be dropped) |
 | CallEvent operation-name matching | `state_executor.go:437` matchesEvent (matches any call, TODO) | — | ⚠️ Approximate |
 | Nested action invocation in entry/do/exit/effect | `state_executor.go:1075` executeAction, `invoke_action.go` invokeAction | `state_behavior_test.go:TestStateDoExitAndTransitionEffectPerformAction` | ✅ Faithful |
 | Run-to-completion semantics | `state_executor.go:288` processNextEvent | `state_executor_test.go:TestStateRunToCompletion` | ✅ Faithful |
@@ -339,11 +341,12 @@ known, so unmodelled types never produce a false positive.
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts:**
-- Conformance cases: 26 (all passing)
-- Robustness tests: 7 (all passing)
+- Conformance cases: 27 (all passing)
+- Robustness tests: 10 (all passing)
 - Unit tests: 41 (action/state executors)
-- Golden AST fixtures: 16
-- Negative parser tests: 15
+- Golden AST fixtures: 17
+- Golden execution traces: 1
+- Negative parser tests: 17
 - Total tests: 900+
 
 **Coverage by Feature Type:**
@@ -351,13 +354,13 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 - Constraint: 3 conformance + 1 robustness
 - Requirement: 5 conformance + 4 unit (named args, inheritance)
 - Action: 5 conformance + 19 unit + 1 robustness
-- State: 9 conformance + 14 unit + 2 robustness
+- State: 10 conformance + 14 unit + 5 robustness
 - Evaluation: 3 conformance (unary, coercion, qualified)
 - Name resolution: 3 unit (inheritance, named args, control flow)
 
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
-- Conformance: 26/26 cases passing
+- Conformance: 27/27 cases passing
 - Training examples: 63/100 clean (37 with pedagogical gaps or OMG bugs)
 - No regressions: All tests pass on every commit
 
