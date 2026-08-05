@@ -155,17 +155,19 @@ class Symbol:
     
     def _repr_html_(self) -> str:
         """IPython rich display: formatted definition."""
+        from html import escape
+        
         html = ['<div style="font-family: monospace; padding: 10px; border: 1px solid #ddd; background: #f9f9f9;">']
-        html.append(f'<h4 style="margin-top: 0;">{self.name}</h4>')
-        html.append(f'<p><strong>Kind:</strong> <code>{self.kind}</code></p>')
-        html.append(f'<p><strong>ID:</strong> <code>{self.id}</code></p>')
+        html.append(f'<h4 style="margin-top: 0;">{escape(self.name)}</h4>')
+        html.append(f'<p><strong>Kind:</strong> <code>{escape(self.kind)}</code></p>')
+        html.append(f'<p><strong>ID:</strong> <code>{escape(self.id)}</code></p>')
         
         # Show metadata if present
         if self.metadata:
             html.append('<p><strong>Metadata:</strong></p>')
             html.append('<ul style="margin: 5px 0;">')
             for key, value in self.metadata.items():
-                html.append(f'<li><code>{key}</code>: {value}</li>')
+                html.append(f'<li><code>{escape(key)}</code>: {escape(str(value))}</li>')
             html.append('</ul>')
         
         # Show children summary
@@ -180,10 +182,10 @@ class Symbol:
             
             html.append('<ul style="margin: 5px 0;">')
             for kind, items in sorted(by_kind.items()):
-                names = ', '.join(item.name for item in items[:5])
+                names = ', '.join(escape(item.name) for item in items[:5])
                 if len(items) > 5:
                     names += f', ... (+{len(items)-5} more)'
-                html.append(f'<li>{kind}: {names}</li>')
+                html.append(f'<li>{escape(kind)}: {names}</li>')
             html.append('</ul>')
         else:
             html.append('<p><em>No children</em></p>')

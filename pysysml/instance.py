@@ -52,9 +52,11 @@ class Instance:
     
     def _repr_html_(self):
         """IPython rich display: slots table."""
+        from html import escape
+        
         html = ['<div style="font-family: monospace; padding: 10px; border: 1px solid #ddd;">']
         html.append(f'<h4 style="margin-top: 0;">Instance #{self.id}</h4>')
-        html.append(f'<p><strong>Type:</strong> <code>{self.type_symbol_id}</code></p>')
+        html.append(f'<p><strong>Type:</strong> <code>{escape(self.type_symbol_id)}</code></p>')
         
         if self.slots:
             html.append('<table style="border-collapse: collapse; width: 100%; margin-top: 10px;">')
@@ -66,7 +68,7 @@ class Instance:
             
             for feature_name, slot_value in self.slots.items():
                 html.append('<tr>')
-                html.append(f'<td style="border: 1px solid #ccc; padding: 5px;"><code>{feature_name}</code></td>')
+                html.append(f'<td style="border: 1px solid #ccc; padding: 5px;"><code>{escape(feature_name)}</code></td>')
                 
                 # Format value
                 if slot_value.HasField('value'):
@@ -89,6 +91,8 @@ class Instance:
     
     def _format_value(self, pb_value):
         """Format a protobuf Value for HTML display."""
+        from html import escape
+        
         kind = pb_value.WhichOneof('kind')
         if kind == 'int_value':
             return str(pb_value.int_value)
@@ -97,7 +101,7 @@ class Instance:
         elif kind == 'bool_value':
             return str(pb_value.bool_value)
         elif kind == 'string_value':
-            return f'"{pb_value.string_value}"'
+            return f'"{escape(pb_value.string_value)}"'
         elif kind == 'instance_id':
             return f'Instance#{pb_value.instance_id}'
         elif kind == 'null':
