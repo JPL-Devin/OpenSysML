@@ -1,0 +1,151 @@
+package semantics
+
+import "github.com/Open-MBEE/Systemica/internal/core/symbols"
+
+// PrimType classifies a symbol against the stdlib scalar value types
+// (`ScalarValues`). It is the lattice the expression type checker reasons over;
+// anything outside it (parts, items, enumerations, collections, unresolved
+// names) is PrimUnknown and suppresses checking.
+type PrimType int
+
+const (
+	PrimUnknown PrimType = iota
+	PrimBoolean
+	PrimString
+	PrimNatural
+	PrimInteger
+	PrimRational
+	PrimReal
+	PrimComplex
+	PrimNumber
+)
+
+var primNames = map[PrimType]string{
+	PrimUnknown:  "unknown",
+	PrimBoolean:  "Boolean",
+	PrimString:   "String",
+	PrimNatural:  "Natural",
+	PrimInteger:  "Integer",
+	PrimRational: "Rational",
+	PrimReal:     "Real",
+	PrimComplex:  "Complex",
+	PrimNumber:   "Number",
+}
+
+// String returns the stdlib name of the type, or "unknown".
+func (p PrimType) String() string {
+	if n, ok := primNames[p]; ok {
+		return n
+	}
+	return "unknown"
+}
+
+// numericRank orders the numeric tower: a value of lower rank conforms to a
+// type of higher rank (Natural ⊑ Integer ⊑ Rational ⊑ Real ⊑ Complex ⊑ Number).
+var numericRank = map[PrimType]int{
+	PrimNatural:  0,
+	PrimInteger:  1,
+	PrimRational: 2,
+	PrimReal:     3,
+	PrimComplex:  4,
+	PrimNumber:   5,
+}
+
+// IsNumeric reports whether p is part of the numeric tower.
+func (p PrimType) IsNumeric() bool {
+	_, ok := numericRank[p]
+	return ok
+}
+
+// PrimConforms reports whether a value of type from is acceptable where to is
+// expected. PrimUnknown on either side conforms, so partial information never
+// produces a diagnostic.
+func PrimConforms(from, to PrimType) bool {
+	if from == PrimUnknown || to == PrimUnknown {
+		return true
+	}
+	if from == to {
+		return true
+	}
+	if from.IsNumeric() && to.IsNumeric() {
+		return numericRank[from] <= numericRank[to]
+	}
+	return false
+}
+
+// PrimWiden returns the more general of two numeric types, or PrimUnknown if
+// either is not numeric.
+func PrimWiden(a, b PrimType) PrimType {
+	if !a.IsNumeric() || !b.IsNumeric() {
+		return PrimUnknown
+	}
+	if numericRank[a] >= numericRank[b] {
+		return a
+	}
+	return b
+}
+
+// scalarFQNs maps stdlib scalar qualified names to their lattice element.
+var scalarFQNs = map[string]PrimType{
+	"ScalarValues::Boolean":  PrimBoolean,
+	"ScalarValues::String":   PrimString,
+	"ScalarValues::Positive": PrimNatural,
+	"ScalarValues::Natural":  PrimNatural,
+	"ScalarValues::Integer":  PrimInteger,
+	"ScalarValues::Rational": PrimRational,
+	"ScalarValues::Real":     PrimReal,
+	"ScalarValues::Complex":  PrimComplex,
+	"ScalarValues::Number":   PrimNumber,
+}
+
+// scalarTable resolves the stdlib scalar symbols once per model, by identity,
+// so a user-declared type merely named "Integer" is never mistaken for one.
+func (m *Model) scalarTable() map[*symbols.Symbol]PrimType {
+	if m.scalars != nil {
+		return m.scalars
+	}
+	table := make(map[*symbols.Symbol]PrimType, len(scalarFQNs))
+	if m.resolver != nil && m.resolver.Index() != nil {
+		for fqn, prim := range scalarFQNs {
+			for _, sym := range m.resolver.Index().LookupQualified(fqn) {
+				if sym != nil {
+					table[sym] = prim
+				}
+			}
+		}
+	}
+	m.scalars = table
+	return table
+}
+
+// PrimTypeOf classifies sym against the scalar lattice. A definition is
+// classified by itself or its nearest scalar supertype; a usage by the type it
+// is typed by (typing is a generalization edge, so the same walk covers both).
+// Symbols with no scalar ancestor are PrimUnknown.
+func (m *Model) PrimTypeOf(sym *symbols.Symbol) PrimType {
+	if m == nil || sym == nil {
+		return PrimUnknown
+	}
+	if cached, ok := m.primTypes[sym]; ok {
+		return cached
+	}
+	table := m.scalarTable()
+	prim := PrimUnknown
+	if p, ok := table[sym]; ok {
+		prim = p
+	} else {
+		// AllSupertypes is breadth-first over declaration order, so the nearest
+		// scalar ancestor (the most specific one) is found first.
+		for _, super := range m.AllSupertypes(sym) {
+			if p, ok := table[super]; ok {
+				prim = p
+				break
+			}
+		}
+	}
+	if m.primTypes == nil {
+		m.primTypes = make(map[*symbols.Symbol]PrimType)
+	}
+	m.primTypes[sym] = prim
+	return prim
+}
