@@ -84,7 +84,7 @@ func TestResolve_FeatureChainExpr(t *testing.T) {
 		if fc.Member == nil || len(fc.Member.Parts) != 1 {
 			t.Fatal("expected single-part member")
 		}
-		if fc.Member.Parts[0].Sym == nil {
+		if _, ok := r.PartSymbol(fc.Member, 0); !ok {
 			t.Error("member part 'x' symbol not stored")
 		}
 	})
@@ -128,7 +128,7 @@ func TestResolve_FeatureChainExpr(t *testing.T) {
 		if outerChain.Member == nil || len(outerChain.Member.Parts) != 1 {
 			t.Fatal("expected outer member 'value'")
 		}
-		if outerChain.Member.Parts[0].Sym == nil {
+		if _, ok := r.PartSymbol(outerChain.Member, 0); !ok {
 			t.Error("outer member part 'value' symbol not stored")
 		}
 
@@ -137,7 +137,7 @@ func TestResolve_FeatureChainExpr(t *testing.T) {
 		if innerChain.Member == nil || len(innerChain.Member.Parts) != 1 {
 			t.Fatal("expected inner member 'Inner'")
 		}
-		if innerChain.Member.Parts[0].Sym == nil {
+		if _, ok := r.PartSymbol(innerChain.Member, 0); !ok {
 			t.Error("inner member part 'Inner' symbol not stored")
 		}
 	})
@@ -280,20 +280,20 @@ func TestResolve_QualifiedNamePartsStoreSymbols(t *testing.T) {
 	}
 
 	// Verify each part has resolved symbol
-	if qn.Parts[0].Sym == nil {
+	if _, ok := r.PartSymbol(qn, 0); !ok {
 		t.Error("Part 0 (A) symbol not set")
 	}
-	if qn.Parts[1].Sym == nil {
+	if _, ok := r.PartSymbol(qn, 1); !ok {
 		t.Error("Part 1 (B) symbol not set")
 	}
 
 	// Verify symbols are correct
-	aSym := qn.Parts[0].Sym.(*symbols.Symbol)
+	aSym, _ := r.PartSymbol(qn, 0)
 	if aSym.Name != "A" {
 		t.Errorf("Part 0 symbol name = %q, want A", aSym.Name)
 	}
 
-	bSym := qn.Parts[1].Sym.(*symbols.Symbol)
+	bSym, _ := r.PartSymbol(qn, 1)
 	if bSym.Name != "B" {
 		t.Errorf("Part 1 symbol name = %q, want B", bSym.Name)
 	}
@@ -345,7 +345,7 @@ func TestResolve_RelationshipTargetChain(t *testing.T) {
 		if fc.Member == nil || len(fc.Member.Parts) != 1 {
 			t.Fatal("expected single-part member 'x'")
 		}
-		if fc.Member.Parts[0].Sym == nil {
+		if _, ok := r.PartSymbol(fc.Member, 0); !ok {
 			t.Error("member part 'x' symbol not stored - chain not resolved")
 		}
 	})
@@ -397,7 +397,7 @@ func TestResolve_RelationshipTargetChain(t *testing.T) {
 		if outerChain.Member == nil || len(outerChain.Member.Parts) != 1 {
 			t.Fatal("expected outer member 'value'")
 		}
-		if outerChain.Member.Parts[0].Sym == nil {
+		if _, ok := r.PartSymbol(outerChain.Member, 0); !ok {
 			t.Error("outer member 'value' symbol not stored")
 		}
 
@@ -409,7 +409,7 @@ func TestResolve_RelationshipTargetChain(t *testing.T) {
 		if innerChain.Member == nil || len(innerChain.Member.Parts) != 1 {
 			t.Fatal("expected inner member 'B'")
 		}
-		if innerChain.Member.Parts[0].Sym == nil {
+		if _, ok := r.PartSymbol(innerChain.Member, 0); !ok {
 			t.Error("inner member 'B' symbol not stored")
 		}
 	})

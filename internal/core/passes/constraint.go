@@ -556,14 +556,6 @@ func (cc *constraintChecker) resolveInheritedMember(owner *symbols.Symbol, qn *a
 	return cc.resolver.ResolveQualified(owner.Scope, qn)
 }
 
-// formatUpper formats an upper bound for display (-1 = "*", else numeric).
-func formatUpper(upper int) string {
-	if upper < 0 {
-		return "*"
-	}
-	return fmt.Sprintf("%d", upper)
-}
-
 // formatBound formats a Bound for display (infinite = "*", else numeric value).
 func formatBound(b semantics.Bound) string {
 	if b.Infinite {

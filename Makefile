@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc test clean install help python-test python-install python-proto
+.PHONY: all build build-sysml build-lsp build-grpc test lint clean install help python-test python-install python-proto
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -11,6 +11,10 @@ LDFLAGS := -X main.Version=$(VERSION) \
            -X main.Commit=$(COMMIT) \
            -X main.BuildTime=$(BUILD_TIME) \
            -X main.GoVersion=$(GO_VERSION)
+
+# Static-analysis tool versions, pinned so CI and local runs agree
+STATICCHECK_VERSION := 2025.1.1
+GOSEC_VERSION := v2.22.5
 
 # Build output directory
 BIN_DIR := bin
@@ -41,6 +45,15 @@ build-grpc: ## Build sysml-grpc binary
 test: ## Run all tests
 	@echo "Running tests..."
 	go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+lint: ## Run static analysis (staticcheck + gosec), as CI does
+	@echo "Running staticcheck..."
+	go run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) ./...
+	@echo "Running gosec..."
+	@# Generated protobuf code is excluded: its unsafe.Pointer use (G103) comes
+	@# from protoc-gen-go and is not ours to change.
+	go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -quiet -exclude-generated ./...
+	@echo "✓ Lint passed"
 
 test-short: ## Run tests without race detector (faster)
 	@echo "Running tests (short)..."

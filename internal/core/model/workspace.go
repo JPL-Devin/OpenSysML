@@ -207,3 +207,24 @@ func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn 
 	defer w.mu.RUnlock()
 	return resolve.New(w.index).ResolveQualified(scope, qn)
 }
+
+// ResolveQualifiedSegmentsInDoc resolves a qualified name and returns the symbol
+// each of its segments denotes, so `A::B::C` yields the symbols for A, B and C.
+// Entries are nil where a segment did not resolve. Used by rename, which must
+// edit a name wherever it appears, qualifier positions included.
+func (w *Workspace) ResolveQualifiedSegmentsInDoc(name string, scope *symbols.Scope, qn *ast.QualifiedName) []*symbols.Symbol {
+	if qn == nil {
+		return nil
+	}
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	r := resolve.New(w.index)
+	r.ResolveQualified(scope, qn)
+	out := make([]*symbols.Symbol, len(qn.Parts))
+	for i := range qn.Parts {
+		if sym, ok := r.PartSymbol(qn, i); ok {
+			out[i] = sym
+		}
+	}
+	return out
+}

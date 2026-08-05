@@ -124,7 +124,7 @@ Current: green (Time: 30.0s)
 | State machine runtime (Tier 5) | ✅ Complete (10 conformance cases: transitions, accept events, sourceless) |
 | REPL debugging commands | ✅ Complete |
 | Standard library bundling | ✅ Complete |
-| LSP server implementation | ✅ Complete |
+| LSP server implementation | ✅ Diagnostics, hover, go-to-definition, references, symbols, completion, formatting, rename (semantic tokens, code actions, signature help not implemented) |
 | gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime RPCs) |
 | Python client library | ✅ Complete (connection lifecycle, runtime APIs, IPython hooks, DataFrame) |
 

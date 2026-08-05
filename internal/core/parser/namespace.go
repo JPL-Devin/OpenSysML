@@ -304,10 +304,7 @@ func (p *Parser) parseNamespaceBody() ([]ast.Node, bool) {
 	var members []ast.Node
 	for !p.atEOF() && !p.at(lexer.RBrace) {
 		before := p.peek().Span.Offset
-		m := p.parseMember()
-		if m != nil {
-			members = append(members, m)
-		}
+		members = append(members, p.parseMember())
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
 			p.advance()
 		}
@@ -529,9 +526,7 @@ func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
 	if p.at(lexer.LBracket) {
 		p.advance() // consume '['
 		imp.FilterExpr = p.ParseExpression()
-		if _, ok := p.expect(lexer.RBracket, "expected ']' after import filter expression"); !ok {
-			// Error already recorded
-		}
+		p.expect(lexer.RBracket, "expected ']' after import filter expression")
 	}
 
 	imp.Body, imp.HasBody = p.parseNamespaceBody()

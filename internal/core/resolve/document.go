@@ -249,7 +249,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 			// Try scope-based lookup first (for live-parsed definitions)
 			if parentSym.Scope != nil {
 				if sym, ok := parentSym.Scope.LookupLocal(featureName); ok {
-					qn.Parts[0].Sym = sym
+					r.recordPart(qn, 0, sym)
 					return
 				}
 			} else {
@@ -258,7 +258,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 				if r.idx != nil {
 					candidates := r.idx.LookupQualified(fqn)
 					if len(candidates) == 1 {
-						qn.Parts[0].Sym = candidates[0]
+						r.recordPart(qn, 0, candidates[0])
 						return
 					} else if len(candidates) > 1 {
 					} else {
@@ -331,7 +331,7 @@ func (r *Resolver) searchInheritedFeature(parentSym *symbols.Symbol, featureName
 		}
 
 		if sym, ok := gp.Scope.LookupLocal(featureName); ok {
-			qn.Parts[0].Sym = sym
+			r.recordPart(qn, 0, sym)
 			return true
 		}
 
@@ -372,7 +372,7 @@ func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featur
 		if r.idx != nil {
 			candidates := r.idx.LookupQualified(fqn)
 			if len(candidates) == 1 {
-				qn.Parts[0].Sym = candidates[0]
+				r.recordPart(qn, 0, candidates[0])
 				return true
 			}
 		}
@@ -422,21 +422,6 @@ func (r *Resolver) findImplicitSpecializations(scope *symbols.Scope, def *ast.De
 	}
 
 	return parents
-}
-
-// splitQualifiedName splits "A::B::C" into ["A", "B", "C"]
-func splitQualifiedName(name string) []string {
-	var parts []string
-	start := 0
-	for i := 0; i < len(name)-1; i++ {
-		if name[i] == ':' && name[i+1] == ':' {
-			parts = append(parts, name[start:i])
-			start = i + 2
-			i++ // skip second ':'
-		}
-	}
-	parts = append(parts, name[start:])
-	return parts
 }
 
 // resolveExpr walks an expression subtree resolving feature references and
@@ -553,7 +538,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 		})
 		return
 	}
-	qn.Parts[0].Sym = cur
+	r.recordPart(qn, 0, cur)
 
 	// Walk remaining parts via member lookup
 	for i := 1; i < len(qn.Parts); i++ {
@@ -589,62 +574,12 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 			return
 		}
 
-		qn.Parts[i].Sym = next
+		r.recordPart(qn, i, next)
 		cur = next
 	}
 
 	// Store final resolution in memo
 	r.memo[qn] = resolution{cur, true}
-}
-
-// getExprSymbol extracts the symbol referenced by an expression, used for
-// member access chains. Returns nil if expression doesn't resolve to a symbol.
-// For typed usages, returns the type's symbol (following typing relationships).
-func (r *Resolver) getExprSymbol(scope *symbols.Scope, e ast.Node) *symbols.Symbol {
-	switch v := e.(type) {
-	case *ast.FeatureReference:
-		if v.Name == nil {
-			return nil
-		}
-		sym, ok := r.ResolveQualified(scope, v.Name)
-		if !ok {
-			return nil
-		}
-		// If this is a typed usage, follow the type
-		if usage, isUsage := sym.Decl.(*ast.Usage); isUsage {
-			typeSym := r.getUsageType(sym.OwnerScope, usage)
-			if typeSym != nil {
-				return typeSym
-			}
-		}
-		return sym
-	case *ast.FeatureChainExpr:
-		// For chained access, get the final member's symbol
-		if v.Member == nil {
-			return nil
-		}
-		// First resolve the chain
-		r.resolveFeatureChain(scope, v)
-		// Get the operand's symbol, then lookup member
-		operandSym := r.getExprSymbol(scope, v.Operand)
-		if operandSym == nil || operandSym.Scope == nil {
-			return nil
-		}
-		memberSym, ok := r.ResolveQualified(operandSym.Scope, v.Member)
-		if !ok {
-			return nil
-		}
-		// Follow type if member is usage
-		if usage, isUsage := memberSym.Decl.(*ast.Usage); isUsage {
-			typeSym := r.getUsageType(memberSym.OwnerScope, usage)
-			if typeSym != nil {
-				return typeSym
-			}
-		}
-		return memberSym
-	default:
-		return nil
-	}
 }
 
 // getOperandSymbol returns the symbol of an expression operand WITHOUT following

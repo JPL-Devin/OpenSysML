@@ -13,11 +13,11 @@ const (
 )
 
 // NameSegment is one identifier in a qualified name, with its source span.
-// Sym is set by the resolver to the symbol this segment resolves to.
+// It carries no semantic information: the symbol a segment resolves to lives in
+// the resolver's side table, reachable through Resolver.PartSymbol.
 type NameSegment struct {
 	Text string
 	Span source.Span
-	Sym  interface{} // *symbols.Symbol, set by resolver
 }
 
 // QualifiedName is an unresolved dotted/`::`-separated name reference.

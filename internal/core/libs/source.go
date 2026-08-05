@@ -43,7 +43,9 @@ type embedSource struct{}
 
 func (s *embedSource) List() []string {
 	var out []string
-	fs.WalkDir(stdlibFS, "stdlib", func(path string, d fs.DirEntry, err error) error {
+	// The walk function returns errors only to stop the walk; an unreadable
+	// embedded FS is a build-time impossibility.
+	_ = fs.WalkDir(stdlibFS, "stdlib", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
@@ -67,7 +69,9 @@ type dirSource struct{ dir string }
 
 func (s *dirSource) List() []string {
 	var out []string
-	filepath.WalkDir(s.dir, func(path string, d fs.DirEntry, err error) error {
+	// A directory that cannot be walked yields no library files, which callers
+	// handle as an empty source.
+	_ = filepath.WalkDir(s.dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
@@ -86,11 +90,14 @@ func (s *dirSource) List() []string {
 }
 
 func (s *dirSource) Read(name string) ([]byte, error) {
-	// Allow subdirectories now
+	// Subdirectories are allowed; escaping the base directory is not. A prefix
+	// test would accept a sibling whose name merely starts with the base ("/libs"
+	// against "/libs-evil"), so containment is decided on path elements.
 	path := filepath.Join(s.dir, name)
-	// Security check: ensure path doesn't escape base dir
-	if !strings.HasPrefix(filepath.Clean(path), filepath.Clean(s.dir)) {
+	rel, err := filepath.Rel(s.dir, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return nil, fmt.Errorf("libs: invalid library file path %q", name)
 	}
+	// #nosec G304 -- path is confined to s.dir by the check above.
 	return os.ReadFile(path)
 }
