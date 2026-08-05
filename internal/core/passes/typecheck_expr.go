@@ -242,10 +242,8 @@ func (ec *exprChecker) checkAddition(scope *symbols.Scope, e *ast.OperatorExpr) 
 	return semantics.PrimUnknown
 }
 
-// divisionResult types `/` the way the kernel function library declares it:
-// Natural over Natural stays whole (NaturalFunctions::'/'), Integer over Integer
-// yields a Rational (IntegerFunctions::'/'), and the wider types divide within
-// themselves.
+// divisionResult follows the kernel function library: Natural/Natural stays
+// Natural, Integer/Integer is Rational, wider types divide within themselves.
 func divisionResult(lhs, rhs semantics.PrimType) semantics.PrimType {
 	switch widened := semantics.PrimWiden(lhs, rhs); widened {
 	case semantics.PrimNatural:
@@ -257,8 +255,8 @@ func divisionResult(lhs, rhs semantics.PrimType) semantics.PrimType {
 	}
 }
 
-// checkArithmetic checks that both operands are numeric and types the result
-// with the operator's own result rule.
+// checkArithmetic requires numeric operands and types the result with the
+// operator's own result rule.
 func (ec *exprChecker) checkArithmetic(
 	scope *symbols.Scope,
 	e *ast.OperatorExpr,
@@ -342,8 +340,7 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	if e.Operand != nil {
 		args = append([]ast.Node{e.Operand}, args...)
 	}
-	// Each argument is typed exactly once; checkArguments reuses these types so
-	// an error inside an argument is not reported twice.
+	// Typed once and reused by checkArguments, so nested errors report once.
 	argTypes := make([]semantics.PrimType, len(args))
 	for i, arg := range args {
 		argTypes[i] = ec.infer(scope, arg)
