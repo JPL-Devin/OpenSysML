@@ -245,7 +245,6 @@ func testCalcUnboundParameter(t *testing.T) {
 	t.Logf("InvokeCalc returned value (unbound parameter accepted): %+v", result)
 }
 
-
 // testConstraintMissingFeature: constraint references nonexistent feature
 func testConstraintMissingFeature(t *testing.T) {
 	src := `
