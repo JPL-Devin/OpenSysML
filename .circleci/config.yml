@@ -58,6 +58,11 @@ jobs:
             ./bin/sysml-lsp --version
             ls -lh bin/
       
+      - persist_to_workspace:
+          root: .
+          paths:
+            - bin/sysml-grpc
+      
       - store_artifacts:
           path: bin/
           destination: binaries
@@ -69,6 +74,16 @@ jobs:
     executor: python-executor
     steps:
       - checkout
+      
+      - attach_workspace:
+          at: .
+      
+      - run:
+          name: Install sysml-grpc binary
+          command: |
+            mkdir -p ~/.pysysml/bin
+            cp bin/sysml-grpc ~/.pysysml/bin/
+            chmod +x ~/.pysysml/bin/sysml-grpc
       
       - run:
           name: Install Python package
@@ -191,6 +206,8 @@ workflows:
             branches:
               only: /.*/
       - python-test:
+          requires:
+            - build-and-test
           filters:
             branches:
               only: /.*/
