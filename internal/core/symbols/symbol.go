@@ -157,6 +157,7 @@ type Symbol struct {
 	Decl       ast.Node       // the declaring AST node
 	Visibility ast.Visibility // declared visibility
 	DeclSpan   source.Span    // span of the declaration (for diagnostics)
+	NameSpan   source.Span    // span of the declared identifier alone (for rename); zero when unknown
 	Scope      *Scope         // the child scope this declaration owns, or nil for leaves
 	OwnerScope *Scope         // the enclosing scope this declaration was declared in
 
