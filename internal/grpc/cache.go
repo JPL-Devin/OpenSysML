@@ -6,16 +6,18 @@ import (
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/passes"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// CachedModel holds parsed model data
+// CachedModel holds parsed model data with semantic analysis results
 type CachedModel struct {
-	Root   *ast.RootNamespace
-	Index  *symbols.Index      // For symbol lookups by FQN
-	Source *source.SourceFile  // For diagnostic line/col mapping
-	Diags  []parser.Diagnostic // Parser diagnostics
+	Root        *ast.RootNamespace
+	Index       *symbols.Index      // For symbol lookups by FQN
+	Source      *source.SourceFile  // For diagnostic line/col mapping
+	ParseDiags  []parser.Diagnostic // Parser diagnostics
+	PassesDiags []passes.Diagnostic // Semantic pass diagnostics (name-resolution, type, constraint)
 }
 
 // Cache is an LRU cache for parsed models keyed by content hash

@@ -65,6 +65,38 @@ def _decrement_refcount():
     return count
 
 
+def _is_pidfile_stale():
+    """Check if pidfile refers to dead/wrong process. Returns (stale, live_process).
+    
+    Caller must hold lockfile.
+    
+    Returns:
+        tuple: (bool stale, psutil.Process or None)
+               - (True, None): pidfile doesn't exist or points to dead process
+               - (True, proc): pidfile points to wrong process (PID reused)
+               - (False, proc): pidfile valid, process is sysml-grpc
+    """
+    pidfile_path = _get_pidfile_path()
+    if not os.path.exists(pidfile_path):
+        return (True, None)
+    
+    try:
+        with open(pidfile_path, 'r') as f:
+            pid = int(f.read().strip())
+        
+        process = psutil.Process(pid)
+        
+        # Verify process is actually sysml-grpc (not PID reuse)
+        cmdline = ' '.join(process.cmdline())
+        if 'sysml-grpc' in cmdline:
+            return (False, process)  # Valid
+        else:
+            return (True, process)  # PID reused by different process
+            
+    except (psutil.NoSuchProcess, psutil.AccessDenied, ValueError, OSError):
+        return (True, None)
+
+
 class Connection:
     """Manages connection to sysml-grpc service.
     
@@ -176,6 +208,7 @@ class Connection:
             RuntimeError: If evaluation fails
         """
         from pysysml.errors import RuntimeError as PyRuntimeError
+        from pysysml.diagnostic import Diagnostic
         
         req = sysml_pb2.EvaluateRequest(
             model_hash=model_hash,
@@ -186,7 +219,8 @@ class Connection:
         response = self._stub.Evaluate(req)
         
         if response.error:
-            raise PyRuntimeError(response.error, diagnostics=list(response.diagnostics))
+            wrapped_diags = [Diagnostic(d) for d in response.diagnostics]
+            raise PyRuntimeError(response.error, diagnostics=wrapped_diags)
         
         # Convert protobuf Value to Python type
         return self._value_to_python(response.result)
@@ -206,6 +240,7 @@ class Connection:
         """
         from pysysml.errors import RuntimeError as PyRuntimeError
         from pysysml.instance import Instance
+        from pysysml.diagnostic import Diagnostic
         
         req = sysml_pb2.InstantiateRequest(
             model_hash=model_hash,
@@ -215,7 +250,8 @@ class Connection:
         response = self._stub.Instantiate(req)
         
         if response.error:
-            raise PyRuntimeError(response.error, diagnostics=list(response.diagnostics))
+            wrapped_diags = [Diagnostic(d) for d in response.diagnostics]
+            raise PyRuntimeError(response.error, diagnostics=wrapped_diags)
         
         return Instance(response.instance)
     
@@ -234,6 +270,7 @@ class Connection:
             RuntimeError: If execution fails
         """
         from pysysml.errors import RuntimeError as PyRuntimeError
+        from pysysml.diagnostic import Diagnostic
         
         # Convert Python inputs to protobuf Values
         pb_inputs = {name: self._python_to_value(val) for name, val in (inputs or {}).items()}
@@ -247,7 +284,8 @@ class Connection:
         response = self._stub.ExecuteAction(req)
         
         if response.error:
-            raise PyRuntimeError(response.error, diagnostics=list(response.diagnostics))
+            wrapped_diags = [Diagnostic(d) for d in response.diagnostics]
+            raise PyRuntimeError(response.error, diagnostics=wrapped_diags)
         
         # Convert outputs
         return {name: self._value_to_python(val) for name, val in response.outputs.items()}
@@ -267,6 +305,7 @@ class Connection:
             RuntimeError: If execution fails
         """
         from pysysml.errors import RuntimeError as PyRuntimeError
+        from pysysml.diagnostic import Diagnostic
         
         req = sysml_pb2.ExecuteStateRequest(
             model_hash=model_hash,
@@ -277,7 +316,8 @@ class Connection:
         response = self._stub.ExecuteState(req)
         
         if response.error:
-            raise PyRuntimeError(response.error, diagnostics=list(response.diagnostics))
+            wrapped_diags = [Diagnostic(d) for d in response.diagnostics]
+            raise PyRuntimeError(response.error, diagnostics=wrapped_diags)
         
         return {
             'states_visited': list(response.states_visited),
@@ -287,6 +327,8 @@ class Connection:
     
     def _python_to_value(self, py_value):
         """Convert Python type to protobuf Value."""
+        from pysysml.instance import Instance
+        
         if isinstance(py_value, bool):
             return sysml_pb2.Value(bool_value=py_value)
         elif isinstance(py_value, int):
@@ -297,6 +339,8 @@ class Connection:
             return sysml_pb2.Value(string_value=py_value)
         elif py_value is None:
             return sysml_pb2.Value(null="")
+        elif isinstance(py_value, Instance):
+            return sysml_pb2.Value(instance_id=py_value.id)
         elif isinstance(py_value, list):
             elements = [self._python_to_value(v) for v in py_value]
             return sysml_pb2.Value(sequence=sysml_pb2.ValueSequence(elements=elements))
@@ -334,25 +378,26 @@ class Connection:
         Returns:
             bool: True if service responds to health check, False otherwise
         """
+        address = f"{host}:{port}"
+        channel = grpc.insecure_channel(address)
         try:
-            address = f"{host}:{port}"
-            channel = grpc.insecure_channel(address)
             stub = sysml_pb2_grpc.SysMLServiceStub(channel)
             
             # Use GetDiagnostics as health check (lightweight RPC)
             request = sysml_pb2.DiagnosticsRequest(model_hash="health_check")
             stub.GetDiagnostics(request, timeout=timeout)
             
-            channel.close()
             return True
         except grpc.RpcError as e:
             # NOT_FOUND is expected for invalid hash - service is working
             if e.code() == grpc.StatusCode.NOT_FOUND:
                 return True
             return False
-        except Exception as e:
+        except Exception:
             # Could be: service not ready, crashed, or network error
             return False
+        finally:
+            channel.close()
     
     def _ensure_service(self):
         """Ensure sysml-grpc service is running, with lockfile coordination.
@@ -362,13 +407,24 @@ class Connection:
         Otherwise, acquires lock and starts service.
         
         Raises:
-            RuntimeError: If service cannot be started or lockfile timeout
+            ConnectionError: If service cannot be started or lockfile timeout
         """
         lockfile_path = _get_lockfile_path()
         lock = FileLock(lockfile_path, timeout=30)
         
         try:
             with lock:
+                # Check for stale pidfile (SIGKILL'd process, PID reuse, etc.)
+                stale, proc = _is_pidfile_stale()
+                if stale:
+                    # Clean up stale state
+                    pidfile_path = _get_pidfile_path()
+                    refcount_path = _get_refcount_path()
+                    if os.path.exists(pidfile_path):
+                        os.remove(pidfile_path)
+                    if os.path.exists(refcount_path):
+                        os.remove(refcount_path)
+                
                 # Check if service already running (another process may have started it)
                 if self._probe_service(self.host, self.port):
                     # Service running - increment refcount and return

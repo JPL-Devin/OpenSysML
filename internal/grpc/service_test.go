@@ -16,7 +16,8 @@ func TestParseFile_ValidSyntax(t *testing.T) {
 	content := `
 package Vehicle {
   part def Engine;
-  part vehicle : Vehicle;
+  part def VehicleDef;
+  part vehicle : VehicleDef;
 }
 `
 

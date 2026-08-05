@@ -145,18 +145,22 @@ def verify_checksum(binary_path, expected_sha256):
     return actual == expected_sha256
 
 
-def ensure_binary(force_download=False):
+def ensure_binary(force_download=False, version=None):
     """Ensure sysml-grpc binary is available, downloading if necessary.
     
     Args:
         force_download (bool): If True, download even if binary exists
+        version (str, optional): Specific version tag to download (e.g. 'v0.1.0').
+                                 If None, auto-download is disabled - binary must
+                                 be pre-installed via `make build` or manual download.
     
     Returns:
         str: Path to binary
     
     Raises:
-        RuntimeError: If binary cannot be obtained
+        ConnectionError: If binary cannot be obtained
     """
+    from pysysml.errors import ConnectionError
     binary_path = get_binary_path()
     
     # Check if binary already exists and is executable
@@ -164,5 +168,12 @@ def ensure_binary(force_download=False):
         if os.access(binary_path, os.X_OK):
             return binary_path
     
-    # Download binary
-    return download_binary()
+    # If no binary and no version specified, cannot auto-download
+    if version is None:
+        raise ConnectionError(
+            f"Binary not found at {binary_path} and auto-download disabled. "
+            f"Build via `make build` or specify version= parameter for download."
+        )
+    
+    # Download binary with explicit version
+    return download_binary(version=version)

@@ -7,7 +7,9 @@ import (
 	"os"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
+	"github.com/Open-MBEE/Systemica/internal/core/libs"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/passes"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
@@ -65,18 +67,41 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	root := p.ParseFile()
 
 	// Get parser diagnostics
-	diags := p.Diagnostics
+	parseDiags := p.Diagnostics
 
 	// Build symbol index for lookups
 	idx := symbols.NewIndex()
+
+	// Load stdlib into index (required for type resolution)
+	stdlibSrc := libs.DefaultSource()
+	cache, _ := libs.NewCache() // Ignore cache errors, continue without
+	loader := libs.NewLoader(stdlibSrc, cache)
+	for _, name := range stdlibSrc.List() {
+		_ = loader.Load(name, idx) // Ignore load errors, continue
+	}
+
+	// Expand wildcard imports (facade packages like ISQ re-exporting ISQMechanics)
+	idx.ExpandWildcardImports()
+
+	// Add user document
 	idx.AddDocument(filePath, root)
+
+	// Run semantic passes (name-resolution, type, constraint)
+	// Only run if no parse errors (tier gating per AGENTS.md §4)
+	var passesDiags []passes.Diagnostic
+	if len(parseDiags) == 0 {
+		// passes.Analyze expects parser diagnostics converted to passes.Diagnostic
+		parseDiagsConverted := make([]passes.Diagnostic, 0) // No parse errors to convert
+		passesDiags = passes.Analyze(filePath, root, parseDiagsConverted, idx)
+	}
 
 	// Create cached model
 	model := &CachedModel{
-		Root:   root,
-		Index:  idx,
-		Source: srcFile,
-		Diags:  diags,
+		Root:        root,
+		Index:       idx,
+		Source:      srcFile,
+		ParseDiags:  parseDiags,
+		PassesDiags: passesDiags,
 	}
 
 	// Compute model hash
@@ -113,7 +138,7 @@ func (s *Service) GetSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.
 	}, nil
 }
 
-// GetDiagnostics retrieves all diagnostics for a parsed model
+// GetDiagnostics retrieves all diagnostics for a parsed model (parser + semantic passes)
 func (s *Service) GetDiagnostics(ctx context.Context, req *pb.DiagnosticsRequest) (*pb.DiagnosticsResponse, error) {
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
@@ -121,10 +146,15 @@ func (s *Service) GetDiagnostics(ctx context.Context, req *pb.DiagnosticsRequest
 		return nil, status.Errorf(codes.NotFound, "model not found: %s", req.ModelHash)
 	}
 
-	// Convert diagnostics to proto
+	// Convert parser diagnostics to proto
 	var pbDiags []*pb.Diagnostic
-	for _, diag := range cached.Diags {
+	for _, diag := range cached.ParseDiags {
 		pbDiags = append(pbDiags, ParserDiagnosticToProto(diag, cached.Source))
+	}
+
+	// Convert semantic pass diagnostics to proto
+	for _, diag := range cached.PassesDiags {
+		pbDiags = append(pbDiags, DiagnosticToProto(diag, cached.Source))
 	}
 
 	return &pb.DiagnosticsResponse{
@@ -320,10 +350,13 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 
 // buildParseResponse constructs ParseFileResponse from cached model
 func (s *Service) buildParseResponse(modelHash string, model *CachedModel) *pb.ParseFileResponse {
-	// Convert diagnostics
+	// Convert parser + semantic diagnostics
 	var pbDiags []*pb.Diagnostic
-	for _, diag := range model.Diags {
+	for _, diag := range model.ParseDiags {
 		pbDiags = append(pbDiags, ParserDiagnosticToProto(diag, model.Source))
+	}
+	for _, diag := range model.PassesDiags {
+		pbDiags = append(pbDiags, DiagnosticToProto(diag, model.Source))
 	}
 
 	// Convert root namespace to SymbolInfo
