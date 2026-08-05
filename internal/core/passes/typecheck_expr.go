@@ -159,10 +159,10 @@ func (ec *exprChecker) inferOperator(scope *symbols.Scope, e *ast.OperatorExpr) 
 		return ec.checkBinaryBoolean(scope, e)
 	case ast.OpAdd:
 		return ec.checkAddition(scope, e)
-	case ast.OpSub, ast.OpMul, ast.OpMod:
-		return ec.checkArithmetic(scope, e, false)
-	case ast.OpDiv, ast.OpPow:
-		return ec.checkArithmetic(scope, e, true)
+	case ast.OpSub, ast.OpMul, ast.OpMod, ast.OpPow:
+		return ec.checkArithmetic(scope, e, semantics.PrimWiden)
+	case ast.OpDiv:
+		return ec.checkArithmetic(scope, e, divisionResult)
 	case ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe:
 		return ec.checkComparison(scope, e)
 	case ast.OpEq, ast.OpNeq:
@@ -242,7 +242,28 @@ func (ec *exprChecker) checkAddition(scope *symbols.Scope, e *ast.OperatorExpr) 
 	return semantics.PrimUnknown
 }
 
-func (ec *exprChecker) checkArithmetic(scope *symbols.Scope, e *ast.OperatorExpr, fractional bool) semantics.PrimType {
+// divisionResult types `/` the way the kernel function library declares it:
+// Natural over Natural stays whole (NaturalFunctions::'/'), Integer over Integer
+// yields a Rational (IntegerFunctions::'/'), and the wider types divide within
+// themselves.
+func divisionResult(lhs, rhs semantics.PrimType) semantics.PrimType {
+	switch widened := semantics.PrimWiden(lhs, rhs); widened {
+	case semantics.PrimNatural:
+		return semantics.PrimNatural
+	case semantics.PrimInteger:
+		return semantics.PrimRational
+	default:
+		return widened
+	}
+}
+
+// checkArithmetic checks that both operands are numeric and types the result
+// with the operator's own result rule.
+func (ec *exprChecker) checkArithmetic(
+	scope *symbols.Scope,
+	e *ast.OperatorExpr,
+	result func(lhs, rhs semantics.PrimType) semantics.PrimType,
+) semantics.PrimType {
 	lhs, rhs, ok := ec.operands(scope, e)
 	if !ok {
 		return semantics.PrimUnknown
@@ -254,11 +275,7 @@ func (ec *exprChecker) checkArithmetic(scope *symbols.Scope, e *ast.OperatorExpr
 		ec.errorf(e.Span(), "operator '%s' requires numeric operands, found %s and %s", e.Operator, lhs, rhs)
 		return semantics.PrimUnknown
 	}
-	if fractional {
-		// Division and exponentiation may leave the integer tower.
-		return semantics.PrimWiden(semantics.PrimWiden(lhs, rhs), semantics.PrimReal)
-	}
-	return semantics.PrimWiden(lhs, rhs)
+	return result(lhs, rhs)
 }
 
 func (ec *exprChecker) checkComparison(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
@@ -325,8 +342,11 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	if e.Operand != nil {
 		args = append([]ast.Node{e.Operand}, args...)
 	}
-	for _, arg := range args {
-		ec.infer(scope, arg)
+	// Each argument is typed exactly once; checkArguments reuses these types so
+	// an error inside an argument is not reported twice.
+	argTypes := make([]semantics.PrimType, len(args))
+	for i, arg := range args {
+		argTypes[i] = ec.infer(scope, arg)
 	}
 	for _, arg := range e.NamedArgs {
 		ec.infer(scope, arg.Value)
@@ -342,11 +362,17 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	if !ok {
 		return semantics.PrimUnknown
 	}
-	ec.checkArguments(scope, e, sym, owner, args, params)
+	ec.checkArguments(e, sym, owner, args, argTypes, params)
 	return semantics.PrimUnknown
 }
 
-func (ec *exprChecker) checkArguments(scope *symbols.Scope, e *ast.InvocationExpr, sym, owner *symbols.Symbol, args []ast.Node, params []*ast.Usage) {
+func (ec *exprChecker) checkArguments(
+	e *ast.InvocationExpr,
+	sym, owner *symbols.Symbol,
+	args []ast.Node,
+	argTypes []semantics.PrimType,
+	params []*ast.Usage,
+) {
 	if len(e.NamedArgs) > 0 {
 		names := make(map[string]bool, len(params))
 		for _, p := range params {
@@ -384,7 +410,7 @@ func (ec *exprChecker) checkArguments(scope *symbols.Scope, e *ast.InvocationExp
 	}
 	for i, arg := range args {
 		want := ec.declaredPrimType(calleeScope, params[i].Relationships)
-		got := ec.infer(scope, arg)
+		got := argTypes[i]
 		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
 			continue
 		}
