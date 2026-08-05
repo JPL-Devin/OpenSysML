@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"container/list"
+	"fmt"
 	"sync"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -33,16 +34,17 @@ type cacheEntry struct {
 	value *CachedModel
 }
 
-// NewCache creates a cache with the specified max size
-func NewCache(maxSize int) *Cache {
+// NewCache creates a cache with the specified max size. It returns an error if
+// maxSize is not positive.
+func NewCache(maxSize int) (*Cache, error) {
 	if maxSize <= 0 {
-		panic("cache maxSize must be positive")
+		return nil, fmt.Errorf("cache maxSize must be positive, got %d", maxSize)
 	}
 	return &Cache{
 		maxSize: maxSize,
 		items:   make(map[string]*list.Element),
 		lruList: list.New(),
-	}
+	}, nil
 }
 
 // Get retrieves a model from cache, returns (model, true) on hit

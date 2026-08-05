@@ -9,8 +9,28 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
+// mustNewCache builds a cache, failing the test if construction errors.
+func mustNewCache(t *testing.T, maxSize int) *Cache {
+	t.Helper()
+	cache, err := NewCache(maxSize)
+	if err != nil {
+		t.Fatalf("NewCache(%d): %v", maxSize, err)
+	}
+	return cache
+}
+
+// mustNewService builds a service, failing the test if construction errors.
+func mustNewService(t *testing.T, cacheSize int) *Service {
+	t.Helper()
+	srv, err := NewService(cacheSize)
+	if err != nil {
+		t.Fatalf("NewService(%d): %v", cacheSize, err)
+	}
+	return srv
+}
+
 func TestCachePutGet(t *testing.T) {
-	cache := NewCache(2) // Max size 2
+	cache := mustNewCache(t, 2) // Max size 2
 
 	hash1 := "abc123"
 	model1 := &CachedModel{
@@ -30,7 +50,7 @@ func TestCachePutGet(t *testing.T) {
 }
 
 func TestCacheMiss(t *testing.T) {
-	cache := NewCache(2)
+	cache := mustNewCache(t, 2)
 
 	_, ok := cache.Get("nonexistent")
 	if ok {
@@ -39,7 +59,7 @@ func TestCacheMiss(t *testing.T) {
 }
 
 func TestCacheLRUEviction(t *testing.T) {
-	cache := NewCache(2)
+	cache := mustNewCache(t, 2)
 
 	model1 := &CachedModel{Root: &ast.RootNamespace{}}
 	model2 := &CachedModel{Root: &ast.RootNamespace{}}
@@ -66,7 +86,7 @@ func TestCacheLRUEviction(t *testing.T) {
 }
 
 func TestCacheThreadSafety(t *testing.T) {
-	cache := NewCache(100)
+	cache := mustNewCache(t, 100)
 	var wg sync.WaitGroup
 
 	// Concurrent writes
@@ -93,10 +113,10 @@ func TestCacheThreadSafety(t *testing.T) {
 }
 
 func TestCacheInvalidMaxSize(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic for maxSize <= 0")
-		}
-	}()
-	NewCache(0)
+	if _, err := NewCache(0); err == nil {
+		t.Error("expected error for maxSize <= 0")
+	}
+	if _, err := NewService(0); err == nil {
+		t.Error("expected error for cacheSize <= 0")
+	}
 }

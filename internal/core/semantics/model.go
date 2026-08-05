@@ -22,6 +22,8 @@ type Model struct {
 
 	directSupers map[*symbols.Symbol][]*symbols.Symbol
 	allSupers    map[*symbols.Symbol][]*symbols.Symbol
+	primTypes    map[*symbols.Symbol]PrimType
+	scalars      map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
 }
 
 // NewModel creates a semantic model backed by the given name resolver. The
@@ -32,6 +34,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		resolver:     resolver,
 		directSupers: make(map[*symbols.Symbol][]*symbols.Symbol),
 		allSupers:    make(map[*symbols.Symbol][]*symbols.Symbol),
+		primTypes:    make(map[*symbols.Symbol]PrimType),
 	}
 }
 

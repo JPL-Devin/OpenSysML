@@ -1,0 +1,452 @@
+package passes
+
+import (
+	"fmt"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
+
+// exprChecker types expressions against the stdlib scalar lattice and reports
+// operand, binding, and invocation mismatches. Every rule is one-sided: a
+// diagnostic is only produced when both the expected and the actual type are
+// known, so partial type information never yields a false positive.
+type exprChecker struct {
+	resolver *resolve.Resolver
+	model    *semantics.Model
+	diags    []Diagnostic
+}
+
+func (ec *exprChecker) errorf(span source.Span, format string, args ...any) {
+	ec.diags = append(ec.diags, Diagnostic{
+		Severity: SeverityError,
+		Span:     span,
+		Message:  fmt.Sprintf(format, args...),
+		Code:     "type.expr",
+		Source:   "type",
+	})
+}
+
+func (ec *exprChecker) warnf(span source.Span, format string, args ...any) {
+	ec.diags = append(ec.diags, Diagnostic{
+		Severity: SeverityWarning,
+		Span:     span,
+		Message:  fmt.Sprintf(format, args...),
+		Code:     "type.expr",
+		Source:   "type",
+	})
+}
+
+// checkUsageValue checks a feature's bound value (`attribute x : T = expr`)
+// against the type the feature is typed by.
+func (ec *exprChecker) checkUsageValue(scope *symbols.Scope, u *ast.Usage) {
+	if u.Value == nil {
+		return
+	}
+	got := ec.infer(scope, u.Value)
+	want := ec.declaredPrimType(scope, u.Relationships)
+	if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
+		return
+	}
+	if !semantics.PrimConforms(got, want) {
+		ec.errorf(u.Value.Span(), "cannot bind %s value to a feature typed by %s", got, want)
+	}
+}
+
+// declaredPrimType returns the scalar type a usage is typed by, or PrimUnknown.
+func (ec *exprChecker) declaredPrimType(scope *symbols.Scope, rels []*ast.Relationship) semantics.PrimType {
+	for _, rel := range rels {
+		if rel == nil || rel.Kind != ast.RelTyping || rel.Target == nil {
+			continue
+		}
+		if sym := ec.resolveTarget(scope, rel.Target); sym != nil {
+			if prim := ec.model.PrimTypeOf(sym); prim != semantics.PrimUnknown {
+				return prim
+			}
+		}
+	}
+	return semantics.PrimUnknown
+}
+
+// resolveTarget resolves a relationship target node to its symbol, following
+// an alias to the type it names.
+func (ec *exprChecker) resolveTarget(scope *symbols.Scope, target ast.Node) *symbols.Symbol {
+	if fr, ok := target.(*ast.FeatureReference); ok {
+		target = fr.Name
+	}
+	qn, ok := target.(*ast.QualifiedName)
+	if !ok {
+		return nil
+	}
+	sym, ok := ec.resolver.ResolveQualified(scope, qn)
+	if !ok || sym == nil {
+		return nil
+	}
+	if sym.Kind == symbols.SymbolAlias {
+		if resolved, ok := ec.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
+			return resolved
+		}
+	}
+	return sym
+}
+
+// checkBoolean checks an expression used where a condition is required.
+func (ec *exprChecker) checkBoolean(scope *symbols.Scope, n ast.Node, context string) {
+	if n == nil {
+		return
+	}
+	got := ec.infer(scope, n)
+	if got == semantics.PrimUnknown || got == semantics.PrimBoolean {
+		return
+	}
+	ec.errorf(n.Span(), "%s must be Boolean, found %s", context, got)
+}
+
+// infer returns the scalar type of an expression, checking its operands on the
+// way down. PrimUnknown means "not a scalar the checker models".
+func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimType {
+	switch e := n.(type) {
+	case *ast.LiteralBool:
+		return semantics.PrimBoolean
+	case *ast.LiteralString:
+		return semantics.PrimString
+	case *ast.LiteralInteger:
+		// The grammar has no negative literals (negation is a unary operator),
+		// so an integer literal is always a Natural and conforms upward.
+		return semantics.PrimNatural
+	case *ast.LiteralReal:
+		// A decimal literal denotes an exact ratio, so it conforms to Rational
+		// as well as Real.
+		return semantics.PrimRational
+	case *ast.FeatureReference:
+		return ec.inferQualified(scope, e.Name)
+	case *ast.QualifiedName:
+		return ec.inferQualified(scope, e)
+	case *ast.OperatorExpr:
+		return ec.inferOperator(scope, e)
+	case *ast.InvocationExpr:
+		return ec.inferInvocation(scope, e)
+	case *ast.SequenceExpr:
+		for _, el := range e.Elements {
+			ec.infer(scope, el)
+		}
+		return semantics.PrimUnknown
+	}
+	return semantics.PrimUnknown
+}
+
+func (ec *exprChecker) inferQualified(scope *symbols.Scope, qn *ast.QualifiedName) semantics.PrimType {
+	if qn == nil {
+		return semantics.PrimUnknown
+	}
+	sym, ok := ec.resolver.ResolveQualified(scope, qn)
+	if !ok || sym == nil {
+		return semantics.PrimUnknown
+	}
+	return ec.model.PrimTypeOf(sym)
+}
+
+func (ec *exprChecker) inferOperator(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
+	switch e.Operator {
+	case ast.OpNot:
+		return ec.checkUnaryBoolean(scope, e)
+	case ast.OpNeg, ast.OpPos:
+		return ec.checkUnaryNumeric(scope, e)
+	case ast.OpAnd, ast.OpConditionalAnd, ast.OpOr, ast.OpConditionalOr, ast.OpXor, ast.OpImplies:
+		return ec.checkBinaryBoolean(scope, e)
+	case ast.OpAdd:
+		return ec.checkAddition(scope, e)
+	case ast.OpSub, ast.OpMul, ast.OpMod:
+		return ec.checkArithmetic(scope, e, false)
+	case ast.OpDiv, ast.OpPow:
+		return ec.checkArithmetic(scope, e, true)
+	case ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe:
+		return ec.checkComparison(scope, e)
+	case ast.OpEq, ast.OpNeq:
+		return ec.checkEquality(scope, e)
+	case ast.OpConditional:
+		return ec.checkConditional(scope, e)
+	}
+	// Operators outside the scalar lattice (casts, classification, ranges,
+	// indexing): still walk operands so nested errors surface.
+	for _, operand := range e.Operands {
+		ec.infer(scope, operand)
+	}
+	return semantics.PrimUnknown
+}
+
+func (ec *exprChecker) checkUnaryBoolean(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
+	if len(e.Operands) != 1 {
+		return semantics.PrimUnknown
+	}
+	got := ec.infer(scope, e.Operands[0])
+	if got != semantics.PrimUnknown && got != semantics.PrimBoolean {
+		ec.errorf(e.Span(), "operator 'not' requires a Boolean operand, found %s", got)
+	}
+	return semantics.PrimBoolean
+}
+
+func (ec *exprChecker) checkUnaryNumeric(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
+	if len(e.Operands) != 1 {
+		return semantics.PrimUnknown
+	}
+	got := ec.infer(scope, e.Operands[0])
+	if got == semantics.PrimUnknown {
+		return semantics.PrimUnknown
+	}
+	if !got.IsNumeric() {
+		ec.errorf(e.Span(), "operator '%s' requires a numeric operand, found %s", e.Operator, got)
+		return semantics.PrimUnknown
+	}
+	if e.Operator == ast.OpNeg {
+		// Negation leaves the naturals.
+		return semantics.PrimWiden(got, semantics.PrimInteger)
+	}
+	return got
+}
+
+func (ec *exprChecker) checkBinaryBoolean(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
+	lhs, rhs, ok := ec.operands(scope, e)
+	if !ok {
+		return semantics.PrimBoolean
+	}
+	for _, got := range []semantics.PrimType{lhs, rhs} {
+		if got != semantics.PrimUnknown && got != semantics.PrimBoolean {
+			ec.errorf(e.Span(), "operator '%s' requires Boolean operands, found %s and %s", e.Operator, lhs, rhs)
+			break
+		}
+	}
+	return semantics.PrimBoolean
+}
+
+// checkAddition allows the numeric tower plus String concatenation, which the
+// stdlib defines as StringFunctions::'+'.
+func (ec *exprChecker) checkAddition(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
+	lhs, rhs, ok := ec.operands(scope, e)
+	if !ok {
+		return semantics.PrimUnknown
+	}
+	if lhs == semantics.PrimUnknown || rhs == semantics.PrimUnknown {
+		return semantics.PrimUnknown
+	}
+	if lhs == semantics.PrimString && rhs == semantics.PrimString {
+		return semantics.PrimString
+	}
+	if lhs.IsNumeric() && rhs.IsNumeric() {
+		return semantics.PrimWiden(lhs, rhs)
+	}
+	ec.errorf(e.Span(), "operator '+' is not defined for %s and %s", lhs, rhs)
+	return semantics.PrimUnknown
+}
+
+func (ec *exprChecker) checkArithmetic(scope *symbols.Scope, e *ast.OperatorExpr, fractional bool) semantics.PrimType {
+	lhs, rhs, ok := ec.operands(scope, e)
+	if !ok {
+		return semantics.PrimUnknown
+	}
+	if lhs == semantics.PrimUnknown || rhs == semantics.PrimUnknown {
+		return semantics.PrimUnknown
+	}
+	if !lhs.IsNumeric() || !rhs.IsNumeric() {
+		ec.errorf(e.Span(), "operator '%s' requires numeric operands, found %s and %s", e.Operator, lhs, rhs)
+		return semantics.PrimUnknown
+	}
+	if fractional {
+		// Division and exponentiation may leave the integer tower.
+		return semantics.PrimWiden(semantics.PrimWiden(lhs, rhs), semantics.PrimReal)
+	}
+	return semantics.PrimWiden(lhs, rhs)
+}
+
+func (ec *exprChecker) checkComparison(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
+	lhs, rhs, ok := ec.operands(scope, e)
+	if !ok {
+		return semantics.PrimBoolean
+	}
+	if lhs == semantics.PrimUnknown || rhs == semantics.PrimUnknown {
+		return semantics.PrimBoolean
+	}
+	bothNumeric := lhs.IsNumeric() && rhs.IsNumeric()
+	bothString := lhs == semantics.PrimString && rhs == semantics.PrimString
+	if !bothNumeric && !bothString {
+		ec.errorf(e.Span(), "operator '%s' is not defined for %s and %s", e.Operator, lhs, rhs)
+	}
+	return semantics.PrimBoolean
+}
+
+// checkEquality warns rather than errors: the stdlib declares '==' over
+// Anything, so comparing disjoint scalars is legal but almost always a mistake.
+func (ec *exprChecker) checkEquality(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
+	lhs, rhs, ok := ec.operands(scope, e)
+	if !ok {
+		return semantics.PrimBoolean
+	}
+	if lhs == semantics.PrimUnknown || rhs == semantics.PrimUnknown {
+		return semantics.PrimBoolean
+	}
+	if !semantics.PrimConforms(lhs, rhs) && !semantics.PrimConforms(rhs, lhs) {
+		result := "false"
+		if e.Operator == ast.OpNeq {
+			result = "true"
+		}
+		ec.warnf(e.Span(), "comparing %s with %s is always %s", lhs, rhs, result)
+	}
+	return semantics.PrimBoolean
+}
+
+func (ec *exprChecker) checkConditional(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
+	if len(e.Operands) != 3 {
+		return semantics.PrimUnknown
+	}
+	ec.checkBoolean(scope, e.Operands[0], "condition of 'if'")
+	thenType := ec.infer(scope, e.Operands[1])
+	elseType := ec.infer(scope, e.Operands[2])
+	if thenType == elseType {
+		return thenType
+	}
+	return semantics.PrimWiden(thenType, elseType)
+}
+
+func (ec *exprChecker) operands(scope *symbols.Scope, e *ast.OperatorExpr) (semantics.PrimType, semantics.PrimType, bool) {
+	if len(e.Operands) != 2 {
+		return semantics.PrimUnknown, semantics.PrimUnknown, false
+	}
+	return ec.infer(scope, e.Operands[0]), ec.infer(scope, e.Operands[1]), true
+}
+
+// inferInvocation checks the argument list of a calc/action invocation against
+// the invoked behavior's `in` parameters. In the arrow form `x->f(a)` the
+// receiver binds to the first parameter, so it is prepended to the arguments.
+func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationExpr) semantics.PrimType {
+	args := e.Args
+	if e.Operand != nil {
+		args = append([]ast.Node{e.Operand}, args...)
+	}
+	for _, arg := range args {
+		ec.infer(scope, arg)
+	}
+	for _, arg := range e.NamedArgs {
+		ec.infer(scope, arg.Value)
+	}
+	if e.Type == nil {
+		return semantics.PrimUnknown
+	}
+	sym, ok := ec.resolver.ResolveQualified(scope, e.Type)
+	if !ok || sym == nil || !isBehaviorKind(sym.Kind) {
+		return semantics.PrimUnknown
+	}
+	params, owner, ok := ec.inParameters(sym)
+	if !ok {
+		return semantics.PrimUnknown
+	}
+	ec.checkArguments(scope, e, sym, owner, args, params)
+	return semantics.PrimUnknown
+}
+
+func (ec *exprChecker) checkArguments(scope *symbols.Scope, e *ast.InvocationExpr, sym, owner *symbols.Symbol, args []ast.Node, params []*ast.Usage) {
+	if len(e.NamedArgs) > 0 {
+		names := make(map[string]bool, len(params))
+		for _, p := range params {
+			names[p.Ident.Name] = true
+		}
+		for _, arg := range e.NamedArgs {
+			if arg.Name == nil || len(arg.Name.Parts) != 1 {
+				continue
+			}
+			if name := arg.Name.Parts[0].Text; !names[name] {
+				ec.errorf(e.Span(), "%s has no parameter named %q", sym.Name, name)
+			}
+		}
+		return
+	}
+	required := 0
+	for _, p := range params {
+		if p.Value == nil {
+			required++
+		}
+	}
+	switch {
+	case len(args) > len(params):
+		ec.errorf(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args))
+		return
+	case len(args) < required:
+		ec.errorf(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
+		return
+	}
+	// Parameter types are named in the scope of the behavior that declares
+	// them, which is not the invoking one.
+	calleeScope := owner.Scope
+	if calleeScope == nil {
+		calleeScope = owner.OwnerScope
+	}
+	for i, arg := range args {
+		want := ec.declaredPrimType(calleeScope, params[i].Relationships)
+		got := ec.infer(scope, arg)
+		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
+			continue
+		}
+		if !semantics.PrimConforms(got, want) {
+			ec.errorf(arg.Span(), "argument %d of %s expects %s, found %s", i+1, sym.Name, want, got)
+		}
+	}
+}
+
+// isBehaviorKind reports whether a symbol is a calc or action, the invocable
+// kinds whose parameter lists the checker understands.
+func isBehaviorKind(k symbols.SymbolKind) bool {
+	switch k {
+	case symbols.SymbolCalcDef, symbols.SymbolCalcUsage, symbols.SymbolActionDef, symbols.SymbolActionUsage:
+		return true
+	}
+	return false
+}
+
+// inParameters returns the `in` parameters a calc/action is invoked with, in
+// declaration order. A behavior that declares none inherits its signature from
+// the type it specializes or is typed by, so the nearest supertype that does
+// declare parameters supplies them. It also returns the symbol that declares
+// them, whose scope their type names resolve in. ok is false when no signature
+// can be determined, in which case the invocation is left unchecked.
+func (ec *exprChecker) inParameters(sym *symbols.Symbol) ([]*ast.Usage, *symbols.Symbol, bool) {
+	if params := declaredInParameters(sym); len(params) > 0 {
+		return params, sym, true
+	}
+	supers := ec.model.AllSupertypes(sym)
+	for _, super := range supers {
+		if params := declaredInParameters(super); len(params) > 0 {
+			return params, super, true
+		}
+	}
+	// A parameterless declaration with no supertypes really takes no
+	// arguments; with supertypes the signature may live somewhere the checker
+	// cannot see, so stay silent.
+	return nil, sym, len(supers) == 0 && sym.Decl != nil
+}
+
+// declaredInParameters returns the `in`/`inout` features declared directly by a
+// symbol's def/usage declaration.
+func declaredInParameters(sym *symbols.Symbol) []*ast.Usage {
+	var members []ast.Node
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		members = d.Members
+	case *ast.Usage:
+		members = d.Members
+	default:
+		return nil
+	}
+	var params []*ast.Usage
+	for _, m := range members {
+		u, ok := unwrapType(m).(*ast.Usage)
+		if !ok {
+			continue
+		}
+		if u.Direction == ast.DirIn || u.Direction == ast.DirInOut {
+			params = append(params, u)
+		}
+	}
+	return params
+}

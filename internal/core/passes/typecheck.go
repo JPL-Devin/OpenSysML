@@ -9,7 +9,9 @@ import (
 )
 
 // TypeCheckPass validates that each def/usage relationship target has a symbol
-// kind compatible with the source node and relationship kind (spec §6.3).
+// kind compatible with the source node and relationship kind (spec §6.3), and
+// types expressions (operands, bound values, invocation arguments) against the
+// stdlib scalar lattice.
 // It runs at LevelType, after name resolution; unresolved targets are skipped.
 type TypeCheckPass struct{}
 
@@ -24,14 +26,18 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 		return nil
 	}
 	// Initialize model to enable inheritance-aware resolution
-	_ = ctx.Model()
-	tc := &typeChecker{resolver: ctx.Resolver()}
+	model := ctx.Model()
+	tc := &typeChecker{
+		resolver: ctx.Resolver(),
+		expr:     &exprChecker{resolver: ctx.Resolver(), model: model},
+	}
 	tc.walk(rootScope, root.Members)
-	return tc.diags
+	return append(tc.diags, tc.expr.diags...)
 }
 
 type typeChecker struct {
 	resolver *resolve.Resolver
+	expr     *exprChecker
 	diags    []Diagnostic
 }
 
@@ -45,6 +51,7 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 			}
 		case *ast.Usage:
 			tc.checkRelationships(scope, d.Relationships, false, 0, d.Kind, d.Direction)
+			tc.expr.checkUsageValue(scope, d)
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
@@ -56,7 +63,36 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
+		default:
+			tc.checkBehaviorMember(scope, d)
 		}
+	}
+}
+
+// checkBehaviorMember types the expressions carried by behavior body members
+// (calc results, constraints, guards, conditions, assignments).
+func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
+	switch m := n.(type) {
+	case *ast.ResultMember:
+		tc.expr.infer(scope, m.Expression)
+	case *ast.ConstraintMember:
+		tc.expr.checkBoolean(scope, m.Expression, "constraint expression")
+	case *ast.AssumeMember:
+		tc.expr.checkBoolean(scope, m.Expression, "assume expression")
+	case *ast.RequireMember:
+		tc.expr.checkBoolean(scope, m.Expression, "require expression")
+	case *ast.IfActionNode:
+		tc.expr.checkBoolean(scope, m.Condition, "condition of 'if'")
+	case *ast.WhileLoopActionNode:
+		tc.expr.checkBoolean(scope, m.Condition, "condition of 'while'")
+	case *ast.ChangeEvent:
+		tc.expr.checkBoolean(scope, m.Condition, "change event condition")
+	case *ast.TransitionMember:
+		tc.expr.checkBoolean(scope, m.Guard, "transition guard")
+	case *ast.AssignmentActionNode:
+		tc.expr.infer(scope, m.Value)
+	case *ast.ActionExecutionNode:
+		tc.expr.infer(scope, m.Expression)
 	}
 }
 
