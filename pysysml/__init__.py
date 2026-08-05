@@ -2,5 +2,9 @@
 
 __version__ = "0.1.0"
 
-# Public API (will be filled in later tasks)
-__all__ = []
+from pysysml.connection import Connection
+from pysysml.model import Model
+from pysysml.symbol import Symbol
+from pysysml.diagnostic import Diagnostic
+
+__all__ = ["Connection", "Model", "Symbol", "Diagnostic"]
