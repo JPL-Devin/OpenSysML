@@ -35,6 +35,8 @@ def _get_refcount_path():
 def _increment_refcount():
     """Increment service reference count. Caller must hold lockfile."""
     refcount_path = _get_refcount_path()
+    os.makedirs(os.path.dirname(refcount_path), exist_ok=True)
+    
     if os.path.exists(refcount_path):
         with open(refcount_path, 'r') as f:
             count = int(f.read().strip())
@@ -417,13 +419,19 @@ class Connection:
                 # Check for stale pidfile (SIGKILL'd process, PID reuse, etc.)
                 stale, proc = _is_pidfile_stale()
                 if stale:
-                    # Clean up stale state
+                    # Clean up stale state (use try/except to handle TOCTOU races)
                     pidfile_path = _get_pidfile_path()
                     refcount_path = _get_refcount_path()
-                    if os.path.exists(pidfile_path):
-                        os.remove(pidfile_path)
-                    if os.path.exists(refcount_path):
-                        os.remove(refcount_path)
+                    try:
+                        if os.path.exists(pidfile_path):
+                            os.remove(pidfile_path)
+                    except FileNotFoundError:
+                        pass  # Another process already removed it
+                    try:
+                        if os.path.exists(refcount_path):
+                            os.remove(refcount_path)
+                    except FileNotFoundError:
+                        pass  # Another process already removed it
                 
                 # Check if service already running (another process may have started it)
                 if self._probe_service(self.host, self.port):
@@ -456,6 +464,7 @@ class Connection:
                     if self._probe_service(self.host, self.port, timeout=2.0):
                         # Write PID file for reference counting
                         pidfile_path = _get_pidfile_path()
+                        os.makedirs(os.path.dirname(pidfile_path), exist_ok=True)
                         with open(pidfile_path, 'w') as f:
                             f.write(f"{process.pid}\n")
                         
