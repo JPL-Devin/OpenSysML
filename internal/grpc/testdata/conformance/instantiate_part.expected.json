@@ -1,0 +1,10 @@
+{
+  "symbol_id": "test::Vehicle",
+  "expected_slots": {
+    "mass": {
+      "materialized": true,
+      "value_kind": "int_value",
+      "value": 1500
+    }
+  }
+}
