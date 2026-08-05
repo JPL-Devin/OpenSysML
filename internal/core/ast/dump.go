@@ -288,6 +288,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		b.WriteString(`(ChangeEvent`)
 		writeChildren(b, depth, []Node{v.Condition})
 		return
+	case *PseudostateNode:
+		fmt.Fprintf(b, `(PseudostateNode kind=%q name=%q)`, v.Kind.String(), v.Name)
+		return
 	default:
 		fmt.Fprintf(b, `(%T)`, n)
 	}

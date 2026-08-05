@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 )
@@ -1942,10 +1944,16 @@ func (p *Parser) parseStateMember() ast.Node {
 			return p.parseRegionMember(start)
 		case "choice":
 			p.advance()
-			return p.parseChoicePseudostate(start)
+			return p.parsePseudostate(start, kw, ast.PseudostateChoice)
 		case "junction":
 			p.advance()
-			return p.parseJunctionPseudostate(start)
+			return p.parsePseudostate(start, kw, ast.PseudostateJunction)
+		case "fork":
+			p.advance()
+			return p.parsePseudostate(start, kw, ast.PseudostateFork)
+		case "join":
+			p.advance()
+			return p.parsePseudostate(start, kw, ast.PseudostateJoin)
 		case "transition":
 			// Lookahead to distinguish:
 			// 1. State machine transition: transition source to target (no name)
@@ -2292,6 +2300,16 @@ func (p *Parser) parseDoMember(start int) ast.Node {
 		return node
 	}
 
+	// Behavioral statement: do perform action a : A; / do assign x := e;
+	if p.isBehavioralKeyword() {
+		stmt := p.parseActionMember()
+		node := &ast.DoMember{
+			Actions: []ast.Node{stmt},
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+
 	// Check for action reference: do actionName;
 	if p.atName() {
 		actionRef := p.parseQualifiedName()
@@ -2347,6 +2365,16 @@ func (p *Parser) parseExitMember(start int) ast.Node {
 		p.advance() // consume ';'
 		node := &ast.ExitMember{
 			Actions: nil, // empty
+		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+
+	// Behavioral statement: exit perform action a : A; / exit assign x := e;
+	if p.isBehavioralKeyword() {
+		stmt := p.parseActionMember()
+		node := &ast.ExitMember{
+			Actions: []ast.Node{stmt},
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -2535,54 +2563,22 @@ func (p *Parser) parseRegionMember(start int) ast.Node {
 	return region
 }
 
-// parseChoicePseudostate parses: choice <name>;
-func (p *Parser) parseChoicePseudostate(start int) ast.Node {
-	// 'choice' already consumed
-
-	// Expect pseudostate name
+// parsePseudostate parses a pseudostate declaration in a state body:
+// choice/junction/fork/join <name>;. The keyword is already consumed.
+func (p *Parser) parsePseudostate(start int, keyword string, kind ast.PseudostateKind) ast.Node {
 	if !p.at(lexer.Identifier) && !p.at(lexer.Keyword) {
-		p.error(p.peek().Span, "expected name after 'choice'")
-		en := &ast.ErrorNode{Message: "expected choice name"}
+		p.error(p.peek().Span, fmt.Sprintf("expected name after '%s'", keyword))
+		en := &ast.ErrorNode{Message: fmt.Sprintf("expected %s name", keyword)}
 		en.NodeSpan = p.spanFrom(start)
 		return en
 	}
 
-	nameToken := p.peek()
-	name := p.src.Text(nameToken.Span)
+	name := p.src.Text(p.peek().Span)
 	p.advance()
-
-	// Expect semicolon
-	p.expect(lexer.Semicolon, "expected ';' after choice name")
+	p.expect(lexer.Semicolon, fmt.Sprintf("expected ';' after %s name", keyword))
 
 	ps := &ast.PseudostateNode{
-		Kind: ast.PseudostateChoice,
-		Name: name,
-	}
-	ps.NodeSpan = p.spanFrom(start)
-	return ps
-}
-
-// parseJunctionPseudostate parses: junction <name>;
-func (p *Parser) parseJunctionPseudostate(start int) ast.Node {
-	// 'junction' already consumed
-
-	// Expect pseudostate name
-	if !p.at(lexer.Identifier) && !p.at(lexer.Keyword) {
-		p.error(p.peek().Span, "expected name after 'junction'")
-		en := &ast.ErrorNode{Message: "expected junction name"}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-
-	nameToken := p.peek()
-	name := p.src.Text(nameToken.Span)
-	p.advance()
-
-	// Expect semicolon
-	p.expect(lexer.Semicolon, "expected ';' after junction name")
-
-	ps := &ast.PseudostateNode{
-		Kind: ast.PseudostateJunction,
+		Kind: kind,
 		Name: name,
 	}
 	ps.NodeSpan = p.spanFrom(start)

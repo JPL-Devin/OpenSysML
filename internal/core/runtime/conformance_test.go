@@ -387,8 +387,19 @@ func runRequirementConformance(t *testing.T, ctx *Context, idx *symbols.Index, p
 	}
 }
 
-// findBehavioralSymbol searches for first symbol matching defKind or usageKind
+// findBehavioralSymbol searches for first symbol matching defKind or usageKind,
+// failing the test when there is none.
 func findBehavioralSymbol(t *testing.T, scope *symbols.Scope, defKind ast.DefinitionKind, usageKind ast.UsageKind) *symbols.Symbol {
+	sym := lookupBehavioralSymbol(scope, defKind, usageKind)
+	if sym == nil {
+		t.Fatalf("no behavioral symbol found (defKind=%v, usageKind=%v)", defKind, usageKind)
+	}
+	return sym
+}
+
+// lookupBehavioralSymbol is findBehavioralSymbol for callers that probe several
+// kinds and treat absence as "not this kind of model".
+func lookupBehavioralSymbol(scope *symbols.Scope, defKind ast.DefinitionKind, usageKind ast.UsageKind) *symbols.Symbol {
 	// Check all child scopes (packages/namespaces)
 	for _, child := range scope.Children() {
 		// Look for named symbols
@@ -420,7 +431,6 @@ func findBehavioralSymbol(t *testing.T, scope *symbols.Scope, defKind ast.Defini
 		}
 	}
 
-	t.Fatalf("no behavioral symbol found (defKind=%v, usageKind=%v)", defKind, usageKind)
 	return nil
 }
 

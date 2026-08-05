@@ -1,0 +1,13 @@
+exit: init
+enter: ready
+transition: init -> ready
+exit: ready
+enter: working
+enter: building (entry action)
+enter: checking (entry action)
+transition: ready -> split
+exit: building
+exit: checking
+exit: working
+enter: done
+transition: working -> done

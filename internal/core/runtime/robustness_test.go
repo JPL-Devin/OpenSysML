@@ -23,40 +23,120 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
+	t.Run("fork_branches_share_region", testForkBranchesShareRegion)
+	t.Run("join_with_one_incoming_branch", testJoinWithOneIncomingBranch)
+	t.Run("region_local_junction_target", testRegionLocalJunctionTarget)
 	t.Run("non_numeric_time_trigger", testNonNumericTimeTrigger)
 }
 
 // testNonNumericTimeTrigger: a timed trigger whose duration is not a number
 // cannot be scheduled and must be reported rather than silently dropped.
 func testNonNumericTimeTrigger(t *testing.T) {
-	src := `
-		package test {
-			state Machine {
-				initial init;
-				state waiting {
-					accept at "noon" then done;
-				}
-				final done;
-				init then waiting;
+	_, _, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state waiting {
+				accept at "noon" then done;
 			}
+			final done;
+			init then waiting;
 		}
-	`
-	file := parseAndBuild(t, src)
-	if file == nil {
-		t.Fatal("parse failed")
-	}
-	idx, _, ctx := buildRuntime(t, "<test>", file)
-	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
-	if sym == nil {
-		t.Fatal("Machine state not found")
-	}
-
-	_, _, err := ctx.ExecuteStateWithEvents(sym, nil)
+	}`)
 	if err == nil {
 		t.Fatal("expected an error for a non-numeric time trigger")
 	}
 	if !strings.Contains(err.Error(), "time duration must be constant, got string") {
 		t.Errorf("expected a numeric-duration error, got: %v", err)
+	}
+}
+
+// testForkBranchesShareRegion: a fork whose branches land in the same region
+// cannot produce one active state per region.
+func testForkBranchesShareRegion(t *testing.T) {
+	_, _, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state ready;
+			state working {
+				region left {
+					initial ls;
+					state a;
+					state b;
+					then ls a;
+				}
+				region right {
+					initial rs;
+					state c;
+					then rs c;
+				}
+			}
+			fork split;
+			final done;
+
+			init then ready;
+			transition ready to split;
+			transition split to a;
+			transition split to b;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error for fork branches in the same region")
+	}
+	if !strings.Contains(err.Error(), "in the same region") {
+		t.Errorf("expected a same-region error, got: %v", err)
+	}
+}
+
+// testJoinWithOneIncomingBranch: a join synchronizes branches, so a single
+// incoming transition is a modeling error rather than a pass-through.
+func testJoinWithOneIncomingBranch(t *testing.T) {
+	_, _, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state ready;
+			join sync;
+			final done;
+
+			init then ready;
+			transition ready to sync;
+			transition sync to done;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error for a join with one incoming transition")
+	}
+	if !strings.Contains(err.Error(), "at least two incoming transitions") {
+		t.Errorf("expected an incoming-branch-count error, got: %v", err)
+	}
+}
+
+// testRegionLocalJunctionTarget: leaving an orthogonal region for a junction is
+// unsupported and must be reported, not silently drop the sibling regions.
+func testRegionLocalJunctionTarget(t *testing.T) {
+	_, _, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			region left {
+				initial ls;
+				state a;
+				state b;
+				then ls a;
+				transition a to merge;
+			}
+			region right {
+				initial rs;
+				state c;
+				then rs c;
+			}
+			junction merge;
+
+			transition merge to b;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error for a region-local transition into a junction")
+	}
+	if !strings.Contains(err.Error(), "must be a state node") {
+		t.Errorf("expected a typed target error, got: %v", err)
 	}
 }
 

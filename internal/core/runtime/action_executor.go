@@ -551,7 +551,15 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 		}
 		token.Data[outputPin] = result
 	} else if node.ActionRef != nil {
-		return fmt.Errorf("nested action invocation not yet implemented")
+		outputs, err := invokeAction(
+			e.ctx, e.action.Scope, actionInvocation{target: node.ActionRef}, token.Data,
+		)
+		if err != nil {
+			return err
+		}
+		for name, value := range outputs {
+			token.Data[name] = value
+		}
 	}
 
 	// Advance to successor
@@ -598,6 +606,18 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			// Bind message to parameter name in token data
 			paramName := paramUsage.Ident.Name
 			token.Data[paramName] = msg.Payload["value"]
+		}
+	}
+
+	// A usage that performs another action (perform X / action a : X / a = X(...))
+	// runs that action to completion before its own body.
+	if inv, ok := nestedInvocation(usage); ok {
+		outputs, err := invokeAction(e.ctx, e.action.Scope, inv, token.Data)
+		if err != nil {
+			return err
+		}
+		for name, value := range outputs {
+			token.Data[name] = value
 		}
 	}
 
