@@ -112,11 +112,6 @@ jobs:
       - go/save-cache
       
       - run:
-          name: Install tools
-          command: |
-            go install github.com/goreleaser/goreleaser@latest
-      
-      - run:
           name: Build release binaries
           command: |
             VERSION=${CIRCLE_TAG}
