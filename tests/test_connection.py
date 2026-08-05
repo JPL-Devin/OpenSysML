@@ -296,7 +296,7 @@ def test_ensure_service_timeout():
                                     conn._ensure_service()
                                     assert False, "Expected RuntimeError"
                                 except RuntimeError as e:
-                                    assert "Failed to start" in str(e)
+                                    assert "Service failed to start" in str(e)
 
 
 def test_cleanup_service():
@@ -331,3 +331,62 @@ def test_auto_start_disabled():
                 conn = Connection(auto_start=False)
                 
                 mock_ensure.assert_not_called()
+
+
+# --- Task 1: Lockfile Coordination Tests ---
+
+
+def test_ensure_service_uses_lockfile():
+    """Test that _ensure_service acquires lockfile before starting service."""
+    import os
+    from filelock import FileLock
+    
+    with patch('pysysml.connection.ensure_binary') as mock_ensure:
+        mock_ensure.return_value = '/path/to/sysml-grpc'
+        
+        with patch('os.path.exists', return_value=True):
+            with patch('subprocess.Popen') as mock_popen:
+                mock_popen.return_value = Mock(pid=12345)
+                
+                # Mock time.sleep to skip retries
+                with patch('time.sleep'):
+                    with patch('grpc.insecure_channel'):
+                        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+                            conn = Connection(auto_start=False)
+                            
+                            # Mock _probe_service: False initially, then True after start
+                            with patch.object(conn, '_probe_service', side_effect=[False, True]):
+                                with patch('atexit.register'):
+                                    conn._ensure_service()
+                                    
+                                    # Verify lockfile was created
+                                    lockfile_path = os.path.expanduser('~/.pysysml/sysml-grpc.lock')
+                                    assert os.path.exists(lockfile_path)
+
+
+def test_concurrent_ensure_service_blocks():
+    """Test that second process blocks while first starts service."""
+    import os
+    import pytest
+    from filelock import FileLock, Timeout
+    
+    lockfile_path = os.path.expanduser('~/.pysysml/sysml-grpc.lock')
+    
+    # Simulate first process holding lock
+    lock1 = FileLock(lockfile_path, timeout=0.1)
+    lock1.acquire()
+    
+    try:
+        # Second process should timeout trying to acquire
+        with pytest.raises(RuntimeError, match="Timeout acquiring service lockfile"):
+            with patch('pysysml.connection.ensure_binary', return_value='/path/to/binary'):
+                with patch('os.path.exists', return_value=True):
+                    with patch('subprocess.Popen') as mock_popen:
+                        mock_popen.return_value = Mock(pid=12345)
+                        with patch('grpc.insecure_channel'):
+                            with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+                                conn = Connection(auto_start=False)
+                                with patch.object(conn, '_probe_service', return_value=False):
+                                    conn._ensure_service()
+    finally:
+        lock1.release()

@@ -10,6 +10,7 @@ setup(
     install_requires=[
         "grpcio>=1.83.0",
         "protobuf>=7.35.1",
+        "filelock>=3.0.0",
     ],
     extras_require={
         "dev": [

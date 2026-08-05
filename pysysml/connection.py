@@ -5,9 +5,17 @@ import grpc
 import os
 import subprocess
 import time
+from filelock import FileLock, Timeout
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
 from pysysml.binary import ensure_binary
+
+
+def _get_lockfile_path():
+    """Get path to service lockfile."""
+    pysysml_dir = os.path.expanduser('~/.pysysml')
+    os.makedirs(pysysml_dir, exist_ok=True)
+    return os.path.join(pysysml_dir, 'sysml-grpc.lock')
 
 
 class Connection:
@@ -123,46 +131,59 @@ class Connection:
             return False
     
     def _ensure_service(self):
-        """Ensure sysml-grpc service is running, starting it if necessary.
+        """Ensure sysml-grpc service is running, with lockfile coordination.
+        
+        Uses filelock to coordinate between multiple Python processes.
+        If service already running, returns immediately.
+        Otherwise, acquires lock and starts service.
         
         Raises:
-            RuntimeError: If service cannot be started
+            RuntimeError: If service cannot be started or lockfile timeout
         """
-        # Check if service already running
-        if self._probe_service(self.host, self.port, timeout=1.0):
-            return
+        lockfile_path = _get_lockfile_path()
+        lock = FileLock(lockfile_path, timeout=30)
         
-        # Get binary path
-        binary_path = ensure_binary()
-        if not binary_path or not os.path.exists(binary_path):
-            raise RuntimeError(f"Binary not found at: {binary_path}")
-        
-        # Start service subprocess
-        self._process = subprocess.Popen(
-            [binary_path, '-port', str(self.port)],
-            start_new_session=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        
-        # Register cleanup handler
-        atexit.register(self._cleanup_service)
-        
-        # Wait for service to become ready
-        # TODO: Consider making startup_timeout configurable for slow environments
-        max_retries = 5
-        retry_delay = 0.5
-        
-        for i in range(max_retries):
-            time.sleep(retry_delay)
-            if self._probe_service(self.host, self.port, timeout=1.0):
-                return
-        
-        # Failed to start
-        self._cleanup_service()
-        raise RuntimeError(
-            f"Failed to start sysml-grpc service after {max_retries * retry_delay}s"
-        )
+        try:
+            with lock:
+                # Check if service already running (another process may have started it)
+                if self._probe_service(self.host, self.port):
+                    return
+                
+                # Get binary path
+                binary_path = ensure_binary()
+                if not os.path.exists(binary_path):
+                    raise RuntimeError(f"Binary not found after download: {binary_path}")
+                
+                # Start service
+                process = subprocess.Popen(
+                    [binary_path, '-port', str(self.port)],
+                    start_new_session=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                
+                self._process = process
+                
+                # Wait for service to become healthy
+                max_retries = 5
+                retry_delay = 0.5
+                
+                for attempt in range(max_retries):
+                    time.sleep(retry_delay)
+                    if self._probe_service(self.host, self.port, timeout=2.0):
+                        # Register cleanup
+                        atexit.register(self._cleanup_service)
+                        return
+                
+                # Service didn't start in time
+                self._cleanup_service()
+                raise RuntimeError(f"Service failed to start within {max_retries * retry_delay}s")
+                
+        except Timeout:
+            raise RuntimeError(
+                f"Timeout acquiring service lockfile after 30s. "
+                f"Another process may be starting the service."
+            )
     
     def _cleanup_service(self):
         """Terminate subprocess if it was started by this Connection."""
