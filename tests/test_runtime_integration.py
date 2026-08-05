@@ -88,3 +88,54 @@ class TestRuntimeIntegration:
         src = 'package Test { invalid syntax ((( }'
         model = self.conn.load_from_content(src)
         assert len(model.diagnostics) > 0
+
+    def test_execute_action_binds_inputs(self):
+        """Supplied inputs must flow into the action and affect its outputs.
+
+        The action seeds attribute `result` (default 0) then adds 5. Passing
+        result=10 must yield 15, proving inputs are not discarded server-side.
+        """
+        src = '''
+        package Test {
+            action addFive {
+                attribute result : Integer = 0;
+                first start;
+                action inner {
+                    assign result := result + 5;
+                }
+                done end;
+                then start inner;
+                then inner end;
+            }
+        }
+        '''
+        model = self.conn.load_from_content(src)
+
+        # Baseline: default 0 + 5 = 5.
+        base = self.conn.execute_action("Test::addFive", model.hash)
+        assert base.get("result") == 5
+
+        # With input result=10 -> 10 + 5 = 15.
+        out = self.conn.execute_action(
+            "Test::addFive", model.hash, inputs={"result": 10}
+        )
+        assert out.get("result") == 15
+
+    def test_execute_state_returns_real_trace(self):
+        """states_visited must reflect the actual states, not a placeholder."""
+        src = '''
+        package Test {
+            state Machine {
+                initial init;
+                state Running;
+                final done;
+
+                init then Running;
+                Running then done;
+            }
+        }
+        '''
+        model = self.conn.load_from_content(src)
+
+        result = self.conn.execute_state("Test::Machine", model.hash)
+        assert result["states_visited"] == ["init", "Running", "done"]

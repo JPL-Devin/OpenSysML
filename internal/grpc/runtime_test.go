@@ -220,15 +220,94 @@ package Test {
 	}
 }
 
-// TestExecuteState_SimpleStateMachine verifies ExecuteState RPC
+// TestExecuteAction_InputBinding verifies that inputs supplied to ExecuteAction
+// are bound into the action's initial context and flow through to the outputs.
+// The action seeds an attribute `result` (default 0) and adds 5 to it; supplying
+// result=10 must yield result=15, proving inputs are not discarded.
+func TestExecuteAction_InputBinding(t *testing.T) {
+	srv := NewService(10)
+
+	content := `
+package Test {
+  action addFive {
+    attribute result : Integer = 0;
+    first start;
+    action inner {
+      assign result := result + 5;
+    }
+    done end;
+    then start inner;
+    then inner end;
+  }
+}
+`
+
+	parseReq := &pb.ParseFileRequest{
+		Source:      &pb.ParseFileRequest_Content{Content: content},
+		ContentHash: "test-execute-action-inputs",
+	}
+
+	parseResp, err := srv.ParseFile(context.Background(), parseReq)
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+	if len(parseResp.Diagnostics) > 0 {
+		t.Fatalf("unexpected parse diagnostics: %v", parseResp.Diagnostics)
+	}
+
+	// Baseline: no inputs -> attribute default (0) + 5 = 5.
+	baseResp, err := srv.ExecuteAction(context.Background(), &pb.ExecuteActionRequest{
+		ModelHash:      parseResp.ModelHash,
+		ActionSymbolId: "Test::addFive",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteAction (baseline) failed: %v", err)
+	}
+	if baseResp.Error != "" {
+		t.Fatalf("baseline execution error: %s", baseResp.Error)
+	}
+	if got := baseResp.Outputs["result"].GetIntValue(); got != 5 {
+		t.Errorf("baseline: expected result 5, got %d", got)
+	}
+
+	// With input result=10 -> 10 + 5 = 15, proving the input was bound.
+	inResp, err := srv.ExecuteAction(context.Background(), &pb.ExecuteActionRequest{
+		ModelHash:      parseResp.ModelHash,
+		ActionSymbolId: "Test::addFive",
+		Inputs: map[string]*pb.Value{
+			"result": {Kind: &pb.Value_IntValue{IntValue: 10}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExecuteAction (with inputs) failed: %v", err)
+	}
+	if inResp.Error != "" {
+		t.Fatalf("input execution error: %s", inResp.Error)
+	}
+	result := inResp.Outputs["result"]
+	if result == nil {
+		t.Fatal("expected 'result' in outputs")
+	}
+	if got := result.GetIntValue(); got != 15 {
+		t.Errorf("with input result=10: expected result 15, got %d (inputs were discarded?)", got)
+	}
+}
+
+// TestExecuteState_SimpleStateMachine verifies ExecuteState RPC returns the REAL
+// ordered sequence of visited states, not a fabricated placeholder trace.
 func TestExecuteState_SimpleStateMachine(t *testing.T) {
 	srv := NewService(10)
 
-	// Parse a model with a state machine
+	// A state machine with three real states: init -> Running -> done.
 	content := `
 package Test {
-  state def SimpleStateMachine {
-    entry state s1;
+  state Machine {
+    initial init;
+    state Running;
+    final done;
+
+    init then Running;
+    Running then done;
   }
 }
 `
@@ -242,28 +321,32 @@ package Test {
 	if err != nil {
 		t.Fatalf("ParseFile failed: %v", err)
 	}
+	if len(parseResp.Diagnostics) > 0 {
+		t.Fatalf("unexpected parse diagnostics: %v", parseResp.Diagnostics)
+	}
 
-	// Call ExecuteState RPC
 	execReq := &pb.ExecuteStateRequest{
 		ModelHash:            parseResp.ModelHash,
-		StateMachineSymbolId: "Test::SimpleStateMachine",
-		Events:               []string{},
+		StateMachineSymbolId: "Test::Machine",
 	}
 
 	execResp, err := srv.ExecuteState(context.Background(), execReq)
 	if err != nil {
 		t.Fatalf("ExecuteState failed: %v", err)
 	}
-
-	// Note: ExecuteState may fail if no initial state, or may succeed with placeholder trace
-	// This test verifies RPC wiring - states_visited should be present even if execution fails
-	if execResp.StatesVisited == nil {
-		execResp.StatesVisited = []string{}
+	if execResp.Error != "" {
+		t.Fatalf("execution error: %s", execResp.Error)
 	}
 
-	if execResp.FinalContext == nil {
-		execResp.FinalContext = make(map[string]*pb.Value)
+	// The trace must reflect the actual states, in order, not a hardcoded placeholder.
+	want := []string{"init", "Running", "done"}
+	got := execResp.StatesVisited
+	if len(got) != len(want) {
+		t.Fatalf("expected states_visited %v, got %v", want, got)
 	}
-
-	// Test passes as long as RPC returns without gRPC error (errors go in Error field)
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("expected states_visited %v, got %v", want, got)
+		}
+	}
 }

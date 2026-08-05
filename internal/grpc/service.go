@@ -247,11 +247,17 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	semModel := semantics.NewModel(resolver)
 	runtimeCtx := runtime.NewContext(semModel, resolver, 100000)
 
-	// TODO: Convert inputs from req.Inputs map using ProtoToValue (not yet implemented)
-	// For now, skip inputs parameter binding
+	// Convert inputs from req.Inputs into runtime values for parameter binding.
+	var inputs map[string]runtime.Value
+	if len(req.Inputs) > 0 {
+		inputs = make(map[string]runtime.Value, len(req.Inputs))
+		for name, pv := range req.Inputs {
+			inputs[name] = ProtoToValue(pv)
+		}
+	}
 
-	// Execute action
-	outputs, err := runtimeCtx.ExecuteAction(action)
+	// Execute action with the supplied inputs
+	outputs, err := runtimeCtx.ExecuteActionWithInputs(action, inputs)
 	if err != nil {
 		return &pb.ExecuteActionResponse{
 			Error: fmt.Sprintf("action execution failed: %v", err),
@@ -291,8 +297,9 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	semModel := semantics.NewModel(resolver)
 	runtimeCtx := runtime.NewContext(semModel, resolver, 100000)
 
-	// Execute state machine
-	finalContext, err := runtimeCtx.ExecuteState(stateMachine)
+	// Execute state machine, injecting the requested events and capturing the
+	// real ordered state-visit trace.
+	finalContext, statesVisited, err := runtimeCtx.ExecuteStateWithEvents(stateMachine, req.Events)
 	if err != nil {
 		return &pb.ExecuteStateResponse{
 			Error: fmt.Sprintf("state machine execution failed: %v", err),
@@ -304,9 +311,6 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	for name, val := range finalContext {
 		pbContext[name] = ValueToProto(val)
 	}
-
-	// Placeholder: states_visited trace (runtime doesn't expose this yet)
-	statesVisited := []string{"initial", "final"}
 
 	return &pb.ExecuteStateResponse{
 		StatesVisited: statesVisited,

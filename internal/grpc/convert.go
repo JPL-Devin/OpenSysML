@@ -244,6 +244,38 @@ func ValueToProto(val runtime.Value) *pb.Value {
 	}
 }
 
+// ProtoToValue converts a protobuf Value to a runtime.Value. It is the inverse
+// of ValueToProto and is used to bind gRPC-supplied inputs into the runtime.
+func ProtoToValue(pv *pb.Value) runtime.Value {
+	if pv == nil {
+		return runtime.Value{Kind: runtime.ValNull}
+	}
+	switch k := pv.GetKind().(type) {
+	case *pb.Value_IntValue:
+		return runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: k.IntValue}}
+	case *pb.Value_RealValue:
+		return runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: k.RealValue}}
+	case *pb.Value_BoolValue:
+		return runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: k.BoolValue}}
+	case *pb.Value_StringValue:
+		return runtime.Value{Kind: runtime.ValString, Str: k.StringValue}
+	case *pb.Value_InstanceId:
+		return runtime.Value{Kind: runtime.ValInstance, Instance: k.InstanceId}
+	case *pb.Value_Sequence:
+		seq := runtime.NewSequence()
+		if k.Sequence != nil {
+			for _, elem := range k.Sequence.Elements {
+				seq.Append(ProtoToValue(elem))
+			}
+		}
+		return runtime.Value{Kind: runtime.ValSequence, Sequence: seq}
+	case *pb.Value_Null:
+		return runtime.Value{Kind: runtime.ValNull}
+	default:
+		return runtime.Value{Kind: runtime.ValNull}
+	}
+}
+
 // InstanceToProto converts runtime.Instance to protobuf Instance.
 func InstanceToProto(inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
 	pbSlots := make(map[string]*pb.SlotValue)
