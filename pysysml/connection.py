@@ -108,13 +108,17 @@ class Connection:
             stub = sysml_pb2_grpc.SysMLServiceStub(channel)
             
             # Use GetDiagnostics as health check (lightweight RPC)
-            request = sysml_pb2.DiagnosticsRequest()
+            request = sysml_pb2.DiagnosticsRequest(model_hash="health_check")
             stub.GetDiagnostics(request, timeout=timeout)
             
             channel.close()
             return True
+        except grpc.RpcError as e:
+            # NOT_FOUND is expected for invalid hash - service is working
+            if e.code() == grpc.StatusCode.NOT_FOUND:
+                return True
+            return False
         except Exception as e:
-            # Log for debugging (optional: add logging)
             # Could be: service not ready, crashed, or network error
             return False
     

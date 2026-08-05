@@ -210,9 +210,20 @@ def test_probe_service_not_running():
         mock_chan_instance = Mock()
         mock_channel.return_value = mock_chan_instance
         
+        # Use real grpc._channel._InactiveRpcError for proper isinstance check
+        # Create a mock that raises UNAVAILABLE status
+        from grpc import _channel
+        
+        # Create state object for _InactiveRpcError
+        state = Mock()
+        state.code = grpc.StatusCode.UNAVAILABLE
+        state.details = "Connection refused"
+        
+        mock_error = _channel._InactiveRpcError(state)
+        
         mock_stub = Mock()
         # Mock GetDiagnostics RPC failure
-        mock_stub.GetDiagnostics.side_effect = grpc.RpcError()
+        mock_stub.GetDiagnostics.side_effect = mock_error
         
         with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection(auto_start=False)

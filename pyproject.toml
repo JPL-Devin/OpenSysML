@@ -19,3 +19,8 @@ dev = [
     "pytest-mock>=3.10.0",
     "grpcio-tools>=1.83.0",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests (requiring service/network)",
+]
