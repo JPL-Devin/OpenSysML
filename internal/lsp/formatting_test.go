@@ -57,6 +57,14 @@ func TestFormattingReturnsNoEditsForFormattedDocument(t *testing.T) {
 	}
 }
 
+// A file whose last line is a comment with no newline after it still formats.
+func TestFormattingDocumentEndingInUnterminatedComment(t *testing.T) {
+	_, got := formatDoc(t, "package P {\npart def Car;\n}\n// note", spaces4)
+	if want := "package P {\n    part def Car;\n}\n// note\n"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
 func TestFormattingSkipsDocumentThatDoesNotParse(t *testing.T) {
 	// Brace depth is meaningless here, so the file must be left untouched.
 	if edits, _ := formatDoc(t, "package P { part def\n", spaces4); len(edits) != 0 {

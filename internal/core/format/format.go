@@ -231,6 +231,11 @@ func significant(name string, src []byte) []string {
 		// Compared with line endings normalized, since emitting the document's
 		// dominant ending is an intended rewrite.
 		text := normalizeNewlines(string(src[tok.Span.Offset:tok.Span.End()]), "\n")
+		if tok.Kind == lexer.SLNote {
+			// A line comment's text includes its terminating newline, which
+			// the formatter supplies when the file did not end with one.
+			text = strings.TrimSuffix(text, "\n")
+		}
 		out = append(out, tok.Kind.String()+" "+text)
 	}
 	return out

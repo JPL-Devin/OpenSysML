@@ -72,6 +72,9 @@ func TestLineCommentNewlineNotDoubled(t *testing.T) {
 		{"package P;\n// note\n\n\n\npart def Car;\n", "package P;\n// note\n\npart def Car;\n"},
 		{"package P;\n// note\npart def Car;\n", "package P;\n// note\npart def Car;\n"},
 		{"// leading note\npackage P;\n", "// leading note\npackage P;\n"},
+		// The comment token's text gains the newline the formatter supplies,
+		// which the token-stream check must not read as a rewrite.
+		{"package P;\n// unterminated note", "package P;\n// unterminated note\n"},
 	}
 	for _, tc := range cases {
 		if got := format(t, tc.src); got != tc.want {

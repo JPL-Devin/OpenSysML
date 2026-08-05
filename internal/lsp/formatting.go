@@ -3,6 +3,7 @@ package lsp
 import (
 	"bytes"
 	"context"
+	"errors"
 
 	"go.lsp.dev/protocol"
 
@@ -19,6 +20,12 @@ func (s *Server) Formatting(ctx context.Context, params *protocol.DocumentFormat
 		return nil, nil
 	}
 	out, err := format.Source(name, doc.Content, formatOptions(params.Options))
+	if errors.Is(err, format.ErrNotIdempotent) {
+		// The formatter declined to rewrite the file. That is its bug, not the
+		// author's, so leave the document alone rather than raise it in the
+		// editor.
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
