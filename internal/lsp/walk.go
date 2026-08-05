@@ -13,8 +13,8 @@ type qnRef struct {
 
 // collectRefs walks a document's scope tree and AST, gathering every
 // QualifiedName reference with its resolution scope. It mirrors
-// resolve/document.go's traversal; a declaration form handled there but not
-// here is a reference the editor cannot find, so the two must stay in step.
+// resolve/document.go's traversal: a form handled there but not here is a
+// reference the editor cannot find.
 func collectRefs(root *ast.RootNamespace, rootScope *symbols.Scope) []qnRef {
 	c := &refCollector{}
 	if root != nil && rootScope != nil {

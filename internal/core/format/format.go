@@ -146,9 +146,8 @@ func (f *formatter) emit(tok lexer.Token) {
 	}
 }
 
-// trailingNewlines counts the newlines at the end of the buffer. A line comment
-// token includes its terminating newline in its own text, so the buffer can
-// already sit at the start of a line before any newline is written here.
+// trailingNewlines counts the newlines already at the end of the buffer; a line
+// comment token includes its terminating newline in its own text.
 func (f *formatter) trailingNewlines() int {
 	b := f.buf.Bytes()
 	n := 0
