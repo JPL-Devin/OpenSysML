@@ -43,7 +43,9 @@ type embedSource struct{}
 
 func (s *embedSource) List() []string {
 	var out []string
-	fs.WalkDir(stdlibFS, "stdlib", func(path string, d fs.DirEntry, err error) error {
+	// The walk function returns errors only to stop the walk; an unreadable
+	// embedded FS is a build-time impossibility.
+	_ = fs.WalkDir(stdlibFS, "stdlib", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
@@ -67,7 +69,9 @@ type dirSource struct{ dir string }
 
 func (s *dirSource) List() []string {
 	var out []string
-	filepath.WalkDir(s.dir, func(path string, d fs.DirEntry, err error) error {
+	// A directory that cannot be walked yields no library files, which callers
+	// handle as an empty source.
+	_ = filepath.WalkDir(s.dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
@@ -92,5 +96,6 @@ func (s *dirSource) Read(name string) ([]byte, error) {
 	if !strings.HasPrefix(filepath.Clean(path), filepath.Clean(s.dir)) {
 		return nil, fmt.Errorf("libs: invalid library file path %q", name)
 	}
+	// #nosec G304 -- path is confined to s.dir by the check above.
 	return os.ReadFile(path)
 }

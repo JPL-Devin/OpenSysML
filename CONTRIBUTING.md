@@ -17,6 +17,7 @@ git clone https://github.com/Open-MBEE/Systemica.git
 cd Systemica
 make build  # builds bin/sysml, bin/sysml-lsp, and bin/sysml-grpc with version info
 make test   # runs all tests
+make lint   # runs staticcheck and gosec, as CI does
 ```
 
 ## Development Workflow
@@ -75,6 +76,18 @@ go test ./internal/core/parser
 4. **Update goldens** (after intentional changes): `go test -run TestGolden -update ./internal/core/parser`
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#parser-test-contract) for full details on the parser testing contract.
+
+### Static Analysis
+
+`make lint` runs the same two checks CI gates on, at the versions pinned in the
+Makefile:
+
+- **staticcheck** — must report nothing. Unused code is deleted rather than left
+  behind; if a helper is genuinely needed by work in flight, land it with its
+  caller.
+- **gosec** — must report nothing. Generated protobuf code is excluded
+  (`-exclude-generated`). Suppress a finding with `#nosec <rule>` **only** with a
+  comment saying why it is safe; do not widen the exclusion list.
 
 ### Code Style
 
@@ -185,6 +198,7 @@ PRs must pass:
 - [ ] All tests pass
 - [ ] No race conditions
 - [ ] Code formatted (`gofmt`)
+- [ ] Static analysis clean (`make lint`: staticcheck and gosec)
 
 ## Project Structure
 

@@ -44,7 +44,7 @@ func TestNewContext(t *testing.T) {
 	if ctx.Resolver() == nil {
 		t.Fatal("Resolver() returned nil")
 	}
-	if ctx.Resolver() != ctx.Resolver() {
+	if first, second := ctx.Resolver(), ctx.Resolver(); first != second {
 		t.Fatal("Resolver() must return the same shared instance")
 	}
 }

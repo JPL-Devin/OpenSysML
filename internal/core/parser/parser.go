@@ -173,10 +173,7 @@ func (p *Parser) ParseFile() *ast.RootNamespace {
 	for !p.atEOF() {
 		before := len(p.buf)
 		beforeOff := p.peek().Span.Offset
-		m := p.parseMember()
-		if m != nil {
-			root.Members = append(root.Members, m)
-		}
+		root.Members = append(root.Members, p.parseMember())
 		// Guarantee progress: if nothing was consumed, skip a token.
 		if len(p.buf) == before && p.peek().Span.Offset == beforeOff && !p.atEOF() {
 			p.advance()

@@ -78,8 +78,9 @@ func main() {
 
 	// Start health check server
 	healthSrv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", *healthPort),
-		Handler: healthHandler(version),
+		Addr:              fmt.Sprintf(":%d", *healthPort),
+		Handler:           healthHandler(version),
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
 		slog.Info("Health check server listening", "addr", healthSrv.Addr)
@@ -176,11 +177,13 @@ func healthHandler(ver string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		if err := json.NewEncoder(w).Encode(map[string]string{
 			"status":  "ok",
 			"service": "sysml-grpc",
 			"version": ver,
-		})
+		}); err != nil {
+			slog.Warn("health response write failed", "error", err)
+		}
 	})
 	return mux
 }

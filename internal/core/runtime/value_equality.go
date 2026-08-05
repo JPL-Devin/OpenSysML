@@ -51,9 +51,12 @@ func hashSequence(seq *Sequence) uint64 {
 	h := fnv.New64a()
 	for _, elem := range seq.elements {
 		k := valueKeyFunc(elem)
+		// #nosec G115 G104 -- truncation is deliberate for a hash, and
+		// hash.Hash.Write is documented never to return an error.
 		h.Write([]byte{byte(k.kind)})
 		// Simplified: hash intVal, strVal, instID (full implementation in later task)
 		if k.intVal != 0 {
+			// #nosec G115 G104 -- see above.
 			h.Write([]byte{byte(k.intVal), byte(k.intVal >> 8)})
 		}
 	}
@@ -68,7 +71,8 @@ func hashSet(set *Set) uint64 {
 	// Sum hashes of elements (order-invariant)
 	var sum uint64
 	for k := range set.elements {
-		sum += uint64(k.intVal) // Simplified
+		// #nosec G115 -- wrapping is intended: this is a hash, not arithmetic.
+		sum += uint64(k.intVal)
 	}
 	return sum
 }
