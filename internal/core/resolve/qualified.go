@@ -21,8 +21,6 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 		res := r.walkUnqualified(scope, qn.Parts[0].Text)
 		if res.ok {
 			qn.Parts[0].Sym = res.sym
-			if res.sym != nil && res.sym.Decl == nil {
-			}
 		} else {
 			r.unresolved(qn)
 		}

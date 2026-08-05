@@ -22,6 +22,8 @@ type Context struct {
 
 // NewContext creates a runtime context backed by the given semantic model.
 // maxSteps sets the runaway guard (step counter limit).
+// It panics if maxSteps <= 0: the limit is a programmer-supplied invariant, not
+// user input, so callers must pass a positive value.
 func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int64) *Context {
 	if maxSteps <= 0 {
 		panic(fmt.Sprintf("runtime: maxSteps must be > 0, got %d", maxSteps))

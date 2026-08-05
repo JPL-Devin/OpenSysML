@@ -1,6 +1,7 @@
 package model
 
 import (
+	"log/slog"
 	"sync"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -48,6 +49,7 @@ func loadStdlib(idx *symbols.Index) {
 	cache, err := libs.NewCache()
 	if err != nil {
 		// Cache initialization failed - continue without caching
+		slog.Warn("stdlib symbol cache unavailable, loading without cache", "error", err)
 		cache = nil
 	}
 	loader := libs.NewLoader(src, cache)
@@ -56,8 +58,7 @@ func loadStdlib(idx *symbols.Index) {
 	for _, name := range src.List() {
 		if err := loader.Load(name, idx); err != nil {
 			// Non-fatal: log but continue (allows REPL to work without stdlib)
-			// In production this might want more robust error handling
-			_ = err // TODO: add logging when available
+			slog.Warn("failed to load stdlib file", "file", name, "error", err)
 		}
 	}
 
