@@ -9,7 +9,7 @@ import (
 
 // TestEvaluate_SimpleExpression verifies Evaluate RPC with a simple arithmetic expression
 func TestEvaluate_SimpleExpression(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	// Parse a model with a calc definition
 	content := `
@@ -59,7 +59,7 @@ package Test {
 
 // TestEvaluate_ParseError verifies Evaluate RPC handles parse errors gracefully
 func TestEvaluate_ParseError(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	// Parse a minimal model
 	content := `package Test {}`
@@ -96,7 +96,7 @@ func TestEvaluate_ParseError(t *testing.T) {
 
 // TestInstantiate_SimplePart verifies Instantiate RPC creates an instance
 func TestInstantiate_SimplePart(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	// Parse a model with a part definition
 	content := `
@@ -148,7 +148,7 @@ package Test {
 
 // TestInstantiate_SymbolNotFound verifies Instantiate handles missing symbol
 func TestInstantiate_SymbolNotFound(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	// Parse a minimal model
 	content := `package Test {}`
@@ -181,7 +181,7 @@ func TestInstantiate_SymbolNotFound(t *testing.T) {
 
 // TestExecuteAction_EmptyAction verifies ExecuteAction RPC on a minimal action
 func TestExecuteAction_EmptyAction(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	// Parse a model with an action definition
 	content := `
@@ -225,7 +225,7 @@ package Test {
 // The action seeds an attribute `result` (default 0) and adds 5 to it; supplying
 // result=10 must yield result=15, proving inputs are not discarded.
 func TestExecuteAction_InputBinding(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	content := `
 package Test {
@@ -296,7 +296,7 @@ package Test {
 // TestExecuteState_SimpleStateMachine verifies ExecuteState RPC returns the REAL
 // ordered sequence of visited states, not a fabricated placeholder trace.
 func TestExecuteState_SimpleStateMachine(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	// A state machine with three real states: init -> Running -> done.
 	content := `

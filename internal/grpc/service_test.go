@@ -11,7 +11,7 @@ import (
 
 // TestParseFile_ValidSyntax verifies ParseFile on well-formed input
 func TestParseFile_ValidSyntax(t *testing.T) {
-	srv := NewService(10) // Cache size 10
+	srv := mustNewService(t, 10) // Cache size 10
 
 	content := `
 package Vehicle {
@@ -50,7 +50,7 @@ package Vehicle {
 
 // TestParseFile_SyntaxErrors verifies ParseFile handles malformed input gracefully
 func TestParseFile_SyntaxErrors(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	content := `
 package Vehicle {
@@ -93,7 +93,7 @@ package Vehicle {
 
 // TestParseFile_FileNotFound verifies ParseFile returns error when file doesn't exist
 func TestParseFile_FileNotFound(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	req := &pb.ParseFileRequest{
 		Source:      &pb.ParseFileRequest_FilePath{FilePath: "/nonexistent/file.sysml"},
@@ -112,7 +112,7 @@ func TestParseFile_FileNotFound(t *testing.T) {
 
 // TestParseFile_CacheHit verifies cache reuses parsed models
 func TestParseFile_CacheHit(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	content := `package Test { part def A; }`
 	req := &pb.ParseFileRequest{
@@ -139,7 +139,7 @@ func TestParseFile_CacheHit(t *testing.T) {
 
 // TestGetSymbol_Found verifies GetSymbol retrieves known symbols
 func TestGetSymbol_Found(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	// First parse a model
 	content := `
@@ -184,7 +184,7 @@ package Vehicle {
 
 // TestGetSymbol_NotFound verifies GetSymbol handles missing symbols
 func TestGetSymbol_NotFound(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	// Parse a model
 	content := `package Vehicle { part def Engine; }`
@@ -220,7 +220,7 @@ func TestGetSymbol_NotFound(t *testing.T) {
 
 // TestGetSymbol_InvalidModelHash verifies GetSymbol fails on unknown model hash
 func TestGetSymbol_InvalidModelHash(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	req := &pb.GetSymbolRequest{
 		ModelHash: "invalid-hash-not-in-cache",
@@ -239,7 +239,7 @@ func TestGetSymbol_InvalidModelHash(t *testing.T) {
 
 // TestGetDiagnostics verifies diagnostics retrieval
 func TestGetDiagnostics(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	// Parse model with errors
 	content := `package Bad { invalid }`
@@ -274,7 +274,7 @@ func TestGetDiagnostics(t *testing.T) {
 
 // TestGetDiagnostics_InvalidModelHash verifies error on unknown model
 func TestGetDiagnostics_InvalidModelHash(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	req := &pb.DiagnosticsRequest{
 		ModelHash: "unknown-hash",
@@ -292,7 +292,7 @@ func TestGetDiagnostics_InvalidModelHash(t *testing.T) {
 
 // TestParseFile_FromFile verifies ParseFile can read from filesystem
 func TestParseFile_FromFile(t *testing.T) {
-	srv := NewService(10)
+	srv := mustNewService(t, 10)
 
 	// Create temp file
 	tmpDir := t.TempDir()
