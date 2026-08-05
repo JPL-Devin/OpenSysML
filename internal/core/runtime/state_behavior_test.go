@@ -90,6 +90,45 @@ func TestStateEntryPerformsAction(t *testing.T) {
 	}
 }
 
+func TestStateDoExitAndTransitionEffectPerformAction(t *testing.T) {
+	ctx, machine := loadState(t, `package test {
+    action def Bump {
+        inout counter : Integer;
+
+        first start;
+        action bumping {
+            assign counter := counter + 10;
+        }
+        done end;
+
+        then start bumping;
+        then bumping end;
+    }
+
+    state Machine {
+        attribute counter : Integer = 1;
+
+        initial init;
+        state active {
+            do perform action working : Bump;
+            exit perform action bump : Bump;
+        }
+        final done;
+
+        init then active;
+        transition active to done do { perform action bumpAgain : Bump; }
+    }
+}`, "Machine")
+
+	data, _, err := ctx.ExecuteStateWithEvents(machine, nil)
+	if err != nil {
+		t.Fatalf("ExecuteStateWithEvents: %v", err)
+	}
+	if got := intValue(t, data, "counter"); got != 31 {
+		t.Errorf("counter = %d, want 31 (do, exit and effect each performed Bump)", got)
+	}
+}
+
 func TestStateEntryPerformsUnresolvedAction(t *testing.T) {
 	ctx, machine := loadState(t, `package test {
     state Machine {

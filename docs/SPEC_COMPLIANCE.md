@@ -68,12 +68,16 @@
 - Orthogonal regions (concurrent states)
 - Choice pseudostates (dynamic branching)
 - Junction pseudostates (static branching)
+- Fork pseudostates (one branch per orthogonal region)
+- Join pseudostates (waits for every branch)
+- Entry/exit point pseudostates (⚠️ no textual notation; AST only)
+- Nested action invocation in entry/do/exit/effect behaviors
 - Run-to-completion semantics
 - Event queue management
 - Dangling transition detection (⚠️ lenient)
 - State visits tracking
 - Multi-region event broadcasting
-- ❌ Not implemented: Fork/Join/Entry/Exit/History pseudostates, deferred events, concurrent `do`, nested action invocation in behaviors, CallEvent operation-name matching
+- ❌ Not implemented: History pseudostates (no AST kind or notation), deferred events, concurrent `do`, CallEvent operation-name matching
 
 **Expression Evaluation (7/7 features):**
 - Binary operators (+, -, *, /, <, >, ==, and, or)
@@ -161,7 +165,7 @@ Each row documents one behavioral semantic feature:
 | Merge node (N→1 non-blocking) | `action_executor.go:422` stepMergeNode | `action_control_flow.sysml` | ✅ Faithful |
 | Decision node (guarded branching) | `action_executor.go:452` stepDecisionNode | `action_control_flow.sysml` | ✅ Faithful |
 | Action execution nodes | `action_executor.go:528` stepActionExecutionNode | `action_control_flow.sysml` | ✅ Faithful |
-| Nested action invocation | `action_executor.go:574` stepNestedAction | `action_nested_invocation.sysml` | ✅ Faithful |
+| Nested action invocation | `action_executor.go:582` stepNestedAction, `invoke_action.go` invokeAction | `invoke_action_test.go:TestInvokeActionPassesParametersBothWays` | ✅ Faithful |
 | Send statement (message passing) | `action_executor.go:574` stepNestedAction | `action_send_accept.sysml` | ✅ Faithful |
 | Accept action (message consumption) | `action_executor.go:574` stepNestedAction | `action_accept_message.sysml` | ✅ Faithful |
 | Object flow (pin-to-pin data) | `action_executor.go:673` applyDataFlows | `action_output.sysml` | ✅ Faithful |
@@ -191,9 +195,12 @@ Each row documents one behavioral semantic feature:
 | Orthogonal regions | `state_executor.go:364` broadcastEvent, `:466` fireTransitionInRegion | `state_orthogonal_regions.sysml` | ✅ Faithful |
 | Choice pseudostates | `state_executor.go:971` evaluateChoicePseudostate | `state_choice_pseudostate.sysml` | ✅ Faithful |
 | Junction pseudostates | `state_executor.go:1020` evaluateJunctionPseudostate | `state_junction_pseudostate.sysml` | ✅ Faithful |
-| Fork/Join/Entry/Exit/History pseudostates | `state_executor.go:552` fireTransition ("unsupported pseudostate kind") | — | ❌ Not Yet Implemented |
+| Fork pseudostates | `state_executor.go:692` fireForkTransition | `pseudostate_test.go:TestForkAndJoinPseudostates` | ✅ Faithful |
+| Join pseudostates | `state_executor.go:768` fireJoinTransition | `pseudostate_test.go:TestJoinWaitsForEveryBranch` | ✅ Faithful |
+| Entry/exit point pseudostates | `state_executor.go:538` fireTransition (routed like a junction) | `pseudostate_test.go:TestEntryAndExitPointPseudostates` | ⚠️ Approximate (AST kinds only; no textual notation) |
+| History pseudostates | — | — | ❌ Not Yet Implemented (no `ast.PseudostateKind` for history) |
 | CallEvent operation-name matching | `state_executor.go:437` matchesEvent (matches any call, TODO) | — | ⚠️ Approximate |
-| Nested action invocation in entry/exit/effect | `state_executor.go:862` executeAction ("not yet implemented") | — | ❌ Not Yet Implemented |
+| Nested action invocation in entry/do/exit/effect | `state_executor.go:1075` executeAction, `invoke_action.go` invokeAction | `state_behavior_test.go:TestStateDoExitAndTransitionEffectPerformAction` | ✅ Faithful |
 | Run-to-completion semantics | `state_executor.go:288` processNextEvent | `state_executor_test.go:TestStateRunToCompletion` | ✅ Faithful |
 | Event queue management | `state_executor.go:1127` EventQueue | `state_executor_test.go` | ✅ Faithful |
 | Dangling transition detection | `robustness_test.go:testStateDanglingTransition` (lenient) | `robustness_test.go:testStateDanglingTransition` | ⚠️ Approximate |
@@ -255,10 +262,9 @@ known, so unmodelled types never produce a false positive.
 - Structured activities with pin connectors
 
 **State Machines (Advanced):**
-- History pseudostates (deep)
+- History pseudostates (shallow and deep)
 - Deferred events
 - Protocol state machines
-- Fork/join transitions (cross-region)
 
 **Object Model:**
 - Dynamic object creation/destruction

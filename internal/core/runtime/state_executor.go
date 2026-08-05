@@ -308,7 +308,10 @@ func (e *StateExecutor) processNextEvent() error {
 					sourceState = stateNode
 				}
 
-				if sourceState != nil {
+				// Transitions leaving a region for a pseudostate (a join, say)
+				// change the whole configuration, so they are not region-local.
+				_, targetIsState := lowerTrans.Target.(*ast.StateNode)
+				if sourceState != nil && targetIsState {
 					// Check if this state is active in any region
 					for region, activeState := range e.activeConfig.regionStates {
 						if activeState == sourceState {
@@ -533,6 +536,17 @@ func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *l
 
 // fireTransition executes a state transition.
 func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
+	// Fork and join reshape the active configuration rather than moving to a
+	// single state, so they are fired whole.
+	if ps, ok := trans.Target.(*ast.PseudostateNode); ok {
+		switch ps.Kind {
+		case ast.PseudostateFork:
+			return e.fireForkTransition(trans, ps)
+		case ast.PseudostateJoin:
+			return e.fireJoinTransition(trans, ps)
+		}
+	}
+
 	// Target can be StateNode or PseudostateNode
 	var targetState *ast.StateNode
 
@@ -546,7 +560,9 @@ func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
 		switch target.Kind {
 		case ast.PseudostateChoice:
 			targetState, err = e.evaluateChoicePseudostate(target)
-		case ast.PseudostateJunction:
+		case ast.PseudostateJunction, ast.PseudostateEntry, ast.PseudostateExit:
+			// Entry and exit points name a boundary crossing: the transition
+			// continues along the point's own outgoing transition.
 			targetState, err = e.evaluateJunctionPseudostate(target)
 		default:
 			return fmt.Errorf("unsupported pseudostate kind: %v", target.Kind)
@@ -562,29 +578,21 @@ func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
 		return fmt.Errorf("transition target state not found")
 	}
 
-	// Evaluate guard if present
-	if trans.Guard != nil {
-		ec := NewEvalContext(e.ctx, nil)
-		ec.Push(e.stateData)
-		guardVal, err := ec.Eval(trans.Guard)
-		if err != nil {
-			return fmt.Errorf("eval guard: %w", err)
-		}
-
-		// Check if boolean true
-		guardPass := false
-		if guardVal.Kind == ValConst && guardVal.Const.Kind == semantics.ValBool {
-			guardPass = guardVal.Const.Bool
-		} else {
-			return fmt.Errorf("guard must be boolean, got %v", guardVal.Kind)
-		}
-
-		// Block transition if guard false
-		if !guardPass {
-			return nil // Remain in current state
-		}
+	pass, err := e.passesGuard(trans.Guard)
+	if err != nil {
+		return err
+	}
+	if !pass {
+		return nil // Remain in current state
 	}
 
+	return e.transitionTo(trans, targetState)
+}
+
+// transitionTo moves the active configuration from the current state to
+// targetState: exit up to the least common ancestor, run the transition effect,
+// then enter down to the target.
+func (e *StateExecutor) transitionTo(trans *lower.Transition, targetState *ast.StateNode) error {
 	// Exit current state hierarchy up to LCA
 	currentState := e.getCurrentState()
 	lca := e.getLCA(currentState, targetState)
@@ -657,6 +665,211 @@ func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
 		e.trace.RecordStateTransition(fromName, targetState.Name, eventName)
 	}
 
+	return nil
+}
+
+// passesGuard reports whether a transition's guard allows it to fire. A nil
+// guard always passes.
+func (e *StateExecutor) passesGuard(guard ast.Node) (bool, error) {
+	if guard == nil {
+		return true, nil
+	}
+	ec := NewEvalContext(e.ctx, nil)
+	ec.Push(e.stateData)
+	val, err := ec.Eval(guard)
+	if err != nil {
+		return false, fmt.Errorf("eval guard: %w", err)
+	}
+	if val.Kind != ValConst || val.Const.Kind != semantics.ValBool {
+		return false, fmt.Errorf("guard must be boolean, got %v", val.Kind)
+	}
+	return val.Const.Bool, nil
+}
+
+// fireForkTransition takes a transition into a fork: every outgoing branch is
+// taken at once, making one state active per orthogonal region of the composite
+// state that owns them.
+func (e *StateExecutor) fireForkTransition(trans *lower.Transition, fork *ast.PseudostateNode) error {
+	pass, err := e.passesGuard(trans.Guard)
+	if err != nil || !pass {
+		return err
+	}
+
+	branches := e.graph.Transitions[fork]
+	if len(branches) < 2 {
+		return fmt.Errorf("fork %s needs at least two outgoing transitions, found %d", fork.Name, len(branches))
+	}
+
+	targets := make(map[*ast.StateRegion]*ast.StateNode, len(branches))
+	var owner *ast.StateNode
+	for _, branch := range branches {
+		if branch.Guard != nil {
+			return fmt.Errorf("fork %s: outgoing transitions cannot be guarded", fork.Name)
+		}
+		target, ok := branch.Target.(*ast.StateNode)
+		if !ok {
+			return fmt.Errorf("fork %s: branch target must be a state, got %T", fork.Name, branch.Target)
+		}
+		region, ok := e.graph.RegionOf[target]
+		if !ok {
+			return fmt.Errorf("fork %s: branch target %s is not in an orthogonal region", fork.Name, target.Name)
+		}
+		if existing, dup := targets[region]; dup {
+			return fmt.Errorf("fork %s: branches %s and %s are in the same region", fork.Name, existing.Name, target.Name)
+		}
+		targets[region] = target
+		if regionOwner := e.graph.RegionOwner[region]; regionOwner != nil {
+			if owner != nil && owner != regionOwner {
+				return fmt.Errorf("fork %s: branches span more than one composite state", fork.Name)
+			}
+			owner = regionOwner
+		}
+	}
+
+	// Leave the source configuration, up to but excluding the composite state
+	// the branches live in.
+	if err := e.exitToward(owner); err != nil {
+		return err
+	}
+	for _, action := range trans.Effect {
+		if err := e.executeAction(action); err != nil {
+			return fmt.Errorf("transition effect: %w", err)
+		}
+	}
+
+	// Enter the composite state's own hierarchy, then override each region's
+	// active state with the branch target instead of the region's initial state.
+	if owner != nil {
+		if err := e.enterHierarchy(owner); err != nil {
+			return err
+		}
+	}
+	e.activeConfig.simpleState = nil
+	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode, len(targets))
+	for region, target := range targets {
+		e.activeConfig.regionStates[region] = target
+		if err := e.enterState(target); err != nil {
+			return fmt.Errorf("enter fork branch %s: %w", target.Name, err)
+		}
+	}
+
+	if err := e.scheduleTransitionEvents(); err != nil {
+		return fmt.Errorf("schedule events: %w", err)
+	}
+	if e.trace != nil {
+		e.trace.RecordStateTransition(getNodeName(trans.Source), fork.Name, "")
+	}
+	return nil
+}
+
+// fireJoinTransition takes a transition into a join. The join only fires once
+// every one of its incoming branches has an active source state; until then the
+// completed branch simply waits.
+func (e *StateExecutor) fireJoinTransition(trans *lower.Transition, join *ast.PseudostateNode) error {
+	pass, err := e.passesGuard(trans.Guard)
+	if err != nil || !pass {
+		return err
+	}
+
+	sources, err := e.joinSources(join)
+	if err != nil {
+		return err
+	}
+	for _, source := range sources {
+		if !e.isActive(source) {
+			return nil // Not yet synchronized: wait for the other branches.
+		}
+	}
+
+	target, err := e.evaluateJunctionPseudostate(join)
+	if err != nil {
+		return fmt.Errorf("evaluate pseudostate: %w", err)
+	}
+	if target == nil {
+		return fmt.Errorf("join %s has no target state", join.Name)
+	}
+
+	// Exit every synchronized branch, then continue from the composite state
+	// they belong to so the usual hierarchy walk exits it as well.
+	var owner *ast.StateNode
+	for _, source := range sources {
+		if region, ok := e.graph.RegionOf[source]; ok {
+			owner = e.graph.RegionOwner[region]
+		}
+		if err := e.exitState(source); err != nil {
+			return fmt.Errorf("exit state: %w", err)
+		}
+	}
+	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
+	e.activeConfig.simpleState = owner
+
+	return e.transitionTo(trans, target)
+}
+
+// joinSources returns the source state of every transition into join.
+func (e *StateExecutor) joinSources(join *ast.PseudostateNode) ([]*ast.StateNode, error) {
+	var sources []*ast.StateNode
+	for _, transitions := range e.graph.Transitions {
+		for _, trans := range transitions {
+			if trans.Target != ast.Node(join) {
+				continue
+			}
+			source, ok := trans.Source.(*ast.StateNode)
+			if !ok {
+				return nil, fmt.Errorf("join %s: incoming source must be a state, got %T", join.Name, trans.Source)
+			}
+			sources = append(sources, source)
+		}
+	}
+	if len(sources) < 2 {
+		return nil, fmt.Errorf("join %s needs at least two incoming transitions, found %d", join.Name, len(sources))
+	}
+	return sources, nil
+}
+
+// isActive reports whether state is part of the active configuration.
+func (e *StateExecutor) isActive(state *ast.StateNode) bool {
+	if e.activeConfig.simpleState == state {
+		return true
+	}
+	for _, active := range e.activeConfig.regionStates {
+		if active == state {
+			return true
+		}
+	}
+	return false
+}
+
+// exitToward exits the active configuration up to, but not including, stop.
+func (e *StateExecutor) exitToward(stop *ast.StateNode) error {
+	for _, active := range e.activeConfig.regionStates {
+		if err := e.exitState(active); err != nil {
+			return fmt.Errorf("exit state: %w", err)
+		}
+	}
+	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
+
+	for current := e.getCurrentState(); current != nil && current != stop; current = e.graph.ParentState[current] {
+		if err := e.exitState(current); err != nil {
+			return fmt.Errorf("exit state: %w", err)
+		}
+	}
+	e.activeConfig.simpleState = nil
+	return nil
+}
+
+// enterHierarchy enters state's ancestors, outermost first, then state itself,
+// skipping any that are already active.
+func (e *StateExecutor) enterHierarchy(state *ast.StateNode) error {
+	chain := e.getParentChain(state)
+	for i := len(chain) - 1; i >= 0; i-- {
+		if e.isActive(chain[i]) {
+			continue
+		}
+		if err := e.enterState(chain[i]); err != nil {
+			return fmt.Errorf("enter state %s: %w", chain[i].Name, err)
+		}
+	}
 	return nil
 }
 
