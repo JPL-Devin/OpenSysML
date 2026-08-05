@@ -5,6 +5,8 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -202,5 +204,76 @@ func visibilityToString(v ast.Visibility) string {
 		return "default"
 	default:
 		return "default"
+	}
+}
+
+// ValueToProto converts runtime.Value to protobuf Value.
+func ValueToProto(val runtime.Value) *pb.Value {
+	switch val.Kind {
+	case runtime.ValConst:
+		// Map semantics.Value to protobuf based on type
+		switch val.Const.Kind {
+		case semantics.ValInt:
+			return &pb.Value{Kind: &pb.Value_IntValue{IntValue: val.Const.Int}}
+		case semantics.ValReal:
+			return &pb.Value{Kind: &pb.Value_RealValue{RealValue: val.Const.Real}}
+		case semantics.ValBool:
+			return &pb.Value{Kind: &pb.Value_BoolValue{BoolValue: val.Const.Bool}}
+		case semantics.ValInfinity:
+			return &pb.Value{Kind: &pb.Value_StringValue{StringValue: "*"}}
+		default:
+			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported const kind"}}
+		}
+	case runtime.ValString:
+		return &pb.Value{Kind: &pb.Value_StringValue{StringValue: val.Str}}
+	case runtime.ValNull:
+		return &pb.Value{Kind: &pb.Value_Null{Null: ""}}
+	case runtime.ValInstance:
+		return &pb.Value{Kind: &pb.Value_InstanceId{InstanceId: val.Instance}}
+	case runtime.ValSequence:
+		// Recursively convert sequence elements
+		var pbElements []*pb.Value
+		if val.Sequence != nil {
+			for _, elem := range val.Sequence.Elements() {
+				pbElements = append(pbElements, ValueToProto(elem))
+			}
+		}
+		return &pb.Value{Kind: &pb.Value_Sequence{Sequence: &pb.ValueSequence{Elements: pbElements}}}
+	default:
+		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
+	}
+}
+
+// InstanceToProto converts runtime.Instance to protobuf Instance.
+func InstanceToProto(inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
+	pbSlots := make(map[string]*pb.SlotValue)
+	
+	for name, slot := range inst.Slots {
+		pbSlot := &pb.SlotValue{
+			FeatureName:  name,
+			Materialized: slot.Materialized,
+		}
+		
+		// Check multiplicity to determine scalar vs collection
+		mult := slot.Feature.Multiplicity
+		if !mult.Upper.Infinite && mult.Upper.Value <= 1 {
+			// Scalar slot
+			pbSlot.Value = ValueToProto(slot.Value)
+		} else {
+			// Collection slot
+			if slot.Values.Kind == runtime.ValSequence && slot.Values.Sequence != nil {
+				for _, elem := range slot.Values.Sequence.Elements() {
+					pbSlot.Values = append(pbSlot.Values, ValueToProto(elem))
+				}
+			}
+		}
+		
+		pbSlots[name] = pbSlot
+	}
+	
+	return &pb.Instance{
+		Id:            inst.ID,
+		TypeSymbolId:  idx.GetFQN(inst.Type),
+		Slots:         pbSlots,
 	}
 }
