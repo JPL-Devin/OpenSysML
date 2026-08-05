@@ -147,6 +147,168 @@ class Connection:
         
         return response.symbol
     
+    def eval(self, expression, model_hash, context_symbol_id=None):
+        """Evaluate a SysML expression.
+        
+        Args:
+            expression (str): SysML expression (e.g., "2 + 2")
+            model_hash (str): Hash from ParseFile response
+            context_symbol_id (str, optional): Symbol FQN for context scope
+            
+        Returns:
+            Value from expression (int, float, bool, str, Instance, etc.)
+            
+        Raises:
+            RuntimeError: If evaluation fails
+        """
+        from pysysml.errors import RuntimeError as PyRuntimeError
+        
+        req = sysml_pb2.EvaluateRequest(
+            model_hash=model_hash,
+            expression=expression,
+            context_symbol_id=context_symbol_id or ""
+        )
+        
+        response = self._stub.Evaluate(req)
+        
+        if response.error:
+            raise PyRuntimeError(response.error, diagnostics=list(response.diagnostics))
+        
+        # Convert protobuf Value to Python type
+        return self._value_to_python(response.result)
+    
+    def instantiate(self, symbol_id, model_hash):
+        """Instantiate a part/usage symbol.
+        
+        Args:
+            symbol_id (str): FQN of part/usage to instantiate
+            model_hash (str): Hash from ParseFile response
+            
+        Returns:
+            Instance object
+            
+        Raises:
+            RuntimeError: If instantiation fails
+        """
+        from pysysml.errors import RuntimeError as PyRuntimeError
+        from pysysml.instance import Instance
+        
+        req = sysml_pb2.InstantiateRequest(
+            model_hash=model_hash,
+            symbol_id=symbol_id
+        )
+        
+        response = self._stub.Instantiate(req)
+        
+        if response.error:
+            raise PyRuntimeError(response.error, diagnostics=list(response.diagnostics))
+        
+        return Instance(response.instance)
+    
+    def execute_action(self, action_symbol_id, model_hash, inputs=None):
+        """Execute an action definition.
+        
+        Args:
+            action_symbol_id (str): FQN of action def
+            model_hash (str): Hash from ParseFile response
+            inputs (dict, optional): Input parameter name → value
+            
+        Returns:
+            dict: Output parameter name → value
+            
+        Raises:
+            RuntimeError: If execution fails
+        """
+        from pysysml.errors import RuntimeError as PyRuntimeError
+        
+        # Convert Python inputs to protobuf Values
+        pb_inputs = {name: self._python_to_value(val) for name, val in (inputs or {}).items()}
+        
+        req = sysml_pb2.ExecuteActionRequest(
+            model_hash=model_hash,
+            action_symbol_id=action_symbol_id,
+            inputs=pb_inputs
+        )
+        
+        response = self._stub.ExecuteAction(req)
+        
+        if response.error:
+            raise PyRuntimeError(response.error, diagnostics=list(response.diagnostics))
+        
+        # Convert outputs
+        return {name: self._value_to_python(val) for name, val in response.outputs.items()}
+    
+    def execute_state(self, state_machine_symbol_id, model_hash, events=None):
+        """Execute a state machine.
+        
+        Args:
+            state_machine_symbol_id (str): FQN of state machine def
+            model_hash (str): Hash from ParseFile response
+            events (list, optional): Event names to process
+            
+        Returns:
+            dict: {'states_visited': [...], 'final_context': {...}}
+            
+        Raises:
+            RuntimeError: If execution fails
+        """
+        from pysysml.errors import RuntimeError as PyRuntimeError
+        
+        req = sysml_pb2.ExecuteStateRequest(
+            model_hash=model_hash,
+            state_machine_symbol_id=state_machine_symbol_id,
+            events=events or []
+        )
+        
+        response = self._stub.ExecuteState(req)
+        
+        if response.error:
+            raise PyRuntimeError(response.error, diagnostics=list(response.diagnostics))
+        
+        return {
+            'states_visited': list(response.states_visited),
+            'final_context': {name: self._value_to_python(val) 
+                             for name, val in response.final_context.items()}
+        }
+    
+    def _python_to_value(self, py_value):
+        """Convert Python type to protobuf Value."""
+        if isinstance(py_value, bool):
+            return sysml_pb2.Value(bool_value=py_value)
+        elif isinstance(py_value, int):
+            return sysml_pb2.Value(int_value=py_value)
+        elif isinstance(py_value, float):
+            return sysml_pb2.Value(real_value=py_value)
+        elif isinstance(py_value, str):
+            return sysml_pb2.Value(string_value=py_value)
+        elif py_value is None:
+            return sysml_pb2.Value(null=True)
+        elif isinstance(py_value, list):
+            elements = [self._python_to_value(v) for v in py_value]
+            return sysml_pb2.Value(sequence=sysml_pb2.Sequence(elements=elements))
+        else:
+            raise ValueError(f"Unsupported Python type: {type(py_value)}")
+    
+    def _value_to_python(self, pb_value):
+        """Convert protobuf Value to Python type."""
+        kind = pb_value.WhichOneof('kind')
+        if kind == 'int_value':
+            return pb_value.int_value
+        elif kind == 'real_value':
+            return pb_value.real_value
+        elif kind == 'bool_value':
+            return pb_value.bool_value
+        elif kind == 'string_value':
+            return pb_value.string_value
+        elif kind == 'instance_id':
+            return pb_value.instance_id  # return ID for now
+        elif kind == 'sequence':
+            return [self._value_to_python(v) for v in pb_value.sequence.elements]
+        elif kind == 'null':
+            return None
+        else:
+            return None
+    
     def _probe_service(self, host, port, timeout=5.0):
         """Check if sysml-grpc service is running and responsive.
         
