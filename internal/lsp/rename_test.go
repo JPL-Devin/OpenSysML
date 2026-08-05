@@ -110,6 +110,44 @@ func TestRenameEditsQualifierSegments(t *testing.T) {
 	}
 }
 
+// References inside definition and usage bodies — typings, specializations and
+// value expressions — must be renamed too, or the model stops resolving.
+func TestRenameEditsReferencesInsideDeclarations(t *testing.T) {
+	ws := model.NewWorkspace()
+	src := `package P {
+	part def Car;
+	part def Coupe :> Car;
+	part c : Car;
+	part d : Car[1];
+	attribute n : ScalarValues::Integer = 1;
+	attribute twice : ScalarValues::Integer = n + n;
+}
+`
+	name := openRenameDoc(t, ws, "/tmp/rename_decls.sysml", src)
+
+	got, err := applyRename(t, ws, name, "Car;", "Vehicle")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if strings.Contains(got[name], "Car") {
+		t.Errorf("Car still referenced after rename:\n%s", got[name])
+	}
+	for _, want := range []string{"part def Vehicle;", ":> Vehicle;", "part c : Vehicle;", "part d : Vehicle[1];"} {
+		if !strings.Contains(got[name], want) {
+			t.Errorf("missing %q in:\n%s", want, got[name])
+		}
+	}
+
+	// A feature referenced from an expression.
+	got, err = applyRename(t, ws, name, "n :", "count")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "= count + count;") {
+		t.Errorf("expression reference not renamed:\n%s", got[name])
+	}
+}
+
 func TestRenameRejectsKeywordAndInvalidNames(t *testing.T) {
 	ws := model.NewWorkspace()
 	name := openRenameDoc(t, ws, "/tmp/rename_bad.sysml", "package P { namespace N; }\n")

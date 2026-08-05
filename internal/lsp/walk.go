@@ -13,7 +13,8 @@ type qnRef struct {
 
 // collectRefs walks a document's scope tree and AST, gathering every
 // QualifiedName reference with its resolution scope. It mirrors
-// resolve/document.go's traversal.
+// resolve/document.go's traversal; a declaration form handled there but not
+// here is a reference the editor cannot find, so the two must stay in step.
 func collectRefs(root *ast.RootNamespace, rootScope *symbols.Scope) []qnRef {
 	c := &refCollector{}
 	if root != nil && rootScope != nil {
@@ -82,7 +83,105 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 	case *ast.FilterMember:
 		c.expr(scope, d.Condition)
+	case *ast.Definition:
+		c.prefixes(scope, d.Prefixes)
+		c.relationships(scope, d.Relationships)
+		if child := c.childScope(scope, d); child != nil {
+			c.walkMembers(child, d.Members)
+		}
+	case *ast.Usage:
+		c.prefixes(scope, d.Prefixes)
+		c.relationships(scope, d.Relationships)
+		c.multiplicity(scope, d.Multiplicity)
+		c.expr(scope, d.Value)
+		for _, end := range d.ConnectorEnds {
+			if end == nil {
+				continue
+			}
+			c.target(scope, end.Target)
+			c.target(scope, end.Reference)
+		}
+		if d.FlowEnds != nil {
+			c.expr(scope, d.FlowEnds.From)
+			c.expr(scope, d.FlowEnds.To)
+			c.expr(scope, d.FlowEnds.Payload)
+		}
+		if child := c.childScope(scope, d); child != nil {
+			c.walkMembers(child, d.Members)
+		}
+	case *ast.SubjectMember:
+		c.add(scope, d.TypeRef)
+		c.multiplicity(scope, d.Multiplicity)
+		c.expr(scope, d.BindingExpr)
+		if child := c.childScope(scope, d); child != nil {
+			c.walkMembers(child, d.Body)
+		}
+	case *ast.InitialNode:
+		// The node's own name is a label, not a reference.
+		c.add(scope, d.Successor)
+		c.expr(scope, d.Guard)
+	case *ast.ResultMember:
+		c.expr(scope, d.Expression)
+	case *ast.ConstraintMember:
+		c.expr(scope, d.Expression)
+	case *ast.AssumeMember:
+		c.expr(scope, d.Expression)
+	case *ast.RequireMember:
+		c.expr(scope, d.Expression)
+		c.walkMembers(scope, d.Body)
+	case *ast.ActorMember:
+		c.add(scope, d.TypeRef)
+		c.expr(scope, d.BindingExpr)
+	case *ast.EntryMember:
+		c.walkMembers(scope, d.Actions)
+	case *ast.DoMember:
+		c.walkMembers(scope, d.Actions)
+	case *ast.ExitMember:
+		c.walkMembers(scope, d.Actions)
+	case *ast.TransitionMember:
+		c.add(scope, d.Source)
+		c.add(scope, d.Target)
+		c.expr(scope, d.Guard)
+		c.walkMembers(scope, d.Effect)
+	case *ast.SendStatement:
+		c.expr(scope, d.Message)
+		c.expr(scope, d.Target)
+	case *ast.TerminateStatement:
+		c.expr(scope, d.Target)
+	case *ast.AcceptActionUsage:
+		c.add(scope, d.ParamType)
 	}
+}
+
+// relationships collects the targets of typings, specializations, subsettings
+// and redefinitions (`: T`, `:> T`, `:>> T`).
+func (c *refCollector) relationships(scope *symbols.Scope, rels []*ast.Relationship) {
+	for _, rel := range rels {
+		if rel != nil {
+			c.target(scope, rel.Target)
+		}
+	}
+}
+
+// target collects a node that names something, whether it was parsed as a
+// qualified name or wrapped in an expression.
+func (c *refCollector) target(scope *symbols.Scope, target ast.Node) {
+	if fr, ok := target.(*ast.FeatureReference); ok {
+		target = fr.Name
+	}
+	if qn, ok := target.(*ast.QualifiedName); ok {
+		c.add(scope, qn)
+		return
+	}
+	c.expr(scope, target)
+}
+
+func (c *refCollector) multiplicity(scope *symbols.Scope, m *ast.Multiplicity) {
+	if m == nil {
+		return
+	}
+	c.expr(scope, m.Lower)
+	c.expr(scope, m.Upper)
 }
 
 func (c *refCollector) prefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {

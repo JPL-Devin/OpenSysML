@@ -91,10 +91,13 @@ func (f *formatter) run(toks []lexer.Token) []byte {
 		}
 		f.emit(tok)
 	}
+	out := f.buf.Bytes()
 	if f.started {
-		f.buf.WriteByte('\n')
+		// Exactly one trailing newline, whether or not the last token was a line
+		// comment that carried its own.
+		out = append(bytes.TrimRight(out, "\n"), '\n')
 	}
-	return f.buf.Bytes()
+	return out
 }
 
 // emit writes one non-whitespace token, together with the whitespace that
@@ -110,9 +113,13 @@ func (f *formatter) emit(tok lexer.Token) {
 	switch {
 	case f.pendingNL > 0:
 		if f.started {
-			// At most one blank line between tokens.
-			f.buf.WriteByte('\n')
+			// At most one blank line between tokens, counting the newline a line
+			// comment token already wrote as part of its own text.
+			want := 1
 			if f.pendingNL > 1 {
+				want = 2
+			}
+			for have := f.trailingNewlines(); have < want; have++ {
 				f.buf.WriteByte('\n')
 			}
 		}
@@ -137,6 +144,18 @@ func (f *formatter) emit(tok lexer.Token) {
 		// after it start from wherever it ended.
 		f.atLineStart = strings.TrimSpace(text[i+1:]) == ""
 	}
+}
+
+// trailingNewlines counts the newlines at the end of the buffer. A line comment
+// token includes its terminating newline in its own text, so the buffer can
+// already sit at the start of a line before any newline is written here.
+func (f *formatter) trailingNewlines() int {
+	b := f.buf.Bytes()
+	n := 0
+	for i := len(b) - 1; i >= 0 && b[i] == '\n'; i-- {
+		n++
+	}
+	return n
 }
 
 // wantSpace reports whether whitespace the author wrote before tok is kept.

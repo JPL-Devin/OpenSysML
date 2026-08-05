@@ -64,6 +64,22 @@ func TestPreservesCommentsAndNotes(t *testing.T) {
 	}
 }
 
+// A line-comment token carries its own terminating newline, so neither the
+// blank-line rule nor the final newline may add a second one.
+func TestLineCommentNewlineNotDoubled(t *testing.T) {
+	cases := []struct{ src, want string }{
+		{"package P;\n// trailing note\n", "package P;\n// trailing note\n"},
+		{"package P;\n// note\n\n\n\npart def Car;\n", "package P;\n// note\n\npart def Car;\n"},
+		{"package P;\n// note\npart def Car;\n", "package P;\n// note\npart def Car;\n"},
+		{"// leading note\npackage P;\n", "// leading note\npackage P;\n"},
+	}
+	for _, tc := range cases {
+		if got := format(t, tc.src); got != tc.want {
+			t.Errorf("format(%q):\ngot:  %q\nwant: %q", tc.src, got, tc.want)
+		}
+	}
+}
+
 func TestPreservesStringContents(t *testing.T) {
 	src := "package P {\nattribute a = \"  spaced  ;  \";\n}\n"
 	if got := format(t, src); !strings.Contains(got, `"  spaced  ;  "`) {
