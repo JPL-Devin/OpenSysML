@@ -7,14 +7,14 @@ import (
 
 func TestISQImportInWorkspace(t *testing.T) {
 	ws := NewWorkspace()
-	
+
 	// Verify ISQ::MassValue exists
 	syms := ws.LookupQualified("ISQ::MassValue")
 	t.Logf("ISQ::MassValue: %d symbols", len(syms))
 	if len(syms) == 0 {
 		t.Fatal("ISQ::MassValue not in index")
 	}
-	
+
 	// Check ISQ package itself
 	isqSyms := ws.LookupQualified("ISQ")
 	t.Logf("ISQ: %d symbols", len(isqSyms))
@@ -22,12 +22,12 @@ func TestISQImportInWorkspace(t *testing.T) {
 		isq := isqSyms[0]
 		t.Logf("ISQ: name=%s kind=%v hasScope=%v", isq.Name, isq.Kind, isq.Scope != nil)
 	}
-	
+
 	// Open a document with import
 	src := `import ISQ::*;
 attribute mass : MassValue;`
 	ws.Open("test.sysml", []byte(src), 1)
-	
+
 	// Check diagnostics
 	diags := ws.Diagnostics("test.sysml")
 	t.Logf("Diagnostics: %d", len(diags))

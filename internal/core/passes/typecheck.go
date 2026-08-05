@@ -339,7 +339,7 @@ func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, d
 	if defKind == usageWantsDefKind(useKind) {
 		return true
 	}
-	
+
 	// Attributes can be typed by any structural def (for parameters, properties)
 	// Also allow enumDef for typed enumerations
 	// This allows: in scene : Scene (attribute : itemDef), verdict : VerdictKind (attribute : enumDef)
@@ -350,7 +350,7 @@ func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, d
 			defKind == symbols.SymbolOccurrenceDef ||
 			defKind == symbols.SymbolEnumerationDef
 	}
-	
+
 	// Parameters (in/out/inout) can cross-type to any structural def
 	// Also allow enumDef for typed enumerations
 	// This allows: in power : PowerValue (part : attributeDef), out verdict : VerdictKind (part : enumDef)
@@ -362,7 +362,7 @@ func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, d
 			defKind == symbols.SymbolOccurrenceDef ||
 			defKind == symbols.SymbolEnumerationDef
 	}
-	
+
 	// Items can be typed by any structural def (structural hierarchy)
 	if useKind == ast.UsageItem {
 		return defKind == symbols.SymbolPartDef ||
@@ -370,7 +370,7 @@ func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, d
 			defKind == symbols.SymbolItemDef ||
 			defKind == symbols.SymbolOccurrenceDef
 	}
-	
+
 	// Occurrences can be typed by any structural def
 	if useKind == ast.UsageOccurrence {
 		return defKind == symbols.SymbolPartDef ||
@@ -378,7 +378,7 @@ func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, d
 			defKind == symbols.SymbolItemDef ||
 			defKind == symbols.SymbolOccurrenceDef
 	}
-	
+
 	// Individuals can be typed by any structural def
 	if useKind == ast.UsageIndividual {
 		return defKind == symbols.SymbolPartDef ||
@@ -387,7 +387,7 @@ func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, d
 			defKind == symbols.SymbolOccurrenceDef ||
 			defKind == symbols.SymbolIndividualDef
 	}
-	
+
 	// Subject/objective are structural usages (requirement elements)
 	if useKind == ast.UsageSubject || useKind == ast.UsageObjective {
 		return defKind == symbols.SymbolPartDef ||
@@ -396,7 +396,7 @@ func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, d
 			defKind == symbols.SymbolOccurrenceDef ||
 			defKind == symbols.SymbolIndividualDef
 	}
-	
+
 	return false
 }
 

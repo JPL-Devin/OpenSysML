@@ -1,10 +1,10 @@
 package libs
 
 import (
-	"strings"
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"strings"
+	"testing"
 )
 
 func TestPerformancesActualPattern(t *testing.T) {
@@ -13,10 +13,10 @@ func TestPerformancesActualPattern(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to load: %v", err)
 	}
-	
+
 	p := parser.New(source.New("Performances.kerml", content))
 	_ = p.ParseFile()
-	
+
 	t.Logf("Performances.kerml diagnostics: %d", len(p.Diagnostics))
 	for _, d := range p.Diagnostics {
 		// Get line number
@@ -26,12 +26,12 @@ func TestPerformancesActualPattern(t *testing.T) {
 				lineNum++
 			}
 		}
-		
+
 		char := ""
 		if d.Span.Offset < len(content) {
 			char = string(content[d.Span.Offset])
 		}
-		
+
 		// Get line content
 		lines := strings.Split(string(content), "\n")
 		lineContent := ""
@@ -41,7 +41,7 @@ func TestPerformancesActualPattern(t *testing.T) {
 				lineContent = lineContent[:80] + "..."
 			}
 		}
-		
+
 		t.Logf("Line %d, offset=%d (char=%q): %s", lineNum, d.Span.Offset, char, d.Message)
 		t.Logf("  Content: %s", lineContent)
 	}

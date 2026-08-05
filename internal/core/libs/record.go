@@ -18,7 +18,7 @@ const formatVersion = 5
 // qualified-name lookups.
 type symRecord struct {
 	FQN             string
-	ShortName       string   // short name (e.g., "kg" for "kilogram"), empty if none
+	ShortName       string // short name (e.g., "kg" for "kilogram"), empty if none
 	Kind            symbols.SymbolKind
 	Span            source.Span
 	Supers          []string // raw target text of specializes/subsets/redefines edges
@@ -90,7 +90,7 @@ func supersOf(decl ast.Node) []string {
 			if ref, ok := target.(*ast.FeatureReference); ok {
 				target = ref.Name
 			}
-			
+
 			if qn, ok := target.(*ast.QualifiedName); ok {
 				out = append(out, qualifiedNameText(qn))
 			}
@@ -128,7 +128,7 @@ func wildcardImportsOf(decl ast.Node) []string {
 	default:
 		return nil
 	}
-	
+
 	var out []string
 	for _, m := range members {
 		imp, ok := m.(*ast.Import)

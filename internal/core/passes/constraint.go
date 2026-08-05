@@ -270,11 +270,11 @@ func (cc *constraintChecker) checkTypingConformance(sym *symbols.Symbol) {
 			}
 		}
 	}
-	
+
 	if usageType == nil {
 		return // No explicit type, skip
 	}
-	
+
 	// Check all subsets relationships
 	for _, rel := range semantics.RelationshipsOf(sym) {
 		if rel == nil || rel.Target == nil || rel.Kind != ast.RelSubsets {
@@ -292,7 +292,7 @@ func (cc *constraintChecker) checkTypingConformance(sym *symbols.Symbol) {
 		if !resolved || subsetted == nil {
 			continue
 		}
-		
+
 		// Extract type of subsetted usage
 		var subsettedType *symbols.Symbol
 		for _, subRel := range semantics.RelationshipsOf(subsetted) {
@@ -311,11 +311,11 @@ func (cc *constraintChecker) checkTypingConformance(sym *symbols.Symbol) {
 				}
 			}
 		}
-		
+
 		if subsettedType == nil {
 			continue // Subsetted usage has no explicit type, skip
 		}
-		
+
 		// Check conformance: usageType must conform to subsettedType
 		if !cc.model.Conforms(usageType, subsettedType) {
 			cc.diags = append(cc.diags, Diagnostic{
@@ -341,11 +341,11 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 	if len(rels) == 0 {
 		return // No relationships
 	}
-	
+
 	// Debug: Check anonymous symbols
 	if sym.Name == "" {
 	}
-	
+
 	// Find owner symbol (the definition/usage that declares sym).
 	// This traverses OwnerScope.Parent() to find the symbol whose Decl matches
 	// sym's declaring scope node. If scope hierarchy is complex (nested blocks,
@@ -371,13 +371,13 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			}
 		}
 	}
-	
+
 	if owner == nil {
 		// Cannot determine owner (complex scope hierarchy or internal structure).
 		// Skip validation gracefully rather than reporting false positives.
 		return
 	}
-	
+
 	// Extract all redefines relationships
 	for _, rel := range rels {
 		if rel == nil {
@@ -389,7 +389,7 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 		if rel.Target == nil {
 			continue
 		}
-		
+
 		targetNode := rel.Target
 		if fr, ok := targetNode.(*ast.FeatureReference); ok {
 			targetNode = fr.Name
@@ -402,11 +402,11 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 		if !resolved || redefined == nil {
 			continue
 		}
-		
+
 		// Check that redefined member is inherited (not locally declared in owner)
 		inherited := false
 		locallyDeclared := false
-		
+
 		// Check if redefined is locally declared in owner's scope
 		if owner.Scope != nil {
 			for _, memberName := range owner.Scope.MemberNames() {
@@ -421,7 +421,7 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 				}
 			}
 		}
-		
+
 		// If not locally declared, check if it's inherited from supertypes
 		if !locallyDeclared {
 			for _, supertype := range cc.model.AllSupertypes(owner) {
@@ -443,7 +443,7 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 				}
 			}
 		}
-		
+
 		if !inherited {
 			cc.diags = append(cc.diags, Diagnostic{
 				Severity: SeverityError,
@@ -456,11 +456,11 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			})
 			continue
 		}
-		
+
 		// Check type conformance
 		usageType := extractUsageType(cc, sym)
 		redefinedType := extractUsageType(cc, redefined)
-		
+
 		if usageType != nil && redefinedType != nil {
 			if !cc.model.Conforms(usageType, redefinedType) {
 				cc.diags = append(cc.diags, Diagnostic{
@@ -474,23 +474,23 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 				})
 			}
 		}
-		
+
 		// Check multiplicity bounds (SysML: redefining multiplicity must tighten)
 		symMult, symOk := cc.model.MultiplicityOf(sym)
 		redefinedMult, redefinedOk := cc.model.MultiplicityOf(redefined)
-		
+
 		// Only validate if both multiplicities are known and evaluable.
 		// MultiplicityOf returns ok=false for non-usages or missing multiplicity.
 		// Bound.Known=false means expression is not model-level-evaluable.
 		// This guards against nil/uninitialized bounds and non-evaluable expressions.
-		if symOk && redefinedOk && symMult.Lower.Known && symMult.Upper.Known && 
-		   redefinedMult.Lower.Known && redefinedMult.Upper.Known {
+		if symOk && redefinedOk && symMult.Lower.Known && symMult.Upper.Known &&
+			redefinedMult.Lower.Known && redefinedMult.Upper.Known {
 			// Lower bound must be >= redefined lower bound
 			lowerViolated := false
 			if !symMult.Lower.Infinite && !redefinedMult.Lower.Infinite {
 				lowerViolated = symMult.Lower.Value < redefinedMult.Lower.Value
 			}
-			
+
 			// Upper bound must be <= redefined upper bound (or both unbounded)
 			upperViolated := false
 			if !redefinedMult.Upper.Infinite { // redefined has finite upper bound
@@ -500,7 +500,7 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 					upperViolated = true
 				}
 			}
-			
+
 			if lowerViolated || upperViolated {
 				cc.diags = append(cc.diags, Diagnostic{
 					Severity: SeverityError,
@@ -555,7 +555,7 @@ func (cc *constraintChecker) resolveInheritedMember(owner *symbols.Symbol, qn *a
 		}
 		return nil, false
 	}
-	
+
 	// For multi-part names, resolve normally (qualifiers won't be local members)
 	return cc.resolver.ResolveQualified(owner.Scope, qn)
 }

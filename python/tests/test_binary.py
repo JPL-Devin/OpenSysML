@@ -3,6 +3,7 @@
 import hashlib
 import os
 import platform
+import pytest
 from unittest.mock import patch, Mock, mock_open
 from pysysml.binary import (
     detect_platform,
@@ -78,13 +79,21 @@ def test_ensure_binary_exists():
 
 
 def test_ensure_binary_downloads():
-    """Test ensure_binary downloads if binary missing."""
+    """Test ensure_binary downloads if binary missing and version provided."""
     with patch('os.path.exists', return_value=False):
         with patch('pysysml.binary.download_binary') as mock_download:
             mock_download.return_value = '/fake/path/sysml-grpc'
-            path = ensure_binary()
+            path = ensure_binary(version='v0.1.0')
             assert path == '/fake/path/sysml-grpc'
-            mock_download.assert_called_once()
+            mock_download.assert_called_once_with(version='v0.1.0')
+
+
+def test_ensure_binary_raises_without_version():
+    """Test ensure_binary raises ConnectionError when binary missing and no version."""
+    from pysysml.errors import ConnectionError
+    with patch('os.path.exists', return_value=False):
+        with pytest.raises(ConnectionError, match="Binary not found.*auto-download disabled"):
+            ensure_binary()
 
 
 def test_download_binary_verifies_checksum():

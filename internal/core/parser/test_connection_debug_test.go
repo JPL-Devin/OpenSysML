@@ -8,7 +8,7 @@ import (
 
 func TestConnectionConnect(t *testing.T) {
 	code := `connection :MatesWith connect [1] be to [1] be;`
-	
+
 	p := New(source.New("test.kerml", []byte(code)))
 	_ = p.ParseFile()
 	if len(p.Diagnostics) > 0 {

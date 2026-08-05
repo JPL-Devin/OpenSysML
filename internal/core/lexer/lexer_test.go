@@ -470,10 +470,10 @@ func TestBehavioralKeywords(t *testing.T) {
 
 	expectedKeywords := []string{
 		"first", "done", "fork", "join", "merge", "decision", "then", // Action
-		"state", "initial", "final", "entry", "exit", "transition",    // State
-		"after", "when", "accept", "on",                               // Trigger
-		"choice", "junction",                                          // Pseudostate
-		"region",                                                      // Region
+		"state", "initial", "final", "entry", "exit", "transition", // State
+		"after", "when", "accept", "on", // Trigger
+		"choice", "junction", // Pseudostate
+		"region", // Region
 	}
 	for i, expected := range expectedKeywords {
 		tok := l.Next()

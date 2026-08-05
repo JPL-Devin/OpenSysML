@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc test clean install help
+.PHONY: all build build-sysml build-lsp build-grpc test clean install help python-test python-install python-proto
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -14,8 +14,9 @@ LDFLAGS := -X main.Version=$(VERSION) \
 
 # Build output directory
 BIN_DIR := bin
+PYTHON_DIR := python
 
-all: build test ## Build and test everything
+all: build test python-test ## Build and test everything
 
 build: build-sysml build-lsp build-grpc ## Build all binaries
 
@@ -64,6 +65,25 @@ version: ## Show version information
 	@echo "Commit:     $(COMMIT)"
 	@echo "Build time: $(BUILD_TIME)"
 	@echo "Go version: $(GO_VERSION)"
+
+python-proto: ## Regenerate Python protobuf stubs
+	@echo "Regenerating Python protobuf stubs..."
+	@command -v protoc >/dev/null 2>&1 || { echo "Error: protoc not found. Install protobuf compiler."; exit 1; }
+	protoc --proto_path=api/proto \
+	       --python_out=$(PYTHON_DIR)/pysysml/proto \
+	       --grpc_python_out=$(PYTHON_DIR)/pysysml/proto \
+	       api/proto/sysml.proto
+	@echo "✓ Regenerated Python stubs"
+
+python-install: ## Install Python package in editable mode
+	@echo "Installing pysysml..."
+	cd $(PYTHON_DIR) && pip install -e .
+	@echo "✓ Installed pysysml"
+
+python-test: ## Run Python tests
+	@echo "Running Python tests..."
+	cd $(PYTHON_DIR) && pytest tests/ -v
+	@echo "✓ Python tests passed"
 
 help: ## Show this help message
 	@echo "Available targets:"

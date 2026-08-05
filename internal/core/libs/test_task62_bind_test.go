@@ -46,12 +46,12 @@ package Test {
 `,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := parser.New(source.New("test.sysml", []byte(tt.code)))
 			root := p.ParseFile()
-			
+
 			if len(p.Diagnostics) > 0 {
 				t.Logf("Diagnostics:")
 				for _, d := range p.Diagnostics {
@@ -59,23 +59,23 @@ package Test {
 				}
 				t.Fatalf("Expected clean parse, got %d diagnostics", len(p.Diagnostics))
 			}
-			
+
 			// Verify AST structure
 			if len(root.Members) == 0 {
 				t.Fatal("No members parsed")
 			}
-			
+
 			// Check that bind created UsageBinding
 			pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
 			if len(pkg.Members) == 0 {
 				t.Fatal("No package members")
 			}
-			
+
 			part := pkg.Members[0].(*ast.Membership).Member.(*ast.Usage)
 			if len(part.Members) == 0 {
 				t.Fatal("No part members")
 			}
-			
+
 			bind := part.Members[0].(*ast.Membership).Member.(*ast.Usage)
 			if bind.Kind != ast.UsageBinding {
 				t.Errorf("Expected UsageBinding, got %v", bind.Kind)

@@ -8,7 +8,7 @@ import (
 func TestOccurrencesContext(t *testing.T) {
 	src := &embedSource{}
 	content, _ := src.Read("Kernel Libraries/Kernel Semantic Library/Occurrences.kerml")
-	
+
 	offsets := []int{25224, 28079, 30619, 31030}
 	for _, offset := range offsets {
 		lineNum := 1
@@ -17,7 +17,7 @@ func TestOccurrencesContext(t *testing.T) {
 				lineNum++
 			}
 		}
-		
+
 		lines := strings.Split(string(content), "\n")
 		contextStart := lineNum - 3
 		if contextStart < 0 {
@@ -27,12 +27,12 @@ func TestOccurrencesContext(t *testing.T) {
 		if contextEnd > len(lines) {
 			contextEnd = len(lines)
 		}
-		
+
 		char := ""
 		if offset < len(content) {
 			char = string(content[offset])
 		}
-		
+
 		t.Logf("\n=== Offset %d (char=%q, line %d) ===", offset, char, lineNum)
 		for i := contextStart; i < contextEnd && i < len(lines); i++ {
 			marker := " "

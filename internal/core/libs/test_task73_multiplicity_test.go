@@ -8,7 +8,7 @@ import (
 )
 
 func TestTask73MultiplicityDecl(t *testing.T) {
-	tests := []struct{
+	tests := []struct {
 		name  string
 		input string
 	}{

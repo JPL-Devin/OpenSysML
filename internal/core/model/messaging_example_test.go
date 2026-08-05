@@ -6,7 +6,7 @@ import (
 
 func TestMessagingExample(t *testing.T) {
 	ws := NewWorkspace()
-	
+
 	src := `package test {
 	import ScalarValues::*;
 	
@@ -42,10 +42,10 @@ func TestMessagingExample(t *testing.T) {
 		then send new Show(shoot.picture) to screen;
 	}
 }`
-	
+
 	ws.Open("test.sysml", []byte(src), 1)
 	diags := ws.Diagnostics("test.sysml")
-	
+
 	t.Logf("Found %d diagnostics", len(diags))
 	for _, d := range diags {
 		t.Logf("  %v", d)

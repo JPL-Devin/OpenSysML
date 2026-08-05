@@ -12,6 +12,7 @@ sysml-lsp
 /examples/sysml-v2-training/
 
 # Python
+/src/  # Legacy Python layout shadow directory (superseded by python/)
 __pycache__/
 *.py[cod]
 *$py.class

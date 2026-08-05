@@ -25,7 +25,7 @@ func TestTradeStudiesDetail(t *testing.T) {
 		if byteOffset < len(data) {
 			char = string(data[byteOffset])
 		}
-		
+
 		// Get context (20 chars before/after)
 		start := byteOffset - 20
 		if start < 0 {
@@ -36,7 +36,7 @@ func TestTradeStudiesDetail(t *testing.T) {
 			end = len(data)
 		}
 		context := string(data[start:end])
-		
+
 		t.Logf("  %d. offset=%d (char=%q): %s", i+1, byteOffset, char, d.Message)
 		t.Logf("      context: %q", context)
 	}

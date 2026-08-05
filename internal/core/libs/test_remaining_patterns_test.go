@@ -1,15 +1,15 @@
 package libs
 
 import (
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"testing"
 )
 
 // Test remaining high-impact patterns
 func TestRemainingPatterns(t *testing.T) {
-	tests := []struct{
-		name string
+	tests := []struct {
+		name  string
 		input string
 	}{
 		// Pattern 1: succession with multiplicity before name
@@ -42,12 +42,12 @@ func TestRemainingPatterns(t *testing.T) {
 			`,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := parser.New(source.New("test.sysml", []byte(tt.input)))
 			_ = p.ParseFile()
-			
+
 			if len(p.Diagnostics) > 0 {
 				t.Logf("Diagnostics for %s:", tt.name)
 				for _, d := range p.Diagnostics {

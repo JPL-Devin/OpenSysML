@@ -13,10 +13,10 @@ func TestObservationRegression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	p := parser.New(source.New("Observation.kerml", data))
 	_ = p.ParseFile()
-	
+
 	t.Logf("Observation.kerml: %d diagnostics", len(p.Diagnostics))
 	for i, d := range p.Diagnostics {
 		byteOffset := d.Span.Offset
@@ -34,11 +34,11 @@ func TestObservationRegression(t *testing.T) {
 			end = len(data)
 		}
 		context := string(data[start:end])
-		
+
 		t.Logf("  %d. offset=%d (char=%q): %s", i+1, byteOffset, char, d.Message)
 		t.Logf("     Context: %q", context)
 	}
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Errorf("REGRESSION: Observation.kerml was clean, now has %d errors", len(p.Diagnostics))
 	}

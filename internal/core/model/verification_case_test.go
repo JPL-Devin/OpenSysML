@@ -6,7 +6,7 @@ import (
 
 func TestVerificationCaseDefinition(t *testing.T) {
 	ws := NewWorkspace()
-	
+
 	src := `package 'Verification Case Definition Example' {
 	private import VerificationCases::*;
 	
@@ -53,25 +53,25 @@ func TestVerificationCaseDefinition(t *testing.T) {
 	}
 	
 }`
-	
+
 	ws.Open("test.sysml", []byte(src), 1)
 	diags := ws.Diagnostics("test.sysml")
-	
+
 	t.Logf("Found %d diagnostics", len(diags))
 	for _, d := range diags {
 		t.Logf("  %v", d)
 	}
-	
+
 	// Count specific errors
 	vehicleErrors := 0
 	for _, d := range diags {
-		if d.Message == "unresolved reference: vehicle" || 
-		   d.Message == "unresolved reference: testVehicle" ||
-		   d.Message == "unresolved reference: massActual" {
+		if d.Message == "unresolved reference: vehicle" ||
+			d.Message == "unresolved reference: testVehicle" ||
+			d.Message == "unresolved reference: massActual" {
 			vehicleErrors++
 		}
 	}
-	
+
 	if vehicleErrors > 0 {
 		t.Errorf("Found %d parameter binding errors (should be 0)", vehicleErrors)
 	}

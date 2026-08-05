@@ -25,8 +25,8 @@ func TestStdlibConformance(t *testing.T) {
 	src := &embedSource{}
 	files := src.List()
 
-	var regressions []string      // files not in allowlist that now fail
-	var staleAllowlist []string    // files in allowlist that now pass
+	var regressions []string    // files not in allowlist that now fail
+	var staleAllowlist []string // files in allowlist that now pass
 
 	for _, path := range files {
 		data, err := src.Read(path)

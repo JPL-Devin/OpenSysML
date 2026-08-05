@@ -730,4 +730,3 @@ func TestParseStateBody_Complete(t *testing.T) {
 		t.Errorf("node 5: expected *ast.TransitionMember, got %T", nodes[5])
 	}
 }
-

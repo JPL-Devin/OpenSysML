@@ -32,11 +32,11 @@ func TestLineIndex(t *testing.T) {
 		offset    int
 		line, col int
 	}{
-		{0, 1, 1},  // 'p'
-		{3, 1, 4},  // 't'
-		{4, 1, 5},  // '\n' belongs to line 1
-		{5, 2, 1},  // 'd'
-		{9, 3, 1},  // 'E' (offset 8 is the second '\n', belongs to line 2)
+		{0, 1, 1}, // 'p'
+		{3, 1, 4}, // 't'
+		{4, 1, 5}, // '\n' belongs to line 1
+		{5, 2, 1}, // 'd'
+		{9, 3, 1}, // 'E' (offset 8 is the second '\n', belongs to line 2)
 	}
 	for _, c := range cases {
 		got := li.PosAt(c.offset)

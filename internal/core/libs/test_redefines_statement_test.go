@@ -69,4 +69,3 @@ func TestRedefinesStatement(t *testing.T) {
 		})
 	}
 }
-

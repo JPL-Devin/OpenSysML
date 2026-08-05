@@ -1,10 +1,10 @@
 package lower
 
 import (
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"testing"
 )
 
 func TestToActionGraph_Simple(t *testing.T) {
@@ -15,15 +15,15 @@ func TestToActionGraph_Simple(t *testing.T) {
 			then start end;
 		}
 	`
-	
+
 	file := source.New("test.sysml", []byte(src))
 	p := parser.New(file)
 	root := p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Fatalf("parse errors: %v", p.Diagnostics)
 	}
-	
+
 	// Find action usage
 	var actionUsage *ast.Usage
 	for _, member := range root.Members {
@@ -34,29 +34,29 @@ func TestToActionGraph_Simple(t *testing.T) {
 			}
 		}
 	}
-	
+
 	if actionUsage == nil {
 		t.Fatal("no action usage found")
 	}
-	
+
 	graph, err := ToActionGraph(actionUsage)
 	if err != nil {
 		t.Fatalf("ToActionGraph failed: %v", err)
 	}
-	
+
 	// Validate graph structure
 	if graph.Initial == nil {
 		t.Error("graph has no initial node")
 	}
-	
+
 	if len(graph.Finals) == 0 {
 		t.Error("graph has no final nodes")
 	}
-	
+
 	if len(graph.Nodes) != 2 {
 		t.Errorf("expected 2 nodes (initial + final), got %d", len(graph.Nodes))
 	}
-	
+
 	// Validate edges: initial → final
 	edges := graph.Edges[graph.Initial]
 	if len(edges) != 1 {
@@ -77,18 +77,18 @@ func TestToStateGraph_Simple(t *testing.T) {
 			}
 		}
 	`
-	
+
 	file := source.New("test.sysml", []byte(src))
 	p := parser.New(file)
 	root := p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		for _, d := range p.Diagnostics {
 			t.Logf("diagnostic: %v", d)
 		}
 		t.Fatalf("parse errors")
 	}
-	
+
 	// Find state usage in package
 	var stateUsage *ast.Usage
 	for _, member := range root.Members {
@@ -105,25 +105,25 @@ func TestToStateGraph_Simple(t *testing.T) {
 			}
 		}
 	}
-	
+
 	if stateUsage == nil {
 		t.Fatal("no state usage found")
 	}
-	
+
 	graph, err := ToStateGraph(stateUsage)
 	if err != nil {
 		t.Fatalf("ToStateGraph failed: %v", err)
 	}
-	
+
 	// Validate graph structure
 	if graph.Initial == nil {
 		t.Error("graph has no initial state")
 	}
-	
+
 	if len(graph.States) < 2 {
 		t.Errorf("expected at least 2 states, got %d", len(graph.States))
 	}
-	
+
 	// Find initial state
 	initialFound := false
 	for _, state := range graph.States {
@@ -132,7 +132,7 @@ func TestToStateGraph_Simple(t *testing.T) {
 			t.Logf("Found initial state: %s", state.Name)
 		}
 	}
-	
+
 	if !initialFound {
 		t.Error("no state marked as initial")
 	}
@@ -156,15 +156,15 @@ func TestToActionGraph_ForkJoinMergeDecision(t *testing.T) {
 			then j end;
 		}
 	`
-	
+
 	file := source.New("test.sysml", []byte(src))
 	p := parser.New(file)
 	root := p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Fatalf("parse errors: %v", p.Diagnostics)
 	}
-	
+
 	var actionUsage *ast.Usage
 	for _, member := range root.Members {
 		if membership, ok := member.(*ast.Membership); ok {
@@ -174,17 +174,17 @@ func TestToActionGraph_ForkJoinMergeDecision(t *testing.T) {
 			}
 		}
 	}
-	
+
 	graph, err := ToActionGraph(actionUsage)
 	if err != nil {
 		t.Fatalf("ToActionGraph failed: %v", err)
 	}
-	
+
 	// Should have: initial, fork, 2 actions, join, final = 6 nodes
 	if len(graph.Nodes) < 6 {
 		t.Errorf("expected at least 6 nodes, got %d", len(graph.Nodes))
 	}
-	
+
 	// Fork should have 2 outgoing edges
 	var forkNode ast.Node
 	for _, node := range graph.Nodes {
@@ -193,11 +193,11 @@ func TestToActionGraph_ForkJoinMergeDecision(t *testing.T) {
 			break
 		}
 	}
-	
+
 	if forkNode == nil {
 		t.Fatal("no fork node found")
 	}
-	
+
 	if len(graph.Edges[forkNode]) != 2 {
 		t.Errorf("fork should have 2 outgoing edges, got %d", len(graph.Edges[forkNode]))
 	}
@@ -225,15 +225,15 @@ func TestToStateGraph_Regions(t *testing.T) {
 			}
 		}
 	`
-	
+
 	file := source.New("test.sysml", []byte(src))
 	p := parser.New(file)
 	root := p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Fatalf("parse errors: %v", p.Diagnostics)
 	}
-	
+
 	var stateUsage *ast.Usage
 	for _, member := range root.Members {
 		if membership, ok := member.(*ast.Membership); ok {
@@ -249,17 +249,17 @@ func TestToStateGraph_Regions(t *testing.T) {
 			}
 		}
 	}
-	
+
 	graph, err := ToStateGraph(stateUsage)
 	if err != nil {
 		t.Fatalf("ToStateGraph failed: %v", err)
 	}
-	
+
 	// Should have 2 regions with initial states
 	if len(graph.RegionInitials) != 2 {
 		t.Errorf("expected 2 region initials, got %d", len(graph.RegionInitials))
 	}
-	
+
 	// Should have 4 states (Red, Green, Walk, DontWalk) + 2 initials = 6
 	if len(graph.States) < 6 {
 		t.Errorf("expected at least 6 states, got %d", len(graph.States))
@@ -279,15 +279,15 @@ func TestToStateGraph_Pseudostates(t *testing.T) {
 			}
 		}
 	`
-	
+
 	file := source.New("test.sysml", []byte(src))
 	p := parser.New(file)
 	root := p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Fatalf("parse errors: %v", p.Diagnostics)
 	}
-	
+
 	var stateUsage *ast.Usage
 	for _, member := range root.Members {
 		if membership, ok := member.(*ast.Membership); ok {
@@ -303,22 +303,22 @@ func TestToStateGraph_Pseudostates(t *testing.T) {
 			}
 		}
 	}
-	
+
 	graph, err := ToStateGraph(stateUsage)
 	if err != nil {
 		t.Fatalf("ToStateGraph failed: %v", err)
 	}
-	
+
 	// Should have 1 choice pseudostate
 	if len(graph.Pseudostates) != 1 {
 		t.Errorf("expected 1 pseudostate, got %d", len(graph.Pseudostates))
 	}
-	
+
 	choiceNode := graph.Pseudostates["c"]
 	if choiceNode == nil {
 		t.Fatal("choice pseudostate 'c' not found")
 	}
-	
+
 	if choiceNode.Kind != ast.PseudostateChoice {
 		t.Errorf("expected choice pseudostate, got %v", choiceNode.Kind)
 	}

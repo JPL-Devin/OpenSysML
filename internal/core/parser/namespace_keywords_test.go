@@ -21,13 +21,13 @@ func TestParseKeywordAsName(t *testing.T) {
 		}
 		t.FailNow()
 	}
-	
+
 	// root -> membership -> definition -> membership -> usage
 	mem1 := root.Members[0].(*ast.Membership)
 	def := mem1.Member.(*ast.Definition)
 	mem2 := def.Members[0].(*ast.Membership)
 	usage := mem2.Member.(*ast.Usage)
-	
+
 	if usage.Ident.Name != "done" {
 		t.Errorf("Expected usage name 'done', got %q", usage.Ident.Name)
 	}

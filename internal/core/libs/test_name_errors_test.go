@@ -13,10 +13,10 @@ func TestExpectedNameErrors(t *testing.T) {
 	files := src.List()
 
 	targetError := "expected a name"
-	
+
 	var samples []struct {
-		file   string
-		offset int
+		file    string
+		offset  int
 		context string
 	}
 
@@ -45,11 +45,11 @@ func TestExpectedNameErrors(t *testing.T) {
 					context = string(data[start:end])
 				}
 				samples = append(samples, struct {
-					file   string
-					offset int
+					file    string
+					offset  int
 					context string
 				}{name, offset, context})
-				
+
 				if len(samples) >= 10 {
 					break
 				}

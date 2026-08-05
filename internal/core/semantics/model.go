@@ -105,7 +105,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		seen[target] = true
 		out = append(out, target)
 	}
-	
+
 	// SubjectMember has TypeRef instead of Relationships - handle separately
 	if subj, ok := sym.Decl.(*ast.SubjectMember); ok && subj.TypeRef != nil {
 		if target, ok := m.resolver.ResolveQualified(sym.OwnerScope, subj.TypeRef); ok && target != nil {
@@ -115,7 +115,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 			}
 		}
 	}
-	
+
 	// Flow usages (message/flow keywords) need implicit typing from stdlib Message/Flow
 	// even when explicitly typed "of Type". This allows accessing stdlib members like
 	// sourceEvent/targetEvent in messages typed by payload item defs.
@@ -130,7 +130,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 			}
 		}
 	}
-	
+
 	// Action usages containing send statements need implicit SendAction typing
 	// to provide access to sentMessage member
 	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind == ast.UsageAction {
@@ -145,7 +145,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 			}
 		}
 	}
-	
+
 	m.directSupers[sym] = out
 	return out
 }

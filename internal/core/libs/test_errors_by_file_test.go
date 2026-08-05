@@ -11,24 +11,24 @@ import (
 func TestStdlibErrorsByFile(t *testing.T) {
 	src := &embedSource{}
 	files := src.List()
-	
+
 	type fileError struct {
-		name  string
-		count int
+		name     string
+		count    int
 		messages []string
 	}
-	
+
 	var failures []fileError
-	
+
 	for _, name := range files {
 		data, err := src.Read(name)
 		if err != nil {
 			t.Fatalf("Read(%q): %v", name, err)
 		}
-		
+
 		p := parser.New(source.New(name, data))
 		_ = p.ParseFile()
-		
+
 		if len(p.Diagnostics) > 0 {
 			var msgs []string
 			for _, d := range p.Diagnostics {
@@ -37,12 +37,12 @@ func TestStdlibErrorsByFile(t *testing.T) {
 			failures = append(failures, fileError{name: name, count: len(p.Diagnostics), messages: msgs})
 		}
 	}
-	
+
 	// Sort by error count descending
 	sort.Slice(failures, func(i, j int) bool {
 		return failures[i].count > failures[j].count
 	})
-	
+
 	t.Logf("Files with errors (sorted by count):")
 	for i, f := range failures {
 		t.Logf("%2d. %s: %d errors", i+1, f.name, f.count)

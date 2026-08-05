@@ -8,6 +8,11 @@ executors:
     docker:
       - image: cimg/go:1.25
     resource_class: medium
+  
+  python-executor:
+    docker:
+      - image: cimg/python:3.11
+    resource_class: medium
 
 jobs:
   build-and-test:
@@ -17,6 +22,20 @@ jobs:
       - go/load-cache
       - go/mod-download
       - go/save-cache
+      
+      - run:
+          name: Check gofmt
+          command: |
+            unformatted=$(gofmt -l .)
+            if [ -n "$unformatted" ]; then
+              echo "The following files are not gofmt'd:"
+              echo "$unformatted"
+              exit 1
+            fi
+      
+      - run:
+          name: Run go vet
+          command: go vet ./...
       
       - run:
           name: Run tests
@@ -39,12 +58,50 @@ jobs:
             ./bin/sysml-lsp --version
             ls -lh bin/
       
+      - persist_to_workspace:
+          root: .
+          paths:
+            - bin/sysml-grpc
+      
       - store_artifacts:
           path: bin/
           destination: binaries
       
       - store_test_results:
           path: coverage.txt
+  
+  python-test:
+    executor: python-executor
+    steps:
+      - checkout
+      
+      - attach_workspace:
+          at: .
+      
+      - run:
+          name: Install sysml-grpc binary
+          command: |
+            mkdir -p ~/.pysysml/bin
+            cp bin/sysml-grpc ~/.pysysml/bin/
+            chmod +x ~/.pysysml/bin/sysml-grpc
+      
+      - run:
+          name: Install Python package
+          command: |
+            cd python
+            pip install -e .
+            pip install pytest pytest-mock
+      
+      - run:
+          name: Run Python tests
+          command: |
+            cd python
+            pytest tests/ -v
+      
+      - run:
+          name: Verify import
+          command: |
+            python3 -c "import pysysml; print(f'pysysml {pysysml.__version__} imported successfully')"
 
   build-release:
     executor: go-executor
@@ -145,6 +202,12 @@ workflows:
   build-test:
     jobs:
       - build-and-test:
+          filters:
+            branches:
+              only: /.*/
+      - python-test:
+          requires:
+            - build-and-test
           filters:
             branches:
               only: /.*/

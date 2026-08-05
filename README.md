@@ -217,7 +217,44 @@ go build -o bin/sysml-lsp ./cmd/sysml-lsp
 
 # Build REPL
 go build -o bin/sysml ./cmd/sysml
+
+# Build gRPC service
+go build -o bin/sysml-grpc ./cmd/sysml-grpc
 ```
+
+## Python Client
+
+**pysysml** provides a Python client library for programmatic access to Systemica's parsing and runtime capabilities via gRPC.
+
+**Installation:**
+```bash
+# Install from source (development mode)
+pip install -e python/
+```
+
+**Quick example:**
+```python
+import pysysml
+
+# Load and parse a SysML model
+model = pysysml.load("vehicle.sysml")
+
+# Evaluate expressions
+result = pysysml.eval("2 + 2", model_hash=model.hash)
+print(result)  # 4
+
+# Instantiate parts
+instance = pysysml.instantiate("Vehicle", model_hash=model.hash)
+print(instance.slots["mass"])
+```
+
+**Features:**
+- Jupyter notebook integration with rich HTML displays
+- pandas DataFrame integration for model analysis
+- Automatic service lifecycle management
+- Full runtime API access (eval, instantiate, execute actions/states)
+
+See [python/INSTALL.md](python/INSTALL.md) for detailed installation and usage instructions.
 
 ## Documentation
 

@@ -24,7 +24,7 @@ func TestTransitionPerformancesDetail(t *testing.T) {
 		if byteOffset < len(src) {
 			char = string(src[byteOffset])
 		}
-		
+
 		// Get context around error
 		start := byteOffset - 50
 		if start < 0 {
@@ -35,7 +35,7 @@ func TestTransitionPerformancesDetail(t *testing.T) {
 			end = len(src)
 		}
 		context := src[start:end]
-		
+
 		t.Logf("  - offset=%d (char=%q): %s", byteOffset, char, d.Message)
 		t.Logf("    Context: %q", context)
 	}

@@ -6,7 +6,7 @@ import (
 
 func TestTransitionFirstStart(t *testing.T) {
 	ws := NewWorkspace()
-	
+
 	src := `package test {
 	attribute def StartSignal;
 	
@@ -21,15 +21,15 @@ func TestTransitionFirstStart(t *testing.T) {
 			then off;
 	}
 }`
-	
+
 	ws.Open("test.sysml", []byte(src), 1)
 	diags := ws.Diagnostics("test.sysml")
-	
+
 	t.Logf("Found %d diagnostics", len(diags))
 	for _, d := range diags {
 		t.Logf("  %v", d)
 	}
-	
+
 	// Should have 0 diagnostics if "start" is properly registered
 	if len(diags) > 0 {
 		t.Errorf("Expected 0 diagnostics, got %d", len(diags))

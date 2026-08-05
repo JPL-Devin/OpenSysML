@@ -9,12 +9,12 @@ import (
 func TestEmbedSourceListsAndReads(t *testing.T) {
 	src := DefaultSource()
 	names := src.List()
-	
+
 	// Check if stdlib files are present (should have 95 files from pilot)
 	if len(names) == 0 {
 		t.Fatal("expected embedded stdlib files, got empty list")
 	}
-	
+
 	// Look for ScalarValues.kerml (in Kernel Data Type Library subdirectory)
 	found := false
 	for _, n := range names {
@@ -26,7 +26,7 @@ func TestEmbedSourceListsAndReads(t *testing.T) {
 	if !found {
 		t.Fatalf("expected ScalarValues.kerml in embedded list, got %d files", len(names))
 	}
-	
+
 	data, err := src.Read("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml")
 	if err != nil {
 		t.Fatalf("Read: %v", err)
@@ -34,7 +34,7 @@ func TestEmbedSourceListsAndReads(t *testing.T) {
 	if len(data) == 0 {
 		t.Fatal("expected non-empty embedded library content")
 	}
-	
+
 	t.Logf("Found %d stdlib files", len(names))
 }
 

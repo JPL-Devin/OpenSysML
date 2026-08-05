@@ -11,25 +11,25 @@ import (
 func TestNamespaceErrorDetail(t *testing.T) {
 	src := &embedSource{}
 	files := src.List()
-	
+
 	type ErrorInfo struct {
 		File    string
 		Offset  int
 		Message string
 		Context string // 60 chars before + after
 	}
-	
+
 	var namespaceErrors []ErrorInfo
-	
+
 	for _, name := range files {
 		data, err := src.Read(name)
 		if err != nil {
 			continue
 		}
-		
+
 		p := parser.New(source.New(name, data))
 		_ = p.ParseFile()
-		
+
 		for _, d := range p.Diagnostics {
 			if d.Message == "expected a namespace member" {
 				offset := d.Span.Offset
@@ -41,10 +41,10 @@ func TestNamespaceErrorDetail(t *testing.T) {
 				if contextEnd > len(data) {
 					contextEnd = len(data)
 				}
-				
+
 				// Extract context
 				ctx := string(data[contextStart:contextEnd])
-				
+
 				namespaceErrors = append(namespaceErrors, ErrorInfo{
 					File:    name,
 					Offset:  offset,
@@ -54,9 +54,9 @@ func TestNamespaceErrorDetail(t *testing.T) {
 			}
 		}
 	}
-	
+
 	t.Logf("Found %d 'expected a namespace member' errors\n", len(namespaceErrors))
-	
+
 	// Show first 10
 	for i, e := range namespaceErrors {
 		if i >= 10 {
@@ -68,7 +68,7 @@ func TestNamespaceErrorDetail(t *testing.T) {
 		t.Logf("Location: offset=%d", e.Offset)
 		t.Logf("Context: ...%q...", e.Context)
 	}
-	
+
 	// Pattern analysis
 	patterns := make(map[string]int)
 	for _, e := range namespaceErrors {
@@ -82,7 +82,7 @@ func TestNamespaceErrorDetail(t *testing.T) {
 		pattern := string(data[offset:end])
 		patterns[pattern]++
 	}
-	
+
 	t.Logf("\n=== Pattern Analysis ===")
 	for pattern, count := range patterns {
 		t.Logf("%3d: %q", count, pattern)

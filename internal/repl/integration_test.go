@@ -71,7 +71,7 @@ func TestActionDebuggerCommands(t *testing.T) {
 	if !strings.Contains(got, "error:") {
 		t.Errorf("missing error:\n%s", got)
 	}
-	
+
 	// Check errors for commands without active session
 	if !strings.Contains(got, "no active action session") {
 		t.Errorf("missing session error:\n%s", got)
@@ -96,7 +96,7 @@ func TestStateMachineDebuggerCommands(t *testing.T) {
 	if !strings.Contains(got, "error:") {
 		t.Errorf("missing error:\n%s", got)
 	}
-	
+
 	// Check errors for commands without active session
 	if !strings.Contains(got, "no active state machine session") {
 		t.Errorf("missing session error:\n%s", got)

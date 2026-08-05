@@ -42,7 +42,7 @@ func main() {
 	ws := model.NewWorkspace()
 	srv := lsp.NewServer(ws)
 	err := srv.Run(context.Background(), stdio{})
-	
+
 	// LSP spec: Exit after Shutdown should return 0, Exit without Shutdown should return 1
 	if err != nil {
 		// Ignore "file already closed" from clean exit
@@ -50,7 +50,7 @@ func main() {
 			log.Fatalf("sysml-lsp: %v", err)
 		}
 	}
-	
+
 	// Exit code handled by Exit() calling conn.Close()
 	os.Exit(0)
 }

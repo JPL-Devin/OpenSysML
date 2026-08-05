@@ -39,7 +39,7 @@ func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 	SetDocName(rs, name)
 	idx.docRoots[name] = rs
 	idx.indexScope(name, rs, "")
-	
+
 	// Extract wildcard imports from root namespace itself
 	// (root is not a symbol, so indexScope won't process its imports)
 	if wildcards := extractWildcardImports(root); len(wildcards) > 0 {
@@ -60,7 +60,7 @@ func (idx *Index) ExpandWildcardImports() {
 			if targetFQN == "" {
 				continue // Target not found
 			}
-			
+
 			targetChildren := idx.LookupDirectChildren(targetFQN)
 			for _, child := range targetChildren {
 				// Extract child's primary name
@@ -75,7 +75,7 @@ func (idx *Index) ExpandWildcardImports() {
 					idx.fqn[reexportFQN] = append(idx.fqn[reexportFQN], child)
 					// Note: not added to contributions - these are synthetic
 				}
-				
+
 				// Also re-export under short name if different from primary name
 				if child.ShortName != "" && child.ShortName != childName {
 					shortReexportFQN := joinFQN(pkgFQN, child.ShortName)
@@ -97,7 +97,7 @@ func (idx *Index) resolveWildcardTarget(pkgFQN, targetText string) string {
 	if len(candidates) == 1 {
 		return candidates[0].Name
 	}
-	
+
 	// Try relative to importing package
 	if pkgFQN != "" {
 		relativeFQN := pkgFQN + "::" + targetText
@@ -106,7 +106,7 @@ func (idx *Index) resolveWildcardTarget(pkgFQN, targetText string) string {
 			return candidates[0].Name
 		}
 	}
-	
+
 	// Target not found or ambiguous
 	return ""
 }
@@ -163,12 +163,12 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 				continue // symbol registered under both short and primary key
 			}
 			seen[sym] = true
-			
+
 			// Index under primary FQN
 			fqn := joinFQN(prefix, sym.Name)
 			idx.fqn[fqn] = append(idx.fqn[fqn], sym)
 			idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: fqn, sym: sym})
-			
+
 			// Also index under short name FQN if different
 			// Try cached shortName first (for stdlib), fallback to extracting from Decl
 			shortName := sym.ShortName
@@ -180,14 +180,14 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 				idx.fqn[shortFQN] = append(idx.fqn[shortFQN], sym)
 				idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: shortFQN, sym: sym})
 			}
-			
+
 			// Extract wildcard imports from packages/namespaces
 			if sym.Kind == SymbolPackage || sym.Kind == SymbolNamespace {
 				if wildcards := extractWildcardImports(sym.Decl); len(wildcards) > 0 {
 					idx.wildcardMeta[fqn] = wildcards
 				}
 			}
-			
+
 			if sym.Scope != nil {
 				idx.indexScope(doc, sym.Scope, fqn)
 			}
@@ -217,7 +217,7 @@ func extractWildcardImports(decl ast.Node) []string {
 	default:
 		return nil
 	}
-	
+
 	var out []string
 	for _, m := range members {
 		imp, ok := m.(*ast.Import)

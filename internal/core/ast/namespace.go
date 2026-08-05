@@ -43,9 +43,9 @@ type Membership struct {
 	NodeBase
 	Visibility       Visibility
 	Member           Node
-	HasSuccession    bool // true if 'then' keyword follows this member
+	HasSuccession    bool   // true if 'then' keyword follows this member
 	SuccessionTarget string // short name of next member (resolved during semantic analysis)
-	SuccessionGuard  Node // optional guard expression on succession edge
+	SuccessionGuard  Node   // optional guard expression on succession edge
 }
 
 // RootNamespace is the top of every parsed file: a flat list of members.
@@ -117,10 +117,10 @@ type Alias struct {
 // Declares a named multiplicity range like exactlyOne [1..1].
 type MultiplicityDecl struct {
 	NodeBase
-	Ident       Identification
-	Range       *Multiplicity // optional - range bounds
-	Members     []Node        // optional - body members (typically doc comments)
-	HasBody     bool          // true if has {}, false if just ;
+	Ident   Identification
+	Range   *Multiplicity // optional - range bounds
+	Members []Node        // optional - body members (typically doc comments)
+	HasBody bool          // true if has {}, false if just ;
 }
 
 // Dependency is `dependency [<id> from] clients to suppliers ;|{}`.

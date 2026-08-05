@@ -2,7 +2,7 @@ package libs
 
 import (
 	"testing"
-	
+
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
@@ -10,21 +10,21 @@ import (
 func TestStdlibErrorSummary(t *testing.T) {
 	src := &embedSource{}
 	files := src.List()
-	
+
 	totalErrors := make(map[string]int)
 	sampleFiles := make(map[string][]string)
 	failCount := 0
-	
+
 	for _, path := range files {
 		data, err := src.Read(path)
 		if err != nil {
 			continue
 		}
-		
+
 		sf := source.New(path, data)
 		p := parser.New(sf)
 		_ = p.ParseFile()
-		
+
 		if len(p.Diagnostics) > 0 {
 			failCount++
 			for _, d := range p.Diagnostics {
@@ -35,12 +35,12 @@ func TestStdlibErrorSummary(t *testing.T) {
 			}
 		}
 	}
-	
-	t.Logf("\nParse coverage: %d/%d (%.1f%%) clean, %d failures\n", 
-		len(files)-failCount, len(files), 
+
+	t.Logf("\nParse coverage: %d/%d (%.1f%%) clean, %d failures\n",
+		len(files)-failCount, len(files),
 		100.0*float64(len(files)-failCount)/float64(len(files)),
 		failCount)
-	
+
 	// Top 10 errors
 	type errCount struct {
 		msg   string
@@ -59,7 +59,7 @@ func TestStdlibErrorSummary(t *testing.T) {
 			}
 		}
 	}
-	
+
 	t.Logf("\nTop 10 errors:")
 	for i := 0; i < 10 && i < len(errors); i++ {
 		e := errors[i]

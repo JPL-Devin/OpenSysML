@@ -2,7 +2,7 @@ package resolve
 
 import (
 	"strings"
-	
+
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -14,7 +14,7 @@ func (r *Resolver) walkUnqualified(scope *symbols.Scope, name string) resolution
 		if sym, ok := s.LookupLocal(name); ok {
 			return resolution{sym: sym, ok: true}
 		}
-		
+
 		// Check inherited members if model available
 		if r.model != nil {
 			if ml, ok := r.model.(MemberLookup); ok && s.Owner() != nil {
@@ -23,7 +23,7 @@ func (r *Resolver) walkUnqualified(scope *symbols.Scope, name string) resolution
 				}
 			}
 		}
-		
+
 		if sym, ok := r.lookupImports(s, name); ok {
 			return resolution{sym: sym, ok: true}
 		}

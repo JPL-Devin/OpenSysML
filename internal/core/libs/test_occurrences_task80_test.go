@@ -13,10 +13,10 @@ func TestOccurrencesTask80(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	p := parser.New(source.New("Occurrences.kerml", data))
 	_ = p.ParseFile()
-	
+
 	t.Logf("Occurrences.kerml: %d diagnostics", len(p.Diagnostics))
 	for i, d := range p.Diagnostics {
 		byteOffset := d.Span.Offset

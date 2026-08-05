@@ -78,7 +78,7 @@ func relTargets(rels []*ast.Relationship) []string {
 		if ref, ok := target.(*ast.FeatureReference); ok {
 			target = ref.Name
 		}
-		
+
 		if qn, ok := target.(*ast.QualifiedName); ok {
 			for j, seg := range qn.Parts {
 				if j > 0 {
@@ -246,19 +246,19 @@ func TestParseActionUsageIntegration(t *testing.T) {
 	if len(u.Members) != 3 {
 		t.Fatalf("expected 3 action members, got %d", len(u.Members))
 	}
-	
+
 	// Verify InitialNode
 	init, ok := u.Members[0].(*ast.InitialNode)
 	if !ok || init.Name != "startNode" {
 		t.Fatalf("member[0]: expected InitialNode startNode, got %T %+v", u.Members[0], u.Members[0])
 	}
-	
+
 	// Verify FinalNode
 	final, ok := u.Members[1].(*ast.FinalNode)
 	if !ok || final.Name != "endNode" {
 		t.Fatalf("member[1]: expected FinalNode endNode, got %T", u.Members[1])
 	}
-	
+
 	// Verify SuccessionEdge
 	edge, ok := u.Members[2].(*ast.SuccessionEdge)
 	if !ok {
@@ -307,38 +307,38 @@ func TestParseEnumLiterals(t *testing.T) {
 }`
 	p := New(source.New("test.sysml", []byte(src)))
 	f := p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		for _, d := range p.Diagnostics {
 			t.Logf("diagnostic: %s", d.Message)
 		}
 		t.Fatalf("parse failed with %d diagnostics", len(p.Diagnostics))
 	}
-	
+
 	// Check enum def
 	if len(f.Members) != 1 {
 		t.Fatalf("expected 1 member, got %d", len(f.Members))
 	}
-	
+
 	mem, ok := f.Members[0].(*ast.Membership)
 	if !ok {
 		t.Fatalf("expected Membership, got %T", f.Members[0])
 	}
-	
+
 	def, ok := mem.Member.(*ast.Definition)
 	if !ok {
 		t.Fatalf("expected Definition, got %T", mem.Member)
 	}
-	
+
 	if def.Kind != ast.DefEnumeration {
 		t.Fatalf("expected DefEnumeration, got %v", def.Kind)
 	}
-	
+
 	// Check enum literals
 	if len(def.Members) != 3 {
 		t.Fatalf("expected 3 body members, got %d", len(def.Members))
 	}
-	
+
 	t.Logf("enum body: %#v", def.Members)
 }
 
@@ -350,13 +350,13 @@ func TestParseEnumLiteralsWithTyping(t *testing.T) {
 }`
 	p := New(source.New("test.sysml", []byte(src)))
 	_ = p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		for _, d := range p.Diagnostics {
 			t.Logf("diagnostic: %s", d.Message)
 		}
 		t.Fatalf("parse failed with %d diagnostics", len(p.Diagnostics))
 	}
-	
+
 	t.Logf("parsed cleanly")
 }

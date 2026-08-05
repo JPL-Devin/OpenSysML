@@ -17,11 +17,11 @@ func TestDocCommentWhitespace(t *testing.T) {
 		
 		feature x;
 	}`
-	
+
 	p1 := parser.New(source.New("test1.kerml", []byte(code1)))
 	_ = p1.ParseFile()
 	t.Logf("Test 1 (tabs only): %d diagnostics", len(p1.Diagnostics))
-	
+
 	// Test 2: space+tabs (Base.kerml pattern)
 	code2 := `package Test {
 		doc 
@@ -31,7 +31,7 @@ func TestDocCommentWhitespace(t *testing.T) {
 		 		
 		feature x;
 	}`
-	
+
 	p2 := parser.New(source.New("test2.kerml", []byte(code2)))
 	_ = p2.ParseFile()
 	t.Logf("Test 2 (space+tabs like Base.kerml): %d diagnostics", len(p2.Diagnostics))

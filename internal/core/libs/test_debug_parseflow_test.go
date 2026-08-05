@@ -1,14 +1,14 @@
 package libs
 
 import (
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"testing"
 )
 
 func TestDebugParseFlow(t *testing.T) {
 	// Simplest case: just succession keyword and start of pattern
-	tests := []struct{
+	tests := []struct {
 		name string
 		code string
 	}{
@@ -21,17 +21,17 @@ func TestDebugParseFlow(t *testing.T) {
 			code: `state S { succession do then x; }`,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			file := source.New("test.kerml", []byte(tt.code))
 			p := parser.New(file)
 			root := p.ParseFile()
-			
+
 			if root == nil {
 				t.Fatal("ParseFile returned nil")
 			}
-			
+
 			for _, d := range p.Diagnostics {
 				t.Errorf("offset %d: %s", d.Span.Offset, d.Message)
 			}

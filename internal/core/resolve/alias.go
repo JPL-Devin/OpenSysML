@@ -18,7 +18,7 @@ func (r *Resolver) ResolveAliasTarget(sym *symbols.Symbol) (*symbols.Symbol, boo
 			return nil, false
 		}
 		seen[cur] = true
-		
+
 		// Fast path: cached alias with target FQN (stdlib symbols loaded via AddRecords)
 		if cur.AliasTargetFQN != "" {
 			// Resolve target as qualified name from alias's scope
@@ -30,7 +30,7 @@ func (r *Resolver) ResolveAliasTarget(sym *symbols.Symbol) (*symbols.Symbol, boo
 			cur = next
 			continue
 		}
-		
+
 		// Slow path: live-parsed alias with Decl (user code)
 		al, ok := cur.Decl.(*ast.Alias)
 		if !ok || al.For == nil {
@@ -63,14 +63,14 @@ func (r *Resolver) resolveCachedAliasTarget(targetText string, aliasSym *symbols
 	if candidates := r.idx.LookupQualified(targetText); len(candidates) > 0 {
 		return candidates[0]
 	}
-	
+
 	// If alias symbol has OwnerScope (shouldn't for cached, but defensive),
 	// resolve as qualified name from that scope
 	if aliasSym.OwnerScope != nil {
 		// Parse targetText into QualifiedName for resolution
 		// For now, simple approach: try relative to parent package
 	}
-	
+
 	// Fallback: construct likely FQN by going up from alias FQN
 	// Example: alias at "ISQ::TimeValue" targeting "DurationValue"
 	// → try "ISQ::DurationValue"
@@ -80,7 +80,7 @@ func (r *Resolver) resolveCachedAliasTarget(targetText string, aliasSym *symbols
 			return candidates[0]
 		}
 	}
-	
+
 	return nil
 }
 

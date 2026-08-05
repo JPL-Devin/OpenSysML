@@ -126,7 +126,7 @@ func TestAllParserFeaturesDemos(t *testing.T) {
 		"parser_features_demo_binding.kerml",
 		"parser_features_demo_connectors.kerml",
 		"parser_features_demo_defaults.kerml",
-		
+
 		// New demos (Sessions 4-5)
 		"parser_features_demo_advanced_connectors.kerml",
 		"parser_features_demo_action_semantics.sysml",

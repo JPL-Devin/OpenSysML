@@ -1,9 +1,9 @@
 package libs
 
 import (
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"testing"
 )
 
 func TestTPTask81Detail(t *testing.T) {
@@ -12,10 +12,10 @@ func TestTPTask81Detail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to load: %v", err)
 	}
-	
+
 	p := parser.New(source.New("TransitionPerformances.kerml", content))
 	_ = p.ParseFile()
-	
+
 	t.Logf("TransitionPerformances diagnostics: %d", len(p.Diagnostics))
 	for i, d := range p.Diagnostics {
 		char := ""

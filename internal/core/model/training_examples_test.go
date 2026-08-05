@@ -11,12 +11,12 @@ import (
 
 func TestTrainingExamplesSemanticErrors(t *testing.T) {
 	trainingDir := filepath.Join("..", "..", "..", "examples", "sysml-v2-training")
-	
+
 	// Skip if training examples not downloaded
 	if _, err := os.Stat(trainingDir); os.IsNotExist(err) {
 		t.Skip("Training examples not downloaded (run ./scripts/download-training-examples.sh)")
 	}
-	
+
 	ws := NewWorkspace()
 	var files []string
 
@@ -79,7 +79,7 @@ func TestTrainingExamplesSemanticErrors(t *testing.T) {
 	}
 
 	t.Logf("Files with semantic errors: %d/%d", len(errorsByFile), len(files))
-	
+
 	// Count error types
 	errorTypes := make(map[string]int)
 	for _, errs := range errorsByFile {

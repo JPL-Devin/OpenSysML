@@ -165,12 +165,12 @@ func extractResultName(expr ast.Node) string {
 	if expr == nil {
 		return ""
 	}
-	
+
 	// Handle FeatureReference wrapper
 	if fr, ok := expr.(*ast.FeatureReference); ok {
 		expr = fr.Name
 	}
-	
+
 	// Extract name from QualifiedName
 	if qn, ok := expr.(*ast.QualifiedName); ok {
 		// Only accept single-part names (simple identifiers)
@@ -178,7 +178,7 @@ func extractResultName(expr ast.Node) string {
 			return qn.Parts[0].Text
 		}
 	}
-	
+
 	return ""
 }
 
@@ -359,12 +359,12 @@ func classifyUsage(u *ast.Usage) SymbolKind {
 	if u.Kind != ast.UsageAttribute {
 		return usageSymbolKind(u.Kind)
 	}
-	
+
 	// Check relationships to determine if this is def-like or usage-like
 	hasTyping := false
 	hasSpecializes := false
 	hasSubsetsOrRedefines := false
-	
+
 	for _, rel := range u.Relationships {
 		switch rel.Kind {
 		case ast.RelTyping:
@@ -375,14 +375,14 @@ func classifyUsage(u *ast.Usage) SymbolKind {
 			hasSubsetsOrRedefines = true
 		}
 	}
-	
+
 	// Attribute usage with ONLY specializes (no typing/subsets) → classify as definition
 	// Pattern: datatype Real specializes Complex;
 	// NOT: datatype MyReal :>> Real; (this has subsets, stays as usage)
 	if hasSpecializes && !hasTyping && !hasSubsetsOrRedefines {
 		return SymbolAttributeDef
 	}
-	
+
 	// Default: treat as usage
 	return SymbolAttributeUsage
 }

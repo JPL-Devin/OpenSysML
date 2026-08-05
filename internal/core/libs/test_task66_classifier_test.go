@@ -13,7 +13,7 @@ func TestTask66Classifier(t *testing.T) {
 		abstract classifier Anything {
 		}
 	}`
-	
+
 	p1 := parser.New(source.New("test1.kerml", []byte(code1)))
 	root1 := p1.ParseFile()
 	if len(p1.Diagnostics) > 0 {
@@ -22,7 +22,7 @@ func TestTask66Classifier(t *testing.T) {
 			t.Errorf("  - %s", d.Message)
 		}
 	}
-	
+
 	// Check AST
 	if root1 == nil {
 		t.Fatal("root1 is nil")
@@ -30,7 +30,7 @@ func TestTask66Classifier(t *testing.T) {
 	if len(root1.Members) != 1 {
 		t.Fatalf("expected 1 member, got %d", len(root1.Members))
 	}
-	
+
 	// Test 2: Base.kerml minimal pattern
 	code2 := `standard library package Base {
 		doc 
@@ -47,7 +47,7 @@ func TestTask66Classifier(t *testing.T) {
 			feature self: Anything[1];
 		}
 	}`
-	
+
 	p2 := parser.New(source.New("test2.kerml", []byte(code2)))
 	_ = p2.ParseFile()
 	if len(p2.Diagnostics) > 0 {

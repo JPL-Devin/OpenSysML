@@ -19,12 +19,12 @@ func TestTask78ActionsPattern(t *testing.T) {
 
 	p := parser.New(source.New("test.kerml", []byte(input)))
 	_ = p.ParseFile()
-	
+
 	t.Logf("Diagnostics: %d", len(p.Diagnostics))
 	for i, d := range p.Diagnostics {
 		t.Logf("  %d. %s", i+1, d.Message)
 	}
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Errorf("Expected clean parse, got %d errors", len(p.Diagnostics))
 	}

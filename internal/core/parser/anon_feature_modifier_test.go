@@ -14,19 +14,19 @@ func TestAnonymousFeatureWithModifier(t *testing.T) {
 	sf := source.New("test.sysml", []byte(input))
 	p := New(sf)
 	file := p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		for _, d := range p.Diagnostics {
 			t.Errorf("Parse error: %s", d.Message)
 		}
 		t.FailNow()
 	}
-	
+
 	// File has one namespace member (action def)
 	def := file.Members[0].(*ast.Membership).Member.(*ast.Definition)
 	bodyMem := def.Members[0].(*ast.Membership)
 	usage := bodyMem.Member.(*ast.Usage)
-	
+
 	if usage.Kind != ast.UsageAttribute {
 		t.Errorf("Expected UsageAttribute, got %v", usage.Kind)
 	}

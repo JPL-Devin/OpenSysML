@@ -1,12 +1,12 @@
 [build-system]
 requires = ["setuptools>=45", "wheel"]
-build-backend = "setuptools.build_backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "pysysml"
 version = "0.1.0"
 description = "Python client library for Systemica SysML v2 parser"
-readme = "pysysml/README.md"
+readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "grpcio>=1.83.0",

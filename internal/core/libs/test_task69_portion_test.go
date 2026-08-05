@@ -58,4 +58,3 @@ func TestPortionModifier(t *testing.T) {
 		})
 	}
 }
-

@@ -24,7 +24,7 @@ func TestShapeItemsDetail(t *testing.T) {
 		if byteOffset < len(content) {
 			char = string(content[byteOffset])
 		}
-		
+
 		// Show context around error
 		start := byteOffset - 40
 		if start < 0 {
@@ -35,7 +35,7 @@ func TestShapeItemsDetail(t *testing.T) {
 			end = len(content)
 		}
 		context := string(content[start:end])
-		
+
 		t.Logf("  - offset=%d (char=%q): %s", byteOffset, char, d.Message)
 		t.Logf("    context: %q", context)
 	}

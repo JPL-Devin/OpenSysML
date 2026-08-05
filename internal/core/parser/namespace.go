@@ -1,7 +1,6 @@
 package parser
 
 import (
-	
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -216,7 +215,7 @@ func (p *Parser) parseMember() ast.Node {
 		return en
 	}
 	m := &ast.Membership{Visibility: vis, Member: inner}
-	
+
 	// Parse optional metadata annotations: @Type{props}
 	// Apply to Usage/Definition nodes
 	if u, ok := inner.(*ast.Usage); ok {
@@ -224,7 +223,7 @@ func (p *Parser) parseMember() ast.Node {
 	} else if d, ok := inner.(*ast.Definition); ok {
 		d.Prefixes = append(d.Prefixes, p.parseMetadataAnnotations()...)
 	}
-	
+
 	m.NodeSpan = p.spanFrom(start)
 	m.SetLeadingTrivia(trivia)
 	return m
@@ -236,20 +235,20 @@ func (p *Parser) parseMember() ast.Node {
 func (p *Parser) tryParseDeclaration() ast.Node {
 	start := p.peek().Span.Offset
 	cp := p.checkpoint()
-	
+
 	node := p.parseDeclaration(start)
-	
+
 	// Check if parse succeeded (node returned, not ErrorNode, position advanced)
 	if node == nil {
 		p.restore(cp)
 		return nil
 	}
-	
+
 	if _, isError := node.(*ast.ErrorNode); isError {
 		p.restore(cp)
 		return nil
 	}
-	
+
 	// Success: keep the parsed node
 	return node
 }
@@ -455,7 +454,7 @@ func (p *Parser) parseComment(start int) ast.Node {
 func (p *Parser) parseDocumentation(start int) ast.Node {
 	p.advance() // 'doc'
 	d := &ast.Documentation{}
-	
+
 	// Parse optional identification only if there's no pending comment
 	// Pattern: `doc name /* comment */` vs `doc /* comment */` (comment belongs to doc, not name)
 	if p.atName() && !p.atKeyword("locale") && !p.hasPendingComment {
@@ -523,7 +522,7 @@ func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
 			imp.IsRecursive = true // recursive membership import; Kind stays ImportMembership
 		}
 	}
-	
+
 	// Optional filter expression: [<expr>]
 	// Pattern: import Package::*[@MetadataType];
 	// Pattern: import Package::**[@MetadataType and condition];
@@ -729,19 +728,19 @@ func (p *Parser) parseFilter(start int) ast.Node {
 // Declares a named multiplicity range (e.g., exactlyOne [1..1]).
 func (p *Parser) parseMultiplicityDecl(start int) ast.Node {
 	p.advance() // multiplicity
-	
+
 	// Parse identification (name)
 	ident := p.parseIdentification()
-	
+
 	// Parse optional multiplicity range [lower..upper]
 	var mult *ast.Multiplicity
 	if p.at(lexer.LBracket) {
 		mult = p.parseMultiplicity()
 	}
-	
+
 	// Parse body or semicolon
 	members, hasBody := p.parseNamespaceBody()
-	
+
 	md := &ast.MultiplicityDecl{
 		Ident:   ident,
 		Range:   mult,

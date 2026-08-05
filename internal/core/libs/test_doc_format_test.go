@@ -14,14 +14,14 @@ func TestDocCommentFormat(t *testing.T) {
 		
 		feature x;
 	}`
-	
+
 	p1 := parser.New(source.New("test1.kerml", []byte(code1)))
 	_ = p1.ParseFile()
 	t.Logf("Test 1 (inline comment): %d diagnostics", len(p1.Diagnostics))
 	for _, d := range p1.Diagnostics {
 		t.Logf("  - %s", d.Message)
 	}
-	
+
 	// Test 2: multi-line comment
 	code2 := `package Test {
 		doc 
@@ -31,7 +31,7 @@ func TestDocCommentFormat(t *testing.T) {
 		
 		feature x;
 	}`
-	
+
 	p2 := parser.New(source.New("test2.kerml", []byte(code2)))
 	_ = p2.ParseFile()
 	t.Logf("\nTest 2 (multi-line comment): %d diagnostics", len(p2.Diagnostics))

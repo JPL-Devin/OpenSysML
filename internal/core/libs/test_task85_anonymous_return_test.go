@@ -1,9 +1,9 @@
 package libs
 
 import (
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"testing"
 )
 
 func TestTask85AnonymousReturn(t *testing.T) {
@@ -18,10 +18,10 @@ func TestTask85AnonymousReturn(t *testing.T) {
 			return : Boolean[1];
 		}
 	}`
-	
+
 	p := parser.New(source.New("test.kerml", []byte(input)))
 	_ = p.ParseFile()
-	
+
 	t.Logf("Diagnostics: %d", len(p.Diagnostics))
 	for _, d := range p.Diagnostics {
 		char := ""
@@ -30,7 +30,7 @@ func TestTask85AnonymousReturn(t *testing.T) {
 		}
 		t.Logf("  - offset=%d (char=%q): %s", d.Span.Offset, char, d.Message)
 	}
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Errorf("Expected clean parse, got %d errors", len(p.Diagnostics))
 	}
