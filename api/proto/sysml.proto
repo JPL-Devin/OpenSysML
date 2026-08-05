@@ -14,6 +14,12 @@ service SysMLService {
   
   // Get all diagnostics for a parsed model
   rpc GetDiagnostics(DiagnosticsRequest) returns (DiagnosticsResponse);
+  
+  // Runtime operations (Phase 4)
+  rpc Evaluate(EvaluateRequest) returns (EvaluateResponse);
+  rpc Instantiate(InstantiateRequest) returns (InstantiateResponse);
+  rpc ExecuteAction(ExecuteActionRequest) returns (ExecuteActionResponse);
+  rpc ExecuteState(ExecuteStateRequest) returns (ExecuteStateResponse);
 }
 
 // ParseFileRequest specifies the source to parse
@@ -56,6 +62,77 @@ message DiagnosticsResponse {
   string error = 2;
 }
 
+// EvaluateRequest requests evaluation of a SysML expression
+message EvaluateRequest {
+  string model_hash = 1;        // from ParseFile response
+  string expression = 2;         // SysML expression string (e.g., "2 + 2")
+  string context_symbol_id = 3; // optional: symbol FQN for context scope
+}
+
+// EvaluateResponse contains evaluation result
+message EvaluateResponse {
+  Value result = 1;
+  string error = 2;              // non-empty if evaluation failed
+  repeated Diagnostic diagnostics = 3;
+}
+
+// Instance represents a runtime instance of a part/usage
+message Instance {
+  int64 id = 1;
+  string type_symbol_id = 2;     // FQN of the def/usage
+  map<string, SlotValue> slots = 3;
+}
+
+// SlotValue represents a feature slot value
+message SlotValue {
+  string feature_name = 1;
+  Value value = 2;               // for scalar slots
+  repeated Value values = 3;     // for collection slots
+  bool materialized = 4;
+}
+
+// InstantiateRequest requests instantiation of a part/usage
+message InstantiateRequest {
+  string model_hash = 1;
+  string symbol_id = 2;          // FQN of part/usage to instantiate
+}
+
+// InstantiateResponse contains the created instance
+message InstantiateResponse {
+  Instance instance = 1;
+  string error = 2;
+  repeated Diagnostic diagnostics = 3;
+}
+
+// ExecuteActionRequest requests action execution
+message ExecuteActionRequest {
+  string model_hash = 1;
+  string action_symbol_id = 2;   // FQN of action def
+  map<string, Value> inputs = 3; // parameter name → value
+}
+
+// ExecuteActionResponse contains action execution results
+message ExecuteActionResponse {
+  map<string, Value> outputs = 1; // output parameter name → value
+  string error = 2;
+  repeated Diagnostic diagnostics = 3;
+}
+
+// ExecuteStateRequest requests state machine execution
+message ExecuteStateRequest {
+  string model_hash = 1;
+  string state_machine_symbol_id = 2;
+  repeated string events = 3;    // sequence of event names to process
+}
+
+// ExecuteStateResponse contains state machine execution trace
+message ExecuteStateResponse {
+  repeated string states_visited = 1; // trace of state names
+  map<string, Value> final_context = 2;
+  string error = 3;
+  repeated Diagnostic diagnostics = 4;
+}
+
 // SymbolInfo represents any SysML element
 message SymbolInfo {
   string id = 1;             // Unique identifier (fully qualified name)
@@ -74,14 +151,21 @@ message AttributeInfo {
   string unit = 4;
 }
 
-// Value represents a literal value
+// Value represents a runtime-evaluable value
 message Value {
-  oneof value {
-    double number = 1;
-    string text = 2;
-    bool boolean = 3;
-    int64 integer = 4;
+  oneof kind {
+    int64 int_value = 1;
+    double real_value = 2;
+    bool bool_value = 3;
+    string string_value = 4;
+    int64 instance_id = 5;      // reference to Instance
+    ValueSequence sequence = 6;
+    string null = 7;            // marker for null (empty string)
   }
+}
+
+message ValueSequence {
+  repeated Value elements = 1;
 }
 
 // Diagnostic represents a parse/semantic error or warning

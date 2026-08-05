@@ -22,6 +22,10 @@ const (
 	SysMLService_ParseFile_FullMethodName      = "/sysml.SysMLService/ParseFile"
 	SysMLService_GetSymbol_FullMethodName      = "/sysml.SysMLService/GetSymbol"
 	SysMLService_GetDiagnostics_FullMethodName = "/sysml.SysMLService/GetDiagnostics"
+	SysMLService_Evaluate_FullMethodName       = "/sysml.SysMLService/Evaluate"
+	SysMLService_Instantiate_FullMethodName    = "/sysml.SysMLService/Instantiate"
+	SysMLService_ExecuteAction_FullMethodName  = "/sysml.SysMLService/ExecuteAction"
+	SysMLService_ExecuteState_FullMethodName   = "/sysml.SysMLService/ExecuteState"
 )
 
 // SysMLServiceClient is the client API for SysMLService service.
@@ -36,6 +40,11 @@ type SysMLServiceClient interface {
 	GetSymbol(ctx context.Context, in *GetSymbolRequest, opts ...grpc.CallOption) (*SymbolResponse, error)
 	// Get all diagnostics for a parsed model
 	GetDiagnostics(ctx context.Context, in *DiagnosticsRequest, opts ...grpc.CallOption) (*DiagnosticsResponse, error)
+	// Runtime operations (Phase 4)
+	Evaluate(ctx context.Context, in *EvaluateRequest, opts ...grpc.CallOption) (*EvaluateResponse, error)
+	Instantiate(ctx context.Context, in *InstantiateRequest, opts ...grpc.CallOption) (*InstantiateResponse, error)
+	ExecuteAction(ctx context.Context, in *ExecuteActionRequest, opts ...grpc.CallOption) (*ExecuteActionResponse, error)
+	ExecuteState(ctx context.Context, in *ExecuteStateRequest, opts ...grpc.CallOption) (*ExecuteStateResponse, error)
 }
 
 type sysMLServiceClient struct {
@@ -76,6 +85,46 @@ func (c *sysMLServiceClient) GetDiagnostics(ctx context.Context, in *Diagnostics
 	return out, nil
 }
 
+func (c *sysMLServiceClient) Evaluate(ctx context.Context, in *EvaluateRequest, opts ...grpc.CallOption) (*EvaluateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EvaluateResponse)
+	err := c.cc.Invoke(ctx, SysMLService_Evaluate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sysMLServiceClient) Instantiate(ctx context.Context, in *InstantiateRequest, opts ...grpc.CallOption) (*InstantiateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InstantiateResponse)
+	err := c.cc.Invoke(ctx, SysMLService_Instantiate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sysMLServiceClient) ExecuteAction(ctx context.Context, in *ExecuteActionRequest, opts ...grpc.CallOption) (*ExecuteActionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecuteActionResponse)
+	err := c.cc.Invoke(ctx, SysMLService_ExecuteAction_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sysMLServiceClient) ExecuteState(ctx context.Context, in *ExecuteStateRequest, opts ...grpc.CallOption) (*ExecuteStateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecuteStateResponse)
+	err := c.cc.Invoke(ctx, SysMLService_ExecuteState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SysMLServiceServer is the server API for SysMLService service.
 // All implementations must embed UnimplementedSysMLServiceServer
 // for forward compatibility.
@@ -88,6 +137,11 @@ type SysMLServiceServer interface {
 	GetSymbol(context.Context, *GetSymbolRequest) (*SymbolResponse, error)
 	// Get all diagnostics for a parsed model
 	GetDiagnostics(context.Context, *DiagnosticsRequest) (*DiagnosticsResponse, error)
+	// Runtime operations (Phase 4)
+	Evaluate(context.Context, *EvaluateRequest) (*EvaluateResponse, error)
+	Instantiate(context.Context, *InstantiateRequest) (*InstantiateResponse, error)
+	ExecuteAction(context.Context, *ExecuteActionRequest) (*ExecuteActionResponse, error)
+	ExecuteState(context.Context, *ExecuteStateRequest) (*ExecuteStateResponse, error)
 	mustEmbedUnimplementedSysMLServiceServer()
 }
 
@@ -106,6 +160,18 @@ func (UnimplementedSysMLServiceServer) GetSymbol(context.Context, *GetSymbolRequ
 }
 func (UnimplementedSysMLServiceServer) GetDiagnostics(context.Context, *DiagnosticsRequest) (*DiagnosticsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetDiagnostics not implemented")
+}
+func (UnimplementedSysMLServiceServer) Evaluate(context.Context, *EvaluateRequest) (*EvaluateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Evaluate not implemented")
+}
+func (UnimplementedSysMLServiceServer) Instantiate(context.Context, *InstantiateRequest) (*InstantiateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Instantiate not implemented")
+}
+func (UnimplementedSysMLServiceServer) ExecuteAction(context.Context, *ExecuteActionRequest) (*ExecuteActionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExecuteAction not implemented")
+}
+func (UnimplementedSysMLServiceServer) ExecuteState(context.Context, *ExecuteStateRequest) (*ExecuteStateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExecuteState not implemented")
 }
 func (UnimplementedSysMLServiceServer) mustEmbedUnimplementedSysMLServiceServer() {}
 func (UnimplementedSysMLServiceServer) testEmbeddedByValue()                      {}
@@ -182,6 +248,78 @@ func _SysMLService_GetDiagnostics_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SysMLService_Evaluate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EvaluateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).Evaluate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_Evaluate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).Evaluate(ctx, req.(*EvaluateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SysMLService_Instantiate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InstantiateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).Instantiate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_Instantiate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).Instantiate(ctx, req.(*InstantiateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SysMLService_ExecuteAction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecuteActionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).ExecuteAction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_ExecuteAction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).ExecuteAction(ctx, req.(*ExecuteActionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SysMLService_ExecuteState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecuteStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).ExecuteState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_ExecuteState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).ExecuteState(ctx, req.(*ExecuteStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SysMLService_ServiceDesc is the grpc.ServiceDesc for SysMLService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -200,6 +338,22 @@ var SysMLService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetDiagnostics",
 			Handler:    _SysMLService_GetDiagnostics_Handler,
+		},
+		{
+			MethodName: "Evaluate",
+			Handler:    _SysMLService_Evaluate_Handler,
+		},
+		{
+			MethodName: "Instantiate",
+			Handler:    _SysMLService_Instantiate_Handler,
+		},
+		{
+			MethodName: "ExecuteAction",
+			Handler:    _SysMLService_ExecuteAction_Handler,
+		},
+		{
+			MethodName: "ExecuteState",
+			Handler:    _SysMLService_ExecuteState_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

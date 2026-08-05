@@ -50,6 +50,26 @@ class SysMLServiceStub:
                 request_serializer=sysml__pb2.DiagnosticsRequest.SerializeToString,
                 response_deserializer=sysml__pb2.DiagnosticsResponse.FromString,
                 _registered_method=True)
+        self.Evaluate = channel.unary_unary(
+                '/sysml.SysMLService/Evaluate',
+                request_serializer=sysml__pb2.EvaluateRequest.SerializeToString,
+                response_deserializer=sysml__pb2.EvaluateResponse.FromString,
+                _registered_method=True)
+        self.Instantiate = channel.unary_unary(
+                '/sysml.SysMLService/Instantiate',
+                request_serializer=sysml__pb2.InstantiateRequest.SerializeToString,
+                response_deserializer=sysml__pb2.InstantiateResponse.FromString,
+                _registered_method=True)
+        self.ExecuteAction = channel.unary_unary(
+                '/sysml.SysMLService/ExecuteAction',
+                request_serializer=sysml__pb2.ExecuteActionRequest.SerializeToString,
+                response_deserializer=sysml__pb2.ExecuteActionResponse.FromString,
+                _registered_method=True)
+        self.ExecuteState = channel.unary_unary(
+                '/sysml.SysMLService/ExecuteState',
+                request_serializer=sysml__pb2.ExecuteStateRequest.SerializeToString,
+                response_deserializer=sysml__pb2.ExecuteStateResponse.FromString,
+                _registered_method=True)
 
 
 class SysMLServiceServicer:
@@ -77,6 +97,31 @@ class SysMLServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Evaluate(self, request, context):
+        """Runtime operations (Phase 4)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Instantiate(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ExecuteAction(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ExecuteState(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SysMLServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -94,6 +139,26 @@ def add_SysMLServiceServicer_to_server(servicer, server):
                     servicer.GetDiagnostics,
                     request_deserializer=sysml__pb2.DiagnosticsRequest.FromString,
                     response_serializer=sysml__pb2.DiagnosticsResponse.SerializeToString,
+            ),
+            'Evaluate': grpc.unary_unary_rpc_method_handler(
+                    servicer.Evaluate,
+                    request_deserializer=sysml__pb2.EvaluateRequest.FromString,
+                    response_serializer=sysml__pb2.EvaluateResponse.SerializeToString,
+            ),
+            'Instantiate': grpc.unary_unary_rpc_method_handler(
+                    servicer.Instantiate,
+                    request_deserializer=sysml__pb2.InstantiateRequest.FromString,
+                    response_serializer=sysml__pb2.InstantiateResponse.SerializeToString,
+            ),
+            'ExecuteAction': grpc.unary_unary_rpc_method_handler(
+                    servicer.ExecuteAction,
+                    request_deserializer=sysml__pb2.ExecuteActionRequest.FromString,
+                    response_serializer=sysml__pb2.ExecuteActionResponse.SerializeToString,
+            ),
+            'ExecuteState': grpc.unary_unary_rpc_method_handler(
+                    servicer.ExecuteState,
+                    request_deserializer=sysml__pb2.ExecuteStateRequest.FromString,
+                    response_serializer=sysml__pb2.ExecuteStateResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -178,6 +243,114 @@ class SysMLService:
             '/sysml.SysMLService/GetDiagnostics',
             sysml__pb2.DiagnosticsRequest.SerializeToString,
             sysml__pb2.DiagnosticsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Evaluate(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/Evaluate',
+            sysml__pb2.EvaluateRequest.SerializeToString,
+            sysml__pb2.EvaluateResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Instantiate(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/Instantiate',
+            sysml__pb2.InstantiateRequest.SerializeToString,
+            sysml__pb2.InstantiateResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ExecuteAction(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/ExecuteAction',
+            sysml__pb2.ExecuteActionRequest.SerializeToString,
+            sysml__pb2.ExecuteActionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ExecuteState(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/ExecuteState',
+            sysml__pb2.ExecuteStateRequest.SerializeToString,
+            sysml__pb2.ExecuteStateResponse.FromString,
             options,
             channel_credentials,
             insecure,
