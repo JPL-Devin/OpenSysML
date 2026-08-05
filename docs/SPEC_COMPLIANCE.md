@@ -60,7 +60,7 @@
 - AcceptEvent triggers (when signal)
 - Sourceless transitions (`accept...then`, nested form)
 - ChangeEvent triggers (when expression)
-- TimeEvent triggers (after duration)
+- TimeEvent triggers (`after` duration, `at` instant)
 - Signal discrimination (name matching)
 - Unmatched signal dropped
 - Completion transitions (nil trigger with guard evaluation)
@@ -91,10 +91,10 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 26 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×9)
+- 27 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×10)
 - 7 robustness tests (deadlock, guards, budgets, sourceless accept)
 - 41 unit tests
-- 19 golden AST fixtures (including pseudostate parsing tests)
+- 17 golden AST fixtures (including pseudostate and timed-trigger parsing tests)
 - 16 negative parser tests
 - 900+ total tests passing
 
@@ -184,7 +184,7 @@ Each row documents one behavioral semantic feature:
 | AcceptEvent triggers (when signal) | `state_executor.go:401` matchesEvent | `state_signal_discriminate.sysml` | ✅ Faithful |
 | Sourceless transitions (`accept...then`) | `lower/state_graph.go:487` collectTransitions Usage case, `:302` resolve container | `accept_then_transition.sysml` | ✅ Faithful (nested form only; flat form errors intentionally) |
 | ChangeEvent triggers (when expr) | `state_executor.go:401` matchesEvent; `:906` pollChangeEvents | `state_executor_test.go:TestStateChangeEvent` | ✅ Faithful |
-| TimeEvent triggers (`accept after <duration>` relative, `accept at <time>` absolute) | `parser/behavior.go` parseAcceptTransition; `state_executor.go` scheduleTransitionsForState, `:401` matchesEvent | `TestParseStateBody_AcceptTransitionTriggerKinds`, `state_executor_test.go:TestStateTimeEvent` | ✅ Faithful |
+| TimeEvent triggers (`accept after <duration>` relative, `accept at <time>` absolute) | `parser/behavior.go` parseAcceptTransition; `state_executor.go` scheduleTransitionsForState, `:401` matchesEvent | `state_timed_triggers.sysml` golden, `state_timed_transitions.sysml` conformance, `state_executor_test.go:TestStateExecutor_AbsoluteTimeEvent`, `robustness_test.go:non_numeric_time_trigger` | ✅ Faithful |
 | Signal discrimination | `state_executor.go:401` matchesEvent signal name | `state_signal_discriminate.sysml` | ✅ Faithful |
 | Unmatched signal dropped | `state_executor.go:401` matchesEvent | `state_signal_unmatched.sysml` | ✅ Faithful |
 | Hierarchical substates | `state_executor.go:131` getParentChain, `:147` getLCA | `state_orthogonal_regions.sysml` | ✅ Faithful |
@@ -335,10 +335,10 @@ known, so unmodelled types never produce a false positive.
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts:**
-- Conformance cases: 26 (all passing)
-- Robustness tests: 7 (all passing)
+- Conformance cases: 27 (all passing)
+- Robustness tests: 8 (all passing)
 - Unit tests: 41 (action/state executors)
-- Golden AST fixtures: 16
+- Golden AST fixtures: 17
 - Negative parser tests: 15
 - Total tests: 900+
 
@@ -347,13 +347,13 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 - Constraint: 3 conformance + 1 robustness
 - Requirement: 5 conformance + 4 unit (named args, inheritance)
 - Action: 5 conformance + 19 unit + 1 robustness
-- State: 9 conformance + 14 unit + 2 robustness
+- State: 10 conformance + 14 unit + 3 robustness
 - Evaluation: 3 conformance (unary, coercion, qualified)
 - Name resolution: 3 unit (inheritance, named args, control flow)
 
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
-- Conformance: 26/26 cases passing
+- Conformance: 27/27 cases passing
 - Training examples: 63/100 clean (37 with pedagogical gaps or OMG bugs)
 - No regressions: All tests pass on every commit
 

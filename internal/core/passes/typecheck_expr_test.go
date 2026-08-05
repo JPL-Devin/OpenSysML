@@ -393,6 +393,22 @@ func TestExprRedefinedParameterTypeChecked(t *testing.T) {
 	}`, "argument 1 of AddText expects String, found Natural")
 }
 
+// A specialization may refine an inherited parameter under a new name, which
+// redefines it by position instead of extending the signature.
+func TestExprRenamedParameterRedefinesByPosition(t *testing.T) {
+	const model = `package P {
+		` + calcAdd + `
+		calc def Convert :> add {
+			in x : ScalarValues::String;
+		}
+		calc c { return Convert(%s); }
+	}`
+	// `x` redefines `a`, so the signature stays (x, b), not (a, b, x).
+	wantOneDiag(t, fmt.Sprintf(model, `1, 2`),
+		"argument 1 of Convert expects String, found Natural")
+	wantNoDiags(t, fmt.Sprintf(model, `"s", 2`))
+}
+
 func TestExprTypedCalcUsageInheritsParameters(t *testing.T) {
 	wantNoDiags(t, `package P {
 		`+calcAdd+`

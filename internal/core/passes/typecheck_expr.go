@@ -444,59 +444,70 @@ func (p parameter) scope() *symbols.Scope {
 // refining only a subset of them keeps the full signature. ok is false when no
 // signature can be determined, in which case the invocation is left unchecked.
 func (ec *exprChecker) effectiveInParameters(sym *symbols.Symbol) ([]parameter, bool) {
-	var params []parameter
-	supers := ec.supertypeMergeOrder(sym)
-	for _, super := range supers {
-		params = mergeParameters(params, super)
-	}
-	params = mergeParameters(params, sym)
+	params := ec.mergedInParameters(sym, map[*symbols.Symbol]bool{})
 	if len(params) > 0 {
 		return params, true
 	}
 	// A parameterless declaration with no supertypes really takes no
 	// arguments; with supertypes the signature may live somewhere the checker
 	// cannot see, so stay silent.
-	return nil, len(supers) == 0 && sym.Decl != nil
+	return nil, len(ec.model.DirectSupertypes(sym)) == 0 && sym.Decl != nil
 }
 
-// supertypeMergeOrder returns sym's transitive supertypes ordered so that a
-// supertype precedes anything that specializes it and siblings keep their
-// declaration order, which is the order positional parameters inherit in. That
-// is a depth-first post-order walk of DirectSupertypes; visiting each symbol
-// once also breaks cycles.
-func (ec *exprChecker) supertypeMergeOrder(sym *symbols.Symbol) []*symbols.Symbol {
-	var order []*symbols.Symbol
-	visited := map[*symbols.Symbol]bool{sym: true}
-	var walk func(*symbols.Symbol)
-	walk = func(s *symbols.Symbol) {
-		for _, super := range ec.model.DirectSupertypes(s) {
-			if visited[super] {
+// mergedInParameters returns sym's signature: the signatures of the types it
+// specializes or is typed by, in declaration order, with sym's own parameters
+// folded in. Recursing keeps each type's parameters positioned against the ones
+// it actually inherits, which is what implicit redefinition is relative to;
+// visiting is the set of symbols on the current path, which breaks cycles.
+func (ec *exprChecker) mergedInParameters(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool) []parameter {
+	if visiting[sym] {
+		return nil
+	}
+	visiting[sym] = true
+	defer delete(visiting, sym)
+
+	var inherited []parameter
+	for _, super := range ec.model.DirectSupertypes(sym) {
+		for _, p := range ec.mergedInParameters(super, visiting) {
+			// A parameter reached through more than one supertype (a
+			// diamond) contributes one signature entry.
+			if i := indexOfName(inherited, p.usage.Ident.Name); i >= 0 {
+				inherited[i] = p
 				continue
 			}
-			visited[super] = true
-			walk(super)
-			order = append(order, super)
+			inherited = append(inherited, p)
 		}
 	}
-	walk(sym)
-	return order
+	return mergeParameters(inherited, sym)
 }
 
 // mergeParameters folds a symbol's own `in` parameters into an inherited list,
-// replacing the entry each one redefines and appending the rest.
+// replacing the entry each one redefines and appending the rest. A declaration
+// that names neither a `:>>` target nor an inherited parameter redefines the
+// next inherited one by position, which is how a specializing behavior refines a
+// parameter under a new name; only once the inherited parameters are used up
+// does a declaration add to the signature.
 func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 	declared := declaredInParameters(sym)
 	if len(declared) == 0 {
 		return inherited
 	}
 	merged := append([]parameter(nil), inherited...)
+	next := 0 // first inherited parameter not yet redefined
 	for _, u := range declared {
 		p := parameter{usage: u, owner: sym}
-		if i := indexOfRedefined(merged, u); i >= 0 {
-			merged[i] = p
+		i := indexOfRedefined(merged, u)
+		if i < 0 && next < len(inherited) {
+			i = next
+		}
+		if i < 0 {
+			merged = append(merged, p)
 			continue
 		}
-		merged = append(merged, p)
+		merged[i] = p
+		if i >= next {
+			next = i + 1
+		}
 	}
 	return merged
 }
@@ -509,10 +520,21 @@ func indexOfRedefined(params []parameter, u *ast.Usage) int {
 		names = []string{u.Ident.Name}
 	}
 	for _, name := range names {
-		for i, p := range params {
-			if p.usage.Ident.Name == name {
-				return i
-			}
+		if i := indexOfName(params, name); i >= 0 {
+			return i
+		}
+	}
+	return -1
+}
+
+// indexOfName finds the parameter with the given name, or -1.
+func indexOfName(params []parameter, name string) int {
+	if name == "" {
+		return -1
+	}
+	for i, p := range params {
+		if p.usage.Ident.Name == name {
+			return i
 		}
 	}
 	return -1

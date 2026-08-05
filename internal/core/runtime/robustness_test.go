@@ -23,6 +23,41 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
+	t.Run("non_numeric_time_trigger", testNonNumericTimeTrigger)
+}
+
+// testNonNumericTimeTrigger: a timed trigger whose duration is not a number
+// cannot be scheduled and must be reported rather than silently dropped.
+func testNonNumericTimeTrigger(t *testing.T) {
+	src := `
+		package test {
+			state Machine {
+				initial init;
+				state waiting {
+					accept at "noon" then done;
+				}
+				final done;
+				init then waiting;
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine state not found")
+	}
+
+	_, _, err := ctx.ExecuteStateWithEvents(sym, nil)
+	if err == nil {
+		t.Fatal("expected an error for a non-numeric time trigger")
+	}
+	if !strings.Contains(err.Error(), "time duration must be constant, got string") {
+		t.Errorf("expected a numeric-duration error, got: %v", err)
+	}
 }
 
 // testDeadlockJoinStarvation: join awaiting token that never arrives
