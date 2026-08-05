@@ -187,8 +187,9 @@ func extractResultName(expr ast.Node) string {
 // declaration was declared in. trivia is the leading trivia from the member wrapper.
 func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Visibility, scope, owner *Scope, trivia []ast.Trivia) *Symbol {
 	name := id.Name
+	nameSpan := id.NameSpan
 	if name == "" {
-		name = id.ShortName
+		name, nameSpan = id.ShortName, id.ShortNameSpan
 	}
 	sym := &Symbol{
 		Name:          name,
@@ -196,6 +197,7 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 		Decl:          decl,
 		Visibility:    vis,
 		DeclSpan:      decl.Span(),
+		NameSpan:      nameSpan,
 		Scope:         scope,
 		OwnerScope:    owner,
 		LeadingTrivia: trivia,

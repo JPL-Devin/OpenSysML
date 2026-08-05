@@ -1,0 +1,182 @@
+package lsp
+
+import (
+	"context"
+	"sort"
+	"strings"
+	"testing"
+
+	"go.lsp.dev/protocol"
+	"go.lsp.dev/uri"
+
+	"github.com/Open-MBEE/Systemica/internal/core/model"
+)
+
+// applyRename runs Rename at the first occurrence of cursor in the named
+// document and returns each document's edited content.
+func applyRename(t *testing.T, ws *model.Workspace, name, cursorAt, newName string) (map[string]string, error) {
+	t.Helper()
+	s := NewServer(ws)
+	doc := ws.Document(name)
+	off := strings.Index(string(doc.Content), cursorAt)
+	if off < 0 {
+		t.Fatalf("cursor anchor %q not found", cursorAt)
+	}
+	edit, err := s.Rename(context.Background(), &protocol.RenameParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition(doc.Content, off),
+		},
+		NewName: newName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for u, edits := range edit.Changes {
+		docName := uriToName(u)
+		out[docName] = applyEdits(t, string(ws.Document(docName).Content), edits)
+	}
+	return out, nil
+}
+
+// applyEdits applies non-overlapping edits back-to-front, as a client would.
+func applyEdits(t *testing.T, content string, edits []protocol.TextEdit) string {
+	t.Helper()
+	spans := make([]protocol.TextEdit, len(edits))
+	copy(spans, edits)
+	sort.Slice(spans, func(i, j int) bool {
+		a, b := spans[i].Range.Start, spans[j].Range.Start
+		if a.Line != b.Line {
+			return a.Line > b.Line
+		}
+		return a.Character > b.Character
+	})
+	src := []byte(content)
+	for _, e := range spans {
+		start := positionToOffset(src, e.Range.Start)
+		end := positionToOffset(src, e.Range.End)
+		src = append(src[:start], append([]byte(e.NewText), src[end:]...)...)
+	}
+	return string(src)
+}
+
+func openRenameDoc(t *testing.T, ws *model.Workspace, path, src string) string {
+	t.Helper()
+	name := uri.File(path).Filename()
+	ws.Open(name, []byte(src), 1)
+	return name
+}
+
+func TestRenameDeclarationAndReferences(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/rename_decl.sysml", "package P { namespace N; }\nimport P::N;\nimport P::N;\n")
+
+	got, err := applyRename(t, ws, name, "N;", "M")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	want := "package P { namespace M; }\nimport P::M;\nimport P::M;\n"
+	if got[name] != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got[name], want)
+	}
+}
+
+func TestRenameFromReferenceRenamesDeclaration(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/rename_ref.sysml", "package P { namespace N; }\nimport P::N;\n")
+
+	got, err := applyRename(t, ws, name, "P::N", "M")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	// The cursor sits on the `P` segment, so P is renamed, not N.
+	want := "package M { namespace N; }\nimport M::N;\n"
+	if got[name] != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got[name], want)
+	}
+}
+
+func TestRenameEditsQualifierSegments(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/rename_qual.sysml", "package P { namespace N; }\nimport P::N;\n")
+
+	got, err := applyRename(t, ws, name, "P {", "Q")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if want := "package Q { namespace N; }\nimport Q::N;\n"; got[name] != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got[name], want)
+	}
+}
+
+func TestRenameRejectsKeywordAndInvalidNames(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/rename_bad.sysml", "package P { namespace N; }\n")
+
+	for _, newName := range []string{"", "part", "2N", "has space", "N::M"} {
+		if _, err := applyRename(t, ws, name, "N;", newName); err == nil {
+			t.Errorf("Rename to %q succeeded, want error", newName)
+		}
+	}
+}
+
+func TestRenameRejectsLibrarySymbols(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/rename_lib.sysml", "package P { attribute x : ScalarValues::Integer; }\n")
+
+	if _, err := applyRename(t, ws, name, "ScalarValues", "Scalars"); err == nil {
+		t.Fatal("renaming a standard-library package succeeded, want error")
+	}
+}
+
+func TestPrepareRenameReportsIdentifierRange(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	src := "package P { namespace N; }\n"
+	name := openRenameDoc(t, ws, "/tmp/prepare.sysml", src)
+
+	at := func(anchor string) protocol.Position {
+		return offsetToPosition([]byte(src), strings.Index(src, anchor))
+	}
+
+	rng, err := s.PrepareRename(context.Background(), &protocol.PrepareRenameParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     at("N;"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("PrepareRename err = %v", err)
+	}
+	if got := positionToOffset([]byte(src), rng.Start); got != strings.Index(src, "N;") {
+		t.Errorf("range start offset = %d, want %d", got, strings.Index(src, "N;"))
+	}
+
+	// A position that names nothing is refused rather than silently accepted.
+	if _, err := s.PrepareRename(context.Background(), &protocol.PrepareRenameParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     at("{"),
+		},
+	}); err == nil {
+		t.Error("PrepareRename on '{' succeeded, want error")
+	}
+}
+
+func TestRenameAcrossDocuments(t *testing.T) {
+	ws := model.NewWorkspace()
+	declName := openRenameDoc(t, ws, "/tmp/rename_decl_a.sysml", "package P { namespace N; }\n")
+	refName := openRenameDoc(t, ws, "/tmp/rename_ref_b.sysml", "import P::N;\n")
+
+	got, err := applyRename(t, ws, declName, "N;", "M")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if want := "package P { namespace M; }\n"; got[declName] != want {
+		t.Errorf("declaring document:\ngot:  %q\nwant: %q", got[declName], want)
+	}
+	if want := "import P::M;\n"; got[refName] != want {
+		t.Errorf("referencing document:\ngot:  %q\nwant: %q", got[refName], want)
+	}
+}
