@@ -181,6 +181,7 @@ Each row documents one behavioral semantic feature:
 | Transition guard evaluation | `state_executor.go:225` scheduleTransitionEvents | `state_choice_pseudostate.sysml` | ✅ Faithful |
 | Transition effect actions | `state_executor.go:586` fireTransition | `state_transition_effect.sysml` | ✅ Faithful |
 | AcceptEvent triggers (when signal) | `state_executor.go:292` matchesEvent | `state_signal_discriminate.sysml` | ✅ Faithful |
+| Sourceless transitions (`accept...then`) | `state_graph.go:487` collectTransitions Usage case, `:302` resolve container | `accept_then_transition.sysml` | ✅ Faithful (nested form only; flat form errors intentionally) |
 | ChangeEvent triggers (when expr) | `state_executor.go:292` matchesEvent | `state_executor_test.go:TestStateChangeEvent` | ✅ Faithful |
 | TimeEvent triggers (after/at) | `state_executor.go:292` matchesEvent | `state_executor_test.go:TestStateTimeEvent` | ✅ Faithful |
 | Signal discrimination | `state_executor.go:308` matchesEvent signal name | `state_signal_discriminate.sysml` | ✅ Faithful |
