@@ -22,7 +22,7 @@ type LineReader interface {
 // Loop runs the read/eval/print cycle until the reader returns io.EOF (Ctrl-D).
 func Loop(r LineReader, out io.Writer, s *Session) error {
 	w := bufio.NewWriter(out)
-	defer w.Flush()
+	defer func() { _ = w.Flush() }()
 	var buf strings.Builder
 	prompt := primaryPrompt
 	for {
@@ -37,10 +37,10 @@ func Loop(r LineReader, out io.Writer, s *Session) error {
 		if buf.Len() == 0 && isMeta(line) {
 			metaOut, quit, merr := s.runMeta(line)
 			printLines(w, metaOut)
-			w.Flush()
+			_ = w.Flush()
 			if merr != nil {
 				printLines(w, []string{"error: " + merr.Error()})
-				w.Flush()
+				_ = w.Flush()
 			}
 			if quit {
 				return nil
@@ -52,7 +52,7 @@ func Loop(r LineReader, out io.Writer, s *Session) error {
 			submit(w, s, buf.String())
 			buf.Reset()
 			prompt = primaryPrompt
-			w.Flush()
+			_ = w.Flush()
 			continue
 		}
 		if buf.Len() > 0 {
@@ -68,7 +68,7 @@ func Loop(r LineReader, out io.Writer, s *Session) error {
 		}
 		buf.Reset()
 		prompt = primaryPrompt
-		w.Flush()
+		_ = w.Flush()
 	}
 }
 
@@ -78,6 +78,6 @@ func submit(w io.Writer, s *Session, src string) {
 
 func printLines(w io.Writer, lines []string) {
 	for _, l := range lines {
-		io.WriteString(w, l+"\n")
+		_, _ = io.WriteString(w, l+"\n")
 	}
 }

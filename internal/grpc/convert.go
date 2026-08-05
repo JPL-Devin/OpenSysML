@@ -1,6 +1,8 @@
 package grpc
 
 import (
+	"math"
+
 	pb "github.com/Open-MBEE/Systemica/api/proto"
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
@@ -42,6 +44,19 @@ func SymbolToProto(sym *symbols.Symbol, idx *symbols.Index) *pb.SymbolInfo {
 	return info
 }
 
+// int32Clamp narrows a line or column number to the proto's int32, saturating
+// rather than wrapping: a position past 2^31 would otherwise be reported as a
+// negative one.
+func int32Clamp(n int) int32 {
+	if n > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if n < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(n)
+}
+
 // DiagnosticToProto converts a passes.Diagnostic to protobuf.
 func DiagnosticToProto(diag passes.Diagnostic, sf *source.SourceFile) *pb.Diagnostic {
 	li := sf.Lines()
@@ -53,10 +68,10 @@ func DiagnosticToProto(diag passes.Diagnostic, sf *source.SourceFile) *pb.Diagno
 		Message:  diag.Message,
 		Span: &pb.Span{
 			File:      sf.Name(),
-			StartLine: int32(start.Line),
-			StartCol:  int32(start.Col),
-			EndLine:   int32(end.Line),
-			EndCol:    int32(end.Col),
+			StartLine: int32Clamp(start.Line),
+			StartCol:  int32Clamp(start.Col),
+			EndLine:   int32Clamp(end.Line),
+			EndCol:    int32Clamp(end.Col),
 		},
 	}
 }
@@ -72,10 +87,10 @@ func ParserDiagnosticToProto(diag parser.Diagnostic, sf *source.SourceFile) *pb.
 		Message:  diag.Message,
 		Span: &pb.Span{
 			File:      sf.Name(),
-			StartLine: int32(start.Line),
-			StartCol:  int32(start.Col),
-			EndLine:   int32(end.Line),
-			EndCol:    int32(end.Col),
+			StartLine: int32Clamp(start.Line),
+			StartCol:  int32Clamp(start.Col),
+			EndLine:   int32Clamp(end.Line),
+			EndCol:    int32Clamp(end.Col),
 		},
 	}
 }
@@ -87,10 +102,10 @@ func convertSpan(sp source.Span, sf *source.SourceFile, li *source.LineIndex) *p
 	end := li.PosAt(sp.End())
 	return &pb.Span{
 		File:      sf.Name(),
-		StartLine: int32(start.Line),
-		StartCol:  int32(start.Col),
-		EndLine:   int32(end.Line),
-		EndCol:    int32(end.Col),
+		StartLine: int32Clamp(start.Line),
+		StartCol:  int32Clamp(start.Col),
+		EndLine:   int32Clamp(end.Line),
+		EndCol:    int32Clamp(end.Col),
 	}
 }
 

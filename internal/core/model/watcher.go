@@ -86,6 +86,7 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 		})
 	case ev.Op&fsnotify.Create != 0:
 		w.deb.Trigger(name, func() {
+			// #nosec G304 -- path is a file the watcher was asked to watch.
 			content, err := os.ReadFile(path)
 			if err != nil {
 				return
@@ -94,6 +95,7 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 		})
 	case ev.Op&fsnotify.Write != 0:
 		w.deb.Trigger(name, func() {
+			// #nosec G304 -- path is a file the watcher was asked to watch.
 			content, err := os.ReadFile(path)
 			if err != nil {
 				return

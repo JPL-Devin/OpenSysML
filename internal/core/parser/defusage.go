@@ -803,15 +803,6 @@ func (p *Parser) isResultKeyword() bool {
 	return p.at(lexer.Keyword) && p.peek().KeywordID == "return"
 }
 
-// isConstraintKeyword checks if next token is 'assert' or 'assume'
-func (p *Parser) isConstraintKeyword() bool {
-	if !p.at(lexer.Keyword) {
-		return false
-	}
-	kw := p.peek().KeywordID
-	return kw == "assert" || kw == "assume"
-}
-
 // isRequirementKeyword checks if next token is requirement-related
 func (p *Parser) isRequirementKeyword() bool {
 	if !p.at(lexer.Keyword) {

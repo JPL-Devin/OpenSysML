@@ -670,7 +670,7 @@ func (s *Session) doStep() ([]string, bool, error) {
 	// Display state
 	tokens := exec.Tokens()
 	out := []string{
-		fmt.Sprintf("✓ Step complete"),
+		"✓ Step complete",
 		fmt.Sprintf("  State: %s", exec.State()),
 		fmt.Sprintf("  Tokens: %d", len(tokens)),
 	}

@@ -110,17 +110,6 @@ func (r *Resolver) lookupInRoot(scope *symbols.Scope, name string) *symbols.Symb
 	return sym
 }
 
-// lookupOutward searches scope and its ancestors for a locally-defined name.
-// Import-aware search is added in Task 7.
-func (r *Resolver) lookupOutward(scope *symbols.Scope, name string) *symbols.Symbol {
-	for s := scope; s != nil; s = s.Parent() {
-		if sym, ok := s.LookupLocal(name); ok {
-			return sym
-		}
-	}
-	return nil
-}
-
 // lookupGlobalTop finds a top-level (single-segment FQN) symbol in the global
 // index. Returns the unique match and the total number of matches, so the
 // caller can report ambiguity (n > 1) rather than silently degrading to

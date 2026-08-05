@@ -16,9 +16,6 @@ type StateConfiguration struct {
 
 	// For composite states with regions: map of region → active state in that region
 	regionStates map[*ast.StateRegion]*ast.StateNode
-
-	// Hierarchical parent chain (for history and LCA calculations)
-	hierarchyStack []*ast.StateNode
 }
 
 // StateExecutor executes state machines using event-driven semantics.
@@ -177,18 +174,6 @@ func (e *StateExecutor) findStateByName(qname *ast.QualifiedName) *ast.StateNode
 		}
 	}
 
-	return nil
-}
-
-// findInitialStateInRegion finds the initial state within a region.
-func (e *StateExecutor) findInitialStateInRegion(region *ast.StateRegion) *ast.StateNode {
-	for _, member := range region.States {
-		if state, ok := member.(*ast.StateNode); ok {
-			if state.IsInitial {
-				return state
-			}
-		}
-	}
 	return nil
 }
 
@@ -1408,11 +1393,6 @@ func (e *StateExecutor) findTransitionsFromPseudostate(ps *ast.PseudostateNode) 
 	}
 
 	return result
-}
-
-// isMultiRegion checks if currently in a composite state with regions.
-func (e *StateExecutor) isMultiRegion() bool {
-	return len(e.activeConfig.regionStates) > 0
 }
 
 // StateStack returns a copy of the state stack (active configuration).

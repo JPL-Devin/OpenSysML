@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -29,7 +30,9 @@ func NewCache() (*Cache, error) {
 		base = d
 	}
 	dir := filepath.Join(base, "sysml-ls", "libs")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// #nosec G703 -- the base directory is the user's own XDG_CACHE_HOME or OS
+	// cache directory, and the joined suffix is a constant.
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, err
 	}
 	return &Cache{dir: dir}, nil
@@ -51,6 +54,8 @@ func (c *Cache) path(key string) string {
 // Load returns the cached record for key, or (nil, false) on any miss
 // (absent file, read error, or decode error — all treated as a benign miss).
 func (c *Cache) Load(key string) (*IndexRecord, bool) {
+	// #nosec G304 G703 -- the path is <cache dir>/<content hash>.idx; the key is
+	// hex-encoded SHA-256 computed by keyFor, never caller-supplied text.
 	data, err := os.ReadFile(c.path(key))
 	if err != nil {
 		return nil, false
@@ -73,11 +78,13 @@ func (c *Cache) Store(key string, rec *IndexRecord) error {
 	}
 	final := c.path(key)
 	tmp := final + ".tmp"
-	if err := os.WriteFile(tmp, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(tmp, buf.Bytes(), 0o600); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, final); err != nil {
-		os.Remove(tmp)
+		if rmErr := os.Remove(tmp); rmErr != nil {
+			return errors.Join(err, rmErr)
+		}
 		return err
 	}
 	return nil

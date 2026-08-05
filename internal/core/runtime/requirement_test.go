@@ -63,7 +63,7 @@ func TestRequirementEvaluation_RequireWithLiteral(t *testing.T) {
 		t.Fatal("UnsafeSpeed not found")
 	}
 
-	satisfied, err = ctx.EvaluateRequirement(unsafeSpeed, testPkg)
+	_, err = ctx.EvaluateRequirement(unsafeSpeed, testPkg)
 	if err == nil {
 		t.Fatal("UnsafeSpeed should fail")
 	}
