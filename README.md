@@ -1,6 +1,6 @@
-# SysML v2 Execution Environment
+# Open Source SysML v2 Implementation
 
-A complete, production-grade SysML v2 implementation in Go—spanning the full lifecycle from authoring to execution, delivering the integrated tooling experience systems engineers expect from modern language ecosystems.
+A complete, production-grade SysML v2 implementation in Go—providing language server, interactive REPL, execution runtime, and Python client library. Spanning the full lifecycle from authoring to execution, delivering the integrated tooling experience systems engineers expect from modern language ecosystems.
 
 ## Quick Start
 
@@ -93,7 +93,8 @@ Current: green (Time: 30.0s)
 
 - **Language Server** — First-class IDE support (VS Code, IntelliJ, Emacs, etc.) with live diagnostics, semantic hover, go-to-definition, intelligent completion, and workspace-wide symbol search.
 - **Interactive REPL** — Exploratory modeling environment: define models incrementally, evaluate expressions on-the-fly, instantiate parts, run calculations, inspect runtime state—like IPython/Jupyter for systems engineering.
-- **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (activity fork/join parallelism, decision guards, hierarchical/orthogonal states, choice/junction pseudostates, TimeEvent/ChangeEvent). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured behavioral coverage.
+- **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (activity fork/join parallelism, decision guards, hierarchical/orthogonal states, choice/junction pseudostates, TimeEvent/ChangeEvent/AcceptEvent, sourceless transitions). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured behavioral coverage.
+- **Python Client Library** — gRPC-based Python bindings for programmatic access: parse models, resolve symbols, evaluate expressions, instantiate parts, execute actions/state machines. Includes IPython display hooks for Jupyter notebooks and pandas DataFrame integration.
 - **Modern Toolchain** — Dependency management (local + remote git), incremental compilation, bundled standard library, persistent semantic caches—`cargo`/`go mod` ergonomics for systems modeling.
 
 ## Goals
@@ -120,10 +121,12 @@ Current: green (Time: 30.0s)
 | Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (16 golden ASTs, 15 negative tests) |
 | Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 12/12 passing) |
 | Action execution engine (Tier 5) | ✅ Complete (5 conformance cases passing) |
-| State machine runtime (Tier 5) | ✅ Complete (9 conformance cases passing) |
+| State machine runtime (Tier 5) | ✅ Complete (10 conformance cases: transitions, accept events, sourceless) |
 | REPL debugging commands | ✅ Complete |
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
+| gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime RPCs) |
+| Python client library | ✅ Complete (connection lifecycle, runtime APIs, IPython hooks, DataFrame) |
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
 **Test coverage:** 890+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 16 golden ASTs, 15 negatives, 26 conformance cases, 7 robustness tests.
