@@ -19,6 +19,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
 	t.Run("decision_no_satisfied_guard", testDecisionNoSatisfiedGuard)
 	t.Run("state_dangling_transition", testStateDanglingTransition)
+	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
@@ -158,7 +159,49 @@ func testStateDanglingTransition(t *testing.T) {
 	t.Log("ProcessNextEvent succeeded (dangling transition not exercised)")
 }
 
-// testCalcUnboundParameter: calc invoked with missing parameter
+// testSourcelessAcceptAtTopLevel: sourceless accept...then at top level should error
+func testSourcelessAcceptAtTopLevel(t *testing.T) {
+	src := `
+		package test {
+			state Machine {
+				initial init;
+				state waiting;
+				state active;
+				init then waiting;
+				accept go then active; // ERROR: sourceless at top level
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+
+	idx, model, ctx := buildRuntime(t, "<test>", file)
+
+	_ = model // silence unused
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine state not found")
+	}
+
+	// Should fail at CreateStateExecutor (lowering time) with clear error
+	exec, err := ctx.CreateStateExecutor(sym)
+	if err != nil {
+		if strings.Contains(err.Error(), "sourceless") && strings.Contains(err.Error(), "containing state") {
+			t.Logf("CreateStateExecutor error (expected): %v", err)
+			return
+		}
+		t.Fatalf("Unexpected error message: %v", err)
+	}
+
+	if exec != nil {
+		t.Error("Expected error for sourceless accept...then at top level, but CreateStateExecutor succeeded")
+	}
+}
+
 func testCalcUnboundParameter(t *testing.T) {
 	src := `
 		package test {
@@ -199,7 +242,7 @@ func testCalcUnboundParameter(t *testing.T) {
 		return
 	}
 
-	t.Logf("InvokeCalc returned: %v (no error - implementation tolerates missing param)", result)
+	t.Logf("InvokeCalc returned value (unbound parameter accepted): %+v", result)
 }
 
 // testConstraintMissingFeature: constraint references nonexistent feature

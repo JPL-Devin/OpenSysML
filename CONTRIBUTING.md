@@ -6,7 +6,7 @@ Thank you for your interest in contributing to Systemica!
 
 ### Prerequisites
 
-- Go 1.23 or later
+- Go 1.25 or later
 - Git
 - Make (recommended for build automation)
 
@@ -15,7 +15,7 @@ Thank you for your interest in contributing to Systemica!
 ```bash
 git clone https://github.com/Open-MBEE/Systemica.git
 cd Systemica
-make build  # builds bin/sysml and bin/sysml-lsp with version info
+make build  # builds bin/sysml, bin/sysml-lsp, and bin/sysml-grpc with version info
 make test   # runs all tests
 ```
 
@@ -30,9 +30,15 @@ make build
 # Build specific binary
 make build-sysml
 make build-lsp
+make build-grpc
 
 # Install to $GOPATH/bin
 make install
+
+# Python gRPC bindings
+make python-proto    # regenerate protobuf stubs
+make python-install  # install pysysml package
+make python-test     # run Python binding tests
 
 # Clean build artifacts
 make clean
@@ -65,7 +71,7 @@ go test ./internal/core/parser
 
 1. **Conformance gate:** `go test -run TestStdlibConformance ./internal/core/libs`
 2. **Golden ASTs:** `go test -run TestGolden ./internal/core/parser`
-3. **Negative tests:** `go test -run TestNegativeParsing ./internal/core/parser`
+3. **Negative tests:** `go test -run TestNegative ./internal/core/parser`
 4. **Update goldens** (after intentional changes): `go test -run TestGolden -update ./internal/core/parser`
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#parser-test-contract) for full details on the parser testing contract.
@@ -184,7 +190,7 @@ PRs must pass:
 
 ```
 github.com/Open-MBEE/Systemica
-├── cmd/                    # Binaries (sysml, sysml-lsp)
+├── cmd/                    # Binaries (sysml, sysml-lsp, sysml-grpc)
 ├── internal/core/          # Core implementation
 │   ├── source/            # Source file handling
 │   ├── lexer/             # Tokenization
@@ -194,10 +200,14 @@ github.com/Open-MBEE/Systemica
 │   ├── resolve/           # Name resolution
 │   ├── semantics/         # Type system
 │   ├── passes/            # Validation
+│   ├── lower/             # AST → execution IR (ActionGraph/StateGraph)
 │   ├── runtime/           # Execution
-│   └── model/             # Workspace
+│   ├── model/             # Workspace
+│   └── libs/              # Standard library bundling
 ├── internal/lsp/          # LSP implementation
+├── internal/grpc/         # gRPC service implementation
 ├── internal/repl/         # REPL implementation
+├── python/                # Python client bindings (pysysml)
 ├── docs/                  # Documentation
 ├── testdata/              # Test fixtures
 └── .circleci/             # CI configuration

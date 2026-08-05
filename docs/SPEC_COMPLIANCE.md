@@ -50,14 +50,15 @@
 - Token-flow tracing (infrastructure ready)
 - Step budget enforcement
 
-**State Machines (22/22 features):**
+**State Machines (core: faithful; advanced: partial):**
 - Initial/final state identification
 - State entry/exit actions
-- State do behavior (simplified immediate execution)
+- State do behavior (⚠️ simplified: immediate, not concurrent)
 - Transition firing
 - Transition guard evaluation
 - Transition effect actions
 - AcceptEvent triggers (when signal)
+- Sourceless transitions (`accept...then`, nested form)
 - ChangeEvent triggers (when expression)
 - TimeEvent triggers (after duration)
 - Signal discrimination (name matching)
@@ -69,10 +70,10 @@
 - Junction pseudostates (static branching)
 - Run-to-completion semantics
 - Event queue management
-- Dangling transition detection
+- Dangling transition detection (⚠️ lenient)
 - State visits tracking
 - Multi-region event broadcasting
-- Control flow node registration (initial/final/first/done)
+- ❌ Not implemented: Fork/Join/Entry/Exit/History pseudostates, deferred events, concurrent `do`, nested action invocation in behaviors, CallEvent operation-name matching
 
 **Expression Evaluation (7/7 features):**
 - Binary operators (+, -, *, /, <, >, ==, and, or)
@@ -90,8 +91,8 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 23 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×6)
-- 6 robustness tests (deadlock, guards, budgets)
+- 26 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×9)
+- 7 robustness tests (deadlock, guards, budgets, sourceless accept)
 - 41 unit tests
 - 19 golden AST fixtures (including pseudostate parsing tests)
 - 16 negative parser tests
@@ -118,15 +119,15 @@ Each row documents one behavioral semantic feature:
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Calc invocation with typed parameters | `context.go:228` `InvokeCalc` | `calc_simple_add.sysml` | ✅ Faithful |
-| Return expression evaluation | `eval.go` + `context.go:228` | `calc_simple_add.sysml` | ✅ Faithful |
-| Parameter binding (positional) | `context.go:228` (args slice) | `calc_simple_add.sysml` | ✅ Faithful |
-| Parameter binding (named arguments) | `context.go:228` | `requirement_invocation_test.go` | ✅ Faithful |
-| Unbound parameter detection | `context.go:228` | `robustness_test.go:testCalcUnboundParameter` | ✅ Faithful |
+| Calc invocation with typed parameters | `context.go:254` `InvokeCalc` | `calc_simple_add.sysml` | ✅ Faithful |
+| Return expression evaluation | `eval.go` + `context.go:254` | `calc_simple_add.sysml` | ✅ Faithful |
+| Parameter binding (positional) | `context.go:254` (args slice) | `calc_simple_add.sysml` | ✅ Faithful |
+| Parameter binding (named arguments) | `context.go:254` | `requirement_invocation_test.go` | ✅ Faithful |
+| Unbound parameter detection | `context.go:254` | `robustness_test.go:testCalcUnboundParameter` | ✅ Faithful |
 | Control flow (if/else) in calc | `eval.go` expression evaluation | `robustness_test.go:testDecisionNoSatisfiedGuard` | ✅ Faithful |
-| Missing return expression | `context.go:228` error path | `robustness_test.go:testDecisionNoSatisfiedGuard` | ✅ Faithful |
-| Unary operators (not, -) | `eval.go:485` evalNeg | `calc_unary_operators.sysml` | ✅ Faithful |
-| Type coercion (Integer→Real) | `eval.go:346` toReal | `calc_type_coercion.sysml` | ✅ Faithful |
+| Missing return expression | `context.go:254` error path | `robustness_test.go:testDecisionNoSatisfiedGuard` | ✅ Faithful |
+| Unary operators (not, -) | `eval.go:483` evalNeg | `calc_unary_operators.sysml` | ✅ Faithful |
+| Type coercion (Integer→Real) | `eval.go:344` toReal | `calc_type_coercion.sysml` | ✅ Faithful |
 | Qualified names (A::B::C) | `eval.go` + `resolve/` | `calc_qualified_names.sysml` | ✅ Faithful |
 
 ### Constraint
@@ -137,74 +138,78 @@ Each row documents one behavioral semantic feature:
 | Assume evaluation (trusted precondition) | `context.go:81` (same path) | `constraint_assume.sysml` | ✅ Faithful |
 | Bare expression as invariant | `context.go:81` | `constraint_literal.sysml` | ✅ Faithful |
 | Unresolved feature reference | `resolve` package + `eval.go` | `robustness_test.go:testConstraintMissingFeature` | ✅ Faithful |
-| Negated constraint (assert not) | `eval.go:485` evalNeg | `constraint_negation.sysml` | ✅ Faithful |
+| Negated constraint (assert not) | `eval.go:483` evalNeg | `constraint_negation.sysml` | ✅ Faithful |
 
 ### Requirement
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Require expression evaluation | `context.go:129` `EvaluateRequirement` | `requirement_literal.sysml` | ✅ Faithful |
-| Subject binding evaluation | `context.go:168-199` (Pass 1) | `requirement_subject.sysml` | ✅ Faithful |
-| Actor binding evaluation | `context.go:168-199` (Pass 1) | `requirement_actor.sysml` | ✅ Faithful |
-| Assume expression evaluation | `context.go:211-217` (Pass 2, doesn't fail) | `requirement_assume.sysml` | ✅ Faithful |
-| Nested requirements | `context.go:201-242` (recursive) | `requirement_nested.sysml` | ✅ Faithful |
+| Require expression evaluation | `context.go:148` `EvaluateRequirement` | `requirement_literal.sysml` | ✅ Faithful |
+| Subject binding evaluation | `context.go:148` `EvaluateRequirement` (Pass 1) | `requirement_subject.sysml` | ✅ Faithful |
+| Actor binding evaluation | `context.go:148` `EvaluateRequirement` (Pass 1) | `requirement_actor.sysml` | ✅ Faithful |
+| Assume expression evaluation | `context.go:148` `EvaluateRequirement` (Pass 2, doesn't fail) | `requirement_assume.sysml` | ✅ Faithful |
+| Nested requirements | `context.go:148` `EvaluateRequirement` (recursive) | `requirement_nested.sysml` | ✅ Faithful |
 
 ### Action (UML 2.5.1 §16 Activities)
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Initial node token placement | `action_executor.go:327` initialize | `action_control_flow.sysml` | ✅ Faithful |
-| Final node termination | `action_executor.go:652` stepFinalNode | `action_control_flow.sysml` | ✅ Faithful |
-| Fork node (1→N parallelism) | `action_executor.go:602` stepForkNode | `action_control_flow.sysml` | ✅ Faithful |
-| Join node (N→1 synchronization) | `action_executor.go:628` stepJoinNode | `action_control_flow.sysml` | ✅ Faithful |
-| Merge node (N→1 non-blocking) | `action_executor.go:565` stepMergeNode | `action_control_flow.sysml` | ✅ Faithful |
-| Decision node (guarded branching) | `action_executor.go:544` stepDecisionNode | `action_control_flow.sysml` | ✅ Faithful |
-| Action execution nodes | `action_executor.go:407` stepToken | `action_control_flow.sysml` | ✅ Faithful |
-| Nested action invocation | `action_executor.go:717` stepNestedAction | `action_nested_invocation.sysml` | ✅ Faithful |
-| Send statement (message passing) | `action_executor.go:735` stepNestedAction | `action_send_accept.sysml` | ✅ Faithful |
-| Accept action (message consumption) | `action_executor.go:757` accept detection | `action_accept_message.sysml` | ✅ Faithful |
-| Object flow (pin-to-pin data) | `action_executor.go:435` stepObjectFlow | `action_executor_test.go:TestActionObjectFlow` | ✅ Faithful |
-| Succession edges | `action_executor.go:269` extractGraph | `action_control_flow.sysml` | ✅ Faithful |
-| Deadlock detection | `action_executor.go:359` Step | `action_executor_test.go:TestActionExecutor_Deadlock_JoinStarvation` | ✅ Faithful |
-| Step budget enforcement | `context.go:253` incrementStep | `robustness_test.go:testStepBudgetExceeded` | ✅ Faithful |
+| Initial node token placement | `action_executor.go:210` initialize | `action_control_flow.sysml` | ✅ Faithful |
+| Final node termination | `action_executor.go:292` stepFinalNode | `action_control_flow.sysml` | ✅ Faithful |
+| Fork node (1→N parallelism) | `action_executor.go:312` stepForkNode | `action_control_flow.sysml` | ✅ Faithful |
+| Join node (N→1 synchronization) | `action_executor.go:342` stepJoinNode | `action_control_flow.sysml` | ✅ Faithful |
+| Merge node (N→1 non-blocking) | `action_executor.go:422` stepMergeNode | `action_control_flow.sysml` | ✅ Faithful |
+| Decision node (guarded branching) | `action_executor.go:452` stepDecisionNode | `action_control_flow.sysml` | ✅ Faithful |
+| Action execution nodes | `action_executor.go:528` stepActionExecutionNode | `action_control_flow.sysml` | ✅ Faithful |
+| Nested action invocation | `action_executor.go:574` stepNestedAction | `action_nested_invocation.sysml` | ✅ Faithful |
+| Send statement (message passing) | `action_executor.go:574` stepNestedAction | `action_send_accept.sysml` | ✅ Faithful |
+| Accept action (message consumption) | `action_executor.go:574` stepNestedAction | `action_accept_message.sysml` | ✅ Faithful |
+| Object flow (pin-to-pin data) | `action_executor.go:673` applyDataFlows | `action_output.sysml` | ✅ Faithful |
+| Succession edges | `lower/action_graph.go:ToActionGraph` | `action_control_flow.sysml` | ✅ Faithful |
+| Deadlock detection | `action_executor.go:72` Step | `action_executor_test.go:TestActionExecutor_Deadlock_JoinStarvation` | ✅ Faithful |
+| Step budget enforcement | `context.go:53` incrementStep | `robustness_test.go:testStepBudgetExceeded` | ✅ Faithful |
 
 ### State Machine (UML 2.5.1 §14 StateMachines)
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Initial state identification | `state_executor.go:71-109` extractGraph | `state_simple.sysml` | ✅ Faithful |
-| Final state termination | `state_executor.go:184` ProcessNextEvent | `state_simple.sysml` | ✅ Faithful |
-| State entry actions | `state_executor.go:731` enterState | `state_full.sysml` | ✅ Faithful |
-| State exit actions | `state_executor.go:806` exitState | `state_full.sysml` | ✅ Faithful |
-| State do behavior (immediate) | `state_executor.go:750` enterState | `state_do_behavior.sysml` | ✅ Faithful |
-| Transition firing | `state_executor.go:561` fireTransition | `state_full.sysml` | ✅ Faithful |
-| Transition guard evaluation | `state_executor.go:225` scheduleTransitionEvents | `state_choice_pseudostate.sysml` | ✅ Faithful |
-| Transition effect actions | `state_executor.go:586` fireTransition | `state_transition_effect.sysml` | ✅ Faithful |
-| AcceptEvent triggers (when signal) | `state_executor.go:292` matchesEvent | `state_signal_discriminate.sysml` | ✅ Faithful |
-| ChangeEvent triggers (when expr) | `state_executor.go:292` matchesEvent | `state_executor_test.go:TestStateChangeEvent` | ✅ Faithful |
-| TimeEvent triggers (after/at) | `state_executor.go:292` matchesEvent | `state_executor_test.go:TestStateTimeEvent` | ✅ Faithful |
-| Signal discrimination | `state_executor.go:308` matchesEvent signal name | `state_signal_discriminate.sysml` | ✅ Faithful |
-| Unmatched signal dropped | `state_executor.go:292` matchesEvent | `state_signal_unmatched.sysml` | ✅ Faithful |
-| Hierarchical substates | `state_executor.go:121` findInitialState | `state_full.sysml` | ✅ Faithful |
-| Orthogonal regions | `state_executor.go:194` scheduleTransitionsForState | `state_orthogonal_regions.sysml` | ✅ Faithful |
-| Choice pseudostates | `state_executor.go:395` evaluateChoicePseudostate | `state_choice_pseudostate.sysml` | ✅ Faithful |
-| Junction pseudostates | `state_executor.go:420` evaluateJunctionPseudostate | `state_junction_pseudostate.sysml` | ✅ Faithful |
-| Run-to-completion semantics | `state_executor.go:276` ProcessNextEvent | `state_executor_test.go:TestStateRunToCompletion` | ✅ Faithful |
-| Event queue management | `state_executor.go:50` eventQueue | `state_executor_test.go` | ✅ Faithful |
-| Dangling transition detection | resolve phase | `robustness_test.go:testStateDanglingTransition` | ✅ Faithful |
-| Completion transitions | `state_executor.go:222` scheduleTransitionEvents nil trigger | `state_simple.sysml` | ✅ Faithful |
+| Initial state identification | `lower/state_graph.go:ToStateGraph`; `state_executor.go:686` initialize | `state_simple.sysml` | ✅ Faithful |
+| Final state termination | `state_executor.go:288` processNextEvent | `state_simple.sysml` | ✅ Faithful |
+| State entry actions | `state_executor.go:749` enterState | `state_do_behavior.sysml` | ✅ Faithful |
+| State exit actions | `state_executor.go:810` exitState | `state_transition_effect.sysml` | ✅ Faithful |
+| State do behavior (immediate, not concurrent) | `state_executor.go:749` enterState | `state_do_behavior.sysml` | ⚠️ Approximate |
+| Transition firing | `state_executor.go:535` fireTransition | `state_transition_effect.sysml` | ✅ Faithful |
+| Transition guard evaluation | `state_executor.go:218` scheduleTransitionsForState | `state_choice_pseudostate.sysml` | ✅ Faithful |
+| Transition effect actions | `state_executor.go:535` fireTransition | `state_transition_effect.sysml` | ✅ Faithful |
+| AcceptEvent triggers (when signal) | `state_executor.go:401` matchesEvent | `state_signal_discriminate.sysml` | ✅ Faithful |
+| Sourceless transitions (`accept...then`) | `lower/state_graph.go:487` collectTransitions Usage case, `:302` resolve container | `accept_then_transition.sysml` | ✅ Faithful (nested form only; flat form errors intentionally) |
+| ChangeEvent triggers (when expr) | `state_executor.go:401` matchesEvent; `:906` pollChangeEvents | `state_executor_test.go:TestStateChangeEvent` | ✅ Faithful |
+| TimeEvent triggers (after/at) | `state_executor.go:401` matchesEvent | `state_executor_test.go:TestStateTimeEvent` | ✅ Faithful |
+| Signal discrimination | `state_executor.go:401` matchesEvent signal name | `state_signal_discriminate.sysml` | ✅ Faithful |
+| Unmatched signal dropped | `state_executor.go:401` matchesEvent | `state_signal_unmatched.sysml` | ✅ Faithful |
+| Hierarchical substates | `state_executor.go:131` getParentChain, `:147` getLCA | `state_orthogonal_regions.sysml` | ✅ Faithful |
+| Orthogonal regions | `state_executor.go:364` broadcastEvent, `:466` fireTransitionInRegion | `state_orthogonal_regions.sysml` | ✅ Faithful |
+| Choice pseudostates | `state_executor.go:971` evaluateChoicePseudostate | `state_choice_pseudostate.sysml` | ✅ Faithful |
+| Junction pseudostates | `state_executor.go:1020` evaluateJunctionPseudostate | `state_junction_pseudostate.sysml` | ✅ Faithful |
+| Fork/Join/Entry/Exit/History pseudostates | `state_executor.go:552` fireTransition ("unsupported pseudostate kind") | — | ❌ Not Yet Implemented |
+| CallEvent operation-name matching | `state_executor.go:437` matchesEvent (matches any call, TODO) | — | ⚠️ Approximate |
+| Nested action invocation in entry/exit/effect | `state_executor.go:862` executeAction ("not yet implemented") | — | ❌ Not Yet Implemented |
+| Run-to-completion semantics | `state_executor.go:288` processNextEvent | `state_executor_test.go:TestStateRunToCompletion` | ✅ Faithful |
+| Event queue management | `state_executor.go:1127` EventQueue | `state_executor_test.go` | ✅ Faithful |
+| Dangling transition detection | `robustness_test.go:testStateDanglingTransition` (lenient) | `robustness_test.go:testStateDanglingTransition` | ⚠️ Approximate |
+| Completion transitions | `state_executor.go:218` scheduleTransitionsForState nil trigger | `state_simple.sysml` | ✅ Faithful |
 
 ### Expression Evaluation
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Binary operators (+, -, *, /, <, >, ==) | `eval.go:203` evalBinaryOp | `calc_simple_add.sysml` | ✅ Faithful |
-| Boolean operators (and, or) | `eval.go:203` evalBinaryOp | `constraint_literal.sysml` | ✅ Faithful |
-| Unary operators (-, not) | `eval.go:485` evalNeg | `calc_unary_operators.sysml` | ✅ Faithful |
-| Literal values (Integer, Real, Boolean, String) | `eval.go:140` evalLiteralExpr | `calc_simple_add.sysml` | ✅ Faithful |
-| Feature reference resolution | `eval.go:150` evalFeatureRef | `constraint_literal.sysml` | ✅ Faithful |
-| Qualified name resolution (A::B::C) | `eval.go:176` evalQualifiedName | `calc_qualified_names.sysml` | ✅ Faithful |
-| Type coercion (Integer→Real) | `eval.go:346` toReal | `calc_type_coercion.sysml` | ✅ Faithful |
+| Binary operators (+, -, *, /, <, >, ==) | `eval.go:265` evalOperator | `calc_simple_add.sysml` | ✅ Faithful |
+| Boolean operators (and, or) | `eval.go:435` evalLogical | `constraint_literal.sysml` | ✅ Faithful |
+| Unary operators (-, not) | `eval.go:483` evalNeg | `calc_unary_operators.sysml` | ✅ Faithful |
+| Literal values (Integer, Real, Boolean, String) | `eval.go:109` evalLiteral* | `calc_simple_add.sysml` | ✅ Faithful |
+| Feature reference resolution | `eval.go:141` evalFeatureReference | `constraint_literal.sysml` | ✅ Faithful |
+| Qualified name resolution (A::B::C) | `eval.go:53` Eval + `resolve/qualified.go` | `calc_qualified_names.sysml` | ✅ Faithful |
+| Type coercion (Integer→Real) | `eval.go:344` toReal | `calc_type_coercion.sysml` | ✅ Faithful |
 
 ### Name Resolution
 
@@ -276,14 +281,14 @@ Each row documents one behavioral semantic feature:
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `context.go` | Execution context, calc/constraint/requirement evaluation | ~500 |
-| `action_executor.go` | Token-flow semantics, control flow nodes, nested actions | ~850 |
-| `state_executor.go` | Event-driven state machines, transitions, hierarchical states, pseudostates | ~1000 |
-| `eval.go` | Expression evaluation (operators, literals, features) | ~600 |
+| `context.go` | Execution context, calc/constraint/requirement evaluation | ~460 |
+| `action_executor.go` | Token-flow semantics, control flow nodes, nested actions | ~729 |
+| `state_executor.go` | Event-driven state machines, transitions, hierarchical states, pseudostates | ~1149 |
+| `eval.go` | Expression evaluation (operators, literals, features) | ~758 |
 | `value.go` | Runtime value representation (ValConst, ValString, ValInstance) | ~150 |
-| `trace.go` | Deterministic execution trace recording | ~170 |
-| `conformance_test.go` | Conformance gate (25 cases) | ~470 |
-| `robustness_test.go` | Failure-mode tests (6 cases) | ~360 |
+| `trace.go` | Deterministic execution trace recording | ~154 |
+| `conformance_test.go` | Conformance gate (26 cases) | ~470 |
+| `robustness_test.go` | Failure-mode tests (7 cases) | ~360 |
 | `trace_test.go` | Golden trace test infrastructure | ~140 |
 
 ### Symbol Resolution (`internal/core/resolve/`)
@@ -307,26 +312,26 @@ Each row documents one behavioral semantic feature:
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts:**
-- Conformance cases: 20 (all passing)
-- Robustness tests: 6 (all passing)
+- Conformance cases: 26 (all passing)
+- Robustness tests: 7 (all passing)
 - Unit tests: 41 (action/state executors)
-- Golden AST fixtures: 19
-- Negative parser tests: 16
+- Golden AST fixtures: 16
+- Negative parser tests: 15
 - Total tests: 900+
 
 **Coverage by Feature Type:**
 - Calc: 4 conformance + 3 unit + 2 robustness
 - Constraint: 3 conformance + 1 robustness
 - Requirement: 5 conformance + 4 unit (named args, inheritance)
-- Action: 3 conformance + 19 unit + 1 robustness
-- State: 2 conformance + 14 unit + 1 robustness
+- Action: 5 conformance + 19 unit + 1 robustness
+- State: 9 conformance + 14 unit + 2 robustness
 - Evaluation: 3 conformance (unary, coercion, qualified)
 - Name resolution: 3 unit (inheritance, named args, control flow)
 
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
-- Conformance: 20/20 cases passing
-- Training examples: 69/100 clean (31 with pedagogical gaps or OMG bugs)
+- Conformance: 26/26 cases passing
+- Training examples: 63/100 clean (37 with pedagogical gaps or OMG bugs)
 - No regressions: All tests pass on every commit
 
 ---

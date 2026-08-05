@@ -1,0 +1,8 @@
+{
+  "type": "state",
+  "events": [
+    {"signal": "go"}
+  ],
+  "stateVisits": ["init", "waiting", "active", "done"],
+  "finalState": "done"
+}

@@ -2140,28 +2140,22 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 	// Expect semicolon
 	p.expect(lexer.Semicolon, "expected ';' after accept transition")
 
-	// Create transition usage with accept trigger
-	// For now, represent as transition usage (specialized connector)
-	transition := &ast.Usage{
-		Kind: ast.UsageTransition,
-		// Store signal type as first connector end, target state as second
-		ConnectorEnds: []*ast.ConnectorEnd{
-			{Reference: signalType},  // trigger
-			{Reference: targetState}, // target
-		},
-	}
-
-	// Store guard, effect, and via in Members (could extend AST for proper transition fields)
-	if guardExpr != nil {
-		// Wrap guard in membership for now
-		transition.Members = append(transition.Members, guardExpr)
-	}
+	// Create TransitionMember (proper transition representation)
+	// Source is nil - will be resolved to containing state at lowering
+	var effects []ast.Node
 	if effectAction != nil {
-		transition.Members = append(transition.Members, effectAction)
+		effects = append(effects, effectAction)
 	}
 	if viaPort != nil {
-		// Store via port as member (could use relationship or dedicated field)
-		transition.Members = append(transition.Members, viaPort)
+		effects = append(effects, viaPort)
+	}
+
+	transition := &ast.TransitionMember{
+		Source:  nil, // No explicit source - resolve to containing state
+		Target:  targetState,
+		Trigger: signalType,
+		Guard:   guardExpr,
+		Effect:  effects,
 	}
 
 	transition.NodeSpan = p.spanFrom(start)
