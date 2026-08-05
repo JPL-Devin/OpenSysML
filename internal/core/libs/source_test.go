@@ -58,6 +58,39 @@ func TestDirSourceOverride(t *testing.T) {
 	}
 }
 
+func TestDirSourceRejectsPathsOutsideBase(t *testing.T) {
+	root := t.TempDir()
+	base := filepath.Join(root, "libs")
+	sibling := filepath.Join(root, "libs-evil")
+	for _, dir := range []string{base, sibling} {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(sibling, "Secret.kerml"), []byte("package Secret;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Outside.kerml"), []byte("package Outside;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	src := NewDirSource(base)
+	// A sibling directory whose name merely starts with the base directory's
+	// name is not contained in it, and neither is a parent traversal.
+	for _, name := range []string{"../libs-evil/Secret.kerml", "../Outside.kerml", "..", "/etc/passwd"} {
+		if _, err := src.Read(name); err == nil {
+			t.Errorf("Read(%q) succeeded, want path rejection", name)
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(base, "Ok.kerml"), []byte("package Ok;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := src.Read("Ok.kerml"); err != nil {
+		t.Fatalf("Read of contained file: %v", err)
+	}
+}
+
 func TestReadUnknownFileErrors(t *testing.T) {
 	src := DefaultSource()
 	if _, err := src.Read("Nope.kerml"); err == nil {
