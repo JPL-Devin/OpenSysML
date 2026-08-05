@@ -11,7 +11,7 @@ import (
 // TestGRPCRobustness exercises failure modes: missing models, invalid symbols, parse errors.
 // Each RPC must return typed errors, never panic.
 func TestGRPCRobustness(t *testing.T) {
-	service := NewService(10) // cache size 10
+	service := mustNewService(t, 10) // cache size 10
 
 	t.Run("parse_invalid_syntax", func(t *testing.T) {
 		req := &pb.ParseFileRequest{

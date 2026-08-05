@@ -342,10 +342,6 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 		return // No relationships
 	}
 
-	// Debug: Check anonymous symbols
-	if sym.Name == "" {
-	}
-
 	// Find owner symbol (the definition/usage that declares sym).
 	// This traverses OwnerScope.Parent() to find the symbol whose Decl matches
 	// sym's declaring scope node. If scope hierarchy is complex (nested blocks,

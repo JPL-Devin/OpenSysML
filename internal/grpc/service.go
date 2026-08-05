@@ -25,11 +25,14 @@ type Service struct {
 	cache *Cache
 }
 
-// NewService creates a gRPC service with specified cache size
-func NewService(cacheSize int) *Service {
-	return &Service{
-		cache: NewCache(cacheSize),
+// NewService creates a gRPC service with specified cache size. It returns an
+// error if cacheSize is not positive.
+func NewService(cacheSize int) (*Service, error) {
+	cache, err := NewCache(cacheSize)
+	if err != nil {
+		return nil, err
 	}
+	return &Service{cache: cache}, nil
 }
 
 // ParseFile parses a SysML file and caches the result

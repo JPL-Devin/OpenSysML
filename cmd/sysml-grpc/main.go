@@ -70,7 +70,11 @@ func main() {
 	)
 
 	// Create gRPC service (cache is internal to the service)
-	svc := sysmlgrpc.NewService(*cacheSize)
+	svc, err := sysmlgrpc.NewService(*cacheSize)
+	if err != nil {
+		slog.Error("Invalid cache size", "error", err)
+		os.Exit(1)
+	}
 
 	// Start health check server
 	healthSrv := &http.Server{
