@@ -181,13 +181,19 @@ jobs:
       - run:
           name: Publish Release on GitHub
           command: |
-            VERSION=${CIRCLE_TAG}
-            ghr -t ${GITHUB_TOKEN} \
-                -u ${CIRCLE_PROJECT_USERNAME} \
-                -r ${CIRCLE_PROJECT_REPONAME} \
-                -c ${CIRCLE_SHA1} \
+            VERSION="${CIRCLE_TAG}"
+            if [ -z "$VERSION" ]; then
+              echo "Error: CIRCLE_TAG is empty"
+              exit 1
+            fi
+            echo "Publishing release $VERSION"
+            ls -la dist/
+            ghr -t "${GITHUB_TOKEN}" \
+                -u "${CIRCLE_PROJECT_USERNAME}" \
+                -r "${CIRCLE_PROJECT_REPONAME}" \
+                -c "${CIRCLE_SHA1}" \
                 -delete \
-                ${VERSION} \
+                "${VERSION}" \
                 dist/
 
 workflows:
