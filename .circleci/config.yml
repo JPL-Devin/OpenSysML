@@ -189,6 +189,12 @@ jobs:
             echo "Publishing release $VERSION"
             ls -la dist/
             
+            # Move only tarballs to a release directory
+            mkdir -p dist/release
+            mv dist/*.tar.gz dist/*.zip dist/release/ 2>/dev/null || true
+            echo "Release artifacts:"
+            ls -la dist/release/
+            
             # Debug: Check available token variables
             echo "Checking for GitHub tokens..."
             env | grep -i "github\|circle" | grep -i token || echo "No tokens found in env"
@@ -206,7 +212,7 @@ jobs:
                 -c "${CIRCLE_SHA1}" \
                 -delete \
                 "${VERSION}" \
-                dist/*.tar.gz
+                dist/release/
 
 workflows:
   version: 2
