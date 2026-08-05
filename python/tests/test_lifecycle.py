@@ -249,35 +249,44 @@ class TestLifecycleRobustness:
             os.remove(refcount_path)
         
         # First connection increments refcount to 1
+        binary_path = get_binary_path()
         with patch('pysysml.connection.ensure_binary') as mock_ensure:
-            mock_ensure.return_value = get_binary_path()
+            mock_ensure.return_value = binary_path
             
-            conn1 = pysysml.connect(auto_start=True)
+            # Mock os.path.exists to return True for binary path check
+            real_exists = os.path.exists
+            def mock_exists(path):
+                if path == binary_path:
+                    return True
+                return real_exists(path)
             
-            # Get PID from pidfile
-            with open(pidfile) as f:
-                pid = int(f.read().strip())
-            
-            # Service should be running
-            assert psutil.Process(pid).is_running()
-            
-            # Second connection increments to 2
-            conn2 = pysysml.connect(auto_start=True)
-            
-            # Close first connection (refcount -> 1)
-            conn1.close()
-            time.sleep(0.5)
-            
-            # Service should still be running
-            assert psutil.Process(pid).is_running()
-            
-            # Close second connection (refcount -> 0)
-            conn2.close()
-            time.sleep(0.5)
-            
-            # Service should be terminated
-            try:
-                assert not psutil.Process(pid).is_running()
-            except psutil.NoSuchProcess:
-                # Expected - process terminated
-                pass
+            with patch('os.path.exists', side_effect=mock_exists):
+                conn1 = pysysml.connect(auto_start=True)
+                
+                # Get PID from pidfile
+                with open(pidfile) as f:
+                    pid = int(f.read().strip())
+                
+                # Service should be running
+                assert psutil.Process(pid).is_running()
+                
+                # Second connection increments to 2
+                conn2 = pysysml.connect(auto_start=True)
+                
+                # Close first connection (refcount -> 1)
+                conn1.close()
+                time.sleep(0.5)
+                
+                # Service should still be running
+                assert psutil.Process(pid).is_running()
+                
+                # Close second connection (refcount -> 0)
+                conn2.close()
+                time.sleep(0.5)
+                
+                # Service should be terminated
+                try:
+                    assert not psutil.Process(pid).is_running()
+                except psutil.NoSuchProcess:
+                    # Expected - process terminated
+                    pass
