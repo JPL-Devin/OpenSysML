@@ -30,11 +30,11 @@ type Session struct {
 	ws       *model.Workspace
 	snippets []snippet
 	version  int
-	
+
 	// Runtime execution context
 	rtCtx     *runtime.Context
 	instances map[string]*runtime.Instance // name -> instance for %instantiate tracking
-	
+
 	// Active executor sessions for debugging
 	actionExec *actionSession
 	stateExec  *stateSession
@@ -150,16 +150,16 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 	if s.rtCtx != nil {
 		return s.rtCtx, nil
 	}
-	
+
 	doc := s.ws.Document(docName)
 	if doc == nil || doc.Scope == nil {
 		return nil, fmt.Errorf("no document loaded")
 	}
-	
+
 	// Build fresh index from current document
 	idx := symbols.NewIndex()
 	idx.AddDocument(docName, doc.AST)
-	
+
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	s.rtCtx = runtime.NewContext(model, resolver, 100000)

@@ -63,12 +63,12 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 	// Walk remaining segments as local members of the current symbol's scope.
 	for i, seg := range qn.Parts[1:] {
 		var all []*symbols.Symbol
-		
+
 		// Try local scope lookup first if available
 		if cur.Scope != nil {
 			all = cur.Scope.LookupLocalAll(seg.Text)
 		}
-		
+
 		// If local lookup fails (or no scope), try building the FQN and looking in the global index.
 		// This handles cases like ScalarValues::Real where ScalarValues is a package
 		// from stdlib that was indexed with full FQNs but doesn't have a populated Scope.
@@ -87,7 +87,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 			}
 			// TODO: Handle deeper nesting if needed
 		}
-		
+
 		if len(all) == 0 {
 			r.unresolved(qn)
 			return resolution{nil, false}

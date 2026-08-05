@@ -100,19 +100,19 @@ func TestErrorPatternAnalysis(t *testing.T) {
 	// Analyze "expected body member" specifically
 	t.Logf("\n\n=== Detailed Analysis: 'expected a body member' ===\n")
 	bodyMemberErrors := msgMap["expected a body member"]
-	
+
 	// Pattern categorization
 	patterns := make(map[string][]ErrorInfo)
 	for _, e := range bodyMemberErrors {
 		ctx := e.Context
-		
+
 		// Categorize by first keyword/token
 		firstToken := ""
 		parts := strings.Fields(ctx)
 		if len(parts) > 0 {
 			firstToken = parts[0]
 		}
-		
+
 		category := "other"
 		if strings.HasPrefix(ctx, "subset ") || strings.HasPrefix(ctx, "disjoint ") {
 			category = "constraint_statement"
@@ -125,10 +125,10 @@ func TestErrorPatternAnalysis(t *testing.T) {
 		} else {
 			category = fmt.Sprintf("token_%s", firstToken)
 		}
-		
+
 		patterns[category] = append(patterns[category], e)
 	}
-	
+
 	// Sort categories by count
 	type CatCount struct {
 		Cat   string
@@ -141,7 +141,7 @@ func TestErrorPatternAnalysis(t *testing.T) {
 	sort.Slice(catCounts, func(i, j int) bool {
 		return catCounts[i].Count > catCounts[j].Count
 	})
-	
+
 	for _, cc := range catCounts {
 		t.Logf("\n  Category: %s (%d occurrences)", cc.Cat, cc.Count)
 		examples := patterns[cc.Cat]

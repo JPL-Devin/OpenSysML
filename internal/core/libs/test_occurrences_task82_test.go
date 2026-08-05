@@ -1,9 +1,9 @@
 package libs
 
 import (
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"testing"
 )
 
 func TestOccurrencesTask82Detail(t *testing.T) {
@@ -12,10 +12,10 @@ func TestOccurrencesTask82Detail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to load: %v", err)
 	}
-	
+
 	p := parser.New(source.New("Occurrences.kerml", content))
 	_ = p.ParseFile()
-	
+
 	t.Logf("Occurrences diagnostics: %d", len(p.Diagnostics))
 	for i, d := range p.Diagnostics {
 		char := ""

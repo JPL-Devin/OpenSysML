@@ -8,8 +8,8 @@ import (
 )
 
 func TestTask79Require(t *testing.T) {
-	tests := []struct{
-		name string
+	tests := []struct {
+		name  string
 		input string
 	}{
 		{
@@ -33,12 +33,12 @@ func TestTask79Require(t *testing.T) {
 			}`,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := parser.New(source.New("test.kerml", []byte(tt.input)))
 			_ = p.ParseFile()
-			
+
 			if len(p.Diagnostics) > 0 {
 				t.Errorf("Expected clean parse, got %d diagnostics:", len(p.Diagnostics))
 				for _, d := range p.Diagnostics {

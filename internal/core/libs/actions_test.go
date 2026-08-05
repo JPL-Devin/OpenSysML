@@ -11,11 +11,13 @@ func TestActionsFile(t *testing.T) {
 	data, _ := src.Read("Systems Library/Actions.sysml")
 	p := parser.New(source.New("Actions.sysml", data))
 	_ = p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Logf("Actions.sysml has %d errors:", len(p.Diagnostics))
 		for i, d := range p.Diagnostics {
-			if i >= 10 { break }
+			if i >= 10 {
+				break
+			}
 			t.Logf("  offset=%d: %s", d.Span.Offset, d.Message)
 		}
 		t.Fail()

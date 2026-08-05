@@ -8,8 +8,8 @@ func qn(name string) *QualifiedName {
 
 func TestDumpConnectorEnds(t *testing.T) {
 	u := &Usage{
-		Kind:          UsageConnection,
-		Ident:         Identification{Name: "c"},
+		Kind:  UsageConnection,
+		Ident: Identification{Name: "c"},
 		ConnectorEnds: []*ConnectorEnd{
 			{Target: qn("a")},
 			{Target: qn("b")},

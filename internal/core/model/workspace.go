@@ -27,10 +27,10 @@ type Workspace struct {
 // Stdlib files are loaded from embedded sources (or SYSML_LIBRARY_PATH if set).
 func NewWorkspace() *Workspace {
 	idx := symbols.NewIndex()
-	
+
 	// Load stdlib into global index
 	loadStdlib(idx)
-	
+
 	return &Workspace{
 		docs:      map[string]*Document{},
 		onDisk:    map[string][]byte{},
@@ -51,7 +51,7 @@ func loadStdlib(idx *symbols.Index) {
 		cache = nil
 	}
 	loader := libs.NewLoader(src, cache)
-	
+
 	// Load all stdlib files
 	for _, name := range src.List() {
 		if err := loader.Load(name, idx); err != nil {
@@ -60,7 +60,7 @@ func loadStdlib(idx *symbols.Index) {
 			_ = err // TODO: add logging when available
 		}
 	}
-	
+
 	// Expand wildcard imports (facade packages like ISQ re-exporting ISQMechanics)
 	idx.ExpandWildcardImports()
 }

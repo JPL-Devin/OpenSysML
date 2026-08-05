@@ -1,9 +1,9 @@
 package libs
 
 import (
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"testing"
 )
 
 func TestTask83ReturnDebug(t *testing.T) {
@@ -12,10 +12,10 @@ func TestTask83ReturnDebug(t *testing.T) {
 			return t1First: Boolean [1];
 		}
 	}`
-	
+
 	p := parser.New(source.New("test.kerml", []byte(input)))
 	root := p.ParseFile()
-	
+
 	t.Logf("Diagnostics: %d", len(p.Diagnostics))
 	for _, d := range p.Diagnostics {
 		char := ""
@@ -24,7 +24,7 @@ func TestTask83ReturnDebug(t *testing.T) {
 		}
 		t.Logf("  - offset=%d (char=%q): %s", d.Span.Offset, char, d.Message)
 	}
-	
+
 	// Also dump AST to see what was parsed
 	if root != nil {
 		t.Logf("Root has %d members", len(root.Members))

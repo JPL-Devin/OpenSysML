@@ -1,9 +1,9 @@
 package libs
 
 import (
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"testing"
 )
 
 func TestEndRefPattern(t *testing.T) {
@@ -34,12 +34,12 @@ func TestEndRefPattern(t *testing.T) {
 			`,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := parser.New(source.New("test.kerml", []byte(tt.code)))
 			root := p.ParseFile()
-			
+
 			if len(p.Diagnostics) > 0 {
 				t.Errorf("Unexpected parse errors:")
 				for _, d := range p.Diagnostics {
@@ -47,7 +47,7 @@ func TestEndRefPattern(t *testing.T) {
 				}
 				t.FailNow()
 			}
-			
+
 			if root == nil {
 				t.Fatal("ParseFile returned nil")
 			}

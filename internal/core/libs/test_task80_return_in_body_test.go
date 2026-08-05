@@ -14,10 +14,10 @@ func TestTask80ReturnInBody(t *testing.T) {
 			return result = 42;
 		}
 	}`
-	
+
 	p := parser.New(source.New("test.kerml", []byte(input)))
 	_ = p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Logf("Diagnostics: %d", len(p.Diagnostics))
 		for _, d := range p.Diagnostics {

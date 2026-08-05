@@ -12,14 +12,14 @@ func TestClassifierAtNamespaceLevel(t *testing.T) {
 	abstract classifier Anything {
 	}
 }`
-	
+
 	p := parser.New(source.New("test.kerml", []byte(code)))
 	_ = p.ParseFile()
 	t.Logf("Diagnostics: %d", len(p.Diagnostics))
 	for _, d := range p.Diagnostics {
 		offset := d.Span.Offset
 		t.Logf("  - offset=%d, %s", offset, d.Message)
-		
+
 		// Show char at offset
 		if offset < len(code) {
 			t.Logf("    Char at offset: %q", code[offset])

@@ -1,10 +1,10 @@
 package symbols
 
 import (
-	"testing"
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"testing"
 )
 
 func TestInitialNodeIndexing(t *testing.T) {
@@ -14,23 +14,23 @@ func TestInitialNodeIndexing(t *testing.T) {
 		state off;
 	}
 }`
-	
+
 	file := parser.New(source.New("test", []byte(src))).ParseFile()
 	idx := NewIndex()
 	idx.AddDocument("test", file)
-	
+
 	// Find state def S scope
 	rootScope := idx.DocumentRoot("test")
 	if rootScope == nil {
 		t.Fatal("Root scope not found")
 	}
-	
+
 	// Find package
 	t.Logf("Root children: %d", len(rootScope.Children()))
 	for i, child := range rootScope.Children() {
 		t.Logf("  [%d] %T", i, child.Node())
 	}
-	
+
 	var pkgScope *Scope
 	for _, child := range rootScope.Children() {
 		if pkg, ok := child.Node().(*ast.Package); ok {
@@ -42,7 +42,7 @@ func TestInitialNodeIndexing(t *testing.T) {
 	if pkgScope == nil {
 		t.Fatal("Package scope not found")
 	}
-	
+
 	// Find state def S
 	t.Logf("Package children: %d", len(pkgScope.Children()))
 	for i, child := range pkgScope.Children() {
@@ -52,7 +52,7 @@ func TestInitialNodeIndexing(t *testing.T) {
 			t.Logf("      name=%s, kind=%v", usage.Ident.Name, usage.Kind)
 		}
 	}
-	
+
 	var stateScope *Scope
 	for _, child := range pkgScope.Children() {
 		if def, ok := child.Node().(*ast.Definition); ok {
@@ -64,7 +64,7 @@ func TestInitialNodeIndexing(t *testing.T) {
 	if stateScope == nil {
 		t.Fatal("State scope not found")
 	}
-	
+
 	// Check AST members directly
 	if stateDef, ok := stateScope.Node().(*ast.Definition); ok {
 		t.Logf("State AST members: %d", len(stateDef.Members))
@@ -84,11 +84,11 @@ func TestInitialNodeIndexing(t *testing.T) {
 			}
 		}
 	}
-	
+
 	// Check if "start" is registered
 	names := stateScope.MemberNames()
 	t.Logf("State members: %v", names)
-	
+
 	startSym, _ := stateScope.LookupLocal("start")
 	if startSym == nil {
 		t.Errorf("'start' not found in state scope")

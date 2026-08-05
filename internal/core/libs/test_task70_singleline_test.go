@@ -27,7 +27,7 @@ func TestTask70BodyExprSingleLine(t *testing.T) {
 
 	p := parser.New(source.New("test.kerml", []byte(input)))
 	_ = p.ParseFile()
-	
+
 	t.Logf("Diagnostics: %d", len(p.Diagnostics))
 	for _, d := range p.Diagnostics {
 		byteOffset := d.Span.Offset
@@ -37,7 +37,7 @@ func TestTask70BodyExprSingleLine(t *testing.T) {
 		}
 		t.Logf("  - offset=%d (char=%q): %s", byteOffset, char, d.Message)
 	}
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Errorf("Expected clean parse, got %d errors", len(p.Diagnostics))
 	}

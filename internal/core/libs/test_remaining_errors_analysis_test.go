@@ -1,10 +1,10 @@
 package libs
 
 import (
-	"strings"
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"strings"
+	"testing"
 )
 
 func TestRemainingErrorsAnalysis(t *testing.T) {
@@ -19,32 +19,32 @@ func TestRemainingErrorsAnalysis(t *testing.T) {
 		"Systems Library/Views.sysml",
 		"Analysis Library/TradeStudies.sysml",
 	}
-	
+
 	for _, filename := range files {
 		content, err := src.Read(filename)
 		if err != nil {
 			t.Logf("Skip %s: %v", filename, err)
 			continue
 		}
-		
+
 		p := parser.New(source.New(filename, content))
 		_ = p.ParseFile()
-		
+
 		if len(p.Diagnostics) == 0 {
 			continue
 		}
-		
+
 		t.Logf("\n=== %s (%d errors) ===", filename, len(p.Diagnostics))
-		
+
 		// Group by offset to dedupe cascading errors
 		offsetsSeen := make(map[int]bool)
-		
+
 		for _, d := range p.Diagnostics {
 			if offsetsSeen[d.Span.Offset] {
 				continue
 			}
 			offsetsSeen[d.Span.Offset] = true
-			
+
 			// Get line number
 			lineNum := 1
 			for i := 0; i < d.Span.Offset && i < len(content); i++ {
@@ -52,7 +52,7 @@ func TestRemainingErrorsAnalysis(t *testing.T) {
 					lineNum++
 				}
 			}
-			
+
 			// Get context
 			lines := strings.Split(string(content), "\n")
 			if lineNum > 0 && lineNum <= len(lines) {

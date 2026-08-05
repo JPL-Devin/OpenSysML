@@ -199,16 +199,16 @@ func (p *Parser) parsePrimary() ast.Node {
 // atExprStart reports whether the current token can start an expression.
 func (p *Parser) atExprStart() bool {
 	t := p.peek()
-	return p.atName() || 
-		t.Kind == lexer.Decimal || 
-		t.Kind == lexer.Real || 
-		t.Kind == lexer.String || 
+	return p.atName() ||
+		t.Kind == lexer.Decimal ||
+		t.Kind == lexer.Real ||
+		t.Kind == lexer.String ||
 		t.Kind == lexer.Star || // infinity
-		t.Kind == lexer.LParen || 
+		t.Kind == lexer.LParen ||
 		t.Kind == lexer.LBrace ||
-		p.atKeyword("null") || 
-		p.atKeyword("true") || 
-		p.atKeyword("false") || 
+		p.atKeyword("null") ||
+		p.atKeyword("true") ||
+		p.atKeyword("false") ||
 		p.atKeyword("new") ||
 		p.atKeyword("if")
 }
@@ -236,7 +236,7 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 		case p.at(lexer.DotQuestion):
 			// `.?{ body }` (select) or `.?{in param; expr}` (filter with lambda).
 			p.advance() // .?
-			
+
 			// Lookahead: if '{' followed by direction keyword (in/out), parse as lambda
 			// Otherwise parse as body expr (select)
 			if p.at(lexer.LBrace) {
@@ -245,12 +245,12 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 					// Lambda expression
 					lambdaStart := p.peek().Span.Offset
 					p.advance() // consume '{'
-					
+
 					// Parse parameters (simplified direction params without bodies)
 					var params []ast.Node
 					for p.at(lexer.Keyword) && (p.peek().KeywordID == "in" || p.peek().KeywordID == "out" || p.peek().KeywordID == "inout") {
 						paramStart := p.peek().Span.Offset
-						
+
 						// Parse direction
 						dirTok := p.advance()
 						var direction ast.FeatureDirection
@@ -262,13 +262,13 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 						case "inout":
 							direction = ast.DirInOut
 						}
-						
+
 						// Parse name
 						ident := p.parseIdentification()
-						
+
 						// Parse optional typing/relationships
 						rels, _ := p.parseRelationships(true)
-						
+
 						// Create attribute usage for lambda parameter
 						param := &ast.Usage{
 							Kind:          ast.UsageAttribute,
@@ -277,26 +277,26 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 							Direction:     direction,
 						}
 						param.NodeSpan = p.spanFrom(paramStart)
-						
+
 						params = append(params, param)
-						
+
 						// Expect semicolon between params and body
 						if !p.accept2(lexer.Semicolon) {
 							break
 						}
 					}
-					
+
 					// Parse body expression
 					body := p.ParseExpression()
-					
+
 					p.expect(lexer.RBrace, "expected '}' after lambda body")
-					
+
 					lambda := &ast.LambdaExpr{
 						Parameters: params,
 						Body:       body,
 					}
 					lambda.NodeSpan = p.spanFrom(lambdaStart)
-					
+
 					// Wrap in select expression (filter operator applied to lambda)
 					s := &ast.SelectExpr{Operand: expr, Body: lambda}
 					s.NodeSpan = p.spanFrom(start)
@@ -470,7 +470,7 @@ func (p *Parser) parseBase() ast.Node {
 // parseParenOrSequence parses `( )`, `( expr )`, or `( expr, expr, ... )`.
 func (p *Parser) parseParenOrSequence(start int) ast.Node {
 	p.advance() // (
-	
+
 	// Check for cast expression: (as Type) or (as Type[mult])
 	if p.atKeyword("as") {
 		p.advance() // consume 'as'
@@ -487,7 +487,7 @@ func (p *Parser) parseParenOrSequence(start int) ast.Node {
 		cast.NodeSpan = p.spanFrom(start)
 		return cast
 	}
-	
+
 	// Regular parenthesized expression or sequence
 	var elems []ast.Node
 	if !p.at(lexer.RParen) {
@@ -582,26 +582,26 @@ func (p *Parser) parseInvocationTail(start int, recv ast.Node, typ *ast.Qualifie
 func (p *Parser) parseBodyExpr(start int) ast.Node {
 	p.advance() // {
 	b := &ast.BodyExpr{}
-	
+
 	// Parse optional doc comment at start of body expression
 	if p.atKeyword("doc") {
 		// Skip doc comment - not stored in BodyExpr AST node
 		// Doc is part of the body expression context but not the expression itself
 		p.parseDocumentation(p.peek().Span.Offset)
 	}
-	
+
 	// Check for shorthand param syntax: {name : Type; expr} without "in" keyword
 	// Common in collection operators like ->exists{p : Point; condition}
 	hasShorthandParam := false
 	if p.atName() && p.peekN(1).Kind == lexer.Colon {
 		hasShorthandParam = true
 	}
-	
+
 	if hasShorthandParam {
 		// Parse single param without "in" keyword
 		var paramType *ast.QualifiedName
 		var paramMult *ast.Multiplicity
-		
+
 		if seg, ok := p.parseNameSegment(); ok {
 			if p.at(lexer.Colon) {
 				p.advance() // :
@@ -620,20 +620,20 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 		}
 		p.expect(lexer.Semicolon, "expected ';' after body parameter")
 	}
-	
+
 	for p.atKeyword("in") {
 		p.advance() // in
 		var paramType *ast.QualifiedName
 		var paramMult *ast.Multiplicity
 		var paramValue ast.Node
 		var isRef bool
-		
+
 		// Check for 'ref' modifier after 'in'
 		if p.atKeyword("ref") {
 			p.advance()
 			isRef = true
 		}
-		
+
 		if seg, ok := p.parseNameSegment(); ok {
 			var paramMembers []ast.Node
 			if p.at(lexer.Colon) {

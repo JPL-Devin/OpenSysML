@@ -87,38 +87,38 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	case *ast.Usage:
 		r.resolvePrefixes(scope, d.Prefixes)
 		r.resolveRelationships(scope, d.Relationships)
-	if d.Multiplicity != nil {
-		r.resolveExpr(scope, d.Multiplicity.Lower)
-		r.resolveExpr(scope, d.Multiplicity.Upper)
-	}
-	r.resolveExpr(scope, d.Value)
-	for _, end := range d.ConnectorEnds {
-		// ConnectorEnd has both Target and Reference fields
-		// Target: primary connector target (part being connected)
-		// Reference: optional "references X" clause, or state transition target
-		if end == nil {
-			continue
+		if d.Multiplicity != nil {
+			r.resolveExpr(scope, d.Multiplicity.Lower)
+			r.resolveExpr(scope, d.Multiplicity.Upper)
 		}
-		if end.Target != nil {
-			if qn, ok := end.Target.(*ast.QualifiedName); ok {
-				r.ResolveQualified(scope, qn)
-			} else {
-				r.resolveExpr(scope, end.Target)
+		r.resolveExpr(scope, d.Value)
+		for _, end := range d.ConnectorEnds {
+			// ConnectorEnd has both Target and Reference fields
+			// Target: primary connector target (part being connected)
+			// Reference: optional "references X" clause, or state transition target
+			if end == nil {
+				continue
+			}
+			if end.Target != nil {
+				if qn, ok := end.Target.(*ast.QualifiedName); ok {
+					r.ResolveQualified(scope, qn)
+				} else {
+					r.resolveExpr(scope, end.Target)
+				}
+			}
+			if end.Reference != nil {
+				if qn, ok := end.Reference.(*ast.QualifiedName); ok {
+					r.ResolveQualified(scope, qn)
+				} else {
+					r.resolveExpr(scope, end.Reference)
+				}
 			}
 		}
-		if end.Reference != nil {
-			if qn, ok := end.Reference.(*ast.QualifiedName); ok {
-				r.ResolveQualified(scope, qn)
-			} else {
-				r.resolveExpr(scope, end.Reference)
-			}
+		if d.FlowEnds != nil {
+			r.resolveExpr(scope, d.FlowEnds.From)
+			r.resolveExpr(scope, d.FlowEnds.To)
+			r.resolveExpr(scope, d.FlowEnds.Payload)
 		}
-	}
-	if d.FlowEnds != nil {
-		r.resolveExpr(scope, d.FlowEnds.From)
-		r.resolveExpr(scope, d.FlowEnds.To)
-		r.resolveExpr(scope, d.FlowEnds.Payload)
-	}
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 		}
@@ -176,7 +176,7 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relati
 			if fr, ok := target.(*ast.FeatureReference); ok {
 				target = fr.Name
 			}
-			
+
 			// Special case: redefinitions should resolve in inherited scope
 			if rel.Kind == ast.RelRedefines {
 				if qn, ok := target.(*ast.QualifiedName); ok {
@@ -184,7 +184,7 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relati
 					continue
 				}
 			}
-			
+
 			// Standard resolution in current scope
 			if qn, ok := target.(*ast.QualifiedName); ok {
 				r.ResolveQualified(scope, qn)
@@ -202,17 +202,17 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 	if qn == nil || len(qn.Parts) == 0 {
 		return
 	}
-	
+
 	// For single-name redefinitions (most common: :>> payload), look in inherited scope
 	if len(qn.Parts) == 1 {
 		featureName := qn.Parts[0].Text
-		
+
 		// DEBUG
-		
+
 		// The scope passed here is the OWNER's scope (where the member with :>> lives)
 		// We need to find the owner's specialization relationships
 		ownerNode := scope.Node()
-		
+
 		// Get owner's relationships to find specialization targets
 		var ownerRels []*ast.Relationship
 		switch owner := ownerNode.(type) {
@@ -229,24 +229,23 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 			r.ResolveQualified(scope, qn)
 			return
 		}
-		
+
 		// Find parent definitions via specialization relationships
 		// Include both explicit and implicit specializations
 		parents := r.findSpecializationTargets(scope, ownerRels)
-		
+
 		// For definitions with implicit base types (e.g., flow def → Flow), add them
 		if def, ok := ownerNode.(*ast.Definition); ok {
 			implicitParents := r.findImplicitSpecializations(scope, def)
 			parents = append(parents, implicitParents...)
 		}
-		
+
 		// Search each parent for the feature
 		for _, parentSym := range parents {
 			if parentSym == nil {
 				continue
 			}
-			
-			
+
 			// Try scope-based lookup first (for live-parsed definitions)
 			if parentSym.Scope != nil {
 				if sym, ok := parentSym.Scope.LookupLocal(featureName); ok {
@@ -270,15 +269,15 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 					}
 				}
 			}
-			
+
 			// Recursively search parent's parents
 			if r.searchInheritedFeature(parentSym, featureName, qn) {
 				return
 			}
 		}
-		
+
 	}
-	
+
 	// Fall back to standard resolution if not found in parents
 	r.ResolveQualified(scope, qn)
 }
@@ -286,18 +285,18 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 // findSpecializationTargets returns symbols for all specialization targets in the relationship list.
 func (r *Resolver) findSpecializationTargets(scope *symbols.Scope, rels []*ast.Relationship) []*symbols.Symbol {
 	var parents []*symbols.Symbol
-	
+
 	for _, rel := range rels {
 		if rel == nil || rel.Kind != ast.RelSpecializes {
 			continue
 		}
-		
+
 		// Extract target name
 		target := rel.Target
 		if fr, ok := target.(*ast.FeatureReference); ok {
 			target = fr.Name
 		}
-		
+
 		if qn, ok := target.(*ast.QualifiedName); ok {
 			// Resolve the specialization target
 			if sym, ok := r.ResolveQualified(scope, qn); ok && sym != nil {
@@ -305,7 +304,7 @@ func (r *Resolver) findSpecializationTargets(scope *symbols.Scope, rels []*ast.R
 			}
 		}
 	}
-	
+
 	return parents
 }
 
@@ -314,7 +313,7 @@ func (r *Resolver) searchInheritedFeature(parentSym *symbols.Symbol, featureName
 	if parentSym == nil || parentSym.Decl == nil {
 		return false
 	}
-	
+
 	// Get parent's relationships (to find its parents)
 	var parentRels []*ast.Relationship
 	switch decl := parentSym.Decl.(type) {
@@ -323,25 +322,25 @@ func (r *Resolver) searchInheritedFeature(parentSym *symbols.Symbol, featureName
 	case *ast.Usage:
 		parentRels = decl.Relationships
 	}
-	
+
 	// Search in each grandparent
 	grandparents := r.findSpecializationTargets(parentSym.Scope.Parent(), parentRels)
 	for _, gp := range grandparents {
 		if gp == nil || gp.Scope == nil {
 			continue
 		}
-		
+
 		if sym, ok := gp.Scope.LookupLocal(featureName); ok {
 			qn.Parts[0].Sym = sym
 			return true
 		}
-		
+
 		// Recurse further up
 		if r.searchInheritedFeature(gp, featureName, qn) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -351,23 +350,23 @@ func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featur
 	// Get parent's specialization relationships from index
 	// For cached symbols, we need to look up specialization info from the FQN metadata
 	// For now, use a simpler approach: try common parent names
-	
+
 	// Map of known implicit parents (this is a hack, but works for common cases)
 	implicitParents := map[string][]string{
-		"Flows::Flow":         {"Flows::Message", "Flows::FlowTransfer"},
-		"Flows::Message":      {"Transfers::Transfer"},
-		"Parts::Part":         {"Items::Item"},
-		"Items::Item":         {"Occurrences::Occurrence"},
+		"Flows::Flow":             {"Flows::Message", "Flows::FlowTransfer"},
+		"Flows::Message":          {"Transfers::Transfer"},
+		"Parts::Part":             {"Items::Item"},
+		"Items::Item":             {"Occurrences::Occurrence"},
 		"Connections::Connection": {"Links::Link", "Connectors::Connector"},
-		"Links::Link":         {"Occurrences::Occurrence"},
+		"Links::Link":             {"Occurrences::Occurrence"},
 		// Add more as needed
 	}
-	
+
 	parentNames, ok := implicitParents[parent.Name]
 	if !ok {
 		return false
 	}
-	
+
 	for _, gpName := range parentNames {
 		fqn := gpName + "::" + featureName
 		if r.idx != nil {
@@ -377,7 +376,7 @@ func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featur
 				return true
 			}
 		}
-		
+
 		// Feature not found in this grandparent - recurse further
 		// Create a dummy symbol with just the name for recursive lookup
 		gpSym := &symbols.Symbol{Name: gpName}
@@ -385,7 +384,7 @@ func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featur
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -393,7 +392,7 @@ func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featur
 // For example, 'flow def' implicitly specializes 'Flow' from kernel library.
 func (r *Resolver) findImplicitSpecializations(scope *symbols.Scope, def *ast.Definition) []*symbols.Symbol {
 	var parents []*symbols.Symbol
-	
+
 	// Map definition kind to base type FQN
 	var baseFQN string
 	switch def.Kind {
@@ -413,7 +412,7 @@ func (r *Resolver) findImplicitSpecializations(scope *symbols.Scope, def *ast.De
 	default:
 		return nil
 	}
-	
+
 	// Look up base type in index
 	if r.idx != nil {
 		candidates := r.idx.LookupQualified(baseFQN)
@@ -421,7 +420,7 @@ func (r *Resolver) findImplicitSpecializations(scope *symbols.Scope, def *ast.De
 			parents = append(parents, candidates[0])
 		}
 	}
-	
+
 	return parents
 }
 
@@ -503,13 +502,13 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr) {
 	// Resolve operand first
 	r.resolveExpr(scope, fc.Operand)
-	
+
 	// Get operand symbol WITHOUT following type (we need usage scope for inline members)
 	operandSym := r.getOperandSymbol(scope, fc.Operand)
 	if operandSym == nil || fc.Member == nil {
 		return
 	}
-	
+
 	// Walk member parts explicitly, assigning symbols to each part
 	r.resolveMemberChain(operandSym, fc.Member)
 }
@@ -520,11 +519,11 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 	if qn == nil || len(qn.Parts) == 0 {
 		return
 	}
-	
+
 	// Resolve first part using model.LookupMember if available, else scope.LookupLocal
 	var cur *symbols.Symbol
 	var ok bool
-	
+
 	if r.model != nil {
 		// Use inheritance-aware lookup via semantics.Model
 		type modelLookup interface {
@@ -534,7 +533,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 			cur, ok = m.LookupMember(parentSym, qn.Parts[0].Text)
 		}
 	}
-	
+
 	if !ok {
 		// Fall back to local scope lookup if model unavailable
 		if parentSym.Scope == nil {
@@ -546,7 +545,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 		}
 		cur, ok = parentSym.Scope.LookupLocal(qn.Parts[0].Text)
 	}
-	
+
 	if !ok {
 		r.Diagnostics = append(r.Diagnostics, Diagnostic{
 			Span:    qn.Parts[0].Span,
@@ -555,12 +554,12 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 		return
 	}
 	qn.Parts[0].Sym = cur
-	
+
 	// Walk remaining parts via member lookup
 	for i := 1; i < len(qn.Parts); i++ {
 		var next *symbols.Symbol
 		var found bool
-		
+
 		if r.model != nil {
 			type modelLookup interface {
 				LookupMember(*symbols.Symbol, string) (*symbols.Symbol, bool)
@@ -569,7 +568,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 				next, found = m.LookupMember(cur, qn.Parts[i].Text)
 			}
 		}
-		
+
 		if !found {
 			// Fall back to local scope lookup
 			if cur.Scope == nil {
@@ -581,7 +580,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 			}
 			next, found = cur.Scope.LookupLocal(qn.Parts[i].Text)
 		}
-		
+
 		if !found {
 			r.Diagnostics = append(r.Diagnostics, Diagnostic{
 				Span:    qn.Parts[i].Span,
@@ -589,11 +588,11 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 			})
 			return
 		}
-		
+
 		qn.Parts[i].Sym = next
 		cur = next
 	}
-	
+
 	// Store final resolution in memo
 	r.memo[qn] = resolution{cur, true}
 }

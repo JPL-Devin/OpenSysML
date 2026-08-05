@@ -30,10 +30,10 @@ func TestTask80OccurrencesMinimal(t *testing.T) {
 			return t1First = includes(t1.endShot.successors, t2.endShot);
 		}
 	}`
-	
+
 	p := parser.New(source.New("test.kerml", []byte(input)))
 	_ = p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Logf("Diagnostics: %d", len(p.Diagnostics))
 		for _, d := range p.Diagnostics {

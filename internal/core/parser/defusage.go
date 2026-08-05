@@ -2,7 +2,7 @@ package parser
 
 import (
 	"fmt"
-	
+
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -46,7 +46,7 @@ var definitionKindKeywords = map[string]ast.DefinitionKind{
 	"analysis":     ast.DefAnalysisCase,
 	"verification": ast.DefVerificationCase,
 	// KerML structural.
-	"behavior":   ast.DefBehavior,
+	"behavior":      ast.DefBehavior,
 	"assoc":         ast.DefAssoc,
 	"struct":        ast.DefStruct,
 	"class":         ast.DefClass,
@@ -76,20 +76,20 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"rendering":  ast.UsageRendering,
 	"concern":    ast.UsageConcern,
 	// Tier B.
-	"connection": ast.UsageConnection,
-	"connector":  ast.UsageConnector,
-	"succession": ast.UsageSuccession,
-	"flow":       ast.UsageFlow,
-	"message":    ast.UsageFlow, // message is synonym for flow
-	"port":       ast.UsagePort,
+	"connection":  ast.UsageConnection,
+	"connector":   ast.UsageConnector,
+	"succession":  ast.UsageSuccession,
+	"flow":        ast.UsageFlow,
+	"message":     ast.UsageFlow, // message is synonym for flow
+	"port":        ast.UsagePort,
 	"interface":   ast.UsageInterface,
 	"interaction": ast.UsageInteraction,
 	"allocation":  ast.UsageAllocation,
 	"allocate":    ast.UsageAllocation, // Short form for allocation usage
-	"binding":    ast.UsageBinding,
-	"actor":      ast.UsageAttribute, // Use case actor
-	"render":     ast.UsageAttribute, // View rendering
-	"bind":       ast.UsageBinding, // shorthand for binding
+	"binding":     ast.UsageBinding,
+	"actor":       ast.UsageAttribute, // Use case actor
+	"render":      ast.UsageAttribute, // View rendering
+	"bind":        ast.UsageBinding,   // shorthand for binding
 	// Tier C.
 	"action":       ast.UsageAction,
 	"perform":      ast.UsageAction, // perform keyword creates action usage
@@ -127,26 +127,26 @@ var usageKindKeywords = map[string]ast.UsageKind{
 }
 
 var featureModifierKeywords = map[string]bool{
-	"abstract":  true,
-	"variation": true,
-	"ref":       true,
-	"end":       true,
-	"constant":  true,
-	"event":     true, // event-driven occurrence modifier
+	"abstract":   true,
+	"variation":  true,
+	"ref":        true,
+	"end":        true,
+	"constant":   true,
+	"event":      true, // event-driven occurrence modifier
 	"individual": true, // individual occurrence/part modifier
 	"snapshot":   true, // snapshot occurrence/part modifier
-	"in":        true,
-	"out":       true,
-	"inout":     true,
-	"composite": true,
-	"portion":   true,
-	"derived":   true,
-	"ordered":   true,
-	"nonunique": true,
-	"public":    true,
-	"protected": true,
-	"private":   true,
-	"readonly":  true,
+	"in":         true,
+	"out":        true,
+	"inout":      true,
+	"composite":  true,
+	"portion":    true,
+	"derived":    true,
+	"ordered":    true,
+	"nonunique":  true,
+	"public":     true,
+	"protected":  true,
+	"private":    true,
+	"readonly":   true,
 }
 
 // relationshipKeywords maps a spelled-out relationship keyword to its kind.
@@ -163,22 +163,22 @@ var relationshipKeywords = map[string]ast.RelationshipKind{
 }
 
 type featureMods struct {
-	isAbstract  bool
-	isVariation bool
-	isReference bool
-	isEnd       bool
-	isChain     bool
-	isConstant  bool
-	isEvent     bool // event modifier for occurrences
-	isIndividual bool // individual modifier for individuals/snapshots
-	isSnapshot  bool // snapshot modifier for snapshots
-	visibility  ast.Visibility
-	direction   ast.FeatureDirection
-	isComposite bool
-	isDerived   bool
-	isReadonly  bool
-	isOrdered   bool
-	isNonunique bool
+	isAbstract        bool
+	isVariation       bool
+	isReference       bool
+	isEnd             bool
+	isChain           bool
+	isConstant        bool
+	isEvent           bool // event modifier for occurrences
+	isIndividual      bool // individual modifier for individuals/snapshots
+	isSnapshot        bool // snapshot modifier for snapshots
+	visibility        ast.Visibility
+	direction         ast.FeatureDirection
+	isComposite       bool
+	isDerived         bool
+	isReadonly        bool
+	isOrdered         bool
+	isNonunique       bool
 	earlyMultiplicity *ast.Multiplicity // for "end [mult] ref ..." syntax
 }
 
@@ -375,7 +375,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			})
 		}
 	}
-	
+
 	// Helper to apply prefixes to result node
 	applyPrefixes := func(node ast.Node) ast.Node {
 		if len(prefixes) == 0 {
@@ -388,7 +388,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 		return node
 	}
-	
+
 	// Check for relationship tokens before modifiers (e.g., :>> x)
 	// These indicate anonymous usages (attribute is default kind)
 	tok := p.peek()
@@ -397,7 +397,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		u := p.parseUsage(start, ast.UsageAttribute, featureMods{}, false)
 		return applyPrefixes(u)
 	}
-	
+
 	mods := p.parseFeatureModifiers()
 
 	// Two-word `use case` kind keyword.
@@ -416,17 +416,17 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	if t.Kind == lexer.Keyword {
 		kw = t.KeywordID
 	}
-	
+
 	// Special case: perform action <name> (declaration form)
 	// Pattern: perform action generateTorque: GenerateTorque;
 	// Skip "perform" and parse as regular "action" usage
 	if kw == "perform" && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "action" {
-		p.advance() // consume 'perform'
-		kw = "action"  // treat as regular action keyword
+		p.advance()   // consume 'perform'
+		kw = "action" // treat as regular action keyword
 		// Continue to dual-keyword path (don't enter usage-only block)
 	} else if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "include" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" || kw == "timeslice" || kw == "snapshot" {
 		// Check for usage-only keywords that never have def forms
-		
+
 		// Special case: perform <ref>; (shorthand without action keyword)
 		// Must check BEFORE consuming keyword token
 		if kw == "perform" && !p.atKeyword("action") {
@@ -442,7 +442,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				IsComposite: mods.isComposite,
 			}
 			u.NodeBase.NodeSpan = p.spanFrom(start)
-			
+
 			// Parse reference target (qualified name or feature chain)
 			target := p.parseRelationshipTarget()
 			if target != nil {
@@ -452,7 +452,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 					Target: target,
 				})
 			}
-			
+
 			// Expect semicolon or body
 			if p.accept2(lexer.Semicolon) {
 				u.HasBody = false
@@ -461,14 +461,14 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				u.Members = p.parseActionBodyMixed()
 				u.HasBody = true
 			}
-			
+
 			u.NodeSpan = p.spanFrom(start)
 			return applyPrefixes(u)
 		}
-		
+
 		p.advance() // consume the kind keyword
 		isAll := p.acceptKeyword("all")
-		
+
 		// Special case: include use case <name> (full form)
 		// If include is followed by "use case", consume them and parse as use case with includes relationship
 		if kw == "include" && p.atUseCase() {
@@ -492,7 +492,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			}
 			return applyPrefixes(u)
 		}
-		
+
 		// Special case: succession flow from X to Y
 		// If succession is followed by flow keyword, parse as flow usage with succession typing
 		if kw == "succession" && p.atKeyword("flow") {
@@ -507,7 +507,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			}
 			return applyPrefixes(u)
 		}
-		
+
 		// Special case: event <ref>; (shorthand event occurrence reference)
 		// If event is NOT followed by occurrence keyword or typing colon, parse as occurrence usage with reference
 		if kw == "event" && !p.atKeyword("occurrence") && !p.at(lexer.Colon) {
@@ -523,7 +523,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				IsComposite: mods.isComposite,
 			}
 			u.NodeBase.NodeSpan = p.spanFrom(start)
-			
+
 			// Parse reference target (qualified name or feature chain)
 			target := p.parseRelationshipTarget()
 			if target != nil {
@@ -533,16 +533,16 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 					Target: target,
 				})
 			}
-			
+
 			// Optional multiplicity after reference
 			if p.at(lexer.LBracket) {
 				u.Multiplicity = p.parseMultiplicity()
 			}
-			
+
 			// Optional relationships (e.g., :>> target)
 			rels, _ := p.parseRelationships(true)
 			u.Relationships = append(u.Relationships, rels...)
-			
+
 			// Expect semicolon or body
 			if p.accept2(lexer.Semicolon) {
 				u.HasBody = false
@@ -552,66 +552,66 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				u.Members = members
 				u.HasBody = hasBody
 			}
-		
-		u.NodeSpan = p.spanFrom(start)
-		return applyPrefixes(u)
-	}
-	
-	// Special case: include <ref>; (shorthand for use case with includes relationship)
-	// If include is NOT followed by "use case", parse as use case usage with includes
-	// Pattern: include <ref>[mult] { body };
-	if kw == "include" && !p.atUseCase() {
-		u := &ast.Usage{
-			Kind:        ast.UsageUseCase,
-			IsAbstract:  mods.isAbstract,
-			IsReference: mods.isReference,
-			IsEnd:       mods.isEnd,
-			Visibility:  mods.visibility,
-			Direction:   mods.direction,
-			IsComposite: mods.isComposite,
+
+			u.NodeSpan = p.spanFrom(start)
+			return applyPrefixes(u)
 		}
-		u.NodeBase.NodeSpan = p.spanFrom(start)
-		
-		// Parse reference target
-		target := p.parseRelationshipTarget()
-		if target != nil {
-			// Add as includes relationship
-			u.Relationships = append(u.Relationships, &ast.Relationship{
-				Kind:   ast.RelIncludes,
-				Target: target,
-			})
-		}
-		
-		// Optional multiplicity after reference
-		if p.at(lexer.LBracket) {
-			u.Multiplicity = p.parseMultiplicity()
-		}
-		
-		// Expect semicolon or body
-		if p.accept2(lexer.Semicolon) {
-			u.HasBody = false
-		} else if p.at(lexer.LBrace) {
-			p.advance() // consume '{'
-			// Parse body members
-			var members []ast.Node
-			for !p.at(lexer.RBrace) && !p.atEOF() {
-				m := p.parseBodyMember()
-				if m != nil {
-					members = append(members, m)
-				}
+
+		// Special case: include <ref>; (shorthand for use case with includes relationship)
+		// If include is NOT followed by "use case", parse as use case usage with includes
+		// Pattern: include <ref>[mult] { body };
+		if kw == "include" && !p.atUseCase() {
+			u := &ast.Usage{
+				Kind:        ast.UsageUseCase,
+				IsAbstract:  mods.isAbstract,
+				IsReference: mods.isReference,
+				IsEnd:       mods.isEnd,
+				Visibility:  mods.visibility,
+				Direction:   mods.direction,
+				IsComposite: mods.isComposite,
 			}
-			p.expect(lexer.RBrace, "expected '}' to close body")
-			u.Members = members
-			u.HasBody = true
+			u.NodeBase.NodeSpan = p.spanFrom(start)
+
+			// Parse reference target
+			target := p.parseRelationshipTarget()
+			if target != nil {
+				// Add as includes relationship
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelIncludes,
+					Target: target,
+				})
+			}
+
+			// Optional multiplicity after reference
+			if p.at(lexer.LBracket) {
+				u.Multiplicity = p.parseMultiplicity()
+			}
+
+			// Expect semicolon or body
+			if p.accept2(lexer.Semicolon) {
+				u.HasBody = false
+			} else if p.at(lexer.LBrace) {
+				p.advance() // consume '{'
+				// Parse body members
+				var members []ast.Node
+				for !p.at(lexer.RBrace) && !p.atEOF() {
+					m := p.parseBodyMember()
+					if m != nil {
+						members = append(members, m)
+					}
+				}
+				p.expect(lexer.RBrace, "expected '}' to close body")
+				u.Members = members
+				u.HasBody = true
+			}
+
+			u.NodeSpan = p.spanFrom(start)
+			return applyPrefixes(u)
 		}
-		
-		u.NodeSpan = p.spanFrom(start)
-		return applyPrefixes(u)
+
+		return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], mods, isAll))
 	}
-	
-	return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], mods, isAll))
-	}
-	
+
 	// Special case: if current token is 'def' (after prefixes/modifiers), parse as generic definition
 	// This handles patterns like `#scenario def X` where prefix acts as semantic annotation
 	if p.atKeyword("def") {
@@ -619,7 +619,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// Use generic definition kind (or could extract from prefix)
 		return applyPrefixes(p.parseDefinition(start, ast.DefClass, mods, false))
 	}
-	
+
 	defKind, ok := definitionKindKeywords[kw]
 	if !ok {
 		// Fallback: if we have modifiers but no kind keyword, assume it's a generic usage (e.g., "in x: Integer;")
@@ -633,17 +633,17 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		return applyPrefixes(nil)
 	}
 	p.advance() // consume the kind keyword
-	
+
 	// Parse 'all' modifier if present (appears after keyword, before name)
 	isAll := p.acceptKeyword("all")
-	
+
 	// Parse 'chain' modifier if present (identifier, not keyword)
 	t2 := p.peek()
 	if t2.Kind == lexer.Identifier && p.src.Text(t2.Span) == "chain" {
 		mods.isChain = true
 		p.advance()
 	}
-	
+
 	// Parse secondary keyword if present (e.g., 'assoc struct')
 	// Check if next token is also a kind keyword
 	t3 := p.peek()
@@ -659,7 +659,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		p.advance() // consume 'def'
 		return applyPrefixes(p.parseDefinition(start, defKind, mods, isAll))
 	}
-	
+
 	// Check if this is a definition-only keyword (not in usageKindKeywords)
 	// Examples: metaclass, struct, class, predicate, bool
 	// These keywords don't require "def" suffix and can't be used as usages
@@ -668,12 +668,12 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// Definition-only keyword - parse as definition directly
 		return applyPrefixes(p.parseDefinition(start, defKind, mods, isAll))
 	}
-	
+
 	// Note: 'datatype' is treated uniformly as a usage keyword by the parser.
 	// Semantic classification (def vs usage) is deferred to the symbol builder
 	// and semantics passes, which have full context (relationships, body structure).
 	// This follows Phase 4 principle: parse syntax uniformly, classify semantically.
-	
+
 	return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], mods, isAll))
 }
 
@@ -689,7 +689,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 		Ident:       p.parseIdentification(),
 	}
 	def.Relationships, _ = p.parseRelationships(false)
-	
+
 	// Dispatch to specialized body parsers based on kind
 	var members []ast.Node
 	var hasBody bool
@@ -750,7 +750,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 	default:
 		members, hasBody = p.parseDefUsageBody()
 	}
-	
+
 	def.Members = members
 	def.HasBody = hasBody
 	def.NodeSpan = p.spanFrom(start)
@@ -767,7 +767,7 @@ func (p *Parser) parseActionBodyGeneric() []ast.Node {
 			// Check for namespace-level succession: 'then' after member
 			if p.atKeyword("then") {
 				p.advance() // consume 'then'
-				
+
 				// Apply succession to membership node
 				if mem, ok := m.(*ast.Membership); ok {
 					mem.HasSuccession = true
@@ -922,7 +922,7 @@ func (p *Parser) isAnonymousSuccession() bool {
 		// Also check: succession name[mult] first x then y
 		nextIdx := 1
 		nextTok := p.peekN(nextIdx)
-		
+
 		// Skip multiplicity if present: [...]
 		if nextTok.Kind == lexer.LBracket {
 			depth := 1
@@ -938,12 +938,12 @@ func (p *Parser) isAnonymousSuccession() bool {
 			}
 			nextTok = p.peekN(nextIdx)
 		}
-		
+
 		// Check if "first" follows (after optional multiplicity)
 		if nextTok.Kind == lexer.Keyword && nextTok.KeywordID == "first" {
 			return false // NAMED succession
 		}
-		
+
 		// Count identifiers before "then" to distinguish:
 		// - succession name end1 then end2 (2 identifiers) - NAMED
 		// - succession end1 then end2 (1 identifier) - ANONYMOUS
@@ -961,16 +961,16 @@ func (p *Parser) isAnonymousSuccession() bool {
 			}
 			// Count identifiers (simple names, not part of feature chains)
 			// Only count as separate identifier if preceded by whitespace/nothing, not dot/::
-			if (tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName) {
-				prevTok := p.peekN(i-1)
+			if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
+				prevTok := p.peekN(i - 1)
 				if prevTok.Kind != lexer.Dot && prevTok.Kind != lexer.ColonColon {
 					identCount++
 				}
 			}
 			// Skip over multiplicity syntax, dots, :: for feature chains
-			if tok.Kind == lexer.LBracket || tok.Kind == lexer.RBracket || 
-			   tok.Kind == lexer.Decimal || tok.Kind == lexer.DotDot || tok.Kind == lexer.Star ||
-			   tok.Kind == lexer.Dot || tok.Kind == lexer.ColonColon || tok.Kind == lexer.Whitespace {
+			if tok.Kind == lexer.LBracket || tok.Kind == lexer.RBracket ||
+				tok.Kind == lexer.Decimal || tok.Kind == lexer.DotDot || tok.Kind == lexer.Star ||
+				tok.Kind == lexer.Dot || tok.Kind == lexer.ColonColon || tok.Kind == lexer.Whitespace {
 				continue
 			}
 			// If not identifier/keyword and not "then", stop searching
@@ -985,33 +985,33 @@ func (p *Parser) isAnonymousSuccession() bool {
 func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isAll bool) *ast.Usage {
 	u := &ast.Usage{
 		Kind:        kind,
-	IsAbstract:  mods.isAbstract,
-	IsReference: mods.isReference,
-	IsAll:       isAll,
-	IsEnd:       mods.isEnd,
-	IsChain:     mods.isChain,
-	IsConstant:  mods.isConstant,
-	IsEvent:     mods.isEvent,
-	Visibility:  mods.visibility,
+		IsAbstract:  mods.isAbstract,
+		IsReference: mods.isReference,
+		IsAll:       isAll,
+		IsEnd:       mods.isEnd,
+		IsChain:     mods.isChain,
+		IsConstant:  mods.isConstant,
+		IsEvent:     mods.isEvent,
+		Visibility:  mods.visibility,
 		Direction:   mods.direction,
 		IsComposite: mods.isComposite,
 		IsDerived:   mods.isDerived,
 		IsOrdered:   mods.isOrdered,
 		IsNonunique: mods.isNonunique,
 	}
-	
+
 	// Apply early multiplicity if present (for "end [mult] ref ..." syntax)
 	if mods.earlyMultiplicity != nil {
 		u.Multiplicity = mods.earlyMultiplicity
 	}
-	
-	// Handle UsageSatisfy special syntax: 
+
+	// Handle UsageSatisfy special syntax:
 	// Full form: satisfy [requirement] <name> by <name> { body }
 	// Short form: satisfy/verify <name>;
 	if kind == ast.UsageSatisfy {
 		// Optional: requirement keyword
 		p.acceptKeyword("requirement")
-		
+
 		reqName := p.parseQualifiedName()
 		if reqName != nil {
 			// Store as typing relationship
@@ -1020,7 +1020,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 				Target: reqName,
 			})
 		}
-		
+
 		// Check for optional "by" clause
 		if p.acceptKeyword("by") {
 			subjTarget := p.parseRelationshipTarget()
@@ -1040,7 +1040,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 				}
 			}
 		}
-		
+
 		// Parse body (requirement body) or semicolon
 		members, hasBody := p.parseDefUsageBody()
 		u.Members = members
@@ -1048,14 +1048,14 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		u.NodeSpan = p.spanFrom(start)
 		return u
 	}
-	
+
 	// Handle UsageBinding special syntax: binding [mult] name = [mult] target; OR binding name[mult] of [mult] target = [mult] value;
 	if kind == ast.UsageBinding {
 		// Check for multiplicity before name: binding [mult] name ...
 		if p.at(lexer.LBracket) {
 			u.Multiplicity = p.parseMultiplicity()
 		}
-		
+
 		// Parse source (name or feature chain like x.field)
 		// Check if simple name or feature chain
 		// Note: use atNameOrKeyword to allow "bind" keyword as identifier name
@@ -1078,12 +1078,12 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 				})
 			}
 		}
-		
+
 		// Check for multiplicity after name (before "of"): name[mult] of ...
 		if p.at(lexer.LBracket) {
 			u.Multiplicity = p.parseMultiplicity()
 		}
-		
+
 		// Check for source expression: binding [mult] name[mult2] source = target
 		// If we have name[mult] and next token is NOT "of" or "=", parse source expression
 		if u.Ident.Name != "" && !p.atKeyword("of") && !p.at(lexer.Eq) && (p.atName() || p.atNameOrKeyword()) {
@@ -1096,7 +1096,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 				})
 			}
 		}
-		
+
 		// Check for "of" keyword (binding name of [mult] target = value)
 		if p.acceptKeyword("of") {
 			// Parse source multiplicity and target
@@ -1113,7 +1113,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 				})
 			}
 		}
-		
+
 		// Parse value: = [mult] expr
 		if p.accept2(lexer.Eq) {
 			// Optional multiplicity before value expression
@@ -1122,7 +1122,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			}
 			u.Value = p.ParseExpression()
 		}
-		
+
 		// Parse body or semicolon
 		members, hasBody := p.parseDefUsageBody()
 		u.Members = members
@@ -1130,7 +1130,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		u.NodeSpan = p.spanFrom(start)
 		return u
 	}
-	
+
 	// Handle succession/connector/flow with multiplicity before name/first keyword
 	// Pattern: `succession [mult] name first [mult] x then [mult] y`
 	// Pattern: `succession [mult] first [mult] x then [mult] y` (anonymous)
@@ -1144,7 +1144,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	if (kind == ast.UsageSuccession || kind == ast.UsageConnector || kind == ast.UsageFlow) && p.at(lexer.LBracket) {
 		earlyMultiplicity = p.parseMultiplicity()
 	}
-	
+
 	// Handle shorthand: `feature redefines x` means `feature x redefines x`
 	// Check if relationship keyword followed by simple name (not qualified name or feature chain)
 	// BUT NOT if followed by multiplicity (e.g., `part redefines cyl[4]` is anonymous redefining cyl, not shorthand)
@@ -1199,19 +1199,19 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		preRels, conjugated = p.parseRelationships(true)
 		// A bare flow shorthand `flow x to y` and anonymous succession `succession x then y` have no declaration name
 		// Anonymous connector starts with 'from' keyword (e.g., `connector : X from y to z`)
-		skipIdentification := (kind == ast.UsageFlow && p.atFlowShorthand()) || 
-			(kind == ast.UsageSuccession && isAnonymous) || 
+		skipIdentification := (kind == ast.UsageFlow && p.atFlowShorthand()) ||
+			(kind == ast.UsageSuccession && isAnonymous) ||
 			(kind == ast.UsageConnector && p.atKeyword("from"))
 		if !skipIdentification {
 			u.Ident = p.parseUsageIdentification(kind)
 		}
 	}
-	
+
 	// Parse post-identification relationships (e.g., : Type)
 	postIdRels, postConj := p.parseRelationships(true)
 	u.Relationships = append(preRels, postIdRels...)
 	u.IsConjugated = conjugated || postConj
-	
+
 	// For anonymous succession/flow, skip multiplicity parsing - it belongs to connector ends
 	// UNLESS earlyMultiplicity was already parsed (e.g., `succession [mult] first ...`)
 	skipMultiplicity := (kind == ast.UsageSuccession || kind == ast.UsageFlow) && u.Ident.Name == "" && earlyMultiplicity == nil
@@ -1222,7 +1222,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			u.Multiplicity = p.parseMultiplicity()
 		}
 	}
-	
+
 	// Parse post-multiplicity modifiers (ordered/nonunique)
 	postMods := p.parsePostModifiers()
 	if postMods.isOrdered {
@@ -1231,20 +1231,20 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	if postMods.isNonunique {
 		u.IsNonunique = true
 	}
-	
+
 	// DEBUG: trace token after post-modifiers
-	// fmt.Printf("DEBUG parseUsage after postMods: tok=%v keyword=%q offset=%d\n", 
+	// fmt.Printf("DEBUG parseUsage after postMods: tok=%v keyword=%q offset=%d\n",
 	//     p.peek().Kind, p.peek().KeywordID, p.peek().Span.Offset)
-	
+
 	// Parse additional relationships after modifiers (e.g., :> target)
 	postRels, _ := p.parseRelationships(true)
 	u.Relationships = append(u.Relationships, postRels...)
-	
+
 	if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
 		u.Value = p.ParseExpression()
 	}
 	p.parseTierBEnds(u, kind)
-	
+
 	// Dispatch to specialized body parsers based on kind
 	var members []ast.Node
 	var hasBody bool
@@ -1310,7 +1310,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
 			// Peek at first token in body
 			firstTok := p.peek()
-			if (firstTok.Kind == lexer.Keyword && (firstTok.KeywordID == "in" || firstTok.KeywordID == "return")) {
+			if firstTok.Kind == lexer.Keyword && (firstTok.KeywordID == "in" || firstTok.KeywordID == "return") {
 				// Structured calc body with parameters/return
 				members = p.parseCalcBody()
 			} else {
@@ -1329,17 +1329,17 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			// Check if this is a typed predicate with input/return parameters
 			// Peek ahead past the '{' and any 'doc' keywords to see if body has 'in' or 'return'
 			hasCalcBody := false
-			for i := 1; i < 10; i++ {  // Look ahead up to 10 tokens
+			for i := 1; i < 10; i++ { // Look ahead up to 10 tokens
 				tok := p.peekN(i)
 				if tok.KeywordID == "doc" {
-					continue  // Skip doc keywords
+					continue // Skip doc keywords
 				}
 				if tok.KeywordID == "in" || tok.KeywordID == "return" {
 					hasCalcBody = true
 				}
-				break  // Stop at first non-doc keyword
+				break // Stop at first non-doc keyword
 			}
-			
+
 			p.advance() // {
 			if hasCalcBody {
 				// Parse as calc body with structured parameters
@@ -1375,7 +1375,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	default:
 		members, hasBody = p.parseDefUsageBody()
 	}
-	
+
 	u.Members = members
 	u.HasBody = hasBody
 	u.NodeSpan = p.spanFrom(start)
@@ -1399,7 +1399,7 @@ func (p *Parser) parseDefUsageBody() (members []ast.Node, hasBody bool) {
 			// Check for namespace-level succession: 'then' after member
 			if p.atKeyword("then") {
 				p.advance() // consume 'then'
-				
+
 				// Apply succession to membership node
 				if mem, ok := m.(*ast.Membership); ok {
 					mem.HasSuccession = true
@@ -1432,7 +1432,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Consume 'then', parse declaration, mark with HasSuccession
 	if p.atKeyword("then") {
 		p.advance() // consume 'then'
-		
+
 		// Recursively parse the member after 'then'
 		innerMember := p.parseBodyMember()
 		if mem, ok := innerMember.(*ast.Membership); ok {
@@ -1489,7 +1489,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		al.SetLeadingTrivia(trivia)
 		return al
 	}
-	
+
 	// Check for timeslice usage keyword
 	// Creates occurrence usage (temporal slice)
 	if p.atKeyword("timeslice") {
@@ -1504,7 +1504,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			return m
 		}
 	}
-	
+
 	// Check for snapshot usage keyword
 	// Creates occurrence usage (temporal instant)
 	if p.atKeyword("snapshot") {
@@ -1519,20 +1519,20 @@ func (p *Parser) parseBodyMember() ast.Node {
 			return m
 		}
 	}
-	
+
 	// Check for behavioral statements in structural contexts (occurrence/part with temporal ordering)
 	// These include: first/then succession edges for snapshot ordering
 	if p.atKeyword("first") {
 		firstTok := p.advance()
 		return p.parseInitialNode(firstTok)
 	}
-	
+
 	// Check for return statement (result member)
 	// Can appear in calc body, constraint body, or requirement body
 	if p.isResultKeyword() {
 		return p.parseResultMember()
 	}
-	
+
 	// Check for redefines statement: `redefines name = expr;` OR `redefines parent.child = expr;`
 	// This is shorthand for anonymous feature with redefines relationship and value
 	// Example: redefines innerSpaceDimension = 0;
@@ -1550,7 +1550,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 				p.expect(lexer.Eq, "expected '=' after redefines target")
 				value := p.ParseExpression()
 				p.accept2(lexer.Semicolon)
-				
+
 				u := &ast.Usage{
 					Kind: ast.UsagePart, // Generic feature
 					Relationships: []*ast.Relationship{
@@ -1563,7 +1563,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 				}
 				u.NodeBase.NodeSpan = p.spanFrom(start)
 				u.SetLeadingTrivia(trivia)
-				
+
 				m := &ast.Membership{
 					Visibility: vis,
 					Member:     u,
@@ -1580,17 +1580,17 @@ func (p *Parser) parseBodyMember() ast.Node {
 			break
 		}
 	}
-	
+
 	// Check for subset/disjoint constraint statements
 	// Pattern: subset X subsets Y; OR disjoint X from Y;
 	// These are anonymous features with relationships
 	if p.atKeyword("subset") || p.atKeyword("disjoint") {
 		isDisjoint := p.atKeyword("disjoint")
 		p.advance() // skip "subset" or "disjoint"
-		
+
 		// Parse first target (source)
 		source := p.parseRelationshipTarget()
-		
+
 		if isDisjoint {
 			// Pattern: disjoint X from Y;
 			if !p.acceptKeyword("from") {
@@ -1598,7 +1598,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			}
 			target := p.parseRelationshipTarget()
 			p.accept2(lexer.Semicolon)
-			
+
 			u := &ast.Usage{
 				Kind: ast.UsagePart, // Generic feature
 				Relationships: []*ast.Relationship{
@@ -1614,7 +1614,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			}
 			u.NodeBase.NodeSpan = p.spanFrom(start)
 			u.SetLeadingTrivia(trivia)
-			
+
 			m := &ast.Membership{
 				Visibility: vis,
 				Member:     u,
@@ -1629,7 +1629,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			}
 			target := p.parseRelationshipTarget()
 			p.accept2(lexer.Semicolon)
-			
+
 			u := &ast.Usage{
 				Kind: ast.UsagePart, // Generic feature
 				Relationships: []*ast.Relationship{
@@ -1645,7 +1645,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			}
 			u.NodeBase.NodeSpan = p.spanFrom(start)
 			u.SetLeadingTrivia(trivia)
-			
+
 			m := &ast.Membership{
 				Visibility: vis,
 				Member:     u,
@@ -1655,12 +1655,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 			return m
 		}
 	}
-	
+
 	// Check for expose statement: expose <path>::**[filter];
 	// View-specific member for exposing elements from a namespace
 	if p.atKeyword("expose") {
 		p.advance() // consume 'expose'
-		
+
 		// Parse import path with wildcard (similar to import parsing)
 		// Pattern: <namespace>::** or <namespace>::**[filter]
 		path := p.parseQualifiedName()
@@ -1668,7 +1668,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			p.error(p.peek().Span, "expected namespace path after 'expose'")
 			return &ast.ErrorNode{Message: "expected namespace path"}
 		}
-		
+
 		// Check for wildcard tail: :: * or :: **
 		isRecursive := false
 		if p.at(lexer.ColonColon) {
@@ -1683,19 +1683,19 @@ func (p *Parser) parseBodyMember() ast.Node {
 					isRecursive = true
 				}
 			} else if nk == lexer.StarStar {
-				p.advance()     // ::
-				p.advance()     // **
+				p.advance() // ::
+				p.advance() // **
 				isRecursive = true
 			}
 		}
-		
+
 		// Check for optional filter expression: [filter]
 		var filterExpr ast.Node
 		if p.accept2(lexer.LBracket) {
 			filterExpr = p.ParseExpression()
 			p.expect(lexer.RBracket, "expected ']' after filter expression")
 		}
-		
+
 		// Create Import node (expose uses similar semantics to import)
 		// Store filter in FilterExpr field if present
 		imp := &ast.Import{
@@ -1705,23 +1705,23 @@ func (p *Parser) parseBodyMember() ast.Node {
 		}
 		imp.NodeBase.NodeSpan = p.spanFrom(start)
 		imp.SetLeadingTrivia(trivia)
-		
+
 		p.expect(lexer.Semicolon, "expected ';' after expose statement")
-		
+
 		return imp
 	}
-	
+
 	// Check for inline connector statement: connect [mult] X to [mult] Y;
 	// This is anonymous connection usage
 	if p.atKeyword("connect") {
 		p.advance() // consume 'connect'
-		
+
 		u := &ast.Usage{
 			Kind: ast.UsageConnection,
 		}
 		u.NodeBase.NodeSpan = p.spanFrom(start)
 		u.SetLeadingTrivia(trivia)
-		
+
 		// Parse connector ends with optional multiplicity
 		// First end
 		firstEnd := p.parseConnectorEnd()
@@ -1730,12 +1730,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 			return &ast.ErrorNode{Message: "expected connector end"}
 		}
 		u.ConnectorEnds = append(u.ConnectorEnds, firstEnd)
-		
+
 		// Expect 'to' keyword
 		if !p.acceptKeyword("to") {
 			p.error(p.peek().Span, "expected 'to' after first connector end")
 		}
-		
+
 		// Second end
 		secondEnd := p.parseConnectorEnd()
 		if secondEnd == nil {
@@ -1743,9 +1743,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 		} else {
 			u.ConnectorEnds = append(u.ConnectorEnds, secondEnd)
 		}
-		
+
 		p.expect(lexer.Semicolon, "expected ';' after connect statement")
-		
+
 		m := &ast.Membership{
 			Visibility: vis,
 			Member:     u,
@@ -1754,7 +1754,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		m.SetLeadingTrivia(trivia)
 		return m
 	}
-	
+
 	// Check for bare redefines/subsets/specializes statement (no visibility/modifiers)
 	// Pattern: redefines <target> = <value>;
 	if p.atKeyword("redefines") || p.atKeyword("subsets") || p.atKeyword("specializes") {
@@ -1764,7 +1764,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		} else if p.atKeyword("specializes") {
 			relKind = ast.RelSpecializes
 		}
-		
+
 		// Lookahead: check if pattern is `<rel> <target> = <value>`
 		hasEq := false
 		for i := 1; i < 10; i++ {
@@ -1777,14 +1777,14 @@ func (p *Parser) parseBodyMember() ast.Node {
 				break
 			}
 		}
-		
+
 		if hasEq {
 			p.advance() // skip relationship keyword
 			target := p.parseRelationshipTarget()
 			p.expect(lexer.Eq, "expected '=' in relationship statement")
 			value := p.ParseExpression()
 			p.accept2(lexer.Semicolon)
-			
+
 			u := &ast.Usage{
 				Kind: ast.UsagePart,
 				Relationships: []*ast.Relationship{
@@ -1797,7 +1797,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			}
 			u.NodeBase.NodeSpan = p.spanFrom(start)
 			u.SetLeadingTrivia(trivia)
-			
+
 			m := &ast.Membership{
 				Visibility: vis,
 				Member:     u,
@@ -1807,7 +1807,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			return m
 		}
 	}
-	
+
 	// Check for inline flow statement: flow [from] X to Y;
 	// This is anonymous flow usage
 	// Distinguish from flow declarations: flow : Type ... or flow name : Type ...
@@ -1829,25 +1829,25 @@ func (p *Parser) parseBodyMember() ast.Node {
 				isInlineFlow = true
 			}
 		}
-		
+
 		if isInlineFlow {
 			p.advance() // consume 'flow'
-			
+
 			u := &ast.Usage{
 				Kind: ast.UsageFlow,
 			}
 			u.NodeBase.NodeSpan = p.spanFrom(start)
 			u.SetLeadingTrivia(trivia)
-			
+
 			// Check for optional 'from' keyword
 			optionalFrom := p.acceptKeyword("from")
 			_ = optionalFrom // both forms valid
-			
+
 			// Parse flow ends: source to target
 			p.parseTierBEnds(u, ast.UsageFlow)
-			
+
 			p.expect(lexer.Semicolon, "expected ';' after flow statement")
-			
+
 			m := &ast.Membership{
 				Visibility: vis,
 				Member:     u,
@@ -1857,7 +1857,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			return m
 		}
 	}
-	
+
 	// Check for inline allocate statement: allocate X to Y;
 	// This is anonymous allocation usage
 	// Distinguish from allocation declarations: allocation : Type ... or allocation name : Type ...
@@ -1878,21 +1878,21 @@ func (p *Parser) parseBodyMember() ast.Node {
 				isInlineAllocate = true
 			}
 		}
-		
+
 		if isInlineAllocate {
 			p.advance() // consume 'allocate'
-			
+
 			u := &ast.Usage{
 				Kind: ast.UsageAllocation,
 			}
 			u.NodeBase.NodeSpan = p.spanFrom(start)
 			u.SetLeadingTrivia(trivia)
-			
+
 			// Parse allocation ends: source to target
 			p.parseTierBEnds(u, ast.UsageAllocation)
-			
+
 			p.expect(lexer.Semicolon, "expected ';' after allocate statement")
-			
+
 			m := &ast.Membership{
 				Visibility: vis,
 				Member:     u,
@@ -1902,7 +1902,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			return m
 		}
 	}
-	
+
 	// Check for accept action syntax: action <name> accept <param> : Type [via <port>];
 	// Pattern: action trigger accept scene : Scene;
 	// Pattern: action trigger accept scene : Scene via viewPort;
@@ -1916,7 +1916,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 				actionName := p.src.Text(p.peek().Span)
 				p.advance() // consume name
 				p.advance() // consume 'accept'
-				
+
 				// Parse param: name : Type
 				paramName := ""
 				var paramType *ast.QualifiedName
@@ -1927,13 +1927,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 				if p.accept2(lexer.Colon) {
 					paramType = p.parseQualifiedName()
 				}
-				
+
 				// Optional 'via' port
 				var viaPort *ast.QualifiedName
 				if p.acceptKeyword("via") {
 					viaPort = p.parseQualifiedName()
 				}
-				
+
 				// Create action usage with output attribute member
 				actionUsage := &ast.Usage{
 					Kind: ast.UsageAction,
@@ -1942,7 +1942,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 						NameSpan: source.Span{}, // fill from token if needed
 					},
 				}
-				
+
 				// Add output parameter as attribute member
 				if paramName != "" && paramType != nil {
 					paramUsage := &ast.Usage{
@@ -1962,7 +1962,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 						Member: paramUsage,
 					})
 				}
-				
+
 				// Add via port as reference relationship
 				if viaPort != nil {
 					actionUsage.Relationships = append(actionUsage.Relationships, &ast.Relationship{
@@ -1970,12 +1970,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 						Target: viaPort,
 					})
 				}
-				
+
 				p.expect(lexer.Semicolon, "expected ';' after accept action")
-				
+
 				actionUsage.NodeSpan = p.spanFrom(start)
 				actionUsage.SetLeadingTrivia(trivia)
-				
+
 				m := &ast.Membership{
 					Visibility: vis,
 					Member:     actionUsage,
@@ -1986,23 +1986,23 @@ func (p *Parser) parseBodyMember() ast.Node {
 			}
 		}
 	}
-	
+
 	// Check for anonymous feature pattern: [modifiers] [name] : Type OR [modifiers] :>> relationships
 	// Examples: private thisClock : Clock :>> self; or ref stateSpace: StateSpace; or ref :>> x
 	// This handles features with visibility but no usage kind keyword
 	nextKind := p.peekN(1).Kind
-	
+
 	// Check for (visibility OR modifier) + (name + colon OR relationship) pattern
 	hasVisibility := vis != ast.VisibilityDefault
 	hasModifier := p.atKeyword("ref") || p.atKeyword("readonly") || p.atKeyword("derived") || p.atKeyword("composite") || p.atKeyword("portion") || p.atKeyword("end")
-	
+
 	if hasVisibility || hasModifier {
 		mods := p.parseFeatureModifiers()
 		// Merge visibility into mods if it was parsed earlier
 		if hasVisibility {
 			mods.visibility = vis
 		}
-		
+
 		// Check for redefines statement after modifiers: `portion redefines name = expr;`
 		// This is shorthand for anonymous feature with modifiers + redefines relationship + value
 		if p.atKeyword("redefines") {
@@ -2017,13 +2017,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 					p.expect(lexer.Eq, "expected '=' in redefines statement")
 					value := p.ParseExpression()
 					p.accept2(lexer.Semicolon)
-					
+
 					u := &ast.Usage{
-						Kind: ast.UsagePart,
+						Kind:        ast.UsagePart,
 						IsComposite: mods.isComposite,
 						IsReference: mods.isReference,
-						IsDerived: mods.isDerived,
-						IsEnd: mods.isEnd,
+						IsDerived:   mods.isDerived,
+						IsEnd:       mods.isEnd,
 						Relationships: []*ast.Relationship{
 							{
 								Kind:   ast.RelRedefines,
@@ -2034,7 +2034,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 					}
 					u.NodeBase.NodeSpan = p.spanFrom(start)
 					u.SetLeadingTrivia(trivia)
-					
+
 					m := &ast.Membership{
 						Visibility: mods.visibility,
 						Member:     u,
@@ -2050,7 +2050,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 				break
 			}
 		}
-		
+
 		// Special case: end shortname [mult] feature name pattern
 		// Example: end self2 [1] feature sameThing: Anything
 		// Also: end [1] feature transferSource (no short name)
@@ -2062,7 +2062,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			var mult *ast.Multiplicity
 			var hasDefKeyword bool
 			var endRels []*ast.Relationship // relationships parsed before definition keyword
-			
+
 			// Parse optional short name (if not starting with '[')
 			if p.atNameOrKeyword() {
 				// Check if pattern matches: name [mult] (feature|occurrence|item|...)
@@ -2079,7 +2079,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 						ahead++ // past ]
 					}
 				}
-				
+
 				// Skip optional relationship clauses before definition keyword
 				// Pattern: end name[mult] subsets X feature Y
 				for ahead < 40 {
@@ -2129,7 +2129,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 						break // not a relationship keyword
 					}
 				}
-				
+
 				// Check if next token after (optional) multiplicity and relationships is a definition or usage keyword
 				nextTok := p.peekN(ahead)
 				isDefKeyword := false
@@ -2138,26 +2138,26 @@ func (p *Parser) parseBodyMember() ast.Node {
 					_, isUsage := usageKindKeywords[nextTok.KeywordID]
 					isDefKeyword = isDef || isUsage
 				}
-				
+
 				if isDefKeyword {
 					tok := p.advance()
 					if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName || tok.Kind == lexer.Keyword {
 						shortName = p.src.Text(tok.Span)
 						shortNameSpan = tok.Span
 					}
-					
+
 					// Parse optional multiplicity before the definition keyword
 					if p.at(lexer.LBracket) {
 						mult = p.parseMultiplicity()
 					}
-					
+
 					// Parse optional relationship clauses before definition keyword
 					// Pattern: end shortname[mult] subsets X feature Y
 					for p.atRelationshipKeyword() {
 						rel, _ := p.parseRelationships(true)
 						endRels = append(endRels, rel...)
 					}
-					
+
 					hasDefKeyword = true
 				}
 			} else if p.at(lexer.LBracket) {
@@ -2170,7 +2170,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 				}
 				if p.peekN(ahead).Kind == lexer.RBracket {
 					ahead++ // past ]
-					
+
 					// Skip optional relationship clauses before definition keyword
 					for ahead < 40 {
 						tok := p.peekN(ahead)
@@ -2214,7 +2214,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 							break
 						}
 					}
-					
+
 					nextTok := p.peekN(ahead)
 					isDefKeyword := false
 					if nextTok.Kind == lexer.Keyword {
@@ -2222,27 +2222,27 @@ func (p *Parser) parseBodyMember() ast.Node {
 						_, isUsage := usageKindKeywords[nextTok.KeywordID]
 						isDefKeyword = isDef || isUsage
 					}
-					
+
 					if isDefKeyword {
 						mult = p.parseMultiplicity()
-						
+
 						// Parse optional relationship clauses before definition keyword
 						for p.atRelationshipKeyword() {
 							rel, _ := p.parseRelationships(true)
 							endRels = append(endRels, rel...)
 						}
-						
+
 						hasDefKeyword = true
 					}
 				}
 			}
-			
+
 			// If we found a definition keyword, parse the full declaration
 			if hasDefKeyword {
 				// Now parse the actual feature/usage declaration
 				// The definition keyword (feature/occurrence/etc) will be consumed by parseDeclaration
 				decl := p.parseDeclaration(start)
-				
+
 				// If it's a usage, apply the short name, multiplicity, relationships, and end modifier
 				if u, ok := decl.(*ast.Usage); ok {
 					u.Ident.ShortName = shortName
@@ -2257,7 +2257,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 					u.IsEnd = true
 					u.Visibility = mods.visibility
 				}
-				
+
 				// Wrap in membership
 				mem := &ast.Membership{Visibility: vis, Member: decl}
 				mem.NodeSpan = p.spanFrom(start)
@@ -2267,7 +2267,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			// If no definition keyword found, fall through to handle as anonymous feature with modifiers
 			// Pattern: end ref name; - will be handled by anonymous feature parsing below
 		}
-		
+
 		// Check for name + colon (typed) OR direct relationship (anonymous) OR name + relationship OR name + semicolon OR name + multiplicity
 		hasNameAndType := p.atName() && p.peekN(1).Kind == lexer.Colon
 		hasRelationship := p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt) || p.atRelationshipKeyword()
@@ -2275,13 +2275,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 		hasNameOnly := p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 		hasNameAndMult := p.atName() && p.peekN(1).Kind == lexer.LBracket // name with multiplicity (e.g., ref payload [0..*])
 		// Allow 'var' keyword as name for anonymous features (common in actions/loops)
-		hasVarKeyword := p.atKeyword("var") && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon || 
+		hasVarKeyword := p.atKeyword("var") && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon ||
 			p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt ||
 			p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
-		
+
 		if hasNameAndType || hasRelationship || hasNameAndRelationship || hasNameOnly || hasNameAndMult || hasVarKeyword {
 			var id ast.Identification
-			
+
 			// Parse optional name
 			if hasNameAndType || hasNameAndRelationship || hasNameOnly || hasNameAndMult || hasVarKeyword {
 				tok := p.advance()
@@ -2297,22 +2297,22 @@ func (p *Parser) parseBodyMember() ast.Node {
 					p.advance() // consume ':'
 				}
 			}
-			
+
 			// Parse as anonymous usage (attribute by default)
 			u := &ast.Usage{
-				Kind:          ast.UsageAttribute,
-				Ident:         id,
-				Visibility:    mods.visibility,
-				IsReference:   mods.isReference,
-				IsDerived:     mods.isDerived,
-				IsComposite:   mods.isComposite,
-				IsEnd:         mods.isEnd,
-				IsChain:       mods.isChain,
-				Direction:     mods.direction,
-				IsOrdered:     mods.isOrdered,
-				IsNonunique:   mods.isNonunique,
+				Kind:        ast.UsageAttribute,
+				Ident:       id,
+				Visibility:  mods.visibility,
+				IsReference: mods.isReference,
+				IsDerived:   mods.isDerived,
+				IsComposite: mods.isComposite,
+				IsEnd:       mods.isEnd,
+				IsChain:     mods.isChain,
+				Direction:   mods.direction,
+				IsOrdered:   mods.isOrdered,
+				IsNonunique: mods.isNonunique,
 			}
-			
+
 			// If we consumed a colon, parse typing relationship(s)
 			// Support comma-separated types: : Type1, Type2, Type3
 			if hasNameAndType {
@@ -2327,12 +2327,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 					}
 				}
 			}
-			
+
 			// Parse optional multiplicity
 			if p.at(lexer.LBracket) {
 				u.Multiplicity = p.parseMultiplicity()
 			}
-			
+
 			// Parse post-multiplicity modifiers (ordered/nonunique)
 			postMods := p.parsePostModifiers()
 			if postMods.isOrdered {
@@ -2341,22 +2341,22 @@ func (p *Parser) parseBodyMember() ast.Node {
 			if postMods.isNonunique {
 				u.IsNonunique = true
 			}
-			
+
 			// Parse additional relationships
 			moreRels, conjugated := p.parseRelationships(true)
 			u.Relationships = append(u.Relationships, moreRels...)
 			u.IsConjugated = conjugated
-			
+
 			// Parse optional value (= expr or default expr)
 			if p.accept2(lexer.Eq) || p.acceptKeyword("default") {
 				u.Value = p.ParseExpression()
 			}
-			
+
 			// Parse body or semicolon
 			members, hasBody := p.parseDefUsageBody()
 			u.Members = members
 			u.HasBody = hasBody
-			
+
 			u.NodeSpan = p.spanFrom(start)
 			mem := &ast.Membership{Visibility: vis, Member: u}
 			mem.NodeSpan = p.spanFrom(start)
@@ -2365,7 +2365,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		}
 		// If not anonymous feature pattern, fallback to parseDeclaration below
 	}
-	
+
 	// Check for anonymous feature pattern without modifiers: name : Type
 	if p.atName() && nextKind == lexer.Colon {
 		var id ast.Identification
@@ -2374,25 +2374,25 @@ func (p *Parser) parseBodyMember() ast.Node {
 			id.Name = p.src.Text(tok.Span)
 			id.NameSpan = tok.Span
 		}
-		
+
 		// Parse as anonymous usage (attribute by default)
 		u := &ast.Usage{
 			Kind:  ast.UsageAttribute,
 			Ident: id,
 		}
-		
+
 		// Parse typing/relationships
 		p.advance() // consume ':'
 		u.Relationships = append(u.Relationships, &ast.Relationship{
 			Kind:   ast.RelTyping,
 			Target: p.parseQualifiedName(),
 		})
-		
+
 		// Parse optional multiplicity
 		if p.at(lexer.LBracket) {
 			u.Multiplicity = p.parseMultiplicity()
 		}
-		
+
 		// Parse post-multiplicity modifiers (ordered/nonunique)
 		postMods := p.parsePostModifiers()
 		if postMods.isOrdered {
@@ -2401,51 +2401,51 @@ func (p *Parser) parseBodyMember() ast.Node {
 		if postMods.isNonunique {
 			u.IsNonunique = true
 		}
-		
+
 		// Parse additional relationships
 		moreRels, conjugated := p.parseRelationships(true)
 		u.Relationships = append(u.Relationships, moreRels...)
 		u.IsConjugated = conjugated
-		
+
 		// Parse optional value (= expr or default expr)
 		if p.accept2(lexer.Eq) || p.acceptKeyword("default") {
 			u.Value = p.ParseExpression()
 		}
-		
+
 		// Parse body or semicolon
 		members, hasBody := p.parseDefUsageBody()
 		u.Members = members
 		u.HasBody = hasBody
-		
+
 		u.NodeSpan = p.spanFrom(start)
 		mem := &ast.Membership{Visibility: vis, Member: u}
 		mem.NodeSpan = p.spanFrom(start)
 		mem.SetLeadingTrivia(trivia)
 		return mem
 	}
-	
+
 	// Check for enum literal pattern: identifier = expr; OR identifier; OR identifier { body }
 	// Examples: low = 0.25; or pass; or open { doc } or done { doc } (keyword as name)
 	// But exclude usage-only keywords (inv, subject, etc.) - they're declarations, not enum literal names
 	// Also exclude constraint (has both def/usage forms but shouldn't be enum literal name)
-	isUsageOnlyKwForEnum := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
-		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
-		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "verify" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint" || 
-		p.peek().KeywordID == "interaction" || p.peek().KeywordID == "bool" || p.peek().KeywordID == "assoc" || p.peek().KeywordID == "struct" || 
+	isUsageOnlyKwForEnum := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" ||
+		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" ||
+		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "verify" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint" ||
+		p.peek().KeywordID == "interaction" || p.peek().KeywordID == "bool" || p.peek().KeywordID == "assoc" || p.peek().KeywordID == "struct" ||
 		p.peek().KeywordID == "class" || p.peek().KeywordID == "predicate")
 	if !isUsageOnlyKwForEnum && p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
 		seg, _ := p.parseNameSegmentRelaxed()
 		id := ast.Identification{Name: seg.Text, NameSpan: seg.Span}
-		
+
 		var value ast.Node
 		if p.at(lexer.Eq) {
 			p.advance() // consume '='
 			value = p.ParseExpression()
 		}
-		
+
 		// Parse body or semicolon
 		members, hasBody := p.parseDefUsageBody()
-		
+
 		u := &ast.Usage{
 			Kind:    ast.UsageEnumeration,
 			Ident:   id,
@@ -2454,20 +2454,20 @@ func (p *Parser) parseBodyMember() ast.Node {
 			HasBody: hasBody,
 		}
 		u.NodeSpan = p.spanFrom(start)
-		
+
 		mem := &ast.Membership{Visibility: vis, Member: u}
 		mem.NodeSpan = p.spanFrom(start)
 		mem.SetLeadingTrivia(trivia)
 		return mem
 	}
-	
+
 	// Check for name-before-keyword pattern: <name> <keyword> { ... }
 	// Example: assert constraint { ... }, require constraint { ... }
 	// <name> can be identifier OR keyword used as name
 	// But exclude usage-only keywords (they're declarations, not names)
 	// Also exclude direction modifiers (in/out - they're modifiers, not names)
-	isUsageOnlyKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" || 
-		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" || 
+	isUsageOnlyKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" ||
+		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" ||
 		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "interaction" ||
 		p.peek().KeywordID == "stakeholder" || p.peek().KeywordID == "frame" || p.peek().KeywordID == "actor" || p.peek().KeywordID == "expose" || p.peek().KeywordID == "render" ||
 		p.peek().KeywordID == "perform")
@@ -2527,23 +2527,23 @@ func (p *Parser) parseBodyMember() ast.Node {
 // Does NOT consume body expressions ({ in ... }) unlike ParseExpression().
 func (p *Parser) parseRelationshipTarget() ast.Node {
 	start := p.peek().Span.Offset
-	
+
 	// Start with qualified name (handles A::B::C)
 	// Use parseQualifiedNameRelaxed to allow keywords like "do" in feature chains (e.g., do.startShot)
 	base := p.parseQualifiedNameRelaxed()
 	if base == nil {
 		return nil
 	}
-	
+
 	// Check for dot extensions (feature chain)
 	if !p.at(lexer.Dot) {
 		return base // Just a qualified name
 	}
-	
+
 	// Build feature chain expression
 	var operand ast.Node = &ast.FeatureReference{Name: base}
 	operand.(*ast.FeatureReference).NodeSpan = base.NodeSpan
-	
+
 	for p.at(lexer.Dot) {
 		p.advance() // consume '.'
 		// Parse member name
@@ -2552,11 +2552,11 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 			p.error(p.peek().Span, "expected a name after '.'")
 			break
 		}
-		
+
 		// Create member name as QualifiedName
 		memberName := &ast.QualifiedName{Parts: []ast.NameSegment{seg}}
 		memberName.NodeSpan = p.spanFrom(p.peek().Span.Offset)
-		
+
 		chain := &ast.FeatureChainExpr{
 			Operand: operand,
 			Member:  memberName,
@@ -2564,7 +2564,7 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 		chain.NodeSpan = p.spanFrom(start)
 		operand = chain
 	}
-	
+
 	return operand
 }
 
@@ -2636,7 +2636,7 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 		// 3. `allocation name : Type { body }` - simple allocation with body, no connector ends
 		// Check for optional 'allocate' keyword (when kind keyword was 'allocation' not 'allocate')
 		p.acceptKeyword("allocate")
-		
+
 		if p.atKeyword("to") {
 			// Single-end form: allocate to target
 			p.advance() // consume "to"
@@ -2719,7 +2719,7 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 		return
 	}
 	u.ConnectorEnds = append(u.ConnectorEnds, from)
-	
+
 	// Check for optional "references" keyword after first end
 	// Pattern: end X references Y to end Z
 	if p.acceptKeyword("references") {
@@ -2728,7 +2728,7 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 			from.Reference = refTarget
 		}
 	}
-	
+
 	// Determine expected keyword based on usage kind
 	var expectedKeyword string
 	switch u.Kind {
@@ -2737,7 +2737,7 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 	default:
 		expectedKeyword = "to"
 	}
-	
+
 	if !p.acceptKeyword(expectedKeyword) {
 		p.error(p.peek().Span, fmt.Sprintf("expected '%s' between connector ends", expectedKeyword))
 		return
@@ -2747,7 +2747,7 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 		return
 	}
 	u.ConnectorEnds = append(u.ConnectorEnds, to)
-	
+
 	// Check for optional "references" keyword after second end
 	if p.acceptKeyword("references") {
 		refTarget := p.parseRelationshipTarget()
@@ -2761,24 +2761,24 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 func (p *Parser) parseConnectorEnd() *ast.ConnectorEnd {
 	start := p.peek().Span.Offset
 	ce := &ast.ConnectorEnd{}
-	
+
 	// Optional multiplicity
 	if p.at(lexer.LBracket) {
 		ce.Multiplicity = p.parseMultiplicity()
 	}
-	
+
 	// Target expression (qualified name or feature chain)
 	// Use parseRelationshipTarget to avoid consuming connector keywords (from/to)
 	ce.Target = p.parseRelationshipTarget()
 	if ce.Target == nil {
 		return nil
 	}
-	
+
 	// Optional relationships (e.g., ::> for interface binding)
 	// Parse relationships until we hit a stopping keyword (to/from/then/references) or terminator
 	rels, _ := p.parseRelationships(true)
 	ce.Relationships = rels
-	
+
 	ce.NodeSpan = p.spanFrom(start)
 	return ce
 }
@@ -2789,13 +2789,13 @@ func (p *Parser) parseConnectorFromTo(u *ast.Usage) {
 	if !p.acceptKeyword("from") {
 		return // Optional connector clause
 	}
-	
+
 	from := p.parseConnectorEnd()
 	if from == nil {
 		return
 	}
 	u.ConnectorEnds = append(u.ConnectorEnds, from)
-	
+
 	// Check for optional "references" keyword after from end
 	if p.acceptKeyword("references") {
 		refTarget := p.parseRelationshipTarget()
@@ -2803,18 +2803,18 @@ func (p *Parser) parseConnectorFromTo(u *ast.Usage) {
 			from.Reference = refTarget
 		}
 	}
-	
+
 	if !p.acceptKeyword("to") {
 		p.error(p.peek().Span, "expected 'to' between connector ends")
 		return
 	}
-	
+
 	to := p.parseConnectorEnd()
 	if to == nil {
 		return
 	}
 	u.ConnectorEnds = append(u.ConnectorEnds, to)
-	
+
 	// Check for optional "references" keyword after to end
 	if p.acceptKeyword("references") {
 		refTarget := p.parseRelationshipTarget()
@@ -2852,10 +2852,10 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 			// Typed declaration - parse as nested member
 			// Create a usage for the payload declaration
 			payloadUsage := &ast.Usage{
-				Kind:   ast.UsageAttribute, // default to attribute
+				Kind: ast.UsageAttribute, // default to attribute
 			}
 			payloadUsage.Ident = p.parseIdentification()
-			
+
 			// Parse typing relationship
 			if p.accept2(lexer.Colon) {
 				typeName := p.parseQualifiedName()
@@ -2866,12 +2866,12 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 					})
 				}
 			}
-			
+
 			// Parse optional value assignment: = expr
 			if p.accept2(lexer.Eq) {
 				payloadUsage.Value = p.ParseExpression()
 			}
-			
+
 			// Store payload usage as member (nested in flow)
 			u.Members = append(u.Members, payloadUsage)
 			// Also store reference in FlowEnds for compatibility (create QualifiedName from identifier)
@@ -2886,7 +2886,7 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 			fe.Payload = p.parseRelationshipTarget() // Allow feature chains, not just qualified names
 		}
 	}
-	
+
 	switch {
 	case p.acceptKeyword("from"):
 		if fe == nil {
@@ -2927,13 +2927,13 @@ func (p *Parser) parseTransitionUsageEnds(u *ast.Usage) {
 			u.ConnectorEnds = append(u.ConnectorEnds, end)
 		}
 	}
-	
+
 	// Parse "accept <param>" - this is body parameter, not connector end
 	if p.acceptKeyword("accept") {
 		// Parse parameter with optional name and type
 		var paramName string
 		var paramType *ast.QualifiedName
-		
+
 		if seg, ok := p.parseNameSegment(); ok {
 			paramName = seg.Text
 			if p.at(lexer.Colon) {
@@ -2941,22 +2941,22 @@ func (p *Parser) parseTransitionUsageEnds(u *ast.Usage) {
 				paramType = p.parseQualifiedName()
 			}
 		}
-		
+
 		// Store as body parameter in Members (similar to calc/function params)
 		// For now, create simple documentation node as placeholder
 		// Full implementation would need BodyParam support in Usage.Members
 		_ = paramName // use later when we extend AST
 		_ = paramType
 	}
-	
-	// Parse "via <end>" if present  
+
+	// Parse "via <end>" if present
 	if p.acceptKeyword("via") {
 		end := p.parseConnectorEnd()
 		if end != nil {
 			u.ConnectorEnds = append(u.ConnectorEnds, end)
 		}
 	}
-	
+
 	// Parse "then <end>"
 	if p.acceptKeyword("then") {
 		end := p.parseConnectorEnd()
@@ -3063,22 +3063,22 @@ func (p *Parser) parseMultiplicityBound() ast.Node {
 // Can appear multiple times. Returns slice of PrefixMetadata nodes.
 func (p *Parser) parseMetadataAnnotations() []*ast.PrefixMetadata {
 	var metadata []*ast.PrefixMetadata
-	
+
 	for p.at(lexer.At) {
 		start := p.peek().Span.Offset
 		p.advance() // consume '@'
-		
+
 		// Parse metadata type
 		metaType := p.parseQualifiedName()
 		if metaType == nil {
 			p.error(p.peek().Span, "expected metadata type after '@'")
 			break
 		}
-		
+
 		pm := &ast.PrefixMetadata{
 			Type: metaType,
 		}
-		
+
 		// Optional body: {prop = value; ...}
 		if p.at(lexer.LBrace) {
 			p.advance() // consume '{'
@@ -3099,10 +3099,10 @@ func (p *Parser) parseMetadataAnnotations() []*ast.PrefixMetadata {
 			p.expect(lexer.RBrace, "expected '}' after metadata body")
 			pm.Body = body
 		}
-		
+
 		pm.NodeSpan = p.spanFrom(start)
 		metadata = append(metadata, pm)
 	}
-	
+
 	return metadata
 }

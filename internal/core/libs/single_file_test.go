@@ -13,10 +13,10 @@ func TestSingleFile_RationalFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	p := parser.New(source.New("RationalFunctions.kerml", data))
 	_ = p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Logf("Parse diagnostics (%d):", len(p.Diagnostics))
 		for i, d := range p.Diagnostics {

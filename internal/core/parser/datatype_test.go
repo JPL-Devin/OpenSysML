@@ -52,7 +52,7 @@ func TestDatatypePatterns(t *testing.T) {
 			if m, ok := member.(*ast.Membership); ok {
 				member = m.Member
 			}
-			
+
 			pkg, ok := member.(*ast.Package)
 			if !ok {
 				t.Fatalf("expected Package, got %T", member)
@@ -67,7 +67,7 @@ func TestDatatypePatterns(t *testing.T) {
 			if m, ok := pkgMember.(*ast.Membership); ok {
 				pkgMember = m.Member
 			}
-			
+
 			// Parser should create Usage uniformly for all datatype patterns
 			usage, ok := pkgMember.(*ast.Usage)
 			if !ok {

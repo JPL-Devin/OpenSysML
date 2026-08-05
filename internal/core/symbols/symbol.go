@@ -28,7 +28,7 @@ const (
 	SymbolOccurrenceDef
 	SymbolIndividualDef
 	SymbolMetadataDef
-	SymbolMetaclass      // KerML metaclass (similar to metadata def)
+	SymbolMetaclass // KerML metaclass (similar to metadata def)
 	SymbolEnumerationDef
 	SymbolViewDef
 	SymbolViewpointDef
@@ -166,12 +166,12 @@ type Symbol struct {
 	LeadingTrivia []ast.Trivia
 
 	DocName string // name of the document that declares this symbol (stamped after Build)
-	
+
 	// AliasTargetFQN is the raw qualified name text of the alias target
 	// ("alias X for Y" → "Y"), populated for cached stdlib aliases where Decl=nil.
 	// Empty for non-aliases or live-parsed aliases (which use Decl instead).
 	AliasTargetFQN string
-	
+
 	// ShortName is the short name from Identification (e.g., "kg" for "kilogram").
 	// Populated for cached symbols where Decl=nil. Empty if no short name.
 	ShortName string

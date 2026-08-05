@@ -7,9 +7,9 @@ package ast
 // InitialNode is the entry point for action execution.
 type InitialNode struct {
 	NodeBase
-	Name      string          // optional identifier for edge referencing
-	Successor *QualifiedName  // optional target for implicit succession (from `first X then Y` syntax)
-	Guard     Node            // optional guard condition for succession
+	Name      string         // optional identifier for edge referencing
+	Successor *QualifiedName // optional target for implicit succession (from `first X then Y` syntax)
+	Guard     Node           // optional guard condition for succession
 }
 
 // FinalNode is the termination point for action execution.
@@ -47,7 +47,7 @@ type ActionExecutionNode struct {
 	NodeBase
 	Name       string
 	ActionRef  *QualifiedName // reference to nested action (mutually exclusive with Expression)
-	Expression Node            // inline expression (mutually exclusive with ActionRef)
+	Expression Node           // inline expression (mutually exclusive with ActionRef)
 }
 
 // AssignmentActionNode represents an assignment statement: assign target := value;
@@ -102,12 +102,12 @@ type StateRegion struct {
 type PseudostateKind int
 
 const (
-	PseudostateChoice PseudostateKind = iota // conditional branch
-	PseudostateJunction                       // merge point
-	PseudostateFork                           // parallel split
-	PseudostateJoin                           // parallel sync
-	PseudostateEntry                          // entry point (submachine)
-	PseudostateExit                           // exit point (submachine)
+	PseudostateChoice   PseudostateKind = iota // conditional branch
+	PseudostateJunction                        // merge point
+	PseudostateFork                            // parallel split
+	PseudostateJoin                            // parallel sync
+	PseudostateEntry                           // entry point (submachine)
+	PseudostateExit                            // exit point (submachine)
 )
 
 func (k PseudostateKind) String() string {
@@ -148,7 +148,7 @@ type ControlFlowEdge struct {
 	NodeBase
 	Source *QualifiedName // source node (typically DecisionNode)
 	Target *QualifiedName // target node
-	Guard  Node            // boolean guard expression
+	Guard  Node           // boolean guard expression
 }
 
 // ObjectFlowEdge is data flow between action parameters/pins (Tier 5).
@@ -322,7 +322,7 @@ type TerminateStatement struct {
 // Syntax: action <name> accept <param> : Type;
 type AcceptActionUsage struct {
 	NodeBase
-	Name       string
-	ParamName  string
-	ParamType  *QualifiedName
+	Name      string
+	ParamName string
+	ParamType *QualifiedName
 }

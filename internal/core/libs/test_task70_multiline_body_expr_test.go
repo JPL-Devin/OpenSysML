@@ -40,7 +40,7 @@ func TestTask70BodyExprMultiline(t *testing.T) {
 
 	p := parser.New(source.New("test.kerml", []byte(input)))
 	_ = p.ParseFile()
-	
+
 	t.Logf("Diagnostics: %d", len(p.Diagnostics))
 	t.Logf("Input length: %d bytes", len(input))
 	t.Logf("Char at 668: %q", string(input[668:669]))
@@ -53,7 +53,7 @@ func TestTask70BodyExprMultiline(t *testing.T) {
 		}
 		t.Logf("  - offset=%d (char=%q): %s", byteOffset, char, d.Message)
 	}
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Errorf("Expected clean parse, got %d errors", len(p.Diagnostics))
 	}

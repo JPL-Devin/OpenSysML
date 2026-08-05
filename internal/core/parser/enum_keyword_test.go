@@ -2,7 +2,7 @@ package parser
 
 import (
 	"testing"
-	
+
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
@@ -16,7 +16,7 @@ enum def StatusKind {
 	sf := source.New("test.sysml", []byte(input))
 	p := New(sf)
 	_ = p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		for _, d := range p.Diagnostics {
 			t.Errorf("%s", d.Message)

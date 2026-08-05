@@ -393,9 +393,9 @@ type Usage struct {
 
 	// Tier B connection/flow/port grammar. These are nil/zero for kinds
 	// that do not use them.
-	ConnectorEnds []*ConnectorEnd  // connection / interface / allocation usage ends
-	FlowEnds      *FlowEnds        // flow usage ends
-	IsConjugated  bool             // `~` conjugation on port / interface
+	ConnectorEnds []*ConnectorEnd // connection / interface / allocation usage ends
+	FlowEnds      *FlowEnds       // flow usage ends
+	IsConjugated  bool            // `~` conjugation on port / interface
 }
 
 // FlowEnds holds the ends of a flow usage: the `from`/`to` targets and an
@@ -411,8 +411,8 @@ type FlowEnds struct {
 // ConnectorEnd represents a single connector end with optional multiplicity.
 type ConnectorEnd struct {
 	NodeBase
-	Target       Node // QualifiedName or Expression (e.g., FeatureChainExpr for occ.startShot)
-	Multiplicity *Multiplicity
-	Reference    Node // Optional "references X" clause - QualifiedName or FeatureChainExpr
+	Target        Node // QualifiedName or Expression (e.g., FeatureChainExpr for occ.startShot)
+	Multiplicity  *Multiplicity
+	Reference     Node            // Optional "references X" clause - QualifiedName or FeatureChainExpr
 	Relationships []*Relationship // Optional relationships (e.g., ::> for interface binding)
 }

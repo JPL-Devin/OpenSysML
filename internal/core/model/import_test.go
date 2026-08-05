@@ -1,13 +1,13 @@
 package model
 
 import (
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"testing"
 )
 
 func TestVerdictKindWithActions(t *testing.T) {
 	ws := NewWorkspace()
-	
+
 	src := `package test {
 		private import VerificationCases::*;
 		
@@ -35,17 +35,17 @@ func TestVerdictKindWithActions(t *testing.T) {
 			return verdict : VerdictKind = evaluateData.verdict;
 		}
 	}`
-	
+
 	ws.Open("test.sysml", []byte(src), 1)
 	diags := ws.Diagnostics("test.sysml")
-	
+
 	t.Logf("Diagnostics: %d", len(diags))
 	for _, d := range diags {
 		if d.Severity == passes.SeverityError {
 			t.Logf("  [ERROR] %v", d.Message)
 		}
 	}
-	
+
 	// Check if VerdictKind is resolved
 	hasUnresolvedVerdictKind := false
 	for _, d := range diags {
@@ -53,7 +53,7 @@ func TestVerdictKindWithActions(t *testing.T) {
 			hasUnresolvedVerdictKind = true
 		}
 	}
-	
+
 	if hasUnresolvedVerdictKind {
 		t.Errorf("VerdictKind not resolved despite import VerificationCases::*")
 	}

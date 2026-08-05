@@ -1,9 +1,9 @@
 package libs
 
 import (
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"testing"
 )
 
 func TestOccurrencesSubsetStatements(t *testing.T) {
@@ -12,10 +12,10 @@ func TestOccurrencesSubsetStatements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
-	
+
 	p := parser.New(source.New("Occurrences.kerml", data))
 	_ = p.ParseFile()
-	
+
 	t.Logf("Diagnostics count: %d", len(p.Diagnostics))
 	for i, d := range p.Diagnostics {
 		if i < 20 { // Show first 20

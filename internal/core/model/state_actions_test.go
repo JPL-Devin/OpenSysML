@@ -6,7 +6,7 @@ import (
 
 func TestStateActionsExample(t *testing.T) {
 	ws := NewWorkspace()
-	
+
 	src := `package test {
 	attribute def VehicleStartSignal;
 	attribute def VehicleOnSignal;
@@ -40,10 +40,10 @@ func TestStateActionsExample(t *testing.T) {
 			then off;
 	}
 }`
-	
+
 	ws.Open("test.sysml", []byte(src), 1)
 	diags := ws.Diagnostics("test.sysml")
-	
+
 	t.Logf("Found %d diagnostics", len(diags))
 	for _, d := range diags {
 		t.Logf("  %v", d)

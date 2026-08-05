@@ -2,7 +2,7 @@ package libs
 
 import (
 	"testing"
-	
+
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
@@ -14,18 +14,18 @@ func TestCheckFileErrors(t *testing.T) {
 		"Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml",
 		"Kernel Libraries/Kernel Semantic Library/Links.kerml",
 	}
-	
+
 	src := &embedSource{}
 	for _, name := range files {
 		data, err := src.Read(name)
 		if err != nil {
 			t.Fatal(err)
 		}
-		
+
 		sf := source.New(name, data)
 		p := parser.New(sf)
 		_ = p.ParseFile()
-		
+
 		t.Logf("\n%s: %d errors", name, len(p.Diagnostics))
 		if len(p.Diagnostics) > 0 && len(p.Diagnostics) <= 10 {
 			for _, d := range p.Diagnostics {

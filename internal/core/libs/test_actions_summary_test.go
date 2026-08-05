@@ -18,15 +18,15 @@ func TestActionsErrorSummary(t *testing.T) {
 	_ = p.ParseFile()
 
 	t.Logf("Actions.sysml: %d diagnostics\n", len(p.Diagnostics))
-	
+
 	code := string(data)
-	
+
 	// Group errors by unique offset
 	offsetMap := make(map[int][]string)
 	for _, d := range p.Diagnostics {
 		offsetMap[d.Span.Offset] = append(offsetMap[d.Span.Offset], d.Message)
 	}
-	
+
 	// Print unique error locations with context
 	i := 1
 	for offset, messages := range offsetMap {
@@ -34,7 +34,7 @@ func TestActionsErrorSummary(t *testing.T) {
 		for _, msg := range messages {
 			t.Logf("  - %s", msg)
 		}
-		
+
 		// Show context (60 chars before and after)
 		start := offset - 60
 		if start < 0 {
@@ -44,7 +44,7 @@ func TestActionsErrorSummary(t *testing.T) {
 		if end > len(code) {
 			end = len(code)
 		}
-		
+
 		before := code[start:offset]
 		after := code[offset:end]
 		if offset < len(code) {

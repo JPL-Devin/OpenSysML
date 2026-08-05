@@ -13,17 +13,17 @@ func TestBaseDetail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
-	
+
 	p := parser.New(source.New("Base.kerml", data))
 	_ = p.ParseFile()
-	
+
 	t.Logf("Total diagnostics: %d\n", len(p.Diagnostics))
-	
+
 	for i, d := range p.Diagnostics {
 		t.Logf("\nDiagnostic %d:", i+1)
 		t.Logf("  Offset: %d", d.Span.Offset)
 		t.Logf("  Message: %s", d.Message)
-		
+
 		// Context
 		offset := d.Span.Offset
 		start := offset - 40

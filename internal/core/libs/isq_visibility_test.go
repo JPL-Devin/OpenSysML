@@ -1,9 +1,9 @@
 package libs
 
 import (
-	"testing"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"testing"
 )
 
 func TestISQMassValueVisibility(t *testing.T) {
@@ -11,24 +11,24 @@ func TestISQMassValueVisibility(t *testing.T) {
 	src := DefaultSource()
 	cache, _ := NewCache()
 	loader := NewLoader(src, cache)
-	
+
 	// Load ISQBase
 	loader.Load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx)
 	loader.Load("Domain Libraries/Quantities and Units/Quantities.sysml", idx)
 	loader.Load("Domain Libraries/Quantities and Units/MeasurementReferences.sysml", idx)
 	loader.Load("Domain Libraries/Quantities and Units/ISQBase.sysml", idx)
-	
+
 	// Check ISQBase::MassValue visibility
 	syms := idx.LookupQualified("ISQBase::MassValue")
 	if len(syms) == 0 {
 		t.Fatal("ISQBase::MassValue not found")
 	}
-	
+
 	sym := syms[0]
 	t.Logf("ISQBase::MassValue visibility: %v", sym.Visibility)
 	t.Logf("  VisibilityDefault=%v, VisibilityPublic=%v, VisibilityPrivate=%v",
 		ast.VisibilityDefault, ast.VisibilityPublic, ast.VisibilityPrivate)
-	
+
 	if sym.Visibility == ast.VisibilityPrivate {
 		t.Error("MassValue is marked private!")
 	}

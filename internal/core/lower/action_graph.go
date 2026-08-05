@@ -13,19 +13,19 @@ import (
 type ActionGraph struct {
 	// Nodes in the graph (InitialNode, FinalNode, ExecutionNode, etc.)
 	Nodes []ast.Node
-	
+
 	// Edges: source node → list of target nodes
 	Edges map[ast.Node][]ast.Node
-	
+
 	// Guards: source → target → guard expression
 	Guards map[ast.Node]map[ast.Node]ast.Node
-	
+
 	// DataFlows: source node → list of object flows
 	DataFlows map[ast.Node][]ObjectFlow
-	
+
 	// InitialNode (required)
 	Initial ast.Node
-	
+
 	// FinalNodes (may be multiple)
 	Finals []ast.Node
 }
@@ -47,7 +47,7 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 		DataFlows: make(map[ast.Node][]ObjectFlow),
 		Finals:    make([]ast.Node, 0),
 	}
-	
+
 	// Extract members from Usage or Definition
 	var members []ast.Node
 	switch n := actionDecl.(type) {
@@ -58,11 +58,11 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 	default:
 		return nil, fmt.Errorf("action must be Usage or Definition, got %T", actionDecl)
 	}
-	
+
 	// First pass: collect nodes
 	for _, member := range members {
 		actualMember := unwrapMembership(member)
-		
+
 		switch n := actualMember.(type) {
 		case *ast.InitialNode:
 			if graph.Initial != nil {
@@ -82,14 +82,14 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 			}
 		}
 	}
-	
+
 	// Note: Initial node is optional at graph construction time.
 	// The executor's initialize() will validate and return the error if missing.
-	
+
 	// Second pass: build edges
 	for _, member := range members {
 		actualMember := unwrapMembership(member)
-		
+
 		switch n := actualMember.(type) {
 		case *ast.InitialNode:
 			// Handle implicit successor from `first X then Y` syntax
@@ -109,7 +109,7 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 		case *ast.SuccessionEdge:
 			sourceNode := findNodeByName(graph.Nodes, n.Source)
 			targetNode := findNodeByName(graph.Nodes, n.Target)
-			
+
 			if sourceNode == nil {
 				return nil, fmt.Errorf("succession edge references undefined source node %v", n.Source)
 			}
@@ -120,7 +120,7 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 		case *ast.ControlFlowEdge:
 			sourceNode := findNodeByName(graph.Nodes, n.Source)
 			targetNode := findNodeByName(graph.Nodes, n.Target)
-			
+
 			if sourceNode == nil {
 				return nil, fmt.Errorf("control flow edge references undefined source %v", n.Source)
 			}
@@ -128,7 +128,7 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 				return nil, fmt.Errorf("control flow edge references undefined target %v", n.Target)
 			}
 			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
-			
+
 			// Store guard expression
 			if n.Guard != nil {
 				if graph.Guards[sourceNode] == nil {
@@ -139,14 +139,14 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 		case *ast.ObjectFlowEdge:
 			sourceNode, sourcePin := parsePinReference(graph.Nodes, n.Source)
 			targetNode, targetPin := parsePinReference(graph.Nodes, n.Target)
-			
+
 			if sourceNode == nil {
 				return nil, fmt.Errorf("object flow edge references undefined source %v", n.Source)
 			}
 			if targetNode == nil {
 				return nil, fmt.Errorf("object flow edge references undefined target %v", n.Target)
 			}
-			
+
 			graph.DataFlows[sourceNode] = append(graph.DataFlows[sourceNode], ObjectFlow{
 				SourcePin: sourcePin,
 				TargetPin: targetPin,
@@ -154,7 +154,7 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 			})
 		}
 	}
-	
+
 	return graph, nil
 }
 
@@ -171,7 +171,7 @@ func findNodeByName(nodes []ast.Node, qname *ast.QualifiedName) ast.Node {
 	if qname == nil || len(qname.Parts) == 0 {
 		return nil
 	}
-	
+
 	targetName := qname.Parts[len(qname.Parts)-1].Text
 	for _, node := range nodes {
 		nodeName := getNodeName(node)
@@ -211,17 +211,17 @@ func parsePinReference(nodes []ast.Node, qname *ast.QualifiedName) (ast.Node, st
 	if qname == nil || len(qname.Parts) == 0 {
 		return nil, ""
 	}
-	
+
 	if len(qname.Parts) == 1 {
 		// Just node name
 		node := findNodeByName(nodes, qname)
 		return node, ""
 	}
-	
+
 	// Node.pin format
 	nodeName := qname.Parts[0].Text
 	pinName := qname.Parts[1].Text
-	
+
 	nodeQname := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: nodeName}}}
 	node := findNodeByName(nodes, nodeQname)
 	return node, pinName

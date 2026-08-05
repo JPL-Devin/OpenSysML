@@ -1,9 +1,9 @@
 package libs
 
 import (
-	"testing"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"testing"
 )
 
 func TestPortsDetail(t *testing.T) {
@@ -12,10 +12,10 @@ func TestPortsDetail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	p := parser.New(source.New("Ports.sysml", data))
 	_ = p.ParseFile()
-	
+
 	t.Logf("Ports.sysml has %d diagnostics:", len(p.Diagnostics))
 	for i, d := range p.Diagnostics {
 		snippet := extractSnippet(string(data), d.Span.Offset, 50)

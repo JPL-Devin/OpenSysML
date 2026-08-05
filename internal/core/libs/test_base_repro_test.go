@@ -23,13 +23,13 @@ func TestBaseReproduction(t *testing.T) {
 		 */
 	}
 }`
-	
+
 	p := parser.New(source.New("base.kerml", []byte(code)))
 	_ = p.ParseFile()
 	t.Logf("Diagnostics: %d", len(p.Diagnostics))
 	for _, d := range p.Diagnostics {
 		t.Logf("  - offset=%d, %s", d.Span.Offset, d.Message)
-		
+
 		offset := d.Span.Offset
 		start := offset - 20
 		if start < 0 {

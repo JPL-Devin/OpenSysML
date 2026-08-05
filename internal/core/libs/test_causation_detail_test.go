@@ -14,16 +14,16 @@ func TestCausationDetail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read %s: %v", file, err)
 	}
-	
+
 	p := parser.New(source.New(file, data))
 	_ = p.ParseFile()
-	
+
 	t.Logf("File: %s", file)
 	t.Logf("Diagnostics: %d", len(p.Diagnostics))
 	for _, d := range p.Diagnostics {
 		t.Logf("  Offset %d: %s", d.Span.Offset, d.Message)
 	}
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Logf("\nShould be clean (succession first/then fixed)")
 	}

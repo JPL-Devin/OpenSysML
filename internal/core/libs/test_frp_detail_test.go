@@ -13,11 +13,11 @@ func TestFeatureReferencingPerformancesDetail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read file: %v", err)
 	}
-	
+
 	sf := source.New("FeatureReferencingPerformances.kerml", data)
 	p := parser.New(sf)
 	_ = p.ParseFile()
-	
+
 	t.Logf("FeatureReferencingPerformances.kerml: %d diagnostics", len(p.Diagnostics))
 	for i, d := range p.Diagnostics {
 		byteOffset := d.Span.Offset
@@ -35,9 +35,8 @@ func TestFeatureReferencingPerformancesDetail(t *testing.T) {
 			end = len(data)
 		}
 		context := string(data[start:end])
-		
+
 		t.Logf("  %d. offset=%d (char=%q): %s", i+1, byteOffset, char, d.Message)
 		t.Logf("     Context: %q", context)
 	}
 }
-

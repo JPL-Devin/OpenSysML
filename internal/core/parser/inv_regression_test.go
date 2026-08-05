@@ -2,7 +2,7 @@ package parser
 
 import (
 	"testing"
-	
+
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
@@ -12,11 +12,11 @@ function f {
 	inv { isZero(zero) }
 }
 `
-	
+
 	sf := source.New("test.sysml", []byte(input))
 	p := New(sf)
 	root := p.ParseFile()
-	
+
 	if len(p.Diagnostics) > 0 {
 		t.Errorf("Expected no errors, got %d:", len(p.Diagnostics))
 		for _, d := range p.Diagnostics {
@@ -24,7 +24,7 @@ function f {
 		}
 		t.Fail()
 	}
-	
+
 	if root == nil {
 		t.Fatal("ParseFile returned nil")
 	}

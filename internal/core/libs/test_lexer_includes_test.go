@@ -11,7 +11,7 @@ func TestLexerIncludes(t *testing.T) {
 	input := `includes(x, y)`
 	src := source.New("test.kerml", []byte(input))
 	lex := lexer.New(src)
-	
+
 	for {
 		tok := lex.Next()
 		t.Logf("Token: kind=%v, text=%q", tok.Kind, src.Text(tok.Span))

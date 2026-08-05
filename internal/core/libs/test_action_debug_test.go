@@ -16,7 +16,7 @@ func TestActionBodyStatementsDebug(t *testing.T) {
 
 	p := parser.New(source.New("test.sysml", []byte(input)))
 	_ = p.ParseFile()
-	
+
 	t.Logf("Diagnostics: %d", len(p.Diagnostics))
 	for _, d := range p.Diagnostics {
 		t.Logf("  offset=%d: %s", d.Span.Offset, d.Message)
