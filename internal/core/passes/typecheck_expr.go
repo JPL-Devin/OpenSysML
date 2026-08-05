@@ -159,10 +159,10 @@ func (ec *exprChecker) inferOperator(scope *symbols.Scope, e *ast.OperatorExpr) 
 		return ec.checkBinaryBoolean(scope, e)
 	case ast.OpAdd:
 		return ec.checkAddition(scope, e)
-	case ast.OpSub, ast.OpMul, ast.OpMod:
-		return ec.checkArithmetic(scope, e, false)
-	case ast.OpDiv, ast.OpPow:
-		return ec.checkArithmetic(scope, e, true)
+	case ast.OpSub, ast.OpMul, ast.OpMod, ast.OpPow:
+		return ec.checkArithmetic(scope, e, semantics.PrimWiden)
+	case ast.OpDiv:
+		return ec.checkArithmetic(scope, e, divisionResult)
 	case ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe:
 		return ec.checkComparison(scope, e)
 	case ast.OpEq, ast.OpNeq:
@@ -242,7 +242,26 @@ func (ec *exprChecker) checkAddition(scope *symbols.Scope, e *ast.OperatorExpr) 
 	return semantics.PrimUnknown
 }
 
-func (ec *exprChecker) checkArithmetic(scope *symbols.Scope, e *ast.OperatorExpr, fractional bool) semantics.PrimType {
+// divisionResult follows the kernel function library: Natural/Natural stays
+// Natural, Integer/Integer is Rational, wider types divide within themselves.
+func divisionResult(lhs, rhs semantics.PrimType) semantics.PrimType {
+	switch widened := semantics.PrimWiden(lhs, rhs); widened {
+	case semantics.PrimNatural:
+		return semantics.PrimNatural
+	case semantics.PrimInteger:
+		return semantics.PrimRational
+	default:
+		return widened
+	}
+}
+
+// checkArithmetic requires numeric operands and types the result with the
+// operator's own result rule.
+func (ec *exprChecker) checkArithmetic(
+	scope *symbols.Scope,
+	e *ast.OperatorExpr,
+	result func(lhs, rhs semantics.PrimType) semantics.PrimType,
+) semantics.PrimType {
 	lhs, rhs, ok := ec.operands(scope, e)
 	if !ok {
 		return semantics.PrimUnknown
@@ -254,11 +273,7 @@ func (ec *exprChecker) checkArithmetic(scope *symbols.Scope, e *ast.OperatorExpr
 		ec.errorf(e.Span(), "operator '%s' requires numeric operands, found %s and %s", e.Operator, lhs, rhs)
 		return semantics.PrimUnknown
 	}
-	if fractional {
-		// Division and exponentiation may leave the integer tower.
-		return semantics.PrimWiden(semantics.PrimWiden(lhs, rhs), semantics.PrimReal)
-	}
-	return semantics.PrimWiden(lhs, rhs)
+	return result(lhs, rhs)
 }
 
 func (ec *exprChecker) checkComparison(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
@@ -325,8 +340,10 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	if e.Operand != nil {
 		args = append([]ast.Node{e.Operand}, args...)
 	}
-	for _, arg := range args {
-		ec.infer(scope, arg)
+	// Typed once and reused by checkArguments, so nested errors report once.
+	argTypes := make([]semantics.PrimType, len(args))
+	for i, arg := range args {
+		argTypes[i] = ec.infer(scope, arg)
 	}
 	for _, arg := range e.NamedArgs {
 		ec.infer(scope, arg.Value)
@@ -338,19 +355,25 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	if !ok || sym == nil || !isBehaviorKind(sym.Kind) {
 		return semantics.PrimUnknown
 	}
-	params, owner, ok := ec.inParameters(sym)
+	params, ok := ec.effectiveInParameters(sym)
 	if !ok {
 		return semantics.PrimUnknown
 	}
-	ec.checkArguments(scope, e, sym, owner, args, params)
+	ec.checkArguments(e, sym, args, argTypes, params)
 	return semantics.PrimUnknown
 }
 
-func (ec *exprChecker) checkArguments(scope *symbols.Scope, e *ast.InvocationExpr, sym, owner *symbols.Symbol, args []ast.Node, params []*ast.Usage) {
+func (ec *exprChecker) checkArguments(
+	e *ast.InvocationExpr,
+	sym *symbols.Symbol,
+	args []ast.Node,
+	argTypes []semantics.PrimType,
+	params []parameter,
+) {
 	if len(e.NamedArgs) > 0 {
 		names := make(map[string]bool, len(params))
 		for _, p := range params {
-			names[p.Ident.Name] = true
+			names[p.usage.Ident.Name] = true
 		}
 		for _, arg := range e.NamedArgs {
 			if arg.Name == nil || len(arg.Name.Parts) != 1 {
@@ -364,7 +387,7 @@ func (ec *exprChecker) checkArguments(scope *symbols.Scope, e *ast.InvocationExp
 	}
 	required := 0
 	for _, p := range params {
-		if p.Value == nil {
+		if p.usage.Value == nil {
 			required++
 		}
 	}
@@ -376,15 +399,9 @@ func (ec *exprChecker) checkArguments(scope *symbols.Scope, e *ast.InvocationExp
 		ec.errorf(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
 		return
 	}
-	// Parameter types are named in the scope of the behavior that declares
-	// them, which is not the invoking one.
-	calleeScope := owner.Scope
-	if calleeScope == nil {
-		calleeScope = owner.OwnerScope
-	}
 	for i, arg := range args {
-		want := ec.declaredPrimType(calleeScope, params[i].Relationships)
-		got := ec.infer(scope, arg)
+		want := ec.declaredPrimType(params[i].scope(), params[i].usage.Relationships)
+		got := argTypes[i]
 		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
 			continue
 		}
@@ -404,26 +421,95 @@ func isBehaviorKind(k symbols.SymbolKind) bool {
 	return false
 }
 
-// inParameters returns the `in` parameters a calc/action is invoked with, in
-// declaration order. A behavior that declares none inherits its signature from
-// the type it specializes or is typed by, so the nearest supertype that does
-// declare parameters supplies them. It also returns the symbol that declares
-// them, whose scope their type names resolve in. ok is false when no signature
-// can be determined, in which case the invocation is left unchecked.
-func (ec *exprChecker) inParameters(sym *symbols.Symbol) ([]*ast.Usage, *symbols.Symbol, bool) {
-	if params := declaredInParameters(sym); len(params) > 0 {
-		return params, sym, true
+// parameter is one `in` parameter of an invoked behavior together with the
+// symbol declaring it, whose scope its type names resolve in.
+type parameter struct {
+	usage *ast.Usage
+	owner *symbols.Symbol
+}
+
+// scope returns the scope the parameter's type names resolve in, which is the
+// declaring behavior's, not the invoking one's.
+func (p parameter) scope() *symbols.Scope {
+	if p.owner.Scope != nil {
+		return p.owner.Scope
 	}
+	return p.owner.OwnerScope
+}
+
+// effectiveInParameters returns the `in` parameters a calc/action is invoked
+// with, in inherited declaration order. A behavior inherits the signature of the
+// types it specializes or is typed by; a parameter it declares itself replaces
+// the inherited one it redefines and is appended otherwise, so a specialization
+// refining only a subset of them keeps the full signature. ok is false when no
+// signature can be determined, in which case the invocation is left unchecked.
+func (ec *exprChecker) effectiveInParameters(sym *symbols.Symbol) ([]parameter, bool) {
+	var params []parameter
 	supers := ec.model.AllSupertypes(sym)
-	for _, super := range supers {
-		if params := declaredInParameters(super); len(params) > 0 {
-			return params, super, true
-		}
+	// AllSupertypes is nearest-first, so merge from the most general down.
+	for i := len(supers) - 1; i >= 0; i-- {
+		params = mergeParameters(params, supers[i])
+	}
+	params = mergeParameters(params, sym)
+	if len(params) > 0 {
+		return params, true
 	}
 	// A parameterless declaration with no supertypes really takes no
 	// arguments; with supertypes the signature may live somewhere the checker
 	// cannot see, so stay silent.
-	return nil, sym, len(supers) == 0 && sym.Decl != nil
+	return nil, len(supers) == 0 && sym.Decl != nil
+}
+
+// mergeParameters folds a symbol's own `in` parameters into an inherited list,
+// replacing the entry each one redefines and appending the rest.
+func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
+	declared := declaredInParameters(sym)
+	if len(declared) == 0 {
+		return inherited
+	}
+	merged := append([]parameter(nil), inherited...)
+	for _, u := range declared {
+		p := parameter{usage: u, owner: sym}
+		if i := indexOfRedefined(merged, u); i >= 0 {
+			merged[i] = p
+			continue
+		}
+		merged = append(merged, p)
+	}
+	return merged
+}
+
+// indexOfRedefined finds the inherited parameter a declaration redefines, named
+// by its `:>>` target when it has one and by its own name otherwise.
+func indexOfRedefined(params []parameter, u *ast.Usage) int {
+	names := redefinedNames(u)
+	if len(names) == 0 && u.Ident.Name != "" {
+		names = []string{u.Ident.Name}
+	}
+	for _, name := range names {
+		for i, p := range params {
+			if p.usage.Ident.Name == name {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// redefinedNames returns the unqualified names a usage redefines (`:>>`).
+func redefinedNames(u *ast.Usage) []string {
+	var names []string
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Kind != ast.RelRedefines {
+			continue
+		}
+		qn, ok := rel.Target.(*ast.QualifiedName)
+		if !ok || len(qn.Parts) == 0 {
+			continue
+		}
+		names = append(names, qn.Parts[len(qn.Parts)-1].Text)
+	}
+	return names
 }
 
 // declaredInParameters returns the `in`/`inout` features declared directly by a

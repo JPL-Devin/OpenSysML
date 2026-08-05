@@ -103,6 +103,31 @@ func TestExprDivisionOfStringsRejected(t *testing.T) {
 		"operator '/' requires numeric operands")
 }
 
+// The kernel function library declares Natural / Natural -> Natural and
+// Integer / Integer -> Rational, and Integer ** Natural -> Integer, so whole
+// results must remain bindable to whole-number features.
+func TestExprWholeNumberDivisionAndPowerOK(t *testing.T) {
+	wantNoDiags(t, `package P {
+	attribute q : ScalarValues::Natural = 7 / 2;
+	attribute p : ScalarValues::Integer = 3 ** 2;
+}`)
+}
+
+func TestExprIntegerDivisionIsRational(t *testing.T) {
+	wantOneDiag(t,
+		`package P {
+	attribute i : ScalarValues::Integer = -7;
+	attribute q : ScalarValues::Natural = i / 2;
+}`,
+		"cannot bind Rational value to a feature typed by Natural")
+}
+
+func TestExprRealDivisionStaysReal(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute q : ScalarValues::Integer = 1.5 / 2; }`,
+		"cannot bind Rational value to a feature typed by Integer")
+}
+
 func TestExprNotOnIntegerRejected(t *testing.T) {
 	wantOneDiag(t,
 		`package P { calc def c { return not 3; } }`,
@@ -168,6 +193,35 @@ func TestExprTransitionGuardMustBeBoolean(t *testing.T) {
 	}`, "transition guard must be Boolean, found Integer")
 }
 
+// A change-event condition is a bare expression in the parsed tree, so it must
+// be checked there rather than in the lowered ast.ChangeEvent. A bare name is
+// left alone: lowering reads it as a signal trigger, not a condition.
+func TestExprChangeEventConditionMustBeBoolean(t *testing.T) {
+	wantOneDiag(t, `package P {
+		part def M {
+			attribute temp : ScalarValues::Integer = 3;
+			state def S {
+				state a;
+				state b;
+				transition a to b when temp + 1;
+			}
+		}
+	}`, "change event condition must be Boolean, found Integer")
+}
+
+func TestExprChangeEventConditionOK(t *testing.T) {
+	wantNoDiags(t, `package P {
+		part def M {
+			attribute temp : ScalarValues::Integer = 3;
+			state def S {
+				state a;
+				state b;
+				transition a to b when temp > 5;
+			}
+		}
+	}`)
+}
+
 func TestExprTransitionGuardComparisonOK(t *testing.T) {
 	wantNoDiags(t, `package P {
 		part def M {
@@ -198,6 +252,13 @@ func TestExprInvocationTooManyArguments(t *testing.T) {
 	wantOneDiag(t,
 		`package P { `+calcAdd+` calc c { return add(1, 2, 3); } }`,
 		"add takes 2 argument(s), found 3")
+}
+
+// An argument expression is typed once, so an error inside it is reported once.
+func TestExprInvocationArgumentErrorReportedOnce(t *testing.T) {
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { return add(1 + "s", 2); } }`,
+		`operator '+' is not defined for Natural and String`)
 }
 
 func TestExprInvocationCorrectArityOK(t *testing.T) {
@@ -260,6 +321,29 @@ func TestExprInheritedParametersCounted(t *testing.T) {
 		calc def Add2 :> add;
 		calc c { return Add2(1, 2); }
 	}`)
+}
+
+// A specialization may redefine a subset of the inherited parameters; the
+// signature is still the full inherited one.
+func TestExprPartiallyRedefinedParametersKeepInheritedSignature(t *testing.T) {
+	wantNoDiags(t, `package P {
+		`+calcAdd+`
+		calc def AddPositive :> add {
+			in a :>> a : ScalarValues::Real;
+		}
+		calc c { return AddPositive(1, 2); }
+	}`)
+}
+
+// A redefined parameter's own type is what its argument is checked against.
+func TestExprRedefinedParameterTypeChecked(t *testing.T) {
+	wantOneDiag(t, `package P {
+		`+calcAdd+`
+		calc def AddText :> add {
+			in a :>> a : ScalarValues::String;
+		}
+		calc c { return AddText(1, 2); }
+	}`, "argument 1 of AddText expects String, found Natural")
 }
 
 func TestExprTypedCalcUsageInheritsParameters(t *testing.T) {

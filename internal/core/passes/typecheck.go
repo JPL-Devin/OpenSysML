@@ -85,14 +85,28 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.checkBoolean(scope, m.Condition, "condition of 'if'")
 	case *ast.WhileLoopActionNode:
 		tc.expr.checkBoolean(scope, m.Condition, "condition of 'while'")
-	case *ast.ChangeEvent:
-		tc.expr.checkBoolean(scope, m.Condition, "change event condition")
 	case *ast.TransitionMember:
 		tc.expr.checkBoolean(scope, m.Guard, "transition guard")
+		tc.checkTrigger(scope, m.Trigger)
 	case *ast.AssignmentActionNode:
 		tc.expr.infer(scope, m.Value)
 	case *ast.ActionExecutionNode:
 		tc.expr.infer(scope, m.Expression)
+	}
+}
+
+// checkTrigger types a transition trigger that is a change-event condition. The
+// parser leaves such a trigger as a bare expression — only lowering wraps it in
+// an ast.ChangeEvent — while signal and time triggers name an event and carry no
+// condition to check.
+func (tc *typeChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
+	switch t := trigger.(type) {
+	case nil:
+	case *ast.ChangeEvent:
+		tc.expr.checkBoolean(scope, t.Condition, "change event condition")
+	case *ast.FeatureReference, *ast.QualifiedName, *ast.TimeEvent, *ast.AcceptEvent, *ast.CallEvent:
+	default:
+		tc.expr.checkBoolean(scope, trigger, "change event condition")
 	}
 }
 

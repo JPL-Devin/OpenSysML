@@ -226,7 +226,9 @@ known, so unmodelled types never produce a false positive.
 | Comparison operand types (`< > <= >=`) | `passes/typecheck_expr.go` `checkComparison` | `TestExprComparisonOfBooleanRejected` | ✅ Faithful |
 | Disjoint `==`/`!=` operands (warning; `'=='` is declared over `Anything`) | `passes/typecheck_expr.go` `checkEquality` | `TestExprEqualityAcrossDisjointTypesWarns` | ✅ Faithful |
 | Boolean-valued contexts (constraint/assume/require, `if`/`while`, guards) | `passes/typecheck.go` `checkBehaviorMember` | `TestExprTransitionGuardMustBeBoolean` | ✅ Faithful |
-| Calc/action invocation arity, incl. inherited and arrow-form receiver | `passes/typecheck_expr.go` `inParameters`/`checkArguments` | `TestExprInvocationTooFewArguments` | ✅ Faithful |
+| Change-event conditions (`transition ... when <expr>`) | `passes/typecheck.go` `checkTrigger` | `TestExprChangeEventConditionMustBeBoolean` | ⚠️ Approximate (a bare-name trigger is a signal, so only expression conditions are checked) |
+| Division/exponentiation result types (`Natural/Natural -> Natural`, `Integer/Integer -> Rational`) | `passes/typecheck_expr.go` `divisionResult` | `TestExprWholeNumberDivisionAndPowerOK` | ✅ Faithful |
+| Calc/action invocation arity, incl. inherited, partially redefined (`:>>`), and arrow-form receiver | `passes/typecheck_expr.go` `effectiveInParameters`/`checkArguments` | `TestExprPartiallyRedefinedParametersKeepInheritedSignature` | ✅ Faithful |
 | Invocation argument types and named-argument names | `passes/typecheck_expr.go` `checkArguments` | `TestExprInvocationArgumentTypeMismatch` | ✅ Faithful |
 | No false positives on the shipped library and examples | corpus guard | `model/typecheck_expr_corpus_test.go` | ✅ Faithful |
 | Non-scalar conformance (parts, items, collections, enumerations) | — | — | ❌ Not Yet Implemented |
