@@ -1,9 +1,8 @@
 {
   "type": "state",
-  "symbol_fqn": "Test::Machine",
   "events": [
-    {"name": "go"}
+    {"signal": "go"}
   ],
-  "expected_states_visited": ["waiting", "active"],
-  "expected_final_state": "active"
+  "stateVisits": ["init", "waiting", "active", "done"],
+  "finalState": "done"
 }

@@ -287,7 +287,7 @@ func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge) (*Transiti
 
 // lowerTransitionMember converts a TransitionMember (parser output) to a Transition.
 // containingState is used as the source when member.Source is nil (sourceless accept...then).
-func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, containingState *ast.StateNode) (*Transition, error) {
+func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, containingState ast.Node) (*Transition, error) {
 	// TransitionMember has: Source (QualifiedName), Target (QualifiedName), Trigger, Guard, Effect ([]Node)
 	// Source and Target can be StateNode or PseudostateNode
 	// Source can be nil for sourceless transitions (accept...then) - use containingState
@@ -299,7 +299,29 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 		if containingState == nil {
 			return nil, fmt.Errorf("sourceless transition (accept...then) at top level has no containing state")
 		}
-		source = containingState
+
+		// containingState could be *ast.Usage (for state X { ... }) or *ast.StateNode
+		// Need to find the corresponding StateNode in graph.States
+		switch cs := containingState.(type) {
+		case *ast.StateNode:
+			source = cs
+		case *ast.Usage:
+			// Find the StateNode that corresponds to this Usage
+			// Match by checking if the Usage is the source of any state
+			for _, s := range graph.States {
+				// StateNode typically comes from the same parse tree - check identity
+				// Or match by name if available
+				if s.Name == cs.Ident.Name {
+					source = s
+					break
+				}
+			}
+			if source == nil {
+				return nil, fmt.Errorf("could not resolve containing state Usage %q to StateNode", cs.Ident.Name)
+			}
+		default:
+			return nil, fmt.Errorf("containing state has unexpected type %T", containingState)
+		}
 	} else {
 		sourceState := findStateByName(graph.States, member.Source)
 		if sourceState != nil {
@@ -407,7 +429,7 @@ func classifyTrigger(trigger ast.Node) ast.Node {
 // Handles top-level members and region members.
 // regionStates limits state lookup to states within a specific region (nil = all states).
 // containingState is the enclosing state for sourceless transitions (nil at top level).
-func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates []*ast.StateNode, containingState *ast.StateNode) error {
+func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates []*ast.StateNode, containingState ast.Node) error {
 
 	for _, member := range memberList {
 		actualMember := unwrapMembership(member)
@@ -461,6 +483,13 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 							graph.Transitions[sourceState] = append(graph.Transitions[sourceState], trans)
 						}
 					}
+				}
+			} else if n.Kind == ast.UsageState && len(n.Members) > 0 {
+				// Handle state usages (state X { ... }) - recurse into members
+				// This state usage can contain transitions (accept...then, etc.)
+				// Pass this Usage node as the containing state for sourceless transitions
+				if err := collectTransitions(graph, n.Members, nil, n); err != nil {
+					return err
 				}
 			}
 		case *ast.InitialNode:
