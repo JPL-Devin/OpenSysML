@@ -29,25 +29,33 @@ def test_get_binary_path():
 
 def test_download_binary():
     """Test binary download from GitHub releases."""
+    # Mock binary download
+    mock_binary_data = b'fake binary content'
+    actual_checksum = hashlib.sha256(mock_binary_data).hexdigest()
+    
+    # Mock checksum file download
+    mock_checksum_data = f"{actual_checksum}  sysml-grpc-linux-amd64\n".encode()
+    
     with patch('urllib.request.urlopen') as mock_urlopen:
-        # Mock HTTP response with context manager support
-        mock_response = Mock()
-        mock_response.read.return_value = b'fake binary content'
-        mock_response.__enter__ = Mock(return_value=mock_response)
-        mock_response.__exit__ = Mock(return_value=False)
-        mock_urlopen.return_value = mock_response
+        # First call: checksum file
+        # Second call: binary
+        mock_urlopen.side_effect = [
+            Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_checksum_data))), __exit__=Mock(return_value=False)),
+            Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_binary_data))), __exit__=Mock(return_value=False))
+        ]
         
-        with patch('builtins.open', mock_open()) as mock_file:
+        with patch('builtins.open', mock_open(read_data=mock_binary_data)):
             with patch('os.makedirs'):
                 with patch('os.chmod'):
-                    result = download_binary(version='v0.1.0')
-                    
-                    expected_path = get_binary_path()
-                    assert result == expected_path
-                    mock_urlopen.assert_called_once()
-                    # Verify URL format
-                    call_args = mock_urlopen.call_args[0][0]
-                    assert 'github.com/Open-MBEE/Systemica/releases/download/v0.1.0' in call_args
+                    with patch('os.rename'):
+                        result = download_binary(version='v0.1.0')
+                        
+                        expected_path = get_binary_path()
+                        assert result == expected_path
+                        assert mock_urlopen.call_count == 2
+                        # Verify URL format
+                        call_args = mock_urlopen.call_args_list[1][0][0]
+                        assert 'github.com/Open-MBEE/Systemica/releases/download/v0.1.0' in call_args
 
 
 def test_verify_checksum():
@@ -77,3 +85,67 @@ def test_ensure_binary_downloads():
             path = ensure_binary()
             assert path == '/fake/path/sysml-grpc'
             mock_download.assert_called_once()
+
+
+def test_download_binary_verifies_checksum():
+    """Test that download_binary fetches and verifies checksum."""
+    import pytest
+    version = 'v0.1.0'
+    github_repo = 'Open-MBEE/Systemica'
+    
+    # Mock binary download
+    mock_binary_data = b'fake binary content'
+    actual_checksum = hashlib.sha256(mock_binary_data).hexdigest()
+    
+    # Mock checksum file download
+    mock_checksum_data = f"{actual_checksum}  sysml-grpc-linux-amd64\n".encode()
+    
+    with patch('urllib.request.urlopen') as mock_urlopen:
+        # First call: checksum file
+        # Second call: binary
+        mock_urlopen.side_effect = [
+            Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_checksum_data))), __exit__=Mock(return_value=False)),
+            Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_binary_data))), __exit__=Mock(return_value=False))
+        ]
+        
+        with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
+            with patch('builtins.open', mock_open(read_data=mock_binary_data)):
+                with patch('os.makedirs'):
+                    with patch('os.chmod'):
+                        with patch('os.rename'):
+                            result = download_binary(version, github_repo)
+                            
+                            # Should have called urlopen twice (checksum + binary)
+                            assert mock_urlopen.call_count == 2
+                            
+                            # Verify checksum URL was constructed correctly
+                            checksum_url = str(mock_urlopen.call_args_list[0][0][0])
+                            assert '.sha256' in checksum_url
+
+
+def test_download_binary_fails_on_checksum_mismatch():
+    """Test that download fails if checksum doesn't match."""
+    import pytest
+    version = 'v0.1.0'
+    github_repo = 'Open-MBEE/Systemica'
+    
+    # Mock binary download
+    mock_binary_data = b'fake binary content'
+    
+    # Wrong checksum
+    wrong_checksum = 'deadbeef' * 8
+    mock_checksum_data = f"{wrong_checksum}  sysml-grpc-linux-amd64\n".encode()
+    
+    with patch('urllib.request.urlopen') as mock_urlopen:
+        mock_urlopen.side_effect = [
+            Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_checksum_data))), __exit__=Mock(return_value=False)),
+            Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_binary_data))), __exit__=Mock(return_value=False))
+        ]
+        
+        with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
+            with patch('builtins.open', mock_open(read_data=mock_binary_data)):
+                with patch('os.makedirs'):
+                    with patch('os.chmod'):
+                        with patch('os.remove'):
+                            with pytest.raises(RuntimeError, match="Checksum mismatch"):
+                                download_binary(version, github_repo)

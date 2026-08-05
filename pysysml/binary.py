@@ -4,6 +4,7 @@ import hashlib
 import os
 import platform
 import stat
+import urllib.error
 import urllib.request
 
 
@@ -51,52 +52,73 @@ def get_binary_path():
 
 
 def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
-    """Download sysml-grpc binary from GitHub releases.
+    """Download sysml-grpc binary from GitHub releases with checksum verification.
     
     Args:
-        version (str): Release tag (e.g. 'v0.1.0') or 'latest'
-        github_repo (str): GitHub repository (org/repo)
+        version (str): Release version tag (e.g., 'v0.1.0')
+        github_repo (str): GitHub repository (owner/repo)
     
     Returns:
         str: Path to downloaded binary
     
     Raises:
-        RuntimeError: If download fails
+        RuntimeError: If download fails or checksum mismatch
     """
-    os_name, arch = detect_platform()
-    binary_path = get_binary_path()
-    
-    # Construct GitHub release URL
-    # Format: https://github.com/Open-MBEE/Systemica/releases/download/v0.1.0/sysml-grpc-linux-amd64
     if version == 'latest':
         raise NotImplementedError(
-            "version='latest' not yet supported. Specify explicit version tag (e.g., 'v0.1.0')"
+            "version='latest' not yet supported. "
+            "Specify explicit version tag like 'v0.1.0'"
         )
     
-    binary_name = f"sysml-grpc-{os_name}-{arch}"
-    if os_name == 'windows':
+    goos, goarch = detect_platform()
+    binary_name = f'sysml-grpc-{goos}-{goarch}'
+    if goos == 'windows':
         binary_name += '.exe'
     
-    url = f"https://github.com/{github_repo}/releases/download/{version}/{binary_name}"
+    # Construct URLs
+    base_url = f'https://github.com/{github_repo}/releases/download/{version}'
+    binary_url = f'{base_url}/{binary_name}'
+    checksum_url = f'{base_url}/{binary_name}.sha256'
     
-    # Create directory if it doesn't exist
+    binary_path = get_binary_path()
     os.makedirs(os.path.dirname(binary_path), exist_ok=True)
     
-    # Download binary
     try:
-        with urllib.request.urlopen(url) as response:
-            data = response.read()
+        # Download checksum file first
+        with urllib.request.urlopen(checksum_url) as response:
+            checksum_content = response.read().decode('utf-8')
         
-        # Write to file
-        with open(binary_path, 'wb') as f:
-            f.write(data)
+        # Parse checksum (format: "hexdigest  filename\n")
+        expected_checksum = checksum_content.split()[0]
+        
+        # Download binary
+        with urllib.request.urlopen(binary_url) as response:
+            binary_data = response.read()
+        
+        # Write to temporary file first
+        temp_path = binary_path + '.tmp'
+        with open(temp_path, 'wb') as f:
+            f.write(binary_data)
+        
+        # Verify checksum
+        if not verify_checksum(temp_path, expected_checksum):
+            os.remove(temp_path)
+            raise RuntimeError(
+                f"Checksum mismatch for {binary_name}. "
+                f"Expected {expected_checksum}, but download does not match. "
+                f"Binary may be corrupted or tampered with."
+            )
+        
+        # Checksum valid - move to final location
+        os.rename(temp_path, binary_path)
         
         # Make executable
-        os.chmod(binary_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+        os.chmod(binary_path, 0o755)
         
         return binary_path
-    except Exception as e:
-        raise RuntimeError(f"Failed to download sysml-grpc binary: {e}")
+        
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Failed to download binary from {binary_url}: {e}")
 
 
 def verify_checksum(binary_path, expected_sha256):
