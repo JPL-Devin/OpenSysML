@@ -249,7 +249,7 @@ class TestLifecycleRobustness:
             os.remove(refcount_path)
         
         # First connection increments refcount to 1
-        with patch('pysysml.binary.ensure_binary') as mock_ensure:
+        with patch('pysysml.connection.ensure_binary') as mock_ensure:
             mock_ensure.return_value = get_binary_path()
             
             conn1 = pysysml.connect(auto_start=True)
