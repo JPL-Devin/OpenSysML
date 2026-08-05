@@ -147,5 +147,6 @@ def test_download_binary_fails_on_checksum_mismatch():
                 with patch('os.makedirs'):
                     with patch('os.chmod'):
                         with patch('os.remove'):
-                            with pytest.raises(RuntimeError, match="Checksum mismatch"):
+                            from pysysml.errors import ConnectionError
+                            with pytest.raises(ConnectionError, match="Checksum mismatch"):
                                 download_binary(version, github_repo)

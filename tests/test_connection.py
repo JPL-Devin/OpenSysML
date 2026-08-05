@@ -292,10 +292,11 @@ def test_ensure_service_timeout():
                     with patch.object(conn, '_probe_service', return_value=False):
                         with patch('subprocess.Popen'):
                             with patch('time.sleep'):  # Speed up test
+                                from pysysml.errors import ConnectionError
                                 try:
                                     conn._ensure_service()
-                                    assert False, "Expected RuntimeError"
-                                except RuntimeError as e:
+                                    assert False, "Expected ConnectionError"
+                                except ConnectionError as e:
                                     assert "Service failed to start" in str(e)
 
 
@@ -383,7 +384,8 @@ def test_concurrent_ensure_service_blocks():
     
     try:
         # Second process should timeout trying to acquire
-        with pytest.raises(RuntimeError, match="Timeout acquiring service lockfile"):
+        from pysysml.errors import ConnectionError
+        with pytest.raises(ConnectionError, match="Timeout acquiring service lockfile"):
             with patch('pysysml.connection.ensure_binary', return_value='/path/to/binary'):
                 with patch('os.path.exists', return_value=True):
                     with patch('subprocess.Popen') as mock_popen:
