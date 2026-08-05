@@ -247,13 +247,13 @@ func ValueToProto(val runtime.Value) *pb.Value {
 // InstanceToProto converts runtime.Instance to protobuf Instance.
 func InstanceToProto(inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
 	pbSlots := make(map[string]*pb.SlotValue)
-	
+
 	for name, slot := range inst.Slots {
 		pbSlot := &pb.SlotValue{
 			FeatureName:  name,
 			Materialized: slot.Materialized,
 		}
-		
+
 		// Check multiplicity to determine scalar vs collection
 		mult := slot.Feature.Multiplicity
 		if !mult.Upper.Infinite && mult.Upper.Value <= 1 {
@@ -267,13 +267,13 @@ func InstanceToProto(inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
 				}
 			}
 		}
-		
+
 		pbSlots[name] = pbSlot
 	}
-	
+
 	return &pb.Instance{
-		Id:            inst.ID,
-		TypeSymbolId:  idx.GetFQN(inst.Type),
-		Slots:         pbSlots,
+		Id:           inst.ID,
+		TypeSymbolId: idx.GetFQN(inst.Type),
+		Slots:        pbSlots,
 	}
 }
