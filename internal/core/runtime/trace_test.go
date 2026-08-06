@@ -111,15 +111,17 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 		}
 		traceOutput = trace.String()
 	}
-
 	if traceOutput == "" {
 		// Calcs are evaluated rather than executed, so there is no executor to
-		// attach a recorder to.
+		// attach a recorder to; cases with no behavioral symbol at all (pure
+		// constraints/requirements) likewise produce nothing to compare.
+		if *updateTraces {
+			t.Skipf("%s produces no trace", testName)
+		}
 		if lookupBehavioralSymbol(rootScope, ast.DefCalc, ast.UsageCalc) != nil {
 			t.Skip("calc tracing not implemented: calcs are evaluated, not executed")
 		}
-		// Outside update mode a golden exists, so a trace was expected.
-		unrecordable("%s has a golden trace but produced none", testName)
+		t.Fatalf("%s has a golden trace but produced none", testName)
 	}
 
 	// Update or compare golden
