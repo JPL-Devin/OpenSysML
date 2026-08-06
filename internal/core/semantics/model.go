@@ -97,10 +97,17 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		if !ok || target == nil {
 			continue
 		}
-		// Skip self-reference ONLY for redefines (nested feature case)
-		// Preserve self-reference for specializes/typing to detect cycles
+		// A redefinition names the feature it refines, which the redefining
+		// feature shadows in its own scope (`part redefines engine`), so a
+		// target resolving to sym itself must be looked up in what sym's owner
+		// inherits. Self-reference through specializes/typing is preserved so
+		// cycle detection still sees it.
 		if target == sym && rel.Kind == ast.RelRedefines {
-			continue
+			if redefined := m.inheritedFeature(sym, qn); redefined != nil {
+				target = redefined
+			} else {
+				continue
+			}
 		}
 		if seen[target] {
 			continue
@@ -149,8 +156,43 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 	}
 
+	// An untyped usage still specializes its standard-library base feature.
+	if len(out) == 0 {
+		if base := m.implicitBase(sym); base != nil {
+			out = append(out, base)
+		}
+	}
+
 	m.directSupers[sym] = out
 	return out
+}
+
+// inheritedFeature returns the feature that sym's owner inherits under the name
+// qn denotes, skipping the owner's own members so a redefinition does not find
+// itself. Only a single-segment name can denote an inherited feature this way;
+// a qualified one names its owner explicitly.
+func (m *Model) inheritedFeature(sym *symbols.Symbol, qn *ast.QualifiedName) *symbols.Symbol {
+	if len(qn.Parts) != 1 {
+		return nil
+	}
+	return m.inheritedFeatureNamed(sym, qn.Parts[0].Text)
+}
+
+// inheritedFeatureNamed is inheritedFeature for an already-extracted name.
+func (m *Model) inheritedFeatureNamed(sym *symbols.Symbol, name string) *symbols.Symbol {
+	if sym.OwnerScope == nil {
+		return nil
+	}
+	owner := sym.OwnerScope.Owner()
+	if owner == nil {
+		return nil
+	}
+	for _, sup := range m.AllSupertypes(owner) {
+		if found, ok := m.LookupMember(sup, name); ok && found != sym {
+			return found
+		}
+	}
+	return nil
 }
 
 // AllSupertypes returns the transitive closure of DirectSupertypes, excluding

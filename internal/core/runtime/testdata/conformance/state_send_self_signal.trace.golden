@@ -1,0 +1,6 @@
+exit: start
+enter: waiting (entry action)
+transition: start -> waiting
+exit: waiting
+enter: done
+transition: waiting -> done (event: accept Ping)

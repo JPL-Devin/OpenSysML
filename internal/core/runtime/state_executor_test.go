@@ -4,21 +4,9 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
-
-// Helper to convert TransitionEdge to lower.Transition for backward-compatible tests
-func edgeToTransition(edge *ast.TransitionEdge, sourceState, targetState *ast.StateNode) *lower.Transition {
-	return &lower.Transition{
-		Source:  sourceState,
-		Target:  targetState,
-		Trigger: edge.Trigger,
-		Guard:   edge.Guard,
-		Effect:  edge.Effect,
-	}
-}
 
 func TestStateExecutor_Creation(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
@@ -297,6 +285,59 @@ func TestStateExecutor_TimeEvent(t *testing.T) {
 	// Time should advance
 	if exec.currentTime != 10.0 {
 		t.Errorf("expected time 10.0, got %f", exec.currentTime)
+	}
+}
+
+// `accept at t` names an instant, so its event fires at t rather than t after
+// the state was entered.
+func TestStateExecutor_AbsoluteTimeEvent(t *testing.T) {
+	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
+
+	// stateA --[after 10]-> stateB --[at 15]-> stateC
+	stateA := &ast.StateNode{Name: "stateA", IsInitial: true}
+	stateB := &ast.StateNode{Name: "stateB"}
+	stateC := &ast.StateNode{Name: "stateC", IsFinal: true}
+
+	relative := &ast.TransitionEdge{
+		Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "stateA"}}},
+		Target:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "stateB"}}},
+		Trigger: &ast.TimeEvent{Duration: &ast.LiteralInteger{Value: "10"}},
+	}
+	absolute := &ast.TransitionEdge{
+		Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "stateB"}}},
+		Target:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "stateC"}}},
+		Trigger: &ast.TimeEvent{Duration: &ast.LiteralInteger{Value: "15"}, Absolute: true},
+	}
+
+	stateMachine := &symbols.Symbol{
+		Name: "AbsoluteTimeMachine",
+		Kind: symbols.SymbolStateUsage,
+		Decl: &ast.Usage{
+			Kind:    ast.UsageState,
+			Ident:   ast.Identification{Name: "AbsoluteTimeMachine"},
+			Members: []ast.Node{stateA, stateB, stateC, relative, absolute},
+		},
+	}
+
+	exec, err := newStateExecutor(ctx, stateMachine)
+	if err != nil {
+		t.Fatalf("create executor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	if err := exec.processNextEvent(); err != nil {
+		t.Fatalf("process relative event: %v", err)
+	}
+	if exec.currentTime != 10.0 {
+		t.Fatalf("expected time 10.0 after relative delay, got %f", exec.currentTime)
+	}
+
+	if exec.eventQueue.Len() != 1 {
+		t.Fatalf("expected the absolute time event to be scheduled, got %d events", exec.eventQueue.Len())
+	}
+	if next := exec.eventQueue.Peek(); next.Timestamp != 15.0 {
+		t.Errorf("expected absolute timestamp 15.0, got %f (relative would be 25.0)", next.Timestamp)
 	}
 }
 

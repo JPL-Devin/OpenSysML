@@ -1,6 +1,7 @@
 package passes
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -103,6 +104,31 @@ func TestExprDivisionOfStringsRejected(t *testing.T) {
 		"operator '/' requires numeric operands")
 }
 
+// The kernel function library declares Natural / Natural -> Natural and
+// Integer / Integer -> Rational, and Integer ** Natural -> Integer, so whole
+// results must remain bindable to whole-number features.
+func TestExprWholeNumberDivisionAndPowerOK(t *testing.T) {
+	wantNoDiags(t, `package P {
+	attribute q : ScalarValues::Natural = 7 / 2;
+	attribute p : ScalarValues::Integer = 3 ** 2;
+}`)
+}
+
+func TestExprIntegerDivisionIsRational(t *testing.T) {
+	wantOneDiag(t,
+		`package P {
+	attribute i : ScalarValues::Integer = -7;
+	attribute q : ScalarValues::Natural = i / 2;
+}`,
+		"cannot bind Rational value to a feature typed by Natural")
+}
+
+func TestExprRealDivisionStaysReal(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute q : ScalarValues::Integer = 1.5 / 2; }`,
+		"cannot bind Rational value to a feature typed by Integer")
+}
+
 func TestExprNotOnIntegerRejected(t *testing.T) {
 	wantOneDiag(t,
 		`package P { calc def c { return not 3; } }`,
@@ -168,6 +194,65 @@ func TestExprTransitionGuardMustBeBoolean(t *testing.T) {
 	}`, "transition guard must be Boolean, found Integer")
 }
 
+// A change-event condition is a bare expression in the parsed tree, so it must
+// be checked there rather than in the lowered ast.ChangeEvent. A bare name is
+// left alone: lowering reads it as a signal trigger, not a condition.
+func TestExprChangeEventConditionMustBeBoolean(t *testing.T) {
+	wantOneDiag(t, `package P {
+		part def M {
+			attribute temp : ScalarValues::Integer = 3;
+			state def S {
+				state a;
+				state b;
+				transition a to b when temp + 1;
+			}
+		}
+	}`, "change event condition must be Boolean, found Integer")
+}
+
+func TestExprChangeEventConditionOK(t *testing.T) {
+	wantNoDiags(t, `package P {
+		part def M {
+			attribute temp : ScalarValues::Integer = 3;
+			state def S {
+				state a;
+				state b;
+				transition a to b when temp > 5;
+			}
+		}
+	}`)
+}
+
+func TestExprTimedTransitionDelayIsNotACondition(t *testing.T) {
+	wantNoDiags(t, `package P {
+		part def M {
+			attribute period : ScalarValues::Integer = 10;
+			state def S {
+				state a {
+					accept after 10 then b;
+				}
+				state b {
+					accept at period then a;
+				}
+			}
+		}
+	}`)
+}
+
+func TestExprAcceptWhenConditionMustBeBoolean(t *testing.T) {
+	wantOneDiag(t, `package P {
+		part def M {
+			attribute temp : ScalarValues::Integer = 3;
+			state def S {
+				state a {
+					accept when temp then b;
+				}
+				state b;
+			}
+		}
+	}`, "change event condition must be Boolean, found Integer")
+}
+
 func TestExprTransitionGuardComparisonOK(t *testing.T) {
 	wantNoDiags(t, `package P {
 		part def M {
@@ -198,6 +283,13 @@ func TestExprInvocationTooManyArguments(t *testing.T) {
 	wantOneDiag(t,
 		`package P { `+calcAdd+` calc c { return add(1, 2, 3); } }`,
 		"add takes 2 argument(s), found 3")
+}
+
+// An argument expression is typed once, so an error inside it is reported once.
+func TestExprInvocationArgumentErrorReportedOnce(t *testing.T) {
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { return add(1 + "s", 2); } }`,
+		`operator '+' is not defined for Natural and String`)
 }
 
 func TestExprInvocationCorrectArityOK(t *testing.T) {
@@ -262,6 +354,61 @@ func TestExprInheritedParametersCounted(t *testing.T) {
 	}`)
 }
 
+// A specialization may redefine a subset of the inherited parameters; the
+// signature is still the full inherited one.
+func TestExprPartiallyRedefinedParametersKeepInheritedSignature(t *testing.T) {
+	wantNoDiags(t, `package P {
+		`+calcAdd+`
+		calc def AddPositive :> add {
+			in a :>> a : ScalarValues::Real;
+		}
+		calc c { return AddPositive(1, 2); }
+	}`)
+}
+
+// Parameters inherited from several supertypes keep the order the supertypes
+// were declared in, so `first` precedes `second` here.
+func TestExprMultipleSupertypesKeepDeclarationOrder(t *testing.T) {
+	const model = `package P {
+		calc def First { in first : ScalarValues::String; }
+		calc def Second { in second : ScalarValues::Integer; }
+		calc def Both :> First, Second;
+		calc c { return Both(%s); }
+	}`
+	wantNoDiags(t, fmt.Sprintf(model, `"s", 1`))
+	// Were the supertypes folded in reverse, `second` would come first and the
+	// String would be reported against it as argument 1 instead.
+	wantOneDiag(t, fmt.Sprintf(model, `1, "s"`),
+		"argument 2 of Both expects Integer, found String")
+}
+
+// A redefined parameter's own type is what its argument is checked against.
+func TestExprRedefinedParameterTypeChecked(t *testing.T) {
+	wantOneDiag(t, `package P {
+		`+calcAdd+`
+		calc def AddText :> add {
+			in a :>> a : ScalarValues::String;
+		}
+		calc c { return AddText(1, 2); }
+	}`, "argument 1 of AddText expects String, found Natural")
+}
+
+// A specialization may refine an inherited parameter under a new name, which
+// redefines it by position instead of extending the signature.
+func TestExprRenamedParameterRedefinesByPosition(t *testing.T) {
+	const model = `package P {
+		` + calcAdd + `
+		calc def Convert :> add {
+			in x : ScalarValues::String;
+		}
+		calc c { return Convert(%s); }
+	}`
+	// `x` redefines `a`, so the signature stays (x, b), not (a, b, x).
+	wantOneDiag(t, fmt.Sprintf(model, `1, 2`),
+		"argument 1 of Convert expects String, found Natural")
+	wantNoDiags(t, fmt.Sprintf(model, `"s", 2`))
+}
+
 func TestExprTypedCalcUsageInheritsParameters(t *testing.T) {
 	wantNoDiags(t, `package P {
 		`+calcAdd+`
@@ -281,9 +428,21 @@ func TestExprUnresolvedNameProducesNoTypeDiagnostic(t *testing.T) {
 	wantNoDiags(t, `package P { attribute x : ScalarValues::Integer = missing; }`)
 }
 
-func TestExprNonScalarTypeSkipped(t *testing.T) {
-	wantNoDiags(t, `package P {
+// A type with no scalar ancestor is outside the lattice, so the scalar rules
+// say nothing about it — but no literal is an instance of it either, which the
+// value rules report (see typecheck_value_test.go).
+func TestExprLiteralBoundToNonScalarType(t *testing.T) {
+	wantOneDiag(t, `package P {
 		attribute def Mass;
 		part def Car { attribute m : Mass = 5; }
-	}`)
+	}`, "cannot bind Natural value to a feature typed by Mass")
+}
+
+// Reaching a scalar through a user-declared type keeps the lattice rules, and
+// their more precise message, in force.
+func TestExprScalarSpecializationUsesLattice(t *testing.T) {
+	wantOneDiag(t, `package P {
+		attribute def Mass specializes ScalarValues::Integer;
+		part def Car { attribute m : Mass = 5.5; }
+	}`, "cannot bind Rational value to a feature typed by Integer")
 }

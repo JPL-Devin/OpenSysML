@@ -90,7 +90,7 @@ func (f *gitFetcher) Fetch(name string, dep Dep) (string, string, error) {
 		return target, sha, nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 		return "", "", err
 	}
 	args := []string{"clone", "--depth", "1"}
@@ -98,7 +98,10 @@ func (f *gitFetcher) Fetch(name string, dep Dep) (string, string, error) {
 		args = append(args, "--branch", rev)
 	}
 	args = append(args, dep.Git, target)
-	if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+	// The repository URL and revision come from the project's own sysml.toml, and
+	// are passed as separate argv entries, never through a shell.
+	cmd := exec.Command("git", args...) // #nosec G204
+	if out, err := cmd.CombinedOutput(); err != nil {
 		return "", "", fmt.Errorf("deps: %s: git clone failed: %v: %s", name, err, out)
 	}
 	sha, err := gitHeadSHA(target)
@@ -110,7 +113,9 @@ func (f *gitFetcher) Fetch(name string, dep Dep) (string, string, error) {
 
 // gitHeadSHA returns the resolved HEAD commit SHA of a checkout.
 func gitHeadSHA(dir string) (string, error) {
-	out, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	// dir is a checkout path this package created, passed as its own argv entry.
+	cmd := exec.Command("git", "-C", dir, "rev-parse", "HEAD") // #nosec G204
+	out, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}

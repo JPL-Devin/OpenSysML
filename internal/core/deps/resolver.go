@@ -108,6 +108,7 @@ func (r *Resolver) loadTree(root string, m *Manifest, idx *symbols.Index) error 
 		// Recurse into the dependency's own manifest, if present. A missing
 		// nested sysml.toml is not an error (leaf dependency).
 		nested := filepath.Join(dir, "sysml.toml")
+		// #nosec G304 -- dir is a dependency checkout this resolver created.
 		data, err := os.ReadFile(nested)
 		if err != nil {
 			continue // no nested manifest (or unreadable): treat as leaf

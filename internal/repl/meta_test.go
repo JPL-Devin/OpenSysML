@@ -54,3 +54,31 @@ func TestIsMeta(t *testing.T) {
 		t.Fatal("isMeta classification wrong")
 	}
 }
+
+// A body-expression parameter and a loop-body declaration exist only inside
+// their body, so the scope-tree search backing %eval must not surface them.
+func TestLookupInScopeTreeSkipsBodyLocalNames(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package P {
+		action def Sample {
+			in attribute samples;
+			assert constraint { samples->forAll { in bodyParam; bodyParam > 0 } }
+			loop action charging { } until true;
+		}
+	}`)
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		t.Fatal("no document scope")
+	}
+	if sym, _ := doc.Scope.LookupLocal("P"); sym == nil {
+		t.Fatal("package P not in the document scope")
+	}
+	for _, name := range []string{"bodyParam", "charging"} {
+		if sym := lookupInScopeTree(doc.Scope, name); sym != nil {
+			t.Errorf("%s is body-local and must not be found in the scope tree", name)
+		}
+	}
+	if sym := lookupInScopeTree(doc.Scope, "samples"); sym == nil {
+		t.Error("samples is a member of Sample and must still be found")
+	}
+}

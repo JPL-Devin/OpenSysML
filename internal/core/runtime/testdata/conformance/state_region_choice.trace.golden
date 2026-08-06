@@ -1,0 +1,9 @@
+exit: lstart
+enter: lidle
+transition: lstart -> lidle
+exit: rstart
+enter: rwatch
+transition: rstart -> rwatch
+exit: lidle
+enter: lfast
+transition: lidle -> lfast

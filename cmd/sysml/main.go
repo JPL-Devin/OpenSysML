@@ -118,18 +118,6 @@ func main() {
 	}
 }
 
-// quoteArg quotes an argument for shell-style parsing if it contains spaces.
-// This ensures paths with spaces are treated as single arguments.
-func quoteArg(s string) string {
-	// If the string contains spaces, quote it
-	if strings.Contains(s, " ") || strings.Contains(s, "\t") {
-		// Escape any existing quotes
-		s = strings.ReplaceAll(s, `"`, `\"`)
-		return `"` + s + `"`
-	}
-	return s
-}
-
 func runInteractive() error {
 	return runInteractiveWithFiles(nil)
 }

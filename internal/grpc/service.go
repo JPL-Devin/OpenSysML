@@ -47,6 +47,9 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 		filePath = "<content>"
 	case *pb.ParseFileRequest_FilePath:
 		filePath = src.FilePath
+		// #nosec G304 -- the client names the model file it wants parsed; reading
+		// arbitrary paths is the service's purpose, and it runs with the caller's
+		// own privileges.
 		data, err := os.ReadFile(filePath)
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, "file not found: %v", err)

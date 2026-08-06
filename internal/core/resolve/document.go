@@ -145,6 +145,106 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		// Final nodes have no references
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		// Control flow nodes have no references to resolve (names are just labels)
+	case *ast.ResultMember:
+		r.resolveExpr(scope, d.Expression)
+	case *ast.ConstraintMember:
+		r.resolveExpr(scope, d.Expression)
+	case *ast.AssumeMember:
+		r.resolveExpr(scope, d.Expression)
+	case *ast.RequireMember:
+		r.resolveExpr(scope, d.Expression)
+		r.walkMembers(scope, d.Body)
+	case *ast.ActorMember:
+		if d.TypeRef != nil {
+			r.ResolveQualified(scope, d.TypeRef)
+		}
+		r.resolveExpr(scope, d.BindingExpr)
+	case *ast.EntryMember:
+		r.walkMembers(scope, d.Actions)
+	case *ast.DoMember:
+		r.walkMembers(scope, d.Actions)
+	case *ast.ExitMember:
+		r.walkMembers(scope, d.Actions)
+	case *ast.StateNode:
+		// The state's own name is a declaration, not a reference. Its body
+		// resolves in the scope the state owns, which holds its substates and
+		// regions; features it reads still resolve outward from there.
+		body := scope
+		if child := r.childScope(scope, d); child != nil {
+			body = child
+		}
+		r.walkMembers(body, d.Entry)
+		r.walkMembers(body, d.Do)
+		r.walkMembers(body, d.Exit)
+		r.walkMembers(body, d.Substates)
+		for _, region := range d.Regions {
+			r.resolveDecl(body, region)
+		}
+	case *ast.StateRegion:
+		states := scope
+		if child := r.childScope(scope, d); child != nil {
+			states = child
+		}
+		r.walkMembers(states, d.States)
+	case *ast.TransitionMember:
+		// Source and target name states, which the state machine's own scope
+		// need not contain (a transition may cross into a region), so they are
+		// left to the lowering layer; the payload expressions are checkable.
+		// The guard and effect resolve against the parameters the transition's
+		// call trigger declares, which live in a scope of their own.
+		r.resolveTrigger(scope, d.Trigger)
+		body := symbols.CallTriggerScope(scope, d)
+		r.resolveExpr(body, d.Guard)
+		r.walkMembers(body, d.Effect)
+	case *ast.SendStatement:
+		r.resolveExpr(scope, d.Message)
+		r.resolveExpr(scope, d.Target)
+	case *ast.TerminateStatement:
+		r.resolveExpr(scope, d.Target)
+	case *ast.AssignmentActionNode:
+		r.resolveExpr(scope, d.Target)
+		r.resolveExpr(scope, d.Value)
+	case *ast.ActionExecutionNode:
+		if d.ActionRef != nil {
+			r.ResolveQualified(scope, d.ActionRef)
+		}
+		r.resolveExpr(scope, d.Expression)
+	case *ast.PerformActionNode:
+		r.resolveExpr(scope, d.ActionRef)
+	case *ast.WhileLoopActionNode:
+		// The loop owns its body's declarations, and its condition is checked
+		// against them: `loop { action charging; } until charging.done`.
+		body := scope
+		if child := r.childScope(scope, d); child != nil {
+			body = child
+		}
+		r.resolveExpr(body, d.Condition)
+		r.walkMembers(body, d.Body)
+	case *ast.IfActionNode:
+		r.resolveExpr(scope, d.Condition)
+		r.walkMembers(scope, d.ThenBody)
+		r.walkMembers(scope, d.ElseBody)
+	}
+}
+
+// resolveTrigger resolves the references a transition trigger carries.
+//
+// A bare name after `when` is classified by lowering as a signal, and signals
+// are injected by the event source rather than declared in the model, so bare
+// names are left unresolved here; resolving them would report every signal-
+// triggered transition as an unresolved reference.
+func (r *Resolver) resolveTrigger(scope *symbols.Scope, trigger ast.Node) {
+	switch t := trigger.(type) {
+	case nil:
+		return
+	case *ast.TimeEvent:
+		r.resolveExpr(scope, t.Duration)
+	case *ast.ChangeEvent:
+		r.resolveExpr(scope, t.Condition)
+	case *ast.QualifiedName, *ast.FeatureReference, *ast.AcceptEvent, *ast.CallEvent:
+		// Signal and call triggers name events, not model elements.
+	default:
+		r.resolveExpr(scope, trigger)
 	}
 }
 
@@ -249,7 +349,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 			// Try scope-based lookup first (for live-parsed definitions)
 			if parentSym.Scope != nil {
 				if sym, ok := parentSym.Scope.LookupLocal(featureName); ok {
-					qn.Parts[0].Sym = sym
+					r.recordPart(qn, 0, sym)
 					return
 				}
 			} else {
@@ -258,7 +358,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 				if r.idx != nil {
 					candidates := r.idx.LookupQualified(fqn)
 					if len(candidates) == 1 {
-						qn.Parts[0].Sym = candidates[0]
+						r.recordPart(qn, 0, candidates[0])
 						return
 					} else if len(candidates) > 1 {
 					} else {
@@ -331,7 +431,7 @@ func (r *Resolver) searchInheritedFeature(parentSym *symbols.Symbol, featureName
 		}
 
 		if sym, ok := gp.Scope.LookupLocal(featureName); ok {
-			qn.Parts[0].Sym = sym
+			r.recordPart(qn, 0, sym)
 			return true
 		}
 
@@ -372,7 +472,7 @@ func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featur
 		if r.idx != nil {
 			candidates := r.idx.LookupQualified(fqn)
 			if len(candidates) == 1 {
-				qn.Parts[0].Sym = candidates[0]
+				r.recordPart(qn, 0, candidates[0])
 				return true
 			}
 		}
@@ -424,21 +524,6 @@ func (r *Resolver) findImplicitSpecializations(scope *symbols.Scope, def *ast.De
 	return parents
 }
 
-// splitQualifiedName splits "A::B::C" into ["A", "B", "C"]
-func splitQualifiedName(name string) []string {
-	var parts []string
-	start := 0
-	for i := 0; i < len(name)-1; i++ {
-		if name[i] == ':' && name[i+1] == ':' {
-			parts = append(parts, name[start:i])
-			start = i + 2
-			i++ // skip second ':'
-		}
-	}
-	parts = append(parts, name[start:])
-	return parts
-}
-
 // resolveExpr walks an expression subtree resolving feature references and
 // classification type references.
 func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
@@ -486,13 +571,26 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			r.resolveExpr(scope, a)
 		}
 	case *ast.BodyExpr:
-		r.resolveExpr(scope, v.Result)
+		for i := range v.Params {
+			p := &v.Params[i]
+			if p.Type != nil {
+				r.ResolveQualified(scope, p.Type)
+			}
+			r.resolveExpr(scope, p.Value)
+		}
+		// A body expression's parameters live in a scope of their own, built
+		// into the document scope tree alongside the declarations.
+		r.resolveExpr(symbols.BodyExprScope(scope, v), v.Result)
 	case *ast.SequenceExpr:
 		for _, el := range v.Elements {
 			r.resolveExpr(scope, el)
 		}
 	case *ast.MetadataAccessExpr:
 		r.ResolveQualified(scope, v.Ref)
+	case *ast.QualifiedName:
+		// A bare name in expression position parses straight to a qualified
+		// name rather than to a FeatureReference wrapper.
+		r.ResolveQualified(scope, v)
 	}
 	// Literals (LiteralBool/String/Integer/Real/Infinity, NullExpr) have no refs.
 }
@@ -521,18 +619,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 	}
 
 	// Resolve first part using model.LookupMember if available, else scope.LookupLocal
-	var cur *symbols.Symbol
-	var ok bool
-
-	if r.model != nil {
-		// Use inheritance-aware lookup via semantics.Model
-		type modelLookup interface {
-			LookupMember(*symbols.Symbol, string) (*symbols.Symbol, bool)
-		}
-		if m, hasMethod := r.model.(modelLookup); hasMethod {
-			cur, ok = m.LookupMember(parentSym, qn.Parts[0].Text)
-		}
-	}
+	cur, ok := r.lookupMember(parentSym, qn.Parts[0].Text)
 
 	if !ok {
 		// Fall back to local scope lookup if model unavailable
@@ -553,21 +640,11 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 		})
 		return
 	}
-	qn.Parts[0].Sym = cur
+	r.recordPart(qn, 0, cur)
 
 	// Walk remaining parts via member lookup
 	for i := 1; i < len(qn.Parts); i++ {
-		var next *symbols.Symbol
-		var found bool
-
-		if r.model != nil {
-			type modelLookup interface {
-				LookupMember(*symbols.Symbol, string) (*symbols.Symbol, bool)
-			}
-			if m, hasMethod := r.model.(modelLookup); hasMethod {
-				next, found = m.LookupMember(cur, qn.Parts[i].Text)
-			}
-		}
+		next, found := r.lookupMember(cur, qn.Parts[i].Text)
 
 		if !found {
 			// Fall back to local scope lookup
@@ -589,62 +666,12 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 			return
 		}
 
-		qn.Parts[i].Sym = next
+		r.recordPart(qn, i, next)
 		cur = next
 	}
 
 	// Store final resolution in memo
 	r.memo[qn] = resolution{cur, true}
-}
-
-// getExprSymbol extracts the symbol referenced by an expression, used for
-// member access chains. Returns nil if expression doesn't resolve to a symbol.
-// For typed usages, returns the type's symbol (following typing relationships).
-func (r *Resolver) getExprSymbol(scope *symbols.Scope, e ast.Node) *symbols.Symbol {
-	switch v := e.(type) {
-	case *ast.FeatureReference:
-		if v.Name == nil {
-			return nil
-		}
-		sym, ok := r.ResolveQualified(scope, v.Name)
-		if !ok {
-			return nil
-		}
-		// If this is a typed usage, follow the type
-		if usage, isUsage := sym.Decl.(*ast.Usage); isUsage {
-			typeSym := r.getUsageType(sym.OwnerScope, usage)
-			if typeSym != nil {
-				return typeSym
-			}
-		}
-		return sym
-	case *ast.FeatureChainExpr:
-		// For chained access, get the final member's symbol
-		if v.Member == nil {
-			return nil
-		}
-		// First resolve the chain
-		r.resolveFeatureChain(scope, v)
-		// Get the operand's symbol, then lookup member
-		operandSym := r.getExprSymbol(scope, v.Operand)
-		if operandSym == nil || operandSym.Scope == nil {
-			return nil
-		}
-		memberSym, ok := r.ResolveQualified(operandSym.Scope, v.Member)
-		if !ok {
-			return nil
-		}
-		// Follow type if member is usage
-		if usage, isUsage := memberSym.Decl.(*ast.Usage); isUsage {
-			typeSym := r.getUsageType(memberSym.OwnerScope, usage)
-			if typeSym != nil {
-				return typeSym
-			}
-		}
-		return memberSym
-	default:
-		return nil
-	}
 }
 
 // getOperandSymbol returns the symbol of an expression operand WITHOUT following

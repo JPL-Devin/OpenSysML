@@ -18,6 +18,11 @@ type Index struct {
 	fqn           map[string][]*Symbol  // fully-qualified name -> symbols
 	contributions map[string][]fqnEntry // document name -> entries it added
 	wildcardMeta  map[string][]string   // package FQN -> target FQNs for wildcard imports
+
+	// reexported marks the (FQN, symbol) pairs that a wildcard import made
+	// visible rather than the namespace declaring them, so a lookup can prefer
+	// the declared member.
+	reexported map[string]map[*Symbol]bool
 }
 
 // NewIndex creates an empty index.
@@ -27,6 +32,7 @@ func NewIndex() *Index {
 		fqn:           make(map[string][]*Symbol),
 		contributions: make(map[string][]fqnEntry),
 		wildcardMeta:  make(map[string][]string),
+		reexported:    make(map[string]map[*Symbol]bool),
 	}
 }
 
@@ -73,6 +79,7 @@ func (idx *Index) ExpandWildcardImports() {
 				// Don't add duplicates
 				if !idx.hasFQN(reexportFQN, child) {
 					idx.fqn[reexportFQN] = append(idx.fqn[reexportFQN], child)
+					idx.markReexported(reexportFQN, child)
 					// Note: not added to contributions - these are synthetic
 				}
 
@@ -81,6 +88,7 @@ func (idx *Index) ExpandWildcardImports() {
 					shortReexportFQN := joinFQN(pkgFQN, child.ShortName)
 					if !idx.hasFQN(shortReexportFQN, child) {
 						idx.fqn[shortReexportFQN] = append(idx.fqn[shortReexportFQN], child)
+						idx.markReexported(shortReexportFQN, child)
 					}
 				}
 			}
@@ -143,6 +151,7 @@ func (idx *Index) RemoveDocument(name string) {
 		}
 		if len(syms) == 0 {
 			delete(idx.fqn, e.fqn)
+			delete(idx.reexported, e.fqn)
 		} else {
 			idx.fqn[e.fqn] = syms
 		}
@@ -272,10 +281,34 @@ func shortNameOf(decl ast.Node) string {
 	}
 }
 
-// LookupQualified returns all symbols registered under the exact
-// fully-qualified name.
+// LookupQualified returns the symbols registered under the exact
+// fully-qualified name. A namespace's own member shadows one of the same name
+// that a wildcard import re-exported through it, as in SI::min, which is SI's
+// minute and not the imported min function.
 func (idx *Index) LookupQualified(fqn string) []*Symbol {
-	return idx.fqn[fqn]
+	syms := idx.fqn[fqn]
+	imported := idx.reexported[fqn]
+	if len(imported) == 0 {
+		return syms
+	}
+	owned := make([]*Symbol, 0, len(syms))
+	for _, sym := range syms {
+		if !imported[sym] {
+			owned = append(owned, sym)
+		}
+	}
+	if len(owned) == 0 {
+		return syms
+	}
+	return owned
+}
+
+// markReexported records that fqn only names sym by way of a wildcard import.
+func (idx *Index) markReexported(fqn string, sym *Symbol) {
+	if idx.reexported[fqn] == nil {
+		idx.reexported[fqn] = make(map[*Symbol]bool)
+	}
+	idx.reexported[fqn][sym] = true
 }
 
 // LookupDirectChildren returns all symbols whose FQN is exactly prefix::name

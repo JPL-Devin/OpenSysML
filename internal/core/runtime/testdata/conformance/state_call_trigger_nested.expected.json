@@ -1,0 +1,24 @@
+{
+  "type": "state",
+  "events": [
+    {
+      "call": "turnOn"
+    },
+    {
+      "call": "turnOn",
+      "args": {
+        "level": {
+          "type": "Integer",
+          "value": 3
+        }
+      }
+    }
+  ],
+  "finalState": "done",
+  "stateVisits": [
+    "start",
+    "standby",
+    "lit",
+    "done"
+  ]
+}

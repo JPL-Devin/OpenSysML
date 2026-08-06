@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"math"
 	"unicode/utf8"
 
 	"go.lsp.dev/protocol"
@@ -26,7 +27,7 @@ func offsetToPosition(content []byte, offset int) protocol.Position {
 		}
 	}
 	char := utf16Len(content[lineStart:offset])
-	return protocol.Position{Line: uint32(line), Character: uint32(char)}
+	return protocol.Position{Line: uint32Clamp(line), Character: uint32Clamp(char)}
 }
 
 // positionToOffset converts a 0-based LSP Position (UTF-16 column) to a byte
@@ -69,6 +70,18 @@ func rangeToSpan(content []byte, r protocol.Range) source.Span {
 		end = start
 	}
 	return source.Span{Offset: start, Len: end - start}
+}
+
+// uint32Clamp narrows a line or column number to the protocol's uint32,
+// saturating rather than wrapping.
+func uint32Clamp(n int) uint32 {
+	if n < 0 {
+		return 0
+	}
+	if n > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(n)
 }
 
 // utf16Len returns the number of UTF-16 code units in b.

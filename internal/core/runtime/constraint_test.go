@@ -106,7 +106,7 @@ func TestConstraintEvaluation_AssertWithLiteral(t *testing.T) {
 		t.Fatal("AlwaysFalse not found")
 	}
 
-	satisfied, err = ctx.EvaluateConstraint(alwaysFalse, testPkg)
+	_, err = ctx.EvaluateConstraint(alwaysFalse, testPkg)
 	if err == nil {
 		t.Fatal("AlwaysFalse should fail")
 	}

@@ -60,6 +60,12 @@ func (m *Model) multiplicityRange(mult *ast.Multiplicity) (Range, bool) {
 	return Range{Lower: b, Upper: b}, true
 }
 
+// RangeOf extracts the multiplicity range declared on a usage node, or ok=false
+// when it declares none.
+func (m *Model) RangeOf(mult *ast.Multiplicity) (Range, bool) {
+	return m.multiplicityRange(mult)
+}
+
 // MultiplicityOf returns the extracted multiplicity range of a usage symbol, or
 // ok=false when the symbol is not a usage or declares no multiplicity.
 func (m *Model) MultiplicityOf(sym *symbols.Symbol) (Range, bool) {

@@ -20,6 +20,31 @@ var (
 
 	// ErrUninitializedSlot is returned when accessing a slot that has no value and no default.
 	ErrUninitializedSlot = errors.New("uninitialized slot")
+
+	// ErrNotACalc is returned when a calc invocation targets a symbol that is
+	// not a calc definition or usage.
+	ErrNotACalc = errors.New("not a calc")
+
+	// ErrCalcArity is returned when a calc invocation passes more arguments than
+	// the calc declares input parameters.
+	ErrCalcArity = errors.New("calc argument count mismatch")
+
+	// ErrUnboundParameter is returned when a calc input parameter receives
+	// neither an argument nor a declared default.
+	ErrUnboundParameter = errors.New("unbound parameter")
+
+	// ErrUnknownParameter is returned when a named argument does not name any
+	// input parameter of the invoked calc.
+	ErrUnknownParameter = errors.New("unknown parameter")
+
+	// ErrNoResultExpression is returned when a calc body declares no return
+	// expression, directly or by inheritance.
+	ErrNoResultExpression = errors.New("no result expression")
+
+	// ErrCalcRecursionLimit is returned when calc invocation nests deeper than
+	// maxCalcNestingDepth, which a recursive calc would otherwise do until the
+	// process ran out of stack.
+	ErrCalcRecursionLimit = errors.New("calc recursion limit exceeded")
 )
 
 // EvalError wraps an evaluation error with source context.
