@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
@@ -18,7 +19,9 @@ import (
 var updateTraces = flag.Bool("update-traces", false, "Update golden trace files")
 
 // TestExecutionTrace runs golden trace tests against conformance cases.
-// Traces capture step-by-step execution (token movements for actions, state transitions for states).
+// Traces capture step-by-step execution (token movements for actions, state
+// transitions for states, parameter binding and sub-expression order for calc
+// and constraint evaluation).
 // Use -update-traces flag to regenerate golden files after reviewing diffs.
 func TestExecutionTrace(t *testing.T) {
 	conformanceDir := filepath.Join("testdata", "conformance")
@@ -73,14 +76,37 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 	var traceOutput string
 
 	// -update-traces runs every conformance case, including known failures and
-	// cases that produce no trace at all (pure constraints and requirements), so
-	// there is nothing to record for those rather than anything to report.
+	// cases that produce no trace at all (requirements), so there is nothing to
+	// record for those rather than anything to report.
 	unrecordable := t.Fatalf
 	if *updateTraces {
 		unrecordable = t.Skipf
 	}
 
 	rootScope := idx.DocumentRoot(sysmlPath)
+
+	// Evaluation-based cases (calc, constraint) trace through the context rather
+	// than an executor, and the expected outcome supplies the calc arguments.
+	switch expected := loadExpectedOutcome(t, conformanceDir, testName); expected.Type {
+	case "calc":
+		ctx.SetTrace(trace)
+		calcSym := findBehavioralSymbol(t, rootScope, ast.DefCalc, ast.UsageCalc)
+		args := make([]Value, len(expected.Inputs))
+		for i, input := range expected.Inputs {
+			args[i] = expectedToRuntimeValue(t, input)
+		}
+		if _, err := ctx.InvokeCalc(calcSym, args, rootScope); err != nil {
+			unrecordable("invoke calc: %v", err)
+		}
+		traceOutput = trace.String()
+	case "constraint":
+		ctx.SetTrace(trace)
+		constraintSym := findBehavioralSymbol(t, rootScope, ast.DefConstraint, ast.UsageConstraint)
+		if _, err := ctx.EvaluateConstraint(constraintSym, rootScope); err != nil {
+			unrecordable("evaluate constraint: %v", err)
+		}
+		traceOutput = trace.String()
+	}
 
 	// Try action execution
 	if actionSym := lookupBehavioralSymbol(rootScope, ast.DefAction, ast.UsageAction); actionSym != nil {
@@ -112,14 +138,10 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 		traceOutput = trace.String()
 	}
 	if traceOutput == "" {
-		// Calcs are evaluated rather than executed, so there is no executor to
-		// attach a recorder to; cases with no behavioral symbol at all (pure
-		// constraints/requirements) likewise produce nothing to compare.
+		// Cases with no traced behavior at all (requirements) produce nothing to
+		// compare.
 		if *updateTraces {
 			t.Skipf("%s produces no trace", testName)
-		}
-		if lookupBehavioralSymbol(rootScope, ast.DefCalc, ast.UsageCalc) != nil {
-			t.Skip("calc tracing not implemented: calcs are evaluated, not executed")
 		}
 		t.Fatalf("%s has a golden trace but produced none", testName)
 	}
@@ -143,4 +165,23 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 			t.Errorf("trace mismatch for %s\n=== WANT ===\n%s\n=== GOT ===\n%s\n", testName, want, got)
 		}
 	}
+}
+
+// loadExpectedOutcome reads a case's conformance expectation, which tells the
+// trace harness how the case is driven. A case without one is untyped and only
+// the executor paths apply.
+func loadExpectedOutcome(t *testing.T, conformanceDir, testName string) ExpectedOutcome {
+	data, err := os.ReadFile(filepath.Join(conformanceDir, testName+".expected.json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ExpectedOutcome{}
+		}
+		t.Fatalf("read expected outcome: %v", err)
+	}
+
+	var expected ExpectedOutcome
+	if err := json.Unmarshal(data, &expected); err != nil {
+		t.Fatalf("parse expected outcome: %v", err)
+	}
+	return expected
 }

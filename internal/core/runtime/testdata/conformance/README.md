@@ -4,6 +4,7 @@ This directory contains behavioral execution conformance tests. Each test consis
 
 1. **`<case>.sysml`** - The behavioral model (action/state/calc/constraint/requirement)
 2. **`<case>.expected.json`** - Expected execution outcome
+3. **`<case>.trace.golden`** - Optional ordered execution trace (see [Golden Traces](#golden-traces))
 
 ## Schema Format
 
@@ -114,6 +115,32 @@ Supported types:
 3. Run `go test ./internal/core/runtime/ -run TestExecutionConformance -v`
 4. If test fails but behavior is correct, verify and update expected file
 5. If behavior is unimplemented, add case name to `known_failures.txt`
+
+## Golden Traces
+
+A case may also carry a `<case>.trace.golden` recording the order in which the
+case executes, checked by `TestExecutionTrace`. Calc and constraint cases record
+calc evaluation: parameter binding, every sub-expression, and results.
+
+```
+enter calc test::scale
+  bind x = 3 [argument]        # argument, or default when none is passed
+  bind factor = 4 [default]
+    eval feature x -> 3        # indentation is sub-expression nesting
+    eval feature factor -> 4
+  eval operator * -> 12
+exit calc test::scale -> 12    # or `-> error: <typed error>`
+```
+
+Entries are canonical, never positions or addresses: parameters bind in
+declaration order (inherited parameters first, at the position the declaring calc
+gives them), and an unordered value such as a set renders sorted. Regenerate with
+`go test ./internal/core/runtime/ -run TestExecutionTrace -update-traces` and
+review every diff — a reordered entry is a behavior change, not noise.
+
+Only cases that have a golden are trace-checked. State cases that broadcast an
+event over orthogonal regions have no order-stable trace yet, so they carry no
+golden rather than a flaky one.
 
 ## Known Failures
 
