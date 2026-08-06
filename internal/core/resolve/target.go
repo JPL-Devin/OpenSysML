@@ -42,7 +42,7 @@ func (r *Resolver) ResolveTarget(scope *symbols.Scope, target ast.Node) (*symbol
 // binds the name `'provide power'` in the very scope the target is looked up
 // in. The target names the outer feature, not the reference to it, so scopes
 // where the name binds to decl itself are skipped.
-func (r *Resolver) ReferenceScope(scope *symbols.Scope, decl ast.Node, target ast.Node) *symbols.Scope {
+func ReferenceScope(scope *symbols.Scope, decl ast.Node, target ast.Node) *symbols.Scope {
 	first := firstSegment(target)
 	if first == "" || decl == nil {
 		return scope
@@ -59,7 +59,7 @@ func (r *Resolver) ReferenceScope(scope *symbols.Scope, decl ast.Node, target as
 // ResolveReferenceTarget resolves the target of a reference subsetting owned by
 // decl, which is declared in scope.
 func (r *Resolver) ResolveReferenceTarget(scope *symbols.Scope, decl ast.Node, target ast.Node) (*symbols.Symbol, bool) {
-	return r.ResolveTarget(r.ReferenceScope(scope, decl, target), target)
+	return r.ResolveTarget(ReferenceScope(scope, decl, target), target)
 }
 
 // firstSegment returns the leading name segment of a relationship target.

@@ -288,7 +288,7 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 
 			at := scope
 			if rel.Kind == ast.RelReferences {
-				at = r.ReferenceScope(scope, decl, target)
+				at = ReferenceScope(scope, decl, target)
 			}
 
 			// Standard resolution in current scope

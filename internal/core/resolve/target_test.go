@@ -65,7 +65,7 @@ func TestReferenceScopeSkipsSelfBinding(t *testing.T) {
 	usage := perform.Decl.(*ast.Usage)
 	target := usage.Relationships[0].Target
 
-	if got := r.ReferenceScope(vehicle.Scope, usage, target); got != pkg.Scope {
+	if got := ReferenceScope(vehicle.Scope, usage, target); got != pkg.Scope {
 		t.Fatalf("ReferenceScope = %v, want the enclosing package scope", got)
 	}
 	sym, ok := r.ResolveReferenceTarget(vehicle.Scope, usage, target)

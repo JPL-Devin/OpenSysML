@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -85,13 +86,13 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.expr(scope, d.Condition)
 	case *ast.Definition:
 		c.prefixes(scope, d.Prefixes)
-		c.relationships(scope, d.Relationships)
+		c.relationships(scope, d, d.Relationships)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
 		}
 	case *ast.Usage:
 		c.prefixes(scope, d.Prefixes)
-		c.relationships(scope, d.Relationships)
+		c.relationships(scope, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
 		c.expr(scope, d.Value)
 		for _, end := range d.ConnectorEnds {
@@ -209,12 +210,19 @@ func (c *refCollector) trigger(scope *symbols.Scope, trigger ast.Node) {
 }
 
 // relationships collects the targets of typings, specializations, subsettings
-// and redefinitions (`: T`, `:> T`, `:>> T`).
-func (c *refCollector) relationships(scope *symbols.Scope, rels []*ast.Relationship) {
+// and redefinitions (`: T`, `:> T`, `:>> T`) owned by decl. A reference
+// subsetting is collected in the scope it resolves in, which skips decl's own
+// binding of the name it references (see resolve.ReferenceScope).
+func (c *refCollector) relationships(scope *symbols.Scope, decl ast.Node, rels []*ast.Relationship) {
 	for _, rel := range rels {
-		if rel != nil {
-			c.target(scope, rel.Target)
+		if rel == nil {
+			continue
 		}
+		at := scope
+		if rel.Kind == ast.RelReferences {
+			at = resolve.ReferenceScope(scope, decl, rel.Target)
+		}
+		c.target(at, rel.Target)
 	}
 }
 
