@@ -11,6 +11,9 @@ func Build(root *ast.RootNamespace) *Scope {
 		return rootScope
 	}
 	buildMembers(rootScope, root.Members)
+	// Body-expression parameter scopes hang off the scopes their expressions
+	// resolve against, so they are linked once the declarations exist.
+	buildBodyScopes(rootScope, root.Members)
 	return rootScope
 }
 
@@ -169,6 +172,15 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		}
 		scope.AddChild(regionScope)
 		buildMembers(regionScope, d.States)
+	case *ast.EntryMember:
+		// An entry/do/exit action is a feature of the state declaring it, so a
+		// named one (`entry action entryAction :>> 'entry';`) is a member of the
+		// state's scope rather than of the wrapper the parser puts it in.
+		buildMembers(scope, d.Actions)
+	case *ast.DoMember:
+		buildMembers(scope, d.Actions)
+	case *ast.ExitMember:
+		buildMembers(scope, d.Actions)
 	case *ast.PseudostateNode:
 		// fork/join/choice/junction/entry/exit named in a state body are
 		// transition endpoints, so they must be referenceable.
@@ -183,48 +195,13 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		// A loop is an anonymous action namespace: its body's declarations (and a
 		// `for` iteration variable) are members visible to the body and condition.
 		child := NewScope(scope, d)
+		child.markBodyLocal()
 		scope.AddChild(child)
 		buildMembers(child, d.Body)
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		// Control flow nodes without explicit names in AST - skip indexing
 		// (If these nodes gain name fields in future, register them here)
 	}
-}
-
-// NewBodyExprScope builds the scope a body expression's parameters declare into
-// (`c->forAll { in i : Positive; f(i) }`). Body expressions sit inside
-// expressions, so this scope is created on demand and not linked into parent.
-func NewBodyExprScope(parent *Scope, body *ast.BodyExpr) *Scope {
-	scope := NewScope(parent, body)
-	doc := docNameOf(parent)
-	for i := range body.Params {
-		p := &body.Params[i]
-		if p.Name == "" {
-			continue
-		}
-		// The parameter's own span, not the whole body's: the editor renames
-		// through NameSpan and jumps to DeclSpan.
-		scope.Define(p.Name, &Symbol{
-			Name:       p.Name,
-			Kind:       SymbolAttributeUsage,
-			Decl:       body,
-			DeclSpan:   p.Span,
-			NameSpan:   p.Span,
-			OwnerScope: scope,
-			DocName:    doc,
-		})
-	}
-	return scope
-}
-
-// docNameOf returns the document that declares the nearest enclosing symbol.
-func docNameOf(scope *Scope) string {
-	for s := scope; s != nil; s = s.parent {
-		if s.owner != nil && s.owner.DocName != "" {
-			return s.owner.DocName
-		}
-	}
-	return ""
 }
 
 // newSymbol builds a Symbol from an identification. scope is the child scope the

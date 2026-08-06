@@ -42,16 +42,6 @@ func (c *refCollector) childScope(scope *symbols.Scope, decl ast.Node) *symbols.
 	return nil
 }
 
-// bodyExprScope mirrors resolve.Resolver.bodyExprScope: a body expression's
-// parameters are its own, so a same-named outer declaration must not collect
-// references to them.
-func (c *refCollector) bodyExprScope(scope *symbols.Scope, body *ast.BodyExpr) *symbols.Scope {
-	if len(body.Params) == 0 {
-		return scope
-	}
-	return symbols.NewBodyExprScope(scope, body)
-}
-
 func (c *refCollector) walkMembers(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		decl := m
@@ -301,7 +291,9 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 			c.add(scope, p.Type)
 			c.expr(scope, p.Value)
 		}
-		c.expr(c.bodyExprScope(scope, v), v.Result)
+		// The same scope the resolver uses, so a reference to a parameter and
+		// its declaration denote one symbol.
+		c.expr(symbols.BodyExprScope(scope, v), v.Result)
 	case *ast.SequenceExpr:
 		for _, el := range v.Elements {
 			c.expr(scope, el)

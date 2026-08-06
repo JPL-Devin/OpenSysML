@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 80/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 20/100 files have semantic errors (38 total errors)  
+**Status:** 81/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 19/100 files have semantic errors (37 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -79,6 +79,24 @@ Each verdict is locked by a focused test in
 `internal/core/model/inherited_scope_resolve_test.go`, including the negative
 cases (a redefinition of an undeclared name, and body-local names referenced
 from outside their body, both still report).
+
+### Verdicts for the implicit-usage-typing re-pin (81/100)
+
+One entry drifted; every other file kept its exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `31. Constraints/Time Constraints` | 1 × `unresolved member: done` | Real fix: `state normal;` is now implicitly typed by `States::StateAction`, which declares `done`, so `TimeOf(normal.done)` resolves to that declaration. The negative counterpart (`normal.notAMember`) still reports — see `internal/core/model/implicit_typing_test.go`. |
+
+**Still recorded, and why implicit typing alone does not fix them**
+
+| File | Diagnostic | Remaining gap |
+|---|---|---|
+| `Conditional Succession Example-1` | `unresolved member: isWellFocused` | Implicit *redefinition*: `out item image;` inside `action focus : Focus` refines `Focus::image` (typed `Image`) by name. Untyped usages that shadow an inherited feature deliberately get no implicit base, so the type still comes from nowhere. |
+| `Action Performance Example`, `Allocation Usage Example` | `unresolved member: focus`/`shoot`/`generateTorque` | The members come from `perform action takePhoto references takePicture;` and `perform providePower.generateTorque;`: a `references` edge and the feature a `perform` statement contributes, neither of which is a generalization. |
+| `Time Slice and Snapshot Example`, `Individuals and Time Slices` | `unresolved reference: start`/`done` | Bugs in the OMG files (`startShot`/`endShot`), unchanged. |
 
 ---
 
@@ -154,7 +172,7 @@ These errors are **not implementation gaps** - the training files reference name
 
 | Category | Pass | Fail | Pass Rate |
 |----------|------|------|-----------|
-| **All Examples** | 71 | 29 | 71% |
+| **All Examples** | 81 | 19 | 81% |
 | **After filtering pedagogical gaps** | ~85 | ~15 | ~85% |
 
 **Note**: Many "failures" are incomplete examples meant for teaching, not executable code. Of the 29 files with errors:
@@ -166,9 +184,9 @@ These errors are **not implementation gaps** - the training files reference name
 
 ## Remaining Work for Full Training Example Support
 
-### Priority 1: Resolution of Inherited and Body-Local Features
-- Members a usage inherits from its definition (calc parameters and results, variants, occurrence features)
-- Names declared in a body: a loop action, an action inside a `for`, a parameter of an expression body
+### Priority 1: Implicit Redefinition and Non-Generalization Feature Sources
+- Implicit redefinition: an untyped usage whose name matches a feature its owner inherits takes that feature's type
+- Features contributed by `perform` statements and by `references` edges on a usage
 - Document correct import paths for Metadata, Variations, Requirements namespaces
 
 ### Priority 2: Type System Enhancements

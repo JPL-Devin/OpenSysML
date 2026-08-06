@@ -27,20 +27,19 @@ type StateGraph struct {
 	// RegionInitials: region → initial state
 	RegionInitials map[*ast.StateRegion]*ast.StateNode
 
-	// TopLevelRegions are the machine's own orthogonal regions, in declaration
-	// order. The order is observable — it is the order the regions are entered
-	// in — so it cannot be recovered from RegionInitials, which is a map.
-	TopLevelRegions []*ast.StateRegion
-
-	// Deferred: state → the triggers it defers while active, normalized the same
-	// way transition triggers are.
-	Deferred map[*ast.StateNode][]ast.Node
-
 	// ParentState: child → parent
 	ParentState map[*ast.StateNode]*ast.StateNode
 
 	// RegionOwner: region → owning composite state
 	RegionOwner map[*ast.StateRegion]*ast.StateNode
+
+	// Deferred: state → the triggers it defers while active, normalized the same
+	// way transition triggers are.
+	Deferred map[*ast.StateNode][]ast.Node
+
+	// TopRegions are the machine's own orthogonal regions, in declaration order.
+	// The order is observable: it is the order regions are entered and exited in.
+	TopRegions []*ast.StateRegion
 
 	// RegionOf: state → the region that declares it (fork/join need the region a
 	// target belongs to)
@@ -98,15 +97,11 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 
 		switch n := actualMember.(type) {
 		case *ast.StateNode:
-			if err := collectStates(graph, n, nil); err != nil {
-				return nil, err
-			}
+			collectStates(graph, n, nil)
 		case *ast.Usage:
 			// Handle state usages: state declarations parsed as Usage with Kind=UsageState
 			if n.Kind == ast.UsageState {
-				if err := collectStates(graph, stateNodeFromUsage(n), nil); err != nil {
-					return nil, err
-				}
+				collectStates(graph, stateNodeFromUsage(n), nil)
 			}
 		case *ast.SubstateMember:
 			// Substate declarations: state <name>;
@@ -115,34 +110,10 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 				Name: n.Name,
 			}
 			stateNode.NodeSpan = n.NodeSpan
-			if err := collectStates(graph, stateNode, nil); err != nil {
-				return nil, err
-			}
+			collectStates(graph, stateNode, nil)
 		case *ast.StateRegion:
-			// Top-level region: collect states within region
-			for _, regionMember := range n.States {
-				var stateNode *ast.StateNode
-				switch member := unwrapMembership(regionMember).(type) {
-				case *ast.StateNode:
-					stateNode = member
-				case *ast.SubstateMember:
-					stateNode = &ast.StateNode{Name: member.Name}
-					stateNode.NodeSpan = member.NodeSpan
-				case *ast.Usage:
-					if member.Kind != ast.UsageState {
-						continue
-					}
-					stateNode = stateNodeFromUsage(member)
-				default:
-					continue
-				}
-				if err := collectStates(graph, stateNode, nil); err != nil {
-					return nil, err
-				}
-				graph.RegionOf[stateNode] = n
-			}
-			// Store the region for later processing
-			// (We'll handle RegionInitials after collecting all states)
+			// Top-level region: collect its states, which no state is the parent of
+			collectRegionStates(graph, n, nil)
 		case *ast.PseudostateNode:
 			graph.Pseudostates[n.Name] = n
 		}
@@ -155,13 +126,10 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 		actualMember := unwrapMembership(member)
 		if region, ok := actualMember.(*ast.StateRegion); ok {
 			hasTopLevelRegions = true
-			// Top-level region
-			initialState := findInitialStateInRegion(graph, region)
-			if initialState == nil {
+			graph.TopRegions = append(graph.TopRegions, region)
+			if graph.RegionInitials[region] == nil {
 				return nil, fmt.Errorf("top-level region %s has no initial state", region.Name)
 			}
-			graph.RegionInitials[region] = initialState
-			graph.TopLevelRegions = append(graph.TopLevelRegions, region)
 		}
 	}
 
@@ -173,12 +141,17 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 			for _, region := range state.Regions {
 				graph.RegionOwner[region] = state
 
-				initialState := findInitialStateInRegion(graph, region)
-				if initialState == nil {
+				if graph.RegionInitials[region] == nil {
 					return nil, fmt.Errorf("region %s in state %s has no initial state", region.Name, state.Name)
 				}
-				graph.RegionInitials[region] = initialState
 			}
+		}
+	}
+
+	// Record the triggers each state defers, once every state is collected.
+	for _, state := range graph.States {
+		if err := collectDeferred(graph, state); err != nil {
+			return nil, err
 		}
 	}
 
@@ -297,22 +270,17 @@ func stateNodeFromUsage(usage *ast.Usage) *ast.StateNode {
 }
 
 // collectStates recursively collects states and builds parent relationships.
-func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNode) error {
+func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNode) {
 	graph.States = append(graph.States, state)
 	if parent != nil {
 		graph.ParentState[state] = parent
-	}
-	if err := collectDeferred(graph, state); err != nil {
-		return err
 	}
 
 	// Recursively collect substates
 	for _, substate := range state.Substates {
 		switch child := unwrapMembership(substate).(type) {
 		case *ast.StateNode:
-			if err := collectStates(graph, child, state); err != nil {
-				return err
-			}
+			collectStates(graph, child, state)
 		case *ast.PseudostateNode:
 			// A pseudostate declared inside a composite state belongs to it: that
 			// ownership is what a history pseudostate restores from, and without it
@@ -324,33 +292,48 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 
 	// Collect states in orthogonal regions
 	for _, region := range state.Regions {
-		for _, regionState := range region.States {
-			var childState *ast.StateNode
-			switch n := unwrapMembership(regionState).(type) {
-			case *ast.StateNode:
-				childState = n
-			case *ast.SubstateMember:
-				childState = &ast.StateNode{Name: n.Name}
-				childState.NodeSpan = n.NodeSpan
-			case *ast.Usage:
-				if n.Kind != ast.UsageState {
-					continue
-				}
-				childState = stateNodeFromUsage(n)
-			case *ast.PseudostateNode:
-				graph.Pseudostates[n.Name] = n
-				graph.PseudostateOwner[n] = state
-				continue
-			default:
+		collectRegionStates(graph, region, state)
+	}
+}
+
+// collectRegionStates collects the states an orthogonal region declares, records
+// which region declares each of them and which one the region starts in, and
+// assigns the region's pseudostates to the state that owns the region. parent is
+// the state owning the region, nil for the machine's own regions.
+//
+// Region members reach here as a state node, a bare `state <name>;` substate or a
+// state usage with a body, each of them possibly wrapped in a membership: a state
+// missed here is a state no transition can name.
+func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast.StateNode) {
+	for _, member := range region.States {
+		var state *ast.StateNode
+		switch n := unwrapMembership(member).(type) {
+		case *ast.StateNode:
+			state = n
+		case *ast.SubstateMember:
+			state = &ast.StateNode{Name: n.Name}
+			state.NodeSpan = n.NodeSpan
+		case *ast.Usage:
+			if n.Kind != ast.UsageState {
 				continue
 			}
-			if err := collectStates(graph, childState, state); err != nil {
-				return err
+			state = stateNodeFromUsage(n)
+		case *ast.PseudostateNode:
+			graph.Pseudostates[n.Name] = n
+			if parent != nil {
+				graph.PseudostateOwner[n] = parent
 			}
-			graph.RegionOf[childState] = region
+			continue
+		default:
+			continue
+		}
+
+		collectStates(graph, state, parent)
+		graph.RegionOf[state] = region
+		if state.IsInitial && graph.RegionInitials[region] == nil {
+			graph.RegionInitials[region] = state
 		}
 	}
-	return nil
 }
 
 // collectDeferred records the triggers a state defers, normalized the same way
@@ -372,18 +355,6 @@ func collectDeferred(graph *StateGraph, state *ast.StateNode) error {
 			graph.Deferred[state] = append(graph.Deferred[state], typed)
 		default:
 			return fmt.Errorf("state %s defers a %T trigger: only signal and call triggers can be deferred", state.Name, typed)
-		}
-	}
-	return nil
-}
-
-// findInitialStateInRegion finds the initial state in a region. It searches the
-// states already collected, so it returns the node the rest of the graph is
-// keyed by rather than a second copy of a state declared with a body.
-func findInitialStateInRegion(graph *StateGraph, region *ast.StateRegion) *ast.StateNode {
-	for _, state := range graph.States {
-		if state.IsInitial && graph.RegionOf[state] == region {
-			return state
 		}
 	}
 	return nil
@@ -688,8 +659,9 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 				return err
 			}
 		case *ast.StateRegion:
-			// The states of this region are the ones collection already keyed to
-			// it, whatever notation declared them.
+			// The states this region declares, in collection order: a transition
+			// declared inside a region names them, and collecting states already
+			// recorded which region declares each one.
 			var statesInRegion []*ast.StateNode
 			for _, state := range graph.States {
 				if graph.RegionOf[state] == n {

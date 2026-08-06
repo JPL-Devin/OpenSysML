@@ -1,0 +1,8 @@
+{
+  "type": "state",
+  "finalState": "stopped",
+  "stateVisits": ["lstart", "rstart", "lwork", "rwork", "stopped"],
+  "outputs": {
+    "exits": {"type": "Integer", "value": 11}
+  }
+}

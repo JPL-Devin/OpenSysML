@@ -55,3 +55,31 @@ func TestBuildConnectorEndsDefineNoSymbols(t *testing.T) {
 		t.Fatalf("expected 3 child scopes (a, b, c), got %d", got)
 	}
 }
+
+// An entry/do/exit action a state declares by name is a feature of that state,
+// as the standard library's StateAction relies on, so it must be a member of
+// the state's scope and not disappear into the parser's entry/do/exit wrapper.
+func TestBuildNamedEntryDoExitActionsAreStateMembers(t *testing.T) {
+	scope := buildScope(t, `abstract state def StateAction {
+		doc
+		/* base */
+
+		entry action entryAction :>> 'entry';
+		do action doAction :>> 'do';
+		exit action exitAction :>> 'exit';
+	}`)
+
+	syms := scope.LookupLocalAll("StateAction")
+	if len(syms) != 1 {
+		t.Fatalf("expected 1 symbol for StateAction, got %d", len(syms))
+	}
+	state := syms[0].Scope
+	if state == nil {
+		t.Fatal("StateAction has no scope")
+	}
+	for _, name := range []string{"entryAction", "doAction", "exitAction"} {
+		if got := len(state.LookupLocalAll(name)); got != 1 {
+			t.Errorf("StateAction declares %d symbols named %q, want 1", got, name)
+		}
+	}
+}
