@@ -1,0 +1,101 @@
+name: PR
+
+# Pull requests only: pushes and tags are covered by the CircleCI config, and
+# this workflow deliberately mirrors only its build-test workflow, not release.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Check gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run static analysis (staticcheck + gosec)
+        run: make lint
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Build binaries
+        run: |
+          make build \
+            VERSION="pr-${{ github.event.pull_request.number }}" \
+            COMMIT="$(git rev-parse --short HEAD)" \
+            BUILD_TIME="$(date -u '+%Y-%m-%d_%H:%M:%S')" \
+            GO_VERSION="$(go version | awk '{print $3}')"
+
+      - name: Verify binaries
+        run: |
+          ./bin/sysml --version
+          ./bin/sysml-lsp --version
+          ls -lh bin/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: bin/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.txt
+
+  python-test:
+    name: Python client tests
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: bin
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install sysml-grpc binary
+        run: |
+          mkdir -p ~/.pysysml/bin
+          cp bin/sysml-grpc ~/.pysysml/bin/
+          chmod +x ~/.pysysml/bin/sysml-grpc
+
+      - name: Install Python package
+        working-directory: python
+        run: |
+          pip install -e .
+          pip install pytest pytest-mock
+
+      - name: Run Python tests
+        working-directory: python
+        run: pytest tests/ -v
+
+      - name: Verify import
+        run: python3 -c "import pysysml; print(f'pysysml {pysysml.__version__} imported successfully')"
