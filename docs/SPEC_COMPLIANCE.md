@@ -363,7 +363,7 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
 - Conformance: 28/28 cases passing
-- Training examples: 63/100 clean (37 with pedagogical gaps or OMG bugs)
+- Training examples: 71/100 clean (29 with pedagogical gaps or OMG bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
 
 ---

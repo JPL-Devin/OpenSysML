@@ -4,10 +4,11 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 63/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 37/100 files have semantic errors (85 total errors)  
+**Status:** 71/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 29/100 files have semantic errors (94 total errors)  
+**Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
-These training examples are from the official OMG pilot implementation. Download the directory above to test locally.
+These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
 
 ---
 

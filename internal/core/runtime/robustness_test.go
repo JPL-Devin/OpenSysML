@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -140,50 +141,41 @@ func testRegionLocalJunctionTarget(t *testing.T) {
 	}
 }
 
-// testDeadlockJoinStarvation: join awaiting token that never arrives
+// testDeadlockJoinStarvation: join awaiting token that never arrives. `stranded`
+// has no incoming edge, so the join has two incoming edges but can only ever be
+// reached by one token.
 func testDeadlockJoinStarvation(t *testing.T) {
-	// Deadlock detection already tested in action_executor_test.go:TestActionExecutor_Deadlock_JoinStarvation
-	// This is a conformance check that the test exists and passes.
-	t.Log("Deadlock detection covered by TestActionExecutor_Deadlock_JoinStarvation")
-
-	// Quick inline test for robustness suite completeness:
 	src := `
 		package test {
-			action deadlock {
-				// Minimal action - deadlock would require complex control flow
+			action starve {
+				first start;
+				action stranded;
+				join sync;
+				done end;
+				then start sync;
+				then stranded sync;
+				then sync end;
 			}
 		}
 	`
-	file := parseAndBuild(t, src)
-	if file == nil {
-		t.Skip("parse failed")
-	}
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 
-	idx, model, ctx := buildRuntime(t, "<test>", file)
-
-	// Find action (may not exist or be executable)
-	rootScope := idx.DocumentRoot("<test>")
-	sym := findSymbolByName(rootScope, "deadlock", ast.DefAction)
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "starve", ast.DefAction)
 	if sym == nil {
-		t.Skip("deadlock action not found (expected - minimal source)")
+		t.Fatal("action starve not found")
 	}
 
 	exec, err := ctx.CreateActionExecutor(sym)
 	if err != nil {
-		t.Logf("CreateActionExecutor error (acceptable): %v", err)
-		return
+		t.Fatalf("create action executor: %v", err)
 	}
-
-	_ = model // silence unused
 
 	err = exec.RunToCompletion()
 	if err == nil {
-		t.Log("RunToCompletion succeeded (no deadlock in minimal source)")
-		return
+		t.Fatal("expected a deadlock error, the starved join completed")
 	}
-
 	if !strings.Contains(err.Error(), "deadlock") {
-		t.Errorf("expected deadlock error, got: %v", err)
+		t.Errorf("expected a deadlock error, got: %v", err)
 	}
 }
 
@@ -399,49 +391,38 @@ func testConstraintMissingFeature(t *testing.T) {
 	t.Log("EvaluateConstraint returned true (missing feature tolerated)")
 }
 
-// testStepBudgetExceeded: execution exceeds maxSteps limit
+// testStepBudgetExceeded: evaluation exceeds maxSteps. Each Eval call spends one
+// step, so an expression with more subexpressions than the budget must report
+// ErrStepLimitExceeded rather than run to the end. The operands are a parameter
+// rather than literals because a constant expression is folded in one step.
 func testStepBudgetExceeded(t *testing.T) {
 	src := `
 		package test {
-			calc infinite {
-				// Simple calc - step budget exercised during evaluation
-				return 1;
+			calc deep {
+				in x : Integer;
+				return x + x + x + x + x + x + x + x;
 			}
 		}
 	`
-	file := parseAndBuild(t, src)
-	if file == nil {
-		t.Fatal("parse failed")
-	}
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 
-	idx, model, ctx := buildRuntime(t, "<test>", file)
-
-	// Set very low step budget
-	ctx.maxSteps = 5
+	ctx.maxSteps = 3
 	ctx.steps = 0
 
-	_ = model // silence unused
-
 	rootScope := idx.DocumentRoot("<test>")
-	sym := findSymbolByName(rootScope, "infinite", ast.DefCalc)
+	sym := findSymbolByName(rootScope, "deep", ast.DefCalc)
 	if sym == nil {
-		t.Skip("infinite calc not found")
+		t.Fatal("calc deep not found")
 	}
 
-	// Invoke with no args, low step budget
-	_, err := ctx.InvokeCalc(sym, []Value{}, rootScope)
-
-	// For simple calc, step budget may not be exercised
-	if err != nil {
-		if strings.Contains(err.Error(), "step limit") || strings.Contains(err.Error(), "exceeded") {
-			t.Logf("Step budget exceeded (expected): %v", err)
-			return
-		}
-		t.Logf("InvokeCalc error: %v", err)
-		return
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}}
+	_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatal("expected the step budget to be exceeded, the calc completed")
 	}
-
-	t.Log("Step budget not exceeded (calc completed within budget)")
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
 }
 
 // Helper: parse source into AST RootNamespace

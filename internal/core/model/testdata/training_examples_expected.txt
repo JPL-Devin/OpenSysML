@@ -1,0 +1,34 @@
+# Files in the pinned OMG training corpus that still report semantic errors,
+# as "<error count>\t<path>". See docs/TRAINING_EXAMPLES.md for why each one
+# fails; regenerate with:
+#   go test ./internal/core/model -run TestTrainingExamplesSemanticErrors -update-training
+# files: 100
+2	07. Parts/Parts Example-1.sysml
+2	07. Parts/Parts Example-2.sysml
+2	09. Connections/Connections Example.sysml
+2	11. Interfaces/Interface Example.sysml
+2	13. Flows/Flow Interface Example.sysml
+1	16. Conditional Succession/Conditional Succession Example-1.sysml
+2	18. Action Performance/Action Performance Example.sysml
+6	27. Occurrences/Interaction Example-1.sysml
+3	27. Occurrences/Interaction Example-2.sysml
+6	27. Occurrences/Interaction Realization-1.sysml
+4	27. Occurrences/Interaction Realization-2.sysml
+8	27. Occurrences/Message Payload Example.sysml
+2	27. Occurrences/Time Slice and Snapshot Example.sysml
+2	28. Individuals/Individuals and Time Slices.sysml
+9	29. Expressions/Car Mass Rollup Example 1.sysml
+7	29. Expressions/Car Mass Rollup Example 2.sysml
+1	32. Requirements/Requirement Groups.sysml
+2	32. Requirements/Requirement Satisfaction.sysml
+1	33. Analysis/Analysis Case Usage Example.sysml
+2	33. Analysis/Trade Study Analysis Example.sysml
+3	34. Verification/Verification Case Definition Example.sysml
+3	34. Verification/Verification Case Usage Example.sysml
+6	35. Use Cases/Use Case Usage Example.sysml
+7	36. Variability/Variation Configuration.sysml
+2	38. Allocation/Allocation Usage Example.sysml
+2	39. Metadata/Metadata Example-1.sysml
+2	41. Language Extension/Model Library Example.sysml
+2	41. Language Extension/User Keyword Example.sysml
+1	42. Views/Views Example.sysml
