@@ -73,6 +73,7 @@
 - Fork pseudostates (one branch per orthogonal region)
 - Join pseudostates (waits for every branch)
 - Entry/exit point pseudostates (⚠️ no textual notation; AST only)
+- Choice/junction/entry/exit reached from inside an orthogonal region
 - Nested action invocation in entry/do/exit/effect behaviors
 - Run-to-completion semantics
 - Event queue management
@@ -98,11 +99,11 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 28 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×11)
-- 13 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join and region-local pseudostate misuse, non-numeric time trigger, misaddressed send, accept of an unsent type)
+- 32 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×14, accept-then×1)
+- 14 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type)
 - 41 unit tests
-- 18 golden AST fixtures (including pseudostate and timed-trigger parsing tests)
-- 1 golden execution trace (fork/join branch ordering)
+- 22 golden AST fixtures (including pseudostate and timed-trigger parsing tests)
+- 7 golden execution traces (fork/join branch ordering, region entry/exit ordering)
 - 17 negative parser tests
 - 900+ total tests passing
 
@@ -200,17 +201,18 @@ Each row documents one behavioral semantic feature:
 | Signal discrimination | `state_executor.go:401` matchesEvent signal name | `state_signal_discriminate.sysml` | ✅ Faithful |
 | Unmatched signal dropped | `state_executor.go` matchesEvent | `state_signal_unmatched.sysml` | ✅ Faithful (an injected event no transition matches is dropped; a message on the bus no active transition accepts is left in flight for another consumer, `signal_test.go:TestStateMachineLeavesForeignSignalPending`) |
 | Hierarchical substates | `state_executor.go:131` getParentChain, `:147` getLCA | `state_orthogonal_regions.sysml` | ✅ Faithful |
-| Orthogonal regions | `state_executor.go:364` broadcastEvent, `:466` fireTransitionInRegion | `state_orthogonal_regions.sysml` | ✅ Faithful |
-| Choice pseudostates | `state_executor.go:971` evaluateChoicePseudostate | `state_choice_pseudostate.sysml` | ✅ Faithful |
-| Junction pseudostates | `state_executor.go:1020` evaluateJunctionPseudostate | `state_junction_pseudostate.sysml` | ✅ Faithful |
+| Orthogonal regions | `state_executor.go` broadcastEvent, `state_region_transition.go` fireTransitionInRegion; region order from `lower.StateGraph.TopRegions` and `CompositeStates` | `state_orthogonal_regions.sysml`, `region_pseudostate_test.go:TestRegionPseudostateExitOrderIsDeterministic` | ✅ Faithful |
+| Choice pseudostates | `state_region_transition.go` pseudostateBranch (guards in declaration order) | `state_choice_pseudostate.sysml`, `state_region_choice.sysml` | ✅ Faithful |
+| Junction pseudostates | `state_region_transition.go` pseudostateBranch | `state_junction_pseudostate.sysml` | ✅ Faithful (evaluated when entered, like a choice, rather than statically before the incoming transition) |
 | Fork pseudostates (bypass targeted regions' initial states) | `state_executor.go:706` fireForkTransition, `:1028` enterStateInto | `state_fork_join.sysml` golden, `state_fork_join_pseudostate.trace.golden`, `fork_join_test.go:TestForkBypassesTargetedRegionInitials` | ✅ Faithful |
 | Join pseudostates | `state_executor.go:782` fireJoinTransition, `:827` joinSources (declaration order) | `pseudostate_test.go:TestJoinWaitsForEveryBranch`, `fork_join_test.go:TestForkJoinVisitOrderIsDeterministic` | ✅ Faithful |
-| Entry/exit point pseudostates | `state_executor.go:538` fireTransition (routed like a junction) | `pseudostate_test.go:TestEntryAndExitPointPseudostates` | ⚠️ Approximate (AST kinds only; no textual notation) |
+| Entry/exit point pseudostates | `state_region_transition.go` pseudostateTarget (routed like a junction) | `pseudostate_test.go:TestEntryAndExitPointPseudostates`, `region_pseudostate_test.go:TestRegionPseudostateExitRecordsHistory` | ⚠️ Approximate (AST kinds only; no textual notation) |
 | History pseudostates (shallow and deep) | `state_executor.go` fireHistoryTransition, `:deepestRecorded`, `exitState` (records the configuration left), `lower/state_graph.go` PseudostateOwner | `history_test.go:TestShallowHistoryRestoresLastSubstate`, `:TestDeepHistoryRestoresInnermostSubstate`, `:TestHistoryRestoresOrthogonalRegions`, `:TestDeepHistoryRestoresBelowRegion`, `:TestHistoryTakesDefaultTransitionWhenUnvisited`, `robustness_test.go:history_outside_composite_state`, `:history_without_record_or_default` | ⚠️ Approximate (semantics faithful for substates and orthogonal regions, including the default history transition; AST kinds only, so the golden-AST and execution-conformance layers do not apply until history has a textual notation) |
 | Composite state with regions entered by a plain transition | `state_executor.go` transitionToInto (keeps the region configuration entering it just built) | `history_test.go:TestHistoryRestoresOrthogonalRegions` | ✅ Faithful |
 | Leaving a composite state exits only its own regions | `state_executor.go` exitState (scoped to `CompositeStates[state]`) | `history_test.go:TestExitingNestedRegionsKeepsSiblingRegions` | ✅ Faithful |
 | Nested substates of a composite state declared textually | `lower/state_graph.go` stateNodeFromUsage (carries substates and nested pseudostates into the graph) | `lower/state_graph_nested_test.go:TestToStateGraph_NestedPseudostateOwner` | ✅ Faithful |
-| Choice/junction/entry/exit reached from inside an orthogonal region | `state_executor.go:316` processNextEvent, `:471` fireTransitionInRegion | `robustness_test.go:region_local_junction_target`, `fork_join_test.go:TestRegionLocalChoiceTargetIsRejected` | ❌ Not Yet Implemented (typed error; sibling regions would be dropped) |
+| Choice/junction/entry/exit reached from inside an orthogonal region | `state_region_transition.go` fireTransitionInRegion, moveWithinRegion, leaveRegion, pseudostateTarget | `state_region_choice.sysml`, `state_region_exit_pseudostate.sysml`, `state_region_cross_pseudostate.sysml` + their trace goldens, `region_pseudostate_test.go`, `robustness_test.go:region_pseudostate_without_satisfied_guard`, `:region_pseudostate_cycle` | ✅ Faithful (a branch staying in the source region moves only that region; one leaving it exits the region set in declaration order and re-enters the target's own region branches, recording history on the way out) |
+| Pseudostate chains (a pseudostate routing into another) | `state_region_transition.go` pseudostateTarget (cycle detected) | `region_pseudostate_test.go:TestRegionLocalJunctionChainIsFollowed`, `robustness_test.go:region_pseudostate_cycle` | ✅ Faithful |
 | Nested action invocation in entry/do/exit/effect | `state_executor.go:1075` executeAction, `invoke_action.go` invokeAction | `state_behavior_test.go:TestStateDoExitAndTransitionEffectPerformAction` | ✅ Faithful |
 | Run-to-completion semantics | `state_executor.go:288` processNextEvent | `state_executor_test.go:TestStateRunToCompletion` | ✅ Faithful |
 | Event queue management | `state_executor.go:1127` EventQueue | `state_executor_test.go` | ✅ Faithful |
@@ -266,6 +268,8 @@ known, so unmodelled types never produce a false positive.
 | Control flow node registration | `builder.go` InitialNode/FinalNode | `transition_first_test.go` | ✅ Faithful |
 | Redefinition target lookup | `document.go:328` searchInheritedFeatureViaIndex | `localclock_test.go` | ✅ Faithful |
 | References in behavioral bodies (calc return, constraint/assume/require, assignment, entry/do/exit, transition guard and effect) | `resolve/document.go` `resolveDecl` | `model/behavior_body_resolve_test.go` `TestBehaviorBodyReferencesAreResolved` | ✅ Faithful |
+| State def bodies are state bodies whatever their first member is | `parser/defusage.go` DefState case (always `parseStateBody`) | `parse/state_def_region_pseudostate.golden` (a state def whose first member is an attribute, followed by regions) | ✅ Faithful |
+| States a region declares with a body (`state x { ... }`) | `lower/state_graph.go` collectRegionStates (memberships unwrapped, region and initial recorded) | `state_region_choice.sysml`, `region_pseudostate_test.go` | ✅ Faithful |
 | Substate, region, and named-pseudostate declarations | `symbols/builder.go` StateNode/StateRegion/PseudostateNode | `model/behavior_body_resolve_test.go` `TestBehaviorDeclarationsAreVisible` | ✅ Faithful |
 | Region-scoped state names (sibling regions may reuse a name) | `symbols/builder.go` StateRegion | `TestBehaviorDeclarationsAreVisible/sibling_regions_reuse_state_names` | ✅ Faithful |
 | Requirement actor declaration | `symbols/builder.go` ActorMember | `TestBehaviorDeclarationsAreVisible/requirement_actor_binding` | ✅ Faithful |

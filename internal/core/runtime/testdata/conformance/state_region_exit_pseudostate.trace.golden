@@ -1,0 +1,10 @@
+exit: lstart
+enter: lwork
+transition: lstart -> lwork
+exit: rstart
+enter: rwork
+transition: rstart -> rwork
+exit: lwork (exit action)
+exit: rwork (exit action)
+enter: stopped
+transition: lwork -> stopped

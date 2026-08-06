@@ -178,30 +178,15 @@ func (e *StateExecutor) getLCA(state1, state2 *ast.StateNode) *ast.StateNode {
 	return nil // No common ancestor
 }
 
-// findStateByName looks up a state by qualified name.
-func (e *StateExecutor) findStateByName(qname *ast.QualifiedName) *ast.StateNode {
-	if qname == nil || len(qname.Parts) == 0 {
-		return nil
-	}
-
-	targetName := qname.Parts[len(qname.Parts)-1].Text
-	for _, state := range e.graph.States {
-		if state.Name == targetName {
-			return state
-		}
-	}
-
-	return nil
-}
-
 // scheduleTransitionEvents schedules TimeEvents for outgoing transitions from current state.
 func (e *StateExecutor) scheduleTransitionEvents() error {
 	currentState := e.getCurrentState()
 
 	// Handle orthogonal regions separately
 	if currentState == nil && len(e.activeConfig.regionStates) > 0 {
-		// Multi-region state - schedule for each region
-		for _, regionState := range e.activeConfig.regionStates {
+		// Multi-region state - schedule for each region, in declaration order:
+		// the order the regions' transitions are queued in is observable.
+		for _, regionState := range e.orderedRegionStates() {
 			if err := e.scheduleTransitionsForState(regionState); err != nil {
 				return err
 			}
@@ -309,30 +294,23 @@ func (e *StateExecutor) processNextEvent() error {
 	case EventTime:
 		// Fire transition - handle both old (TransitionEdge) and new (lower.Transition) for backward compatibility
 		if lowerTrans, ok := event.Payload.(*lower.Transition); ok {
-			// Determine if this transition is within a region
-			if len(e.activeConfig.regionStates) > 0 {
-				// Multi-region machine - find which region this transition belongs to
-				var sourceState *ast.StateNode
-				if stateNode, ok := lowerTrans.Source.(*ast.StateNode); ok {
-					sourceState = stateNode
-				}
-
-				// A fork or join rewrites the whole active configuration, so a
-				// transition into one is not region-local. Every other target
-				// stays region-local, where fireTransitionInRegion handles it or
-				// rejects it — routing it out of the region instead would drop
-				// the sibling regions silently.
-				if sourceState != nil && !isSynchronizationTarget(lowerTrans.Target) {
-					// Check if this state is active in any region
-					for region, activeState := range e.activeConfig.regionStates {
-						if activeState == sourceState {
-							// Found the region - fire transition within it
-							return e.fireTransitionInRegion(region, lowerTrans)
-						}
+			sourceState, _ := lowerTrans.Source.(*ast.StateNode)
+			if sourceState != nil && !e.inActiveConfiguration(sourceState) {
+				// The source was left before this event came up, so the transition
+				// it carries is stale: firing it would move a state machine that is
+				// no longer there.
+				return nil
+			}
+			// A transition out of a state that is the active state of an orthogonal
+			// region is region-local: it must not tear down the sibling regions
+			// unless its target lies outside the region set.
+			if sourceState != nil {
+				for _, region := range e.orderedActiveRegions() {
+					if e.activeConfig.regionStates[region] == sourceState {
+						return e.fireTransitionInRegion(region, lowerTrans)
 					}
 				}
 			}
-			// Simple machine or couldn't determine region - use regular fireTransition
 			return e.fireTransition(lowerTrans)
 		}
 
@@ -378,9 +356,14 @@ func (e *StateExecutor) processNextEvent() error {
 func (e *StateExecutor) broadcastEvent(event *Event) error {
 	// If in composite state with regions, broadcast to all
 	if len(e.activeConfig.regionStates) > 0 {
-		// Broadcast event to each region independently
-		for region, regionState := range e.activeConfig.regionStates {
-			// Find transitions from this region's active state
+		// Broadcast the event to each region independently, in declaration order.
+		// A region may be left by another region's reaction, so its active state is
+		// read again here rather than snapshotted.
+		for _, region := range e.orderedActiveRegions() {
+			regionState, stillActive := e.activeConfig.regionStates[region]
+			if !stillActive {
+				continue
+			}
 			transitions := e.graph.Transitions[regionState]
 			for _, trans := range transitions {
 				if e.matchesEvent(trans, event) {
@@ -478,72 +461,6 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 	}
 }
 
-// fireTransitionInRegion fires a transition within a specific region.
-func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *lower.Transition) error {
-	// Target should be a StateNode (pseudostates not supported in region transitions yet)
-	targetState, ok := trans.Target.(*ast.StateNode)
-	if !ok {
-		return fmt.Errorf("transition target must be a state node, got %T", trans.Target)
-	}
-
-	// Get current state in this region
-	sourceState := e.activeConfig.regionStates[region]
-
-	// Evaluate guard if present
-	if trans.Guard != nil {
-		ec := NewEvalContext(e.ctx, nil)
-		ec.Push(e.stateData)
-		guardVal, err := ec.Eval(trans.Guard)
-		if err != nil {
-			return fmt.Errorf("eval guard: %w", err)
-		}
-
-		guardPass := false
-		if guardVal.Kind == ValConst && guardVal.Const.Kind == semantics.ValBool {
-			guardPass = guardVal.Const.Bool
-		} else {
-			return fmt.Errorf("guard must be boolean, got %v", guardVal.Kind)
-		}
-
-		if !guardPass {
-			return nil // Guard failed, remain in current state
-		}
-	}
-
-	// Exit current state in this region
-	if err := e.exitState(sourceState); err != nil {
-		return fmt.Errorf("exit state: %w", err)
-	}
-
-	// Execute transition effect
-	for _, action := range trans.Effect {
-		if err := e.executeAction(action); err != nil {
-			return fmt.Errorf("transition effect: %w", err)
-		}
-	}
-
-	// Enter target state in this region
-	if err := e.enterState(targetState); err != nil {
-		return fmt.Errorf("enter state: %w", err)
-	}
-
-	// Update active state for this region
-	e.activeConfig.regionStates[region] = targetState
-
-	// Schedule outgoing transitions from the new state
-	if err := e.scheduleTransitionsForState(targetState); err != nil {
-		return fmt.Errorf("schedule transitions: %w", err)
-	}
-
-	// Record trace
-	if e.trace != nil {
-		eventName := triggerName(trans.Trigger)
-		e.trace.RecordStateTransition(sourceState.Name, targetState.Name, eventName)
-	}
-
-	return nil
-}
-
 // fireTransition executes a state transition.
 func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
 	// Fork and join reshape the active configuration rather than moving to a
@@ -567,18 +484,13 @@ func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
 	case *ast.StateNode:
 		targetState = target
 	case *ast.PseudostateNode:
-		// Evaluate pseudostate to get final target state
-		var err error
-		switch target.Kind {
-		case ast.PseudostateChoice:
-			targetState, err = e.evaluateChoicePseudostate(target)
-		case ast.PseudostateJunction, ast.PseudostateEntry, ast.PseudostateExit:
-			// Entry and exit points name a boundary crossing: the transition
-			// continues along the point's own outgoing transition.
-			targetState, err = e.evaluateJunctionPseudostate(target)
-		default:
+		// A choice, junction or entry/exit point routes the transition onwards:
+		// following it yields the state the transition really enters.
+		if !transientPseudostate(target.Kind) {
 			return fmt.Errorf("unsupported pseudostate kind: %v", target.Kind)
 		}
+		var err error
+		targetState, err = e.pseudostateTarget(target)
 		if err != nil {
 			return fmt.Errorf("evaluate pseudostate: %w", err)
 		}
@@ -762,7 +674,7 @@ func (e *StateExecutor) fireHistoryTransition(trans *lower.Transition, hist *ast
 	record := e.history[owner]
 	if record == nil {
 		// Never exited: take the default history transition.
-		target, err := e.evaluateJunctionPseudostate(hist)
+		target, err := e.pseudostateTarget(hist)
 		if err != nil {
 			return fmt.Errorf("history %s has no default transition and %s has no recorded configuration: %w", hist.Name, owner.Name, err)
 		}
@@ -914,7 +826,7 @@ func (e *StateExecutor) fireJoinTransition(trans *lower.Transition, join *ast.Ps
 		}
 	}
 
-	target, err := e.evaluateJunctionPseudostate(join)
+	target, err := e.pseudostateTarget(join)
 	if err != nil {
 		return fmt.Errorf("evaluate pseudostate: %w", err)
 	}
@@ -1024,22 +936,23 @@ func (e *StateExecutor) activeCompositeOwner() *ast.StateNode {
 // activeConfig.regionStates is a map.
 func (e *StateExecutor) orderedRegionStates() []*ast.StateNode {
 	states := make([]*ast.StateNode, 0, len(e.activeConfig.regionStates))
-	seen := make(map[*ast.StateRegion]bool, len(e.activeConfig.regionStates))
-	for _, state := range e.graph.States {
-		for _, region := range e.graph.CompositeStates[state] {
-			seen[region] = true
-			if active, ok := e.activeConfig.regionStates[region]; ok {
-				states = append(states, active)
+	for _, region := range e.orderedActiveRegions() {
+		states = append(states, e.activeConfig.regionStates[region])
+	}
+	return states
+}
+
+// inActiveConfiguration reports whether state is active, either as an active
+// state itself or as an ancestor of one.
+func (e *StateExecutor) inActiveConfiguration(state *ast.StateNode) bool {
+	for _, active := range e.activeStates() {
+		for _, ancestor := range e.getParentChain(active) {
+			if ancestor == state {
+				return true
 			}
 		}
 	}
-	// A region whose owner is absent from graph.States still has to be exited.
-	for region, active := range e.activeConfig.regionStates {
-		if !seen[region] {
-			states = append(states, active)
-		}
-	}
-	return states
+	return false
 }
 
 // enterHierarchyInto enters state's ancestors, outermost first, then state
@@ -1211,15 +1124,10 @@ func (e *StateExecutor) initialize() error {
 	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
 	e.activeConfig.simpleState = nil
 
-	// Enter initial states for all regions
-	for region, initialState := range e.graph.RegionInitials {
-		if initialState == nil {
-			return fmt.Errorf("region %s has no initial state", region.Name)
-		}
-		e.activeConfig.regionStates[region] = initialState
-		if err := e.enterState(initialState); err != nil {
-			return fmt.Errorf("enter initial state in region %s: %w", region.Name, err)
-		}
+	// Enter the initial state of each of the machine's own regions, in declaration
+	// order: the order they are entered in is observable.
+	if err := e.enterRegionsInto(nil, e.graph.TopRegions, nil); err != nil {
+		return err
 	}
 
 	// Schedule events for outgoing transitions in all regions
@@ -1231,13 +1139,17 @@ func (e *StateExecutor) initialize() error {
 }
 
 // descendantChain returns the states from ancestor's child down to leaf,
-// outermost first, excluding ancestor itself. leaf alone is returned when
-// ancestor is not one of its ancestors.
+// outermost first, excluding ancestor itself. A nil ancestor returns the whole
+// chain from leaf's outermost ancestor down; leaf alone is returned when
+// ancestor is neither nil nor one of its ancestors.
 func (e *StateExecutor) descendantChain(ancestor, leaf *ast.StateNode) []*ast.StateNode {
 	if leaf == nil {
 		return nil
 	}
 	chain := e.getParentChain(leaf) // leaf .. root
+	if ancestor == nil {
+		return e.rootToLeaf(leaf)
+	}
 	for i, state := range chain {
 		if state == ancestor {
 			descendants := make([]*ast.StateNode, 0, i)
@@ -1286,21 +1198,8 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 		// entering a nested composite does not drop its parent's configuration.
 		e.activeConfig.simpleState = nil // Clear simple state
 
-		for _, region := range regions {
-			entry, targeted := branches[region]
-			if !targeted {
-				entry = e.graph.RegionInitials[region]
-			}
-			e.activeConfig.regionStates[region] = entry
-			// Enter the states between the region and its entry, outermost first: a
-			// branch may name a state nested below the region, and its ancestors'
-			// entry behaviors still have to run. Only descendants of state are
-			// entered here — its own ancestors are already active.
-			for _, descendant := range e.descendantChain(state, entry) {
-				if err := e.enterStateInto(descendant, branches); err != nil {
-					return fmt.Errorf("enter starting state in region %s: %w", region.Name, err)
-				}
-			}
+		if err := e.enterRegionsInto(state, regions, branches); err != nil {
+			return err
 		}
 	} else {
 		// Simple state (no regions)
@@ -1324,6 +1223,32 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 	// Don't schedule transitions here - let the caller decide when to schedule
 	// This prevents double-scheduling in region transitions
 
+	return nil
+}
+
+// enterRegionsInto activates one state per orthogonal region of container: the
+// state branches names for that region, or the region's initial state. container
+// is nil for the machine's own regions, which no state owns.
+func (e *StateExecutor) enterRegionsInto(container *ast.StateNode, regions []*ast.StateRegion, branches map[*ast.StateRegion]*ast.StateNode) error {
+	for _, region := range regions {
+		entry, targeted := branches[region]
+		if !targeted {
+			entry = e.graph.RegionInitials[region]
+		}
+		if entry == nil {
+			return fmt.Errorf("region %s has no initial state", region.Name)
+		}
+		e.activeConfig.regionStates[region] = entry
+		// Enter the states between the region and its entry, outermost first: a
+		// branch may name a state nested below the region, and its ancestors' entry
+		// behaviors still have to run. Only descendants of container are entered
+		// here — its own ancestors are already active.
+		for _, descendant := range e.descendantChain(container, entry) {
+			if err := e.enterStateInto(descendant, branches); err != nil {
+				return fmt.Errorf("enter starting state in region %s: %w", region.Name, err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -1365,8 +1290,12 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 			// Clear the entry first: the recursive exit walks the same map, and the
 			// region still pointing at regionState would exit it a second time.
 			delete(e.activeConfig.regionStates, region)
-			if err := e.exitState(regionState); err != nil {
-				return fmt.Errorf("exit region state: %w", err)
+			// A region's active state may be nested below the region, so exit it and
+			// the states between it and this one: their exit behaviors run too.
+			for current := regionState; current != nil && current != state; current = e.graph.ParentState[current] {
+				if err := e.exitState(current); err != nil {
+					return fmt.Errorf("exit region state: %w", err)
+				}
 			}
 		}
 	}
@@ -1551,137 +1480,6 @@ func (e *StateExecutor) getCurrentState() *ast.StateNode {
 func (e *StateExecutor) setCurrentState(state *ast.StateNode) {
 	e.activeConfig.simpleState = state
 	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode) // Clear regions
-}
-
-// evaluateChoicePseudostate evaluates a choice pseudostate dynamically.
-// Returns the target state based on guard evaluation at runtime.
-func (e *StateExecutor) evaluateChoicePseudostate(choice *ast.PseudostateNode) (*ast.StateNode, error) {
-	// Find all outgoing transitions from this choice
-	outgoing := e.findTransitionsFromPseudostate(choice)
-	if len(outgoing) == 0 {
-		return nil, fmt.Errorf("choice %s has no outgoing transitions", choice.Name)
-	}
-
-	// Evaluate guards dynamically in order
-	for _, trans := range outgoing {
-		if trans.Guard == nil {
-			// Else branch (unguarded transition)
-			targetState := e.findStateByName(trans.Target)
-			if targetState == nil {
-				targetName := "<unknown>"
-				if trans.Target != nil && len(trans.Target.Parts) > 0 {
-					targetName = trans.Target.Parts[len(trans.Target.Parts)-1].Text
-				}
-				return nil, fmt.Errorf("choice target state not found: %s", targetName)
-			}
-			return targetState, nil
-		}
-
-		// Evaluate guard
-		ec := NewEvalContext(e.ctx, nil)
-		ec.Push(e.stateData)
-		guardVal, err := ec.Eval(trans.Guard)
-		if err != nil {
-			return nil, fmt.Errorf("eval choice guard: %w", err)
-		}
-
-		// Check boolean
-		if guardVal.Kind == ValConst && guardVal.Const.Kind == semantics.ValBool && guardVal.Const.Bool {
-			targetState := e.findStateByName(trans.Target)
-			if targetState == nil {
-				targetName := "<unknown>"
-				if trans.Target != nil && len(trans.Target.Parts) > 0 {
-					targetName = trans.Target.Parts[len(trans.Target.Parts)-1].Text
-				}
-				return nil, fmt.Errorf("choice target state not found: %s", targetName)
-			}
-			return targetState, nil
-		}
-	}
-
-	return nil, fmt.Errorf("choice %s: no guard evaluated to true", choice.Name)
-}
-
-// evaluateJunctionPseudostate evaluates a junction pseudostate statically.
-// Returns the target state based on static guard evaluation (pre-evaluated).
-func (e *StateExecutor) evaluateJunctionPseudostate(junction *ast.PseudostateNode) (*ast.StateNode, error) {
-	// Find all outgoing transitions from this junction
-	outgoing := e.findTransitionsFromPseudostate(junction)
-	if len(outgoing) == 0 {
-		return nil, fmt.Errorf("junction %s has no outgoing transitions", junction.Name)
-	}
-
-	// Evaluate guards statically in order
-	for _, trans := range outgoing {
-		if trans.Guard == nil {
-			// Else branch (unguarded transition)
-			targetState := e.findStateByName(trans.Target)
-			if targetState == nil {
-				targetName := "<unknown>"
-				if trans.Target != nil && len(trans.Target.Parts) > 0 {
-					targetName = trans.Target.Parts[len(trans.Target.Parts)-1].Text
-				}
-				return nil, fmt.Errorf("junction target state not found: %s", targetName)
-			}
-			return targetState, nil
-		}
-
-		// Static evaluation (same as dynamic for now, but conceptually earlier)
-		ec := NewEvalContext(e.ctx, nil)
-		ec.Push(e.stateData)
-		guardVal, err := ec.Eval(trans.Guard)
-		if err != nil {
-			return nil, fmt.Errorf("eval junction guard: %w", err)
-		}
-
-		// Check boolean
-		if guardVal.Kind == ValConst && guardVal.Const.Kind == semantics.ValBool && guardVal.Const.Bool {
-			targetState := e.findStateByName(trans.Target)
-			if targetState == nil {
-				targetName := "<unknown>"
-				if trans.Target != nil && len(trans.Target.Parts) > 0 {
-					targetName = trans.Target.Parts[len(trans.Target.Parts)-1].Text
-				}
-				return nil, fmt.Errorf("junction target state not found: %s", targetName)
-			}
-			return targetState, nil
-		}
-	}
-
-	return nil, fmt.Errorf("junction %s: no guard evaluated to true", junction.Name)
-}
-
-// findTransitionsFromPseudostate finds all outgoing transitions from a pseudostate.
-func (e *StateExecutor) findTransitionsFromPseudostate(ps *ast.PseudostateNode) []*ast.TransitionEdge {
-	// Look up transitions from graph (already lowered)
-	lowerTransitions, ok := e.graph.Transitions[ps]
-	if !ok {
-		return nil
-	}
-
-	// Convert lower.Transition back to TransitionEdge for compatibility
-	result := make([]*ast.TransitionEdge, 0, len(lowerTransitions))
-	for _, lowerTrans := range lowerTransitions {
-		sourceName := getNodeName(lowerTrans.Source)
-		targetName := getNodeName(lowerTrans.Target)
-
-		edge := &ast.TransitionEdge{
-			Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: sourceName}}},
-			Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: targetName}}},
-			Guard:  lowerTrans.Guard,
-			Effect: lowerTrans.Effect,
-		}
-
-		if lowerTrans.Trigger != nil {
-			if triggerEvent, ok := lowerTrans.Trigger.(ast.TriggerEvent); ok {
-				edge.Trigger = triggerEvent
-			}
-		}
-
-		result = append(result, edge)
-	}
-
-	return result
 }
 
 // StateStack returns a copy of the state stack (active configuration).

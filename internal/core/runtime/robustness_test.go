@@ -26,7 +26,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
 	t.Run("fork_branches_share_region", testForkBranchesShareRegion)
 	t.Run("join_with_one_incoming_branch", testJoinWithOneIncomingBranch)
-	t.Run("region_local_junction_target", testRegionLocalJunctionTarget)
+	t.Run("region_pseudostate_without_satisfied_guard", testRegionPseudostateWithoutSatisfiedGuard)
+	t.Run("region_pseudostate_cycle", testRegionPseudostateCycle)
 	t.Run("non_numeric_time_trigger", testNonNumericTimeTrigger)
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
@@ -204,11 +205,15 @@ func testJoinWithOneIncomingBranch(t *testing.T) {
 	}
 }
 
-// testRegionLocalJunctionTarget: leaving an orthogonal region for a junction is
-// unsupported and must be reported, not silently drop the sibling regions.
-func testRegionLocalJunctionTarget(t *testing.T) {
+// testRegionPseudostateWithoutSatisfiedGuard: a junction reached from inside an
+// orthogonal region whose branches are all guarded false has nowhere to go. The
+// region set is left in place and the dead end reported, rather than the machine
+// resting on a pseudostate.
+func testRegionPseudostateWithoutSatisfiedGuard(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
 		state Machine {
+			attribute x : Integer = 9;
+
 			region left {
 				initial ls;
 				state a;
@@ -223,14 +228,46 @@ func testRegionLocalJunctionTarget(t *testing.T) {
 			}
 			junction merge;
 
-			transition merge to b;
+			transition merge to b if x == 1;
 		}
 	}`)
 	if err == nil {
-		t.Fatal("expected an error for a region-local transition into a junction")
+		t.Fatal("expected an error for a junction with no satisfied guard")
 	}
-	if !strings.Contains(err.Error(), "must be a state node") {
-		t.Errorf("expected a typed target error, got: %v", err)
+	if !strings.Contains(err.Error(), "no guard evaluated to true") {
+		t.Errorf("expected an unsatisfied-guard error, got: %v", err)
+	}
+}
+
+// testRegionPseudostateCycle: pseudostates that route into each other never
+// reach a state, so following the chain has to report the cycle instead of
+// looping forever.
+func testRegionPseudostateCycle(t *testing.T) {
+	_, _, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			region left {
+				initial ls;
+				state a;
+				then ls a;
+				transition a to first;
+			}
+			region right {
+				initial rs;
+				state c;
+				then rs c;
+			}
+			junction first;
+			junction second;
+
+			transition first to second;
+			transition second to first;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error for pseudostates routing into each other")
+	}
+	if !strings.Contains(err.Error(), "form a cycle") {
+		t.Errorf("expected a cycle error, got: %v", err)
 	}
 }
 
