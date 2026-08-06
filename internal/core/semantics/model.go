@@ -24,6 +24,7 @@ type Model struct {
 	allSupers    map[*symbols.Symbol][]*symbols.Symbol
 	primTypes    map[*symbols.Symbol]PrimType
 	scalars      map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
+	params       map[*symbols.Symbol]behaviorParameters
 }
 
 // NewModel creates a semantic model backed by the given name resolver. The
@@ -35,6 +36,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		directSupers: make(map[*symbols.Symbol][]*symbols.Symbol),
 		allSupers:    make(map[*symbols.Symbol][]*symbols.Symbol),
 		primTypes:    make(map[*symbols.Symbol]PrimType),
+		params:       make(map[*symbols.Symbol]behaviorParameters),
 	}
 }
 
@@ -154,6 +156,17 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 				}
 			}
 		}
+	}
+
+	// A parameter of a behavior or step implicitly redefines the corresponding
+	// parameter of each behavior or step its owner specializes, and so takes
+	// that parameter's type when it declares none (see redefinition.go).
+	for _, redefined := range m.implicitParameterRedefinitions(sym) {
+		if seen[redefined] {
+			continue
+		}
+		seen[redefined] = true
+		out = append(out, redefined)
 	}
 
 	// An untyped usage still specializes its standard-library base feature.

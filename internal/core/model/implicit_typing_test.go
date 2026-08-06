@@ -109,17 +109,72 @@ func TestImplicitBaseNotAppliedToTypedUsage(t *testing.T) {
 	}
 }
 
-// TestImplicitBaseYieldsToImplicitRedefinition covers a usage whose name matches
-// a feature its owner inherits: that feature supplies the type, so the usage
-// must not be given the generic standard library base instead.
+// TestImplicitBaseYieldsToImplicitRedefinition covers a parameter of a step:
+// it implicitly redefines the parameter at its position in the behavior that
+// types the step (KerML 7.4.7.3), and that parameter supplies the type, so the
+// parameter must not be given the generic standard library base instead.
 func TestImplicitBaseYieldsToImplicitRedefinition(t *testing.T) {
+	src := `package P {
+		part def Image;
+		action def Focus { in scene; out image : Image; }
+		action focus : Focus { in item scene; out item image; }
+	}`
+	if got := implicitBaseOf(t, src, "P", "focus", "image"); len(got) != 1 || got[0] != "image" {
+		t.Fatalf("supertypes = %v, want [image] (the redefined parameter of Focus)", got)
+	}
+}
+
+// TestLikeNamedUsageIsNotAnImplicitRedefinition covers the case the parameter
+// rule does not extend to: an undirected nested usage that happens to have the
+// same name as a feature its owner inherits. SysML v2 7.6.1 makes that a name
+// conflict to be resolved by an explicit redefinition, not an implicit
+// redefinition, so the usage keeps the standard library base of its kind.
+func TestLikeNamedUsageIsNotAnImplicitRedefinition(t *testing.T) {
 	src := `package P {
 		part def Engine;
 		part def Vehicle { part engine : Engine; }
 		part v : Vehicle { part engine; }
 	}`
-	if got := implicitBaseOf(t, src, "P", "v", "engine"); len(got) != 0 {
-		t.Fatalf("supertypes = %v, want none (implicit redefinition governs)", got)
+	if got := implicitBaseOf(t, src, "P", "v", "engine"); len(got) != 1 || got[0] != "Parts::Part" {
+		t.Fatalf("supertypes = %v, want [Parts::Part]", got)
+	}
+}
+
+// TestImplicitRedefinitionSuppliesInheritedMembers covers the user-visible
+// effect on the OMG training model "Conditional Succession Example-1": the
+// output parameter of a subaction is typed by the parameter it redefines, so
+// members of that type resolve.
+func TestImplicitRedefinitionSuppliesInheritedMembers(t *testing.T) {
+	good := `package P {
+		part def Scene;
+		part def Image { isWellFocused : ScalarValues::Boolean; }
+		action def Focus { in scene : Scene; out image : Image; }
+		action takePicture {
+			action focus : Focus {
+				in item scene;
+				out item image;
+			}
+			constraint { focus.image.isWellFocused }
+		}
+	}`
+	if found := diagnose(t, "implicit_redef_ok", good); len(found) != 0 {
+		t.Fatalf("expected no findings, got %v", found)
+	}
+
+	bad := `package P {
+		part def Scene;
+		part def Image { isWellFocused : ScalarValues::Boolean; }
+		action def Focus { in scene : Scene; out image : Image; }
+		action takePicture {
+			action focus : Focus {
+				in item scene;
+				out item image;
+			}
+			constraint { focus.image.notAMember }
+		}
+	}`
+	if found := diagnose(t, "implicit_redef_bad", bad); len(found) != 1 {
+		t.Fatalf("expected one finding for the undeclared member, got %d: %v", len(found), found)
 	}
 }
 

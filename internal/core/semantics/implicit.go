@@ -65,13 +65,6 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 	if !ok || m.resolver == nil || m.resolver.Index() == nil {
 		return nil
 	}
-	// A usage whose name matches a feature its owner inherits implicitly
-	// redefines that feature, which supplies the type instead of the base.
-	// Redefinition does not supply it yet: see "Decisions to Reassess" in
-	// docs/SPEC_COMPLIANCE.md.
-	if sym.Name != "" && m.inheritedFeatureNamed(sym, sym.Name) != nil {
-		return nil
-	}
 	for _, base := range m.resolver.Index().LookupQualified(fqn) {
 		if base != nil && base != sym {
 			return base

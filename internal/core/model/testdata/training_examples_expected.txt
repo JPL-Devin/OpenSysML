@@ -6,7 +6,6 @@
 2	09. Connections/Connections Example.sysml
 2	11. Interfaces/Interface Example.sysml
 2	13. Flows/Flow Interface Example.sysml
-1	16. Conditional Succession/Conditional Succession Example-1.sysml
 2	18. Action Performance/Action Performance Example.sysml
 3	27. Occurrences/Interaction Example-2.sysml
 2	27. Occurrences/Message Payload Example.sysml

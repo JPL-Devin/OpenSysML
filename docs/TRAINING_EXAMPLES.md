@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 81/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 19/100 files have semantic errors (37 total errors)  
+**Status:** 82/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 18/100 files have semantic errors (36 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -94,9 +94,37 @@ One entry drifted; every other file kept its exact count.
 
 | File | Diagnostic | Remaining gap |
 |---|---|---|
-| `Conditional Succession Example-1` | `unresolved member: isWellFocused` | Implicit *redefinition*: `out item image;` inside `action focus : Focus` refines `Focus::image` (typed `Image`) by name. Untyped usages that shadow an inherited feature deliberately get no implicit base, so the type still comes from nowhere. |
+| `Conditional Succession Example-1` | `unresolved member: isWellFocused` | Implicit *redefinition*: `out item image;` inside `action focus : Focus` refines `Focus::image` (typed `Image`). Untyped usages that shadow an inherited feature deliberately got no implicit base, so the type came from nowhere. (Fixed in the 82/100 re-pin below.) |
 | `Action Performance Example`, `Allocation Usage Example` | `unresolved member: focus`/`shoot`/`generateTorque` | The members come from `perform action takePhoto references takePicture;` and `perform providePower.generateTorque;`: a `references` edge and the feature a `perform` statement contributes, neither of which is a generalization. |
 | `Time Slice and Snapshot Example`, `Individuals and Time Slices` | `unresolved reference: start`/`done` | Bugs in the OMG files (`startShot`/`endShot`), unchanged. |
+
+### Verdicts for the implicit-parameter-redefinition re-pin (82/100)
+
+One entry drifted; every other file kept its exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `16. Conditional Succession/Conditional Succession Example-1` | 1 × `unresolved member: isWellFocused` | Real fix: `out item image;` inside `action focus : Focus` is the second parameter of a step, so it implicitly redefines `Focus::image` (KerML 7.4.7.3, SysML v2 7.17.2 — the match is by *position*, not by name) and takes its type `Image`. `focus.image.isWellFocused` now resolves to `Image::isWellFocused`, the declaration the OMG model means. The negative counterpart (`focus.image.notAMember`) still reports — see `internal/core/model/implicit_typing_test.go` `TestImplicitRedefinitionSuppliesInheritedMembers`. |
+
+**Deliberate test change**
+
+`internal/core/model/implicit_typing_test.go` `TestImplicitBaseYieldsToImplicitRedefinition`
+pinned the previous behavior of a *name*-based rule: any usage whose name matched
+a feature its owner inherits was left with no implicit base at all, on the
+assumption that an implicit redefinition would later supply the type. The
+specification has no such name-based rule — implicit redefinition applies to the
+parameters of behaviors and steps by position (KerML 7.4.7.2/7.4.7.3), to
+connection and association ends by position (SysML v2 7.13.2), and to result
+parameters as results (SysML v2 7.19.2), while a nested usage that merely shares
+a name with an inherited feature is a *name conflict* to be resolved by an
+explicit redefinition (SysML v2 7.6.1, KerML 7.3.2.1). The test therefore now
+pins the parameter case (the parameter takes the redefined parameter's type),
+and the new `TestLikeNamedUsageIsNotAnImplicitRedefinition` pins the other side:
+a like-named undirected usage keeps the standard library base of its kind
+instead of being silently treated as a redefinition. We still do not diagnose
+the name conflict itself; that gap is recorded in `docs/SPEC_COMPLIANCE.md`.
 
 ---
 
