@@ -428,9 +428,21 @@ func TestExprUnresolvedNameProducesNoTypeDiagnostic(t *testing.T) {
 	wantNoDiags(t, `package P { attribute x : ScalarValues::Integer = missing; }`)
 }
 
-func TestExprNonScalarTypeSkipped(t *testing.T) {
-	wantNoDiags(t, `package P {
+// A type with no scalar ancestor is outside the lattice, so the scalar rules
+// say nothing about it — but no literal is an instance of it either, which the
+// value rules report (see typecheck_value_test.go).
+func TestExprLiteralBoundToNonScalarType(t *testing.T) {
+	wantOneDiag(t, `package P {
 		attribute def Mass;
 		part def Car { attribute m : Mass = 5; }
-	}`)
+	}`, "cannot bind Natural value to a feature typed by Mass")
+}
+
+// Reaching a scalar through a user-declared type keeps the lattice rules, and
+// their more precise message, in force.
+func TestExprScalarSpecializationUsesLattice(t *testing.T) {
+	wantOneDiag(t, `package P {
+		attribute def Mass specializes ScalarValues::Integer;
+		part def Car { attribute m : Mass = 5.5; }
+	}`, "cannot bind Rational value to a feature typed by Integer")
 }

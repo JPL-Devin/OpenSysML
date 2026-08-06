@@ -41,19 +41,25 @@ func (ec *exprChecker) warnf(span source.Span, format string, args ...any) {
 }
 
 // checkUsageValue checks a feature's bound value (`attribute x : T = expr`)
-// against the type the feature is typed by.
+// against the type and multiplicity the feature declares.
 func (ec *exprChecker) checkUsageValue(scope *symbols.Scope, u *ast.Usage) {
 	if u.Value == nil {
 		return
 	}
-	got := ec.infer(scope, u.Value)
 	want := ec.declaredPrimType(scope, u.Relationships)
-	if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
-		return
+	// A collection literal binds elementwise, so each element is checked
+	// against the feature's type rather than the sequence as a whole.
+	for _, value := range valueElements(u.Value) {
+		got := ec.infer(scope, value)
+		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
+			continue
+		}
+		if !semantics.PrimConforms(got, want) {
+			ec.errorf(value.Span(), "cannot bind %s value to a feature typed by %s", got, want)
+		}
 	}
-	if !semantics.PrimConforms(got, want) {
-		ec.errorf(u.Value.Span(), "cannot bind %s value to a feature typed by %s", got, want)
-	}
+	ec.checkValueConformance(scope, u)
+	ec.checkValueCount(u)
 }
 
 // declaredPrimType returns the scalar type a usage is typed by, or PrimUnknown.
@@ -130,6 +136,8 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 	case *ast.InvocationExpr:
 		return ec.inferInvocation(scope, e)
 	case *ast.SequenceExpr:
+		// A sequence has no scalar type of its own; walking the elements keeps
+		// errors inside them reported.
 		for _, el := range e.Elements {
 			ec.infer(scope, el)
 		}
