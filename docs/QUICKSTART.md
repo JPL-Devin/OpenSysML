@@ -16,29 +16,69 @@ sudo mv sysml-linux-amd64 /usr/local/bin/sysml
 chmod +x /usr/local/bin/sysml
 ```
 
-**macOS (Apple Silicon):**
+**macOS (Apple Silicon):** download with `curl`, not a browser — see [macOS: Gatekeeper](#macos-gatekeeper).
 ```bash
-wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-darwin-arm64.tar.gz
-tar xzf sysml-darwin-arm64.tar.gz
-sudo mv sysml-darwin-arm64 /usr/local/bin/sysml
-chmod +x /usr/local/bin/sysml
+curl -fL -o systemica.tar.gz https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-darwin-arm64.tar.gz
+tar xzf systemica.tar.gz
+sudo mv sysml sysml-lsp /usr/local/bin/
 ```
 
 **macOS (Intel):**
 ```bash
-wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-darwin-amd64.tar.gz
-tar xzf sysml-darwin-amd64.tar.gz
-sudo mv sysml-darwin-amd64 /usr/local/bin/sysml
-chmod +x /usr/local/bin/sysml
+curl -fL -o systemica.tar.gz https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-darwin-amd64.tar.gz
+tar xzf systemica.tar.gz
+sudo mv sysml sysml-lsp /usr/local/bin/
 ```
 
 **Windows:**
-Download `sysml-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/Systemica/releases/latest), extract, and add to PATH.
+Download `systemica-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/Systemica/releases/latest), extract, and add to PATH. Windows SmartScreen may warn that the publisher is unrecognized; the binaries are not Authenticode-signed.
 
 **Available binaries:**
 - `sysml` — Interactive REPL
 - `sysml-lsp` — Language Server Protocol server
-- `sysml-grpc` — gRPC service (backs the Python bindings)
+
+`sysml-grpc` (which backs the Python bindings) is not part of the release archives; build it from source with `make build-grpc`.
+
+**Archive layout:** `systemica-<os>-<arch>.tar.gz` bundles contain both binaries under their
+plain names (`sysml`, `sysml-lsp`); the older single-binary `sysml-<os>-<arch>.tar.gz` and
+`sysml-lsp-<os>-<arch>.tar.gz` archives are still published. The bundles and
+`SHA256SUMS.txt` are produced from the next tagged release onward; for earlier releases use
+the single-binary archives. `SHA256SUMS.txt` covers every archive:
+
+```bash
+curl -fLO https://github.com/Open-MBEE/Systemica/releases/latest/download/SHA256SUMS.txt
+shasum -a 256 -c SHA256SUMS.txt --ignore-missing   # macOS; use sha256sum -c on Linux
+```
+
+### macOS: Gatekeeper
+
+When macOS refuses to run a downloaded binary with **"cannot be opened because the developer
+cannot be verified"**, the cause is the `com.apple.quarantine` extended attribute that
+browsers attach to downloads, combined with the fact that these binaries are not signed with
+an Apple Developer ID or notarized. It is not a broken binary.
+
+Three ways to avoid it, best first:
+
+1. **Download with `curl` or `wget`** (as shown above). They do not set the quarantine
+   attribute, so no prompt appears.
+2. **Install with a Go toolchain** — built locally, never quarantined:
+   ```bash
+   go install github.com/Open-MBEE/Systemica/cmd/sysml@latest
+   go install github.com/Open-MBEE/Systemica/cmd/sysml-lsp@latest
+   ```
+3. **Clear the attribute** if you already downloaded the archive in a browser. Verify the
+   checksum first — you are turning off a security check, so make sure you have the file we
+   published:
+   ```bash
+   shasum -a 256 systemica-darwin-arm64.tar.gz   # compare against SHA256SUMS.txt
+   xattr -d com.apple.quarantine /usr/local/bin/sysml /usr/local/bin/sysml-lsp
+   ```
+   `xattr -d: No such xattr` simply means the file was not quarantined. Use
+   `xattr -c <file>` to clear all attributes, or `xattr -dr com.apple.quarantine <dir>` for a
+   directory.
+
+See [MACOS_DISTRIBUTION.md](MACOS_DISTRIBUTION.md) for the root-cause analysis and for what
+signing + notarizing the releases would require.
 
 ### Option 2: Build from Source
 

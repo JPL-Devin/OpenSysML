@@ -1,0 +1,39 @@
+# Template, not an installable formula: placeholders are filled in per release
+# by scripts/render-homebrew-formula.sh. See packaging/homebrew/README.md.
+class Systemica < Formula
+  desc "SysML v2 toolchain: interactive REPL and language server"
+  homepage "https://github.com/Open-MBEE/Systemica"
+  version "__VERSION__"
+  license "Apache-2.0"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/Open-MBEE/Systemica/releases/download/__TAG__/systemica-darwin-arm64.tar.gz"
+      sha256 "__SHA256_DARWIN_ARM64__"
+    end
+    on_intel do
+      url "https://github.com/Open-MBEE/Systemica/releases/download/__TAG__/systemica-darwin-amd64.tar.gz"
+      sha256 "__SHA256_DARWIN_AMD64__"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/Open-MBEE/Systemica/releases/download/__TAG__/systemica-linux-arm64.tar.gz"
+      sha256 "__SHA256_LINUX_ARM64__"
+    end
+    on_intel do
+      url "https://github.com/Open-MBEE/Systemica/releases/download/__TAG__/systemica-linux-amd64.tar.gz"
+      sha256 "__SHA256_LINUX_AMD64__"
+    end
+  end
+
+  def install
+    bin.install "sysml", "sysml-lsp"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/sysml --version")
+    assert_match version.to_s, shell_output("#{bin}/sysml-lsp --version")
+  end
+end

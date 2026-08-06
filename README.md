@@ -14,7 +14,15 @@ A complete, production-grade SysML v2 implementation in Go—providing language 
 wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-linux-amd64.tar.gz
 tar xzf sysml-linux-amd64.tar.gz && sudo mv sysml-linux-amd64 /usr/local/bin/sysml
 
-# macOS (see Quick Start for all platforms)
+# macOS (Apple Silicon) — curl, unlike a browser download, does not quarantine the file
+curl -fL -o systemica.tar.gz https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-darwin-arm64.tar.gz
+tar xzf systemica.tar.gz && sudo mv sysml sysml-lsp /usr/local/bin/
+```
+
+**With a Go toolchain (no download, never quarantined):**
+```bash
+go install github.com/Open-MBEE/Systemica/cmd/sysml@latest
+go install github.com/Open-MBEE/Systemica/cmd/sysml-lsp@latest
 ```
 
 **Or build from source:**
@@ -22,6 +30,13 @@ tar xzf sysml-linux-amd64.tar.gz && sudo mv sysml-linux-amd64 /usr/local/bin/sys
 make build
 ./bin/sysml
 ```
+
+> **macOS:** if you download the tarball with a browser instead, macOS tags it with
+> `com.apple.quarantine` and Gatekeeper shows "cannot be opened because the developer cannot
+> be verified" — the binaries are not signed with an Apple Developer ID. Use the `curl`
+> command above, or see [Quick Start](docs/QUICKSTART.md#macos-gatekeeper) for how to clear
+> the attribute. Background and the notarization decision:
+> [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
 
 ### Try it
 
@@ -209,6 +224,12 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 **Release process:**
 - Every commit: Build + test
 - Tagged releases (`v*`): Multi-platform binaries published to GitHub Releases
+
+**Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
+`sysml-lsp-<os>-<arch>.tar.gz`), `systemica-<os>-<arch>.tar.gz` bundles containing both
+binaries, and `SHA256SUMS.txt`. macOS binaries are not Developer ID signed or notarized and
+Windows binaries are not Authenticode signed — see
+[docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
 
 ## Building
 
