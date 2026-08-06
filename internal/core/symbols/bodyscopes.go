@@ -133,6 +133,10 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		buildBodyScopes(scope, d.Actions)
 	case *ast.ExitMember:
 		buildBodyScopes(scope, d.Actions)
+	case *ast.DeferMember:
+		for _, trigger := range d.Triggers {
+			bodyScopesInTrigger(scope, trigger)
+		}
 	case *ast.StateNode:
 		body := scope
 		if child := bodyScopeChild(scope, d); child != nil {

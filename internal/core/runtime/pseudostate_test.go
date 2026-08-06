@@ -149,8 +149,9 @@ func TestJoinWaitsForEveryBranch(t *testing.T) {
 	}
 }
 
-// Entry and exit points have no textual notation, so they are built directly on
-// the AST here; the executor must route through them like a junction.
+// The executor must route through an entry or exit point like a junction. The
+// machine is built on the AST directly; the `entry point`/`exit point` notation
+// is covered by the state_entry_exit_points conformance case.
 func TestEntryAndExitPointPseudostates(t *testing.T) {
 	init := &ast.StateNode{Name: "init", IsInitial: true}
 	inner := &ast.StateNode{Name: "inner"}

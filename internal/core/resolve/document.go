@@ -165,6 +165,12 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.walkMembers(scope, d.Actions)
 	case *ast.ExitMember:
 		r.walkMembers(scope, d.Actions)
+	case *ast.DeferMember:
+		// A deferred event is a trigger like a transition's, so it resolves the
+		// same way: bare signal names are left to lowering.
+		for _, trigger := range d.Triggers {
+			r.resolveTrigger(scope, trigger)
+		}
 	case *ast.StateNode:
 		// The state's own name is a declaration, not a reference. Its body
 		// resolves in the scope the state owns, which holds its substates and

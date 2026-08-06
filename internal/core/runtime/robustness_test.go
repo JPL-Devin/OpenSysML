@@ -181,8 +181,7 @@ func testCallArgumentOfWrongType(t *testing.T) {
 
 // testHistoryOutsideCompositeState: a history pseudostate restores the state
 // that declares it, so one declared directly in the machine has nothing to
-// restore and must report rather than enter an arbitrary state. History has no
-// textual notation, so the machine is built on the AST directly.
+// restore and must report rather than enter an arbitrary state.
 func testHistoryOutsideCompositeState(t *testing.T) {
 	exec := stateExecutorFor(t, &ast.Usage{
 		Kind:  ast.UsageState,

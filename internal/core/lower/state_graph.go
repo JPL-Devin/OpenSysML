@@ -116,6 +116,10 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 			collectRegionStates(graph, n, nil)
 		case *ast.PseudostateNode:
 			graph.Pseudostates[n.Name] = n
+		case *ast.DeferMember:
+			// The machine's own body has no state to defer for: an event deferred
+			// there would be retained for the whole run and never redelivered.
+			return nil, fmt.Errorf("defer must be declared inside a state, not in the state machine body")
 		}
 	}
 
@@ -247,6 +251,8 @@ func stateNodeFromUsage(usage *ast.Usage) *ast.StateNode {
 			state.Do = append(state.Do, m.Actions...)
 		case *ast.ExitMember:
 			state.Exit = append(state.Exit, m.Actions...)
+		case *ast.DeferMember:
+			state.Defer = append(state.Defer, m.Triggers...)
 		case *ast.StateRegion:
 			state.Regions = append(state.Regions, m)
 		case *ast.StateNode:
