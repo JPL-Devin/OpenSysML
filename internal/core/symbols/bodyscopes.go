@@ -39,6 +39,7 @@ func newBodyExprScope(parent *Scope, body *ast.BodyExpr) *Scope {
 		return parent
 	}
 	scope := NewScope(parent, body)
+	scope.markBodyLocal()
 	for i := range body.Params {
 		p := &body.Params[i]
 		if p.Name == "" {

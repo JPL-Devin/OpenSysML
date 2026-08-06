@@ -135,7 +135,8 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 
 // lookupInSubtree searches a scope and all descendant scopes for name.
 func lookupInSubtree(scope *symbols.Scope, name string, seen map[*symbols.Scope]bool) (*symbols.Symbol, bool) {
-	if scope == nil || seen[scope] {
+	// A body-local name is not a member of the namespace being imported.
+	if scope == nil || seen[scope] || scope.BodyLocal() {
 		return nil, false
 	}
 	seen[scope] = true

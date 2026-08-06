@@ -186,6 +186,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		// A loop is an anonymous action namespace: its body's declarations (and a
 		// `for` iteration variable) are members visible to the body and condition.
 		child := NewScope(scope, d)
+		child.markBodyLocal()
 		scope.AddChild(child)
 		buildMembers(child, d.Body)
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
