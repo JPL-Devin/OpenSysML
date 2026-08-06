@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
@@ -22,6 +23,12 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_dangling_transition", testStateDanglingTransition)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
+	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
+	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
+	t.Run("calc_without_result", testCalcWithoutResult)
+	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
+	t.Run("calc_direct_recursion", testCalcDirectRecursion)
+	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
 	t.Run("fork_branches_share_region", testForkBranchesShareRegion)
@@ -508,6 +515,8 @@ func testSourcelessAcceptAtTopLevel(t *testing.T) {
 	}
 }
 
+// testCalcUnboundParameter: a parameter with neither an argument nor a default
+// is a modeling error, not a null value.
 func testCalcUnboundParameter(t *testing.T) {
 	src := `
 		package test {
@@ -518,15 +527,7 @@ func testCalcUnboundParameter(t *testing.T) {
 			}
 		}
 	`
-	file := parseAndBuild(t, src)
-	if file == nil {
-		t.Fatal("parse failed")
-	}
-
-	idx, model, ctx := buildRuntime(t, "<test>", file)
-
-	_ = model // silence unused
-
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "add", ast.DefCalc)
 	if sym == nil {
@@ -536,19 +537,187 @@ func testCalcUnboundParameter(t *testing.T) {
 	// Invoke with only 1 argument (missing y)
 	xVal := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
 	result, err := ctx.InvokeCalc(sym, []Value{xVal}, rootScope)
+	if err == nil {
+		t.Fatalf("expected an unbound parameter error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("expected ErrUnboundParameter, got: %v", err)
+	}
+}
 
-	if err != nil {
-		t.Logf("InvokeCalc returned error (expected): %v", err)
-		return
+// testCalcTooManyArguments: more arguments than parameters has no binding, so it
+// reports an arity error instead of dropping the extras.
+func testCalcTooManyArguments(t *testing.T) {
+	src := `
+		package test {
+			calc double {
+				in x: Integer;
+				return x * 2;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "double", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("double calc not found")
 	}
 
-	// Some implementations may return null or zero
-	if result.Kind == ValNull {
-		t.Log("InvokeCalc returned null (unbound parameter)")
-		return
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}}
+	_, err := ctx.InvokeCalc(sym, []Value{arg, arg}, rootScope)
+	if err == nil {
+		t.Fatal("expected an arity error, the calc accepted a surplus argument")
+	}
+	if !errors.Is(err, ErrCalcArity) {
+		t.Errorf("expected ErrCalcArity, got: %v", err)
+	}
+}
+
+// testCalcUnknownNamedArgument: a named argument that matches no parameter is
+// reported instead of silently leaving the parameter on its default.
+func testCalcUnknownNamedArgument(t *testing.T) {
+	src := `
+		package test {
+			calc scale {
+				in x: Integer = 1;
+				return x * 2;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "scale", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("scale calc not found")
 	}
 
-	t.Logf("InvokeCalc returned value (unbound parameter accepted): %+v", result)
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	_, err := ctx.InvokeCalcNamed(sym, map[string]Value{"factor": arg}, rootScope)
+	if err == nil {
+		t.Fatal("expected an unknown parameter error, the invocation succeeded")
+	}
+	if !errors.Is(err, ErrUnknownParameter) {
+		t.Errorf("expected ErrUnknownParameter, got: %v", err)
+	}
+}
+
+// testCalcWithoutResult: a calc body with no return expression has no value to
+// produce, own or inherited.
+func testCalcWithoutResult(t *testing.T) {
+	src := `
+		package test {
+			calc empty {
+				in x: Integer;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "empty", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("empty calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}}
+	_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatal("expected a missing-result error, the calc returned a value")
+	}
+	if !errors.Is(err, ErrNoResultExpression) {
+		t.Errorf("expected ErrNoResultExpression, got: %v", err)
+	}
+}
+
+// testCalcSymbolIsNotACalc: invoking a non-calc symbol is rejected by kind
+// rather than by whatever its body happens to contain.
+func testCalcSymbolIsNotACalc(t *testing.T) {
+	src := `
+		package test {
+			part def Engine {
+				attribute power : Integer;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Engine", ast.DefPart)
+	if sym == nil {
+		t.Fatal("Engine part def not found")
+	}
+
+	_, err := ctx.InvokeCalc(sym, nil, rootScope)
+	if err == nil {
+		t.Fatal("expected a not-a-calc error, the invocation succeeded")
+	}
+	if !errors.Is(err, ErrNotACalc) {
+		t.Errorf("expected ErrNotACalc, got: %v", err)
+	}
+}
+
+// testCalcDirectRecursion: a calc that invokes itself unconditionally must be
+// stopped by the nesting bound instead of exhausting the stack.
+func testCalcDirectRecursion(t *testing.T) {
+	src := `
+		package test {
+			calc countdown {
+				in n: Integer;
+				return countdown(n - 1);
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "countdown")
+}
+
+// testCalcMutualRecursion: the bound is on nesting depth, so a cycle through
+// another calc is caught the same way as direct self-invocation.
+func testCalcMutualRecursion(t *testing.T) {
+	src := `
+		package test {
+			calc ping {
+				in n: Integer;
+				return pong(n);
+			}
+
+			calc pong {
+				in n: Integer;
+				return ping(n);
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "ping")
+}
+
+// assertCalcRecursionBounded invokes calcName and requires a recursion-limit
+// error promptly: the invocation runs on its own goroutine so a hang fails the
+// case instead of stalling the suite until the package timeout.
+func assertCalcRecursionBounded(t *testing.T, src, calcName string) {
+	t.Helper()
+
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, calcName, ast.DefCalc)
+	if sym == nil {
+		t.Fatalf("calc %s not found", calcName)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 10}}
+		_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatalf("expected recursive calc %s to be bounded, it returned a value", calcName)
+		}
+		if !errors.Is(err, ErrCalcRecursionLimit) {
+			t.Errorf("expected ErrCalcRecursionLimit, got: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatalf("recursive calc %s did not terminate", calcName)
+	}
 }
 
 // testConstraintMissingFeature: constraint references nonexistent feature

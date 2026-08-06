@@ -10,15 +10,19 @@
 
 ### ✅ Fully Implemented & Tested (~98% of Targeted Features)
 
-**Calculations (8/8 features):**
+**Calculations (12/12 features):**
 - Invocation with typed parameters
-- Return expression evaluation
+- Return expression evaluation (both `return <expr>;` and a bound return parameter `return : T = <expr>;`)
 - Parameter binding (positional + named arguments)
+- Parameter defaults (own and inherited)
+- Inherited parameters and result through a typed calc usage, including redeclaration
+- Nested calc invocation, and invocation from a constraint
 - Control flow (if/else)
 - Unary operators (not, -)
 - Type coercion (Integer→Real)
 - Qualified names (A::B::C)
-- Error handling (unbound parameters, missing return)
+- Deterministic evaluation trace (parameter binding, sub-expression order, results)
+- Error handling (unbound/unknown parameters, arity, missing return, recursion and step budgets)
 
 **Constraints (5/5 features):**
 - Assert evaluation (boolean satisfaction)
@@ -100,11 +104,11 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 33 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×15, accept-then×1)
-- 19 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, history misuse, non-deferrable deferred trigger, non-terminating do behavior)
+- 39 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×5, state×15, accept-then×1)
+- 25 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures)
 - 41 unit tests
-- 22 golden AST fixtures (including pseudostate and timed-trigger parsing tests)
-- 8 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions)
+- 23 golden AST fixtures (including pseudostate, timed-trigger and calc default/invocation parsing tests)
+- 21 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, calc and constraint evaluation)
 - 17 negative parser tests
 - 900+ total tests passing
 
@@ -129,13 +133,26 @@ Each row documents one behavioral semantic feature:
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Calc invocation with typed parameters | `context.go:254` `InvokeCalc` | `calc_simple_add.sysml` | ✅ Faithful |
-| Return expression evaluation | `eval.go` + `context.go:254` | `calc_simple_add.sysml` | ✅ Faithful |
-| Parameter binding (positional) | `context.go:254` (args slice) | `calc_simple_add.sysml` | ✅ Faithful |
-| Parameter binding (named arguments) | `context.go:254` | `requirement_invocation_test.go` | ✅ Faithful |
-| Unbound parameter detection | `context.go:254` | `robustness_test.go:testCalcUnboundParameter` | ✅ Faithful |
+| Calc invocation with typed parameters | `invoke_calc.go` `InvokeCalc`/`invokeCalcShape` | `calc_simple_add.sysml` | ✅ Faithful |
+| Return expression evaluation (`return <expr>;`) | `invoke_calc.go` `calcResult`/`resultExpression` + `eval.go` `Eval` | `calc_simple_add.sysml` | ✅ Faithful |
+| Result as a bound return parameter (`return : T = <expr>;`) | `invoke_calc.go` `resultExpression` | `calc_return_parameter.sysml` | ✅ Faithful |
+| Parameter binding (positional) | `invoke_calc.go` `bindCalcParameter` | `calc_simple_add.sysml` | ✅ Faithful |
+| Parameter binding (named arguments) | `eval.go` `evalInvocation` + `invoke_calc.go` `InvokeCalcNamed` | `calc_named_arguments.sysml` | ✅ Faithful |
+| Parameter default when no argument is passed | `invoke_calc.go` `bindCalcParameter` | `calc_parameter_defaults.sysml` | ✅ Faithful |
+| Parameters and result inherited through a typed calc usage | `invoke_calc.go` `calcShapeOf`/`calcChain`/`calcParameters` | `calc_inherited_parameters.sysml`, `calc_return_parameter.sysml` | ✅ Faithful |
+| Redeclared parameter keeps its inherited position and default | `invoke_calc.go` `calcParameters` | `calc_return_parameter.sysml` | ✅ Faithful |
+| Nested calc invocation | `eval.go` `evalInvocation` → `invoke_calc.go` `invokeCalc` | `calc_nested_invocation.sysml` | ✅ Faithful |
+| Calc invoked from a constraint | `context.go` `EvaluateConstraint` → `eval.go` `evalInvocation` | `calc_from_constraint.sysml` | ✅ Faithful |
+| Deterministic evaluation trace (binding, sub-expression order, result) | `trace.go` `RecordCalcEnter`/`RecordCalcBind`/`EndEval`, `eval.go` `Eval` | `*.trace.golden` via `TestExecutionTrace`, `trace_calc_test.go:TestCalcTraceIsStableAcrossRuns` | ✅ Faithful |
+| Canonical rendering of unordered values in traces | `trace.go` `FormatTraceValue` | `trace_calc_test.go:TestFormatTraceValueCanonicalizesSets` | ✅ Faithful |
+| Unbound parameter detection | `invoke_calc.go` `bindCalcParameter` (`ErrUnboundParameter`) | `robustness_test.go:testCalcUnboundParameter` | ✅ Faithful |
+| Surplus positional arguments | `invoke_calc.go` `checkArgs` (`ErrCalcArity`) | `robustness_test.go:testCalcTooManyArguments` | ✅ Faithful |
+| Named argument that names no parameter | `invoke_calc.go` `checkArgs` (`ErrUnknownParameter`) | `robustness_test.go:testCalcUnknownNamedArgument` | ✅ Faithful |
+| Invoked symbol is not a calc | `invoke_calc.go` `calcShapeOf` (`ErrNotACalc`) | `robustness_test.go:testCalcSymbolIsNotACalc` | ✅ Faithful |
+| Recursive calc (direct or mutual) is bounded | `invoke_calc.go` `invokeCalcShape` (`ErrCalcRecursionLimit`, depth 32) | `robustness_test.go:testCalcDirectRecursion`, `:testCalcMutualRecursion` | ⚠️ Approximate (depth-bounded; recursion is rejected rather than evaluated) |
+| Step budget bounds calc evaluation | `context.go` step counter (`ErrStepLimitExceeded`) | `robustness_test.go:testStepBudgetExceeded` | ✅ Faithful |
 | Control flow (if/else) in calc | `eval.go` expression evaluation | `robustness_test.go:testDecisionNoSatisfiedGuard` | ✅ Faithful |
-| Missing return expression | `context.go:254` error path | `robustness_test.go:testDecisionNoSatisfiedGuard` | ✅ Faithful |
+| Missing return expression | `invoke_calc.go` `calcShapeOf` (`ErrNoResultExpression`) | `robustness_test.go:testCalcWithoutResult` | ✅ Faithful |
 | Unary operators (not, -) | `eval.go:483` evalNeg | `calc_unary_operators.sysml` | ✅ Faithful |
 | Type coercion (Integer→Real) | `eval.go:344` toReal | `calc_type_coercion.sysml` | ✅ Faithful |
 | Qualified names (A::B::C) | `eval.go` + `resolve/` | `calc_qualified_names.sysml` | ✅ Faithful |
@@ -366,15 +383,17 @@ are tracked here):
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `context.go` | Execution context, calc/constraint/requirement evaluation | ~460 |
+| `context.go` | Execution context, constraint/requirement evaluation | ~430 |
+| `invoke_calc.go` | Calc invocation: parameter/result resolution across specialization, binding, recursion bound | ~300 |
 | `action_executor.go` | Token-flow semantics, control flow nodes, nested actions | ~729 |
 | `state_executor.go` | Event-driven state machines, transitions, hierarchical states, pseudostates | ~1149 |
 | `eval.go` | Expression evaluation (operators, literals, features) | ~758 |
 | `value.go` | Runtime value representation (ValConst, ValString, ValInstance) | ~150 |
-| `trace.go` | Deterministic execution trace recording | ~154 |
+| `trace.go` | Deterministic execution and calc-evaluation trace recording, canonical value rendering | ~290 |
 | `conformance_test.go` | Conformance gate (26 cases) | ~470 |
-| `robustness_test.go` | Failure-mode tests (7 cases) | ~360 |
-| `trace_test.go` | Golden trace test infrastructure | ~140 |
+| `robustness_test.go` | Failure-mode tests (22 cases) | ~660 |
+| `trace_test.go` | Golden trace test infrastructure | ~200 |
+| `trace_calc_test.go` | Trace determinism and canonical rendering unit tests | ~180 |
 
 ### Symbol Resolution (`internal/core/resolve/`)
 
@@ -397,27 +416,27 @@ are tracked here):
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts:**
-- Conformance cases: 28 (all passing)
-- Robustness tests: 11 (all passing)
+- Conformance cases: 39 (all passing)
+- Robustness tests: 25 (all passing)
 - Unit tests: 41 (action/state executors)
-- Golden AST fixtures: 18
-- Golden execution traces: 1
+- Golden AST fixtures: 23
+- Golden execution traces: 21
 - Negative parser tests: 17
 - Total tests: 900+
 
 **Coverage by Feature Type:**
-- Calc: 4 conformance + 3 unit + 2 robustness
-- Constraint: 3 conformance + 1 robustness
+- Calc: 10 conformance + 10 golden traces + 8 unit + 7 robustness
+- Constraint: 3 conformance + 3 golden traces + 1 robustness
 - Requirement: 5 conformance + 4 unit (named args, inheritance)
 - Action: 5 conformance + 19 unit + 1 robustness
-- State: 11 conformance + 14 unit + 6 robustness
+- State: 15 conformance + 6 golden traces + 14 unit + 9 robustness
 - Evaluation: 3 conformance (unary, coercion, qualified)
 - Name resolution: 3 unit (inheritance, named args, control flow)
 
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
-- Conformance: 28/28 cases passing
-- Training examples: 71/100 clean (29 with pedagogical gaps or OMG bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
+- Conformance: 39/39 cases passing
+- Training examples: 80/100 clean (20 with pedagogical gaps or OMG bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
 
 ---
