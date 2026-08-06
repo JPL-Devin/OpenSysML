@@ -122,9 +122,8 @@ func (h eventHeap) Less(i, j int) bool {
 	if h[i].Timestamp != h[j].Timestamp {
 		return h[i].Timestamp < h[j].Timestamp
 	}
-	// Events queued for the same instant are dispatched in arrival order: IDs are
-	// handed out in that order, and a deferred event re-queued later keeps its
-	// original ID so it still comes before whatever arrived after it.
+	// Events queued for the same instant are dispatched in the order they were
+	// queued, since IDs are handed out in that order.
 	return h[i].ID < h[j].ID
 }
 
