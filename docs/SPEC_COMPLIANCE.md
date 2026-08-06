@@ -305,12 +305,42 @@ known, so unmodelled types never produce a false positive.
 | Body-expression parameters (`c->forAll { in i : Positive; f(i) }`) | `symbols/bodyscopes.go` `buildBodyScopes` (scope linked into the document tree), read back by `symbols.BodyExprScope` in `resolve/document.go` and `lsp/walk.go` | `TestBodyLocalDeclarationsAreVisible/body_expression_parameter`, `lsp` `TestRenameLeavesBodyExpressionParameters`, `TestRenameBodyExpressionParameterFromDeclaration`, `TestDefinitionBodyExpressionParameter` | ✅ Faithful |
 | Features of the stdlib base type of an untyped usage (`state normal;` → `States::StateAction::done`) | `semantics/implicit.go` `implicitUsageBases`, `Model.implicitBase` via `semantics/model.go` `DirectSupertypes` | `model/implicit_typing_test.go` `TestImplicitUsageBaseTypes`, `TestInheritedMembersResolveThroughUntypedUsage`, `semantics/implicit_test.go`, `lsp/implicit_typing_test.go` | ⚠️ Approximate (the implicit base is the stdlib base *definition* of the usage kind, not the base *feature* it subsets, since library index records carry no specialization edges; connector/succession/flow/binding/satisfy/subject/objective usages take their type from what they relate to and get no base) |
 | Implicit redefinition of a like-named inherited feature (`out item image;` in `action focus : Focus`) | `semantics/implicit.go` (only to the extent that such a usage is deliberately given no implicit base) | `model/implicit_typing_test.go` `TestImplicitBaseYieldsToImplicitRedefinition`, `docs/TRAINING_EXAMPLES.md` pinned count (`Conditional Succession Example-1`) | ❌ Not Yet Implemented (the usage is left untyped rather than taking the inherited feature's type, so members of that type report unresolved) |
-| Features contributed by `perform` statements and `references` edges (`perform providePower.generateTorque;`) | — | `docs/TRAINING_EXAMPLES.md` pinned counts (`Action Performance Example`, `Allocation Usage Example`) | ❌ Not Yet Implemented (neither is a generalization edge, so the referenced action's members are not reachable) |
+| Reference subsetting contributes members (`perform action takePhoto references takePicture;`, `perform providePower.generateTorque;`) | `semantics/reference.go` `Model.ReferencedFeature`, `Model.MemberSources`, consumed by `semantics/members.go` `MembersOf`/`LookupMember`; targets resolved by `resolve/target.go` `ResolveTarget`/`ResolveReferenceTarget` | `semantics/reference_test.go`, `resolve/target_test.go`, `model/perform_reference_test.go`, `parse/perform_reference.golden`, `runtime/testdata/conformance/action_perform_reference.sysml`, `runtime/robustness_test.go` (`perform_of_missing_action`, `perform_reference_cycle`) | ✅ Faithful (a member-contribution relation, deliberately **not** a generalization — see below) |
+| Effective name of an unnamed feature that reference-subsets (`perform providePower.generateTorque;` declares `generateTorque`) | `symbols/builder.go` `effectiveIdent`, `ast/namespace.go` `TargetName` | `symbols/perform_test.go`, `model/perform_reference_test.go` | ⚠️ Approximate (the naming feature is the reference subsetting's target only; a redefinition is not yet used as a naming feature) |
+| A reference subsetting resolves outside the name it contributes (`part v { perform 'provide power'; }`) | `resolve/target.go` `ReferenceScope`, applied in `resolve/document.go` `resolveRelationships` | `resolve/target_test.go` `TestReferenceScopeSkipsSelfBinding`, `model/perform_reference_test.go` (`perform shadowing the action it performs`) | ✅ Faithful |
+| Anonymous binary allocation (`allocate torqueGenerator to powerTrain`) | `parser/defusage.go` `atAllocateShorthand` | `parse/perform_reference.golden` | ✅ Faithful (both names are connector ends; formerly the first was read as the usage's name) |
+| `individual def X :> PartDef`, `individual x : IndividualDef` kind compatibility | `passes/typecheck.go` kind tables | `docs/TRAINING_EXAMPLES.md` pinned count (`Verification Case Usage Example`, 6) | ❌ Not Yet Implemented (an individual definition specializing an occurrence definition, SysML 7.9.5, is reported as a kind mismatch; these false positives became visible once that file's name-resolution tier went clean) |
 | `if`/`else` branch bodies as namespaces | — | — | ❌ Not Yet Implemented (branch declarations are registered nowhere; the AST has no per-branch node to own a scope) |
 | Transition source/target names | — (deferred to `lower/state_graph.go`) | — | ⚠️ Approximate (not resolved as references, so a misspelled endpoint surfaces at lowering, not at the name-resolution tier) |
 | Signal trigger names (`when sigX`) | — | `TestBehaviorDeclarationsAreVisible/signal_trigger` | ⚠️ Approximate (a bare trigger name is an injected event, not a declared element, so it is deliberately not resolved) |
 | Accept-parameter visibility to sibling action nodes | `runtime/action_executor.go` shared token data | `action_accept_message.sysml` | ⚠️ Approximate (the executor binds the payload into shared token data, which scoping does not model: a sibling node reading the parameter by simple name is reported unresolved) |
 | Unqualified library names in files that do not import their library (`Boolean`, `Real`, `that`) | — | — | ❌ Not Yet Implemented (no implicit library import or KerML implicit features, so library files report large numbers of unresolved references) |
+
+#### Design note: `references` is a member-contribution edge, not a generalization
+
+A `perform` action usage relates the action it performs through a
+**ReferenceSubsetting**, written `references` or `::>` (SysML v2 §7.17.6; the
+derived `PerformActionUsage::performedAction` comes from that owned reference
+subsetting, §8.3.17.14). KerML makes ReferenceSubsetting a syntactically
+distinguished kind of Subsetting (§8.3.3.3.9), which is why the referenced
+feature's members are visible on the referencing one.
+
+It is nevertheless kept out of `semantics.Model.DirectSupertypes`. Subsetting
+in this implementation drives conformance and implicit typing, and a perform
+statement is not a subtype of the action it performs for those purposes: making
+it one would give `perform action takePhoto references takePicture;` the type of
+`takePicture` and silently change conformance results elsewhere. Instead
+`Model.MemberSources` — the union of the generalization edges and the reference
+subsetting, breadth-first and cycle-guarded — is what member lookup consumes, so
+`takePhoto.focus` resolves while `AllSupertypes(takePhoto)` stays free of
+`takePicture`.
+
+Two consequences of the spec's naming rules fall out of this and are implemented
+alongside it: an unnamed feature takes the effective name of the feature it
+references (KerML `Feature::effectiveName`), so `perform providePower.generateTorque;`
+declares `generateTorque`; and because that name is bound in the same scope the
+reference resolves in, the reference is resolved outside its own binding
+(`resolve.Resolver.ReferenceScope`).
 
 ---
 

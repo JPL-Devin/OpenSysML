@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 81/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 19/100 files have semantic errors (37 total errors)  
+**Status:** 83/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 17/100 files have semantic errors (36 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -95,8 +95,26 @@ One entry drifted; every other file kept its exact count.
 | File | Diagnostic | Remaining gap |
 |---|---|---|
 | `Conditional Succession Example-1` | `unresolved member: isWellFocused` | Implicit *redefinition*: `out item image;` inside `action focus : Focus` refines `Focus::image` (typed `Image`) by name. Untyped usages that shadow an inherited feature deliberately get no implicit base, so the type still comes from nowhere. |
-| `Action Performance Example`, `Allocation Usage Example` | `unresolved member: focus`/`shoot`/`generateTorque` | The members come from `perform action takePhoto references takePicture;` and `perform providePower.generateTorque;`: a `references` edge and the feature a `perform` statement contributes, neither of which is a generalization. |
+| `Action Performance Example`, `Allocation Usage Example` | `unresolved member: focus`/`shoot`/`generateTorque` | The members come from `perform action takePhoto references takePicture;` and `perform providePower.generateTorque;`: a `references` edge and the feature a `perform` statement contributes, neither of which is a generalization. **Fixed since — see the 83/100 verdicts below.** |
 | `Time Slice and Snapshot Example`, `Individuals and Time Slices` | `unresolved reference: start`/`done` | Bugs in the OMG files (`startShot`/`endShot`), unchanged. |
+
+### Verdicts for the reference-subsetting re-pin (83/100)
+
+Two entries went clean and one reports more; every other file kept its exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `18. Action Performance/Action Performance Example` | 2 × `unresolved member: focus`/`shoot` | Real fix: `perform action takePhoto references takePicture;` relates `takePhoto` to `takePicture` by a reference subsetting (SysML 7.17.6), which contributes the referenced action's members. `takePhoto.focus` now resolves to `takePicture::focus`. The negative counterpart (a member the referenced action does not declare) still reports — see `internal/core/semantics/reference_test.go` and `internal/core/model/perform_reference_test.go`. |
+| `38. Allocation/Allocation Usage Example` | 2 × `unresolved member: generateTorque` | Real fix, two causes: `perform providePower.generateTorque;` names its feature after the feature it references (KerML `Feature::effectiveName`), so `torqueGenerator.generateTorque` names a declaration; and `allocate torqueGenerator to powerTrain` is an anonymous binary allocation, whose first name is a connector end rather than the usage's own name. |
+| `32. Requirements/Requirement Satisfaction` | unchanged count, different errors | Same fix, in a file that was already recorded: `perform 'provide power'.'generate torque'` resolves now. Its two remaining errors (`type must be a definition, found requirementUsage`) were already recorded and are unrelated. |
+
+**A file that reports more, adjudicated**
+
+| File | Was | Now | Verdict |
+|---|---|---|---|
+| `34. Verification/Verification Case Usage Example` | 3 × `unresolved reference: testVehicle`/`massMeasured` | 6 × `individual cannot specialize partDef` / `... cannot be typed by individualDef` | The three name-resolution false positives are fixed by this change: `perform vehicleMassTest;` used to shadow the verification usage it performs with an empty feature, so `vehicleMassTest.collectData` and the redefinitions under it resolved to nothing. With the name-resolution tier clean, the type tier runs on this file for the first time (tiers are skipped after a lower tier errors) and reports six pre-existing false positives about individuals: `individual def TestSystem :> MassVerificationSystem;` and `individual testSystem : TestSystem` are well-formed (SysML 7.9.5), and the kind tables in `passes/typecheck.go` do not yet accept an individual definition specializing an occurrence definition. Recorded, not fixed, to keep this change scoped; see `docs/SPEC_COMPLIANCE.md`. |
 
 ---
 

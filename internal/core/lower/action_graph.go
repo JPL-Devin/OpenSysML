@@ -253,7 +253,7 @@ func lowerBody(graph *ActionGraph, node *ast.Usage) {
 // relationship on the accept action, or "" when it named none.
 func acceptPort(node *ast.Usage) string {
 	for _, rel := range node.Relationships {
-		if rel == nil || rel.Kind != ast.RelReferences {
+		if rel == nil || rel.Kind != ast.RelVia {
 			continue
 		}
 		if name := ast.SimpleName(rel.Target); name != "" {

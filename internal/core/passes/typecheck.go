@@ -201,7 +201,7 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if !isCompatibleTyping(useKind, direction, target) {
 			return fmt.Sprintf("%s cannot be typed by %s (kind mismatch)", useKind, target)
 		}
-	case ast.RelReferences, ast.RelCrosses:
+	case ast.RelReferences, ast.RelCrosses, ast.RelVia, ast.RelAnnotates, ast.RelSubject:
 		if !isDef && !isUsageKind(target) {
 			return fmt.Sprintf("%s target must be a usage, found %s", rel, target)
 		}

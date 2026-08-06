@@ -21,8 +21,12 @@ func buildModel(t *testing.T, src string) (*Model, *symbols.Scope) {
 	}
 	idx := symbols.NewIndexFromDoc(name, root)
 	r := resolve.New(idx)
+	m := NewModel(r)
+	// The workspace attaches the model before resolving so that feature chains
+	// see inherited and contributed members; mirror that here.
+	r.SetModel(m)
 	r.ResolveDocument(name, root)
-	return NewModel(r), idx.DocumentRoot(name)
+	return m, idx.DocumentRoot(name)
 }
 
 // sym looks up the first symbol named key at the document root scope.

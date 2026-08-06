@@ -80,13 +80,13 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveExpr(scope, d.Condition)
 	case *ast.Definition:
 		r.resolvePrefixes(scope, d.Prefixes)
-		r.resolveRelationships(scope, d.Relationships)
+		r.resolveRelationships(scope, d, d.Relationships)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 		}
 	case *ast.Usage:
 		r.resolvePrefixes(scope, d.Prefixes)
-		r.resolveRelationships(scope, d.Relationships)
+		r.resolveRelationships(scope, d, d.Relationships)
 		if d.Multiplicity != nil {
 			r.resolveExpr(scope, d.Multiplicity.Lower)
 			r.resolveExpr(scope, d.Multiplicity.Upper)
@@ -266,9 +266,10 @@ func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixM
 	}
 }
 
-// resolveRelationships resolves each relationship target as a qualified name.
-// Special handling for redefinitions: targets are looked up in inherited scope.
-func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relationship) {
+// resolveRelationships resolves each relationship target of decl as a qualified
+// name. Redefinitions resolve in the inherited scope, and reference subsettings
+// resolve outside decl's own name binding (see ReferenceScope).
+func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rels []*ast.Relationship) {
 	for _, rel := range rels {
 		if rel != nil && rel.Target != nil {
 			// Unwrap FeatureReference if needed (relationship targets parsed as expressions)
@@ -285,11 +286,16 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relati
 				}
 			}
 
+			at := scope
+			if rel.Kind == ast.RelReferences {
+				at = r.ReferenceScope(scope, decl, target)
+			}
+
 			// Standard resolution in current scope
 			if qn, ok := target.(*ast.QualifiedName); ok {
-				r.ResolveQualified(scope, qn)
+				r.ResolveQualified(at, qn)
 			} else if fc, ok := target.(*ast.FeatureChainExpr); ok {
-				r.resolveFeatureChain(scope, fc)
+				r.resolveFeatureChain(at, fc)
 			}
 		}
 	}
