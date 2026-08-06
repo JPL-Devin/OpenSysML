@@ -2946,6 +2946,7 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 		if p.atName() && p.peekN(1).Kind == lexer.Colon {
 			// Typed declaration - parse as nested member
 			// Create a usage for the payload declaration
+			payloadStart := p.peek().Span.Offset
 			payloadUsage := &ast.Usage{
 				Kind: ast.UsageAttribute, // default to attribute
 			}
@@ -2967,6 +2968,11 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 				payloadUsage.Value = p.ParseExpression()
 			}
 
+			// The declaration is a member like any other, so it carries its own
+			// span: the symbol built from it is what go-to-definition, hover and
+			// rename identify a payload by.
+			payloadUsage.NodeSpan = p.spanFrom(payloadStart)
+
 			// Store payload usage as member (nested in flow)
 			u.Members = append(u.Members, payloadUsage)
 			fe.PayloadDecl = payloadUsage
@@ -2976,6 +2982,7 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 					{Text: payloadUsage.Ident.Name, Span: payloadUsage.Ident.NameSpan},
 				},
 			}
+			qn.NodeSpan = payloadUsage.Ident.NameSpan
 			fe.Payload = qn
 		} else {
 			// Simple reference
