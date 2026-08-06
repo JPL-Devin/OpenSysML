@@ -33,6 +33,10 @@ type StateGraph struct {
 	// RegionOwner: region → owning composite state
 	RegionOwner map[*ast.StateRegion]*ast.StateNode
 
+	// Deferred: state → the triggers it defers while active, normalized the same
+	// way transition triggers are.
+	Deferred map[*ast.StateNode][]ast.Node
+
 	// TopRegions are the machine's own orthogonal regions, in declaration order.
 	// The order is observable: it is the order regions are entered and exited in.
 	TopRegions []*ast.StateRegion
@@ -71,6 +75,7 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 		ParentState:      make(map[*ast.StateNode]*ast.StateNode),
 		RegionOwner:      make(map[*ast.StateRegion]*ast.StateNode),
 		RegionOf:         make(map[*ast.StateNode]*ast.StateRegion),
+		Deferred:         make(map[*ast.StateNode][]ast.Node),
 	}
 
 	// Extract members
@@ -140,6 +145,13 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 					return nil, fmt.Errorf("region %s in state %s has no initial state", region.Name, state.Name)
 				}
 			}
+		}
+	}
+
+	// Record the triggers each state defers, once every state is collected.
+	for _, state := range graph.States {
+		if err := collectDeferred(graph, state); err != nil {
+			return nil, err
 		}
 	}
 
@@ -322,6 +334,30 @@ func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast
 			graph.RegionInitials[region] = state
 		}
 	}
+}
+
+// collectDeferred records the triggers a state defers, normalized the same way
+// transition triggers are. Only a signal or a call can be deferred: a time or
+// change event is not dispatched from the event pool, so retaining one has no
+// meaning and is reported rather than silently ignored.
+func collectDeferred(graph *StateGraph, state *ast.StateNode) error {
+	for _, trigger := range state.Defer {
+		if trigger == nil {
+			return fmt.Errorf("state %s defers a nil trigger", state.Name)
+		}
+		switch typed := classifyTrigger(trigger).(type) {
+		case *ast.AcceptEvent:
+			if ast.SimpleName(typed.SignalType) == "" {
+				return fmt.Errorf("state %s defers a signal trigger that names no signal", state.Name)
+			}
+			graph.Deferred[state] = append(graph.Deferred[state], typed)
+		case *ast.CallEvent:
+			graph.Deferred[state] = append(graph.Deferred[state], typed)
+		default:
+			return fmt.Errorf("state %s defers a %T trigger: only signal and call triggers can be deferred", state.Name, typed)
+		}
+	}
+	return nil
 }
 
 // findStateByName looks up a state by qualified name.

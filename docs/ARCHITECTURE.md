@@ -223,7 +223,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 
 2. **StateExecutor** — Event-driven state machine execution
    - Initial/final state keywords (initial/final)
-   - Entry/exit/do behaviors (⚠️ `do` runs synchronously on entry, not concurrently)
+   - Entry/exit/do behaviors (`do` runs while its state is active, one action per round, interleaved with the do behaviors of the states active alongside it)
    - TimeEvent scheduling with priority queue
    - ChangeEvent condition polling
    - Guard evaluation for transitions
@@ -233,7 +233,8 @@ Parse + model all behavioral bodies with unified fallback grammar:
    - Choice + Junction pseudostates
    - Golden trace recording for transitions/entry/exit
    - APIs: `ProcessNextEvent()`, `CurrentState()`, `EventQueue()`, `StateData()`, `SetTrace()`
-   - **Known limitations:** history, entry and exit point pseudostates have no textual notation, so they can only be built programmatically; no deferred events; CallEvent matches any call (`matchesEvent:437` TODO)
+   - Deferred events: an event no active transition handles is retained while a state deferring it is active, and delivered afterwards in arrival order
+   - **Known limitations:** history, entry and exit point pseudostates and deferred events have no textual notation, so they can only be built programmatically; CallEvent matches any call (`matchesEvent:437` TODO)
 
 3. **Context Integration** — Public runtime APIs
    - `InvokeCalc(symbol, args)` — Invoke calculation with arguments, return result
@@ -608,7 +609,7 @@ Every behavioral feature must have:
 - Test case(s) exercising the feature
 - Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / 🚧 Known Failure
 
-**Current coverage:** ~98% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); all 26 conformance cases pass. Fork/join and shallow/deep history are implemented but have no textual notation for history; deferred events and concurrent `do` remain unimplemented — see SPEC_COMPLIANCE.md.
+**Current coverage:** ~98% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); all 29 conformance cases pass. Fork/join, shallow/deep history and deferred events are implemented but have no textual notation for history or deferral — see SPEC_COMPLIANCE.md.
 
 ---
 
