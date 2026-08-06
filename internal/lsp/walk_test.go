@@ -118,3 +118,36 @@ func TestRenameLeavesSignalTriggerNames(t *testing.T) {
 		t.Errorf("signal trigger name was rewritten:\n%s", got[name])
 	}
 }
+
+// A body expression's parameter is its own declaration, so renaming a
+// same-named outer feature must not rewrite the parameter's uses inside the
+// body, while a name the body only reads from outside is still rewritten.
+func TestRenameLeavesBodyExpressionParameters(t *testing.T) {
+	ws := model.NewWorkspace()
+	src := `package P {
+	import ScalarValues::*;
+	import ControlFunctions::*;
+	attribute s : Integer = 1;
+	action def Sample {
+		in attribute samples : Real[*];
+		assert constraint { samples->forAll { in s : Real; s > 0 } }
+		assert constraint { samples->forAll { in x : Real; x > s } }
+	}
+}
+`
+	name := openRenameDoc(t, ws, "/tmp/walk_bodyexpr.sysml", src)
+
+	got, err := applyRename(t, ws, name, "s : Integer", "threshold")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "attribute threshold : Integer = 1;") {
+		t.Errorf("declaration not renamed:\n%s", got[name])
+	}
+	if !strings.Contains(got[name], "in s : Real; s > 0") {
+		t.Errorf("body-expression parameter was rewritten:\n%s", got[name])
+	}
+	if !strings.Contains(got[name], "x > threshold") {
+		t.Errorf("reference to the outer feature was not renamed:\n%s", got[name])
+	}
+}
