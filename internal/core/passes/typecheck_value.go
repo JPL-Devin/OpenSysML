@@ -140,7 +140,11 @@ func (ec *exprChecker) valueTypeSymbol(scope *symbols.Scope, value ast.Node) *sy
 		// the checker has no rule for that.
 		return nil
 	}
-	if typed := ec.declaredTypeSymbol(symbolScope(sym), u.Relationships); typed != nil {
+	// The type name resolves from the scope the usage was declared in, as
+	// generalization targets do elsewhere (semantics.DirectSupertypes, the
+	// subsetting conformance checks). Resolving from the scope the usage owns
+	// would let its own members shadow the type it names.
+	if typed := ec.declaredTypeSymbol(sym.OwnerScope, u.Relationships); typed != nil {
 		return typed
 	}
 	// An enumeration literal declares no type: it is a member of the
@@ -162,14 +166,6 @@ func (ec *exprChecker) owningEnumeration(sym *symbols.Symbol) *symbols.Symbol {
 		return nil
 	}
 	return owner
-}
-
-// symbolScope returns the scope a symbol's own type names resolve in.
-func symbolScope(sym *symbols.Symbol) *symbols.Scope {
-	if sym.Scope != nil {
-		return sym.Scope
-	}
-	return sym.OwnerScope
 }
 
 // qualifiedNameOf unwraps the name forms a value expression can take.
