@@ -416,9 +416,9 @@ func (e *StateExecutor) defersEvent(event *Event) bool {
 }
 
 // recallDeferredEvents returns every deferred event the configuration reached by
-// the step just finished no longer defers to the event pool, keeping their
-// relative order. A recalled event is queued as arriving now, behind the
-// completion events the step queued: run-to-completion dispatches those first.
+// the step just finished no longer defers to the event pool. A recalled event
+// keeps its ID, so it is dispatched ahead of whatever arrived while it was held
+// back, but not its original timestamp, which would move virtual time backwards.
 func (e *StateExecutor) recallDeferredEvents() {
 	if len(e.deferred) == 0 {
 		return
@@ -429,8 +429,6 @@ func (e *StateExecutor) recallDeferredEvents() {
 			retained = append(retained, event)
 			continue
 		}
-		event.ID = e.nextEventID
-		e.nextEventID++
 		event.Timestamp = e.currentTime
 		e.eventQueue.Push(event)
 	}

@@ -326,3 +326,39 @@ func TestExitedNestedRegionDoesNotReactToTheSameEvent(t *testing.T) {
 		}
 	}
 }
+
+// A recalled event keeps its place ahead of the signals that arrived while it was
+// held back: Ping arrived before Pong, so ready reacts to Ping although Pong was
+// queued first.
+func TestRecalledEventPrecedesLaterArrivals(t *testing.T) {
+	busy := &ast.StateNode{Name: "busy", Defer: []ast.Node{acceptTrigger("Ping")}}
+	machine := &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{
+			&ast.StateNode{Name: "init", IsInitial: true},
+			busy,
+			&ast.StateNode{Name: "ready"},
+			&ast.StateNode{Name: "gotPing", IsFinal: true},
+			&ast.StateNode{Name: "gotPong", IsFinal: true},
+			transitionMember("init", "busy"),
+			triggeredTransition("busy", "ready", "Go"),
+			triggeredTransition("ready", "gotPing", "Ping"),
+			triggeredTransition("ready", "gotPong", "Pong"),
+		},
+	}
+
+	exec := stateExecutorFor(t, machine)
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	exec.SendSignal("Ping", nil)
+	exec.SendSignal("Go", nil)
+	exec.SendSignal("Pong", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	assertVisits(t, exec.stateVisits, "init", "busy", "ready", "gotPing")
+}

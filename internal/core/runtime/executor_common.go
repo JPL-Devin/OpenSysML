@@ -3,7 +3,9 @@ package runtime
 import (
 	"container/heap"
 	"fmt"
+
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 )
 
 // Token represents a control/data token in action execution.
@@ -122,9 +124,31 @@ func (h eventHeap) Less(i, j int) bool {
 	if h[i].Timestamp != h[j].Timestamp {
 		return h[i].Timestamp < h[j].Timestamp
 	}
-	// Events queued for the same instant are dispatched in the order they were
-	// queued, since IDs are handed out in that order.
+	// A completion event is dispatched before the pool events queued for the same
+	// instant: a state that has completed leaves before it reacts to a signal.
+	if isCompletionEvent(h[i]) != isCompletionEvent(h[j]) {
+		return isCompletionEvent(h[i])
+	}
+	// Otherwise events are dispatched in arrival order: IDs are handed out in that
+	// order and a deferred event keeps its ID when it is recalled, so it still
+	// comes before whatever arrived after it.
 	return h[i].ID < h[j].ID
+}
+
+// isCompletionEvent reports whether an event carries a completion transition,
+// the transition a state takes once it is done rather than on a trigger.
+func isCompletionEvent(event Event) bool {
+	if event.Type != EventTime {
+		return false
+	}
+	switch payload := event.Payload.(type) {
+	case *lower.Transition:
+		return payload.Trigger == nil
+	case *ast.TransitionEdge:
+		return payload.Trigger == nil
+	default:
+		return false
+	}
 }
 
 func (h eventHeap) Swap(i, j int) {
