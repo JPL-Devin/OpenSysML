@@ -1,0 +1,15 @@
+package CallTriggerNestedTest {
+    // The sourceless nested form: a call trigger written inside the state it
+    // leaves, so only the invocation carrying `level` takes the lamp out of standby.
+    state Lamp {
+        initial start;
+        state standby {
+            accept turnOn(level) then lit;
+        }
+        state lit;
+        final done;
+
+        start then standby;
+        lit then done;
+    }
+}

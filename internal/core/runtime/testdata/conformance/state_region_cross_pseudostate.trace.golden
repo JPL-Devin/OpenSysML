@@ -1,0 +1,21 @@
+exit: start
+enter: running
+enter: lstart
+enter: rstart
+transition: start -> running
+exit: lstart
+enter: lidle
+transition: lstart -> lidle
+exit: rstart
+enter: ridle
+transition: rstart -> ridle
+exit: lidle
+exit: ridle
+exit: running
+enter: running
+enter: lstart
+enter: rtarget (entry action)
+transition: lidle -> rtarget
+exit: lstart
+enter: lidle
+transition: lstart -> lidle

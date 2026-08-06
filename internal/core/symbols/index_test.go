@@ -44,6 +44,28 @@ func TestIndexAmbiguousQualified(t *testing.T) {
 	}
 }
 
+// A member a namespace declares shadows one of the same name that a wildcard
+// import re-exports through it, so the qualified name stays unambiguous — the
+// pattern of SI::min, which is SI's own minute and not an imported function.
+func TestIndexOwnedMemberShadowsWildcardReexport(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml", "package Functions { calc def min; calc def clamp; }")
+	addDoc(t, idx, "b.sysml", "package Units { public import Functions::*; attribute <min> minute; }")
+	idx.ExpandWildcardImports()
+
+	syms := idx.LookupQualified("Units::min")
+	if len(syms) != 1 {
+		t.Fatalf("LookupQualified(Units::min) len = %d, want 1", len(syms))
+	}
+	if syms[0].Name != "minute" {
+		t.Errorf("Units::min = %q, want the declared minute", syms[0].Name)
+	}
+	if got := len(idx.LookupQualified("Units::clamp")); got != 1 {
+		t.Errorf("LookupQualified(Units::clamp) len = %d, want 1: "+
+			"a re-export stays visible when nothing shadows it", got)
+	}
+}
+
 func TestIndexDocumentRoot(t *testing.T) {
 	idx := NewIndex()
 	addDoc(t, idx, "a.sysml", "package P;")

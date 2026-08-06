@@ -1,8 +1,10 @@
 package runtime
 
 import (
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
@@ -21,54 +23,432 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_dangling_transition", testStateDanglingTransition)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
+	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
+	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
+	t.Run("calc_without_result", testCalcWithoutResult)
+	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
+	t.Run("calc_direct_recursion", testCalcDirectRecursion)
+	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
+	t.Run("fork_branches_share_region", testForkBranchesShareRegion)
+	t.Run("join_with_one_incoming_branch", testJoinWithOneIncomingBranch)
+	t.Run("region_pseudostate_without_satisfied_guard", testRegionPseudostateWithoutSatisfiedGuard)
+	t.Run("region_pseudostate_cycle", testRegionPseudostateCycle)
+	t.Run("non_numeric_time_trigger", testNonNumericTimeTrigger)
+	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
+	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
+	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
+	t.Run("history_outside_composite_state", testHistoryOutsideCompositeState)
+	t.Run("history_without_record_or_default", testHistoryWithoutRecordOrDefault)
+	t.Run("defer_of_non_deferrable_trigger", testDeferOfNonDeferrableTrigger)
+	t.Run("non_terminating_do_behavior", testNonTerminatingDoBehavior)
+	t.Run("call_of_unhandled_operation", testCallOfUnhandledOperation)
+	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 }
 
-// testDeadlockJoinStarvation: join awaiting token that never arrives
-func testDeadlockJoinStarvation(t *testing.T) {
-	// Deadlock detection already tested in action_executor_test.go:TestActionExecutor_Deadlock_JoinStarvation
-	// This is a conformance check that the test exists and passes.
-	t.Log("Deadlock detection covered by TestActionExecutor_Deadlock_JoinStarvation")
+// testDeferOfNonDeferrableTrigger: only signals and calls are dispatched from
+// the event pool, so a state deferring a time trigger is reported at lowering
+// rather than deferring nothing at run time.
+func testDeferOfNonDeferrableTrigger(t *testing.T) {
+	idx := symbols.NewIndex()
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 1000)
 
-	// Quick inline test for robustness suite completeness:
+	machine := &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{
+			&ast.StateNode{Name: "init", IsInitial: true},
+			&ast.StateNode{
+				Name:  "busy",
+				Defer: []ast.Node{&ast.TimeEvent{Duration: &ast.LiteralInteger{Value: "1"}}},
+			},
+			transitionMember("init", "busy"),
+		},
+	}
+
+	_, err := newStateExecutor(ctx, &symbols.Symbol{
+		Kind: symbols.SymbolStateUsage,
+		Name: machine.Ident.Name,
+		Decl: machine,
+	})
+	if err == nil {
+		t.Fatal("expected an error for a state deferring a time trigger")
+	}
+	if !strings.Contains(err.Error(), "only signal and call triggers can be deferred") {
+		t.Errorf("expected a deferrability error, got: %v", err)
+	}
+}
+
+// testNonTerminatingDoBehavior: a do behavior whose state is re-entered every
+// round never ends, so the run is bounded and reports instead of hanging.
+func testNonTerminatingDoBehavior(t *testing.T) {
+	spin := &ast.StateNode{
+		Name: "spin",
+		Do: []ast.Node{&ast.AssignmentActionNode{
+			Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "ticks"}}},
+			Value:  &ast.LiteralInteger{Value: "1"},
+		}},
+	}
+	exec := stateExecutorFor(t, &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{
+			&ast.StateNode{Name: "init", IsInitial: true},
+			spin,
+			transitionMember("init", "spin"),
+			transitionMember("spin", "spin"),
+		},
+	})
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	err := exec.RunToCompletion()
+	if err == nil {
+		t.Fatal("expected a budget error for a machine that never settles")
+	}
+	if !strings.Contains(err.Error(), "exceeded max") {
+		t.Errorf("expected a budget error, got: %v", err)
+	}
+}
+
+// stateExecutorForSource builds an executor for the named machine in src, for
+// tests that drive it event by event.
+func stateExecutorForSource(t *testing.T, name, src string) *StateExecutor {
+	t.Helper()
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), name, ast.DefState)
+	if sym == nil {
+		t.Fatalf("state machine %s not found", name)
+	}
+	exec, err := newStateExecutor(ctx, sym)
+	if err != nil {
+		t.Fatalf("newStateExecutor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	return exec
+}
+
+// testCallOfUnhandledOperation: an invocation no trigger names is discarded by
+// run-to-completion, leaving the machine where it was rather than hanging.
+func testCallOfUnhandledOperation(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state waiting;
+			state moving;
+			init then waiting;
+			transition waiting to moving accept go();
+		}
+	}`)
+	exec.InvokeOperation("halt", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	current, ok := exec.CurrentState().(*ast.StateNode)
+	if !ok || current.Name != "waiting" {
+		t.Errorf("expected the unhandled call to leave the machine in waiting, got %v", exec.CurrentState())
+	}
+}
+
+// testCallArgumentOfWrongType: an argument the guard cannot compare reports
+// rather than firing or dropping the transition on a wrong comparison.
+func testCallArgumentOfWrongType(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state waiting;
+			state moving;
+			init then waiting;
+			transition waiting to moving accept setSpeed(value) if value > 0;
+		}
+	}`)
+	exec.InvokeOperation("setSpeed", map[string]Value{
+		"value": {Kind: ValString, Str: "fast"},
+	})
+	err := exec.RunToCompletion()
+	if err == nil {
+		t.Fatal("expected an error: the guard compares a String argument with 0")
+	}
+	if !strings.Contains(err.Error(), "string") {
+		t.Errorf("expected the offending operand kind in the message, got: %v", err)
+	}
+}
+
+// testHistoryOutsideCompositeState: a history pseudostate restores the state
+// that declares it, so one declared directly in the machine has nothing to
+// restore and must report rather than enter an arbitrary state. History has no
+// textual notation, so the machine is built on the AST directly.
+func testHistoryOutsideCompositeState(t *testing.T) {
+	exec := stateExecutorFor(t, &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{
+			&ast.StateNode{Name: "init", IsInitial: true},
+			&ast.StateNode{Name: "away"},
+			&ast.PseudostateNode{Kind: ast.PseudostateShallowHistory, Name: "H"},
+			transitionMember("init", "away"),
+			transitionMember("away", "H"),
+		},
+	})
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	fire(t, exec, "init", "away")
+
+	err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
+	if err == nil {
+		t.Fatal("expected an error for a history outside any composite state")
+	}
+	if !strings.Contains(err.Error(), "must be declared inside the composite state") {
+		t.Errorf("expected an ownership error, got: %v", err)
+	}
+}
+
+// testHistoryWithoutRecordOrDefault: before its composite state has ever been
+// exited a history has nothing to restore, and with no outgoing transition there
+// is no default target either — that is reported, not silently ignored.
+func testHistoryWithoutRecordOrDefault(t *testing.T) {
+	history := &ast.PseudostateNode{Kind: ast.PseudostateShallowHistory, Name: "H"}
+	outer := &ast.StateNode{
+		Name:      "outer",
+		Substates: []ast.Node{&ast.StateNode{Name: "first"}, history},
+	}
+	exec := stateExecutorFor(t, &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{
+			&ast.StateNode{Name: "init", IsInitial: true},
+			outer,
+			&ast.StateNode{Name: "away"},
+			transitionMember("init", "away"),
+			transitionMember("away", "H"),
+		},
+	})
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	fire(t, exec, "init", "away")
+
+	err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
+	if err == nil {
+		t.Fatal("expected an error: nothing recorded and no default history transition")
+	}
+	if !strings.Contains(err.Error(), "no recorded configuration") {
+		t.Errorf("expected a missing-default error, got: %v", err)
+	}
+}
+
+// testSendViaUnconnectedPort: a port with no connection reaches no one, so an
+// accept waiting on the message must report rather than hang or bind nothing.
+func testSendViaUnconnectedPort(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			port outPort;
+			port inPort;
+			first start;
+			action sender { send 42 via outPort; }
+			action reader accept msg : Integer via inPort;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error: nothing connects outPort to inPort")
+	}
+	if !errors.Is(err, ErrNoMatchingMessage) {
+		t.Errorf("expected ErrNoMatchingMessage, got: %v", err)
+	}
+}
+
+// testNonNumericTimeTrigger: a timed trigger whose duration is not a number
+// cannot be scheduled and must be reported rather than silently dropped.
+func testNonNumericTimeTrigger(t *testing.T) {
+	_, _, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state waiting {
+				accept at "noon" then done;
+			}
+			final done;
+			init then waiting;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error for a non-numeric time trigger")
+	}
+	if !strings.Contains(err.Error(), "time duration must be constant, got string") {
+		t.Errorf("expected a numeric-duration error, got: %v", err)
+	}
+}
+
+// testForkBranchesShareRegion: a fork whose branches land in the same region
+// cannot produce one active state per region.
+func testForkBranchesShareRegion(t *testing.T) {
+	_, _, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state ready;
+			state working {
+				region left {
+					initial ls;
+					state a;
+					state b;
+					then ls a;
+				}
+				region right {
+					initial rs;
+					state c;
+					then rs c;
+				}
+			}
+			fork split;
+			final done;
+
+			init then ready;
+			transition ready to split;
+			transition split to a;
+			transition split to b;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error for fork branches in the same region")
+	}
+	if !strings.Contains(err.Error(), "in the same region") {
+		t.Errorf("expected a same-region error, got: %v", err)
+	}
+}
+
+// testJoinWithOneIncomingBranch: a join synchronizes branches, so a single
+// incoming transition is a modeling error rather than a pass-through.
+func testJoinWithOneIncomingBranch(t *testing.T) {
+	_, _, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state ready;
+			join sync;
+			final done;
+
+			init then ready;
+			transition ready to sync;
+			transition sync to done;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error for a join with one incoming transition")
+	}
+	if !strings.Contains(err.Error(), "at least two incoming transitions") {
+		t.Errorf("expected an incoming-branch-count error, got: %v", err)
+	}
+}
+
+// testRegionPseudostateWithoutSatisfiedGuard: a junction reached from inside an
+// orthogonal region whose branches are all guarded false has nowhere to go. The
+// region set is left in place and the dead end reported, rather than the machine
+// resting on a pseudostate.
+func testRegionPseudostateWithoutSatisfiedGuard(t *testing.T) {
+	_, _, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			attribute x : Integer = 9;
+
+			region left {
+				initial ls;
+				state a;
+				state b;
+				then ls a;
+				transition a to merge;
+			}
+			region right {
+				initial rs;
+				state c;
+				then rs c;
+			}
+			junction merge;
+
+			transition merge to b if x == 1;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error for a junction with no satisfied guard")
+	}
+	if !strings.Contains(err.Error(), "no guard evaluated to true") {
+		t.Errorf("expected an unsatisfied-guard error, got: %v", err)
+	}
+}
+
+// testRegionPseudostateCycle: pseudostates that route into each other never
+// reach a state, so following the chain has to report the cycle instead of
+// looping forever.
+func testRegionPseudostateCycle(t *testing.T) {
+	_, _, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			region left {
+				initial ls;
+				state a;
+				then ls a;
+				transition a to first;
+			}
+			region right {
+				initial rs;
+				state c;
+				then rs c;
+			}
+			junction first;
+			junction second;
+
+			transition first to second;
+			transition second to first;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error for pseudostates routing into each other")
+	}
+	if !strings.Contains(err.Error(), "form a cycle") {
+		t.Errorf("expected a cycle error, got: %v", err)
+	}
+}
+
+// testDeadlockJoinStarvation: join awaiting token that never arrives. `stranded`
+// has no incoming edge, so the join has two incoming edges but can only ever be
+// reached by one token.
+func testDeadlockJoinStarvation(t *testing.T) {
 	src := `
 		package test {
-			action deadlock {
-				// Minimal action - deadlock would require complex control flow
+			action starve {
+				first start;
+				action stranded;
+				join sync;
+				done end;
+				then start sync;
+				then stranded sync;
+				then sync end;
 			}
 		}
 	`
-	file := parseAndBuild(t, src)
-	if file == nil {
-		t.Skip("parse failed")
-	}
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 
-	idx, model, ctx := buildRuntime(t, "<test>", file)
-
-	// Find action (may not exist or be executable)
-	rootScope := idx.DocumentRoot("<test>")
-	sym := findSymbolByName(rootScope, "deadlock", ast.DefAction)
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "starve", ast.DefAction)
 	if sym == nil {
-		t.Skip("deadlock action not found (expected - minimal source)")
+		t.Fatal("action starve not found")
 	}
 
 	exec, err := ctx.CreateActionExecutor(sym)
 	if err != nil {
-		t.Logf("CreateActionExecutor error (acceptable): %v", err)
-		return
+		t.Fatalf("create action executor: %v", err)
 	}
-
-	_ = model // silence unused
 
 	err = exec.RunToCompletion()
 	if err == nil {
-		t.Log("RunToCompletion succeeded (no deadlock in minimal source)")
-		return
+		t.Fatal("expected a deadlock error, the starved join completed")
 	}
-
 	if !strings.Contains(err.Error(), "deadlock") {
-		t.Errorf("expected deadlock error, got: %v", err)
+		t.Errorf("expected a deadlock error, got: %v", err)
 	}
 }
 
@@ -202,6 +582,8 @@ func testSourcelessAcceptAtTopLevel(t *testing.T) {
 	}
 }
 
+// testCalcUnboundParameter: a parameter with neither an argument nor a default
+// is a modeling error, not a null value.
 func testCalcUnboundParameter(t *testing.T) {
 	src := `
 		package test {
@@ -212,15 +594,7 @@ func testCalcUnboundParameter(t *testing.T) {
 			}
 		}
 	`
-	file := parseAndBuild(t, src)
-	if file == nil {
-		t.Fatal("parse failed")
-	}
-
-	idx, model, ctx := buildRuntime(t, "<test>", file)
-
-	_ = model // silence unused
-
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "add", ast.DefCalc)
 	if sym == nil {
@@ -230,19 +604,187 @@ func testCalcUnboundParameter(t *testing.T) {
 	// Invoke with only 1 argument (missing y)
 	xVal := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
 	result, err := ctx.InvokeCalc(sym, []Value{xVal}, rootScope)
+	if err == nil {
+		t.Fatalf("expected an unbound parameter error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("expected ErrUnboundParameter, got: %v", err)
+	}
+}
 
-	if err != nil {
-		t.Logf("InvokeCalc returned error (expected): %v", err)
-		return
+// testCalcTooManyArguments: more arguments than parameters has no binding, so it
+// reports an arity error instead of dropping the extras.
+func testCalcTooManyArguments(t *testing.T) {
+	src := `
+		package test {
+			calc double {
+				in x: Integer;
+				return x * 2;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "double", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("double calc not found")
 	}
 
-	// Some implementations may return null or zero
-	if result.Kind == ValNull {
-		t.Log("InvokeCalc returned null (unbound parameter)")
-		return
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}}
+	_, err := ctx.InvokeCalc(sym, []Value{arg, arg}, rootScope)
+	if err == nil {
+		t.Fatal("expected an arity error, the calc accepted a surplus argument")
+	}
+	if !errors.Is(err, ErrCalcArity) {
+		t.Errorf("expected ErrCalcArity, got: %v", err)
+	}
+}
+
+// testCalcUnknownNamedArgument: a named argument that matches no parameter is
+// reported instead of silently leaving the parameter on its default.
+func testCalcUnknownNamedArgument(t *testing.T) {
+	src := `
+		package test {
+			calc scale {
+				in x: Integer = 1;
+				return x * 2;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "scale", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("scale calc not found")
 	}
 
-	t.Logf("InvokeCalc returned value (unbound parameter accepted): %+v", result)
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	_, err := ctx.InvokeCalcNamed(sym, map[string]Value{"factor": arg}, rootScope)
+	if err == nil {
+		t.Fatal("expected an unknown parameter error, the invocation succeeded")
+	}
+	if !errors.Is(err, ErrUnknownParameter) {
+		t.Errorf("expected ErrUnknownParameter, got: %v", err)
+	}
+}
+
+// testCalcWithoutResult: a calc body with no return expression has no value to
+// produce, own or inherited.
+func testCalcWithoutResult(t *testing.T) {
+	src := `
+		package test {
+			calc empty {
+				in x: Integer;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "empty", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("empty calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}}
+	_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatal("expected a missing-result error, the calc returned a value")
+	}
+	if !errors.Is(err, ErrNoResultExpression) {
+		t.Errorf("expected ErrNoResultExpression, got: %v", err)
+	}
+}
+
+// testCalcSymbolIsNotACalc: invoking a non-calc symbol is rejected by kind
+// rather than by whatever its body happens to contain.
+func testCalcSymbolIsNotACalc(t *testing.T) {
+	src := `
+		package test {
+			part def Engine {
+				attribute power : Integer;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Engine", ast.DefPart)
+	if sym == nil {
+		t.Fatal("Engine part def not found")
+	}
+
+	_, err := ctx.InvokeCalc(sym, nil, rootScope)
+	if err == nil {
+		t.Fatal("expected a not-a-calc error, the invocation succeeded")
+	}
+	if !errors.Is(err, ErrNotACalc) {
+		t.Errorf("expected ErrNotACalc, got: %v", err)
+	}
+}
+
+// testCalcDirectRecursion: a calc that invokes itself unconditionally must be
+// stopped by the nesting bound instead of exhausting the stack.
+func testCalcDirectRecursion(t *testing.T) {
+	src := `
+		package test {
+			calc countdown {
+				in n: Integer;
+				return countdown(n - 1);
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "countdown")
+}
+
+// testCalcMutualRecursion: the bound is on nesting depth, so a cycle through
+// another calc is caught the same way as direct self-invocation.
+func testCalcMutualRecursion(t *testing.T) {
+	src := `
+		package test {
+			calc ping {
+				in n: Integer;
+				return pong(n);
+			}
+
+			calc pong {
+				in n: Integer;
+				return ping(n);
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "ping")
+}
+
+// assertCalcRecursionBounded invokes calcName and requires a recursion-limit
+// error promptly: the invocation runs on its own goroutine so a hang fails the
+// case instead of stalling the suite until the package timeout.
+func assertCalcRecursionBounded(t *testing.T, src, calcName string) {
+	t.Helper()
+
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, calcName, ast.DefCalc)
+	if sym == nil {
+		t.Fatalf("calc %s not found", calcName)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 10}}
+		_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatalf("expected recursive calc %s to be bounded, it returned a value", calcName)
+		}
+		if !errors.Is(err, ErrCalcRecursionLimit) {
+			t.Errorf("expected ErrCalcRecursionLimit, got: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatalf("recursive calc %s did not terminate", calcName)
+	}
 }
 
 // testConstraintMissingFeature: constraint references nonexistent feature
@@ -284,49 +826,38 @@ func testConstraintMissingFeature(t *testing.T) {
 	t.Log("EvaluateConstraint returned true (missing feature tolerated)")
 }
 
-// testStepBudgetExceeded: execution exceeds maxSteps limit
+// testStepBudgetExceeded: evaluation exceeds maxSteps. Each Eval call spends one
+// step, so an expression with more subexpressions than the budget must report
+// ErrStepLimitExceeded rather than run to the end. The operands are a parameter
+// rather than literals because a constant expression is folded in one step.
 func testStepBudgetExceeded(t *testing.T) {
 	src := `
 		package test {
-			calc infinite {
-				// Simple calc - step budget exercised during evaluation
-				return 1;
+			calc deep {
+				in x : Integer;
+				return x + x + x + x + x + x + x + x;
 			}
 		}
 	`
-	file := parseAndBuild(t, src)
-	if file == nil {
-		t.Fatal("parse failed")
-	}
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 
-	idx, model, ctx := buildRuntime(t, "<test>", file)
-
-	// Set very low step budget
-	ctx.maxSteps = 5
+	ctx.maxSteps = 3
 	ctx.steps = 0
 
-	_ = model // silence unused
-
 	rootScope := idx.DocumentRoot("<test>")
-	sym := findSymbolByName(rootScope, "infinite", ast.DefCalc)
+	sym := findSymbolByName(rootScope, "deep", ast.DefCalc)
 	if sym == nil {
-		t.Skip("infinite calc not found")
+		t.Fatal("calc deep not found")
 	}
 
-	// Invoke with no args, low step budget
-	_, err := ctx.InvokeCalc(sym, []Value{}, rootScope)
-
-	// For simple calc, step budget may not be exercised
-	if err != nil {
-		if strings.Contains(err.Error(), "step limit") || strings.Contains(err.Error(), "exceeded") {
-			t.Logf("Step budget exceeded (expected): %v", err)
-			return
-		}
-		t.Logf("InvokeCalc error: %v", err)
-		return
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}}
+	_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatal("expected the step budget to be exceeded, the calc completed")
 	}
-
-	t.Log("Step budget not exceeded (calc completed within budget)")
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
 }
 
 // Helper: parse source into AST RootNamespace

@@ -1,0 +1,21 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Usage kind="state" name="ParallelSplit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+      (*ast.StateNode)
+      (*ast.SubstateMember)
+      (Membership visibility="default"
+        (Usage kind="state" name="working" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.StateRegion)
+          (*ast.StateRegion)))
+      (PseudostateNode kind="fork" name="split")
+      (PseudostateNode kind="join" name="sync")
+      (*ast.StateNode)
+      (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (ConnectorEnd target="<nil>")
+        (ConnectorEnd target="<nil>"))
+      (TransitionMember source="ready" target="split")
+      (TransitionMember source="split" target="building")
+      (TransitionMember source="split" target="checking")
+      (TransitionMember source="building" target="sync")
+      (TransitionMember source="checking" target="sync")
+      (TransitionMember source="sync" target="done"))))

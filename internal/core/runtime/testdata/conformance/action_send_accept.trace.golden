@@ -1,0 +1,5 @@
+step 1: token 1@sender
+step 2: token 1@counter
+step 3: token 1@recorder
+step 4: token 1@*ast.FinalNode
+step 5: no active tokens

@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -165,6 +167,10 @@ func (p *Parser) parseIdentification() ast.Identification {
 			// These keywords have special syntax meaning, not valid as identifier names here
 			return id
 		}
+		// Any other keyword here is the name the author meant, so it is read as
+		// one rather than dropped. SysML reserves it though (KerML §7.2.4): only
+		// an unrestricted name may spell a keyword.
+		p.warn(p.peek().Span, fmt.Sprintf("%q is a reserved keyword; write '%s' to use it as a name", kw, kw))
 	}
 	if seg, ok := p.parseNameSegmentRelaxed(); ok {
 		id.Name = seg.Text
@@ -304,10 +310,7 @@ func (p *Parser) parseNamespaceBody() ([]ast.Node, bool) {
 	var members []ast.Node
 	for !p.atEOF() && !p.at(lexer.RBrace) {
 		before := p.peek().Span.Offset
-		m := p.parseMember()
-		if m != nil {
-			members = append(members, m)
-		}
+		members = append(members, p.parseMember())
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
 			p.advance()
 		}
@@ -529,9 +532,7 @@ func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
 	if p.at(lexer.LBracket) {
 		p.advance() // consume '['
 		imp.FilterExpr = p.ParseExpression()
-		if _, ok := p.expect(lexer.RBracket, "expected ']' after import filter expression"); !ok {
-			// Error already recorded
-		}
+		p.expect(lexer.RBracket, "expected ']' after import filter expression")
 	}
 
 	imp.Body, imp.HasBody = p.parseNamespaceBody()

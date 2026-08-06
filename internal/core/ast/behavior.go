@@ -82,11 +82,15 @@ type IfActionNode struct {
 type StateNode struct {
 	NodeBase
 	Name      string
-	IsInitial bool           // initial state marker
-	IsFinal   bool           // final state marker
-	Entry     []Node         // entry behaviors (action sequence)
-	Do        []Node         // do activity (ongoing action)
-	Exit      []Node         // exit behaviors (action sequence)
+	IsInitial bool   // initial state marker
+	IsFinal   bool   // final state marker
+	Entry     []Node // entry behaviors (action sequence)
+	Do        []Node // do activity (ongoing action)
+	Exit      []Node // exit behaviors (action sequence)
+	// Defer names the events the state defers while it is active: an event no
+	// transition of the active configuration handles is retained instead of
+	// dropped, and delivered again once no active state defers it.
+	Defer     []Node
 	Substates []Node         // nested states (hierarchical)
 	Regions   []*StateRegion // orthogonal regions (parallel)
 }
@@ -108,6 +112,12 @@ const (
 	PseudostateJoin                            // parallel sync
 	PseudostateEntry                           // entry point (submachine)
 	PseudostateExit                            // exit point (submachine)
+	// PseudostateShallowHistory re-enters the substate of its composite state
+	// that was active when that state was last exited.
+	PseudostateShallowHistory
+	// PseudostateDeepHistory re-enters the innermost substate that was active
+	// when its composite state was last exited.
+	PseudostateDeepHistory
 )
 
 func (k PseudostateKind) String() string {
@@ -124,6 +134,10 @@ func (k PseudostateKind) String() string {
 		return "entry"
 	case PseudostateExit:
 		return "exit"
+	case PseudostateShallowHistory:
+		return "shallow history"
+	case PseudostateDeepHistory:
+		return "deep history"
 	default:
 		return "unknown"
 	}
@@ -174,10 +188,13 @@ type TriggerEvent interface {
 	triggerEvent() // unexported marker method (closed set)
 }
 
-// TimeEvent fires after a specified duration.
+// TimeEvent fires at a point in time. Absolute distinguishes `accept at <time>`,
+// which fires at the given instant, from `accept after <duration>`, which fires
+// that far after the source state is entered.
 type TimeEvent struct {
 	NodeBase
 	Duration Node // time expression (literal or variable)
+	Absolute bool // true for `at`, false for `after`
 }
 
 func (*TimeEvent) triggerEvent() {}
@@ -198,10 +215,13 @@ type AcceptEvent struct {
 
 func (*AcceptEvent) triggerEvent() {}
 
-// CallEvent fires when an operation is invoked.
+// CallEvent fires when an operation is invoked. Parameters are the argument
+// names the trigger declares (`accept op(speed)`); an empty list matches a call
+// to that operation whatever arguments it carries.
 type CallEvent struct {
 	NodeBase
-	Operation *QualifiedName // operation to invoke
+	Operation  *QualifiedName // operation to invoke
+	Parameters []NameSegment  // declared argument names, in written order
 }
 
 func (*CallEvent) triggerEvent() {}
@@ -304,11 +324,17 @@ type TransitionMember struct {
 }
 
 // SendStatement sends a message to a target.
-// Syntax: send <message> to <target>;
+// Syntax: send <message> to <target>; | send <message> via <port>;
+//
+// The two forms address different things and are not interchangeable: `to`
+// names the receiver directly, while `via` names a port of the sender, and the
+// message reaches whatever that port is connected to. IsVia records which form
+// was written so routing can tell them apart.
 type SendStatement struct {
 	NodeBase
 	Message Node // message expression (often NewExpression)
-	Target  Node // target expression (action/part reference)
+	Target  Node // target expression: the receiver (`to`) or the sending port (`via`)
+	IsVia   bool // the target is a port to route through, not a receiver
 }
 
 // TerminateStatement terminates an action or lifecycle.

@@ -22,10 +22,12 @@ type ExpectedValue struct {
 	Value interface{} `json:"value"`
 }
 
-// ExpectedEvent represents a signal event to inject during state machine execution
+// ExpectedEvent represents an event to inject during state machine execution:
+// either a signal (`signal`) or an operation invocation (`call`).
 type ExpectedEvent struct {
-	Signal string                   `json:"signal"`         // Signal type name
-	Args   map[string]ExpectedValue `json:"args,omitempty"` // Signal arguments
+	Signal string                   `json:"signal,omitempty"` // Signal type name
+	Call   string                   `json:"call,omitempty"`   // Invoked operation name
+	Args   map[string]ExpectedValue `json:"args,omitempty"`   // Signal payload or call arguments
 }
 
 // ExpectedOutcome represents expected execution result
@@ -62,9 +64,6 @@ func TestExecutionConformance(t *testing.T) {
 	// Walk conformance directory for .expected.json files
 	entries, err := os.ReadDir(conformanceDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			t.Skip("conformance directory does not exist yet")
-		}
 		t.Fatalf("failed to read conformance directory: %v", err)
 	}
 
@@ -89,7 +88,7 @@ func TestExecutionConformance(t *testing.T) {
 	}
 
 	if testCount == 0 {
-		t.Skip("no conformance cases found")
+		t.Fatalf("no runnable conformance cases in %s", conformanceDir)
 	}
 }
 
@@ -221,28 +220,22 @@ func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path st
 		for name, val := range event.Args {
 			args[name] = expectedToRuntimeValue(t, val)
 		}
-		exec.SendSignal(event.Signal, args)
+		switch {
+		case event.Call != "" && event.Signal != "":
+			t.Fatalf("event declares both signal %q and call %q", event.Signal, event.Call)
+		case event.Call != "":
+			exec.InvokeOperation(event.Call, args)
+		case event.Signal != "":
+			exec.SendSignal(event.Signal, args)
+		default:
+			t.Fatalf("event declares neither a signal nor a call")
+		}
 	}
 
-	// Process events until completion or suspension
-	const maxEvents = 10000
-	eventCount := 0
-
-	for exec.state == StateRunning {
-		if exec.eventQueue.Len() == 0 {
-			exec.state = StateSuspended
-			break
-		}
-
-		if eventCount >= maxEvents {
-			t.Fatalf("state machine exceeded max events (%d), possible infinite loop", maxEvents)
-		}
-
-		if err := exec.processNextEvent(); err != nil {
-			t.Fatalf("process event: %v", err)
-		}
-
-		eventCount++
+	// Process events until completion or suspension, through the executor's own
+	// loop: a harness-local copy drifts from the semantics under test.
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run state machine: %v", err)
 	}
 
 	// Validate final state
@@ -387,8 +380,19 @@ func runRequirementConformance(t *testing.T, ctx *Context, idx *symbols.Index, p
 	}
 }
 
-// findBehavioralSymbol searches for first symbol matching defKind or usageKind
+// findBehavioralSymbol searches for first symbol matching defKind or usageKind,
+// failing the test when there is none.
 func findBehavioralSymbol(t *testing.T, scope *symbols.Scope, defKind ast.DefinitionKind, usageKind ast.UsageKind) *symbols.Symbol {
+	sym := lookupBehavioralSymbol(scope, defKind, usageKind)
+	if sym == nil {
+		t.Fatalf("no behavioral symbol found (defKind=%v, usageKind=%v)", defKind, usageKind)
+	}
+	return sym
+}
+
+// lookupBehavioralSymbol is findBehavioralSymbol for callers that probe several
+// kinds and treat absence as "not this kind of model".
+func lookupBehavioralSymbol(scope *symbols.Scope, defKind ast.DefinitionKind, usageKind ast.UsageKind) *symbols.Symbol {
 	// Check all child scopes (packages/namespaces)
 	for _, child := range scope.Children() {
 		// Look for named symbols
@@ -420,7 +424,6 @@ func findBehavioralSymbol(t *testing.T, scope *symbols.Scope, defKind ast.Defini
 		}
 	}
 
-	t.Fatalf("no behavioral symbol found (defKind=%v, usageKind=%v)", defKind, usageKind)
 	return nil
 }
 

@@ -11,6 +11,9 @@ func Build(root *ast.RootNamespace) *Scope {
 		return rootScope
 	}
 	buildMembers(rootScope, root.Members)
+	// Body-expression parameter scopes hang off the scopes their expressions
+	// resolve against, so they are linked once the declarations exist.
+	buildBodyScopes(rootScope, root.Members)
 	return rootScope
 }
 
@@ -109,15 +112,13 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		if len(d.Body) > 0 {
 			buildMembers(child, d.Body)
 		}
-	case *ast.ResultMember:
-		// ResultMember represents calc/function result: return <expr>; or return <name>;
-		// If expression is a simple identifier/reference, create attribute usage symbol
-		// so the result can be accessed via feature chain (e.g., calc.resultName)
-		name := extractResultName(d.Expression)
-		if name != "" {
-			id := ast.Identification{Name: name}
+	case *ast.ActorMember:
+		// ActorMember declares a requirement/use-case actor: actor <name> : <Type>;
+		// or actor <name> = <expr>; either form binds the name in the body.
+		if d.Name != "" {
+			id := ast.Identification{Name: d.Name}
 			child := NewScope(scope, d)
-			sym := newSymbol(id, SymbolAttributeUsage, d, vis, child, scope, trivia)
+			sym := newSymbol(id, SymbolPartUsage, d, vis, child, scope, trivia)
 			defineIdent(scope, id, sym)
 			scope.AddChild(child)
 		}
@@ -146,6 +147,43 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	case *ast.StateNode:
 		// Register state node by name (including initial/final pseudostates)
 		// so transitions and successions can reference it
+		if d.Name == "" {
+			return
+		}
+		id := ast.Identification{Name: d.Name}
+		child := NewScope(scope, d)
+		sym := newSymbol(id, SymbolStateUsage, d, vis, child, scope, trivia)
+		defineIdent(scope, id, sym)
+		scope.AddChild(child)
+		// Substates and regions declare the names the state's own body refers to.
+		buildMembers(child, d.Substates)
+		for _, region := range d.Regions {
+			buildDecl(child, region, ast.VisibilityDefault, nil)
+		}
+	case *ast.StateRegion:
+		// A region is a namespace of its own: sibling regions routinely reuse
+		// state names (each region declaring its own `initial start`), so their
+		// states must not collide in the composite state's scope.
+		regionScope := NewScope(scope, d)
+		if d.Name != "" {
+			id := ast.Identification{Name: d.Name}
+			sym := newSymbol(id, SymbolStateUsage, d, vis, regionScope, scope, trivia)
+			defineIdent(scope, id, sym)
+		}
+		scope.AddChild(regionScope)
+		buildMembers(regionScope, d.States)
+	case *ast.EntryMember:
+		// An entry/do/exit action is a feature of the state declaring it, so a
+		// named one (`entry action entryAction :>> 'entry';`) is a member of the
+		// state's scope rather than of the wrapper the parser puts it in.
+		buildMembers(scope, d.Actions)
+	case *ast.DoMember:
+		buildMembers(scope, d.Actions)
+	case *ast.ExitMember:
+		buildMembers(scope, d.Actions)
+	case *ast.PseudostateNode:
+		// fork/join/choice/junction/entry/exit named in a state body are
+		// transition endpoints, so they must be referenceable.
 		if d.Name != "" {
 			id := ast.Identification{Name: d.Name}
 			child := NewScope(scope, d)
@@ -153,33 +191,17 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 			defineIdent(scope, id, sym)
 			scope.AddChild(child)
 		}
+	case *ast.WhileLoopActionNode:
+		// A loop is an anonymous action namespace: its body's declarations (and a
+		// `for` iteration variable) are members visible to the body and condition.
+		child := NewScope(scope, d)
+		child.markBodyLocal()
+		scope.AddChild(child)
+		buildMembers(child, d.Body)
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		// Control flow nodes without explicit names in AST - skip indexing
 		// (If these nodes gain name fields in future, register them here)
 	}
-}
-
-// extractResultName attempts to extract a simple identifier name from a result expression.
-// Returns empty string if expression is complex or not a simple name reference.
-func extractResultName(expr ast.Node) string {
-	if expr == nil {
-		return ""
-	}
-
-	// Handle FeatureReference wrapper
-	if fr, ok := expr.(*ast.FeatureReference); ok {
-		expr = fr.Name
-	}
-
-	// Extract name from QualifiedName
-	if qn, ok := expr.(*ast.QualifiedName); ok {
-		// Only accept single-part names (simple identifiers)
-		if len(qn.Parts) == 1 {
-			return qn.Parts[0].Text
-		}
-	}
-
-	return ""
 }
 
 // newSymbol builds a Symbol from an identification. scope is the child scope the
@@ -187,8 +209,9 @@ func extractResultName(expr ast.Node) string {
 // declaration was declared in. trivia is the leading trivia from the member wrapper.
 func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Visibility, scope, owner *Scope, trivia []ast.Trivia) *Symbol {
 	name := id.Name
+	nameSpan := id.NameSpan
 	if name == "" {
-		name = id.ShortName
+		name, nameSpan = id.ShortName, id.ShortNameSpan
 	}
 	sym := &Symbol{
 		Name:          name,
@@ -196,6 +219,7 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 		Decl:          decl,
 		Visibility:    vis,
 		DeclSpan:      decl.Span(),
+		NameSpan:      nameSpan,
 		Scope:         scope,
 		OwnerScope:    owner,
 		LeadingTrivia: trivia,

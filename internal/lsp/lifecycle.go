@@ -22,6 +22,8 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 			CompletionProvider: &protocol.CompletionOptions{
 				TriggerCharacters: []string{":", "."},
 			},
+			DocumentFormattingProvider: true,
+			RenameProvider:             &protocol.RenameOptions{PrepareProvider: true},
 		},
 		ServerInfo: &protocol.ServerInfo{
 			Name:    "sysml-lsp",

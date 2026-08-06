@@ -23,11 +23,65 @@ type ActionGraph struct {
 	// DataFlows: source node → list of object flows
 	DataFlows map[ast.Node][]ObjectFlow
 
+	// Bodies: node → the statements that node executes, in declaration order
+	Bodies map[ast.Node][]Statement
+
+	// Accepts: node → the message that node waits for
+	Accepts map[ast.Node]Accept
+
 	// InitialNode (required)
 	Initial ast.Node
 
 	// FinalNodes (may be multiple)
 	Finals []ast.Node
+
+	// Connections are the connectors declared in the action body, which is how
+	// a `send ... via <port>` finds the ports it reaches.
+	Connections []Connection
+}
+
+// Statement is one lowered statement in an action node's body. Statements are
+// kept in declaration order so the executor never walks the node's members
+// again to find them.
+type Statement interface {
+	statement()
+}
+
+// Send is a lowered send statement. Message stays an expression because its
+// value is only known at execution time.
+//
+// Target is the simple name the send addressed, empty for a broadcast. IsVia
+// records that the name is a port of the sender rather than a receiver, in which
+// case the message goes to whatever the graph's Connections join that port to.
+type Send struct {
+	Message ast.Node
+	Target  string
+	IsVia   bool
+}
+
+func (Send) statement() {}
+
+// Assign is a lowered assignment: `assign <Target> := <Value>`. Target is the
+// simple name assigned to, empty when the target was not a plain name.
+type Assign struct {
+	Target string
+	Value  ast.Node
+	Node   ast.Node // the statement itself, for diagnostics
+}
+
+func (Assign) statement() {}
+
+// Accept is a lowered accept parameter: `action r accept msg : Warning;`.
+// SignalType is the parameter's declared type, empty when it was declared
+// without one, in which case the node accepts a message of any type.
+//
+// ViaPort is the port named by `accept msg : Warning via p`, empty when the
+// accept named none. A port-routed message is only offered to an accept on the
+// port it arrived at, so the two forms do not consume each other's messages.
+type Accept struct {
+	ParamName  string
+	SignalType string
+	ViaPort    string
 }
 
 // ObjectFlow represents a data flow edge between pins.
@@ -45,6 +99,8 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 		Edges:     make(map[ast.Node][]ast.Node),
 		Guards:    make(map[ast.Node]map[ast.Node]ast.Node),
 		DataFlows: make(map[ast.Node][]ObjectFlow),
+		Bodies:    make(map[ast.Node][]Statement),
+		Accepts:   make(map[ast.Node]Accept),
 		Finals:    make([]ast.Node, 0),
 	}
 
@@ -79,9 +135,12 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 			// Nested action usage (treat as execution node)
 			if n.Kind == ast.UsageAction {
 				graph.Nodes = append(graph.Nodes, n)
+				lowerBody(graph, n)
 			}
 		}
 	}
+
+	graph.Connections = lowerConnections(members)
 
 	// Note: Initial node is optional at graph construction time.
 	// The executor's initialize() will validate and return the error if missing.
@@ -156,6 +215,66 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 	}
 
 	return graph, nil
+}
+
+// lowerBody records a nested action node's statements and the message it waits
+// for, so the executor reads them from the graph rather than walking the node's
+// members again.
+func lowerBody(graph *ActionGraph, node *ast.Usage) {
+	for _, member := range node.Members {
+		switch m := unwrapMembership(member).(type) {
+		case *ast.SendStatement:
+			graph.Bodies[node] = append(graph.Bodies[node], Send{
+				Message: m.Message,
+				Target:  ast.SimpleName(m.Target),
+				IsVia:   m.IsVia,
+			})
+		case *ast.AssignmentActionNode:
+			graph.Bodies[node] = append(graph.Bodies[node], Assign{
+				Target: ast.SimpleName(m.Target),
+				Value:  m.Value,
+				Node:   m,
+			})
+		case *ast.Usage:
+			if !m.IsAccept {
+				continue
+			}
+			graph.Accepts[node] = Accept{
+				ParamName:  m.Ident.Name,
+				SignalType: typingTarget(m),
+				ViaPort:    acceptPort(node),
+			}
+		}
+	}
+}
+
+// acceptPort returns the port an accept action routes through
+// (`action r accept msg : T via p`), which the parser records as a reference
+// relationship on the accept action, or "" when it named none.
+func acceptPort(node *ast.Usage) string {
+	for _, rel := range node.Relationships {
+		if rel == nil || rel.Kind != ast.RelReferences {
+			continue
+		}
+		if name := ast.SimpleName(rel.Target); name != "" {
+			return name
+		}
+	}
+	return ""
+}
+
+// typingTarget returns the name a usage was typed with (`: T`), or "" when it
+// was declared without a type.
+func typingTarget(usage *ast.Usage) string {
+	for _, rel := range usage.Relationships {
+		if rel == nil || rel.Kind != ast.RelTyping {
+			continue
+		}
+		if name := ast.SimpleName(rel.Target); name != "" {
+			return name
+		}
+	}
+	return ""
 }
 
 // unwrapMembership extracts the actual member from a Membership wrapper.

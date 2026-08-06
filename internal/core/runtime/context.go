@@ -18,6 +18,25 @@ type Context struct {
 	maxSteps  int64
 	instances map[int64]*Instance
 	features  map[*symbols.Symbol][]EffectiveFeature
+
+	// calcShapes memoizes resolved calc invocation interfaces (parameters,
+	// defaults, result expression) per calc symbol.
+	calcShapes map[*symbols.Symbol]*calcShape
+
+	// trace records evaluation, nil when not tracing.
+	trace *TraceRecorder
+
+	// actionDepth is the number of action invocations currently on the stack,
+	// bounding recursion across nested action executors.
+	actionDepth int
+
+	// calcDepth is the number of calc invocations currently on the stack,
+	// bounding recursion across nested calc evaluations.
+	calcDepth int
+
+	// messages are the signals in flight, oldest first. The bus is context-wide,
+	// so a message one behavior sends can be accepted in another.
+	messages []Message
 }
 
 // NewContext creates a runtime context backed by the given semantic model.
@@ -29,14 +48,21 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		panic(fmt.Sprintf("runtime: maxSteps must be > 0, got %d", maxSteps))
 	}
 	return &Context{
-		model:     model,
-		resolver:  resolver,
-		nextID:    1, // IDs start at 1 (0 = invalid)
-		steps:     0,
-		maxSteps:  maxSteps,
-		instances: make(map[int64]*Instance),
-		features:  make(map[*symbols.Symbol][]EffectiveFeature),
+		model:      model,
+		resolver:   resolver,
+		nextID:     1, // IDs start at 1 (0 = invalid)
+		steps:      0,
+		maxSteps:   maxSteps,
+		instances:  make(map[int64]*Instance),
+		features:   make(map[*symbols.Symbol][]EffectiveFeature),
+		calcShapes: make(map[*symbols.Symbol]*calcShape),
 	}
+}
+
+// SetTrace attaches a trace recorder to this context, so that every expression
+// and calc evaluated through it is recorded. Pass nil to stop tracing.
+func (ctx *Context) SetTrace(tr *TraceRecorder) {
+	ctx.trace = tr
 }
 
 // Model returns the semantic model this context operates over.
@@ -251,88 +277,6 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 	return true, nil
 }
 
-// InvokeCalc invokes a calculation with given arguments and returns the result.
-// Arguments should be in the same order as the calc's input parameters.
-func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols.Scope) (Value, error) {
-	if sym == nil || sym.Decl == nil {
-		return Value{}, fmt.Errorf("calc invocation: invalid symbol")
-	}
-
-	var members []ast.Node
-	switch decl := sym.Decl.(type) {
-	case *ast.Definition:
-		members = decl.Members
-	case *ast.Usage:
-		members = decl.Members
-	default:
-		return Value{}, fmt.Errorf("calc invocation: %q is not a calc definition or usage", sym.Name)
-	}
-
-	if members == nil {
-		return Value{}, fmt.Errorf("calc invocation: %q has no body", sym.Name)
-	}
-
-	// Extract parameters (usages with Direction = DirIn or DirInOut)
-	var params []*ast.Usage
-	for _, m := range members {
-		// Unwrap Membership if present
-		node := m
-		if membership, ok := m.(*ast.Membership); ok {
-			node = membership.Member
-		}
-
-		if usage, ok := node.(*ast.Usage); ok {
-			if usage.Direction == ast.DirIn || usage.Direction == ast.DirInOut {
-				params = append(params, usage)
-			}
-		}
-	}
-
-	// Validate argument count
-	if len(args) != len(params) {
-		return Value{}, fmt.Errorf("calc invocation: expected %d arguments, got %d", len(params), len(args))
-	}
-
-	// Create parameter bindings
-	bindings := make(map[string]Value)
-	for i, param := range params {
-		// Use Name (not ShortName which might be empty for simple usages)
-		name := param.Ident.Name
-		if name == "" && param.Ident.ShortName != "" {
-			name = param.Ident.ShortName
-		}
-		bindings[name] = args[i]
-	}
-
-	// Extract return member (ResultMember with Expression)
-	var returnExpr ast.Node
-	for _, m := range members {
-		// Unwrap Membership if present
-		node := m
-		if membership, ok := m.(*ast.Membership); ok {
-			node = membership.Member
-		}
-
-		if rm, ok := node.(*ast.ResultMember); ok && rm.Expression != nil {
-			returnExpr = rm.Expression
-			break
-		}
-	}
-
-	if returnExpr == nil {
-		return Value{}, fmt.Errorf("calc invocation: %q has no return expression", sym.Name)
-	}
-
-	// Evaluate return expression with parameter bindings
-	ec := &EvalContext{
-		ctx:    ctx,
-		frames: []map[string]Value{bindings},
-		scope:  scope,
-	}
-
-	return ec.Eval(returnExpr)
-}
-
 // ExecuteAction executes an action definition/usage to completion.
 // Returns final token data from the action's execution.
 func (ctx *Context) ExecuteAction(action *symbols.Symbol) (map[string]Value, error) {
@@ -401,28 +345,8 @@ func (ctx *Context) ExecuteStateWithEvents(stateMachine *symbols.Symbol, events 
 		exec.SendSignal(event, nil)
 	}
 
-	// Process events until completion or suspension
-	const maxEvents = 10000
-	eventCount := 0
-
-	for exec.state == StateRunning {
-		// Check for pending events
-		if exec.eventQueue.Len() == 0 {
-			exec.state = StateSuspended
-			break
-		}
-
-		// Check step limit
-		if eventCount >= maxEvents {
-			return nil, nil, fmt.Errorf("state machine exceeded max events (%d), possible infinite loop", maxEvents)
-		}
-
-		// Process next event
-		if err := exec.processNextEvent(); err != nil {
-			return nil, nil, fmt.Errorf("process event: %w", err)
-		}
-
-		eventCount++
+	if err := exec.RunToCompletion(); err != nil {
+		return nil, nil, err
 	}
 
 	// Return state machine data and the real ordered visit trace

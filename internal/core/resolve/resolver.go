@@ -25,8 +25,9 @@ type Resolver struct {
 	idx         *symbols.Index
 	memo        map[ast.Node]resolution
 	resolving   map[ast.Node]bool // cycle detection
+	parts       map[*ast.QualifiedName][]*symbols.Symbol
 	Diagnostics []Diagnostic
-	model       interface{} // Optional *semantics.Model for inheritance-aware member lookup
+	model       MemberLookup // Optional *semantics.Model for inheritance-aware member lookup
 }
 
 // New creates a resolver over the given index.
@@ -35,7 +36,35 @@ func New(idx *symbols.Index) *Resolver {
 		idx:       idx,
 		memo:      map[ast.Node]resolution{},
 		resolving: map[ast.Node]bool{},
+		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
 	}
+}
+
+// recordPart stores the symbol a single segment of a qualified name resolves to.
+// Per-segment results are kept here rather than on the AST, which stays
+// immutable after parsing so that concurrent readers may share it.
+func (r *Resolver) recordPart(qn *ast.QualifiedName, i int, sym *symbols.Symbol) {
+	if qn == nil || i < 0 || i >= len(qn.Parts) {
+		return
+	}
+	syms, ok := r.parts[qn]
+	if !ok {
+		syms = make([]*symbols.Symbol, len(qn.Parts))
+		r.parts[qn] = syms
+	}
+	syms[i] = sym
+}
+
+// PartSymbol returns the symbol the i-th segment of qn resolved to during a
+// previous resolution by this resolver. Callers that need intermediate
+// resolutions of a qualified name (a hover over `A::B` in `A::B::C`, say) read
+// them here.
+func (r *Resolver) PartSymbol(qn *ast.QualifiedName, i int) (*symbols.Symbol, bool) {
+	syms, ok := r.parts[qn]
+	if !ok || i < 0 || i >= len(syms) || syms[i] == nil {
+		return nil, false
+	}
+	return syms[i], true
 }
 
 // Index returns the symbol index this resolver operates over.
@@ -43,9 +72,18 @@ func (r *Resolver) Index() *symbols.Index {
 	return r.idx
 }
 
+// lookupMember resolves name as a member of sym — declared by it or inherited
+// from what it specializes or is typed by — when a semantic model is attached.
+func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if r.model == nil || sym == nil {
+		return nil, false
+	}
+	return r.model.LookupMember(sym, name)
+}
+
 // SetModel attaches a semantic model for inheritance-aware member resolution.
 // Must be called before resolving feature chains if inherited members are needed.
-func (r *Resolver) SetModel(model interface{}) {
+func (r *Resolver) SetModel(model MemberLookup) {
 	r.model = model
 }
 

@@ -16,6 +16,7 @@ type Document struct {
 	Version          int
 	AST              *ast.RootNamespace
 	ParseDiagnostics []parser.Diagnostic
+	ParseWarnings    []parser.Diagnostic
 	Scope            *symbols.Scope
 	sf               *source.SourceFile
 }
@@ -33,6 +34,7 @@ func newDocument(name string, content []byte, version int) *Document {
 		Version:          version,
 		AST:              root,
 		ParseDiagnostics: p.Diagnostics,
+		ParseWarnings:    p.Warnings,
 		Scope:            scope,
 		sf:               sf,
 	}

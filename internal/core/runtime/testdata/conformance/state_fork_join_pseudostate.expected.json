@@ -1,0 +1,8 @@
+{
+  "type": "state",
+  "finalState": "done",
+  "outputs": {
+    "leftDone": { "type": "Integer", "value": 1 },
+    "rightDone": { "type": "Integer", "value": 1 }
+  }
+}

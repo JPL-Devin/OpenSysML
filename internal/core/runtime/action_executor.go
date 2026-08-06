@@ -21,7 +21,6 @@ type ActionExecutor struct {
 	breakpoints  map[string]bool
 	results      map[string]Value  // Accumulated results from consumed final tokens
 	trace        *TraceRecorder    // Optional trace recorder for testing
-	messageQueue []Message         // Queue of sent messages (FIFO)
 	mergeVisited map[ast.Node]bool // Track merge node visits
 	inputs       map[string]Value  // Input parameter bindings seeded into the initial token
 }
@@ -31,12 +30,6 @@ type ActionExecutor struct {
 // the same name. Must be called before initialize().
 func (e *ActionExecutor) SetInputs(inputs map[string]Value) {
 	e.inputs = inputs
-}
-
-// Message represents a signal instance sent via send action.
-type Message struct {
-	SignalType string           // Signal type name
-	Payload    map[string]Value // Signal attribute values
 }
 
 // newActionExecutor creates an action executor.
@@ -551,7 +544,15 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 		}
 		token.Data[outputPin] = result
 	} else if node.ActionRef != nil {
-		return fmt.Errorf("nested action invocation not yet implemented")
+		outputs, err := invokeAction(
+			e.ctx, e.action.Scope, actionInvocation{target: node.ActionRef}, token.Data,
+		)
+		if err != nil {
+			return err
+		}
+		for name, value := range outputs {
+			token.Data[name] = value
+		}
 	}
 
 	// Advance to successor
@@ -578,80 +579,60 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		return fmt.Errorf("expected Usage, got %T", token.Location)
 	}
 
-	// Check for accept parameters and consume messages
-	for _, member := range usage.Members {
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
-		}
-
-		if paramUsage, ok := actualMember.(*ast.Usage); ok && paramUsage.IsAccept {
-			// Accept action: consume message from queue
-			if len(e.messageQueue) == 0 {
-				return fmt.Errorf("accept action %s: no messages in queue", paramUsage.Ident.Name)
+	// An accept node waits for a message of its parameter's type.
+	accept, isAccept := e.graph.Accepts[usage]
+	if isAccept {
+		msg, taken := e.ctx.TakeMessage(func(m Message) bool {
+			if !m.arrivedAt(accept.ViaPort) || !m.carriesSignal(accept.SignalType) {
+				return false
 			}
+			// A message routed to this accept's port is already addressed by the
+			// connection it travelled over, so the accept's own name does not
+			// have to appear in it.
+			return accept.ViaPort != "" || m.addressedTo(usage.Ident.Name)
+		})
+		if !taken {
+			return fmt.Errorf("accept action %s: %w of type %s%s",
+				accept.ParamName, ErrNoMatchingMessage, orAny(accept.SignalType), viaSuffix(accept.ViaPort))
+		}
+		token.Data[accept.ParamName] = msg.Payload["value"]
+	}
 
-			// Dequeue first message (FIFO)
-			msg := e.messageQueue[0]
-			e.messageQueue = e.messageQueue[1:]
-
-			// Bind message to parameter name in token data
-			paramName := paramUsage.Ident.Name
-			token.Data[paramName] = msg.Payload["value"]
+	// A usage that performs another action (perform X / action a : X / a = X(...))
+	// runs that action to completion before its own body.
+	if inv, ok := nestedInvocation(usage, accept.ViaPort); ok {
+		outputs, err := invokeAction(e.ctx, e.action.Scope, inv, token.Data)
+		if err != nil {
+			return err
+		}
+		for name, value := range outputs {
+			token.Data[name] = value
 		}
 	}
 
-	// Execute nested action members (assignments, send statements, expressions)
-	for _, member := range usage.Members {
-		// Unwrap Membership if present
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
-		}
+	// Execute the node's lowered statements in declaration order.
+	for _, stmt := range e.graph.Bodies[usage] {
+		ec := NewEvalContext(e.ctx, nil)
+		ec.Push(token.Data) // Token data available for evaluation
 
-		// Execute send statements
-		if send, ok := actualMember.(*ast.SendStatement); ok {
-			ec := NewEvalContext(e.ctx, nil)
-			ec.Push(token.Data) // Token data available for evaluation
-
-			// Evaluate message expression
-			msgValue, err := ec.Eval(send.Message)
+		switch s := stmt.(type) {
+		case lower.Send:
+			msg, err := ec.buildMessage(e.action.Scope, s)
 			if err != nil {
-				return fmt.Errorf("eval send message: %w", err)
+				return err
 			}
-
-			// Queue message (simple FIFO queue)
-			msg := Message{
-				SignalType: "GenericSignal", // TODO: extract from message type
-				Payload:    map[string]Value{"value": msgValue},
+			e.ctx.post(e.graph.Connections, msg, s)
+		case lower.Assign:
+			if s.Target == "" {
+				return fmt.Errorf("nested action %s: unsupported assignment target", usage.Ident.Name)
 			}
-			e.messageQueue = append(e.messageQueue, msg)
-			continue
-		}
-
-		// Execute assignment actions
-		if assign, ok := actualMember.(*ast.AssignmentActionNode); ok {
-			ec := NewEvalContext(e.ctx, nil)
-			ec.Push(token.Data) // Token data available for RHS evaluation
-
-			// Evaluate RHS
-			value, err := ec.Eval(assign.Value)
+			value, err := ec.Eval(s.Value)
 			if err != nil {
 				return fmt.Errorf("eval assignment RHS: %w", err)
 			}
-
-			// Store in token data (updates shared state)
-			// Target can be QualifiedName or FeatureReference
-			var targetName string
-			if qname, ok := assign.Target.(*ast.QualifiedName); ok && len(qname.Parts) > 0 {
-				targetName = qname.Parts[len(qname.Parts)-1].Text
-			} else if fref, ok := assign.Target.(*ast.FeatureReference); ok && fref.Name != nil && len(fref.Name.Parts) > 0 {
-				targetName = fref.Name.Parts[len(fref.Name.Parts)-1].Text
-			}
-
-			if targetName != "" {
-				token.Data[targetName] = value
-			}
+			token.Data[s.Target] = value
+		default:
+			return fmt.Errorf("nested action %s: unsupported statement %T", usage.Ident.Name, stmt)
 		}
 	}
 

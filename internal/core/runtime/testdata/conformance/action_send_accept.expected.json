@@ -1,9 +1,6 @@
 {
-    "type": "action",
-    "outputs": {
-        "result": {
-            "type": "Integer",
-            "value": 50
-        }
-    }
+	"type": "action",
+	"outputs": {
+		"number": {"type": "Integer", "value": 50}
+	}
 }

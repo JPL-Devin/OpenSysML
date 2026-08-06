@@ -10,11 +10,17 @@ import (
 // stream. It buffers non-trivia tokens for lookahead and collects
 // diagnostics; it always produces a tree (ErrorNodes for bad input).
 type Parser struct {
-	src         *source.SourceFile
-	lx          *lexer.Lexer
-	buf         []lexer.Token // lookahead ring of non-trivia tokens
-	triv        []ast.Trivia  // trivia pending attachment to the next node
+	src  *source.SourceFile
+	lx   *lexer.Lexer
+	buf  []lexer.Token // lookahead ring of non-trivia tokens
+	triv []ast.Trivia  // trivia pending attachment to the next node
+	// Diagnostics are syntax errors: input the parser could not read as
+	// well-formed SysML.
 	Diagnostics []Diagnostic
+	// Warnings are findings on input that parsed into the tree the author
+	// intended but is not well-formed SysML, such as a reserved keyword written
+	// as a declaration name.
+	Warnings []Diagnostic
 
 	pendingComment    source.Span // span of the most recent /* */ regular comment
 	hasPendingComment bool
@@ -134,9 +140,16 @@ func (p *Parser) expect(k lexer.Kind, msg string) (lexer.Token, bool) {
 	return p.peek(), false
 }
 
-// error records a diagnostic.
+// error records a diagnostic that makes the parse ill-formed.
 func (p *Parser) error(sp source.Span, msg string) {
 	p.Diagnostics = append(p.Diagnostics, Diagnostic{Span: sp, Message: msg})
+}
+
+// warn records a diagnostic for input that parses to the tree the author meant
+// but is not well-formed SysML. It is kept apart from Diagnostics so that
+// callers gating on a clean parse are not blocked by it.
+func (p *Parser) warn(sp source.Span, msg string) {
+	p.Warnings = append(p.Warnings, Diagnostic{Span: sp, Message: msg})
 }
 
 // takeTrivia returns and clears the pending leading trivia.
@@ -173,10 +186,7 @@ func (p *Parser) ParseFile() *ast.RootNamespace {
 	for !p.atEOF() {
 		before := len(p.buf)
 		beforeOff := p.peek().Span.Offset
-		m := p.parseMember()
-		if m != nil {
-			root.Members = append(root.Members, m)
-		}
+		root.Members = append(root.Members, p.parseMember())
 		// Guarantee progress: if nothing was consumed, skip a token.
 		if len(p.buf) == before && p.peek().Span.Offset == beforeOff && !p.atEOF() {
 			p.advance()

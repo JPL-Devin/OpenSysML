@@ -1,6 +1,6 @@
 # Pseudostates Design - Choice and Junction
 
-**Status:** Implementation Plan  
+**Status:** Implemented — choice, junction, fork, join, entry/exit points and history, including pseudostates reached from inside an orthogonal region  
 **UML Reference:** UML 2.5.1 §14.2.3.4 (Pseudostates)
 
 ## Overview
@@ -257,3 +257,131 @@ package JunctionTest {
 - UML 2.5.1 §14.2.3.4.3 (Choice Pseudostates)
 - UML 2.5.1 §14.2.3.4.4 (Junction Pseudostates)
 - SysML v2 Pilot Implementation (state machine examples)
+
+## Fork and Join
+
+Fork and join are declared like choice and junction:
+
+```sysml
+state Machine {
+    initial init;
+    state idle;
+    state running {
+        region left  { initial ls; state working;  then ls working; }
+        region right { initial rs; state watching; then rs watching; }
+    }
+    fork split;
+    join sync;
+    final done;
+
+    init then idle;
+    transition idle to split;
+    transition split to working;    // one branch per region
+    transition split to watching;
+    transition working to sync;
+    transition watching to sync;
+    transition sync to done;
+}
+```
+
+**Fork** (`fireForkTransition`): every outgoing branch is taken at once. Branches
+must be unguarded and must target states in distinct orthogonal regions of one
+composite state; that composite state is entered and each region's active state
+becomes its branch target instead of the region's initial state.
+
+**Join** (`fireJoinTransition`): the transition only proceeds once the source
+state of every incoming branch is active. A branch that arrives early leaves its
+source state active and waits, so the join synchronizes the regions before the
+composite state is exited.
+
+**Entry/exit points** (`ast.PseudostateEntry`, `ast.PseudostateExit`) are routed
+like a junction — the transition continues along the point's own outgoing
+transition — but there is no textual notation for them, so they can only be built
+programmatically.
+
+**History** (`ast.PseudostateShallowHistory`, `ast.PseudostateDeepHistory`) is
+owned by the composite state it restores — `lower.StateGraph.PseudostateOwner`
+records that ownership — and re-enters the configuration that state was last left
+in. `exitState` records the configuration on the way out, per composite state: the
+substate that was active, and the active state of each orthogonal region.
+
+`fireHistoryTransition` reads that record before leaving the source
+configuration, since a transition out of the owner's own substates would
+otherwise overwrite it, then:
+
+- a **shallow** history enters the recorded substate, or re-enters the owner with
+  one branch per region holding that region's recorded state;
+- a **deep** history keeps following the record downwards (`deepestRecorded`),
+  collecting a branch for every nested region it passes, so the innermost recorded
+  state is the one entered;
+- when the owner has never been exited there is nothing to restore, so the
+  history's own outgoing transition supplies the target — UML's default history
+  transition.
+
+Entering a branch nested below a region runs the entry behaviors of the states
+above it inside that region, so a restored deep configuration is not entered
+sideways.
+
+Like entry/exit points, history has no textual notation, so it can only be built
+programmatically.
+
+## Pseudostates Reached From Inside an Orthogonal Region
+
+`state_region_transition.go` implements transitions whose source is the active
+state of an orthogonal region, which is how a choice, junction or entry/exit
+point declared beside the regions is reached from inside one. Where the branch
+the pseudostate routes along ends decides how much of the configuration moves,
+per UML's least common ancestor rule:
+
+```sysml
+state def RegionChoice {
+    attribute mode : Integer = 2;
+
+    region left  { initial lstart; state lidle; state lfast; state lslow;
+                   then lstart lidle; transition lidle to pick; }
+    region right { initial rstart; state rwatch; then rstart rwatch; }
+
+    choice pick;
+
+    transition pick to lfast if mode == 2;   // stays in region left
+    transition pick to lslow;                // else branch
+}
+```
+
+- **`pseudostateTarget`** follows the chain of transient pseudostates (choice,
+  junction, entry point, exit point) from the transition's target until a state
+  is reached, so `exit point → junction → state` enters that state. A chain that
+  routes back into a pseudostate it already passed, a branch with no satisfied
+  guard, and a branch into a fork, join or history all return typed errors rather
+  than leaving the machine resting on a pseudostate.
+- **`moveWithinRegion`** handles a branch ending inside the source region: the
+  exit stops at the region boundary even when the least common ancestor lies
+  above it, so the state owning the region is neither exited nor re-entered and
+  every sibling region keeps the state it was in — including its entry behaviors,
+  which do not run again.
+- **`leaveRegion`** handles a branch ending outside the source region. The least
+  common ancestor is then above the region set, so the whole set is left: every
+  region is exited in declaration order — recording its configuration, so a later
+  history transition restores it — before the target is entered.
+  - A target in a **sibling region of the same composite state** re-enters that
+    state with one branch naming the target: the regions the branch does not name
+    restart at their initial states, since their previous configuration was left.
+  - A target **outside the composite state** exits it and its ancestors up to the
+    least common ancestor, then enters down to the target, entering that target's
+    own regions on the way.
+- **`leaveTopRegions`** does the same for the machine's own regions, which no
+  state owns. `lower.StateGraph.TopRegions` carries their declaration order, so
+  the order regions are entered, exited and offered an event in is the declared
+  one and never map iteration order.
+
+Fork, join and history reached from inside a region are fired whole
+(`fireTransition`), since they rewrite the configuration rather than move one
+region.
+
+### Known limitations
+
+- A junction's guards are evaluated when it is reached, like a choice's, rather
+  than statically together with its incoming transition. The two differ only for
+  guards over data an effect on the incoming transition changes.
+- Entry points, exit points and history have no textual notation, so a model
+  reaching them has to be built on the AST directly.

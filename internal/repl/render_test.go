@@ -38,7 +38,7 @@ func TestRenderDiagnostics(t *testing.T) {
 	s := NewSession()
 	r := s.Submit("namespace N { import Missing::X; }")
 	if len(r.Diagnostics) == 0 {
-		t.Skip("no diagnostic produced; adjust source to force one")
+		t.Fatal("importing a missing namespace produced no diagnostic to render")
 	}
 	out := renderDiagnostics(r.Diagnostics, r.Source)
 	joined := strings.Join(out, "\n")

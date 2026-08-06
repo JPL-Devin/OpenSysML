@@ -124,7 +124,7 @@ Current: green (Time: 30.0s)
 | State machine runtime (Tier 5) | ✅ Complete (10 conformance cases: transitions, accept events, sourceless) |
 | REPL debugging commands | ✅ Complete |
 | Standard library bundling | ✅ Complete |
-| LSP server implementation | ✅ Complete |
+| LSP server implementation | ✅ Diagnostics, hover, go-to-definition, references, symbols, completion, formatting, rename (semantic tokens, code actions, signature help not implemented) |
 | gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime RPCs) |
 | Python client library | ✅ Complete (connection lifecycle, runtime APIs, IPython hooks, DataFrame) |
 
@@ -132,7 +132,7 @@ Current: green (Time: 30.0s)
 **Test coverage:** 890+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 16 golden ASTs, 15 negatives, 26 conformance cases, 7 robustness tests.
 **Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 **Behavioral execution:** Calc/constraint/requirement fully functional (12/12 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (26/26 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
-**Training examples:** 63/100 files clean. Download from [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
+**Training examples:** 71/100 files clean, gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
 ## Architecture

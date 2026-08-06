@@ -21,6 +21,28 @@ const (
 	ValExpr // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
 )
 
+// String names the kind, so diagnostics quoting it read as more than an index.
+func (k ValueKind) String() string {
+	switch k {
+	case ValConst:
+		return "constant"
+	case ValNull:
+		return "null"
+	case ValString:
+		return "string"
+	case ValInstance:
+		return "instance"
+	case ValSequence:
+		return "sequence"
+	case ValSet:
+		return "set"
+	case ValExpr:
+		return "expression"
+	default:
+		return "invalid"
+	}
+}
+
 // Value is a runtime-evaluable value.
 type Value struct {
 	Kind     ValueKind

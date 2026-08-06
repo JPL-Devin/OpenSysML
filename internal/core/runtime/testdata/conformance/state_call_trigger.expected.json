@@ -1,0 +1,39 @@
+{
+  "type": "state",
+  "events": [
+    {
+      "call": "setSpeed"
+    },
+    {
+      "call": "setSpeed",
+      "args": {
+        "value": {
+          "type": "Integer",
+          "value": 0
+        }
+      }
+    },
+    {
+      "call": "setSpeed",
+      "args": {
+        "value": {
+          "type": "Integer",
+          "value": 55
+        }
+      }
+    }
+  ],
+  "finalState": "done",
+  "stateVisits": [
+    "start",
+    "idle",
+    "cruising",
+    "done"
+  ],
+  "outputs": {
+    "value": {
+      "type": "Integer",
+      "value": 55
+    }
+  }
+}

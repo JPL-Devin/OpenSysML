@@ -6,11 +6,17 @@ This directory contains example SysML v2 models.
 
 The official OMG SysML v2 training examples are **not included in this repository**.
 
-**Download them from:**
+**Download them with:**
 
-https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training
+```bash
+./scripts/download-training-examples.sh
+```
 
-**Status:** 69/100 training files parse cleanly. See [docs/TRAINING_EXAMPLES.md](../docs/TRAINING_EXAMPLES.md) for details.
+That fetches `sysml/src/training` from the pinned pilot release
+(https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) into
+`sysml-v2-training/`, which is gitignored.
+
+**Status:** 71/100 training files are clean. See [docs/TRAINING_EXAMPLES.md](../docs/TRAINING_EXAMPLES.md) for details.
 
 ## Other Examples
 

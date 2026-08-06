@@ -1,0 +1,4 @@
+enter calc test::testQualified
+    eval literal 42 -> 42
+  eval feature test::inner::value -> 42
+exit calc test::testQualified -> 42

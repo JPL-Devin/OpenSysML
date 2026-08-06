@@ -63,3 +63,23 @@ func TestImportDoesNotLeakNonImported(t *testing.T) {
 		t.Fatalf("Hidden should NOT be visible (only Widget imported)")
 	}
 }
+
+func TestImportRecursiveSkipsBodyLocalNames(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"a.sysml": `package Lib {
+			action def Sample {
+				in attribute samples;
+				assert constraint { samples->forAll { in bodyParam; bodyParam > 0 } }
+				loop action charging { } until true;
+			}
+		}`,
+		"b.sysml": "package App { import Lib::**; }",
+	})
+	r := New(idx)
+	appScope := scopeOf(t, idx.DocumentRoot("b.sysml"), "App")
+	for _, name := range []string{"bodyParam", "charging"} {
+		if _, ok := r.ResolveName(appScope, name, &ast.FeatureReference{}); ok {
+			t.Errorf("%s is body-local and must not be importable", name)
+		}
+	}
+}

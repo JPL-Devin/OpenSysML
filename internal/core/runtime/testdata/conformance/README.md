@@ -4,6 +4,7 @@ This directory contains behavioral execution conformance tests. Each test consis
 
 1. **`<case>.sysml`** - The behavioral model (action/state/calc/constraint/requirement)
 2. **`<case>.expected.json`** - Expected execution outcome
+3. **`<case>.trace.golden`** - Optional ordered execution trace (see [Golden Traces](#golden-traces))
 
 ## Schema Format
 
@@ -28,7 +29,7 @@ This directory contains behavioral execution conformance tests. Each test consis
 ```json
 {
   "type": "state",
-  "events": ["sigB"],
+  "events": [{"signal": "sigB"}],
   "finalState": "Active.Cruising",
   "stateVisits": ["Off", "Idle", "Active", "Active.Accelerating", "Active.Cruising"],
   "outputs": {
@@ -37,10 +38,13 @@ This directory contains behavioral execution conformance tests. Each test consis
 }
 ```
 
-- `events`: ordered list of signal names to inject into the machine (drives
-  `AcceptEvent`-triggered transitions). Each name is delivered in order after the
-  machine reaches a stable configuration. Optional; omit for autonomous
-  (time/completion-driven) machines.
+- `events`: ordered list of events to inject into the machine. Each entry names
+  either a signal (`{"signal": "sigB", "args": {...}}`, driving
+  `AcceptEvent`-triggered transitions) or an operation invocation
+  (`{"call": "setSpeed", "args": {"value": {"type": "Integer", "value": 55}}}`,
+  driving `CallEvent`-triggered transitions), with `args` optional. Events are
+  delivered in order. Optional; omit for autonomous (time/completion-driven)
+  machines.
 - `finalState`: qualified name of final reached state
 - `stateVisits`: ordered list of states visited (optional, for golden trace verification)
 - `outputs`: map of state machine outputs
@@ -114,6 +118,32 @@ Supported types:
 3. Run `go test ./internal/core/runtime/ -run TestExecutionConformance -v`
 4. If test fails but behavior is correct, verify and update expected file
 5. If behavior is unimplemented, add case name to `known_failures.txt`
+
+## Golden Traces
+
+A case may also carry a `<case>.trace.golden` recording the order in which the
+case executes, checked by `TestExecutionTrace`. Calc and constraint cases record
+calc evaluation: parameter binding, every sub-expression, and results.
+
+```
+enter calc test::scale
+  bind x = 3 [argument]        # argument, or default when none is passed
+  bind factor = 4 [default]
+    eval feature x -> 3        # indentation is sub-expression nesting
+    eval feature factor -> 4
+  eval operator * -> 12
+exit calc test::scale -> 12    # or `-> error: <typed error>`
+```
+
+Entries are canonical, never positions or addresses: parameters bind in
+declaration order (inherited parameters first, at the position the declaring calc
+gives them), and an unordered value such as a set renders sorted. Regenerate with
+`go test ./internal/core/runtime/ -run TestExecutionTrace -update-traces` and
+review every diff — a reordered entry is a behavior change, not noise.
+
+Only cases that have a golden are trace-checked. State cases that broadcast an
+event over orthogonal regions have no order-stable trace yet, so they carry no
+golden rather than a flaky one.
 
 ## Known Failures
 

@@ -670,7 +670,7 @@ func (s *Session) doStep() ([]string, bool, error) {
 	// Display state
 	tokens := exec.Tokens()
 	out := []string{
-		fmt.Sprintf("✓ Step complete"),
+		"✓ Step complete",
 		fmt.Sprintf("  State: %s", exec.State()),
 		fmt.Sprintf("  Tokens: %d", len(tokens)),
 	}
@@ -916,11 +916,13 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 
 	exec := s.stateExec.executor
 
-	if exec.EventQueue().Len() == 0 {
+	// A state's do behavior is work too: the machine can have none queued yet
+	// still have somewhere to go, and its completion transition is queued once
+	// the behavior ends.
+	if !exec.HasPendingWork() {
 		return []string{"Event queue empty - no events to process"}, false, nil
 	}
 
-	// Process next event
 	err := exec.ProcessNextEvent()
 	if err != nil {
 		return []string{fmt.Sprintf("error: event processing failed: %v", err)}, false, nil
@@ -949,7 +951,8 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 
 // lookupInScopeTree recursively searches scope and all nested scopes for a symbol.
 func lookupInScopeTree(scope *symbols.Scope, name string) *symbols.Symbol {
-	if scope == nil {
+	// A body-local name is only visible inside its own body.
+	if scope == nil || scope.BodyLocal() {
 		return nil
 	}
 

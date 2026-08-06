@@ -203,6 +203,19 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			}
 		}
 		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q)`, fromStr, toStr, payloadStr)
+	case *SendStatement:
+		// The `to`/`via` distinction decides how the message is routed, so a
+		// golden that did not show it would not lock the parse.
+		fmt.Fprintf(b, `(SendStatement via=%t`, v.IsVia)
+		var kids []Node
+		if v.Message != nil {
+			kids = append(kids, v.Message)
+		}
+		if v.Target != nil {
+			kids = append(kids, v.Target)
+		}
+		writeChildren(b, depth, kids)
+		return
 	case *ConnectorEnd:
 		targetStr := ""
 		if qn, ok := v.Target.(*QualifiedName); ok {
@@ -266,6 +279,38 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			b.WriteString(`(RequireMember`)
 			writeChildren(b, depth, []Node{v.Expression})
 		}
+		return
+	case *TransitionMember:
+		fmt.Fprintf(b, `(TransitionMember source=%q target=%q`, qnString(v.Source), qnString(v.Target))
+		kids := make([]Node, 0, len(v.Effect)+2)
+		if v.Trigger != nil {
+			kids = append(kids, v.Trigger)
+		}
+		if v.Guard != nil {
+			kids = append(kids, v.Guard)
+		}
+		kids = append(kids, v.Effect...)
+		writeChildren(b, depth, kids)
+		return
+	case *TimeEvent:
+		// `at` and `after` differ only in this flag, so print it.
+		fmt.Fprintf(b, `(TimeEvent absolute=%t`, v.Absolute)
+		writeChildren(b, depth, []Node{v.Duration})
+		return
+	case *ChangeEvent:
+		b.WriteString(`(ChangeEvent`)
+		writeChildren(b, depth, []Node{v.Condition})
+		return
+	case *CallEvent:
+		names := make([]string, len(v.Parameters))
+		for i, p := range v.Parameters {
+			names[i] = p.Text
+		}
+		fmt.Fprintf(b, `(CallEvent operation=%q parameters=[%s])`,
+			qnString(v.Operation), strings.Join(names, " "))
+		return
+	case *PseudostateNode:
+		fmt.Fprintf(b, `(PseudostateNode kind=%q name=%q)`, v.Kind.String(), v.Name)
 		return
 	default:
 		fmt.Fprintf(b, `(%T)`, n)

@@ -8,7 +8,7 @@ import (
 )
 
 // walkQualified resolves a qualified name segment-by-segment, storing each
-// segment's resolved symbol in Parts[i].Sym.
+// segment's resolved symbol in the resolver's side table.
 func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) resolution {
 	if len(qn.Parts) == 0 {
 		return resolution{nil, false}
@@ -20,7 +20,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 	if len(qn.Parts) == 1 && !qn.Global && scope != nil {
 		res := r.walkUnqualified(scope, qn.Parts[0].Text)
 		if res.ok {
-			qn.Parts[0].Sym = res.sym
+			r.recordPart(qn, 0, res.sym)
 		} else {
 			r.unresolved(qn)
 		}
@@ -56,7 +56,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 		r.unresolved(qn)
 		return resolution{nil, false}
 	}
-	qn.Parts[0].Sym = cur
+	r.recordPart(qn, 0, cur)
 
 	// Walk remaining segments as local members of the current symbol's scope.
 	for i, seg := range qn.Parts[1:] {
@@ -86,6 +86,15 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 			// TODO: Handle deeper nesting if needed
 		}
 
+		// A segment may name a member the current symbol inherits rather than
+		// declares: `engine::'4cylEngine'` reaches the variants of the type
+		// `engine` is typed by.
+		if len(all) == 0 {
+			if sym, ok := r.lookupMember(cur, seg.Text); ok {
+				all = []*symbols.Symbol{sym}
+			}
+		}
+
 		if len(all) == 0 {
 			r.unresolved(qn)
 			return resolution{nil, false}
@@ -95,7 +104,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 			return resolution{nil, false}
 		}
 		cur = all[0]
-		qn.Parts[i+1].Sym = cur
+		r.recordPart(qn, i+1, cur)
 	}
 	return resolution{cur, true}
 }
@@ -108,17 +117,6 @@ func (r *Resolver) lookupInRoot(scope *symbols.Scope, name string) *symbols.Symb
 	}
 	sym, _ := root.LookupLocal(name)
 	return sym
-}
-
-// lookupOutward searches scope and its ancestors for a locally-defined name.
-// Import-aware search is added in Task 7.
-func (r *Resolver) lookupOutward(scope *symbols.Scope, name string) *symbols.Symbol {
-	for s := scope; s != nil; s = s.Parent() {
-		if sym, ok := s.LookupLocal(name); ok {
-			return sym
-		}
-	}
-	return nil
 }
 
 // lookupGlobalTop finds a top-level (single-segment FQN) symbol in the global
@@ -149,12 +147,6 @@ func rootOf(scope *symbols.Scope) *symbols.Scope {
 
 // unresolved records an unresolved-reference diagnostic.
 func (r *Resolver) unresolved(qn *ast.QualifiedName) {
-	// Debug: log where "start" resolution is attempted
-	name := qnText(qn)
-	if name == "start" || name == "done" {
-		// Log the QualifiedName structure to see where it came from
-		// This will help us understand which code path is trying to resolve these names
-	}
 	r.Diagnostics = append(r.Diagnostics, Diagnostic{
 		Span:    qn.Span(),
 		Message: "unresolved reference: " + qnText(qn),

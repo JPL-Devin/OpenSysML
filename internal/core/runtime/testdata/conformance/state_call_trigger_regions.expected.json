@@ -1,0 +1,7 @@
+{
+  "type": "state",
+  "events": [
+    {"call": "wake"}
+  ],
+  "finalState": "Chiming+Lit"
+}

@@ -15,15 +15,29 @@ type EvalContext struct {
 	ctx    *Context           // runtime context
 	scope  *symbols.Scope     // scope context for name resolution
 	frames []map[string]Value // stack of local bindings (innermost = frames[len-1])
+	trace  *TraceRecorder     // evaluation trace recorder, nil when not tracing
 }
 
-// NewEvalContext creates an evaluation context with an empty frame stack.
+// NewEvalContext creates an evaluation context with an empty frame stack. It
+// inherits the runtime context's trace recorder, so every evaluation reached
+// from a traced context is recorded, including nested calc invocations.
 func NewEvalContext(ctx *Context, scope *symbols.Scope) *EvalContext {
 	return &EvalContext{
 		ctx:    ctx,
 		scope:  scope,
 		frames: nil,
+		trace:  ctx.trace,
 	}
+}
+
+// evalIn returns a context that resolves names in scope while sharing this
+// one's bindings and trace, for a body member written in another declaration's
+// scope (an inherited calc result or parameter default).
+func (ec *EvalContext) evalIn(scope *symbols.Scope) *EvalContext {
+	if scope == nil || scope == ec.scope {
+		return ec
+	}
+	return &EvalContext{ctx: ec.ctx, scope: scope, frames: ec.frames, trace: ec.trace}
 }
 
 // Push adds a new frame to the stack (on calc invocation, lambda entry).
@@ -50,7 +64,20 @@ func (ec *EvalContext) Lookup(name string) (Value, bool) {
 
 // Eval evaluates an expression node. Returns a Value or an error.
 // Increments ctx.steps on each eval call; errors when ctx.steps >= ctx.maxSteps.
+// When the context is traced, the evaluation is recorded after its
+// sub-expressions, which makes sub-expression order part of the trace.
 func (ec *EvalContext) Eval(node ast.Node) (Value, error) {
+	if ec.trace == nil {
+		return ec.eval(node)
+	}
+	ec.trace.BeginEval()
+	value, err := ec.eval(node)
+	ec.trace.EndEval(TraceLabel(node), value, err)
+	return value, err
+}
+
+// eval dispatches one expression node, without trace bookkeeping.
+func (ec *EvalContext) eval(node ast.Node) (Value, error) {
 	// Step counter
 	if err := ec.ctx.incrementStep(); err != nil {
 		return Value{}, err
@@ -391,7 +418,7 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 
 	// Both must be ValConst
 	if left.Kind != ValConst || right.Kind != ValConst {
-		return Value{}, fmt.Errorf("comparison operands must be constants")
+		return Value{}, fmt.Errorf("comparison operands must be constants, got %s and %s", left.Kind, right.Kind)
 	}
 
 	// Compare integers
@@ -597,7 +624,7 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	// Build qualified name string for builtin lookup
 	qualName := qualifiedNameToString(n.Type)
 
-	// Eval args
+	// Eval args in source order
 	args := make([]Value, len(n.Args))
 	for i, arg := range n.Args {
 		val, err := ec.Eval(arg)
@@ -607,81 +634,39 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 		args[i] = val
 	}
 
+	named := make(map[string]Value, len(n.NamedArgs))
+	for _, arg := range n.NamedArgs {
+		if arg.Name == nil || len(arg.Name.Parts) == 0 {
+			return Value{}, fmt.Errorf("unnamed argument in invocation of %s", qualName)
+		}
+		val, err := ec.Eval(arg.Value)
+		if err != nil {
+			return Value{}, err
+		}
+		named[arg.Name.Parts[len(arg.Name.Parts)-1].Text] = val
+	}
+
 	// Check builtin registry
 	if fn, ok := builtins[qualName]; ok {
+		if len(named) > 0 {
+			return Value{}, fmt.Errorf("%w: builtin %s takes positional arguments only", ErrUnknownParameter, qualName)
+		}
 		return fn(ec, args)
 	}
 
-	// User-defined calc: resolve target symbol
-	// Use evaluation context scope (or fallback to root if nil)
+	// User-defined calc: resolve target symbol from the evaluation context scope.
 	calcSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.Type)
 	if !ok || calcSym == nil {
-		return Value{}, fmt.Errorf("unresolved calc: %s", qualName)
+		return Value{}, fmt.Errorf("%w: calc %s", ErrUnresolvedReference, qualName)
 	}
 
-	// Ensure it's a calc definition or usage
-	calcDef, isCalcDef := calcSym.Decl.(*ast.Definition)
-	calcUsage, isCalcUsage := calcSym.Decl.(*ast.Usage)
-
-	if !isCalcDef && !isCalcUsage {
-		return Value{}, fmt.Errorf("not a calc: %s (%T)", qualName, calcSym.Decl)
+	// Every invocation goes through the one calc path, so an expression and a
+	// direct InvokeCalc bind parameters and trace identically. The notation keeps
+	// the argument forms mutually exclusive.
+	if len(named) > 0 {
+		return ec.ctx.InvokeCalcNamed(calcSym, named, ec.scope)
 	}
-
-	var members []ast.Node
-	if isCalcDef && calcDef.Kind == ast.DefCalc {
-		members = calcDef.Members
-	} else if isCalcUsage && calcUsage.Kind == ast.UsageCalc {
-		members = calcUsage.Members
-	} else {
-		return Value{}, fmt.Errorf("symbol is not a calc: %s", qualName)
-	}
-
-	// Extract parameters (usages with 'in' direction) and result members
-	params := []string{}
-	var resultExprs []ast.Node
-
-	for _, member := range members {
-		// Unwrap Membership
-		var node ast.Node = member
-		if membership, ok := member.(*ast.Membership); ok {
-			node = membership.Member
-		}
-
-		// Check for parameters (usages with 'in' direction and name)
-		if usage, ok := node.(*ast.Usage); ok {
-			if usage.Ident.Name != "" && (usage.Direction == ast.DirIn || usage.Direction == ast.DirInOut) {
-				params = append(params, usage.Ident.Name)
-			}
-		}
-
-		// Check for ResultMember
-		if resultMember, ok := node.(*ast.ResultMember); ok {
-			resultExprs = append(resultExprs, resultMember.Expression)
-		}
-	}
-
-	// Bind arguments to parameters
-	if len(args) != len(params) {
-		return Value{}, fmt.Errorf("calc %s: expected %d args, got %d", qualName, len(params), len(args))
-	}
-
-	bindings := make(map[string]Value)
-	for i, paramName := range params {
-		bindings[paramName] = args[i]
-	}
-
-	// Push new frame with parameter bindings
-	ec.Push(bindings)
-	defer ec.Pop()
-
-	// Evaluate result expressions (return statements)
-	if len(resultExprs) == 0 {
-		return Value{}, fmt.Errorf("calc %s has no return statement", qualName)
-	}
-
-	// Evaluate the first return expression
-	// (In SysML v2, calcs typically have one return; multiple would need aggregation)
-	return ec.Eval(resultExprs[0])
+	return ec.ctx.InvokeCalc(calcSym, args, ec.scope)
 }
 
 // qualifiedNameToString converts a QualifiedName AST node to "Package::Name" format.
