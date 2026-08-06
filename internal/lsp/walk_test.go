@@ -20,8 +20,8 @@ const bodyRefSource = `package P {
 	attribute bare : Integer = speed;
 	attribute paren : Integer = (speed);
 	attribute operand : Integer = speed + 1;
-	calc plain { return speed; }
-	calc def Plain { return speed; }
+	calc plain { return r = speed; }
+	calc def Plain { return r = speed; }
 	constraint inRange { speed > 0 }
 	requirement Req {
 		assume speed > 0;

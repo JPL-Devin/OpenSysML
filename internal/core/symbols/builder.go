@@ -179,10 +179,40 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 			defineIdent(scope, id, sym)
 			scope.AddChild(child)
 		}
+	case *ast.WhileLoopActionNode:
+		// A loop is an anonymous action namespace: what its body declares (and,
+		// for `for x in c`, the iteration variable) is a member of the loop, so
+		// the body and the loop's own condition can refer to it.
+		child := NewScope(scope, d)
+		scope.AddChild(child)
+		buildMembers(child, d.Body)
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		// Control flow nodes without explicit names in AST - skip indexing
 		// (If these nodes gain name fields in future, register them here)
 	}
+}
+
+// NewBodyExprScope builds the scope a body expression's parameters declare into
+// (`c->forAll { in i : Positive; f(i) }`). Body expressions are nested in
+// expressions rather than in member lists, so their scope is created on demand
+// by the resolver instead of during the member walk, and is not linked into
+// parent's children.
+func NewBodyExprScope(parent *Scope, body *ast.BodyExpr) *Scope {
+	scope := NewScope(parent, body)
+	for i := range body.Params {
+		p := &body.Params[i]
+		if p.Name == "" {
+			continue
+		}
+		scope.Define(p.Name, &Symbol{
+			Name:       p.Name,
+			Kind:       SymbolAttributeUsage,
+			Decl:       body,
+			DeclSpan:   body.Span(),
+			OwnerScope: scope,
+		})
+	}
+	return scope
 }
 
 // newSymbol builds a Symbol from an identification. scope is the child scope the

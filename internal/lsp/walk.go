@@ -176,8 +176,13 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	case *ast.PerformActionNode:
 		c.expr(scope, d.ActionRef)
 	case *ast.WhileLoopActionNode:
-		c.expr(scope, d.Condition)
-		c.walkMembers(scope, d.Body)
+		// A loop owns the scope its body declares into (see symbols.buildDecl).
+		body := scope
+		if child := c.childScope(scope, d); child != nil {
+			body = child
+		}
+		c.expr(body, d.Condition)
+		c.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
 		c.expr(scope, d.Condition)
 		c.walkMembers(scope, d.ThenBody)
@@ -290,9 +295,9 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		c.add(scope, v.Ref)
 	case *ast.QualifiedName:
 		// A bare name in expression position parses straight to a qualified
-		// name rather than to a FeatureReference wrapper: `return speed;` and
-		// `return (speed);` reach here, while `return speed + 1;` arrives as an
-		// operand of an OperatorExpr.
+		// name rather than to a FeatureReference wrapper: `return r = speed;`
+		// and `return (speed);` reach here, while `return speed + 1;` arrives
+		// as an operand of an OperatorExpr.
 		c.add(scope, v)
 	}
 }

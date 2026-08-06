@@ -1,0 +1,43 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="calc" abstract=false variation=false name="Acceleration"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="tp" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="tm" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+        (Relationship kind="typing" target=Real
+          (*ast.QualifiedName))
+        (OperatorExpr operator="/"
+          (FeatureReference name="tp")
+          (FeatureReference name="tm")))))
+  (Membership visibility="default"
+    (Usage kind="calc" name="acc" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+      (Relationship kind="typing" target=Acceleration
+        (*ast.QualifiedName))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="tp" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (LiteralInteger value="1")))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="tm" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (LiteralInteger value="2")))
+      (Usage kind="attribute" name="a" ref=false direction="out" composite=false derived=false ordered=false nonunique=false)))
+  (Membership visibility="default"
+    (Usage kind="calc" name="bounded" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+      (Relationship kind="typing" target=Acceleration
+        (*ast.QualifiedName))
+      (Usage kind="attribute" name="sampled" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+        (Multiplicity range=true
+          (LiteralInteger value="0")
+          (LiteralInteger value="1")))))
+  (Membership visibility="default"
+    (Usage kind="calc" name="computed" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+      (Membership visibility="default"
+        (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (*ast.ResultMember))))

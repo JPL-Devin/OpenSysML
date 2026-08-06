@@ -86,6 +86,15 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 			// TODO: Handle deeper nesting if needed
 		}
 
+		// A segment may name a member the current symbol inherits rather than
+		// declares: `engine::'4cylEngine'` reaches the variants of the type
+		// `engine` is typed by.
+		if len(all) == 0 {
+			if sym, ok := r.lookupMember(cur, seg.Text); ok {
+				all = []*symbols.Symbol{sym}
+			}
+		}
+
 		if len(all) == 0 {
 			r.unresolved(qn)
 			return resolution{nil, false}

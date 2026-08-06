@@ -84,7 +84,13 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 	case *ast.IfActionNode:
 		tc.expr.checkBoolean(scope, m.Condition, "condition of 'if'")
 	case *ast.WhileLoopActionNode:
-		tc.expr.checkBoolean(scope, m.Condition, "condition of 'while'")
+		// The condition may read the loop's own body members, which live in the
+		// scope the loop owns.
+		body := scope
+		if child := childScopeOf(scope, m); child != nil {
+			body = child
+		}
+		tc.expr.checkBoolean(body, m.Condition, "condition of 'while'")
 	case *ast.TransitionMember:
 		tc.expr.checkBoolean(scope, m.Guard, "transition guard")
 		tc.checkTrigger(scope, m.Trigger)

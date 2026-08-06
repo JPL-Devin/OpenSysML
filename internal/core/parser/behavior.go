@@ -1328,11 +1328,10 @@ func (p *Parser) parseResultMember() ast.Node {
 	}
 
 	// Check for Pattern 5: return [kind] [modifiers] name [mult] [body/semicolon] (no type, no value)
-	// Only match if modifiers present OR followed by multiplicity - bare 'return name;' is computed result (Pattern 3)
-	hasModifiers := mods.isAbstract || mods.isReference || mods.isEnd || mods.isConstant ||
-		mods.isComposite || mods.isDerived || mods.isReadonly || mods.isOrdered || mods.isNonunique
-	hasMultiplicity := p.peekN(1).Kind == lexer.LBracket
-	if (hasModifiers || hasMultiplicity) && p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
+	// `return` introduces a return parameter, so a lone name after it declares
+	// that parameter (`calc acc : Acceleration { return a; }`) rather than
+	// referencing one.
+	if p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
