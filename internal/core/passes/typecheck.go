@@ -137,9 +137,12 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 		if !ok || sym == nil {
 			continue // unresolved: name-resolution tier owns this
 		}
-		// Resolve aliases to their underlying types for typing relationships
+		// Resolve aliases to their underlying types for typing relationships and
+		// for a satisfy reference, both of which check the target's kind.
 		targetSym := sym
-		if rel.Kind == ast.RelTyping && sym.Kind == symbols.SymbolAlias {
+		aliasMatters := rel.Kind == ast.RelTyping ||
+			(rel.Kind == ast.RelSubsets && useKind == ast.UsageSatisfy)
+		if aliasMatters && sym.Kind == symbols.SymbolAlias {
 			if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
 				targetSym = resolved
 			}

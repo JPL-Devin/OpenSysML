@@ -125,3 +125,20 @@ func TestTypeCheckSatisfyNonRequirementUsageError(t *testing.T) {
 		t.Fatalf("expected one type diagnostic for satisfy of a non-requirement, got %v", diags)
 	}
 }
+
+// An alias for a requirement usage is a legal satisfy target.
+func TestTypeCheckSatisfyAliasOfRequirementUsageOK(t *testing.T) {
+	src := `
+		package P {
+			requirement vehicleSpecification;
+			alias VS for vehicleSpecification;
+			part v;
+			part ctx {
+				satisfy VS by v;
+			}
+		}
+	`
+	if diags := typeDiags(t, src); len(diags) != 0 {
+		t.Fatalf("expected no type diagnostics for satisfy through an alias, got %v", diags)
+	}
+}
