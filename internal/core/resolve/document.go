@@ -114,12 +114,19 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 				}
 			}
 		}
+		child := r.childScope(scope, d)
 		if d.FlowEnds != nil {
 			r.resolveExpr(scope, d.FlowEnds.From)
 			r.resolveExpr(scope, d.FlowEnds.To)
-			r.resolveExpr(scope, d.FlowEnds.Payload)
+			// A declared payload (`of name : Type`) names a member of the flow
+			// itself, not an element of the enclosing scope.
+			payloadScope := scope
+			if d.FlowEnds.PayloadDecl != nil && child != nil {
+				payloadScope = child
+			}
+			r.resolveExpr(payloadScope, d.FlowEnds.Payload)
 		}
-		if child := r.childScope(scope, d); child != nil {
+		if child != nil {
 			r.walkMembers(child, d.Members)
 		}
 	case *ast.SubjectMember:
@@ -221,9 +228,18 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveExpr(body, d.Condition)
 		r.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
+		// The condition is evaluated before either branch is entered, so it sees
+		// the enclosing scope only; each branch owns its body's declarations.
 		r.resolveExpr(scope, d.Condition)
-		r.walkMembers(scope, d.ThenBody)
-		r.walkMembers(scope, d.ElseBody)
+		for _, branch := range d.Branches() {
+			r.resolveDecl(scope, branch)
+		}
+	case *ast.IfBranchNode:
+		body := scope
+		if child := r.childScope(scope, d); child != nil {
+			body = child
+		}
+		r.walkMembers(body, d.Body)
 	}
 }
 

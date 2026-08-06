@@ -38,7 +38,7 @@ func TestDumpFlowEnds(t *testing.T) {
 	}
 	got := Dump(u)
 	want := "(Usage kind=\"flow\" name=\"f\" ref=false direction=\"none\" composite=false derived=false ordered=false nonunique=false\n" +
-		"  (FlowEnds from=\"a\" to=\"b\" payload=\"Fuel\"))"
+		"  (FlowEnds from=\"a\" to=\"b\" payload=\"Fuel\" declared=false))"
 	if got != want {
 		t.Fatalf("Dump mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
@@ -52,6 +52,28 @@ func TestDumpConjugated(t *testing.T) {
 	}
 	got := Dump(u)
 	want := `(Usage kind="port" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false conjugated=true)`
+	if got != want {
+		t.Fatalf("Dump mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestDumpFlowEndsDeclaredPayload(t *testing.T) {
+	payload := &Usage{Kind: UsageAttribute, Ident: Identification{Name: "pay"}}
+	u := &Usage{
+		Kind:  UsageFlow,
+		Ident: Identification{Name: "f"},
+		FlowEnds: &FlowEnds{
+			From:        qn("a"),
+			To:          qn("b"),
+			Payload:     qn("pay"),
+			PayloadDecl: payload,
+		},
+		Members: []Node{payload},
+	}
+	got := Dump(u)
+	want := "(Usage kind=\"flow\" name=\"f\" ref=false direction=\"none\" composite=false derived=false ordered=false nonunique=false\n" +
+		"  (FlowEnds from=\"a\" to=\"b\" payload=\"pay\" declared=true)\n" +
+		"  (Usage kind=\"attribute\" name=\"pay\" ref=false direction=\"none\" composite=false derived=false ordered=false nonunique=false))"
 	if got != want {
 		t.Fatalf("Dump mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}

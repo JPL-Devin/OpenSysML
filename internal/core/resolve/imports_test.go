@@ -71,13 +71,14 @@ func TestImportRecursiveSkipsBodyLocalNames(t *testing.T) {
 				in attribute samples;
 				assert constraint { samples->forAll { in bodyParam; bodyParam > 0 } }
 				loop action charging { } until true;
+				if true { action thenLocal; } else { action elseLocal; }
 			}
 		}`,
 		"b.sysml": "package App { import Lib::**; }",
 	})
 	r := New(idx)
 	appScope := scopeOf(t, idx.DocumentRoot("b.sysml"), "App")
-	for _, name := range []string{"bodyParam", "charging"} {
+	for _, name := range []string{"bodyParam", "charging", "thenLocal", "elseLocal"} {
 		if _, ok := r.ResolveName(appScope, name, &ast.FeatureReference{}); ok {
 			t.Errorf("%s is body-local and must not be importable", name)
 		}
