@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -165,6 +167,10 @@ func (p *Parser) parseIdentification() ast.Identification {
 			// These keywords have special syntax meaning, not valid as identifier names here
 			return id
 		}
+		// Any other keyword here is the name the author meant, so it is read as
+		// one rather than dropped. SysML reserves it though (KerML §7.2.4): only
+		// an unrestricted name may spell a keyword.
+		p.warn(p.peek().Span, fmt.Sprintf("%q is a reserved keyword; write '%s' to use it as a name", kw, kw))
 	}
 	if seg, ok := p.parseNameSegmentRelaxed(); ok {
 		id.Name = seg.Text

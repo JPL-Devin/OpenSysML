@@ -69,6 +69,46 @@ func TestParseKeywordAsNameAfterKindKeyword(t *testing.T) {
 	}
 }
 
+// A keyword in name position is reported: SysML reserves keywords there, and
+// only an unrestricted name may spell one. It is a warning rather than an error
+// because the normative OMG library relies on unquoted keyword names
+// (`step entry[1];`, `part done : Part;`) and must keep parsing clean.
+func TestParseKeywordAsNameIsReported(t *testing.T) {
+	p := New(source.New("test.sysml", []byte("package P { action flow { assign x := 1; } }")))
+	p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Errorf("errors = %v, want none: a keyword name still parses", p.Diagnostics)
+	}
+	if len(p.Warnings) != 1 {
+		t.Fatalf("warnings = %v, want one", p.Warnings)
+	}
+	want := `"flow" is a reserved keyword; write 'flow' to use it as a name`
+	if p.Warnings[0].Message != want {
+		t.Errorf("warning = %q, want %q", p.Warnings[0].Message, want)
+	}
+
+	// The quoted spelling the warning suggests is well-formed and warning-free.
+	q := New(source.New("test.sysml", []byte("package P { action 'flow' { assign x := 1; } }")))
+	q.ParseFile()
+	if len(q.Diagnostics) != 0 || len(q.Warnings) != 0 {
+		t.Errorf("quoted name reported %v / %v, want neither", q.Diagnostics, q.Warnings)
+	}
+
+	// Keywords with their own meaning in this position are not names at all, so
+	// they must not be reported as one.
+	for _, src := range []string{
+		"package P { part def S { part x; connect x to x; } }",
+		"package P { action a { first start; then done; } }",
+		"package P { part def S { attribute x : Integer default 1; } }",
+	} {
+		r := New(source.New("test.sysml", []byte(src)))
+		r.ParseFile()
+		if len(r.Warnings) != 0 {
+			t.Errorf("%s warned %v, want none", src, r.Warnings)
+		}
+	}
+}
+
 // The converse: a keyword before a kind keyword qualifies the kind, so the name
 // that follows the kind is the declaration's, and a declaration with no name
 // stays anonymous rather than being named after its own kind.

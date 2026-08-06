@@ -21,6 +21,22 @@
       (Membership visibility="default"
         (Usage kind="item" name="Shape" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
       (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Bound"
+          (Membership visibility="default"
+            (Usage kind="part" name="base" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="part" name="edges" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+          (Membership visibility="default"
+            (Usage kind="part" name="boundaryEdges" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=(expr)
+                (FeatureChainExpr member="edges"
+                  (FeatureReference name="base")))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (FeatureReference name="boundaryEdges")))))
+      (Membership visibility="default"
         (Definition kind="item" abstract=false variation=false name="Alice"))
       (Membership visibility="default"
         (Definition kind="part" abstract=false variation=false name="Constrained"

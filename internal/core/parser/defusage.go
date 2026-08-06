@@ -694,7 +694,16 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(u)
 		}
 
-		return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], mods, isAll))
+		// `assert constraint { ... }` (likewise `assume`/`require`) spells the
+		// kind after the prefix: the second keyword is the kind, so the
+		// declaration is an anonymous constraint rather than one named
+		// `constraint`.
+		kindKeyword := kw
+		if kindPrefixKeywords[kw] && isKindKeyword(p.peek()) {
+			kindKeyword = p.peek().KeywordID
+			p.advance()
+		}
+		return applyPrefixes(p.parseUsage(start, usageKindKeywords[kindKeyword], mods, isAll))
 	}
 
 	// Special case: if current token is 'def' (after prefixes/modifiers), parse as generic definition
@@ -1131,10 +1140,23 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			u.Multiplicity = p.parseMultiplicity()
 		}
 
-		// Parse source (name or feature chain like x.field)
-		// Check if simple name or feature chain
-		// Note: use atNameOrKeyword to allow "bind" keyword as identifier name
-		if p.atNameOrKeyword() && p.peekN(1).Kind != lexer.Dot && p.peekN(1).Kind != lexer.LBracket {
+		// `binding [mult] bind [mult] src = [mult] tgt` states the connector's
+		// ends after the `bind` keyword instead of naming the connector, so the
+		// keyword is consumed rather than read as the name.
+		if p.atKeyword("bind") {
+			p.advance()
+			if p.at(lexer.LBracket) {
+				p.parseMultiplicity() // end multiplicity, not the connector's
+			}
+			if source := p.parseRelationshipTarget(); source != nil {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelRedefines, // Use redefines to mark binding source
+					Target: source,
+				})
+			}
+		} else if p.atNameOrKeyword() && p.peekN(1).Kind != lexer.Dot && p.peekN(1).Kind != lexer.LBracket {
+			// Parse source (name or feature chain like x.field)
+			// Check if simple name or feature chain
 			// Simple name - use as identification
 			u.Ident = p.parseIdentification()
 		} else if p.atNameOrKeyword() && p.peekN(1).Kind == lexer.LBracket {
