@@ -44,6 +44,52 @@ func TestDefinitionJumpsToDeclaration(t *testing.T) {
 	}
 }
 
+// Go-to-definition on a body-expression parameter must land on the parameter's
+// own identifier, not on the body's brace or the same-named outer feature; on
+// the declaration itself there is nothing to jump to.
+func TestDefinitionBodyExpressionParameter(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/def_bodyparam.sysml").Filename()
+	src := `package P {
+	import ScalarValues::*;
+	import ControlFunctions::*;
+	attribute s : Integer = 1;
+	action def Sample {
+		in attribute samples : Real[*];
+		assert constraint { samples->forAll { in s : Real; s > 0 } }
+	}
+}
+`
+	ws.Open(name, []byte(src), 1)
+
+	definitionAt := func(anchor string) []protocol.Location {
+		t.Helper()
+		locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+				Position:     offsetToPosition([]byte(src), strings.Index(src, anchor)),
+			},
+		})
+		if err != nil {
+			t.Fatalf("Definition err = %v", err)
+		}
+		return locs
+	}
+
+	locs := definitionAt("s > 0")
+	if len(locs) != 1 {
+		t.Fatalf("locations from use = %d, want 1", len(locs))
+	}
+	if got, want := positionToOffset([]byte(src), locs[0].Range.Start), strings.Index(src, "s : Real; s > 0"); got != want {
+		t.Errorf("definition offset = %d, want %d (the parameter's own name)", got, want)
+	}
+
+	if locs := definitionAt("s : Real; s > 0"); len(locs) != 0 {
+		t.Errorf("definition on the declaration returned %d locations, want 0", len(locs))
+	}
+}
+
 func TestDefinitionCrossFile(t *testing.T) {
 	ws := model.NewWorkspace()
 	s := NewServer(ws)
