@@ -949,7 +949,8 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 
 // lookupInScopeTree recursively searches scope and all nested scopes for a symbol.
 func lookupInScopeTree(scope *symbols.Scope, name string) *symbols.Symbol {
-	if scope == nil {
+	// A body-local name is only visible inside its own body.
+	if scope == nil || scope.BodyLocal() {
 		return nil
 	}
 

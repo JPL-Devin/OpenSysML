@@ -26,7 +26,6 @@ type Resolver struct {
 	memo        map[ast.Node]resolution
 	resolving   map[ast.Node]bool // cycle detection
 	parts       map[*ast.QualifiedName][]*symbols.Symbol
-	bodyScopes  map[*ast.BodyExpr]*symbols.Scope // scopes owning body-expression parameters
 	Diagnostics []Diagnostic
 	model       MemberLookup // Optional *semantics.Model for inheritance-aware member lookup
 }
@@ -34,11 +33,10 @@ type Resolver struct {
 // New creates a resolver over the given index.
 func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
-		idx:        idx,
-		memo:       map[ast.Node]resolution{},
-		resolving:  map[ast.Node]bool{},
-		parts:      map[*ast.QualifiedName][]*symbols.Symbol{},
-		bodyScopes: map[*ast.BodyExpr]*symbols.Scope{},
+		idx:       idx,
+		memo:      map[ast.Node]resolution{},
+		resolving: map[ast.Node]bool{},
+		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
 	}
 }
 
