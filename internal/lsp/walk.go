@@ -186,8 +186,16 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
 		c.expr(scope, d.Condition)
-		c.walkMembers(scope, d.ThenBody)
-		c.walkMembers(scope, d.ElseBody)
+		for _, branch := range d.Branches() {
+			c.resolveDecl(scope, branch)
+		}
+	case *ast.IfBranchNode:
+		// A branch owns the scope its body declares into (see symbols.buildDecl).
+		body := scope
+		if child := c.childScope(scope, d); child != nil {
+			body = child
+		}
+		c.walkMembers(body, d.Body)
 	}
 }
 

@@ -1067,82 +1067,66 @@ func (p *Parser) parseIfAction(tok lexer.Token) ast.Node {
 			Message:  "expected '{' after if condition",
 		}
 	}
+	thenStart := p.peek().Span.Offset
 	p.advance() // consume '{'
+	thenBranch := p.parseIfBranch(ast.IfBranchThen, thenStart, "expected '}' after if body")
 
-	// Parse then body statements
-	var thenBody []ast.Node
+	// Check for optional 'else' clause
+	var elseBranch *ast.IfBranchNode
+	elseStart := p.peek().Span.Offset
+	if p.acceptKeyword("else") {
+		if !p.at(lexer.LBrace) {
+			p.error(p.peek().Span, "expected '{' after else")
+		} else {
+			p.advance() // consume '{'
+			elseBranch = p.parseIfBranch(ast.IfBranchElse, elseStart, "expected '}' after else body")
+		}
+	}
+
+	node := &ast.IfActionNode{
+		Condition: condition,
+		Then:      thenBranch,
+		Else:      elseBranch,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseIfBranch parses the members of one branch body of an if action, with the
+// opening '{' already consumed, and consumes the closing '}'. start is the
+// offset the branch's span begins at ('{' for the then branch, 'else' for the
+// else branch). Both declarations and behavioral statements are accepted, so
+// `if <cond> { action x : Type { body }; first x then y; }` parses.
+func (p *Parser) parseIfBranch(kind ast.IfBranchKind, start int, closeMsg string) *ast.IfBranchNode {
+	var body []ast.Node
 	for !p.at(lexer.RBrace) && !p.atEOF() {
-		// Use parseActionBodyMixed to support both declarations and behavioral statements
-		// This allows: if <cond> { action x : Type { body }; first x then y; }
 		before := p.peek().Span.Offset
 
-		// Try direction parameters first
+		// Direction parameters first.
 		if p.isDirectionKeyword() {
-			thenBody = append(thenBody, p.parseDirectionParameter())
+			body = append(body, p.parseDirectionParameter())
 			continue
 		}
 
-		// Try declarations (action/part/etc)
+		// Declarations (action/part/etc).
 		if p.atDefUsageStart() {
-			m := p.parseBodyMember()
-			if m != nil {
-				thenBody = append(thenBody, m)
+			if m := p.parseBodyMember(); m != nil {
+				body = append(body, m)
 			}
-			// Check if no progress (prevent infinite loop)
+			// No progress: advance to avoid an infinite loop.
 			if p.peek().Span.Offset == before {
 				p.advance()
 			}
 			continue
 		}
 
-		// Parse behavioral statements
-		thenBody = append(thenBody, p.parseActionMember())
+		body = append(body, p.parseActionMember())
 	}
+	p.expect(lexer.RBrace, closeMsg)
 
-	p.expect(lexer.RBrace, "expected '}' after if body")
-
-	// Check for optional 'else' clause
-	var elseBody []ast.Node
-	if p.acceptKeyword("else") {
-		if !p.at(lexer.LBrace) {
-			p.error(p.peek().Span, "expected '{' after else")
-		} else {
-			p.advance() // consume '{'
-			for !p.at(lexer.RBrace) && !p.atEOF() {
-				before := p.peek().Span.Offset
-
-				// Try direction parameters first
-				if p.isDirectionKeyword() {
-					elseBody = append(elseBody, p.parseDirectionParameter())
-					continue
-				}
-
-				// Try declarations
-				if p.atDefUsageStart() {
-					m := p.parseBodyMember()
-					if m != nil {
-						elseBody = append(elseBody, m)
-					}
-					if p.peek().Span.Offset == before {
-						p.advance()
-					}
-					continue
-				}
-
-				// Parse behavioral statements
-				elseBody = append(elseBody, p.parseActionMember())
-			}
-			p.expect(lexer.RBrace, "expected '}' after else body")
-		}
-	}
-
-	node := &ast.IfActionNode{
-		Condition: condition,
-		ThenBody:  thenBody,
-		ElseBody:  elseBody,
-	}
-	node.NodeSpan = p.spanFrom(start)
-	return node
+	branch := &ast.IfBranchNode{Kind: kind, Body: body}
+	branch.NodeSpan = p.spanFrom(start)
+	return branch
 }
 
 // Phase C1: Calculation and Constraint Bodies

@@ -235,11 +235,11 @@ This generates error frequency analysis and per-file diagnostics.
 
 ## Conclusion
 
-**Implementation Status**: Core behavioral semantics complete (20/20 conformance tests passing).
+**Implementation Status**: Core behavioral semantics complete (43/43 execution conformance cases passing).
 
-**Training Example Status**: 80% clean. Remaining errors are primarily:
-1. Missing local declarations in pedagogical examples
-2. Features of the stdlib base type of an untyped usage, which no implicit typing supplies (see the verdict tables above)
+**Training Example Status**: 81/100 clean (19 files, 37 errors). Remaining errors are primarily:
+1. Missing local declarations in pedagogical examples, and bugs in the OMG files themselves
+2. Implicit *redefinition* of a like-named inherited feature, and members contributed by `perform`/`references` edges — neither of which implicit stdlib typing supplies (see the verdict tables above)
 3. Type system edge cases (feature work needed)
 
 The runtime implementation is **production-ready for complete SysML v2 models**. Training example "failures" reflect incomplete example files, not missing runtime features.

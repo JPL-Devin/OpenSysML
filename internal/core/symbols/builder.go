@@ -199,6 +199,19 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		child.markBodyLocal()
 		scope.AddChild(child)
 		buildMembers(child, d.Body)
+	case *ast.IfActionNode:
+		// Each branch is a namespace of its own: `if c { action a; } else { action a; }`
+		// declares two distinct actions, neither of them a member of the enclosing
+		// behavior. The condition is evaluated outside both branches, so it is not
+		// resolved against them.
+		for _, branch := range d.Branches() {
+			buildDecl(scope, branch, vis, trivia)
+		}
+	case *ast.IfBranchNode:
+		child := NewScope(scope, d)
+		child.markBodyLocal()
+		scope.AddChild(child)
+		buildMembers(child, d.Body)
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		// Control flow nodes without explicit names in AST - skip indexing
 		// (If these nodes gain name fields in future, register them here)
