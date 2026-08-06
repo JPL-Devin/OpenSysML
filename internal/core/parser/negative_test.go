@@ -37,6 +37,8 @@ func TestNegative(t *testing.T) {
 		{"perform_no_reference", "action a { perform ; }"},
 		{"perform_dangling_chain", "action a { perform b.; }"},
 		{"allocate_missing_target", "package q { allocate a to ; }"},
+		{"message_payload_declaration_no_type", "message m of pay : from a to b;"},
+		{"message_payload_declaration_no_target", "message m of pay : T from a;"},
 	}
 
 	for _, tt := range tests {

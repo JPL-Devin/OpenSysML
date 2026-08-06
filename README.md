@@ -14,7 +14,14 @@ A complete, production-grade SysML v2 implementation in Go—providing language 
 wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-linux-amd64.tar.gz
 tar xzf sysml-linux-amd64.tar.gz && sudo mv sysml-linux-amd64 /usr/local/bin/sysml
 
-# macOS (see Quick Start for all platforms)
+# macOS (Intel or Apple Silicon) — see the note below; requires the tap to exist
+brew tap Open-MBEE/tap && brew install systemica
+```
+
+**With a Go toolchain (no download, never quarantined):**
+```bash
+go install github.com/Open-MBEE/Systemica/cmd/sysml@latest
+go install github.com/Open-MBEE/Systemica/cmd/sysml-lsp@latest
 ```
 
 **Or build from source:**
@@ -22,6 +29,19 @@ tar xzf sysml-linux-amd64.tar.gz && sudo mv sysml-linux-amd64 /usr/local/bin/sys
 make build
 ./bin/sysml
 ```
+
+> **macOS — use Homebrew.** The released binaries are not Developer ID signed or notarized,
+> so a tarball downloaded *in a browser* carries `com.apple.quarantine` and Gatekeeper shows
+> "cannot be opened because the developer cannot be verified". Homebrew downloads with
+> `curl`, which never sets that attribute, so `brew install` avoids the prompt entirely.
+> Fallback if you download the tarball directly (`curl -fL ... systemica-darwin-arm64.tar.gz`,
+> then `xattr -d com.apple.quarantine`): see
+> [Quick Start](docs/QUICKSTART.md#macos-gatekeeper). Signing/notarization is the eventual
+> fix — [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
+>
+> The tap is not published yet: `brew tap Open-MBEE/tap` works once the maintainer creates
+> `Open-MBEE/homebrew-tap` ([how](packaging/homebrew/README.md)). Until then use `go install`
+> or the direct download.
 
 ### Try it
 
@@ -209,6 +229,12 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 **Release process:**
 - Every commit: Build + test
 - Tagged releases (`v*`): Multi-platform binaries published to GitHub Releases
+
+**Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
+`sysml-lsp-<os>-<arch>.tar.gz`), `systemica-<os>-<arch>.tar.gz` bundles containing both
+binaries, and `SHA256SUMS.txt`. macOS binaries are not Developer ID signed or notarized and
+Windows binaries are not Authenticode signed — see
+[docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
 
 ## Building
 

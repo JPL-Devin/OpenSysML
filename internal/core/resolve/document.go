@@ -114,12 +114,19 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 				}
 			}
 		}
+		child := r.childScope(scope, d)
 		if d.FlowEnds != nil {
 			r.resolveExpr(scope, d.FlowEnds.From)
 			r.resolveExpr(scope, d.FlowEnds.To)
-			r.resolveExpr(scope, d.FlowEnds.Payload)
+			// A declared payload (`of name : Type`) names a member of the flow
+			// itself, not an element of the enclosing scope.
+			payloadScope := scope
+			if d.FlowEnds.PayloadDecl != nil && child != nil {
+				payloadScope = child
+			}
+			r.resolveExpr(payloadScope, d.FlowEnds.Payload)
 		}
-		if child := r.childScope(scope, d); child != nil {
+		if child != nil {
 			r.walkMembers(child, d.Members)
 		}
 	case *ast.SubjectMember:

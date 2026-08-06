@@ -420,6 +420,10 @@ type FlowEnds struct {
 	From    Node // Flow source (qualified name or feature chain)
 	To      Node // Flow target (qualified name or feature chain)
 	Payload Node // optional; from the `of` clause (qualified name or feature chain)
+	// PayloadDecl is set when the `of` clause declares the payload feature
+	// (`of name : Type`) instead of referring to an existing one. That usage is
+	// also a member of the owning flow, and Payload names it.
+	PayloadDecl *Usage
 }
 
 // ConnectorEnd represents a single connector end with optional multiplicity.
