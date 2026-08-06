@@ -69,6 +69,42 @@ func TestParseKeywordAsNameAfterKindKeyword(t *testing.T) {
 	}
 }
 
+// A prefix keyword followed by a kind keyword and a name declares that kind:
+// `variant attribute diameterSmall` is an attribute variant, not a variant
+// named `attribute`. With no name after it, the kind keyword is the name.
+func TestParseVariantWithKindKeyword(t *testing.T) {
+	tests := []struct {
+		src  string
+		kind ast.UsageKind
+		name string
+	}{
+		{"package P { variation attribute def C { variant attribute diameterSmall = 70; } }", ast.UsageAttribute, "diameterSmall"},
+		{"package P { variation part def C { variant part smallEngine; } }", ast.UsagePart, "smallEngine"},
+		{"package P { variation part def C { variant attribute; } }", ast.UsagePart, "attribute"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := New(source.New("test.sysml", []byte(tt.src)))
+			root := p.ParseFile()
+			if len(p.Diagnostics) > 0 {
+				t.Fatalf("parse errors: %v", p.Diagnostics)
+			}
+			pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
+			def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
+			usage, ok := def.Members[0].(*ast.Membership).Member.(*ast.Usage)
+			if !ok {
+				t.Fatalf("%s parsed to %T, want a usage", tt.src, def.Members[0].(*ast.Membership).Member)
+			}
+			if usage.Ident.Name != tt.name {
+				t.Errorf("%s declared %q, want %q", tt.src, usage.Ident.Name, tt.name)
+			}
+			if usage.Kind != tt.kind {
+				t.Errorf("%s has kind %v, want %v", tt.src, usage.Kind, tt.kind)
+			}
+		})
+	}
+}
+
 // A keyword in name position is reported: SysML reserves keywords there, and
 // only an unrestricted name may spell one. It is a warning rather than an error
 // because the normative OMG library relies on unquoted keyword names
