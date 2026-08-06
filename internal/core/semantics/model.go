@@ -156,6 +156,13 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 	}
 
+	// An untyped usage still specializes its standard-library base feature.
+	if len(out) == 0 {
+		if base := m.implicitBase(sym); base != nil {
+			out = append(out, base)
+		}
+	}
+
 	m.directSupers[sym] = out
 	return out
 }
@@ -165,14 +172,21 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 // itself. Only a single-segment name can denote an inherited feature this way;
 // a qualified one names its owner explicitly.
 func (m *Model) inheritedFeature(sym *symbols.Symbol, qn *ast.QualifiedName) *symbols.Symbol {
-	if sym.OwnerScope == nil || len(qn.Parts) != 1 {
+	if len(qn.Parts) != 1 {
+		return nil
+	}
+	return m.inheritedFeatureNamed(sym, qn.Parts[0].Text)
+}
+
+// inheritedFeatureNamed is inheritedFeature for an already-extracted name.
+func (m *Model) inheritedFeatureNamed(sym *symbols.Symbol, name string) *symbols.Symbol {
+	if sym.OwnerScope == nil {
 		return nil
 	}
 	owner := sym.OwnerScope.Owner()
 	if owner == nil {
 		return nil
 	}
-	name := qn.Parts[0].Text
 	for _, sup := range m.AllSupertypes(owner) {
 		if found, ok := m.LookupMember(sup, name); ok && found != sym {
 			return found
