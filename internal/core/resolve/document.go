@@ -145,6 +145,97 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		// Final nodes have no references
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		// Control flow nodes have no references to resolve (names are just labels)
+	case *ast.ResultMember:
+		r.resolveExpr(scope, d.Expression)
+	case *ast.ConstraintMember:
+		r.resolveExpr(scope, d.Expression)
+	case *ast.AssumeMember:
+		r.resolveExpr(scope, d.Expression)
+	case *ast.RequireMember:
+		r.resolveExpr(scope, d.Expression)
+		r.walkMembers(scope, d.Body)
+	case *ast.ActorMember:
+		if d.TypeRef != nil {
+			r.ResolveQualified(scope, d.TypeRef)
+		}
+		r.resolveExpr(scope, d.BindingExpr)
+	case *ast.EntryMember:
+		r.walkMembers(scope, d.Actions)
+	case *ast.DoMember:
+		r.walkMembers(scope, d.Actions)
+	case *ast.ExitMember:
+		r.walkMembers(scope, d.Actions)
+	case *ast.StateNode:
+		// The state's own name is a declaration, not a reference. Its body
+		// resolves in the scope the state owns, which holds its substates and
+		// regions; features it reads still resolve outward from there.
+		body := scope
+		if child := r.childScope(scope, d); child != nil {
+			body = child
+		}
+		r.walkMembers(body, d.Entry)
+		r.walkMembers(body, d.Do)
+		r.walkMembers(body, d.Exit)
+		r.walkMembers(body, d.Substates)
+		for _, region := range d.Regions {
+			r.resolveDecl(body, region)
+		}
+	case *ast.StateRegion:
+		states := scope
+		if child := r.childScope(scope, d); child != nil {
+			states = child
+		}
+		r.walkMembers(states, d.States)
+	case *ast.TransitionMember:
+		// Source and target name states, which the state machine's own scope
+		// need not contain (a transition may cross into a region), so they are
+		// left to the lowering layer; the payload expressions are checkable.
+		r.resolveTrigger(scope, d.Trigger)
+		r.resolveExpr(scope, d.Guard)
+		r.walkMembers(scope, d.Effect)
+	case *ast.SendStatement:
+		r.resolveExpr(scope, d.Message)
+		r.resolveExpr(scope, d.Target)
+	case *ast.TerminateStatement:
+		r.resolveExpr(scope, d.Target)
+	case *ast.AssignmentActionNode:
+		r.resolveExpr(scope, d.Target)
+		r.resolveExpr(scope, d.Value)
+	case *ast.ActionExecutionNode:
+		if d.ActionRef != nil {
+			r.ResolveQualified(scope, d.ActionRef)
+		}
+		r.resolveExpr(scope, d.Expression)
+	case *ast.PerformActionNode:
+		r.resolveExpr(scope, d.ActionRef)
+	case *ast.WhileLoopActionNode:
+		r.resolveExpr(scope, d.Condition)
+		r.walkMembers(scope, d.Body)
+	case *ast.IfActionNode:
+		r.resolveExpr(scope, d.Condition)
+		r.walkMembers(scope, d.ThenBody)
+		r.walkMembers(scope, d.ElseBody)
+	}
+}
+
+// resolveTrigger resolves the references a transition trigger carries.
+//
+// A bare name after `when` is classified by lowering as a signal, and signals
+// are injected by the event source rather than declared in the model, so bare
+// names are left unresolved here; resolving them would report every signal-
+// triggered transition as an unresolved reference.
+func (r *Resolver) resolveTrigger(scope *symbols.Scope, trigger ast.Node) {
+	switch t := trigger.(type) {
+	case nil:
+		return
+	case *ast.TimeEvent:
+		r.resolveExpr(scope, t.Duration)
+	case *ast.ChangeEvent:
+		r.resolveExpr(scope, t.Condition)
+	case *ast.QualifiedName, *ast.FeatureReference, *ast.AcceptEvent, *ast.CallEvent:
+		// Signal and call triggers name events, not model elements.
+	default:
+		r.resolveExpr(scope, trigger)
 	}
 }
 
@@ -478,6 +569,10 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 		}
 	case *ast.MetadataAccessExpr:
 		r.ResolveQualified(scope, v.Ref)
+	case *ast.QualifiedName:
+		// A bare name in expression position parses straight to a qualified
+		// name rather than to a FeatureReference wrapper.
+		r.ResolveQualified(scope, v)
 	}
 	// Literals (LiteralBool/String/Integer/Real/Infinity, NullExpr) have no refs.
 }
