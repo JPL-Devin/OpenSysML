@@ -165,6 +165,28 @@ jobs:
                 tar czf "${binary}.tar.gz" "$binary"
               fi
             done
+            
+            # Bundle archives: both binaries under their plain names
+            # (sysml, sysml-lsp), which is the layout a Homebrew formula or a
+            # PATH install expects. The per-binary archives above are kept
+            # unchanged so existing download links keep working.
+            for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+              stage="stage/${platform}"
+              mkdir -p "$stage"
+              cp "sysml-${platform}" "${stage}/sysml"
+              cp "sysml-lsp-${platform}" "${stage}/sysml-lsp"
+              tar czf "systemica-${platform}.tar.gz" -C "$stage" sysml sysml-lsp
+            done
+            mkdir -p stage/windows-amd64
+            cp sysml-windows-amd64.exe stage/windows-amd64/sysml.exe
+            cp sysml-lsp-windows-amd64.exe stage/windows-amd64/sysml-lsp.exe
+            (cd stage/windows-amd64 && zip -q ../../systemica-windows-amd64.zip sysml.exe sysml-lsp.exe)
+            rm -rf stage
+            
+            # Checksums over every published archive, so a Homebrew formula
+            # (or a careful user) can verify a download.
+            sha256sum ./*.tar.gz ./*.zip | sed 's|\./||' > SHA256SUMS.txt
+            cat SHA256SUMS.txt
       
       - store_artifacts:
           path: dist/
@@ -196,6 +218,7 @@ jobs:
             # Move only tarballs to a release directory
             mkdir -p dist/release
             mv dist/*.tar.gz dist/*.zip dist/release/ 2>/dev/null || true
+            mv dist/SHA256SUMS.txt dist/release/
             echo "Release artifacts:"
             ls -la dist/release/
             
