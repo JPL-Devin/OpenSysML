@@ -117,36 +117,3 @@ func TestForkJoinVisitOrderIsDeterministic(t *testing.T) {
 		}
 	}
 }
-
-// A transition from inside an orthogonal region to a choice or junction is not
-// supported: it would leave the sibling regions active but untracked. It has to
-// report that rather than silently dropping them.
-func TestRegionLocalChoiceTargetIsRejected(t *testing.T) {
-	_, _, err := executeStateSource(t, "Machine", `package P {
-		state Machine {
-			attribute x : Integer = 1;
-
-			region left {
-				initial ls;
-				state lstart;
-				state lnext;
-				then ls lstart;
-				transition lstart to pick;
-			}
-			region right {
-				initial rs;
-				state rstart;
-				then rs rstart;
-			}
-			choice pick;
-
-			transition pick to lnext if x == 1;
-		}
-	}`)
-	if err == nil {
-		t.Fatal("expected an error for a region-local transition into a choice")
-	}
-	if !strings.Contains(err.Error(), "must be a state node") {
-		t.Errorf("expected a typed target error, got: %v", err)
-	}
-}

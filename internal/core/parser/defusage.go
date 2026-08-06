@@ -831,17 +831,13 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featur
 			hasBody = true
 		}
 	case ast.DefState:
-		// State def bodies: state body OR generic
-		// Lookahead: if body starts with state keywords → parseStateBody
-		// Otherwise → generic parseDefUsageBody
+		// State def bodies are state bodies, like state usage bodies: what the
+		// first member happens to be does not change what the rest may be, and
+		// the generic body member parser knows nothing of regions or transitions.
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
-			if p.isStateKeyword() {
-				members = p.parseStateBody()
-			} else {
-				members = p.parseActionBodyGeneric()
-			}
+			members = p.parseStateBody()
 			hasBody = true
 		}
 	default:
@@ -907,15 +903,6 @@ func (p *Parser) isRequirementKeyword() bool {
 	}
 	kw := p.peek().KeywordID
 	return kw == "subject" || kw == "assume" || kw == "require" || kw == "actor" || kw == "doc"
-}
-
-// isStateKeyword checks if next token is state body keyword
-func (p *Parser) isStateKeyword() bool {
-	if !p.at(lexer.Keyword) {
-		return false
-	}
-	kw := p.peek().KeywordID
-	return kw == "entry" || kw == "do" || kw == "exit" || kw == "state" || kw == "region" || kw == "transition" || kw == "first" || kw == "accept"
 }
 
 // parseUsageIdentification parses identification for usage declarations, with special handling

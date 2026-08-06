@@ -15,6 +15,7 @@ type Scope struct {
 	memberOrder      []string             // name keys in first-seen order (for deterministic enumeration)
 	anonymousMembers []*Symbol            // anonymous symbols (no name) that aren't in members map
 	children         []*Scope
+	bodyLocal        bool // declarations live only inside the owning body
 }
 
 // NewScope creates an empty scope with the given parent and owning node.
@@ -37,6 +38,13 @@ func (s *Scope) SetOwner(sym *Symbol) { s.owner = sym }
 
 // Node returns the AST node that owns this scope, or nil for the document root.
 func (s *Scope) Node() ast.Node { return s.node }
+
+// BodyLocal reports whether this scope's names exist only inside the body that
+// declares them, so a subtree search such as a recursive import must skip it.
+func (s *Scope) BodyLocal() bool { return s.bodyLocal }
+
+// markBodyLocal records that this scope's names do not escape its body.
+func (s *Scope) markBodyLocal() { s.bodyLocal = true }
 
 // Children returns the child scopes in definition order.
 func (s *Scope) Children() []*Scope { return s.children }
