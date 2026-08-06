@@ -233,7 +233,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
    - Choice + Junction pseudostates
    - Golden trace recording for transitions/entry/exit
    - APIs: `ProcessNextEvent()`, `CurrentState()`, `EventQueue()`, `StateData()`, `SetTrace()`
-   - **Known limitations:** Fork/Join/Entry/Exit/History pseudostates return "unsupported pseudostate kind" (`state_executor.go:552`); no deferred events; CallEvent matches any call (`matchesEvent:437` TODO); nested action invocation in behaviors not implemented (`executeAction:862`)
+   - **Known limitations:** history, entry and exit point pseudostates have no textual notation, so they can only be built programmatically; no deferred events; CallEvent matches any call (`matchesEvent:437` TODO)
 
 3. **Context Integration** — Public runtime APIs
    - `InvokeCalc(symbol, args)` — Invoke calculation with arguments, return result
@@ -608,7 +608,7 @@ Every behavioral feature must have:
 - Test case(s) exercising the feature
 - Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / 🚧 Known Failure
 
-**Current coverage:** ~98% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); all 26 conformance cases pass. Advanced state-machine features remain unimplemented (fork/join/history pseudostates, deferred events, concurrent `do`) — see SPEC_COMPLIANCE.md.
+**Current coverage:** ~98% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); all 26 conformance cases pass. Fork/join and shallow/deep history are implemented but have no textual notation for history; deferred events and concurrent `do` remain unimplemented — see SPEC_COMPLIANCE.md.
 
 ---
 

@@ -13,6 +13,11 @@ type StateGraph struct {
 	// Pseudostates (choice, junction, etc.)
 	Pseudostates map[string]*ast.PseudostateNode
 
+	// PseudostateOwner: pseudostate -> the composite state that declares it,
+	// absent for one declared directly in the machine. A history pseudostate
+	// restores the configuration of its owner, so the owner must survive lowering.
+	PseudostateOwner map[*ast.PseudostateNode]*ast.StateNode
+
 	// Transitions: source node (StateNode or PseudostateNode) → list of transitions
 	Transitions map[ast.Node][]*Transition
 
@@ -53,14 +58,15 @@ type Transition struct {
 // ToStateGraph converts a state machine AST (Usage or Definition) to a StateGraph.
 func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 	graph := &StateGraph{
-		States:          make([]*ast.StateNode, 0),
-		Pseudostates:    make(map[string]*ast.PseudostateNode),
-		Transitions:     make(map[ast.Node][]*Transition),
-		CompositeStates: make(map[*ast.StateNode][]*ast.StateRegion),
-		RegionInitials:  make(map[*ast.StateRegion]*ast.StateNode),
-		ParentState:     make(map[*ast.StateNode]*ast.StateNode),
-		RegionOwner:     make(map[*ast.StateRegion]*ast.StateNode),
-		RegionOf:        make(map[*ast.StateNode]*ast.StateRegion),
+		States:           make([]*ast.StateNode, 0),
+		Pseudostates:     make(map[string]*ast.PseudostateNode),
+		PseudostateOwner: make(map[*ast.PseudostateNode]*ast.StateNode),
+		Transitions:      make(map[ast.Node][]*Transition),
+		CompositeStates:  make(map[*ast.StateNode][]*ast.StateRegion),
+		RegionInitials:   make(map[*ast.StateRegion]*ast.StateNode),
+		ParentState:      make(map[*ast.StateNode]*ast.StateNode),
+		RegionOwner:      make(map[*ast.StateRegion]*ast.StateNode),
+		RegionOf:         make(map[*ast.StateNode]*ast.StateRegion),
 	}
 
 	// Extract members
@@ -247,6 +253,21 @@ func stateNodeFromUsage(usage *ast.Usage) *ast.StateNode {
 			state.Exit = append(state.Exit, m.Actions...)
 		case *ast.StateRegion:
 			state.Regions = append(state.Regions, m)
+		case *ast.StateNode:
+			state.Substates = append(state.Substates, m)
+		case *ast.PseudostateNode:
+			state.Substates = append(state.Substates, m)
+		case *ast.SubstateMember:
+			child := &ast.StateNode{Name: m.Name}
+			child.NodeSpan = m.NodeSpan
+			state.Substates = append(state.Substates, child)
+		case *ast.Usage:
+			// A state declared inside a composite state is one of its substates:
+			// dropping it here would leave the hierarchy out of the graph and every
+			// transition naming a nested state unresolvable.
+			if m.Kind == ast.UsageState {
+				state.Substates = append(state.Substates, stateNodeFromUsage(m))
+			}
 		}
 	}
 	return state
@@ -261,8 +282,15 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 
 	// Recursively collect substates
 	for _, substate := range state.Substates {
-		if childState, ok := substate.(*ast.StateNode); ok {
-			collectStates(graph, childState, state)
+		switch child := unwrapMembership(substate).(type) {
+		case *ast.StateNode:
+			collectStates(graph, child, state)
+		case *ast.PseudostateNode:
+			// A pseudostate declared inside a composite state belongs to it: that
+			// ownership is what a history pseudostate restores from, and without it
+			// a nested pseudostate is not part of the graph at all.
+			graph.Pseudostates[child.Name] = child
+			graph.PseudostateOwner[child] = state
 		}
 	}
 
@@ -284,6 +312,9 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 					collectStates(graph, childState, state)
 					graph.RegionOf[childState] = region
 				}
+			case *ast.PseudostateNode:
+				graph.Pseudostates[n.Name] = n
+				graph.PseudostateOwner[n] = state
 			}
 		}
 	}

@@ -108,6 +108,12 @@ const (
 	PseudostateJoin                            // parallel sync
 	PseudostateEntry                           // entry point (submachine)
 	PseudostateExit                            // exit point (submachine)
+	// PseudostateShallowHistory re-enters the substate of its composite state
+	// that was active when that state was last exited.
+	PseudostateShallowHistory
+	// PseudostateDeepHistory re-enters the innermost substate that was active
+	// when its composite state was last exited.
+	PseudostateDeepHistory
 )
 
 func (k PseudostateKind) String() string {
@@ -124,6 +130,10 @@ func (k PseudostateKind) String() string {
 		return "entry"
 	case PseudostateExit:
 		return "exit"
+	case PseudostateShallowHistory:
+		return "shallow history"
+	case PseudostateDeepHistory:
+		return "deep history"
 	default:
 		return "unknown"
 	}

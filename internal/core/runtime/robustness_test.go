@@ -31,6 +31,72 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
+	t.Run("history_outside_composite_state", testHistoryOutsideCompositeState)
+	t.Run("history_without_record_or_default", testHistoryWithoutRecordOrDefault)
+}
+
+// testHistoryOutsideCompositeState: a history pseudostate restores the state
+// that declares it, so one declared directly in the machine has nothing to
+// restore and must report rather than enter an arbitrary state. History has no
+// textual notation, so the machine is built on the AST directly.
+func testHistoryOutsideCompositeState(t *testing.T) {
+	exec := stateExecutorFor(t, &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{
+			&ast.StateNode{Name: "init", IsInitial: true},
+			&ast.StateNode{Name: "away"},
+			&ast.PseudostateNode{Kind: ast.PseudostateShallowHistory, Name: "H"},
+			transitionMember("init", "away"),
+			transitionMember("away", "H"),
+		},
+	})
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	fire(t, exec, "init", "away")
+
+	err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
+	if err == nil {
+		t.Fatal("expected an error for a history outside any composite state")
+	}
+	if !strings.Contains(err.Error(), "must be declared inside the composite state") {
+		t.Errorf("expected an ownership error, got: %v", err)
+	}
+}
+
+// testHistoryWithoutRecordOrDefault: before its composite state has ever been
+// exited a history has nothing to restore, and with no outgoing transition there
+// is no default target either — that is reported, not silently ignored.
+func testHistoryWithoutRecordOrDefault(t *testing.T) {
+	history := &ast.PseudostateNode{Kind: ast.PseudostateShallowHistory, Name: "H"}
+	outer := &ast.StateNode{
+		Name:      "outer",
+		Substates: []ast.Node{&ast.StateNode{Name: "first"}, history},
+	}
+	exec := stateExecutorFor(t, &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{
+			&ast.StateNode{Name: "init", IsInitial: true},
+			outer,
+			&ast.StateNode{Name: "away"},
+			transitionMember("init", "away"),
+			transitionMember("away", "H"),
+		},
+	})
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	fire(t, exec, "init", "away")
+
+	err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
+	if err == nil {
+		t.Fatal("expected an error: nothing recorded and no default history transition")
+	}
+	if !strings.Contains(err.Error(), "no recorded configuration") {
+		t.Errorf("expected a missing-default error, got: %v", err)
+	}
 }
 
 // testSendViaUnconnectedPort: a port with no connection reaches no one, so an

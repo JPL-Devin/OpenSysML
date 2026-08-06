@@ -299,5 +299,28 @@ like a junction — the transition continues along the point's own outgoing
 transition — but there is no textual notation for them, so they can only be built
 programmatically.
 
-**History** pseudostates are not implemented: there is no `PseudostateKind` for
-them, so a notation and a stored prior configuration would both be needed.
+**History** (`ast.PseudostateShallowHistory`, `ast.PseudostateDeepHistory`) is
+owned by the composite state it restores — `lower.StateGraph.PseudostateOwner`
+records that ownership — and re-enters the configuration that state was last left
+in. `exitState` records the configuration on the way out, per composite state: the
+substate that was active, and the active state of each orthogonal region.
+
+`fireHistoryTransition` reads that record before leaving the source
+configuration, since a transition out of the owner's own substates would
+otherwise overwrite it, then:
+
+- a **shallow** history enters the recorded substate, or re-enters the owner with
+  one branch per region holding that region's recorded state;
+- a **deep** history keeps following the record downwards (`deepestRecorded`),
+  collecting a branch for every nested region it passes, so the innermost recorded
+  state is the one entered;
+- when the owner has never been exited there is nothing to restore, so the
+  history's own outgoing transition supplies the target — UML's default history
+  transition.
+
+Entering a branch nested below a region runs the entry behaviors of the states
+above it inside that region, so a restored deep configuration is not entered
+sideways.
+
+Like entry/exit points, history has no textual notation, so it can only be built
+programmatically.
