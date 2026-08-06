@@ -415,60 +415,59 @@ are tracked here):
 
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
-**Test Counts:**
-- Conformance cases: 39 (all passing)
-- Robustness tests: 25 (all passing)
-- Unit tests: 41 (action/state executors)
-- Golden AST fixtures: 23
+**Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
+- Execution conformance cases: 43 (all passing)
+- gRPC conformance cases: 5 (all passing)
+- Robustness subtests: 27 (all passing)
+- Golden AST fixtures: 24
 - Golden execution traces: 21
-- Negative parser tests: 17
-- Total tests: 900+
+- Negative parser subtests: 19
 
-**Coverage by Feature Type:**
-- Calc: 10 conformance + 10 golden traces + 8 unit + 7 robustness
-- Constraint: 3 conformance + 3 golden traces + 1 robustness
-- Requirement: 5 conformance + 4 unit (named args, inheritance)
-- Action: 5 conformance + 19 unit + 1 robustness
-- State: 15 conformance + 6 golden traces + 14 unit + 9 robustness
-- Evaluation: 3 conformance (unary, coercion, qualified)
-- Name resolution: 3 unit (inheritance, named args, control flow)
+**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 43 total):
+- Calc: 10 conformance + 10 golden traces (includes unary, coercion and qualified-name evaluation)
+- Constraint: 3 conformance + 3 golden traces
+- Requirement: 5 conformance
+- Action: 6 conformance + 2 golden traces (including `accept_then_transition`)
+- State: 19 conformance + 6 golden traces
 
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
-- Conformance: 39/39 cases passing
-- Training examples: 80/100 clean (20 with pedagogical gaps or OMG bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
+- Execution conformance: 43/43 cases passing
+- Training examples: 81/100 clean (19 files / 37 errors, all with pedagogical gaps, OMG bugs or the resolution gaps listed above, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
+
+> The training-example gate needs the corpus, which is not vendored: run
+> `./scripts/download-training-examples.sh` first. CI does not download it, so the gate
+> **skips in CI** — it has to be run locally before claiming a change is clean.
 
 ---
 
-## gRPC Service Layer (python-bindings-grpc branch)
+## gRPC Service Layer
 
 **Implementation:** internal/grpc/service.go  
-**Status:** ✅ Functional, ⚠️ Test coverage incomplete per AGENTS.md §5.2
+**Status:** ✅ Functional, ✅ §5.2 test contract satisfied for the wrapper
 
 ### Runtime RPC Handlers
 
 | RPC | Implementation | Status | Tests |
 |-----|---------------|--------|-------|
-| ParseFile | service.go:62-100 (parser + passes.Analyze + stdlib load) | ✅ Faithful | runtime_test.go:TestParseFile_* |
-| GetSymbol | service.go:103-133 | ✅ Faithful | service_test.go:TestGetSymbol_* |
-| GetDiagnostics | service.go:136-156 (parser + semantic) | ✅ Faithful | runtime_test.go (implicit) |
-| Evaluate | service.go:159-187 | ✅ Faithful | runtime_test.go:TestEvaluate_* |
-| Instantiate | service.go:190-217 | ✅ Faithful | runtime_test.go:TestInstantiate_* |
-| ExecuteAction | service.go:220-295 | ✅ Faithful | runtime_test.go:TestExecuteAction_* |
-| ExecuteState | service.go:298-349 | ✅ Faithful | runtime_test.go:TestExecuteState_* |
+| ParseFile | service.go:39-123 (parser + passes.Analyze + stdlib load) | ✅ Faithful | runtime_test.go:TestParseFile_*, every conformance case |
+| GetSymbol | service.go:126-145 | ✅ Faithful | service_test.go:TestGetSymbol_* |
+| GetDiagnostics | service.go:148-169 (parser + semantic) | ✅ Faithful | runtime_test.go (implicit) |
+| Evaluate | service.go:172-227 | ✅ Faithful | runtime_test.go:TestEvaluate_*, conformance `evaluate_arithmetic` |
+| Instantiate | service.go:230-262 | ✅ Faithful | runtime_test.go:TestInstantiate_*, conformance `instantiate_part` |
+| ExecuteAction | service.go:265-312 | ✅ Faithful | runtime_test.go:TestExecuteAction_*, conformance `execute_action_inputs`, `execute_action_no_initial` |
+| ExecuteState | service.go:315-355 | ✅ Faithful | runtime_test.go:TestExecuteState_*, conformance `execute_state_transitions` |
 
 ### Test Coverage (AGENTS.md §5.2 Four-Layer Contract)
 
 **Current:**
 - ✅ Layer 1 (Golden AST): Covered via parser tests (fixtures in internal/core/parser/testdata/)
-- ❌ Layer 2 (Execution conformance): Missing `.sysml` + `.expected.json` in runtime/testdata/conformance/
-- ✅ Layer 3 (Golden traces): N/A (gRPC wrapper doesn't add trace behavior)
-- ⚠️ Layer 4 (Robustness): Error cases in runtime_test.go, not in robustness_test.go
+- ✅ Layer 2 (Execution conformance): `internal/grpc/conformance_test.go` drives `Evaluate`, `Instantiate`, `ExecuteAction` and `ExecuteState` from `.sysml` + `.expected.json` pairs in `internal/grpc/testdata/conformance/` (5 cases, one of them a failure mode), each parsed through the `ParseFile` RPC so the whole wrapper is exercised. Schema: that directory's `README.md`.
+- ✅ Layer 3 (Golden traces): N/A — the wrapper adds no ordering behavior of its own; traces are pinned at the runtime tier.
+- ✅ Layer 4 (Robustness): `internal/grpc/robustness_test.go` covers the wrapper's failure modes (unknown model hash, unknown symbol, malformed expression); execution-level failure modes stay pinned in `internal/core/runtime/robustness_test.go`.
 
-**Rationale:** gRPC layer is a protocol wrapper over internal/core/runtime (which has full §5.2 compliance). Tests verify RPC marshalling + error propagation. Adequate for integration layer.
-
-**Follow-up:** Add gRPC-specific conformance tests if protocol behavior diverges from core runtime semantics.
+**Rationale:** the gRPC layer is a protocol wrapper over `internal/core/runtime`, which carries full §5.2 compliance for execution semantics. Its own conformance cases assert what the wrapper is responsible for: symbol lookup by FQN, input binding, value marshalling in both directions (including which `Value` oneof arm is set), the state-visit trace, and in-band error reporting.
 
 ### Known Limitations (Non-blocking)
 

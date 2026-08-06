@@ -1,4 +1,5 @@
 {
+  "rpc": "Evaluate",
   "expression": "2 + 2",
   "expected_result": {
     "kind": "int_value",

@@ -1,0 +1,9 @@
+{
+  "rpc": "ExecuteState",
+  "symbol_id": "test::Machine",
+  "expected_states_visited": [
+    "init",
+    "Running",
+    "done"
+  ]
+}
