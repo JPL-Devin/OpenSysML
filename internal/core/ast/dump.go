@@ -203,6 +203,19 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			}
 		}
 		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q)`, fromStr, toStr, payloadStr)
+	case *SendStatement:
+		// The `to`/`via` distinction decides how the message is routed, so a
+		// golden that did not show it would not lock the parse.
+		fmt.Fprintf(b, `(SendStatement via=%t`, v.IsVia)
+		var kids []Node
+		if v.Message != nil {
+			kids = append(kids, v.Message)
+		}
+		if v.Target != nil {
+			kids = append(kids, v.Target)
+		}
+		writeChildren(b, depth, kids)
+		return
 	case *ConnectorEnd:
 		targetStr := ""
 		if qn, ok := v.Target.(*QualifiedName); ok {

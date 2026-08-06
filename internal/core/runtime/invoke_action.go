@@ -28,7 +28,11 @@ type actionInvocation struct {
 
 // nestedInvocation reports the action a nested usage performs, if any. A usage
 // that only carries its own body (assignments, sends, accepts) performs nothing.
-func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
+//
+// notPerformed names a reference the usage carries for another purpose — the
+// port of `accept msg : T via p`, which the parser records the same way a
+// `perform` records its target, but which names a port rather than an action.
+func nestedInvocation(usage *ast.Usage, notPerformed string) (actionInvocation, bool) {
 	if invocation, ok := usage.Value.(*ast.InvocationExpr); ok && invocation.Type != nil {
 		return actionInvocation{
 			target: invocation.Type,
@@ -41,6 +45,9 @@ func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 			continue
 		}
 		if qn, ok := rel.Target.(*ast.QualifiedName); ok {
+			if notPerformed != "" && ast.SimpleName(qn) == notPerformed {
+				continue
+			}
 			return actionInvocation{target: qn}, true
 		}
 	}

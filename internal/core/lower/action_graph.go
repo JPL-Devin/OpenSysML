@@ -34,6 +34,10 @@ type ActionGraph struct {
 
 	// FinalNodes (may be multiple)
 	Finals []ast.Node
+
+	// Connections are the connectors declared in the action body, which is how
+	// a `send ... via <port>` finds the ports it reaches.
+	Connections []Connection
 }
 
 // Statement is one lowered statement in an action node's body. Statements are
@@ -43,12 +47,16 @@ type Statement interface {
 	statement()
 }
 
-// Send is a lowered send statement: `send <Message> to <Target>` (or `via`).
-// Message stays an expression because its value is only known at execution
-// time; Target is the simple name the send addressed, empty for a broadcast.
+// Send is a lowered send statement. Message stays an expression because its
+// value is only known at execution time.
+//
+// Target is the simple name the send addressed, empty for a broadcast. IsVia
+// records that the name is a port of the sender rather than a receiver, in which
+// case the message goes to whatever the graph's Connections join that port to.
 type Send struct {
 	Message ast.Node
 	Target  string
+	IsVia   bool
 }
 
 func (Send) statement() {}
@@ -66,9 +74,14 @@ func (Assign) statement() {}
 // Accept is a lowered accept parameter: `action r accept msg : Warning;`.
 // SignalType is the parameter's declared type, empty when it was declared
 // without one, in which case the node accepts a message of any type.
+//
+// ViaPort is the port named by `accept msg : Warning via p`, empty when the
+// accept named none. A port-routed message is only offered to an accept on the
+// port it arrived at, so the two forms do not consume each other's messages.
 type Accept struct {
 	ParamName  string
 	SignalType string
+	ViaPort    string
 }
 
 // ObjectFlow represents a data flow edge between pins.
@@ -126,6 +139,8 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 			}
 		}
 	}
+
+	graph.Connections = lowerConnections(members)
 
 	// Note: Initial node is optional at graph construction time.
 	// The executor's initialize() will validate and return the error if missing.
@@ -212,6 +227,7 @@ func lowerBody(graph *ActionGraph, node *ast.Usage) {
 			graph.Bodies[node] = append(graph.Bodies[node], Send{
 				Message: m.Message,
 				Target:  ast.SimpleName(m.Target),
+				IsVia:   m.IsVia,
 			})
 		case *ast.AssignmentActionNode:
 			graph.Bodies[node] = append(graph.Bodies[node], Assign{
@@ -226,9 +242,25 @@ func lowerBody(graph *ActionGraph, node *ast.Usage) {
 			graph.Accepts[node] = Accept{
 				ParamName:  m.Ident.Name,
 				SignalType: typingTarget(m),
+				ViaPort:    acceptPort(node),
 			}
 		}
 	}
+}
+
+// acceptPort returns the port an accept action routes through
+// (`action r accept msg : T via p`), which the parser records as a reference
+// relationship on the accept action, or "" when it named none.
+func acceptPort(node *ast.Usage) string {
+	for _, rel := range node.Relationships {
+		if rel == nil || rel.Kind != ast.RelReferences {
+			continue
+		}
+		if name := ast.SimpleName(rel.Target); name != "" {
+			return name
+		}
+	}
+	return ""
 }
 
 // typingTarget returns the name a usage was typed with (`: T`), or "" when it

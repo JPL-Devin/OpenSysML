@@ -1,0 +1,45 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="test" library=false standard=false
+      (Import visibility="default" all=false kind=namespace recursive=false imported="ScalarValues")
+      (Membership visibility="default"
+        (Usage kind="action" name="communicate" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="result" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="0")))
+          (Membership visibility="default"
+            (Usage kind="port" name="outPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="port" name="inPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="outPort"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="inPort"
+                (*ast.QualifiedName))))
+          (*ast.InitialNode)
+          (Membership visibility="default"
+            (Usage kind="action" name="sender" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (SendStatement via=true
+                (LiteralInteger value="100")
+                (FeatureReference name="outPort"))))
+          (Membership visibility="default"
+            (Usage kind="action" name="notifier" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (SendStatement via=false
+                (LiteralInteger value="100")
+                (FeatureReference name="reader"))))
+          (Membership visibility="default"
+            (Usage kind="action" name="reader" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="references" target=inPort
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="msg" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Integer
+                    (*ast.QualifiedName))))))
+          (*ast.FinalNode)
+          (*ast.SuccessionEdge)
+          (*ast.SuccessionEdge)
+          (*ast.SuccessionEdge)
+          (*ast.SuccessionEdge))))))
