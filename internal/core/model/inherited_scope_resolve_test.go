@@ -85,6 +85,31 @@ func TestBodyLocalDeclarationsAreVisible(t *testing.T) {
 				}
 			}
 		}`},
+		{"if branch body reads its own declaration", `package P {
+			import ScalarValues::*;
+			action def Step { out done : Boolean; }
+			action def Drive {
+				in attribute fast : Boolean;
+				if fast {
+					action accelerate : Step { out done; }
+					assign fast := accelerate.done;
+				}
+			}
+		}`},
+		{"else branch reuses the then branch's name", `package P {
+			import ScalarValues::*;
+			action def Step { out done : Boolean; }
+			action def Drive {
+				in attribute fast : Boolean;
+				if fast {
+					action move : Step { out done; }
+					assign fast := move.done;
+				} else {
+					action move : Step { out done; }
+					assign fast := move.done;
+				}
+			}
+		}`},
 		{"body expression parameter", `package P {
 			import ScalarValues::*;
 			import ControlFunctions::*;
@@ -117,6 +142,25 @@ func TestBodyLocalNamesDoNotEscape(t *testing.T) {
 			action def Charge {
 				loop action charging { } until true;
 				attribute c = charging;
+			}
+		}`},
+		{"if branch member from outside", `package P {
+			import ScalarValues::*;
+			action def Drive {
+				in attribute fast : Boolean;
+				if fast { action accelerate; }
+				attribute a = accelerate;
+			}
+		}`},
+		{"else branch member from the then branch", `package P {
+			import ScalarValues::*;
+			action def Drive {
+				in attribute fast : Boolean;
+				if fast {
+					attribute a = brake;
+				} else {
+					action brake;
+				}
 			}
 		}`},
 		{"body expression parameter from outside", `package P {

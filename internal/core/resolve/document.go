@@ -221,9 +221,18 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveExpr(body, d.Condition)
 		r.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
+		// The condition is evaluated before either branch is entered, so it sees
+		// the enclosing scope only; each branch owns its body's declarations.
 		r.resolveExpr(scope, d.Condition)
-		r.walkMembers(scope, d.ThenBody)
-		r.walkMembers(scope, d.ElseBody)
+		for _, branch := range d.Branches() {
+			r.resolveDecl(scope, branch)
+		}
+	case *ast.IfBranchNode:
+		body := scope
+		if child := r.childScope(scope, d); child != nil {
+			body = child
+		}
+		r.walkMembers(body, d.Body)
 	}
 }
 

@@ -309,6 +309,21 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		fmt.Fprintf(b, `(CallEvent operation=%q parameters=[%s])`,
 			qnString(v.Operation), strings.Join(names, " "))
 		return
+	case *IfActionNode:
+		b.WriteString(`(IfActionNode`)
+		kids := []Node{}
+		if v.Condition != nil {
+			kids = append(kids, v.Condition)
+		}
+		for _, branch := range v.Branches() {
+			kids = append(kids, branch)
+		}
+		writeChildren(b, depth, kids)
+		return
+	case *IfBranchNode:
+		fmt.Fprintf(b, `(IfBranchNode kind=%q`, v.Kind.String())
+		writeChildren(b, depth, v.Body)
+		return
 	case *PseudostateNode:
 		fmt.Fprintf(b, `(PseudostateNode kind=%q name=%q)`, v.Kind.String(), v.Name)
 		return
