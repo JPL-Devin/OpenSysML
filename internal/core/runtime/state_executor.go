@@ -471,6 +471,11 @@ func (e *StateExecutor) broadcastEvent(event *Event) (bool, error) {
 		// order: the regions' transitions run in the order returned.
 		consumed := false
 		for _, active := range e.orderedActiveRegions() {
+			// The list is a snapshot: a nested region an earlier region's
+			// transition already exited must not react to the event.
+			if e.activeConfig.regionStates[active.region] != active.state {
+				continue
+			}
 			trans, err := e.enabledTransition(active.state, event)
 			if err != nil {
 				return consumed, fmt.Errorf("region %s: %w", active.region.Name, err)

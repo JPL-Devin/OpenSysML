@@ -274,3 +274,55 @@ func TestEventBlockedByAGuardIsStillDeferred(t *testing.T) {
 
 	assertVisits(t, exec.stateVisits, "init", "busy", "ready", "done")
 }
+
+// An event is broadcast to the regions active when it is dispatched: a nested
+// region an outer region's transition just exited must not still react to it and
+// come back to life.
+func TestExitedNestedRegionDoesNotReactToTheSameEvent(t *testing.T) {
+	composite := &ast.StateNode{
+		Name:      "co",
+		IsInitial: true,
+		Regions: []*ast.StateRegion{
+			{Name: "a", States: []ast.Node{
+				&ast.StateNode{Name: "a1", IsInitial: true},
+				&ast.StateNode{Name: "a2"},
+			}},
+			{Name: "b", States: []ast.Node{&ast.StateNode{Name: "b1", IsInitial: true}}},
+		},
+		// A transition inside a nested region only lowers when the composite state
+		// owns it, so a1 reacting to Ping is declared here.
+		Substates: []ast.Node{&ast.TransitionEdge{
+			Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "a1"}}},
+			Target:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "a2"}}},
+			Trigger: acceptTrigger("Ping"),
+		}},
+	}
+	machine := &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{&ast.StateRegion{Name: "outer", States: []ast.Node{
+			composite,
+			&ast.StateNode{Name: "out"},
+			triggeredTransition("co", "out", "Ping"),
+		}}},
+	}
+
+	exec := stateExecutorFor(t, machine)
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	exec.SendSignal("Ping", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	if containsState(exec.stateVisits, "a2") {
+		t.Errorf("the exited nested region took the event too, visits: %v", exec.stateVisits)
+	}
+	for region, state := range exec.activeConfig.regionStates {
+		if region.Name != "outer" {
+			t.Errorf("region %s is still active in %s after leaving co", region.Name, state.Name)
+		}
+	}
+}
