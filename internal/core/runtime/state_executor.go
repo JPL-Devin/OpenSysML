@@ -1987,10 +1987,22 @@ func (e *StateExecutor) StateMachineSymbol() *symbols.Symbol {
 
 // ProcessNextEvent processes the next event from the queue (for REPL stepping).
 // It is the same step RunToCompletion repeats: every active state's do behavior
-// advances by one action, then the next event is dispatched.
+// advances by one action, then the next event is dispatched. Advancing the do
+// behaviors is progress in itself, so a step that ran one and found no event to
+// dispatch succeeds — the completion transition it enables is queued next.
 func (e *StateExecutor) ProcessNextEvent() error {
-	if _, err := e.runDoRound(); err != nil {
+	ran, err := e.runDoRound()
+	if err != nil {
 		return err
 	}
+	if e.eventQueue.Len() == 0 && ran > 0 {
+		return nil
+	}
 	return e.processNextEvent()
+}
+
+// HasPendingWork reports whether stepping the machine can still make progress:
+// an event is queued, or a state's do behavior has actions left to run.
+func (e *StateExecutor) HasPendingWork() bool {
+	return e.eventQueue.Len() > 0 || len(e.doActivities) > 0
 }

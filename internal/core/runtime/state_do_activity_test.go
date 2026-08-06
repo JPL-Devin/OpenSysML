@@ -152,6 +152,41 @@ func TestCompletionWaitsForTheDoBehavior(t *testing.T) {
 	}
 }
 
+// Stepping the machine one event at a time drives a do behavior to its end:
+// advancing it is progress even while no event is queued, which is the only way
+// the completion transition it gates ever gets queued.
+func TestSteppingDrivesADoBehaviorToItsEnd(t *testing.T) {
+	work := &ast.StateNode{Name: "work", Do: []ast.Node{bump(), bump(), bump()}}
+	machine := &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{
+			&ast.StateNode{Name: "init", IsInitial: true},
+			work,
+			&ast.StateNode{Name: "done", IsFinal: true},
+			transitionMember("init", "work"),
+			transitionMember("work", "done"),
+		},
+	}
+
+	exec := stateExecutorFor(t, machine)
+	exec.stateData["ticks"] = zeroTicks()
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	for i := 0; i < 100 && exec.HasPendingWork(); i++ {
+		if err := exec.ProcessNextEvent(); err != nil {
+			t.Fatalf("step %d: %v", i, err)
+		}
+	}
+
+	assertVisits(t, exec.stateVisits, "init", "work", "done")
+	if ticks := ticksAfter(t, exec); ticks != 3 {
+		t.Errorf("do behavior ran %d actions, want 3", ticks)
+	}
+}
+
 // Do behaviors in orthogonal regions share the machine: neither region's
 // behavior runs to its end before the other one starts.
 func TestDoBehaviorsOfOrthogonalRegionsInterleave(t *testing.T) {

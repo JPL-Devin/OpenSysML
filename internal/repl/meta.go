@@ -916,11 +916,13 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 
 	exec := s.stateExec.executor
 
-	if exec.EventQueue().Len() == 0 {
+	// A state's do behavior is work too: the machine can have none queued yet
+	// still have somewhere to go, and its completion transition is queued once
+	// the behavior ends.
+	if !exec.HasPendingWork() {
 		return []string{"Event queue empty - no events to process"}, false, nil
 	}
 
-	// Process next event
 	err := exec.ProcessNextEvent()
 	if err != nil {
 		return []string{fmt.Sprintf("error: event processing failed: %v", err)}, false, nil
