@@ -39,6 +39,10 @@ func TestTrainingExamplesSemanticErrors(t *testing.T) {
 			t.Fatalf("panic while loading %s: %v", current, r)
 		}
 	}()
+	// Open every file before reading any diagnostics: the corpus imports across
+	// files (`private import 'Requirement Usages'::*`), so diagnosing a file
+	// while later ones are still unopened would measure the alphabetical order
+	// of the corpus rather than the implementation.
 	for _, path := range files {
 		current = path
 		content, err := os.ReadFile(filepath.Join(trainingDir, path))
@@ -46,6 +50,10 @@ func TestTrainingExamplesSemanticErrors(t *testing.T) {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		ws.Open(path, content, 1)
+	}
+
+	for _, path := range files {
+		current = path
 
 		var errs []string
 		for _, d := range ws.Diagnostics(path) {

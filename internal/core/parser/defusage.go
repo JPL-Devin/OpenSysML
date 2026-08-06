@@ -698,8 +698,12 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// kind after the prefix: the second keyword is the kind, so the
 		// declaration is an anonymous constraint rather than one named
 		// `constraint`.
+		// `variant` likewise prefixes a kind when a name follows it
+		// (`variant attribute diameterSmall = 70[mm];`); with no name, the
+		// second keyword is the variant's own name.
 		kindKeyword := kw
-		if kindPrefixKeywords[kw] && isKindKeyword(p.peek()) {
+		if isKindKeyword(p.peek()) &&
+			(kindPrefixKeywords[kw] || (kw == "variant" && !namesDeclaration(p.peekN(1)))) {
 			kindKeyword = p.peek().KeywordID
 			p.advance()
 		}
