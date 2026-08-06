@@ -42,7 +42,7 @@
 - Decision node (guarded branching)
 - Action execution nodes
 - Nested action invocation
-- Send statement (⚠️ typed messages addressed by name; no port-connection routing)
+- Send statement (⚠️ typed messages addressed by name or routed through a connected port)
 - Accept action (⚠️ takes the oldest message of its type; no suspension)
 - Object flow (pin-to-pin data)
 - Succession edges
@@ -169,9 +169,10 @@ Each row documents one behavioral semantic feature:
 | Decision node (guarded branching) | `action_executor.go:452` stepDecisionNode | `action_control_flow.sysml` | ✅ Faithful |
 | Action execution nodes | `action_executor.go:528` stepActionExecutionNode | `action_control_flow.sysml` | ✅ Faithful |
 | Nested action invocation | `action_executor.go:582` stepNestedAction, `invoke_action.go` invokeAction | `invoke_action_test.go:TestInvokeActionPassesParametersBothWays` | ✅ Faithful |
-| Send statement (message passing) | `lower/action_graph.go` lowerBody; `runtime/signal.go` buildMessage, PostMessage | `action_send_accept.sysml`, `lower/action_body_test.go:TestActionBodyLowering`, `signal_test.go:TestActionMessageReachesStateMachine` | ⚠️ Approximate (a message is typed by what was sent and addressed to the named target; ports are addressed as names, so no connection routing) |
+| Send statement (message passing) | `lower/action_graph.go` lowerBody; `runtime/signal.go` buildMessage, post | `action_send_accept.sysml`, `lower/action_body_test.go:TestActionBodyLowering`, `signal_test.go:TestActionMessageReachesStateMachine` | ✅ Faithful (a message is typed by what was sent and addressed to the named receiver) |
 | Accept action (message consumption) | `action_executor.go` stepNestedAction accept case; `runtime/signal.go` TakeMessage | `action_send_accept.sysml`, `action_accept_message.sysml`, `robustness_test.go:send_reaches_only_its_addressee`, `:accept_of_unsent_type` | ⚠️ Approximate (an accept takes the oldest message of its declared type addressed to it, and reports `ErrNoMatchingMessage` otherwise; SysML would suspend and wait) |
-| Send through a port (`send x via p`) | — | `action_port_communication.sysml` (known failure) | ❌ Not implemented (the message is addressed to the port; delivering it to a connected consumer needs connection routing) |
+| Send through a port (`send x via p`) | `lower/connection.go` lowerConnections, PeerPorts; `runtime/signal.go` postVia, arrivedAt | `action_port_communication.sysml` + trace golden, `lower/connection_test.go:TestLowerConnectionsFromActionBody`, `signal_test.go:TestSendViaPortReachesConnectedAccept`, `robustness_test.go:send_via_unconnected_port` | ⚠️ Approximate (the message reaches every port connected to the sending port by a connector declared in the same behavior body; a port of the enclosing part is not visible to the behavior, and conjugation and port direction do not restrict routing) |
+| Accept through a port (`accept msg : T via p`) | `lower/action_graph.go` acceptPort; `runtime/action_executor.go` stepNestedAction accept case | `action_port_communication.sysml`, `lower/connection_test.go:TestLowerAcceptRecordsViaPort`, `signal_test.go:TestPortRoutedMessageBypassesPortlessAccept`, `:TestAddressedMessageBypassesPortAccept` | ✅ Faithful (an accept on a port takes only messages routed to that port, and an accept on none takes only addressed messages) |
 | Object flow (pin-to-pin data) | `action_executor.go:673` applyDataFlows | `action_output.sysml` | ✅ Faithful |
 | Succession edges | `lower/action_graph.go:ToActionGraph` | `action_control_flow.sysml` | ✅ Faithful |
 | Deadlock detection | `action_executor.go:72` Step | `action_executor_test.go:TestActionExecutor_Deadlock_JoinStarvation` | ✅ Faithful |

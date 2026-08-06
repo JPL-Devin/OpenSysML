@@ -193,6 +193,144 @@ func TestStateMachineLeavesForeignSignalPending(t *testing.T) {
 	}
 }
 
+// A send through a port reaches the accept listening on the port connected to
+// it: the connection, not the accept's name, is what addresses the message.
+func TestSendViaPortReachesConnectedAccept(t *testing.T) {
+	outputs, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			attribute got : Integer = 0;
+			port outPort;
+			port inPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send 42 via outPort; }
+			action reader accept msg : Integer via inPort;
+			action recorder { assign got := msg; }
+			done end;
+			then start sender;
+			then sender reader;
+			then reader recorder;
+			then recorder end;
+		}
+	}`)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 42)
+}
+
+// A port-routed message is only for the accept on the port it arrived at: an
+// accept listening on no port does not take it, however well its type matches.
+func TestPortRoutedMessageBypassesPortlessAccept(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			port outPort;
+			port inPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send 42 via outPort; }
+			action reader accept msg : Integer;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	if !errors.Is(err, ErrNoMatchingMessage) {
+		t.Fatalf("expected ErrNoMatchingMessage for an accept on no port, got: %v", err)
+	}
+}
+
+// The converse: an accept listening on a port does not take an addressed
+// message, which travelled over no connection.
+func TestAddressedMessageBypassesPortAccept(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			port inPort;
+			first start;
+			action sender { send 42 to reader; }
+			action reader accept msg : Integer via inPort;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	if !errors.Is(err, ErrNoMatchingMessage) {
+		t.Fatalf("expected ErrNoMatchingMessage for an accept on a port, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "via inPort") {
+		t.Errorf("expected the awaited port in the message, got: %v", err)
+	}
+}
+
+// A connection joins its ends without a direction, so a send through either end
+// reaches the other: the accept listens on the end the send did not name.
+func TestSendViaPortRoutesInEitherDirection(t *testing.T) {
+	outputs, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			attribute got : Integer = 0;
+			port left;
+			port right;
+			connect right to left;
+			first start;
+			action sender { send 7 via left; }
+			action reader accept msg : Integer via right;
+			action recorder { assign got := msg; }
+			done end;
+			then start sender;
+			then sender reader;
+			then reader recorder;
+			then recorder end;
+		}
+	}`)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 7)
+}
+
+// A state machine's transitions accept signals, never ports, so a message routed
+// to a port is not swallowed by a machine that would otherwise react to it.
+func TestPortRoutedMessageDoesNotReachStateMachine(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		item def Ping;
+		action pipeline {
+			port outPort;
+			port inPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send Ping via outPort; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+		state Driver {
+			initial init;
+			state waiting;
+			final done;
+			init then waiting;
+			transition waiting to done when Ping;
+		}
+	}`))
+	root := idx.DocumentRoot("<test>")
+	actionSym := findSymbolByName(root, "pipeline", ast.DefAction)
+	stateSym := findSymbolByName(root, "Driver", ast.DefState)
+	if actionSym == nil || stateSym == nil {
+		t.Fatal("pipeline or Driver not found")
+	}
+	if _, err := ctx.ExecuteAction(actionSym); err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	if _, _, err := ctx.ExecuteStateWithEvents(stateSym, nil); err != nil {
+		t.Fatalf("execute state machine: %v", err)
+	}
+	pending := ctx.PendingMessages()
+	if len(pending) != 1 || pending[0].Port != "inPort" {
+		t.Fatalf("expected the port-routed Ping still in flight, got %v", pending)
+	}
+}
+
 // A call event fires only the transition triggered by the operation invoked.
 // The triggers are hand-built because the notation for a call trigger is not
 // parsed yet, so call events are only reachable programmatically.

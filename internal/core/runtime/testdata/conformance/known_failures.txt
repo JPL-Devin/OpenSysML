@@ -1,8 +1,2 @@
 # Known failures for behavioral execution conformance tests
 # Remove entries when implementation is complete
-
-# `send 100 via outPort;` addresses the port, and nothing in the model connects
-# that port to the accepting action, so the message reaches no one. Delivering it
-# needs connection routing (port → connected part/action), which is not
-# implemented; see docs/SPEC_COMPLIANCE.md.
-action_port_communication

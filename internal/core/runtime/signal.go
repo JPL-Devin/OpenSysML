@@ -22,12 +22,16 @@ var ErrNoMatchingMessage = errors.New("no matching message")
 // typed consumes only messages of that type, so two sends of different types
 // reach different accepts regardless of the order they were posted in.
 //
-// Target names the element the send addressed (`send m to r` / `send m via p`).
-// A consumer accepts a message addressed to itself or to no one; an empty
-// Target is a broadcast.
+// Target names the receiver a `send m to r` addressed. A consumer accepts a
+// message addressed to itself or to no one; an empty Target is a broadcast.
+//
+// Port names the port a `send m via p` was routed to — the peer end of p, not p
+// itself, since that is where the message arrived. Only an accept on that port
+// consumes it, so port-routed traffic and addressed traffic stay separate.
 type Message struct {
 	SignalType string
 	Target     string
+	Port       string
 	Payload    map[string]Value
 }
 
@@ -70,6 +74,39 @@ func (m Message) addressedTo(name string) bool {
 	return m.Target == "" || m.Target == name
 }
 
+// arrivedAt reports whether a consumer listening on port may take this message.
+// The two sides must agree: a message routed through a port is only for an
+// accept on that port, and an accept on a port takes nothing else — otherwise a
+// broadcast would be consumed by whichever accept ran first, regardless of the
+// connections the model declared.
+func (m Message) arrivedAt(port string) bool {
+	return m.Port == port
+}
+
+// postVia routes a message out of a sending port: every port connected to it
+// receives a copy, since a connection joins ends without a direction. A port
+// with no connections reaches no one, which is not an error — the message is
+// simply never delivered, and an accept waiting for it fails with
+// ErrNoMatchingMessage.
+func (ctx *Context) postVia(conns []lower.Connection, msg Message, sendingPort string) {
+	for _, peer := range lower.PeerPorts(conns, sendingPort) {
+		routed := msg
+		routed.Target = ""
+		routed.Port = peer
+		ctx.PostMessage(routed)
+	}
+}
+
+// post delivers a built message the way the send addressed it: routed through
+// the connections of the sending port, or straight onto the bus.
+func (ctx *Context) post(conns []lower.Connection, msg Message, send lower.Send) {
+	if send.IsVia {
+		ctx.postVia(conns, msg, send.Target)
+		return
+	}
+	ctx.PostMessage(msg)
+}
+
 // carriesSignal reports whether this message satisfies an accept of signalType.
 // An empty signalType accepts any message: the model asked for no type.
 func (m Message) carriesSignal(signalType string) bool {
@@ -82,9 +119,16 @@ func (m Message) carriesSignal(signalType string) bool {
 // (`send Ping to m`, where `item def Ping;`) — the notation this subset offers
 // for a signal that carries nothing. Any other message expression is evaluated,
 // and the message is typed by the value's type, carrying it as `value`.
+//
+// A `via` send addresses a port rather than a receiver, so the built message
+// carries no Target: postVia fills in the port the message reaches.
 func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Message, error) {
+	target := send.Target
+	if send.IsVia {
+		target = ""
+	}
 	if typeName, ok := e.namedType(scope, send.Message); ok {
-		return Message{SignalType: typeName, Target: send.Target, Payload: map[string]Value{}}, nil
+		return Message{SignalType: typeName, Target: target, Payload: map[string]Value{}}, nil
 	}
 
 	value, err := e.Eval(send.Message)
@@ -97,7 +141,7 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 	}
 	return Message{
 		SignalType: signalType,
-		Target:     send.Target,
+		Target:     target,
 		Payload:    map[string]Value{"value": value},
 	}, nil
 }
@@ -120,6 +164,15 @@ func triggerName(trigger ast.Node) string {
 	default:
 		return fmt.Sprintf("%T", trigger)
 	}
+}
+
+// viaSuffix describes the port an accept waits on, for an error message, or
+// nothing when it waits on none.
+func viaSuffix(port string) string {
+	if port == "" {
+		return ""
+	}
+	return " via " + port
 }
 
 // orAny names a type or operation, or reports that any is accepted when the

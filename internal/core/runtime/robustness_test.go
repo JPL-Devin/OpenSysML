@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -29,6 +30,31 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("non_numeric_time_trigger", testNonNumericTimeTrigger)
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
+	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
+}
+
+// testSendViaUnconnectedPort: a port with no connection reaches no one, so an
+// accept waiting on the message must report rather than hang or bind nothing.
+func testSendViaUnconnectedPort(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			port outPort;
+			port inPort;
+			first start;
+			action sender { send 42 via outPort; }
+			action reader accept msg : Integer via inPort;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error: nothing connects outPort to inPort")
+	}
+	if !errors.Is(err, ErrNoMatchingMessage) {
+		t.Errorf("expected ErrNoMatchingMessage, got: %v", err)
+	}
 }
 
 // testNonNumericTimeTrigger: a timed trigger whose duration is not a number
