@@ -56,6 +56,41 @@ var definitionKindKeywords = map[string]ast.DefinitionKind{
 	"bool":          ast.DefBool,
 }
 
+// compoundDefKinds are the two-keyword kinds, where the second keyword names
+// the kind rather than the declaration. Every other pair of kind keywords is a
+// kind followed by a name. The two-word `use case` is handled separately in
+// parseDefUsage.
+var compoundDefKinds = map[[2]string]bool{
+	{"assoc", "struct"}:      true,
+	{"analysis", "case"}:     true,
+	{"verification", "case"}: true,
+}
+
+// kindPrefixKeywords are keywords that qualify a following kind keyword rather
+// than naming the declaration, even when no name follows the kind:
+// `assert constraint { ... }` is an asserted anonymous constraint, not a
+// declaration named `constraint`.
+var kindPrefixKeywords = map[string]bool{
+	"assert":  true,
+	"assume":  true,
+	"require": true,
+	"var":     true,
+}
+
+// notKindPrefixKeywords are keywords that are never a prefix of a following
+// kind keyword, because they are a kind of their own with dedicated parsing
+// (`satisfy requirement r by x`) or a direction that the kind carries
+// (`in item x`). A following kind keyword belongs to their own declaration.
+var notKindPrefixKeywords = map[string]bool{
+	"subject": true, "objective": true, "succession": true, "inv": true,
+	"connector": true, "satisfy": true, "verify": true, "step": true,
+	"expr": true, "interaction": true, "stakeholder": true, "frame": true,
+	"actor": true, "expose": true, "render": true, "perform": true,
+	"include": true, "exhibit": true, "variant": true, "event": true,
+	"timeslice": true, "snapshot": true, "transition": true, "bind": true,
+	"in": true, "out": true, "inout": true,
+}
+
 // usageKindKeywords maps a single kind keyword to its UsageKind.
 var usageKindKeywords = map[string]ast.UsageKind{
 	"part":      ast.UsagePart,
@@ -180,6 +215,56 @@ type featureMods struct {
 	isOrdered         bool
 	isNonunique       bool
 	earlyMultiplicity *ast.Multiplicity // for "end [mult] ref ..." syntax
+}
+
+// atKindPrefix reports whether the current keyword qualifies the kind keyword
+// after it instead of being the kind itself, as in `var feature x` or
+// `item part Shape`. When it does not, the second keyword names the declaration
+// (`action flow { ... }` is an action named `flow`).
+func (p *Parser) atKindPrefix() bool {
+	if !p.at(lexer.Keyword) || notKindPrefixKeywords[p.peek().KeywordID] {
+		return false
+	}
+	if !isKindKeyword(p.peekN(1)) {
+		return false
+	}
+	return kindPrefixKeywords[p.peek().KeywordID] || !namesDeclaration(p.peekN(2))
+}
+
+// atSecondaryKind reports whether the current kind keyword belongs to the kind
+// of the declaration whose first kind keyword was already consumed, rather than
+// being that declaration's name.
+func (p *Parser) atSecondaryKind(firstKeyword string) bool {
+	if notKindPrefixKeywords[firstKeyword] || !isKindKeyword(p.peek()) {
+		return false
+	}
+	if compoundDefKinds[[2]string{firstKeyword, p.peek().KeywordID}] || kindPrefixKeywords[firstKeyword] {
+		return true
+	}
+	return !namesDeclaration(p.peekN(1))
+}
+
+// isKindKeyword reports whether the token is a def or usage kind keyword.
+func isKindKeyword(t lexer.Token) bool {
+	if t.Kind != lexer.Keyword {
+		return false
+	}
+	_, isDef := definitionKindKeywords[t.KeywordID]
+	_, isUsage := usageKindKeywords[t.KeywordID]
+	return isDef || isUsage
+}
+
+// namesDeclaration reports whether a kind keyword followed by this token is the
+// name of the declaration rather than its kind. A declaration that ends there
+// (`;`), opens a body (`{`) or is typed (`:`) has nothing else to take its name
+// from, so the kind keyword before it is the name; anything else — a name, a
+// `def`, a redefinition — belongs to a declaration of that kind.
+func namesDeclaration(t lexer.Token) bool {
+	switch t.Kind {
+	case lexer.Semicolon, lexer.LBrace, lexer.Colon:
+		return true
+	}
+	return false
 }
 
 // atDefUsageStart reports whether the current token begins a def/usage
@@ -644,15 +729,14 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		p.advance()
 	}
 
-	// Parse secondary keyword if present (e.g., 'assoc struct')
-	// Check if next token is also a kind keyword
-	t3 := p.peek()
-	if t3.Kind == lexer.Keyword {
-		if secondKind, ok := definitionKindKeywords[t3.KeywordID]; ok && t3.KeywordID != "def" {
-			// Have secondary keyword - use it as primary kind
-			defKind = secondKind
-			p.advance() // consume secondary keyword
-		}
+	// Parse a secondary kind keyword, which happens either in a compound kind
+	// (`assoc struct`) or when the first keyword prefixes the second
+	// (`item part Shape`). A kind keyword that is not one of those is the
+	// declaration's name (`attribute item : Integer` names the attribute
+	// `item`), and consuming it here would silently discard that name.
+	if p.atSecondaryKind(kw) {
+		defKind = definitionKindKeywords[p.peek().KeywordID]
+		p.advance() // consume secondary keyword
 	}
 
 	if p.atKeyword("def") {
@@ -2452,18 +2536,29 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return mem
 	}
 
+	// A keyword before a kind keyword qualifies the declaration rather than
+	// naming it (`var feature x`, `assert constraint { ... }`), so it is consumed
+	// and the declaration keeps the name it declares for itself. A keyword that
+	// is not such a prefix is the declaration's own kind, and the keyword after
+	// it is its name (`action flow { ... }` is an action named `flow`); that is
+	// parsed below, which reads the name instead of dropping it.
+	if p.at(lexer.Keyword) && p.atKindPrefix() {
+		p.advance() // consume the prefix keyword
+		inner := p.parseDeclaration(start)
+		if inner == nil {
+			en := p.errorNodeSkip(start, "expected a body member")
+			en.SetLeadingTrivia(trivia)
+			return en
+		}
+		mem := &ast.Membership{Visibility: vis, Member: inner}
+		mem.NodeSpan = p.spanFrom(start)
+		mem.SetLeadingTrivia(trivia)
+		return mem
+	}
+
 	// Check for name-before-keyword pattern: <name> <keyword> { ... }
-	// Example: assert constraint { ... }, require constraint { ... }
-	// <name> can be identifier OR keyword used as name
-	// But exclude usage-only keywords (they're declarations, not names)
-	// Also exclude direction modifiers (in/out - they're modifiers, not names)
-	isUsageOnlyKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" ||
-		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" ||
-		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "interaction" ||
-		p.peek().KeywordID == "stakeholder" || p.peek().KeywordID == "frame" || p.peek().KeywordID == "actor" || p.peek().KeywordID == "expose" || p.peek().KeywordID == "render" ||
-		p.peek().KeywordID == "perform")
-	isDirectionKw := p.at(lexer.Keyword) && (p.peek().KeywordID == "in" || p.peek().KeywordID == "out")
-	if !isUsageOnlyKw && !isDirectionKw && (p.atName() || p.at(lexer.Keyword)) {
+	// Example: myConstraint constraint { ... }
+	if p.atName() {
 		next := p.peekN(1)
 		if next.Kind == lexer.Keyword {
 			_, isDef := definitionKindKeywords[next.KeywordID]
@@ -2472,14 +2567,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 				// Parse as named usage: consume name token, then proceed with keyword
 				var id ast.Identification
 				tok := p.advance()
-				if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
-					id.Name = p.src.Text(tok.Span)
-					id.NameSpan = tok.Span
-				} else if tok.Kind == lexer.Keyword {
-					// Keyword used as name (e.g., 'assert' in 'assert constraint')
-					id.Name = tok.KeywordID
-					id.NameSpan = tok.Span
-				}
+				id.Name = p.src.Text(tok.Span)
+				id.NameSpan = tok.Span
 				inner := p.parseDeclaration(start)
 				if u, ok := inner.(*ast.Usage); ok {
 					u.Ident = id

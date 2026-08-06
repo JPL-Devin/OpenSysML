@@ -159,3 +159,24 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 		})
 	}
 }
+
+// TestKeywordNamedDeclarationIsReferenceable covers a declaration whose name is
+// a keyword: the name must reach the symbol table, or references to it resolve
+// against nothing while the misspelled control case reports nothing either.
+func TestKeywordNamedDeclarationIsReferenceable(t *testing.T) {
+	resolved := `package P {
+		action flow { }
+		action caller { action a : flow; }
+	}`
+	if got := diagnose(t, "kwname", resolved); len(got) != 0 {
+		t.Errorf("reference to the keyword-named action reported %v, want none", got)
+	}
+
+	misspelled := `package P {
+		action flow { }
+		action caller { action a : flwo; }
+	}`
+	if got := diagnose(t, "kwname_bad", misspelled); len(got) != 1 {
+		t.Errorf("reference to an undeclared name reported %v, want one finding", got)
+	}
+}
