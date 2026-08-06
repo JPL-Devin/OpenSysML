@@ -199,20 +199,35 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 // parent's children.
 func NewBodyExprScope(parent *Scope, body *ast.BodyExpr) *Scope {
 	scope := NewScope(parent, body)
+	doc := docNameOf(parent)
 	for i := range body.Params {
 		p := &body.Params[i]
 		if p.Name == "" {
 			continue
 		}
+		// The parameter's own span, not the whole body's: the editor renames
+		// through NameSpan and jumps to DeclSpan.
 		scope.Define(p.Name, &Symbol{
 			Name:       p.Name,
 			Kind:       SymbolAttributeUsage,
 			Decl:       body,
-			DeclSpan:   body.Span(),
+			DeclSpan:   p.Span,
+			NameSpan:   p.Span,
 			OwnerScope: scope,
+			DocName:    doc,
 		})
 	}
 	return scope
+}
+
+// docNameOf returns the document that declares the nearest enclosing symbol.
+func docNameOf(scope *Scope) string {
+	for s := scope; s != nil; s = s.parent {
+		if s.owner != nil && s.owner.DocName != "" {
+			return s.owner.DocName
+		}
+	}
+	return ""
 }
 
 // newSymbol builds a Symbol from an identification. scope is the child scope the

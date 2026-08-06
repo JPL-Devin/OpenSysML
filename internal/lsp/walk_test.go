@@ -151,3 +151,32 @@ func TestRenameLeavesBodyExpressionParameters(t *testing.T) {
 		t.Errorf("reference to the outer feature was not renamed:\n%s", got[name])
 	}
 }
+
+// Renaming from a use of a body-expression parameter must edit the parameter's
+// own declaration, not the body's opening brace, and must leave the same-named
+// outer feature alone.
+func TestRenameBodyExpressionParameterFromUse(t *testing.T) {
+	ws := model.NewWorkspace()
+	src := `package P {
+	import ScalarValues::*;
+	import ControlFunctions::*;
+	attribute s : Integer = 1;
+	action def Sample {
+		in attribute samples : Real[*];
+		assert constraint { samples->forAll { in s : Real; s > 0 } }
+	}
+}
+`
+	name := openRenameDoc(t, ws, "/tmp/walk_bodyparam.sysml", src)
+
+	got, err := applyRename(t, ws, name, "s > 0", "sample")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "in sample : Real; sample > 0") {
+		t.Errorf("parameter declaration and use not both renamed:\n%s", got[name])
+	}
+	if !strings.Contains(got[name], "attribute s : Integer = 1;") {
+		t.Errorf("outer feature was rewritten:\n%s", got[name])
+	}
+}
