@@ -981,6 +981,9 @@ func (e *StateExecutor) isActive(state *ast.StateNode) bool {
 // exitToward exits the active configuration up to, but not including, stop.
 func (e *StateExecutor) exitToward(stop *ast.StateNode) error {
 	for _, active := range e.orderedRegionStates() {
+		if !e.isActive(active) {
+			continue // Already left as part of an enclosing composite state's teardown.
+		}
 		if err := e.exitState(active); err != nil {
 			return fmt.Errorf("exit state: %w", err)
 		}
@@ -1333,28 +1336,39 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 	// Check if this state is a composite state with regions
 	regions, isComposite := e.graph.CompositeStates[state]
 
-	// Remember the configuration being left, so a history pseudostate owned by
-	// this state or by its parent can restore it.
-	if isComposite && len(e.activeConfig.regionStates) > 0 {
-		active := make(map[*ast.StateRegion]*ast.StateNode, len(e.activeConfig.regionStates))
-		for region, regionState := range e.activeConfig.regionStates {
+	// The active configuration of every composite state lives in one map, so only
+	// this state's own regions may be recorded or torn down here: touching the
+	// whole map would stop the regions of an enclosing composite state too.
+	active := make(map[*ast.StateRegion]*ast.StateNode, len(regions))
+	for _, region := range regions {
+		if regionState, isActive := e.activeConfig.regionStates[region]; isActive {
 			active[region] = regionState
 		}
+	}
+
+	// Remember the configuration being left, so a history pseudostate owned by
+	// this state or by its parent can restore it.
+	if len(active) > 0 {
 		e.recordHistory(state).regions = active
 	}
 	if parent := e.graph.ParentState[state]; parent != nil {
 		e.recordHistory(parent).child = state
 	}
 
-	// If this is a composite state with regions, exit all active region states first
-	if isComposite && len(regions) > 0 && len(e.activeConfig.regionStates) > 0 {
-		for _, regionState := range e.activeConfig.regionStates {
+	// Exit the active state of each of this state's regions, in declaration order.
+	if isComposite {
+		for _, region := range regions {
+			regionState, isActive := active[region]
+			if !isActive {
+				continue
+			}
+			// Clear the entry first: the recursive exit walks the same map, and the
+			// region still pointing at regionState would exit it a second time.
+			delete(e.activeConfig.regionStates, region)
 			if err := e.exitState(regionState); err != nil {
 				return fmt.Errorf("exit region state: %w", err)
 			}
 		}
-		// Clear region configuration
-		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
 	}
 
 	// Record trace

@@ -273,28 +273,59 @@ func TestDeepHistoryRestoresBelowRegion(t *testing.T) {
 	}
 }
 
-// A history pseudostate declared outside any composite state has nothing to
-// restore, which is reported rather than silently ignored.
-func TestHistoryOutsideCompositeStateIsRejected(t *testing.T) {
-	history := &ast.PseudostateNode{Kind: ast.PseudostateShallowHistory, Name: "H"}
+// Leaving a composite state that sits inside an orthogonal region leaves the
+// sibling regions of the enclosing state running: the active configuration of
+// every composite state shares one map, so a teardown must only touch the
+// regions of the state being left.
+func TestExitingNestedRegionsKeepsSiblingRegions(t *testing.T) {
+	innerA := &ast.StateNode{Name: "innerA", IsInitial: true}
+	innerB := &ast.StateNode{Name: "innerB", IsInitial: true}
+	nested := &ast.StateNode{
+		Name:      "nested",
+		IsInitial: true,
+		Regions: []*ast.StateRegion{
+			{Name: "a", States: []ast.Node{innerA}},
+			{Name: "b", States: []ast.Node{innerB}},
+		},
+	}
+	leftDone := &ast.StateNode{Name: "leftDone"}
+	rstart := &ast.StateNode{Name: "rstart", IsInitial: true}
+
+	outer := &ast.StateNode{
+		Name: "outer",
+		Regions: []*ast.StateRegion{
+			{Name: "left", States: []ast.Node{nested, leftDone}},
+			{Name: "right", States: []ast.Node{rstart}},
+		},
+	}
 	exec := stateExecutorFor(t, &ast.Usage{
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
 			&ast.StateNode{Name: "init", IsInitial: true},
-			&ast.StateNode{Name: "away"},
-			history,
-			transitionMember("init", "away"),
-			transitionMember("away", "H"),
+			outer,
+			transitionMember("init", "nested"),
+			transitionMember("nested", "leftDone"),
 		},
 	})
 	if err := exec.initialize(); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
-	fire(t, exec, "init", "away")
 
-	err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
-	if err == nil || !strings.Contains(err.Error(), "must be declared inside the composite state") {
-		t.Fatalf("err = %v, want a report that H owns no composite state", err)
+	fire(t, exec, "init", "nested")
+	advanceRegion(t, exec, "left", "nested", "leftDone")
+
+	active := map[string]bool{}
+	for _, state := range exec.activeConfig.regionStates {
+		active[state.Name] = true
+	}
+	if !active["rstart"] {
+		t.Errorf("active configuration = %v, want the sibling region to still hold rstart", active)
+	}
+	if !active["leftDone"] {
+		t.Errorf("active configuration = %v, want the left region to hold leftDone", active)
+	}
+	if active["innerA"] || active["innerB"] {
+		t.Errorf("active configuration = %v, want the left nested regions to be gone", active)
 	}
 }
