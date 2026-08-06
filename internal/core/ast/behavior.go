@@ -215,10 +215,13 @@ type AcceptEvent struct {
 
 func (*AcceptEvent) triggerEvent() {}
 
-// CallEvent fires when an operation is invoked.
+// CallEvent fires when an operation is invoked. Parameters are the argument
+// names the trigger declares (`accept op(speed)`); an empty list matches a call
+// to that operation whatever arguments it carries.
 type CallEvent struct {
 	NodeBase
-	Operation *QualifiedName // operation to invoke
+	Operation  *QualifiedName // operation to invoke
+	Parameters []string       // declared argument names, in written order
 }
 
 func (*CallEvent) triggerEvent() {}

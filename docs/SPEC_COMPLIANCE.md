@@ -68,7 +68,7 @@
 - Signal discrimination (name matching)
 - Unmatched signal dropped
 - Signals sent from entry/do/exit/effect actions reaching the machine
-- CallEvent operation matching (⚠️ no notation parsed; programmatic only)
+- CallEvent triggers (`accept op(arg)` notation, operation and argument matching)
 - Completion transitions (nil trigger with guard evaluation)
 - Hierarchical substates
 - Orthogonal regions (concurrent states)
@@ -86,7 +86,6 @@
 - Multi-region event broadcasting
 - ⚠️ History pseudostates: shallow and deep restoration implemented, reachable programmatically only (no textual notation)
 - ⚠️ Deferred events: retention and recall implemented across hierarchy and orthogonal regions, reachable programmatically only (no textual notation)
-- ❌ Not implemented: call-trigger notation
 
 **Expression Evaluation (7/7 features):**
 - Binary operators (+, -, *, /, <, >, ==, and, or)
@@ -104,12 +103,12 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 39 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×5, state×15, accept-then×1)
-- 25 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures)
+- 43 conformance cases (all passing: calc×8, constraint×5, requirement×5, action×5, state×20)
+- 27 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type)
 - 41 unit tests
-- 23 golden AST fixtures (including pseudostate, timed-trigger and calc default/invocation parsing tests)
+- 24 golden AST fixtures (including pseudostate, timed-trigger, call-trigger and calc default/invocation parsing tests)
 - 21 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, calc and constraint evaluation)
-- 17 negative parser tests
+- 19 negative parser tests
 - 900+ total tests passing
 
 ---
@@ -220,7 +219,7 @@ Each row documents one behavioral semantic feature:
 | Transition effect actions | `state_executor.go:535` fireTransition | `state_transition_effect.sysml` | ✅ Faithful |
 | AcceptEvent triggers (when signal) | `state_executor.go` matchesEvent | `state_signal_discriminate.sysml` | ✅ Faithful |
 | Signals sent from state behaviors reaching the machine | `state_executor.go` executeAction send case, deliverPendingSignal | `state_send_self_signal.sysml` + trace golden, `signal_test.go:TestSendOfNamedTypeReachesStateMachine` | ✅ Faithful |
-| CallEvent triggers (operation name matching) | `state_executor.go` matchesEvent EventCall case, InvokeOperation | `signal_test.go:TestCallEventMatchesOperationName` | ⚠️ Approximate (matching and injection work, but no notation is parsed for a call trigger, so call events are reachable only programmatically) |
+| CallEvent triggers (`accept op(param)` notation, operation and argument matching, arguments bound for guard/effect) | `parser/behavior.go` parseTriggerEvent/parseCallEvent; `state_executor.go` matchesEvent EventCall case, bindTriggerArguments, InvokeOperation | `parser/testdata/parse/state_call_trigger.golden`, `lower/trigger_test.go:TestTriggerClassification_CallTrigger`, `state_call_trigger{,_guard,_nested,_regions}.sysml` conformance, `signal_test.go:TestCallEventMatchesOperationName`, `robustness_test.go:call_of_unhandled_operation`, `:call_argument_of_wrong_type` | ✅ Faithful (a trigger on an enclosing composite state does not see events while a substate is active — the same limitation as every other trigger kind) |
 | Sourceless transitions (`accept...then`) | `lower/state_graph.go:487` collectTransitions Usage case, `:302` resolve container | `accept_then_transition.sysml` | ✅ Faithful (nested form only; flat form errors intentionally) |
 | ChangeEvent triggers (when expr) | `state_executor.go:401` matchesEvent; `:906` pollChangeEvents | `state_executor_test.go:TestStateChangeEvent` | ✅ Faithful |
 | TimeEvent triggers (`accept after <duration>` relative, `accept at <time>` absolute) | `parser/behavior.go` parseAcceptTransition; `state_executor.go` scheduleTransitionsForState, `:401` matchesEvent | `state_timed_triggers.sysml` golden, `state_timed_transitions.sysml` conformance, `state_executor_test.go:TestStateExecutor_AbsoluteTimeEvent`, `robustness_test.go:non_numeric_time_trigger` | ✅ Faithful |
@@ -242,6 +241,7 @@ Each row documents one behavioral semantic feature:
 | Nested action invocation in entry/do/exit/effect | `state_executor.go:1075` executeAction, `invoke_action.go` invokeAction | `state_behavior_test.go:TestStateDoExitAndTransitionEffectPerformAction` | ✅ Faithful |
 | Run-to-completion semantics | `state_executor.go:288` processNextEvent | `state_executor_test.go:TestStateRunToCompletion` | ✅ Faithful |
 | Event queue management | `state_executor.go:1127` EventQueue | `state_executor_test.go` | ✅ Faithful |
+| Deterministic dispatch order | `executor_common.go` eventHeap.Less (time, then arrival), `state_executor.go` orderedActiveRegions (region declaration order) | `state_call_trigger_regions.sysml` | ✅ Faithful |
 | Dangling transition detection | `robustness_test.go:testStateDanglingTransition` (lenient) | `robustness_test.go:testStateDanglingTransition` | ⚠️ Approximate |
 | Completion transitions | `state_executor.go:218` scheduleTransitionsForState nil trigger | `state_simple.sysml` | ✅ Faithful |
 

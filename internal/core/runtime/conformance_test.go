@@ -22,10 +22,12 @@ type ExpectedValue struct {
 	Value interface{} `json:"value"`
 }
 
-// ExpectedEvent represents a signal event to inject during state machine execution
+// ExpectedEvent represents an event to inject during state machine execution:
+// either a signal (`signal`) or an operation invocation (`call`).
 type ExpectedEvent struct {
-	Signal string                   `json:"signal"`         // Signal type name
-	Args   map[string]ExpectedValue `json:"args,omitempty"` // Signal arguments
+	Signal string                   `json:"signal,omitempty"` // Signal type name
+	Call   string                   `json:"call,omitempty"`   // Invoked operation name
+	Args   map[string]ExpectedValue `json:"args,omitempty"`   // Signal payload or call arguments
 }
 
 // ExpectedOutcome represents expected execution result
@@ -218,7 +220,16 @@ func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path st
 		for name, val := range event.Args {
 			args[name] = expectedToRuntimeValue(t, val)
 		}
-		exec.SendSignal(event.Signal, args)
+		switch {
+		case event.Call != "" && event.Signal != "":
+			t.Fatalf("event declares both signal %q and call %q", event.Signal, event.Call)
+		case event.Call != "":
+			exec.InvokeOperation(event.Call, args)
+		case event.Signal != "":
+			exec.SendSignal(event.Signal, args)
+		default:
+			t.Fatalf("event declares neither a signal nor a call")
+		}
 	}
 
 	// Process events until completion or suspension, through the executor's own

@@ -1,0 +1,20 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="CallTriggers" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="state" name="Controller" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.StateNode)
+          (Membership visibility="default"
+            (Usage kind="state" name="idle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (TransitionMember source="" target="stopping"
+                (CallEvent operation="brake" parameters=[]))))
+          (*ast.SubstateMember)
+          (*ast.SubstateMember)
+          (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (ConnectorEnd target="<nil>")
+            (ConnectorEnd target="<nil>"))
+          (TransitionMember source="idle" target="cruising"
+            (CallEvent operation="setSpeed" parameters=[value])
+            (OperatorExpr operator=">"
+              (FeatureReference name="value")
+              (LiteralInteger value="0"))))))))

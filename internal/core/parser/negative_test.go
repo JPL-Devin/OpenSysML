@@ -32,6 +32,8 @@ func TestNegative(t *testing.T) {
 		{"constraint_incomplete", "constraint c { assert }"},
 		{"state_fork_no_name", "state s { fork ; }"},
 		{"state_join_no_semicolon", "state s { join sync state t; }"},
+		{"call_trigger_unclosed_params", "state s { accept op(a then t; }"},
+		{"call_trigger_missing_param_name", "state s { accept op(,) then t; }"},
 	}
 
 	for _, tt := range tests {

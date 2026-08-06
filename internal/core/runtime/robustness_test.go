@@ -43,6 +43,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("history_without_record_or_default", testHistoryWithoutRecordOrDefault)
 	t.Run("defer_of_non_deferrable_trigger", testDeferOfNonDeferrableTrigger)
 	t.Run("non_terminating_do_behavior", testNonTerminatingDoBehavior)
+	t.Run("call_of_unhandled_operation", testCallOfUnhandledOperation)
+	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 }
 
 // testDeferOfNonDeferrableTrigger: only signals and calls are dispatched from
@@ -109,6 +111,71 @@ func testNonTerminatingDoBehavior(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "exceeded max") {
 		t.Errorf("expected a budget error, got: %v", err)
+	}
+}
+
+// stateExecutorForSource builds an executor for the named machine in src, for
+// tests that drive it event by event.
+func stateExecutorForSource(t *testing.T, name, src string) *StateExecutor {
+	t.Helper()
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), name, ast.DefState)
+	if sym == nil {
+		t.Fatalf("state machine %s not found", name)
+	}
+	exec, err := newStateExecutor(ctx, sym)
+	if err != nil {
+		t.Fatalf("newStateExecutor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	return exec
+}
+
+// testCallOfUnhandledOperation: an invocation no trigger names is discarded by
+// run-to-completion, leaving the machine where it was rather than hanging.
+func testCallOfUnhandledOperation(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state waiting;
+			state moving;
+			init then waiting;
+			transition waiting to moving accept go();
+		}
+	}`)
+	exec.InvokeOperation("halt", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	current, ok := exec.CurrentState().(*ast.StateNode)
+	if !ok || current.Name != "waiting" {
+		t.Errorf("expected the unhandled call to leave the machine in waiting, got %v", exec.CurrentState())
+	}
+}
+
+// testCallArgumentOfWrongType: an argument the guard cannot compare reports
+// rather than firing or dropping the transition on a wrong comparison.
+func testCallArgumentOfWrongType(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state waiting;
+			state moving;
+			init then waiting;
+			transition waiting to moving accept setSpeed(value) if value > 0;
+		}
+	}`)
+	exec.InvokeOperation("setSpeed", map[string]Value{
+		"value": {Kind: ValString, Str: "fast"},
+	})
+	err := exec.RunToCompletion()
+	if err == nil {
+		t.Fatal("expected an error: the guard compares a String argument with 0")
+	}
+	if !strings.Contains(err.Error(), "string") {
+		t.Errorf("expected the offending operand kind in the message, got: %v", err)
 	}
 }
 

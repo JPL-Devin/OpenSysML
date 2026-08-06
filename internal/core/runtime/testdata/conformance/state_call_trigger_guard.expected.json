@@ -1,0 +1,8 @@
+{
+  "type": "state",
+  "events": [
+    {"call": "setSpeed", "args": {"value": {"type": "Integer", "value": 0}}}
+  ],
+  "finalState": "idle",
+  "stateVisits": ["start", "idle"]
+}

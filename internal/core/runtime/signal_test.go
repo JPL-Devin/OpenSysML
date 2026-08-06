@@ -331,19 +331,22 @@ func TestPortRoutedMessageDoesNotReachStateMachine(t *testing.T) {
 	}
 }
 
-// A call event fires only the transition triggered by the operation invoked.
-// The triggers are hand-built because the notation for a call trigger is not
-// parsed yet, so call events are only reachable programmatically.
+// A call event fires only the transition triggered by the operation invoked,
+// and only when the call carries every argument the trigger declares.
 func TestCallEventMatchesOperationName(t *testing.T) {
-	callTrigger := func(operation string) *lower.Transition {
-		trigger := &ast.CallEvent{}
+	callTrigger := func(operation string, params ...string) *lower.Transition {
+		trigger := &ast.CallEvent{Parameters: params}
 		if operation != "" {
 			trigger.Operation = &ast.QualifiedName{Parts: []ast.NameSegment{{Text: operation}}}
 		}
 		return &lower.Transition{Trigger: trigger}
 	}
-	callEvent := func(operation string) *Event {
-		return &Event{Type: EventCall, Payload: Call{Operation: operation}}
+	callEvent := func(operation string, args ...string) *Event {
+		call := Call{Operation: operation, Args: make(map[string]Value, len(args))}
+		for _, arg := range args {
+			call.Args[arg] = Value{}
+		}
+		return &Event{Type: EventCall, Payload: call}
 	}
 
 	exec := &StateExecutor{}
@@ -357,6 +360,10 @@ func TestCallEventMatchesOperationName(t *testing.T) {
 		{"other operation", callTrigger("open"), callEvent("close"), false},
 		{"unnamed operation accepts any", callTrigger(""), callEvent("close"), true},
 		{"accept trigger ignores calls", &lower.Transition{Trigger: &ast.AcceptEvent{}}, callEvent("open"), false},
+		{"declared parameter present", callTrigger("open", "angle"), callEvent("open", "angle"), true},
+		{"declared parameter missing", callTrigger("open", "angle"), callEvent("open"), false},
+		{"one declared parameter of several missing", callTrigger("open", "angle", "speed"), callEvent("open", "angle"), false},
+		{"undeclared arguments ignored", callTrigger("open"), callEvent("open", "angle"), true},
 	}
 	for _, tc := range tests {
 		if got := exec.matchesEvent(tc.trans, tc.event); got != tc.matches {

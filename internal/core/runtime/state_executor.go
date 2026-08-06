@@ -492,6 +492,11 @@ func (e *StateExecutor) enabledTransition(state *ast.StateNode, event *Event) (*
 		if !e.matchesEvent(trans, event) {
 			continue
 		}
+		// A call trigger's arguments are bound before the guard runs: the guard is
+		// written against the parameters the trigger declares.
+		if err := e.bindTriggerArguments(trans, event); err != nil {
+			return nil, err
+		}
 		pass, err := e.passesGuard(trans.Guard)
 		if err != nil {
 			return nil, err
@@ -501,6 +506,29 @@ func (e *StateExecutor) enabledTransition(state *ast.StateNode, event *Event) (*
 		}
 	}
 	return nil, nil
+}
+
+// bindTriggerArguments binds the parameters a call trigger declares to the
+// arguments of the invocation, so the transition's guard and effect can read
+// them. Only a matched transition is bound, so every declared name is present.
+func (e *StateExecutor) bindTriggerArguments(trans *lower.Transition, event *Event) error {
+	callEvent, ok := trans.Trigger.(*ast.CallEvent)
+	if !ok || len(callEvent.Parameters) == 0 {
+		return nil
+	}
+	call, ok := event.Payload.(Call)
+	if !ok {
+		return fmt.Errorf("call trigger %s: event carries %T, not an operation invocation",
+			ast.SimpleName(callEvent.Operation), event.Payload)
+	}
+	for _, param := range callEvent.Parameters {
+		value, ok := call.Args[param]
+		if !ok {
+			return fmt.Errorf("call trigger %s: invocation carries no argument %q", call.Operation, param)
+		}
+		e.stateData[param] = value
+	}
+	return nil
 }
 
 // matchesEvent checks if a transition matches the given event.
@@ -560,7 +588,17 @@ func triggerMatches(trigger ast.Node, event *Event) bool {
 		// A trigger naming an operation fires only for that operation; a trigger
 		// naming none fires for any call.
 		expectedOp := ast.SimpleName(callEvent.Operation)
-		return expectedOp == "" || expectedOp == call.Operation
+		if expectedOp != "" && expectedOp != call.Operation {
+			return false
+		}
+		// A trigger declaring parameters fires only for a call carrying an
+		// argument of each declared name; `op()` takes the call whatever it carries.
+		for _, param := range callEvent.Parameters {
+			if _, ok := call.Args[param]; !ok {
+				return false
+			}
+		}
+		return true
 
 	case EventChange:
 		// Re-evaluate condition (pollChangeEvents is the primary driver); here we
@@ -1044,11 +1082,11 @@ func (e *StateExecutor) activeCompositeOwner() *ast.StateNode {
 }
 
 // orderedRegionStates returns the active state of each orthogonal region in
-// region declaration order, since exit behaviors run in the order returned and
-// activeConfig.regionStates is a map.
+// region declaration order, since exit behaviors run in the order returned.
 func (e *StateExecutor) orderedRegionStates() []*ast.StateNode {
-	states := make([]*ast.StateNode, 0, len(e.activeConfig.regionStates))
-	for _, region := range e.orderedActiveRegions() {
+	regions := e.orderedActiveRegions()
+	states := make([]*ast.StateNode, 0, len(regions))
+	for _, region := range regions {
 		states = append(states, e.activeConfig.regionStates[region])
 	}
 	return states

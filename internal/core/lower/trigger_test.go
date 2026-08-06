@@ -253,6 +253,88 @@ func TestTriggerClassification_NilCompletion(t *testing.T) {
 	}
 }
 
+// A parsed call trigger reaches the graph with its operation and declared
+// parameters intact: the runtime matches on both and must not re-derive them.
+func TestTriggerClassification_CallTrigger(t *testing.T) {
+	src := `
+		package test {
+			state M {
+				initial start;
+				state waiting;
+				final done;
+
+				start then waiting;
+				transition waiting to done accept setSpeed(value);
+			}
+		}
+	`
+
+	p := parser.New(source.New("test.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) > 0 {
+		t.Fatalf("parse errors: %v", p.Diagnostics)
+	}
+
+	stateUsage := findStateUsage(root)
+	if stateUsage == nil {
+		t.Fatal("no state usage found")
+	}
+
+	graph, err := ToStateGraph(stateUsage)
+	if err != nil {
+		t.Fatalf("ToStateGraph failed: %v", err)
+	}
+
+	var trigger *ast.CallEvent
+	for _, transitions := range graph.Transitions {
+		for _, tr := range transitions {
+			source, ok := tr.Source.(*ast.StateNode)
+			if !ok || source.Name != "waiting" {
+				continue
+			}
+			callEvent, ok := tr.Trigger.(*ast.CallEvent)
+			if !ok {
+				t.Fatalf("expected CallEvent, got %T", tr.Trigger)
+			}
+			trigger = callEvent
+		}
+	}
+
+	if trigger == nil {
+		t.Fatal("transition waiting->done not found")
+	}
+	if got := ast.SimpleName(trigger.Operation); got != "setSpeed" {
+		t.Errorf("operation = %q, want setSpeed", got)
+	}
+	if len(trigger.Parameters) != 1 || trigger.Parameters[0] != "value" {
+		t.Errorf("parameters = %v, want [value]", trigger.Parameters)
+	}
+}
+
+// findStateUsage returns the first state usage declared in the first package.
+func findStateUsage(root *ast.RootNamespace) *ast.Usage {
+	for _, member := range root.Members {
+		membership, ok := member.(*ast.Membership)
+		if !ok {
+			continue
+		}
+		pkg, ok := membership.Member.(*ast.Package)
+		if !ok {
+			continue
+		}
+		for _, pkgMember := range pkg.Members {
+			pkgMembership, ok := pkgMember.(*ast.Membership)
+			if !ok {
+				continue
+			}
+			if usage, ok := pkgMembership.Member.(*ast.Usage); ok && usage.Kind == ast.UsageState {
+				return usage
+			}
+		}
+	}
+	return nil
+}
+
 func TestTriggerClassification_AlreadyTyped(t *testing.T) {
 	// Test that already-typed triggers pass through unchanged
 	timeEvent := &ast.TimeEvent{Duration: &ast.LiteralInteger{Value: "5"}}

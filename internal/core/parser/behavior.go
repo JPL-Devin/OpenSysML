@@ -2054,6 +2054,94 @@ func (p *Parser) parseSuccessionStatement(start int) ast.Node {
 	return succession
 }
 
+// parseTriggerEvent parses the event of a transition trigger, the part after
+// `accept`: a time event (`at <instant>` / `after <duration>`), a change event
+// (`when <condition>`), a call event (`<operation>(<params>)`), a typed payload
+// (`<name> : <Type>`) or a bare signal name. The event kind is decided here so
+// lowering never has to re-derive it.
+func (p *Parser) parseTriggerEvent() ast.Node {
+	if p.atKeyword("at") || p.atKeyword("after") {
+		absolute := p.atKeyword("at")
+		kwStart := p.peek().Span.Offset
+		p.advance() // consume 'at' / 'after'
+		evt := &ast.TimeEvent{Duration: p.ParseExpression(), Absolute: absolute}
+		evt.NodeSpan = p.spanFrom(kwStart)
+		return evt
+	}
+
+	if p.atKeyword("when") {
+		kwStart := p.peek().Span.Offset
+		p.advance() // consume 'when'
+		evt := &ast.ChangeEvent{Condition: p.ParseExpression()}
+		evt.NodeSpan = p.spanFrom(kwStart)
+		return evt
+	}
+
+	// Typed payload: accept <name> : <Type>
+	if (p.at(lexer.Identifier) || p.at(lexer.Keyword)) && p.peekN(1).Kind == lexer.Colon {
+		paramStart := p.peek().Span.Offset
+		ident := p.parseIdentification()
+		rels, _ := p.parseRelationships(true)
+
+		usage := &ast.Usage{
+			Kind:          ast.UsageAttribute,
+			Ident:         ident,
+			Relationships: rels,
+		}
+		usage.NodeSpan = p.spanFrom(paramStart)
+		return usage
+	}
+
+	// Bare name: a signal reference, or a call event when an argument list follows.
+	nameStart := p.peek().Span.Offset
+	name := p.parseQualifiedNameRelaxed()
+	if name == nil {
+		// An unnamed trigger is an error node, not a nil trigger: a nil one would
+		// read as a completion transition and fire on its own.
+		en := &ast.ErrorNode{Message: "expected an event after 'accept'"}
+		en.NodeSpan = p.spanFrom(nameStart)
+		return en
+	}
+	if p.at(lexer.LParen) {
+		return p.parseCallEvent(nameStart, name)
+	}
+	return name
+}
+
+// parseCallEvent parses the argument list of a call trigger, `(<name>, ...)`,
+// after its operation name. The names are matched against the arguments of the
+// invocation, so `accept setSpeed(value)` fires only for a call carrying a
+// `value` argument, while `accept setSpeed()` fires for any call to it.
+func (p *Parser) parseCallEvent(start int, operation *ast.QualifiedName) ast.Node {
+	p.advance() // consume '('
+
+	var params []string
+	for !p.at(lexer.RParen) && !p.atEOF() {
+		seg, ok := p.parseNameSegmentRelaxed()
+		if !ok {
+			p.error(p.peek().Span, "expected parameter name in call trigger")
+			en := &ast.ErrorNode{Message: "expected parameter name in call trigger"}
+			en.NodeSpan = p.spanFrom(start)
+			return en
+		}
+		params = append(params, seg.Text)
+		if !p.accept2(lexer.Comma) {
+			break
+		}
+	}
+
+	if !p.accept2(lexer.RParen) {
+		p.error(p.peek().Span, "expected ')' after call trigger parameters")
+		en := &ast.ErrorNode{Message: "expected ')' after call trigger parameters"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+
+	evt := &ast.CallEvent{Operation: operation, Parameters: params}
+	evt.NodeSpan = p.spanFrom(start)
+	return evt
+}
+
 // parseAcceptTransition parses: accept <signal> then <state>;
 // This is a state transition triggered by accepting a signal
 func (p *Parser) parseAcceptTransition(start int) ast.Node {
@@ -2062,49 +2150,8 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 		p.advance() // consume 'accept' if not already consumed
 	}
 
-	// Parse signal type reference (use relaxed parsing to allow keywords as names)
-	// Could be event type OR temporal expression (at <time>) OR change trigger (when <cond>) OR relative time (after <duration>)
-	// OR typed parameter (name : Type)
-	var signalType ast.Node
-	if p.atKeyword("at") || p.atKeyword("after") {
-		// Temporal transition: accept at <timeExpr> / after <duration> then <state>.
-		absolute := p.atKeyword("at")
-		kwStart := p.peek().Span.Offset
-		p.advance() // consume 'at' / 'after'
-		evt := &ast.TimeEvent{Duration: p.ParseExpression(), Absolute: absolute}
-		evt.NodeSpan = p.spanFrom(kwStart)
-		signalType = evt
-	} else if p.atKeyword("when") {
-		// Change transition: accept when <condition> then <state>
-		kwStart := p.peek().Span.Offset
-		p.advance() // consume 'when'
-		evt := &ast.ChangeEvent{Condition: p.ParseExpression()}
-		evt.NodeSpan = p.spanFrom(kwStart)
-		signalType = evt
-	} else {
-		// Event transition: accept <signal> OR accept <name> : Type
-		// Lookahead: if identifier followed by colon, parse as typed parameter
-		if (p.at(lexer.Identifier) || p.at(lexer.Keyword)) && p.peekN(1).Kind == lexer.Colon {
-			// Typed trigger: parse name + typing
-			paramStart := p.peek().Span.Offset
-			ident := p.parseIdentification()
+	signalType := p.parseTriggerEvent()
 
-			// Parse typing
-			rels, _ := p.parseRelationships(true)
-
-			// Create attribute usage to represent typed trigger
-			usage := &ast.Usage{
-				Kind:          ast.UsageAttribute,
-				Ident:         ident,
-				Relationships: rels,
-			}
-			usage.NodeSpan = p.spanFrom(paramStart)
-			signalType = usage
-		} else {
-			// Simple signal reference
-			signalType = p.parseQualifiedNameRelaxed()
-		}
-	}
 	// Optional guard condition: if <expr>
 	var guardExpr ast.Node
 	if p.acceptKeyword("if") {
@@ -2603,11 +2650,15 @@ func (p *Parser) parseTransitionMember(start int) ast.Node {
 	// Parse target state (allow keywords like 'done', 'active' as state names)
 	target := p.parseQualifiedNameRelaxed()
 
-	// Optional: when <trigger>
+	// Optional trigger: `when <expr>` or, with the spec's trigger keyword,
+	// `accept <event>` (which is what a call trigger needs: `accept op(x)`).
 	var trigger ast.Node
 	if p.atKeyword("when") {
 		p.advance()                   // consume 'when'
 		trigger = p.ParseExpression() // simplified: parse as expression (could be time/change/accept/call)
+	} else if p.atKeyword("accept") {
+		p.advance() // consume 'accept'
+		trigger = p.parseTriggerEvent()
 	}
 
 	// Optional: if <guard>

@@ -29,7 +29,7 @@ This directory contains behavioral execution conformance tests. Each test consis
 ```json
 {
   "type": "state",
-  "events": ["sigB"],
+  "events": [{"signal": "sigB"}],
   "finalState": "Active.Cruising",
   "stateVisits": ["Off", "Idle", "Active", "Active.Accelerating", "Active.Cruising"],
   "outputs": {
@@ -38,10 +38,13 @@ This directory contains behavioral execution conformance tests. Each test consis
 }
 ```
 
-- `events`: ordered list of signal names to inject into the machine (drives
-  `AcceptEvent`-triggered transitions). Each name is delivered in order after the
-  machine reaches a stable configuration. Optional; omit for autonomous
-  (time/completion-driven) machines.
+- `events`: ordered list of events to inject into the machine. Each entry names
+  either a signal (`{"signal": "sigB", "args": {...}}`, driving
+  `AcceptEvent`-triggered transitions) or an operation invocation
+  (`{"call": "setSpeed", "args": {"value": {"type": "Integer", "value": 55}}}`,
+  driving `CallEvent`-triggered transitions), with `args` optional. Events are
+  delivered in order. Optional; omit for autonomous (time/completion-driven)
+  machines.
 - `finalState`: qualified name of final reached state
 - `stateVisits`: ordered list of states visited (optional, for golden trace verification)
 - `outputs`: map of state machine outputs

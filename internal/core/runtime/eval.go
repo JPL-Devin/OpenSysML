@@ -418,7 +418,7 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 
 	// Both must be ValConst
 	if left.Kind != ValConst || right.Kind != ValConst {
-		return Value{}, fmt.Errorf("comparison operands must be constants")
+		return Value{}, fmt.Errorf("comparison operands must be constants, got %s and %s", left.Kind, right.Kind)
 	}
 
 	// Compare integers
