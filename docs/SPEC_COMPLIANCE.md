@@ -286,6 +286,18 @@ known, so unmodelled types never produce a false positive.
 
 ## What We Don't (Yet) Support
 
+### Decisions to Reassess
+
+Deliberate limitations whose *current* handling should be revisited once the
+feature they wait on lands (this repository has issues disabled, so follow-ups
+are tracked here):
+
+| Deferred until | Reassess |
+|---|---|
+| Implicit redefinition of a like-named inherited feature | `semantics/implicit.go` `implicitBase` gives such a usage no implicit base at all, rather than the redefined feature's type. Once redefinition supplies the type it should fall through to it instead of returning nil. Pinned by `model/implicit_typing_test.go` `TestImplicitBaseYieldsToImplicitRedefinition` and by `Conditional Succession Example-1` in `docs/TRAINING_EXAMPLES.md`. |
+| Specialization edges in the library index (`libs/loader.go` `recordEntries` drops `Supers`) | `implicitUsageBases` maps each usage kind to its stdlib base *definition* because the base *feature* the spec has usages subset would be a dead end for member lookup. With the edges recorded, the map should name the base feature the spec names. |
+| Features contributed by `perform` statements and `references` edges | Neither is a generalization, so the referenced action's members are unreachable (`Action Performance Example`, `Allocation Usage Example`). |
+
 ### Major UML/SysML Features Not Implemented
 
 **Activity Diagrams (Advanced):**

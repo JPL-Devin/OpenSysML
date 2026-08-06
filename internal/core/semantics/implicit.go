@@ -67,6 +67,8 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 	}
 	// A usage whose name matches a feature its owner inherits implicitly
 	// redefines that feature, which supplies the type instead of the base.
+	// Redefinition does not supply it yet: see "Decisions to Reassess" in
+	// docs/SPEC_COMPLIANCE.md.
 	if sym.Name != "" && m.inheritedFeatureNamed(sym, sym.Name) != nil {
 		return nil
 	}
