@@ -34,6 +34,8 @@ func TestNegative(t *testing.T) {
 		{"state_join_no_semicolon", "state s { join sync state t; }"},
 		{"call_trigger_unclosed_params", "state s { accept op(a then t; }"},
 		{"call_trigger_missing_param_name", "state s { accept op(,) then t; }"},
+		{"message_payload_declaration_no_type", "message m of pay : from a to b;"},
+		{"message_payload_declaration_no_target", "message m of pay : T from a;"},
 		{"defer_no_event", "state s { defer ; }"},
 		{"defer_no_semicolon", "state s { defer Ping state t; }"},
 		{"defer_trailing_comma", "state s { defer Ping, ; }"},

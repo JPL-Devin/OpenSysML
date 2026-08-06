@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 81/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 19/100 files have semantic errors (37 total errors)  
+**Status:** 82/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 18/100 files have semantic errors (35 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -57,7 +57,7 @@ diagnostic on a well-formed model, so the count is pinned and the gap named:
 | File | Diagnostic | Gap |
 |---|---|---|
 | `Time Constraints` | `unresolved member: done` | Inherited occurrence features are not members of a state usage: an untyped `state normal;` has no implicit typing to `States::StateAction`. |
-| `Message Payload Example` | `unresolved reference: fuelCommand` (2×) | The payload feature a message declares in its `of` clause is not registered. |
+| `Message Payload Example` | `unresolved reference: fuelCommand` (2×) | The payload feature a message declares in its `of` clause is not registered. (Fixed — see the message-payload re-pin below.) |
 | `Action Performance Example`, `Allocation Usage Example`, `Conditional Succession Example-1` | `unresolved member: focus`/`generateTorque`/`isWellFocused` | Same missing implicit typing: features of the stdlib base type of an untyped usage are not members of it. |
 
 ### Verdicts for the inherited- and body-local-feature re-pin (80/100)
@@ -97,6 +97,20 @@ One entry drifted; every other file kept its exact count.
 | `Conditional Succession Example-1` | `unresolved member: isWellFocused` | Implicit *redefinition*: `out item image;` inside `action focus : Focus` refines `Focus::image` (typed `Image`) by name. Untyped usages that shadow an inherited feature deliberately get no implicit base, so the type still comes from nowhere. |
 | `Action Performance Example`, `Allocation Usage Example` | `unresolved member: focus`/`shoot`/`generateTorque` | The members come from `perform action takePhoto references takePicture;` and `perform providePower.generateTorque;`: a `references` edge and the feature a `perform` statement contributes, neither of which is a generalization. |
 | `Time Slice and Snapshot Example`, `Individuals and Time Slices` | `unresolved reference: start`/`done` | Bugs in the OMG files (`startShot`/`endShot`), unchanged. |
+
+### Verdicts for the message-payload re-pin (82/100)
+
+One entry drifted; every other file kept its exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `27. Occurrences/Message Payload Example` | 2 × `unresolved reference: fuelCommand` | Real fix: `message m of fuelCommand : FuelCommand` *declares* the payload feature. The parser built that declaration but then overwrote `Usage.Members` with the body members, so it was never registered, and the `of` name was resolved as a reference in the enclosing scope. The declaration is now a member of the message (`FlowEnds.PayloadDecl`) and the `of` name resolves to it, which also makes `fuelCommandMessage.fuelCommand` reach the payload. |
+
+The payload *reference* form (`flow f of Fuel from a to b`) is unchanged and
+still resolves outward, with the negative case (`of` naming nothing) still
+reporting — see `internal/core/model/flow_payload_resolve_test.go`.
 
 ---
 
@@ -217,11 +231,11 @@ This generates error frequency analysis and per-file diagnostics.
 
 ## Conclusion
 
-**Implementation Status**: Core behavioral semantics complete (20/20 conformance tests passing).
+**Implementation Status**: Core behavioral semantics complete (43/43 execution conformance cases passing).
 
-**Training Example Status**: 80% clean. Remaining errors are primarily:
-1. Missing local declarations in pedagogical examples
-2. Features of the stdlib base type of an untyped usage, which no implicit typing supplies (see the verdict tables above)
+**Training Example Status**: 81/100 clean (19 files, 37 errors). Remaining errors are primarily:
+1. Missing local declarations in pedagogical examples, and bugs in the OMG files themselves
+2. Implicit *redefinition* of a like-named inherited feature, and members contributed by `perform`/`references` edges — neither of which implicit stdlib typing supplies (see the verdict tables above)
 3. Type system edge cases (feature work needed)
 
 The runtime implementation is **production-ready for complete SysML v2 models**. Training example "failures" reflect incomplete example files, not missing runtime features.

@@ -101,12 +101,19 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			c.target(scope, end.Target)
 			c.target(scope, end.Reference)
 		}
+		child := c.childScope(scope, d)
 		if d.FlowEnds != nil {
 			c.expr(scope, d.FlowEnds.From)
 			c.expr(scope, d.FlowEnds.To)
-			c.expr(scope, d.FlowEnds.Payload)
+			// A declared payload (`of name : Type`) names a member of the flow
+			// itself, not an element of the enclosing scope.
+			payloadScope := scope
+			if d.FlowEnds.PayloadDecl != nil && child != nil {
+				payloadScope = child
+			}
+			c.expr(payloadScope, d.FlowEnds.Payload)
 		}
-		if child := c.childScope(scope, d); child != nil {
+		if child != nil {
 			c.walkMembers(child, d.Members)
 		}
 	case *ast.SubjectMember:
@@ -189,8 +196,16 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
 		c.expr(scope, d.Condition)
-		c.walkMembers(scope, d.ThenBody)
-		c.walkMembers(scope, d.ElseBody)
+		for _, branch := range d.Branches() {
+			c.resolveDecl(scope, branch)
+		}
+	case *ast.IfBranchNode:
+		// A branch owns the scope its body declares into (see symbols.buildDecl).
+		body := scope
+		if child := c.childScope(scope, d); child != nil {
+			body = child
+		}
+		c.walkMembers(body, d.Body)
 	}
 }
 
