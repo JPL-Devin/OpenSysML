@@ -34,6 +34,11 @@ type StateGraph struct {
 
 	// InitialState (required for simple machines, nil for multi-region)
 	Initial *ast.StateNode
+
+	// Connections are the connectors declared in the state machine body, which
+	// is how a `send ... via <port>` in an entry/do/exit/effect action finds the
+	// ports it reaches.
+	Connections []Connection
 }
 
 // Transition represents a state transition (lowered from TransitionEdge or TransitionMember).
@@ -68,6 +73,8 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 	default:
 		return nil, fmt.Errorf("state machine must be Usage or Definition, got %T", stateMachineDecl)
 	}
+
+	graph.Connections = lowerConnections(members)
 
 	// First pass: collect states and pseudostates
 	for _, member := range members {

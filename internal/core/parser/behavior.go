@@ -2660,8 +2660,12 @@ func (p *Parser) parseSendStatement(tok lexer.Token) ast.Node {
 	// Parse message expression
 	message := p.ParseExpression()
 
-	// Expect 'to' or 'via' keyword
-	if !p.acceptKeyword("to") && !p.acceptKeyword("via") {
+	// Expect 'to' or 'via' keyword. Which one was written decides how the
+	// target is interpreted: a receiver, or a port to route through.
+	isVia := false
+	if p.acceptKeyword("via") {
+		isVia = true
+	} else if !p.acceptKeyword("to") {
 		p.error(p.peek().Span, "expected 'to' or 'via' after send message")
 	}
 
@@ -2676,6 +2680,7 @@ func (p *Parser) parseSendStatement(tok lexer.Token) ast.Node {
 	node := &ast.SendStatement{
 		Message: message,
 		Target:  target,
+		IsVia:   isVia,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node

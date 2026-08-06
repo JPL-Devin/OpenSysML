@@ -307,11 +307,17 @@ type TransitionMember struct {
 }
 
 // SendStatement sends a message to a target.
-// Syntax: send <message> to <target>;
+// Syntax: send <message> to <target>; | send <message> via <port>;
+//
+// The two forms address different things and are not interchangeable: `to`
+// names the receiver directly, while `via` names a port of the sender, and the
+// message reaches whatever that port is connected to. IsVia records which form
+// was written so routing can tell them apart.
 type SendStatement struct {
 	NodeBase
 	Message Node // message expression (often NewExpression)
-	Target  Node // target expression (action/part reference)
+	Target  Node // target expression: the receiver (`to`) or the sending port (`via`)
+	IsVia   bool // the target is a port to route through, not a receiver
 }
 
 // TerminateStatement terminates an action or lifecycle.

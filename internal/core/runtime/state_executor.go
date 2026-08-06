@@ -958,7 +958,9 @@ func (e *StateExecutor) enqueueSignal(msg Message) {
 // this machine must not swallow a message addressed to a different behavior.
 func (e *StateExecutor) deliverPendingSignal() bool {
 	msg, ok := e.ctx.TakeMessage(func(m Message) bool {
-		return m.addressedTo(e.stateMachine.Name) && e.acceptsSignal(m)
+		// A transition trigger names a signal, never a port (`accept <type>` has
+		// no `via` form), so a message routed to a port is not for this machine.
+		return m.arrivedAt("") && m.addressedTo(e.stateMachine.Name) && e.acceptsSignal(m)
 	})
 	if !ok {
 		return false
@@ -1210,7 +1212,9 @@ func (e *StateExecutor) executeAction(action ast.Node) error {
 	case *ast.Usage:
 		// An entry/exit/effect action that performs another action:
 		// perform X; / action a : X; / action a = X(...);
-		inv, ok := nestedInvocation(node)
+		// A state action never accepts on a port, so every reference it carries
+		// names the action it performs.
+		inv, ok := nestedInvocation(node, "")
 		if !ok {
 			return fmt.Errorf("state action %s performs no action", node.Ident.Name)
 		}
@@ -1254,14 +1258,16 @@ func (e *StateExecutor) executeAction(action ast.Node) error {
 		// where this machine's own transitions and other behaviors can accept it.
 		ec := NewEvalContext(e.ctx, nil)
 		ec.Push(e.stateData)
-		msg, err := ec.buildMessage(e.stateMachine.Scope, lower.Send{
+		send := lower.Send{
 			Message: node.Message,
 			Target:  ast.SimpleName(node.Target),
-		})
+			IsVia:   node.IsVia,
+		}
+		msg, err := ec.buildMessage(e.stateMachine.Scope, send)
 		if err != nil {
 			return err
 		}
-		e.ctx.PostMessage(msg)
+		e.ctx.post(e.graph.Connections, msg, send)
 		return nil
 
 	default:

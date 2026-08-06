@@ -11,14 +11,14 @@ package test {
 		action sender {
 			send 100 via outPort;
 		}
-		action receiver accept msg : Integer via inPort;
-		action processor {
-			assign result := msg;
+		action notifier {
+			send 100 to reader;
 		}
+		action reader accept msg : Integer via inPort;
 		done end;
 		then start sender;
-		then sender receiver;
-		then receiver processor;
-		then processor end;
+		then sender notifier;
+		then notifier reader;
+		then reader end;
 	}
 }

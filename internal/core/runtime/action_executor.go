@@ -580,20 +580,27 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	}
 
 	// An accept node waits for a message of its parameter's type.
-	if accept, ok := e.graph.Accepts[usage]; ok {
+	accept, isAccept := e.graph.Accepts[usage]
+	if isAccept {
 		msg, taken := e.ctx.TakeMessage(func(m Message) bool {
-			return m.addressedTo(usage.Ident.Name) && m.carriesSignal(accept.SignalType)
+			if !m.arrivedAt(accept.ViaPort) || !m.carriesSignal(accept.SignalType) {
+				return false
+			}
+			// A message routed to this accept's port is already addressed by the
+			// connection it travelled over, so the accept's own name does not
+			// have to appear in it.
+			return accept.ViaPort != "" || m.addressedTo(usage.Ident.Name)
 		})
 		if !taken {
-			return fmt.Errorf("accept action %s: %w of type %s",
-				accept.ParamName, ErrNoMatchingMessage, orAny(accept.SignalType))
+			return fmt.Errorf("accept action %s: %w of type %s%s",
+				accept.ParamName, ErrNoMatchingMessage, orAny(accept.SignalType), viaSuffix(accept.ViaPort))
 		}
 		token.Data[accept.ParamName] = msg.Payload["value"]
 	}
 
 	// A usage that performs another action (perform X / action a : X / a = X(...))
 	// runs that action to completion before its own body.
-	if inv, ok := nestedInvocation(usage); ok {
+	if inv, ok := nestedInvocation(usage, accept.ViaPort); ok {
 		outputs, err := invokeAction(e.ctx, e.action.Scope, inv, token.Data)
 		if err != nil {
 			return err
@@ -614,7 +621,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			if err != nil {
 				return err
 			}
-			e.ctx.PostMessage(msg)
+			e.ctx.post(e.graph.Connections, msg, s)
 		case lower.Assign:
 			if s.Target == "" {
 				return fmt.Errorf("nested action %s: unsupported assignment target", usage.Ident.Name)
