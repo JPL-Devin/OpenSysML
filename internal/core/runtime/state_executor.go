@@ -417,24 +417,26 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 		}
 
 		// Match signal type (last segment of QualifiedName against Message.SignalType)
-		if acceptEvent.SignalType != nil {
-			parts := acceptEvent.SignalType.Parts
-			if len(parts) > 0 {
-				expectedSignal := parts[len(parts)-1].Text
-				return expectedSignal == msg.SignalType
-			}
+		expectedSignal := ast.SimpleName(acceptEvent.SignalType)
+		if expectedSignal == "" {
+			return false
 		}
-		return false
+		return msg.carriesSignal(expectedSignal)
 
 	case EventCall:
 		// Must have CallEvent trigger
-		_, ok := trans.Trigger.(*ast.CallEvent)
+		callEvent, ok := trans.Trigger.(*ast.CallEvent)
 		if !ok {
 			return false
 		}
-		// TODO: match operation name from callEvent.Operation
-		// For now, accept any call event
-		return true
+		call, ok := event.Payload.(Call)
+		if !ok {
+			return false
+		}
+		// A trigger naming an operation fires only for that operation; a trigger
+		// naming none fires for any call.
+		expectedOp := ast.SimpleName(callEvent.Operation)
+		return expectedOp == "" || expectedOp == call.Operation
 
 	case EventChange:
 		// Must have ChangeEvent trigger
@@ -519,10 +521,7 @@ func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *l
 
 	// Record trace
 	if e.trace != nil {
-		eventName := ""
-		if trans.Trigger != nil {
-			eventName = fmt.Sprintf("%v", trans.Trigger)
-		}
+		eventName := triggerName(trans.Trigger)
 		e.trace.RecordStateTransition(sourceState.Name, targetState.Name, eventName)
 	}
 
@@ -652,11 +651,7 @@ func (e *StateExecutor) transitionTo(trans *lower.Transition, targetState *ast.S
 
 	// Record trace
 	if e.trace != nil {
-		eventName := ""
-		if trans.Trigger != nil {
-			// Extract event name from trigger (simplified)
-			eventName = fmt.Sprintf("%v", trans.Trigger)
-		}
+		eventName := triggerName(trans.Trigger)
 		e.trace.RecordStateTransition(fromName, targetState.Name, eventName)
 	}
 
@@ -913,7 +908,7 @@ const maxStateEvents = 10000
 // event left to process, at which point it suspends.
 func (e *StateExecutor) RunToCompletion() error {
 	for events := 0; e.state == StateRunning; events++ {
-		if e.eventQueue.Len() == 0 {
+		if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() {
 			e.state = StateSuspended
 			return nil
 		}
@@ -931,22 +926,79 @@ func (e *StateExecutor) RunToCompletion() error {
 // This is the primary API for driving state machines with external signals.
 // The signal is enqueued and will be processed on the next ProcessNextEvent call.
 func (e *StateExecutor) SendSignal(signalType string, args map[string]Value) {
-	// Create Message struct (same as ActionExecutor uses)
-	msg := Message{
-		SignalType: signalType,
-		Payload:    args,
-	}
+	e.enqueueSignal(Message{SignalType: signalType, Payload: args})
+}
 
-	// Enqueue as EventAccept
-	event := Event{
+// InvokeOperation injects a call event for the named operation. Transitions
+// triggered by that operation fire; transitions triggered by another do not.
+func (e *StateExecutor) InvokeOperation(operation string, args map[string]Value) {
+	e.eventQueue.Push(Event{
+		ID:        e.nextEventID,
+		Type:      EventCall,
+		Timestamp: e.currentTime,
+		Payload:   Call{Operation: operation, Args: args},
+	})
+	e.nextEventID++
+}
+
+// enqueueSignal queues a message as an accept event, to fire immediately.
+func (e *StateExecutor) enqueueSignal(msg Message) {
+	e.eventQueue.Push(Event{
 		ID:        e.nextEventID,
 		Type:      EventAccept,
-		Timestamp: e.currentTime, // Fire immediately
+		Timestamp: e.currentTime,
 		Payload:   msg,
-	}
+	})
 	e.nextEventID++
+}
 
-	e.eventQueue.Push(event)
+// deliverPendingSignal takes a message off the context bus that the active
+// configuration can react to and queues it, reporting whether it found one.
+// A message no active transition accepts stays on the bus for another consumer:
+// this machine must not swallow a message addressed to a different behavior.
+func (e *StateExecutor) deliverPendingSignal() bool {
+	msg, ok := e.ctx.TakeMessage(func(m Message) bool {
+		return m.addressedTo(e.stateMachine.Name) && e.acceptsSignal(m)
+	})
+	if !ok {
+		return false
+	}
+	e.enqueueSignal(msg)
+	return true
+}
+
+// acceptsSignal reports whether any transition out of the active configuration
+// is triggered by this message's signal.
+func (e *StateExecutor) acceptsSignal(msg Message) bool {
+	for _, state := range e.activeStates() {
+		for _, trans := range e.graph.Transitions[state] {
+			accept, ok := trans.Trigger.(*ast.AcceptEvent)
+			if !ok {
+				continue
+			}
+			signal := ast.SimpleName(accept.SignalType)
+			if signal != "" && msg.carriesSignal(signal) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// activeStates returns the states currently active: one per region for a
+// composite configuration, otherwise the single active state.
+func (e *StateExecutor) activeStates() []*ast.StateNode {
+	if len(e.activeConfig.regionStates) > 0 {
+		states := make([]*ast.StateNode, 0, len(e.activeConfig.regionStates))
+		for _, state := range e.activeConfig.regionStates {
+			states = append(states, state)
+		}
+		return states
+	}
+	if current := e.getCurrentState(); current != nil {
+		return []*ast.StateNode{current}
+	}
+	return nil
 }
 
 // initialize sets current state to initial state and enters it.
@@ -1195,6 +1247,21 @@ func (e *StateExecutor) executeAction(action ast.Node) error {
 
 		// Store in state data
 		e.stateData[targetName] = rhsVal
+		return nil
+
+	case *ast.SendStatement:
+		// A send in an entry/do/exit/effect action posts to the context bus,
+		// where this machine's own transitions and other behaviors can accept it.
+		ec := NewEvalContext(e.ctx, nil)
+		ec.Push(e.stateData)
+		msg, err := ec.buildMessage(e.stateMachine.Scope, lower.Send{
+			Message: node.Message,
+			Target:  ast.SimpleName(node.Target),
+		})
+		if err != nil {
+			return err
+		}
+		e.ctx.PostMessage(msg)
 		return nil
 
 	default:

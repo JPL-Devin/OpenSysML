@@ -27,6 +27,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("join_with_one_incoming_branch", testJoinWithOneIncomingBranch)
 	t.Run("region_local_junction_target", testRegionLocalJunctionTarget)
 	t.Run("non_numeric_time_trigger", testNonNumericTimeTrigger)
+	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
+	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 }
 
 // testNonNumericTimeTrigger: a timed trigger whose duration is not a number

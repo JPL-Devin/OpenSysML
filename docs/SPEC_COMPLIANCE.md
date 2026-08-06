@@ -42,8 +42,8 @@
 - Decision node (guarded branching)
 - Action execution nodes
 - Nested action invocation
-- Send statement (message passing)
-- Accept action (message consumption)
+- Send statement (⚠️ typed messages addressed by name; no port-connection routing)
+- Accept action (⚠️ takes the oldest message of its type; no suspension)
 - Object flow (pin-to-pin data)
 - Succession edges
 - Deadlock detection
@@ -63,6 +63,8 @@
 - TimeEvent triggers (`after` duration, `at` instant)
 - Signal discrimination (name matching)
 - Unmatched signal dropped
+- Signals sent from entry/do/exit/effect actions reaching the machine
+- CallEvent operation matching (⚠️ no notation parsed; programmatic only)
 - Completion transitions (nil trigger with guard evaluation)
 - Hierarchical substates
 - Orthogonal regions (concurrent states)
@@ -77,7 +79,7 @@
 - Dangling transition detection (⚠️ lenient)
 - State visits tracking
 - Multi-region event broadcasting
-- ❌ Not implemented: History pseudostates (no AST kind or notation), deferred events, concurrent `do`, CallEvent operation-name matching
+- ❌ Not implemented: History pseudostates (no AST kind or notation), deferred events, concurrent `do`, call-trigger notation
 
 **Expression Evaluation (7/7 features):**
 - Binary operators (+, -, *, /, <, >, ==, and, or)
@@ -96,7 +98,7 @@
 
 **Test Coverage:**
 - 28 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×11)
-- 11 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join and region-local pseudostate misuse, non-numeric time trigger)
+- 13 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join and region-local pseudostate misuse, non-numeric time trigger, misaddressed send, accept of an unsent type)
 - 41 unit tests
 - 18 golden AST fixtures (including pseudostate and timed-trigger parsing tests)
 - 1 golden execution trace (fork/join branch ordering)
@@ -167,8 +169,9 @@ Each row documents one behavioral semantic feature:
 | Decision node (guarded branching) | `action_executor.go:452` stepDecisionNode | `action_control_flow.sysml` | ✅ Faithful |
 | Action execution nodes | `action_executor.go:528` stepActionExecutionNode | `action_control_flow.sysml` | ✅ Faithful |
 | Nested action invocation | `action_executor.go:582` stepNestedAction, `invoke_action.go` invokeAction | `invoke_action_test.go:TestInvokeActionPassesParametersBothWays` | ✅ Faithful |
-| Send statement (message passing) | `action_executor.go:574` stepNestedAction | `action_send_accept.sysml` | ✅ Faithful |
-| Accept action (message consumption) | `action_executor.go:574` stepNestedAction | `action_accept_message.sysml` | ✅ Faithful |
+| Send statement (message passing) | `lower/action_graph.go` lowerBody; `runtime/signal.go` buildMessage, PostMessage | `action_send_accept.sysml`, `lower/action_body_test.go:TestActionBodyLowering`, `signal_test.go:TestActionMessageReachesStateMachine` | ⚠️ Approximate (a message is typed by what was sent and addressed to the named target; ports are addressed as names, so no connection routing) |
+| Accept action (message consumption) | `action_executor.go` stepNestedAction accept case; `runtime/signal.go` TakeMessage | `action_send_accept.sysml`, `action_accept_message.sysml`, `robustness_test.go:send_reaches_only_its_addressee`, `:accept_of_unsent_type` | ⚠️ Approximate (an accept takes the oldest message of its declared type addressed to it, and reports `ErrNoMatchingMessage` otherwise; SysML would suspend and wait) |
+| Send through a port (`send x via p`) | — | `action_port_communication.sysml` (known failure) | ❌ Not implemented (the message is addressed to the port; delivering it to a connected consumer needs connection routing) |
 | Object flow (pin-to-pin data) | `action_executor.go:673` applyDataFlows | `action_output.sysml` | ✅ Faithful |
 | Succession edges | `lower/action_graph.go:ToActionGraph` | `action_control_flow.sysml` | ✅ Faithful |
 | Deadlock detection | `action_executor.go:72` Step | `action_executor_test.go:TestActionExecutor_Deadlock_JoinStarvation` | ✅ Faithful |
@@ -186,12 +189,14 @@ Each row documents one behavioral semantic feature:
 | Transition firing | `state_executor.go:535` fireTransition | `state_transition_effect.sysml` | ✅ Faithful |
 | Transition guard evaluation | `state_executor.go:218` scheduleTransitionsForState | `state_choice_pseudostate.sysml` | ✅ Faithful |
 | Transition effect actions | `state_executor.go:535` fireTransition | `state_transition_effect.sysml` | ✅ Faithful |
-| AcceptEvent triggers (when signal) | `state_executor.go:401` matchesEvent | `state_signal_discriminate.sysml` | ✅ Faithful |
+| AcceptEvent triggers (when signal) | `state_executor.go` matchesEvent | `state_signal_discriminate.sysml` | ✅ Faithful |
+| Signals sent from state behaviors reaching the machine | `state_executor.go` executeAction send case, deliverPendingSignal | `state_send_self_signal.sysml` + trace golden, `signal_test.go:TestSendOfNamedTypeReachesStateMachine` | ✅ Faithful |
+| CallEvent triggers (operation name matching) | `state_executor.go` matchesEvent EventCall case, InvokeOperation | `signal_test.go:TestCallEventMatchesOperationName` | ⚠️ Approximate (matching and injection work, but no notation is parsed for a call trigger, so call events are reachable only programmatically) |
 | Sourceless transitions (`accept...then`) | `lower/state_graph.go:487` collectTransitions Usage case, `:302` resolve container | `accept_then_transition.sysml` | ✅ Faithful (nested form only; flat form errors intentionally) |
 | ChangeEvent triggers (when expr) | `state_executor.go:401` matchesEvent; `:906` pollChangeEvents | `state_executor_test.go:TestStateChangeEvent` | ✅ Faithful |
 | TimeEvent triggers (`accept after <duration>` relative, `accept at <time>` absolute) | `parser/behavior.go` parseAcceptTransition; `state_executor.go` scheduleTransitionsForState, `:401` matchesEvent | `state_timed_triggers.sysml` golden, `state_timed_transitions.sysml` conformance, `state_executor_test.go:TestStateExecutor_AbsoluteTimeEvent`, `robustness_test.go:non_numeric_time_trigger` | ✅ Faithful |
 | Signal discrimination | `state_executor.go:401` matchesEvent signal name | `state_signal_discriminate.sysml` | ✅ Faithful |
-| Unmatched signal dropped | `state_executor.go:401` matchesEvent | `state_signal_unmatched.sysml` | ✅ Faithful |
+| Unmatched signal dropped | `state_executor.go` matchesEvent | `state_signal_unmatched.sysml` | ✅ Faithful (an injected event no transition matches is dropped; a message on the bus no active transition accepts is left in flight for another consumer, `signal_test.go:TestStateMachineLeavesForeignSignalPending`) |
 | Hierarchical substates | `state_executor.go:131` getParentChain, `:147` getLCA | `state_orthogonal_regions.sysml` | ✅ Faithful |
 | Orthogonal regions | `state_executor.go:364` broadcastEvent, `:466` fireTransitionInRegion | `state_orthogonal_regions.sysml` | ✅ Faithful |
 | Choice pseudostates | `state_executor.go:971` evaluateChoicePseudostate | `state_choice_pseudostate.sysml` | ✅ Faithful |
@@ -201,7 +206,6 @@ Each row documents one behavioral semantic feature:
 | Entry/exit point pseudostates | `state_executor.go:538` fireTransition (routed like a junction) | `pseudostate_test.go:TestEntryAndExitPointPseudostates` | ⚠️ Approximate (AST kinds only; no textual notation) |
 | History pseudostates | — | — | ❌ Not Yet Implemented (no `ast.PseudostateKind` for history) |
 | Choice/junction/entry/exit reached from inside an orthogonal region | `state_executor.go:316` processNextEvent, `:471` fireTransitionInRegion | `robustness_test.go:region_local_junction_target`, `fork_join_test.go:TestRegionLocalChoiceTargetIsRejected` | ❌ Not Yet Implemented (typed error; sibling regions would be dropped) |
-| CallEvent operation-name matching | `state_executor.go:437` matchesEvent (matches any call, TODO) | — | ⚠️ Approximate |
 | Nested action invocation in entry/do/exit/effect | `state_executor.go:1075` executeAction, `invoke_action.go` invokeAction | `state_behavior_test.go:TestStateDoExitAndTransitionEffectPerformAction` | ✅ Faithful |
 | Run-to-completion semantics | `state_executor.go:288` processNextEvent | `state_executor_test.go:TestStateRunToCompletion` | ✅ Faithful |
 | Event queue management | `state_executor.go:1127` EventQueue | `state_executor_test.go` | ✅ Faithful |
