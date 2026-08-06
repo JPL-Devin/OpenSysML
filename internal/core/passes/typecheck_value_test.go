@@ -135,3 +135,16 @@ func TestValueExpressionNotReported(t *testing.T) {
 		part w : Wheel = Wheel();
 	}`)
 }
+
+// A referenced value's type name must resolve where the value was declared: the
+// scope the declaration owns also exposes its own members, which would shadow
+// the type it names and make a well-formed model report a mismatch.
+func TestValueTypeNameNotShadowedByOwnMembers(t *testing.T) {
+	wantNoValueDiags(t, `package P {
+		private import M::*;
+		part t : Truck {
+			attribute Truck : ScalarValues::Integer = 1;
+		}
+		part v : Vehicle = t;
+	}`)
+}
