@@ -169,6 +169,15 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		}
 		scope.AddChild(regionScope)
 		buildMembers(regionScope, d.States)
+	case *ast.EntryMember:
+		// An entry/do/exit action is a feature of the state declaring it, so a
+		// named one (`entry action entryAction :>> 'entry';`) is a member of the
+		// state's scope rather than of the wrapper the parser puts it in.
+		buildMembers(scope, d.Actions)
+	case *ast.DoMember:
+		buildMembers(scope, d.Actions)
+	case *ast.ExitMember:
+		buildMembers(scope, d.Actions)
 	case *ast.PseudostateNode:
 		// fork/join/choice/junction/entry/exit named in a state body are
 		// transition endpoints, so they must be referenceable.
