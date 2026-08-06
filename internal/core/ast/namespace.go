@@ -28,6 +28,29 @@ type QualifiedName struct {
 	Parts  []NameSegment
 }
 
+// AsQualifiedName unwraps the two forms a name reference parses to: a bare
+// QualifiedName, or one wrapped in a FeatureReference. It returns nil for
+// anything else.
+func AsQualifiedName(node Node) *QualifiedName {
+	switch n := node.(type) {
+	case *QualifiedName:
+		return n
+	case *FeatureReference:
+		return n.Name
+	}
+	return nil
+}
+
+// SimpleName returns a reference's last segment — the name the resolver and the
+// runtime match on — or "" when node names nothing.
+func SimpleName(node Node) string {
+	qname := AsQualifiedName(node)
+	if qname == nil || len(qname.Parts) == 0 {
+		return ""
+	}
+	return qname.Parts[len(qname.Parts)-1].Text
+}
+
 // Identification captures `<shortName> name` or `name` on a declaration.
 type Identification struct {
 	ShortName     string

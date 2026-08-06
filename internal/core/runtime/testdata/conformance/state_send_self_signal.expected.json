@@ -1,0 +1,6 @@
+{
+  "type": "state",
+  "finalState": "done",
+  "stateVisits": ["start", "waiting", "done"],
+  "outputs": {}
+}

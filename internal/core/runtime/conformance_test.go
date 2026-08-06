@@ -224,25 +224,10 @@ func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path st
 		exec.SendSignal(event.Signal, args)
 	}
 
-	// Process events until completion or suspension
-	const maxEvents = 10000
-	eventCount := 0
-
-	for exec.state == StateRunning {
-		if exec.eventQueue.Len() == 0 {
-			exec.state = StateSuspended
-			break
-		}
-
-		if eventCount >= maxEvents {
-			t.Fatalf("state machine exceeded max events (%d), possible infinite loop", maxEvents)
-		}
-
-		if err := exec.processNextEvent(); err != nil {
-			t.Fatalf("process event: %v", err)
-		}
-
-		eventCount++
+	// Process events until completion or suspension, through the executor's own
+	// loop: a harness-local copy drifts from the semantics under test.
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run state machine: %v", err)
 	}
 
 	// Validate final state

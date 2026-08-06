@@ -22,6 +22,10 @@ type Context struct {
 	// actionDepth is the number of action invocations currently on the stack,
 	// bounding recursion across nested action executors.
 	actionDepth int
+
+	// messages are the signals in flight, oldest first. The bus is context-wide,
+	// so a message one behavior sends can be accepted in another.
+	messages []Message
 }
 
 // NewContext creates a runtime context backed by the given semantic model.
