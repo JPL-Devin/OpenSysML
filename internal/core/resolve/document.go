@@ -255,19 +255,6 @@ func (r *Resolver) childScope(scope *symbols.Scope, decl ast.Node) *symbols.Scop
 	return nil
 }
 
-// bodyExprScope returns the memoized scope holding body's parameters.
-func (r *Resolver) bodyExprScope(scope *symbols.Scope, body *ast.BodyExpr) *symbols.Scope {
-	if len(body.Params) == 0 {
-		return scope
-	}
-	if s, ok := r.bodyScopes[body]; ok {
-		return s
-	}
-	s := symbols.NewBodyExprScope(scope, body)
-	r.bodyScopes[body] = s
-	return s
-}
-
 func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {
 	for _, p := range prefixes {
 		if p != nil {
@@ -588,7 +575,9 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			}
 			r.resolveExpr(scope, p.Value)
 		}
-		r.resolveExpr(r.bodyExprScope(scope, v), v.Result)
+		// A body expression's parameters live in a scope of their own, built
+		// into the document scope tree alongside the declarations.
+		r.resolveExpr(symbols.BodyExprScope(scope, v), v.Result)
 	case *ast.SequenceExpr:
 		for _, el := range v.Elements {
 			r.resolveExpr(scope, el)

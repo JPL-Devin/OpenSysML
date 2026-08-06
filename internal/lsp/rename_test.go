@@ -266,6 +266,81 @@ func TestRenameShorthandRedefinitionEditsOnce(t *testing.T) {
 	}
 }
 
+// bodyParamSrc declares a body-expression parameter that shadows a same-named
+// outer feature, so an edit that confuses the two is visible.
+const bodyParamSrc = `package P {
+	import ScalarValues::*;
+	import ControlFunctions::*;
+	attribute s : Integer = 1;
+	action def Sample {
+		in attribute samples : Real[*];
+		assert constraint { samples->forAll { in s : Real; s > 0 } }
+	}
+}
+`
+
+// A body expression's parameters are declarations like any other, so renaming
+// with the cursor on the parameter itself must rewrite it and its uses.
+func TestRenameBodyExpressionParameterFromDeclaration(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/rename_bodyparam_decl.sysml", bodyParamSrc)
+
+	edits := renameEdits(t, ws, name, "s : Real; s > 0", "sample")
+	assertNoOverlap(t, edits)
+
+	got, err := applyRename(t, ws, name, "s : Real; s > 0", "sample")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "in sample : Real; sample > 0") {
+		t.Errorf("parameter declaration and use not both renamed:\n%s", got[name])
+	}
+	if !strings.Contains(got[name], "attribute s : Integer = 1;") {
+		t.Errorf("outer feature was rewritten:\n%s", got[name])
+	}
+}
+
+// Renaming from a use of the parameter must produce the same edits as renaming
+// from its declaration.
+func TestRenameBodyExpressionParameterFromUseMatchesDeclaration(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/rename_bodyparam_use.sysml", bodyParamSrc)
+
+	fromDecl, err := applyRename(t, ws, name, "s : Real; s > 0", "sample")
+	if err != nil {
+		t.Fatalf("Rename from declaration err = %v", err)
+	}
+	fromUse, err := applyRename(t, ws, name, "s > 0", "sample")
+	if err != nil {
+		t.Fatalf("Rename from use err = %v", err)
+	}
+	if fromDecl[name] != fromUse[name] {
+		t.Errorf("rename from declaration and from use differ:\n%s\n---\n%s", fromDecl[name], fromUse[name])
+	}
+}
+
+// PrepareRename must accept the parameter's own identifier, so the client
+// offers the parameter name for editing rather than refusing the position.
+func TestPrepareRenameAcceptsBodyExpressionParameter(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := openRenameDoc(t, ws, "/tmp/prepare_bodyparam.sysml", bodyParamSrc)
+
+	want := strings.Index(bodyParamSrc, "s : Real; s > 0")
+	rng, err := s.PrepareRename(context.Background(), &protocol.PrepareRenameParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition([]byte(bodyParamSrc), want),
+		},
+	})
+	if err != nil {
+		t.Fatalf("PrepareRename err = %v", err)
+	}
+	if got := positionToOffset([]byte(bodyParamSrc), rng.Start); got != want {
+		t.Errorf("range start offset = %d, want %d", got, want)
+	}
+}
+
 // assertNoOverlap fails when two edits cover the same characters: clients reject
 // a workspace edit with overlapping ranges outright.
 func assertNoOverlap(t *testing.T, edits []protocol.TextEdit) {

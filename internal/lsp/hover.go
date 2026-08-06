@@ -43,15 +43,26 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 }
 
 // symbolAtOffset finds the innermost symbol whose DeclSpan contains offset.
+// Nested scopes are searched first, including those an anonymous declaration
+// owns and those no symbol owns at all — a loop body or the parameters of a
+// body expression.
 func symbolAtOffset(scope *symbols.Scope, offset int) *symbols.Symbol {
+	for _, child := range scope.Children() {
+		node := child.Node()
+		if node == nil {
+			continue
+		}
+		sp := node.Span()
+		if offset < sp.Offset || offset >= sp.End() {
+			continue
+		}
+		if inner := symbolAtOffset(child, offset); inner != nil {
+			return inner
+		}
+	}
 	for _, sym := range scope.Members() {
 		sp := sym.DeclSpan
 		if offset >= sp.Offset && offset < sp.End() {
-			if sym.Scope != nil {
-				if inner := symbolAtOffset(sym.Scope, offset); inner != nil {
-					return inner
-				}
-			}
 			return sym
 		}
 	}
