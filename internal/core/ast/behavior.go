@@ -70,12 +70,53 @@ type WhileLoopActionNode struct {
 	Body      []Node // statements in loop body
 }
 
+// IfBranchKind discriminates the two branches of an if action.
+type IfBranchKind int
+
+const (
+	// IfBranchThen is the branch taken when the condition holds.
+	IfBranchThen IfBranchKind = iota
+	// IfBranchElse is the branch taken when it does not.
+	IfBranchElse
+)
+
+// String renders the branch's introducing keyword.
+func (k IfBranchKind) String() string {
+	if k == IfBranchElse {
+		return "else"
+	}
+	return "then"
+}
+
+// IfBranchNode is the body of one branch of an if action. It exists so that a
+// branch is an element in its own right: the declarations a branch body makes
+// are members of the branch, not of the enclosing behavior, and only a node can
+// own a scope.
+type IfBranchNode struct {
+	NodeBase
+	Kind IfBranchKind
+	Body []Node // statements in the branch body
+}
+
 // IfActionNode represents conditional: if condition { thenBody } else { elseBody }
 type IfActionNode struct {
 	NodeBase
-	Condition Node   // boolean expression
-	ThenBody  []Node // statements in then branch
-	ElseBody  []Node // statements in else branch (optional)
+	Condition Node          // boolean expression
+	Then      *IfBranchNode // branch taken when the condition holds
+	Else      *IfBranchNode // branch taken otherwise (nil when there is no else)
+}
+
+// Branches returns the branches the conditional declares, in source order,
+// skipping an absent else.
+func (n *IfActionNode) Branches() []*IfBranchNode {
+	var branches []*IfBranchNode
+	if n.Then != nil {
+		branches = append(branches, n.Then)
+	}
+	if n.Else != nil {
+		branches = append(branches, n.Else)
+	}
+	return branches
 }
 
 // StateNode represents a state in a state machine (simple, composite, or orthogonal).

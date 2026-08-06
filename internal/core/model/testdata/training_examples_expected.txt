@@ -8,7 +8,6 @@
 2	13. Flows/Flow Interface Example.sysml
 2	18. Action Performance/Action Performance Example.sysml
 3	27. Occurrences/Interaction Example-2.sysml
-2	27. Occurrences/Message Payload Example.sysml
 2	27. Occurrences/Time Slice and Snapshot Example.sysml
 2	28. Individuals/Individuals and Time Slices.sysml
 2	32. Requirements/Requirement Satisfaction.sysml
