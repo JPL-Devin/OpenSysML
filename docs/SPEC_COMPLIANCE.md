@@ -60,7 +60,7 @@
 - AcceptEvent triggers (when signal)
 - Sourceless transitions (`accept...then`, nested form)
 - ChangeEvent triggers (when expression)
-- TimeEvent triggers (after duration)
+- TimeEvent triggers (`after` duration, `at` instant)
 - Signal discrimination (name matching)
 - Unmatched signal dropped
 - Completion transitions (nil trigger with guard evaluation)
@@ -95,10 +95,10 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 27 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×10)
-- 10 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join and region-local pseudostate misuse)
+- 28 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×11)
+- 11 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join and region-local pseudostate misuse, non-numeric time trigger)
 - 41 unit tests
-- 17 golden AST fixtures (including pseudostate parsing tests)
+- 18 golden AST fixtures (including pseudostate and timed-trigger parsing tests)
 - 1 golden execution trace (fork/join branch ordering)
 - 17 negative parser tests
 - 900+ total tests passing
@@ -189,7 +189,7 @@ Each row documents one behavioral semantic feature:
 | AcceptEvent triggers (when signal) | `state_executor.go:401` matchesEvent | `state_signal_discriminate.sysml` | ✅ Faithful |
 | Sourceless transitions (`accept...then`) | `lower/state_graph.go:487` collectTransitions Usage case, `:302` resolve container | `accept_then_transition.sysml` | ✅ Faithful (nested form only; flat form errors intentionally) |
 | ChangeEvent triggers (when expr) | `state_executor.go:401` matchesEvent; `:906` pollChangeEvents | `state_executor_test.go:TestStateChangeEvent` | ✅ Faithful |
-| TimeEvent triggers (after/at) | `state_executor.go:401` matchesEvent | `state_executor_test.go:TestStateTimeEvent` | ✅ Faithful |
+| TimeEvent triggers (`accept after <duration>` relative, `accept at <time>` absolute) | `parser/behavior.go` parseAcceptTransition; `state_executor.go` scheduleTransitionsForState, `:401` matchesEvent | `state_timed_triggers.sysml` golden, `state_timed_transitions.sysml` conformance, `state_executor_test.go:TestStateExecutor_AbsoluteTimeEvent`, `robustness_test.go:non_numeric_time_trigger` | ✅ Faithful |
 | Signal discrimination | `state_executor.go:401` matchesEvent signal name | `state_signal_discriminate.sysml` | ✅ Faithful |
 | Unmatched signal dropped | `state_executor.go:401` matchesEvent | `state_signal_unmatched.sysml` | ✅ Faithful |
 | Hierarchical substates | `state_executor.go:131` getParentChain, `:147` getLCA | `state_orthogonal_regions.sysml` | ✅ Faithful |
@@ -235,7 +235,9 @@ known, so unmodelled types never produce a false positive.
 | Comparison operand types (`< > <= >=`) | `passes/typecheck_expr.go` `checkComparison` | `TestExprComparisonOfBooleanRejected` | ✅ Faithful |
 | Disjoint `==`/`!=` operands (warning; `'=='` is declared over `Anything`) | `passes/typecheck_expr.go` `checkEquality` | `TestExprEqualityAcrossDisjointTypesWarns` | ✅ Faithful |
 | Boolean-valued contexts (constraint/assume/require, `if`/`while`, guards) | `passes/typecheck.go` `checkBehaviorMember` | `TestExprTransitionGuardMustBeBoolean` | ✅ Faithful |
-| Calc/action invocation arity, incl. inherited and arrow-form receiver | `passes/typecheck_expr.go` `inParameters`/`checkArguments` | `TestExprInvocationTooFewArguments` | ✅ Faithful |
+| Change-event conditions (`accept when <expr>`, `transition ... when <expr>`) | `passes/typecheck.go` `checkTrigger` | `TestExprAcceptWhenConditionMustBeBoolean` | ⚠️ Approximate (`accept when` is always a condition; after `transition ... when` a bare name is a signal, so only expressions are checked there) |
+| Division/exponentiation result types (`Natural/Natural -> Natural`, `Integer/Integer -> Rational`) | `passes/typecheck_expr.go` `divisionResult` | `TestExprWholeNumberDivisionAndPowerOK` | ✅ Faithful |
+| Calc/action invocation arity, incl. inherited, partially redefined (`:>>`), and arrow-form receiver | `passes/typecheck_expr.go` `effectiveInParameters`/`checkArguments` | `TestExprPartiallyRedefinedParametersKeepInheritedSignature` | ✅ Faithful |
 | Invocation argument types and named-argument names | `passes/typecheck_expr.go` `checkArguments` | `TestExprInvocationArgumentTypeMismatch` | ✅ Faithful |
 | No false positives on the shipped library and examples | corpus guard | `model/typecheck_expr_corpus_test.go` | ✅ Faithful |
 | Non-scalar conformance (parts, items, collections, enumerations) | — | — | ❌ Not Yet Implemented |
@@ -341,10 +343,10 @@ known, so unmodelled types never produce a false positive.
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts:**
-- Conformance cases: 27 (all passing)
-- Robustness tests: 10 (all passing)
+- Conformance cases: 28 (all passing)
+- Robustness tests: 11 (all passing)
 - Unit tests: 41 (action/state executors)
-- Golden AST fixtures: 17
+- Golden AST fixtures: 18
 - Golden execution traces: 1
 - Negative parser tests: 17
 - Total tests: 900+
@@ -354,13 +356,13 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 - Constraint: 3 conformance + 1 robustness
 - Requirement: 5 conformance + 4 unit (named args, inheritance)
 - Action: 5 conformance + 19 unit + 1 robustness
-- State: 10 conformance + 14 unit + 5 robustness
+- State: 11 conformance + 14 unit + 6 robustness
 - Evaluation: 3 conformance (unary, coercion, qualified)
 - Name resolution: 3 unit (inheritance, named args, control flow)
 
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
-- Conformance: 27/27 cases passing
+- Conformance: 28/28 cases passing
 - Training examples: 63/100 clean (37 with pedagogical gaps or OMG bugs)
 - No regressions: All tests pass on every commit
 

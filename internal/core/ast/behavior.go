@@ -174,10 +174,13 @@ type TriggerEvent interface {
 	triggerEvent() // unexported marker method (closed set)
 }
 
-// TimeEvent fires after a specified duration.
+// TimeEvent fires at a point in time. Absolute distinguishes `accept at <time>`,
+// which fires at the given instant, from `accept after <duration>`, which fires
+// that far after the source state is entered.
 type TimeEvent struct {
 	NodeBase
 	Duration Node // time expression (literal or variable)
+	Absolute bool // true for `at`, false for `after`
 }
 
 func (*TimeEvent) triggerEvent() {}

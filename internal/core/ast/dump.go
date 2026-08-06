@@ -267,6 +267,27 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			writeChildren(b, depth, []Node{v.Expression})
 		}
 		return
+	case *TransitionMember:
+		fmt.Fprintf(b, `(TransitionMember source=%q target=%q`, qnString(v.Source), qnString(v.Target))
+		kids := make([]Node, 0, len(v.Effect)+2)
+		if v.Trigger != nil {
+			kids = append(kids, v.Trigger)
+		}
+		if v.Guard != nil {
+			kids = append(kids, v.Guard)
+		}
+		kids = append(kids, v.Effect...)
+		writeChildren(b, depth, kids)
+		return
+	case *TimeEvent:
+		// `at` and `after` differ only in this flag, so print it.
+		fmt.Fprintf(b, `(TimeEvent absolute=%t`, v.Absolute)
+		writeChildren(b, depth, []Node{v.Duration})
+		return
+	case *ChangeEvent:
+		b.WriteString(`(ChangeEvent`)
+		writeChildren(b, depth, []Node{v.Condition})
+		return
 	case *PseudostateNode:
 		fmt.Fprintf(b, `(PseudostateNode kind=%q name=%q)`, v.Kind.String(), v.Name)
 		return

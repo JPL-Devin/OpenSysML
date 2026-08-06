@@ -2067,23 +2067,21 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 	// Could be event type OR temporal expression (at <time>) OR change trigger (when <cond>) OR relative time (after <duration>)
 	// OR typed parameter (name : Type)
 	var signalType ast.Node
-	var isTemporalTransition bool
-	var isChangeTransition bool
-	if p.atKeyword("at") {
-		// Temporal transition: accept at <timeExpr> then <state>
-		p.advance() // consume 'at'
-		signalType = p.ParseExpression()
-		isTemporalTransition = true
-	} else if p.atKeyword("after") {
-		// Relative time transition: accept after <duration> then <state>
-		p.advance() // consume 'after'
-		signalType = p.ParseExpression()
-		isTemporalTransition = true
+	if p.atKeyword("at") || p.atKeyword("after") {
+		// Temporal transition: accept at <timeExpr> / after <duration> then <state>.
+		absolute := p.atKeyword("at")
+		kwStart := p.peek().Span.Offset
+		p.advance() // consume 'at' / 'after'
+		evt := &ast.TimeEvent{Duration: p.ParseExpression(), Absolute: absolute}
+		evt.NodeSpan = p.spanFrom(kwStart)
+		signalType = evt
 	} else if p.atKeyword("when") {
 		// Change transition: accept when <condition> then <state>
+		kwStart := p.peek().Span.Offset
 		p.advance() // consume 'when'
-		signalType = p.ParseExpression()
-		isChangeTransition = true
+		evt := &ast.ChangeEvent{Condition: p.ParseExpression()}
+		evt.NodeSpan = p.spanFrom(kwStart)
+		signalType = evt
 	} else {
 		// Event transition: accept <signal> OR accept <name> : Type
 		// Lookahead: if identifier followed by colon, parse as typed parameter
@@ -2108,9 +2106,6 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 			signalType = p.parseQualifiedNameRelaxed()
 		}
 	}
-	_ = isTemporalTransition // might be useful for AST differentiation
-	_ = isChangeTransition
-
 	// Optional guard condition: if <expr>
 	var guardExpr ast.Node
 	if p.acceptKeyword("if") {

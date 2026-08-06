@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lower"
@@ -255,11 +256,18 @@ func (e *StateExecutor) scheduleTransitionsForState(state *ast.StateNode) error 
 				return fmt.Errorf("time duration must be constant, got %v", durationVal.Kind)
 			}
 
+			// `accept at t` names an instant, `accept after d` an offset from
+			// entering the state. An instant already past fires immediately.
+			timestamp := e.currentTime + duration
+			if timeEvent.Absolute {
+				timestamp = math.Max(duration, e.currentTime)
+			}
+
 			// Schedule event (generate unique ID using current queue length)
 			e.eventQueue.Push(Event{
 				ID:        e.nextEventID,
 				Type:      EventTime,
-				Timestamp: e.currentTime + duration,
+				Timestamp: timestamp,
 				Payload:   trans, // Store transition reference
 			})
 			e.nextEventID++
@@ -875,14 +883,9 @@ func (e *StateExecutor) orderedRegionStates() []*ast.StateNode {
 	return states
 }
 
-// enterHierarchy enters state's ancestors, outermost first, then state itself,
-// skipping any that are already active.
-func (e *StateExecutor) enterHierarchy(state *ast.StateNode) error {
-	return e.enterHierarchyInto(state, nil)
-}
-
-// enterHierarchyInto is enterHierarchy, except that state's own orthogonal
-// regions start at the given branch targets wherever branches names one.
+// enterHierarchyInto enters state's ancestors, outermost first, then state
+// itself, skipping any that are already active. State's own orthogonal regions
+// start at the given branch targets wherever branches names one.
 func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*ast.StateRegion]*ast.StateNode) error {
 	chain := e.getParentChain(state)
 	for i := len(chain) - 1; i >= 0; i-- {

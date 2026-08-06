@@ -19,7 +19,11 @@
           (*ast.SubstateMember)
           (*ast.SubstateMember)
           (*ast.SubstateMember)
-          (*ast.TransitionMember)))
-      (*ast.TransitionMember)
-      (*ast.TransitionMember)
-      (*ast.TransitionMember))))
+          (TransitionMember source="Accelerating" target="Cruising"
+            (FeatureReference name="stable"))))
+      (TransitionMember source="Off" target="Idle"
+        (FeatureReference name="powerOn"))
+      (TransitionMember source="Idle" target="Active"
+        (FeatureReference name="start"))
+      (TransitionMember source="Active" target="Off"
+        (FeatureReference name="shutdown")))))

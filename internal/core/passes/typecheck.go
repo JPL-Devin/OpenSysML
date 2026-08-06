@@ -85,14 +85,31 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.checkBoolean(scope, m.Condition, "condition of 'if'")
 	case *ast.WhileLoopActionNode:
 		tc.expr.checkBoolean(scope, m.Condition, "condition of 'while'")
-	case *ast.ChangeEvent:
-		tc.expr.checkBoolean(scope, m.Condition, "change event condition")
 	case *ast.TransitionMember:
 		tc.expr.checkBoolean(scope, m.Guard, "transition guard")
+		tc.checkTrigger(scope, m.Trigger)
 	case *ast.AssignmentActionNode:
 		tc.expr.infer(scope, m.Value)
 	case *ast.ActionExecutionNode:
 		tc.expr.infer(scope, m.Expression)
+	}
+}
+
+// checkTrigger types a transition trigger. A change event carries a Boolean
+// condition and a time event a duration expression; a signal or call trigger
+// names an event and has nothing to type here. `transition ... when <expr>`
+// leaves the trigger as a bare expression, which is a change-event condition
+// unless it is a bare name — that names a signal.
+func (tc *typeChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
+	switch t := trigger.(type) {
+	case nil:
+	case *ast.ChangeEvent:
+		tc.expr.checkBoolean(scope, t.Condition, "change event condition")
+	case *ast.TimeEvent:
+		tc.expr.infer(scope, t.Duration)
+	case *ast.FeatureReference, *ast.QualifiedName, *ast.AcceptEvent, *ast.CallEvent:
+	default:
+		tc.expr.checkBoolean(scope, trigger, "change event condition")
 	}
 }
 

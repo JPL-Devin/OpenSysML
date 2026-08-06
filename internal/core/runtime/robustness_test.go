@@ -26,6 +26,28 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("fork_branches_share_region", testForkBranchesShareRegion)
 	t.Run("join_with_one_incoming_branch", testJoinWithOneIncomingBranch)
 	t.Run("region_local_junction_target", testRegionLocalJunctionTarget)
+	t.Run("non_numeric_time_trigger", testNonNumericTimeTrigger)
+}
+
+// testNonNumericTimeTrigger: a timed trigger whose duration is not a number
+// cannot be scheduled and must be reported rather than silently dropped.
+func testNonNumericTimeTrigger(t *testing.T) {
+	_, _, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state waiting {
+				accept at "noon" then done;
+			}
+			final done;
+			init then waiting;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error for a non-numeric time trigger")
+	}
+	if !strings.Contains(err.Error(), "time duration must be constant, got string") {
+		t.Errorf("expected a numeric-duration error, got: %v", err)
+	}
 }
 
 // testForkBranchesShareRegion: a fork whose branches land in the same region
