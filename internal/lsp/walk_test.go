@@ -20,8 +20,8 @@ const bodyRefSource = `package P {
 	attribute bare : Integer = speed;
 	attribute paren : Integer = (speed);
 	attribute operand : Integer = speed + 1;
-	calc plain { return speed; }
-	calc def Plain { return speed; }
+	calc plain { return r = speed; }
+	calc def Plain { return r = speed; }
 	constraint inRange { speed > 0 }
 	requirement Req {
 		assume speed > 0;
@@ -116,5 +116,67 @@ func TestRenameLeavesSignalTriggerNames(t *testing.T) {
 	}
 	if !strings.Contains(got[name], "when go;") {
 		t.Errorf("signal trigger name was rewritten:\n%s", got[name])
+	}
+}
+
+// A body expression's parameter is its own declaration, so renaming a
+// same-named outer feature must not rewrite the parameter's uses inside the
+// body, while a name the body only reads from outside is still rewritten.
+func TestRenameLeavesBodyExpressionParameters(t *testing.T) {
+	ws := model.NewWorkspace()
+	src := `package P {
+	import ScalarValues::*;
+	import ControlFunctions::*;
+	attribute s : Integer = 1;
+	action def Sample {
+		in attribute samples : Real[*];
+		assert constraint { samples->forAll { in s : Real; s > 0 } }
+		assert constraint { samples->forAll { in x : Real; x > s } }
+	}
+}
+`
+	name := openRenameDoc(t, ws, "/tmp/walk_bodyexpr.sysml", src)
+
+	got, err := applyRename(t, ws, name, "s : Integer", "threshold")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "attribute threshold : Integer = 1;") {
+		t.Errorf("declaration not renamed:\n%s", got[name])
+	}
+	if !strings.Contains(got[name], "in s : Real; s > 0") {
+		t.Errorf("body-expression parameter was rewritten:\n%s", got[name])
+	}
+	if !strings.Contains(got[name], "x > threshold") {
+		t.Errorf("reference to the outer feature was not renamed:\n%s", got[name])
+	}
+}
+
+// Renaming from a use of a body-expression parameter must edit the parameter's
+// own declaration, not the body's opening brace, and must leave the same-named
+// outer feature alone.
+func TestRenameBodyExpressionParameterFromUse(t *testing.T) {
+	ws := model.NewWorkspace()
+	src := `package P {
+	import ScalarValues::*;
+	import ControlFunctions::*;
+	attribute s : Integer = 1;
+	action def Sample {
+		in attribute samples : Real[*];
+		assert constraint { samples->forAll { in s : Real; s > 0 } }
+	}
+}
+`
+	name := openRenameDoc(t, ws, "/tmp/walk_bodyparam.sysml", src)
+
+	got, err := applyRename(t, ws, name, "s > 0", "sample")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "in sample : Real; sample > 0") {
+		t.Errorf("parameter declaration and use not both renamed:\n%s", got[name])
+	}
+	if !strings.Contains(got[name], "attribute s : Integer = 1;") {
+		t.Errorf("outer feature was rewritten:\n%s", got[name])
 	}
 }

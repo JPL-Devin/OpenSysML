@@ -209,8 +209,14 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	case *ast.PerformActionNode:
 		r.resolveExpr(scope, d.ActionRef)
 	case *ast.WhileLoopActionNode:
-		r.resolveExpr(scope, d.Condition)
-		r.walkMembers(scope, d.Body)
+		// The loop owns its body's declarations, and its condition is checked
+		// against them: `loop { action charging; } until charging.done`.
+		body := scope
+		if child := r.childScope(scope, d); child != nil {
+			body = child
+		}
+		r.resolveExpr(body, d.Condition)
+		r.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
 		r.resolveExpr(scope, d.Condition)
 		r.walkMembers(scope, d.ThenBody)
@@ -247,6 +253,19 @@ func (r *Resolver) childScope(scope *symbols.Scope, decl ast.Node) *symbols.Scop
 		}
 	}
 	return nil
+}
+
+// bodyExprScope returns the memoized scope holding body's parameters.
+func (r *Resolver) bodyExprScope(scope *symbols.Scope, body *ast.BodyExpr) *symbols.Scope {
+	if len(body.Params) == 0 {
+		return scope
+	}
+	if s, ok := r.bodyScopes[body]; ok {
+		return s
+	}
+	s := symbols.NewBodyExprScope(scope, body)
+	r.bodyScopes[body] = s
+	return s
 }
 
 func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {
@@ -562,7 +581,14 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			r.resolveExpr(scope, a)
 		}
 	case *ast.BodyExpr:
-		r.resolveExpr(scope, v.Result)
+		for i := range v.Params {
+			p := &v.Params[i]
+			if p.Type != nil {
+				r.ResolveQualified(scope, p.Type)
+			}
+			r.resolveExpr(scope, p.Value)
+		}
+		r.resolveExpr(r.bodyExprScope(scope, v), v.Result)
 	case *ast.SequenceExpr:
 		for _, el := range v.Elements {
 			r.resolveExpr(scope, el)
@@ -601,18 +627,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 	}
 
 	// Resolve first part using model.LookupMember if available, else scope.LookupLocal
-	var cur *symbols.Symbol
-	var ok bool
-
-	if r.model != nil {
-		// Use inheritance-aware lookup via semantics.Model
-		type modelLookup interface {
-			LookupMember(*symbols.Symbol, string) (*symbols.Symbol, bool)
-		}
-		if m, hasMethod := r.model.(modelLookup); hasMethod {
-			cur, ok = m.LookupMember(parentSym, qn.Parts[0].Text)
-		}
-	}
+	cur, ok := r.lookupMember(parentSym, qn.Parts[0].Text)
 
 	if !ok {
 		// Fall back to local scope lookup if model unavailable
@@ -637,17 +652,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 
 	// Walk remaining parts via member lookup
 	for i := 1; i < len(qn.Parts); i++ {
-		var next *symbols.Symbol
-		var found bool
-
-		if r.model != nil {
-			type modelLookup interface {
-				LookupMember(*symbols.Symbol, string) (*symbols.Symbol, bool)
-			}
-			if m, hasMethod := r.model.(modelLookup); hasMethod {
-				next, found = m.LookupMember(cur, qn.Parts[i].Text)
-			}
-		}
+		next, found := r.lookupMember(cur, qn.Parts[i].Text)
 
 		if !found {
 			// Fall back to local scope lookup

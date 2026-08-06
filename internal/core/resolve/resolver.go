@@ -26,17 +26,19 @@ type Resolver struct {
 	memo        map[ast.Node]resolution
 	resolving   map[ast.Node]bool // cycle detection
 	parts       map[*ast.QualifiedName][]*symbols.Symbol
+	bodyScopes  map[*ast.BodyExpr]*symbols.Scope // scopes owning body-expression parameters
 	Diagnostics []Diagnostic
-	model       interface{} // Optional *semantics.Model for inheritance-aware member lookup
+	model       MemberLookup // Optional *semantics.Model for inheritance-aware member lookup
 }
 
 // New creates a resolver over the given index.
 func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
-		idx:       idx,
-		memo:      map[ast.Node]resolution{},
-		resolving: map[ast.Node]bool{},
-		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
+		idx:        idx,
+		memo:       map[ast.Node]resolution{},
+		resolving:  map[ast.Node]bool{},
+		parts:      map[*ast.QualifiedName][]*symbols.Symbol{},
+		bodyScopes: map[*ast.BodyExpr]*symbols.Scope{},
 	}
 }
 
@@ -72,9 +74,18 @@ func (r *Resolver) Index() *symbols.Index {
 	return r.idx
 }
 
+// lookupMember resolves name as a member of sym — declared by it or inherited
+// from what it specializes or is typed by — when a semantic model is attached.
+func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if r.model == nil || sym == nil {
+		return nil, false
+	}
+	return r.model.LookupMember(sym, name)
+}
+
 // SetModel attaches a semantic model for inheritance-aware member resolution.
 // Must be called before resolving feature chains if inherited members are needed.
-func (r *Resolver) SetModel(model interface{}) {
+func (r *Resolver) SetModel(model MemberLookup) {
 	r.model = model
 }
 

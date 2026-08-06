@@ -1,0 +1,139 @@
+package model
+
+import "testing"
+
+// TestInheritedMembersAreVisible covers references that reach a member through
+// what a feature specializes, redefines or is typed by, rather than through its
+// own body. Each model is well formed, so none may report a finding.
+func TestInheritedMembersAreVisible(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{"variant through typed usage", `package P {
+			part def Engine;
+			variation part def EngineChoices :> Engine {
+				variant part cyl4;
+				variant part cyl6;
+			}
+			part family { part engine : EngineChoices; }
+			part v :> family { part redefines engine = engine::cyl4; }
+		}`},
+		{"nested redefinition", `package P {
+			part def Cylinder;
+			part def Engine { part cyl : Cylinder[4..6]; }
+			part def Vehicle { part eng : Engine; }
+			part small : Vehicle { part redefines eng { part redefines cyl[4]; } }
+		}`},
+		{"member inherited from definition", `package P {
+			import ScalarValues::*;
+			part def Vehicle { attribute mass : Real; }
+			part v : Vehicle { attribute m = v::mass; }
+		}`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if found := diagnose(t, "inherited", tc.src); len(found) != 0 {
+				t.Fatalf("expected no findings in a well-formed model, got %d: %v", len(found), found)
+			}
+		})
+	}
+}
+
+// TestRedefinitionDoesNotShadowItsTarget covers the misspelled counterpart of
+// the inherited cases: a redefinition of a name no supertype declares must
+// still report, or the inherited lookup would accept anything.
+func TestRedefinitionDoesNotShadowItsTarget(t *testing.T) {
+	src := `package P {
+		part def Engine;
+		variation part def EngineChoices :> Engine { variant part cyl4; }
+		part family { part engine : EngineChoices; }
+		part v :> family { part redefines engine = engine::cyl8; }
+	}`
+	if found := diagnose(t, "inherited_bad", src); len(found) != 1 {
+		t.Fatalf("expected one finding for the undeclared variant, got %d: %v", len(found), found)
+	}
+}
+
+// TestBodyLocalDeclarationsAreVisible covers names declared inside a loop body
+// or a body expression, which are members of the loop or the expression rather
+// than of the enclosing behavior.
+func TestBodyLocalDeclarationsAreVisible(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{"loop condition reads loop body", `package P {
+			import ScalarValues::*;
+			action def Monitor { out charge : Real; }
+			action def Charge {
+				loop action charging {
+					action monitor : Monitor { out charge; }
+				} until charging.monitor.charge >= 100;
+			}
+		}`},
+		{"for body statement reads for body", `package P {
+			import ScalarValues::*;
+			action def Step { in x_in : Real; out x_out : Real; }
+			action def Move {
+				in attribute profile : Real[*];
+				private attribute position : Real = 0;
+				for power in profile {
+					perform action step : Step { in x_in = position; out x_out; }
+					then assign position := step.x_out;
+				}
+			}
+		}`},
+		{"body expression parameter", `package P {
+			import ScalarValues::*;
+			import ControlFunctions::*;
+			action def Sample {
+				in attribute samples : Real[*];
+				assert constraint { samples->forAll { in s : Real; s > 0 } }
+			}
+		}`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if found := diagnose(t, "bodylocal", tc.src); len(found) != 0 {
+				t.Fatalf("expected no findings in a well-formed model, got %d: %v", len(found), found)
+			}
+		})
+	}
+}
+
+// TestBodyLocalNamesDoNotEscape covers the negative side: a loop body member is
+// not a member of the enclosing behavior, and a body-expression parameter is
+// not visible outside its body.
+func TestBodyLocalNamesDoNotEscape(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{"loop member from outside", `package P {
+			import ScalarValues::*;
+			action def Charge {
+				loop action charging { } until true;
+				attribute c = charging;
+			}
+		}`},
+		{"body expression parameter from outside", `package P {
+			import ScalarValues::*;
+			import ControlFunctions::*;
+			action def Sample {
+				in attribute samples : Real[*];
+				assert constraint { samples->forAll { in s : Real; s > 0 } & s > 0 }
+			}
+		}`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if found := diagnose(t, "escape", tc.src); len(found) != 1 {
+				t.Fatalf("expected one finding, got %d: %v", len(found), found)
+			}
+		})
+	}
+}

@@ -97,10 +97,17 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		if !ok || target == nil {
 			continue
 		}
-		// Skip self-reference ONLY for redefines (nested feature case)
-		// Preserve self-reference for specializes/typing to detect cycles
+		// A redefinition names the feature it refines, which the redefining
+		// feature shadows in its own scope (`part redefines engine`), so a
+		// target resolving to sym itself must be looked up in what sym's owner
+		// inherits. Self-reference through specializes/typing is preserved so
+		// cycle detection still sees it.
 		if target == sym && rel.Kind == ast.RelRedefines {
-			continue
+			if redefined := m.inheritedFeature(sym, qn); redefined != nil {
+				target = redefined
+			} else {
+				continue
+			}
 		}
 		if seen[target] {
 			continue
@@ -151,6 +158,27 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 
 	m.directSupers[sym] = out
 	return out
+}
+
+// inheritedFeature returns the feature that sym's owner inherits under the name
+// qn denotes, skipping the owner's own members so a redefinition does not find
+// itself. Only a single-segment name can denote an inherited feature this way;
+// a qualified one names its owner explicitly.
+func (m *Model) inheritedFeature(sym *symbols.Symbol, qn *ast.QualifiedName) *symbols.Symbol {
+	if sym.OwnerScope == nil || len(qn.Parts) != 1 {
+		return nil
+	}
+	owner := sym.OwnerScope.Owner()
+	if owner == nil {
+		return nil
+	}
+	name := qn.Parts[0].Text
+	for _, sup := range m.AllSupertypes(owner) {
+		if found, ok := m.LookupMember(sup, name); ok && found != sym {
+			return found
+		}
+	}
+	return nil
 }
 
 // AllSupertypes returns the transitive closure of DirectSupertypes, excluding

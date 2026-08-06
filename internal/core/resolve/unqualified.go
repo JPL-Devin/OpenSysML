@@ -16,12 +16,8 @@ func (r *Resolver) walkUnqualified(scope *symbols.Scope, name string) resolution
 		}
 
 		// Check inherited members if model available
-		if r.model != nil {
-			if ml, ok := r.model.(MemberLookup); ok && s.Owner() != nil {
-				if sym, ok := ml.LookupMember(s.Owner(), name); ok {
-					return resolution{sym: sym, ok: true}
-				}
-			}
+		if sym, ok := r.lookupMember(s.Owner(), name); ok {
+			return resolution{sym: sym, ok: true}
 		}
 
 		if sym, ok := r.lookupImports(s, name); ok {

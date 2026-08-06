@@ -229,6 +229,8 @@ func TestParseResultBody_Simple(t *testing.T) {
 	}
 }
 
+// A lone name after 'return' declares the return parameter; an expression is a
+// computed result.
 func TestParseResultBody_Multiple(t *testing.T) {
 	input := `{
 		return a;
@@ -241,10 +243,20 @@ func TestParseResultBody_Multiple(t *testing.T) {
 		t.Fatalf("expected 2 nodes, got %d", len(nodes))
 	}
 
-	for i, node := range nodes {
-		if _, ok := node.(*ast.ResultMember); !ok {
-			t.Errorf("node %d: expected *ast.ResultMember, got %T", i, node)
+	u, ok := nodes[0].(*ast.Usage)
+	if !ok {
+		t.Errorf("node 0: expected *ast.Usage, got %T", nodes[0])
+	} else {
+		if u.Ident.Name != "a" {
+			t.Errorf("node 0: name = %q, want %q", u.Ident.Name, "a")
 		}
+		if u.Direction != ast.DirOut {
+			t.Errorf("node 0: direction = %v, want out", u.Direction)
+		}
+	}
+
+	if _, ok := nodes[1].(*ast.ResultMember); !ok {
+		t.Errorf("node 1: expected *ast.ResultMember, got %T", nodes[1])
 	}
 }
 

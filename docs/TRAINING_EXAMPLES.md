@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 71/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 29/100 files have semantic errors (81 total errors)  
+**Status:** 80/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 20/100 files have semantic errors (38 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -56,14 +56,29 @@ diagnostic on a well-formed model, so the count is pinned and the gap named:
 
 | File | Diagnostic | Gap |
 |---|---|---|
-| `Control Structures Example` | `unresolved reference: charging` | A loop action's own name is not in scope in its `until` expression. |
-| `Assignment Example` | `unresolved reference: dynamics` (2×) | An action declared inside a `for` body is not visible to the `assign` steps after it. |
-| `Calculation Usages-1` | 7 unresolved `a`/`v`/`x` | Parameters and results a calc usage inherits from its definition are not members of the usage. |
-| `Analysis Case Definition Example` | `unresolved reference: i` (8×) | Parameters declared in an expression body (`->forAll {in i: Positive; ...}`) are not in scope in that body. |
-| `Variation Usages`, `Variation Configuration` | `engine::'4cylEngine'` etc. | Same inherited-member gap through a qualified name: the variants of `EngineChoices` are not reachable through the usage `engine`. |
-| `Time Constraints` | `unresolved member: done` | Inherited occurrence features are not members of a state usage. |
+| `Time Constraints` | `unresolved member: done` | Inherited occurrence features are not members of a state usage: an untyped `state normal;` has no implicit typing to `States::StateAction`. |
 | `Message Payload Example` | `unresolved reference: fuelCommand` (2×) | The payload feature a message declares in its `of` clause is not registered. |
-| `Trade Study Analysis Example` | 9 of 10 | Same inherited-member gap; `alternative` is a genuine typo in the OMG file (`alternatives`). |
+| `Action Performance Example`, `Allocation Usage Example`, `Conditional Succession Example-1` | `unresolved member: focus`/`generateTorque`/`isWellFocused` | Same missing implicit typing: features of the stdlib base type of an untyped usage are not members of it. |
+
+### Verdicts for the inherited- and body-local-feature re-pin (80/100)
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `Calculation Usages-1` | 7 unresolved `a`/`v`/`x` | Real fix: `return a;` declares the calc's return parameter, which the parser had read as a reference to one. The names now resolve to those parameters. |
+| `Trade Study Analysis Example` | 10 errors, now 1 | Real fix, same cause plus inherited members of a calc usage (`power`, `mass`, `efficiency`, `cost`). The remaining error is `alternative`, a genuine typo in the OMG file (`alternatives`). |
+| `Variation Usages`, `Variation Configuration` | `engine::'4cylEngine'` etc. | Real fix: a qualified-name segment now reaches inherited members, and `part redefines engine` no longer resolves its own redefinition target to itself. |
+| `Parts Example-1`, `Parts Example-2` | `unresolved reference: cyl` (2× each) | Real fix, same redefinition-shadowing cause: `part redefines eng { part redefines cyl[4]; }` resolves `cyl` through `Engine`. |
+| `Use Case Usage Example` | 6 unresolved actors | Real fix: `'provide transportation'::driver` reaches the actors the use case usage inherits from its definition. |
+| `Control Structures Example` | `unresolved reference: charging` | Real fix: a loop owns the scope its body declares into, so its `until` condition sees `charging`. |
+| `Assignment Example` | `unresolved reference: dynamics` (2×) | Real fix, same scope: an action declared in a `for` body is visible to the `assign` steps in that body. |
+| `Analysis Case Definition Example` | `unresolved reference: i` (8×) | Real fix: a body expression's parameters (`->forAll {in i: Positive; ...}`) are in scope in its result. |
+
+Each verdict is locked by a focused test in
+`internal/core/model/inherited_scope_resolve_test.go`, including the negative
+cases (a redefinition of an undeclared name, and body-local names referenced
+from outside their body, both still report).
 
 ---
 
@@ -186,9 +201,9 @@ This generates error frequency analysis and per-file diagnostics.
 
 **Implementation Status**: Core behavioral semantics complete (20/20 conformance tests passing).
 
-**Training Example Status**: 71% clean, 85% clean after filtering pedagogical gaps. Remaining errors are primarily:
+**Training Example Status**: 80% clean. Remaining errors are primarily:
 1. Missing local declarations in pedagogical examples
-2. Inherited and body-local features that resolution does not reach (see the verdict table above)
+2. Features of the stdlib base type of an untyped usage, which no implicit typing supplies (see the verdict tables above)
 3. Type system edge cases (feature work needed)
 
 The runtime implementation is **production-ready for complete SysML v2 models**. Training example "failures" reflect incomplete example files, not missing runtime features.

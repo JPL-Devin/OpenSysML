@@ -42,6 +42,16 @@ func (c *refCollector) childScope(scope *symbols.Scope, decl ast.Node) *symbols.
 	return nil
 }
 
+// bodyExprScope mirrors resolve.Resolver.bodyExprScope: a body expression's
+// parameters are its own, so a same-named outer declaration must not collect
+// references to them.
+func (c *refCollector) bodyExprScope(scope *symbols.Scope, body *ast.BodyExpr) *symbols.Scope {
+	if len(body.Params) == 0 {
+		return scope
+	}
+	return symbols.NewBodyExprScope(scope, body)
+}
+
 func (c *refCollector) walkMembers(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		decl := m
@@ -176,8 +186,13 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	case *ast.PerformActionNode:
 		c.expr(scope, d.ActionRef)
 	case *ast.WhileLoopActionNode:
-		c.expr(scope, d.Condition)
-		c.walkMembers(scope, d.Body)
+		// A loop owns the scope its body declares into (see symbols.buildDecl).
+		body := scope
+		if child := c.childScope(scope, d); child != nil {
+			body = child
+		}
+		c.expr(body, d.Condition)
+		c.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
 		c.expr(scope, d.Condition)
 		c.walkMembers(scope, d.ThenBody)
@@ -281,7 +296,12 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 			c.expr(scope, a)
 		}
 	case *ast.BodyExpr:
-		c.expr(scope, v.Result)
+		for i := range v.Params {
+			p := &v.Params[i]
+			c.add(scope, p.Type)
+			c.expr(scope, p.Value)
+		}
+		c.expr(c.bodyExprScope(scope, v), v.Result)
 	case *ast.SequenceExpr:
 		for _, el := range v.Elements {
 			c.expr(scope, el)
@@ -290,9 +310,9 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		c.add(scope, v.Ref)
 	case *ast.QualifiedName:
 		// A bare name in expression position parses straight to a qualified
-		// name rather than to a FeatureReference wrapper: `return speed;` and
-		// `return (speed);` reach here, while `return speed + 1;` arrives as an
-		// operand of an OperatorExpr.
+		// name rather than to a FeatureReference wrapper: `return r = speed;`
+		// and `return (speed);` reach here, while `return speed + 1;` arrives
+		// as an operand of an OperatorExpr.
 		c.add(scope, v)
 	}
 }
