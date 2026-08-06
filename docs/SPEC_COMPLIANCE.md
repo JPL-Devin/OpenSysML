@@ -53,7 +53,7 @@
 **State Machines (core: faithful; advanced: partial):**
 - Initial/final state identification
 - State entry/exit actions
-- State do behavior (⚠️ simplified: immediate, not concurrent)
+- State do behavior (runs while the state is active; concurrently active states interleave)
 - Transition firing
 - Transition guard evaluation
 - Transition effect actions
@@ -81,7 +81,8 @@
 - State visits tracking
 - Multi-region event broadcasting
 - ⚠️ History pseudostates: shallow and deep restoration implemented, reachable programmatically only (no textual notation)
-- ❌ Not implemented: deferred events, concurrent `do`, call-trigger notation
+- ⚠️ Deferred events: retention and recall implemented across hierarchy and orthogonal regions, reachable programmatically only (no textual notation)
+- ❌ Not implemented: call-trigger notation
 
 **Expression Evaluation (7/7 features):**
 - Binary operators (+, -, *, /, <, >, ==, and, or)
@@ -99,11 +100,11 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 32 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×14, accept-then×1)
-- 14 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type)
+- 33 conformance cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×15, accept-then×1)
+- 19 robustness tests (deadlock, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, history misuse, non-deferrable deferred trigger, non-terminating do behavior)
 - 41 unit tests
 - 22 golden AST fixtures (including pseudostate and timed-trigger parsing tests)
-- 7 golden execution traces (fork/join branch ordering, region entry/exit ordering)
+- 8 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions)
 - 17 negative parser tests
 - 900+ total tests passing
 
@@ -188,7 +189,15 @@ Each row documents one behavioral semantic feature:
 | Final state termination | `state_executor.go:288` processNextEvent | `state_simple.sysml` | ✅ Faithful |
 | State entry actions | `state_executor.go:749` enterState | `state_do_behavior.sysml` | ✅ Faithful |
 | State exit actions | `state_executor.go:810` exitState | `state_transition_effect.sysml` | ✅ Faithful |
-| State do behavior (immediate, not concurrent) | `state_executor.go:749` enterState | `state_do_behavior.sysml` | ⚠️ Approximate |
+| State do behavior runs while its state is active, one action per round | `state_executor.go` startDoActivity, runDoRound | `state_do_behavior.sysml`, `state_do_activity_test.go` | ✅ Faithful |
+| Concurrently active states interleave their do behaviors, in region declaration order | `state_executor.go` runDoRound, orderedActiveRegions | `state_concurrent_do.sysml` + trace golden | ✅ Faithful |
+| Exiting a state abandons the rest of its do behavior | `state_executor.go` exitState, stopDoActivity | `state_do_activity_test.go:TestDoBehaviorIsCancelledWhenItsStateIsExited` | ✅ Faithful |
+| A state completes only once its do behavior has finished | `state_executor.go` scheduleCompletionTransitions | `state_do_activity_test.go:TestCompletionWaitsForTheDoBehavior` | ✅ Faithful |
+| Deferred events retained while a deferring state is active, delivered afterwards in arrival order | `lower/state_graph.go` collectDeferred; `state_executor.go` defersEvent, recallDeferredEvents | `state_deferred_test.go` | ⚠️ Approximate (no textual notation: `StateNode.Defer` is programmatic) |
+| Earliest transfer first (`Occurrence::incomingTransferSort` defaults to `earlierFirstIncomingTransferSort`): a recalled event is dispatched before the events that arrived while it was deferred, and a completion event before either | `executor_common.go` eventHeap.Less, isCompletionEvent; `state_executor.go` recallDeferredEvents | `state_deferred_test.go:TestRecalledEventPrecedesLaterArrivals` | ✅ Faithful |
+| An event reaches only the regions still active when it is dispatched | `state_executor.go` broadcastEvent | `state_deferred_test.go:TestExitedNestedRegionDoesNotReactToTheSameEvent` | ✅ Faithful |
+| Deferral by an ancestor state and across orthogonal regions | `state_executor.go` defersEvent | `state_deferred_test.go:TestCompositeStateDefersForItsSubstates`, `TestDeferralSpansOrthogonalRegions` | ✅ Faithful |
+| Deferring a non-dispatchable trigger reports | `lower/state_graph.go` collectDeferred | `robustness_test.go:defer_of_non_deferrable_trigger` | ✅ Faithful |
 | Transition firing | `state_executor.go:535` fireTransition | `state_transition_effect.sysml` | ✅ Faithful |
 | Transition guard evaluation | `state_executor.go:218` scheduleTransitionsForState | `state_choice_pseudostate.sysml` | ✅ Faithful |
 | Transition effect actions | `state_executor.go:535` fireTransition | `state_transition_effect.sysml` | ✅ Faithful |
@@ -312,8 +321,7 @@ are tracked here):
 - Structured activities with pin connectors
 
 **State Machines (Advanced):**
-- Textual notation for history, entry and exit point pseudostates (the runtime supports them; only the syntax is missing)
-- Deferred events
+- Textual notation for history, entry and exit point pseudostates, and for deferred events (the runtime supports them; only the syntax is missing)
 - Protocol state machines
 
 **Object Model:**

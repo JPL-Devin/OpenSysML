@@ -1,0 +1,18 @@
+exit: lstart
+enter: lwork
+transition: lstart -> lwork
+do: lwork
+exit: rstart
+enter: rwork
+transition: rstart -> rwork
+do: lwork
+do: rwork
+do: lwork
+do: rwork
+exit: lwork
+enter: ldone
+transition: lwork -> ldone
+do: rwork
+exit: rwork
+enter: rdone
+transition: rwork -> rdone
