@@ -97,11 +97,15 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 
 		switch n := actualMember.(type) {
 		case *ast.StateNode:
-			collectStates(graph, n, nil)
+			if err := collectStates(graph, n, nil); err != nil {
+				return nil, err
+			}
 		case *ast.Usage:
 			// Handle state usages: state declarations parsed as Usage with Kind=UsageState
 			if n.Kind == ast.UsageState {
-				collectStates(graph, stateNodeFromUsage(n), nil)
+				if err := collectStates(graph, stateNodeFromUsage(n), nil); err != nil {
+					return nil, err
+				}
 			}
 		case *ast.SubstateMember:
 			// Substate declarations: state <name>;
@@ -110,10 +114,14 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 				Name: n.Name,
 			}
 			stateNode.NodeSpan = n.NodeSpan
-			collectStates(graph, stateNode, nil)
+			if err := collectStates(graph, stateNode, nil); err != nil {
+				return nil, err
+			}
 		case *ast.StateRegion:
 			// Top-level region: collect its states, which no state is the parent of
-			collectRegionStates(graph, n, nil)
+			if err := collectRegionStates(graph, n, nil); err != nil {
+				return nil, err
+			}
 		case *ast.PseudostateNode:
 			graph.Pseudostates[n.Name] = n
 		case *ast.DeferMember:
@@ -276,7 +284,7 @@ func stateNodeFromUsage(usage *ast.Usage) *ast.StateNode {
 }
 
 // collectStates recursively collects states and builds parent relationships.
-func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNode) {
+func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNode) error {
 	graph.States = append(graph.States, state)
 	if parent != nil {
 		graph.ParentState[state] = parent
@@ -286,7 +294,9 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 	for _, substate := range state.Substates {
 		switch child := unwrapMembership(substate).(type) {
 		case *ast.StateNode:
-			collectStates(graph, child, state)
+			if err := collectStates(graph, child, state); err != nil {
+				return err
+			}
 		case *ast.PseudostateNode:
 			// A pseudostate declared inside a composite state belongs to it: that
 			// ownership is what a history pseudostate restores from, and without it
@@ -298,8 +308,11 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 
 	// Collect states in orthogonal regions
 	for _, region := range state.Regions {
-		collectRegionStates(graph, region, state)
+		if err := collectRegionStates(graph, region, state); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // collectRegionStates collects the states an orthogonal region declares, records
@@ -310,7 +323,7 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 // Region members reach here as a state node, a bare `state <name>;` substate or a
 // state usage with a body, each of them possibly wrapped in a membership: a state
 // missed here is a state no transition can name.
-func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast.StateNode) {
+func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast.StateNode) error {
 	for _, member := range region.States {
 		var state *ast.StateNode
 		switch n := unwrapMembership(member).(type) {
@@ -330,16 +343,22 @@ func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast
 				graph.PseudostateOwner[n] = parent
 			}
 			continue
+		case *ast.DeferMember:
+			// A region is not a state: only a state can retain an event.
+			return fmt.Errorf("defer must be declared inside a state, not in a region body")
 		default:
 			continue
 		}
 
-		collectStates(graph, state, parent)
+		if err := collectStates(graph, state, parent); err != nil {
+			return err
+		}
 		graph.RegionOf[state] = region
 		if state.IsInitial && graph.RegionInitials[region] == nil {
 			graph.RegionInitials[region] = state
 		}
 	}
+	return nil
 }
 
 // collectDeferred records the triggers a state defers, normalized the same way
