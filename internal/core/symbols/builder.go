@@ -180,9 +180,8 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 			scope.AddChild(child)
 		}
 	case *ast.WhileLoopActionNode:
-		// A loop is an anonymous action namespace: what its body declares (and,
-		// for `for x in c`, the iteration variable) is a member of the loop, so
-		// the body and the loop's own condition can refer to it.
+		// A loop is an anonymous action namespace: its body's declarations (and a
+		// `for` iteration variable) are members visible to the body and condition.
 		child := NewScope(scope, d)
 		scope.AddChild(child)
 		buildMembers(child, d.Body)
@@ -193,10 +192,8 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 }
 
 // NewBodyExprScope builds the scope a body expression's parameters declare into
-// (`c->forAll { in i : Positive; f(i) }`). Body expressions are nested in
-// expressions rather than in member lists, so their scope is created on demand
-// by the resolver instead of during the member walk, and is not linked into
-// parent's children.
+// (`c->forAll { in i : Positive; f(i) }`). Body expressions sit inside
+// expressions, so this scope is created on demand and not linked into parent.
 func NewBodyExprScope(parent *Scope, body *ast.BodyExpr) *Scope {
 	scope := NewScope(parent, body)
 	doc := docNameOf(parent)
