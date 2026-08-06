@@ -138,9 +138,28 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.walkMembers(scope, d.Actions)
 	case *ast.ExitMember:
 		c.walkMembers(scope, d.Actions)
+	case *ast.StateNode:
+		body := scope
+		if child := c.childScope(scope, d); child != nil {
+			body = child
+		}
+		c.walkMembers(body, d.Entry)
+		c.walkMembers(body, d.Do)
+		c.walkMembers(body, d.Exit)
+		c.walkMembers(body, d.Substates)
+		for _, region := range d.Regions {
+			c.resolveDecl(body, region)
+		}
+	case *ast.StateRegion:
+		states := scope
+		if child := c.childScope(scope, d); child != nil {
+			states = child
+		}
+		c.walkMembers(states, d.States)
 	case *ast.TransitionMember:
 		c.add(scope, d.Source)
 		c.add(scope, d.Target)
+		c.trigger(scope, d.Trigger)
 		c.expr(scope, d.Guard)
 		c.walkMembers(scope, d.Effect)
 	case *ast.SendStatement:
@@ -148,8 +167,39 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.expr(scope, d.Target)
 	case *ast.TerminateStatement:
 		c.expr(scope, d.Target)
-	case *ast.AcceptActionUsage:
-		c.add(scope, d.ParamType)
+	case *ast.AssignmentActionNode:
+		c.expr(scope, d.Target)
+		c.expr(scope, d.Value)
+	case *ast.ActionExecutionNode:
+		c.add(scope, d.ActionRef)
+		c.expr(scope, d.Expression)
+	case *ast.PerformActionNode:
+		c.expr(scope, d.ActionRef)
+	case *ast.WhileLoopActionNode:
+		c.expr(scope, d.Condition)
+		c.walkMembers(scope, d.Body)
+	case *ast.IfActionNode:
+		c.expr(scope, d.Condition)
+		c.walkMembers(scope, d.ThenBody)
+		c.walkMembers(scope, d.ElseBody)
+	}
+}
+
+// trigger collects the references a transition trigger carries. Bare signal and
+// call event names are not model references (see resolve/document.go), so they
+// are skipped here too: renaming a declaration must not rewrite them.
+func (c *refCollector) trigger(scope *symbols.Scope, trigger ast.Node) {
+	switch t := trigger.(type) {
+	case nil:
+		return
+	case *ast.TimeEvent:
+		c.expr(scope, t.Duration)
+	case *ast.ChangeEvent:
+		c.expr(scope, t.Condition)
+	case *ast.QualifiedName, *ast.FeatureReference, *ast.AcceptEvent, *ast.CallEvent:
+		// Event names, not model elements.
+	default:
+		c.expr(scope, trigger)
 	}
 }
 
@@ -238,6 +288,12 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		}
 	case *ast.MetadataAccessExpr:
 		c.add(scope, v.Ref)
+	case *ast.QualifiedName:
+		// A bare name in expression position parses straight to a qualified
+		// name rather than to a FeatureReference wrapper: `return speed;` and
+		// `return (speed);` reach here, while `return speed + 1;` arrives as an
+		// operand of an OperatorExpr.
+		c.add(scope, v)
 	}
 }
 
