@@ -1,9 +1,24 @@
-# Template, not an installable formula: placeholders are filled in per release
-# by scripts/render-homebrew-formula.sh. See packaging/homebrew/README.md.
+# Homebrew formula for Systemica, maintained here and copied to the tap repo
+# Open-MBEE/homebrew-tap as Formula/systemica.rb.
+#
+# Per release, exactly five fields change: `version` and the four `sha256`
+# values. Get them from the release's SHA256SUMS.txt, e.g. for v0.3.0:
+#
+#   curl -fL https://github.com/Open-MBEE/Systemica/releases/download/v0.3.0/SHA256SUMS.txt
+#
+# and take the line for each systemica-<os>-<arch>.tar.gz. The four URLs change
+# only in the tag path component.
+#
+# Or render the whole file (recommended, no manual copying):
+#
+#   scripts/render-homebrew-formula.sh v0.3.0 > Formula/systemica.rb
+#
+# The PLACEHOLDER checksums below are intentionally invalid: this file as
+# committed here is the source template. Do not commit it to the tap unrendered.
 class Systemica < Formula
   desc "SysML v2 toolchain: interactive REPL and language server"
   homepage "https://github.com/Open-MBEE/Systemica"
-  version "__VERSION__"
+  version "__VERSION__" # tag without the leading "v"
   license "Apache-2.0"
 
   on_macos do
@@ -33,7 +48,11 @@ class Systemica < Formula
   end
 
   test do
+    # Release binaries embed the tag (e.g. "sysml v0.3.0") via ldflags.
     assert_match version.to_s, shell_output("#{bin}/sysml --version")
     assert_match version.to_s, shell_output("#{bin}/sysml-lsp --version")
+
+    # Evaluate an expression non-interactively: exercises lexer, parser, and runtime.
+    assert_match "= 8", shell_output("#{bin}/sysml -e '5 + 3'")
   end
 end

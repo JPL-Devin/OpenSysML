@@ -16,16 +16,19 @@ sudo mv sysml-linux-amd64 /usr/local/bin/sysml
 chmod +x /usr/local/bin/sysml
 ```
 
-**macOS (Apple Silicon):** download with `curl`, not a browser — see [macOS: Gatekeeper](#macos-gatekeeper).
+**macOS (Intel or Apple Silicon) — Homebrew is the recommended path:**
 ```bash
-curl -fL -o systemica.tar.gz https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-darwin-arm64.tar.gz
-tar xzf systemica.tar.gz
-sudo mv sysml sysml-lsp /usr/local/bin/
+brew tap Open-MBEE/tap
+brew install systemica
 ```
+This avoids the Gatekeeper prompt described in [macOS: Gatekeeper](#macos-gatekeeper).
+**The tap is not published yet** — these commands work once the maintainer creates
+`Open-MBEE/homebrew-tap`; until then use `go install` or the direct download below.
 
-**macOS (Intel):**
+**macOS, direct download (fallback):** use `curl`, not a browser.
 ```bash
-curl -fL -o systemica.tar.gz https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-darwin-amd64.tar.gz
+# Apple Silicon; use systemica-darwin-amd64.tar.gz on Intel
+curl -fL -o systemica.tar.gz https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-darwin-arm64.tar.gz
 tar xzf systemica.tar.gz
 sudo mv sysml sysml-lsp /usr/local/bin/
 ```
@@ -57,16 +60,19 @@ cannot be verified"**, the cause is the `com.apple.quarantine` extended attribut
 browsers attach to downloads, combined with the fact that these binaries are not signed with
 an Apple Developer ID or notarized. It is not a broken binary.
 
-Three ways to avoid it, best first:
+Ways to avoid it, best first:
 
-1. **Download with `curl` or `wget`** (as shown above). They do not set the quarantine
+1. **Install with Homebrew** (`brew tap Open-MBEE/tap && brew install systemica`). Homebrew
+   downloads with `curl` and does not quarantine formula binaries. This is the recommended
+   path, and the accepted stopgap until the releases are signed and notarized.
+2. **Download with `curl` or `wget`** (as shown above). They do not set the quarantine
    attribute, so no prompt appears.
-2. **Install with a Go toolchain** — built locally, never quarantined:
+3. **Install with a Go toolchain** — built locally, never quarantined:
    ```bash
    go install github.com/Open-MBEE/Systemica/cmd/sysml@latest
    go install github.com/Open-MBEE/Systemica/cmd/sysml-lsp@latest
    ```
-3. **Clear the attribute** if you already downloaded the archive in a browser. Verify the
+4. **Clear the attribute** if you already downloaded the archive in a browser. Verify the
    checksum first — you are turning off a security check, so make sure you have the file we
    published:
    ```bash

@@ -69,7 +69,7 @@ Two consequences worth knowing:
 | Option | Removes the prompt for a browser download? | Cost | Requires credentials we don't have |
 | --- | --- | --- | --- |
 | Developer ID signing + notarization (stapling only if we ship `.pkg`/`.dmg`, see §5.3) | **Yes** — the only option that does | $99/yr Apple Developer Program + macOS CI minutes | Yes |
-| Homebrew tap/formula | Yes, for users who install via `brew` (curl download, no quarantine) | Free (a tap repo) | No, but needs a new repo |
+| Homebrew tap/formula (**accepted stopgap**) | Yes, for users who install via `brew` (curl download, no quarantine) | Free (a tap repo) | No, but needs a new repo |
 | `go install .../cmd/sysml@latest` | Yes (built locally, never quarantined) | Free; user needs a Go toolchain | No |
 | Ad-hoc signing in CI (`codesign -s -`) | **No** — see §2.1; also already effectively done by the Go linker | Needs a macOS runner | No |
 | Documented `xattr -d com.apple.quarantine` | Yes, but by having the user disable a security check | Free | No |
@@ -82,25 +82,26 @@ archive from a tampered one. It is documented in `docs/QUICKSTART.md` as an esca
 ## 4. What this change actually lands
 
 1. **Docs** (`README.md`, `docs/QUICKSTART.md`): a macOS section that recommends
-   `curl`/`go install` over a browser download, explains the prompt, and gives the exact
-   quarantine-clearing and checksum-verification commands.
+   `brew tap Open-MBEE/tap && brew install systemica`, with `curl`/`go install` and the
+   quarantine-clearing + checksum-verification commands as fallbacks.
 2. **Release artifacts** (`.circleci/config.yml`): in addition to the existing per-binary
    archives (unchanged, so existing links keep working), the `build-release` job now
    publishes `systemica-<os>-<arch>.tar.gz`/`.zip` bundles containing `sysml` and
    `sysml-lsp` under their plain names, plus a `SHA256SUMS.txt` covering every archive.
    Both are prerequisites for a Homebrew formula and for users who want to verify a
    download.
-3. **Homebrew formula template** (`packaging/homebrew/`) and
+3. **Homebrew formula** (`packaging/homebrew/Formula/systemica.rb`) plus
    `scripts/render-homebrew-formula.sh`, which renders it for a tag from `SHA256SUMS.txt`.
-   **No tap repository was created** — see `packaging/homebrew/README.md`; that is a
-   maintainer decision.
+   Homebrew is the accepted macOS install path until notarization exists. **No tap
+   repository was created**: the maintainer creates `Open-MBEE/homebrew-tap` and pushes the
+   rendered formula — steps in `packaging/homebrew/README.md`.
 
 ## 5. Decision record: notarization
 
 **Decision: not implemented in this change, because it cannot be done without credentials
-the maintainer must obtain.** Nothing about the change above conflicts with adding it
-later; the notarization step would run after the existing build step and re-tar the signed
-binaries.
+the maintainer must obtain. Homebrew is the accepted stopgap in the meantime** (maintainer
+decision, 2026-08-06). Nothing about the change above conflicts with adding it later; the
+notarization step would run after the existing build step and re-tar the signed binaries.
 
 ### 5.1 What the maintainer must provide
 

@@ -14,9 +14,8 @@ A complete, production-grade SysML v2 implementation in Go—providing language 
 wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-linux-amd64.tar.gz
 tar xzf sysml-linux-amd64.tar.gz && sudo mv sysml-linux-amd64 /usr/local/bin/sysml
 
-# macOS (Apple Silicon) — curl, unlike a browser download, does not quarantine the file
-curl -fL -o systemica.tar.gz https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-darwin-arm64.tar.gz
-tar xzf systemica.tar.gz && sudo mv sysml sysml-lsp /usr/local/bin/
+# macOS (Intel or Apple Silicon) — see the note below; requires the tap to exist
+brew tap Open-MBEE/tap && brew install systemica
 ```
 
 **With a Go toolchain (no download, never quarantined):**
@@ -31,12 +30,18 @@ make build
 ./bin/sysml
 ```
 
-> **macOS:** if you download the tarball with a browser instead, macOS tags it with
-> `com.apple.quarantine` and Gatekeeper shows "cannot be opened because the developer cannot
-> be verified" — the binaries are not signed with an Apple Developer ID. Use the `curl`
-> command above, or see [Quick Start](docs/QUICKSTART.md#macos-gatekeeper) for how to clear
-> the attribute. Background and the notarization decision:
-> [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
+> **macOS — use Homebrew.** The released binaries are not Developer ID signed or notarized,
+> so a tarball downloaded *in a browser* carries `com.apple.quarantine` and Gatekeeper shows
+> "cannot be opened because the developer cannot be verified". Homebrew downloads with
+> `curl`, which never sets that attribute, so `brew install` avoids the prompt entirely.
+> Fallback if you download the tarball directly (`curl -fL ... systemica-darwin-arm64.tar.gz`,
+> then `xattr -d com.apple.quarantine`): see
+> [Quick Start](docs/QUICKSTART.md#macos-gatekeeper). Signing/notarization is the eventual
+> fix — [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
+>
+> The tap is not published yet: `brew tap Open-MBEE/tap` works once the maintainer creates
+> `Open-MBEE/homebrew-tap` ([how](packaging/homebrew/README.md)). Until then use `go install`
+> or the direct download.
 
 ### Try it
 

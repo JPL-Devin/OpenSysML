@@ -1,42 +1,59 @@
 # Homebrew packaging
 
-`systemica.rb.template` is a Homebrew formula template for the `systemica-<os>-<arch>`
-bundle archives published with each tagged release (they contain `sysml` and `sysml-lsp`
-under their plain names, which is the layout Homebrew's `bin.install` expects).
+`brew install` is the recommended macOS install path: Homebrew fetches archives with `curl`,
+which does not set the `com.apple.quarantine` extended attribute, so a Homebrew-installed
+`sysml` never triggers the Gatekeeper "developer cannot be verified" prompt. (Homebrew
+applies quarantine only to *casks* — hence the cask-only `--no-quarantine` flag — not to
+formulae.) It is the accepted stopgap until the releases are Developer ID signed and
+notarized; see [docs/MACOS_DISTRIBUTION.md](../../docs/MACOS_DISTRIBUTION.md).
 
-Render it for a published tag:
+`Formula/systemica.rb` here is the maintained source of the formula. It carries
+`__VERSION__` / `__TAG__` / `__SHA256_*__` placeholders and is **not installable as-is**;
+`scripts/render-homebrew-formula.sh` substitutes them from a release's `SHA256SUMS.txt` and
+strips the maintainer-facing header comment.
 
-```bash
-scripts/render-homebrew-formula.sh v0.3.0 > systemica.rb
-```
+## The tap does not exist yet
 
-The script reads `SHA256SUMS.txt` from the release (downloading it if a local copy is not
-passed as the second argument) and substitutes the version, URLs, and checksums.
+**`brew tap Open-MBEE/tap && brew install systemica` will not work until the maintainer
+creates `Open-MBEE/homebrew-tap` and pushes a rendered formula.** Nothing in this repository
+creates or publishes it. One-time setup:
 
-## Why this matters on macOS
+1. Create a public GitHub repository named exactly **`Open-MBEE/homebrew-tap`**. The
+   `homebrew-` prefix is what makes `brew tap Open-MBEE/tap` resolve to it.
+2. Render the formula for the newest release and commit it as **`Formula/systemica.rb`**:
 
-`brew install` fetches archives with `curl`, which does not set the
-`com.apple.quarantine` extended attribute, so a Homebrew-installed `sysml` does not trigger
-the Gatekeeper "developer cannot be verified" prompt. Homebrew applies quarantine only to
-*casks* (hence the cask-only `--no-quarantine` flag); formulae are not quarantined. See
-[docs/MACOS_DISTRIBUTION.md](../../docs/MACOS_DISTRIBUTION.md) for the full analysis.
+   ```bash
+   # in a clone of Open-MBEE/Systemica
+   ./scripts/render-homebrew-formula.sh v0.3.0 > /tmp/systemica.rb
 
-## Not yet published — maintainer action required
+   # in a clone of Open-MBEE/homebrew-tap
+   mkdir -p Formula && cp /tmp/systemica.rb Formula/systemica.rb
+   git add Formula/systemica.rb
+   git commit -m "systemica 0.3.0"
+   git push
+   ```
 
-**There is no tap yet.** A formula must live in a tap repository named
-`homebrew-<something>` (e.g. `Open-MBEE/homebrew-tap`), so that users can run:
+   The tag must be a release that already has `systemica-<os>-<arch>.tar.gz` archives and
+   `SHA256SUMS.txt` attached — i.e. one built after this change lands. The script fails
+   loudly if a checksum is missing.
+3. Verify before announcing it:
 
-```bash
-brew tap Open-MBEE/tap
-brew install systemica
-```
+   ```bash
+   brew tap Open-MBEE/tap
+   brew install --verbose systemica
+   brew test systemica
+   brew audit --strict --online Open-MBEE/tap/systemica
+   ```
 
-Creating that repository is a maintainer decision and was deliberately not done from this
-change. Once it exists, the release process is:
+## Per release
 
-1. Tag and let CircleCI publish the release (archives + `SHA256SUMS.txt`).
-2. Run `scripts/render-homebrew-formula.sh <tag> > Formula/systemica.rb` in the tap.
-3. Commit and push the tap.
+The release job publishes stable artifact names, so only two things change per release:
 
-Automating step 2–3 from CI needs a token with write access to the tap repository; that is
-out of scope here.
+1. Tag `vX.Y.Z` and let CircleCI publish the release (per-binary archives,
+   `systemica-<os>-<arch>.tar.gz`/`.zip` bundles, and `SHA256SUMS.txt`).
+2. In the tap: `./scripts/render-homebrew-formula.sh vX.Y.Z > Formula/systemica.rb`, commit,
+   push. Five values change — `version` and the four `sha256` lines.
+
+This can be automated later: a tag-triggered job could run the render script and push the
+tap commit, but that needs a token with write access to `Open-MBEE/homebrew-tap` stored as a
+CI secret, which is a maintainer decision and is deliberately not set up here.
