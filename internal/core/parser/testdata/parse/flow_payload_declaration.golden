@@ -1,0 +1,30 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="MessagePayload" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="item" abstract=false variation=false name="FuelCommand"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="fuelFlow" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Definition kind="occurrence" abstract=false variation=false name="Interaction"
+          (Membership visibility="default"
+            (Usage kind="part" name="sender" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="part" name="receiver" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="flow" name="fuelCommandMessage" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="fuelCommand" declared=true)
+              (Usage kind="attribute" name="fuelCommand" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                (Relationship kind="typing" target=FuelCommand
+                  (*ast.QualifiedName)))))
+          (Membership visibility="default"
+            (Usage kind="flow" name="forwardMessage" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="fuelCommand" declared=true)
+              (Usage kind="attribute" name="fuelCommand" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                (Relationship kind="typing" target=FuelCommand
+                  (*ast.QualifiedName))
+                (FeatureChainExpr member="fuelCommand"
+                  (FeatureReference name="fuelCommandMessage")))))
+          (Membership visibility="default"
+            (Usage kind="flow" name="plainPayload" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="FuelCommand" declared=false))))))))

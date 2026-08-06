@@ -202,7 +202,8 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 				payloadStr = fmt.Sprintf("%T", v.Payload)
 			}
 		}
-		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q)`, fromStr, toStr, payloadStr)
+		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q declared=%t)`,
+			fromStr, toStr, payloadStr, v.PayloadDecl != nil)
 	case *SendStatement:
 		// The `to`/`via` distinction decides how the message is routed, so a
 		// golden that did not show it would not lock the parse.
