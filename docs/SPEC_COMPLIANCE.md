@@ -273,7 +273,9 @@ known, so unmodelled types never produce a false positive.
 | Redefinition target that the redefinition shadows (`part redefines engine`) | `semantics/model.go` `inheritedFeature` | `TestInheritedMembersAreVisible/nested_redefinition`, `TestRedefinitionDoesNotShadowItsTarget` | ✅ Faithful |
 | Loop body as a namespace (`loop { action a; } until a.x`, `for x in c { ... }`) | `symbols/builder.go` WhileLoopActionNode, `resolve/document.go`, `passes/typecheck.go`, `lsp/walk.go` | `TestBodyLocalDeclarationsAreVisible`, `TestBodyLocalNamesDoNotEscape` | ✅ Faithful |
 | Body-expression parameters (`c->forAll { in i : Positive; f(i) }`) | `symbols/bodyscopes.go` `buildBodyScopes` (scope linked into the document tree), read back by `symbols.BodyExprScope` in `resolve/document.go` and `lsp/walk.go` | `TestBodyLocalDeclarationsAreVisible/body_expression_parameter`, `lsp` `TestRenameLeavesBodyExpressionParameters`, `TestRenameBodyExpressionParameterFromDeclaration`, `TestDefinitionBodyExpressionParameter` | ✅ Faithful |
-| Features of the stdlib base type of an untyped usage (`state normal;` → `States::StateAction::done`) | — | `docs/TRAINING_EXAMPLES.md` pinned counts (`Time Constraints`, `Action Performance Example`) | ❌ Not Yet Implemented (no implicit typing per usage kind, so such members report unresolved) |
+| Features of the stdlib base type of an untyped usage (`state normal;` → `States::StateAction::done`) | `semantics/implicit.go` `implicitUsageBases`, `Model.implicitBase` via `semantics/model.go` `DirectSupertypes` | `model/implicit_typing_test.go` `TestImplicitUsageBaseTypes`, `TestInheritedMembersResolveThroughUntypedUsage`, `semantics/implicit_test.go`, `lsp/implicit_typing_test.go` | ⚠️ Approximate (the implicit base is the stdlib base *definition* of the usage kind, not the base *feature* it subsets, since library index records carry no specialization edges; connector/succession/flow/binding/satisfy/subject/objective usages take their type from what they relate to and get no base) |
+| Implicit redefinition of a like-named inherited feature (`out item image;` in `action focus : Focus`) | `semantics/implicit.go` (only to the extent that such a usage is deliberately given no implicit base) | `model/implicit_typing_test.go` `TestImplicitBaseYieldsToImplicitRedefinition`, `docs/TRAINING_EXAMPLES.md` pinned count (`Conditional Succession Example-1`) | ❌ Not Yet Implemented (the usage is left untyped rather than taking the inherited feature's type, so members of that type report unresolved) |
+| Features contributed by `perform` statements and `references` edges (`perform providePower.generateTorque;`) | — | `docs/TRAINING_EXAMPLES.md` pinned counts (`Action Performance Example`, `Allocation Usage Example`) | ❌ Not Yet Implemented (neither is a generalization edge, so the referenced action's members are not reachable) |
 | `if`/`else` branch bodies as namespaces | — | — | ❌ Not Yet Implemented (branch declarations are registered nowhere; the AST has no per-branch node to own a scope) |
 | Transition source/target names | — (deferred to `lower/state_graph.go`) | — | ⚠️ Approximate (not resolved as references, so a misspelled endpoint surfaces at lowering, not at the name-resolution tier) |
 | Signal trigger names (`when sigX`) | — | `TestBehaviorDeclarationsAreVisible/signal_trigger` | ⚠️ Approximate (a bare trigger name is an injected event, not a declared element, so it is deliberately not resolved) |
@@ -283,6 +285,18 @@ known, so unmodelled types never produce a false positive.
 ---
 
 ## What We Don't (Yet) Support
+
+### Decisions to Reassess
+
+Deliberate limitations whose *current* handling should be revisited once the
+feature they wait on lands (this repository has issues disabled, so follow-ups
+are tracked here):
+
+| Deferred until | Reassess |
+|---|---|
+| Implicit redefinition of a like-named inherited feature | `semantics/implicit.go` `implicitBase` gives such a usage no implicit base at all, rather than the redefined feature's type. Once redefinition supplies the type it should fall through to it instead of returning nil. Pinned by `model/implicit_typing_test.go` `TestImplicitBaseYieldsToImplicitRedefinition` and by `Conditional Succession Example-1` in `docs/TRAINING_EXAMPLES.md`. |
+| Specialization edges in the library index (`libs/loader.go` `recordEntries` drops `Supers`) | `implicitUsageBases` maps each usage kind to its stdlib base *definition* because the base *feature* the spec has usages subset would be a dead end for member lookup. With the edges recorded, the map should name the base feature the spec names. |
+| Features contributed by `perform` statements and `references` edges | Neither is a generalization, so the referenced action's members are unreachable (`Action Performance Example`, `Allocation Usage Example`). |
 
 ### Major UML/SysML Features Not Implemented
 
