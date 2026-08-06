@@ -7,6 +7,7 @@ import (
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lower"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 )
 
 // executeActionSource executes the named action declared in src.
@@ -335,7 +336,11 @@ func TestPortRoutedMessageDoesNotReachStateMachine(t *testing.T) {
 // and only when the call carries every argument the trigger declares.
 func TestCallEventMatchesOperationName(t *testing.T) {
 	callTrigger := func(operation string, params ...string) *lower.Transition {
-		trigger := &ast.CallEvent{Parameters: params}
+		declared := make([]ast.NameSegment, len(params))
+		for i, param := range params {
+			declared[i] = ast.NameSegment{Text: param}
+		}
+		trigger := &ast.CallEvent{Parameters: declared}
 		if operation != "" {
 			trigger.Operation = &ast.QualifiedName{Parts: []ast.NameSegment{{Text: operation}}}
 		}
@@ -369,6 +374,29 @@ func TestCallEventMatchesOperationName(t *testing.T) {
 		if got := exec.matchesEvent(tc.trans, tc.event); got != tc.matches {
 			t.Errorf("%s: matchesEvent = %v, want %v", tc.name, got, tc.matches)
 		}
+	}
+}
+
+// A call whose guard rejects it must leave the machine's data as it was: its
+// arguments are bound only for the guard, and undone when nothing fires.
+func TestRejectedCallLeavesNoArgumentsBehind(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state waiting;
+			state moving;
+			init then waiting;
+			transition waiting to moving accept setSpeed(value) if value > 0;
+		}
+	}`)
+	exec.InvokeOperation("setSpeed", map[string]Value{
+		"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 0}},
+	})
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	if value, held := exec.stateData["value"]; held {
+		t.Errorf("the rejected call's argument is still in the machine's data: %v", value)
 	}
 }
 

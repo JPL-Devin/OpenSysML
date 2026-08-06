@@ -190,9 +190,12 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		// Source and target name states, which the state machine's own scope
 		// need not contain (a transition may cross into a region), so they are
 		// left to the lowering layer; the payload expressions are checkable.
+		// The guard and effect resolve against the parameters the transition's
+		// call trigger declares, which live in a scope of their own.
 		r.resolveTrigger(scope, d.Trigger)
-		r.resolveExpr(scope, d.Guard)
-		r.walkMembers(scope, d.Effect)
+		body := symbols.CallTriggerScope(scope, d)
+		r.resolveExpr(body, d.Guard)
+		r.walkMembers(body, d.Effect)
 	case *ast.SendStatement:
 		r.resolveExpr(scope, d.Message)
 		r.resolveExpr(scope, d.Target)

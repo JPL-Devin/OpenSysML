@@ -2115,7 +2115,7 @@ func (p *Parser) parseTriggerEvent() ast.Node {
 func (p *Parser) parseCallEvent(start int, operation *ast.QualifiedName) ast.Node {
 	p.advance() // consume '('
 
-	var params []string
+	var params []ast.NameSegment
 	for !p.at(lexer.RParen) && !p.atEOF() {
 		seg, ok := p.parseNameSegmentRelaxed()
 		if !ok {
@@ -2124,7 +2124,7 @@ func (p *Parser) parseCallEvent(start int, operation *ast.QualifiedName) ast.Nod
 			en.NodeSpan = p.spanFrom(start)
 			return en
 		}
-		params = append(params, seg.Text)
+		params = append(params, seg)
 		if !p.accept2(lexer.Comma) {
 			break
 		}

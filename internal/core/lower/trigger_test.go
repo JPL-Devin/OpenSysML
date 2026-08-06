@@ -306,7 +306,7 @@ func TestTriggerClassification_CallTrigger(t *testing.T) {
 	if got := ast.SimpleName(trigger.Operation); got != "setSpeed" {
 		t.Errorf("operation = %q, want setSpeed", got)
 	}
-	if len(trigger.Parameters) != 1 || trigger.Parameters[0] != "value" {
+	if len(trigger.Parameters) != 1 || trigger.Parameters[0].Text != "value" {
 		t.Errorf("parameters = %v, want [value]", trigger.Parameters)
 	}
 }

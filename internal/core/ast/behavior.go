@@ -221,7 +221,7 @@ func (*AcceptEvent) triggerEvent() {}
 type CallEvent struct {
 	NodeBase
 	Operation  *QualifiedName // operation to invoke
-	Parameters []string       // declared argument names, in written order
+	Parameters []NameSegment  // declared argument names, in written order
 }
 
 func (*CallEvent) triggerEvent() {}

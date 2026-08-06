@@ -493,42 +493,70 @@ func (e *StateExecutor) enabledTransition(state *ast.StateNode, event *Event) (*
 			continue
 		}
 		// A call trigger's arguments are bound before the guard runs: the guard is
-		// written against the parameters the trigger declares.
-		if err := e.bindTriggerArguments(trans, event); err != nil {
+		// written against the parameters the trigger declares. A transition that
+		// does not fire must leave no trace of them in the machine's data.
+		unbind, err := e.bindTriggerArguments(trans, event)
+		if err != nil {
+			unbind()
 			return nil, err
 		}
 		pass, err := e.passesGuard(trans.Guard)
 		if err != nil {
+			unbind()
 			return nil, err
 		}
 		if pass {
 			return trans, nil
 		}
+		unbind()
 	}
 	return nil, nil
 }
 
 // bindTriggerArguments binds the parameters a call trigger declares to the
 // arguments of the invocation, so the transition's guard and effect can read
-// them. Only a matched transition is bound, so every declared name is present.
-func (e *StateExecutor) bindTriggerArguments(trans *lower.Transition, event *Event) error {
+// them. It returns the function restoring the machine's data to what it held
+// before, for the caller to run when the transition does not fire.
+func (e *StateExecutor) bindTriggerArguments(trans *lower.Transition, event *Event) (func(), error) {
 	callEvent, ok := trans.Trigger.(*ast.CallEvent)
 	if !ok || len(callEvent.Parameters) == 0 {
-		return nil
+		return func() {}, nil
 	}
+	unbind := e.restoreData(callEvent.Parameters)
 	call, ok := event.Payload.(Call)
 	if !ok {
-		return fmt.Errorf("call trigger %s: event carries %T, not an operation invocation",
+		return unbind, fmt.Errorf("call trigger %s: event carries %T, not an operation invocation",
 			ast.SimpleName(callEvent.Operation), event.Payload)
 	}
 	for _, param := range callEvent.Parameters {
-		value, ok := call.Args[param]
+		value, ok := call.Args[param.Text]
 		if !ok {
-			return fmt.Errorf("call trigger %s: invocation carries no argument %q", call.Operation, param)
+			return unbind, fmt.Errorf("call trigger %s: invocation carries no argument %q",
+				call.Operation, param.Text)
 		}
-		e.stateData[param] = value
+		e.stateData[param.Text] = value
 	}
-	return nil
+	return unbind, nil
+}
+
+// restoreData snapshots the named entries of the machine's data and returns the
+// function putting them back, deleting the ones that were not there before.
+func (e *StateExecutor) restoreData(names []ast.NameSegment) func() {
+	saved := make(map[string]Value, len(names))
+	held := make(map[string]bool, len(names))
+	for _, name := range names {
+		value, ok := e.stateData[name.Text]
+		saved[name.Text], held[name.Text] = value, ok
+	}
+	return func() {
+		for name, wasHeld := range held {
+			if wasHeld {
+				e.stateData[name] = saved[name]
+			} else {
+				delete(e.stateData, name)
+			}
+		}
+	}
 }
 
 // matchesEvent checks if a transition matches the given event.
@@ -594,7 +622,7 @@ func triggerMatches(trigger ast.Node, event *Event) bool {
 		// A trigger declaring parameters fires only for a call carrying an
 		// argument of each declared name; `op()` takes the call whatever it carries.
 		for _, param := range callEvent.Parameters {
-			if _, ok := call.Args[param]; !ok {
+			if _, ok := call.Args[param.Text]; !ok {
 				return false
 			}
 		}

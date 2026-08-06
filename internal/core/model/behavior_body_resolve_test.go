@@ -87,6 +87,15 @@ func TestBehaviorBodyReferencesAreResolved(t *testing.T) {
 				transition a to b do { assign v := zzz; };
 			}
 		}`},
+		// A call trigger's parameters belong to its own transition: another
+		// transition's guard must not see them.
+		{"call trigger parameter outside its transition", `package P {
+			state S {
+				initial i; state a; state b; state c; i then a;
+				transition a to b accept setSpeed(zzz);
+				transition b to c if zzz > 0;
+			}
+		}`},
 	}
 
 	for _, tc := range cases {
@@ -140,6 +149,17 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 		}`},
 		{"signal trigger", `package P {
 			state S { initial i; state a; state b; i then a; transition a to b when sigX; }
+		}`},
+		{"call trigger parameter in guard", `package P {
+			state S { initial i; state a; state b; i then a; transition a to b accept setSpeed(value) if value > 0; }
+		}`},
+		{"call trigger parameter in effect", `package P {
+			import ScalarValues::*;
+			state S {
+				attribute v : Integer = 0;
+				initial i; state b; i then a;
+				state a { accept setSpeed(value) do { assign v := value; } then b; }
+			}
 		}`},
 		{"requirement actor binding", `package P {
 			import ScalarValues::*;

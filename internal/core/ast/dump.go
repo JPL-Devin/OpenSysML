@@ -302,8 +302,12 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		writeChildren(b, depth, []Node{v.Condition})
 		return
 	case *CallEvent:
+		names := make([]string, len(v.Parameters))
+		for i, p := range v.Parameters {
+			names[i] = p.Text
+		}
 		fmt.Fprintf(b, `(CallEvent operation=%q parameters=[%s])`,
-			qnString(v.Operation), strings.Join(v.Parameters, " "))
+			qnString(v.Operation), strings.Join(names, " "))
 		return
 	case *PseudostateNode:
 		fmt.Fprintf(b, `(PseudostateNode kind=%q name=%q)`, v.Kind.String(), v.Name)

@@ -153,8 +153,11 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		buildBodyScopes(states, d.States)
 	case *ast.TransitionMember:
 		bodyScopesInTrigger(scope, d.Trigger)
-		bodyScopesInExpr(scope, d.Guard)
-		buildBodyScopes(scope, d.Effect)
+		// The parameters a call trigger declares are visible to the transition's
+		// own guard and effect, and nowhere else.
+		body := newCallTriggerScope(scope, d)
+		bodyScopesInExpr(body, d.Guard)
+		buildBodyScopes(body, d.Effect)
 	case *ast.SendStatement:
 		bodyScopesInExpr(scope, d.Message)
 		bodyScopesInExpr(scope, d.Target)
@@ -179,6 +182,46 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		buildBodyScopes(scope, d.ThenBody)
 		buildBodyScopes(scope, d.ElseBody)
 	}
+}
+
+// CallTriggerScope returns the scope holding the parameters trans's call
+// trigger declares, or parent when it declares none.
+func CallTriggerScope(parent *Scope, trans *ast.TransitionMember) *Scope {
+	if parent == nil {
+		return nil
+	}
+	for _, ch := range parent.Children() {
+		if ch.Node() == trans {
+			return ch
+		}
+	}
+	return parent
+}
+
+// newCallTriggerScope creates and links the scope a call trigger's parameters
+// declare into, so `accept setSpeed(value) if value > 0` resolves `value`.
+func newCallTriggerScope(parent *Scope, trans *ast.TransitionMember) *Scope {
+	callEvent, ok := trans.Trigger.(*ast.CallEvent)
+	if !ok || len(callEvent.Parameters) == 0 {
+		return parent
+	}
+	if existing := bodyScopeChild(parent, trans); existing != nil {
+		return existing
+	}
+	scope := NewScope(parent, trans)
+	scope.markBodyLocal()
+	for _, param := range callEvent.Parameters {
+		scope.Define(param.Text, &Symbol{
+			Name:       param.Text,
+			Kind:       SymbolAttributeUsage,
+			Decl:       callEvent,
+			DeclSpan:   param.Span,
+			NameSpan:   param.Span,
+			OwnerScope: scope,
+		})
+	}
+	parent.AddChild(scope)
+	return scope
 }
 
 // bodyScopesInTrigger mirrors resolve's trigger handling: only the payload
