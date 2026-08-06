@@ -101,6 +101,16 @@ func (tr *TraceRecorder) RecordStateExit(state string, hasExitAction bool) {
 	}
 }
 
+// RecordDoStep records one action of a state's do behavior, which is how the
+// interleaving of concurrently active states' do behaviors becomes visible.
+func (tr *TraceRecorder) RecordDoStep(state string) {
+	if !tr.enabled {
+		return
+	}
+
+	tr.entries = append(tr.entries, fmt.Sprintf("do: %s", state))
+}
+
 // RecordEvent records an event being processed.
 func (tr *TraceRecorder) RecordEvent(event string, time float64) {
 	if !tr.enabled {

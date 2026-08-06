@@ -42,6 +42,23 @@ type StateExecutor struct {
 	// it was last exited. A history pseudostate re-enters that configuration
 	// instead of the composite state's initial one.
 	history map[*ast.StateNode]*historyRecord
+
+	// deferred holds, in arrival order, the events an active state defers and no
+	// transition of the active configuration handled.
+	deferred []Event
+
+	// doActivities are the running do behaviors, in the order their states were
+	// entered. Concurrently active states interleave one action per round, so this
+	// order — not map iteration order — decides the interleaving.
+	doActivities []*doActivity
+}
+
+// doActivity is the part of a state's do behavior that has still to run. The
+// behavior runs while its state is active rather than at entry, and is abandoned
+// when the state is exited.
+type doActivity struct {
+	state   *ast.StateNode
+	pending []ast.Node
 }
 
 // historyRecord is the configuration one composite state was last left in.
@@ -78,6 +95,7 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 		stateVisits:  make([]string, 0),
 		stateStack:   make([]*ast.StateNode, 0),
 		history:      make(map[*ast.StateNode]*historyRecord),
+		deferred:     make([]Event, 0),
 		activeConfig: &StateConfiguration{
 			regionStates: make(map[*ast.StateRegion]*ast.StateNode),
 		},
@@ -200,8 +218,9 @@ func (e *StateExecutor) scheduleTransitionEvents() error {
 
 	// Handle orthogonal regions separately
 	if currentState == nil && len(e.activeConfig.regionStates) > 0 {
-		// Multi-region state - schedule for each region
-		for _, regionState := range e.activeConfig.regionStates {
+		// Multi-region state - schedule for each region, in declaration order:
+		// the order events are queued in is the order they are dispatched in.
+		for _, regionState := range e.orderedRegionStates() {
 			if err := e.scheduleTransitionsForState(regionState); err != nil {
 				return err
 			}
@@ -216,38 +235,48 @@ func (e *StateExecutor) scheduleTransitionEvents() error {
 	return e.scheduleTransitionsForState(currentState)
 }
 
+// scheduleCompletionTransitions queues the completion transitions of a state
+// whose guard holds. A state completes only once its do behavior has finished,
+// so a state still running one is skipped here and scheduled by runDoRound when
+// the behavior ends.
+func (e *StateExecutor) scheduleCompletionTransitions(state *ast.StateNode) error {
+	if e.hasRunningDoActivity(state) {
+		return nil
+	}
+
+	for _, trans := range e.graph.Transitions[state] {
+		if trans.Trigger != nil {
+			continue
+		}
+		satisfied, err := e.passesGuard(trans.Guard)
+		if err != nil {
+			return fmt.Errorf("eval completion guard: %w", err)
+		}
+		if !satisfied {
+			continue
+		}
+		e.eventQueue.Push(Event{
+			ID:        e.nextEventID,
+			Type:      EventTime, // Use EventTime with nil trigger
+			Timestamp: e.currentTime,
+			Payload:   trans,
+		})
+		e.nextEventID++
+	}
+	return nil
+}
+
 // scheduleTransitionsForState schedules events for outgoing transitions of a specific state.
 func (e *StateExecutor) scheduleTransitionsForState(state *ast.StateNode) error {
 	transitions := e.graph.Transitions[state]
 
+	if err := e.scheduleCompletionTransitions(state); err != nil {
+		return err
+	}
+
 	for _, trans := range transitions {
 		if trans.Trigger == nil {
-			// Completion transition - only schedule if guard is satisfied
-			guardSatisfied := true
-			if trans.Guard != nil {
-				ec := NewEvalContext(e.ctx, nil)
-				ec.Push(e.stateData)
-				guardVal, err := ec.Eval(trans.Guard)
-				if err != nil {
-					return fmt.Errorf("eval completion guard: %w", err)
-				}
-
-				if guardVal.Kind == ValConst && guardVal.Const.Kind == semantics.ValBool {
-					guardSatisfied = guardVal.Const.Bool
-				} else {
-					return fmt.Errorf("guard must be boolean, got %v", guardVal.Kind)
-				}
-			}
-
-			if guardSatisfied {
-				e.eventQueue.Push(Event{
-					ID:        e.nextEventID,
-					Type:      EventTime, // Use EventTime with nil trigger
-					Timestamp: e.currentTime,
-					Payload:   trans,
-				})
-				e.nextEventID++
-			}
+			continue // scheduled above, once the state's do behavior has finished
 		} else if timeEvent, ok := trans.Trigger.(*ast.TimeEvent); ok {
 			// Evaluate duration expression
 			ec := NewEvalContext(e.ctx, nil)
@@ -293,7 +322,10 @@ func (e *StateExecutor) scheduleTransitionsForState(state *ast.StateNode) error 
 	return nil
 }
 
-// processNextEvent pops and processes the next event from queue.
+// processNextEvent pops and processes the next event from queue. It is one
+// run-to-completion step: the event is dispatched, and only once it has been
+// fully handled are events the new configuration no longer defers dispatched
+// again.
 func (e *StateExecutor) processNextEvent() error {
 	if e.eventQueue.Len() == 0 {
 		return fmt.Errorf("no events to process")
@@ -304,6 +336,15 @@ func (e *StateExecutor) processNextEvent() error {
 	// Advance time
 	e.currentTime = event.Timestamp
 
+	if err := e.dispatchEvent(event); err != nil {
+		return err
+	}
+	e.recallDeferredEvents()
+	return nil
+}
+
+// dispatchEvent delivers one event to the active configuration.
+func (e *StateExecutor) dispatchEvent(event Event) error {
 	// Process event by type
 	switch event.Type {
 	case EventTime:
@@ -370,45 +411,116 @@ func (e *StateExecutor) processNextEvent() error {
 		return fmt.Errorf("invalid TimeEvent payload: expected *lower.Transition or *ast.TransitionEdge")
 	default:
 		// For general events, broadcast to all active regions
-		return e.broadcastEvent(&event)
+		consumed, err := e.broadcastEvent(&event)
+		if err != nil {
+			return err
+		}
+		if !consumed && e.defersEvent(&event) {
+			e.deferred = append(e.deferred, event)
+		}
+		return nil
 	}
 }
 
-// broadcastEvent sends an event to all active regions (or single state if no regions).
-func (e *StateExecutor) broadcastEvent(event *Event) error {
-	// If in composite state with regions, broadcast to all
-	if len(e.activeConfig.regionStates) > 0 {
-		// Broadcast event to each region independently
-		for region, regionState := range e.activeConfig.regionStates {
-			// Find transitions from this region's active state
-			transitions := e.graph.Transitions[regionState]
-			for _, trans := range transitions {
-				if e.matchesEvent(trans, event) {
-					// Fire transition within this region
-					if err := e.fireTransitionInRegion(region, trans); err != nil {
-						return fmt.Errorf("fire transition in region %s: %w", region.Name, err)
-					}
-					break // Run-to-completion: one transition per region per event
+// defersEvent reports whether any state of the active configuration, or an
+// ancestor of one, defers this event. A composite state's deferral holds while
+// any of its substates is active.
+func (e *StateExecutor) defersEvent(event *Event) bool {
+	for _, state := range e.activeStates() {
+		for _, ancestor := range e.getParentChain(state) {
+			for _, trigger := range e.graph.Deferred[ancestor] {
+				if triggerMatches(trigger, event) {
+					return true
 				}
 			}
 		}
-		return nil
+	}
+	return false
+}
+
+// recallDeferredEvents returns every deferred event the configuration reached by
+// the step just finished no longer defers to the event pool, keeping their
+// relative order. A recalled event is queued as arriving now, behind the
+// completion events the step queued: run-to-completion dispatches those first.
+func (e *StateExecutor) recallDeferredEvents() {
+	if len(e.deferred) == 0 {
+		return
+	}
+	retained := make([]Event, 0, len(e.deferred))
+	for _, event := range e.deferred {
+		if e.defersEvent(&event) {
+			retained = append(retained, event)
+			continue
+		}
+		event.ID = e.nextEventID
+		e.nextEventID++
+		event.Timestamp = e.currentTime
+		e.eventQueue.Push(event)
+	}
+	e.deferred = retained
+}
+
+// broadcastEvent sends an event to all active regions (or single state if no
+// regions), reporting whether any of them consumed it. An event no region
+// consumed is either deferred or dropped by the caller, so "a transition fired"
+// and "nothing happened" must not look alike here.
+func (e *StateExecutor) broadcastEvent(event *Event) (bool, error) {
+	// If in composite state with regions, broadcast to all
+	if len(e.activeConfig.regionStates) > 0 {
+		// Broadcast the event to each region independently, in region declaration
+		// order: the regions' transitions run in the order returned.
+		consumed := false
+		for _, active := range e.orderedActiveRegions() {
+			trans, err := e.enabledTransition(active.state, event)
+			if err != nil {
+				return consumed, fmt.Errorf("region %s: %w", active.region.Name, err)
+			}
+			if trans == nil {
+				continue
+			}
+			// Run-to-completion: one transition per region per event.
+			if err := e.fireTransitionInRegion(active.region, trans); err != nil {
+				return consumed, fmt.Errorf("fire transition in region %s: %w", active.region.Name, err)
+			}
+			consumed = true
+		}
+		return consumed, nil
 	}
 
 	// Simple state (no regions) - existing logic
 	currentState := e.getCurrentState()
 	if currentState == nil {
-		return nil // No active state
+		return false, nil // No active state
 	}
 
-	transitions := e.graph.Transitions[currentState]
-	for _, trans := range transitions {
-		if e.matchesEvent(trans, event) {
-			return e.fireTransition(trans)
+	trans, err := e.enabledTransition(currentState, event)
+	if err != nil || trans == nil {
+		return false, err
+	}
+	if err := e.fireTransition(trans); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// enabledTransition returns the first transition out of state that this event
+// triggers and whose guard holds, or nil when the state cannot react to it. A
+// transition whose guard is false does not consume the event, so a later one
+// still gets its chance.
+func (e *StateExecutor) enabledTransition(state *ast.StateNode, event *Event) (*lower.Transition, error) {
+	for _, trans := range e.graph.Transitions[state] {
+		if !e.matchesEvent(trans, event) {
+			continue
+		}
+		pass, err := e.passesGuard(trans.Guard)
+		if err != nil {
+			return nil, err
+		}
+		if pass {
+			return trans, nil
 		}
 	}
-
-	return nil // Event not consumed
+	return nil, nil
 }
 
 // matchesEvent checks if a transition matches the given event.
@@ -419,19 +531,36 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 	}
 
 	switch event.Type {
+	case EventAccept, EventCall, EventChange:
+		return triggerMatches(trans.Trigger, event)
+
+	case EventTime:
+		// Time events carry the specific transition in Payload
+		// If matchesEvent is called for time events (shouldn't normally happen),
+		// match if this transition is the one in the payload
+		if transPayload, ok := event.Payload.(*lower.Transition); ok {
+			return trans == transPayload
+		}
+		return false
+
+	default:
+		return false
+	}
+}
+
+// triggerMatches reports whether a trigger reacts to an event, whether the
+// trigger belongs to a transition or to a state's deferred set.
+func triggerMatches(trigger ast.Node, event *Event) bool {
+	switch event.Type {
 	case EventAccept:
-		// Must have AcceptEvent trigger
-		acceptEvent, ok := trans.Trigger.(*ast.AcceptEvent)
+		acceptEvent, ok := trigger.(*ast.AcceptEvent)
 		if !ok {
 			return false
 		}
-
-		// Extract message payload
 		msg, ok := event.Payload.(Message)
 		if !ok {
 			return false
 		}
-
 		// Match signal type (last segment of QualifiedName against Message.SignalType)
 		expectedSignal := ast.SimpleName(acceptEvent.SignalType)
 		if expectedSignal == "" {
@@ -440,8 +569,7 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 		return msg.carriesSignal(expectedSignal)
 
 	case EventCall:
-		// Must have CallEvent trigger
-		callEvent, ok := trans.Trigger.(*ast.CallEvent)
+		callEvent, ok := trigger.(*ast.CallEvent)
 		if !ok {
 			return false
 		}
@@ -455,23 +583,10 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 		return expectedOp == "" || expectedOp == call.Operation
 
 	case EventChange:
-		// Must have ChangeEvent trigger
-		changeEvent, ok := trans.Trigger.(*ast.ChangeEvent)
-		if !ok {
-			return false
-		}
-		// Re-evaluate condition (pollChangeEvents is the primary driver)
-		// Here we just verify it's a ChangeEvent trigger
-		return changeEvent.Condition != nil
-
-	case EventTime:
-		// Time events carry the specific transition in Payload
-		// If matchesEvent is called for time events (shouldn't normally happen),
-		// match if this transition is the one in the payload
-		if transPayload, ok := event.Payload.(*lower.Transition); ok {
-			return trans == transPayload
-		}
-		return false
+		// Re-evaluate condition (pollChangeEvents is the primary driver); here we
+		// just verify it is a change trigger with a condition.
+		changeEvent, ok := trigger.(*ast.ChangeEvent)
+		return ok && changeEvent.Condition != nil
 
 	default:
 		return false
@@ -1019,25 +1134,50 @@ func (e *StateExecutor) activeCompositeOwner() *ast.StateNode {
 	return deepest
 }
 
+// activeRegion pairs an orthogonal region with the state active in it.
+type activeRegion struct {
+	region *ast.StateRegion
+	state  *ast.StateNode
+}
+
+// orderedActiveRegions returns each active orthogonal region with its active
+// state, in region declaration order. The order is observable — entry, exit and
+// do behaviors run in the order returned — and activeConfig.regionStates is a
+// map, so it is rebuilt from the graph rather than read off that map.
+func (e *StateExecutor) orderedActiveRegions() []activeRegion {
+	active := make([]activeRegion, 0, len(e.activeConfig.regionStates))
+	seen := make(map[*ast.StateRegion]bool, len(e.activeConfig.regionStates))
+	ordered := make([]*ast.StateRegion, 0, len(e.activeConfig.regionStates))
+	ordered = append(ordered, e.graph.TopLevelRegions...)
+	for _, state := range e.graph.States {
+		ordered = append(ordered, e.graph.CompositeStates[state]...)
+	}
+	for _, region := range ordered {
+		if seen[region] {
+			continue
+		}
+		seen[region] = true
+		if state, ok := e.activeConfig.regionStates[region]; ok {
+			active = append(active, activeRegion{region: region, state: state})
+		}
+	}
+	// A region whose owner is absent from graph.States still has to be reported;
+	// leaving it out would, for one, leak a state that exiting never left.
+	for region, state := range e.activeConfig.regionStates {
+		if !seen[region] {
+			active = append(active, activeRegion{region: region, state: state})
+		}
+	}
+	return active
+}
+
 // orderedRegionStates returns the active state of each orthogonal region in
 // region declaration order, since exit behaviors run in the order returned and
 // activeConfig.regionStates is a map.
 func (e *StateExecutor) orderedRegionStates() []*ast.StateNode {
 	states := make([]*ast.StateNode, 0, len(e.activeConfig.regionStates))
-	seen := make(map[*ast.StateRegion]bool, len(e.activeConfig.regionStates))
-	for _, state := range e.graph.States {
-		for _, region := range e.graph.CompositeStates[state] {
-			seen[region] = true
-			if active, ok := e.activeConfig.regionStates[region]; ok {
-				states = append(states, active)
-			}
-		}
-	}
-	// A region whose owner is absent from graph.States still has to be exited.
-	for region, active := range e.activeConfig.regionStates {
-		if !seen[region] {
-			states = append(states, active)
-		}
+	for _, active := range e.orderedActiveRegions() {
+		states = append(states, active.state)
 	}
 	return states
 }
@@ -1068,22 +1208,145 @@ func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*a
 // reports a typed error instead of spinning forever.
 const maxStateEvents = 10000
 
+// maxDoSteps bounds the do activity actions one run may perform, so a machine
+// that keeps restarting do behaviors reports instead of spinning forever.
+const maxDoSteps = 100000
+
 // RunToCompletion processes queued events until the machine completes or has no
-// event left to process, at which point it suspends.
+// event or running do behavior left, at which point it suspends. A state's do
+// behavior runs while the state is active: each run-to-completion step advances
+// every active state's do behavior by one action and then dispatches one event,
+// so concurrently active states interleave instead of one running to the end at
+// entry, and leaving a state abandons the rest of its do behavior.
 func (e *StateExecutor) RunToCompletion() error {
-	for events := 0; e.state == StateRunning; events++ {
+	events, doSteps := 0, 0
+	for e.state == StateRunning {
+		ran, err := e.runDoRound()
+		if err != nil {
+			return err
+		}
+		doSteps += ran
+		if doSteps >= maxDoSteps {
+			return fmt.Errorf("state machine exceeded max do activity steps (%d), possible non-terminating do behavior", maxDoSteps)
+		}
 		if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() {
+			if ran > 0 {
+				continue // do behaviors are still running; they may yet queue events
+			}
 			e.state = StateSuspended
 			return nil
 		}
 		if events >= maxStateEvents {
 			return fmt.Errorf("state machine exceeded max events (%d), possible infinite loop", maxStateEvents)
 		}
+		events++
 		if err := e.processNextEvent(); err != nil {
 			return fmt.Errorf("process event: %w", err)
 		}
 	}
 	return nil
+}
+
+// startDoActivity registers a state's do behavior as running. Re-entering a
+// state restarts its do behavior rather than resuming the abandoned one.
+func (e *StateExecutor) startDoActivity(state *ast.StateNode) {
+	if len(state.Do) == 0 {
+		return
+	}
+	e.stopDoActivity(state)
+	e.doActivities = append(e.doActivities, &doActivity{
+		state:   state,
+		pending: append([]ast.Node(nil), state.Do...),
+	})
+}
+
+// stopDoActivity abandons whatever is left of a state's do behavior, which is
+// what exiting the state does to it.
+func (e *StateExecutor) stopDoActivity(state *ast.StateNode) {
+	kept := e.doActivities[:0]
+	for _, activity := range e.doActivities {
+		if activity.state != state {
+			kept = append(kept, activity)
+		}
+	}
+	for i := len(kept); i < len(e.doActivities); i++ {
+		e.doActivities[i] = nil
+	}
+	e.doActivities = kept
+}
+
+// runDoRound advances every running do behavior by one action, in the order the
+// states were entered, and returns how many actions ran. One round is how
+// concurrently active states share the machine: each performs one action before
+// any performs its next.
+func (e *StateExecutor) runDoRound() (int, error) {
+	if len(e.doActivities) == 0 {
+		return 0, nil
+	}
+	round := make([]*doActivity, len(e.doActivities))
+	copy(round, e.doActivities)
+
+	ran := 0
+	for _, activity := range round {
+		if len(activity.pending) == 0 || !e.isRunningDoActivity(activity) {
+			continue
+		}
+		action := activity.pending[0]
+		activity.pending = activity.pending[1:]
+		if e.trace != nil {
+			e.trace.RecordDoStep(activity.state.Name)
+		}
+		if err := e.executeAction(action); err != nil {
+			return ran, fmt.Errorf("do action in state %s: %w", activity.state.Name, err)
+		}
+		ran++
+	}
+
+	// Drop the behaviors that have finished; an activity an action exited the
+	// state of is already gone.
+	finished := make([]*ast.StateNode, 0, len(e.doActivities))
+	kept := e.doActivities[:0]
+	for _, activity := range e.doActivities {
+		if len(activity.pending) > 0 {
+			kept = append(kept, activity)
+			continue
+		}
+		finished = append(finished, activity.state)
+	}
+	for i := len(kept); i < len(e.doActivities); i++ {
+		e.doActivities[i] = nil
+	}
+	e.doActivities = kept
+
+	// A state completes once its do behavior has finished, which is when its
+	// completion transitions become eligible.
+	for _, state := range finished {
+		if err := e.scheduleCompletionTransitions(state); err != nil {
+			return ran, fmt.Errorf("schedule completion of state %s: %w", state.Name, err)
+		}
+	}
+	return ran, nil
+}
+
+// isRunningDoActivity reports whether an activity is still registered, which it
+// is not once its state has been exited.
+func (e *StateExecutor) isRunningDoActivity(activity *doActivity) bool {
+	for _, running := range e.doActivities {
+		if running == activity {
+			return true
+		}
+	}
+	return false
+}
+
+// hasRunningDoActivity reports whether a state's do behavior is still running.
+func (e *StateExecutor) hasRunningDoActivity(state *ast.StateNode) bool {
+	for _, activity := range e.doActivities {
+		if activity.state == state {
+			return true
+		}
+	}
+	return false
 }
 
 // SendSignal injects a signal event into the state machine.
@@ -1151,15 +1414,12 @@ func (e *StateExecutor) acceptsSignal(msg Message) bool {
 	return false
 }
 
-// activeStates returns the states currently active: one per region for a
-// composite configuration, otherwise the single active state.
+// activeStates returns the states currently active, in region declaration
+// order: one per region for a composite configuration, otherwise the single
+// active state.
 func (e *StateExecutor) activeStates() []*ast.StateNode {
 	if len(e.activeConfig.regionStates) > 0 {
-		states := make([]*ast.StateNode, 0, len(e.activeConfig.regionStates))
-		for _, state := range e.activeConfig.regionStates {
-			states = append(states, state)
-		}
-		return states
+		return e.orderedRegionStates()
 	}
 	if current := e.getCurrentState(); current != nil {
 		return []*ast.StateNode{current}
@@ -1211,8 +1471,9 @@ func (e *StateExecutor) initialize() error {
 	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
 	e.activeConfig.simpleState = nil
 
-	// Enter initial states for all regions
-	for region, initialState := range e.graph.RegionInitials {
+	// Enter the initial state of every region, in declaration order.
+	for _, region := range e.graph.TopLevelRegions {
+		initialState := e.graph.RegionInitials[region]
 		if initialState == nil {
 			return fmt.Errorf("region %s has no initial state", region.Name)
 		}
@@ -1312,14 +1573,9 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 		// Otherwise, the region state was already set by fireTransitionInRegion
 	}
 
-	// Execute do activities (ongoing behavior)
-	// Simplified: execute immediately like entry actions
-	// Full UML semantics: concurrent execution with state lifetime
-	for _, action := range state.Do {
-		if err := e.executeAction(action); err != nil {
-			return fmt.Errorf("do action: %w", err)
-		}
-	}
+	// The do behavior runs while the state is active, interleaved with the do
+	// behaviors of the states active alongside it, rather than at entry.
+	e.startDoActivity(state)
 
 	// Don't schedule transitions here - let the caller decide when to schedule
 	// This prevents double-scheduling in region transitions
@@ -1370,6 +1626,10 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 			}
 		}
 	}
+
+	// Leaving the state abandons whatever is left of its do behavior, before the
+	// exit behavior runs.
+	e.stopDoActivity(state)
 
 	// Record trace
 	if e.trace != nil {
@@ -1726,6 +1986,11 @@ func (e *StateExecutor) StateMachineSymbol() *symbols.Symbol {
 }
 
 // ProcessNextEvent processes the next event from the queue (for REPL stepping).
+// It is the same step RunToCompletion repeats: every active state's do behavior
+// advances by one action, then the next event is dispatched.
 func (e *StateExecutor) ProcessNextEvent() error {
+	if _, err := e.runDoRound(); err != nil {
+		return err
+	}
 	return e.processNextEvent()
 }

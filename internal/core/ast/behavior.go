@@ -82,11 +82,15 @@ type IfActionNode struct {
 type StateNode struct {
 	NodeBase
 	Name      string
-	IsInitial bool           // initial state marker
-	IsFinal   bool           // final state marker
-	Entry     []Node         // entry behaviors (action sequence)
-	Do        []Node         // do activity (ongoing action)
-	Exit      []Node         // exit behaviors (action sequence)
+	IsInitial bool   // initial state marker
+	IsFinal   bool   // final state marker
+	Entry     []Node // entry behaviors (action sequence)
+	Do        []Node // do activity (ongoing action)
+	Exit      []Node // exit behaviors (action sequence)
+	// Defer names the events the state defers while it is active: an event no
+	// transition of the active configuration handles is retained instead of
+	// dropped, and delivered again once no active state defers it.
+	Defer     []Node
 	Substates []Node         // nested states (hierarchical)
 	Regions   []*StateRegion // orthogonal regions (parallel)
 }

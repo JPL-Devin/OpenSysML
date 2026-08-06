@@ -119,7 +119,13 @@ type eventHeap []Event
 func (h eventHeap) Len() int { return len(h) }
 
 func (h eventHeap) Less(i, j int) bool {
-	return h[i].Timestamp < h[j].Timestamp
+	if h[i].Timestamp != h[j].Timestamp {
+		return h[i].Timestamp < h[j].Timestamp
+	}
+	// Events queued for the same instant are dispatched in arrival order: IDs are
+	// handed out in that order, and a deferred event re-queued later keeps its
+	// original ID so it still comes before whatever arrived after it.
+	return h[i].ID < h[j].ID
 }
 
 func (h eventHeap) Swap(i, j int) {

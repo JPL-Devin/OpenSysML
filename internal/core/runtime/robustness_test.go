@@ -33,6 +33,75 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
 	t.Run("history_outside_composite_state", testHistoryOutsideCompositeState)
 	t.Run("history_without_record_or_default", testHistoryWithoutRecordOrDefault)
+	t.Run("defer_of_non_deferrable_trigger", testDeferOfNonDeferrableTrigger)
+	t.Run("non_terminating_do_behavior", testNonTerminatingDoBehavior)
+}
+
+// testDeferOfNonDeferrableTrigger: only signals and calls are dispatched from
+// the event pool, so a state deferring a time trigger is reported at lowering
+// rather than deferring nothing at run time.
+func testDeferOfNonDeferrableTrigger(t *testing.T) {
+	idx := symbols.NewIndex()
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 1000)
+
+	machine := &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{
+			&ast.StateNode{Name: "init", IsInitial: true},
+			&ast.StateNode{
+				Name:  "busy",
+				Defer: []ast.Node{&ast.TimeEvent{Duration: &ast.LiteralInteger{Value: "1"}}},
+			},
+			transitionMember("init", "busy"),
+		},
+	}
+
+	_, err := newStateExecutor(ctx, &symbols.Symbol{
+		Kind: symbols.SymbolStateUsage,
+		Name: machine.Ident.Name,
+		Decl: machine,
+	})
+	if err == nil {
+		t.Fatal("expected an error for a state deferring a time trigger")
+	}
+	if !strings.Contains(err.Error(), "only signal and call triggers can be deferred") {
+		t.Errorf("expected a deferrability error, got: %v", err)
+	}
+}
+
+// testNonTerminatingDoBehavior: a do behavior whose state is re-entered every
+// round never ends, so the run is bounded and reports instead of hanging.
+func testNonTerminatingDoBehavior(t *testing.T) {
+	spin := &ast.StateNode{
+		Name: "spin",
+		Do: []ast.Node{&ast.AssignmentActionNode{
+			Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "ticks"}}},
+			Value:  &ast.LiteralInteger{Value: "1"},
+		}},
+	}
+	exec := stateExecutorFor(t, &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{
+			&ast.StateNode{Name: "init", IsInitial: true},
+			spin,
+			transitionMember("init", "spin"),
+			transitionMember("spin", "spin"),
+		},
+	})
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	err := exec.RunToCompletion()
+	if err == nil {
+		t.Fatal("expected a budget error for a machine that never settles")
+	}
+	if !strings.Contains(err.Error(), "exceeded max") {
+		t.Errorf("expected a budget error, got: %v", err)
+	}
 }
 
 // testHistoryOutsideCompositeState: a history pseudostate restores the state
