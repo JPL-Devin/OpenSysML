@@ -37,6 +37,21 @@ type StateExecutor struct {
 	stateData    map[string]Value // State machine local variables
 	stateVisits  []string         // Ordered list of visited state names
 	stateStack   []*ast.StateNode // Active state configuration (for nested states)
+
+	// history records, per composite state, the configuration that state had when
+	// it was last exited. A history pseudostate re-enters that configuration
+	// instead of the composite state's initial one.
+	history map[*ast.StateNode]*historyRecord
+}
+
+// historyRecord is the configuration one composite state was last left in.
+type historyRecord struct {
+	// child is the substate that was active, whether it was declared directly or
+	// in one of the state's orthogonal regions.
+	child *ast.StateNode
+	// regions is the active state of each orthogonal region, empty for a state
+	// that has none.
+	regions map[*ast.StateRegion]*ast.StateNode
 }
 
 // newStateExecutor creates a state executor.
@@ -62,6 +77,7 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 		stateData:    make(map[string]Value),
 		stateVisits:  make([]string, 0),
 		stateStack:   make([]*ast.StateNode, 0),
+		history:      make(map[*ast.StateNode]*historyRecord),
 		activeConfig: &StateConfiguration{
 			regionStates: make(map[*ast.StateRegion]*ast.StateNode),
 		},
@@ -538,6 +554,8 @@ func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
 			return e.fireForkTransition(trans, ps)
 		case ast.PseudostateJoin:
 			return e.fireJoinTransition(trans, ps)
+		case ast.PseudostateShallowHistory, ast.PseudostateDeepHistory:
+			return e.fireHistoryTransition(trans, ps)
 		}
 	}
 
@@ -587,8 +605,21 @@ func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
 // targetState: exit up to the least common ancestor, run the transition effect,
 // then enter down to the target.
 func (e *StateExecutor) transitionTo(trans *lower.Transition, targetState *ast.StateNode) error {
+	return e.transitionToInto(trans, targetState, nil)
+}
+
+// transitionToInto is transitionTo with branches naming the state each
+// orthogonal region entered on the way must start in, which is how a history
+// pseudostate restores a recorded configuration rather than the initial one.
+func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *ast.StateNode, branches map[*ast.StateRegion]*ast.StateNode) error {
 	// Exit current state hierarchy up to LCA
 	currentState := e.getCurrentState()
+	if currentState == nil {
+		// A composite state with orthogonal regions is represented by its
+		// regions' active states rather than by a single active state, so leaving
+		// it starts from the state that owns those regions.
+		currentState = e.activeCompositeOwner()
+	}
 	// The trace's source name has to be read before the move, not after it.
 	fromName := ""
 	if currentState != nil {
@@ -626,13 +657,18 @@ func (e *StateExecutor) transitionTo(trans *lower.Transition, targetState *ast.S
 
 	// Reverse statesToEnter (shallowest to deepest)
 	for i := len(statesToEnter) - 1; i >= 0; i-- {
-		if err := e.enterState(statesToEnter[i]); err != nil {
+		if err := e.enterStateInto(statesToEnter[i], branches); err != nil {
 			return fmt.Errorf("enter state: %w", err)
 		}
 	}
 
-	// Update current state and rebuild stateStack with full active configuration
-	e.setCurrentState(targetState)
+	// Update current state and rebuild stateStack with full active configuration.
+	// A composite state with orthogonal regions is represented by its regions'
+	// active states, which entering it has just filled in, so taking it as the
+	// single active state would discard that configuration.
+	if _, hasRegions := e.graph.CompositeStates[targetState]; !hasRegions {
+		e.setCurrentState(targetState)
+	}
 	e.stateStack = e.getParentChain(targetState)
 	// Reverse to root→leaf order for stateStack
 	for i, j := 0, len(e.stateStack)-1; i < j; i, j = i+1, j-1 {
@@ -658,11 +694,20 @@ func (e *StateExecutor) transitionTo(trans *lower.Transition, targetState *ast.S
 	return nil
 }
 
-// isSynchronizationTarget reports whether a transition target is a fork or join
-// pseudostate, the two kinds that replace the entire active configuration.
+// isSynchronizationTarget reports whether a transition target is a pseudostate
+// that replaces the entire active configuration rather than moving one region:
+// fork, join, and history.
 func isSynchronizationTarget(target ast.Node) bool {
 	ps, ok := target.(*ast.PseudostateNode)
-	return ok && (ps.Kind == ast.PseudostateFork || ps.Kind == ast.PseudostateJoin)
+	if !ok {
+		return false
+	}
+	switch ps.Kind {
+	case ast.PseudostateFork, ast.PseudostateJoin,
+		ast.PseudostateShallowHistory, ast.PseudostateDeepHistory:
+		return true
+	}
+	return false
 }
 
 // passesGuard reports whether a transition's guard allows it to fire. A nil
@@ -681,6 +726,102 @@ func (e *StateExecutor) passesGuard(guard ast.Node) (bool, error) {
 		return false, fmt.Errorf("guard must be boolean, got %v", val.Kind)
 	}
 	return val.Const.Bool, nil
+}
+
+// recordHistory returns state's history record, creating it on first use.
+func (e *StateExecutor) recordHistory(state *ast.StateNode) *historyRecord {
+	record, ok := e.history[state]
+	if !ok {
+		record = &historyRecord{}
+		e.history[state] = record
+	}
+	return record
+}
+
+// fireHistoryTransition takes a transition into a history pseudostate: the
+// composite state that owns it is re-entered in the configuration it was last
+// left in. Before the state has ever been exited there is nothing to restore, so
+// the history's own outgoing transition supplies the default target, exactly as
+// UML's default history transition does.
+//
+// A shallow history restores the substate that was active; a deep history keeps
+// descending, restoring the innermost one.
+func (e *StateExecutor) fireHistoryTransition(trans *lower.Transition, hist *ast.PseudostateNode) error {
+	pass, err := e.passesGuard(trans.Guard)
+	if err != nil || !pass {
+		return err
+	}
+
+	owner, ok := e.graph.PseudostateOwner[hist]
+	if !ok || owner == nil {
+		return fmt.Errorf("history %s must be declared inside the composite state it restores", hist.Name)
+	}
+
+	// The record has to be read before the source configuration is left: a
+	// transition out of the owner's own substates would otherwise overwrite it.
+	record := e.history[owner]
+	if record == nil {
+		// Never exited: take the default history transition.
+		target, err := e.evaluateJunctionPseudostate(hist)
+		if err != nil {
+			return fmt.Errorf("history %s has no default transition and %s has no recorded configuration: %w", hist.Name, owner.Name, err)
+		}
+		return e.transitionTo(trans, target)
+	}
+
+	deep := hist.Kind == ast.PseudostateDeepHistory
+	branches := make(map[*ast.StateRegion]*ast.StateNode)
+
+	if len(record.regions) > 0 {
+		// The owner keeps its configuration in its regions, so it is re-entered
+		// with one branch per region rather than moved to a single state.
+		for _, region := range e.graph.CompositeStates[owner] {
+			active, recorded := record.regions[region]
+			if !recorded {
+				continue
+			}
+			if deep {
+				active = e.deepestRecorded(active, branches)
+			}
+			branches[region] = active
+		}
+		return e.transitionToInto(trans, owner, branches)
+	}
+
+	target := record.child
+	if target == nil {
+		return fmt.Errorf("history %s: no substate of %s was recorded", hist.Name, owner.Name)
+	}
+	if deep {
+		target = e.deepestRecorded(target, branches)
+	}
+	return e.transitionToInto(trans, target, branches)
+}
+
+// deepestRecorded follows the configuration recorded below state and returns the
+// innermost state to enter, adding a branch for every orthogonal region it
+// passes through so those regions are restored too. A state whose recorded
+// configuration lives in regions is itself the state to enter, since its regions
+// carry the rest.
+func (e *StateExecutor) deepestRecorded(state *ast.StateNode, branches map[*ast.StateRegion]*ast.StateNode) *ast.StateNode {
+	for {
+		record := e.history[state]
+		if record == nil {
+			return state
+		}
+		if len(record.regions) > 0 {
+			for _, region := range e.graph.CompositeStates[state] {
+				if active, recorded := record.regions[region]; recorded {
+					branches[region] = e.deepestRecorded(active, branches)
+				}
+			}
+			return state
+		}
+		if record.child == nil {
+			return state
+		}
+		state = record.child
+	}
 }
 
 // fireForkTransition takes a transition into a fork: every outgoing branch is
@@ -853,6 +994,26 @@ func (e *StateExecutor) exitToward(stop *ast.StateNode) error {
 	}
 	e.activeConfig.simpleState = nil
 	return nil
+}
+
+// activeCompositeOwner returns the deepest composite state whose orthogonal
+// regions hold the active configuration, or nil when no region is active. It
+// walks graph.States rather than the region map so the answer does not depend on
+// map iteration order.
+func (e *StateExecutor) activeCompositeOwner() *ast.StateNode {
+	var deepest *ast.StateNode
+	depth := -1
+	for _, state := range e.graph.States {
+		for _, region := range e.graph.CompositeStates[state] {
+			if _, active := e.activeConfig.regionStates[region]; !active {
+				continue
+			}
+			if d := len(e.getParentChain(state)); d > depth {
+				deepest, depth = state, d
+			}
+		}
+	}
+	return deepest
 }
 
 // orderedRegionStates returns the active state of each orthogonal region in
@@ -1066,6 +1227,26 @@ func (e *StateExecutor) initialize() error {
 	return nil
 }
 
+// descendantChain returns the states from ancestor's child down to leaf,
+// outermost first, excluding ancestor itself. leaf alone is returned when
+// ancestor is not one of its ancestors.
+func (e *StateExecutor) descendantChain(ancestor, leaf *ast.StateNode) []*ast.StateNode {
+	if leaf == nil {
+		return nil
+	}
+	chain := e.getParentChain(leaf) // leaf .. root
+	for i, state := range chain {
+		if state == ancestor {
+			descendants := make([]*ast.StateNode, 0, i)
+			for j := i - 1; j >= 0; j-- {
+				descendants = append(descendants, chain[j])
+			}
+			return descendants
+		}
+	}
+	return []*ast.StateNode{leaf}
+}
+
 // enterState executes entry behaviors when entering a state.
 func (e *StateExecutor) enterState(state *ast.StateNode) error {
 	return e.enterStateInto(state, nil)
@@ -1097,9 +1278,9 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 
 	// Check if this is a composite state with regions
 	if regions, isComposite := e.graph.CompositeStates[state]; isComposite {
-		// Entering composite state with orthogonal regions
-		// Initialize active configuration for all regions
-		e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
+		// Entering composite state with orthogonal regions: activate one state per
+		// region. Entries for other composite states' regions are left alone, so
+		// entering a nested composite does not drop its parent's configuration.
 		e.activeConfig.simpleState = nil // Clear simple state
 
 		for _, region := range regions {
@@ -1108,9 +1289,14 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 				entry = e.graph.RegionInitials[region]
 			}
 			e.activeConfig.regionStates[region] = entry
-			// Recursively enter each region's starting state
-			if err := e.enterState(entry); err != nil {
-				return fmt.Errorf("enter starting state in region %s: %w", region.Name, err)
+			// Enter the states between the region and its entry, outermost first: a
+			// branch may name a state nested below the region, and its ancestors'
+			// entry behaviors still have to run. Only descendants of state are
+			// entered here — its own ancestors are already active.
+			for _, descendant := range e.descendantChain(state, entry) {
+				if err := e.enterStateInto(descendant, branches); err != nil {
+					return fmt.Errorf("enter starting state in region %s: %w", region.Name, err)
+				}
 			}
 		}
 	} else {
@@ -1146,6 +1332,19 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 
 	// Check if this state is a composite state with regions
 	regions, isComposite := e.graph.CompositeStates[state]
+
+	// Remember the configuration being left, so a history pseudostate owned by
+	// this state or by its parent can restore it.
+	if isComposite && len(e.activeConfig.regionStates) > 0 {
+		active := make(map[*ast.StateRegion]*ast.StateNode, len(e.activeConfig.regionStates))
+		for region, regionState := range e.activeConfig.regionStates {
+			active[region] = regionState
+		}
+		e.recordHistory(state).regions = active
+	}
+	if parent := e.graph.ParentState[state]; parent != nil {
+		e.recordHistory(parent).child = state
+	}
 
 	// If this is a composite state with regions, exit all active region states first
 	if isComposite && len(regions) > 0 && len(e.activeConfig.regionStates) > 0 {
