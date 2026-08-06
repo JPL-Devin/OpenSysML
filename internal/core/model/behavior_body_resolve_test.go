@@ -3,6 +3,8 @@ package model
 import (
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/passes"
 )
 
 // unresolvedMessages returns the name-resolution findings for one document.
@@ -157,5 +159,60 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 				t.Fatalf("expected no findings in a well-formed model, got %d: %v", len(found), found)
 			}
 		})
+	}
+}
+
+// TestKeywordNamedDeclarationIsReferenceable covers a declaration whose name is
+// a keyword: the name must reach the symbol table, or references to it resolve
+// against nothing while the misspelled control case reports nothing either.
+func TestKeywordNamedDeclarationIsReferenceable(t *testing.T) {
+	resolved := `package P {
+		action flow { }
+		action caller { action a : flow; }
+	}`
+	if got := diagnose(t, "kwname", resolved); len(got) != 0 {
+		t.Errorf("reference to the keyword-named action reported %v, want none", got)
+	}
+
+	misspelled := `package P {
+		action flow { }
+		action caller { action a : flwo; }
+	}`
+	if got := diagnose(t, "kwname_bad", misspelled); len(got) != 1 {
+		t.Errorf("reference to an undeclared name reported %v, want one finding", got)
+	}
+}
+
+// TestReservedKeywordNameWarning covers how a keyword-spelled declaration name
+// reaches consumers: as a warning that does not gate the later tiers, so the
+// same file still reports its unresolved reference.
+func TestReservedKeywordNameWarning(t *testing.T) {
+	ws := NewWorkspace()
+	uri := "file:///kwwarn.sysml"
+	ws.Open(uri, []byte(`package P {
+		attribute x = 1;
+		action flow { assign x := zzz; }
+	}`), 1)
+	defer ws.Close(uri)
+
+	var warnings, errors []passes.Diagnostic
+	for _, d := range ws.Diagnostics(uri) {
+		switch d.Severity {
+		case passes.SeverityWarning:
+			warnings = append(warnings, d)
+		case passes.SeverityError:
+			errors = append(errors, d)
+		}
+	}
+
+	if len(warnings) != 1 || warnings[0].Code != "reserved-keyword-name" {
+		t.Fatalf("warnings = %v, want one reserved-keyword-name", warnings)
+	}
+	if !strings.Contains(warnings[0].Message, `"flow" is a reserved keyword`) {
+		t.Errorf("warning = %q", warnings[0].Message)
+	}
+	// The warning must not gate name resolution: `zzz` is still reported.
+	if len(errors) != 1 || !strings.Contains(errors[0].Message, "unresolved reference: zzz") {
+		t.Errorf("errors = %v, want the unresolved reference to zzz", errors)
 	}
 }

@@ -151,15 +151,24 @@ func (w *Workspace) Diagnostics(name string) []passes.Diagnostic {
 	if doc == nil {
 		return nil
 	}
-	parseDiags := make([]passes.Diagnostic, len(doc.ParseDiagnostics))
-	for i, pd := range doc.ParseDiagnostics {
-		parseDiags[i] = passes.Diagnostic{
+	parseDiags := make([]passes.Diagnostic, 0, len(doc.ParseDiagnostics)+len(doc.ParseWarnings))
+	for _, pd := range doc.ParseDiagnostics {
+		parseDiags = append(parseDiags, passes.Diagnostic{
 			Severity: passes.SeverityError,
 			Span:     pd.Span,
 			Message:  pd.Message,
 			Code:     "syntax",
 			Source:   "syntax",
-		}
+		})
+	}
+	for _, pw := range doc.ParseWarnings {
+		parseDiags = append(parseDiags, passes.Diagnostic{
+			Severity: passes.SeverityWarning,
+			Span:     pw.Span,
+			Message:  pw.Message,
+			Code:     "reserved-keyword-name",
+			Source:   "syntax",
+		})
 	}
 	diags := passes.Analyze(name, doc.AST, parseDiags, w.index)
 	w.diagCache[name] = diags
