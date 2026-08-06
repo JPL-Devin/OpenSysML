@@ -72,6 +72,14 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 	trace := NewTraceRecorder()
 	var traceOutput string
 
+	// -update-traces runs every conformance case, including known failures and
+	// cases that produce no trace at all (pure constraints and requirements), so
+	// there is nothing to record for those rather than anything to report.
+	unrecordable := t.Fatalf
+	if *updateTraces {
+		unrecordable = t.Skipf
+	}
+
 	rootScope := idx.DocumentRoot(sysmlPath)
 
 	// Try action execution
@@ -85,7 +93,7 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 		// Drive the traced executor itself: ctx.ExecuteAction would build a
 		// second, untraced one and leave the recorder empty.
 		if err := exec.RunToCompletion(); err != nil {
-			t.Logf("action execution error (may be expected): %v", err)
+			unrecordable("action execution: %v", err)
 		}
 		traceOutput = trace.String()
 	}
@@ -99,19 +107,21 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 		exec.SetTrace(trace)
 
 		if err := exec.RunToCompletion(); err != nil {
-			t.Logf("state execution error (may be expected): %v", err)
+			unrecordable("state execution: %v", err)
 		}
 		traceOutput = trace.String()
 	}
-
-	// Try calc execution
-	if calcSym := lookupBehavioralSymbol(rootScope, ast.DefCalc, ast.UsageCalc); calcSym != nil {
-		// Calc execution doesn't use executors, no trace support yet
-		t.Skip("calc tracing not yet implemented")
-	}
-
 	if traceOutput == "" {
-		t.Skip("no behavioral symbol found or no trace generated")
+		// Calcs are evaluated rather than executed, so there is no executor to
+		// attach a recorder to; cases with no behavioral symbol at all (pure
+		// constraints/requirements) likewise produce nothing to compare.
+		if *updateTraces {
+			t.Skipf("%s produces no trace", testName)
+		}
+		if lookupBehavioralSymbol(rootScope, ast.DefCalc, ast.UsageCalc) != nil {
+			t.Skip("calc tracing not implemented: calcs are evaluated, not executed")
+		}
+		t.Fatalf("%s has a golden trace but produced none", testName)
 	}
 
 	// Update or compare golden

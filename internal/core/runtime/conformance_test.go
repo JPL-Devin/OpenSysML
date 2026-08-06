@@ -62,9 +62,6 @@ func TestExecutionConformance(t *testing.T) {
 	// Walk conformance directory for .expected.json files
 	entries, err := os.ReadDir(conformanceDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			t.Skip("conformance directory does not exist yet")
-		}
 		t.Fatalf("failed to read conformance directory: %v", err)
 	}
 
@@ -89,7 +86,7 @@ func TestExecutionConformance(t *testing.T) {
 	}
 
 	if testCount == 0 {
-		t.Skip("no conformance cases found")
+		t.Fatalf("no runnable conformance cases in %s", conformanceDir)
 	}
 }
 
