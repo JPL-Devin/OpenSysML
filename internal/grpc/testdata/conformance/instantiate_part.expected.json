@@ -1,4 +1,5 @@
 {
+  "rpc": "Instantiate",
   "symbol_id": "test::Vehicle",
   "expected_slots": {
     "mass": {
