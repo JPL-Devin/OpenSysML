@@ -33,6 +33,10 @@ type StateGraph struct {
 	// RegionOwner: region → owning composite state
 	RegionOwner map[*ast.StateRegion]*ast.StateNode
 
+	// TopRegions are the machine's own orthogonal regions, in declaration order.
+	// The order is observable: it is the order regions are entered and exited in.
+	TopRegions []*ast.StateRegion
+
 	// RegionOf: state → the region that declares it (fork/join need the region a
 	// target belongs to)
 	RegionOf map[*ast.StateNode]*ast.StateRegion
@@ -103,24 +107,8 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 			stateNode.NodeSpan = n.NodeSpan
 			collectStates(graph, stateNode, nil)
 		case *ast.StateRegion:
-			// Top-level region: collect states within region
-			for _, regionMember := range n.States {
-				if state, ok := regionMember.(*ast.StateNode); ok {
-					collectStates(graph, state, nil)
-					graph.RegionOf[state] = n
-				} else if substate, ok := regionMember.(*ast.SubstateMember); ok {
-					stateNode := &ast.StateNode{Name: substate.Name}
-					stateNode.NodeSpan = substate.NodeSpan
-					collectStates(graph, stateNode, nil)
-					graph.RegionOf[stateNode] = n
-				} else if usage, ok := regionMember.(*ast.Usage); ok && usage.Kind == ast.UsageState {
-					stateNode := stateNodeFromUsage(usage)
-					collectStates(graph, stateNode, nil)
-					graph.RegionOf[stateNode] = n
-				}
-			}
-			// Store the region for later processing
-			// (We'll handle RegionInitials after collecting all states)
+			// Top-level region: collect its states, which no state is the parent of
+			collectRegionStates(graph, n, nil)
 		case *ast.PseudostateNode:
 			graph.Pseudostates[n.Name] = n
 		}
@@ -133,12 +121,10 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 		actualMember := unwrapMembership(member)
 		if region, ok := actualMember.(*ast.StateRegion); ok {
 			hasTopLevelRegions = true
-			// Top-level region
-			initialState := findInitialStateInRegion(graph, region)
-			if initialState == nil {
+			graph.TopRegions = append(graph.TopRegions, region)
+			if graph.RegionInitials[region] == nil {
 				return nil, fmt.Errorf("top-level region %s has no initial state", region.Name)
 			}
-			graph.RegionInitials[region] = initialState
 		}
 	}
 
@@ -150,11 +136,9 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 			for _, region := range state.Regions {
 				graph.RegionOwner[region] = state
 
-				initialState := findInitialStateInRegion(graph, region)
-				if initialState == nil {
+				if graph.RegionInitials[region] == nil {
 					return nil, fmt.Errorf("region %s in state %s has no initial state", region.Name, state.Name)
 				}
-				graph.RegionInitials[region] = initialState
 			}
 		}
 	}
@@ -296,40 +280,48 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 
 	// Collect states in orthogonal regions
 	for _, region := range state.Regions {
-		for _, regionState := range region.States {
-			switch n := unwrapMembership(regionState).(type) {
-			case *ast.StateNode:
-				collectStates(graph, n, state)
-				graph.RegionOf[n] = region
-			case *ast.SubstateMember:
-				childState := &ast.StateNode{Name: n.Name}
-				childState.NodeSpan = n.NodeSpan
-				collectStates(graph, childState, state)
-				graph.RegionOf[childState] = region
-			case *ast.Usage:
-				if n.Kind == ast.UsageState {
-					childState := stateNodeFromUsage(n)
-					collectStates(graph, childState, state)
-					graph.RegionOf[childState] = region
-				}
-			case *ast.PseudostateNode:
-				graph.Pseudostates[n.Name] = n
-				graph.PseudostateOwner[n] = state
-			}
-		}
+		collectRegionStates(graph, region, state)
 	}
 }
 
-// findInitialStateInRegion finds the initial state in a region.
-func findInitialStateInRegion(graph *StateGraph, region *ast.StateRegion) *ast.StateNode {
-	for _, state := range region.States {
-		if stateNode, ok := state.(*ast.StateNode); ok {
-			if stateNode.IsInitial {
-				return stateNode
+// collectRegionStates collects the states an orthogonal region declares, records
+// which region declares each of them and which one the region starts in, and
+// assigns the region's pseudostates to the state that owns the region. parent is
+// the state owning the region, nil for the machine's own regions.
+//
+// Region members reach here as a state node, a bare `state <name>;` substate or a
+// state usage with a body, each of them possibly wrapped in a membership: a state
+// missed here is a state no transition can name.
+func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast.StateNode) {
+	for _, member := range region.States {
+		var state *ast.StateNode
+		switch n := unwrapMembership(member).(type) {
+		case *ast.StateNode:
+			state = n
+		case *ast.SubstateMember:
+			state = &ast.StateNode{Name: n.Name}
+			state.NodeSpan = n.NodeSpan
+		case *ast.Usage:
+			if n.Kind != ast.UsageState {
+				continue
 			}
+			state = stateNodeFromUsage(n)
+		case *ast.PseudostateNode:
+			graph.Pseudostates[n.Name] = n
+			if parent != nil {
+				graph.PseudostateOwner[n] = parent
+			}
+			continue
+		default:
+			continue
+		}
+
+		collectStates(graph, state, parent)
+		graph.RegionOf[state] = region
+		if state.IsInitial && graph.RegionInitials[region] == nil {
+			graph.RegionInitials[region] = state
 		}
 	}
-	return nil
 }
 
 // findStateByName looks up a state by qualified name.
@@ -631,27 +623,13 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 				return err
 			}
 		case *ast.StateRegion:
-			// Collect states that belong to this region
-			// We need to find which states in graph.States came from this region
+			// The states this region declares, in collection order: a transition
+			// declared inside a region names them, and collecting states already
+			// recorded which region declares each one.
 			var statesInRegion []*ast.StateNode
-			for _, regionMember := range n.States {
-				actualRegionMember := unwrapMembership(regionMember)
-				if stateNode, ok := actualRegionMember.(*ast.StateNode); ok {
-					// This state is directly in the region
-					for _, graphState := range graph.States {
-						if graphState == stateNode {
-							statesInRegion = append(statesInRegion, graphState)
-							break
-						}
-					}
-				} else if substate, ok := actualRegionMember.(*ast.SubstateMember); ok {
-					// Find the corresponding StateNode created from this SubstateMember
-					for _, graphState := range graph.States {
-						if graphState.Name == substate.Name {
-							statesInRegion = append(statesInRegion, graphState)
-							break
-						}
-					}
+			for _, state := range graph.States {
+				if graph.RegionOf[state] == n {
+					statesInRegion = append(statesInRegion, state)
 				}
 			}
 
