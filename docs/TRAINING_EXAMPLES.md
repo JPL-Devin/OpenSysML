@@ -195,7 +195,7 @@ One entry drifted; every other file kept its exact count.
 
 **Deliberate test change**
 
-`internal/core/model/implicit_typing_test.go` `TestImplicitBaseYieldsToImplicitRedefinition`
+`internal/core/model/implicit_typing_test.go` `TestParameterRedefinitionAccompaniesTheImplicitBase`
 pinned the previous behavior of a *name*-based rule: any usage whose name matched
 a feature its owner inherits was left with no implicit base at all, on the
 assumption that an implicit redefinition would later supply the type. The

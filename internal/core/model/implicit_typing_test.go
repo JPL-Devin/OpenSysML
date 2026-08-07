@@ -109,18 +109,35 @@ func TestImplicitBaseNotAppliedToTypedUsage(t *testing.T) {
 	}
 }
 
-// TestImplicitBaseYieldsToImplicitRedefinition covers a parameter of a step:
-// it implicitly redefines the parameter at its position in the behavior that
-// types the step (KerML 7.4.7.3), and that parameter supplies the type, so the
-// parameter must not be given the generic standard library base instead.
-func TestImplicitBaseYieldsToImplicitRedefinition(t *testing.T) {
+// TestParameterRedefinitionAccompaniesTheImplicitBase covers a parameter of a
+// step: it implicitly redefines the parameter at its position in the behavior
+// that types the step (KerML 7.4.7.3), and that parameter supplies the type.
+// The kind's standard library base is an independent rule, so it still applies
+// — the redefined parameter may itself be untyped.
+func TestParameterRedefinitionAccompaniesTheImplicitBase(t *testing.T) {
 	src := `package P {
 		part def Image;
 		action def Focus { in scene; out image : Image; }
 		action focus : Focus { in item scene; out item image; }
 	}`
-	if got := implicitBaseOf(t, src, "P", "focus", "image"); len(got) != 1 || got[0] != "image" {
-		t.Fatalf("supertypes = %v, want [image] (the redefined parameter of Focus)", got)
+	got := implicitBaseOf(t, src, "P", "focus", "image")
+	if len(got) != 2 || got[0] != "image" || got[1] != "Items::Item" {
+		t.Fatalf("supertypes = %v, want [image Items::Item] (the redefined parameter of Focus, then the kind's base)", got)
+	}
+}
+
+// TestParameterOfAnUntypedParameterKeepsItsImplicitBase covers the case where
+// the redefined parameter carries no type of its own: the redefining parameter
+// still gets the standard library base of its kind, so the redefinition never
+// costs it a type.
+func TestParameterOfAnUntypedParameterKeepsItsImplicitBase(t *testing.T) {
+	src := `package P {
+		action def Focus { in scene; }
+		action focus : Focus { in item lighting; }
+	}`
+	got := implicitBaseOf(t, src, "P", "focus", "lighting")
+	if len(got) != 2 || got[0] != "scene" || got[1] != "Items::Item" {
+		t.Fatalf("supertypes = %v, want [scene Items::Item]", got)
 	}
 }
 
