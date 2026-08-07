@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 81/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 19/100 files have semantic errors (37 total errors)  
+**Status:** 88/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 12/100 files have semantic errors (29 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -57,7 +57,7 @@ diagnostic on a well-formed model, so the count is pinned and the gap named:
 | File | Diagnostic | Gap |
 |---|---|---|
 | `Time Constraints` | `unresolved member: done` | Inherited occurrence features are not members of a state usage: an untyped `state normal;` has no implicit typing to `States::StateAction`. |
-| `Message Payload Example` | `unresolved reference: fuelCommand` (2×) | The payload feature a message declares in its `of` clause is not registered. |
+| `Message Payload Example` | `unresolved reference: fuelCommand` (2×) | The payload feature a message declares in its `of` clause is not registered. (Fixed — see the message-payload re-pin below.) |
 | `Action Performance Example`, `Allocation Usage Example`, `Conditional Succession Example-1` | `unresolved member: focus`/`generateTorque`/`isWellFocused` | Same missing implicit typing: features of the stdlib base type of an untyped usage are not members of it. |
 
 ### Verdicts for the inherited- and body-local-feature re-pin (80/100)
@@ -94,9 +94,122 @@ One entry drifted; every other file kept its exact count.
 
 | File | Diagnostic | Remaining gap |
 |---|---|---|
-| `Conditional Succession Example-1` | `unresolved member: isWellFocused` | Implicit *redefinition*: `out item image;` inside `action focus : Focus` refines `Focus::image` (typed `Image`) by name. Untyped usages that shadow an inherited feature deliberately get no implicit base, so the type still comes from nowhere. |
-| `Action Performance Example`, `Allocation Usage Example` | `unresolved member: focus`/`shoot`/`generateTorque` | The members come from `perform action takePhoto references takePicture;` and `perform providePower.generateTorque;`: a `references` edge and the feature a `perform` statement contributes, neither of which is a generalization. |
+| `Conditional Succession Example-1` | `unresolved member: isWellFocused` | Implicit *redefinition*: `out item image;` inside `action focus : Focus` refines `Focus::image` (typed `Image`). Untyped usages that shadow an inherited feature deliberately got no implicit base, so the type came from nowhere. (Fixed in the 88/100 re-pin below.) |
+| `Action Performance Example`, `Allocation Usage Example` | `unresolved member: focus`/`shoot`/`generateTorque` | The members come from `perform action takePhoto references takePicture;` and `perform providePower.generateTorque;`: a `references` edge and the feature a `perform` statement contributes, neither of which is a generalization. **Fixed since — see the reference-subsetting verdicts below.** |
 | `Time Slice and Snapshot Example`, `Individuals and Time Slices` | `unresolved reference: start`/`done` | Bugs in the OMG files (`startShot`/`endShot`), unchanged. |
+
+### Verdicts for the reference-subsetting re-pin (81 → 83; 87 once `main`'s message-payload and satisfy-reference fixes merged in)
+
+Two entries went clean and one reports more; every other file kept its exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `18. Action Performance/Action Performance Example` | 2 × `unresolved member: focus`/`shoot` | Real fix: `perform action takePhoto references takePicture;` relates `takePhoto` to `takePicture` by a reference subsetting (SysML 7.17.6), which contributes the referenced action's members. `takePhoto.focus` now resolves to `takePicture::focus`. The negative counterpart (a member the referenced action does not declare) still reports — see `internal/core/semantics/reference_test.go` and `internal/core/model/perform_reference_test.go`. |
+| `38. Allocation/Allocation Usage Example` | 2 × `unresolved member: generateTorque` | Real fix, two causes: `perform providePower.generateTorque;` names its feature after the feature it references (KerML `Feature::effectiveName`), so `torqueGenerator.generateTorque` names a declaration; and `allocate torqueGenerator to powerTrain` is an anonymous binary allocation, whose first name is a connector end rather than the usage's own name. |
+| `32. Requirements/Requirement Satisfaction` | 2, then unchanged | Same fix, in a file that was already recorded: `perform 'provide power'.'generate torque'` resolves now. Its two remaining errors were unrelated and are cleared separately by the satisfy-reference verdicts below. |
+
+**A file that reports more, adjudicated**
+
+| File | Was | Now | Verdict |
+|---|---|---|---|
+| `34. Verification/Verification Case Usage Example` | 3 × `unresolved reference: testVehicle`/`massMeasured` | 6 × `individual cannot specialize partDef` / `... cannot be typed by individualDef` | The three name-resolution false positives are fixed by this change: `perform vehicleMassTest;` used to shadow the verification usage it performs with an empty feature, so `vehicleMassTest.collectData` and the redefinitions under it resolved to nothing. With the name-resolution tier clean, the type tier runs on this file for the first time (tiers are skipped after a lower tier errors) and reports six pre-existing false positives about individuals: `individual def TestSystem :> MassVerificationSystem;` and `individual testSystem : TestSystem` are well-formed (SysML 7.9.5), and the kind tables in `passes/typecheck.go` do not yet accept an individual definition specializing an occurrence definition. Recorded, not fixed, to keep this change scoped; see `docs/SPEC_COMPLIANCE.md`. |
+
+### Verdicts for the message-payload re-pin (82/100)
+
+One entry drifted; every other file kept its exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `27. Occurrences/Message Payload Example` | 2 × `unresolved reference: fuelCommand` | Real fix: `message m of fuelCommand : FuelCommand` *declares* the payload feature. The parser built that declaration but then overwrote `Usage.Members` with the body members, so it was never registered, and the `of` name was resolved as a reference in the enclosing scope. The declaration is now a member of the message (`FlowEnds.PayloadDecl`) and the `of` name resolves to it, which also makes `fuelCommandMessage.fuelCommand` reach the payload. |
+
+The payload *reference* form (`flow f of Fuel from a to b`) is unchanged and
+still resolves outward, with the negative case (`of` naming nothing) still
+reporting — see `internal/core/model/flow_payload_resolve_test.go`.
+
+### Verdicts for the satisfy-reference re-pin (85/100)
+
+Three entries drifted, all of them the same false positive; every other file kept
+its exact count.
+
+**Spec basis.** `SatisfyRequirementUsage` (SysML v2 §7.21.4, abstract syntax
+§8.3.21.10; concrete syntax in the pilot `SysML.xtext`) is:
+
+```
+SatisfyRequirementUsage :
+    OccurrenceUsagePrefix 'assert'? ( isNegated ?= 'not' )? 'satisfy'
+    ( ownedRelationship += OwnedReferenceSubsetting FeatureSpecializationPart?
+    | RequirementUsageKeyword UsageDeclaration?
+    )
+    ValuePart? ( 'by' ownedRelationship += SatisfactionSubjectMember )? RequirementBody
+;
+```
+
+Without the `requirement` keyword the name after `satisfy` is an
+**OwnedReferenceSubsetting** — a `ReferenceSubsetting` (a `Subsetting`) whose
+`referencedFeature` must be a `Feature`, i.e. a **usage**, never a definition.
+`satisfy <requirementDef>` is in fact the ill-formed direction.
+
+The abstract syntax makes this normative — `SatisfyRequirementUsage` carries the
+constraint
+
+```
+ownedReferenceSubsetting <> null implies
+    referencedFeatureTarget().oclIsKindOf(RequirementUsage)
+```
+
+so the referenced element must be a `RequirementUsage`. `ViewpointUsage` and
+`ConcernUsage` both specialize `RequirementUsage` (`SysML.ecore`:
+`ViewpointUsage eSuperTypes="#//RequirementUsage"`), so
+`satisfy <viewpointUsage>` inside a `view def` is equally legal.
+
+**Verdict: type-checker false positive.** The parser encoded the reference as a
+`FeatureTyping` (`RelTyping`), so the type tier demanded a definition. It now
+encodes it as `RelSubsets`, and the type tier requires the target to be a
+requirement usage (including viewpoint and concern usages).
+
+| File | Was | Verdict |
+|---|---|---|
+| `32. Requirements/Requirement Satisfaction` | 2 × `type must be a definition, found requirementUsage` | False positive: `satisfy vehicleSpecification by vehicle_design;` references the requirement usages declared in `Requirement Groups`. Legal per the grammar above. |
+| `33. Analysis/Analysis Case Usage Example` | 1 × `type must be a definition, found requirementUsage` | False positive: `satisfy vehicleFuelEconomyRequirements by vehicle_c1;` references the `requirement` usage declared in the same part. |
+| `42. Views/Views Example` | 1 × `type must be a definition, found viewpointUsage` | False positive: `satisfy 'system structure perspective';` references the `viewpoint` usage in `Viewpoint Example`; a viewpoint usage is a requirement usage. |
+
+The checking is narrowed, not dropped: `satisfy <non-requirement usage>` still
+reports (`satisfy target must be a requirement usage, found ...`), locked by
+`TestTypeCheckSatisfyNonRequirementUsageError` alongside the two positive cases in
+`internal/core/passes/typecheck_test.go`, and the parse shape is pinned by
+`internal/core/parser/testdata/parse/satisfy_reference.golden`.
+
+### Verdicts for the implicit-parameter-redefinition re-pin (88/100)
+
+One entry drifted; every other file kept its exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `16. Conditional Succession/Conditional Succession Example-1` | 1 × `unresolved member: isWellFocused` | Real fix: `out item image;` inside `action focus : Focus` is the second parameter of a step, so it implicitly redefines `Focus::image` (KerML 7.4.7.3, SysML v2 7.17.2 — the match is by *position*, not by name) and takes its type `Image`. `focus.image.isWellFocused` now resolves to `Image::isWellFocused`, the declaration the OMG model means. The negative counterpart (`focus.image.notAMember`) still reports — see `internal/core/model/implicit_typing_test.go` `TestImplicitRedefinitionSuppliesInheritedMembers`. |
+
+**Deliberate test change**
+
+`internal/core/model/implicit_typing_test.go` `TestParameterRedefinitionAccompaniesTheImplicitBase`
+pinned the previous behavior of a *name*-based rule: any usage whose name matched
+a feature its owner inherits was left with no implicit base at all, on the
+assumption that an implicit redefinition would later supply the type. The
+specification has no such name-based rule — implicit redefinition applies to the
+parameters of behaviors and steps by position (KerML 7.4.7.2/7.4.7.3), to
+connection and association ends by position (SysML v2 7.13.2), and to result
+parameters as results (SysML v2 7.19.2), while a nested usage that merely shares
+a name with an inherited feature is a *name conflict* to be resolved by an
+explicit redefinition (SysML v2 7.6.1, KerML 7.3.2.1). The test therefore now
+pins the parameter case (the parameter takes the redefined parameter's type),
+and the new `TestLikeNamedUsageIsNotAnImplicitRedefinition` pins the other side:
+a like-named undirected usage keeps the standard library base of its kind
+instead of being silently treated as a redefinition. We still do not diagnose
+the name conflict itself; that gap is recorded in `docs/SPEC_COMPLIANCE.md`.
 
 ---
 
@@ -158,7 +271,6 @@ These errors are **not implementation gaps** - the training files reference name
 
 ### Type System Limitations
 
-- `type must be a definition, found requirementUsage` (3×): Type system doesn't allow requirement usages as types
 - `X subsets Y: types do not conform` (2×): Subsetting validation gaps
 
 ### Parser/Unimplemented Features
@@ -172,13 +284,10 @@ These errors are **not implementation gaps** - the training files reference name
 
 | Category | Pass | Fail | Pass Rate |
 |----------|------|------|-----------|
-| **All Examples** | 81 | 19 | 81% |
-| **After filtering pedagogical gaps** | ~85 | ~15 | ~85% |
+| **All Examples** | 87 | 13 | 87% |
+| **After filtering pedagogical gaps** | ~87 | ~13 | ~87% |
 
-**Note**: Many "failures" are incomplete examples meant for teaching, not executable code. Of the 29 files with errors:
-- ~20 have only missing local declarations (pedagogical)
-- ~10 have stdlib import issues (mostly resolvable)
-- ~7 have type system limitations (require feature work)
+**Note**: Many "failures" are incomplete examples meant for teaching, not executable code. Of the 13 files with errors, most emit only missing local declarations or bugs in the OMG material itself (wrong feature names, typos, missing imports); the rest are type-system and validation gaps listed above.
 
 ---
 
@@ -186,11 +295,9 @@ These errors are **not implementation gaps** - the training files reference name
 
 ### Priority 1: Implicit Redefinition and Non-Generalization Feature Sources
 - Implicit redefinition: an untyped usage whose name matches a feature its owner inherits takes that feature's type
-- Features contributed by `perform` statements and by `references` edges on a usage
 - Document correct import paths for Metadata, Variations, Requirements namespaces
 
 ### Priority 2: Type System Enhancements
-- Allow requirement usages as types (or document this limitation)
 - Improve subsetting validation conformance checking
 
 ### Priority 3: Flow Validation Relaxation
@@ -217,11 +324,11 @@ This generates error frequency analysis and per-file diagnostics.
 
 ## Conclusion
 
-**Implementation Status**: Core behavioral semantics complete (20/20 conformance tests passing).
+**Implementation Status**: Core behavioral semantics complete (43/43 execution conformance cases passing).
 
-**Training Example Status**: 80% clean. Remaining errors are primarily:
-1. Missing local declarations in pedagogical examples
-2. Features of the stdlib base type of an untyped usage, which no implicit typing supplies (see the verdict tables above)
+**Training Example Status**: 87/100 clean (13 files, 30 errors). Remaining errors are primarily:
+1. Missing local declarations in pedagogical examples, and bugs in the OMG files themselves
+2. Implicit *redefinition* of a like-named inherited feature, which implicit stdlib typing does not supply (see the verdict tables above)
 3. Type system edge cases (feature work needed)
 
 The runtime implementation is **production-ready for complete SysML v2 models**. Training example "failures" reflect incomplete example files, not missing runtime features.

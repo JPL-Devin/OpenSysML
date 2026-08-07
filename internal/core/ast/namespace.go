@@ -51,6 +51,24 @@ func SimpleName(node Node) string {
 	return qname.Parts[len(qname.Parts)-1].Text
 }
 
+// TargetName returns the last segment of a relationship target — a qualified
+// name, a feature reference, or a feature chain (`providePower.generateTorque`)
+// — together with its span, or "" when node names nothing.
+func TargetName(node Node) (string, source.Span) {
+	if chain, ok := node.(*FeatureChainExpr); ok {
+		if chain.Member == nil {
+			return "", source.Span{}
+		}
+		node = chain.Member
+	}
+	qname := AsQualifiedName(node)
+	if qname == nil || len(qname.Parts) == 0 {
+		return "", source.Span{}
+	}
+	last := qname.Parts[len(qname.Parts)-1]
+	return last.Text, last.Span
+}
+
 // Identification captures `<shortName> name` or `name` on a declaration.
 type Identification struct {
 	ShortName     string

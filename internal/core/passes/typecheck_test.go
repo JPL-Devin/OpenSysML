@@ -76,3 +76,69 @@ func TestTypeCheckTypingByAliasOK(t *testing.T) {
 		t.Fatalf("expected no type diagnostics for alias typing, got %v", diags)
 	}
 }
+
+// `satisfy <name>` references an existing requirement usage (a reference
+// subsetting), so a requirement usage target is legal there.
+func TestTypeCheckSatisfyRequirementUsageOK(t *testing.T) {
+	src := `
+		package P {
+			requirement vehicleSpecification;
+			part def Vehicle;
+			part v : Vehicle;
+			part ctx {
+				satisfy vehicleSpecification by v;
+			}
+		}
+	`
+	if diags := typeDiags(t, src); len(diags) != 0 {
+		t.Fatalf("expected no type diagnostics for satisfy of a requirement usage, got %v", diags)
+	}
+}
+
+// A viewpoint usage is a requirement usage, so `satisfy <viewpointUsage>` is legal.
+func TestTypeCheckSatisfyViewpointUsageOK(t *testing.T) {
+	src := `
+		package P {
+			viewpoint perspective;
+			view def StructureView {
+				satisfy perspective;
+			}
+		}
+	`
+	if diags := typeDiags(t, src); len(diags) != 0 {
+		t.Fatalf("expected no type diagnostics for satisfy of a viewpoint usage, got %v", diags)
+	}
+}
+
+// Satisfying something that is not a requirement usage stays an error.
+func TestTypeCheckSatisfyNonRequirementUsageError(t *testing.T) {
+	src := `
+		package P {
+			attribute a;
+			part ctx {
+				satisfy a;
+			}
+		}
+	`
+	diags := typeDiags(t, src)
+	if len(diags) != 1 {
+		t.Fatalf("expected one type diagnostic for satisfy of a non-requirement, got %v", diags)
+	}
+}
+
+// An alias for a requirement usage is a legal satisfy target.
+func TestTypeCheckSatisfyAliasOfRequirementUsageOK(t *testing.T) {
+	src := `
+		package P {
+			requirement vehicleSpecification;
+			alias VS for vehicleSpecification;
+			part v;
+			part ctx {
+				satisfy VS by v;
+			}
+		}
+	`
+	if diags := typeDiags(t, src); len(diags) != 0 {
+		t.Fatalf("expected no type diagnostics for satisfy through an alias, got %v", diags)
+	}
+}

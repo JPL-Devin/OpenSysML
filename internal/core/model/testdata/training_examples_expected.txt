@@ -6,19 +6,12 @@
 2	09. Connections/Connections Example.sysml
 2	11. Interfaces/Interface Example.sysml
 2	13. Flows/Flow Interface Example.sysml
-1	16. Conditional Succession/Conditional Succession Example-1.sysml
-2	18. Action Performance/Action Performance Example.sysml
 3	27. Occurrences/Interaction Example-2.sysml
-2	27. Occurrences/Message Payload Example.sysml
 2	27. Occurrences/Time Slice and Snapshot Example.sysml
 2	28. Individuals/Individuals and Time Slices.sysml
-2	32. Requirements/Requirement Satisfaction.sysml
-1	33. Analysis/Analysis Case Usage Example.sysml
 1	33. Analysis/Trade Study Analysis Example.sysml
 3	34. Verification/Verification Case Definition Example.sysml
-3	34. Verification/Verification Case Usage Example.sysml
-2	38. Allocation/Allocation Usage Example.sysml
+6	34. Verification/Verification Case Usage Example.sysml
 2	39. Metadata/Metadata Example-1.sysml
 2	41. Language Extension/Model Library Example.sysml
 2	41. Language Extension/User Keyword Example.sysml
-1	42. Views/Views Example.sysml

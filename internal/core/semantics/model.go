@@ -20,10 +20,14 @@ import (
 type Model struct {
 	resolver *resolve.Resolver
 
-	directSupers map[*symbols.Symbol][]*symbols.Symbol
-	allSupers    map[*symbols.Symbol][]*symbols.Symbol
-	primTypes    map[*symbols.Symbol]PrimType
-	scalars      map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
+	directSupers  map[*symbols.Symbol][]*symbols.Symbol
+	allSupers     map[*symbols.Symbol][]*symbols.Symbol
+	referenced    map[*symbols.Symbol]*symbols.Symbol
+	resolvingRef  map[*symbols.Symbol]bool
+	memberSources map[*symbols.Symbol][]*symbols.Symbol
+	primTypes     map[*symbols.Symbol]PrimType
+	scalars       map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
+	params        map[*symbols.Symbol]behaviorParameters
 }
 
 // NewModel creates a semantic model backed by the given name resolver. The
@@ -31,17 +35,26 @@ type Model struct {
 // queried.
 func NewModel(resolver *resolve.Resolver) *Model {
 	return &Model{
-		resolver:     resolver,
-		directSupers: make(map[*symbols.Symbol][]*symbols.Symbol),
-		allSupers:    make(map[*symbols.Symbol][]*symbols.Symbol),
-		primTypes:    make(map[*symbols.Symbol]PrimType),
+		resolver:      resolver,
+		directSupers:  make(map[*symbols.Symbol][]*symbols.Symbol),
+		allSupers:     make(map[*symbols.Symbol][]*symbols.Symbol),
+		referenced:    make(map[*symbols.Symbol]*symbols.Symbol),
+		resolvingRef:  make(map[*symbols.Symbol]bool),
+		memberSources: make(map[*symbols.Symbol][]*symbols.Symbol),
+		primTypes:     make(map[*symbols.Symbol]PrimType),
+		params:        make(map[*symbols.Symbol]behaviorParameters),
 	}
 }
 
 // GeneralizationKind reports whether a relationship kind forms a conformance
 // ("is-a" / "conforms-to") edge for the specialization graph: specialization on
-// definitions, and subsetting/redefinition/typing on usages. references/crosses
-// are feature-value edges, not generalization, and are excluded.
+// definitions, and subsetting/redefinition/typing on usages.
+//
+// Reference subsetting (`references`) is excluded even though KerML 8.3.3.3.9
+// makes it a kind of Subsetting: it contributes members through MemberSources
+// instead, so that a referencing feature does not silently acquire the
+// referenced feature's type for conformance and implicit-typing purposes.
+// crosses is a feature-value edge, not generalization, and is excluded too.
 func GeneralizationKind(k ast.RelationshipKind) bool {
 	switch k {
 	case ast.RelSpecializes, ast.RelSubsets, ast.RelRedefines, ast.RelTyping:
@@ -156,8 +169,22 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 	}
 
+	// A parameter of a behavior or step implicitly redefines the corresponding
+	// parameter of each behavior or step its owner specializes, and so takes
+	// that parameter's type when it declares none (see redefinition.go).
+	declared := len(out)
+	for _, redefined := range m.implicitParameterRedefinitions(sym) {
+		if seen[redefined] {
+			continue
+		}
+		seen[redefined] = true
+		out = append(out, redefined)
+	}
+
 	// An untyped usage still specializes its standard-library base feature.
-	if len(out) == 0 {
+	// Implicit redefinition does not stand in for it: the two rules are
+	// independent, and the redefined parameter may itself be untyped.
+	if declared == 0 {
 		if base := m.implicitBase(sym); base != nil {
 			out = append(out, base)
 		}

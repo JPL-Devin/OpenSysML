@@ -133,6 +133,10 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		buildBodyScopes(scope, d.Actions)
 	case *ast.ExitMember:
 		buildBodyScopes(scope, d.Actions)
+	case *ast.DeferMember:
+		for _, trigger := range d.Triggers {
+			bodyScopesInTrigger(scope, trigger)
+		}
 	case *ast.StateNode:
 		body := scope
 		if child := bodyScopeChild(scope, d); child != nil {
@@ -179,8 +183,16 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		buildBodyScopes(body, d.Body)
 	case *ast.IfActionNode:
 		bodyScopesInExpr(scope, d.Condition)
-		buildBodyScopes(scope, d.ThenBody)
-		buildBodyScopes(scope, d.ElseBody)
+		for _, branch := range d.Branches() {
+			bodyScopesInDecl(scope, branch)
+		}
+	case *ast.IfBranchNode:
+		// A branch owns the scope its body declares into (see builder.buildDecl).
+		body := scope
+		if child := bodyScopeChild(scope, d); child != nil {
+			body = child
+		}
+		buildBodyScopes(body, d.Body)
 	}
 }
 

@@ -5,7 +5,7 @@
 
 ## Overview
 
-Pseudostates are transient vertices in state machines that enable complex control flow. This document covers **choice** and **junction** pseudostates.
+Pseudostates are transient vertices in state machines that enable complex control flow. This document covers **choice** and **junction** pseudostates in detail, and the routing and history semantics of the remaining kinds below. The textual notation for every kind is tabulated in `docs/grammar/README.md`.
 
 ### Choice vs Junction
 
@@ -60,6 +60,27 @@ state def SafetyMonitor {
     transition statusEval to Nominal if (temp < 50);
     transition statusEval to Warning if (temp >= 50 and temp < 100);
     transition statusEval to Critical if (temp >= 100);
+}
+```
+
+**History, entry/exit points and deferral** (a Systemica extension — the OMG
+textual notation has no production for pseudostates or for deferral; see
+`docs/grammar/README.md`):
+```sysml
+state def Player {
+    state playing {
+        state track;
+        state paused;
+
+        defer Skip;            // retained while `playing` is active
+        history resume;        // shallow, UML's H; `deep history` is H*
+        entry point start;
+        exit point stop;
+    }
+    state stopped;
+
+    transition stopped to resume when Resume;
+    transition resume to track;   // default history transition
 }
 ```
 
@@ -296,8 +317,8 @@ composite state is exited.
 
 **Entry/exit points** (`ast.PseudostateEntry`, `ast.PseudostateExit`) are routed
 like a junction — the transition continues along the point's own outgoing
-transition — but there is no textual notation for them, so they can only be built
-programmatically.
+transition. They are declared `entry point <name>;` and `exit point <name>;` in a
+state body.
 
 **History** (`ast.PseudostateShallowHistory`, `ast.PseudostateDeepHistory`) is
 owned by the composite state it restores — `lower.StateGraph.PseudostateOwner`
@@ -322,8 +343,9 @@ Entering a branch nested below a region runs the entry behaviors of the states
 above it inside that region, so a restored deep configuration is not entered
 sideways.
 
-Like entry/exit points, history has no textual notation, so it can only be built
-programmatically.
+History is declared `history <name>;` (shallow, as UML's `H`), `shallow history
+<name>;` or `deep history <name>;` in the body of the composite state it
+restores.
 
 ## Pseudostates Reached From Inside an Orthogonal Region
 
@@ -383,5 +405,6 @@ region.
 - A junction's guards are evaluated when it is reached, like a choice's, rather
   than statically together with its incoming transition. The two differ only for
   guards over data an effect on the incoming transition changes.
-- Entry points, exit points and history have no textual notation, so a model
-  reaching them has to be built on the AST directly.
+- Entry points, exit points and history are a Systemica extension to the OMG
+  textual notation, which has no production for any pseudostate; see
+  `docs/grammar/README.md`.

@@ -531,11 +531,14 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			// Parse reference target (qualified name or feature chain)
 			target := p.parseRelationshipTarget()
 			if target != nil {
-				// Add as references relationship
+				// The performed action is related to the perform action usage
+				// by a reference subsetting (SysML 7.17.6).
 				u.Relationships = append(u.Relationships, &ast.Relationship{
 					Kind:   ast.RelReferences,
 					Target: target,
 				})
+			} else {
+				p.error(p.peek().Span, "expected an action reference after 'perform'")
 			}
 
 			// Expect semicolon or body
@@ -1084,16 +1087,22 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	// Full form: satisfy [requirement] <name> by <name> { body }
 	// Short form: satisfy/verify <name>;
 	if kind == ast.UsageSatisfy {
-		// Optional: requirement keyword
-		p.acceptKeyword("requirement")
+		// Per SatisfyRequirementUsage: without the `requirement` keyword the name is
+		// a reference subsetting of an existing requirement usage, not a typing;
+		// with the keyword it declares a new requirement usage.
+		declaresRequirement := p.acceptKeyword("requirement")
 
 		reqName := p.parseQualifiedName()
 		if reqName != nil {
-			// Store as typing relationship
-			u.Relationships = append(u.Relationships, &ast.Relationship{
-				Kind:   ast.RelTyping,
-				Target: reqName,
-			})
+			if declaresRequirement && len(reqName.Parts) == 1 {
+				u.Ident.Name = reqName.Parts[0].Text
+				u.Ident.NameSpan = reqName.Parts[0].Span
+			} else {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelSubsets,
+					Target: reqName,
+				})
+			}
 		}
 
 		// Check for optional "by" clause
@@ -1103,13 +1112,13 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 				// Store subject as identification or relationship depending on node type
 				// If it's a simple qualified name, use as identification
 				// If it's a feature chain or other expression, store as relationship
-				if qn, ok := subjTarget.(*ast.QualifiedName); ok && len(qn.Parts) > 0 {
+				if qn, ok := subjTarget.(*ast.QualifiedName); ok && len(qn.Parts) > 0 && u.Ident.Name == "" {
 					u.Ident.Name = qn.Parts[0].Text
 					u.Ident.NameSpan = qn.Parts[0].Span
 				} else {
-					// Store as references relationship for complex expressions
+					// Store as a subject relationship for complex expressions
 					u.Relationships = append(u.Relationships, &ast.Relationship{
-						Kind:   ast.RelReferences,
+						Kind:   ast.RelSubject,
 						Target: subjTarget,
 					})
 				}
@@ -1289,6 +1298,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		// Anonymous connector starts with 'from' keyword (e.g., `connector : X from y to z`)
 		skipIdentification := (kind == ast.UsageFlow && p.atFlowShorthand()) ||
 			(kind == ast.UsageSuccession && isAnonymous) ||
+			(kind == ast.UsageAllocation && p.atAllocateShorthand()) ||
 			(kind == ast.UsageConnector && p.atKeyword("from"))
 		if !skipIdentification {
 			u.Ident = p.parseUsageIdentification(kind)
@@ -1464,7 +1474,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		members, hasBody = p.parseDefUsageBody()
 	}
 
-	u.Members = members
+	// A flow's `of name : Type` clause contributes a member before the body is
+	// parsed, so the body members are appended rather than replacing it.
+	u.Members = append(u.Members, members...)
 	u.HasBody = hasBody
 	u.NodeSpan = p.spanFrom(start)
 	return u
@@ -2051,10 +2063,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 					})
 				}
 
-				// Add via port as reference relationship
+				// Add via port as the receiving port relationship
 				if viaPort != nil {
 					actionUsage.Relationships = append(actionUsage.Relationships, &ast.Relationship{
-						Kind:   ast.RelReferences,
+						Kind:   ast.RelVia,
 						Target: viaPort,
 					})
 				}
@@ -2648,7 +2660,7 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 
 		// Create member name as QualifiedName
 		memberName := &ast.QualifiedName{Parts: []ast.NameSegment{seg}}
-		memberName.NodeSpan = p.spanFrom(p.peek().Span.Offset)
+		memberName.NodeSpan = seg.Span
 
 		chain := &ast.FeatureChainExpr{
 			Operand: operand,
@@ -2753,9 +2765,9 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 			for {
 				target := p.parseRelationshipTarget()
 				if target != nil {
-					// Store as references relationship (metadata references/annotates target)
+					// Store as an annotation relationship: metadata annotates its target
 					u.Relationships = append(u.Relationships, &ast.Relationship{
-						Kind:   ast.RelReferences,
+						Kind:   ast.RelAnnotates,
 						Target: target,
 					})
 				}
@@ -2928,6 +2940,17 @@ func (p *Parser) atFlowShorthand() bool {
 	return n.Kind == lexer.Keyword && n.KeywordID == "to"
 }
 
+// atAllocateShorthand reports whether an allocation usage names its first
+// connector end rather than itself: in `allocate torqueGenerator to powerTrain`
+// both names are ends, while `allocate a1 : AllocDef` declares a named usage.
+func (p *Parser) atAllocateShorthand() bool {
+	if !p.atName() {
+		return false
+	}
+	n := p.peekN(1)
+	return n.Kind == lexer.Keyword && n.KeywordID == "to"
+}
+
 // parseFlowEnds parses an optional `of <payload>` followed by either
 // `from <x> to <y>` or the shorthand `<x> to <y>`. On a malformed end it records
 // a diagnostic and keeps whatever ends were parsed so far.
@@ -2944,6 +2967,7 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 		if p.atName() && p.peekN(1).Kind == lexer.Colon {
 			// Typed declaration - parse as nested member
 			// Create a usage for the payload declaration
+			payloadStart := p.peek().Span.Offset
 			payloadUsage := &ast.Usage{
 				Kind: ast.UsageAttribute, // default to attribute
 			}
@@ -2965,14 +2989,21 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 				payloadUsage.Value = p.ParseExpression()
 			}
 
+			// The declaration is a member like any other, so it carries its own
+			// span: the symbol built from it is what go-to-definition, hover and
+			// rename identify a payload by.
+			payloadUsage.NodeSpan = p.spanFrom(payloadStart)
+
 			// Store payload usage as member (nested in flow)
 			u.Members = append(u.Members, payloadUsage)
+			fe.PayloadDecl = payloadUsage
 			// Also store reference in FlowEnds for compatibility (create QualifiedName from identifier)
 			qn := &ast.QualifiedName{
 				Parts: []ast.NameSegment{
 					{Text: payloadUsage.Ident.Name, Span: payloadUsage.Ident.NameSpan},
 				},
 			}
+			qn.NodeSpan = payloadUsage.Ident.NameSpan
 			fe.Payload = qn
 		} else {
 			// Simple reference

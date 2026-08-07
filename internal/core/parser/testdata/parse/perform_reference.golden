@@ -1,0 +1,40 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="test" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="TakePicture"))
+      (Membership visibility="default"
+        (Usage kind="action" name="takePicture" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=TakePicture
+            (*ast.QualifiedName))
+          (Usage kind="action" name="focus" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (Usage kind="action" name="shoot" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+      (Membership visibility="default"
+        (Usage kind="part" name="camera" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="action" name="takePhoto" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="references" target=takePicture
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="focuser" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="references" target=(expr)
+                    (FeatureChainExpr member="focus"
+                      (FeatureReference name="takePhoto")))))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="torqueGenerator" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="allocation" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="takePicture"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="camera"
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="allocation" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="focus"
+                  (FeatureReference name="takePicture")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="focuser"
+                  (FeatureReference name="camera"))))))))))

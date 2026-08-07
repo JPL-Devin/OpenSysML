@@ -1067,82 +1067,66 @@ func (p *Parser) parseIfAction(tok lexer.Token) ast.Node {
 			Message:  "expected '{' after if condition",
 		}
 	}
+	thenStart := p.peek().Span.Offset
 	p.advance() // consume '{'
+	thenBranch := p.parseIfBranch(ast.IfBranchThen, thenStart, "expected '}' after if body")
 
-	// Parse then body statements
-	var thenBody []ast.Node
+	// Check for optional 'else' clause
+	var elseBranch *ast.IfBranchNode
+	elseStart := p.peek().Span.Offset
+	if p.acceptKeyword("else") {
+		if !p.at(lexer.LBrace) {
+			p.error(p.peek().Span, "expected '{' after else")
+		} else {
+			p.advance() // consume '{'
+			elseBranch = p.parseIfBranch(ast.IfBranchElse, elseStart, "expected '}' after else body")
+		}
+	}
+
+	node := &ast.IfActionNode{
+		Condition: condition,
+		Then:      thenBranch,
+		Else:      elseBranch,
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseIfBranch parses the members of one branch body of an if action, with the
+// opening '{' already consumed, and consumes the closing '}'. start is the
+// offset the branch's span begins at ('{' for the then branch, 'else' for the
+// else branch). Both declarations and behavioral statements are accepted, so
+// `if <cond> { action x : Type { body }; first x then y; }` parses.
+func (p *Parser) parseIfBranch(kind ast.IfBranchKind, start int, closeMsg string) *ast.IfBranchNode {
+	var body []ast.Node
 	for !p.at(lexer.RBrace) && !p.atEOF() {
-		// Use parseActionBodyMixed to support both declarations and behavioral statements
-		// This allows: if <cond> { action x : Type { body }; first x then y; }
 		before := p.peek().Span.Offset
 
-		// Try direction parameters first
+		// Direction parameters first.
 		if p.isDirectionKeyword() {
-			thenBody = append(thenBody, p.parseDirectionParameter())
+			body = append(body, p.parseDirectionParameter())
 			continue
 		}
 
-		// Try declarations (action/part/etc)
+		// Declarations (action/part/etc).
 		if p.atDefUsageStart() {
-			m := p.parseBodyMember()
-			if m != nil {
-				thenBody = append(thenBody, m)
+			if m := p.parseBodyMember(); m != nil {
+				body = append(body, m)
 			}
-			// Check if no progress (prevent infinite loop)
+			// No progress: advance to avoid an infinite loop.
 			if p.peek().Span.Offset == before {
 				p.advance()
 			}
 			continue
 		}
 
-		// Parse behavioral statements
-		thenBody = append(thenBody, p.parseActionMember())
+		body = append(body, p.parseActionMember())
 	}
+	p.expect(lexer.RBrace, closeMsg)
 
-	p.expect(lexer.RBrace, "expected '}' after if body")
-
-	// Check for optional 'else' clause
-	var elseBody []ast.Node
-	if p.acceptKeyword("else") {
-		if !p.at(lexer.LBrace) {
-			p.error(p.peek().Span, "expected '{' after else")
-		} else {
-			p.advance() // consume '{'
-			for !p.at(lexer.RBrace) && !p.atEOF() {
-				before := p.peek().Span.Offset
-
-				// Try direction parameters first
-				if p.isDirectionKeyword() {
-					elseBody = append(elseBody, p.parseDirectionParameter())
-					continue
-				}
-
-				// Try declarations
-				if p.atDefUsageStart() {
-					m := p.parseBodyMember()
-					if m != nil {
-						elseBody = append(elseBody, m)
-					}
-					if p.peek().Span.Offset == before {
-						p.advance()
-					}
-					continue
-				}
-
-				// Parse behavioral statements
-				elseBody = append(elseBody, p.parseActionMember())
-			}
-			p.expect(lexer.RBrace, "expected '}' after else body")
-		}
-	}
-
-	node := &ast.IfActionNode{
-		Condition: condition,
-		ThenBody:  thenBody,
-		ElseBody:  elseBody,
-	}
-	node.NodeSpan = p.spanFrom(start)
-	return node
+	branch := &ast.IfBranchNode{Kind: kind, Body: body}
+	branch.NodeSpan = p.spanFrom(start)
+	return branch
 }
 
 // Phase C1: Calculation and Constraint Bodies
@@ -1232,6 +1216,7 @@ func (p *Parser) parseResultMember() ast.Node {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
+			IsResult:    true,
 			IsAbstract:  mods.isAbstract,
 			IsReference: mods.isReference,
 			IsEnd:       mods.isEnd,
@@ -1335,6 +1320,7 @@ func (p *Parser) parseResultMember() ast.Node {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
+			IsResult:    true,
 			IsAbstract:  mods.isAbstract,
 			IsReference: mods.isReference,
 			IsEnd:       mods.isEnd,
@@ -1378,6 +1364,7 @@ func (p *Parser) parseResultMember() ast.Node {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
+			IsResult:    true,
 			IsAbstract:  mods.isAbstract,
 			IsReference: mods.isReference,
 			IsEnd:       mods.isEnd,
@@ -1918,14 +1905,29 @@ func (p *Parser) parseStateMember() ast.Node {
 			p.advance()
 			return p.parseFinalState(start)
 		case "entry":
+			// `entry point <name>;` declares an entry point pseudostate; `entry ...`
+			// anything else is the state's entry action.
+			if p.atPointPseudostate() {
+				p.advance() // consume 'entry'
+				p.advance() // consume 'point'
+				return p.parsePseudostate(start, "entry point", ast.PseudostateEntry)
+			}
 			p.advance()
 			return p.parseEntryMember(start)
 		case "do":
 			p.advance()
 			return p.parseDoMember(start)
 		case "exit":
+			if p.atPointPseudostate() {
+				p.advance() // consume 'exit'
+				p.advance() // consume 'point'
+				return p.parsePseudostate(start, "exit point", ast.PseudostateExit)
+			}
 			p.advance()
 			return p.parseExitMember(start)
+		case "defer":
+			p.advance()
+			return p.parseDeferMember(start)
 		case "state":
 			// Check if this is a simple declaration (state name;) or full usage (state name { ... })
 			// Lookahead: state followed by name/keyword and semicolon → SubstateMember
@@ -1953,6 +1955,23 @@ func (p *Parser) parseStateMember() ast.Node {
 		case "join":
 			p.advance()
 			return p.parsePseudostate(start, kw, ast.PseudostateJoin)
+		case "history":
+			// Bare `history <name>;` is shallow, as in UML's H vs H*.
+			p.advance()
+			return p.parsePseudostate(start, kw, ast.PseudostateShallowHistory)
+		case "shallow", "deep":
+			kind := ast.PseudostateShallowHistory
+			if kw == "deep" {
+				kind = ast.PseudostateDeepHistory
+			}
+			p.advance() // consume 'shallow' / 'deep'
+			if !p.acceptKeyword("history") {
+				p.error(p.peek().Span, fmt.Sprintf("expected 'history' after '%s'", kw))
+				en := &ast.ErrorNode{Message: fmt.Sprintf("expected 'history' after '%s'", kw)}
+				en.NodeSpan = p.spanFrom(start)
+				return en
+			}
+			return p.parsePseudostate(start, kw+" history", kind)
 		case "transition":
 			// Lookahead to distinguish:
 			// 1. State machine transition: transition source to target (no name)
@@ -2607,6 +2626,53 @@ func (p *Parser) parseRegionMember(start int) ast.Node {
 	}
 	region.NodeSpan = p.spanFrom(start)
 	return region
+}
+
+// atPointPseudostate reports whether the `entry`/`exit` keyword at the cursor
+// starts an entry/exit point pseudostate — `entry point <name>;` — rather than
+// an entry/exit action. `point` is matched contextually rather than reserved as
+// a keyword, because models routinely name features `point`.
+func (p *Parser) atPointPseudostate() bool {
+	point := p.peekN(1)
+	if point.Kind != lexer.Identifier || p.src.Text(point.Span) != "point" {
+		return false
+	}
+	name := p.peekN(2)
+	if name.Kind != lexer.Identifier && name.Kind != lexer.Keyword {
+		return false
+	}
+	return p.peekN(3).Kind == lexer.Semicolon
+}
+
+// parseDeferMember parses `defer <event> [, <event>]* ;` in a state body: the
+// events the state retains while it is active instead of dropping them. Each
+// event is parsed exactly like a transition trigger, so a signal name and a
+// call event (`defer setSpeed(value)`) both work.
+func (p *Parser) parseDeferMember(start int) ast.Node {
+	// 'defer' already consumed
+	if p.at(lexer.Semicolon) || p.atEOF() || p.at(lexer.RBrace) {
+		p.error(p.peek().Span, "expected an event after 'defer'")
+		en := &ast.ErrorNode{Message: "expected an event after 'defer'"}
+		if p.at(lexer.Semicolon) {
+			p.advance()
+		}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+
+	var triggers []ast.Node
+	for {
+		triggers = append(triggers, p.parseTriggerEvent())
+		if !p.accept2(lexer.Comma) {
+			break
+		}
+	}
+
+	p.expect(lexer.Semicolon, "expected ';' after deferred events")
+
+	node := &ast.DeferMember{Triggers: triggers}
+	node.NodeSpan = p.spanFrom(start)
+	return node
 }
 
 // parsePseudostate parses a pseudostate declaration in a state body:

@@ -1,0 +1,20 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="IfBranches" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Drive"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="speed" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (IfActionNode
+            (OperatorExpr operator=">"
+              (FeatureReference name="speed")
+              (LiteralInteger value="0"))
+            (IfBranchNode kind="then"
+              (Membership visibility="default"
+                (Usage kind="action" name="accelerate" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+              (*ast.AssignmentActionNode))
+            (IfBranchNode kind="else"
+              (Membership visibility="default"
+                (Usage kind="action" name="brake" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))))))))

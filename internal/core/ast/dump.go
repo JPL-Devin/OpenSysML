@@ -202,7 +202,8 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 				payloadStr = fmt.Sprintf("%T", v.Payload)
 			}
 		}
-		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q)`, fromStr, toStr, payloadStr)
+		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q declared=%t)`,
+			fromStr, toStr, payloadStr, v.PayloadDecl != nil)
 	case *SendStatement:
 		// The `to`/`via` distinction decides how the message is routed, so a
 		// golden that did not show it would not lock the parse.
@@ -309,8 +310,27 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		fmt.Fprintf(b, `(CallEvent operation=%q parameters=[%s])`,
 			qnString(v.Operation), strings.Join(names, " "))
 		return
+	case *IfActionNode:
+		b.WriteString(`(IfActionNode`)
+		kids := []Node{}
+		if v.Condition != nil {
+			kids = append(kids, v.Condition)
+		}
+		for _, branch := range v.Branches() {
+			kids = append(kids, branch)
+		}
+		writeChildren(b, depth, kids)
+		return
+	case *IfBranchNode:
+		fmt.Fprintf(b, `(IfBranchNode kind=%q`, v.Kind.String())
+		writeChildren(b, depth, v.Body)
+		return
 	case *PseudostateNode:
 		fmt.Fprintf(b, `(PseudostateNode kind=%q name=%q)`, v.Kind.String(), v.Name)
+		return
+	case *DeferMember:
+		b.WriteString(`(DeferMember`)
+		writeChildren(b, depth, v.Triggers)
 		return
 	default:
 		fmt.Fprintf(b, `(%T)`, n)

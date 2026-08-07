@@ -80,13 +80,13 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveExpr(scope, d.Condition)
 	case *ast.Definition:
 		r.resolvePrefixes(scope, d.Prefixes)
-		r.resolveRelationships(scope, d.Relationships)
+		r.resolveRelationships(scope, d, d.Relationships)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 		}
 	case *ast.Usage:
 		r.resolvePrefixes(scope, d.Prefixes)
-		r.resolveRelationships(scope, d.Relationships)
+		r.resolveRelationships(scope, d, d.Relationships)
 		if d.Multiplicity != nil {
 			r.resolveExpr(scope, d.Multiplicity.Lower)
 			r.resolveExpr(scope, d.Multiplicity.Upper)
@@ -114,12 +114,19 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 				}
 			}
 		}
+		child := r.childScope(scope, d)
 		if d.FlowEnds != nil {
 			r.resolveExpr(scope, d.FlowEnds.From)
 			r.resolveExpr(scope, d.FlowEnds.To)
-			r.resolveExpr(scope, d.FlowEnds.Payload)
+			// A declared payload (`of name : Type`) names a member of the flow
+			// itself, not an element of the enclosing scope.
+			payloadScope := scope
+			if d.FlowEnds.PayloadDecl != nil && child != nil {
+				payloadScope = child
+			}
+			r.resolveExpr(payloadScope, d.FlowEnds.Payload)
 		}
-		if child := r.childScope(scope, d); child != nil {
+		if child != nil {
 			r.walkMembers(child, d.Members)
 		}
 	case *ast.SubjectMember:
@@ -165,6 +172,12 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.walkMembers(scope, d.Actions)
 	case *ast.ExitMember:
 		r.walkMembers(scope, d.Actions)
+	case *ast.DeferMember:
+		// A deferred event is a trigger like a transition's, so it resolves the
+		// same way: bare signal names are left to lowering.
+		for _, trigger := range d.Triggers {
+			r.resolveTrigger(scope, trigger)
+		}
 	case *ast.StateNode:
 		// The state's own name is a declaration, not a reference. Its body
 		// resolves in the scope the state owns, which holds its substates and
@@ -221,9 +234,18 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveExpr(body, d.Condition)
 		r.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
+		// The condition is evaluated before either branch is entered, so it sees
+		// the enclosing scope only; each branch owns its body's declarations.
 		r.resolveExpr(scope, d.Condition)
-		r.walkMembers(scope, d.ThenBody)
-		r.walkMembers(scope, d.ElseBody)
+		for _, branch := range d.Branches() {
+			r.resolveDecl(scope, branch)
+		}
+	case *ast.IfBranchNode:
+		body := scope
+		if child := r.childScope(scope, d); child != nil {
+			body = child
+		}
+		r.walkMembers(body, d.Body)
 	}
 }
 
@@ -266,9 +288,10 @@ func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixM
 	}
 }
 
-// resolveRelationships resolves each relationship target as a qualified name.
-// Special handling for redefinitions: targets are looked up in inherited scope.
-func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relationship) {
+// resolveRelationships resolves each relationship target of decl as a qualified
+// name. Redefinitions resolve in the inherited scope, and reference subsettings
+// resolve outside decl's own name binding (see refFilter).
+func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rels []*ast.Relationship) {
 	for _, rel := range rels {
 		if rel != nil && rel.Target != nil {
 			// Unwrap FeatureReference if needed (relationship targets parsed as expressions)
@@ -283,6 +306,13 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relati
 					r.resolveRedefinition(scope, qn, rels)
 					continue
 				}
+			}
+
+			// A reference subsetting resolves its leading segment past the
+			// name decl borrows from it; memoizing that result makes the
+			// chain walk below see the referenced feature, not decl.
+			if rel.Kind == ast.RelReferences {
+				r.resolveTarget(scope, leadingName(target), &refFilter{decl: decl})
 			}
 
 			// Standard resolution in current scope

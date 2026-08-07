@@ -124,3 +124,74 @@ func TestDefinitionCrossFile(t *testing.T) {
 		t.Errorf("decl line = %d, want 0", locs[0].Range.Start.Line)
 	}
 }
+
+// The name in a perform statement names the action performed, not the perform
+// statement — which now carries that name too (symbols.effectiveIdent).
+func TestDefinitionPerformReference(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/def_perform.sysml").Filename()
+	src := `package P {
+	action providePower;
+	part vehicle {
+		perform providePower;
+	}
+}
+`
+	ws.Open(name, []byte(src), 1)
+
+	off := strings.LastIndex(src, "providePower")
+	locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition([]byte(src), off),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Definition err = %v", err)
+	}
+	if len(locs) != 1 {
+		t.Fatalf("locations = %d, want 1", len(locs))
+	}
+	// `action providePower;` is on line 1; the perform statement is on line 3.
+	if locs[0].Range.Start.Line != 1 {
+		t.Errorf("decl line = %d, want 1 (the action, not the perform statement)", locs[0].Range.Start.Line)
+	}
+}
+
+// The last segment of `perform providePower.generateTorque;` names a member of
+// the referenced action, not of the enclosing part — where the perform statement
+// binds that very name.
+func TestDefinitionPerformChainMember(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/def_perform_chain.sysml").Filename()
+	src := `package P {
+	action providePower {
+		action generateTorque;
+	}
+	part torqueGenerator {
+		perform providePower.generateTorque;
+	}
+}
+`
+	ws.Open(name, []byte(src), 1)
+
+	off := strings.LastIndex(src, "generateTorque")
+	locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition([]byte(src), off),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Definition err = %v", err)
+	}
+	if len(locs) != 1 {
+		t.Fatalf("locations = %d, want 1", len(locs))
+	}
+	// `action generateTorque;` is on line 2; the perform statement is on line 5.
+	if locs[0].Range.Start.Line != 2 {
+		t.Errorf("decl line = %d, want 2 (the action's member, not the perform statement)", locs[0].Range.Start.Line)
+	}
+}

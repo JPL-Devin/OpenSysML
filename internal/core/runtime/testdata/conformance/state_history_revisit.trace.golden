@@ -1,0 +1,19 @@
+exit: start
+enter: outer
+enter: first
+transition: start -> first
+exit: first
+enter: second
+transition: first -> second
+exit: second
+exit: outer
+enter: away
+transition: second -> away
+exit: away
+enter: outer
+enter: second
+transition: away -> second
+exit: second
+exit: outer
+enter: done
+transition: second -> done

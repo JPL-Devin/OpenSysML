@@ -137,9 +137,12 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 		if !ok || sym == nil {
 			continue // unresolved: name-resolution tier owns this
 		}
-		// Resolve aliases to their underlying types for typing relationships
+		// Resolve aliases to their underlying types for typing relationships and
+		// for a satisfy reference, both of which check the target's kind.
 		targetSym := sym
-		if rel.Kind == ast.RelTyping && sym.Kind == symbols.SymbolAlias {
+		aliasMatters := rel.Kind == ast.RelTyping ||
+			(rel.Kind == ast.RelSubsets && useKind == ast.UsageSatisfy)
+		if aliasMatters && sym.Kind == symbols.SymbolAlias {
 			if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
 				targetSym = resolved
 			}
@@ -191,6 +194,11 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if !isUsageKind(target) && !isDefKind(target) {
 			return fmt.Sprintf("%s target must be a usage or definition, found %s", rel, target)
 		}
+		// `satisfy`/`verify <name>` is a reference subsetting of an existing
+		// requirement usage; viewpoint and concern usages are requirement usages.
+		if useKind == ast.UsageSatisfy && rel == ast.RelSubsets && !isRequirementUsageKind(target) {
+			return fmt.Sprintf("satisfy target must be a requirement usage, found %s", target)
+		}
 	case ast.RelTyping:
 		if isDef {
 			return "" // typing on a definition is not produced by the parser; ignore
@@ -201,7 +209,7 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if !isCompatibleTyping(useKind, direction, target) {
 			return fmt.Sprintf("%s cannot be typed by %s (kind mismatch)", useKind, target)
 		}
-	case ast.RelReferences, ast.RelCrosses:
+	case ast.RelReferences, ast.RelCrosses, ast.RelVia, ast.RelAnnotates, ast.RelSubject:
 		if !isDef && !isUsageKind(target) {
 			return fmt.Sprintf("%s target must be a usage, found %s", rel, target)
 		}
@@ -388,6 +396,16 @@ func isDefKind(k symbols.SymbolKind) bool {
 
 func isUsageKind(k symbols.SymbolKind) bool {
 	return usageSymbolKinds[k]
+}
+
+// isRequirementUsageKind reports whether k is a RequirementUsage or one of its
+// specializations (ViewpointUsage, ConcernUsage).
+func isRequirementUsageKind(k symbols.SymbolKind) bool {
+	switch k {
+	case symbols.SymbolRequirementUsage, symbols.SymbolViewpointUsage, symbols.SymbolConcernUsage:
+		return true
+	}
+	return false
 }
 
 // isCompatibleTyping checks if a usage kind can be typed by a definition kind.

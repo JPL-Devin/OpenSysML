@@ -2,13 +2,15 @@ package lsp
 
 import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// qnRef is a qualified-name reference paired with the scope it resolves against.
+// qnRef is a qualified-name reference paired with everything needed to resolve
+// it the way the document walk did: its scope, the declaration referring to it
+// and the feature chain it is a member of.
 type qnRef struct {
-	qn    *ast.QualifiedName
-	scope *symbols.Scope
+	resolve.Reference
 }
 
 // collectRefs walks a document's scope tree and AST, gathering every
@@ -29,7 +31,24 @@ type refCollector struct {
 
 func (c *refCollector) add(scope *symbols.Scope, qn *ast.QualifiedName) {
 	if qn != nil {
-		c.refs = append(c.refs, qnRef{qn: qn, scope: scope})
+		c.refs = append(c.refs, qnRef{resolve.Reference{Scope: scope, QN: qn}})
+	}
+}
+
+// addReference records the target of a reference subsetting owned by decl.
+func (c *refCollector) addReference(scope *symbols.Scope, decl ast.Node, qn *ast.QualifiedName) {
+	if qn != nil {
+		c.refs = append(c.refs, qnRef{resolve.Reference{Scope: scope, QN: qn, Referrer: decl}})
+	}
+}
+
+// addChainMember records the member segments of a feature chain, which name
+// members of the operand rather than elements of scope.
+func (c *refCollector) addChainMember(scope *symbols.Scope, decl ast.Node, chain *ast.FeatureChainExpr) {
+	if chain != nil && chain.Member != nil {
+		c.refs = append(c.refs, qnRef{resolve.Reference{
+			Scope: scope, QN: chain.Member, Referrer: decl, Chain: chain,
+		}})
 	}
 }
 
@@ -85,13 +104,13 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.expr(scope, d.Condition)
 	case *ast.Definition:
 		c.prefixes(scope, d.Prefixes)
-		c.relationships(scope, d.Relationships)
+		c.relationships(scope, d, d.Relationships)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
 		}
 	case *ast.Usage:
 		c.prefixes(scope, d.Prefixes)
-		c.relationships(scope, d.Relationships)
+		c.relationships(scope, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
 		c.expr(scope, d.Value)
 		for _, end := range d.ConnectorEnds {
@@ -101,12 +120,19 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			c.target(scope, end.Target)
 			c.target(scope, end.Reference)
 		}
+		child := c.childScope(scope, d)
 		if d.FlowEnds != nil {
 			c.expr(scope, d.FlowEnds.From)
 			c.expr(scope, d.FlowEnds.To)
-			c.expr(scope, d.FlowEnds.Payload)
+			// A declared payload (`of name : Type`) names a member of the flow
+			// itself, not an element of the enclosing scope.
+			payloadScope := scope
+			if d.FlowEnds.PayloadDecl != nil && child != nil {
+				payloadScope = child
+			}
+			c.expr(payloadScope, d.FlowEnds.Payload)
 		}
-		if child := c.childScope(scope, d); child != nil {
+		if child != nil {
 			c.walkMembers(child, d.Members)
 		}
 	case *ast.SubjectMember:
@@ -138,6 +164,10 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.walkMembers(scope, d.Actions)
 	case *ast.ExitMember:
 		c.walkMembers(scope, d.Actions)
+	case *ast.DeferMember:
+		for _, trigger := range d.Triggers {
+			c.trigger(scope, trigger)
+		}
 	case *ast.StateNode:
 		body := scope
 		if child := c.childScope(scope, d); child != nil {
@@ -185,8 +215,16 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
 		c.expr(scope, d.Condition)
-		c.walkMembers(scope, d.ThenBody)
-		c.walkMembers(scope, d.ElseBody)
+		for _, branch := range d.Branches() {
+			c.resolveDecl(scope, branch)
+		}
+	case *ast.IfBranchNode:
+		// A branch owns the scope its body declares into (see symbols.buildDecl).
+		body := scope
+		if child := c.childScope(scope, d); child != nil {
+			body = child
+		}
+		c.walkMembers(body, d.Body)
 	}
 }
 
@@ -209,13 +247,38 @@ func (c *refCollector) trigger(scope *symbols.Scope, trigger ast.Node) {
 }
 
 // relationships collects the targets of typings, specializations, subsettings
-// and redefinitions (`: T`, `:> T`, `:>> T`).
-func (c *refCollector) relationships(scope *symbols.Scope, rels []*ast.Relationship) {
+// and redefinitions (`: T`, `:> T`, `:>> T`) owned by decl. A reference
+// subsetting records decl as the referrer, so it resolves past decl's own
+// binding of the name it references.
+func (c *refCollector) relationships(scope *symbols.Scope, decl ast.Node, rels []*ast.Relationship) {
 	for _, rel := range rels {
-		if rel != nil {
-			c.target(scope, rel.Target)
+		if rel == nil {
+			continue
 		}
+		if rel.Kind == ast.RelReferences {
+			c.referenceTarget(scope, decl, rel.Target)
+			continue
+		}
+		c.target(scope, rel.Target)
 	}
+}
+
+// referenceTarget collects a reference subsetting's target, tagging the leading
+// qualified name with the declaration that refers to it.
+func (c *refCollector) referenceTarget(scope *symbols.Scope, decl ast.Node, target ast.Node) {
+	if fr, ok := target.(*ast.FeatureReference); ok {
+		target = fr.Name
+	}
+	if qn, ok := target.(*ast.QualifiedName); ok {
+		c.addReference(scope, decl, qn)
+		return
+	}
+	if chain, ok := target.(*ast.FeatureChainExpr); ok {
+		c.referenceTarget(scope, decl, chain.Operand)
+		c.addChainMember(scope, decl, chain)
+		return
+	}
+	c.expr(scope, target)
 }
 
 // target collects a node that names something, whether it was parsed as a
@@ -260,7 +323,7 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		c.add(scope, v.TypeRef)
 	case *ast.FeatureChainExpr:
 		c.expr(scope, v.Operand)
-		c.add(scope, v.Member)
+		c.addChainMember(scope, nil, v)
 	case *ast.IndexExpr:
 		c.expr(scope, v.Operand)
 		c.expr(scope, v.Index)
@@ -312,7 +375,7 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 // refAtOffset returns the qnRef whose qualified-name span contains offset.
 func refAtOffset(refs []qnRef, offset int) *qnRef {
 	for i := range refs {
-		sp := refs[i].qn.Span()
+		sp := refs[i].QN.Span()
 		if offset >= sp.Offset && offset < sp.End() {
 			return &refs[i]
 		}

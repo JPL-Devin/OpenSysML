@@ -452,7 +452,17 @@ func (p parameter) scope() *symbols.Scope {
 // refining only a subset of them keeps the full signature. ok is false when no
 // signature can be determined, in which case the invocation is left unchecked.
 func (ec *exprChecker) effectiveInParameters(sym *symbols.Symbol) ([]parameter, bool) {
-	params := ec.mergedInParameters(sym, map[*symbols.Symbol]bool{})
+	// Merging runs over every parameter, because redefinition is positional
+	// over the whole parameter list (KerML 7.4.7.2), as
+	// semantics.Model.parametersOf computes it; only the invocation signature
+	// is restricted to the inputs.
+	all := ec.mergedParameters(sym, map[*symbols.Symbol]bool{})
+	var params []parameter
+	for _, p := range all {
+		if p.usage.Direction == ast.DirIn || p.usage.Direction == ast.DirInOut {
+			params = append(params, p)
+		}
+	}
 	if len(params) > 0 {
 		return params, true
 	}
@@ -462,12 +472,13 @@ func (ec *exprChecker) effectiveInParameters(sym *symbols.Symbol) ([]parameter, 
 	return nil, len(ec.model.DirectSupertypes(sym)) == 0 && sym.Decl != nil
 }
 
-// mergedInParameters returns sym's signature: the signatures of the types it
-// specializes or is typed by, in declaration order, with sym's own parameters
-// folded in. Recursing keeps each type's parameters positioned against the ones
-// it actually inherits, which is what implicit redefinition is relative to;
-// visiting is the set of symbols on the current path, which breaks cycles.
-func (ec *exprChecker) mergedInParameters(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool) []parameter {
+// mergedParameters returns sym's parameter list: the parameter lists of the
+// types it specializes or is typed by, in declaration order, with sym's own
+// parameters folded in. Recursing keeps each type's parameters positioned
+// against the ones it actually inherits, which is what implicit redefinition is
+// relative to; visiting is the set of symbols on the current path, which breaks
+// cycles.
+func (ec *exprChecker) mergedParameters(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool) []parameter {
 	if visiting[sym] {
 		return nil
 	}
@@ -476,7 +487,7 @@ func (ec *exprChecker) mergedInParameters(sym *symbols.Symbol, visiting map[*sym
 
 	var inherited []parameter
 	for _, super := range ec.model.DirectSupertypes(sym) {
-		for _, p := range ec.mergedInParameters(super, visiting) {
+		for _, p := range ec.mergedParameters(super, visiting) {
 			// A parameter reached through more than one supertype (a
 			// diamond) contributes one signature entry.
 			if i := indexOfName(inherited, p.usage.Ident.Name); i >= 0 {
@@ -489,45 +500,46 @@ func (ec *exprChecker) mergedInParameters(sym *symbols.Symbol, visiting map[*sym
 	return mergeParameters(inherited, sym)
 }
 
-// mergeParameters folds a symbol's own `in` parameters into an inherited list,
-// replacing the entry each one redefines and appending the rest. A declaration
-// that names neither a `:>>` target nor an inherited parameter redefines the
-// next inherited one by position, which is how a specializing behavior refines a
-// parameter under a new name; only once the inherited parameters are used up
-// does a declaration add to the signature.
+// mergeParameters returns a symbol's parameter list: the ones it declares, in
+// declaration order, followed by the inherited ones none of them redefines. A
+// declaration redefines the inherited parameter its `:>>` names, or, failing
+// that, the one at its own position with the same direction; only once the inherited parameters are used
+// up does a declaration purely add to the list. This is the order and the
+// matching semantics.Model.parametersOf derives (KerML 7.4.7.2), so both tiers
+// see one parameter list.
 func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
-	declared := declaredInParameters(sym)
+	declared := declaredParameters(sym)
 	if len(declared) == 0 {
 		return inherited
 	}
-	merged := append([]parameter(nil), inherited...)
-	next := 0 // first inherited parameter not yet redefined
-	for _, u := range declared {
-		p := parameter{usage: u, owner: sym}
-		i := indexOfRedefined(merged, u)
-		if i < 0 && next < len(inherited) {
-			i = next
-		}
+	merged := make([]parameter, 0, len(declared)+len(inherited))
+	claimed := make([]bool, len(inherited))
+	for position, u := range declared {
+		merged = append(merged, parameter{usage: u, owner: sym})
+		i := indexOfRedefined(inherited, u)
 		if i < 0 {
-			merged = append(merged, p)
-			continue
+			i = position
 		}
-		merged[i] = p
-		if i >= next {
-			next = i + 1
+		// A position whose directions disagree is not a redefinition, so the
+		// inherited parameter there stays in the list.
+		if i < len(inherited) && inherited[i].usage.Direction == u.Direction {
+			claimed[i] = true
+		}
+	}
+	for i, p := range inherited {
+		if !claimed[i] {
+			merged = append(merged, p)
 		}
 	}
 	return merged
 }
 
 // indexOfRedefined finds the inherited parameter a declaration redefines, named
-// by its `:>>` target when it has one and by its own name otherwise.
+// by its `:>>` target. A declaration with no explicit target redefines by
+// position (KerML 7.4.7.2), which the caller applies, so its own name does not
+// select the inherited parameter.
 func indexOfRedefined(params []parameter, u *ast.Usage) int {
-	names := redefinedNames(u)
-	if len(names) == 0 && u.Ident.Name != "" {
-		names = []string{u.Ident.Name}
-	}
-	for _, name := range names {
+	for _, name := range redefinedNames(u) {
 		if i := indexOfName(params, name); i >= 0 {
 			return i
 		}
@@ -564,9 +576,10 @@ func redefinedNames(u *ast.Usage) []string {
 	return names
 }
 
-// declaredInParameters returns the `in`/`inout` features declared directly by a
-// symbol's def/usage declaration.
-func declaredInParameters(sym *symbols.Symbol) []*ast.Usage {
+// declaredParameters returns the parameters declared directly by a symbol's
+// def/usage declaration: its directed features, minus the result parameter,
+// which is redefined as the result rather than by position.
+func declaredParameters(sym *symbols.Symbol) []*ast.Usage {
 	var members []ast.Node
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
@@ -582,7 +595,7 @@ func declaredInParameters(sym *symbols.Symbol) []*ast.Usage {
 		if !ok {
 			continue
 		}
-		if u.Direction == ast.DirIn || u.Direction == ast.DirInOut {
+		if u.Direction != ast.DirNone && !u.IsResult {
 			params = append(params, u)
 		}
 	}

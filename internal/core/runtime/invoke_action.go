@@ -24,15 +24,16 @@ type actionInvocation struct {
 	target *ast.QualifiedName
 	args   []ast.Node
 	named  []ast.NamedArg
+	// referrer is the usage owning a reference subsetting, whose own effective
+	// name is the one the target names (see resolve.ResolveReferenceTarget).
+	referrer ast.Node
 }
 
 // nestedInvocation reports the action a nested usage performs, if any. A usage
 // that only carries its own body (assignments, sends, accepts) performs nothing.
-//
-// notPerformed names a reference the usage carries for another purpose — the
-// port of `accept msg : T via p`, which the parser records the same way a
-// `perform` records its target, but which names a port rather than an action.
-func nestedInvocation(usage *ast.Usage, notPerformed string) (actionInvocation, bool) {
+// Only typing and reference-subsetting edges name a performed action: the port
+// of `accept msg : T via p` is a via edge, not a reference subsetting.
+func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 	if invocation, ok := usage.Value.(*ast.InvocationExpr); ok && invocation.Type != nil {
 		return actionInvocation{
 			target: invocation.Type,
@@ -45,10 +46,11 @@ func nestedInvocation(usage *ast.Usage, notPerformed string) (actionInvocation, 
 			continue
 		}
 		if qn, ok := rel.Target.(*ast.QualifiedName); ok {
-			if notPerformed != "" && ast.SimpleName(qn) == notPerformed {
-				continue
+			inv := actionInvocation{target: qn}
+			if rel.Kind == ast.RelReferences {
+				inv.referrer = usage
 			}
-			return actionInvocation{target: qn}, true
+			return inv, true
 		}
 	}
 	return actionInvocation{}, false
@@ -68,7 +70,7 @@ func invokeAction(
 	inv actionInvocation,
 	data map[string]Value,
 ) (map[string]Value, error) {
-	sym, err := resolveActionSymbol(ctx, scope, inv.target)
+	sym, err := resolveActionSymbol(ctx, scope, inv)
 	if err != nil {
 		return nil, err
 	}
@@ -105,8 +107,9 @@ func invokeAction(
 func resolveActionSymbol(
 	ctx *Context,
 	scope *symbols.Scope,
-	target *ast.QualifiedName,
+	inv actionInvocation,
 ) (*symbols.Symbol, error) {
+	target := inv.target
 	if target == nil || len(target.Parts) == 0 {
 		return nil, fmt.Errorf("empty action reference")
 	}
@@ -114,9 +117,18 @@ func resolveActionSymbol(
 	if scope == nil || ctx.resolver == nil {
 		return nil, fmt.Errorf("cannot resolve action %s: no scope", name)
 	}
-	sym, ok := ctx.resolver.ResolveQualified(scope, target)
+	var sym *symbols.Symbol
+	var ok bool
+	if inv.referrer != nil {
+		sym, ok = ctx.resolver.ResolveReferenceTarget(scope, inv.referrer, target)
+	} else {
+		sym, ok = ctx.resolver.ResolveQualified(scope, target)
+	}
 	if !ok || sym == nil {
 		return nil, fmt.Errorf("unresolved action reference: %s", name)
+	}
+	if inv.referrer != nil && sym.Decl == inv.referrer {
+		return nil, fmt.Errorf("unresolved action reference: %s (a perform statement cannot perform itself)", name)
 	}
 	if sym.Kind != symbols.SymbolActionDef && sym.Kind != symbols.SymbolActionUsage {
 		return nil, fmt.Errorf("%s is not an action (%v)", name, sym.Kind)

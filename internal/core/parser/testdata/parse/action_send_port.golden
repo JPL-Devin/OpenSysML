@@ -32,7 +32,7 @@
                 (FeatureReference name="reader"))))
           (Membership visibility="default"
             (Usage kind="action" name="reader" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (Relationship kind="references" target=inPort
+              (Relationship kind="via" target=inPort
                 (*ast.QualifiedName))
               (Membership visibility="default"
                 (Usage kind="attribute" name="msg" ref=false direction="out" composite=false derived=false ordered=false nonunique=false

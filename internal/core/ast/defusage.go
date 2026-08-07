@@ -265,14 +265,22 @@ const (
 	RelSpecializes                         // 'specializes' / ':>'
 	RelSubsets                             // 'subsets' / ':>'
 	RelRedefines                           // 'redefines' / ':>>'
-	RelReferences                          // 'references' / '::>'
-	RelCrosses                             // 'crosses' / '=>'
-	RelDisjoint                            // 'disjoint from'
-	RelIntersects                          // 'intersects'
-	RelInverseOf                           // 'inverse of'
-	RelUnions                              // 'unions'
-	RelChains                              // 'chains'
-	RelIncludes                            // 'includes' (use case inclusion)
+	// RelReferences models a KerML ReferenceSubsetting: the single owned
+	// subsetting a feature may syntactically distinguish with 'references' /
+	// '::>' (KerML 8.3.3.3.9). The 'via', 'about' and 'by' clauses of accept
+	// actions, metadata usages and satisfy usages name related elements
+	// without subsetting them, so they carry their own kinds below.
+	RelReferences // 'references' / '::>'
+	RelCrosses    // 'crosses' / '=>'
+	RelDisjoint   // 'disjoint from'
+	RelIntersects // 'intersects'
+	RelInverseOf  // 'inverse of'
+	RelUnions     // 'unions'
+	RelChains     // 'chains'
+	RelIncludes   // 'includes' (use case inclusion)
+	RelVia        // 'via' (accept action receiving port)
+	RelAnnotates  // 'about' (metadata annotated element)
+	RelSubject    // 'by' (satisfy/verify subject)
 )
 
 func (k RelationshipKind) String() string {
@@ -301,6 +309,12 @@ func (k RelationshipKind) String() string {
 		return "chains"
 	case RelIncludes:
 		return "includes"
+	case RelVia:
+		return "via"
+	case RelAnnotates:
+		return "about"
+	case RelSubject:
+		return "by"
 	default:
 		return "unknown"
 	}
@@ -378,6 +392,7 @@ type Usage struct {
 	IsConstant    bool // 'constant' feature modifier
 	IsEvent       bool // 'event' modifier for event-driven occurrences
 	IsAccept      bool // 'accept' action for message consumption
+	IsResult      bool // declared with 'return': the result parameter of a calculation/expression
 	Visibility    Visibility
 	Direction     FeatureDirection
 	IsComposite   bool
@@ -406,6 +421,10 @@ type FlowEnds struct {
 	From    Node // Flow source (qualified name or feature chain)
 	To      Node // Flow target (qualified name or feature chain)
 	Payload Node // optional; from the `of` clause (qualified name or feature chain)
+	// PayloadDecl is set when the `of` clause declares the payload feature
+	// (`of name : Type`) instead of referring to an existing one. That usage is
+	// also a member of the owning flow, and Payload names it.
+	PayloadDecl *Usage
 }
 
 // ConnectorEnd represents a single connector end with optional multiplicity.
