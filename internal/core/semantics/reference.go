@@ -32,7 +32,7 @@ func (m *Model) ReferencedFeature(sym *symbols.Symbol) *symbols.Symbol {
 
 	var out *symbols.Symbol
 	if node := referenceSubsettingTarget(sym); node != nil {
-		if target, ok := m.resolver.ResolveReferenceTarget(sym.OwnerScope, sym.Decl, node); ok && target != sym {
+		if target, ok := m.resolver.ResolveReferenceTarget(referenceScope(sym), sym.Decl, node); ok && target != sym {
 			out = target
 		}
 	}
@@ -59,6 +59,17 @@ func referenceSubsettingTarget(sym *symbols.Symbol) ast.Node {
 		}
 	}
 	return nil
+}
+
+// referenceScope returns the scope sym's reference-subsetting target is written
+// in. A connector end is a member of the connector, but what it attaches to is a
+// feature of the connector's owner, so it resolves one scope out — the same
+// scope the document walk uses (resolve/document.go).
+func referenceScope(sym *symbols.Symbol) *symbols.Scope {
+	if _, ok := sym.Decl.(*ast.ConnectorEnd); ok && sym.OwnerScope != nil {
+		return sym.OwnerScope.Parent()
+	}
+	return sym.OwnerScope
 }
 
 // MemberSources returns the symbols whose scopes contribute members to sym, in

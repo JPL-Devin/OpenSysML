@@ -3,6 +3,9 @@ package semantics
 import (
 	"testing"
 
+	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -264,5 +267,45 @@ func TestImplicitEndRedefinitionOfAssociationUsage(t *testing.T) {
 		if len(supers) != 1 || supers[0] != nested(t, assoc.Scope, c.redefined) {
 			t.Fatalf("DirectSupertypes(%s) = %v, want [Ownership::%s]", c.end, supers, c.redefined)
 		}
+	}
+}
+
+// TestConnectorEndReferenceIsNotASiblingEnd covers that the feature an end
+// attaches to is a feature of the connector's owner, not of the connector, so a
+// name it shares with a sibling end names the owner's feature. The model is
+// queried before any document walk, since the walk's memo would otherwise
+// supply the answer.
+func TestConnectorEndReferenceIsNotASiblingEnd(t *testing.T) {
+	const name = "t.sysml"
+	src := `package P {
+		part def TireBead;
+		connection def PressureSeat {
+			end [1] part bead : TireBead;
+			end [1] part rim : TireBead;
+		}
+		part wheelAssy {
+			part outer : TireBead;
+			part bead : TireBead;
+			connection : PressureSeat connect
+				bead references outer to
+				rim references bead;
+		}
+	}`
+	p := parser.New(source.New(name, []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	idx := symbols.NewIndexFromDoc(name, root)
+	r := resolve.New(idx)
+	m := NewModel(r)
+	r.SetModel(m)
+
+	pkg := sym(t, idx.DocumentRoot(name), "P")
+	wheel := nested(t, pkg.Scope, "wheelAssy")
+	conn := connector(t, wheel.Scope)
+	got := m.ReferencedFeature(nested(t, conn.Scope, "rim"))
+	if want := nested(t, wheel.Scope, "bead"); got != want {
+		t.Fatalf("ReferencedFeature(rim) = %v (kind %v), want wheelAssy::bead", got, got.Kind)
 	}
 }
