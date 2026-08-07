@@ -90,6 +90,20 @@ func TestConnectorEndNamesResolve(t *testing.T) {
 					seatBead :>> PressureSeat::bead references t.bead;
 			}
 		}`},
+		{"explicitly redefining end by plain name", `package P {
+			part def TireBead;
+			connection def PressureSeat {
+				end [1] part bead : TireBead;
+				end [1] part rim;
+			}
+			part wheelAssy {
+				part t { part bead : TireBead; }
+				part w { part rim; }
+				connection : PressureSeat connect
+					seatRim :>> rim references w.rim to
+					seatBead :>> bead references t.bead;
+			}
+		}`},
 	}
 
 	for _, tc := range cases {

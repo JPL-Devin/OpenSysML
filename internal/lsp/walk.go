@@ -117,7 +117,13 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			if end == nil {
 				continue
 			}
-			c.target(scope, end.Target)
+			// An end that reference-subsets what it attaches to declares its
+			// own name, so that name is a declaration, not a reference.
+			_, declaresName := end.DeclaredName()
+			c.relationships(scope, end, end.Relationships)
+			if !declaresName {
+				c.target(scope, end.Target)
+			}
 			c.target(scope, end.Reference)
 		}
 		child := c.childScope(scope, d)

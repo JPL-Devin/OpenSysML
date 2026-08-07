@@ -46,12 +46,16 @@ func connectorKind(k ast.UsageKind) bool {
 }
 
 // endName names the feature an end attaches to. A chain (`sensor.out`) attaches
-// to its last segment, which is the port itself.
+// to its last segment, which is the port itself. An end that declares its own
+// name (`bead references t.bead`) attaches to what it reference-subsets.
 func endName(end *ast.ConnectorEnd) string {
 	if end == nil {
 		return ""
 	}
 	target := end.Target
+	if _, declaresName := end.DeclaredName(); declaresName {
+		target = end.ReferencedTarget()
+	}
 	if target == nil {
 		target = end.Reference
 	}

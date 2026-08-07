@@ -119,6 +119,46 @@ func TestRenameLeavesSignalTriggerNames(t *testing.T) {
 	}
 }
 
+// A connector end that declares its own name refers to the feature it
+// reference-subsets, so renaming that feature must rewrite the reference and
+// leave the end's name alone.
+func TestRenameRewritesConnectorEndReferenceTarget(t *testing.T) {
+	ws := model.NewWorkspace()
+	src := `package P {
+	port def OutPort;
+	port def InPort;
+	interface def FuelInterface {
+		end supplierPort : OutPort;
+		end consumerPort : InPort;
+	}
+	part vehicle {
+		part tankAssy { port fuelTankPort : OutPort; }
+		part eng { port engineFuelPort : InPort; }
+		interface : FuelInterface connect
+			supplierPort ::> tankAssy.fuelTankPort to
+			consumerPort ::> eng.engineFuelPort;
+	}
+}
+`
+	name := openRenameDoc(t, ws, "/tmp/walk_connectorend.sysml", src)
+
+	got, err := applyRename(t, ws, name, "tankAssy {", "tank")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "supplierPort ::> tank.fuelTankPort") {
+		t.Errorf("the feature the end attaches to was not renamed:\n%s", got[name])
+	}
+
+	got, err = applyRename(t, ws, name, "supplierPort : OutPort", "supply")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "end supply : OutPort;") {
+		t.Errorf("the definition's end was not renamed:\n%s", got[name])
+	}
+}
+
 // A body expression's parameter is its own declaration, so renaming a
 // same-named outer feature must not rewrite the parameter's uses inside the
 // body, while a name the body only reads from outside is still rewritten.
