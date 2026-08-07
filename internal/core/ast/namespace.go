@@ -132,6 +132,11 @@ const (
 )
 
 // Import is `[visibility] import [all] QualifiedName[::*][::**] ;|{}`.
+//
+// An `expose` declaration in a view body is also an Import: SysML v2 8.3.26.2
+// makes Expose a specialization of Import (MembershipExpose specializes
+// MembershipImport, NamespaceExpose specializes NamespaceImport), so it is
+// represented by this node with IsExpose set.
 type Import struct {
 	NodeBase
 	Visibility  Visibility
@@ -142,6 +147,11 @@ type Import struct {
 	FilterExpr  Node // Optional filter expression [<expr>]
 	Body        []Node
 	HasBody     bool
+	// IsExpose marks an `expose` declaration. Per SysML v2 8.3.26.2 an Expose
+	// always imports all elements regardless of visibility (isImportAll = true)
+	// and always has protected visibility, so IsAll and Visibility are fixed
+	// accordingly by the parser.
+	IsExpose bool
 }
 
 // Alias is `alias <shortName> name for QualifiedName ;|{}`.

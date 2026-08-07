@@ -505,9 +505,24 @@ func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
 		Imported:   qn,
 	}
 
-	// Wildcard tail (per KerML.xtext ImportedMembership/ImportedNamespace):
-	//   `:: *`          -> namespace import (may then take `:: **` recursive)
-	//   `:: **` directly -> recursive MEMBERSHIP import (no `::*`)
+	p.parseImportTail(imp)
+
+	imp.Body, imp.HasBody = p.parseNamespaceBody()
+	imp.NodeSpan = p.spanFrom(start)
+	return imp
+}
+
+// parseImportTail parses the wildcard tail and the optional filter expression
+// that follow the imported qualified name of an import or an expose, setting
+// Kind and IsRecursive on imp accordingly.
+//
+// Wildcard tail (per KerML.xtext ImportedMembership/ImportedNamespace):
+//
+//	`:: *`           -> namespace import (may then take `:: **` recursive)
+//	`:: **` directly -> recursive MEMBERSHIP import (no `::*`)
+//
+// Filter expression: `import Package::*[@MetadataType];`
+func (p *Parser) parseImportTail(imp *ast.Import) {
 	if p.at(lexer.ColonColon) {
 		nk := p.peekN(1).Kind
 		if nk == lexer.Star {
@@ -526,19 +541,13 @@ func (p *Parser) parseImport(start int, vis ast.Visibility) *ast.Import {
 		}
 	}
 
-	// Optional filter expression: [<expr>]
-	// Pattern: import Package::*[@MetadataType];
-	// Pattern: import Package::**[@MetadataType and condition];
 	if p.at(lexer.LBracket) {
 		p.advance() // consume '['
 		imp.FilterExpr = p.ParseExpression()
 		p.expect(lexer.RBracket, "expected ']' after import filter expression")
 	}
-
-	imp.Body, imp.HasBody = p.parseNamespaceBody()
-	imp.NodeSpan = p.spanFrom(start)
-	return imp
 }
+
 func (p *Parser) parseAlias(start int, vis ast.Visibility) *ast.Alias {
 	p.advance() // 'alias'
 	id := p.parseIdentification()

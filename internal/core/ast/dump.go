@@ -138,8 +138,12 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		writeChildren(b, depth, prefixesAnd(v.Prefixes, v.Members))
 		return
 	case *Import:
-		fmt.Fprintf(b, `(Import visibility=%q all=%t kind=%s recursive=%t imported=%q`,
-			visibilityString(v.Visibility), v.IsAll, importKindString(v.Kind), v.IsRecursive, qnString(v.Imported))
+		label := "Import"
+		if v.IsExpose {
+			label = "Expose"
+		}
+		fmt.Fprintf(b, `(%s visibility=%q all=%t kind=%s recursive=%t imported=%q`,
+			label, visibilityString(v.Visibility), v.IsAll, importKindString(v.Kind), v.IsRecursive, qnString(v.Imported))
 		writeChildren(b, depth, v.Body)
 		return
 	case *Alias:
