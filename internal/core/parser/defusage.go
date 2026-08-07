@@ -2383,12 +2383,14 @@ func (p *Parser) parseBodyMember() ast.Node {
 		hasNameAndRelationship := p.atName() && (p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt)
 		hasNameOnly := p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 		hasNameAndMult := p.atName() && p.peekN(1).Kind == lexer.LBracket // name with multiplicity (e.g., ref payload [0..*])
+		// `end [1] : A;` — an unnamed feature declaring only its type.
+		hasTypeOnly := p.at(lexer.Colon)
 		// Allow 'var' keyword as name for anonymous features (common in actions/loops)
 		hasVarKeyword := p.atKeyword("var") && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon ||
 			p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt ||
 			p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 
-		if hasNameAndType || hasRelationship || hasNameAndRelationship || hasNameOnly || hasNameAndMult || hasVarKeyword {
+		if hasNameAndType || hasTypeOnly || hasRelationship || hasNameAndRelationship || hasNameOnly || hasNameAndMult || hasVarKeyword {
 			var id ast.Identification
 
 			// Parse optional name
@@ -2422,9 +2424,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 				IsNonunique: mods.isNonunique,
 			}
 
+			if hasTypeOnly {
+				p.advance() // consume ':'
+			}
+
 			// If we consumed a colon, parse typing relationship(s)
 			// Support comma-separated types: : Type1, Type2, Type3
-			if hasNameAndType {
+			if hasNameAndType || hasTypeOnly {
 				for {
 					u.Relationships = append(u.Relationships, &ast.Relationship{
 						Kind:   ast.RelTyping,

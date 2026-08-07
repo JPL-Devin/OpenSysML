@@ -38,7 +38,8 @@ func connectorLike(sym *symbols.Symbol) bool {
 // ownedEnds returns the end features sym owns, one entry per end in
 // declaration order: first the ends of its `connect` clause, then the `end`
 // features of its body. An end that declares no name of its own — `connect a
-// to b` — still occupies its position, and is reported as a nil entry.
+// to b` — still occupies its position, as does one whose symbol is not
+// registered; both are reported as a nil entry.
 func ownedEnds(sym *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil || sym.Scope == nil {
 		return nil
@@ -61,9 +62,8 @@ func ownedEnds(sym *symbols.Symbol) []*symbols.Symbol {
 		if !ok || !usage.IsEnd {
 			continue
 		}
-		if found := memberSymbol(sym.Scope, usage); found != nil {
-			out = append(out, found)
-		}
+		// An end with no registered symbol still occupies its position.
+		out = append(out, memberSymbol(sym.Scope, usage))
 	}
 	return out
 }

@@ -14,6 +14,20 @@
           (Multiplicity range=false
             (LiteralInteger value="1"))))))
   (Membership visibility="default"
+    (Definition kind="connection" abstract=false variation=false name="Anonymous"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireBead
+            (*ast.QualifiedName))
+          (Multiplicity range=false
+            (LiteralInteger value="1"))))
+      (Membership visibility="default"
+        (Usage kind="part" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireMountingRim
+            (*ast.QualifiedName))
+          (Multiplicity range=false
+            (LiteralInteger value="1"))))))
+  (Membership visibility="default"
     (Definition kind="interface" abstract=false variation=false name="FuelInterface"
       (Membership visibility="default"
         (Usage kind="attribute" name="supplierPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true

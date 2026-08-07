@@ -309,3 +309,29 @@ func TestConnectorEndReferenceIsNotASiblingEnd(t *testing.T) {
 		t.Fatalf("ReferencedFeature(rim) = %v (kind %v), want wheelAssy::bead", got, got.Kind)
 	}
 }
+
+// TestImplicitEndRedefinitionCountsUnnamedBodyEnds covers that an `end` feature
+// of a connector's body occupies its position even when it declares no name, so
+// the ends after it match the general's ends at the right position.
+func TestImplicitEndRedefinitionCountsUnnamedBodyEnds(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def A;
+		part def B;
+		connection def Base {
+			end [1] part one : A;
+			end [1] part two : B;
+		}
+		connection def Sub specializes Base {
+			end [1] : A;
+			end [1] part later : B;
+		}
+	}`)
+	p := sym(t, root, "P")
+	base := nested(t, p.Scope, "Base")
+	sub := nested(t, p.Scope, "Sub")
+
+	supers := m.DirectSupertypes(nested(t, sub.Scope, "later"))
+	if want := nested(t, base.Scope, "two"); len(supers) == 0 || supers[len(supers)-1] != want {
+		t.Fatalf("DirectSupertypes(later) = %v, want the last to be Base::two", supers)
+	}
+}
