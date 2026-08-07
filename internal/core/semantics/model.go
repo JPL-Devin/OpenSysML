@@ -27,6 +27,7 @@ type Model struct {
 	memberSources map[*symbols.Symbol][]*symbols.Symbol
 	primTypes     map[*symbols.Symbol]PrimType
 	scalars       map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
+	params        map[*symbols.Symbol]behaviorParameters
 }
 
 // NewModel creates a semantic model backed by the given name resolver. The
@@ -41,6 +42,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		resolvingRef:  make(map[*symbols.Symbol]bool),
 		memberSources: make(map[*symbols.Symbol][]*symbols.Symbol),
 		primTypes:     make(map[*symbols.Symbol]PrimType),
+		params:        make(map[*symbols.Symbol]behaviorParameters),
 	}
 }
 
@@ -167,8 +169,22 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 	}
 
+	// A parameter of a behavior or step implicitly redefines the corresponding
+	// parameter of each behavior or step its owner specializes, and so takes
+	// that parameter's type when it declares none (see redefinition.go).
+	declared := len(out)
+	for _, redefined := range m.implicitParameterRedefinitions(sym) {
+		if seen[redefined] {
+			continue
+		}
+		seen[redefined] = true
+		out = append(out, redefined)
+	}
+
 	// An untyped usage still specializes its standard-library base feature.
-	if len(out) == 0 {
+	// Implicit redefinition does not stand in for it: the two rules are
+	// independent, and the redefined parameter may itself be untyped.
+	if declared == 0 {
 		if base := m.implicitBase(sym); base != nil {
 			out = append(out, base)
 		}

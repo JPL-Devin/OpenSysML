@@ -392,6 +392,7 @@ type Usage struct {
 	IsConstant    bool // 'constant' feature modifier
 	IsEvent       bool // 'event' modifier for event-driven occurrences
 	IsAccept      bool // 'accept' action for message consumption
+	IsResult      bool // declared with 'return': the result parameter of a calculation/expression
 	Visibility    Visibility
 	Direction     FeatureDirection
 	IsComposite   bool

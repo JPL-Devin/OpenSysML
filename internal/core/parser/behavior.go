@@ -1216,6 +1216,7 @@ func (p *Parser) parseResultMember() ast.Node {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
+			IsResult:    true,
 			IsAbstract:  mods.isAbstract,
 			IsReference: mods.isReference,
 			IsEnd:       mods.isEnd,
@@ -1319,6 +1320,7 @@ func (p *Parser) parseResultMember() ast.Node {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
+			IsResult:    true,
 			IsAbstract:  mods.isAbstract,
 			IsReference: mods.isReference,
 			IsEnd:       mods.isEnd,
@@ -1362,6 +1364,7 @@ func (p *Parser) parseResultMember() ast.Node {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
+			IsResult:    true,
 			IsAbstract:  mods.isAbstract,
 			IsReference: mods.isReference,
 			IsEnd:       mods.isEnd,
