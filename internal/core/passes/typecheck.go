@@ -181,6 +181,14 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if defKind == ast.DefMetadata && target == symbols.SymbolMetaclass {
 			return ""
 		}
+		// `individual def X` is an occurrence definition (equivalent to
+		// `individual occurrence def X`) that individuates the definition it
+		// specializes, so it may specialize an occurrence definition of any kind
+		// (SysML v2 §7.9.4). It may not specialize an attribute definition:
+		// Occurrences::Occurrence is disjoint with Base::DataValues (§8.4.5.1).
+		if defKind == ast.DefIndividual && isOccurrenceDefKind(target) {
+			return ""
+		}
 		if target != want {
 			return fmt.Sprintf("%s cannot specialize %s (kind mismatch)", defKind, target)
 		}
@@ -398,6 +406,48 @@ func isUsageKind(k symbols.SymbolKind) bool {
 	return usageSymbolKinds[k]
 }
 
+// occurrenceDefSymbolKinds is the set of SymbolKinds that classify a definition
+// that is an OccurrenceDefinition in the SysML v2 abstract syntax (§8.3.9.3):
+// the occurrence definition itself, an individual definition, and every kind
+// whose metaclass directly or indirectly specializes OccurrenceDefinition —
+// items and parts (§8.3.10.2, §8.3.11.2), ports (§8.3.12.5), connections with
+// their interface and allocation specializations (§8.3.13.3, §8.3.14.2,
+// §8.3.15.2), actions and everything derived from them (§8.3.16.2, §8.3.17.3,
+// §8.3.18.5, §8.3.19.2, §8.3.22.2, §8.3.23.2, §8.3.24.3, §8.3.25.3),
+// constraints and requirements (§8.3.20.3, §8.3.21.3, §8.3.21.8, §8.3.26.8),
+// views and renderings (§8.3.26.7, §8.3.26.5) and metadata definitions
+// (§8.3.27.2). Attribute and enumeration definitions are data types, not
+// occurrence definitions (§8.3.7.2, §8.3.8.2).
+var occurrenceDefSymbolKinds = map[symbols.SymbolKind]bool{
+	symbols.SymbolOccurrenceDef:       true,
+	symbols.SymbolIndividualDef:       true,
+	symbols.SymbolItemDef:             true,
+	symbols.SymbolPartDef:             true,
+	symbols.SymbolPortDef:             true,
+	symbols.SymbolConnectionDef:       true,
+	symbols.SymbolInterfaceDef:        true,
+	symbols.SymbolAllocationDef:       true,
+	symbols.SymbolFlowDef:             true,
+	symbols.SymbolActionDef:           true,
+	symbols.SymbolStateDef:            true,
+	symbols.SymbolCalcDef:             true,
+	symbols.SymbolCaseDef:             true,
+	symbols.SymbolAnalysisCaseDef:     true,
+	symbols.SymbolVerificationCaseDef: true,
+	symbols.SymbolUseCaseDef:          true,
+	symbols.SymbolConstraintDef:       true,
+	symbols.SymbolRequirementDef:      true,
+	symbols.SymbolConcernDef:          true,
+	symbols.SymbolViewpointDef:        true,
+	symbols.SymbolViewDef:             true,
+	symbols.SymbolRenderingDef:        true,
+	symbols.SymbolMetadataDef:         true,
+}
+
+func isOccurrenceDefKind(k symbols.SymbolKind) bool {
+	return occurrenceDefSymbolKinds[k]
+}
+
 // isRequirementUsageKind reports whether k is a RequirementUsage or one of its
 // specializations (ViewpointUsage, ConcernUsage).
 func isRequirementUsageKind(k symbols.SymbolKind) bool {
@@ -412,6 +462,19 @@ func isRequirementUsageKind(k symbols.SymbolKind) bool {
 // Allows structural compatibility: part/attribute/item/occurrence can cross-type
 // since they're all structural classifiers in SysML.
 func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, defKind symbols.SymbolKind) bool {
+	if compatibleTyping(useKind, direction, defKind) {
+		return true
+	}
+	// An individual definition is an occurrence definition that individuates the
+	// definition it specializes (SysML v2 §7.9.4), so a usage may be typed by
+	// one wherever it may be typed by an occurrence definition.
+	if defKind == symbols.SymbolIndividualDef {
+		return compatibleTyping(useKind, direction, symbols.SymbolOccurrenceDef)
+	}
+	return false
+}
+
+func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, defKind symbols.SymbolKind) bool {
 	// Exact match always allowed
 	if defKind == usageWantsDefKind(useKind) {
 		return true
