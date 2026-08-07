@@ -500,42 +500,38 @@ func (ec *exprChecker) mergedParameters(sym *symbols.Symbol, visiting map[*symbo
 	return mergeParameters(inherited, sym)
 }
 
-// mergeParameters folds a symbol's own parameters into an inherited list,
-// replacing the entry each one redefines and appending the rest. A declaration
-// that names neither a `:>>` target nor an inherited parameter redefines the
-// next inherited one by position, which is how a specializing behavior refines a
-// parameter under a new name; only once the inherited parameters are used up
-// does a declaration add to the signature.
+// mergeParameters returns a symbol's parameter list: the ones it declares, in
+// declaration order, followed by the inherited ones none of them redefines. A
+// declaration redefines the inherited parameter its `:>>` names, or, failing
+// that, the one at its own position; only once the inherited parameters are used
+// up does a declaration purely add to the list. This is the order and the
+// matching semantics.Model.parametersOf derives (KerML 7.4.7.2), so both tiers
+// see one parameter list.
 func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 	declared := declaredParameters(sym)
 	if len(declared) == 0 {
 		return inherited
 	}
-	merged := append([]parameter(nil), inherited...)
-	next := 0 // first inherited parameter not yet redefined
+	merged := make([]parameter, 0, len(declared)+len(inherited))
+	claimed := make([]bool, len(inherited))
+	next := 0 // first inherited parameter not yet claimed
 	for _, u := range declared {
-		p := parameter{usage: u, owner: sym}
-		i := indexOfRedefined(merged, u)
+		merged = append(merged, parameter{usage: u, owner: sym})
+		i := indexOfRedefined(inherited, u)
 		if i < 0 && next < len(inherited) {
 			i = next
 		}
-		// A redefining parameter has the same direction as the one it
-		// redefines; a position whose directions disagree is not a
-		// redefinition, but it is still consumed.
-		if i >= 0 && merged[i].usage.Direction != u.Direction {
-			if i >= next {
-				next = i + 1
-			}
-			merged = append(merged, p)
-			continue
-		}
 		if i < 0 {
-			merged = append(merged, p)
 			continue
 		}
-		merged[i] = p
+		claimed[i] = true
 		if i >= next {
 			next = i + 1
+		}
+	}
+	for i, p := range inherited {
+		if !claimed[i] {
+			merged = append(merged, p)
 		}
 	}
 	return merged

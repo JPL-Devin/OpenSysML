@@ -426,17 +426,34 @@ func TestExprRedeclaredParametersMatchByPositionNotName(t *testing.T) {
 }
 
 // An `out` parameter occupies a position, so an input declared after one
-// redefines the inherited parameter at that position, not the first.
+// redefines the inherited parameter at that position, not the first, and the
+// inherited parameter at the position the output took is not part of the
+// signature — the list semantics.Model.parametersOf derives for the same model.
 func TestExprOutParameterOccupiesAPosition(t *testing.T) {
 	const model = `package P {
 		calc def C { in a : ScalarValues::String; in b : ScalarValues::Integer; }
 		calc def D :> C { out y; in x : ScalarValues::Integer; }
 		calc c { return D(%s); }
 	}`
-	// `x` is at position 1, so it redefines `b`; the signature stays (a, x).
-	wantNoDiags(t, fmt.Sprintf(model, `"s", 1`))
+	// D's parameters are (y, x): `x` is at position 1, so it redefines `b`.
+	wantNoDiags(t, fmt.Sprintf(model, `1`))
+	wantOneDiag(t, fmt.Sprintf(model, `"s"`),
+		"argument 1 of D expects Integer, found String")
+}
+
+// An explicit `:>>` naming a parameter at another position claims that one, so
+// the parameter left to inherit is the one no declaration redefines — again the
+// list semantics.Model.parametersOf derives.
+func TestExprExplicitRedefinitionClaimsItsTarget(t *testing.T) {
+	const model = `package P {
+		calc def C { in a : ScalarValues::String; in b : ScalarValues::Integer; }
+		calc def D :> C { in bb :>> b; }
+		calc c { return D(%s); }
+	}`
+	// D's parameters are (bb, a), not (bb, b).
+	wantNoDiags(t, fmt.Sprintf(model, `1, "s"`))
 	wantOneDiag(t, fmt.Sprintf(model, `1, 1`),
-		"argument 1 of D expects String, found Natural")
+		"argument 2 of D expects String, found Natural")
 }
 
 func TestExprTypedCalcUsageInheritsParameters(t *testing.T) {
