@@ -456,6 +456,21 @@ func TestExprExplicitRedefinitionClaimsItsTarget(t *testing.T) {
 		"argument 2 of D expects String, found Natural")
 }
 
+// A declaration claims the inherited parameter at its own position, not the
+// next unclaimed one, so an explicit `:>>` further along does not shift the
+// declarations after it.
+func TestExprPositionalClaimIsByDeclarationIndex(t *testing.T) {
+	const model = `package P {
+		calc def C { in a : ScalarValues::String; in b : ScalarValues::Integer; in c : ScalarValues::Boolean; }
+		calc def D :> C { in z :>> c; in w; }
+		calc c { return D(%s); }
+	}`
+	// D's parameters are (z, w, a): `z` claims `c`, `w` claims `b` by position.
+	wantOneDiag(t, fmt.Sprintf(model, `true, 1, "s", 1`),
+		"D takes 3 argument(s), found 4")
+	wantNoDiags(t, fmt.Sprintf(model, `true, 1, "s"`))
+}
+
 func TestExprTypedCalcUsageInheritsParameters(t *testing.T) {
 	wantNoDiags(t, `package P {
 		`+calcAdd+`

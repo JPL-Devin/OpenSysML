@@ -514,19 +514,14 @@ func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 	}
 	merged := make([]parameter, 0, len(declared)+len(inherited))
 	claimed := make([]bool, len(inherited))
-	next := 0 // first inherited parameter not yet claimed
-	for _, u := range declared {
+	for position, u := range declared {
 		merged = append(merged, parameter{usage: u, owner: sym})
 		i := indexOfRedefined(inherited, u)
-		if i < 0 && next < len(inherited) {
-			i = next
-		}
 		if i < 0 {
-			continue
+			i = position
 		}
-		claimed[i] = true
-		if i >= next {
-			next = i + 1
+		if i < len(inherited) {
+			claimed[i] = true
 		}
 	}
 	for i, p := range inherited {
