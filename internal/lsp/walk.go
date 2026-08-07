@@ -145,6 +145,10 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.walkMembers(scope, d.Actions)
 	case *ast.ExitMember:
 		c.walkMembers(scope, d.Actions)
+	case *ast.DeferMember:
+		for _, trigger := range d.Triggers {
+			c.trigger(scope, trigger)
+		}
 	case *ast.StateNode:
 		body := scope
 		if child := c.childScope(scope, d); child != nil {

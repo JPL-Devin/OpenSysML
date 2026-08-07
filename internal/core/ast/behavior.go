@@ -346,6 +346,13 @@ type ExitMember struct {
 	Actions []Node // action sequence
 }
 
+// DeferMember represents the events a state defers while it is active.
+// Syntax: defer <event> [, <event>]* ;
+type DeferMember struct {
+	NodeBase
+	Triggers []Node // deferred triggers, in declaration order
+}
+
 // SubstateMember represents a nested state declaration.
 // Syntax: state <name>;
 type SubstateMember struct {

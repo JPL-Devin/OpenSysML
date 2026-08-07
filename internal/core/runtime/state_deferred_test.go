@@ -7,8 +7,8 @@ import (
 )
 
 // acceptTrigger builds the trigger of a transition or deferral that reacts to a
-// signal. Deferral has no textual notation, so the machines below are built on
-// the AST directly, the way the history tests are.
+// signal. The machines below are built on the AST directly, the way the history
+// tests are; the `defer` notation is covered by the conformance cases.
 func acceptTrigger(signal string) *ast.AcceptEvent {
 	return &ast.AcceptEvent{
 		SignalType: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: signal}}},
