@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -24,6 +25,9 @@ type actionInvocation struct {
 	target *ast.QualifiedName
 	args   []ast.Node
 	named  []ast.NamedArg
+	// referrer is the usage owning a reference subsetting, whose own effective
+	// name is the one the target names (see resolve.ReferenceScope).
+	referrer ast.Node
 }
 
 // nestedInvocation reports the action a nested usage performs, if any. A usage
@@ -43,7 +47,11 @@ func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 			continue
 		}
 		if qn, ok := rel.Target.(*ast.QualifiedName); ok {
-			return actionInvocation{target: qn}, true
+			inv := actionInvocation{target: qn}
+			if rel.Kind == ast.RelReferences {
+				inv.referrer = usage
+			}
+			return inv, true
 		}
 	}
 	return actionInvocation{}, false
@@ -63,7 +71,7 @@ func invokeAction(
 	inv actionInvocation,
 	data map[string]Value,
 ) (map[string]Value, error) {
-	sym, err := resolveActionSymbol(ctx, scope, inv.target)
+	sym, err := resolveActionSymbol(ctx, scope, inv)
 	if err != nil {
 		return nil, err
 	}
@@ -100,14 +108,18 @@ func invokeAction(
 func resolveActionSymbol(
 	ctx *Context,
 	scope *symbols.Scope,
-	target *ast.QualifiedName,
+	inv actionInvocation,
 ) (*symbols.Symbol, error) {
+	target := inv.target
 	if target == nil || len(target.Parts) == 0 {
 		return nil, fmt.Errorf("empty action reference")
 	}
 	name := qualifiedNameText(target)
 	if scope == nil || ctx.resolver == nil {
 		return nil, fmt.Errorf("cannot resolve action %s: no scope", name)
+	}
+	if inv.referrer != nil {
+		scope = resolve.ReferenceScope(scope, inv.referrer, target)
 	}
 	sym, ok := ctx.resolver.ResolveQualified(scope, target)
 	if !ok || sym == nil {
