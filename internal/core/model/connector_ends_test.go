@@ -114,6 +114,22 @@ func TestConnectorEndNamesResolve(t *testing.T) {
 					seatBead :>> bead references t.bead;
 			}
 		}`},
+		{"body member redefining a declared end", `package P {
+			part def TireBead;
+			connection def PressureSeat {
+				end [1] part bead : TireBead;
+				end [1] part rim : TireBead;
+			}
+			part wheelAssy {
+				part t { part bead : TireBead; }
+				part w { part rim : TireBead; }
+				connection : PressureSeat connect
+					bead references t.bead to
+					rim references w.rim {
+						part p :>> bead;
+					}
+			}
+		}`},
 	}
 
 	for _, tc := range cases {
