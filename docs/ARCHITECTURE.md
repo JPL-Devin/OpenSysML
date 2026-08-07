@@ -206,7 +206,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 ### Tier 5 — Behavioral Interpreter ✅ Complete
 
 **Package:** `internal/core/runtime`  
-**Status:** Complete with 890+ tests. Conformance gate: 26/26 cases passing (calc/constraint/requirement/action/state all functional).  
+**Status:** Complete with 1,400+ tests. Conformance gate: 51/51 cases passing (calc/constraint/requirement/action/state all functional).  
 **Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for detailed compliance mapping (~98% faithful implementation).
 
 **Architecture:**
@@ -255,12 +255,12 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - Lowering to execution IR lives in `internal/core/lower/` (`ToActionGraph`, `ToStateGraph`)
 
 **Testing:**
-- **Golden ASTs**: 16 behavioral fixtures - `internal/core/parser/testdata/parse/`
-- **Negative tests**: 15 cases - `internal/core/parser/negative_test.go`
-- **Unit tests**: 41 tests (action, state) - `action_executor_test.go`, `state_executor_test.go`
-- **Conformance gate**: 26 cases (all passing: calc×4, constraint×3, requirement×5, action×5, state×9) - `conformance_test.go`
-- **Golden traces**: Infrastructure ready (no .trace.golden files yet) - `trace_test.go`
-- **Robustness**: 7 failure-mode tests (deadlock, unbound params, missing features, dangling transitions, sourceless accept, step budget) - `robustness_test.go`
+- **Golden ASTs**: 20 behavioral fixtures (of 30 total) - `internal/core/parser/testdata/parse/`
+- **Negative tests**: 32 cases - `internal/core/parser/negative_test.go`
+- **Unit tests**: 42 tests (action, state) - `action_executor_test.go`, `state_executor_test.go`
+- **Conformance gate**: 51 cases (all passing: calc×10, constraint×3, requirement×5, action×8, state×25) - `conformance_test.go`
+- **Golden traces**: 22 `.trace.golden` files (calc×10, constraint×3, action×2, state×7) - `trace_test.go`
+- **Robustness**: 29 failure-mode subtests (deadlock, unbound params, missing features, dangling transitions, sourceless accept, step budget, pseudostate dead ends and cycles, history and defer misuse, send/accept misrouting, calc arity/recursion, `perform` reference failures) - `robustness_test.go`
 - **Coverage**: All behavioral types fully functional. Action: 14/14 features ✅. State: 13/13 features ✅. Calc: 8/8 ✅. Constraint: 5/5 ✅. Requirement: 5/5 ✅. Evaluation: 7/7 ✅.
 
 **Measured Compliance:** See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for semantic rule → implementation → test case mapping with status (✅ faithful / ⚠️ approximate / ❌ not yet implemented).
@@ -277,7 +277,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 
 **Package:** `internal/lsp`  
 **Binary:** `cmd/sysml-lsp`  
-**Status:** ✅ Complete (stdio protocol, 8 LSP features, 41 tests)
+**Status:** ✅ Complete (stdio protocol, 8 LSP features, 68 tests)
 
 ### Features
 
@@ -342,7 +342,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - `walk.go` — AST traversal for symbol extraction
 
 **Testing:**
-- 41 tests covering all features
+- 68 tests covering all features
 - Integration tests with mock clients
 - Incremental sync edge cases (astral plane characters, multi-change, offset-zero insertion)
 
@@ -609,7 +609,7 @@ Every behavioral feature must have:
 - Test case(s) exercising the feature
 - Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / 🚧 Known Failure
 
-**Current coverage:** ~98% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); all 29 conformance cases pass. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see SPEC_COMPLIANCE.md and docs/grammar/README.md.
+**Current coverage:** ~98% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); all 51 conformance cases pass. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see SPEC_COMPLIANCE.md and docs/grammar/README.md.
 
 ---
 

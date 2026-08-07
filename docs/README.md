@@ -15,7 +15,7 @@
 
 - **[Spec Compliance](SPEC_COMPLIANCE.md)** — What's implemented, what's faithful to UML/SysML specs, what's approximate
 - **[Testing Strategy](TESTING.md)** — Test contracts, coverage policy, how to verify correctness
-- **[Training Examples](TRAINING_EXAMPLES.md)** — Status of OMG training materials (71/100 clean)
+- **[Training Examples](TRAINING_EXAMPLES.md)** — Status of OMG training materials (88/100 clean)
 
 ## Development
 
