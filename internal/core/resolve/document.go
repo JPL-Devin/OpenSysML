@@ -103,13 +103,17 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			// its own name (`connect bead references t.bead`), so that name is a
 			// declaration, not a reference to resolve.
 			_, declaresName := end.DeclaredName()
-			// An end redefines an end of the connector's own type, so its
-			// relationships resolve in the connector's scope.
+			// A redefinition names an end of the connector's own type, so it
+			// resolves in the connector's scope; everything else an end names —
+			// the feature it attaches to, its type — is a feature of the
+			// connector's owner and resolves in the enclosing scope.
 			endScope := scope
 			if inner := r.childScope(scope, d); inner != nil {
 				endScope = inner
 			}
-			r.resolveRelationships(endScope, end, end.Relationships)
+			redefines, others := ast.SplitRedefinitions(end.Relationships)
+			r.resolveRelationships(endScope, end, redefines)
+			r.resolveRelationships(scope, end, others)
 			if end.Target != nil && !declaresName {
 				if qn, ok := end.Target.(*ast.QualifiedName); ok {
 					r.ResolveQualified(scope, qn)

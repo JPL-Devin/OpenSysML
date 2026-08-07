@@ -127,15 +127,17 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 				continue
 			}
 			// An end that reference-subsets what it attaches to declares its
-			// own name, so that name is a declaration, not a reference. Its
-			// relationships resolve in the connector's own scope, since an
-			// explicit `:>>` names an end of the connector's type.
+			// own name, so that name is a declaration, not a reference. A `:>>`
+			// on it names an end of the connector's type and so resolves in the
+			// connector's scope; everything else resolves in the enclosing one.
 			_, declaresName := end.DeclaredName()
 			endScope := scope
 			if child != nil {
 				endScope = child
 			}
-			c.relationships(endScope, end, end.Relationships)
+			redefines, others := ast.SplitRedefinitions(end.Relationships)
+			c.relationships(endScope, end, redefines)
+			c.relationships(scope, end, others)
 			if !declaresName {
 				c.target(scope, end.Target)
 			}

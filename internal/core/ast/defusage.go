@@ -450,6 +450,19 @@ func (c *ConnectorEnd) ReferencedTarget() Node {
 	return c.Reference
 }
 
+// SplitRedefinitions partitions rels into the redefinitions and the rest,
+// which resolve in different scopes when owned by a connector end.
+func SplitRedefinitions(rels []*Relationship) (redefines, others []*Relationship) {
+	for _, rel := range rels {
+		if rel != nil && rel.Kind == RelRedefines {
+			redefines = append(redefines, rel)
+			continue
+		}
+		others = append(others, rel)
+	}
+	return redefines, others
+}
+
 // DeclaredName returns the name the end declares for itself, and whether it
 // declares one at all. A connector end names an end feature of the connector
 // only when it also reference-subsets the feature that end attaches to
