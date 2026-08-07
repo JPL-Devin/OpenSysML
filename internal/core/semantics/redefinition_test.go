@@ -207,3 +207,30 @@ func TestImplicitRedefinitionOfInheritedParameter(t *testing.T) {
 		t.Fatalf("DirectSupertypes(focus::image) = %v, want [Focus::image]", supers)
 	}
 }
+
+// TestInheritedParametersExcludeExplicitlyRedefinedOnes covers that a general
+// behavior's parameters are inherited by what an owned parameter actually
+// redefines, not by count: `shot :>> image` claims `image`, so the parameter
+// left to inherit is `scene`, whatever position it was declared at.
+func TestInheritedParametersExcludeExplicitlyRedefinedOnes(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def Scene;
+		part def Image;
+		action def Focus { in scene : Scene; out image : Image; }
+		action def AutoFocus :> Focus { out shot :>> image; }
+		action af : AutoFocus { out item pic; in item s; }
+	}`)
+	p := sym(t, root, "P")
+	autoFocus := nested(t, p.Scope, "AutoFocus")
+	wantShot := nested(t, autoFocus.Scope, "shot")
+	wantScene := nested(t, nested(t, p.Scope, "Focus").Scope, "scene")
+
+	// AutoFocus's parameters are (shot, scene): position 0 is the owned `shot`,
+	// and `image` is not inherited because `shot` redefines it.
+	if supers := m.DirectSupertypes(nested(t, p.Scope, "af", "pic")); len(supers) != 1 || supers[0] != wantShot {
+		t.Fatalf("DirectSupertypes(af::pic) = %v, want [AutoFocus::shot]", supers)
+	}
+	if supers := m.DirectSupertypes(nested(t, p.Scope, "af", "s")); len(supers) != 1 || supers[0] != wantScene {
+		t.Fatalf("DirectSupertypes(af::s) = %v, want [Focus::scene]", supers)
+	}
+}

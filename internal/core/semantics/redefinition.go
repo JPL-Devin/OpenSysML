@@ -107,15 +107,69 @@ func (m *Model) parametersOf(sym *symbols.Symbol) behaviorParameters {
 	}
 	if len(generals) == 1 {
 		general := m.parametersOf(generals[0])
-		if len(general.positional) > len(out.positional) {
-			out.positional = append(out.positional, general.positional[len(out.positional):]...)
+		claimed := claimedParameters(out, general)
+		for _, p := range general.positional {
+			if !claimed[p.sym] {
+				out.positional = append(out.positional, p)
+			}
 		}
-		if out.result.sym == nil {
+		if out.result.sym == nil && !claimed[general.result.sym] {
 			out.result = general.result
 		}
 	}
 
 	m.params[sym] = out
+	return out
+}
+
+// claimedParameters returns the parameters of general that owned redefines,
+// each by the target its declaration names explicitly or, failing that, the one
+// at its own position. Only what no owned parameter claims is inherited.
+func claimedParameters(owned, general behaviorParameters) map[*symbols.Symbol]bool {
+	claimed := make(map[*symbols.Symbol]bool)
+	for i, p := range owned.positional {
+		if explicit := namedParameters(p.usage, general); len(explicit) > 0 {
+			for _, target := range explicit {
+				claimed[target.sym] = true
+			}
+			continue
+		}
+		if i < len(general.positional) {
+			claimed[general.positional[i].sym] = true
+		}
+	}
+	if owned.result.sym != nil {
+		for _, target := range namedParameters(owned.result.usage, general) {
+			claimed[target.sym] = true
+		}
+		claimed[general.result.sym] = true
+	}
+	delete(claimed, nil)
+	return claimed
+}
+
+// namedParameters returns the parameters of general that a declaration's `:>>`
+// clauses name, matching on the last segment of each qualified name.
+func namedParameters(u *ast.Usage, general behaviorParameters) []parameter {
+	var out []parameter
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Kind != ast.RelRedefines {
+			continue
+		}
+		qn, ok := rel.Target.(*ast.QualifiedName)
+		if !ok || len(qn.Parts) == 0 {
+			continue
+		}
+		name := qn.Parts[len(qn.Parts)-1].Text
+		for _, p := range general.positional {
+			if p.sym != nil && p.sym.Name == name {
+				out = append(out, p)
+			}
+		}
+		if general.result.sym != nil && general.result.sym.Name == name {
+			out = append(out, general.result)
+		}
+	}
 	return out
 }
 
