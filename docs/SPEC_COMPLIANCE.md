@@ -473,13 +473,13 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
 - Execution conformance: 51/51 cases passing
-- Training examples: 88/100 clean (12 files / 29 errors, all with pedagogical gaps, OMG bugs or the resolution gaps listed above, gated by `internal/core/model/testdata/training_examples_expected.txt`)
+- Training examples: 89/100 clean (11 files / 26 errors, all with pedagogical gaps, OMG bugs or the resolution gaps listed above, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
 
 > The training-example gate needs the corpus, which is not vendored: run
 > `./scripts/download-training-examples.sh` first. CI does not download it, so the gate
 > **skips in CI** — it has to be run locally before claiming a change is clean.
-> The first run on a cold semantic cache under-reports (81/100); see the known
+> The first run on a cold semantic cache under-reports (82/100); see the known
 > issue in [`TRAINING_EXAMPLES.md`](TRAINING_EXAMPLES.md).
 
 ---

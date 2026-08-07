@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 88/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 12/100 files have semantic errors (29 total errors)  
+**Status:** 89/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 11/100 files have semantic errors (26 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -213,15 +213,43 @@ the name conflict itself; that gap is recorded in `docs/SPEC_COMPLIANCE.md`.
 
 ---
 
+### Verdicts for the import-in-definition-body re-pin (89/100)
+
+One entry drifted; every other file kept its exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `34. Verification/Verification Case Definition Example` | 3 × (`unresolved reference: VerdictKind` ×2, `unresolved reference: PassIf`) | Real fix: `verification def VehicleMassTest` opens its body with `private import VerificationCases::*;`, and the three names it declares to be missing (`VerdictKind` on the `evaluateData` output and on the `def`-level `return`, and `PassIf` in the `evaluateData` body) all resolve to `VerificationCases`. The prior verdict below — "imports must be at package level, not inside a verification def" — was wrong: in KerML an `Import` is a `Relationship` whose `importOwningNamespace` is *any* `Namespace` (KerML 7.2.5.4 Imports; abstract syntax 8.3.2.4.2 Import / 8.3.2.4.6 NamespaceImport), and a definition body is a `Namespace` because a `Definition`/`Usage` is a `Type` and every `Type` is a `Namespace` (SysML v2 7.5.1 Namespaces, 7.5.3 Imports, 7.6 Definition and Usage). A `NamespaceImport` therefore imports the visible (public) memberships of `VerificationCases` into the `VehicleMassTest` body, and — through the ordinary parent-scope walk — into the nested `evaluateData` action, exactly where the OMG model uses them. |
+
+**What changed**
+
+`internal/core/resolve/unqualified.go` `importsOf` only harvested imports from
+`*ast.Package`, `*ast.Namespace`, and `*ast.RootNamespace`, so an import declared
+inside a definition or usage body was never consulted during name resolution. It
+now also harvests imports from `*ast.Definition` and `*ast.Usage` bodies. The
+existing membership/inheritance-then-import ordering (`walkUnqualifiedHiding`) and
+import visibility (`visibleThroughImport`, `import all`) are unchanged, and a
+`private import` in a definition body still does not leak to importers of that
+definition because an imported name is not an *owned* member and is not
+re-surfaced by a `NamespaceImport` of the outer definition. Covered by
+`internal/core/resolve/imports_test.go`
+(`TestImportInDefinitionBodyVisibleInBody`,
+`TestImportInDefinitionBodyVisibleInNestedBody`,
+`TestImportInPackageBodyVisibleInNestedDefinition`,
+`TestImportInDefinitionBodyDoesNotLeakToImporter`).
+
+---
+
 ## Error Classification
 
-The 29 errors recorded on the current baseline, per file (the counts are exactly
+The 26 errors recorded on the current baseline, per file (the counts are exactly
 the ones in `training_examples_expected.txt`):
 
 | File | n | Cause |
 |---|---|---|
 | `34. Verification/Verification Case Usage Example` | 6 | `individual def :> partDef` kind tables |
-| `34. Verification/Verification Case Definition Example` | 3 | an import inside a definition body is not visible to nested scopes |
 | `27. Occurrences/Interaction Example-2` | 3 | flow declared with neither end |
 | `09. Connections/Connections Example` | 2 | connection-usage end names |
 | `11. Interfaces/Interface Example` | 2 | interface-usage end names |
@@ -246,9 +274,8 @@ the ones in `training_examples_expected.txt`):
 - **Cause**: Feature is named `alternatives` (plural) in `Domain Libraries/Analysis/TradeStudies.sysml`
 - **Fix**: Change `alternative` → `alternatives` in the OMG file
 
-### Resolution Gaps (13 errors, 6 files)
+### Resolution Gaps (10 errors, 5 files)
 
-- `34. Verification/Verification Case Definition Example` (3): `private import VerificationCases::*;` sits inside the `verification def` body, and that import is not visible to the nested action bodies that reference `VerdictKind`/`PassIf`
 - `09. Connections/Connections Example` (2): `connect bead references t.bead to mountingRim references w.rim;` names the ends `TireWheelJoint` declares, which the connection usage does not reach
 - `11. Interfaces/Interface Example`, `13. Flows/Flow Interface Example` (2 each): `supplierPort ::> tankAssy.fuelTankPort` names the ends the interface definition declares, same gap as above
 - `39. Metadata/Metadata Example-1` (2): `:> annotatedElement : SysML::PartDefinition;` inside a `metadata def` does not reach the feature the metadata definition inherits
@@ -263,16 +290,22 @@ the ones in `training_examples_expected.txt`):
 
 - `27. Occurrences/Interaction Example-2` (3): `flow X must declare both a source and a target end` — the file declares message flows with neither end
 
+### Resolved Historically ✅
+
+- `VerdictKind`, `PassIf` (`34. Verification/Verification Case Definition Example`): fixed by consulting imports owned by a definition/usage body during name resolution. The former verdict — "imports must be at package level, not inside a verification def" — was wrong: the file's `private import VerificationCases::*;` sits inside the `verification def VehicleMassTest` body, which is a legitimate place for an import, because a definition body is a `Namespace` and an `Import`'s `importOwningNamespace` may be any `Namespace` (KerML 7.2.5.4; SysML v2 7.5.3, 7.6). See the import-in-definition-body re-pin above.
+- `localClock`, `payload` (4 errors): fixed in 8304f03, c683bc8 by resolving features inherited from parent definitions (Part → Item → Occurrence, Flow → Message → Transfer).
+- Named argument resolution: fixed in ff70654 (named args did not resolve parameter names).
+
 ---
 
 ## Training Example Compliance
 
 | Category | Pass | Fail | Pass Rate |
 |----------|------|------|-----------|
-| **All Examples** | 88 | 12 | 88% |
-| **Excluding the files whose errors are OMG bugs** | 91 | 9 | 91% |
+| **All Examples** | 89 | 11 | 89% |
+| **Excluding the files whose errors are OMG bugs** | 92 | 8 | 92% |
 
-**Note**: Of the 12 files with errors, three fail only because of bugs in the OMG material itself (wrong feature names, a typo); the rest are the resolution, type-system and validation gaps listed above.
+**Note**: Of the 11 files with errors, three fail only because of bugs in the OMG material itself (wrong feature names, a typo); the rest are the resolution, type-system and validation gaps listed above.
 
 ---
 
@@ -280,7 +313,6 @@ the ones in `training_examples_expected.txt`):
 
 ### Priority 1: Kind Tables and Non-Generalization Feature Sources
 - Accept an individual definition specializing an occurrence definition (SysML 7.9.5) in `passes/typecheck.go`
-- Make an import declared inside a definition body visible to the nested scopes of that body
 - Resolve connection- and interface-usage end names, and the feature a user keyword's metadata definition supplies
 
 ### Priority 2: Type System Enhancements
@@ -308,10 +340,10 @@ This generates error frequency analysis and per-file diagnostics.
 
 **Known issue — the first run on a cold semantic cache under-reports.** With no
 stdlib cache on disk (`$XDG_CACHE_HOME/sysml-ls`, or `~/.cache/sysml-ls`), the
-gate reports 81/100 (19 files, 50 errors): the extra diagnostics are false
+gate reports 82/100 (18 files, 47 errors): the extra diagnostics are false
 `unresolved reference`s for stdlib names such as `kg`, `mm`, `SysML::PartUsage`
 and `VerdictKind`. The same run populates the cache, so every later run reports
-the recorded 88/100. The numbers in this file are the warm-cache result, which is
+the recorded 89/100. The numbers in this file are the warm-cache result, which is
 what the expectation file pins; a cold-cache run is a false negative, not a
 regression in the corpus.
 
@@ -321,9 +353,9 @@ regression in the corpus.
 
 **Implementation Status**: Core behavioral semantics complete (51/51 execution conformance cases passing).
 
-**Training Example Status**: 88/100 clean (12 files, 29 errors). Remaining errors are primarily:
+**Training Example Status**: 89/100 clean (11 files, 26 errors). Remaining errors are primarily:
 1. Missing local declarations in pedagogical examples, and bugs in the OMG files themselves
-2. Features contributed by something other than a generalization — connection and interface ends, metadata definitions behind a user keyword, imports declared inside a definition body
+2. Features contributed by something other than a generalization — connection and interface ends, metadata definitions behind a user keyword
 3. Type system edge cases (feature work needed)
 
 The runtime implementation is **production-ready for complete SysML v2 models**. Training example "failures" reflect incomplete example files, not missing runtime features.

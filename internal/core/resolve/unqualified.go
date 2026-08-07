@@ -62,7 +62,11 @@ func (r *Resolver) lookupImports(scope *symbols.Scope, name string) (*symbols.Sy
 	return nil, false
 }
 
-// importsOf returns the *ast.Import declarations directly in a namespace-bearing node.
+// importsOf returns the *ast.Import declarations directly in a namespace-bearing
+// node. In KerML an Import is a Relationship owned by any Namespace, and a
+// definition or usage body is itself a Namespace, so imports declared inside a
+// definition/usage body apply to that body's scope (and, through the ordinary
+// parent-scope walk, to every scope nested within it).
 func importsOf(node ast.Node) []*ast.Import {
 	var members []ast.Node
 	switch n := node.(type) {
@@ -71,6 +75,10 @@ func importsOf(node ast.Node) []*ast.Import {
 	case *ast.Namespace:
 		members = n.Members
 	case *ast.RootNamespace:
+		members = n.Members
+	case *ast.Definition:
+		members = n.Members
+	case *ast.Usage:
 		members = n.Members
 	default:
 		return nil
