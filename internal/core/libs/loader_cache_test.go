@@ -66,6 +66,35 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	}
 }
 
+// A restored symbol's supertypes must match what the live-parsed AST yields, so
+// the typing edge of a feature survives the round trip too.
+func TestLoaderCacheKeepsTypingEdge(t *testing.T) {
+	dir := t.TempDir()
+	src := "package Lib { part def Engine; part e : Engine; }"
+	if err := os.WriteFile(filepath.Join(dir, "lib.sysml"), []byte(src), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	ld := NewLoader(NewDirSource(dir), &Cache{dir: t.TempDir()})
+
+	idx1 := symbols.NewIndex()
+	if err := ld.Load("lib.sysml", idx1); err != nil {
+		t.Fatalf("first Load: %v", err)
+	}
+	ld.Persist(idx1)
+
+	idx2 := symbols.NewIndex()
+	if err := ld.Load("lib.sysml", idx2); err != nil {
+		t.Fatalf("second Load: %v", err)
+	}
+	e := idx2.LookupQualified("Lib::e")
+	if len(e) != 1 {
+		t.Fatalf("cached load did not register Lib::e")
+	}
+	if len(e[0].SuperFQNs) != 1 || e[0].SuperFQNs[0] != "Lib::Engine" {
+		t.Fatalf("supertypes of the cached e = %v, want [Lib::Engine]", e[0].SuperFQNs)
+	}
+}
+
 // A record whose supertypes are not all reachable yet must not be cached when
 // the loader requires resolution: its key is the content alone, so it would be
 // restored — minus that edge — in a context where the target is present.

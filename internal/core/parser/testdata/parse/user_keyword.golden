@@ -14,4 +14,7 @@
                   (LiteralReal value="0.01")))))
           (Membership visibility="default"
             (Usage kind="attribute" name="device shutoff" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (PrefixMetadata type="failure"))))))))
+              (PrefixMetadata type="failure")))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="packageLevelCause" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (PrefixMetadata type="cause"))))))

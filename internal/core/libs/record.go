@@ -5,13 +5,14 @@ import (
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // formatVersion is the on-disk index record format version. Bump it whenever
 // the persisted shape changes; a mismatch invalidates all cached records.
-const formatVersion = 6
+const formatVersion = 7
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.
 // It deliberately excludes the AST-backed Decl and the Scope/OwnerScope
@@ -22,7 +23,7 @@ type symRecord struct {
 	ShortName       string // short name (e.g., "kg" for "kilogram"), empty if none
 	Kind            symbols.SymbolKind
 	Span            source.Span
-	Supers          []string // FQNs of the specializes/subsets/redefines targets
+	Supers          []string // FQNs of the generalization targets (see supersOf)
 	WildcardImports []string // for packages: FQNs of wildcard-imported packages
 	AliasTarget     string   // for aliases: raw target text of "alias X for Y"
 }
@@ -76,11 +77,11 @@ func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, idx *sy
 	return complete
 }
 
-// supersOf resolves the specialization edges (specializes/subsets/redefines)
-// declared by a Definition or Usage to the fully-qualified names of their
-// targets, reporting whether every one of them resolved. Typing, references,
-// and crosses edges are not specializations and are excluded; a feature chain
-// target has no qualified name to record and counts as unresolved.
+// supersOf resolves the generalization edges declared by a Definition or Usage
+// to the fully-qualified names of their targets, reporting whether every one of
+// them resolved. The edge kinds are exactly semantics.GeneralizationKind, since
+// a restored record replaces that graph; a feature chain target has no
+// qualified name to record and counts as unresolved.
 func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) ([]string, bool) {
 	var rels []*ast.Relationship
 	switch d := sym.Decl.(type) {
@@ -92,11 +93,10 @@ func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) ([]s
 		return nil, true
 	}
 	var out []string
+	seen := map[string]bool{}
 	complete := true
 	for _, rel := range rels {
-		switch rel.Kind {
-		case ast.RelSpecializes, ast.RelSubsets, ast.RelRedefines:
-		default:
+		if !semantics.GeneralizationKind(rel.Kind) {
 			continue
 		}
 		// Unwrap FeatureReference to get underlying QualifiedName
@@ -122,6 +122,10 @@ func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) ([]s
 			complete = false
 			continue
 		}
+		if seen[superFQN] {
+			continue
+		}
+		seen[superFQN] = true
 		out = append(out, superFQN)
 	}
 	return out, complete

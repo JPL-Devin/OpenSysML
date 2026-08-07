@@ -6,4 +6,7 @@ package UserKeywords {
 
 		#failure 'device shutoff';
 	}
+
+	// A keyword-only declaration is also a namespace member.
+	#cause packageLevelCause;
 }

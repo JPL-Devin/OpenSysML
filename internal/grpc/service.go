@@ -82,15 +82,22 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	stdlibSrc := libs.DefaultSource()
 	cache, _ := libs.NewCache() // Ignore cache errors, continue without
 	loader := libs.NewLoader(stdlibSrc, cache)
+	loaded := true
 	for _, name := range stdlibSrc.List() {
-		_ = loader.Load(name, idx) // Ignore load errors, continue
+		if err := loader.Load(name, idx); err != nil {
+			loaded = false // Ignore load errors, continue
+		}
 	}
 
 	// Expand wildcard imports (facade packages like ISQ re-exporting ISQMechanics)
 	idx.ExpandWildcardImports()
 
-	// Cache what was parsed, so the next request restores it instead.
-	loader.Persist(idx)
+	// Cache what was parsed, so the next request restores it instead. An
+	// incomplete library is not cached: a record is keyed by content alone, so
+	// it would be reused without the supertypes the missing file declared.
+	if loaded {
+		loader.Persist(idx)
+	}
 
 	// Add user document
 	idx.AddDocument(filePath, root)

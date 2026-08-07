@@ -3,6 +3,7 @@ package libs
 import (
 	"bytes"
 	"encoding/gob"
+	"slices"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
@@ -106,23 +107,26 @@ func TestRecordSupersFromSpecializationEdges(t *testing.T) {
 	}
 }
 
-func TestRecordSupersExcludesTypingAndReferences(t *testing.T) {
-	src := "part def Engine; part e : Engine subsets Engine;"
+// Supers is now the generalization graph of a symbol restored from the cache
+// (which has no AST), so it records exactly the edge kinds
+// semantics.GeneralizationKind accepts — typing included, references excluded.
+func TestRecordSupersCoversGeneralizationEdges(t *testing.T) {
+	src := "part def Engine; part e : Engine subsets Engine; part def Chassis; part c ::> Chassis;"
 	root := parser.New(source.New("lib", []byte(src))).ParseFile()
 	idx := symbols.NewIndex()
 	idx.AddDocument("lib", root)
 
 	rec := recordOf("lib", idx)
-	var e *symRecord
-	for i := range rec.Symbols {
-		if rec.Symbols[i].FQN == "e" {
-			e = &rec.Symbols[i]
-		}
+	got := map[string][]string{}
+	for _, s := range rec.Symbols {
+		got[s.FQN] = s.Supers
 	}
-	if e == nil {
-		t.Fatalf("e record not found")
+	// Typing and subsetting name the same target here, recorded once.
+	if want := []string{"Engine"}; !slices.Equal(got["e"], want) {
+		t.Fatalf("Supers of e = %v, want %v", got["e"], want)
 	}
-	if len(e.Supers) != 1 || e.Supers[0] != "Engine" {
-		t.Fatalf("Supers = %v, want [Engine] (subsets only)", e.Supers)
+	// `::>` is reference subsetting: it contributes members, not conformance.
+	if len(got["c"]) != 0 {
+		t.Fatalf("Supers of c = %v, want none (reference subsetting)", got["c"])
 	}
 }

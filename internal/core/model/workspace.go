@@ -55,10 +55,12 @@ func loadStdlib(idx *symbols.Index) {
 	loader := libs.NewLoader(src, cache)
 
 	// Load all stdlib files
+	loaded := true
 	for _, name := range src.List() {
 		if err := loader.Load(name, idx); err != nil {
 			// Non-fatal: log but continue (allows REPL to work without stdlib)
 			slog.Warn("failed to load stdlib file", "file", name, "error", err)
+			loaded = false
 		}
 	}
 
@@ -66,8 +68,12 @@ func loadStdlib(idx *symbols.Index) {
 	idx.ExpandWildcardImports()
 
 	// Cache whatever had to be parsed, now that every library file is indexed
-	// and a supertype declared in another file resolves.
-	loader.Persist(idx)
+	// and a supertype declared in another file resolves. A record is keyed by
+	// content alone, so nothing is cached from an incomplete library: it would
+	// be reused, minus the supertypes that file declared, on every later run.
+	if loaded {
+		loader.Persist(idx)
+	}
 }
 
 // Open registers an authoritative open buffer for name and reindexes.
