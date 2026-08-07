@@ -1905,14 +1905,29 @@ func (p *Parser) parseStateMember() ast.Node {
 			p.advance()
 			return p.parseFinalState(start)
 		case "entry":
+			// `entry point <name>;` declares an entry point pseudostate; `entry ...`
+			// anything else is the state's entry action.
+			if p.atPointPseudostate() {
+				p.advance() // consume 'entry'
+				p.advance() // consume 'point'
+				return p.parsePseudostate(start, "entry point", ast.PseudostateEntry)
+			}
 			p.advance()
 			return p.parseEntryMember(start)
 		case "do":
 			p.advance()
 			return p.parseDoMember(start)
 		case "exit":
+			if p.atPointPseudostate() {
+				p.advance() // consume 'exit'
+				p.advance() // consume 'point'
+				return p.parsePseudostate(start, "exit point", ast.PseudostateExit)
+			}
 			p.advance()
 			return p.parseExitMember(start)
+		case "defer":
+			p.advance()
+			return p.parseDeferMember(start)
 		case "state":
 			// Check if this is a simple declaration (state name;) or full usage (state name { ... })
 			// Lookahead: state followed by name/keyword and semicolon → SubstateMember
@@ -1940,6 +1955,23 @@ func (p *Parser) parseStateMember() ast.Node {
 		case "join":
 			p.advance()
 			return p.parsePseudostate(start, kw, ast.PseudostateJoin)
+		case "history":
+			// Bare `history <name>;` is shallow, as in UML's H vs H*.
+			p.advance()
+			return p.parsePseudostate(start, kw, ast.PseudostateShallowHistory)
+		case "shallow", "deep":
+			kind := ast.PseudostateShallowHistory
+			if kw == "deep" {
+				kind = ast.PseudostateDeepHistory
+			}
+			p.advance() // consume 'shallow' / 'deep'
+			if !p.acceptKeyword("history") {
+				p.error(p.peek().Span, fmt.Sprintf("expected 'history' after '%s'", kw))
+				en := &ast.ErrorNode{Message: fmt.Sprintf("expected 'history' after '%s'", kw)}
+				en.NodeSpan = p.spanFrom(start)
+				return en
+			}
+			return p.parsePseudostate(start, kw+" history", kind)
 		case "transition":
 			// Lookahead to distinguish:
 			// 1. State machine transition: transition source to target (no name)
@@ -2594,6 +2626,53 @@ func (p *Parser) parseRegionMember(start int) ast.Node {
 	}
 	region.NodeSpan = p.spanFrom(start)
 	return region
+}
+
+// atPointPseudostate reports whether the `entry`/`exit` keyword at the cursor
+// starts an entry/exit point pseudostate — `entry point <name>;` — rather than
+// an entry/exit action. `point` is matched contextually rather than reserved as
+// a keyword, because models routinely name features `point`.
+func (p *Parser) atPointPseudostate() bool {
+	point := p.peekN(1)
+	if point.Kind != lexer.Identifier || p.src.Text(point.Span) != "point" {
+		return false
+	}
+	name := p.peekN(2)
+	if name.Kind != lexer.Identifier && name.Kind != lexer.Keyword {
+		return false
+	}
+	return p.peekN(3).Kind == lexer.Semicolon
+}
+
+// parseDeferMember parses `defer <event> [, <event>]* ;` in a state body: the
+// events the state retains while it is active instead of dropping them. Each
+// event is parsed exactly like a transition trigger, so a signal name and a
+// call event (`defer setSpeed(value)`) both work.
+func (p *Parser) parseDeferMember(start int) ast.Node {
+	// 'defer' already consumed
+	if p.at(lexer.Semicolon) || p.atEOF() || p.at(lexer.RBrace) {
+		p.error(p.peek().Span, "expected an event after 'defer'")
+		en := &ast.ErrorNode{Message: "expected an event after 'defer'"}
+		if p.at(lexer.Semicolon) {
+			p.advance()
+		}
+		en.NodeSpan = p.spanFrom(start)
+		return en
+	}
+
+	var triggers []ast.Node
+	for {
+		triggers = append(triggers, p.parseTriggerEvent())
+		if !p.accept2(lexer.Comma) {
+			break
+		}
+	}
+
+	p.expect(lexer.Semicolon, "expected ';' after deferred events")
+
+	node := &ast.DeferMember{Triggers: triggers}
+	node.NodeSpan = p.spanFrom(start)
+	return node
 }
 
 // parsePseudostate parses a pseudostate declaration in a state body:

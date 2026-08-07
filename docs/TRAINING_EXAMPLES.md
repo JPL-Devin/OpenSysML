@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 86/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 14/100 files have semantic errors (30 total errors)  
+**Status:** 88/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 12/100 files have semantic errors (29 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -94,9 +94,27 @@ One entry drifted; every other file kept its exact count.
 
 | File | Diagnostic | Remaining gap |
 |---|---|---|
-| `Conditional Succession Example-1` | `unresolved member: isWellFocused` | Implicit *redefinition*: `out item image;` inside `action focus : Focus` refines `Focus::image` (typed `Image`). Untyped usages that shadow an inherited feature deliberately got no implicit base, so the type came from nowhere. (Fixed in the 86/100 re-pin below.) |
-| `Action Performance Example`, `Allocation Usage Example` | `unresolved member: focus`/`shoot`/`generateTorque` | The members come from `perform action takePhoto references takePicture;` and `perform providePower.generateTorque;`: a `references` edge and the feature a `perform` statement contributes, neither of which is a generalization. |
+| `Conditional Succession Example-1` | `unresolved member: isWellFocused` | Implicit *redefinition*: `out item image;` inside `action focus : Focus` refines `Focus::image` (typed `Image`). Untyped usages that shadow an inherited feature deliberately got no implicit base, so the type came from nowhere. (Fixed in the 88/100 re-pin below.) |
+| `Action Performance Example`, `Allocation Usage Example` | `unresolved member: focus`/`shoot`/`generateTorque` | The members come from `perform action takePhoto references takePicture;` and `perform providePower.generateTorque;`: a `references` edge and the feature a `perform` statement contributes, neither of which is a generalization. **Fixed since — see the reference-subsetting verdicts below.** |
 | `Time Slice and Snapshot Example`, `Individuals and Time Slices` | `unresolved reference: start`/`done` | Bugs in the OMG files (`startShot`/`endShot`), unchanged. |
+
+### Verdicts for the reference-subsetting re-pin (81 → 83; 87 once `main`'s message-payload and satisfy-reference fixes merged in)
+
+Two entries went clean and one reports more; every other file kept its exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `18. Action Performance/Action Performance Example` | 2 × `unresolved member: focus`/`shoot` | Real fix: `perform action takePhoto references takePicture;` relates `takePhoto` to `takePicture` by a reference subsetting (SysML 7.17.6), which contributes the referenced action's members. `takePhoto.focus` now resolves to `takePicture::focus`. The negative counterpart (a member the referenced action does not declare) still reports — see `internal/core/semantics/reference_test.go` and `internal/core/model/perform_reference_test.go`. |
+| `38. Allocation/Allocation Usage Example` | 2 × `unresolved member: generateTorque` | Real fix, two causes: `perform providePower.generateTorque;` names its feature after the feature it references (KerML `Feature::effectiveName`), so `torqueGenerator.generateTorque` names a declaration; and `allocate torqueGenerator to powerTrain` is an anonymous binary allocation, whose first name is a connector end rather than the usage's own name. |
+| `32. Requirements/Requirement Satisfaction` | 2, then unchanged | Same fix, in a file that was already recorded: `perform 'provide power'.'generate torque'` resolves now. Its two remaining errors were unrelated and are cleared separately by the satisfy-reference verdicts below. |
+
+**A file that reports more, adjudicated**
+
+| File | Was | Now | Verdict |
+|---|---|---|---|
+| `34. Verification/Verification Case Usage Example` | 3 × `unresolved reference: testVehicle`/`massMeasured` | 6 × `individual cannot specialize partDef` / `... cannot be typed by individualDef` | The three name-resolution false positives are fixed by this change: `perform vehicleMassTest;` used to shadow the verification usage it performs with an empty feature, so `vehicleMassTest.collectData` and the redefinitions under it resolved to nothing. With the name-resolution tier clean, the type tier runs on this file for the first time (tiers are skipped after a lower tier errors) and reports six pre-existing false positives about individuals: `individual def TestSystem :> MassVerificationSystem;` and `individual testSystem : TestSystem` are well-formed (SysML 7.9.5), and the kind tables in `passes/typecheck.go` do not yet accept an individual definition specializing an occurrence definition. Recorded, not fixed, to keep this change scoped; see `docs/SPEC_COMPLIANCE.md`. |
 
 ### Verdicts for the message-payload re-pin (82/100)
 
@@ -165,7 +183,7 @@ reports (`satisfy target must be a requirement usage, found ...`), locked by
 `internal/core/passes/typecheck_test.go`, and the parse shape is pinned by
 `internal/core/parser/testdata/parse/satisfy_reference.golden`.
 
-### Verdicts for the implicit-parameter-redefinition re-pin (86/100)
+### Verdicts for the implicit-parameter-redefinition re-pin (88/100)
 
 One entry drifted; every other file kept its exact count.
 
@@ -266,13 +284,10 @@ These errors are **not implementation gaps** - the training files reference name
 
 | Category | Pass | Fail | Pass Rate |
 |----------|------|------|-----------|
-| **All Examples** | 85 | 15 | 85% |
-| **After filtering pedagogical gaps** | ~85 | ~15 | ~85% |
+| **All Examples** | 87 | 13 | 87% |
+| **After filtering pedagogical gaps** | ~87 | ~13 | ~87% |
 
-**Note**: Many "failures" are incomplete examples meant for teaching, not executable code. Of the 29 files with errors:
-- ~20 have only missing local declarations (pedagogical)
-- ~10 have stdlib import issues (mostly resolvable)
-- ~7 have type system limitations (require feature work)
+**Note**: Many "failures" are incomplete examples meant for teaching, not executable code. Of the 13 files with errors, most emit only missing local declarations or bugs in the OMG material itself (wrong feature names, typos, missing imports); the rest are type-system and validation gaps listed above.
 
 ---
 
@@ -280,7 +295,6 @@ These errors are **not implementation gaps** - the training files reference name
 
 ### Priority 1: Implicit Redefinition and Non-Generalization Feature Sources
 - Implicit redefinition: an untyped usage whose name matches a feature its owner inherits takes that feature's type
-- Features contributed by `perform` statements and by `references` edges on a usage
 - Document correct import paths for Metadata, Variations, Requirements namespaces
 
 ### Priority 2: Type System Enhancements
@@ -312,9 +326,9 @@ This generates error frequency analysis and per-file diagnostics.
 
 **Implementation Status**: Core behavioral semantics complete (43/43 execution conformance cases passing).
 
-**Training Example Status**: 81/100 clean (19 files, 37 errors). Remaining errors are primarily:
+**Training Example Status**: 87/100 clean (13 files, 30 errors). Remaining errors are primarily:
 1. Missing local declarations in pedagogical examples, and bugs in the OMG files themselves
-2. Implicit *redefinition* of a like-named inherited feature, and members contributed by `perform`/`references` edges — neither of which implicit stdlib typing supplies (see the verdict tables above)
+2. Implicit *redefinition* of a like-named inherited feature, which implicit stdlib typing does not supply (see the verdict tables above)
 3. Type system edge cases (feature work needed)
 
 The runtime implementation is **production-ready for complete SysML v2 models**. Training example "failures" reflect incomplete example files, not missing runtime features.

@@ -176,4 +176,8 @@ type Symbol struct {
 	// ShortName is the short name from Identification (e.g., "kg" for "kilogram").
 	// Populated for cached symbols where Decl=nil. Empty if no short name.
 	ShortName string
+
+	// EffectiveName reports that Name was taken from the feature this
+	// declaration references rather than declared (KerML Feature::effectiveName).
+	EffectiveName bool
 }

@@ -531,11 +531,14 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			// Parse reference target (qualified name or feature chain)
 			target := p.parseRelationshipTarget()
 			if target != nil {
-				// Add as references relationship
+				// The performed action is related to the perform action usage
+				// by a reference subsetting (SysML 7.17.6).
 				u.Relationships = append(u.Relationships, &ast.Relationship{
 					Kind:   ast.RelReferences,
 					Target: target,
 				})
+			} else {
+				p.error(p.peek().Span, "expected an action reference after 'perform'")
 			}
 
 			// Expect semicolon or body
@@ -1113,9 +1116,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 					u.Ident.Name = qn.Parts[0].Text
 					u.Ident.NameSpan = qn.Parts[0].Span
 				} else {
-					// Store as references relationship for complex expressions
+					// Store as a subject relationship for complex expressions
 					u.Relationships = append(u.Relationships, &ast.Relationship{
-						Kind:   ast.RelReferences,
+						Kind:   ast.RelSubject,
 						Target: subjTarget,
 					})
 				}
@@ -1295,6 +1298,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 		// Anonymous connector starts with 'from' keyword (e.g., `connector : X from y to z`)
 		skipIdentification := (kind == ast.UsageFlow && p.atFlowShorthand()) ||
 			(kind == ast.UsageSuccession && isAnonymous) ||
+			(kind == ast.UsageAllocation && p.atAllocateShorthand()) ||
 			(kind == ast.UsageConnector && p.atKeyword("from"))
 		if !skipIdentification {
 			u.Ident = p.parseUsageIdentification(kind)
@@ -2059,10 +2063,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 					})
 				}
 
-				// Add via port as reference relationship
+				// Add via port as the receiving port relationship
 				if viaPort != nil {
 					actionUsage.Relationships = append(actionUsage.Relationships, &ast.Relationship{
-						Kind:   ast.RelReferences,
+						Kind:   ast.RelVia,
 						Target: viaPort,
 					})
 				}
@@ -2656,7 +2660,7 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 
 		// Create member name as QualifiedName
 		memberName := &ast.QualifiedName{Parts: []ast.NameSegment{seg}}
-		memberName.NodeSpan = p.spanFrom(p.peek().Span.Offset)
+		memberName.NodeSpan = seg.Span
 
 		chain := &ast.FeatureChainExpr{
 			Operand: operand,
@@ -2761,9 +2765,9 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 			for {
 				target := p.parseRelationshipTarget()
 				if target != nil {
-					// Store as references relationship (metadata references/annotates target)
+					// Store as an annotation relationship: metadata annotates its target
 					u.Relationships = append(u.Relationships, &ast.Relationship{
-						Kind:   ast.RelReferences,
+						Kind:   ast.RelAnnotates,
 						Target: target,
 					})
 				}
@@ -2929,6 +2933,17 @@ func (p *Parser) parseConnectorFromTo(u *ast.Usage) {
 // `x to y` (a name immediately followed by the `to` keyword), which has no
 // declaration name.
 func (p *Parser) atFlowShorthand() bool {
+	if !p.atName() {
+		return false
+	}
+	n := p.peekN(1)
+	return n.Kind == lexer.Keyword && n.KeywordID == "to"
+}
+
+// atAllocateShorthand reports whether an allocation usage names its first
+// connector end rather than itself: in `allocate torqueGenerator to powerTrain`
+// both names are ends, while `allocate a1 : AllocDef` declares a named usage.
+func (p *Parser) atAllocateShorthand() bool {
 	if !p.atName() {
 		return false
 	}

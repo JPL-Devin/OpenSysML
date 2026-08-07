@@ -309,3 +309,46 @@ func TestInvokeActionRecursionIsBounded(t *testing.T) {
 		t.Fatalf("error = %v, want a nesting-depth error", err)
 	}
 }
+
+// A bare perform statement is named after the action it performs
+// (symbols.effectiveIdent), so its target must be resolved outside that
+// binding — otherwise it performs itself, which does nothing.
+func TestPerformShorthandRunsTheReferencedAction(t *testing.T) {
+	ctx, outer := loadAction(t, `package test {
+	action increment {
+		in base : Integer;
+		out result : Integer;
+
+		first begin;
+		action bump {
+			assign result := base + 5;
+		}
+		done finish;
+
+		then begin bump;
+		then bump finish;
+	}
+
+	action outer {
+		attribute base : Integer = 7;
+		attribute result : Integer = 0;
+
+		first start;
+
+		perform increment;
+
+		done end;
+
+		then start increment;
+		then increment end;
+	}
+}`, "outer")
+
+	outputs, err := ctx.ExecuteAction(outer)
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if got := intOutput(t, outputs, "result"); got != 12 {
+		t.Errorf("result = %d, want 12 (the performed action ran)", got)
+	}
+}

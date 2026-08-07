@@ -15,7 +15,7 @@
                 (*ast.QualifiedName))))
           (Membership visibility="default"
             (Usage kind="satisfy" name="viewpointConformance" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (Relationship kind="references" target=vehicle
+              (Relationship kind="by" target=vehicle
                 (*ast.QualifiedName))))))
       (Membership visibility="default"
         (Definition kind="view" abstract=false variation=false name="StructureView"

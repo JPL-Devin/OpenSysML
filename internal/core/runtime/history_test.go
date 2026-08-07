@@ -41,8 +41,9 @@ func visitsAfter(exec *StateExecutor, mark int) []string {
 }
 
 // shallowHistoryMachine is `outer` with two flat substates and a shallow history
-// that a state outside `outer` transitions into. History has no textual notation,
-// so the machine is built on the AST directly.
+// that a state outside `outer` transitions into. The machines here are built on the
+// AST directly to vary one detail at a time; the `history` notation is covered by
+// the conformance cases.
 func shallowHistoryMachine() *ast.Usage {
 	first := &ast.StateNode{Name: "first"}
 	second := &ast.StateNode{Name: "second"}

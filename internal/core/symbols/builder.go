@@ -89,8 +89,10 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		// Phase 4: Parser treats 'datatype' uniformly as usage. Builder classifies based on context.
 		// If usage is attribute kind with specializes/subsets but no typing, treat as definition.
 		kind := classifyUsage(d)
-		sym := newSymbol(d.Ident, kind, d, vis, child, scope, trivia)
-		defineIdent(scope, d.Ident, sym)
+		id := effectiveIdent(d)
+		sym := newSymbol(id, kind, d, vis, child, scope, trivia)
+		sym.EffectiveName = id != d.Ident
+		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
 	case *ast.SubstateMember:
@@ -242,6 +244,32 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 		scope.SetOwner(sym)
 	}
 	return sym
+}
+
+// effectiveIdent returns the identification a usage is registered under. A
+// usage declared without a name or short name takes the name of its naming
+// feature (KerML Feature::effectiveName): for a usage with a reference
+// subsetting that is the referenced feature, which is how `perform
+// providePower.generateTorque;` contributes the member `generateTorque` to the
+// part performing it (SysML 7.6.5, 7.17.6 and 8.3.17.14 PerformActionUsage::
+// namingFeature).
+//
+// The referenced feature's own effective name is approximated by the last
+// segment of the reference, which is the declared name of the feature that
+// segment resolves to; resolution has not run when scopes are built.
+func effectiveIdent(u *ast.Usage) ast.Identification {
+	if u.Ident.Name != "" || u.Ident.ShortName != "" {
+		return u.Ident
+	}
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Kind != ast.RelReferences {
+			continue
+		}
+		if name, span := ast.TargetName(rel.Target); name != "" {
+			return ast.Identification{Name: name, NameSpan: span}
+		}
+	}
+	return u.Ident
 }
 
 // defineIdent registers sym under its short and primary name keys, skipping

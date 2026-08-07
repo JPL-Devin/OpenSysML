@@ -1,0 +1,20 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Deferral" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="state" name="Controller" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.StateNode)
+          (Membership visibility="default"
+            (Usage kind="state" name="busy" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (DeferMember
+                (*ast.QualifiedName)
+                (CallEvent operation="setSpeed" parameters=[value]))))
+          (*ast.SubstateMember)
+          (*ast.StateNode)
+          (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (ConnectorEnd target="<nil>")
+            (ConnectorEnd target="<nil>"))
+          (TransitionMember source="busy" target="ready"
+            (FeatureReference name="Go"))
+          (TransitionMember source="ready" target="done"
+            (FeatureReference name="Ping")))))))

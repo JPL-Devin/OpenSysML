@@ -212,9 +212,16 @@ func (w *Workspace) DocumentNames() []string {
 // ResolveQualifiedInDoc resolves a qualified name against the given scope using
 // the workspace's symbol index. Used by the LSP layer for go-to-definition.
 func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	return w.ResolveReferenceInDoc(name, resolve.Reference{Scope: scope, QN: qn})
+}
+
+// ResolveReferenceInDoc resolves one name occurrence, which may be the target of
+// a reference subsetting or a feature chain's member segment (see
+// resolve.Reference).
+func (w *Workspace) ResolveReferenceInDoc(name string, ref resolve.Reference) (*symbols.Symbol, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	return resolve.New(w.index).ResolveQualified(scope, qn)
+	return resolve.New(w.index).ResolveReference(ref)
 }
 
 // ResolveQualifiedSegmentsInDoc resolves a qualified name and returns the symbol
@@ -222,16 +229,22 @@ func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn 
 // Entries are nil where a segment did not resolve. Used by rename, which must
 // edit a name wherever it appears, qualifier positions included.
 func (w *Workspace) ResolveQualifiedSegmentsInDoc(name string, scope *symbols.Scope, qn *ast.QualifiedName) []*symbols.Symbol {
-	if qn == nil {
+	return w.ResolveReferenceSegmentsInDoc(name, resolve.Reference{Scope: scope, QN: qn})
+}
+
+// ResolveReferenceSegmentsInDoc is ResolveQualifiedSegmentsInDoc for one name
+// occurrence (see ResolveReferenceInDoc).
+func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Reference) []*symbols.Symbol {
+	if ref.QN == nil {
 		return nil
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	r := resolve.New(w.index)
-	r.ResolveQualified(scope, qn)
-	out := make([]*symbols.Symbol, len(qn.Parts))
-	for i := range qn.Parts {
-		if sym, ok := r.PartSymbol(qn, i); ok {
+	r.ResolveReference(ref)
+	out := make([]*symbols.Symbol, len(ref.QN.Parts))
+	for i := range ref.QN.Parts {
+		if sym, ok := r.PartSymbol(ref.QN, i); ok {
 			out[i] = sym
 		}
 	}
