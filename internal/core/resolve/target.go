@@ -40,17 +40,23 @@ func (r *Resolver) ResolveTarget(scope *symbols.Scope, target ast.Node) (*symbol
 // resolves its target in. An unnamed feature takes its name from the feature it
 // references (KerML Feature::effectiveName), so `perform 'provide power';`
 // binds the name `'provide power'` in the very scope the target is looked up
-// in. The target names the outer feature, not the reference to it, so scopes
-// where the name binds to decl itself are skipped.
+// in. The target names the outer feature, not the reference to it, so a scope
+// is skipped only when every symbol it binds under that name is decl itself —
+// a sibling declaration of the same name is a legitimate target.
 func ReferenceScope(scope *symbols.Scope, decl ast.Node, target ast.Node) *symbols.Scope {
 	first := firstSegment(target)
 	if first == "" || decl == nil {
 		return scope
 	}
 	for s := scope; s != nil; s = s.Parent() {
-		sym, ok := s.LookupLocal(first)
-		if !ok || sym.Decl != decl {
+		bound := s.LookupLocalAll(first)
+		if len(bound) == 0 {
 			return s
+		}
+		for _, sym := range bound {
+			if sym.Decl != decl {
+				return s
+			}
 		}
 	}
 	return scope

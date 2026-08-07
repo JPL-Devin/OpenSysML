@@ -42,7 +42,12 @@ func (m *Model) ReferencedFeature(sym *symbols.Symbol) *symbols.Symbol {
 		out = target
 		break
 	}
-	m.referenced[sym] = out
+	// A result computed while another symbol's reference is in flight saw a
+	// truncated member view (that symbol's own reference was hidden), so it is
+	// provisional and must not be cached.
+	if len(m.resolvingRef) == 1 {
+		m.referenced[sym] = out
+	}
 	return out
 }
 

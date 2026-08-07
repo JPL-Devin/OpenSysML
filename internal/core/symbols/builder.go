@@ -91,6 +91,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		kind := classifyUsage(d)
 		id := effectiveIdent(d)
 		sym := newSymbol(id, kind, d, vis, child, scope, trivia)
+		sym.EffectiveName = id != d.Ident
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)

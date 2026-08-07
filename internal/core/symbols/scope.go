@@ -70,10 +70,16 @@ func (s *Scope) DefineAnonymous(sym *Symbol) {
 }
 
 // LookupLocal returns the first symbol defined under name in this scope only.
+// A declared name wins over an effective one taken from a referenced feature.
 func (s *Scope) LookupLocal(name string) (*Symbol, bool) {
 	syms := s.members[name]
 	if len(syms) == 0 {
 		return nil, false
+	}
+	for _, sym := range syms {
+		if !sym.EffectiveName {
+			return sym, true
+		}
 	}
 	return syms[0], true
 }

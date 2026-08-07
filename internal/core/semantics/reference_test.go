@@ -127,3 +127,66 @@ func contains(syms []*symbols.Symbol, want *symbols.Symbol) bool {
 	}
 	return false
 }
+
+// A perform statement declared beside the action it performs must still find
+// that sibling: only its own effective-name binding is skipped, not the whole
+// scope that binding lives in.
+func TestReferenceFindsSiblingDeclaredAfterIt(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part vehicle {
+			perform providePower;
+			action providePower { action generateTorque; }
+		}
+	}`)
+
+	pkg := sym(t, root, "P")
+	vehicle := sym(t, pkg.Scope, "vehicle")
+
+	var perform, action *symbols.Symbol
+	for _, s := range vehicle.Scope.LookupLocalAll("providePower") {
+		if usage, ok := s.Decl.(*ast.Usage); ok && usage.Ident.Name == "" {
+			perform = s
+		} else {
+			action = s
+		}
+	}
+	if perform == nil || action == nil {
+		t.Fatalf("expected both a perform statement and an action named providePower")
+	}
+	if got := m.ReferencedFeature(perform); got != action {
+		t.Fatalf("ReferencedFeature(perform) = %v, want the sibling action", got)
+	}
+	if _, ok := m.LookupMember(perform, "generateTorque"); !ok {
+		t.Errorf("LookupMember(perform, \"generateTorque\") not found")
+	}
+}
+
+// A reference resolved while another reference is in flight saw a truncated
+// member view (the in-flight symbol's own reference is hidden by the cycle
+// guard), so its result is provisional and must not be memoized.
+func TestNestedReferenceResultIsNotCached(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		action takePicture { action focus; }
+		part camera { perform action takePhoto references takePicture; }
+	}`)
+
+	pkg := sym(t, root, "P")
+	camera := sym(t, pkg.Scope, "camera")
+	takePhoto := sym(t, camera.Scope, "takePhoto")
+	takePicture := sym(t, pkg.Scope, "takePicture")
+
+	delete(m.referenced, takePhoto)
+	m.resolvingRef[takePicture] = true
+	got := m.ReferencedFeature(takePhoto)
+	delete(m.resolvingRef, takePicture)
+
+	if got != takePicture {
+		t.Fatalf("ReferencedFeature(takePhoto) = %v, want takePicture", got)
+	}
+	if _, cached := m.referenced[takePhoto]; cached {
+		t.Errorf("a result computed under an in-flight resolution was memoized")
+	}
+	if got := m.ReferencedFeature(takePhoto); got != takePicture {
+		t.Errorf("ReferencedFeature(takePhoto) = %v after recompute, want takePicture", got)
+	}
+}
