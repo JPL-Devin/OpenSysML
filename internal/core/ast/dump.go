@@ -175,6 +175,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.IsConjugated {
 			b.WriteString(` conjugated=true`)
 		}
+		if v.IsEnd {
+			b.WriteString(` end=true`)
+		}
 		writeChildren(b, depth, usageChildren(v))
 		return
 	case *FlowEnds:
@@ -231,6 +234,12 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		if v.Target != nil {
 			kids = append(kids, v.Target)
+		}
+		for _, r := range v.Relationships {
+			kids = append(kids, r)
+		}
+		if v.Reference != nil {
+			kids = append(kids, v.Reference)
 		}
 		writeChildren(b, depth, kids)
 		return

@@ -2437,6 +2437,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 			if p.at(lexer.LBracket) {
 				u.Multiplicity = p.parseMultiplicity()
 			}
+			if u.Multiplicity == nil {
+				// `end [1] rim : Rim` — the multiplicity was taken as an early one.
+				u.Multiplicity = mods.earlyMultiplicity
+			}
 
 			// Parse post-multiplicity modifiers (ordered/nonunique)
 			postMods := p.parsePostModifiers()

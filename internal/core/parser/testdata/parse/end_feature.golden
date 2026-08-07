@@ -1,0 +1,53 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="connection" abstract=false variation=false name="PressureSeat"
+      (Membership visibility="default"
+        (Usage kind="part" name="bead" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireBead
+            (*ast.QualifiedName))
+          (Multiplicity range=false
+            (LiteralInteger value="1"))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="mountingRim" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=TireMountingRim
+            (*ast.QualifiedName))
+          (Multiplicity range=false
+            (LiteralInteger value="1"))))))
+  (Membership visibility="default"
+    (Definition kind="interface" abstract=false variation=false name="FuelInterface"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="supplierPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+          (Relationship kind="typing" target=FuelOutPort
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="consumerPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true))))
+  (Membership visibility="default"
+    (Usage kind="part" name="wheelAssy" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+      (Membership visibility="default"
+        (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=PressureSeat
+            (*ast.QualifiedName))
+          (ConnectorEnd target="bead"
+            (*ast.QualifiedName)
+            (Relationship kind="references" target=(expr)
+              (FeatureChainExpr member="bead"
+                (FeatureReference name="t"))))
+          (ConnectorEnd target="mountingRim"
+            (*ast.QualifiedName)
+            (Relationship kind="references" target=(expr)
+              (FeatureChainExpr member="rim"
+                (FeatureReference name="w"))))))
+      (Membership visibility="default"
+        (Usage kind="interface" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=FuelInterface
+            (*ast.QualifiedName))
+          (ConnectorEnd target="supplierPort"
+            (*ast.QualifiedName)
+            (Relationship kind="references" target=(expr)
+              (FeatureChainExpr member="fuelTankPort"
+                (FeatureReference name="tankAssy"))))
+          (ConnectorEnd target="consumerPort"
+            (*ast.QualifiedName)
+            (Relationship kind="references" target=(expr)
+              (FeatureChainExpr member="engineFuelPort"
+                (FeatureReference name="eng")))))))))

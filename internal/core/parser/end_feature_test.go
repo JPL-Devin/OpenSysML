@@ -32,6 +32,9 @@ connection def PressureSeat {
 		t.Fatalf("expected a Definition, got %T", file.Members[0].(*ast.Membership).Member)
 	}
 	want := []string{"bead", "rim", "supplierPort", "consumerPort"}
+	// The two ends written with an early multiplicity must keep it, whether or
+	// not a kind keyword follows it.
+	withMultiplicity := map[string]bool{"bead": true, "rim": true}
 	if len(def.Members) != len(want) {
 		t.Fatalf("expected %d members, got %d", len(want), len(def.Members))
 	}
@@ -46,10 +49,11 @@ connection def PressureSeat {
 		if !u.IsEnd {
 			t.Fatalf("%s: IsEnd = false, want true", name)
 		}
+		if got := u.Multiplicity != nil; got != withMultiplicity[name] {
+			t.Fatalf("%s: has multiplicity = %v, want %v", name, got, withMultiplicity[name])
+		}
 	}
-	if bead := def.Members[0].(*ast.Membership).Member.(*ast.Usage); bead.Multiplicity == nil {
-		t.Fatalf("bead lost the multiplicity declared before its kind keyword")
-	} else if bead.Kind != ast.UsagePart {
+	if bead := def.Members[0].(*ast.Membership).Member.(*ast.Usage); bead.Kind != ast.UsagePart {
 		t.Fatalf("bead kind = %v, want part", bead.Kind)
 	}
 }
