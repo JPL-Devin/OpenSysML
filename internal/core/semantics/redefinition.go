@@ -124,7 +124,8 @@ func (m *Model) parametersOf(sym *symbols.Symbol) behaviorParameters {
 
 // claimedParameters returns the parameters of general that owned redefines,
 // each by the target its declaration names explicitly or, failing that, the one
-// at its own position. Only what no owned parameter claims is inherited.
+// at its own position with the same direction. Only what no owned parameter
+// claims is inherited.
 func claimedParameters(owned, general behaviorParameters) map[*symbols.Symbol]bool {
 	claimed := make(map[*symbols.Symbol]bool)
 	for i, p := range owned.positional {
@@ -134,7 +135,9 @@ func claimedParameters(owned, general behaviorParameters) map[*symbols.Symbol]bo
 			}
 			continue
 		}
-		if i < len(general.positional) {
+		// A position whose directions disagree is not a redefinition, so the
+		// general parameter there is neither redefined nor dropped.
+		if i < len(general.positional) && general.positional[i].usage.Direction == p.usage.Direction {
 			claimed[general.positional[i].sym] = true
 		}
 	}

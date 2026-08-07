@@ -426,19 +426,27 @@ func TestExprRedeclaredParametersMatchByPositionNotName(t *testing.T) {
 }
 
 // An `out` parameter occupies a position, so an input declared after one
-// redefines the inherited parameter at that position, not the first, and the
-// inherited parameter at the position the output took is not part of the
-// signature — the list semantics.Model.parametersOf derives for the same model.
+// redefines the inherited parameter at that position, not the first. The input
+// at the position the output took keeps its place in the list, since an output
+// does not redefine an input — the list semantics.Model.parametersOf derives.
 func TestExprOutParameterOccupiesAPosition(t *testing.T) {
 	const model = `package P {
 		calc def C { in a : ScalarValues::String; in b : ScalarValues::Integer; }
 		calc def D :> C { out y; in x : ScalarValues::Integer; }
 		calc c { return D(%s); }
 	}`
-	// D's parameters are (y, x): `x` is at position 1, so it redefines `b`.
-	wantNoDiags(t, fmt.Sprintf(model, `1`))
-	wantOneDiag(t, fmt.Sprintf(model, `"s"`),
+	// D's parameters are (y, x, a): `x` is at position 1, so it redefines `b`,
+	// and `a` is inherited because `out y` does not redefine it.
+	wantNoDiags(t, fmt.Sprintf(model, `1, "s"`))
+	wantOneDiag(t, fmt.Sprintf(model, `"s", "s"`),
 		"argument 1 of D expects Integer, found String")
+
+	// Adding only an output leaves the inherited signature untouched.
+	wantNoDiags(t, `package P {
+		calc def C { in a : ScalarValues::Integer; in b : ScalarValues::Integer; }
+		calc def D :> C { out y; }
+		calc c { return D(1, 2); }
+	}`)
 }
 
 // An explicit `:>>` naming a parameter at another position claims that one, so

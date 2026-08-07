@@ -234,3 +234,26 @@ func TestInheritedParametersExcludeExplicitlyRedefinedOnes(t *testing.T) {
 		t.Fatalf("DirectSupertypes(af::s) = %v, want [Focus::scene]", supers)
 	}
 }
+
+// TestInheritedParameterSurvivesADirectionMismatch covers that a position whose
+// directions disagree is not a redefinition and does not consume the general
+// parameter either: `out y` neither redefines `in a` nor hides it.
+func TestInheritedParameterSurvivesADirectionMismatch(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def Scene;
+		action def Take { in scene : Scene; }
+		action def Record :> Take { out y; }
+		action r : Record { out item o; in item s; }
+	}`)
+	p := sym(t, root, "P")
+	wantY := nested(t, nested(t, p.Scope, "Record").Scope, "y")
+	wantScene := nested(t, nested(t, p.Scope, "Take").Scope, "scene")
+
+	// Record's parameters are (y, scene): `out y` does not redefine `in scene`.
+	if supers := m.DirectSupertypes(nested(t, p.Scope, "r", "o")); len(supers) != 1 || supers[0] != wantY {
+		t.Fatalf("DirectSupertypes(r::o) = %v, want [Record::y]", supers)
+	}
+	if supers := m.DirectSupertypes(nested(t, p.Scope, "r", "s")); len(supers) != 1 || supers[0] != wantScene {
+		t.Fatalf("DirectSupertypes(r::s) = %v, want [Take::scene]", supers)
+	}
+}

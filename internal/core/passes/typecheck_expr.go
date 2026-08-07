@@ -503,7 +503,7 @@ func (ec *exprChecker) mergedParameters(sym *symbols.Symbol, visiting map[*symbo
 // mergeParameters returns a symbol's parameter list: the ones it declares, in
 // declaration order, followed by the inherited ones none of them redefines. A
 // declaration redefines the inherited parameter its `:>>` names, or, failing
-// that, the one at its own position; only once the inherited parameters are used
+// that, the one at its own position with the same direction; only once the inherited parameters are used
 // up does a declaration purely add to the list. This is the order and the
 // matching semantics.Model.parametersOf derives (KerML 7.4.7.2), so both tiers
 // see one parameter list.
@@ -520,7 +520,9 @@ func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 		if i < 0 {
 			i = position
 		}
-		if i < len(inherited) {
+		// A position whose directions disagree is not a redefinition, so the
+		// inherited parameter there stays in the list.
+		if i < len(inherited) && inherited[i].usage.Direction == u.Direction {
 			claimed[i] = true
 		}
 	}
