@@ -159,6 +159,36 @@ func TestRenameRewritesConnectorEndReferenceTarget(t *testing.T) {
 	}
 }
 
+// An explicit `:>>` on a connector end names an end of the connector's type, so
+// renaming that end must rewrite the clause even in the plain-name spelling.
+func TestRenameRewritesConnectorEndRedefinitionTarget(t *testing.T) {
+	ws := model.NewWorkspace()
+	src := `package P {
+	part def TireBead;
+	connection def PressureSeat {
+		end [1] part bead : TireBead;
+		end [1] part rim;
+	}
+	part wheelAssy {
+		part t { part bead : TireBead; }
+		part w { part rim; }
+		connection : PressureSeat connect
+			seatRim :>> rim references w.rim to
+			seatBead :>> bead references t.bead;
+	}
+}
+`
+	name := openRenameDoc(t, ws, "/tmp/walk_endredef.sysml", src)
+
+	got, err := applyRename(t, ws, name, "rim;", "mountingRim")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "seatRim :>> mountingRim references w.rim") {
+		t.Errorf("the redefinition target was not renamed:\n%s", got[name])
+	}
+}
+
 // A body expression's parameter is its own declaration, so renaming a
 // same-named outer feature must not rewrite the parameter's uses inside the
 // body, while a name the body only reads from outside is still rewritten.

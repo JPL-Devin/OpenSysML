@@ -18,6 +18,7 @@ connection def PressureSeat {
 	end [1] part bead : TireBead;
 	end [1] rim : TireMountingRim;
 	end supplierPort : FuelOutPort;
+	end part <b> shortNamed : TireBead;
 	end part consumerPort;
 }
 `
@@ -31,7 +32,7 @@ connection def PressureSeat {
 	if !ok {
 		t.Fatalf("expected a Definition, got %T", file.Members[0].(*ast.Membership).Member)
 	}
-	want := []string{"bead", "rim", "supplierPort", "consumerPort"}
+	want := []string{"bead", "rim", "supplierPort", "shortNamed", "consumerPort"}
 	// The two ends written with an early multiplicity must keep it, whether or
 	// not a kind keyword follows it.
 	withMultiplicity := map[string]bool{"bead": true, "rim": true}
@@ -55,5 +56,9 @@ connection def PressureSeat {
 	}
 	if bead := def.Members[0].(*ast.Membership).Member.(*ast.Usage); bead.Kind != ast.UsagePart {
 		t.Fatalf("bead kind = %v, want part", bead.Kind)
+	}
+	// A short name written after the kind keyword is the declaration's own.
+	if named := def.Members[3].(*ast.Membership).Member.(*ast.Usage); named.Ident.ShortName != "b" {
+		t.Fatalf("shortNamed short name = %q, want b", named.Ident.ShortName)
 	}
 }

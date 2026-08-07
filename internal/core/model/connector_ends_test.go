@@ -90,6 +90,16 @@ func TestConnectorEndNamesResolve(t *testing.T) {
 					seatBead :>> PressureSeat::bead references t.bead;
 			}
 		}`},
+		{"general whose ends are not enumerable", `package P {
+			connection def PressureSeat;
+			part wheelAssy {
+				part t { part bead; }
+				part w { part rim; }
+				connection : PressureSeat connect
+					bead references t.bead to
+					rim references w.rim;
+			}
+		}`},
 		{"explicitly redefining end by plain name", `package P {
 			part def TireBead;
 			connection def PressureSeat {

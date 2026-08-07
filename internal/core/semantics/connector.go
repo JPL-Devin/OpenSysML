@@ -218,6 +218,11 @@ func (m *Model) UnmatchedConnectorEnds(sym *symbols.Symbol) (*symbols.Symbol, []
 			continue
 		}
 		supEnds := m.endsOf(sup)
+		if len(supEnds) == 0 {
+			// The general's own ends are not enumerable (no parsed body, or they
+			// are inherited from an unparsed library), so its arity is unknown.
+			continue
+		}
 		var unmatched []*symbols.Symbol
 		for i, end := range owned {
 			if i < len(supEnds) || len(namedEnds(end, supEnds)) > 0 {

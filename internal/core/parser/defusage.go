@@ -2350,8 +2350,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 				// If it's a usage, apply the short name, multiplicity, relationships, and end modifier
 				if u, ok := decl.(*ast.Usage); ok {
-					u.Ident.ShortName = shortName
-					u.Ident.ShortNameSpan = shortNameSpan
+					// `end part <b> bead : T` declares its short name after the
+					// kind keyword, so parseDeclaration already took it.
+					if shortName != "" {
+						u.Ident.ShortName = shortName
+						u.Ident.ShortNameSpan = shortNameSpan
+					}
 					if mult != nil && u.Multiplicity == nil {
 						u.Multiplicity = mult
 					}
