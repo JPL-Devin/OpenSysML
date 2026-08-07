@@ -94,6 +94,34 @@ func TestImplicitEndRedefinitionIsPositional(t *testing.T) {
 	}
 }
 
+// TestImplicitEndRedefinitionCountsUnnamedEnds covers that positions are
+// counted over the whole connect clause: an end that only names what it
+// attaches to still occupies its position, so a following end that declares a
+// name of its own redefines the end at its own position, not the first one.
+func TestImplicitEndRedefinitionCountsUnnamedEnds(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def TireBead;
+		part def Rim;
+		connection def PressureSeat {
+			end [1] part bead : TireBead;
+			end [1] part rim : Rim;
+		}
+		part w {
+			part wheel { part r : Rim; }
+			part b : TireBead;
+			connection : PressureSeat connect b to seatRim references wheel.r;
+		}
+	}`)
+	p := sym(t, root, "P")
+	seat := nested(t, p.Scope, "PressureSeat")
+	conn := connector(t, nested(t, p.Scope, "w").Scope)
+
+	if supers := m.DirectSupertypes(nested(t, conn.Scope, "seatRim")); len(supers) != 1 ||
+		supers[0] != nested(t, seat.Scope, "rim") {
+		t.Fatalf("DirectSupertypes(seatRim) = %v, want [PressureSeat::rim]", supers)
+	}
+}
+
 // TestImplicitEndRedefinitionOfInterfaceUsage covers SysML v2 7.14.2, where the
 // ends are ports bound with `::>` rather than `references`.
 func TestImplicitEndRedefinitionOfInterfaceUsage(t *testing.T) {

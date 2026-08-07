@@ -33,9 +33,10 @@ func connectorLike(sym *symbols.Symbol) bool {
 	return false
 }
 
-// ownedEnds returns the end features sym owns, in declaration order: first the
-// ends its `connect` clause declares by name, then the `end` features of its
-// body. Only symbols the scope builder created are reported.
+// ownedEnds returns the end features sym owns, one entry per end in
+// declaration order: first the ends of its `connect` clause, then the `end`
+// features of its body. An end that declares no name of its own — `connect a
+// to b` — still occupies its position, and is reported as a nil entry.
 func ownedEnds(sym *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil || sym.Scope == nil {
 		return nil
@@ -47,11 +48,10 @@ func ownedEnds(sym *symbols.Symbol) []*symbols.Symbol {
 				continue
 			}
 			if _, declares := end.DeclaredName(); !declares {
+				out = append(out, nil)
 				continue
 			}
-			if found := memberSymbol(sym.Scope, end); found != nil {
-				out = append(out, found)
-			}
+			out = append(out, memberSymbol(sym.Scope, end))
 		}
 	}
 	for _, member := range declMembers(sym) {
@@ -123,6 +123,9 @@ func claimedEnds(owned, general []*symbols.Symbol) map[*symbols.Symbol]bool {
 // on the last segment of each qualified name.
 func namedEnds(end *symbols.Symbol, general []*symbols.Symbol) []*symbols.Symbol {
 	var out []*symbols.Symbol
+	if end == nil {
+		return nil
+	}
 	for _, rel := range RelationshipsOf(end) {
 		if rel == nil || rel.Kind != ast.RelRedefines {
 			continue
@@ -225,7 +228,7 @@ func (m *Model) UnmatchedConnectorEnds(sym *symbols.Symbol) (*symbols.Symbol, []
 		}
 		var unmatched []*symbols.Symbol
 		for i, end := range owned {
-			if i < len(supEnds) || len(namedEnds(end, supEnds)) > 0 {
+			if end == nil || i < len(supEnds) || len(namedEnds(end, supEnds)) > 0 {
 				continue
 			}
 			unmatched = append(unmatched, end)
