@@ -279,13 +279,18 @@ func (c *refCollector) relationships(scope *symbols.Scope, decl ast.Node, rels [
 			c.referenceTarget(scope, decl, rel.Target)
 			continue
 		}
+		// A target parsed as an expression wraps the name it denotes.
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
 		if rel.Kind == ast.RelRedefines {
-			if qn, ok := rel.Target.(*ast.QualifiedName); ok {
+			if qn, ok := target.(*ast.QualifiedName); ok {
 				c.addRedefinition(scope, qn)
 				continue
 			}
 		}
-		c.target(scope, rel.Target)
+		c.target(scope, target)
 	}
 }
 
