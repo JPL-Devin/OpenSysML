@@ -1,0 +1,25 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="SatisfyReference" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="requirement" name="vehicleSpecification" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="viewpoint" name="perspective" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="part" name="vehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="part" name="context" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="satisfy" name="vehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=vehicleSpecification
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="satisfy" name="viewpointConformance" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="references" target=vehicle
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="view" abstract=false variation=false name="StructureView"
+          (Membership visibility="default"
+            (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=perspective
+                (*ast.QualifiedName)))))))))

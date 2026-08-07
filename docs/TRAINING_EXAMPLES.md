@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 83/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 17/100 files have semantic errors (34 total errors)  
+**Status:** 86/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 14/100 files have semantic errors (30 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -94,7 +94,7 @@ One entry drifted; every other file kept its exact count.
 
 | File | Diagnostic | Remaining gap |
 |---|---|---|
-| `Conditional Succession Example-1` | `unresolved member: isWellFocused` | Implicit *redefinition*: `out item image;` inside `action focus : Focus` refines `Focus::image` (typed `Image`). Untyped usages that shadow an inherited feature deliberately got no implicit base, so the type came from nowhere. (Fixed in the 83/100 re-pin below.) |
+| `Conditional Succession Example-1` | `unresolved member: isWellFocused` | Implicit *redefinition*: `out item image;` inside `action focus : Focus` refines `Focus::image` (typed `Image`). Untyped usages that shadow an inherited feature deliberately got no implicit base, so the type came from nowhere. (Fixed in the 86/100 re-pin below.) |
 | `Action Performance Example`, `Allocation Usage Example` | `unresolved member: focus`/`shoot`/`generateTorque` | The members come from `perform action takePhoto references takePicture;` and `perform providePower.generateTorque;`: a `references` edge and the feature a `perform` statement contributes, neither of which is a generalization. |
 | `Time Slice and Snapshot Example`, `Individuals and Time Slices` | `unresolved reference: start`/`done` | Bugs in the OMG files (`startShot`/`endShot`), unchanged. |
 
@@ -112,7 +112,60 @@ The payload *reference* form (`flow f of Fuel from a to b`) is unchanged and
 still resolves outward, with the negative case (`of` naming nothing) still
 reporting — see `internal/core/model/flow_payload_resolve_test.go`.
 
-### Verdicts for the implicit-parameter-redefinition re-pin (83/100)
+### Verdicts for the satisfy-reference re-pin (85/100)
+
+Three entries drifted, all of them the same false positive; every other file kept
+its exact count.
+
+**Spec basis.** `SatisfyRequirementUsage` (SysML v2 §7.21.4, abstract syntax
+§8.3.21.10; concrete syntax in the pilot `SysML.xtext`) is:
+
+```
+SatisfyRequirementUsage :
+    OccurrenceUsagePrefix 'assert'? ( isNegated ?= 'not' )? 'satisfy'
+    ( ownedRelationship += OwnedReferenceSubsetting FeatureSpecializationPart?
+    | RequirementUsageKeyword UsageDeclaration?
+    )
+    ValuePart? ( 'by' ownedRelationship += SatisfactionSubjectMember )? RequirementBody
+;
+```
+
+Without the `requirement` keyword the name after `satisfy` is an
+**OwnedReferenceSubsetting** — a `ReferenceSubsetting` (a `Subsetting`) whose
+`referencedFeature` must be a `Feature`, i.e. a **usage**, never a definition.
+`satisfy <requirementDef>` is in fact the ill-formed direction.
+
+The abstract syntax makes this normative — `SatisfyRequirementUsage` carries the
+constraint
+
+```
+ownedReferenceSubsetting <> null implies
+    referencedFeatureTarget().oclIsKindOf(RequirementUsage)
+```
+
+so the referenced element must be a `RequirementUsage`. `ViewpointUsage` and
+`ConcernUsage` both specialize `RequirementUsage` (`SysML.ecore`:
+`ViewpointUsage eSuperTypes="#//RequirementUsage"`), so
+`satisfy <viewpointUsage>` inside a `view def` is equally legal.
+
+**Verdict: type-checker false positive.** The parser encoded the reference as a
+`FeatureTyping` (`RelTyping`), so the type tier demanded a definition. It now
+encodes it as `RelSubsets`, and the type tier requires the target to be a
+requirement usage (including viewpoint and concern usages).
+
+| File | Was | Verdict |
+|---|---|---|
+| `32. Requirements/Requirement Satisfaction` | 2 × `type must be a definition, found requirementUsage` | False positive: `satisfy vehicleSpecification by vehicle_design;` references the requirement usages declared in `Requirement Groups`. Legal per the grammar above. |
+| `33. Analysis/Analysis Case Usage Example` | 1 × `type must be a definition, found requirementUsage` | False positive: `satisfy vehicleFuelEconomyRequirements by vehicle_c1;` references the `requirement` usage declared in the same part. |
+| `42. Views/Views Example` | 1 × `type must be a definition, found viewpointUsage` | False positive: `satisfy 'system structure perspective';` references the `viewpoint` usage in `Viewpoint Example`; a viewpoint usage is a requirement usage. |
+
+The checking is narrowed, not dropped: `satisfy <non-requirement usage>` still
+reports (`satisfy target must be a requirement usage, found ...`), locked by
+`TestTypeCheckSatisfyNonRequirementUsageError` alongside the two positive cases in
+`internal/core/passes/typecheck_test.go`, and the parse shape is pinned by
+`internal/core/parser/testdata/parse/satisfy_reference.golden`.
+
+### Verdicts for the implicit-parameter-redefinition re-pin (86/100)
 
 One entry drifted; every other file kept its exact count.
 
@@ -200,7 +253,6 @@ These errors are **not implementation gaps** - the training files reference name
 
 ### Type System Limitations
 
-- `type must be a definition, found requirementUsage` (3×): Type system doesn't allow requirement usages as types
 - `X subsets Y: types do not conform` (2×): Subsetting validation gaps
 
 ### Parser/Unimplemented Features
@@ -214,7 +266,7 @@ These errors are **not implementation gaps** - the training files reference name
 
 | Category | Pass | Fail | Pass Rate |
 |----------|------|------|-----------|
-| **All Examples** | 81 | 19 | 81% |
+| **All Examples** | 85 | 15 | 85% |
 | **After filtering pedagogical gaps** | ~85 | ~15 | ~85% |
 
 **Note**: Many "failures" are incomplete examples meant for teaching, not executable code. Of the 29 files with errors:
@@ -232,7 +284,6 @@ These errors are **not implementation gaps** - the training files reference name
 - Document correct import paths for Metadata, Variations, Requirements namespaces
 
 ### Priority 2: Type System Enhancements
-- Allow requirement usages as types (or document this limitation)
 - Improve subsetting validation conformance checking
 
 ### Priority 3: Flow Validation Relaxation
