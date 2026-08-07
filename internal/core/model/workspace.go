@@ -212,9 +212,20 @@ func (w *Workspace) DocumentNames() []string {
 // ResolveQualifiedInDoc resolves a qualified name against the given scope using
 // the workspace's symbol index. Used by the LSP layer for go-to-definition.
 func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	return w.ResolveReferenceInDoc(name, scope, nil, qn)
+}
+
+// ResolveReferenceInDoc resolves qn as the target of a reference subsetting
+// owned by decl — a `perform`/`references` edge — which must not resolve to the
+// name decl borrows from it. A nil decl resolves qn as an ordinary reference.
+func (w *Workspace) ResolveReferenceInDoc(name string, scope *symbols.Scope, decl ast.Node, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	return resolve.New(w.index).ResolveQualified(scope, qn)
+	r := resolve.New(w.index)
+	if decl == nil {
+		return r.ResolveQualified(scope, qn)
+	}
+	return r.ResolveReferenceTarget(scope, decl, qn)
 }
 
 // ResolveQualifiedSegmentsInDoc resolves a qualified name and returns the symbol
@@ -222,13 +233,23 @@ func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn 
 // Entries are nil where a segment did not resolve. Used by rename, which must
 // edit a name wherever it appears, qualifier positions included.
 func (w *Workspace) ResolveQualifiedSegmentsInDoc(name string, scope *symbols.Scope, qn *ast.QualifiedName) []*symbols.Symbol {
+	return w.ResolveReferenceSegmentsInDoc(name, scope, nil, qn)
+}
+
+// ResolveReferenceSegmentsInDoc is ResolveQualifiedSegmentsInDoc for the target
+// of a reference subsetting owned by decl (see ResolveReferenceInDoc).
+func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, scope *symbols.Scope, decl ast.Node, qn *ast.QualifiedName) []*symbols.Symbol {
 	if qn == nil {
 		return nil
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	r := resolve.New(w.index)
-	r.ResolveQualified(scope, qn)
+	if decl == nil {
+		r.ResolveQualified(scope, qn)
+	} else {
+		r.ResolveReferenceTarget(scope, decl, qn)
+	}
 	out := make([]*symbols.Symbol, len(qn.Parts))
 	for i := range qn.Parts {
 		if sym, ok := r.PartSymbol(qn, i); ok {

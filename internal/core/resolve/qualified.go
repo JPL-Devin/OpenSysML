@@ -9,7 +9,9 @@ import (
 
 // walkQualified resolves a qualified name segment-by-segment, storing each
 // segment's resolved symbol in the resolver's side table.
-func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) resolution {
+// hide, when set, makes the bindings of a reference subsetting's own borrowed
+// name invisible to the first segment's lookup.
+func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hide *refFilter) resolution {
 	if len(qn.Parts) == 0 {
 		return resolution{nil, false}
 	}
@@ -18,7 +20,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 	// unqualified lookup (including imports), not just outward scope lookup.
 	// Fall back to normal qualified lookup if scope is nil.
 	if len(qn.Parts) == 1 && !qn.Global && scope != nil {
-		res := r.walkUnqualified(scope, qn.Parts[0].Text)
+		res := r.walkUnqualifiedHiding(scope, qn.Parts[0].Text, hide)
 		if res.ok {
 			r.recordPart(qn, 0, res.sym)
 		} else {
@@ -41,7 +43,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 		cur = r.lookupInRoot(scope, first)
 	} else {
 		// Use import-aware lookup for first segment of multi-part names
-		res := r.walkUnqualified(scope, first)
+		res := r.walkUnqualifiedHiding(scope, first, hide)
 		cur = res.sym
 	}
 	if cur == nil {

@@ -2,14 +2,16 @@ package lsp
 
 import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // qnRef is a qualified-name reference paired with the scope it resolves against.
+// referrer is set when the name is the target of a reference subsetting owned by
+// that declaration, which resolves past the name it borrows from the target.
 type qnRef struct {
-	qn    *ast.QualifiedName
-	scope *symbols.Scope
+	qn       *ast.QualifiedName
+	scope    *symbols.Scope
+	referrer ast.Node
 }
 
 // collectRefs walks a document's scope tree and AST, gathering every
@@ -31,6 +33,13 @@ type refCollector struct {
 func (c *refCollector) add(scope *symbols.Scope, qn *ast.QualifiedName) {
 	if qn != nil {
 		c.refs = append(c.refs, qnRef{qn: qn, scope: scope})
+	}
+}
+
+// addReference records the target of a reference subsetting owned by decl.
+func (c *refCollector) addReference(scope *symbols.Scope, decl ast.Node, qn *ast.QualifiedName) {
+	if qn != nil {
+		c.refs = append(c.refs, qnRef{qn: qn, scope: scope, referrer: decl})
 	}
 }
 
@@ -226,19 +235,37 @@ func (c *refCollector) trigger(scope *symbols.Scope, trigger ast.Node) {
 
 // relationships collects the targets of typings, specializations, subsettings
 // and redefinitions (`: T`, `:> T`, `:>> T`) owned by decl. A reference
-// subsetting is collected in the scope it resolves in, which skips decl's own
-// binding of the name it references (see resolve.ReferenceScope).
+// subsetting records decl as the referrer, so it resolves past decl's own
+// binding of the name it references.
 func (c *refCollector) relationships(scope *symbols.Scope, decl ast.Node, rels []*ast.Relationship) {
 	for _, rel := range rels {
 		if rel == nil {
 			continue
 		}
-		at := scope
 		if rel.Kind == ast.RelReferences {
-			at = resolve.ReferenceScope(scope, decl, rel.Target)
+			c.referenceTarget(scope, decl, rel.Target)
+			continue
 		}
-		c.target(at, rel.Target)
+		c.target(scope, rel.Target)
 	}
+}
+
+// referenceTarget collects a reference subsetting's target, tagging the leading
+// qualified name with the declaration that refers to it.
+func (c *refCollector) referenceTarget(scope *symbols.Scope, decl ast.Node, target ast.Node) {
+	if fr, ok := target.(*ast.FeatureReference); ok {
+		target = fr.Name
+	}
+	if qn, ok := target.(*ast.QualifiedName); ok {
+		c.addReference(scope, decl, qn)
+		return
+	}
+	if chain, ok := target.(*ast.FeatureChainExpr); ok {
+		c.referenceTarget(scope, decl, chain.Operand)
+		c.add(scope, chain.Member)
+		return
+	}
+	c.expr(scope, target)
 }
 
 // target collects a node that names something, whether it was parsed as a

@@ -23,7 +23,7 @@ func (s *Server) Definition(ctx context.Context, params *protocol.DefinitionPara
 	if ref == nil {
 		return nil, nil
 	}
-	sym, ok := s.ws.ResolveQualifiedInDoc(name, ref.scope, ref.qn)
+	sym, ok := s.ws.ResolveReferenceInDoc(name, ref.scope, ref.referrer, ref.qn)
 	if !ok || sym == nil {
 		return nil, nil
 	}

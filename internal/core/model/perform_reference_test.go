@@ -83,6 +83,24 @@ func TestPerformedActionMembersResolve(t *testing.T) {
 				}
 			}`,
 		},
+		{
+			name: "perform of an action inherited from the part's type",
+			src: `package 'Inherited Performance' {
+				part def Vehicle {
+					action providePower {
+						action generateTorque;
+					}
+				}
+
+				part vehicle : Vehicle {
+					perform providePower;
+
+					part engine {
+						perform providePower.generateTorque;
+					}
+				}
+			}`,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ws := NewWorkspace()

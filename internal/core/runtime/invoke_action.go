@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -26,7 +25,7 @@ type actionInvocation struct {
 	args   []ast.Node
 	named  []ast.NamedArg
 	// referrer is the usage owning a reference subsetting, whose own effective
-	// name is the one the target names (see resolve.ReferenceScope).
+	// name is the one the target names (see resolve.ResolveReferenceTarget).
 	referrer ast.Node
 }
 
@@ -118,10 +117,13 @@ func resolveActionSymbol(
 	if scope == nil || ctx.resolver == nil {
 		return nil, fmt.Errorf("cannot resolve action %s: no scope", name)
 	}
+	var sym *symbols.Symbol
+	var ok bool
 	if inv.referrer != nil {
-		scope = resolve.ReferenceScope(scope, inv.referrer, target)
+		sym, ok = ctx.resolver.ResolveReferenceTarget(scope, inv.referrer, target)
+	} else {
+		sym, ok = ctx.resolver.ResolveQualified(scope, target)
 	}
-	sym, ok := ctx.resolver.ResolveQualified(scope, target)
 	if !ok || sym == nil {
 		return nil, fmt.Errorf("unresolved action reference: %s", name)
 	}

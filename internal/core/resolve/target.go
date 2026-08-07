@@ -15,18 +15,25 @@ import (
 // relationship is already resolved — and diagnosed — while walking the
 // document, and this is the query side of that result.
 func (r *Resolver) ResolveTarget(scope *symbols.Scope, target ast.Node) (*symbols.Symbol, bool) {
+	return r.resolveTarget(scope, target, nil)
+}
+
+// resolveTarget is ResolveTarget with an optional reference filter, which
+// applies to the leading segment of the target only: the rest of a feature
+// chain is looked up in the preceding segment, not in the enclosing scope.
+func (r *Resolver) resolveTarget(scope *symbols.Scope, target ast.Node, hide *refFilter) (*symbols.Symbol, bool) {
 	switch t := target.(type) {
 	case nil:
 		return nil, false
 	case *ast.QualifiedName:
-		return r.ResolveQualified(scope, t)
+		return r.resolveQualified(scope, t, hide)
 	case *ast.FeatureReference:
 		if t.Name == nil {
 			return nil, false
 		}
-		return r.ResolveQualified(scope, t.Name)
+		return r.resolveQualified(scope, t.Name, hide)
 	case *ast.FeatureChainExpr:
-		owner, ok := r.ResolveTarget(scope, t.Operand)
+		owner, ok := r.resolveTarget(scope, t.Operand, hide)
 		if !ok || t.Member == nil {
 			return nil, false
 		}
@@ -36,40 +43,53 @@ func (r *Resolver) ResolveTarget(scope *symbols.Scope, target ast.Node) (*symbol
 	}
 }
 
-// ReferenceScope returns the scope a reference subsetting owned by decl
-// resolves its target in. An unnamed feature takes its name from the feature it
-// references (KerML Feature::effectiveName), so `perform 'provide power';`
-// binds the name `'provide power'` in the very scope the target is looked up
-// in. The target names the outer feature, not a reference to it, so scopes
-// binding the name only to such references are skipped; a declaration of that
-// name, wherever it sits, is a legitimate target.
-func ReferenceScope(scope *symbols.Scope, decl ast.Node, target ast.Node) *symbols.Scope {
-	first := firstSegment(target)
-	if first == "" || decl == nil {
-		return scope
+// refFilter hides, during one reference-subsetting resolution, the bindings the
+// referring declaration itself contributes. An unnamed feature takes its name
+// from the feature it references (KerML Feature::effectiveName), so
+// `perform 'provide power';` binds `'provide power'` in the very scope its
+// target is looked up in; the target names the referenced feature, never a
+// reference to it, so such borrowed bindings are invisible to it while a
+// declaration of that name — local, inherited or imported — is a valid target.
+type refFilter struct{ decl ast.Node }
+
+// hides reports whether sym is a binding a reference target must not see.
+func (f *refFilter) hides(sym *symbols.Symbol) bool {
+	if f == nil || sym == nil {
+		return false
 	}
-	for s := scope; s != nil; s = s.Parent() {
-		bound := s.LookupLocalAll(first)
-		if len(bound) == 0 {
-			return s
-		}
-		for _, sym := range bound {
-			if sym.Decl != decl && !sym.EffectiveName {
-				return s
-			}
+	return sym.Decl == f.decl || sym.EffectiveName
+}
+
+// lookupLocal is Scope.LookupLocal with the hidden bindings removed. A nil
+// filter hides nothing.
+func (f *refFilter) lookupLocal(scope *symbols.Scope, name string) (*symbols.Symbol, bool) {
+	if scope == nil {
+		return nil, false
+	}
+	if f == nil {
+		return scope.LookupLocal(name)
+	}
+	visible := make([]*symbols.Symbol, 0, 1)
+	for _, sym := range scope.LookupLocalAll(name) {
+		if !f.hides(sym) {
+			visible = append(visible, sym)
 		}
 	}
-	return scope
+	if len(visible) == 0 {
+		return nil, false
+	}
+	return symbols.PreferDeclared(visible)[0], true
 }
 
 // ResolveReferenceTarget resolves the target of a reference subsetting owned by
 // decl, which is declared in scope.
 func (r *Resolver) ResolveReferenceTarget(scope *symbols.Scope, decl ast.Node, target ast.Node) (*symbols.Symbol, bool) {
-	return r.ResolveTarget(ReferenceScope(scope, decl, target), target)
+	return r.resolveTarget(scope, target, &refFilter{decl: decl})
 }
 
-// firstSegment returns the leading name segment of a relationship target.
-func firstSegment(target ast.Node) string {
+// leadingName returns the qualified name a relationship target starts with: the
+// only part of it looked up in the enclosing scope.
+func leadingName(target ast.Node) ast.Node {
 	for {
 		chain, ok := target.(*ast.FeatureChainExpr)
 		if !ok {
@@ -77,11 +97,10 @@ func firstSegment(target ast.Node) string {
 		}
 		target = chain.Operand
 	}
-	qname := ast.AsQualifiedName(target)
-	if qname == nil || len(qname.Parts) == 0 {
-		return ""
+	if qname := ast.AsQualifiedName(target); qname != nil {
+		return qname
 	}
-	return qname.Parts[0].Text
+	return nil
 }
 
 // memberChain walks qn's segments as members of owner, following inheritance

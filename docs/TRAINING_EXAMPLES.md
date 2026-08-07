@@ -256,13 +256,10 @@ These errors are **not implementation gaps** - the training files reference name
 
 | Category | Pass | Fail | Pass Rate |
 |----------|------|------|-----------|
-| **All Examples** | 85 | 15 | 85% |
-| **After filtering pedagogical gaps** | ~85 | ~15 | ~85% |
+| **All Examples** | 87 | 13 | 87% |
+| **After filtering pedagogical gaps** | ~87 | ~13 | ~87% |
 
-**Note**: Many "failures" are incomplete examples meant for teaching, not executable code. Of the 29 files with errors:
-- ~20 have only missing local declarations (pedagogical)
-- ~10 have stdlib import issues (mostly resolvable)
-- ~7 have type system limitations (require feature work)
+**Note**: Many "failures" are incomplete examples meant for teaching, not executable code. Of the 13 files with errors, most emit only missing local declarations or bugs in the OMG material itself (wrong feature names, typos, missing imports); the rest are type-system and validation gaps listed above.
 
 ---
 
@@ -270,7 +267,6 @@ These errors are **not implementation gaps** - the training files reference name
 
 ### Priority 1: Implicit Redefinition and Non-Generalization Feature Sources
 - Implicit redefinition: an untyped usage whose name matches a feature its owner inherits takes that feature's type
-- Features contributed by `perform` statements and by `references` edges on a usage
 - Document correct import paths for Metadata, Variations, Requirements namespaces
 
 ### Priority 2: Type System Enhancements

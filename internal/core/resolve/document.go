@@ -284,7 +284,7 @@ func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixM
 
 // resolveRelationships resolves each relationship target of decl as a qualified
 // name. Redefinitions resolve in the inherited scope, and reference subsettings
-// resolve outside decl's own name binding (see ReferenceScope).
+// resolve outside decl's own name binding (see refFilter).
 func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rels []*ast.Relationship) {
 	for _, rel := range rels {
 		if rel != nil && rel.Target != nil {
@@ -302,16 +302,18 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 				}
 			}
 
-			at := scope
+			// A reference subsetting resolves its leading segment past the
+			// name decl borrows from it; memoizing that result makes the
+			// chain walk below see the referenced feature, not decl.
 			if rel.Kind == ast.RelReferences {
-				at = ReferenceScope(scope, decl, target)
+				r.resolveTarget(scope, leadingName(target), &refFilter{decl: decl})
 			}
 
 			// Standard resolution in current scope
 			if qn, ok := target.(*ast.QualifiedName); ok {
-				r.ResolveQualified(at, qn)
+				r.ResolveQualified(scope, qn)
 			} else if fc, ok := target.(*ast.FeatureChainExpr); ok {
-				r.resolveFeatureChain(at, fc)
+				r.resolveFeatureChain(scope, fc)
 			}
 		}
 	}

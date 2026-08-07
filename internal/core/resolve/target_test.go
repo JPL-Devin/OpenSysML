@@ -53,7 +53,7 @@ func TestResolveTargetFollowsFeatureChain(t *testing.T) {
 
 // The feature a perform statement declares carries the referenced feature's
 // name, so the reference itself must resolve outside that binding.
-func TestReferenceScopeSkipsSelfBinding(t *testing.T) {
+func TestReferenceTargetSkipsSelfBinding(t *testing.T) {
 	r, root := resolveIndex(t, `package P {
 		action providePower;
 		part vehicle { perform providePower; }
@@ -65,9 +65,6 @@ func TestReferenceScopeSkipsSelfBinding(t *testing.T) {
 	usage := perform.Decl.(*ast.Usage)
 	target := usage.Relationships[0].Target
 
-	if got := ReferenceScope(vehicle.Scope, usage, target); got != pkg.Scope {
-		t.Fatalf("ReferenceScope = %v, want the enclosing package scope", got)
-	}
 	sym, ok := r.ResolveReferenceTarget(vehicle.Scope, usage, target)
 	action, _ := pkg.Scope.LookupLocal("providePower")
 	if !ok || sym != action {

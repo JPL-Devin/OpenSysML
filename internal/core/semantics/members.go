@@ -73,6 +73,18 @@ func (m *Model) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol,
 			}
 		}
 	}
+	return m.LookupContributedMember(sym, name)
+}
+
+// LookupContributedMember is LookupMember without sym's own declarations: only
+// the members contributed by what sym specializes, is typed by or
+// reference-subsets. Callers that must not see a local binding — resolving a
+// reference subsetting's target past the borrowed name it binds itself — ask
+// for the contributed member instead.
+func (m *Model) LookupContributedMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if sym == nil || name == "" {
+		return nil, false
+	}
 	for _, sup := range m.MemberSources(sym) {
 		if sup.Scope != nil {
 			if s, ok := sup.Scope.LookupLocal(name); ok {

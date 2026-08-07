@@ -242,3 +242,28 @@ func TestQualifiedNameThroughEffectiveNameIsNotAmbiguous(t *testing.T) {
 		t.Fatalf("ReferencedFeature(perform) = %v, want vehicle::providePower::generateTorque", got)
 	}
 }
+
+// A perform statement may name an action its owner inherits from its type;
+// hiding its own borrowed binding must not hide the scope's inherited members.
+func TestPerformOfInheritedAction(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def Vehicle { action providePower { action generateTorque; } }
+		part vehicle : Vehicle { perform providePower; }
+	}`)
+
+	pkg := sym(t, root, "P")
+	vehicleDef := sym(t, pkg.Scope, "Vehicle")
+	vehicle := sym(t, pkg.Scope, "vehicle")
+	providePower := sym(t, vehicleDef.Scope, "providePower")
+
+	performs := vehicle.Scope.LookupLocalAll("providePower")
+	if len(performs) != 1 {
+		t.Fatalf("perform statements bound = %d, want 1", len(performs))
+	}
+	if got := m.ReferencedFeature(performs[0]); got != providePower {
+		t.Fatalf("ReferencedFeature(perform) = %v, want the inherited action", got)
+	}
+	if _, ok := m.LookupMember(performs[0], "generateTorque"); !ok {
+		t.Errorf("LookupMember(perform, \"generateTorque\") not found")
+	}
+}
