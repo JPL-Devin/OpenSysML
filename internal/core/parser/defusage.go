@@ -1756,53 +1756,29 @@ func (p *Parser) parseBodyMember() ast.Node {
 		}
 	}
 
-	// Check for expose statement: expose <path>::**[filter];
-	// View-specific member for exposing elements from a namespace
+	// Check for expose statement: expose <path>[::*|::**][filter];
+	// Per SysML v2 8.3.26.2, an Expose is an Import: MembershipExpose
+	// specializes MembershipImport and NamespaceExpose specializes
+	// NamespaceImport, so the wildcard tail selects the import kind exactly as
+	// it does for `import`. An Expose always imports all elements regardless of
+	// visibility (isImportAll = true) and always has protected visibility.
 	if p.atKeyword("expose") {
 		p.advance() // consume 'expose'
 
-		// Parse import path with wildcard (similar to import parsing)
-		// Pattern: <namespace>::** or <namespace>::**[filter]
 		path := p.parseQualifiedName()
 		if path == nil {
 			p.error(p.peek().Span, "expected namespace path after 'expose'")
 			return &ast.ErrorNode{Message: "expected namespace path"}
 		}
 
-		// Check for wildcard tail: :: * or :: **
-		isRecursive := false
-		if p.at(lexer.ColonColon) {
-			nk := p.peekN(1).Kind
-			if nk == lexer.Star {
-				p.advance() // ::
-				p.advance() // *
-				// Check for recursive: :: **
-				if p.at(lexer.ColonColon) && p.peekN(1).Kind == lexer.StarStar {
-					p.advance() // ::
-					p.advance() // **
-					isRecursive = true
-				}
-			} else if nk == lexer.StarStar {
-				p.advance() // ::
-				p.advance() // **
-				isRecursive = true
-			}
-		}
-
-		// Check for optional filter expression: [filter]
-		var filterExpr ast.Node
-		if p.accept2(lexer.LBracket) {
-			filterExpr = p.ParseExpression()
-			p.expect(lexer.RBracket, "expected ']' after filter expression")
-		}
-
-		// Create Import node (expose uses similar semantics to import)
-		// Store filter in FilterExpr field if present
 		imp := &ast.Import{
-			Imported:    path,
-			IsRecursive: isRecursive,
-			FilterExpr:  filterExpr,
+			Visibility: ast.VisibilityProtected,
+			IsAll:      true,
+			Kind:       ast.ImportMembership,
+			Imported:   path,
+			IsExpose:   true,
 		}
+		p.parseImportTail(imp)
 		imp.NodeBase.NodeSpan = p.spanFrom(start)
 		imp.SetLeadingTrivia(trivia)
 

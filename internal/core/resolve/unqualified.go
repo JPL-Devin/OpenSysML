@@ -116,7 +116,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 			return target, true
 		}
 		if imp.IsRecursive && target.Scope != nil {
-			if sym, ok := lookupInSubtree(target.Scope, name, map[*symbols.Scope]bool{}); ok {
+			if sym, ok := lookupInSubtree(target.Scope, name, imp, map[*symbols.Scope]bool{}); ok {
 				return sym, true
 			}
 		}
@@ -148,25 +148,27 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		}
 	}
 	if imp.IsRecursive {
-		if sym, ok := lookupInSubtree(target.Scope, name, map[*symbols.Scope]bool{}); ok && visibleThroughImport(imp, sym) {
+		if sym, ok := lookupInSubtree(target.Scope, name, imp, map[*symbols.Scope]bool{}); ok {
 			return sym, true
 		}
 	}
 	return nil, false
 }
 
-// lookupInSubtree searches a scope and all descendant scopes for name.
-func lookupInSubtree(scope *symbols.Scope, name string, seen map[*symbols.Scope]bool) (*symbols.Symbol, bool) {
+// lookupInSubtree searches a scope and all descendant scopes for a match on
+// name that imp may surface. A match the import cannot surface does not end the
+// walk: another scope in the subtree may hold a visible one.
+func lookupInSubtree(scope *symbols.Scope, name string, imp *ast.Import, seen map[*symbols.Scope]bool) (*symbols.Symbol, bool) {
 	// A body-local name is not a member of the namespace being imported.
 	if scope == nil || seen[scope] || scope.BodyLocal() {
 		return nil, false
 	}
 	seen[scope] = true
-	if sym, ok := scope.LookupLocal(name); ok {
+	if sym, ok := scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) {
 		return sym, true
 	}
 	for _, child := range scope.Children() {
-		if sym, ok := lookupInSubtree(child, name, seen); ok {
+		if sym, ok := lookupInSubtree(child, name, imp, seen); ok {
 			return sym, true
 		}
 	}
