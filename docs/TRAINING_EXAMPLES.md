@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 88/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 12/100 files have semantic errors (29 total errors)  
+**Status:** 89/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 11/100 files have semantic errors (26 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -213,6 +213,35 @@ the name conflict itself; that gap is recorded in `docs/SPEC_COMPLIANCE.md`.
 
 ---
 
+### Verdicts for the import-in-definition-body re-pin (89/100)
+
+One entry drifted; every other file kept its exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `34. Verification/Verification Case Definition Example` | 3 × (`unresolved reference: VerdictKind` ×2, `unresolved reference: PassIf`) | Real fix: `verification def VehicleMassTest` opens its body with `private import VerificationCases::*;`, and the three names it declares to be missing (`VerdictKind` on the `evaluateData` output and on the `def`-level `return`, and `PassIf` in the `evaluateData` body) all resolve to `VerificationCases`. The prior verdict below — "imports must be at package level, not inside a verification def" — was wrong: in KerML an `Import` is a `Relationship` whose `importOwningNamespace` is *any* `Namespace` (KerML 7.2.5.4 Imports; abstract syntax 8.3.2.4.2 Import / 8.3.2.4.6 NamespaceImport), and a definition body is a `Namespace` because a `Definition`/`Usage` is a `Type` and every `Type` is a `Namespace` (SysML v2 7.5.1 Namespaces, 7.5.3 Imports, 7.6 Definition and Usage). A `NamespaceImport` therefore imports the visible (public) memberships of `VerificationCases` into the `VehicleMassTest` body, and — through the ordinary parent-scope walk — into the nested `evaluateData` action, exactly where the OMG model uses them. |
+
+**What changed**
+
+`internal/core/resolve/unqualified.go` `importsOf` only harvested imports from
+`*ast.Package`, `*ast.Namespace`, and `*ast.RootNamespace`, so an import declared
+inside a definition or usage body was never consulted during name resolution. It
+now also harvests imports from `*ast.Definition` and `*ast.Usage` bodies. The
+existing membership/inheritance-then-import ordering (`walkUnqualifiedHiding`) and
+import visibility (`visibleThroughImport`, `import all`) are unchanged, and a
+`private import` in a definition body still does not leak to importers of that
+definition because an imported name is not an *owned* member and is not
+re-surfaced by a `NamespaceImport` of the outer definition. Covered by
+`internal/core/resolve/imports_test.go`
+(`TestImportInDefinitionBodyVisibleInBody`,
+`TestImportInDefinitionBodyVisibleInNestedBody`,
+`TestImportInPackageBodyVisibleInNestedDefinition`,
+`TestImportInDefinitionBodyDoesNotLeakToImporter`).
+
+---
+
 ## Error Classification
 
 ### Local Declaration Errors (Missing in Training Files)
@@ -235,11 +264,11 @@ These errors are **not implementation gaps** - the training files reference name
 - **Cause**: Files use `snapshot sale = start` and `snapshot junked = done` but KerML defines these as `startShot` and `endShot` (Occurrences.kerml:348, 364)
 - **Fix**: Change `start` → `startShot`, `done` → `endShot`
 
-**Missing imports (3 files, 3 errors):**
-- Files: Verification examples
-- **Error**: `unresolved reference: VerdictKind` (2×), `unresolved reference: PassIf` (1×)
-- **Cause**: Files reference verification features without importing VerificationCases package
-- **Fix**: Add `private import VerificationCases::*;` at package level (imports must be at package level, not inside verification def)
+**Import inside a definition body (RESOLVED ✅):**
+- File: `34. Verification/Verification Case Definition Example.sysml`
+- **Former error**: `unresolved reference: VerdictKind` (2×), `unresolved reference: PassIf` (1×)
+- **Former (incorrect) verdict**: "imports must be at package level, not inside a verification def"
+- **Reality**: the file's `private import VerificationCases::*;` sits *inside* the `verification def VehicleMassTest` body, which is a legitimate place for an import — a definition body is a `Namespace` and an `Import`'s `importOwningNamespace` may be any `Namespace` (KerML 7.2.5.4; SysML v2 7.5.3, 7.6). The example was correct; the resolver was not consulting body-owned imports. See the import-in-definition-body re-pin above.
 
 **Scope resolution - inherited feature resolution (FIXED ✅):**
 - **Previous errors**: `unresolved reference: localClock`, `unresolved reference: payload` (4 total)
@@ -261,7 +290,7 @@ These errors are **not implementation gaps** - the training files reference name
 ### Stdlib/Import Errors
 
 **Resolved ✅:**
-- `VerdictKind`, `PassIf`: Fixed by ensuring imports at package level (not inside definitions)
+- `VerdictKind`, `PassIf`: Fixed by consulting imports owned by a definition/usage body during name resolution (the example's `private import VerificationCases::*;` is correct; see the import-in-definition-body re-pin above)
 - Named argument resolution: Fixed in ff70654 (named args don't resolve parameter names)
 - `localClock`, `payload`: Fixed in 8304f03, c683bc8 (inherited feature resolution)
 
