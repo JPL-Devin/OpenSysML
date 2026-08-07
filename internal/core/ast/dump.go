@@ -345,6 +345,18 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		b.WriteString(`(DeferMember`)
 		writeChildren(b, depth, v.Triggers)
 		return
+	case *EntryMember:
+		b.WriteString(`(EntryMember`)
+		writeChildren(b, depth, v.Actions)
+		return
+	case *DoMember:
+		b.WriteString(`(DoMember`)
+		writeChildren(b, depth, v.Actions)
+		return
+	case *ExitMember:
+		b.WriteString(`(ExitMember`)
+		writeChildren(b, depth, v.Actions)
+		return
 	default:
 		fmt.Fprintf(b, `(%T)`, n)
 	}

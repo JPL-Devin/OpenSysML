@@ -207,6 +207,7 @@ Each row documents one behavioral semantic feature:
 | Final state termination | `state_executor.go:288` processNextEvent | `state_simple.sysml` | ✅ Faithful |
 | State entry actions | `state_executor.go:749` enterState | `state_do_behavior.sysml` | ✅ Faithful |
 | State exit actions | `state_executor.go:810` exitState | `state_transition_effect.sysml` | ✅ Faithful |
+| An entry/do/exit action given by reference (`entry warmUp;`) is a performed action usage subsetting the referenced action (`StateActionUsage` → `PerformedActionUsage` → `PerformActionUsageDeclaration`) | `parser/behavior.go` parseStateSubaction; `parser/defusage.go` parsePerformedActionReference | `parser/testdata/parse/state_subaction_reference.golden`, `parser/state_subaction_test.go`, `parser/negative_test.go:entry_reference_no_semicolon`, `resolve/state_subaction_test.go`, `runtime/state_behavior_test.go:TestStateSubactionByReferencePerformsAction` | ✅ Faithful |
 | State do behavior runs while its state is active, one action per round | `state_executor.go` startDoActivity, runDoRound | `state_do_behavior.sysml`, `state_do_activity_test.go` | ✅ Faithful |
 | Concurrently active states interleave their do behaviors, in region declaration order | `state_executor.go` runDoRound, orderedActiveRegions | `state_concurrent_do.sysml` + trace golden | ✅ Faithful |
 | Exiting a state abandons the rest of its do behavior | `state_executor.go` exitState, stopDoActivity | `state_do_activity_test.go:TestDoBehaviorIsCancelledWhenItsStateIsExited` | ✅ Faithful |

@@ -1,8 +1,14 @@
 (RootNamespace
   (Membership visibility="default"
     (Definition kind="state" abstract=false variation=false name="VehicleStates"
-      (*ast.EntryMember)
-      (*ast.DoMember)
-      (*ast.ExitMember)
+      (EntryMember
+        (Membership visibility="default"
+          (Usage kind="action" name="start" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+      (DoMember
+        (Membership visibility="default"
+          (Usage kind="action" name="run" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+      (ExitMember
+        (Membership visibility="default"
+          (Usage kind="action" name="stop" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
       (*ast.SubstateMember)
       (*ast.SubstateMember))))
