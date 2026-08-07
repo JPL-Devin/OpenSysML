@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 90/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 10/100 files have semantic errors (20 total errors)  
+**Status:** 93/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 7/100 files have semantic errors (14 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -211,6 +211,7 @@ a like-named undirected usage keeps the standard library base of its kind
 instead of being silently treated as a redefinition. We still do not diagnose
 the name conflict itself; that gap is recorded in `docs/SPEC_COMPLIANCE.md`.
 
+<<<<<<< HEAD
 ### Verdicts for the individual-definition re-pin (89/100, 90/100 with the import-in-definition-body fix below)
 
 One entry drifted; every other file kept its exact count.
@@ -240,6 +241,29 @@ That is a separate gap: it does not change the verdict here, since typing by an
 individual definition is legal for those kinds too, but it is why the pinned
 messages read the way they did.
 
+||||||| parent of 99f1f49 (feat(semantics): implicit redefinition of connector ends by position)
+=======
+### Verdicts for the connector-end-redefinition re-pin (93/100)
+
+Three entries drifted, all in the same direction; every other file kept its
+exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `09. Connections/Connections Example` | 2 × `unresolved reference: bead`, `mountingRim` | False positives: `connection : PressureSeat connect bead references t.bead to mountingRim references w.rim;` *declares* those two names as the connection's own ends, which redefine `PressureSeat::bead` and `PressureSeat::mountingRim` by position (SysML v2 7.13.2). They were being resolved as references to features of the enclosing part, where nothing declares them. |
+| `11. Interfaces/Interface Example` | 2 × `unresolved reference: supplierPort`, `consumerPort` | False positives: same rule for an interface usage, whose ends are bound with `::>` rather than `references` (SysML v2 7.14.2); the names declare the ends inherited from `FuelInterface`. |
+| `13. Flows/Flow Interface Example` | 2 × `unresolved reference: supplierPort`, `consumerPort` | False positives: identical to the above; the flows the interface definition declares between the two ends do not change how the usage's `connect` clause names them. |
+
+Making the name-resolution tier clean in the latter two files exposed the type
+tier behind it, which reported `attribute cannot be typed by portDef` for the
+definitions' own ends (`end supplierPort : FuelOutPort;`). That too was a false
+positive: an `end` feature is a plain KerML feature typed by the feature it
+connects, not an `AttributeUsage`, so the usage-kind taxonomy does not constrain
+its type (SysML v2 7.14.2). The kind check now skips end features.
+
+>>>>>>> 99f1f49 (feat(semantics): implicit redefinition of connector ends by position)
 ---
 
 ### Verdicts for the import-in-definition-body re-pin (89/100)

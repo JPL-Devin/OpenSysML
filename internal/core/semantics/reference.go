@@ -31,16 +31,10 @@ func (m *Model) ReferencedFeature(sym *symbols.Symbol) *symbols.Symbol {
 	defer delete(m.resolvingRef, sym)
 
 	var out *symbols.Symbol
-	for _, rel := range RelationshipsOf(sym) {
-		if rel == nil || rel.Kind != ast.RelReferences || rel.Target == nil {
-			continue
+	if node := referenceSubsettingTarget(sym); node != nil {
+		if target, ok := m.resolver.ResolveReferenceTarget(sym.OwnerScope, sym.Decl, node); ok && target != sym {
+			out = target
 		}
-		target, ok := m.resolver.ResolveReferenceTarget(sym.OwnerScope, sym.Decl, rel.Target)
-		if !ok || target == sym {
-			continue
-		}
-		out = target
-		break
 	}
 	// A result computed while another symbol's reference is in flight saw a
 	// truncated member view (that symbol's own reference was hidden), so it is
@@ -49,6 +43,22 @@ func (m *Model) ReferencedFeature(sym *symbols.Symbol) *symbols.Symbol {
 		m.referenced[sym] = out
 	}
 	return out
+}
+
+// referenceSubsettingTarget returns the node naming the feature sym
+// reference-subsets, or nil when it has no such clause. A connector end carries
+// that clause outside its relationship list when it is written with the
+// `references` keyword, so it is asked for its own.
+func referenceSubsettingTarget(sym *symbols.Symbol) ast.Node {
+	if end, ok := sym.Decl.(*ast.ConnectorEnd); ok {
+		return end.ReferencedTarget()
+	}
+	for _, rel := range RelationshipsOf(sym) {
+		if rel != nil && rel.Kind == ast.RelReferences && rel.Target != nil {
+			return rel.Target
+		}
+	}
+	return nil
 }
 
 // MemberSources returns the symbols whose scopes contribute members to sym, in

@@ -2163,8 +2163,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 			var hasDefKeyword bool
 			var endRels []*ast.Relationship // relationships parsed before definition keyword
 
-			// Parse optional short name (if not starting with '[')
-			if p.atNameOrKeyword() {
+			if isKindKeyword(p.peek()) {
+				// `end [1] part bead : TireBead` — the kind keyword follows the
+				// modifiers directly, so there is no short name, and the
+				// multiplicity was already taken as an early one.
+				mult = mods.earlyMultiplicity
+				hasDefKeyword = true
+			} else if p.atNameOrKeyword() {
 				// Check if pattern matches: name [mult] (feature|occurrence|item|...)
 				// OR: [mult] (feature|occurrence|...)
 				// Also: name [mult] subsets X feature name (with relationship clause)

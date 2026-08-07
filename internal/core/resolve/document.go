@@ -99,7 +99,12 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			if end == nil {
 				continue
 			}
-			if end.Target != nil {
+			// An end that reference-subsets the feature it attaches to declares
+			// its own name (`connect bead references t.bead`), so that name is a
+			// declaration, not a reference to resolve.
+			_, declaresName := end.DeclaredName()
+			r.resolveRelationships(scope, end, end.Relationships)
+			if end.Target != nil && !declaresName {
 				if qn, ok := end.Target.(*ast.QualifiedName); ok {
 					r.ResolveQualified(scope, qn)
 				} else {

@@ -95,6 +95,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
+		buildConnectorEnds(child, d)
 	case *ast.SubstateMember:
 		// SubstateMember represents simple state declaration: state <name>;
 		// Create a state usage symbol for it
@@ -216,6 +217,26 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		// Control flow nodes without explicit names in AST - skip indexing
 		// (If these nodes gain name fields in future, register them here)
+	}
+}
+
+// buildConnectorEnds registers a symbol for every end of a connector usage that
+// declares a name (`connect bead references t.bead`). Such an end is an end
+// feature of the connector itself (SysML v2 §7.13.2), so it is a member of the
+// connector's own scope, never of the scope the connector is declared in.
+func buildConnectorEnds(scope *Scope, u *ast.Usage) {
+	for _, end := range u.ConnectorEnds {
+		if end == nil {
+			continue
+		}
+		id, ok := end.DeclaredName()
+		if !ok {
+			continue
+		}
+		child := NewScope(scope, end)
+		sym := newSymbol(id, SymbolConnectorEnd, end, ast.VisibilityDefault, child, scope, nil)
+		defineIdent(scope, id, sym)
+		scope.AddChild(child)
 	}
 }
 
