@@ -2,16 +2,15 @@ package lsp
 
 import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// qnRef is a qualified-name reference paired with the scope it resolves against.
-// referrer is set when the name is the target of a reference subsetting owned by
-// that declaration, which resolves past the name it borrows from the target.
+// qnRef is a qualified-name reference paired with everything needed to resolve
+// it the way the document walk did: its scope, the declaration referring to it
+// and the feature chain it is a member of.
 type qnRef struct {
-	qn       *ast.QualifiedName
-	scope    *symbols.Scope
-	referrer ast.Node
+	resolve.Reference
 }
 
 // collectRefs walks a document's scope tree and AST, gathering every
@@ -32,14 +31,24 @@ type refCollector struct {
 
 func (c *refCollector) add(scope *symbols.Scope, qn *ast.QualifiedName) {
 	if qn != nil {
-		c.refs = append(c.refs, qnRef{qn: qn, scope: scope})
+		c.refs = append(c.refs, qnRef{resolve.Reference{Scope: scope, QN: qn}})
 	}
 }
 
 // addReference records the target of a reference subsetting owned by decl.
 func (c *refCollector) addReference(scope *symbols.Scope, decl ast.Node, qn *ast.QualifiedName) {
 	if qn != nil {
-		c.refs = append(c.refs, qnRef{qn: qn, scope: scope, referrer: decl})
+		c.refs = append(c.refs, qnRef{resolve.Reference{Scope: scope, QN: qn, Referrer: decl}})
+	}
+}
+
+// addChainMember records the member segments of a feature chain, which name
+// members of the operand rather than elements of scope.
+func (c *refCollector) addChainMember(scope *symbols.Scope, decl ast.Node, chain *ast.FeatureChainExpr) {
+	if chain != nil && chain.Member != nil {
+		c.refs = append(c.refs, qnRef{resolve.Reference{
+			Scope: scope, QN: chain.Member, Referrer: decl, Chain: chain,
+		}})
 	}
 }
 
@@ -262,7 +271,7 @@ func (c *refCollector) referenceTarget(scope *symbols.Scope, decl ast.Node, targ
 	}
 	if chain, ok := target.(*ast.FeatureChainExpr); ok {
 		c.referenceTarget(scope, decl, chain.Operand)
-		c.add(scope, chain.Member)
+		c.addChainMember(scope, decl, chain)
 		return
 	}
 	c.expr(scope, target)
@@ -310,7 +319,7 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		c.add(scope, v.TypeRef)
 	case *ast.FeatureChainExpr:
 		c.expr(scope, v.Operand)
-		c.add(scope, v.Member)
+		c.addChainMember(scope, nil, v)
 	case *ast.IndexExpr:
 		c.expr(scope, v.Operand)
 		c.expr(scope, v.Index)
@@ -362,7 +371,7 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 // refAtOffset returns the qnRef whose qualified-name span contains offset.
 func refAtOffset(refs []qnRef, offset int) *qnRef {
 	for i := range refs {
-		sp := refs[i].qn.Span()
+		sp := refs[i].QN.Span()
 		if offset >= sp.Offset && offset < sp.End() {
 			return &refs[i]
 		}

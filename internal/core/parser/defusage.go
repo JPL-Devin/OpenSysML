@@ -2660,7 +2660,7 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 
 		// Create member name as QualifiedName
 		memberName := &ast.QualifiedName{Parts: []ast.NameSegment{seg}}
-		memberName.NodeSpan = p.spanFrom(p.peek().Span.Offset)
+		memberName.NodeSpan = seg.Span
 
 		chain := &ast.FeatureChainExpr{
 			Operand: operand,

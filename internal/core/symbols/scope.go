@@ -76,6 +76,9 @@ func (s *Scope) LookupLocal(name string) (*Symbol, bool) {
 	if len(syms) == 0 {
 		return nil, false
 	}
+	if len(syms) == 1 {
+		return syms[0], true
+	}
 	return PreferDeclared(syms)[0], true
 }
 

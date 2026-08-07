@@ -24,7 +24,7 @@ func (s *Server) References(ctx context.Context, params *protocol.ReferenceParam
 	// or on a declaration (find the symbol whose DeclSpan contains the cursor).
 	var target *symbols.Symbol
 	if ref := refAtOffset(refs, offset); ref != nil {
-		if sym, ok := s.ws.ResolveReferenceInDoc(name, ref.scope, ref.referrer, ref.qn); ok {
+		if sym, ok := s.ws.ResolveReferenceInDoc(name, ref.Reference); ok {
 			target = sym
 		}
 	}
@@ -40,9 +40,9 @@ func (s *Server) References(ctx context.Context, params *protocol.ReferenceParam
 		out = append(out, s.symbolLocation(name, target))
 	}
 	for _, ref := range refs {
-		sym, ok := s.ws.ResolveReferenceInDoc(name, ref.scope, ref.referrer, ref.qn)
+		sym, ok := s.ws.ResolveReferenceInDoc(name, ref.Reference)
 		// Pointer identity: same-document resolution stays inside the Document-tree
-		// scope captured above (ref.scope points into doc.Scope), so sym and target
+		// scope captured above (ref.Scope points into doc.Scope), so sym and target
 		// are both Document-tree pointers and comparable. Cross-document references
 		// (resolved through the global index tree) are out of scope for v1 and would
 		// need FQN/DocName+DeclSpan equality instead of pointer identity.
@@ -51,9 +51,9 @@ func (s *Server) References(ctx context.Context, params *protocol.ReferenceParam
 		}
 		// A QualifiedName resolves to the symbol of its terminal segment, so the
 		// reference range highlights that segment, not the whole dotted name.
-		refSpan := ref.qn.Span()
-		if n := len(ref.qn.Parts); n > 0 {
-			refSpan = ref.qn.Parts[n-1].Span
+		refSpan := ref.QN.Span()
+		if n := len(ref.QN.Parts); n > 0 {
+			refSpan = ref.QN.Parts[n-1].Span
 		}
 		out = append(out, protocol.Location{
 			URI:   nameToURI(name),

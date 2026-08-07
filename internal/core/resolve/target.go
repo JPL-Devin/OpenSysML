@@ -87,6 +87,41 @@ func (r *Resolver) ResolveReferenceTarget(scope *symbols.Scope, decl ast.Node, t
 	return r.resolveTarget(scope, target, &refFilter{decl: decl})
 }
 
+// Reference describes one occurrence of a name to resolve on its own, outside a
+// document walk: which scope it is written in, the declaration that refers to it
+// when it is a reference subsetting's target, and the feature chain it is the
+// member segment of. Used by the editor layer, which resolves a single name
+// under the cursor and must reach the same symbol the document walk did.
+type Reference struct {
+	Scope *symbols.Scope
+	QN    *ast.QualifiedName
+	// Referrer owns the reference subsetting QN is the target of, if any.
+	Referrer ast.Node
+	// Chain is set when QN is the member of a feature chain, whose segments are
+	// members of the operand rather than of Scope (SysML 7.6.6).
+	Chain *ast.FeatureChainExpr
+}
+
+// ResolveReference resolves a single name occurrence, honoring both the
+// reference-subsetting and feature-chain rules.
+func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
+	if ref.QN == nil {
+		return nil, false
+	}
+	var hide *refFilter
+	if ref.Referrer != nil {
+		hide = &refFilter{decl: ref.Referrer}
+	}
+	if ref.Chain != nil {
+		owner, ok := r.resolveTarget(ref.Scope, ref.Chain.Operand, hide)
+		if !ok {
+			return nil, false
+		}
+		return r.memberChain(owner, ref.QN)
+	}
+	return r.resolveQualified(ref.Scope, ref.QN, hide)
+}
+
 // leadingName returns the qualified name a relationship target starts with: the
 // only part of it looked up in the enclosing scope.
 func leadingName(target ast.Node) ast.Node {
@@ -107,7 +142,7 @@ func leadingName(target ast.Node) ast.Node {
 // where a semantic model is attached.
 func (r *Resolver) memberChain(owner *symbols.Symbol, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
 	cur := owner
-	for _, part := range qn.Parts {
+	for i, part := range qn.Parts {
 		next, ok := r.lookupMember(cur, part.Text)
 		if !ok && cur.Scope != nil {
 			next, ok = cur.Scope.LookupLocal(part.Text)
@@ -116,6 +151,7 @@ func (r *Resolver) memberChain(owner *symbols.Symbol, qn *ast.QualifiedName) (*s
 			return nil, false
 		}
 		cur = next
+		r.recordPart(qn, i, cur)
 	}
 	return cur, true
 }
