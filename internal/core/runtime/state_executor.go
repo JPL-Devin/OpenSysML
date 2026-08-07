@@ -1651,9 +1651,7 @@ func (e *StateExecutor) executeAction(action ast.Node) error {
 	case *ast.Usage:
 		// An entry/exit/effect action that performs another action:
 		// perform X; / action a : X; / action a = X(...);
-		// A state action never accepts on a port, so every reference it carries
-		// names the action it performs.
-		inv, ok := nestedInvocation(node, "")
+		inv, ok := nestedInvocation(node)
 		if !ok {
 			return fmt.Errorf("state action %s performs no action", node.Ident.Name)
 		}

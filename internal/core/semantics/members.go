@@ -3,11 +3,11 @@ package semantics
 import "github.com/Open-MBEE/Systemica/internal/core/symbols"
 
 // MembersOf returns the members visible on sym: those declared directly in its
-// owned scope plus members inherited from its (transitive) supertypes, with
-// name masking — a member declared closer to sym hides an inherited member of
-// the same name (approximating redefinition/masking). Results are deterministic:
-// local members first (declaration order), then supertype members in
-// AllSupertypes order.
+// owned scope plus members inherited from what it specializes and what it
+// reference-subsets, with name masking — a member declared closer to sym hides
+// an inherited member of the same name (approximating redefinition/masking).
+// Results are deterministic: local members first (declaration order), then
+// contributed members in MemberSources order.
 func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil {
 		return nil
@@ -39,14 +39,15 @@ func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
 	}
 
 	collect(sym.Scope)
-	for _, sup := range m.AllSupertypes(sym) {
-		collect(sup.Scope)
+	for _, src := range m.MemberSources(sym) {
+		collect(src.Scope)
 	}
 	return out
 }
 
-// LookupMember returns the first visible member of sym (local or inherited)
-// registered under name, honoring masking.
+// LookupMember returns the first visible member of sym — declared by it, or
+// contributed by what it specializes or reference-subsets — registered under
+// name, honoring masking.
 func (m *Model) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
 	if sym == nil || name == "" {
 		return nil, false
@@ -72,13 +73,25 @@ func (m *Model) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol,
 			}
 		}
 	}
-	for _, sup := range m.AllSupertypes(sym) {
+	return m.LookupContributedMember(sym, name)
+}
+
+// LookupContributedMember is LookupMember without sym's own declarations: only
+// the members contributed by what sym specializes, is typed by or
+// reference-subsets. Callers that must not see a local binding — resolving a
+// reference subsetting's target past the borrowed name it binds itself — ask
+// for the contributed member instead.
+func (m *Model) LookupContributedMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if sym == nil || name == "" {
+		return nil, false
+	}
+	for _, sup := range m.MemberSources(sym) {
 		if sup.Scope != nil {
 			if s, ok := sup.Scope.LookupLocal(name); ok {
 				return s, true
 			}
 		}
-		// Also check index for cached supertypes with nil Scope
+		// Also check index for cached sources with nil Scope
 		if sup.Scope == nil {
 			idx := m.resolver.Index()
 			children := idx.LookupDirectChildren(sup.Name)

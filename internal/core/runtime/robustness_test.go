@@ -45,6 +45,59 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("non_terminating_do_behavior", testNonTerminatingDoBehavior)
 	t.Run("call_of_unhandled_operation", testCallOfUnhandledOperation)
 	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
+	t.Run("perform_of_missing_action", testPerformOfMissingAction)
+	t.Run("perform_reference_cycle", testPerformReferenceCycle)
+}
+
+// testPerformOfMissingAction: a perform statement naming nothing resolvable is
+// an error at execution, not a silently skipped node.
+func testPerformOfMissingAction(t *testing.T) {
+	ctx, outer := loadAction(t, `package test {
+		action outer {
+			first start;
+			perform action doIt references missingAction;
+			done end;
+
+			then start doIt;
+			then doIt end;
+		}
+	}`, "outer")
+
+	if _, err := ctx.ExecuteAction(outer); err == nil {
+		t.Fatal("expected performing an unresolved action to fail")
+	} else if !strings.Contains(err.Error(), "missingAction") {
+		t.Errorf("error should name the unresolved action, got: %v", err)
+	}
+}
+
+// testPerformReferenceCycle: an action performing itself must be stopped by the
+// nesting bound instead of recursing forever.
+func testPerformReferenceCycle(t *testing.T) {
+	ctx, outer := loadAction(t, `package test {
+		action outer {
+			first start;
+			perform action doIt references outer;
+			done end;
+
+			then start doIt;
+			then doIt end;
+		}
+	}`, "outer")
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := ctx.ExecuteAction(outer)
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected a self-performing action to be bounded, it completed")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("self-performing action did not terminate")
+	}
 }
 
 // testDeferOfNonDeferrableTrigger: only signals and calls are dispatched from

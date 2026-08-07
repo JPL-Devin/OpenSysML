@@ -253,7 +253,7 @@ func lowerBody(graph *ActionGraph, node *ast.Usage) {
 // relationship on the accept action, or "" when it named none.
 func acceptPort(node *ast.Usage) string {
 	for _, rel := range node.Relationships {
-		if rel == nil || rel.Kind != ast.RelReferences {
+		if rel == nil || rel.Kind != ast.RelVia {
 			continue
 		}
 		if name := ast.SimpleName(rel.Target); name != "" {
@@ -319,7 +319,19 @@ func getNodeName(node ast.Node) string {
 	case *ast.ActionExecutionNode:
 		return n.Name
 	case *ast.Usage:
-		return n.Ident.Name
+		if n.Ident.Name != "" {
+			return n.Ident.Name
+		}
+		// An unnamed usage is named after the feature it references
+		// (`perform increment;` is a node named increment).
+		for _, rel := range n.Relationships {
+			if rel == nil || rel.Kind != ast.RelReferences {
+				continue
+			}
+			if name, _ := ast.TargetName(rel.Target); name != "" {
+				return name
+			}
+		}
 	}
 	return ""
 }

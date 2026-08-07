@@ -307,13 +307,47 @@ known, so unmodelled types never produce a false positive.
 | Body-expression parameters (`c->forAll { in i : Positive; f(i) }`) | `symbols/bodyscopes.go` `buildBodyScopes` (scope linked into the document tree), read back by `symbols.BodyExprScope` in `resolve/document.go` and `lsp/walk.go` | `TestBodyLocalDeclarationsAreVisible/body_expression_parameter`, `lsp` `TestRenameLeavesBodyExpressionParameters`, `TestRenameBodyExpressionParameterFromDeclaration`, `TestDefinitionBodyExpressionParameter` | ✅ Faithful |
 | Features of the stdlib base type of an untyped usage (`state normal;` → `States::StateAction::done`) | `semantics/implicit.go` `implicitUsageBases`, `Model.implicitBase` via `semantics/model.go` `DirectSupertypes` | `model/implicit_typing_test.go` `TestImplicitUsageBaseTypes`, `TestInheritedMembersResolveThroughUntypedUsage`, `semantics/implicit_test.go`, `lsp/implicit_typing_test.go` | ⚠️ Approximate (the implicit base is the stdlib base *definition* of the usage kind, not the base *feature* it subsets, since library index records carry no specialization edges; connector/succession/flow/binding/satisfy/subject/objective usages take their type from what they relate to and get no base) |
 | Implicit redefinition of a like-named inherited feature (`out item image;` in `action focus : Focus`) | `semantics/implicit.go` (only to the extent that such a usage is deliberately given no implicit base) | `model/implicit_typing_test.go` `TestImplicitBaseYieldsToImplicitRedefinition`, `docs/TRAINING_EXAMPLES.md` pinned count (`Conditional Succession Example-1`) | ❌ Not Yet Implemented (the usage is left untyped rather than taking the inherited feature's type, so members of that type report unresolved) |
-| Features contributed by `perform` statements and `references` edges (`perform providePower.generateTorque;`) | — | `docs/TRAINING_EXAMPLES.md` pinned counts (`Action Performance Example`, `Allocation Usage Example`) | ❌ Not Yet Implemented (neither is a generalization edge, so the referenced action's members are not reachable) |
+| Reference subsetting contributes members (`perform action takePhoto references takePicture;`, `perform providePower.generateTorque;`) | `semantics/reference.go` `Model.ReferencedFeature`, `Model.MemberSources`, consumed by `semantics/members.go` `MembersOf`/`LookupMember`; targets resolved by `resolve/target.go` `ResolveTarget`/`ResolveReferenceTarget` | `semantics/reference_test.go`, `resolve/target_test.go`, `model/perform_reference_test.go`, `parse/perform_reference.golden`, `runtime/testdata/conformance/action_perform_reference.sysml`, `runtime/robustness_test.go` (`perform_of_missing_action`, `perform_reference_cycle`) | ✅ Faithful (a member-contribution relation, deliberately **not** a generalization — see below) |
+| Effective name of an unnamed feature that reference-subsets (`perform providePower.generateTorque;` declares `generateTorque`) | `symbols/builder.go` `effectiveIdent`, `ast/namespace.go` `TargetName` | `symbols/perform_test.go`, `model/perform_reference_test.go` | ⚠️ Approximate (the naming feature is the reference subsetting's target only; a redefinition is not yet used as a naming feature) |
+| A reference subsetting resolves outside the name it contributes, while the members its owner inherits and imports stay visible (`part v : V { perform 'provide power'; }`) | `resolve/target.go` `refFilter`, `Resolver.ResolveReferenceTarget`, threaded through `resolve/unqualified.go` `walkUnqualifiedHiding` and applied in `resolve/document.go` `resolveRelationships`, `lsp/walk.go` `refCollector.relationships` (via `model.Workspace.ResolveReferenceInDoc`) and `runtime/invoke_action.go` `resolveActionSymbol`; the inherited half is `semantics/members.go` `Model.LookupContributedMember` | `resolve/target_test.go` `TestReferenceTargetSkipsSelfBinding`, `semantics/reference_test.go` `TestPerformOfInheritedAction`, `lsp/definition_test.go` `TestDefinitionPerformChainMember` (a chain member resolves through its operand, `resolve.Reference.Chain`), `semantics/reference_test.go` `TestReferenceFindsSiblingDeclaredAfterIt`, `model/perform_reference_test.go` (`perform shadowing the action it performs`), `lsp/definition_test.go` `TestDefinitionPerformReference`, `runtime` `TestPerformShorthandRunsTheReferencedAction`, `conformance/action_perform_shorthand.sysml` | ✅ Faithful |
+| The `perform X;` shorthand is an action node named X | `lower/action_graph.go` `getNodeName` | `conformance/action_perform_shorthand.sysml` (`then start increment;` names the perform statement) | ✅ Faithful |
+| Anonymous binary allocation (`allocate torqueGenerator to powerTrain`) | `parser/defusage.go` `atAllocateShorthand` | `parse/perform_reference.golden` | ✅ Faithful (both names are connector ends; formerly the first was read as the usage's name) |
+| A declared name wins over an effective one in the same namespace (`part v { perform p; action p; }`) | `symbols/scope.go` `PreferDeclared`, used by `LookupLocal` and `resolve/qualified.go`'s segment walk; `symbols/builder.go` (`Symbol.EffectiveName`) | `semantics/reference_test.go` `TestReferenceFindsSiblingDeclaredAfterIt`, `TestQualifiedNameThroughEffectiveNameIsNotAmbiguous`, `TestRepeatedPerformResolvesToTheAction` | ✅ Faithful |
+| `individual def X :> PartDef`, `individual x : IndividualDef` kind compatibility | `passes/typecheck.go` kind tables | `docs/TRAINING_EXAMPLES.md` pinned count (`Verification Case Usage Example`, 6) | ❌ Not Yet Implemented (an individual definition specializing an occurrence definition, SysML 7.9.5, is reported as a kind mismatch; these false positives became visible once that file's name-resolution tier went clean) |
 | `if`/`else` branch bodies as namespaces | `ast/behavior.go` `IfBranchNode` (parsed by `parser/behavior.go` `parseIfBranch`), `symbols/builder.go` IfActionNode/IfBranchNode, `resolve/document.go`, `symbols/bodyscopes.go`, `lsp/walk.go` | `TestBodyLocalDeclarationsAreVisible/if_branch_body_reads_its_own_declaration`, `/else_branch_reuses_the_then_branch's_name`, `TestBodyLocalNamesDoNotEscape/if_branch_member_from_outside`, `/else_branch_member_from_the_then_branch`, `parse/action_if_branch_body.golden`, `lsp/if_branch_test.go`, `resolve` `TestImportRecursiveSkipsBodyLocalNames`, `repl` `TestLookupInScopeTreeSkipsBodyLocalNames` | ✅ Faithful (each branch owns a body-local scope: names declared in a branch resolve inside it, do not escape to the enclosing behavior or to the sibling branch, and — like loop bodies — are excluded from recursive imports and the REPL scope-tree search; the condition is evaluated before either branch is entered, so it resolves in the enclosing scope only) |
 | Transition source/target names | — (deferred to `lower/state_graph.go`) | — | ⚠️ Approximate (not resolved as references, so a misspelled endpoint surfaces at lowering, not at the name-resolution tier) |
 | Signal trigger names (`when sigX`) | — | `TestBehaviorDeclarationsAreVisible/signal_trigger` | ⚠️ Approximate (a bare trigger name is an injected event, not a declared element, so it is deliberately not resolved) |
 | Payload feature a flow/message declares in its `of` clause (`message m of fuelCommand : FuelCommand`) | `parser/defusage.go` `parseFlowEnds` (declaration recorded as `FlowEnds.PayloadDecl` and kept as a member of the flow), `resolve/document.go` (the `of` name resolves in the flow's own scope) | `parse/flow_payload_declaration.golden`, `model/flow_payload_resolve_test.go` `TestDeclaredFlowPayloadIsAMember`, `TestFlowPayloadReferenceStillResolvesOutward` | ✅ Faithful (the declared payload is a member of the message, so the `of` name and `m.payload` both resolve; the reference form `of Type` still resolves in the enclosing scope) |
 | Accept-parameter visibility to sibling action nodes | `runtime/action_executor.go` shared token data | `action_accept_message.sysml` | ⚠️ Approximate (the executor binds the payload into shared token data, which scoping does not model: a sibling node reading the parameter by simple name is reported unresolved) |
 | Unqualified library names in files that do not import their library (`Boolean`, `Real`, `that`) | — | — | ❌ Not Yet Implemented (no implicit library import or KerML implicit features, so library files report large numbers of unresolved references) |
+
+#### Design note: `references` is a member-contribution edge, not a generalization
+
+A `perform` action usage relates the action it performs through a
+**ReferenceSubsetting**, written `references` or `::>` (SysML v2 §7.17.6; the
+derived `PerformActionUsage::performedAction` comes from that owned reference
+subsetting, §8.3.17.14). KerML makes ReferenceSubsetting a syntactically
+distinguished kind of Subsetting (§8.3.3.3.9), which is why the referenced
+feature's members are visible on the referencing one.
+
+It is nevertheless kept out of `semantics.Model.DirectSupertypes`. Subsetting
+in this implementation drives conformance and implicit typing, and a perform
+statement is not a subtype of the action it performs for those purposes: making
+it one would give `perform action takePhoto references takePicture;` the type of
+`takePicture` and silently change conformance results elsewhere. Instead
+`Model.MemberSources` — the union of the generalization edges and the reference
+subsetting, breadth-first and cycle-guarded — is what member lookup consumes, so
+`takePhoto.focus` resolves while `AllSupertypes(takePhoto)` stays free of
+`takePicture`.
+
+Two consequences of the spec's naming rules fall out of this and are implemented
+alongside it: an unnamed feature takes the effective name of the feature it
+references (KerML `Feature::effectiveName`), so `perform providePower.generateTorque;`
+declares `generateTorque`; and because that name is bound in the same scope the
+reference resolves in, the reference is resolved outside its own binding: a
+`refFilter` hides just that borrowed binding for the duration of the lookup,
+leaving each scope's declarations, inherited members and imports intact, so a
+`perform` of an action the owner inherits from its type still resolves.
 
 ---
 
@@ -329,7 +363,6 @@ are tracked here):
 |---|---|
 | Implicit redefinition of a like-named inherited feature | `semantics/implicit.go` `implicitBase` gives such a usage no implicit base at all, rather than the redefined feature's type. Once redefinition supplies the type it should fall through to it instead of returning nil. Pinned by `model/implicit_typing_test.go` `TestImplicitBaseYieldsToImplicitRedefinition` and by `Conditional Succession Example-1` in `docs/TRAINING_EXAMPLES.md`. |
 | Specialization edges in the library index (`libs/loader.go` `recordEntries` drops `Supers`) | `implicitUsageBases` maps each usage kind to its stdlib base *definition* because the base *feature* the spec has usages subset would be a dead end for member lookup. With the edges recorded, the map should name the base feature the spec names. |
-| Features contributed by `perform` statements and `references` edges | Neither is a generalization, so the referenced action's members are unreachable (`Action Performance Example`, `Allocation Usage Example`). |
 
 ### Major UML/SysML Features Not Implemented
 

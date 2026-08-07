@@ -265,14 +265,22 @@ const (
 	RelSpecializes                         // 'specializes' / ':>'
 	RelSubsets                             // 'subsets' / ':>'
 	RelRedefines                           // 'redefines' / ':>>'
-	RelReferences                          // 'references' / '::>'
-	RelCrosses                             // 'crosses' / '=>'
-	RelDisjoint                            // 'disjoint from'
-	RelIntersects                          // 'intersects'
-	RelInverseOf                           // 'inverse of'
-	RelUnions                              // 'unions'
-	RelChains                              // 'chains'
-	RelIncludes                            // 'includes' (use case inclusion)
+	// RelReferences models a KerML ReferenceSubsetting: the single owned
+	// subsetting a feature may syntactically distinguish with 'references' /
+	// '::>' (KerML 8.3.3.3.9). The 'via', 'about' and 'by' clauses of accept
+	// actions, metadata usages and satisfy usages name related elements
+	// without subsetting them, so they carry their own kinds below.
+	RelReferences // 'references' / '::>'
+	RelCrosses    // 'crosses' / '=>'
+	RelDisjoint   // 'disjoint from'
+	RelIntersects // 'intersects'
+	RelInverseOf  // 'inverse of'
+	RelUnions     // 'unions'
+	RelChains     // 'chains'
+	RelIncludes   // 'includes' (use case inclusion)
+	RelVia        // 'via' (accept action receiving port)
+	RelAnnotates  // 'about' (metadata annotated element)
+	RelSubject    // 'by' (satisfy/verify subject)
 )
 
 func (k RelationshipKind) String() string {
@@ -301,6 +309,12 @@ func (k RelationshipKind) String() string {
 		return "chains"
 	case RelIncludes:
 		return "includes"
+	case RelVia:
+		return "via"
+	case RelAnnotates:
+		return "about"
+	case RelSubject:
+		return "by"
 	default:
 		return "unknown"
 	}

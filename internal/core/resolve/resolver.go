@@ -11,6 +11,9 @@ import (
 type MemberLookup interface {
 	// LookupMember searches for a member by name in sym's scope and inherited scopes.
 	LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool)
+	// LookupContributedMember searches the inherited scopes only, skipping
+	// what sym itself declares.
+	LookupContributedMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool)
 }
 
 // resolution is a memoized lookup outcome.
@@ -81,6 +84,15 @@ func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symb
 	return r.model.LookupMember(sym, name)
 }
 
+// lookupContributedMember resolves name as a member sym inherits or
+// reference-subsets, ignoring the members sym declares itself.
+func (r *Resolver) lookupContributedMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if r.model == nil || sym == nil {
+		return nil, false
+	}
+	return r.model.LookupContributedMember(sym, name)
+}
+
 // SetModel attaches a semantic model for inheritance-aware member resolution.
 // Must be called before resolving feature chains if inherited members are needed.
 func (r *Resolver) SetModel(model MemberLookup) {
@@ -91,6 +103,12 @@ func (r *Resolver) SetModel(model MemberLookup) {
 // scope may be nil to resolve purely from the global index / document root.
 // Later tasks implement the walk; this skeleton reports unresolved.
 func (r *Resolver) ResolveQualified(scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	return r.resolveQualified(scope, qn, nil)
+}
+
+// resolveQualified is ResolveQualified with an optional filter hiding the
+// bindings a reference subsetting's own borrowed name contributes.
+func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName, hide *refFilter) (*symbols.Symbol, bool) {
 	if qn == nil {
 		return nil, false
 	}
@@ -103,15 +121,10 @@ func (r *Resolver) ResolveQualified(scope *symbols.Scope, qn *ast.QualifiedName)
 		return nil, false
 	}
 	r.resolving[qn] = true
-	res := r.doResolveQualified(scope, qn)
+	res := r.walkQualified(scope, qn, hide)
 	delete(r.resolving, qn)
 	r.memo[qn] = res
 	return res.sym, res.ok
-}
-
-// doResolveQualified is the uncached qualified-name resolution.
-func (r *Resolver) doResolveQualified(scope *symbols.Scope, qn *ast.QualifiedName) resolution {
-	return r.walkQualified(scope, qn)
 }
 
 // ResolveName resolves a single-segment (unqualified) reference from the given

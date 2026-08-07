@@ -600,7 +600,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 
 	// A usage that performs another action (perform X / action a : X / a = X(...))
 	// runs that action to completion before its own body.
-	if inv, ok := nestedInvocation(usage, accept.ViaPort); ok {
+	if inv, ok := nestedInvocation(usage); ok {
 		outputs, err := invokeAction(e.ctx, e.action.Scope, inv, token.Data)
 		if err != nil {
 			return err

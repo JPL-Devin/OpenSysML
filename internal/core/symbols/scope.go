@@ -70,12 +70,32 @@ func (s *Scope) DefineAnonymous(sym *Symbol) {
 }
 
 // LookupLocal returns the first symbol defined under name in this scope only.
+// A declared name wins over an effective one taken from a referenced feature.
 func (s *Scope) LookupLocal(name string) (*Symbol, bool) {
 	syms := s.members[name]
 	if len(syms) == 0 {
 		return nil, false
 	}
-	return syms[0], true
+	if len(syms) == 1 {
+		return syms[0], true
+	}
+	return PreferDeclared(syms)[0], true
+}
+
+// PreferDeclared drops symbols whose name was borrowed from a referenced
+// feature when the key also has a declared one, which is how a `perform p;`
+// shorthand and a declaration named p coexist in one scope.
+func PreferDeclared(syms []*Symbol) []*Symbol {
+	declared := make([]*Symbol, 0, len(syms))
+	for _, sym := range syms {
+		if !sym.EffectiveName {
+			declared = append(declared, sym)
+		}
+	}
+	if len(declared) == 0 {
+		return syms
+	}
+	return declared
 }
 
 // LookupLocalAll returns every symbol defined under name in this scope only.

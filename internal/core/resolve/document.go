@@ -80,13 +80,13 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveExpr(scope, d.Condition)
 	case *ast.Definition:
 		r.resolvePrefixes(scope, d.Prefixes)
-		r.resolveRelationships(scope, d.Relationships)
+		r.resolveRelationships(scope, d, d.Relationships)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 		}
 	case *ast.Usage:
 		r.resolvePrefixes(scope, d.Prefixes)
-		r.resolveRelationships(scope, d.Relationships)
+		r.resolveRelationships(scope, d, d.Relationships)
 		if d.Multiplicity != nil {
 			r.resolveExpr(scope, d.Multiplicity.Lower)
 			r.resolveExpr(scope, d.Multiplicity.Upper)
@@ -288,9 +288,10 @@ func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixM
 	}
 }
 
-// resolveRelationships resolves each relationship target as a qualified name.
-// Special handling for redefinitions: targets are looked up in inherited scope.
-func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relationship) {
+// resolveRelationships resolves each relationship target of decl as a qualified
+// name. Redefinitions resolve in the inherited scope, and reference subsettings
+// resolve outside decl's own name binding (see refFilter).
+func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rels []*ast.Relationship) {
 	for _, rel := range rels {
 		if rel != nil && rel.Target != nil {
 			// Unwrap FeatureReference if needed (relationship targets parsed as expressions)
@@ -305,6 +306,13 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, rels []*ast.Relati
 					r.resolveRedefinition(scope, qn, rels)
 					continue
 				}
+			}
+
+			// A reference subsetting resolves its leading segment past the
+			// name decl borrows from it; memoizing that result makes the
+			// chain walk below see the referenced feature, not decl.
+			if rel.Kind == ast.RelReferences {
+				r.resolveTarget(scope, leadingName(target), &refFilter{decl: decl})
 			}
 
 			// Standard resolution in current scope

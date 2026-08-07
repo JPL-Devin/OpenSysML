@@ -10,13 +10,27 @@ import (
 // walkUnqualified searches the scope and its ancestors for a local match or an
 // imported match, then falls back to the document root and finally the global index.
 func (r *Resolver) walkUnqualified(scope *symbols.Scope, name string) resolution {
+	return r.walkUnqualifiedHiding(scope, name, nil)
+}
+
+// walkUnqualifiedHiding is walkUnqualified with the bindings hide covers made
+// invisible. Only those bindings are hidden: each scope's inherited members and
+// imports are still consulted, so a perform statement's borrowed name does not
+// hide the action its owner inherits from its type.
+func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide *refFilter) resolution {
 	for s := scope; s != nil; s = s.Parent() {
-		if sym, ok := s.LookupLocal(name); ok {
+		if sym, ok := hide.lookupLocal(s, name); ok {
 			return resolution{sym: sym, ok: true}
 		}
 
 		// Check inherited members if model available
-		if sym, ok := r.lookupMember(s.Owner(), name); ok {
+		if hide == nil {
+			if sym, ok := r.lookupMember(s.Owner(), name); ok {
+				return resolution{sym: sym, ok: true}
+			}
+		} else if sym, ok := r.lookupContributedMember(s.Owner(), name); ok {
+			// The owner's own declarations are the local bindings already
+			// filtered above, so only contributed ones remain.
 			return resolution{sym: sym, ok: true}
 		}
 
@@ -25,7 +39,7 @@ func (r *Resolver) walkUnqualified(scope *symbols.Scope, name string) resolution
 		}
 	}
 	if root := rootOf(scope); root != nil {
-		if sym, ok := root.LookupLocal(name); ok {
+		if sym, ok := hide.lookupLocal(root, name); ok {
 			return resolution{sym: sym, ok: true}
 		}
 	}
