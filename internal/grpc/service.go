@@ -89,6 +89,9 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	// Expand wildcard imports (facade packages like ISQ re-exporting ISQMechanics)
 	idx.ExpandWildcardImports()
 
+	// Cache what was parsed, so the next request restores it instead.
+	loader.Persist(idx)
+
 	// Add user document
 	idx.AddDocument(filePath, root)
 

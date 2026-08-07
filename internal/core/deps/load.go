@@ -10,6 +10,9 @@ import (
 func loadDir(dir string, idx *symbols.Index, cache *libs.Cache) error {
 	src := libs.NewDirSource(dir)
 	loader := libs.NewLoader(src, cache)
+	// Dependencies load before the stdlib, so a record whose supertypes are not
+	// all reachable yet must not be cached under its content-only key.
+	loader.RequireResolved = true
 	for _, name := range src.List() {
 		if err := loader.Load(name, idx); err != nil {
 			return err

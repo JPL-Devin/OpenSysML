@@ -25,7 +25,8 @@ func indexOf(t *testing.T, name, src string) *symbols.Index {
 
 // recordOf is recordFromIndex with a resolver over idx, as the loader builds it.
 func recordOf(name string, idx *symbols.Index) *IndexRecord {
-	return recordFromIndex(name, idx, resolve.New(idx))
+	rec, _ := recordFromIndex(name, idx, resolve.New(idx))
+	return rec
 }
 
 func fqnSet(rec *IndexRecord) map[string]symbols.SymbolKind {

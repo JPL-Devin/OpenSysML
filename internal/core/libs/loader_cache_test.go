@@ -66,6 +66,37 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	}
 }
 
+// A record whose supertypes are not all reachable yet must not be cached when
+// the loader requires resolution: its key is the content alone, so it would be
+// restored — minus that edge — in a context where the target is present.
+func TestLoaderRequireResolvedSkipsUnresolvedRecord(t *testing.T) {
+	dir := t.TempDir()
+	// Specializes ScalarValues::Real, which this directory does not declare.
+	src := filepath.Join(dir, "lib.sysml")
+	if err := os.WriteFile(src, []byte("package Lib { attribute def Mass :> ScalarValues::Real; }"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	cacheDir := t.TempDir()
+	ld := NewLoader(NewDirSource(dir), &Cache{dir: cacheDir})
+	ld.RequireResolved = true
+
+	idx := symbols.NewIndex()
+	if err := ld.Load("lib.sysml", idx); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	ld.Persist(idx)
+
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		t.Fatalf("read cache dir: %v", err)
+	}
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) == ".idx" {
+			t.Fatalf("cached %s despite the unresolved supertype ScalarValues::Real", e.Name())
+		}
+	}
+}
+
 func TestIndexAddRecordsRemovable(t *testing.T) {
 	idx := symbols.NewIndex()
 	idx.AddRecords("lib.kerml", []symbols.RecordEntry{

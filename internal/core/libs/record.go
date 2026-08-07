@@ -34,49 +34,54 @@ type IndexRecord struct {
 }
 
 // recordFromIndex extracts a reduced, serializable record of every symbol the
-// named document contributed to idx. Returns nil if the document is unknown.
-// Specialization targets are resolved through r, so the record holds the
-// fully-qualified name of each supertype rather than the relative text that
-// only means something in the declaring file's scope.
-func recordFromIndex(name string, idx *symbols.Index, r *resolve.Resolver) *IndexRecord {
+// named document contributed to idx, and reports whether every specialization
+// target it declares resolved. Returns nil if the document is unknown.
+// Targets are resolved through r, so the record holds the fully-qualified name
+// of each supertype rather than text that only means something in its own file.
+func recordFromIndex(name string, idx *symbols.Index, r *resolve.Resolver) (*IndexRecord, bool) {
 	root := idx.DocumentRoot(name)
 	if root == nil {
-		return nil
+		return nil, false
 	}
 	rec := &IndexRecord{Name: name}
-	collectScope(root, "", rec, idx, r)
-	return rec
+	complete := collectScope(root, "", rec, idx, r)
+	return rec, complete
 }
 
 // collectScope walks scope's members (and child scopes) appending reduced
 // records. prefix is the fully-qualified name of scope's owner ("" at root).
-func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, idx *symbols.Index, r *resolve.Resolver) {
+// Reports whether every specialization target it met resolved.
+func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, idx *symbols.Index, r *resolve.Resolver) bool {
+	complete := true
 	for _, sym := range scope.Members() {
 		fqn := sym.Name
 		if prefix != "" {
 			fqn = prefix + "::" + sym.Name
 		}
+		supers, resolved := supersOf(sym, idx, r)
+		complete = complete && resolved
 		rec.Symbols = append(rec.Symbols, symRecord{
 			FQN:             fqn,
 			ShortName:       shortNameOf(sym.Decl),
 			Kind:            sym.Kind,
 			Span:            sym.DeclSpan,
-			Supers:          supersOf(sym, idx, r),
+			Supers:          supers,
 			WildcardImports: wildcardImportsOf(sym.Decl),
 			AliasTarget:     aliasTargetOf(sym.Decl),
 		})
 		if sym.Scope != nil {
-			collectScope(sym.Scope, fqn, rec, idx, r)
+			complete = collectScope(sym.Scope, fqn, rec, idx, r) && complete
 		}
 	}
+	return complete
 }
 
 // supersOf resolves the specialization edges (specializes/subsets/redefines)
 // declared by a Definition or Usage to the fully-qualified names of their
-// targets. Typing, references, and crosses edges are not specializations and
-// are excluded, as are targets that do not resolve or are not qualified names
-// (feature chains). Returns nil for any other node kind.
-func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) []string {
+// targets, reporting whether every one of them resolved. Typing, references,
+// and crosses edges are not specializations and are excluded; a feature chain
+// target has no qualified name to record and counts as unresolved.
+func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) ([]string, bool) {
 	var rels []*ast.Relationship
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
@@ -84,9 +89,10 @@ func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) []st
 	case *ast.Usage:
 		rels = d.Relationships
 	default:
-		return nil
+		return nil, true
 	}
 	var out []string
+	complete := true
 	for _, rel := range rels {
 		switch rel.Kind {
 		case ast.RelSpecializes, ast.RelSubsets, ast.RelRedefines:
@@ -100,17 +106,25 @@ func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) []st
 		}
 		qn, ok := target.(*ast.QualifiedName)
 		if !ok {
+			complete = false
 			continue
 		}
 		super, ok := r.ResolveQualified(sym.OwnerScope, qn)
-		if !ok || super == nil || super == sym {
+		if !ok || super == nil {
+			complete = false
 			continue
 		}
-		if superFQN := idx.GetFQN(super); superFQN != "" {
-			out = append(out, superFQN)
+		if super == sym {
+			continue
 		}
+		superFQN := idx.GetFQN(super)
+		if superFQN == "" {
+			complete = false
+			continue
+		}
+		out = append(out, superFQN)
 	}
-	return out
+	return out, complete
 }
 
 // qualifiedNameText renders a QualifiedName as "A::B::C" (no leading $:: marker;

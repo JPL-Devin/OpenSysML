@@ -10,9 +10,13 @@ import (
 // Loader lazily loads library files from a Source and registers their symbols
 // into a target index, using a Cache to skip parsing on repeat loads (Task 6).
 type Loader struct {
-	src    Source
-	cache  *Cache
-	parsed []pending // documents parsed this session, awaiting Persist
+	src   Source
+	cache *Cache
+	// RequireResolved makes Persist skip a document with an unresolved
+	// specialization target: a record is keyed by content alone, so one built in
+	// a partially populated index must not be reused where the target exists.
+	RequireResolved bool
+	parsed          []pending // documents parsed this session, awaiting Persist
 }
 
 // pending is a parsed document whose cache record has not been written yet.
@@ -71,9 +75,11 @@ func (l *Loader) Persist(idx *symbols.Index) {
 	}
 	r := resolve.New(idx)
 	for _, p := range l.parsed {
-		if rec := recordFromIndex(p.name, idx, r); rec != nil {
-			_ = l.cache.Store(p.key, rec) // cache write failure is non-fatal
+		rec, resolved := recordFromIndex(p.name, idx, r)
+		if rec == nil || (l.RequireResolved && !resolved) {
+			continue
 		}
+		_ = l.cache.Store(p.key, rec) // cache write failure is non-fatal
 	}
 	l.parsed = nil
 }
