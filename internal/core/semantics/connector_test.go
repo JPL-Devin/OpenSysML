@@ -232,3 +232,37 @@ func TestConnectorEndRedefinitionNegativeCases(t *testing.T) {
 		}
 	})
 }
+
+// TestImplicitEndRedefinitionOfAssociationUsage covers that the rule is stated
+// over associations (SysML v2 7.13.2, KerML 7.4.5): a connection usage typed by
+// an association redefines the association's ends by position too.
+func TestImplicitEndRedefinitionOfAssociationUsage(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def Owner;
+		part def Owned;
+		assoc Ownership {
+			end owner : Owner;
+			end owned : Owned;
+		}
+		part w {
+			part o : Owner;
+			part d : Owned;
+			connection : Ownership connect
+				theOwner references o to
+				theOwned references d;
+		}
+	}`)
+	p := sym(t, root, "P")
+	assoc := nested(t, p.Scope, "Ownership")
+	conn := connector(t, nested(t, p.Scope, "w").Scope)
+
+	for _, c := range []struct{ end, redefined string }{
+		{"theOwner", "owner"},
+		{"theOwned", "owned"},
+	} {
+		supers := m.DirectSupertypes(nested(t, conn.Scope, c.end))
+		if len(supers) != 1 || supers[0] != nested(t, assoc.Scope, c.redefined) {
+			t.Fatalf("DirectSupertypes(%s) = %v, want [Ownership::%s]", c.end, supers, c.redefined)
+		}
+	}
+}

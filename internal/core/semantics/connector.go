@@ -20,13 +20,15 @@ func connectorLike(sym *symbols.Symbol) bool {
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
 		switch d.Kind {
-		case ast.DefConnection, ast.DefInterface, ast.DefAllocation, ast.DefFlow:
+		case ast.DefConnection, ast.DefInterface, ast.DefAllocation, ast.DefFlow,
+			ast.DefAssoc, ast.DefBinding:
 			return true
 		}
 	case *ast.Usage:
 		switch d.Kind {
 		case ast.UsageConnection, ast.UsageInterface, ast.UsageAllocation,
-			ast.UsageConnector, ast.UsageFlow, ast.UsageSuccession:
+			ast.UsageConnector, ast.UsageFlow, ast.UsageSuccession,
+			ast.UsageAssoc, ast.UsageBinding:
 			return true
 		}
 	}
