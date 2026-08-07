@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -22,6 +23,11 @@ func indexOf(t *testing.T, name, src string) *symbols.Index {
 	return idx
 }
 
+// recordOf is recordFromIndex with a resolver over idx, as the loader builds it.
+func recordOf(name string, idx *symbols.Index) *IndexRecord {
+	return recordFromIndex(name, idx, resolve.New(idx))
+}
+
 func fqnSet(rec *IndexRecord) map[string]symbols.SymbolKind {
 	m := map[string]symbols.SymbolKind{}
 	for _, s := range rec.Symbols {
@@ -33,7 +39,7 @@ func fqnSet(rec *IndexRecord) map[string]symbols.SymbolKind {
 func TestRecordFromIndexCollectsReducedSymbols(t *testing.T) {
 	idx := indexOf(t, "Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml",
 		"standard library package ScalarValues { namespace Boolean; namespace Real; }")
-	rec := recordFromIndex("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx)
+	rec := recordOf("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx)
 	if rec == nil {
 		t.Fatal("recordFromIndex returned nil")
 	}
@@ -54,7 +60,7 @@ func TestRecordFromIndexCollectsReducedSymbols(t *testing.T) {
 
 func TestIndexRecordGobRoundTrip(t *testing.T) {
 	idx := indexOf(t, "a.kerml", "package P { namespace N; }")
-	rec := recordFromIndex("a.kerml", idx)
+	rec := recordOf("a.kerml", idx)
 
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(rec); err != nil {
@@ -81,7 +87,7 @@ func TestRecordSupersFromSpecializationEdges(t *testing.T) {
 	idx := symbols.NewIndex()
 	idx.AddDocument("lib", root)
 
-	rec := recordFromIndex("lib", idx)
+	rec := recordOf("lib", idx)
 	if rec == nil {
 		t.Fatalf("expected a record")
 	}
@@ -105,7 +111,7 @@ func TestRecordSupersExcludesTypingAndReferences(t *testing.T) {
 	idx := symbols.NewIndex()
 	idx.AddDocument("lib", root)
 
-	rec := recordFromIndex("lib", idx)
+	rec := recordOf("lib", idx)
 	var e *symRecord
 	for i := range rec.Symbols {
 		if rec.Symbols[i].FQN == "e" {

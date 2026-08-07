@@ -37,6 +37,7 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	if len(idx1.LookupQualified("ScalarValues::Boolean")) != 1 {
 		t.Fatal("first load did not index ScalarValues::Boolean")
 	}
+	ld.Persist(idx1)
 	entries, _ := os.ReadDir(cacheDir)
 	found := false
 	for _, e := range entries {
@@ -55,6 +56,13 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	if len(idx2.LookupQualified("ScalarValues")) != 1 ||
 		len(idx2.LookupQualified("ScalarValues::Boolean")) != 1 {
 		t.Fatal("cached load did not repopulate index")
+	}
+
+	// A symbol restored from the cache keeps its specialization targets: it has
+	// no Decl, so those edges are the only way its inherited members are found.
+	boolean := idx2.LookupQualified("ScalarValues::Boolean")[0]
+	if len(boolean.SuperFQNs) != 1 || boolean.SuperFQNs[0] != "ScalarValues::ScalarValue" {
+		t.Fatalf("supertypes of the cached Boolean = %v, want [ScalarValues::ScalarValue]", boolean.SuperFQNs)
 	}
 }
 

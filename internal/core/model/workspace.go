@@ -64,6 +64,10 @@ func loadStdlib(idx *symbols.Index) {
 
 	// Expand wildcard imports (facade packages like ISQ re-exporting ISQMechanics)
 	idx.ExpandWildcardImports()
+
+	// Cache whatever had to be parsed, now that every library file is indexed
+	// and a supertype declared in another file resolves.
+	loader.Persist(idx)
 }
 
 // Open registers an authoritative open buffer for name and reindexes.

@@ -417,6 +417,12 @@ func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, d
 		return true
 	}
 
+	// SysML v2 §7.27.2: a MetadataDefinition is an ItemDefinition, so it types
+	// whatever an item definition types (`:> annotatedElement : SysML::PartDefinition`).
+	if defKind == symbols.SymbolMetadataDef {
+		defKind = symbols.SymbolItemDef
+	}
+
 	// Attributes can be typed by any structural def (for parameters, properties)
 	// Also allow enumDef for typed enumerations
 	// This allows: in scene : Scene (attribute : itemDef), verdict : VerdictKind (attribute : enumDef)

@@ -15,5 +15,8 @@ func loadDir(dir string, idx *symbols.Index, cache *libs.Cache) error {
 			return err
 		}
 	}
+	// Records are written once the whole directory is indexed, so a
+	// specialization target in a sibling file resolves.
+	loader.Persist(idx)
 	return nil
 }
