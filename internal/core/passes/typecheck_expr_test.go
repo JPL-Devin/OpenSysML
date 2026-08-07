@@ -425,6 +425,20 @@ func TestExprRedeclaredParametersMatchByPositionNotName(t *testing.T) {
 		"argument 1 of Swapped expects String, found Natural")
 }
 
+// An `out` parameter occupies a position, so an input declared after one
+// redefines the inherited parameter at that position, not the first.
+func TestExprOutParameterOccupiesAPosition(t *testing.T) {
+	const model = `package P {
+		calc def C { in a : ScalarValues::String; in b : ScalarValues::Integer; }
+		calc def D :> C { out y; in x : ScalarValues::Integer; }
+		calc c { return D(%s); }
+	}`
+	// `x` is at position 1, so it redefines `b`; the signature stays (a, x).
+	wantNoDiags(t, fmt.Sprintf(model, `"s", 1`))
+	wantOneDiag(t, fmt.Sprintf(model, `1, 1`),
+		"argument 1 of D expects String, found Natural")
+}
+
 func TestExprTypedCalcUsageInheritsParameters(t *testing.T) {
 	wantNoDiags(t, `package P {
 		`+calcAdd+`
