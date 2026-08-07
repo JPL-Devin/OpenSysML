@@ -10,7 +10,6 @@
 2	27. Occurrences/Time Slice and Snapshot Example.sysml
 2	28. Individuals/Individuals and Time Slices.sysml
 1	33. Analysis/Trade Study Analysis Example.sysml
-6	34. Verification/Verification Case Usage Example.sysml
 2	39. Metadata/Metadata Example-1.sysml
 2	41. Language Extension/Model Library Example.sysml
 2	41. Language Extension/User Keyword Example.sysml

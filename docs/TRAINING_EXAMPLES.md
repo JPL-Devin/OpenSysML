@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 89/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 11/100 files have semantic errors (26 total errors)  
+**Status:** 90/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 10/100 files have semantic errors (20 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -210,6 +210,35 @@ and the new `TestLikeNamedUsageIsNotAnImplicitRedefinition` pins the other side:
 a like-named undirected usage keeps the standard library base of its kind
 instead of being silently treated as a redefinition. We still do not diagnose
 the name conflict itself; that gap is recorded in `docs/SPEC_COMPLIANCE.md`.
+
+### Verdicts for the individual-definition re-pin (89/100, 90/100 with the import-in-definition-body fix below)
+
+One entry drifted; every other file kept its exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `34. Verification/Verification Case Usage Example` | 3 × `individual cannot specialize partDef`, 1 × `attribute cannot be typed by individualDef`, 2 × `part cannot be typed by individualDef` | Real fix: all six were false positives from the kind tables in `passes/typecheck.go`. `individual def X` is an occurrence definition — it is equivalent to `individual occurrence def X` and individuates the definition it specializes (SysML v2 7.9.4, abstract syntax 8.3.9.3: `individual` is `OccurrenceDefinition::isIndividual`, not a metaclass of its own) — so `individual def TestSystem :> MassVerificationSystem;` and the two `:> Vehicle` declarations are well formed, and a usage may be typed by an individual definition wherever it may be typed by an occurrence definition (`individual testSystem : TestSystem`, `in individual :>> testVehicle : TestVehicle1`). |
+
+The checking is narrowed, not dropped. An occurrence definition still cannot
+specialize a data type — `Occurrences::Occurrence` is disjoint with
+`Base::DataValues` (SysML v2 8.4.5.1) — so `individual def Bad :> SomeAttributeDef;`
+still reports `individual cannot specialize attributeDef (kind mismatch)`, and a
+usage kind that rejects an occurrence definition still rejects an individual
+definition (`port p : SomeIndividualDef`). Both negatives, and the positive
+cases including the corpus file's shape, are locked by
+`internal/core/passes/typecheck_individuals_test.go`.
+
+Two of the six messages named a usage kind the declaration does not have:
+`individual testSystem : TestSystem` was checked as an *attribute* usage and
+`in individual :>> testVehicle` as a *part* usage, because the parser drops the
+`individual` modifier (`parser/behavior.go`, `parser/defusage.go` record it but
+the AST has no field for it) and falls back to the default kind instead of the
+occurrence kind that 7.9.4 prescribes for a declaration with no kind keyword.
+That is a separate gap: it does not change the verdict here, since typing by an
+individual definition is legal for those kinds too, but it is why the pinned
+messages read the way they did.
 
 ---
 
