@@ -76,12 +76,23 @@ func (s *Scope) LookupLocal(name string) (*Symbol, bool) {
 	if len(syms) == 0 {
 		return nil, false
 	}
+	return PreferDeclared(syms)[0], true
+}
+
+// PreferDeclared drops symbols whose name was borrowed from a referenced
+// feature when the key also has a declared one, which is how a `perform p;`
+// shorthand and a declaration named p coexist in one scope.
+func PreferDeclared(syms []*Symbol) []*Symbol {
+	declared := make([]*Symbol, 0, len(syms))
 	for _, sym := range syms {
 		if !sym.EffectiveName {
-			return sym, true
+			declared = append(declared, sym)
 		}
 	}
-	return syms[0], true
+	if len(declared) == 0 {
+		return syms
+	}
+	return declared
 }
 
 // LookupLocalAll returns every symbol defined under name in this scope only.

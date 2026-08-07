@@ -64,7 +64,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName) re
 
 		// Try local scope lookup first if available
 		if cur.Scope != nil {
-			all = cur.Scope.LookupLocalAll(seg.Text)
+			all = symbols.PreferDeclared(cur.Scope.LookupLocalAll(seg.Text))
 		}
 
 		// If local lookup fails (or no scope), try building the FQN and looking in the global index.

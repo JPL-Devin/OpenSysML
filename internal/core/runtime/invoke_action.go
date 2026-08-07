@@ -125,6 +125,9 @@ func resolveActionSymbol(
 	if !ok || sym == nil {
 		return nil, fmt.Errorf("unresolved action reference: %s", name)
 	}
+	if inv.referrer != nil && sym.Decl == inv.referrer {
+		return nil, fmt.Errorf("unresolved action reference: %s (a perform statement cannot perform itself)", name)
+	}
 	if sym.Kind != symbols.SymbolActionDef && sym.Kind != symbols.SymbolActionUsage {
 		return nil, fmt.Errorf("%s is not an action (%v)", name, sym.Kind)
 	}

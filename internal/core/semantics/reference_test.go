@@ -190,3 +190,55 @@ func TestNestedReferenceResultIsNotCached(t *testing.T) {
 		t.Errorf("ReferencedFeature(takePhoto) = %v after recompute, want takePicture", got)
 	}
 }
+
+// Two perform statements for the same action in one body both take its
+// effective name; neither may resolve to the other.
+func TestRepeatedPerformResolvesToTheAction(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		action increment { action bump; }
+		action outer {
+			perform increment;
+			perform increment;
+		}
+	}`)
+
+	pkg := sym(t, root, "P")
+	outer := sym(t, pkg.Scope, "outer")
+	increment := sym(t, pkg.Scope, "increment")
+
+	performs := outer.Scope.LookupLocalAll("increment")
+	if len(performs) != 2 {
+		t.Fatalf("perform statements bound = %d, want 2", len(performs))
+	}
+	for i, perform := range performs {
+		if got := m.ReferencedFeature(perform); got != increment {
+			t.Errorf("ReferencedFeature(perform %d) = %v, want the action", i, got)
+		}
+	}
+}
+
+// A perform statement and a declaration may share a name in one scope; a
+// qualified path through that scope names the declaration, not the statement.
+func TestQualifiedNameThroughEffectiveNameIsNotAmbiguous(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part vehicle {
+			perform providePower;
+			action providePower { action generateTorque; }
+		}
+		part other { perform vehicle.providePower.generateTorque; }
+	}`)
+
+	pkg := sym(t, root, "P")
+	vehicle := sym(t, pkg.Scope, "vehicle")
+	other := sym(t, pkg.Scope, "other")
+	action := sym(t, vehicle.Scope, "providePower")
+	generateTorque := sym(t, action.Scope, "generateTorque")
+
+	perform := other.Scope.LookupLocalAll("generateTorque")
+	if len(perform) != 1 {
+		t.Fatalf("perform statements bound in other = %d, want 1", len(perform))
+	}
+	if got := m.ReferencedFeature(perform[0]); got != generateTorque {
+		t.Fatalf("ReferencedFeature(perform) = %v, want vehicle::providePower::generateTorque", got)
+	}
+}
