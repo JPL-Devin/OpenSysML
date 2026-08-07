@@ -1087,16 +1087,22 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	// Full form: satisfy [requirement] <name> by <name> { body }
 	// Short form: satisfy/verify <name>;
 	if kind == ast.UsageSatisfy {
-		// Optional: requirement keyword
-		p.acceptKeyword("requirement")
+		// Per SatisfyRequirementUsage: without the `requirement` keyword the name is
+		// a reference subsetting of an existing requirement usage, not a typing;
+		// with the keyword it declares a new requirement usage.
+		declaresRequirement := p.acceptKeyword("requirement")
 
 		reqName := p.parseQualifiedName()
 		if reqName != nil {
-			// Store as typing relationship
-			u.Relationships = append(u.Relationships, &ast.Relationship{
-				Kind:   ast.RelTyping,
-				Target: reqName,
-			})
+			if declaresRequirement && len(reqName.Parts) == 1 {
+				u.Ident.Name = reqName.Parts[0].Text
+				u.Ident.NameSpan = reqName.Parts[0].Span
+			} else {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelSubsets,
+					Target: reqName,
+				})
+			}
 		}
 
 		// Check for optional "by" clause
@@ -1106,7 +1112,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 				// Store subject as identification or relationship depending on node type
 				// If it's a simple qualified name, use as identification
 				// If it's a feature chain or other expression, store as relationship
-				if qn, ok := subjTarget.(*ast.QualifiedName); ok && len(qn.Parts) > 0 {
+				if qn, ok := subjTarget.(*ast.QualifiedName); ok && len(qn.Parts) > 0 && u.Ident.Name == "" {
 					u.Ident.Name = qn.Parts[0].Text
 					u.Ident.NameSpan = qn.Parts[0].Span
 				} else {
