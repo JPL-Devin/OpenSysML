@@ -430,8 +430,8 @@ are tracked here):
 | `eval.go` | Expression evaluation (operators, literals, features) | ~758 |
 | `value.go` | Runtime value representation (ValConst, ValString, ValInstance) | ~150 |
 | `trace.go` | Deterministic execution and calc-evaluation trace recording, canonical value rendering | ~290 |
-| `conformance_test.go` | Conformance gate (26 cases) | ~470 |
-| `robustness_test.go` | Failure-mode tests (22 cases) | ~660 |
+| `conformance_test.go` | Conformance gate (51 cases) | ~470 |
+| `robustness_test.go` | Failure-mode tests (29 subtests) | ~660 |
 | `trace_test.go` | Golden trace test infrastructure | ~200 |
 | `trace_calc_test.go` | Trace determinism and canonical rendering unit tests | ~180 |
 

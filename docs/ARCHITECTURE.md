@@ -511,7 +511,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 #### 4. Negative Test Suite
 - **Purpose:** Verify parser rejects malformed input gracefully
 - **Location:** `internal/core/parser/negative_test.go`
-- **Test:** `TestNegative` with 15 malformed inputs (6 behavioral + 9 structural)
+- **Test:** `TestNegative` with 32 malformed inputs (23 behavioral + 9 structural)
 - **Acceptance:** Each case produces diagnostics (doesn't panic)
 - **Coverage:** Unclosed blocks, unexpected tokens, invalid syntax, incomplete behavioral members
 
@@ -533,16 +533,16 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 #### 1. Golden AST Fixtures
 - **Purpose:** Lock in parse structure before execution changes
 - **Location:** `internal/core/parser/testdata/parse/` (behavioral fixtures)
-- **Coverage:** 7 behavioral fixtures (actions, states, calc, constraints, requirements)
+- **Coverage:** 20 behavioral fixtures, of 30 in total (action×4, calc×4, constraint×1, requirement×2, state×9)
 - **Acceptance:** `TestGolden` passes, AST dumps match expectations
 - **Update flag:** `go test -run TestGolden -update`
 
 **Behavioral fixtures:**
-- `action_control_flow.sysml`, `action_mixed_params.sysml`
-- `state_full.sysml`, `state_transition_variants.sysml`
-- `calc_return.sysml`
+- `action_control_flow.sysml`, `action_if_branch_body.sysml`, `action_mixed_params.sysml`, `action_send_port.sysml`
+- `state.sysml`, `state_full.sysml`, `state_transition_variants.sysml`, `state_call_trigger.sysml`, `state_def_region_pseudostate.sysml`, `state_defer.sysml`, `state_fork_join.sysml`, `state_history_entry_exit.sysml`, `state_timed_triggers.sysml`
+- `calc.sysml`, `calc_defaults_and_invocation.sysml`, `calc_return.sysml`, `calc_return_parameter.sysml`
 - `constraint_assert_assume.sysml`
-- `requirement_members.sysml`
+- `requirement.sysml`, `requirement_members.sysml`
 
 #### 2. Execution Conformance Gate
 - **Purpose:** Verify behavioral execution produces expected outcomes
@@ -552,12 +552,12 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 - **Allowlist:** `known_failures.txt` (currently empty — all cases pass)
 - **Acceptance:** Expected outputs/satisfaction match actual execution results
 
-**Coverage (26 cases):**
-- Calc: parameter binding, return values, unary operators, type coercion, qualified names (×4)
+**Coverage (51 cases):**
+- Calc: parameter binding, return values, defaults, inherited parameters, unary operators, type coercion, qualified names, nested and from-constraint invocation (×10)
 - Constraint: assert/assume satisfaction, negation (×3)
 - Requirement: require/subject/actor/assume satisfaction, nested (×5)
-- Action: token flow, outputs, nested invocation, send/accept, port communication (×5)
-- State: simple, do behavior, transition effect, choice/junction pseudostates, orthogonal regions, signal discrimination/unmatched, accept...then (×9)
+- Action: token flow, outputs, nested invocation, send/accept, port communication, `perform` reference and shorthand, accept...then (×8)
+- State: simple, do behavior, concurrent do, transition effect, choice/junction/fork-join pseudostates, orthogonal regions and region pseudostates, shallow/deep history, entry/exit points, deferred/undeferred events, call and timed triggers, signal discrimination/unmatched, self signal (×25)
 
 **Usage:**
 ```bash
@@ -571,7 +571,7 @@ go test -v -run TestExecutionConformance ./internal/core/runtime
 - **Determinism:** Token sorting by ID, fixed event queue tie-breaking
 - **Acceptance:** Trace output matches golden file
 - **Update flag:** `go test -run TestExecutionTrace -update-traces`
-- **Status:** Infrastructure complete (TraceRecorder integrated), no .trace.golden files yet (awaiting executor enhancements)
+- **Coverage:** 22 `.trace.golden` files (calc×10, constraint×3, action×2, state×7)
 
 **Trace format:**
 - Action: `step N: token T1@node1, token T2@node2` (sorted)
@@ -580,7 +580,7 @@ go test -v -run TestExecutionConformance ./internal/core/runtime
 #### 4. Runtime Robustness Tests
 - **Purpose:** Verify malformed/pathological behaviors fail gracefully (typed errors, no panics/hangs)
 - **Location:** `internal/core/runtime/robustness_test.go`
-- **Test:** `TestRuntimeRobustness` with 7 failure modes
+- **Test:** `TestRuntimeRobustness` with 29 failure modes
 - **Acceptance:** All return typed errors, never panic, timeout guard (60s) prevents hangs
 
 **Failure modes:**
@@ -588,9 +588,18 @@ go test -v -run TestExecutionConformance ./internal/core/runtime
 - Decision with no satisfied guard
 - State machine with dangling transition
 - Sourceless accept...then at top level
-- Calc with unbound parameter
+- Calc with unbound parameter, surplus or unknown-named arguments, no result, non-calc target, direct or mutual recursion
 - Constraint referencing missing feature
 - Step budget exceeded
+- Fork/join misuse (branches sharing a region, join with one incoming branch)
+- Region pseudostate with no satisfied guard, or a cycle
+- Non-numeric time trigger
+- Send that reaches only its addressee, accept of an unsent type, send through an unconnected port
+- History outside a composite state, or without a record or default
+- Defer of a non-deferrable trigger
+- Non-terminating do behavior
+- Call of an unhandled operation, call argument of the wrong type
+- `perform` of a missing action, `perform` reference cycle
 
 **Usage:**
 ```bash

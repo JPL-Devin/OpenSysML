@@ -16,7 +16,7 @@ That fetches `sysml/src/training` from the pinned pilot release
 (https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) into
 `sysml-v2-training/`, which is gitignored.
 
-**Status:** 71/100 training files are clean. See [docs/TRAINING_EXAMPLES.md](../docs/TRAINING_EXAMPLES.md) for details.
+**Status:** 88/100 training files are clean. See [docs/TRAINING_EXAMPLES.md](../docs/TRAINING_EXAMPLES.md) for details.
 
 ## Other Examples
 
