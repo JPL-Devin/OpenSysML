@@ -68,6 +68,25 @@ func TestRecursiveMembershipImportSkipsPrivate(t *testing.T) {
 	}
 }
 
+// A hidden name the subtree walk meets first must not end the search: a visible
+// member of the same name elsewhere in the subtree is still importable.
+func TestRecursiveImportSkipsHiddenNameTwin(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"lib.sysml": "package Lib { part def Outer { private part def X; part def Inner { public part def X; } } }",
+		"app.sysml": "package App { import Lib::Outer::**; }",
+	})
+	app := scopeOf(t, idx.DocumentRoot("app.sysml"), "App")
+
+	r := New(idx)
+	sym, ok := r.ResolveName(app, "X", ident("X"))
+	if !ok {
+		t.Fatalf("public Inner::X must be importable even though private Outer::X shares its name")
+	}
+	if sym.Visibility == ast.VisibilityPrivate {
+		t.Fatalf("resolved the private X, want the public one")
+	}
+}
+
 func TestQualifiedAccessIgnoresPrivate(t *testing.T) {
 	idx := indexOf(t, map[string]string{
 		"lib.sysml": "package Lib { private namespace Sec; }",
