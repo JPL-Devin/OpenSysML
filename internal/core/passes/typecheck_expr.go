@@ -521,13 +521,11 @@ func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 }
 
 // indexOfRedefined finds the inherited parameter a declaration redefines, named
-// by its `:>>` target when it has one and by its own name otherwise.
+// by its `:>>` target. A declaration with no explicit target redefines by
+// position (KerML 7.4.7.2), which the caller applies, so its own name does not
+// select the inherited parameter.
 func indexOfRedefined(params []parameter, u *ast.Usage) int {
-	names := redefinedNames(u)
-	if len(names) == 0 && u.Ident.Name != "" {
-		names = []string{u.Ident.Name}
-	}
-	for _, name := range names {
+	for _, name := range redefinedNames(u) {
 		if i := indexOfName(params, name); i >= 0 {
 			return i
 		}

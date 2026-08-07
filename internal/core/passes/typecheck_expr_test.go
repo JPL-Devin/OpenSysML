@@ -409,6 +409,22 @@ func TestExprRenamedParameterRedefinesByPosition(t *testing.T) {
 	wantNoDiags(t, fmt.Sprintf(model, `"s", 2`))
 }
 
+// A redeclaration matches the inherited parameter at its own position, even
+// when its name is that of a different inherited parameter — the same rule
+// semantics/redefinition.go applies, so both tiers see one signature.
+func TestExprRedeclaredParametersMatchByPositionNotName(t *testing.T) {
+	const model = `package P {
+		calc def Swap { in a : ScalarValues::String; in b : ScalarValues::Integer; }
+		calc def Swapped :> Swap { in b : ScalarValues::String; in a : ScalarValues::Integer; }
+		calc c { return Swapped(%s); }
+	}`
+	wantNoDiags(t, fmt.Sprintf(model, `"s", 1`))
+	// Matched by name instead, the signature would be (a : Integer, b : String)
+	// and this would report against argument 2.
+	wantOneDiag(t, fmt.Sprintf(model, `1, 1`),
+		"argument 1 of Swapped expects String, found Natural")
+}
+
 func TestExprTypedCalcUsageInheritsParameters(t *testing.T) {
 	wantNoDiags(t, `package P {
 		`+calcAdd+`
