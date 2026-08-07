@@ -211,7 +211,6 @@ a like-named undirected usage keeps the standard library base of its kind
 instead of being silently treated as a redefinition. We still do not diagnose
 the name conflict itself; that gap is recorded in `docs/SPEC_COMPLIANCE.md`.
 
-<<<<<<< HEAD
 ### Verdicts for the individual-definition re-pin (89/100, 90/100 with the import-in-definition-body fix below)
 
 One entry drifted; every other file kept its exact count.
@@ -241,8 +240,6 @@ That is a separate gap: it does not change the verdict here, since typing by an
 individual definition is legal for those kinds too, but it is why the pinned
 messages read the way they did.
 
-||||||| parent of 99f1f49 (feat(semantics): implicit redefinition of connector ends by position)
-=======
 ### Verdicts for the connector-end-redefinition re-pin (93/100)
 
 Three entries drifted, all in the same direction; every other file kept its
@@ -263,7 +260,6 @@ positive: an `end` feature is a plain KerML feature typed by the feature it
 connects, not an `AttributeUsage`, so the usage-kind taxonomy does not constrain
 its type (SysML v2 7.14.2). The kind check now skips end features.
 
->>>>>>> 99f1f49 (feat(semantics): implicit redefinition of connector ends by position)
 ---
 
 ### Verdicts for the import-in-definition-body re-pin (89/100)
