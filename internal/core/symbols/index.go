@@ -156,18 +156,19 @@ func (idx *Index) resolveWildcardTarget(pkgFQN, targetText string) string {
 	return ""
 }
 
-// namesOwnedTarget reports whether fqn is a usable wildcard-import target:
-// exactly one symbol is registered under it and that symbol is actually
-// declared there, not merely re-exported by an earlier wildcard expansion. A
-// purely synthetic key (P::B created by re-exporting a child package B into P)
-// has no subtree indexed under it, so accepting it would make the import bring
-// in nothing.
+// namesOwnedTarget reports whether exactly one symbol is declared under fqn,
+// ignoring any an earlier wildcard expansion re-exported there: a re-export
+// registers the symbol alone, so its subtree is only indexed under the FQN it
+// was declared with and importing it would bring in nothing.
 func (idx *Index) namesOwnedTarget(fqn string) bool {
-	syms := idx.fqn[fqn]
-	if len(syms) != 1 {
-		return false
+	imported := idx.reexported[fqn]
+	owned := 0
+	for _, sym := range idx.fqn[fqn] {
+		if !imported[sym] {
+			owned++
+		}
 	}
-	return !idx.reexported[fqn][syms[0]]
+	return owned == 1
 }
 
 func (idx *Index) hasFQN(fqn string, sym *Symbol) bool {

@@ -129,6 +129,26 @@ func TestExpandWildcardImportsIgnoresSyntheticTarget(t *testing.T) {
 	}
 }
 
+// A declared package stays a usable wildcard target when an import re-exported
+// something of the same name alongside it — the declaration shadows the
+// re-export, as it does for any lookup.
+func TestExpandWildcardImportsTargetSurvivesAReexportOfItsName(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { package Util { part def FromBase; } }")
+	addDoc(t, idx, "lib.sysml", "package Lib { public import Base::*; "+
+		"package Util { part def A; } package Sub { public import Util::*; } }")
+	idx.ExpandWildcardImports()
+
+	if got := len(idx.LookupQualified("Lib::Sub::A")); got != 1 {
+		t.Errorf("LookupQualified(Lib::Sub::A) len = %d, want 1: "+
+			"`import Util::*` names Lib's own Util", got)
+	}
+	if got := len(idx.LookupQualified("Lib::Sub::FromBase")); got != 0 {
+		t.Errorf("LookupQualified(Lib::Sub::FromBase) len = %d, want 0: "+
+			"Lib::Util shadows the re-exported Base::Util", got)
+	}
+}
+
 func TestIndexDocumentRoot(t *testing.T) {
 	idx := NewIndex()
 	addDoc(t, idx, "a.sysml", "package P;")
