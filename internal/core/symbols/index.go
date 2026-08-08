@@ -1,6 +1,10 @@
 package symbols
 
-import "github.com/Open-MBEE/Systemica/internal/core/ast"
+import (
+	"sort"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+)
 
 // fqnEntry records one symbol registered under a fully-qualified name.
 type fqnEntry struct {
@@ -53,13 +57,33 @@ func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 	}
 }
 
-// ExpandWildcardImports performs a post-indexing pass to add re-exported symbols.
-// For each package with wildcard imports like `import ISQMechanics::*`, this adds
-// ISQMechanics members as visible through the importing package's FQN.
-// Call this after all documents are indexed.
+// ExpandWildcardImports adds re-exported symbols for every package with a
+// wildcard import like `import ISQMechanics::*`, making the target's members
+// visible through the importing package's FQN. Call it after all documents are
+// indexed.
+//
+// Imports chain — KerML imports Kernel::*, which imports Core::*, which imports
+// Root::* — so a single pass would only propagate one level and its result
+// would depend on the order the importing packages happened to be visited in.
+// Passes therefore repeat until nothing new is re-exported, over the importers
+// in name order, which makes the outcome independent of both map iteration
+// order and of whether a document was parsed or restored from cache.
 func (idx *Index) ExpandWildcardImports() {
-	// Use metadata from wildcard imports
-	for pkgFQN, targets := range idx.wildcardMeta {
+	for idx.expandWildcardImportsPass() {
+	}
+}
+
+// expandWildcardImportsPass re-exports one level of wildcard imports and
+// reports whether it registered anything new.
+func (idx *Index) expandWildcardImportsPass() bool {
+	added := false
+	pkgFQNs := make([]string, 0, len(idx.wildcardMeta))
+	for pkgFQN := range idx.wildcardMeta {
+		pkgFQNs = append(pkgFQNs, pkgFQN)
+	}
+	sort.Strings(pkgFQNs)
+	for _, pkgFQN := range pkgFQNs {
+		targets := idx.wildcardMeta[pkgFQN]
 		for _, targetText := range targets {
 			// Resolve target FQN: may be absolute (ISQMechanics) or relative (Systems)
 			targetFQN := idx.resolveWildcardTarget(pkgFQN, targetText)
@@ -80,6 +104,7 @@ func (idx *Index) ExpandWildcardImports() {
 				if !idx.hasFQN(reexportFQN, child) {
 					idx.fqn[reexportFQN] = append(idx.fqn[reexportFQN], child)
 					idx.markReexported(reexportFQN, child)
+					added = true
 					// Note: not added to contributions - these are synthetic
 				}
 
@@ -89,30 +114,42 @@ func (idx *Index) ExpandWildcardImports() {
 					if !idx.hasFQN(shortReexportFQN, child) {
 						idx.fqn[shortReexportFQN] = append(idx.fqn[shortReexportFQN], child)
 						idx.markReexported(shortReexportFQN, child)
+						added = true
 					}
 				}
 			}
 		}
 	}
+	return added
 }
 
-// resolveWildcardTarget resolves a wildcard import target name to its FQN.
-// Handles both absolute references (ISQMechanics) and relative references (Systems within SysML).
-// Returns the resolved FQN or empty string if not found.
+// resolveWildcardTarget resolves a wildcard import target name to the
+// fully-qualified name it names. Handles both absolute references
+// (ISQMechanics) and references relative to the importing package (Systems
+// within SysML). Returns "" if the target is unknown or ambiguous.
+//
+// The answer is the key the target was found under, not the matched symbol's
+// Name: a symbol built from a parsed document carries only its local name,
+// while one restored from a cache record carries its fully-qualified one.
+//
+// A relative target is searched from the importing package outward through its
+// enclosing packages before the global namespace, as KerML 8.2.3.5 resolves a
+// name: KerML::Core's `import Root::*` names its sibling KerML::Root.
 func (idx *Index) resolveWildcardTarget(pkgFQN, targetText string) string {
-	// Try absolute lookup first
-	candidates := idx.LookupQualified(targetText)
-	if len(candidates) == 1 {
-		return candidates[0].Name
+	for prefix := pkgFQN; prefix != ""; {
+		if candidate := prefix + "::" + targetText; len(idx.LookupQualified(candidate)) == 1 {
+			return candidate
+		}
+		i := lastIndex(prefix, "::")
+		if i < 0 {
+			break
+		}
+		prefix = prefix[:i]
 	}
 
-	// Try relative to importing package
-	if pkgFQN != "" {
-		relativeFQN := pkgFQN + "::" + targetText
-		candidates = idx.LookupQualified(relativeFQN)
-		if len(candidates) == 1 {
-			return candidates[0].Name
-		}
+	// Global namespace
+	if len(idx.LookupQualified(targetText)) == 1 {
+		return targetText
 	}
 
 	// Target not found or ambiguous
@@ -301,6 +338,22 @@ func (idx *Index) LookupQualified(fqn string) []*Symbol {
 		return syms
 	}
 	return owned
+}
+
+// FQNs returns every fully-qualified name registered in the index, sorted.
+func (idx *Index) FQNs() []string {
+	out := make([]string, 0, len(idx.fqn))
+	for fqn := range idx.fqn {
+		out = append(out, fqn)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// WildcardImportsOf returns the wildcard-import targets recorded for the
+// namespace registered under fqn ("" for a document root).
+func (idx *Index) WildcardImportsOf(fqn string) []string {
+	return idx.wildcardMeta[fqn]
 }
 
 // markReexported records that fqn only names sym by way of a wildcard import.
