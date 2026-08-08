@@ -137,7 +137,7 @@ func (idx *Index) expandWildcardImportsPass() bool {
 // name: KerML::Core's `import Root::*` names its sibling KerML::Root.
 func (idx *Index) resolveWildcardTarget(pkgFQN, targetText string) string {
 	for prefix := pkgFQN; prefix != ""; {
-		if candidate := prefix + "::" + targetText; len(idx.LookupQualified(candidate)) == 1 {
+		if candidate := prefix + "::" + targetText; idx.namesOwnedTarget(candidate) {
 			return candidate
 		}
 		i := lastIndex(prefix, "::")
@@ -148,12 +148,26 @@ func (idx *Index) resolveWildcardTarget(pkgFQN, targetText string) string {
 	}
 
 	// Global namespace
-	if len(idx.LookupQualified(targetText)) == 1 {
+	if idx.namesOwnedTarget(targetText) {
 		return targetText
 	}
 
 	// Target not found or ambiguous
 	return ""
+}
+
+// namesOwnedTarget reports whether fqn is a usable wildcard-import target:
+// exactly one symbol is registered under it and that symbol is actually
+// declared there, not merely re-exported by an earlier wildcard expansion. A
+// purely synthetic key (P::B created by re-exporting a child package B into P)
+// has no subtree indexed under it, so accepting it would make the import bring
+// in nothing.
+func (idx *Index) namesOwnedTarget(fqn string) bool {
+	syms := idx.fqn[fqn]
+	if len(syms) != 1 {
+		return false
+	}
+	return !idx.reexported[fqn][syms[0]]
 }
 
 func (idx *Index) hasFQN(fqn string, sym *Symbol) bool {

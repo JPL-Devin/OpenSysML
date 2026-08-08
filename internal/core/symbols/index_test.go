@@ -109,6 +109,26 @@ func TestExpandWildcardImportsPrefersTheEnclosingTarget(t *testing.T) {
 	}
 }
 
+// A wildcard import must resolve to a package that actually declares members,
+// not to a synthetic key an earlier import produced by re-exporting a
+// same-named subpackage. Here P imports both Outer::* (which re-exports its
+// child package Shared into P as P::Shared) and Shared::* (the top-level one).
+// P::Shared has no subtree, so resolving `import Shared::*` to it would bring
+// in nothing; it must resolve to the real top-level Shared instead.
+func TestExpandWildcardImportsIgnoresSyntheticTarget(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "shared.sysml", "package Shared { part def Widget; }")
+	addDoc(t, idx, "outer.sysml", "package Outer { package Shared { part def Ignored; } }")
+	addDoc(t, idx, "p.sysml", "package P { public import Outer::*; public import Shared::*; }")
+	idx.ExpandWildcardImports()
+
+	if got := len(idx.LookupQualified("P::Widget")); got != 1 {
+		t.Errorf("LookupQualified(P::Widget) len = %d, want 1: "+
+			"import Shared::* must resolve to the top-level Shared, "+
+			"not the re-exported P::Shared", got)
+	}
+}
+
 func TestIndexDocumentRoot(t *testing.T) {
 	idx := NewIndex()
 	addDoc(t, idx, "a.sysml", "package P;")
