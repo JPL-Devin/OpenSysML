@@ -47,6 +47,9 @@ func TestNegative(t *testing.T) {
 		{"shallow_without_history", "state s { shallow resume; }"},
 		{"history_no_semicolon", "state s { history resume state t; }"},
 		{"entry_point_no_name", "state s { entry point ; }"},
+		{"end_no_feature", "connection def C { end ; }"},
+		{"end_unclosed_multiplicity", "connection def C { end [1 part bead : T; }"},
+		{"connector_end_no_reference_target", "part p { connection : C connect bead references to rim; }"},
 	}
 
 	for _, tt := range tests {

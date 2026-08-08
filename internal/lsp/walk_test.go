@@ -119,6 +119,76 @@ func TestRenameLeavesSignalTriggerNames(t *testing.T) {
 	}
 }
 
+// A connector end that declares its own name refers to the feature it
+// reference-subsets, so renaming that feature must rewrite the reference and
+// leave the end's name alone.
+func TestRenameRewritesConnectorEndReferenceTarget(t *testing.T) {
+	ws := model.NewWorkspace()
+	src := `package P {
+	port def OutPort;
+	port def InPort;
+	interface def FuelInterface {
+		end supplierPort : OutPort;
+		end consumerPort : InPort;
+	}
+	part vehicle {
+		part tankAssy { port fuelTankPort : OutPort; }
+		part eng { port engineFuelPort : InPort; }
+		interface : FuelInterface connect
+			supplierPort ::> tankAssy.fuelTankPort to
+			consumerPort ::> eng.engineFuelPort;
+	}
+}
+`
+	name := openRenameDoc(t, ws, "/tmp/walk_connectorend.sysml", src)
+
+	got, err := applyRename(t, ws, name, "tankAssy {", "tank")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "supplierPort ::> tank.fuelTankPort") {
+		t.Errorf("the feature the end attaches to was not renamed:\n%s", got[name])
+	}
+
+	got, err = applyRename(t, ws, name, "supplierPort : OutPort", "supply")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "end supply : OutPort;") {
+		t.Errorf("the definition's end was not renamed:\n%s", got[name])
+	}
+}
+
+// An explicit `:>>` on a connector end names an end of the connector's type, so
+// renaming that end must rewrite the clause even in the plain-name spelling.
+func TestRenameRewritesConnectorEndRedefinitionTarget(t *testing.T) {
+	ws := model.NewWorkspace()
+	src := `package P {
+	part def TireBead;
+	connection def PressureSeat {
+		end [1] part bead : TireBead;
+		end [1] part rim;
+	}
+	part wheelAssy {
+		part t { part bead : TireBead; }
+		part w { part rim; }
+		connection : PressureSeat connect
+			seatRim :>> rim references w.rim to
+			seatBead :>> bead references t.bead;
+	}
+}
+`
+	name := openRenameDoc(t, ws, "/tmp/walk_endredef.sysml", src)
+
+	got, err := applyRename(t, ws, name, "rim;", "mountingRim")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if !strings.Contains(got[name], "seatRim :>> mountingRim references w.rim") {
+		t.Errorf("the redefinition target was not renamed:\n%s", got[name])
+	}
+}
+
 // A body expression's parameter is its own declaration, so renaming a
 // same-named outer feature must not rewrite the parameter's uses inside the
 // body, while a name the body only reads from outside is still rewritten.

@@ -45,12 +45,16 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		switch d := unwrapType(m).(type) {
 		case *ast.Definition:
-			tc.checkRelationships(scope, d.Relationships, true, d.Kind, 0, ast.DirNone)
+			tc.checkRelationships(scope, d.Relationships, declKind{isDef: true, defKind: d.Kind})
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
 		case *ast.Usage:
-			tc.checkRelationships(scope, d.Relationships, false, 0, d.Kind, d.Direction)
+			tc.checkRelationships(scope, d.Relationships, declKind{
+				useKind:   d.Kind,
+				direction: d.Direction,
+				isEnd:     d.IsEnd,
+			})
 			tc.expr.checkUsageValue(scope, d)
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
@@ -119,7 +123,19 @@ func (tc *typeChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
 	}
 }
 
-func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Relationship, isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind, direction ast.FeatureDirection) {
+// declKind describes the declaration a relationship is declared on: what the
+// kind-compatibility rules are checked against.
+type declKind struct {
+	isDef     bool
+	defKind   ast.DefinitionKind
+	useKind   ast.UsageKind
+	direction ast.FeatureDirection
+	// isEnd marks a feature declared with the `end` modifier, whose type is that
+	// of the feature it connects and so escapes the usage-kind taxonomy.
+	isEnd bool
+}
+
+func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Relationship, decl declKind) {
 	for _, rel := range rels {
 		if rel == nil || rel.Target == nil {
 			continue
@@ -141,13 +157,13 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 		// for a satisfy reference, both of which check the target's kind.
 		targetSym := sym
 		aliasMatters := rel.Kind == ast.RelTyping ||
-			(rel.Kind == ast.RelSubsets && useKind == ast.UsageSatisfy)
+			(rel.Kind == ast.RelSubsets && decl.useKind == ast.UsageSatisfy)
 		if aliasMatters && sym.Kind == symbols.SymbolAlias {
 			if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
 				targetSym = resolved
 			}
 		}
-		if msg := compatMessage(isDef, defKind, useKind, direction, rel.Kind, targetSym.Kind); msg != "" {
+		if msg := compatMessage(decl, rel.Kind, targetSym.Kind); msg != "" {
 			tc.diags = append(tc.diags, Diagnostic{
 				Severity: SeverityError,
 				Span:     rel.Target.Span(),
@@ -159,7 +175,8 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 	}
 }
 
-func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind, direction ast.FeatureDirection, rel ast.RelationshipKind, target symbols.SymbolKind) string {
+func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.SymbolKind) string {
+	isDef, defKind, useKind, direction := decl.isDef, decl.defKind, decl.useKind, decl.direction
 	switch rel {
 	case ast.RelSpecializes:
 		want := defSymbolKind(defKind)
@@ -213,6 +230,12 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		}
 		if !isDefKind(target) {
 			return fmt.Sprintf("type must be a definition, found %s", target)
+		}
+		// An end feature is a plain KerML feature typed by whatever the feature it
+		// connects is typed by (`end supplierPort : FuelOutPort`), so the usage-kind
+		// taxonomy does not constrain it.
+		if decl.isEnd {
+			return ""
 		}
 		if !isCompatibleTyping(useKind, direction, target) {
 			return fmt.Sprintf("%s cannot be typed by %s (kind mismatch)", useKind, target)
@@ -395,6 +418,7 @@ var usageSymbolKinds = map[symbols.SymbolKind]bool{
 	symbols.SymbolAnalysisCaseUsage:     true,
 	symbols.SymbolVerificationCaseUsage: true,
 	symbols.SymbolUseCaseUsage:          true,
+	symbols.SymbolConnectorEnd:          true, // An end of a connect clause is a feature
 	symbols.SymbolAlias:                 true, // Aliases can be subsetting targets
 }
 

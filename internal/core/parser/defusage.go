@@ -2139,8 +2139,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 			var hasDefKeyword bool
 			var endRels []*ast.Relationship // relationships parsed before definition keyword
 
-			// Parse optional short name (if not starting with '[')
-			if p.atNameOrKeyword() {
+			if isKindKeyword(p.peek()) {
+				// `end [1] part bead : TireBead` — the kind keyword follows the
+				// modifiers directly, so there is no short name, and the
+				// multiplicity was already taken as an early one.
+				mult = mods.earlyMultiplicity
+				hasDefKeyword = true
+			} else if p.atNameOrKeyword() {
 				// Check if pattern matches: name [mult] (feature|occurrence|item|...)
 				// OR: [mult] (feature|occurrence|...)
 				// Also: name [mult] subsets X feature name (with relationship clause)
@@ -2321,8 +2326,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 				// If it's a usage, apply the short name, multiplicity, relationships, and end modifier
 				if u, ok := decl.(*ast.Usage); ok {
-					u.Ident.ShortName = shortName
-					u.Ident.ShortNameSpan = shortNameSpan
+					// `end part <b> bead : T` declares its short name after the
+					// kind keyword, so parseDeclaration already took it.
+					if shortName != "" {
+						u.Ident.ShortName = shortName
+						u.Ident.ShortNameSpan = shortNameSpan
+					}
 					if mult != nil && u.Multiplicity == nil {
 						u.Multiplicity = mult
 					}
@@ -2350,12 +2359,14 @@ func (p *Parser) parseBodyMember() ast.Node {
 		hasNameAndRelationship := p.atName() && (p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt)
 		hasNameOnly := p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 		hasNameAndMult := p.atName() && p.peekN(1).Kind == lexer.LBracket // name with multiplicity (e.g., ref payload [0..*])
+		// `end [1] : A;` — an unnamed feature declaring only its type.
+		hasTypeOnly := p.at(lexer.Colon)
 		// Allow 'var' keyword as name for anonymous features (common in actions/loops)
 		hasVarKeyword := p.atKeyword("var") && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon ||
 			p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt ||
 			p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 
-		if hasNameAndType || hasRelationship || hasNameAndRelationship || hasNameOnly || hasNameAndMult || hasVarKeyword {
+		if hasNameAndType || hasTypeOnly || hasRelationship || hasNameAndRelationship || hasNameOnly || hasNameAndMult || hasVarKeyword {
 			var id ast.Identification
 
 			// Parse optional name
@@ -2389,9 +2400,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 				IsNonunique: mods.isNonunique,
 			}
 
+			if hasTypeOnly {
+				p.advance() // consume ':'
+			}
+
 			// If we consumed a colon, parse typing relationship(s)
 			// Support comma-separated types: : Type1, Type2, Type3
-			if hasNameAndType {
+			if hasNameAndType || hasTypeOnly {
 				for {
 					u.Relationships = append(u.Relationships, &ast.Relationship{
 						Kind:   ast.RelTyping,
@@ -2407,6 +2422,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 			// Parse optional multiplicity
 			if p.at(lexer.LBracket) {
 				u.Multiplicity = p.parseMultiplicity()
+			}
+			if u.Multiplicity == nil {
+				// `end [1] rim : Rim` — the multiplicity was taken as an early one.
+				u.Multiplicity = mods.earlyMultiplicity
 			}
 
 			// Parse post-multiplicity modifiers (ordered/nonunique)

@@ -76,6 +76,9 @@ const (
 	SymbolAnalysisCaseUsage
 	SymbolVerificationCaseUsage
 	SymbolUseCaseUsage
+	// SymbolConnectorEnd is an end feature a connector usage declares in its
+	// connect clause (`connect bead references t.bead`).
+	SymbolConnectorEnd
 )
 
 var symbolKindNames = map[SymbolKind]string{
@@ -138,6 +141,7 @@ var symbolKindNames = map[SymbolKind]string{
 	SymbolAnalysisCaseUsage:     "analysisCaseUsage",
 	SymbolVerificationCaseUsage: "verificationCaseUsage",
 	SymbolUseCaseUsage:          "useCaseUsage",
+	SymbolConnectorEnd:          "connectorEnd",
 }
 
 // String returns the display name of the kind.
