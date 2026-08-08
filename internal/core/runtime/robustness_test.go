@@ -47,6 +47,64 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 	t.Run("perform_of_missing_action", testPerformOfMissingAction)
 	t.Run("perform_reference_cycle", testPerformReferenceCycle)
+	t.Run("state_subaction_reference_of_missing_action", testStateSubactionReferenceOfMissingAction)
+	t.Run("state_subaction_reference_feature_chain", testStateSubactionReferenceFeatureChain)
+}
+
+// testStateSubactionReferenceOfMissingAction: an entry action given by
+// reference to a name nothing declares fails at execution, naming the target.
+func testStateSubactionReferenceOfMissingAction(t *testing.T) {
+	ctx, machine := loadState(t, `package test {
+		state Machine {
+			initial init;
+			state active {
+				entry noSuchAction;
+			}
+			final done;
+
+			init then active;
+			active then done;
+		}
+	}`, "Machine")
+
+	if _, _, err := ctx.ExecuteStateWithEvents(machine, nil); err == nil {
+		t.Fatal("expected an unresolved entry action reference to fail")
+	} else if !strings.Contains(err.Error(), "noSuchAction") {
+		t.Errorf("error should name the unresolved action, got: %v", err)
+	}
+}
+
+// testStateSubactionReferenceFeatureChain: a feature-chain reference parses but
+// is not invocable, so it must report what it named rather than an empty name.
+func testStateSubactionReferenceFeatureChain(t *testing.T) {
+	ctx, machine := loadState(t, `package test {
+		action def CoolDown {
+			first start;
+			done end;
+			then start end;
+		}
+
+		state Machine {
+			part controller {
+				action coolDown : CoolDown;
+			}
+
+			initial init;
+			state active {
+				exit controller.coolDown;
+			}
+			final done;
+
+			init then active;
+			active then done;
+		}
+	}`, "Machine")
+
+	if _, _, err := ctx.ExecuteStateWithEvents(machine, nil); err == nil {
+		t.Fatal("expected a feature-chain action reference to fail")
+	} else if !strings.Contains(err.Error(), "coolDown") {
+		t.Errorf("error should name the chained action, got: %v", err)
+	}
 }
 
 // testPerformOfMissingAction: a perform statement naming nothing resolvable is

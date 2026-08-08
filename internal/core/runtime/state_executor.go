@@ -1653,7 +1653,7 @@ func (e *StateExecutor) executeAction(action ast.Node) error {
 		// perform X; / action a : X; / action a = X(...);
 		inv, ok := nestedInvocation(node)
 		if !ok {
-			return fmt.Errorf("state action %s performs no action", node.Ident.Name)
+			return fmt.Errorf("state action %s performs no action", stateActionName(node))
 		}
 		return e.invokeNested(inv)
 
@@ -1710,6 +1710,26 @@ func (e *StateExecutor) executeAction(action ast.Node) error {
 	default:
 		return fmt.Errorf("unsupported action type: %T", action)
 	}
+}
+
+// stateActionName names a state action in diagnostics, falling back to what it
+// references when the usage is anonymous (`entry a.b;`).
+func stateActionName(u *ast.Usage) string {
+	if u.Ident.Name != "" {
+		return u.Ident.Name
+	}
+	for _, rel := range u.Relationships {
+		if rel.Kind != ast.RelReferences && rel.Kind != ast.RelTyping {
+			continue
+		}
+		switch target := rel.Target.(type) {
+		case *ast.QualifiedName:
+			return qualifiedNameText(target)
+		case *ast.FeatureChainExpr:
+			return "feature chain " + qualifiedNameText(target.Member)
+		}
+	}
+	return "<anonymous>"
 }
 
 // pollChangeEvents checks ChangeEvent conditions for outgoing transitions.

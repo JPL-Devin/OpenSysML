@@ -516,42 +516,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// Must check BEFORE consuming keyword token
 		if kw == "perform" && !p.atKeyword("action") {
 			p.advance() // consume 'perform'
-			// Parse reference target (can be feature chain like takePhoto.focus)
-			u := &ast.Usage{
-				Kind:        ast.UsageAction,
-				IsAbstract:  mods.isAbstract,
-				IsReference: mods.isReference,
-				IsEnd:       mods.isEnd,
-				Visibility:  mods.visibility,
-				Direction:   mods.direction,
-				IsComposite: mods.isComposite,
-			}
-			u.NodeBase.NodeSpan = p.spanFrom(start)
-
-			// Parse reference target (qualified name or feature chain)
-			target := p.parseRelationshipTarget()
-			if target != nil {
-				// The performed action is related to the perform action usage
-				// by a reference subsetting (SysML 7.17.6).
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelReferences,
-					Target: target,
-				})
-			} else {
-				p.error(p.peek().Span, "expected an action reference after 'perform'")
-			}
-
-			// Expect semicolon or body
-			if p.accept2(lexer.Semicolon) {
-				u.HasBody = false
-			} else if p.at(lexer.LBrace) {
-				p.advance()
-				u.Members = p.parseActionBodyMixed()
-				u.HasBody = true
-			}
-
-			u.NodeSpan = p.spanFrom(start)
-			return applyPrefixes(u)
+			return applyPrefixes(p.parsePerformedActionReference(start, mods, "perform"))
 		}
 
 		p.advance() // consume the kind keyword
@@ -2622,6 +2587,59 @@ func (p *Parser) parseBodyMember() ast.Node {
 	mem.NodeSpan = p.spanFrom(start)
 	mem.SetLeadingTrivia(trivia)
 	return mem
+}
+
+// parsePerformedActionReference parses the reference form of a performed action
+// usage — a feature reference with an optional body — which SysML.xtext spells
+// `OwnedReferenceSubsetting FeatureSpecializationPart? ValuePart?` followed by
+// an `ActionBody` (PerformActionUsageDeclaration; SysML v2 §7.17.6). The keyword
+// that introduced it, if any, is already consumed; kw only names it in errors.
+func (p *Parser) parsePerformedActionReference(start int, mods featureMods, kw string) *ast.Usage {
+	u := &ast.Usage{
+		Kind:        ast.UsageAction,
+		IsAbstract:  mods.isAbstract,
+		IsReference: mods.isReference,
+		IsEnd:       mods.isEnd,
+		Visibility:  mods.visibility,
+		Direction:   mods.direction,
+		IsComposite: mods.isComposite,
+	}
+	u.NodeBase.NodeSpan = p.spanFrom(start)
+
+	target := p.parseRelationshipTarget()
+	if target != nil {
+		u.Relationships = append(u.Relationships, &ast.Relationship{
+			Kind:   ast.RelReferences,
+			Target: target,
+		})
+	} else {
+		p.error(p.peek().Span, fmt.Sprintf("expected an action reference after '%s'", kw))
+	}
+
+	// FeatureSpecializationPart? ValuePart?
+	if p.at(lexer.LBracket) {
+		u.Multiplicity = p.parseMultiplicity()
+	}
+	specRels, conjugated := p.parseRelationships(true)
+	u.Relationships = append(u.Relationships, specRels...)
+	u.IsConjugated = conjugated
+	if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
+		u.Value = p.ParseExpression()
+	}
+
+	switch {
+	case p.accept2(lexer.Semicolon):
+		u.HasBody = false
+	case p.at(lexer.LBrace):
+		p.advance()
+		u.Members = p.parseActionBodyMixed()
+		u.HasBody = true
+	case target != nil:
+		p.error(p.peek().Span, fmt.Sprintf("expected ';' or '{' after '%s' action reference", kw))
+	}
+
+	u.NodeSpan = p.spanFrom(start)
+	return u
 }
 
 // parseRelationshipTarget parses a relationship target which can be either:

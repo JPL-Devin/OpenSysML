@@ -129,6 +129,47 @@ func TestStateDoExitAndTransitionEffectPerformAction(t *testing.T) {
 	}
 }
 
+// An entry/exit action named by reference (`entry Bump;`) is the same performed
+// action usage as `entry perform Bump;`, so it invokes the referenced action.
+func TestStateSubactionByReferencePerformsAction(t *testing.T) {
+	ctx, machine := loadState(t, `package test {
+    action def Bump {
+        inout counter : Integer;
+
+        first start;
+        action bumping {
+            assign counter := counter + 10;
+        }
+        done end;
+
+        then start bumping;
+        then bumping end;
+    }
+
+    state Machine {
+        attribute counter : Integer = 1;
+
+        initial init;
+        state active {
+            entry Bump;
+            exit Bump;
+        }
+        final done;
+
+        init then active;
+        active then done;
+    }
+}`, "Machine")
+
+	data, _, err := ctx.ExecuteStateWithEvents(machine, nil)
+	if err != nil {
+		t.Fatalf("ExecuteStateWithEvents: %v", err)
+	}
+	if got := intValue(t, data, "counter"); got != 21 {
+		t.Errorf("counter = %d, want 21 (entry and exit each performed Bump)", got)
+	}
+}
+
 func TestStateEntryPerformsUnresolvedAction(t *testing.T) {
 	ctx, machine := loadState(t, `package test {
     state Machine {
