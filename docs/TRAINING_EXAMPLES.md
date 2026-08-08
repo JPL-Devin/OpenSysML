@@ -379,6 +379,12 @@ unchanged at three files (`start`/`done` vs `startShot`/`endShot` in
 ceiling is therefore **97/100**, and the two files between 95 and 97 are our
 own remaining false positives.
 
+> Amended at 97/100: `alternative` is no longer among the pinned OMG bugs. The
+> `:>> alternative` in `Trade Study Analysis Example` now matches `alternatives`
+> through implicit redefinition, so the file's one remaining error is a false
+> positive of ours (`objective cannot be typed by requirementDef`). The pinned
+> OMG bugs are the two `start`/`done` files, putting the ceiling at **98/100**.
+
 ---
 
 ### Verdicts for the import-in-definition-body re-pin (89/100)
@@ -430,71 +436,38 @@ is not touched here.
 
 ## Error Classification
 
-### Local Declaration Errors (Missing in Training Files)
+The 5 errors recorded on the current baseline, per file (the counts are exactly
+the ones in `training_examples_expected.txt`):
 
-These errors are **not implementation gaps** - the training files reference names that don't exist in those files. These are either:
-1. Pedagogical simplifications (examples show partial code)
-2. References to features that should be defined elsewhere
-3. Incomplete examples for illustration purposes
+| File | n | Cause |
+|---|---|---|
+| `27. Occurrences/Time Slice and Snapshot Example` | 2 | OMG bug: `start`/`done` should be `startShot`/`endShot` |
+| `28. Individuals/Individuals and Time Slices` | 2 | same OMG bug |
+| `33. Analysis/Trade Study Analysis Example` | 1 | kind tables reject an `objective` typed by a `requirement def` |
 
-**Most common:**
-- `simpleMass`, `MassedThing`, etc.: References to definitions not in file
-- Port/interface references: `supplierPort`, `consumerPort`, message endpoints
-- `testVehicle` (2×): Missing test fixture declarations
+### Bugs in the OMG Materials (4 errors, 2 files)
 
-### Training Example Bugs (Incorrect Code in OMG Materials)
-
-**Lifecycle snapshots - wrong feature names (2 files, 4 errors):**
-- Files: `27. Occurrences/Time Slice and Snapshot Example.sysml` lines 16, 25; `28. Individuals/Individuals and Time Slices.sysml` lines 12, 16
+**Lifecycle snapshots — wrong feature names (2 files, 4 errors):**
+- Files: `27. Occurrences/Time Slice and Snapshot Example.sysml`; `28. Individuals/Individuals and Time Slices.sysml`
 - **Error**: `unresolved reference: start` (2×), `unresolved reference: done` (2×)
 - **Cause**: Files use `snapshot sale = start` and `snapshot junked = done` but KerML defines these as `startShot` and `endShot` (Occurrences.kerml:348, 364)
-- **Fix**: Change `start` → `startShot`, `done` → `endShot`
+- **Fix**: Change `start` → `startShot`, `done` → `endShot` in the OMG files
 
-**Import inside a definition body (RESOLVED ✅):**
-- File: `34. Verification/Verification Case Definition Example.sysml`
-- **Former error**: `unresolved reference: VerdictKind` (2×), `unresolved reference: PassIf` (1×)
-- **Former (incorrect) verdict**: "imports must be at package level, not inside a verification def"
-- **Reality**: the file's `private import VerificationCases::*;` sits *inside* the `verification def VehicleMassTest` body, which is a legitimate place for an import — a definition body is a `Namespace` and an `Import`'s `importOwningNamespace` may be any `Namespace` (KerML 7.2.5.4; SysML v2 7.5.3, 7.6). The example was correct; the resolver was not consulting body-owned imports. See the import-in-definition-body re-pin above.
+### Type System Limitations (1 error, 1 file)
 
-**Scope resolution - inherited feature resolution (FIXED ✅):**
-- **Previous errors**: `unresolved reference: localClock`, `unresolved reference: payload` (4 total)
-- **Cause**: Features inherited from parent definitions (Part → Item → Occurrence, Flow → Message → Transfer)
-- **Fix**: Implemented inherited feature resolution in commits 8304f03, c683bc8
-- **Status**: All localClock and payload errors eliminated
+- `33. Analysis/Trade Study Analysis Example` (1): `objective cannot be typed by requirementDef (kind mismatch)`. The file writes `objective : MaximizeObjective;`, and the standard library declares `requirement def MaximizeObjective :> TradeStudyObjective` (`Domain Libraries/Analysis/TradeStudies.sysml:98`), so the type is the one the library intends. The `UsageObjective` row of the kind table in `passes/typecheck.go` accepts only the structural definition kinds and not `requirementDef`, which is what an objective is.
 
-**Typos (1 file, 1 error):**
-- **Error**: `unresolved reference: alternative` (1×)
-- **Cause**: Feature is named `alternatives` (plural) in `Domain Libraries/Analysis/TradeStudies.sysml`
-- **Fix**: Change `alternative` → `alternatives`
+### Resolved Historically ✅
 
-**Package reference issues (2-3 files):**
-- **Error**: `unresolved reference: Requirement Usages` (1×), `unresolved reference: Variation Usages` (1×)
-- **Cause**: Package name references need proper qualification/import path
-
-**Summary**: 8-10 files have bugs in OMG training materials (incorrect feature names, missing imports, typos). All referenced features exist in stdlib - these are authoring errors in training examples, not implementation gaps.
-
-### Stdlib/Import Errors
-
-**Resolved ✅:**
-- `VerdictKind`, `PassIf`: Fixed by consulting imports owned by a definition/usage body during name resolution (the example's `private import VerificationCases::*;` is correct; see the import-in-definition-body re-pin above)
-- Named argument resolution: Fixed in ff70654 (named args don't resolve parameter names)
-- `localClock`, `payload`: Fixed in 8304f03, c683bc8 (inherited feature resolution)
-
-**Still present:**
-- `annotatedElement` (2×): Metadata feature - likely needs ModelingMetadata import
-- `alternative`: a typo in the OMG file (the feature is `alternatives`)
-
-### Type System Limitations
-
-- `X subsets Y: types do not conform`: withdrawn — subsetting intersects types
-  rather than requiring conformance (see the 97/100 re-pin verdicts above)
-
-### Parser/Unimplemented Features
-
-- `flow X must declare both a source and a target end`: withdrawn for flows that
-  declare no ends at all, which is how a message is written (see the 97/100
-  re-pin verdicts above)
-- Various member access errors: Features that exist but aren't accessible in resolution scope
+- `alternative` (`33. Analysis/Trade Study Analysis Example`): the file's `:>> alternative` is now matched against `alternatives` through implicit redefinition, so the former "OMG typo" verdict no longer applies to this file; the one error it still emits is the objective kind-table gap above.
+- Connection- and interface-usage end names (`09. Connections`, `11. Interfaces`, `13. Flows`, 6 errors): fixed by implicit redefinition of connector ends by position and by resolving a connector end's reference target in the enclosing scope (see the connector-end-redefinition re-pin above).
+- `annotatedElement` and user-keyword typing (`39. Metadata`, `41. Language Extension`, 4 errors): fixed by inheriting metadata features and applying semantic metadata keywords (see the metadata and user-keyword re-pin above).
+- `X subsets Y: types do not conform` (`41. Language Extension/Model Library Example`, 2 errors): withdrawn — subsetting intersects types rather than requiring conformance (see the subsetting-conformance and flow-ends re-pin above).
+- `flow X must declare both a source and a target end` (`27. Occurrences/Interaction Example-2`, 3 errors): withdrawn for flows that declare no ends at all, which is how a message is written (same re-pin).
+- `individual cannot specialize partDef` / `... cannot be typed by individualDef` (`34. Verification/Verification Case Usage Example`, 6 errors): fixed by treating an individual definition as an occurrence definition (SysML v2 7.9.5).
+- `VerdictKind`, `PassIf` (`34. Verification/Verification Case Definition Example`, 3 errors): fixed by consulting imports owned by a definition/usage body during name resolution. The former verdict — "imports must be at package level, not inside a verification def" — was wrong: the file's `private import VerificationCases::*;` sits inside the `verification def VehicleMassTest` body, which is a legitimate place for an import, because a definition body is a `Namespace` and an `Import`'s `importOwningNamespace` may be any `Namespace` (KerML 7.2.5.4; SysML v2 7.5.3, 7.6).
+- `localClock`, `payload` (4 errors): fixed in 8304f03, c683bc8 by resolving features inherited from parent definitions (Part → Item → Occurrence, Flow → Message → Transfer).
+- Named argument resolution: fixed in ff70654 (named args did not resolve parameter names).
 
 ---
 
@@ -503,17 +476,16 @@ These errors are **not implementation gaps** - the training files reference name
 | Category | Pass | Fail | Pass Rate |
 |----------|------|------|-----------|
 | **All Examples** | 97 | 3 | 97% |
-| **After filtering pedagogical gaps** | ~97 | ~3 | ~97% |
+| **Excluding the 2 files whose errors are OMG bugs** | 97 | 1 | 99% |
 
-**Note**: Many "failures" are incomplete examples meant for teaching, not executable code. Of the 3 files with errors, most emit only missing local declarations or bugs in the OMG material itself (wrong feature names, typos, missing imports); the rest are type-system and validation gaps listed above.
+**Note**: Of the 3 files with errors, two fail only because of bugs in the OMG material itself (`start`/`done` instead of `startShot`/`endShot`); the third is the objective kind-table gap listed above.
 
 ---
 
 ## Remaining Work for Full Training Example Support
 
-### Priority 1: Implicit Redefinition and Non-Generalization Feature Sources
-- Implicit redefinition: an untyped usage whose name matches a feature its owner inherits takes that feature's type
-- Document correct import paths for Metadata, Variations, Requirements namespaces
+### Priority 1: Kind Tables
+- Accept a `requirement def` as the type of an `objective` in the kind table in `passes/typecheck.go` — the last remaining corpus false positive
 
 ### Priority 2: Pedagogical Documentation
 - Mark which examples are intentionally incomplete
@@ -531,15 +503,23 @@ go test -run TestTrainingExamplesSemanticErrors ./internal/core/model -v
 
 This generates error frequency analysis and per-file diagnostics.
 
+**Known issue — the first run on a cold semantic cache under-reports.** With no
+stdlib cache on disk (`$XDG_CACHE_HOME/sysml-ls`, or `~/.cache/sysml-ls`), the
+gate reports 86/100 (14 files, 34 errors): the extra diagnostics are false
+`unresolved reference`s for stdlib names such as `kg`, `mm`, `s`, `h`,
+`SysML::PartUsage` and `KerML::Element`. The same run populates the cache, so
+every later run reports the recorded 97/100. The numbers in this file are the warm-cache result, which is
+what the expectation file pins; a cold-cache run is a false negative, not a
+regression in the corpus.
+
 ---
 
 ## Conclusion
 
-**Implementation Status**: Core behavioral semantics complete (43/43 execution conformance cases passing).
+**Implementation Status**: Core behavioral semantics complete (51/51 execution conformance cases passing).
 
-**Training Example Status**: 87/100 clean (13 files, 30 errors). Remaining errors are primarily:
-1. Missing local declarations in pedagogical examples, and bugs in the OMG files themselves
-2. Implicit *redefinition* of a like-named inherited feature, which implicit stdlib typing does not supply (see the verdict tables above)
-3. Type system edge cases (feature work needed)
+**Training Example Status**: 97/100 clean (3 files, 5 errors). What remains is:
+1. Two files that use feature names KerML does not define (`start`/`done` instead of `startShot`/`endShot`) — bugs in the OMG material
+2. One kind-table gap: an `objective` typed by a `requirement def`
 
 The runtime implementation is **production-ready for complete SysML v2 models**. Training example "failures" reflect incomplete example files, not missing runtime features.
