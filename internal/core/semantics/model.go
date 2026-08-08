@@ -28,6 +28,7 @@ type Model struct {
 	primTypes     map[*symbols.Symbol]PrimType
 	scalars       map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
 	params        map[*symbols.Symbol]behaviorParameters
+	ends          map[*symbols.Symbol][]*symbols.Symbol
 }
 
 // NewModel creates a semantic model backed by the given name resolver. The
@@ -43,6 +44,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		memberSources: make(map[*symbols.Symbol][]*symbols.Symbol),
 		primTypes:     make(map[*symbols.Symbol]PrimType),
 		params:        make(map[*symbols.Symbol]behaviorParameters),
+		ends:          make(map[*symbols.Symbol][]*symbols.Symbol),
 	}
 }
 
@@ -71,6 +73,8 @@ func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
 	case *ast.Definition:
 		return d.Relationships
 	case *ast.Usage:
+		return d.Relationships
+	case *ast.ConnectorEnd:
 		return d.Relationships
 	default:
 		return nil
@@ -197,6 +201,17 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// that parameter's type when it declares none (see redefinition.go).
 	declared := len(out)
 	for _, redefined := range m.implicitParameterRedefinitions(sym) {
+		if seen[redefined] {
+			continue
+		}
+		seen[redefined] = true
+		out = append(out, redefined)
+	}
+
+	// An end of a connector implicitly redefines the end at its own position of
+	// each connector its owner specializes, and so takes that end's type when it
+	// declares none (see connector.go).
+	for _, redefined := range m.implicitEndRedefinitions(sym) {
 		if seen[redefined] {
 			continue
 		}

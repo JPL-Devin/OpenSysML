@@ -80,6 +80,7 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkMultiplicityRange(sym)
 	cc.checkSubsettingMultiplicity(sym)
 	cc.checkConnectorEnds(sym)
+	cc.checkConnectorEndRedefinition(sym)
 	cc.checkTypingConformance(sym)
 	cc.checkRedefinition(sym)
 }
@@ -224,6 +225,28 @@ func (cc *constraintChecker) checkConnectorEnds(sym *symbols.Symbol) {
 				Source:   "constraint",
 			})
 		}
+	}
+}
+
+// checkConnectorEndRedefinition flags an end a connector declares that redefines
+// no end of the connector it specializes. Every end of a typed connector
+// redefines the end at its own position of that type (SysML v2 §7.13.2), so an
+// end beyond the last position of the type refines nothing.
+func (cc *constraintChecker) checkConnectorEndRedefinition(sym *symbols.Symbol) {
+	general, unmatched := cc.model.UnmatchedConnectorEnds(sym)
+	if general == nil {
+		return
+	}
+	declared := cc.model.ConnectorEndCount(general)
+	for _, end := range unmatched {
+		cc.diags = append(cc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     end.DeclSpan,
+			Message: fmt.Sprintf("end %s redefines no end of %s, which declares %d end(s)",
+				end.Name, general.Name, declared),
+			Code:   "connector-ends",
+			Source: "constraint",
+		})
 	}
 }
 

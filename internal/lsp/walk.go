@@ -42,6 +42,14 @@ func (c *refCollector) addReference(scope *symbols.Scope, decl ast.Node, qn *ast
 	}
 }
 
+// addRedefinition records a redefinition's target, which names a feature of the
+// owning scope's generals rather than a member of the scope itself.
+func (c *refCollector) addRedefinition(scope *symbols.Scope, qn *ast.QualifiedName) {
+	if qn != nil {
+		c.refs = append(c.refs, qnRef{resolve.Reference{Scope: scope, QN: qn, Redefines: true}})
+	}
+}
+
 // addChainMember records the member segments of a feature chain, which name
 // members of the operand rather than elements of scope.
 func (c *refCollector) addChainMember(scope *symbols.Scope, decl ast.Node, chain *ast.FeatureChainExpr) {
@@ -113,14 +121,28 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.relationships(scope, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
 		c.expr(scope, d.Value)
+		child := c.childScope(scope, d)
 		for _, end := range d.ConnectorEnds {
 			if end == nil {
 				continue
 			}
-			c.target(scope, end.Target)
+			// An end that reference-subsets what it attaches to declares its
+			// own name, so that name is a declaration, not a reference. A `:>>`
+			// on it names an end of the connector's type and so resolves in the
+			// connector's scope; everything else resolves in the enclosing one.
+			_, declaresName := end.DeclaredName()
+			endScope := scope
+			if child != nil {
+				endScope = child
+			}
+			redefines, others := ast.SplitRedefinitions(end.Relationships)
+			c.relationships(endScope, end, redefines)
+			c.relationships(scope, end, others)
+			if !declaresName {
+				c.target(scope, end.Target)
+			}
 			c.target(scope, end.Reference)
 		}
-		child := c.childScope(scope, d)
 		if d.FlowEnds != nil {
 			c.expr(scope, d.FlowEnds.From)
 			c.expr(scope, d.FlowEnds.To)
@@ -259,7 +281,18 @@ func (c *refCollector) relationships(scope *symbols.Scope, decl ast.Node, rels [
 			c.referenceTarget(scope, decl, rel.Target)
 			continue
 		}
-		c.target(scope, rel.Target)
+		// A target parsed as an expression wraps the name it denotes.
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		if rel.Kind == ast.RelRedefines {
+			if qn, ok := target.(*ast.QualifiedName); ok {
+				c.addRedefinition(scope, qn)
+				continue
+			}
+		}
+		c.target(scope, target)
 	}
 }
 

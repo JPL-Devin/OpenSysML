@@ -99,7 +99,22 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			if end == nil {
 				continue
 			}
-			if end.Target != nil {
+			// An end that reference-subsets the feature it attaches to declares
+			// its own name (`connect bead references t.bead`), so that name is a
+			// declaration, not a reference to resolve.
+			_, declaresName := end.DeclaredName()
+			// A redefinition names an end of the connector's own type, so it
+			// resolves in the connector's scope; everything else an end names —
+			// the feature it attaches to, its type — is a feature of the
+			// connector's owner and resolves in the enclosing scope.
+			endScope := scope
+			if inner := r.childScope(scope, d); inner != nil {
+				endScope = inner
+			}
+			redefines, others := ast.SplitRedefinitions(end.Relationships)
+			r.resolveRelationships(endScope, end, redefines)
+			r.resolveRelationships(scope, end, others)
+			if end.Target != nil && !declaresName {
 				if qn, ok := end.Target.(*ast.QualifiedName); ok {
 					r.ResolveQualified(scope, qn)
 				} else {
@@ -364,6 +379,12 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		// Include both explicit and implicit specializations
 		parents := r.findSpecializationTargets(scope, ownerRels)
 
+		// A usage's type is a general of it (KerML feature typing is a
+		// specialization), so its members can be redefined too.
+		if _, ok := ownerNode.(*ast.Usage); ok {
+			parents = append(parents, r.findTypingTargets(scope, ownerRels)...)
+		}
+
 		// For definitions with implicit base types (e.g., flow def → Flow), add them
 		if def, ok := ownerNode.(*ast.Definition); ok {
 			implicitParents := r.findImplicitSpecializations(scope, def)
@@ -442,6 +463,27 @@ func (r *Resolver) findSpecializationTargets(scope *symbols.Scope, rels []*ast.R
 		}
 	}
 
+	return parents
+}
+
+// findTypingTargets resolves the types named by the typing relationships in
+// rels, which are the generals a usage inherits members from.
+func (r *Resolver) findTypingTargets(scope *symbols.Scope, rels []*ast.Relationship) []*symbols.Symbol {
+	var parents []*symbols.Symbol
+	for _, rel := range rels {
+		if rel == nil || rel.Kind != ast.RelTyping {
+			continue
+		}
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		if qn, ok := target.(*ast.QualifiedName); ok {
+			if sym, ok := r.ResolveQualified(scope, qn); ok && sym != nil {
+				parents = append(parents, sym)
+			}
+		}
+	}
 	return parents
 }
 

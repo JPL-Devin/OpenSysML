@@ -100,6 +100,9 @@ type Reference struct {
 	// Chain is set when QN is the member of a feature chain, whose segments are
 	// members of the operand rather than of Scope (SysML 7.6.6).
 	Chain *ast.FeatureChainExpr
+	// Redefines is set when QN is the target of a redefinition, which names a
+	// feature of Scope's generals rather than a member of Scope itself.
+	Redefines bool
 }
 
 // ResolveReference resolves a single name occurrence, honoring both the
@@ -118,6 +121,10 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 			return nil, false
 		}
 		return r.memberChain(owner, ref.QN)
+	}
+	if ref.Redefines {
+		r.resolveRedefinition(ref.Scope, ref.QN, nil)
+		return r.PartSymbol(ref.QN, len(ref.QN.Parts)-1)
 	}
 	return r.resolveQualified(ref.Scope, ref.QN, hide)
 }
