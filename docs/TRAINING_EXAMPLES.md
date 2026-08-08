@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 95/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 5/100 files have semantic errors (10 total errors)  
+**Status:** 97/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 3/100 files have semantic errors (5 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -260,6 +260,125 @@ positive: an `end` feature is a plain KerML feature typed by the feature it
 connects, not an `AttributeUsage`, so the usage-kind taxonomy does not constrain
 its type (SysML v2 7.14.2). The kind check now skips end features.
 
+### Verdicts for the subsetting-conformance and flow-ends re-pin (95 → 97/100)
+
+Two entries drifted, both from over-strict constraint checks; every other file
+kept its exact count. Both files were adjudicated against the OMG source model
+and the specifications, and in both the OMG example is well formed.
+
+#### `41. Language Extension/Model Library Example` — subsetting type conformance
+
+```sysml
+abstract occurrence def Situation;
+abstract occurrence situations : Situation[*] nonunique;
+abstract occurrence def Cause { attribute probability : Real; }
+abstract occurrence causes : Cause[*] nonunique :> situations;
+```
+
+We reported `causes (typed by Cause) subsets situations (typed by Situation):
+types do not conform` (and the same for `failures`/`Failure`), because `Cause`
+does not specialize `Situation`.
+
+**Spec basis.** KerML 1.0 (formal/2026-03-01), `Subsetting`, §8.3.3.3.10, states the
+rule this check was meant to enforce:
+
+> "To support this the domain of the `subsettingFeature` must be the same or
+> specialize (at least indirectly) the domain of the `subsettedFeature` (via
+> `Specialization`), and the co-domain (intersection of the types) of the
+> `subsettingFeature` must specialize the co-domain of the `subsettedFeature`."
+
+The co-domain is the **intersection of the types**, and KerML §8.3.3.3.4
+(`Feature`, attribute `/type`) says where those types come from:
+
+> "Types that restrict the values of this Feature, such that the values must be
+> instances of all the types. The types of a Feature are derived from its
+> `typings` and the types of its `subsettings`."
+
+So the types of `causes` are `Cause` *and* `Situation`, and its co-domain
+`Cause ∩ Situation` specializes `Situation` by construction — the rule is
+satisfied whatever the declared typing is. KerML §7.3.4.4 says the same thing in
+prose:
+
+> "A subsetting feature can restrict aspects of the subsetted feature, otherwise
+> it will, by default, have the same properties as the subsetted feature. In
+> particular, a subsetting feature can constrain its featured types to be
+> specializations of those of the subsetted feature and add additional feature
+> types."
+
+The three normative constraints KerML lists on `Subsetting`
+(`validateSubsettingConstantConformance`, `validateSubsettingFeaturingTypes`,
+`validateSubsettingUniquenessConformance`) are about constancy, accessibility and
+uniqueness; none of them requires the declared type of the subsetting feature to
+conform to the type of the subsetted feature.
+
+**Verdict: our checker was over-strict.** A subsetting feature *adds* types; it
+does not have to specialize them. `checkTypingConformance` in
+`internal/core/passes/constraint.go` could therefore never report a true
+positive, and it is removed. The corresponding conformance rule for
+*redefinition* (`checkRedefinition`) is untouched. `subsetting-multiplicity`,
+which implements a rule KerML does state (§7.3.4.4: a subsetting feature "can
+also restrict the multiplicity of its subsetted feature"), is untouched as well.
+
+#### `27. Occurrences/Interaction Example-2` — a message with no ends
+
+```sysml
+message setSpeedMessage of SetSpeed;
+then message sensedSpeedMessage of SensedSpeed;
+message fuelCommandMessage of FuelCommand;
+```
+
+We reported `flow setSpeedMessage must declare both a source and a target end`
+(3×).
+
+**Spec basis.** SysML v2 1.0 (formal/2026-03-02) §8.2.2.16 makes the ends
+optional in both flow and message declarations:
+
+```
+MessageDeclaration : FlowUsage =
+    UsageDeclaration ValuePart?
+    ( 'of' ownedRelationship += FlowPayloadFeatureMember )?
+    ( 'from' ownedRelationship += MessageEventMember
+      'to' ownedRelationship += MessageEventMember )?
+  | ownedRelationship += MessageEventMember 'to'
+    ownedRelationship += MessageEventMember
+```
+
+and §8.4.12.2 (Flow Usages) makes end-less-ness a *requirement* for a message:
+
+> "For a FlowUsage to be considered a message, it must not have any owned
+> flowEnds. Therefore, such a FlowUsage should only be defined by
+> FlowDefinitions that are abstract and have no flowEnds."
+
+The same clause notes that even `message m : M of i : I from evt1 to evt2;` "is
+parsed as an abstract FlowUsage, but without any flowEnds" — `evt1`/`evt2` become
+`in` parameters redefining `Message::sourceEvent`/`targetEvent`. The abstract
+syntax agrees: the only end-related constraint on `FlowUsage` (§8.3.16.3,
+`checkFlowUsageFlowSpecialization`) is conditioned on
+`ownedEndFeatures->notEmpty()`, and §8.4.12.1 states that "An abstract
+FlowDefinition may have less than two flowEnds." This is exactly the shape of the
+OMG example, whose events are supplied by the participants
+(`event setSpeedMessage.sourceEvent;` inside `ref part driver`).
+
+**Verdict: our checker was over-strict.** The check fired on any flow with a
+non-nil `FlowEnds`, and a payload-only `of <payload>` clause allocates one, so a
+message that declares only a payload looked like a flow with a missing end.
+`checkConnectorEnds` no longer looks at flow ends at all. The narrower rule it
+would otherwise keep — a flow that names one end but not the other — is
+unreachable at the constraint tier: `parseFlowTo` records `expected 'to' between
+flow ends` whenever the `to` clause is missing, and `Registry.Run` skips every
+pass above the level that errored, so a half-declared flow never reaches
+`ConstraintPass`. That case is pinned where it actually surfaces, as the
+`flow_source_without_target` entry of the parser's `TestNegative` suite.
+
+#### Implied corpus ceiling
+
+Both verdicts are "the checker is wrong", so the set of pinned OMG bugs is
+unchanged at three files (`start`/`done` vs `startShot`/`endShot` in
+`Time Slice and Snapshot Example` and `Individuals and Time Slices`, and
+`alternative` vs `alternatives` in `Trade Study Analysis Example`). The corpus
+ceiling is therefore **97/100**, and the two files between 95 and 97 are our
+own remaining false positives.
+
 ---
 
 ### Verdicts for the import-in-definition-body re-pin (89/100)
@@ -367,11 +486,14 @@ These errors are **not implementation gaps** - the training files reference name
 
 ### Type System Limitations
 
-- `X subsets Y: types do not conform` (2×): Subsetting validation gaps
+- `X subsets Y: types do not conform`: withdrawn — subsetting intersects types
+  rather than requiring conformance (see the 97/100 re-pin verdicts above)
 
 ### Parser/Unimplemented Features
 
-- `flow X must declare both a source and a target end` (2×): Flow validation strictness
+- `flow X must declare both a source and a target end`: withdrawn for flows that
+  declare no ends at all, which is how a message is written (see the 97/100
+  re-pin verdicts above)
 - Various member access errors: Features that exist but aren't accessible in resolution scope
 
 ---
@@ -380,10 +502,10 @@ These errors are **not implementation gaps** - the training files reference name
 
 | Category | Pass | Fail | Pass Rate |
 |----------|------|------|-----------|
-| **All Examples** | 87 | 13 | 87% |
-| **After filtering pedagogical gaps** | ~87 | ~13 | ~87% |
+| **All Examples** | 97 | 3 | 97% |
+| **After filtering pedagogical gaps** | ~97 | ~3 | ~97% |
 
-**Note**: Many "failures" are incomplete examples meant for teaching, not executable code. Of the 13 files with errors, most emit only missing local declarations or bugs in the OMG material itself (wrong feature names, typos, missing imports); the rest are type-system and validation gaps listed above.
+**Note**: Many "failures" are incomplete examples meant for teaching, not executable code. Of the 3 files with errors, most emit only missing local declarations or bugs in the OMG material itself (wrong feature names, typos, missing imports); the rest are type-system and validation gaps listed above.
 
 ---
 
@@ -393,14 +515,7 @@ These errors are **not implementation gaps** - the training files reference name
 - Implicit redefinition: an untyped usage whose name matches a feature its owner inherits takes that feature's type
 - Document correct import paths for Metadata, Variations, Requirements namespaces
 
-### Priority 2: Type System Enhancements
-- Improve subsetting validation conformance checking
-
-### Priority 3: Flow Validation Relaxation
-- Make flow source/target validation warnings instead of errors
-- Support declarative flows without full endpoint specification
-
-### Priority 4: Pedagogical Documentation
+### Priority 2: Pedagogical Documentation
 - Mark which examples are intentionally incomplete
 - Provide "complete" versions of pedagogical examples for testing
 
