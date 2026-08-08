@@ -43,7 +43,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 **Purpose:** Verify AST structure matches expected output
 
 - **Test:** `TestGolden` (internal/core/parser/)
-- **Fixtures:** `testdata/parse/*.sysml` (30 representative files)
+- **Fixtures:** `testdata/parse/*.sysml` (33 representative files)
 - **Goldens:** `testdata/parse/*.golden` (AST dumps)
 - **Acceptance:** Parse output matches golden file
 
@@ -73,7 +73,7 @@ Future work: If SysML printer added, verify `parse(print(parse(input))) == parse
 **Purpose:** Verify parser rejects malformed input gracefully
 
 - **Test:** `TestNegative` (internal/core/parser/)
-- **Coverage:** 32 malformed inputs (23 behavioral + 9 structural)
+- **Coverage:** 36 malformed inputs (27 behavioral + 9 structural)
 - **Acceptance:** Each case produces diagnostics (never panics)
 
 **Examples:**

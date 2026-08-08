@@ -37,6 +37,7 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	if len(idx1.LookupQualified("ScalarValues::Boolean")) != 1 {
 		t.Fatal("first load did not index ScalarValues::Boolean")
 	}
+	ld.Persist(idx1)
 	entries, _ := os.ReadDir(cacheDir)
 	found := false
 	for _, e := range entries {
@@ -55,6 +56,73 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	if len(idx2.LookupQualified("ScalarValues")) != 1 ||
 		len(idx2.LookupQualified("ScalarValues::Boolean")) != 1 {
 		t.Fatal("cached load did not repopulate index")
+	}
+
+	// A symbol restored from the cache keeps its specialization targets: it has
+	// no Decl, so those edges are the only way its inherited members are found.
+	boolean := idx2.LookupQualified("ScalarValues::Boolean")[0]
+	if len(boolean.SuperFQNs) != 1 || boolean.SuperFQNs[0] != "ScalarValues::ScalarValue" {
+		t.Fatalf("supertypes of the cached Boolean = %v, want [ScalarValues::ScalarValue]", boolean.SuperFQNs)
+	}
+}
+
+// A restored symbol's supertypes must match what the live-parsed AST yields, so
+// the typing edge of a feature survives the round trip too.
+func TestLoaderCacheKeepsTypingEdge(t *testing.T) {
+	dir := t.TempDir()
+	src := "package Lib { part def Engine; part e : Engine; }"
+	if err := os.WriteFile(filepath.Join(dir, "lib.sysml"), []byte(src), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	ld := NewLoader(NewDirSource(dir), &Cache{dir: t.TempDir()})
+
+	idx1 := symbols.NewIndex()
+	if err := ld.Load("lib.sysml", idx1); err != nil {
+		t.Fatalf("first Load: %v", err)
+	}
+	ld.Persist(idx1)
+
+	idx2 := symbols.NewIndex()
+	if err := ld.Load("lib.sysml", idx2); err != nil {
+		t.Fatalf("second Load: %v", err)
+	}
+	e := idx2.LookupQualified("Lib::e")
+	if len(e) != 1 {
+		t.Fatalf("cached load did not register Lib::e")
+	}
+	if len(e[0].SuperFQNs) != 1 || e[0].SuperFQNs[0] != "Lib::Engine" {
+		t.Fatalf("supertypes of the cached e = %v, want [Lib::Engine]", e[0].SuperFQNs)
+	}
+}
+
+// A record whose supertypes are not all reachable yet must not be cached when
+// the loader requires resolution: its key is the content alone, so it would be
+// restored — minus that edge — in a context where the target is present.
+func TestLoaderRequireResolvedSkipsUnresolvedRecord(t *testing.T) {
+	dir := t.TempDir()
+	// Specializes ScalarValues::Real, which this directory does not declare.
+	src := filepath.Join(dir, "lib.sysml")
+	if err := os.WriteFile(src, []byte("package Lib { attribute def Mass :> ScalarValues::Real; }"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	cacheDir := t.TempDir()
+	ld := NewLoader(NewDirSource(dir), &Cache{dir: cacheDir})
+	ld.RequireResolved = true
+
+	idx := symbols.NewIndex()
+	if err := ld.Load("lib.sysml", idx); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	ld.Persist(idx)
+
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		t.Fatalf("read cache dir: %v", err)
+	}
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) == ".idx" {
+			t.Fatalf("cached %s despite the unresolved supertype ScalarValues::Real", e.Name())
+		}
 	}
 }
 

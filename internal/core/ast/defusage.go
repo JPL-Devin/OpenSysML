@@ -435,3 +435,47 @@ type ConnectorEnd struct {
 	Reference     Node            // Optional "references X" clause - QualifiedName or FeatureChainExpr
 	Relationships []*Relationship // Optional relationships (e.g., ::> for interface binding)
 }
+
+// ReferencedTarget returns the node naming the feature the end reference-subsets
+// (`references x`, `::> x`), or nil when the end has no such clause.
+func (c *ConnectorEnd) ReferencedTarget() Node {
+	if c == nil {
+		return nil
+	}
+	for _, rel := range c.Relationships {
+		if rel != nil && rel.Kind == RelReferences && rel.Target != nil {
+			return rel.Target
+		}
+	}
+	return c.Reference
+}
+
+// SplitRedefinitions partitions rels into the redefinitions and the rest,
+// which resolve in different scopes when owned by a connector end.
+func SplitRedefinitions(rels []*Relationship) (redefines, others []*Relationship) {
+	for _, rel := range rels {
+		if rel != nil && rel.Kind == RelRedefines {
+			redefines = append(redefines, rel)
+			continue
+		}
+		others = append(others, rel)
+	}
+	return redefines, others
+}
+
+// DeclaredName returns the name the end declares for itself, and whether it
+// declares one at all. A connector end names an end feature of the connector
+// only when it also reference-subsets the feature that end attaches to
+// (`connect bead references t.bead`, `connect supplierPort ::> a.p`); without
+// that clause the end names an existing feature instead (`connect a to b`).
+func (c *ConnectorEnd) DeclaredName() (Identification, bool) {
+	if c == nil || c.ReferencedTarget() == nil {
+		return Identification{}, false
+	}
+	qname := AsQualifiedName(c.Target)
+	if qname == nil || len(qname.Parts) != 1 {
+		return Identification{}, false
+	}
+	part := qname.Parts[0]
+	return Identification{Name: part.Text, NameSpan: part.Span}, true
+}

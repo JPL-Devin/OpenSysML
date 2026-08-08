@@ -9,6 +9,7 @@ type RecordEntry struct {
 	ShortName       string // short name (e.g., "kg" for "kilogram"), empty if none
 	Kind            SymbolKind
 	Span            source.Span
+	Supers          []string // FQNs of the specialization targets of a def/usage
 	WildcardImports []string // for packages: FQNs of wildcard-imported targets
 	AliasTarget     string   // for aliases: raw target text of "alias X for Y"
 }
@@ -26,6 +27,7 @@ func (idx *Index) AddRecords(name string, entries []RecordEntry) {
 			ShortName:      e.ShortName,
 			Kind:           e.Kind,
 			DeclSpan:       e.Span,
+			SuperFQNs:      e.Supers,
 			AliasTargetFQN: e.AliasTarget,
 		}
 		idx.fqn[e.FQN] = append(idx.fqn[e.FQN], sym)

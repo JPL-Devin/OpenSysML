@@ -25,6 +25,29 @@ func TestLowerConnectionsFromActionBody(t *testing.T) {
 	}
 }
 
+// An end that declares its own name attaches to the feature it
+// reference-subsets, so that is what routing must join.
+func TestLowerConnectionEndsThatDeclareTheirOwnName(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action a {
+			port outPort;
+			port inPort;
+			connection : Link connect
+				source references outPort to
+				target references inPort;
+			first start;
+			done end;
+			then start end;
+		}
+	`)
+	if len(graph.Connections) != 1 {
+		t.Fatalf("Connections = %v, want one connection", graph.Connections)
+	}
+	if got := PeerPorts(graph.Connections, "outPort"); len(got) != 1 || got[0] != "inPort" {
+		t.Errorf("PeerPorts(outPort) = %v, want [inPort]", got)
+	}
+}
+
 func TestLowerSendRecordsViaForm(t *testing.T) {
 	graph := actionGraphFor(t, `
 		action a {

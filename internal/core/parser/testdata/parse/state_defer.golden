@@ -12,8 +12,10 @@
           (*ast.SubstateMember)
           (*ast.StateNode)
           (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-            (ConnectorEnd target="<nil>")
-            (ConnectorEnd target="<nil>"))
+            (ConnectorEnd target="<nil>"
+              (*ast.QualifiedName))
+            (ConnectorEnd target="<nil>"
+              (*ast.QualifiedName)))
           (TransitionMember source="busy" target="ready"
             (FeatureReference name="Go"))
           (TransitionMember source="ready" target="done"

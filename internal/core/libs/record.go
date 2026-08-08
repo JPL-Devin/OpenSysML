@@ -4,13 +4,15 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // formatVersion is the on-disk index record format version. Bump it whenever
 // the persisted shape changes; a mismatch invalidates all cached records.
-const formatVersion = 5
+const formatVersion = 7
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.
 // It deliberately excludes the AST-backed Decl and the Scope/OwnerScope
@@ -21,7 +23,7 @@ type symRecord struct {
 	ShortName       string // short name (e.g., "kg" for "kilogram"), empty if none
 	Kind            symbols.SymbolKind
 	Span            source.Span
-	Supers          []string // raw target text of specializes/subsets/redefines edges
+	Supers          []string // FQNs of the generalization targets (see supersOf)
 	WildcardImports []string // for packages: FQNs of wildcard-imported packages
 	AliasTarget     string   // for aliases: raw target text of "alias X for Y"
 }
@@ -33,71 +35,100 @@ type IndexRecord struct {
 }
 
 // recordFromIndex extracts a reduced, serializable record of every symbol the
-// named document contributed to idx. Returns nil if the document is unknown.
-func recordFromIndex(name string, idx *symbols.Index) *IndexRecord {
+// named document contributed to idx, and reports whether every specialization
+// target it declares resolved. Returns nil if the document is unknown.
+// Targets are resolved through r, so the record holds the fully-qualified name
+// of each supertype rather than text that only means something in its own file.
+func recordFromIndex(name string, idx *symbols.Index, r *resolve.Resolver) (*IndexRecord, bool) {
 	root := idx.DocumentRoot(name)
 	if root == nil {
-		return nil
+		return nil, false
 	}
 	rec := &IndexRecord{Name: name}
-	collectScope(root, "", rec)
-	return rec
+	complete := collectScope(root, "", rec, idx, r)
+	return rec, complete
 }
 
 // collectScope walks scope's members (and child scopes) appending reduced
 // records. prefix is the fully-qualified name of scope's owner ("" at root).
-func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord) {
+// Reports whether every specialization target it met resolved.
+func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, idx *symbols.Index, r *resolve.Resolver) bool {
+	complete := true
 	for _, sym := range scope.Members() {
 		fqn := sym.Name
 		if prefix != "" {
 			fqn = prefix + "::" + sym.Name
 		}
+		supers, resolved := supersOf(sym, idx, r)
+		complete = complete && resolved
 		rec.Symbols = append(rec.Symbols, symRecord{
 			FQN:             fqn,
 			ShortName:       shortNameOf(sym.Decl),
 			Kind:            sym.Kind,
 			Span:            sym.DeclSpan,
-			Supers:          supersOf(sym.Decl),
+			Supers:          supers,
 			WildcardImports: wildcardImportsOf(sym.Decl),
 			AliasTarget:     aliasTargetOf(sym.Decl),
 		})
 		if sym.Scope != nil {
-			collectScope(sym.Scope, fqn, rec)
+			complete = collectScope(sym.Scope, fqn, rec, idx, r) && complete
 		}
 	}
+	return complete
 }
 
-// supersOf extracts the raw qualified-name text of the specialization edges
-// (specializes/subsets/redefines) declared by a Definition or Usage. Typing,
-// references, and crosses edges are not specializations and are excluded.
-// Returns nil for any other node kind.
-func supersOf(decl ast.Node) []string {
+// supersOf resolves the generalization edges declared by a Definition or Usage
+// to the fully-qualified names of their targets, reporting whether every one of
+// them resolved. The edge kinds are exactly semantics.GeneralizationKind, since
+// a restored record replaces that graph; a feature chain target has no
+// qualified name to record and counts as unresolved.
+func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) ([]string, bool) {
 	var rels []*ast.Relationship
-	switch d := decl.(type) {
+	switch d := sym.Decl.(type) {
 	case *ast.Definition:
 		rels = d.Relationships
 	case *ast.Usage:
 		rels = d.Relationships
 	default:
-		return nil
+		return nil, true
 	}
 	var out []string
-	for _, r := range rels {
-		switch r.Kind {
-		case ast.RelSpecializes, ast.RelSubsets, ast.RelRedefines:
-			// Unwrap FeatureReference to get underlying QualifiedName
-			target := r.Target
-			if ref, ok := target.(*ast.FeatureReference); ok {
-				target = ref.Name
-			}
-
-			if qn, ok := target.(*ast.QualifiedName); ok {
-				out = append(out, qualifiedNameText(qn))
-			}
-			// Feature chain targets are not QualifiedNames, skip
+	seen := map[string]bool{}
+	complete := true
+	for _, rel := range rels {
+		if !semantics.GeneralizationKind(rel.Kind) {
+			continue
 		}
+		// Unwrap FeatureReference to get underlying QualifiedName
+		target := rel.Target
+		if ref, ok := target.(*ast.FeatureReference); ok {
+			target = ref.Name
+		}
+		qn, ok := target.(*ast.QualifiedName)
+		if !ok {
+			complete = false
+			continue
+		}
+		super, ok := r.ResolveQualified(sym.OwnerScope, qn)
+		if !ok || super == nil {
+			complete = false
+			continue
+		}
+		if super == sym {
+			continue
+		}
+		superFQN := idx.GetFQN(super)
+		if superFQN == "" {
+			complete = false
+			continue
+		}
+		if seen[superFQN] {
+			continue
+		}
+		seen[superFQN] = true
+		out = append(out, superFQN)
 	}
-	return out
+	return out, complete
 }
 
 // qualifiedNameText renders a QualifiedName as "A::B::C" (no leading $:: marker;

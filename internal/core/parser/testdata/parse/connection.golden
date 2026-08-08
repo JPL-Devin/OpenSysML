@@ -2,11 +2,11 @@
   (Membership visibility="default"
     (Definition kind="connection" abstract=false variation=false name="WireConnection"
       (Membership visibility="default"
-        (Usage kind="attribute" name="supplierPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Usage kind="attribute" name="supplierPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
           (Relationship kind="typing" target=Port
             (*ast.QualifiedName))))
       (Membership visibility="default"
-        (Usage kind="attribute" name="consumerPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Usage kind="attribute" name="consumerPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
           (Relationship kind="typing" target=Port
             (*ast.QualifiedName))))))
   (Membership visibility="default"

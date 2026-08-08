@@ -138,7 +138,7 @@ Current: green (Time: 30.0s)
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (30 golden ASTs, 32 negative tests) |
+| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (33 golden ASTs, 36 negative tests) |
 | Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 18/18 passing) |
 | Action execution engine (Tier 5) | ✅ Complete (8 conformance cases passing) |
 | State machine runtime (Tier 5) | ✅ Complete (25 conformance cases: transitions, accept events, sourceless) |
@@ -149,10 +149,10 @@ Current: green (Time: 30.0s)
 | Python client library | ✅ Complete (connection lifecycle, runtime APIs, IPython hooks, DataFrame) |
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
-**Test coverage:** 1,400+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 30 golden ASTs, 32 negatives, 51 conformance cases, 29 robustness subtests.
+**Test coverage:** 1,500+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 33 golden ASTs, 36 negatives, 51 conformance cases, 29 robustness subtests.
 **Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 **Behavioral execution:** Calc/constraint/requirement fully functional (18/18 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (51/51 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
-**Training examples:** 89/100 files clean (11 files, 26 errors), gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
+**Training examples:** 97/100 files clean (3 files, 5 errors), gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
 ## Architecture

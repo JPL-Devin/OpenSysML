@@ -3,9 +3,11 @@ package libs
 import (
 	"bytes"
 	"encoding/gob"
+	"slices"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -22,6 +24,12 @@ func indexOf(t *testing.T, name, src string) *symbols.Index {
 	return idx
 }
 
+// recordOf is recordFromIndex with a resolver over idx, as the loader builds it.
+func recordOf(name string, idx *symbols.Index) *IndexRecord {
+	rec, _ := recordFromIndex(name, idx, resolve.New(idx))
+	return rec
+}
+
 func fqnSet(rec *IndexRecord) map[string]symbols.SymbolKind {
 	m := map[string]symbols.SymbolKind{}
 	for _, s := range rec.Symbols {
@@ -33,7 +41,7 @@ func fqnSet(rec *IndexRecord) map[string]symbols.SymbolKind {
 func TestRecordFromIndexCollectsReducedSymbols(t *testing.T) {
 	idx := indexOf(t, "Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml",
 		"standard library package ScalarValues { namespace Boolean; namespace Real; }")
-	rec := recordFromIndex("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx)
+	rec := recordOf("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx)
 	if rec == nil {
 		t.Fatal("recordFromIndex returned nil")
 	}
@@ -54,7 +62,7 @@ func TestRecordFromIndexCollectsReducedSymbols(t *testing.T) {
 
 func TestIndexRecordGobRoundTrip(t *testing.T) {
 	idx := indexOf(t, "a.kerml", "package P { namespace N; }")
-	rec := recordFromIndex("a.kerml", idx)
+	rec := recordOf("a.kerml", idx)
 
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(rec); err != nil {
@@ -81,7 +89,7 @@ func TestRecordSupersFromSpecializationEdges(t *testing.T) {
 	idx := symbols.NewIndex()
 	idx.AddDocument("lib", root)
 
-	rec := recordFromIndex("lib", idx)
+	rec := recordOf("lib", idx)
 	if rec == nil {
 		t.Fatalf("expected a record")
 	}
@@ -99,23 +107,26 @@ func TestRecordSupersFromSpecializationEdges(t *testing.T) {
 	}
 }
 
-func TestRecordSupersExcludesTypingAndReferences(t *testing.T) {
-	src := "part def Engine; part e : Engine subsets Engine;"
+// Supers is now the generalization graph of a symbol restored from the cache
+// (which has no AST), so it records exactly the edge kinds
+// semantics.GeneralizationKind accepts — typing included, references excluded.
+func TestRecordSupersCoversGeneralizationEdges(t *testing.T) {
+	src := "part def Engine; part e : Engine subsets Engine; part def Chassis; part c ::> Chassis;"
 	root := parser.New(source.New("lib", []byte(src))).ParseFile()
 	idx := symbols.NewIndex()
 	idx.AddDocument("lib", root)
 
-	rec := recordFromIndex("lib", idx)
-	var e *symRecord
-	for i := range rec.Symbols {
-		if rec.Symbols[i].FQN == "e" {
-			e = &rec.Symbols[i]
-		}
+	rec := recordOf("lib", idx)
+	got := map[string][]string{}
+	for _, s := range rec.Symbols {
+		got[s.FQN] = s.Supers
 	}
-	if e == nil {
-		t.Fatalf("e record not found")
+	// Typing and subsetting name the same target here, recorded once.
+	if want := []string{"Engine"}; !slices.Equal(got["e"], want) {
+		t.Fatalf("Supers of e = %v, want %v", got["e"], want)
 	}
-	if len(e.Supers) != 1 || e.Supers[0] != "Engine" {
-		t.Fatalf("Supers = %v, want [Engine] (subsets only)", e.Supers)
+	// `::>` is reference subsetting: it contributes members, not conformance.
+	if len(got["c"]) != 0 {
+		t.Fatalf("Supers of c = %v, want none (reference subsetting)", got["c"])
 	}
 }

@@ -206,7 +206,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 ### Tier 5 — Behavioral Interpreter ✅ Complete
 
 **Package:** `internal/core/runtime`  
-**Status:** Complete with 1,400+ tests. Conformance gate: 51/51 cases passing (calc/constraint/requirement/action/state all functional).  
+**Status:** Complete with 1,500+ tests. Conformance gate: 51/51 cases passing (calc/constraint/requirement/action/state all functional).  
 **Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for detailed compliance mapping (~98% faithful implementation).
 
 **Architecture:**
@@ -255,8 +255,8 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - Lowering to execution IR lives in `internal/core/lower/` (`ToActionGraph`, `ToStateGraph`)
 
 **Testing:**
-- **Golden ASTs**: 20 behavioral fixtures (of 30 total) - `internal/core/parser/testdata/parse/`
-- **Negative tests**: 32 cases - `internal/core/parser/negative_test.go`
+- **Golden ASTs**: 20 behavioral fixtures (of 33 total) - `internal/core/parser/testdata/parse/`
+- **Negative tests**: 36 cases - `internal/core/parser/negative_test.go`
 - **Unit tests**: 42 tests (action, state) - `action_executor_test.go`, `state_executor_test.go`
 - **Conformance gate**: 51 cases (all passing: calc×10, constraint×3, requirement×5, action×8, state×25) - `conformance_test.go`
 - **Golden traces**: 22 `.trace.golden` files (calc×10, constraint×3, action×2, state×7) - `trace_test.go`
@@ -277,7 +277,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 
 **Package:** `internal/lsp`  
 **Binary:** `cmd/sysml-lsp`  
-**Status:** ✅ Complete (stdio protocol, 8 LSP features, 68 tests)
+**Status:** ✅ Complete (stdio protocol, 8 LSP features, 71 tests)
 
 ### Features
 
@@ -342,7 +342,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - `walk.go` — AST traversal for symbol extraction
 
 **Testing:**
-- 68 tests covering all features
+- 71 tests covering all features
 - Integration tests with mock clients
 - Incremental sync edge cases (astral plane characters, multi-change, offset-zero insertion)
 
@@ -511,7 +511,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 #### 4. Negative Test Suite
 - **Purpose:** Verify parser rejects malformed input gracefully
 - **Location:** `internal/core/parser/negative_test.go`
-- **Test:** `TestNegative` with 32 malformed inputs (23 behavioral + 9 structural)
+- **Test:** `TestNegative` with 36 malformed inputs (27 behavioral + 9 structural)
 - **Acceptance:** Each case produces diagnostics (doesn't panic)
 - **Coverage:** Unclosed blocks, unexpected tokens, invalid syntax, incomplete behavioral members
 
@@ -533,7 +533,7 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 #### 1. Golden AST Fixtures
 - **Purpose:** Lock in parse structure before execution changes
 - **Location:** `internal/core/parser/testdata/parse/` (behavioral fixtures)
-- **Coverage:** 20 behavioral fixtures, of 30 in total (action×4, calc×4, constraint×1, requirement×2, state×9)
+- **Coverage:** 20 behavioral fixtures, of 33 in total (action×4, calc×4, constraint×1, requirement×2, state×9)
 - **Acceptance:** `TestGolden` passes, AST dumps match expectations
 - **Update flag:** `go test -run TestGolden -update`
 

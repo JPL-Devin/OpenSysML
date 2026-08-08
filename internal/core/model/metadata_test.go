@@ -1,0 +1,128 @@
+package model
+
+import (
+	"strings"
+	"testing"
+)
+
+// diagnoseSource opens src in a stdlib-loaded workspace and returns its
+// diagnostic messages.
+func diagnoseSource(t *testing.T, uri, src string) []string {
+	t.Helper()
+	ws := NewWorkspace()
+	ws.Open(uri, []byte(src), 1)
+	defer ws.Close(uri)
+
+	var msgs []string
+	for _, d := range ws.Diagnostics(uri) {
+		msgs = append(msgs, d.Message)
+	}
+	return msgs
+}
+
+// TestMetadataDefinitionInheritsAnnotatedElement covers SysML v2 §7.27.2: a
+// metadata definition implicitly specializes Metadata::MetadataItem, so the
+// `annotatedElement` feature it inherits from Metaobjects::Metaobject can be
+// restricted by subsetting it.
+func TestMetadataDefinitionInheritsAnnotatedElement(t *testing.T) {
+	src := `package P {
+		metadata def SecurityFeature {
+			:> annotatedElement : SysML::PartDefinition;
+		}
+	}`
+	if got := diagnoseSource(t, "file:///metadata.sysml", src); len(got) != 0 {
+		t.Fatalf("expected no diagnostics, got %v", got)
+	}
+
+	got := implicitBaseOf(t, src, "P", "SecurityFeature")
+	if len(got) != 1 || got[0] != "Metadata::MetadataItem" {
+		t.Fatalf("supertypes of the metadata definition = %v, want [Metadata::MetadataItem]", got)
+	}
+}
+
+// TestExplicitSpecializationReplacesMetadataBase pins that the implicit base
+// applies only to a metadata definition that declares no generalization of its
+// own.
+func TestExplicitSpecializationReplacesMetadataBase(t *testing.T) {
+	src := `package P {
+		metadata def Base;
+		metadata def Derived :> Base;
+	}`
+	got := implicitBaseOf(t, src, "P", "Derived")
+	if len(got) != 1 || got[0] != "Base" {
+		t.Fatalf("supertypes of the derived metadata definition = %v, want [Base]", got)
+	}
+}
+
+// semanticMetadataSource declares a semantic metadata definition `wheel` whose
+// baseType is the usage `wheels`, per SysML v2 §7.27.3.
+const semanticMetadataSource = `package P {
+	private import Metaobjects::SemanticMetadata;
+
+	part def Wheel {
+		attribute pressure;
+	}
+	part wheels : Wheel[*];
+
+	metadata def wheel :> SemanticMetadata {
+		:>> baseType = wheels meta SysML::Usage;
+	}
+
+	part def Car {
+		#wheel frontLeft {
+			:>> pressure = 1;
+		}
+	}
+
+	#wheel def SportsWheel;
+}`
+
+// TestSemanticMetadataKeywordSubsetsBaseType covers SysML v2 §7.27.4 and
+// §7.27.3: a usage prefixed by a semantic metadata keyword implicitly subsets
+// the keyword's baseType usage, so that usage's members are inherited.
+func TestSemanticMetadataKeywordSubsetsBaseType(t *testing.T) {
+	if got := diagnoseSource(t, "file:///semantic-metadata.sysml", semanticMetadataSource); len(got) != 0 {
+		t.Fatalf("expected no diagnostics, got %v", got)
+	}
+
+	got := implicitBaseOf(t, semanticMetadataSource, "P", "Car", "frontLeft")
+	if len(got) != 1 || got[0] != "wheels" {
+		t.Fatalf("supertypes of the annotated usage = %v, want [wheels]", got)
+	}
+}
+
+// TestSemanticMetadataKeywordSubclassifiesBaseTypeOfDefinition covers the
+// definition case of SysML v2 §7.27.3: a definition annotated with a usage
+// baseType subclassifies the definitions that usage is typed by.
+func TestSemanticMetadataKeywordSubclassifiesBaseTypeOfDefinition(t *testing.T) {
+	got := implicitBaseOf(t, semanticMetadataSource, "P", "SportsWheel")
+	if len(got) != 1 || got[0] != "Wheel" {
+		t.Fatalf("supertypes of the annotated definition = %v, want [Wheel]", got)
+	}
+}
+
+// TestPlainMetadataKeywordAddsNoSpecialization pins the other side of §7.27.3:
+// a keyword naming a metadata definition that is not semantic metadata
+// annotates the declaration without specializing anything.
+func TestPlainMetadataKeywordAddsNoSpecialization(t *testing.T) {
+	src := `package P {
+		metadata def Approved;
+		part def Design {
+			#Approved wheel;
+		}
+	}`
+	got := implicitBaseOf(t, src, "P", "Design", "wheel")
+	if len(got) != 1 || got[0] != "Base::DataValue" {
+		t.Fatalf("supertypes of the annotated usage = %v, want [Base::DataValue]", got)
+	}
+}
+
+// TestSemanticMetadataMemberIsNotInvented guards the resolution path added for
+// inherited members: a name the baseType does not declare still fails.
+func TestSemanticMetadataMemberIsNotInvented(t *testing.T) {
+	src := strings.Replace(semanticMetadataSource, ":>> pressure = 1;", ":>> notAMember = 1;", 1)
+	got := diagnoseSource(t, "file:///semantic-metadata-negative.sysml", src)
+	if len(got) != 1 || !strings.Contains(got[0], "notAMember") {
+		t.Fatalf("diagnostics = %v, want one about notAMember", got)
+	}
+}

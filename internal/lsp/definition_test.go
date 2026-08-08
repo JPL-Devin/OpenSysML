@@ -195,3 +195,45 @@ func TestDefinitionPerformChainMember(t *testing.T) {
 		t.Errorf("decl line = %d, want 2 (the action's member, not the perform statement)", locs[0].Range.Start.Line)
 	}
 }
+
+// The feature a connector end attaches to is a feature of the connector's
+// owner, so a name it shares with a sibling end names the owner's feature.
+func TestDefinitionConnectorEndReferenceIsNotASiblingEnd(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/def_end_sibling.sysml").Filename()
+	src := `package P {
+	part def TireBead;
+	connection def PressureSeat {
+		end [1] part bead : TireBead;
+		end [1] part rim : TireBead;
+	}
+	part wheelAssy {
+		part outer : TireBead;
+		part bead : TireBead;
+		connection : PressureSeat connect
+			bead references outer to
+			rim references bead;
+	}
+}
+`
+	ws.Open(name, []byte(src), 1)
+
+	off := strings.LastIndex(src, "references bead") + len("references ")
+	locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition([]byte(src), off),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Definition err = %v", err)
+	}
+	if len(locs) != 1 {
+		t.Fatalf("locations = %d, want 1", len(locs))
+	}
+	// `part bead : TireBead;` is on line 8; the sibling end is on line 10.
+	if locs[0].Range.Start.Line != 8 {
+		t.Errorf("decl line = %d, want 8 (the part, not the sibling end)", locs[0].Range.Start.Line)
+	}
+}
