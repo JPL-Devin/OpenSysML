@@ -362,9 +362,13 @@ OMG example, whose events are supplied by the participants
 **Verdict: our checker was over-strict.** The check fired on any flow with a
 non-nil `FlowEnds`, and a payload-only `of <payload>` clause allocates one, so a
 message that declares only a payload looked like a flow with a missing end.
-`checkConnectorEnds` now treats a flow as declaring ends only when at least one
-of `from`/`to` is present; a flow that declares one end but not the other still
-reports (`TestConstraintFlowSourceWithoutTargetFails`).
+`checkConnectorEnds` no longer looks at flow ends at all. The narrower rule it
+would otherwise keep — a flow that names one end but not the other — is
+unreachable at the constraint tier: `parseFlowTo` records `expected 'to' between
+flow ends` whenever the `to` clause is missing, and `Registry.Run` skips every
+pass above the level that errored, so a half-declared flow never reaches
+`ConstraintPass`. That case is pinned where it actually surfaces, as the
+`flow_source_without_target` entry of the parser's `TestNegative` suite.
 
 #### Implied corpus ceiling
 

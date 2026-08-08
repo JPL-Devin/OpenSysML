@@ -193,15 +193,8 @@ func TestConstraintMessageWithoutEndsOK(t *testing.T) {
 	}
 }
 
-// A flow that declares a source but no target is still incomplete: the grammar
-// pairs `from` with `to` (SysML v2 §8.2.2.16).
-func TestConstraintFlowSourceWithoutTargetFails(t *testing.T) {
-	diags := constraintDiags(t,
-		"part def C { item Fuel; part a; flow f of Fuel from a; }")
-	if !hasCode(diags, "flow-ends") {
-		t.Fatalf("expected flow-ends diagnostic for a flow with only a source, got %v", diags)
-	}
-}
+// A flow naming a source but no target is a parse error, pinned by the parser's
+// `flow_source_without_target` negative case, not by this tier.
 
 // --- V-C4 Track 4 Task 13: typing conformance ---
 

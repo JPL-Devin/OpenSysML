@@ -185,15 +185,11 @@ func (cc *constraintChecker) checkSubsettingMultiplicity(sym *symbols.Symbol) {
 //   - a connection must declare at least two ends (adapts the pilot's
 //     INVALID_CONNECTOR_RELATED_FEATURES rule);
 //   - an interface or allocation is binary — exactly two ends when any are
-//     declared (adapts the binary-specialization rules);
-//   - a flow that declares one end must declare the other.
+//     declared (adapts the binary-specialization rules).
 //
-// Usages with no declared ends are treated as abstract and skipped. A flow may
-// legitimately declare no ends at all: SysML v2 §8.2.2.16 makes the
-// `'from' … 'to' …` part of FlowDeclaration and MessageDeclaration optional, and
-// §8.4.12.2 requires it to be absent for a message ("For a FlowUsage to be
-// considered a message, it must not have any owned flowEnds"), so a payload-only
-// declaration such as `message m of Payload;` is well formed.
+// Usages with no declared ends are treated as abstract and skipped. Flow ends
+// are not checked: they are optional (SysML v2 §8.2.2.16) and must be absent for
+// a message (§8.4.12.2), and a half-declared pair is a parse error.
 func (cc *constraintChecker) checkConnectorEnds(sym *symbols.Symbol) {
 	u, ok := sym.Decl.(*ast.Usage)
 	if !ok {
@@ -218,19 +214,6 @@ func (cc *constraintChecker) checkConnectorEnds(sym *symbols.Symbol) {
 			if n != 2 {
 				cc.addConnectorEndsDiag(sym, u, "an allocation must be binary (exactly two ends)")
 			}
-		}
-	case ast.UsageFlow:
-		// An `of <payload>` clause on its own declares no ends: FlowEnds then
-		// only carries the payload and the flow is a message.
-		declaresAnEnd := u.FlowEnds != nil && (u.FlowEnds.From != nil || u.FlowEnds.To != nil)
-		if declaresAnEnd && (u.FlowEnds.From == nil || u.FlowEnds.To == nil) {
-			cc.diags = append(cc.diags, Diagnostic{
-				Severity: SeverityError,
-				Span:     u.FlowEnds.Span(),
-				Message:  fmt.Sprintf("flow %s must declare both a source and a target end", sym.Name),
-				Code:     "flow-ends",
-				Source:   "constraint",
-			})
 		}
 	}
 }
