@@ -476,7 +476,7 @@ the ones in `training_examples_expected.txt`):
 | Category | Pass | Fail | Pass Rate |
 |----------|------|------|-----------|
 | **All Examples** | 97 | 3 | 97% |
-| **Excluding the files whose errors are OMG bugs** | 99 | 1 | 99% |
+| **Excluding the 2 files whose errors are OMG bugs** | 97 | 1 | 99% |
 
 **Note**: Of the 3 files with errors, two fail only because of bugs in the OMG material itself (`start`/`done` instead of `startShot`/`endShot`); the third is the objective kind-table gap listed above.
 
