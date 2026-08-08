@@ -2,6 +2,7 @@ package libs
 
 import (
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -11,6 +12,17 @@ import (
 type Loader struct {
 	src   Source
 	cache *Cache
+	// RequireResolved makes Persist skip a document with an unresolved
+	// specialization target: a record is keyed by content alone, so one built in
+	// a partially populated index must not be reused where the target exists.
+	RequireResolved bool
+	parsed          []pending // documents parsed this session, awaiting Persist
+}
+
+// pending is a parsed document whose cache record has not been written yet.
+type pending struct {
+	name string
+	key  string
 }
 
 // NewLoader returns a Loader over src, using cache for persistence.
@@ -20,7 +32,8 @@ func NewLoader(src Source, cache *Cache) *Loader {
 
 // Load reads the named library file and registers its symbols into idx. On a
 // cache hit the reduced record is restored directly, skipping lexing/parsing;
-// on a miss the file is parsed, registered, and a reduced record is persisted.
+// on a miss the file is parsed and registered, and its record is written by a
+// later call to Persist.
 func (l *Loader) Load(name string, idx *symbols.Index) error {
 	content, err := l.src.Read(name)
 	if err != nil {
@@ -42,14 +55,33 @@ func (l *Loader) Load(name string, idx *symbols.Index) error {
 		return nil
 	}
 
-	// Miss: parse, register, extract a reduced record, persist it.
+	// Miss: parse and register now; the record is written by Persist, once the
+	// whole library is indexed and cross-file supertypes resolve.
 	p := parser.New(source.New(name, content))
 	root := p.ParseFile()
 	idx.AddDocument(name, root)
-	if rec := recordFromIndex(name, idx); rec != nil {
-		_ = l.cache.Store(key, rec) // cache write failure is non-fatal
-	}
+	l.parsed = append(l.parsed, pending{name: name, key: key})
 	return nil
+}
+
+// Persist caches a reduced record of every document this loader parsed. It is
+// separate from Load because a record holds resolved supertype names: a
+// specialization target in one library file may be declared in another, so
+// records can only be built once every file has been indexed.
+func (l *Loader) Persist(idx *symbols.Index) {
+	if l.cache == nil {
+		l.parsed = nil
+		return
+	}
+	r := resolve.New(idx)
+	for _, p := range l.parsed {
+		rec, resolved := recordFromIndex(p.name, idx, r)
+		if rec == nil || (l.RequireResolved && !resolved) {
+			continue
+		}
+		_ = l.cache.Store(p.key, rec) // cache write failure is non-fatal
+	}
+	l.parsed = nil
 }
 
 // recordEntries projects a persisted IndexRecord onto symbols.RecordEntry.
@@ -61,6 +93,7 @@ func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
 			ShortName:       s.ShortName,
 			Kind:            s.Kind,
 			Span:            s.Span,
+			Supers:          s.Supers,
 			WildcardImports: s.WildcardImports,
 			AliasTarget:     s.AliasTarget,
 		}

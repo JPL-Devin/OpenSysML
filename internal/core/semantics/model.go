@@ -133,6 +133,19 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, target)
 	}
 
+	// A library symbol restored from the cache has no AST: its specialization
+	// edges were resolved when the record was written and are carried as FQNs.
+	for _, fqn := range sym.SuperFQNs {
+		for _, target := range m.resolver.Index().LookupQualified(fqn) {
+			if target == nil || target == sym || seen[target] {
+				continue
+			}
+			seen[target] = true
+			out = append(out, target)
+			break
+		}
+	}
+
 	// SubjectMember has TypeRef instead of Relationships - handle separately
 	if subj, ok := sym.Decl.(*ast.SubjectMember); ok && subj.TypeRef != nil {
 		if target, ok := m.resolver.ResolveQualified(sym.OwnerScope, subj.TypeRef); ok && target != nil {
@@ -171,6 +184,16 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 				}
 			}
 		}
+	}
+
+	// Semantic metadata annotating this element — a `#keyword` prefix — adds the
+	// implicit specialization of its baseType (SysML v2 §7.27.3, §7.27.4).
+	for _, base := range m.semanticMetadataBases(sym) {
+		if base == nil || base == sym || seen[base] {
+			continue
+		}
+		seen[base] = true
+		out = append(out, base)
 	}
 
 	// A parameter of a behavior or step implicitly redefines the corresponding

@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 93/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 7/100 files have semantic errors (14 total errors)  
+**Status:** 95/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 5/100 files have semantic errors (10 total errors)  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -288,6 +288,24 @@ re-surfaced by a `NamespaceImport` of the outer definition. Covered by
 `TestImportInDefinitionBodyVisibleInNestedBody`,
 `TestImportInPackageBodyVisibleInNestedDefinition`,
 `TestImportInDefinitionBodyDoesNotLeakToImporter`).
+
+---
+
+### Verdicts for the metadata and user-keyword re-pin (95/100)
+
+Two entries drifted; every other file kept its exact count.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `39. Metadata/Metadata Example-1` | 2 × `unresolved reference: annotatedElement` | Real fix: a metadata definition is a kind of `Metadata::MetadataItem`, which specializes `Metaobjects::Metaobject` (SysML v2 §7.27.2, §9.2.21; [KerML, 9.2.17]), so `:> annotatedElement : SysML::PartDefinition` redefines the inherited feature. Two parts were missing: the implicit base for the metadata kind, and the specialization edges of *cached* library symbols, which were persisted but never restored, hiding `MetadataItem :> Metaobject`. `annotatedElement` now resolves to `Metaobjects::Metaobject::annotatedElement`. |
+| `41. Language Extension/User Keyword Example` | 2 × `unresolved reference: probability` / `severity` | Real fix: `#cause` and `#failure` name metadata definitions specializing `Metaobjects::SemanticMetadata`, so the usages they prefix implicitly subset the `baseType` those definitions bind — `causes : Cause` and `failures : Failure` from `Model Library Example` (SysML v2 §7.27.3, §7.27.4). `probability` and `severity` are members of `Cause`/`Failure` and now resolve there. The parser also dropped a keyword-only usage declaration (`#cause 'battery old' { ... }`, §7.27.4), re-reading it as an enumeration literal without its prefix; it is now parsed as the usage it declares. |
+
+`41. Language Extension/Model Library Example` keeps its 2 errors: `causes`
+subsets `situations` while being typed by `Cause` rather than `Situation`. That
+is a separate conformance question about subsetting with a specialized type and
+is not touched here.
 
 ---
 

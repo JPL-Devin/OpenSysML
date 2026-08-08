@@ -728,7 +728,11 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// Also check if name + multiplicity/modifiers follow (e.g., "in seq[1..*] ordered;")
 		hasModifiers := mods.direction != ast.DirNone || mods.isReference || mods.isEnd || mods.isComposite || mods.isDerived
 		hasNameWithMultOrMods := p.atNameOrKeyword() && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon || isPostModifierKeyword(p.peekN(1)))
-		if hasModifiers || hasNameWithMultOrMods {
+		// SysML v2 §7.27.4: a user-defined keyword may declare a usage without
+		// any language-defined keyword (`#cause 'battery old' { ... }`). The
+		// kind of such a usage comes from the metadata, not the syntax.
+		keywordOnlyUsage := len(prefixes) > 0 && (p.at(lexer.Identifier) || p.at(lexer.UnrestrictedName))
+		if hasModifiers || hasNameWithMultOrMods || keywordOnlyUsage {
 			return applyPrefixes(p.parseUsage(start, ast.UsageAttribute, mods, false))
 		}
 		return applyPrefixes(nil)

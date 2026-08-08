@@ -712,6 +712,11 @@ func (p *Parser) leadingPrefixIsNamespace() bool {
 func (p *Parser) leadingPrefixIsDefUsage() bool {
 	i := p.prefixLookahead() // skip past all #QualifiedName prefixes
 	t := p.peekN(i)
+	// SysML v2 §7.27.4: a user keyword may declare a usage on its own, with no
+	// language-defined keyword (`#failure 'device shutoff';`).
+	if t.Kind == lexer.Identifier || t.Kind == lexer.UnrestrictedName {
+		return true
+	}
 	if t.Kind != lexer.Keyword {
 		return false
 	}

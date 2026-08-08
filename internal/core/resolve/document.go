@@ -427,6 +427,13 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 			}
 		}
 
+		// The walk above follows declared specializations only. The semantic
+		// model also knows the implicit ones — a library base, or the baseType
+		// a semantic-metadata keyword contributes (SysML v2 §7.27.3).
+		if sym, ok := r.lookupContributedMember(scope.Owner(), featureName); ok {
+			r.recordPart(qn, 0, sym)
+			return
+		}
 	}
 
 	// Fall back to standard resolution if not found in parents
