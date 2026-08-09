@@ -119,9 +119,11 @@ func (idx *Index) expandWildcardImportsPass() bool {
 				// Don't add duplicates
 				if !idx.hasFQN(reexportFQN, child) {
 					idx.fqn[reexportFQN] = append(idx.fqn[reexportFQN], child)
-					idx.markReexported(reexportFQN, child, target.Private)
 					added = true
 					// Note: not added to contributions - these are synthetic
+				}
+				if idx.markReexported(reexportFQN, child, target.Private) {
+					added = true
 				}
 
 				// Also re-export under short name if different from primary name
@@ -129,7 +131,9 @@ func (idx *Index) expandWildcardImportsPass() bool {
 					shortReexportFQN := joinFQN(pkgFQN, child.ShortName)
 					if !idx.hasFQN(shortReexportFQN, child) {
 						idx.fqn[shortReexportFQN] = append(idx.fqn[shortReexportFQN], child)
-						idx.markReexported(shortReexportFQN, child, target.Private)
+						added = true
+					}
+					if idx.markReexported(shortReexportFQN, child, target.Private) {
 						added = true
 					}
 				}
@@ -144,7 +148,7 @@ func (idx *Index) expandWildcardImportsPass() bool {
 // (ISQMechanics) and references relative to the importing package (Systems
 // within SysML). Returns "" if the target is unknown or ambiguous.
 //
-// The answer is the key the target was found under, not the matched symbol's
+// The answer is the FQN the target was declared under, not the matched symbol's
 // Name: a symbol built from a parsed document carries only its local name,
 // while one restored from a cache record carries its fully-qualified one.
 //
@@ -177,26 +181,30 @@ func (idx *Index) resolveWildcardTarget(pkgFQN, targetText string) string {
 //
 // A namespace declared under key holds its members there, and shadows anything
 // a wildcard import also re-exported under that name (SI::min is SI's minute).
-// A key that only a re-export created names the symbol but holds none of its
-// members, so the answer is the FQN the symbol was declared under: `import B::*`
-// in a package that earlier imported B from elsewhere imports that B's members.
+// Either way the answer is the FQN the symbol was declared under, the only key
+// its members are registered under: neither a re-export nor the short-name entry
+// of `package <USCU> USCustomaryUnits` copies its subtree.
 func (idx *Index) wildcardTargetAt(key string) (string, bool) {
 	imported := idx.reexported[key]
 	owned, reexports := 0, 0
-	var sole *Symbol
+	var soleOwned, soleImported *Symbol
 	for _, sym := range idx.fqn[key] {
 		if imported[sym] {
 			reexports++
-			sole = sym
+			soleImported = sym
 			continue
 		}
 		owned++
+		soleOwned = sym
 	}
 	switch {
 	case owned == 1:
+		if declared, ok := idx.declaredAt[soleOwned]; ok {
+			return declared, true
+		}
 		return key, true
 	case owned == 0 && reexports == 1:
-		declared, ok := idx.declaredAt[sole]
+		declared, ok := idx.declaredAt[soleImported]
 		return declared, ok
 	default:
 		return "", false // unknown, or ambiguous between namespaces
@@ -413,19 +421,31 @@ func (idx *Index) WildcardImportsOf(fqn string) []WildcardImport {
 }
 
 // markReexported records that fqn only names sym by way of a wildcard import,
-// and whether that import was private.
-func (idx *Index) markReexported(fqn string, sym *Symbol, private bool) {
+// hidden while every import that surfaced it was private, and reports whether
+// anything changed. A public import of a name a private one already brought in
+// exports it, so the mark only ever clears.
+func (idx *Index) markReexported(fqn string, sym *Symbol, private bool) bool {
 	if idx.reexported[fqn] == nil {
 		idx.reexported[fqn] = make(map[*Symbol]bool)
 	}
-	idx.reexported[fqn][sym] = true
-	if !private {
-		return
+	switch {
+	case !idx.reexported[fqn][sym]:
+		idx.reexported[fqn][sym] = true
+		if private {
+			if idx.hidden[fqn] == nil {
+				idx.hidden[fqn] = make(map[*Symbol]bool)
+			}
+			idx.hidden[fqn][sym] = true
+		}
+		return true
+	case private:
+		return false
+	case idx.hidden[fqn][sym]:
+		delete(idx.hidden[fqn], sym)
+		return true
+	default:
+		return false
 	}
-	if idx.hidden[fqn] == nil {
-		idx.hidden[fqn] = make(map[*Symbol]bool)
-	}
-	idx.hidden[fqn][sym] = true
 }
 
 // exportedChildren returns the direct children of prefix that a wildcard import

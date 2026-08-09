@@ -133,6 +133,39 @@ func TestExpandWildcardImportsFollowsAReexportedTarget(t *testing.T) {
 	}
 }
 
+// A wildcard import can name its target by the package's short name, whose
+// index entry holds none of the members: they live under the declared FQN.
+func TestExpandWildcardImportsResolvesAShortNameTarget(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "lib.sysml", "package <USCU> USCustomaryUnits { part def Inch; }")
+	addDoc(t, idx, "p.sysml", "package P { public import USCU::*; }")
+	idx.ExpandWildcardImports()
+
+	if got := len(idx.LookupQualified("P::Inch")); got != 1 {
+		t.Errorf("LookupQualified(P::Inch) len = %d, want 1: "+
+			"`import USCU::*` names USCustomaryUnits, whose members live under its "+
+			"declared name", got)
+	}
+}
+
+// A name is exported when any import that surfaced it was public, so importing
+// a namespace publicly still passes it on after a private import of the same
+// name reached it first (KerML 8.2.3.3).
+func TestExpandWildcardImportsExportsAPubliclyReimportedName(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Shared; }")
+	addDoc(t, idx, "mid.sysml", "package Mid { public import Base::*; }")
+	addDoc(t, idx, "top.sysml",
+		"package Top { private import Base::*; public import Mid::*; }")
+	addDoc(t, idx, "user.sysml", "package User { public import Top::*; }")
+	idx.ExpandWildcardImports()
+
+	if got := len(idx.LookupQualified("User::Shared")); got != 1 {
+		t.Errorf("LookupQualified(User::Shared) len = %d, want 1: "+
+			"Top imports Shared publicly through Mid as well", got)
+	}
+}
+
 // Following a re-exported target only works while the name means one thing: two
 // imports bringing in different packages of that name leave it ambiguous, and an
 // ambiguous target imports nothing rather than picking one of them.
