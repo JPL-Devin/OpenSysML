@@ -94,9 +94,21 @@ func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
 			Kind:            s.Kind,
 			Span:            s.Span,
 			Supers:          s.Supers,
-			WildcardImports: s.WildcardImports,
+			WildcardImports: wildcardImportEntries(s.WildcardImports),
 			AliasTarget:     s.AliasTarget,
 		}
+	}
+	return out
+}
+
+// wildcardImportEntries projects persisted wildcard imports onto their index form.
+func wildcardImportEntries(imports []wildcardImport) []symbols.WildcardImport {
+	if len(imports) == 0 {
+		return nil
+	}
+	out := make([]symbols.WildcardImport, len(imports))
+	for i, imp := range imports {
+		out[i] = symbols.WildcardImport{Target: imp.Target, Private: imp.Private}
 	}
 	return out
 }

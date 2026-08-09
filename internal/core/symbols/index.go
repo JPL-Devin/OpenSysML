@@ -18,15 +18,24 @@ type fqnEntry struct {
 // tracked so a document can be removed or re-added without leaving stale
 // entries.
 type Index struct {
-	docRoots      map[string]*Scope     // document name -> root scope
-	fqn           map[string][]*Symbol  // fully-qualified name -> symbols
-	contributions map[string][]fqnEntry // document name -> entries it added
-	wildcardMeta  map[string][]string   // package FQN -> target FQNs for wildcard imports
+	docRoots      map[string]*Scope           // document name -> root scope
+	fqn           map[string][]*Symbol        // fully-qualified name -> symbols
+	contributions map[string][]fqnEntry       // document name -> entries it added
+	wildcardMeta  map[string][]WildcardImport // package FQN -> its wildcard imports
 
 	// reexported marks the (FQN, symbol) pairs that a wildcard import made
 	// visible rather than the namespace declaring them, so a lookup can prefer
-	// the declared member.
+	// the declared member. hidden is the subset a *private* import surfaced,
+	// which a further wildcard import must not carry on.
 	reexported map[string]map[*Symbol]bool
+	hidden     map[string]map[*Symbol]bool
+}
+
+// WildcardImport is one `import X::*` declaration: the target's raw qualified
+// name text and whether the import was declared private.
+type WildcardImport struct {
+	Target  string
+	Private bool
 }
 
 // NewIndex creates an empty index.
@@ -35,8 +44,9 @@ func NewIndex() *Index {
 		docRoots:      make(map[string]*Scope),
 		fqn:           make(map[string][]*Symbol),
 		contributions: make(map[string][]fqnEntry),
-		wildcardMeta:  make(map[string][]string),
+		wildcardMeta:  make(map[string][]WildcardImport),
 		reexported:    make(map[string]map[*Symbol]bool),
+		hidden:        make(map[string]map[*Symbol]bool),
 	}
 }
 
@@ -84,14 +94,14 @@ func (idx *Index) expandWildcardImportsPass() bool {
 	sort.Strings(pkgFQNs)
 	for _, pkgFQN := range pkgFQNs {
 		targets := idx.wildcardMeta[pkgFQN]
-		for _, targetText := range targets {
+		for _, target := range targets {
 			// Resolve target FQN: may be absolute (ISQMechanics) or relative (Systems)
-			targetFQN := idx.resolveWildcardTarget(pkgFQN, targetText)
+			targetFQN := idx.resolveWildcardTarget(pkgFQN, target.Target)
 			if targetFQN == "" {
 				continue // Target not found
 			}
 
-			targetChildren := idx.LookupDirectChildren(targetFQN)
+			targetChildren := idx.exportedChildren(targetFQN)
 			for _, child := range targetChildren {
 				// Extract child's primary name
 				childName := child.Name
@@ -103,7 +113,7 @@ func (idx *Index) expandWildcardImportsPass() bool {
 				// Don't add duplicates
 				if !idx.hasFQN(reexportFQN, child) {
 					idx.fqn[reexportFQN] = append(idx.fqn[reexportFQN], child)
-					idx.markReexported(reexportFQN, child)
+					idx.markReexported(reexportFQN, child, target.Private)
 					added = true
 					// Note: not added to contributions - these are synthetic
 				}
@@ -113,7 +123,7 @@ func (idx *Index) expandWildcardImportsPass() bool {
 					shortReexportFQN := joinFQN(pkgFQN, child.ShortName)
 					if !idx.hasFQN(shortReexportFQN, child) {
 						idx.fqn[shortReexportFQN] = append(idx.fqn[shortReexportFQN], child)
-						idx.markReexported(shortReexportFQN, child)
+						idx.markReexported(shortReexportFQN, child, target.Private)
 						added = true
 					}
 				}
@@ -264,9 +274,10 @@ func joinFQN(prefix, name string) string {
 	return prefix + "::" + name
 }
 
-// extractWildcardImports extracts the target names of wildcard imports from a Package, Namespace, or RootNamespace AST node.
-// Returns the raw qualified name text (e.g., "ISQBase") for each `import <name>::*` statement.
-func extractWildcardImports(decl ast.Node) []string {
+// extractWildcardImports extracts the wildcard imports of a Package, Namespace,
+// or RootNamespace AST node: the raw qualified name text (e.g. "ISQBase") and
+// declared visibility of each `import <name>::*` statement.
+func extractWildcardImports(decl ast.Node) []WildcardImport {
 	var members []ast.Node
 	switch d := decl.(type) {
 	case *ast.Package:
@@ -279,13 +290,16 @@ func extractWildcardImports(decl ast.Node) []string {
 		return nil
 	}
 
-	var out []string
+	var out []WildcardImport
 	for _, m := range members {
 		imp, ok := m.(*ast.Import)
 		if !ok || imp.Kind != ast.ImportNamespace || imp.Imported == nil {
 			continue
 		}
-		out = append(out, qualifiedNameText(imp.Imported))
+		out = append(out, WildcardImport{
+			Target:  qualifiedNameText(imp.Imported),
+			Private: imp.Visibility == ast.VisibilityPrivate,
+		})
 	}
 	return out
 }
@@ -367,16 +381,50 @@ func (idx *Index) FQNs() []string {
 
 // WildcardImportsOf returns the wildcard-import targets recorded for the
 // namespace registered under fqn ("" for a document root).
-func (idx *Index) WildcardImportsOf(fqn string) []string {
+func (idx *Index) WildcardImportsOf(fqn string) []WildcardImport {
 	return idx.wildcardMeta[fqn]
 }
 
-// markReexported records that fqn only names sym by way of a wildcard import.
-func (idx *Index) markReexported(fqn string, sym *Symbol) {
+// markReexported records that fqn only names sym by way of a wildcard import,
+// and whether that import was private.
+func (idx *Index) markReexported(fqn string, sym *Symbol, private bool) {
 	if idx.reexported[fqn] == nil {
 		idx.reexported[fqn] = make(map[*Symbol]bool)
 	}
 	idx.reexported[fqn][sym] = true
+	if !private {
+		return
+	}
+	if idx.hidden[fqn] == nil {
+		idx.hidden[fqn] = make(map[*Symbol]bool)
+	}
+	idx.hidden[fqn][sym] = true
+}
+
+// exportedChildren returns the direct children of prefix that a wildcard import
+// of prefix surfaces: everything but what prefix's own private imports brought
+// in, which stays visible only inside prefix (KerML 8.2.3.3).
+func (idx *Index) exportedChildren(prefix string) []*Symbol {
+	var out []*Symbol
+	seen := make(map[*Symbol]bool)
+	targetPrefix := prefix + "::"
+	for fqn, syms := range idx.fqn {
+		if len(fqn) <= len(targetPrefix) || fqn[:len(targetPrefix)] != targetPrefix {
+			continue
+		}
+		if containsString(fqn[len(targetPrefix):], "::") {
+			continue
+		}
+		hidden := idx.hidden[fqn]
+		for _, sym := range syms {
+			if seen[sym] || hidden[sym] {
+				continue
+			}
+			seen[sym] = true
+			out = append(out, sym)
+		}
+	}
+	return out
 }
 
 // LookupDirectChildren returns all symbols whose FQN is exactly prefix::name

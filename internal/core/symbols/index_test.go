@@ -149,6 +149,28 @@ func TestExpandWildcardImportsTargetSurvivesAReexportOfItsName(t *testing.T) {
 	}
 }
 
+// A private import is visible only inside the namespace that declares it, so a
+// package importing that namespace must not see what it privately imported.
+func TestExpandWildcardImportsDoesNotCarryOnAPrivateImport(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Hidden; part def Shown; }")
+	addDoc(t, idx, "mid.sysml", "package Mid { private import Base::*; part def Own; }")
+	addDoc(t, idx, "top.sysml", "package Top { public import Mid::*; }")
+	idx.ExpandWildcardImports()
+
+	if got := len(idx.LookupQualified("Mid::Hidden")); got != 1 {
+		t.Errorf("LookupQualified(Mid::Hidden) len = %d, want 1: "+
+			"a private import is visible inside Mid", got)
+	}
+	if got := len(idx.LookupQualified("Top::Own")); got != 1 {
+		t.Errorf("LookupQualified(Top::Own) len = %d, want 1: Mid::Own is public", got)
+	}
+	if got := len(idx.LookupQualified("Top::Hidden")); got != 0 {
+		t.Errorf("LookupQualified(Top::Hidden) len = %d, want 0: "+
+			"Mid imported Base privately, so Top does not see Base's members", got)
+	}
+}
+
 func TestIndexDocumentRoot(t *testing.T) {
 	idx := NewIndex()
 	addDoc(t, idx, "a.sysml", "package P;")
