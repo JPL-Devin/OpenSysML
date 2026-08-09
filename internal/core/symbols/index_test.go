@@ -133,6 +133,28 @@ func TestExpandWildcardImportsFollowsAReexportedTarget(t *testing.T) {
 	}
 }
 
+// Following a re-exported target only works while the name means one thing: two
+// imports bringing in different packages of that name leave it ambiguous, and an
+// ambiguous target imports nothing rather than picking one of them.
+func TestExpandWildcardImportsIgnoresAnAmbiguousTarget(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml", "package A { package Shared { part def FromA; } }")
+	addDoc(t, idx, "b.sysml", "package B { package Shared { part def FromB; } }")
+	addDoc(t, idx, "p.sysml",
+		"package P { public import A::*; public import B::*; public import Shared::*; }")
+	idx.ExpandWildcardImports()
+
+	if got := len(idx.fqn["P::Shared"]); got != 2 {
+		t.Fatalf("P::Shared names %d symbols, want the 2 re-exports this case needs", got)
+	}
+	for _, fqn := range []string{"P::FromA", "P::FromB"} {
+		if got := len(idx.LookupQualified(fqn)); got != 0 {
+			t.Errorf("LookupQualified(%s) len = %d, want 0: "+
+				"`import Shared::*` cannot choose between A::Shared and B::Shared", fqn, got)
+		}
+	}
+}
+
 // A declared package stays a usable wildcard target when an import re-exported
 // something of the same name alongside it — the declaration shadows the
 // re-export, as it does for any lookup.
