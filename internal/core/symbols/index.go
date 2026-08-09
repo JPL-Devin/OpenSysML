@@ -29,6 +29,11 @@ type Index struct {
 	// which a further wildcard import must not carry on.
 	reexported map[string]map[*Symbol]bool
 	hidden     map[string]map[*Symbol]bool
+
+	// declaredAt maps a symbol to the FQN its declaration gives it, which is the
+	// only key its own members are registered under: a re-export registers the
+	// symbol elsewhere but never copies its subtree.
+	declaredAt map[*Symbol]string
 }
 
 // WildcardImport is one `import X::*` declaration: the target's raw qualified
@@ -47,6 +52,7 @@ func NewIndex() *Index {
 		wildcardMeta:  make(map[string][]WildcardImport),
 		reexported:    make(map[string]map[*Symbol]bool),
 		hidden:        make(map[string]map[*Symbol]bool),
+		declaredAt:    make(map[*Symbol]string),
 	}
 }
 
@@ -147,8 +153,8 @@ func (idx *Index) expandWildcardImportsPass() bool {
 // name: KerML::Core's `import Root::*` names its sibling KerML::Root.
 func (idx *Index) resolveWildcardTarget(pkgFQN, targetText string) string {
 	for prefix := pkgFQN; prefix != ""; {
-		if candidate := prefix + "::" + targetText; idx.namesOwnedTarget(candidate) {
-			return candidate
+		if fqn, ok := idx.wildcardTargetAt(prefix + "::" + targetText); ok {
+			return fqn
 		}
 		i := lastIndex(prefix, "::")
 		if i < 0 {
@@ -158,27 +164,43 @@ func (idx *Index) resolveWildcardTarget(pkgFQN, targetText string) string {
 	}
 
 	// Global namespace
-	if idx.namesOwnedTarget(targetText) {
-		return targetText
+	if fqn, ok := idx.wildcardTargetAt(targetText); ok {
+		return fqn
 	}
 
 	// Target not found or ambiguous
 	return ""
 }
 
-// namesOwnedTarget reports whether exactly one symbol is declared under fqn,
-// ignoring any an earlier wildcard expansion re-exported there: a re-export
-// registers the symbol alone, so its subtree is only indexed under the FQN it
-// was declared with and importing it would bring in nothing.
-func (idx *Index) namesOwnedTarget(fqn string) bool {
-	imported := idx.reexported[fqn]
-	owned := 0
-	for _, sym := range idx.fqn[fqn] {
-		if !imported[sym] {
-			owned++
+// wildcardTargetAt reports the FQN a wildcard import reads its members from
+// when key names exactly one namespace, and whether it does.
+//
+// A namespace declared under key holds its members there, and shadows anything
+// a wildcard import also re-exported under that name (SI::min is SI's minute).
+// A key that only a re-export created names the symbol but holds none of its
+// members, so the answer is the FQN the symbol was declared under: `import B::*`
+// in a package that earlier imported B from elsewhere imports that B's members.
+func (idx *Index) wildcardTargetAt(key string) (string, bool) {
+	imported := idx.reexported[key]
+	owned, reexports := 0, 0
+	var sole *Symbol
+	for _, sym := range idx.fqn[key] {
+		if imported[sym] {
+			reexports++
+			sole = sym
+			continue
 		}
+		owned++
 	}
-	return owned == 1
+	switch {
+	case owned == 1:
+		return key, true
+	case owned == 0 && reexports == 1:
+		declared, ok := idx.declaredAt[sole]
+		return declared, ok
+	default:
+		return "", false // unknown, or ambiguous between namespaces
+	}
 }
 
 func (idx *Index) hasFQN(fqn string, sym *Symbol) bool {
@@ -204,6 +226,9 @@ func lastIndex(s, substr string) int {
 // global index and forgets its root scope. Unknown names are a no-op.
 func (idx *Index) RemoveDocument(name string) {
 	for _, e := range idx.contributions[name] {
+		if idx.declaredAt[e.sym] == e.fqn {
+			delete(idx.declaredAt, e.sym)
+		}
 		syms := idx.fqn[e.fqn]
 		for i, s := range syms {
 			if s == e.sym {
@@ -214,6 +239,7 @@ func (idx *Index) RemoveDocument(name string) {
 		if len(syms) == 0 {
 			delete(idx.fqn, e.fqn)
 			delete(idx.reexported, e.fqn)
+			delete(idx.hidden, e.fqn)
 		} else {
 			idx.fqn[e.fqn] = syms
 		}
@@ -238,6 +264,7 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 			// Index under primary FQN
 			fqn := joinFQN(prefix, sym.Name)
 			idx.fqn[fqn] = append(idx.fqn[fqn], sym)
+			idx.declaredAt[sym] = fqn
 			idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: fqn, sym: sym})
 
 			// Also index under short name FQN if different

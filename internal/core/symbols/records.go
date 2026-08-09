@@ -31,6 +31,7 @@ func (idx *Index) AddRecords(name string, entries []RecordEntry) {
 			AliasTargetFQN: e.AliasTarget,
 		}
 		idx.fqn[e.FQN] = append(idx.fqn[e.FQN], sym)
+		idx.declaredAt[sym] = e.FQN
 		idx.contributions[name] = append(idx.contributions[name], fqnEntry{fqn: e.FQN, sym: sym})
 
 		// Also index under short name FQN if different

@@ -109,23 +109,27 @@ func TestExpandWildcardImportsPrefersTheEnclosingTarget(t *testing.T) {
 	}
 }
 
-// A wildcard import must resolve to a package that actually declares members,
-// not to a synthetic key an earlier import produced by re-exporting a
-// same-named subpackage. Here P imports both Outer::* (which re-exports its
-// child package Shared into P as P::Shared) and Shared::* (the top-level one).
-// P::Shared has no subtree, so resolving `import Shared::*` to it would bring
-// in nothing; it must resolve to the real top-level Shared instead.
-func TestExpandWildcardImportsIgnoresSyntheticTarget(t *testing.T) {
+// A wildcard target names the package an earlier import brought into the
+// importing namespace before a top-level one of that name, since KerML 8.2.3.5
+// resolves a name against a namespace's imported memberships. Here P imports
+// Outer::* (re-exporting Outer::Shared as P::Shared) and then Shared::*, which
+// names that P::Shared; its members are read from where it was declared, since
+// a re-export registers the symbol alone and copies none of its subtree.
+func TestExpandWildcardImportsFollowsAReexportedTarget(t *testing.T) {
 	idx := NewIndex()
 	addDoc(t, idx, "shared.sysml", "package Shared { part def Widget; }")
-	addDoc(t, idx, "outer.sysml", "package Outer { package Shared { part def Ignored; } }")
+	addDoc(t, idx, "outer.sysml", "package Outer { package Shared { part def Imported; } }")
 	addDoc(t, idx, "p.sysml", "package P { public import Outer::*; public import Shared::*; }")
 	idx.ExpandWildcardImports()
 
-	if got := len(idx.LookupQualified("P::Widget")); got != 1 {
-		t.Errorf("LookupQualified(P::Widget) len = %d, want 1: "+
-			"import Shared::* must resolve to the top-level Shared, "+
-			"not the re-exported P::Shared", got)
+	if got := len(idx.LookupQualified("P::Imported")); got != 1 {
+		t.Errorf("LookupQualified(P::Imported) len = %d, want 1: "+
+			"`import Shared::*` names the P::Shared that `import Outer::*` "+
+			"brought in, and its members live under Outer::Shared", got)
+	}
+	if got := len(idx.LookupQualified("P::Widget")); got != 0 {
+		t.Errorf("LookupQualified(P::Widget) len = %d, want 0: "+
+			"the imported Shared shadows the top-level one", got)
 	}
 }
 
