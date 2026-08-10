@@ -3,6 +3,7 @@ package passes
 import (
 	"testing"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -123,6 +124,29 @@ func TestConstraintConnectionNaryOK(t *testing.T) {
 		"part def C { part a; part b; part d; connection conn connect (a, b, d); }")
 	if hasCode(diags, "connector-ends") {
 		t.Fatalf("n-ary connection should be allowed, got %v", diags)
+	}
+}
+
+// The constraint tier sees every end an n-ary clause declares, so its arity
+// rules count the real arity rather than a truncated one.
+func TestConstraintConnectionNaryEndCountReachesTheChecker(t *testing.T) {
+	src := "part def C { part a; part b; part c; part d; connection conn connect (a, b, c, d); }"
+	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("<t>", root)
+	syms := idx.LookupQualified("C::conn")
+	if len(syms) != 1 {
+		t.Fatalf("expected one symbol for C::conn, got %d", len(syms))
+	}
+	u, ok := syms[0].Decl.(*ast.Usage)
+	if !ok {
+		t.Fatalf("C::conn declared by %T, want *ast.Usage", syms[0].Decl)
+	}
+	if len(u.ConnectorEnds) != 4 {
+		t.Fatalf("connector ends at the constraint tier = %d, want 4", len(u.ConnectorEnds))
+	}
+	if hasCode(constraintDiags(t, src), "connector-ends") {
+		t.Fatalf("a four-end connection should be allowed")
 	}
 }
 

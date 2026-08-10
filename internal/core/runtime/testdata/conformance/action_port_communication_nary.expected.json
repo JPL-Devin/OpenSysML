@@ -1,0 +1,7 @@
+{
+	"type": "action",
+	"outputs": {
+		"atA": {"type": "Integer", "value": 100},
+		"atB": {"type": "Integer", "value": 100}
+	}
+}
