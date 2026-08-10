@@ -96,16 +96,6 @@ func collectInScopeTree(scope *symbols.Scope, name string) []*symbols.Symbol {
 	return out
 }
 
-// lookupInScopeTree returns the first symbol named name in scope or a nested
-// scope, or nil.
-func lookupInScopeTree(scope *symbols.Scope, name string) *symbols.Symbol {
-	matches := collectInScopeTree(scope, name)
-	if len(matches) == 0 {
-		return nil
-	}
-	return matches[0]
-}
-
 // scopeSymbolFor returns the symbol in scope's tree declared by decl, or nil.
 func scopeSymbolFor(scope *symbols.Scope, decl ast.Node) *symbols.Symbol {
 	if scope == nil || decl == nil {
