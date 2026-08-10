@@ -279,6 +279,34 @@ func TestLookupQualifiedFromSeesAPrivateImportOnlyFromWithin(t *testing.T) {
 	}
 }
 
+// HiddenFrom is what a caller that has another route to a name — an
+// inheritance-aware member search over the index's direct children — asks
+// before taking it, so it answers only for a name nothing but a private import
+// surfaced, seen from outside the importing namespace.
+func TestHiddenFromReportsOnlyPrivatelySurfacedNames(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Hidden; part def Shown; }")
+	addDoc(t, idx, "mid.sysml",
+		"package Mid { private import Base::*; part def Own; package Inner { part def I; } }")
+	addDoc(t, idx, "pub.sysml", "package Pub { public import Base::*; }")
+	idx.ExpandWildcardImports()
+
+	if !idx.HiddenFrom("Mid::Hidden", "") {
+		t.Errorf("HiddenFrom(Mid::Hidden, \"\") = false, want true")
+	}
+	for _, from := range []string{"Mid", "Mid::Inner"} {
+		if idx.HiddenFrom("Mid::Hidden", from) {
+			t.Errorf("HiddenFrom(Mid::Hidden, %s) = true, want false: the namespace "+
+				"declaring the private import sees it", from)
+		}
+	}
+	for _, fqn := range []string{"Mid::Own", "Pub::Shown", "Base::Hidden", "Mid::Missing"} {
+		if idx.HiddenFrom(fqn, "") {
+			t.Errorf("HiddenFrom(%s, \"\") = true, want false", fqn)
+		}
+	}
+}
+
 // A public wildcard import is unaffected: the name it surfaces stays reachable
 // by a qualified reference through the importing namespace, from anywhere.
 func TestLookupQualifiedReachesAPubliclyImportedName(t *testing.T) {

@@ -416,6 +416,25 @@ func (idx *Index) LookupQualifiedFrom(fqn, fromFQN string) []*Symbol {
 	return owned
 }
 
+// HiddenFrom reports whether every symbol registered under fqn is one only a
+// private import surfaced there, seen from the namespace fromFQN. It is the
+// reason LookupQualifiedFrom found nothing, so a caller that falls back to
+// another lookup route — the qualified walk's inheritance-aware member search,
+// which reaches cached symbols through LookupDirectChildren — asks here first
+// and stops, rather than resurfacing a name KerML 8.2.3.3 hides.
+func (idx *Index) HiddenFrom(fqn, fromFQN string) bool {
+	hidden := idx.hidden[fqn]
+	if len(hidden) == 0 || withinNamespace(fromFQN, namespaceOf(fqn)) {
+		return false
+	}
+	for _, sym := range idx.fqn[fqn] {
+		if !hidden[sym] {
+			return false
+		}
+	}
+	return true
+}
+
 // namespaceOf returns the FQN of the namespace a qualified name names a member
 // of: "A::B::C" -> "A::B", and "" for a top-level name.
 func namespaceOf(fqn string) string {

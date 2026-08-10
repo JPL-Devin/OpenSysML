@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -117,6 +118,86 @@ func TestResolveQualifiedReachesAPubliclyImportedName(t *testing.T) {
 	app := scopeOf(t, idx.DocumentRoot("app.sysml"), "App")
 	if _, ok := r.ResolveQualified(app, qn(false, "Mid", "Shown")); !ok {
 		t.Fatalf("Mid::Shown unresolved from App; diagnostics: %v", r.Diagnostics)
+	}
+}
+
+// An unnamed element contributes no segment to a fully-qualified name, so a
+// reference written inside one is still made from the enclosing namespace and
+// still sees what that namespace imported privately.
+func TestResolveQualifiedFromInsideAnUnnamedElement(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"base.sysml": "package Base { part def Hidden; }",
+		"mid.sysml":  "package Mid { private import Base::*; part : Hidden { part inner; } }",
+	})
+	idx.ExpandWildcardImports()
+	r := New(idx)
+
+	mid := scopeOf(t, idx.DocumentRoot("mid.sysml"), "Mid")
+	unnamed := mid.Children()
+	if len(unnamed) != 1 {
+		t.Fatalf("Mid has %d child scopes, want the unnamed part's", len(unnamed))
+	}
+	if _, ok := r.ResolveQualified(unnamed[0], qn(false, "Mid", "Hidden")); !ok {
+		t.Fatalf("Mid::Hidden unresolved inside Mid's unnamed part; diagnostics: %v",
+			r.Diagnostics)
+	}
+	inner := unnamed[0].Children()
+	if len(inner) != 1 {
+		t.Fatalf("the unnamed part has %d child scopes, want inner's", len(inner))
+	}
+	if _, ok := r.ResolveQualified(inner[0], qn(false, "Mid", "Hidden")); !ok {
+		t.Fatalf("Mid::Hidden unresolved inside Mid's unnamed part's inner part; "+
+			"diagnostics: %v", r.Diagnostics)
+	}
+}
+
+// directChildLookup is how a semantic model reaches the members of a symbol
+// restored from the library cache, which carries no Scope: by enumerating the
+// index's direct children under its FQN.
+type directChildLookup struct{ idx *symbols.Index }
+
+func (d directChildLookup) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	for _, child := range d.idx.LookupDirectChildren(sym.Name) {
+		leaf := child.Name
+		if i := strings.LastIndex(leaf, "::"); i >= 0 {
+			leaf = leaf[i+2:]
+		}
+		if leaf == name {
+			return child, true
+		}
+	}
+	return nil, false
+}
+
+func (d directChildLookup) LookupContributedMember(*symbols.Symbol, string) (*symbols.Symbol, bool) {
+	return nil, false
+}
+
+// The qualified walk falls back to an inheritance-aware member search when the
+// index has nothing, and for a cached symbol that search enumerates direct
+// children without consulting the visibility marks. A privately imported name
+// must not come back through it either — the stdlib, where private wildcard
+// imports are pervasive, is loaded exactly this way.
+func TestResolveQualifiedRejectsAPrivatelyImportedNameThroughMemberLookup(t *testing.T) {
+	idx := symbols.NewIndex()
+	idx.AddRecords("lib", []symbols.RecordEntry{
+		{FQN: "Base", Kind: symbols.SymbolPackage},
+		{FQN: "Base::Hidden", Kind: symbols.SymbolPartDef},
+		{FQN: "Mid", Kind: symbols.SymbolPackage, WildcardImports: []symbols.WildcardImport{
+			{Target: "Base", Private: true},
+		}},
+	})
+	idx.ExpandWildcardImports()
+	r := New(idx)
+	r.SetModel(directChildLookup{idx: idx})
+
+	if sym, ok := r.ResolveQualified(nil, qn(false, "Mid", "Hidden")); ok {
+		t.Fatalf("Mid::Hidden resolved to %q from outside Mid: Mid imported Base "+
+			"privately", sym.Name)
+	}
+	// The member route still reaches a name Mid holds publicly.
+	if _, ok := r.ResolveQualified(nil, qn(false, "Base", "Hidden")); !ok {
+		t.Fatalf("Base::Hidden unresolved; diagnostics: %v", r.Diagnostics)
 	}
 }
 

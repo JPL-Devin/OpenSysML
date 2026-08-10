@@ -2,6 +2,7 @@ package resolve
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -61,6 +62,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 	r.recordPart(qn, 0, cur)
 
 	// Walk remaining segments as local members of the current symbol's scope.
+	from := r.referringNamespaceFQN(scope)
 	for i, seg := range qn.Parts[1:] {
 		var all []*symbols.Symbol
 
@@ -77,7 +79,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 			if i == 0 && cur != nil {
 				// First segment after the initial lookup: cur::seg
 				fqn := cur.Name + "::" + seg.Text
-				candidates := r.idx.LookupQualifiedFrom(fqn, r.referringNamespaceFQN(scope))
+				candidates := r.idx.LookupQualifiedFrom(fqn, from)
 				if len(candidates) == 1 {
 					all = candidates
 				} else if len(candidates) > 1 {
@@ -86,6 +88,14 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 				}
 			}
 			// TODO: Handle deeper nesting if needed
+		}
+
+		// The name exists under cur but only because a private import surfaced it
+		// there: it is invisible from here (KerML 8.2.3.3), and the member search
+		// below reaches cached symbols by a route that does not know that.
+		if len(all) == 0 && r.idx != nil && r.idx.HiddenFrom(cur.Name+"::"+seg.Text, from) {
+			r.unresolved(qn)
+			return resolution{nil, false}
 		}
 
 		// A segment may name a member the current symbol inherits rather than
@@ -121,11 +131,25 @@ func (r *Resolver) referringNamespaceFQN(scope *symbols.Scope) string {
 		return ""
 	}
 	for s := scope; s != nil; s = s.Parent() {
-		if owner := s.Owner(); owner != nil {
-			return r.idx.GetFQN(owner)
+		if owner := s.Owner(); owner != nil && owner.Name != "" {
+			return withoutEmptySegments(r.idx.GetFQN(owner))
 		}
 	}
 	return ""
+}
+
+// withoutEmptySegments drops the empty segments an unnamed enclosing element
+// contributes to a fully-qualified name, so "Mid::::inner" reads as
+// "Mid::inner" and still tests as nested inside Mid.
+func withoutEmptySegments(fqn string) string {
+	parts := strings.Split(fqn, "::")
+	kept := parts[:0]
+	for _, p := range parts {
+		if p != "" {
+			kept = append(kept, p)
+		}
+	}
+	return strings.Join(kept, "::")
 }
 
 // lookupInRoot finds a name in the document root scope reachable from scope.
