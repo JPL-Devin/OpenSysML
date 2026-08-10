@@ -1,6 +1,10 @@
 package resolve
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
 
 func TestAliasResolvesTarget(t *testing.T) {
 	idx := indexOf(t, map[string]string{
@@ -46,6 +50,61 @@ func TestAliasCycleGuard(t *testing.T) {
 	aSym, _ := pScope.LookupLocal("A")
 	if _, ok := r.ResolveAliasTarget(aSym); ok {
 		t.Fatalf("cyclic alias should not resolve")
+	}
+}
+
+// An alias declared in a namespace reaches a target that namespace holds only
+// through a private wildcard import, which the stdlib does throughout:
+// ISQThermodynamics aliases TemperatureValue for a ThermodynamicTemperatureValue
+// it sees only via `private import ISQBase::*`. A qualified reference from
+// anywhere else must not reach that name (KerML 8.2.3.3), so the alias resolves
+// its target *from* its own namespace.
+func TestAliasResolvesAPrivatelyImportedTargetFromCache(t *testing.T) {
+	idx := symbols.NewIndex()
+	idx.AddRecords("lib", []symbols.RecordEntry{
+		{FQN: "Base", Kind: symbols.SymbolPackage},
+		{FQN: "Base::Hidden", Kind: symbols.SymbolPartDef},
+		{FQN: "Mid", Kind: symbols.SymbolPackage, WildcardImports: []symbols.WildcardImport{
+			{Target: "Base", Private: true},
+		}},
+		{FQN: "Mid::HiddenAlias", Kind: symbols.SymbolAlias, AliasTarget: "Hidden"},
+	})
+	idx.ExpandWildcardImports()
+
+	aliases := idx.LookupQualified("Mid::HiddenAlias")
+	if len(aliases) != 1 {
+		t.Fatalf("LookupQualified(Mid::HiddenAlias) len = %d, want 1", len(aliases))
+	}
+	target, ok := New(idx).ResolveAliasTarget(aliases[0])
+	if !ok {
+		t.Fatalf("alias of a privately imported type unresolved")
+	}
+	if target.Name != "Base::Hidden" {
+		t.Fatalf("alias target = %q, want Base::Hidden", target.Name)
+	}
+}
+
+// The same for an alias in a parsed document, which reaches its target through
+// the private import declared in its own scope.
+func TestAliasResolvesAPrivatelyImportedTargetWhenParsed(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"base.sysml": "package Base { part def Hidden; }",
+		"mid.sysml":  "package Mid { private import Base::*; alias H for Hidden; }",
+	})
+	idx.ExpandWildcardImports()
+	r := New(idx)
+
+	mid := scopeOf(t, idx.DocumentRoot("mid.sysml"), "Mid")
+	hSym, ok := mid.LookupLocal("H")
+	if !ok {
+		t.Fatalf("alias H not found in Mid")
+	}
+	target, ok := r.ResolveAliasTarget(hSym)
+	if !ok {
+		t.Fatalf("alias H unresolved; diags=%v", r.Diagnostics)
+	}
+	if target.Name != "Hidden" {
+		t.Fatalf("alias target = %q, want Hidden", target.Name)
 	}
 }
 
