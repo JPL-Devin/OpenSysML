@@ -369,6 +369,11 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 				// individual def → DefIndividual keyword
 				return m
 			}
+			if isKindKeyword(nextTok) && namesDeclaration(p.peekN(2)) {
+				// The kind keyword is the declaration's name, not its kind
+				// (`individual item : Integer`), so `individual` carries the kind.
+				return m
+			}
 			m.isIndividual = true
 		case "snapshot":
 			// Check if standalone usage: snapshot <name> ...
@@ -376,6 +381,10 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			nextTok := p.peekN(1)
 			if nextTok.Kind == lexer.Identifier || (nextTok.Kind == lexer.Keyword && !isModifierOrKindKeyword(nextTok.KeywordID)) {
 				// Treat as usage keyword, stop consuming modifiers
+				return m
+			}
+			if isKindKeyword(nextTok) && namesDeclaration(p.peekN(2)) {
+				// The kind keyword names the declaration (`snapshot item : T`).
 				return m
 			}
 			m.isSnapshot = true

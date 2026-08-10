@@ -169,3 +169,36 @@ func TestParseDirectionParameterOccurrenceModifiers(t *testing.T) {
 		}
 	}
 }
+
+// A declaration may be named with a kind keyword (`individual item : Integer`
+// names the declaration `item`); the modifier path must not consume that
+// keyword as the kind and leave the declaration anonymous.
+func TestParseOccurrenceModifierKeywordName(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		wantName       string
+		wantIndividual bool
+		wantSnapshot   bool
+	}{
+		{"individual_typed", "individual item : Integer;", "item", true, false},
+		{"individual_terminated", "individual part;", "part", true, false},
+		{"individual_body", "individual state { }", "state", true, false},
+		{"snapshot_typed", "snapshot item : Integer;", "item", false, true},
+		{"snapshot_terminated", "snapshot part;", "part", false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u := parseSingleUsage(t, tt.input)
+			if u.Ident.Name != tt.wantName {
+				t.Errorf("name = %q, want %q", u.Ident.Name, tt.wantName)
+			}
+			if u.IsIndividual != tt.wantIndividual {
+				t.Errorf("IsIndividual = %t, want %t", u.IsIndividual, tt.wantIndividual)
+			}
+			if u.IsSnapshot != tt.wantSnapshot {
+				t.Errorf("IsSnapshot = %t, want %t", u.IsSnapshot, tt.wantSnapshot)
+			}
+		})
+	}
+}
