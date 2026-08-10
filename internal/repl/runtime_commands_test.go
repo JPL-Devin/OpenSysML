@@ -284,12 +284,15 @@ func TestStateDebuggerAdvancesByTime(t *testing.T) {
 
 	// The completion transition out of `init` is due now; the transition out of
 	// `waiting` is scheduled at 10, so a shorter advance stops before it.
-	wants(t, run(t, s, "%advance 1"), "Advanced through 1.00 (1 event(s) processed)", "Current state: waiting", "Time: 0.00")
-	wants(t, run(t, s, "%advance 9"), "0 event(s) processed", "Current state: waiting")
+	wants(t, run(t, s, "%advance 1"), "Advanced to 1.00 (1 event(s) processed)", "Current state: waiting", "Last event at: 0.00")
 
-	wants(t, run(t, s, "%advance 10"), "Current state: working", "Time: 10.00")
-	wants(t, run(t, s, "%advance 5"), "Current state: done", "Time: 15.00", "State machine completed")
-	wants(t, run(t, s, "%advance 5"), "No pending work")
+	// Durations accumulate: the second advance reaches 10 even though no event
+	// moved the executor's own clock during the first.
+	wants(t, run(t, s, "%advance 9"), "Advanced to 10.00 (1 event(s) processed)", "Current state: working")
+	wants(t, run(t, s, "%current"), "Time: 10.00")
+
+	wants(t, run(t, s, "%advance 5"), "Current state: done", "Last event at: 15.00", "State machine completed")
+	wants(t, run(t, s, "%advance 5"), "No pending work - simulation time is now 20.00")
 }
 
 func TestAdvanceRejectsBadDuration(t *testing.T) {

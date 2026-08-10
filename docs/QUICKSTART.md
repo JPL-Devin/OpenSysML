@@ -400,26 +400,27 @@ sysml> %state TrafficLight
   Events: 1
 
 sysml> %advance 25
-✓ Advanced through 25.00 (2 event(s) processed)
+✓ Advanced to 25.00 (2 event(s) processed)
   Current state: yellow
-  Time: 25.00
+  Last event at: 25.00
   Remaining events: 1
 
 sysml> %current
 Current state: yellow
 Time: 25.00
+Last event at: 25.00
 Execution state: Running
 
 sysml> %advance 5
-✓ Advanced through 30.00 (1 event(s) processed)
+✓ Advanced to 30.00 (1 event(s) processed)
   Current state: red
-  Time: 30.00
+  Last event at: 30.00
   Remaining events: 1
 
 sysml> %advance 30
-✓ Advanced through 60.00 (1 event(s) processed)
+✓ Advanced to 60.00 (1 event(s) processed)
   Current state: off
-  Time: 60.00
+  Last event at: 60.00
   Remaining events: 0
 
 ✓ State machine completed (final state reached)

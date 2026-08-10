@@ -53,6 +53,9 @@ type stateSession struct {
 	name     string
 	symbol   *symbols.Symbol
 	executor *runtime.StateExecutor
+	// now is the debugger's clock. The executor's own clock only moves when an
+	// event is processed, so successive %advance calls accumulate here.
+	now float64
 }
 
 // NewSession returns a session over a fresh workspace.

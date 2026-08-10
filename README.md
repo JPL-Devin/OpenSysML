@@ -101,9 +101,9 @@ sysml> %state TrafficLight
   Events: 1
 
 sysml> %advance 30
-✓ Advanced through 30.00 (1 event(s) processed)
+✓ Advanced to 30.00 (1 event(s) processed)
   Current state: green
-  Time: 30.00
+  Last event at: 30.00
   Remaining events: 1
 ```
 

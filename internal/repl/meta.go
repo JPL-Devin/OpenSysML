@@ -2,6 +2,7 @@ package repl
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"slices"
 	"strconv"
@@ -868,6 +869,7 @@ func (s *Session) doStateMachine(name string) ([]string, bool, error) {
 		name:     name,
 		symbol:   sym,
 		executor: exec,
+		now:      exec.CurrentTime(),
 	}
 
 	return []string{
@@ -912,7 +914,8 @@ func (s *Session) doCurrent() ([]string, bool, error) {
 
 	out := []string{
 		fmt.Sprintf("Current state: %s", currentStateName(exec)),
-		fmt.Sprintf("Time: %.2f", exec.CurrentTime()),
+		fmt.Sprintf("Time: %.2f", s.stateExec.now),
+		fmt.Sprintf("Last event at: %.2f", exec.CurrentTime()),
 		fmt.Sprintf("Execution state: %s", exec.State()),
 	}
 
@@ -980,13 +983,14 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 	}
 
 	exec := s.stateExec.executor
-	deadline := exec.CurrentTime() + duration
+	deadline := s.stateExec.now + duration
 
 	// A state's do behavior is work too: the machine can have none queued yet
 	// still have somewhere to go, and its completion transition is queued once
 	// the behavior ends.
 	if !exec.HasPendingWork() {
-		return []string{fmt.Sprintf("No pending work - simulation time stays at %.2f", exec.CurrentTime())}, false, nil
+		s.stateExec.now = deadline
+		return []string{fmt.Sprintf("No pending work - simulation time is now %.2f", deadline)}, false, nil
 	}
 
 	// Bound the drain so a machine that keeps queueing work cannot hang the REPL.
@@ -1003,11 +1007,12 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 		}
 		processed++
 	}
+	s.stateExec.now = math.Max(deadline, exec.CurrentTime())
 
 	out := []string{
-		fmt.Sprintf("✓ Advanced through %.2f (%d event(s) processed)", deadline, processed),
+		fmt.Sprintf("✓ Advanced to %.2f (%d event(s) processed)", s.stateExec.now, processed),
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		fmt.Sprintf("  Time: %.2f", exec.CurrentTime()),
+		fmt.Sprintf("  Last event at: %.2f", exec.CurrentTime()),
 		fmt.Sprintf("  Remaining events: %d", exec.EventQueue().Len()),
 	}
 
