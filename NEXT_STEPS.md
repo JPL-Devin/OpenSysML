@@ -62,6 +62,36 @@ in `docs/TRAINING_EXAMPLES.md`.
 
 ---
 
+# Wave 1 — done (C1, E2, F1, F2)
+
+Four concurrent children, disjoint file sets, plus one maintainer PR picking up a child's finding.
+All five green; verified merged together locally at **98/100** with `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`.
+
+| PR | Task | Corpus |
+|---|---|---|
+| #47 | C1 — CI downloads the corpus and gates on it (no longer skips) | 97, now CI-verified |
+| #46 | F2 — named n-ary `connect` does **not** reproduce; regression tests at every layer | 97 |
+| #49 | maintainer — anonymous inline `connect (a, b, c);` really did fail to parse | 97 |
+| #48 | F1 — `individual`/`snapshot` stored in the AST and consulted by the kind tables | 97 |
+| #45 | E2 — an `objective` is typed by a `requirement def` | 97 → **98** |
+
+Merge order **#47 → #46 → #49 → #48 → #45**; #44 is independent. #49 is based on #46's branch. One
+clerical conflict, #48 vs #46/#49 in `internal/core/parser/negative_test.go` (both append to the same
+table), resolution verified, no rebase needed.
+
+**C1 changes the working rule on the expectations file.** While the gate was invisible to CI, children
+were told never to commit `internal/core/model/testdata/training_examples_expected.txt`. Now that the
+gate is a required check, a PR that leaves it uncommitted goes red the moment it lands. The rule is:
+
+> A PR that moves the corpus **regenerates and commits the expectations file in that same PR**, and
+> corpus-moving PRs are **serialised** — only one in flight at a time.
+
+The original no-commit rule was right for its situation (seven children editing one file against a
+moving baseline) and is wrong for this one. Review the regenerated diff: any entry other than the one
+the PR intends to move is a finding to report, not to commit.
+
+---
+
 # Batch E — reproducibility and CI
 
 ## E1 — cold-cache corpus reproducibility ✅ done (#43)
@@ -81,13 +111,26 @@ Fixed by iterating the expansion to a fixpoint and searching enclosing namespace
 This was a real correctness bug on any fresh machine, not a test artefact — the LSP and REPL take the
 same path — and it went undetected for the whole of Batch A. It left one new ⚠️ row, tracked as B5.
 
-## C1 — CI, and the corpus download (blocking, maintainer) — now unblocked
+## C1 — CI, and the corpus download (blocking, maintainer) ✅ done (#47)
+
+CI now downloads the corpus, caches it, verifies 100 files are present, and runs a dedicated corpus-gate
+step that fails on `--- SKIP`. `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1` makes an absent corpus an error
+rather than a silent pass; the local-developer skip path is kept. The CI log now prints
+`97/100 training files clean` instead of skipping.
+
+Original write-up:
 
 CI does not run `./scripts/download-training-examples.sh`, so the corpus gate **silently skips there**.
 Ten PRs have now merged on local evidence alone. E1 was the blocker; the gate is cold-safe, so add the
 download step. Do this before Batch B so the rest of the work is actually verified by CI.
 
-## E2 — the last corpus false positive: an `objective` typed by a `requirement def`
+## E2 — the last corpus false positive: an `objective` typed by a `requirement def` ✅ done (#45)
+
+Landed with the strict reading, approved by the maintainer: an `objective` accepts only
+requirement-definition kinds, so `objective o : Vehicle` on a `part def` now reports where it previously
+did not. `subject` was left on the structural kinds. Corpus 97 → 98, the ceiling.
+
+Original write-up:
 
 1 error, `33. Analysis/Trade Study Analysis Example.sysml`. The file writes `objective : MaximizeObjective;`
 and the standard library declares `requirement def MaximizeObjective :> TradeStudyObjective`
@@ -173,7 +216,18 @@ diff of the corpus before and after, not the total. E1 having landed, that diff 
 
 Found by children that correctly stopped rather than expanding scope.
 
-## F1 — the `individual` modifier is dropped at parse time
+## F1 — the `individual` modifier is dropped at parse time ✅ done (#48)
+
+`ast.Usage` gained `IsIndividual`/`IsSnapshot`, both parser paths store them, and the kind tables consult
+them. A review round caught a second hole: `individual part p;` still dropped the modifier because
+`parseFeatureModifiers` returned early on `individual <usageKind>`; kind and modifier are now both kept
+in bodies, at top level and in parameters.
+
+**Known limitation, not a task.** The modifier is not reflected in the usage's *symbol* kind, so
+`individual testSystem` still indexes as an attribute usage. This is honest and is compensated by the
+typecheck widening; it is recorded as a ⚠️ row in `docs/SPEC_COMPLIANCE.md`. Do not task it.
+
+Original write-up:
 
 Still present on `7bb77cc`. `internal/core/parser/behavior.go:390` reads, verbatim:
 
@@ -187,13 +241,57 @@ So `individual testSystem : TestSystem` is checked as an ordinary usage rather t
 modifier still evaporates. Needs an AST field, the parser storing it, the kind tables consulting it,
 a golden fixture and a negative case. `isSnapshot` is the same shape and should go with it.
 
-## F2 — n-ary `connect (a, b, c)` — verify before tasking
+## F2 — n-ary `connect (a, b, c)` — verify before tasking ✅ done (#46, plus #49)
+
+**It does not reproduce for a named connector declaration.** End counts for binary/3-end/4-end are 2/3/4
+at parse, at the constraint tier and through lowering, with runtime `PeerPorts` 1/2/3. #46 is regression
+tests at every layer plus one conformance case; no behaviour change was invented, which is what the task
+asked for.
+
+The **anonymous inline** form `connect (a, b, c);` was real, and was the child's "Found, not fixed" item:
+`parseBodyMember` had a hand-rolled binary-only reader instead of calling `parseConnectorEnds`. Fixed by
+the maintainer in #49.
+
+Original write-up:
 
 A3 reported that the n-ary form silently loses all but the first end at parse time. On `7bb77cc`
 `parseConnectorEnds` appends every end in the comma loop, so the parse-time claim does not reproduce as
 described — it may have been fixed during #40's review rounds, or the loss may be downstream in
 `passes/constraint.go` `checkConnectorEnds` / `lower/connection.go`. **Reproduce it first**; if it is
 real, the task is wherever the ends are actually dropped, and if it is not, close it out.
+
+---
+
+# Batch G — found by wave 1 (new)
+
+## G1 — a `subject` escapes the usage-kind check depending on what precedes it in the body
+
+Found by E2, reproduced on the merged wave-1 stack:
+
+```
+requirement def R { subject s : A; }                 -> no diagnostic
+requirement def R { attribute x; subject s : A; }    -> subject cannot be typed by actionDef
+requirement def R { doc /* d */ subject s : A; }     -> no diagnostic
+requirement R { attribute x; subject s : A; }        -> no diagnostic   (usage: never checked)
+concern def R { subject s : A; }                     -> reports
+```
+
+It is **not** a first-member rule, which is how it first read. Whenever the requirement-specific body
+path is taken (`parser/defusage.go:798`, and always for a requirement *usage* at `defusage.go:1426`),
+`subject` is parsed as `*ast.SubjectMember` rather than a `Usage`, and `passes/typecheck.go` only walks
+`*ast.Usage`. So whether a subject is type-checked depends on which keyword happens to open the body.
+
+**The fix belongs in the pass, not the parser:** typecheck should handle `*ast.SubjectMember` too instead
+of depending on the parse path. It touches `passes/typecheck.go`, which both #45 and #48 edit, so it
+cannot start until wave 1 has merged.
+
+## G2 — candidates from wave 1's "Found, not fixed", not yet tasked
+
+- `internal/core/parser/defusage.go:365-373` — `individual part ip : Vehicle;` parses as
+  `ast.Usage{Kind: individual}` with the `part` keyword absorbed (same for `individual occurrence`).
+  Fixing it reclassifies the usage kind and reaches `internal/core/symbols/builder.go`.
+- `internal/core/parser/behavior.go:267-280` — `action a { in snapshot ; }` parses with zero
+  diagnostics; an anonymous untyped parameter is silently accepted. Pre-existing for `in event ;` too.
 
 ---
 
@@ -254,10 +352,9 @@ technical. Three rules:
 
 ## Suggested sequencing
 
-1. **C1** first and by the maintainer — ten PRs have merged without CI, and E1 has removed the reason
-   to keep deferring it.
-2. **E2**, **F1** and **F2** concurrently — small, isolated, disjoint file sets.
-3. **B1** as several separate sessions, with **B2**, **B4** and **B5** alongside. These share
+1. ~~**C1** first~~ and ~~**E2**, **F1**, **F2** concurrently~~ — wave 1, done; see the wave-1 section
+   above for the merge order.
+2. **B1** as several separate sessions, with **B2**, **B4** and **B5** alongside. These share
    `docs/SPEC_COMPLIANCE.md` and little else, so they parallelize well; the two `state_executor.go`
    items in B1 must run one at a time.
-4. **B3 last**, gated on a per-file corpus diff.
+3. **B3 last**, gated on a per-file corpus diff.
