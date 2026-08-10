@@ -73,6 +73,18 @@ func TestSlotsRendersConstraintVerdict(t *testing.T) {
 	wants(t, run(t, s, "%slots Derived::Heavy"), "massOK: <constraint: violated>")
 }
 
+// A requirement usage is a verdict too, and %slots must agree with what
+// %requirement says about the same feature of the same instance.
+func TestSlotsAgreesWithRequirementOnSameInstance(t *testing.T) {
+	s := loadFixture(t, "testdata/derived_package.sysml")
+	run(t, s, "%instantiate Derived::Vehicle")
+
+	wants(t, run(t, s, "%requirement Derived::Vehicle::lightEnough"), "satisfied")
+	got := run(t, s, "%slots Derived::Vehicle")
+	wants(t, got, "lightEnough: <requirement: satisfied>")
+	rejects(t, got, "<unknown>")
+}
+
 // A constraint over a feature nothing declares is still an error, distinct from
 // a violated assertion.
 func TestConstraintEvaluationErrorIsNotAViolation(t *testing.T) {

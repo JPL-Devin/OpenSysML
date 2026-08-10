@@ -423,10 +423,10 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 
 	for i := range features {
 		feat := &features[i]
-		// A constraint the part carries has no value; what it has is a verdict
-		// about this instance, which is the useful thing to show.
-		if feat.Symbol != nil && feat.Symbol.Kind == symbols.SymbolConstraintUsage {
-			lines = append(lines, fmt.Sprintf("  %s: %s", feat.Name, constraintVerdict(ctx, feat, inst)))
+		// A constraint or requirement the part carries has no value; what it has
+		// is a verdict about this instance, which is the useful thing to show.
+		if verdict, ok := featureVerdict(ctx, feat, inst); ok {
+			lines = append(lines, fmt.Sprintf("  %s: %s", feat.Name, verdict))
 			continue
 		}
 		slot, err := inst.GetSlot(ctx, feat.Name)
@@ -440,22 +440,35 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 	return lines, false, nil
 }
 
-// constraintVerdict evaluates a constraint feature against the instance that
-// carries it and renders the outcome for a slot listing.
-func constraintVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *runtime.Instance) string {
+// featureVerdict evaluates a constraint or requirement feature against the
+// instance that carries it and renders the outcome for a slot listing.
+// Reports false for a feature that holds a value rather than a verdict.
+func featureVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *runtime.Instance) (string, bool) {
 	if feat.Symbol == nil {
-		return "<constraint>"
+		return "", false
 	}
-	passed, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
-	switch {
-	case errors.Is(err, runtime.ErrConstraintViolated):
-		return "<constraint: violated>"
-	case err != nil:
-		return fmt.Sprintf("<constraint: %v>", err)
-	case passed:
-		return "<constraint: satisfied>"
+	var (
+		kind   string
+		passed bool
+		err    error
+	)
+	switch feat.Symbol.Kind {
+	case symbols.SymbolConstraintUsage:
+		kind = "constraint"
+		passed, err = ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
+	case symbols.SymbolRequirementUsage:
+		kind = "requirement"
+		passed, err = ctx.EvaluateRequirementOn(feat.Symbol, feat.DeclScope(), inst)
 	default:
-		return "<constraint: violated>"
+		return "", false
+	}
+	switch {
+	case err != nil && !errors.Is(err, runtime.ErrConstraintViolated):
+		return fmt.Sprintf("<%s: %v>", kind, err), true
+	case err != nil || !passed:
+		return fmt.Sprintf("<%s: violated>", kind), true
+	default:
+		return fmt.Sprintf("<%s: satisfied>", kind), true
 	}
 }
 
