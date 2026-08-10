@@ -71,13 +71,22 @@ All five green; verified merged together locally at **98/100** with `SYSTEMICA_R
 |---|---|---|
 | #47 | C1 — CI downloads the corpus and gates on it (no longer skips) | 97, now CI-verified |
 | #46 | F2 — named n-ary `connect` does **not** reproduce; regression tests at every layer | 97 |
-| #49 | maintainer — anonymous inline `connect (a, b, c);` really did fail to parse | 97 |
+| #49 → **#50** | maintainer — anonymous inline `connect (a, b, c);` really did fail to parse | 97 |
 | #48 | F1 — `individual`/`snapshot` stored in the AST and consulted by the kind tables | 97 |
 | #45 | E2 — an `objective` is typed by a `requirement def` | 97 → **98** |
 
 Merge order **#47 → #46 → #49 → #48 → #45**; #44 is independent. #49 is based on #46's branch. One
 clerical conflict, #48 vs #46/#49 in `internal/core/parser/negative_test.go` (both append to the same
 table), resolution verified, no rebase needed.
+
+**#49 shows why the merged badge is not evidence.** It was based on #46; #46 landed first, and #49 then
+merged into that already-merged branch, so GitHub displayed it as merged while the fix was absent from
+`main`. It was re-landed as **#50**. Two rules follow: prefer independent branches off `main`, and where
+a stack is unavoidable, state the order to the maintainer *and* afterwards confirm
+`git merge-base --is-ancestor <sha> origin/main` rather than reading the badge.
+
+`main` is now at `426d292`, green, **98/100**, with the gate actually running in CI. One wave-1 follow-up
+is still open: **#52** (G1, below).
 
 **C1 changes the working rule on the expectations file.** While the gate was invisible to CI, children
 were told never to commit `internal/core/model/testdata/training_examples_expected.txt`. Now that the
@@ -203,6 +212,34 @@ The expose work landed two honest ❌s that should not be left to rot:
 
 Do the protected-import one first — the expose validation is a small diagnostic on top of it.
 
+**B4 also owns B6 (below) and B5's leftover.** All three are the same representation, and settling them
+in one session with one spec citation is cheaper and safer than three passes over `symbols/index.go`.
+B4 must run the corpus before and after: unlike B5, B6 can move it. Do not start B4 until #55 is on
+`main`.
+
+### B6 — a bare `import P::*` is not covered by B5's fix
+
+An import with no visibility keyword parses as `VisibilityDefault`, and `internal/core/symbols/index.go:324`
+maps only an explicit `ast.VisibilityPrivate` to `Private`. B5 therefore closes `private import` and
+leaves the default form open. If the KerML default import visibility is private, **every bare wildcard
+import in the workspace currently re-exports when it should not** — which is a large behavioural change,
+hence the spec citation and the before/after corpus requirement.
+
+### B5's leftover — the unqualified route is still open
+
+`internal/core/resolve/unqualified.go:134` — `matchImport` enumerates a wildcard import's target with
+`idx.LookupDirectChildren` (`symbols/index.go:485`), which does not consult the hidden marks, so the
+*unqualified* route into a private import still resolves. Repro:
+
+```sysml
+package Base { part def Hidden; }
+package Mid  { private import Base::*; }
+package App  { import Mid::*; }        // `Hidden` resolves unqualified inside App
+```
+
+B5 left it because `unqualified.go` belonged to sibling B2 that wave, and because `LookupDirectChildren`
+is also the enumeration `semantics/members.go:64,97` relies on.
+
 ## B3 — implicit library import (do this LAST)
 
 `❌ Unqualified library names in files that do not import their library`. Deferred again for the same
@@ -264,9 +301,14 @@ real, the task is wherever the ends are actually dropped, and if it is not, clos
 
 # Batch G — found by wave 1 (new)
 
-## G1 — a `subject` escapes the usage-kind check depending on what precedes it in the body
+## G1 — a `subject` escapes the usage-kind check depending on what precedes it in the body ✅ done (#52, open)
 
-Found by E2, reproduced on the merged wave-1 stack:
+Taken by the maintainer in **#52**, which also corrected a `subject` rule #45 got wrong: the allow-list
+rejected the `port def` and `action def` that the OMG models subject, and §8.3.21 makes the subject
+parameter unconstrained. `docs/TRAINING_EXAMPLES.md` marks that half of #45's verdict superseded.
+At the time of writing #52 is green and awaiting merge — not on `main`. **Do not task this.**
+
+Original write-up. Found by E2, reproduced on the merged wave-1 stack:
 
 ```
 requirement def R { subject s : A; }                 -> no diagnostic
@@ -292,6 +334,33 @@ cannot start until wave 1 has merged.
   Fixing it reclassifies the usage kind and reaches `internal/core/symbols/builder.go`.
 - `internal/core/parser/behavior.go:267-280` — `action a { in snapshot ; }` parses with zero
   diagnostics; an anonymous untyped parameter is silently accepted. Pre-existing for `in event ;` too.
+
+## G3 — #51 is contested; do not treat it as wave-1 cleanup and do not merge it
+
+#51 reinterprets `individual item : Integer;` so that `item` becomes the *name* and the usage's kind
+becomes `individual` rather than `item`. On `main` that form is an anonymous item usage, consistent with
+both `item : Integer;` and `ref item : Integer;` — `ref` is a modifier in the same position and #51
+leaves it alone, so the change would make two modifiers in the same position behave oppositely. A spec
+citation has been requested on the PR. This is a spec-reading call for the maintainer, not a child's.
+
+---
+
+# Wave 2 — in progress (B1a, B2, B5; B4 deliberately held)
+
+Three concurrent children off `main` @ `426d292`, no stacking. **B4 was not launched with them**: it has
+to widen the same `Private bool` visibility representation in `internal/core/symbols/index.go`
+(`reexport`/`markReexported`) that B5 reworks, which is a file collision rather than mere task coupling,
+so it runs after B5 merges.
+
+| PR | Task | Corpus |
+|---|---|---|
+| #54 | B1a — `accept` suspends the action instead of returning `ErrNoMatchingMessage` | 98, unmoved |
+| #55 | B5 — a privately wildcard-imported name is no longer reachable by qualified reference | 98, unmoved |
+| — | B2 — the three naming rules | running |
+
+#54 adds a real waiting state plus deadlock detection: conformance 54 → 56, robustness 31 → 33, golden
+traces 24 with no existing golden changed. #55 closes KerML §8.2.3.3 for qualified references while
+keeping `resolveCachedAliasTarget` working, verified cold with zero per-file corpus drift.
 
 ---
 
@@ -340,8 +409,11 @@ technical. Three rules:
 1. **Partition by disjoint file sets, not by task independence.** All seven Batch A children edited
    `internal/core/model/testdata/training_examples_expected.txt`, so every PR conflicted with every other
    one and the corpus figure churned 88 → 89 → 90 → 91 → 93 → 95 → 97 while sessions re-measured against a
-   moving baseline. Children should adjudicate in `docs/TRAINING_EXAMPLES.md` and report counts, but not
-   commit the expectations file; one follow-up session regenerates it after the batch merges.
+   moving baseline. Children should adjudicate in `docs/TRAINING_EXAMPLES.md` and report counts.
+   **Superseded in part:** the no-commit half of this rule died with C1 — see the wave-1 section. A
+   corpus-moving PR now commits its own regenerated expectations file, and such PRs are serialised.
+   The disjoint-file-sets rule itself stands, and wave 2 shows it binds harder than task independence:
+   B4 reads as independent of B5 and is not, because they share one field in `symbols/index.go`.
 2. **Give every child an explicit file list and a stop rule.** "If you find a bug outside this list,
    write it up under 'Found, not fixed' and carry on." A3 ran to 69 ACU and about eleven review rounds,
    expanding from one spec row into four parser bugs and two resolver rewrites — all real, none in scope.
@@ -354,7 +426,12 @@ technical. Three rules:
 
 1. ~~**C1** first~~ and ~~**E2**, **F1**, **F2** concurrently~~ — wave 1, done; see the wave-1 section
    above for the merge order.
-2. **B1** as several separate sessions, with **B2**, **B4** and **B5** alongside. These share
-   `docs/SPEC_COMPLIANCE.md` and little else, so they parallelize well; the two `state_executor.go`
-   items in B1 must run one at a time.
-3. **B3 last**, gated on a per-file corpus diff.
+2. ~~**B1** as several separate sessions, with **B2**, **B4** and **B5** alongside~~ — wave 2, in
+   progress as **B1a**, **B2** and **B5**; see the wave-2 section. B1's five remaining bullets (port
+   routing direction and conjugation, accept-parameter visibility, transition endpoint name timing,
+   dangling transition detection, calc recursion) are serialised behind B1a because they share
+   `runtime/action_executor.go`, `eval.go` and `state_executor.go`.
+3. **B4** after #55 lands, carrying **B6** and B5's unqualified-route leftover in the same session.
+4. Each child edits **only its own row** of `docs/SPEC_COMPLIANCE.md`, and stays off `cmd/`,
+   `internal/repl/` and `README.md` while the maintainer is working those.
+5. **B3 last**, gated on a per-file corpus diff.
