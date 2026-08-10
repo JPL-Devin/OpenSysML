@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -9,11 +8,6 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
-
-// ErrNoMatchingMessage reports that an accept action found no message it could
-// consume. It is a suspension condition in SysML, but this runtime executes a
-// single behavior to completion, so nothing can arrive later.
-var ErrNoMatchingMessage = errors.New("no matching message")
 
 // Message is a signal instance in flight.
 //
@@ -86,8 +80,8 @@ func (m Message) arrivedAt(port string) bool {
 // postVia routes a message out of a sending port: every port connected to it
 // receives a copy, since a connection joins ends without a direction. A port
 // with no connections reaches no one, which is not an error — the message is
-// simply never delivered, and an accept waiting for it fails with
-// ErrNoMatchingMessage.
+// simply never delivered, and an accept waiting for it stays suspended until
+// the run gives up with ErrAcceptDeadlock.
 func (ctx *Context) postVia(conns []lower.Connection, msg Message, sendingPort string) {
 	for _, peer := range lower.PeerPorts(conns, sendingPort) {
 		routed := msg

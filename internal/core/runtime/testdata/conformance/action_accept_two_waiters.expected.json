@@ -1,0 +1,7 @@
+{
+	"type": "action",
+	"outputs": {
+		"number": {"type": "Integer", "value": 5},
+		"message": {"type": "String", "value": "go"}
+	}
+}

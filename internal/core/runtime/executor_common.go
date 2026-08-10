@@ -13,6 +13,28 @@ type Token struct {
 	ID       int64            // Unique token ID
 	Location ast.Node         // Current node position
 	Data     map[string]Value // Token data (parameters, flow values)
+
+	// Wait records that this token is parked at an accept node: the accept
+	// found no message it could consume, so the action is suspended there
+	// until one arrives. It is nil for every token that is free to advance.
+	Wait *AcceptWait
+}
+
+// AcceptWait describes the message a parked token is waiting for. It is the
+// accept's lowered shape plus the step the token parked at, which is what lets
+// a blocked run report which accept is waiting for what rather than only that
+// it is stuck.
+type AcceptWait struct {
+	ParamName  string // the accept parameter the message will bind to
+	SignalType string // the type awaited, empty when the accept named none
+	ViaPort    string // the port awaited on, empty when the accept named none
+	Since      int    // step count at which the token parked
+}
+
+// String describes what a parked token is waiting for, for error messages.
+func (w AcceptWait) String() string {
+	return fmt.Sprintf("accept %s waiting for a message of type %s%s",
+		w.ParamName, orAny(w.SignalType), viaSuffix(w.ViaPort))
 }
 
 // ExecutionState tracks executor state.
@@ -23,6 +45,7 @@ const (
 	StateRunning                         // In progress
 	StateCompleted                       // Reached terminal state
 	StateSuspended                       // Paused for debugging
+	StateWaiting                         // Every remaining token is parked at an accept
 )
 
 func (s ExecutionState) String() string {
@@ -35,6 +58,8 @@ func (s ExecutionState) String() string {
 		return "Completed"
 	case StateSuspended:
 		return "Suspended"
+	case StateWaiting:
+		return "Waiting"
 	default:
 		return "Unknown"
 	}

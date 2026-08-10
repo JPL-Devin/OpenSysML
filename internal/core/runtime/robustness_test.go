@@ -39,6 +39,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
+	t.Run("accept_deadlock_never_satisfied", testAcceptDeadlockNeverSatisfied)
+	t.Run("accept_deadlock_reports_every_waiting_accept", testAcceptDeadlockReportsEveryWaitingAccept)
 	t.Run("history_outside_composite_state", testHistoryOutsideCompositeState)
 	t.Run("history_without_record_or_default", testHistoryWithoutRecordOrDefault)
 	t.Run("defer_of_non_deferrable_trigger", testDeferOfNonDeferrableTrigger)
@@ -353,8 +355,9 @@ func testHistoryWithoutRecordOrDefault(t *testing.T) {
 	}
 }
 
-// testSendViaUnconnectedPort: a port with no connection reaches no one, so an
-// accept waiting on the message must report rather than hang or bind nothing.
+// testSendViaUnconnectedPort: a port with no connection reaches no one, so the
+// accept waiting on the message suspends forever — which must be reported as a
+// deadlock rather than hanging or binding nothing.
 func testSendViaUnconnectedPort(t *testing.T) {
 	_, err := executeActionSource(t, "pipeline", `package P {
 		action pipeline {
@@ -372,8 +375,85 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error: nothing connects outPort to inPort")
 	}
-	if !errors.Is(err, ErrNoMatchingMessage) {
-		t.Errorf("expected ErrNoMatchingMessage, got: %v", err)
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+}
+
+// testAcceptDeadlockNeverSatisfied: an accept nothing can ever satisfy suspends
+// the action, and a suspension that can never end must be reported as a typed
+// deadlock rather than hanging.
+func testAcceptDeadlockNeverSatisfied(t *testing.T) {
+	done := make(chan error, 1)
+	go func() {
+		_, err := executeActionSource(t, "pipeline", `package P {
+			action pipeline {
+				first start;
+				action reader accept n : Integer;
+				done end;
+				then start reader;
+				then reader end;
+			}
+		}`)
+		done <- err
+	}()
+
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("an action waiting for a message that cannot arrive did not terminate")
+	}
+
+	if err == nil {
+		t.Fatal("expected a deadlock error, the suspended accept completed")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+	for _, want := range []string{"accept n", "Integer"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected %q in the deadlock report, got: %v", want, err)
+		}
+	}
+}
+
+// testAcceptDeadlockReportsEveryWaitingAccept: with two accepts parked in
+// parallel branches and only one message in flight, the accept that can proceed
+// does, and the report names the one still waiting rather than the whole action.
+func testAcceptDeadlockReportsEveryWaitingAccept(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action sender { send 7 to reader; }
+			fork split;
+			action reader accept n : Integer;
+			action recorder { assign got := n; }
+			action listener accept text : String;
+			join sync;
+			done end;
+			then start sender;
+			then sender split;
+			then split reader;
+			then split listener;
+			then reader recorder;
+			then recorder sync;
+			then listener sync;
+			then sync end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected a deadlock error: no String is ever sent")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Fatalf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "accept text waiting for a message of type String") {
+		t.Errorf("expected the still-waiting accept in the report, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "accept n ") {
+		t.Errorf("the Integer accept was satisfied and must not be reported as waiting: %v", err)
 	}
 }
 

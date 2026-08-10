@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lower"
@@ -61,7 +63,18 @@ func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, e
 
 // Step advances execution by one step for all active tokens.
 // Safely handles token slice modifications (fork/join) by collecting indices first.
-// Returns error if deadlock detected (no progress made).
+//
+// A token that reaches an accept with no message it can consume parks there
+// rather than failing: the action is suspended until a matching message
+// arrives. When a step moves nothing and at least one token is parked, the
+// executor enters StateWaiting instead of reporting a deadlock — a caller
+// driving Step itself (the REPL, or a state machine running in the same
+// context) may still post the awaited message and step again, which resumes
+// the parked token. RunToCompletion has no such caller, so it turns a step
+// that leaves the executor waiting into ErrAcceptDeadlock.
+//
+// Returns an error if a deadlock unrelated to accepts is detected (no progress
+// made and nothing is waiting for a message).
 func (e *ActionExecutor) Step() error {
 	if e.state == StateCompleted {
 		return nil // Already completed
@@ -69,6 +82,12 @@ func (e *ActionExecutor) Step() error {
 
 	if e.state == StateReady {
 		return fmt.Errorf("executor not initialized (call initialize first)")
+	}
+
+	// A waiting executor is asked again whether its parked tokens can proceed:
+	// messages may have been posted since the step that parked them.
+	if e.state == StateWaiting {
+		e.state = StateRunning
 	}
 
 	// Snapshot token state before step (for deadlock detection)
@@ -122,9 +141,13 @@ func (e *ActionExecutor) Step() error {
 		progressMade = true
 	}
 
-	// If no progress and tokens remain, deadlock detected
+	// If no progress and tokens remain, either the action is suspended waiting
+	// for a message, or it is stuck for a reason no message can resolve.
 	if !progressMade && len(e.tokens) > 0 {
-		return fmt.Errorf("deadlock detected: %d token(s) stuck, no progress made", len(e.tokens))
+		if !e.anyTokenWaiting() {
+			return fmt.Errorf("deadlock detected: %d token(s) stuck, no progress made", len(e.tokens))
+		}
+		e.state = StateWaiting
 	}
 
 	// Increment step count
@@ -138,13 +161,60 @@ func (e *ActionExecutor) Step() error {
 	return nil
 }
 
+// anyTokenWaiting reports whether some token is parked at an accept.
+func (e *ActionExecutor) anyTokenWaiting() bool {
+	for _, token := range e.tokens {
+		if token.Wait != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// waitingTokens returns the parked tokens, in token-ID order, so that a report
+// of what an action is waiting for does not depend on step scheduling.
+func (e *ActionExecutor) waitingTokens() []Token {
+	waiting := make([]Token, 0, len(e.tokens))
+	for _, token := range e.tokens {
+		if token.Wait != nil {
+			waiting = append(waiting, token)
+		}
+	}
+	sort.Slice(waiting, func(i, j int) bool { return waiting[i].ID < waiting[j].ID })
+	return waiting
+}
+
+// deadlockError describes a suspension that can never end: the accepts still
+// waiting, and any token blocked for another reason alongside them.
+func (e *ActionExecutor) deadlockError() error {
+	waiting := e.waitingTokens()
+	descriptions := make([]string, 0, len(waiting))
+	for _, token := range waiting {
+		descriptions = append(descriptions, token.Wait.String())
+	}
+	if blocked := len(e.tokens) - len(waiting); blocked > 0 {
+		descriptions = append(descriptions,
+			fmt.Sprintf("%d token(s) blocked for another reason", blocked))
+	}
+	return fmt.Errorf("%w in action %s: nothing can post the awaited message (%s)",
+		ErrAcceptDeadlock, e.action.Name, strings.Join(descriptions, "; "))
+}
+
 // RunToCompletion executes until StateCompleted or error.
 // Includes infinite loop protection.
+//
+// Nothing outside the action can post a message while this runs, so an action
+// whose every remaining token is parked at an accept can never be resumed: the
+// suspension is a deadlock and is reported as ErrAcceptDeadlock at the first
+// step that makes no progress. A parked action therefore cannot spend the step
+// budget spinning — the budget is only consumed by steps that move something.
 func (e *ActionExecutor) RunToCompletion() error {
 	const maxSteps = 10000
 	steps := 0
 
-	for e.state == StateRunning {
+	// A run may start from StateWaiting: a caller that stepped an action into a
+	// suspension and then posted the awaited message resumes it here.
+	for e.state == StateRunning || e.state == StateWaiting {
 		if steps >= maxSteps {
 			return fmt.Errorf("execution exceeded max steps (%d), possible infinite loop", maxSteps)
 		}
@@ -152,6 +222,9 @@ func (e *ActionExecutor) RunToCompletion() error {
 		err := e.Step()
 		if err != nil {
 			return err
+		}
+		if e.state == StateWaiting {
+			return e.deadlockError()
 		}
 
 		steps++
@@ -579,7 +652,9 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		return fmt.Errorf("expected Usage, got %T", token.Location)
 	}
 
-	// An accept node waits for a message of its parameter's type.
+	// An accept node waits for a message of its parameter's type. Until one
+	// arrives the token parks here: the action is suspended, not failed, and
+	// the next step retries the match.
 	accept, isAccept := e.graph.Accepts[usage]
 	if isAccept {
 		msg, taken := e.ctx.TakeMessage(func(m Message) bool {
@@ -592,9 +667,17 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			return accept.ViaPort != "" || m.addressedTo(usage.Ident.Name)
 		})
 		if !taken {
-			return fmt.Errorf("accept action %s: %w of type %s%s",
-				accept.ParamName, ErrNoMatchingMessage, orAny(accept.SignalType), viaSuffix(accept.ViaPort))
+			if token.Wait == nil {
+				token.Wait = &AcceptWait{
+					ParamName:  accept.ParamName,
+					SignalType: accept.SignalType,
+					ViaPort:    accept.ViaPort,
+					Since:      e.stepCount,
+				}
+			}
+			return nil
 		}
+		token.Wait = nil
 		token.Data[accept.ParamName] = msg.Payload["value"]
 	}
 

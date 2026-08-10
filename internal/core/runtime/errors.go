@@ -41,6 +41,13 @@ var (
 	// expression, directly or by inheritance.
 	ErrNoResultExpression = errors.New("no result expression")
 
+	// ErrAcceptDeadlock is returned when an action can no longer progress
+	// because every token it has left is parked at an accept, so no token can
+	// post the message any of them waits for. An accept suspends the action
+	// rather than failing, so this is how a suspension that can never end is
+	// reported instead of hanging.
+	ErrAcceptDeadlock = errors.New("accept deadlock")
+
 	// ErrCalcRecursionLimit is returned when calc invocation nests deeper than
 	// maxCalcNestingDepth, which a recursive calc would otherwise do until the
 	// process ran out of stack.
