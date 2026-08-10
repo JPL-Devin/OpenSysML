@@ -32,4 +32,28 @@
           (ConnectorEnd target="c"
             (*ast.QualifiedName))
           (ConnectorEnd target="d"
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="a"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="b"
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="a"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="b"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="c"
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="a"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="b"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="c"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="d"
             (*ast.QualifiedName)))))))

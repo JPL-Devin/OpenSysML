@@ -60,6 +60,8 @@ func TestNegative(t *testing.T) {
 		{"nary_connect_unclosed", "part def C { part a; part b; connection conn connect (a, b; }"},
 		{"nary_connect_trailing_comma", "part def C { part a; part b; connection conn connect (a, b, ); }"},
 		{"nary_connect_empty", "part def C { connection conn connect (); }"},
+		{"anonymous_nary_connect_unclosed", "part def C { part a; part b; connect (a, b; }"},
+		{"anonymous_nary_connect_empty", "part def C { connect (); }"},
 	}
 
 	for _, tt := range tests {
