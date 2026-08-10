@@ -77,7 +77,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 			if i == 0 && cur != nil {
 				// First segment after the initial lookup: cur::seg
 				fqn := cur.Name + "::" + seg.Text
-				candidates := r.idx.LookupQualified(fqn)
+				candidates := r.idx.LookupQualifiedFrom(fqn, r.referringNamespaceFQN(scope))
 				if len(candidates) == 1 {
 					all = candidates
 				} else if len(candidates) > 1 {
@@ -109,6 +109,23 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		r.recordPart(qn, i+1, cur)
 	}
 	return resolution{cur, true}
+}
+
+// referringNamespaceFQN returns the fully-qualified name of the namespace a
+// reference made in scope belongs to, or "" for one made outside any namespace.
+// It is the context a qualified lookup is answered in: a name a private wildcard
+// import brought into a namespace is a member of it but visible only from
+// within (KerML 8.2.3.3), so `Mid::Hidden` resolves inside Mid and nowhere else.
+func (r *Resolver) referringNamespaceFQN(scope *symbols.Scope) string {
+	if r.idx == nil {
+		return ""
+	}
+	for s := scope; s != nil; s = s.Parent() {
+		if owner := s.Owner(); owner != nil {
+			return r.idx.GetFQN(owner)
+		}
+	}
+	return ""
 }
 
 // lookupInRoot finds a name in the document root scope reachable from scope.

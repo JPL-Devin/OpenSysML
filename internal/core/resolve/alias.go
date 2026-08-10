@@ -55,28 +55,32 @@ func aliasScope(sym *symbols.Symbol) *symbols.Scope {
 	return sym.OwnerScope
 }
 
-// resolveCachedAliasTarget resolves an alias target from its raw qualified name text.
-// For cached stdlib symbols (no OwnerScope), attempts FQN lookup. If that fails,
-// treats it as relative and searches parent package scope.
+// resolveCachedAliasTarget resolves an alias target from its raw qualified name
+// text. A cached symbol carries no scope, so the lookup goes through the index:
+// first as an absolute FQN, then relative to the namespace that declares the
+// alias.
+//
+// Both lookups are made *from* that namespace (LookupQualifiedFrom), which is
+// what lets an alias reach a target its namespace only sees through a private
+// wildcard import — `ISQThermodynamics::TemperatureValue` aliases
+// `ThermodynamicTemperatureValue`, which ISQThermodynamics holds only by way of
+// its `private import ISQBase::*`. That name is a member of the namespace but
+// not a visible one (KerML 8.2.3.3), so it is unreachable by a qualified
+// reference from elsewhere while remaining reachable from within, which is where
+// an alias of it is declared.
 func (r *Resolver) resolveCachedAliasTarget(targetText string, aliasSym *symbols.Symbol) *symbols.Symbol {
-	// Try direct FQN lookup first (absolute reference)
-	if candidates := r.idx.LookupQualified(targetText); len(candidates) > 0 {
+	namespaceFQN := parentPackageFQN(aliasSym.Name)
+
+	// Absolute reference.
+	if candidates := r.idx.LookupQualifiedFrom(targetText, namespaceFQN); len(candidates) > 0 {
 		return candidates[0]
 	}
 
-	// If alias symbol has OwnerScope (shouldn't for cached, but defensive),
-	// resolve as qualified name from that scope
-	if aliasSym.OwnerScope != nil {
-		// Parse targetText into QualifiedName for resolution
-		// For now, simple approach: try relative to parent package
-	}
-
-	// Fallback: construct likely FQN by going up from alias FQN
-	// Example: alias at "ISQ::TimeValue" targeting "DurationValue"
-	// → try "ISQ::DurationValue"
-	if parentFQN := parentPackageFQN(aliasSym.Name); parentFQN != "" {
-		candidateFQN := parentFQN + "::" + targetText
-		if candidates := r.idx.LookupQualified(candidateFQN); len(candidates) > 0 {
+	// Relative to the declaring namespace: an alias at "ISQ::TimeValue" naming
+	// "DurationValue" means "ISQ::DurationValue".
+	if namespaceFQN != "" {
+		candidateFQN := namespaceFQN + "::" + targetText
+		if candidates := r.idx.LookupQualifiedFrom(candidateFQN, namespaceFQN); len(candidates) > 0 {
 			return candidates[0]
 		}
 	}

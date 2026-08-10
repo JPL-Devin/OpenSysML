@@ -226,7 +226,9 @@ func TestExpandWildcardImportsTargetSurvivesAReexportOfItsName(t *testing.T) {
 }
 
 // A private import is visible only inside the namespace that declares it, so a
-// package importing that namespace must not see what it privately imported.
+// package importing that namespace must not see what it privately imported, and
+// neither must a qualified reference through that namespace's own name
+// (KerML 8.2.3.3).
 func TestExpandWildcardImportsDoesNotCarryOnAPrivateImport(t *testing.T) {
 	idx := NewIndex()
 	addDoc(t, idx, "base.sysml", "package Base { part def Hidden; part def Shown; }")
@@ -234,8 +236,12 @@ func TestExpandWildcardImportsDoesNotCarryOnAPrivateImport(t *testing.T) {
 	addDoc(t, idx, "top.sysml", "package Top { public import Mid::*; }")
 	idx.ExpandWildcardImports()
 
-	if got := len(idx.LookupQualified("Mid::Hidden")); got != 1 {
-		t.Errorf("LookupQualified(Mid::Hidden) len = %d, want 1: "+
+	if got := len(idx.LookupQualified("Mid::Hidden")); got != 0 {
+		t.Errorf("LookupQualified(Mid::Hidden) len = %d, want 0: "+
+			"Mid does not re-export what it imported privately", got)
+	}
+	if got := len(idx.LookupQualifiedFrom("Mid::Hidden", "Mid")); got != 1 {
+		t.Errorf("LookupQualifiedFrom(Mid::Hidden, Mid) len = %d, want 1: "+
 			"a private import is visible inside Mid", got)
 	}
 	if got := len(idx.LookupQualified("Top::Own")); got != 1 {
@@ -244,6 +250,74 @@ func TestExpandWildcardImportsDoesNotCarryOnAPrivateImport(t *testing.T) {
 	if got := len(idx.LookupQualified("Top::Hidden")); got != 0 {
 		t.Errorf("LookupQualified(Top::Hidden) len = %d, want 0: "+
 			"Mid imported Base privately, so Top does not see Base's members", got)
+	}
+}
+
+// A privately imported name is visible from inside the importing namespace and
+// from anything nested in it, and from nowhere else — not from a sibling, and
+// not from a namespace whose name merely starts with the same text.
+func TestLookupQualifiedFromSeesAPrivateImportOnlyFromWithin(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Hidden; }")
+	addDoc(t, idx, "mid.sysml",
+		"package Mid { private import Base::*; package Inner { part def I; } }")
+	addDoc(t, idx, "midden.sysml", "package Midden { part def M; }")
+	idx.ExpandWildcardImports()
+
+	for _, from := range []string{"Mid", "Mid::Inner"} {
+		if got := len(idx.LookupQualifiedFrom("Mid::Hidden", from)); got != 1 {
+			t.Errorf("LookupQualifiedFrom(Mid::Hidden, %s) len = %d, want 1: "+
+				"a private import is visible throughout the namespace declaring it",
+				from, got)
+		}
+	}
+	for _, from := range []string{"", "Midden", "Other::Mid"} {
+		if got := len(idx.LookupQualifiedFrom("Mid::Hidden", from)); got != 0 {
+			t.Errorf("LookupQualifiedFrom(Mid::Hidden, %q) len = %d, want 0: "+
+				"Mid's private import is not visible there", from, got)
+		}
+	}
+}
+
+// A public wildcard import is unaffected: the name it surfaces stays reachable
+// by a qualified reference through the importing namespace, from anywhere.
+func TestLookupQualifiedReachesAPubliclyImportedName(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Shown; }")
+	addDoc(t, idx, "mid.sysml", "package Mid { public import Base::*; }")
+	idx.ExpandWildcardImports()
+
+	if got := len(idx.LookupQualified("Mid::Shown")); got != 1 {
+		t.Errorf("LookupQualified(Mid::Shown) len = %d, want 1: "+
+			"a public import re-exports the name it surfaces", got)
+	}
+}
+
+// Chained: A privately imports B::*, and C imports A::*. C sees neither B's
+// members through A nor, since A never re-exported them, through its own name.
+func TestLookupQualifiedAcrossAChainedPrivateImport(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "b.sysml", "package B { part def Deep; }")
+	addDoc(t, idx, "a.sysml", "package A { private import B::*; part def Own; }")
+	addDoc(t, idx, "c.sysml", "package C { public import A::*; }")
+	idx.ExpandWildcardImports()
+
+	if got := len(idx.LookupQualified("C::Own")); got != 1 {
+		t.Errorf("LookupQualified(C::Own) len = %d, want 1: A::Own is public", got)
+	}
+	for _, fqn := range []string{"C::Deep", "A::Deep"} {
+		if got := len(idx.LookupQualified(fqn)); got != 0 {
+			t.Errorf("LookupQualified(%s) len = %d, want 0: "+
+				"B::Deep reaches A privately and stops there", fqn, got)
+		}
+	}
+	if got := len(idx.LookupQualifiedFrom("A::Deep", "A")); got != 1 {
+		t.Errorf("LookupQualifiedFrom(A::Deep, A) len = %d, want 1: "+
+			"A's own private import is visible inside A", got)
+	}
+	if got := len(idx.LookupQualifiedFrom("C::Deep", "C")); got != 0 {
+		t.Errorf("LookupQualifiedFrom(C::Deep, C) len = %d, want 0: "+
+			"C never received B's members at all", got)
 	}
 }
 

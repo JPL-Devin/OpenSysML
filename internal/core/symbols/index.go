@@ -370,15 +370,39 @@ func shortNameOf(decl ast.Node) string {
 	}
 }
 
-// LookupQualified returns the symbols registered under the exact
-// fully-qualified name. A namespace's own member shadows one of the same name
-// that a wildcard import re-exported through it, as in SI::min, which is SI's
-// minute and not the imported min function.
+// LookupQualified returns the symbols a qualified reference from outside the
+// naming namespace reaches under the exact fully-qualified name. A namespace's
+// own member shadows one of the same name that a wildcard import re-exported
+// through it, as in SI::min, which is SI's minute and not the imported min
+// function, and a name only a *private* import surfaced is not reachable at all:
+// it is a member of the namespace, but not a visible one (KerML 8.2.3.3).
 func (idx *Index) LookupQualified(fqn string) []*Symbol {
+	return idx.LookupQualifiedFrom(fqn, "")
+}
+
+// LookupQualifiedFrom is LookupQualified as seen from the namespace named by
+// fromFQN. A private import is visible inside the namespace that declares it and
+// inside everything nested in it, so a reference made from there — including the
+// target of an alias the namespace declares — still reaches a privately imported
+// name that the same lookup from anywhere else does not (KerML 8.2.3.3).
+//
+// fromFQN is the FQN of the referring namespace; "" means "from outside", which
+// is what an ordinary qualified reference elsewhere in the workspace gets.
+func (idx *Index) LookupQualifiedFrom(fqn, fromFQN string) []*Symbol {
 	syms := idx.fqn[fqn]
 	imported := idx.reexported[fqn]
 	if len(imported) == 0 {
 		return syms
+	}
+	hidden := idx.hidden[fqn]
+	if len(hidden) > 0 && !withinNamespace(fromFQN, namespaceOf(fqn)) {
+		visible := make([]*Symbol, 0, len(syms))
+		for _, sym := range syms {
+			if !hidden[sym] {
+				visible = append(visible, sym)
+			}
+		}
+		syms = visible
 	}
 	owned := make([]*Symbol, 0, len(syms))
 	for _, sym := range syms {
@@ -390,6 +414,34 @@ func (idx *Index) LookupQualified(fqn string) []*Symbol {
 		return syms
 	}
 	return owned
+}
+
+// namespaceOf returns the FQN of the namespace a qualified name names a member
+// of: "A::B::C" -> "A::B", and "" for a top-level name.
+func namespaceOf(fqn string) string {
+	i := lastIndex(fqn, "::")
+	if i < 0 {
+		return ""
+	}
+	return fqn[:i]
+}
+
+// withinNamespace reports whether a reference made from the namespace fromFQN
+// sees ns's private memberships, which it does when it *is* ns or is nested
+// inside it. A reference from outside any namespace ("") never does, and neither
+// does one from a namespace that merely shares a name prefix ("A::BC" is not in
+// "A::B").
+func withinNamespace(fromFQN, ns string) bool {
+	if fromFQN == "" {
+		return false
+	}
+	if ns == "" {
+		return false
+	}
+	if fromFQN == ns {
+		return true
+	}
+	return len(fromFQN) > len(ns)+2 && fromFQN[:len(ns)] == ns && fromFQN[len(ns):len(ns)+2] == "::"
 }
 
 // FQNs returns every fully-qualified name registered in the index, sorted.

@@ -77,6 +77,49 @@ func TestResolveQualifiedGlobal(t *testing.T) {
 	}
 }
 
+// A name a namespace holds only through a private wildcard import is not a
+// visible member of it, so a qualified reference from another package does not
+// reach it — while the same reference made inside that namespace does
+// (KerML 8.2.3.3).
+func TestResolveQualifiedRejectsAPrivatelyImportedName(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"base.sysml": "package Base { part def Hidden; }",
+		"mid.sysml":  "package Mid { private import Base::*; }",
+		"app.sysml":  "package App { }",
+	})
+	idx.ExpandWildcardImports()
+	r := New(idx)
+
+	app := scopeOf(t, idx.DocumentRoot("app.sysml"), "App")
+	if sym, ok := r.ResolveQualified(app, qn(false, "Mid", "Hidden")); ok {
+		t.Fatalf("Mid::Hidden resolved to %q from App: Mid imported Base privately",
+			sym.Name)
+	}
+
+	mid := scopeOf(t, idx.DocumentRoot("mid.sysml"), "Mid")
+	if _, ok := r.ResolveQualified(mid, qn(false, "Mid", "Hidden")); !ok {
+		t.Fatalf("Mid::Hidden unresolved inside Mid, where the private import is "+
+			"visible; diagnostics: %v", r.Diagnostics)
+	}
+}
+
+// A public wildcard import still re-exports: the qualified reference the private
+// case rejects resolves here.
+func TestResolveQualifiedReachesAPubliclyImportedName(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"base.sysml": "package Base { part def Shown; }",
+		"mid.sysml":  "package Mid { public import Base::*; }",
+		"app.sysml":  "package App { }",
+	})
+	idx.ExpandWildcardImports()
+	r := New(idx)
+
+	app := scopeOf(t, idx.DocumentRoot("app.sysml"), "App")
+	if _, ok := r.ResolveQualified(app, qn(false, "Mid", "Shown")); !ok {
+		t.Fatalf("Mid::Shown unresolved from App; diagnostics: %v", r.Diagnostics)
+	}
+}
+
 func TestResolveQualifiedSegmentIntoLeaf(t *testing.T) {
 	// A leaf symbol (no child scope) cannot own further segments.
 	idx := indexOf(t, map[string]string{
