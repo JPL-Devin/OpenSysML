@@ -388,15 +388,15 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 **Action debugging:**
 - `%action <name>` — Start debugging action execution
 - `%step` — Advance all tokens one step
-- `%continue` — Run action to completion
+- `%continue` — Run action to completion, or to the first breakpoint hit
 - `%tokens` — Show active tokens with location + data
-- `%break <nodeName>` — Set breakpoint on node
+- `%break <nodeName>` — Set breakpoint on node; `%continue` stops when a token reaches it
 
 **State machine debugging:**
 - `%state <name>` — Start debugging state machine
 - `%events` — Show event queue length
 - `%current` — Show current state, stack, stateData, time
-- `%advance` — Process next event
+- `%advance <time>` — Advance simulation time by `<time>` units, processing every event due
 - `%stop` — Stop debugging session
 
 ### Implementation

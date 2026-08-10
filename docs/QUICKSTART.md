@@ -384,54 +384,60 @@ Result: 42
 **State machine execution:**
 ```sysml
 sysml> state TrafficLight {
-...>     entry start green;
-...>     state green;
-...>     state yellow;
-...>     state red;
-...>     done end off;
-...>     
-...>     transition green to yellow after 25;
-...>     transition yellow to red after 5;
-...>     transition red to off after 30;
+...>     initial start;
+...>     state green { accept after 25 then yellow; }
+...>     state yellow { accept after 5 then red; }
+...>     state red { accept after 30 then off; }
+...>     final off;
+...>
+...>     start then green;
 ...> }
-✓ TrafficLight
 
 sysml> %state TrafficLight
-State machine: TrafficLight
-Current: green
-Time: 0.0s
-Events: 1
+✓ Started state machine executor for "TrafficLight"
+  Current state: start
+  Time: 0.00
+  Events: 1
 
-sysml> %advance
-Current: yellow (Time: 25.0s)
+sysml> %advance 25
+✓ Advanced to 25.00 (2 event(s) processed)
+  Current state: yellow
+  Time: 25.00
+  Remaining events: 1
 
 sysml> %current
 Current state: yellow
-State stack: [yellow]
-Time: 25.0s
-Events: 1
-State: Running
+Time: 25.00
+Execution state: Running
 
-sysml> %advance
-Current: red (Time: 30.0s)
+sysml> %advance 5
+✓ Advanced to 30.00 (1 event(s) processed)
+  Current state: red
+  Time: 30.00
+  Remaining events: 1
 
-sysml> %advance
-✓ Final state reached (off)
+sysml> %advance 30
+✓ Advanced to 60.00 (1 event(s) processed)
+  Current state: off
+  Time: 60.00
+  Remaining events: 0
+
+✓ State machine completed (final state reached)
 ```
 
 **Action debugging commands:**
 - `%action <name>` — Start action debugging session
 - `%step` — Advance all tokens one step
-- `%continue` — Run to completion
+- `%continue` — Run to completion, or to the first breakpoint hit
 - `%tokens` — Show active tokens with data
-- `%break <node>` — Set breakpoint
+- `%break <node>` — Set breakpoint on a named node; `%continue` stops when a token reaches it
 - `%stop` — Stop debugging
 
 **State machine debugging commands:**
 - `%state <name>` — Start state machine debugging
 - `%events` — Show event queue
 - `%current` — Show current state, stack, data
-- `%advance` — Process next event
+- `%advance <time>` — Advance simulation time by `<time>` units, processing every event due
 - `%stop` — Stop debugging
 
 **See [examples/action-executor-demo.sysml](../examples/action-executor-demo.sysml) and [examples/state-machine-demo.sysml](../examples/state-machine-demo.sysml) for complete workflows.**

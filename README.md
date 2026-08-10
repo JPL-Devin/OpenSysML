@@ -95,12 +95,16 @@ sysml> %continue
 Result: 360
 
 sysml> %state TrafficLight
-State machine: TrafficLight
-Current: red
-Time: 0.0s
+✓ Started state machine executor for "TrafficLight"
+  Current state: red
+  Time: 0.00
+  Events: 1
 
-sysml> %advance
-Current: green (Time: 30.0s)
+sysml> %advance 30
+✓ Advanced to 30.00 (1 event(s) processed)
+  Current state: green
+  Time: 30.00
+  Remaining events: 1
 ```
 
 **See [examples/repl-behavioral-demo.sysml](examples/repl-behavioral-demo.sysml) for comprehensive demos.**
