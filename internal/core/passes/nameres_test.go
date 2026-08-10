@@ -106,6 +106,52 @@ func TestImplicitlyRedefiningParameterBindsRedefinedName(t *testing.T) {
 	}
 }
 
+// resolvedInBody resolves name in the body scope of the member called fqn,
+// after the pass has built the semantic model.
+func resolvedInBody(t *testing.T, src, fqn, name string) (*symbols.Symbol, *symbols.Scope) {
+	t.Helper()
+	ctx, root := nameresCtx(t, "a.sysml", src)
+	NameResolutionPass{}.Run(ctx, "a.sysml", root)
+	owners := ctx.Index.LookupQualified(fqn)
+	if len(owners) != 1 || owners[0].Scope == nil {
+		t.Fatalf("looking up %s: got %d symbols with a body scope", fqn, len(owners))
+	}
+	sym, ok := ctx.Resolver().ResolveName(owners[0].Scope, name, nil)
+	if !ok {
+		t.Fatalf("%s does not resolve in %s", name, fqn)
+	}
+	return sym, owners[0].Scope
+}
+
+// The name binds the anonymous parameter itself, not the inherited one it
+// takes the name from.
+func TestImplicitlyRedefiningParameterIsWhatTheNameBinds(t *testing.T) {
+	sym, scope := resolvedInBody(t, `package P {
+		item def Image;
+		action def Shoot { in image : Image; }
+		action shoot : Shoot {
+			in item;
+			attribute x = image;
+		}
+	}`, "P::shoot", "image")
+	if sym.OwnerScope != scope {
+		t.Fatalf("image resolved to %s outside the body, want the anonymous parameter", sym.Name)
+	}
+}
+
+// Two implicit redefinitions need not agree on a name, so neither names the
+// parameter and the inherited feature keeps the name (KerML 7.3.4.5).
+func TestParameterRedefiningTwoInheritedOnesStaysAnonymous(t *testing.T) {
+	sym, scope := resolvedInBody(t, `package P {
+		action def B1 { in p1; }
+		action def B2 { in p2; }
+		action a : B1, B2 { in item; }
+	}`, "P::a", "p1")
+	if sym.OwnerScope == scope {
+		t.Fatalf("p1 resolved to the anonymous parameter of a, want B1::p1")
+	}
+}
+
 // The name is the redefined parameter's, not the keyword the parameter was
 // declared with.
 func TestImplicitlyRedefiningParameterDoesNotBindItsKeyword(t *testing.T) {

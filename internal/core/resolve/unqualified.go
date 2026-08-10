@@ -82,15 +82,18 @@ func (r *Resolver) implicitlyNamedMember(scope *symbols.Scope, name string, hide
 			continue
 		}
 		r.naming[sym] = true
-		named := false
+		var redefined *symbols.Symbol
+		count := 0
 		for _, sup := range model.DirectSupertypes(sym) {
-			if isParameter(sup) && simpleName(sup) == name {
-				named = true
-				break
+			if isParameter(sup) {
+				redefined = sup
+				count++
 			}
 		}
 		delete(r.naming, sym)
-		if named {
+		// One redefinition names the feature; several need not agree on a
+		// name, so the feature stays anonymous (KerML 7.3.4.5).
+		if count == 1 && simpleName(redefined) == name {
 			return sym, true
 		}
 	}
