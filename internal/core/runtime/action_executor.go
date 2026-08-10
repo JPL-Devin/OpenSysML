@@ -11,19 +11,27 @@ import (
 
 // ActionExecutor executes action bodies using token-flow semantics.
 type ActionExecutor struct {
-	ctx          *Context
-	action       *symbols.Symbol
-	graph        *lower.ActionGraph // Execution IR
-	tokens       []Token
-	state        ExecutionState
-	nextTokenID  int64
-	stepCount    int // Current step number for tracing
-	breakpoints  map[string]bool
-	results      map[string]Value  // Accumulated results from consumed final tokens
-	trace        *TraceRecorder    // Optional trace recorder for testing
-	mergeVisited map[ast.Node]bool // Track merge node visits
-	inputs       map[string]Value  // Input parameter bindings seeded into the initial token
-	pausedAt     string            // Node name RunToCompletion stopped at, empty when it ran to the end
+	ctx         *Context
+	action      *symbols.Symbol
+	graph       *lower.ActionGraph // Execution IR
+	tokens      []Token
+	state       ExecutionState
+	nextTokenID int64
+	stepCount   int // Current step number for tracing
+	breakpoints map[string]bool
+	// firedBreakpoints records the token visits a breakpoint already stopped on.
+	firedBreakpoints map[breakpointVisit]bool
+	results          map[string]Value  // Accumulated results from consumed final tokens
+	trace            *TraceRecorder    // Optional trace recorder for testing
+	mergeVisited     map[ast.Node]bool // Track merge node visits
+	inputs           map[string]Value  // Input parameter bindings seeded into the initial token
+	pausedAt         string            // Node name RunToCompletion stopped at, empty when it ran to the end
+}
+
+// breakpointVisit identifies one token's stay at one node.
+type breakpointVisit struct {
+	token int64
+	node  ast.Node
 }
 
 // SetInputs binds input parameter values that seed the initial token's data.
@@ -46,15 +54,17 @@ func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, e
 	}
 
 	exec := &ActionExecutor{
-		ctx:          ctx,
-		action:       action,
-		graph:        graph,
-		tokens:       make([]Token, 0),
-		state:        StateReady,
-		nextTokenID:  1,
-		breakpoints:  make(map[string]bool),
-		results:      make(map[string]Value),
-		mergeVisited: make(map[ast.Node]bool),
+		ctx:         ctx,
+		action:      action,
+		graph:       graph,
+		tokens:      make([]Token, 0),
+		state:       StateReady,
+		nextTokenID: 1,
+		breakpoints: make(map[string]bool),
+
+		firedBreakpoints: make(map[breakpointVisit]bool),
+		results:          make(map[string]Value),
+		mergeVisited:     make(map[ast.Node]bool),
 	}
 
 	return exec, nil
@@ -148,7 +158,7 @@ func (e *ActionExecutor) Step() error {
 // RunToCompletion executes until StateCompleted, a breakpoint, or error.
 // Includes infinite loop protection.
 //
-// A run stops as soon as a token arrives at a node a breakpoint was set on
+// A run stops as soon as a token sits on a node a breakpoint was set on
 // (see SetBreakpoint), leaving the tokens where they are so the run can be
 // resumed by calling RunToCompletion again or stepped with Step; PausedAt names
 // the node it stopped at. With no breakpoints set the run is unconditional.
@@ -162,20 +172,18 @@ func (e *ActionExecutor) RunToCompletion() error {
 	}
 
 	for e.state == StateRunning {
+		if node := e.breakpointHit(); node != "" {
+			e.pausedAt = node
+			e.state = StateSuspended
+			return nil
+		}
+
 		if steps >= maxSteps {
 			return fmt.Errorf("execution exceeded max steps (%d), possible infinite loop", maxSteps)
 		}
 
-		before := e.tokenLocations()
-		err := e.Step()
-		if err != nil {
+		if err := e.Step(); err != nil {
 			return err
-		}
-
-		if node := e.breakpointHit(before); node != "" {
-			e.pausedAt = node
-			e.state = StateSuspended
-			return nil
 		}
 
 		steps++
@@ -184,34 +192,45 @@ func (e *ActionExecutor) RunToCompletion() error {
 	return nil
 }
 
-// tokenLocations records where each token sits, so a breakpoint fires when a
-// token arrives at its node rather than on every step it spends there.
-func (e *ActionExecutor) tokenLocations() map[int64]ast.Node {
-	if len(e.breakpoints) == 0 {
-		return nil
-	}
-	locations := make(map[int64]ast.Node, len(e.tokens))
-	for _, token := range e.tokens {
-		locations[token.ID] = token.Location
-	}
-	return locations
-}
-
-// breakpointHit returns the name of the breakpoint node a token just arrived
-// at, or "" if none did.
-func (e *ActionExecutor) breakpointHit(before map[int64]ast.Node) string {
+// breakpointHit returns the name of a breakpoint node a token sits on and has
+// not yet stopped the run at, or "" if none does. Firing once per token and
+// visit means a resumed run continues past the node it stopped at, while a
+// token that leaves and comes back around a loop stops again.
+func (e *ActionExecutor) breakpointHit() string {
 	if len(e.breakpoints) == 0 {
 		return ""
 	}
-	for _, token := range e.tokens {
-		if prev, seen := before[token.ID]; seen && prev == token.Location {
-			continue
-		}
-		if name := ActionNodeName(token.Location); name != "" && e.breakpoints[name] {
-			return name
+	for visit := range e.firedBreakpoints {
+		if loc, ok := e.tokenLocation(visit.token); !ok || loc != visit.node {
+			delete(e.firedBreakpoints, visit)
 		}
 	}
+	for _, token := range e.tokens {
+		name := ActionNodeName(token.Location)
+		if name == "" || !e.breakpoints[name] {
+			continue
+		}
+		visit := breakpointVisit{token: token.ID, node: token.Location}
+		if e.firedBreakpoints[visit] {
+			continue
+		}
+		if e.firedBreakpoints == nil {
+			e.firedBreakpoints = make(map[breakpointVisit]bool)
+		}
+		e.firedBreakpoints[visit] = true
+		return name
+	}
 	return ""
+}
+
+// tokenLocation returns where the given token sits, if it is still active.
+func (e *ActionExecutor) tokenLocation(id int64) (ast.Node, bool) {
+	for _, token := range e.tokens {
+		if token.ID == id {
+			return token.Location, true
+		}
+	}
+	return nil, false
 }
 
 // PausedAt returns the breakpoint node the last run stopped at, or "" when the
@@ -805,6 +824,7 @@ func (e *ActionExecutor) SetBreakpoint(nodeName string) {
 // ClearBreakpoints removes all breakpoints.
 func (e *ActionExecutor) ClearBreakpoints() {
 	e.breakpoints = make(map[string]bool)
+	e.firedBreakpoints = make(map[breakpointVisit]bool)
 }
 
 // SetTrace sets the trace recorder for this executor.

@@ -280,6 +280,21 @@ func TestBreakpointStopsAndResumes(t *testing.T) {
 	wants(t, run(t, s, "%continue"), "✓ Action completed", "total = 5")
 }
 
+// The initial node already holds a token when the run starts, so a breakpoint
+// on it must still stop before the first step.
+func TestBreakpointOnInitialNodeStops(t *testing.T) {
+	s := loadFixture(t, "testdata/action_debug.sysml")
+	run(t, s, "%action tally")
+	run(t, s, "%break start")
+
+	paused := run(t, s, "%continue")
+	wants(t, paused, `⏸ Paused at breakpoint "start"`, "Tokens: 1")
+	rejects(t, paused, "Action completed")
+
+	wants(t, run(t, s, "%tokens"), "Token 1 @ start")
+	wants(t, run(t, s, "%continue"), "✓ Action completed", "total = 5")
+}
+
 func TestBreakpointRejectsUnknownNode(t *testing.T) {
 	s := loadFixture(t, "testdata/action_debug.sysml")
 	run(t, s, "%action tally")
