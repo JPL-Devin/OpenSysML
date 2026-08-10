@@ -23,6 +23,7 @@ type ActionExecutor struct {
 	trace        *TraceRecorder    // Optional trace recorder for testing
 	mergeVisited map[ast.Node]bool // Track merge node visits
 	inputs       map[string]Value  // Input parameter bindings seeded into the initial token
+	pausedAt     string            // Node name RunToCompletion stopped at, empty when it ran to the end
 }
 
 // SetInputs binds input parameter values that seed the initial token's data.
@@ -69,6 +70,12 @@ func (e *ActionExecutor) Step() error {
 
 	if e.state == StateReady {
 		return fmt.Errorf("executor not initialized (call initialize first)")
+	}
+
+	// Stepping resumes a run a breakpoint suspended.
+	if e.state == StateSuspended {
+		e.state = StateRunning
+		e.pausedAt = ""
 	}
 
 	// Snapshot token state before step (for deadlock detection)
@@ -138,26 +145,127 @@ func (e *ActionExecutor) Step() error {
 	return nil
 }
 
-// RunToCompletion executes until StateCompleted or error.
+// RunToCompletion executes until StateCompleted, a breakpoint, or error.
 // Includes infinite loop protection.
+//
+// A run stops as soon as a token arrives at a node a breakpoint was set on
+// (see SetBreakpoint), leaving the tokens where they are so the run can be
+// resumed by calling RunToCompletion again or stepped with Step; PausedAt names
+// the node it stopped at. With no breakpoints set the run is unconditional.
 func (e *ActionExecutor) RunToCompletion() error {
 	const maxSteps = 10000
 	steps := 0
+
+	e.pausedAt = ""
+	if e.state == StateSuspended {
+		e.state = StateRunning
+	}
 
 	for e.state == StateRunning {
 		if steps >= maxSteps {
 			return fmt.Errorf("execution exceeded max steps (%d), possible infinite loop", maxSteps)
 		}
 
+		before := e.tokenLocations()
 		err := e.Step()
 		if err != nil {
 			return err
+		}
+
+		if node := e.breakpointHit(before); node != "" {
+			e.pausedAt = node
+			e.state = StateSuspended
+			return nil
 		}
 
 		steps++
 	}
 
 	return nil
+}
+
+// tokenLocations records where each token sits, so a breakpoint fires when a
+// token arrives at its node rather than on every step it spends there.
+func (e *ActionExecutor) tokenLocations() map[int64]ast.Node {
+	if len(e.breakpoints) == 0 {
+		return nil
+	}
+	locations := make(map[int64]ast.Node, len(e.tokens))
+	for _, token := range e.tokens {
+		locations[token.ID] = token.Location
+	}
+	return locations
+}
+
+// breakpointHit returns the name of the breakpoint node a token just arrived
+// at, or "" if none did.
+func (e *ActionExecutor) breakpointHit(before map[int64]ast.Node) string {
+	if len(e.breakpoints) == 0 {
+		return ""
+	}
+	for _, token := range e.tokens {
+		if prev, seen := before[token.ID]; seen && prev == token.Location {
+			continue
+		}
+		if name := ActionNodeName(token.Location); name != "" && e.breakpoints[name] {
+			return name
+		}
+	}
+	return ""
+}
+
+// PausedAt returns the breakpoint node the last run stopped at, or "" when the
+// run was not stopped by a breakpoint.
+func (e *ActionExecutor) PausedAt() string {
+	return e.pausedAt
+}
+
+// ActionNodeName returns the declared name of an action graph node, or "" when
+// the node is anonymous or not a named node kind.
+func ActionNodeName(node ast.Node) string {
+	switch n := node.(type) {
+	case *ast.InitialNode:
+		return n.Name
+	case *ast.FinalNode:
+		return n.Name
+	case *ast.ForkNode:
+		return n.Name
+	case *ast.JoinNode:
+		return n.Name
+	case *ast.MergeNode:
+		return n.Name
+	case *ast.DecisionNode:
+		return n.Name
+	case *ast.ActionExecutionNode:
+		return n.Name
+	case *ast.StateNode:
+		return n.Name
+	case *ast.Usage:
+		if n.Ident.Name != "" {
+			return n.Ident.Name
+		}
+		return n.Ident.ShortName
+	case *ast.Definition:
+		if n.Ident.Name != "" {
+			return n.Ident.Name
+		}
+		return n.Ident.ShortName
+	default:
+		return ""
+	}
+}
+
+// NodeNames returns the declared names of the action's graph nodes, in
+// declaration order. Anonymous nodes are omitted; a debugger uses it to check
+// that a breakpoint names a node that exists.
+func (e *ActionExecutor) NodeNames() []string {
+	names := make([]string, 0, len(e.graph.Nodes))
+	for _, node := range e.graph.Nodes {
+		if name := ActionNodeName(node); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // extractGraph builds node and edge maps from action AST.

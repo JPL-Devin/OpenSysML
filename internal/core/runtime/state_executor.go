@@ -1781,6 +1781,12 @@ func (e *StateExecutor) CurrentState() ast.Node {
 	return nil
 }
 
+// ActiveStates returns the machine's active state configuration: the single
+// active state, or one state per orthogonal region, in declaration order.
+func (e *StateExecutor) ActiveStates() []*ast.StateNode {
+	return e.activeStates()
+}
+
 // GetStateVisits returns the ordered list of visited state names.
 func (e *StateExecutor) GetStateVisits() []string {
 	return e.stateVisits
