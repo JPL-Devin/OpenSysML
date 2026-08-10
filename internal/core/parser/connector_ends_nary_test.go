@@ -117,16 +117,65 @@ func TestParseNaryConnectorEndsMalformedKeepsPartialEnds(t *testing.T) {
 	}
 }
 
-// The anonymous inline form is binary-only: `connect (a, b, c);` without a
-// declared connection name does not parse. Tracked as a known limitation in
-// docs/SPEC_COMPLIANCE.md ("n-ary connector ends"); the ends are lost loudly
-// (a diagnostic), never silently.
-func TestParseAnonymousInlineNaryConnectIsNotSupported(t *testing.T) {
-	src := "part def C { part a; part b; part c; connect (a, b, c); }"
-	p := New(source.New("<t>", []byte(src)))
-	_ = p.ParseFile()
-	if len(p.Diagnostics) == 0 {
-		t.Fatalf("anonymous inline n-ary connect now parses; " +
-			"update the known-limitation row in docs/SPEC_COMPLIANCE.md and assert the ends here")
+// The anonymous inline form declares no connection name but is the same
+// connector clause, so it keeps every end a parenthesized list gives it.
+func TestParseAnonymousInlineConnectKeepsEveryEnd(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		want []string
+	}{
+		{
+			"binary",
+			"part def C { part a; part b; connect a to b; }",
+			[]string{"a", "b"},
+		},
+		{
+			"ternary",
+			"part def C { part a; part b; part c; connect (a, b, c); }",
+			[]string{"a", "b", "c"},
+		},
+		{
+			"quaternary",
+			"part def C { part a; part b; part c; part d; connect (a, b, c, d); }",
+			[]string{"a", "b", "c", "d"},
+		},
+		{
+			"ends given as feature chains",
+			"part def C { part a; part b; part c; connect (a.out, b.in, c.in); }",
+			[]string{"out", "in", "in"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := endTargets(t, tc.src)
+			if len(got) != len(tc.want) {
+				t.Fatalf("parsed %d ends %v, want %d %v", len(got), got, len(tc.want), tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Fatalf("end %d = %q, want %q (all: %v)", i, got[i], tc.want[i], got)
+				}
+			}
+		})
+	}
+}
+
+// The anonymous form still reports a malformed clause rather than accepting it.
+func TestParseAnonymousInlineConnectMalformedReports(t *testing.T) {
+	for _, src := range []string{
+		"part def C { part a; part b; connect (a, b; }",
+		"part def C { part a; part b; connect a b; }",
+		"part def C { connect (); }",
+		"part def C { part a; connect a to; }",
+	} {
+		p := New(source.New("<t>", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) == 0 {
+			t.Errorf("%q: expected a diagnostic", src)
+		}
+		if root == nil {
+			t.Errorf("%q: parser returned no tree", src)
+		}
 	}
 }
