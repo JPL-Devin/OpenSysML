@@ -58,6 +58,10 @@ var (
 	// failure to evaluate, so callers can tell the two apart.
 	ErrViolated = errors.New("evaluated to false")
 
+	// ErrNoConditions is returned when a constraint or requirement carries no
+	// condition to evaluate: reporting a verdict would claim a check that never ran.
+	ErrNoConditions = errors.New("no condition to evaluate")
+
 	// ErrCyclicSlot is returned when a slot's default value depends, directly or
 	// through other slots, on the slot being computed.
 	ErrCyclicSlot = errors.New("cyclic slot dependency")

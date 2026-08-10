@@ -167,6 +167,8 @@ Each row documents one behavioral semantic feature:
 | Negated constraint (assert not) | `eval.go:483` evalNeg | `constraint_negation.sysml` | ✅ Faithful |
 | A constraint a type carries is evaluated against an instance of it, so it reads that object's slots rather than declared defaults | `context.go` `EvaluateConstraintOn`, `eval.go` `NewEvalContextIn`/`selfSlotValue` | `instance_constraint_binding.sysml`, `repl/instance_test.go:TestConstraintBindsToInstance` | ✅ Faithful |
 | A false assertion is a verdict, not a malfunction (`ErrViolated`), and is distinguishable from an evaluation failure | `errors.go` `ErrViolated`, `context.go` `EvaluateConstraintOn` | `repl/instance_test.go:TestConstraintEvaluationErrorIsNotAViolation` | ✅ Faithful |
+| A constraint usage inherits its conditions from the definition it is typed by (`constraint limit : MassLimit;`) | `context.go` `chainMembers` over `semantics.Model.AllSupertypes` | `instance_inherited_constraint.sysml` | ⚠️ Approximate — inherited conditions are evaluated, but a parameter the usage binds (`in m = mass`) is not passed to them |
+| A constraint carrying no condition yields no verdict (`ErrNoConditions`) rather than a vacuous pass | `errors.go` `ErrNoConditions`, `context.go` `EvaluateConstraintOn`/`EvaluateRequirementOn` | `runtime/constraint_test.go:TestConstraintWithoutConditionsIsNotAVerdict` | ✅ Faithful |
 
 ### Instantiation and Feature Values (SysML v2 §7.6 Feature Values, KerML §8.3)
 
@@ -178,8 +180,9 @@ Each row documents one behavioral semantic feature:
 | A default expression resolves declarations in the scope that declared the feature, while instance slots take precedence | `shape.go` `EffectiveFeature.DeclScope`, `eval.go` `EvalContext.self` | `instance_derived_slots.sysml` | ✅ Faithful |
 | Mutually dependent defaults report a cycle rather than recursing to the step budget | `context.go` `derivingSlots`, `errors.go` `ErrCyclicSlot` | `robustness_test.go:cyclic_derived_slot` | ✅ Faithful |
 | A default over an undeclared feature fails naming the slot | `instance.go` `evalSlotDefault` | `robustness_test.go:derived_slot_over_missing_feature` | ✅ Faithful |
+| A multi-valued feature holds its default's contents; a single value written on it is the collection's one element | `instance.go` `GetSlot` | `runtime/instance_test.go:TestMultiValuedDefaultMaterializes`, `repl/instance_test.go:TestCollectionSlotsShowTheirContents` | ✅ Faithful |
 
-⚠️ A multi-valued feature (upper bound > 1, including unbounded `[*]`) keeps its declared default unevaluated; only single-valued defaults are materialized.
+⚠️ A multi-valued feature that is both typed and given a default takes the typed instantiation; the default is not merged into it.
 
 ### Requirement
 
@@ -190,6 +193,7 @@ Each row documents one behavioral semantic feature:
 | Actor binding evaluation | `context.go:148` `EvaluateRequirement` (Pass 1) | `requirement_actor.sysml` | ✅ Faithful |
 | Assume expression evaluation | `context.go:148` `EvaluateRequirement` (Pass 2, doesn't fail) | `requirement_assume.sysml` | ✅ Faithful |
 | A false required condition is a verdict, not a malfunction (`ErrViolated`), like a false assertion | `context.go` `EvaluateRequirementOn`, `errors.go` `ErrViolated` | `repl/instance_test.go:TestRequirementViolationIsAVerdictNotAnError` | ✅ Faithful |
+| A requirement usage inherits assume/require conditions from the definition it is typed by | `context.go` `chainMembers` | `runtime/constraint_test.go:TestConstraintWithoutConditionsIsNotAVerdict` (companion path) | ⚠️ Approximate — as for constraints, bound parameters are not passed |
 | Nested requirements | `context.go:148` `EvaluateRequirement` (recursive) | `requirement_nested.sysml` | ✅ Faithful |
 | `satisfy <name>` is an `OwnedReferenceSubsetting` of an existing usage, not a typing (SysML v2 §8.3.21.10 `SatisfyRequirementUsage`) | `parser/defusage.go` `parseDefUsage` (`ast.RelSubsets`) | `parser/testdata/parse/satisfy_reference.golden` | ✅ Faithful |
 | `referencedFeatureTarget().oclIsKindOf(RequirementUsage)` — satisfy/verify may only reference a requirement usage (incl. viewpoint/concern usages) | `passes/typecheck.go` `compatMessage`, `isRequirementUsageKind` | `passes/typecheck_test.go` `TestTypeCheckSatisfyRequirementUsageOK`, `TestTypeCheckSatisfyViewpointUsageOK`, `TestTypeCheckSatisfyNonRequirementUsageError` | ✅ Faithful |

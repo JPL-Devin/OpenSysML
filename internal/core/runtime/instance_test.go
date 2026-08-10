@@ -135,3 +135,32 @@ func TestGetSlot_LazyComposite(t *testing.T) {
 		t.Errorf("expected Engine type, got %s", childInst.Type.Name)
 	}
 }
+
+// A multi-valued feature holds its default's contents, not <unknown>: a single
+// value written on it is the collection's one element.
+func TestMultiValuedDefaultMaterializes(t *testing.T) {
+	src := `
+		part def Rig {
+			attribute mass = 100.0;
+			attribute doubles[0..*] = mass * 2.0;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Rig"))
+	if err != nil {
+		t.Fatalf("Instantiate failed: %v", err)
+	}
+	slot, err := inst.GetSlot(ctx, "doubles")
+	if err != nil {
+		t.Fatalf("GetSlot failed: %v", err)
+	}
+	if slot.Values.Kind != ValSequence {
+		t.Fatalf("Values.Kind = %v, want a sequence", slot.Values.Kind)
+	}
+	elements := slot.Values.Sequence.Elements()
+	if len(elements) != 1 || elements[0].Const.Real != 200.0 {
+		t.Errorf("doubles = %v, want [200]", elements)
+	}
+}

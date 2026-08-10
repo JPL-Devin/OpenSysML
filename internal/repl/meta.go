@@ -270,7 +270,7 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 				}
 				return []string{
 					fmt.Sprintf("✓ %s%s", expr, onInstance(inst, owner)),
-					fmt.Sprintf("  = %s", formatValue(slot.Value)),
+					fmt.Sprintf("  = %s", formatSlot(slot)),
 				}, false, nil
 			}
 		}
@@ -434,7 +434,7 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 			lines = append(lines, fmt.Sprintf("  %s: <error: %v>", feat.Name, err))
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("  %s = %s", feat.Name, formatValue(slot.Value)))
+		lines = append(lines, fmt.Sprintf("  %s = %s", feat.Name, formatSlot(slot)))
 	}
 
 	return lines, false, nil
@@ -485,7 +485,15 @@ func (s *Session) doInstances() ([]string, bool, error) {
 	return lines, false, nil
 }
 
-// formatValue renders a runtime value for display.
+// formatSlot renders what a slot holds: a multi-valued feature keeps its
+// contents in Values, leaving the scalar Value unset.
+func formatSlot(slot *runtime.Slot) string {
+	if slot.Values.Kind != runtime.ValInvalid {
+		return formatValue(slot.Values)
+	}
+	return formatValue(slot.Value)
+}
+
 func formatValue(val runtime.Value) string {
 	switch val.Kind {
 	case runtime.ValConst:
@@ -508,12 +516,22 @@ func formatValue(val runtime.Value) string {
 	case runtime.ValInstance:
 		return fmt.Sprintf("Instance(ID: %d)", val.Instance)
 	case runtime.ValSequence:
-		return fmt.Sprintf("Sequence[%d]", val.Sequence.Size())
+		return formatElements(val.Sequence.Elements())
 	case runtime.ValSet:
 		return fmt.Sprintf("Set{%d}", val.Set.Size())
 	default:
 		return "<unknown>"
 	}
+}
+
+// formatElements renders a collection's contents, since its size alone answers
+// nothing about what the object holds.
+func formatElements(elements []runtime.Value) string {
+	parts := make([]string, len(elements))
+	for i, el := range elements {
+		parts[i] = formatValue(el)
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 // doCalc invokes a calculation with arguments.

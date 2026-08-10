@@ -102,6 +102,23 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 		return slot, nil
 	}
 
+	// A multi-valued feature given a default holds that default's contents; a
+	// single value written there is the collection's one element.
+	if slot.Feature.DefaultValue != nil && slot.Feature.Type == nil {
+		val, err := ctx.evalSlotDefault(inst, slot, name)
+		if err != nil {
+			return nil, err
+		}
+		if val.Kind != ValSequence && val.Kind != ValSet {
+			seq := NewSequence()
+			seq.Append(val)
+			val = Value{Kind: ValSequence, Sequence: seq}
+		}
+		slot.Values = val
+		slot.Materialized = true
+		return slot, nil
+	}
+
 	// Lazy instantiation: if feature is composite (has a type that's a part/item def)
 	if slot.Feature.Type != nil {
 		// Check multiplicity (C2 + C1)

@@ -184,3 +184,14 @@ func TestNestedPartMemberBindsToTheNestedInstance(t *testing.T) {
 	wants(t, run(t, s, "%constraint Nested::Car::engine::light"),
 		"passed", "on Nested::Car::engine")
 }
+
+// A multi-valued feature shows what the object holds, not <unknown>.
+func TestCollectionSlotsShowTheirContents(t *testing.T) {
+	s := loadFixture(t, "testdata/collection_slots.sysml")
+	run(t, s, "%instantiate Coll::Rig")
+
+	got := run(t, s, "%slots Coll::Rig")
+	wants(t, got, "doubles = [200.00]", "wheels = [Instance(ID: 2), Instance(ID: 3)]")
+	rejects(t, got, "<unknown>")
+	wants(t, run(t, s, "%eval Coll::Rig::doubles"), "= [200.00]")
+}
