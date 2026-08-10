@@ -463,7 +463,7 @@ func featureVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *
 		return "", false
 	}
 	switch {
-	case err != nil && !errors.Is(err, runtime.ErrConstraintViolated):
+	case err != nil && !errors.Is(err, runtime.ErrViolated):
 		return fmt.Sprintf("<%s: %v>", kind, err), true
 	case err != nil || !passed:
 		return fmt.Sprintf("<%s: violated>", kind), true
@@ -636,7 +636,7 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 	if err != nil || !passed {
 		return []string{
 			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
-			"  " + verdictDetail(err),
+			"  " + verdictDetail("Assertion", err),
 		}, false, nil
 	}
 
@@ -645,17 +645,14 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 	}, false, nil
 }
 
-// verdictDetail explains a failed verdict: an assertion that evaluated to
-// false is the model's answer, not a malfunction, so it is not an error line.
-func verdictDetail(err error) string {
-	switch {
-	case err == nil:
-		return "Assertion evaluated to false"
-	case errors.Is(err, runtime.ErrConstraintViolated):
-		return "Assertion evaluated to false"
-	default:
-		return fmt.Sprintf("Error: %v", err)
+// verdictDetail explains a failed verdict: a condition that evaluated to false
+// is the model's answer, not a malfunction, so it is not an error line. what
+// names the kind of condition, e.g. "Assertion" or "Required condition".
+func verdictDetail(what string, err error) string {
+	if err == nil || errors.Is(err, runtime.ErrViolated) {
+		return what + " evaluated to false"
 	}
+	return fmt.Sprintf("Error: %v", err)
 }
 
 // onInstance renders the " (on <owner> ID: n)" suffix that marks a result as
@@ -693,7 +690,7 @@ func (s *Session) doRequirement(name string) ([]string, bool, error) {
 	if err != nil || !passed {
 		return []string{
 			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),
-			"  " + verdictDetail(err),
+			"  " + verdictDetail("Required condition", err),
 		}, false, nil
 	}
 

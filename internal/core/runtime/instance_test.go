@@ -42,6 +42,36 @@ func TestInstantiate_SimplePartDef(t *testing.T) {
 	}
 }
 
+// An unbounded upper bound carries the numeric value 0, so a feature declared
+// [*] must not be mistaken for a scalar and filled with a single default.
+func TestInstantiate_UnboundedDefaultIsNotAScalar(t *testing.T) {
+	src := `
+		part def Wheel {
+			attribute diameter: Real = 0.5;
+		}
+		part def Car {
+			part wheels: Wheel[0..*] = 1;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Car"))
+	if err != nil {
+		t.Fatalf("Instantiate failed: %v", err)
+	}
+	slot, err := inst.GetSlot(ctx, "wheels")
+	if err != nil {
+		t.Fatalf("GetSlot failed: %v", err)
+	}
+	if slot.Value.Kind != ValInvalid {
+		t.Errorf("unbounded slot holds a scalar value %v", slot.Value)
+	}
+	if slot.Values.Kind != ValSequence {
+		t.Errorf("expected a sequence, got %v", slot.Values.Kind)
+	}
+}
+
 func TestInstantiate_IDAllocation(t *testing.T) {
 	src := `part def A {}`
 	model, resolver, root := parseAndBuildModel(t, src)

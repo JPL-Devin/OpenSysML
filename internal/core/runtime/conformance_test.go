@@ -422,7 +422,7 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 			continue
 		}
 		satisfied, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
-		if err != nil && !errors.Is(err, ErrConstraintViolated) {
+		if err != nil && !errors.Is(err, ErrViolated) {
 			t.Errorf("constraint %q: %v", name, err)
 			continue
 		}

@@ -54,7 +54,7 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 		// Fold constant defaults eagerly. A default that is not constant may read
 		// sibling slots of this very instance, so it is left to GetSlot, which
 		// evaluates it against the finished instance.
-		if feat.DefaultValue != nil && feat.Multiplicity.Upper.Value <= 1 {
+		if feat.DefaultValue != nil && isScalarFeature(feat) {
 			if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 				slot.Value = Value{Kind: ValConst, Const: semVal}
 				slot.Materialized = true
@@ -68,6 +68,13 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 	ctx.registerInstance(inst)
 
 	return inst, nil
+}
+
+// isScalarFeature reports whether a feature holds at most one value. An
+// unbounded upper bound carries Value 0, so the infinite flag has to be tested
+// separately.
+func isScalarFeature(feat *EffectiveFeature) bool {
+	return !feat.Multiplicity.Upper.Infinite && feat.Multiplicity.Upper.Value <= 1
 }
 
 // GetSlot retrieves the slot for the named feature, materializing it lazily
@@ -85,7 +92,7 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 
 	// A default that did not constant-fold is a derived value: evaluate it
 	// against this instance, so that it sees the sibling slots it refers to.
-	if slot.Feature.DefaultValue != nil && slot.Feature.Multiplicity.Upper.Value <= 1 {
+	if slot.Feature.DefaultValue != nil && isScalarFeature(slot.Feature) {
 		val, err := ctx.evalSlotDefault(inst, slot, name)
 		if err != nil {
 			return nil, err

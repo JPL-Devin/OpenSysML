@@ -120,7 +120,7 @@ This directory contains behavioral execution conformance tests. Each test consis
   than constant-folded. Keys are slot names, not paths.
 - `constraints`: expected verdict per constraint feature the instance carries,
   evaluated bound to the instance. `false` means the assertion evaluated to
-  false (`ErrConstraintViolated`), not that evaluation failed.
+  false (`ErrViolated`), not that evaluation failed.
 
 ## Value Format
 

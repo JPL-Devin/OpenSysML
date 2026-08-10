@@ -182,7 +182,7 @@ func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Sco
 		// Handle assert vs assume
 		if constraintMember.IsAssert {
 			if !satisfied {
-				return false, fmt.Errorf("constraint %s: %w", sym.Name, ErrConstraintViolated)
+				return false, fmt.Errorf("constraint %s: assertion %w", sym.Name, ErrViolated)
 			}
 		}
 		// assume: always pass (assumptions are trusted)
@@ -298,7 +298,7 @@ func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Sc
 			}
 
 			if !satisfied {
-				return false, fmt.Errorf("requirement %s: require condition failed", sym.Name)
+				return false, fmt.Errorf("requirement %s: require condition %w", sym.Name, ErrViolated)
 			}
 		}
 	}

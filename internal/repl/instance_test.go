@@ -85,6 +85,18 @@ func TestSlotsAgreesWithRequirementOnSameInstance(t *testing.T) {
 	rejects(t, got, "<unknown>")
 }
 
+// A required condition that is false is the model's answer, not a malfunction,
+// so it reports a verdict rather than an error — in both places that report it.
+func TestRequirementViolationIsAVerdictNotAnError(t *testing.T) {
+	s := loadFixture(t, "testdata/derived_package.sysml")
+	run(t, s, "%instantiate Derived::Heavy")
+
+	got := run(t, s, "%requirement Derived::Heavy::lightEnough")
+	wants(t, got, "✗ Requirement Derived::Heavy::lightEnough failed", "Required condition evaluated to false")
+	rejects(t, got, "Error:")
+	wants(t, run(t, s, "%slots Derived::Heavy"), "lightEnough: <requirement: violated>")
+}
+
 // A constraint over a feature nothing declares is still an error, distinct from
 // a violated assertion.
 func TestConstraintEvaluationErrorIsNotAViolation(t *testing.T) {
@@ -131,13 +143,13 @@ func TestRedeclarationEndsDebuggerWithNotice(t *testing.T) {
 // The same contract for the state machine debugger.
 func TestStateDebuggerSurvivesUnrelatedSubmission(t *testing.T) {
 	s := loadFixture(t, "testdata/state_debug.sysml")
-	started := run(t, s, "%state")
-	if strings.Contains(started, "error") {
+	started := run(t, s, "%state Cycle")
+	if !strings.Contains(started, "Started state machine executor") {
 		t.Fatalf("%%state failed: %s", started)
 	}
 
 	if res := s.Submit(`package Unrelated { part def Widget { attribute size = 1.0; } }`); len(res.Notices) != 0 {
 		t.Errorf("unrelated submission reported %v", res.Notices)
 	}
-	rejects(t, run(t, s, "%current"), "No active")
+	rejects(t, run(t, s, "%current"), "no active")
 }

@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -110,8 +111,8 @@ func TestConstraintEvaluation_AssertWithLiteral(t *testing.T) {
 	if err == nil {
 		t.Fatal("AlwaysFalse should fail")
 	}
-	if !strings.Contains(err.Error(), "assertion failed") {
-		t.Fatalf("Expected 'assertion failed', got: %v", err)
+	if !errors.Is(err, ErrViolated) {
+		t.Fatalf("Expected a violation verdict, got: %v", err)
 	}
 	t.Logf("✓ AlwaysFalse: assertion failed (as expected)")
 }

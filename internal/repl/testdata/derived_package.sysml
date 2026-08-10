@@ -28,5 +28,9 @@ package Derived {
 		constraint massOK {
 			assert mass < 2000.0;
 		}
+
+		requirement lightEnough {
+			require constraint { mass < 2000.0 }
+		}
 	}
 }
