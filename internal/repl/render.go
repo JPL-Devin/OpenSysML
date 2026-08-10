@@ -173,6 +173,12 @@ func renderResult(r Result, v Verbosity) []string {
 	if hasError(diags) {
 		return out
 	}
+	// A validation tier is skipped once a lower tier errors anywhere in the
+	// buffer, so a clean report on this submission would otherwise read as a
+	// full check when the deeper passes never ran.
+	if r.analysisBlocked() {
+		out = append(out, blockedNote)
+	}
 	return append(out, renderSummary(r.ownMembers())...)
 }
 
@@ -200,6 +206,20 @@ func scopedDiagnostics(r Result, v Verbosity) []passes.Diagnostic {
 		out = append(out, d)
 	}
 	return out
+}
+
+// blockedNote warns that a clean report is not a full check.
+const blockedNote = "note: an earlier error in the session is unresolved, so later checks may not have run on this submission (%verbosity debug shows it)"
+
+// analysisBlocked reports whether an error outside this submission stopped the
+// higher validation tiers from running over it.
+func (r Result) analysisBlocked() bool {
+	for _, d := range r.Diagnostics {
+		if d.Severity == passes.SeverityError && !r.mine(d.Span) {
+			return true
+		}
+	}
+	return false
 }
 
 func hasError(diags []passes.Diagnostic) bool {

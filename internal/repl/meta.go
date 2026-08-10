@@ -138,7 +138,7 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		}
 		v, verr := ParseVerbosity(fields[1])
 		if verr != nil {
-			return nil, false, verr
+			return []string{"error: " + verr.Error()}, false, nil
 		}
 		s.SetVerbosity(v)
 		return []string{fmt.Sprintf("verbosity: %s", v)}, false, nil

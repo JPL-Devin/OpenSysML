@@ -28,6 +28,18 @@ func TestEarlierErrorDoesNotSuppressThisSubmission(t *testing.T) {
 	rejects(t, got, "Missing::X")
 }
 
+// A clean report is not a full check while an earlier error blocks the higher
+// validation tiers, so the confirmation says so rather than reading as a pass.
+func TestBlockedAnalysisIsNotReportedAsClean(t *testing.T) {
+	s := NewSession()
+	s.Submit("namespace N { import Missing::X; }")
+	got := strings.Join(renderResult(s.Submit("package P { }"), VerbosityNormal), "\n")
+	wants(t, got, "an earlier error in the session is unresolved")
+
+	clean := strings.Join(renderResult(NewSession().Submit("package P { }"), VerbosityNormal), "\n")
+	rejects(t, clean, "unresolved")
+}
+
 // The summary covers what this submission declared, not the whole buffer.
 func TestSummaryCoversOnlyThisSubmission(t *testing.T) {
 	s := NewSession()
@@ -83,7 +95,8 @@ func TestVerbosityMetaCommand(t *testing.T) {
 	if s.Verbosity() != VerbosityDebug {
 		t.Errorf("verbosity = %v, want debug", s.Verbosity())
 	}
-	if _, _, err := s.RunMeta("%verbosity loud"); err == nil {
-		t.Error("an unknown level was accepted")
+	wants(t, run(t, s, "%verbosity loud"), `error: unknown verbosity "loud"`)
+	if s.Verbosity() != VerbosityDebug {
+		t.Error("an unknown level changed the verbosity")
 	}
 }
