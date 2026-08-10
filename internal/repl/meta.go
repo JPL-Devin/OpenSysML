@@ -964,6 +964,9 @@ func parseDuration(arg string) (float64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid time %q (expected a number of time units, e.g. 30 or 30s)", arg)
 	}
+	if math.IsNaN(d) || math.IsInf(d, 0) {
+		return 0, fmt.Errorf("invalid time %q (expected a finite number of time units, e.g. 30 or 30s)", arg)
+	}
 	if d < 0 {
 		return 0, fmt.Errorf("invalid time %q (must not be negative)", arg)
 	}

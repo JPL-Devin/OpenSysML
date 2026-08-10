@@ -346,6 +346,10 @@ func TestParseDuration(t *testing.T) {
 		{"", 0, true},
 		{"later", 0, true},
 		{"-1", 0, true},
+		// A non-finite duration would poison the debugger clock for good.
+		{"NaN", 0, true},
+		{"inf", 0, true},
+		{"-Inf", 0, true},
 	}
 	for _, tc := range cases {
 		got, err := parseDuration(tc.in)
