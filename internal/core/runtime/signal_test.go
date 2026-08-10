@@ -22,7 +22,8 @@ func executeActionSource(t *testing.T, name, src string) (map[string]Value, erro
 }
 
 // A send addresses a specific consumer: an accept action named by no send must
-// not take a message addressed to a sibling.
+// not take a message addressed to a sibling. The accept suspends waiting for
+// its own message, and since nothing else can post one the run deadlocks.
 func testSendReachesOnlyItsAddressee(t *testing.T) {
 	_, err := executeActionSource(t, "pipeline", `package P {
 		action pipeline {
@@ -41,13 +42,14 @@ func testSendReachesOnlyItsAddressee(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error: the message is addressed to `wanted`, not `other`")
 	}
-	if !errors.Is(err, ErrNoMatchingMessage) {
-		t.Errorf("expected ErrNoMatchingMessage, got: %v", err)
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
 	}
 }
 
-// An accept whose type no in-flight message carries reports rather than binding
-// the wrong message or silently continuing.
+// An accept whose type no in-flight message carries waits for its own type
+// rather than binding the wrong message or silently continuing, and reports
+// the type it is still waiting for when the wait can never end.
 func testAcceptOfUnsentTypeReports(t *testing.T) {
 	_, err := executeActionSource(t, "pipeline", `package P {
 		action pipeline {
@@ -64,8 +66,8 @@ func testAcceptOfUnsentTypeReports(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error: only an Integer was sent")
 	}
-	if !errors.Is(err, ErrNoMatchingMessage) {
-		t.Errorf("expected ErrNoMatchingMessage, got: %v", err)
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "String") {
 		t.Errorf("expected the accepted type in the message, got: %v", err)
@@ -237,8 +239,8 @@ func TestPortRoutedMessageBypassesPortlessAccept(t *testing.T) {
 			then reader end;
 		}
 	}`)
-	if !errors.Is(err, ErrNoMatchingMessage) {
-		t.Fatalf("expected ErrNoMatchingMessage for an accept on no port, got: %v", err)
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Fatalf("expected ErrAcceptDeadlock for an accept on no port, got: %v", err)
 	}
 }
 
@@ -257,8 +259,8 @@ func TestAddressedMessageBypassesPortAccept(t *testing.T) {
 			then reader end;
 		}
 	}`)
-	if !errors.Is(err, ErrNoMatchingMessage) {
-		t.Fatalf("expected ErrNoMatchingMessage for an accept on a port, got: %v", err)
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Fatalf("expected ErrAcceptDeadlock for an accept on a port, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "via inPort") {
 		t.Errorf("expected the awaited port in the message, got: %v", err)
@@ -397,6 +399,116 @@ func TestRejectedCallLeavesNoArgumentsBehind(t *testing.T) {
 	}
 	if value, held := exec.stateData["value"]; held {
 		t.Errorf("the rejected call's argument is still in the machine's data: %v", value)
+	}
+}
+
+// An accept whose message has not arrived parks the token rather than failing:
+// the action is suspended at that node, and the token records what it waits for.
+func TestAcceptParksTokenUntilMessageArrives(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action reader accept n : Integer;
+			action recorder { assign got := n; }
+			done end;
+			then start reader;
+			then reader recorder;
+			then recorder end;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+
+	// Step until the accept parks: the executor waits rather than erroring.
+	for i := 0; i < 10 && exec.State() != StateWaiting; i++ {
+		if err := exec.Step(); err != nil {
+			t.Fatalf("step %d: %v", i, err)
+		}
+	}
+	if exec.State() != StateWaiting {
+		t.Fatalf("expected the executor to be waiting, got %v", exec.State())
+	}
+	tokens := exec.Tokens()
+	if len(tokens) != 1 || tokens[0].Wait == nil {
+		t.Fatalf("expected one parked token, got %+v", tokens)
+	}
+	if tokens[0].Wait.ParamName != "n" || tokens[0].Wait.SignalType != "Integer" {
+		t.Errorf("unexpected wait: %+v", *tokens[0].Wait)
+	}
+	// Step 1 moves the token off `start` onto the accept; step 2 finds nothing
+	// it can take and parks it there.
+	if tokens[0].Wait.Since != 2 {
+		t.Errorf("expected the token to have parked at step 2, got %d", tokens[0].Wait.Since)
+	}
+
+	// A message posted from outside the action resumes it.
+	ctx.PostMessage(Message{
+		SignalType: "Integer",
+		Target:     "reader",
+		Payload: map[string]Value{
+			"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 9}},
+		},
+	})
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("resume after the message arrived: %v", err)
+	}
+	if exec.State() != StateCompleted {
+		t.Fatalf("expected the resumed action to complete, got %v", exec.State())
+	}
+	assertIntOutput(t, exec.Results(), "got", 9)
+}
+
+// A parked token holds its place in the queue's matching order: an accept that
+// suspended before a message it cannot take arrived still takes only its own.
+func TestParkedAcceptTakesOnlyItsOwnMessage(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action reader accept n : Integer;
+			action recorder { assign got := n; }
+			done end;
+			then start reader;
+			then reader recorder;
+			then recorder end;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	for i := 0; i < 10 && exec.State() != StateWaiting; i++ {
+		if err := exec.Step(); err != nil {
+			t.Fatalf("step %d: %v", i, err)
+		}
+	}
+
+	// A String arrives first and must be left in flight; the Integer resumes it.
+	ctx.PostMessage(Message{SignalType: "String", Target: "reader", Payload: map[string]Value{
+		"value": {Kind: ValString, Str: "not for you"},
+	}})
+	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Payload: map[string]Value{
+		"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 4}},
+	}})
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("resume after the message arrived: %v", err)
+	}
+	assertIntOutput(t, exec.Results(), "got", 4)
+
+	pending := ctx.PendingMessages()
+	if len(pending) != 1 || pending[0].SignalType != "String" {
+		t.Fatalf("expected the String still in flight, got %v", pending)
 	}
 }
 
