@@ -42,6 +42,7 @@ var (
 	showVersion bool
 	debugMode   bool
 	quietMode   bool
+	traceMode   bool
 )
 
 // stringSlice is a custom flag type for multiple values
@@ -67,6 +68,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  sysml -e \"expr\" file.sysml # Load file, evaluate, and exit\n")
 		fmt.Fprintf(os.Stderr, "  sysml file.sysml          # Load file and start REPL\n")
 		fmt.Fprintf(os.Stderr, "  sysml -debug file.sysml   # Load file, reporting every diagnostic\n")
+		fmt.Fprintf(os.Stderr, "  sysml -trace file.sysml   # Load file, reporting each execution step\n")
 	}
 
 	flag.Var(&evalExprs, "eval", "Evaluate expression and exit (can be specified multiple times)")
@@ -75,6 +77,7 @@ func main() {
 	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
 	flag.BoolVar(&debugMode, "debug", false, "Report every diagnostic over the whole session buffer, with the pass that produced it")
 	flag.BoolVar(&quietMode, "quiet", false, "Report errors only, suppressing warnings")
+	flag.BoolVar(&traceMode, "trace", false, "Report each execution step: expression evaluation, calc invocation, action tokens, state transitions")
 	flag.Parse()
 
 	if debugMode && quietMode {
@@ -132,7 +135,7 @@ func runInteractive() error {
 	return runInteractiveWithFiles(nil)
 }
 
-// newSession returns a session at the verbosity the flags asked for.
+// newSession returns a session in the output modes the flags asked for.
 func newSession() *repl.Session {
 	sess := repl.NewSession()
 	switch {
@@ -141,6 +144,7 @@ func newSession() *repl.Session {
 	case quietMode:
 		sess.SetVerbosity(repl.VerbosityQuiet)
 	}
+	sess.SetTracing(traceMode)
 	return sess
 }
 

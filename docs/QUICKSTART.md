@@ -233,6 +233,7 @@ Instance: MyModel::System (ID: 1)
 | `%clear` | Clear session (reset all declarations) |
 | `%load <file>` | Load .sysml file into session |
 | `%verbosity [level]` | Show or set output level: `quiet` (errors only), `normal`, `debug` (every diagnostic over the whole buffer) |
+| `%trace [on\|off]` | Show or set execution tracing: each evaluation, calc invocation, action step and state transition |
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create instance from part definition |
 | `%slots <name>` | Show instance slots and values |

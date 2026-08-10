@@ -40,6 +40,9 @@ type Session struct {
 	actionExec *actionSession
 	stateExec  *stateSession
 
+	// trace records execution steps while tracing is on, nil otherwise.
+	trace *runtime.TraceRecorder
+
 	verbosity Verbosity
 }
 
@@ -228,6 +231,7 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	s.rtCtx = runtime.NewContext(model, resolver, 100000)
+	s.rtCtx.SetTrace(s.trace)
 	return s.rtCtx, nil
 }
 
