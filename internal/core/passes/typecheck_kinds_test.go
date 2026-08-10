@@ -62,17 +62,26 @@ func TestTypeCheckObjectiveTypedByActionDefError(t *testing.T) {
 	}
 }
 
-// A subject is an unconstrained Usage, so a structural definition still types it
-// while a requirement definition does not.
-func TestTypeCheckSubjectTypedByPartDefOK(t *testing.T) {
-	diags := typeDiags(t, "part def Vehicle; analysis def A { subject v : Vehicle; }")
-	if len(diags) != 0 {
-		t.Fatalf("expected no type diagnostics, got %v", diags)
+// A subject is an unconstrained Usage (SysML v2 §8.3.21), so a definition of any
+// kind types it. The OMG training models subject a `port def` and an `action def`
+// (`32. Requirements/Requirement Definitions.sysml`).
+func TestTypeCheckSubjectTypedByAnyDefKindOK(t *testing.T) {
+	for _, src := range []string{
+		"part def Vehicle; analysis def A { subject v : Vehicle; }",
+		"port def ClutchPort; requirement def R { subject clutchPort : ClutchPort; }",
+		"action def GenerateTorque; requirement def R { subject t : GenerateTorque; }",
+		"requirement def R2; analysis def A { subject s : R2; }",
+		"item def I; requirement def R { subject i : I; }",
+	} {
+		if diags := typeDiags(t, src); len(diags) != 0 {
+			t.Errorf("%s: expected no type diagnostics, got %v", src, diags)
+		}
 	}
 }
 
-func TestTypeCheckSubjectTypedByRequirementDefError(t *testing.T) {
-	diags := typeDiags(t, "requirement def R2; analysis def A { subject s : R2; }")
+// A subject is still a usage, so its type must be a definition.
+func TestTypeCheckSubjectTypedByUsageError(t *testing.T) {
+	diags := typeDiags(t, "part def V; part v : V; requirement def R { subject s : v; }")
 	if len(diags) != 1 {
 		t.Fatalf("expected one type diagnostic, got %v", diags)
 	}
