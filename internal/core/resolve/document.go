@@ -299,6 +299,11 @@ func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
 	if r.model == nil || owner == nil || parameterizedByName(owner) {
 		return
 	}
+	// Nothing is inherited without a supertype, and asking for the
+	// contributed members of every scope is not free.
+	if model, ok := r.model.(supertypeLookup); !ok || len(model.DirectSupertypes(owner)) == 0 {
+		return
+	}
 	for _, name := range scope.MemberNames() {
 		for _, sym := range scope.LookupLocalAll(name) {
 			if !conflictable(sym) || sym.Name != name {
