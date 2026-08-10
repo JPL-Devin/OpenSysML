@@ -710,14 +710,11 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	}
 	p.advance() // consume the kind keyword
 
-	// A kind keyword that is itself an occurrence modifier carries it: `snapshot s`
-	// is an occurrence usage whose portionKind is snapshot, and `individual : T` an
-	// anonymous individual occurrence usage (SysML v2 §8.3.9.11).
-	switch kw {
-	case "individual":
+	// `individual : T` is an anonymous individual occurrence usage: the keyword
+	// naming the kind still names the modifier (SysML v2 §8.3.9.11). `snapshot`
+	// is handled with the usage-only keywords above.
+	if kw == "individual" {
 		mods.isIndividual = true
-	case "snapshot":
-		mods.isSnapshot = true
 	}
 
 	// Parse 'all' modifier if present (appears after keyword, before name)
