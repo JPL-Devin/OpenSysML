@@ -148,6 +148,23 @@ func TestExpandWildcardImportsResolvesAShortNameTarget(t *testing.T) {
 	}
 }
 
+// A cycle of wildcard imports brings a package its own members back; they stay
+// owned, so a declaration still shadows a name another import brought in.
+func TestExpandWildcardImportsKeepsAnOwnedNameOwnedAcrossACycle(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml",
+		"package A { part def Widget; public import B::*; public import C::*; }")
+	addDoc(t, idx, "b.sysml", "package B { public import A::*; }")
+	addDoc(t, idx, "c.sysml", "package C { part def Widget; }")
+	idx.ExpandWildcardImports()
+
+	got := idx.LookupQualified("A::Widget")
+	if len(got) != 1 || idx.declaredAt[got[0]] != "A::Widget" {
+		t.Errorf("LookupQualified(A::Widget) = %d symbol(s), want A's own: "+
+			"`import B::*` re-exporting it back does not make it borrowed", len(got))
+	}
+}
+
 // A name is exported when any import that surfaced it was public, so importing
 // a namespace publicly still passes it on after a private import of the same
 // name reached it first (KerML 8.2.3.3).

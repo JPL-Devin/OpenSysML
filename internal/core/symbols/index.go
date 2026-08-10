@@ -115,25 +115,13 @@ func (idx *Index) expandWildcardImportsPass() bool {
 					childName = childName[i+2:]
 				}
 				// Add child under importing package's FQN
-				reexportFQN := joinFQN(pkgFQN, childName)
-				// Don't add duplicates
-				if !idx.hasFQN(reexportFQN, child) {
-					idx.fqn[reexportFQN] = append(idx.fqn[reexportFQN], child)
-					added = true
-					// Note: not added to contributions - these are synthetic
-				}
-				if idx.markReexported(reexportFQN, child, target.Private) {
+				if idx.reexport(joinFQN(pkgFQN, childName), child, target.Private) {
 					added = true
 				}
 
 				// Also re-export under short name if different from primary name
 				if child.ShortName != "" && child.ShortName != childName {
-					shortReexportFQN := joinFQN(pkgFQN, child.ShortName)
-					if !idx.hasFQN(shortReexportFQN, child) {
-						idx.fqn[shortReexportFQN] = append(idx.fqn[shortReexportFQN], child)
-						added = true
-					}
-					if idx.markReexported(shortReexportFQN, child, target.Private) {
+					if idx.reexport(joinFQN(pkgFQN, child.ShortName), child, target.Private) {
 						added = true
 					}
 				}
@@ -418,6 +406,23 @@ func (idx *Index) FQNs() []string {
 // namespace registered under fqn ("" for a document root).
 func (idx *Index) WildcardImportsOf(fqn string) []WildcardImport {
 	return idx.wildcardMeta[fqn]
+}
+
+// reexport registers sym under fqn on behalf of a wildcard import and reports
+// whether anything changed. An entry the importing namespace declares itself is
+// left alone: a cycle of wildcard imports brings a package its own members back,
+// and they are not borrowed.
+func (idx *Index) reexport(fqn string, sym *Symbol, private bool) bool {
+	if !idx.hasFQN(fqn, sym) {
+		// Note: not added to contributions - these are synthetic
+		idx.fqn[fqn] = append(idx.fqn[fqn], sym)
+		idx.markReexported(fqn, sym, private)
+		return true
+	}
+	if !idx.reexported[fqn][sym] {
+		return false
+	}
+	return idx.markReexported(fqn, sym, private)
 }
 
 // markReexported records that fqn only names sym by way of a wildcard import,
