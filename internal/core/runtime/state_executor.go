@@ -1781,6 +1781,12 @@ func (e *StateExecutor) CurrentState() ast.Node {
 	return nil
 }
 
+// ActiveStates returns the machine's active state configuration: the single
+// active state, or one state per orthogonal region, in declaration order.
+func (e *StateExecutor) ActiveStates() []*ast.StateNode {
+	return e.activeStates()
+}
+
 // GetStateVisits returns the ordered list of visited state names.
 func (e *StateExecutor) GetStateVisits() []string {
 	return e.stateVisits
@@ -1858,4 +1864,21 @@ func (e *StateExecutor) ProcessNextEvent() error {
 // an event is queued, or a state's do behavior has actions left to run.
 func (e *StateExecutor) HasPendingWork() bool {
 	return e.eventQueue.Len() > 0 || len(e.doActivities) > 0
+}
+
+// RunDoRound advances every active state's do behavior by one action, without
+// dispatching any event, and reports how many actions ran.
+func (e *StateExecutor) RunDoRound() (int, error) {
+	return e.runDoRound()
+}
+
+// HasPendingDoWork reports whether some active state's do behavior still has an
+// action to run. Such work is due now, unlike a queued event's timestamp.
+func (e *StateExecutor) HasPendingDoWork() bool {
+	for _, activity := range e.doActivities {
+		if len(activity.pending) > 0 {
+			return true
+		}
+	}
+	return false
 }

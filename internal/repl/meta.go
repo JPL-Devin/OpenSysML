@@ -2,7 +2,10 @@ package repl
 
 import (
 	"fmt"
+	"math"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -90,7 +93,7 @@ var helpText = []string{
 	"%state <name>       start state machine debugging session",
 	"%events             show event queue",
 	"%current            show current state and configuration",
-	"%advance <time>     advance simulation time",
+	"%advance <time>     advance simulation time by <time> units, processing every event due",
 }
 
 // runMeta executes a meta command line. Returns lines to print, whether to quit,
@@ -209,14 +212,9 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
-		return []string{"error: no declarations loaded"}, false, nil
-	}
-
-	sym, ok := doc.Scope.LookupLocal(name)
-	if !ok || sym == nil {
-		return []string{fmt.Sprintf("error: symbol %q not found", name)}, false, nil
+	sym, fqn, lerr := s.lookupSymbol(name)
+	if lerr != nil {
+		return []string{"error: " + lerr.Error()}, false, nil
 	}
 
 	inst, err := ctx.Instantiate(sym)
@@ -224,9 +222,11 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 		return []string{fmt.Sprintf("error: instantiation failed: %v", err)}, false, nil
 	}
 
-	s.instances[name] = inst
+	// Keyed by the resolved name, so %slots finds the instance whichever
+	// spelling of the name created it.
+	s.instances[fqn] = inst
 	return []string{
-		fmt.Sprintf("✓ Created instance of %s", name),
+		fmt.Sprintf("✓ Created instance of %s", fqn),
 		fmt.Sprintf("  ID: %d", inst.ID),
 		fmt.Sprintf("  Use %%slots %s to inspect", name),
 	}, false, nil
@@ -252,23 +252,26 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 		return []string{"error: " + err.Error()}, false, nil
 	}
 
-	// Try simple feature reference lookup (e.g., "%eval x")
-	if isSimpleIdentifier(expr) {
-		sym := lookupInScopeTree(doc.Scope, expr)
-		if sym != nil {
-			if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
-				// Evaluate with the symbol's owner scope for proper name resolution
-				val, err := ctx.EvalWithScope(usage.Value, sym.OwnerScope)
-				if err != nil {
-					return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
-				}
-				return []string{
-					fmt.Sprintf("✓ %s", expr),
-					fmt.Sprintf("  = %s", formatValue(val)),
-				}, false, nil
-			}
+	// Try feature reference lookup, simple ("%eval x") or qualified
+	// ("%eval Demo::Vehicle::mass").
+	if isSymbolReference(expr) {
+		sym, _, lerr := s.lookupSymbol(expr)
+		if lerr != nil {
+			return []string{"error: " + lerr.Error()}, false, nil
 		}
-		return []string{fmt.Sprintf("error: symbol %q not found", expr)}, false, nil
+		usage, ok := sym.Decl.(*ast.Usage)
+		if !ok || usage.Value == nil {
+			return []string{fmt.Sprintf("error: %q has no value to evaluate", expr)}, false, nil
+		}
+		// Evaluate with the symbol's owner scope for proper name resolution
+		val, err := ctx.EvalWithScope(usage.Value, sym.OwnerScope)
+		if err != nil {
+			return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
+		}
+		return []string{
+			fmt.Sprintf("✓ %s", expr),
+			fmt.Sprintf("  = %s", formatValue(val)),
+		}, false, nil
 	}
 
 	// Complex expression with feature refs - inject into session context
@@ -287,8 +290,12 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	// Find __eval__ attribute (should be last member)
 	var evalUsage *ast.Usage
 	for i := len(root.Members) - 1; i >= 0; i-- {
-		if usage, ok := root.Members[i].(*ast.Usage); ok && usage.Value != nil {
-			if usage.Ident.ShortName == "__eval__" {
+		member := root.Members[i]
+		if membership, ok := member.(*ast.Membership); ok {
+			member = membership.Member
+		}
+		if usage, ok := member.(*ast.Usage); ok && usage.Value != nil {
+			if usage.Ident.Name == "__eval__" || usage.Ident.ShortName == "__eval__" {
 				evalUsage = usage
 				break
 			}
@@ -299,7 +306,9 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 		return []string{"error: could not parse expression"}, false, nil
 	}
 
-	val, err := ctx.Eval(evalUsage.Value)
+	// Evaluated against the document scope, so a compound expression can name
+	// the session's top-level features.
+	val, err := ctx.EvalWithScope(evalUsage.Value, doc.Scope)
 	if err != nil {
 		return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
 	}
@@ -349,27 +358,35 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 	}, true
 }
 
-// isSimpleIdentifier checks if string is a single identifier (no operators/spaces).
-func isSimpleIdentifier(s string) bool {
-	s = strings.TrimSpace(s)
-	if len(s) == 0 {
+// isSymbolReference reports whether expr names a symbol — a single identifier
+// or a qualified name like Demo::Vehicle::mass — rather than a compound
+// expression.
+func isSymbolReference(expr string) bool {
+	expr = strings.TrimSpace(expr)
+	if len(expr) == 0 {
 		return false
 	}
 	// Simple heuristic: no spaces, operators, or parens
-	for _, ch := range s {
+	for _, ch := range expr {
 		if ch == ' ' || ch == '+' || ch == '-' || ch == '*' || ch == '/' ||
 			ch == '(' || ch == ')' || ch == '.' {
 			return false
 		}
 	}
-	return true
+	// A ':' is only meaningful here as part of the '::' qualifier separator.
+	return !strings.Contains(strings.ReplaceAll(expr, "::", ""), ":")
 }
 
 // doSlots shows instance slots.
 func (s *Session) doSlots(name string) ([]string, bool, error) {
-	inst, ok := s.instances[name]
+	_, fqn, lerr := s.lookupSymbol(name)
+	if lerr != nil {
+		return []string{"error: " + lerr.Error()}, false, nil
+	}
+
+	inst, ok := s.instances[fqn]
 	if !ok {
-		return []string{fmt.Sprintf("error: no instance named %q (use %%instantiate first)", name)}, false, nil
+		return []string{fmt.Sprintf("error: no instance of %q (use %%instantiate first)", fqn)}, false, nil
 	}
 
 	ctx, err := s.getOrCreateRuntime()
@@ -378,7 +395,7 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 	}
 
 	lines := []string{
-		fmt.Sprintf("Instance: %s (ID: %d)", name, inst.ID),
+		fmt.Sprintf("Instance: %s (ID: %d)", fqn, inst.ID),
 		"Slots:",
 	}
 
@@ -459,10 +476,9 @@ func (s *Session) doCalc(args []string) ([]string, bool, error) {
 		return []string{"error: no declarations loaded"}, false, nil
 	}
 
-	// Use lookupInScopeTree to search nested scopes (e.g., package members)
-	sym := lookupInScopeTree(doc.Scope, calcName)
-	if sym == nil {
-		return []string{fmt.Sprintf("error: calc %q not found", calcName)}, false, nil
+	sym, _, lerr := s.lookupSymbol(calcName)
+	if lerr != nil {
+		return []string{"error: " + lerr.Error()}, false, nil
 	}
 
 	ctx, err := s.getOrCreateRuntime()
@@ -545,10 +561,9 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 		return []string{"error: no declarations loaded"}, false, nil
 	}
 
-	// Use lookupInScopeTree to search nested scopes
-	sym := lookupInScopeTree(doc.Scope, name)
-	if sym == nil {
-		return []string{fmt.Sprintf("error: constraint %q not found", name)}, false, nil
+	sym, _, lerr := s.lookupSymbol(name)
+	if lerr != nil {
+		return []string{"error: " + lerr.Error()}, false, nil
 	}
 
 	ctx, err := s.getOrCreateRuntime()
@@ -576,10 +591,9 @@ func (s *Session) doRequirement(name string) ([]string, bool, error) {
 		return []string{"error: no declarations loaded"}, false, nil
 	}
 
-	// Use lookupInScopeTree to search nested scopes
-	sym := lookupInScopeTree(doc.Scope, name)
-	if sym == nil {
-		return []string{fmt.Sprintf("error: requirement %q not found", name)}, false, nil
+	sym, _, lerr := s.lookupSymbol(name)
+	if lerr != nil {
+		return []string{"error: " + lerr.Error()}, false, nil
 	}
 
 	ctx, err := s.getOrCreateRuntime()
@@ -609,15 +623,9 @@ func (s *Session) doAction(name string) ([]string, bool, error) {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
-		return []string{"error: no declarations loaded"}, false, nil
-	}
-
-	// Use lookupInScopeTree to search nested scopes
-	sym := lookupInScopeTree(doc.Scope, name)
-	if sym == nil {
-		return []string{fmt.Sprintf("error: action %q not found", name)}, false, nil
+	sym, _, lerr := s.lookupSymbol(name)
+	if lerr != nil {
+		return []string{"error: " + lerr.Error()}, false, nil
 	}
 
 	if sym.Kind != symbols.SymbolActionUsage && sym.Kind != symbols.SymbolActionDef {
@@ -702,10 +710,21 @@ func (s *Session) doContinue() ([]string, bool, error) {
 		return []string{"✓ Action already completed"}, false, nil
 	}
 
-	// Run to completion
+	// Run to completion, or to the first breakpoint hit
 	err := exec.RunToCompletion()
 	if err != nil {
 		return []string{fmt.Sprintf("error: execution failed: %v", err)}, false, nil
+	}
+
+	if node := exec.PausedAt(); node != "" {
+		out := []string{
+			fmt.Sprintf("⏸ Paused at breakpoint %q", node),
+			fmt.Sprintf("  State: %s", exec.State()),
+			fmt.Sprintf("  Tokens: %d", len(exec.Tokens())),
+			"",
+			"Use %tokens to inspect, %step or %continue to resume",
+		}
+		return out, false, nil
 	}
 
 	// Display results
@@ -740,13 +759,9 @@ func (s *Session) doTokens() ([]string, bool, error) {
 
 	out := []string{fmt.Sprintf("Active tokens (%d):", len(tokens))}
 	for _, tok := range tokens {
-		locName := "<unknown>"
-		if stateNode, ok := tok.Location.(*ast.StateNode); ok {
-			if stateNode.Name != "" {
-				locName = stateNode.Name
-			}
-		} else if tok.Location != nil {
-			locName = fmt.Sprintf("%T", tok.Location)
+		locName := runtime.ActionNodeName(tok.Location)
+		if locName == "" {
+			locName = anonymousNodeLabel(tok.Location)
 		}
 
 		out = append(out, fmt.Sprintf("  Token %d @ %s", tok.ID, locName))
@@ -760,16 +775,51 @@ func (s *Session) doTokens() ([]string, bool, error) {
 	return out, false, nil
 }
 
-// doBreak sets a breakpoint.
+// anonymousNodeLabel describes a node that declares no name, by kind.
+func anonymousNodeLabel(node ast.Node) string {
+	switch node.(type) {
+	case *ast.InitialNode:
+		return "<initial>"
+	case *ast.FinalNode:
+		return "<final>"
+	case *ast.ForkNode:
+		return "<fork>"
+	case *ast.JoinNode:
+		return "<join>"
+	case *ast.MergeNode:
+		return "<merge>"
+	case *ast.DecisionNode:
+		return "<decision>"
+	case *ast.ActionExecutionNode:
+		return "<action>"
+	case nil:
+		return "<none>"
+	default:
+		return "<anonymous>"
+	}
+}
+
+// doBreak sets a breakpoint at a named node of the running action.
 func (s *Session) doBreak(nodeName string) ([]string, bool, error) {
 	if s.actionExec == nil {
 		return []string{"error: no active action session (use %action <name> first)"}, false, nil
 	}
 
 	exec := s.actionExec.executor
+	names := exec.NodeNames()
+	if !slices.Contains(names, nodeName) {
+		out := []string{fmt.Sprintf("error: action %q has no node named %q", s.actionExec.name, nodeName)}
+		if len(names) > 0 {
+			out = append(out, "  nodes: "+strings.Join(names, ", "))
+		}
+		return out, false, nil
+	}
 	exec.SetBreakpoint(nodeName)
 
-	return []string{fmt.Sprintf("✓ Breakpoint set at node %q", nodeName)}, false, nil
+	return []string{
+		fmt.Sprintf("✓ Breakpoint set at node %q", nodeName),
+		"  %continue runs until a token reaches it",
+	}, false, nil
 }
 
 // doStop stops the current debugging session.
@@ -799,15 +849,9 @@ func (s *Session) doStateMachine(name string) ([]string, bool, error) {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
-		return []string{"error: no declarations loaded"}, false, nil
-	}
-
-	// Use lookupInScopeTree to search nested scopes
-	sym := lookupInScopeTree(doc.Scope, name)
-	if sym == nil {
-		return []string{fmt.Sprintf("error: state machine %q not found", name)}, false, nil
+	sym, _, lerr := s.lookupSymbol(name)
+	if lerr != nil {
+		return []string{"error: " + lerr.Error()}, false, nil
 	}
 
 	if sym.Kind != symbols.SymbolStateDef && sym.Kind != symbols.SymbolStateUsage {
@@ -825,18 +869,12 @@ func (s *Session) doStateMachine(name string) ([]string, bool, error) {
 		name:     name,
 		symbol:   sym,
 		executor: exec,
-	}
-
-	// Display initial state
-	currentState := exec.CurrentState()
-	stateName := "<unknown>"
-	if stateNode, ok := currentState.(*ast.StateNode); ok && stateNode.Name != "" {
-		stateName = stateNode.Name
+		now:      exec.CurrentTime(),
 	}
 
 	return []string{
 		fmt.Sprintf("✓ Started state machine executor for %q", name),
-		fmt.Sprintf("  Current state: %s", stateName),
+		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
 		fmt.Sprintf("  Time: %.2f", exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
 		"",
@@ -871,18 +909,13 @@ func (s *Session) doCurrent() ([]string, bool, error) {
 	}
 
 	exec := s.stateExec.executor
-	currentState := exec.CurrentState()
 	stateStack := exec.StateStack()
 	stateData := exec.StateData()
 
-	stateName := "<unknown>"
-	if stateNode, ok := currentState.(*ast.StateNode); ok && stateNode.Name != "" {
-		stateName = stateNode.Name
-	}
-
 	out := []string{
-		fmt.Sprintf("Current state: %s", stateName),
-		fmt.Sprintf("Time: %.2f", exec.CurrentTime()),
+		fmt.Sprintf("Current state: %s", currentStateName(exec)),
+		fmt.Sprintf("Time: %.2f", s.stateExec.now),
+		fmt.Sprintf("Last event at: %.2f", exec.CurrentTime()),
 		fmt.Sprintf("Execution state: %s", exec.State()),
 	}
 
@@ -905,41 +938,101 @@ func (s *Session) doCurrent() ([]string, bool, error) {
 	return out, false, nil
 }
 
-// doAdvance advances simulation time.
+// currentStateName renders the machine's active configuration: the active
+// state's name, or one name per orthogonal region.
+func currentStateName(exec *runtime.StateExecutor) string {
+	active := exec.ActiveStates()
+	if len(active) == 0 {
+		return "<none>"
+	}
+	names := make([]string, 0, len(active))
+	for _, state := range active {
+		if state.Name != "" {
+			names = append(names, state.Name)
+		} else {
+			names = append(names, "<anonymous>")
+		}
+	}
+	return strings.Join(names, " | ")
+}
+
+// parseDuration reads the argument of %advance: a number of time units, with
+// an optional trailing "s".
+func parseDuration(arg string) (float64, error) {
+	text := strings.TrimSuffix(strings.TrimSpace(arg), "s")
+	d, err := strconv.ParseFloat(text, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid time %q (expected a number of time units, e.g. 30 or 30s)", arg)
+	}
+	if math.IsNaN(d) || math.IsInf(d, 0) {
+		return 0, fmt.Errorf("invalid time %q (expected a finite number of time units, e.g. 30 or 30s)", arg)
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("invalid time %q (must not be negative)", arg)
+	}
+	return d, nil
+}
+
+// doAdvance advances simulation time by the given duration, processing every
+// event scheduled at or before the deadline.
 func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 	if s.stateExec == nil {
 		return []string{"error: no active state machine session (use %state <name> first)"}, false, nil
 	}
 
-	// Parse time - for now just process next event
-	// TODO: parse timeStr and advance to specific time
+	duration, err := parseDuration(timeStr)
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
 
 	exec := s.stateExec.executor
+	deadline := s.stateExec.now + duration
 
 	// A state's do behavior is work too: the machine can have none queued yet
 	// still have somewhere to go, and its completion transition is queued once
 	// the behavior ends.
 	if !exec.HasPendingWork() {
-		return []string{"Event queue empty - no events to process"}, false, nil
+		s.stateExec.now = deadline
+		return []string{fmt.Sprintf("No pending work - simulation time is now %.2f", deadline)}, false, nil
 	}
 
-	err := exec.ProcessNextEvent()
-	if err != nil {
-		return []string{fmt.Sprintf("error: event processing failed: %v", err)}, false, nil
+	// Bound the drain so a machine that keeps queueing work cannot hang the REPL.
+	const maxAdvanceEvents = 10000
+	processed := 0
+	doActions := 0
+	for exec.HasPendingWork() && exec.State() == runtime.StateRunning && processed+doActions < maxAdvanceEvents {
+		if queue := exec.EventQueue(); queue.Len() > 0 && queue.Peek().Timestamp > deadline {
+			// Events past the deadline are out of scope, but a do behavior with
+			// actions left is due now, so run it without dispatching them.
+			if !exec.HasPendingDoWork() {
+				break
+			}
+			ran, err := exec.RunDoRound()
+			if err != nil {
+				return []string{fmt.Sprintf("error: do behavior failed: %v", err)}, false, nil
+			}
+			if ran == 0 {
+				break
+			}
+			doActions += ran
+			continue
+		}
+		if err := exec.ProcessNextEvent(); err != nil {
+			return []string{fmt.Sprintf("error: event processing failed: %v", err)}, false, nil
+		}
+		processed++
 	}
-
-	// Display new state
-	currentState := exec.CurrentState()
-	stateName := "<unknown>"
-	if stateNode, ok := currentState.(*ast.StateNode); ok && stateNode.Name != "" {
-		stateName = stateNode.Name
-	}
+	s.stateExec.now = math.Max(deadline, exec.CurrentTime())
 
 	out := []string{
-		"✓ Event processed",
-		fmt.Sprintf("  Current state: %s", stateName),
-		fmt.Sprintf("  Time: %.2f", exec.CurrentTime()),
+		fmt.Sprintf("✓ Advanced to %.2f (%d event(s) processed)", s.stateExec.now, processed),
+		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
+		fmt.Sprintf("  Last event at: %.2f", exec.CurrentTime()),
 		fmt.Sprintf("  Remaining events: %d", exec.EventQueue().Len()),
+	}
+
+	if doActions > 0 {
+		out = append(out, fmt.Sprintf("  Do behavior actions run: %d", doActions))
 	}
 
 	if exec.State() == runtime.StateCompleted {
@@ -947,26 +1040,4 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 	}
 
 	return out, false, nil
-}
-
-// lookupInScopeTree recursively searches scope and all nested scopes for a symbol.
-func lookupInScopeTree(scope *symbols.Scope, name string) *symbols.Symbol {
-	// A body-local name is only visible inside its own body.
-	if scope == nil || scope.BodyLocal() {
-		return nil
-	}
-
-	// Try local lookup first
-	if sym, ok := scope.LookupLocal(name); ok && sym != nil {
-		return sym
-	}
-
-	// Recursively search nested scopes
-	for _, child := range scope.Children() {
-		if sym := lookupInScopeTree(child, name); sym != nil {
-			return sym
-		}
-	}
-
-	return nil
 }

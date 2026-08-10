@@ -33,7 +33,8 @@ type Session struct {
 
 	// Runtime execution context
 	rtCtx     *runtime.Context
-	instances map[string]*runtime.Instance // name -> instance for %instantiate tracking
+	idx       *symbols.Index               // index over the session document, shared by lookup and runtime
+	instances map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
 
 	// Active executor sessions for debugging
 	actionExec *actionSession
@@ -52,6 +53,9 @@ type stateSession struct {
 	name     string
 	symbol   *symbols.Symbol
 	executor *runtime.StateExecutor
+	// now is the debugger's clock. The executor's own clock only moves when an
+	// event is processed, so successive %advance calls accumulate here.
+	now float64
 }
 
 // NewSession returns a session over a fresh workspace.
@@ -121,6 +125,14 @@ func (s *Session) Submit(src string) Result {
 	joined := s.accept(src)
 	s.version++
 	s.ws.Open(docName, []byte(joined), s.version)
+	// The document is a new AST and scope tree, so anything derived from the
+	// previous one is stale — including instances, whose IDs restart with the
+	// new runtime context, and any debugging session bound to the old graph.
+	s.idx = nil
+	s.rtCtx = nil
+	s.instances = make(map[string]*runtime.Instance)
+	s.actionExec = nil
+	s.stateExec = nil
 	diags := s.ws.Diagnostics(docName)
 	var members []ast.Node
 	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
@@ -140,6 +152,7 @@ func (s *Session) Clear() {
 	s.snippets = nil
 	s.version = 0
 	s.rtCtx = nil
+	s.idx = nil
 	s.instances = make(map[string]*runtime.Instance)
 	s.actionExec = nil
 	s.stateExec = nil
@@ -151,17 +164,29 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 		return s.rtCtx, nil
 	}
 
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
+	idx := s.symbolIndex()
+	if idx == nil {
 		return nil, fmt.Errorf("no document loaded")
 	}
-
-	// Build fresh index from current document
-	idx := symbols.NewIndex()
-	idx.AddDocument(docName, doc.AST)
 
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	s.rtCtx = runtime.NewContext(model, resolver, 100000)
 	return s.rtCtx, nil
+}
+
+// symbolIndex lazily indexes the session document, returning nil when nothing
+// is loaded. Name lookup and the runtime context share it.
+func (s *Session) symbolIndex() *symbols.Index {
+	if s.idx != nil {
+		return s.idx
+	}
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		return nil
+	}
+	idx := symbols.NewIndex()
+	idx.AddDocument(docName, doc.AST)
+	s.idx = idx
+	return idx
 }

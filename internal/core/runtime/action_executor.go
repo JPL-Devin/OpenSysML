@@ -13,18 +13,27 @@ import (
 
 // ActionExecutor executes action bodies using token-flow semantics.
 type ActionExecutor struct {
-	ctx          *Context
-	action       *symbols.Symbol
-	graph        *lower.ActionGraph // Execution IR
-	tokens       []Token
-	state        ExecutionState
-	nextTokenID  int64
-	stepCount    int // Current step number for tracing
-	breakpoints  map[string]bool
-	results      map[string]Value  // Accumulated results from consumed final tokens
-	trace        *TraceRecorder    // Optional trace recorder for testing
-	mergeVisited map[ast.Node]bool // Track merge node visits
-	inputs       map[string]Value  // Input parameter bindings seeded into the initial token
+	ctx         *Context
+	action      *symbols.Symbol
+	graph       *lower.ActionGraph // Execution IR
+	tokens      []Token
+	state       ExecutionState
+	nextTokenID int64
+	stepCount   int // Current step number for tracing
+	breakpoints map[string]bool
+	// firedBreakpoints records the token visits a breakpoint already stopped on.
+	firedBreakpoints map[breakpointVisit]bool
+	results          map[string]Value  // Accumulated results from consumed final tokens
+	trace            *TraceRecorder    // Optional trace recorder for testing
+	mergeVisited     map[ast.Node]bool // Track merge node visits
+	inputs           map[string]Value  // Input parameter bindings seeded into the initial token
+	pausedAt         string            // Node name RunToCompletion stopped at, empty when it ran to the end
+}
+
+// breakpointVisit identifies one token's stay at one node.
+type breakpointVisit struct {
+	token int64
+	node  ast.Node
 }
 
 // SetInputs binds input parameter values that seed the initial token's data.
@@ -47,15 +56,17 @@ func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, e
 	}
 
 	exec := &ActionExecutor{
-		ctx:          ctx,
-		action:       action,
-		graph:        graph,
-		tokens:       make([]Token, 0),
-		state:        StateReady,
-		nextTokenID:  1,
-		breakpoints:  make(map[string]bool),
-		results:      make(map[string]Value),
-		mergeVisited: make(map[ast.Node]bool),
+		ctx:         ctx,
+		action:      action,
+		graph:       graph,
+		tokens:      make([]Token, 0),
+		state:       StateReady,
+		nextTokenID: 1,
+		breakpoints: make(map[string]bool),
+
+		firedBreakpoints: make(map[breakpointVisit]bool),
+		results:          make(map[string]Value),
+		mergeVisited:     make(map[ast.Node]bool),
 	}
 
 	return exec, nil
@@ -82,6 +93,12 @@ func (e *ActionExecutor) Step() error {
 
 	if e.state == StateReady {
 		return fmt.Errorf("executor not initialized (call initialize first)")
+	}
+
+	// Stepping resumes a run a breakpoint suspended.
+	if e.state == StateSuspended {
+		e.state = StateRunning
+		e.pausedAt = ""
 	}
 
 	// A waiting executor is asked again whether its parked tokens can proceed:
@@ -200,8 +217,13 @@ func (e *ActionExecutor) deadlockError() error {
 		ErrAcceptDeadlock, e.action.Name, strings.Join(descriptions, "; "))
 }
 
-// RunToCompletion executes until StateCompleted or error.
+// RunToCompletion executes until StateCompleted, a breakpoint, or error.
 // Includes infinite loop protection.
+//
+// A run stops as soon as a token sits on a node a breakpoint was set on
+// (see SetBreakpoint), leaving the tokens where they are so the run can be
+// resumed by calling RunToCompletion again or stepped with Step; PausedAt names
+// the node it stopped at. With no breakpoints set the run is unconditional.
 //
 // Nothing outside the action can post a message while this runs, so an action
 // whose every remaining token is parked at an accept can never be resumed: the
@@ -212,15 +234,25 @@ func (e *ActionExecutor) RunToCompletion() error {
 	const maxSteps = 10000
 	steps := 0
 
+	e.pausedAt = ""
+	if e.state == StateSuspended {
+		e.state = StateRunning
+	}
+
 	// A run may start from StateWaiting: a caller that stepped an action into a
 	// suspension and then posted the awaited message resumes it here.
 	for e.state == StateRunning || e.state == StateWaiting {
+		if node := e.breakpointHit(); node != "" {
+			e.pausedAt = node
+			e.state = StateSuspended
+			return nil
+		}
+
 		if steps >= maxSteps {
 			return fmt.Errorf("execution exceeded max steps (%d), possible infinite loop", maxSteps)
 		}
 
-		err := e.Step()
-		if err != nil {
+		if err := e.Step(); err != nil {
 			return err
 		}
 		if e.state == StateWaiting {
@@ -231,6 +263,101 @@ func (e *ActionExecutor) RunToCompletion() error {
 	}
 
 	return nil
+}
+
+// breakpointHit returns the name of a breakpoint node a token sits on and has
+// not yet stopped the run at, or "" if none does. Firing once per token and
+// visit means a resumed run continues past the node it stopped at, while a
+// token that leaves and comes back around a loop stops again.
+func (e *ActionExecutor) breakpointHit() string {
+	if len(e.breakpoints) == 0 {
+		return ""
+	}
+	for visit := range e.firedBreakpoints {
+		if loc, ok := e.tokenLocation(visit.token); !ok || loc != visit.node {
+			delete(e.firedBreakpoints, visit)
+		}
+	}
+	for _, token := range e.tokens {
+		name := ActionNodeName(token.Location)
+		if name == "" || !e.breakpoints[name] {
+			continue
+		}
+		visit := breakpointVisit{token: token.ID, node: token.Location}
+		if e.firedBreakpoints[visit] {
+			continue
+		}
+		if e.firedBreakpoints == nil {
+			e.firedBreakpoints = make(map[breakpointVisit]bool)
+		}
+		e.firedBreakpoints[visit] = true
+		return name
+	}
+	return ""
+}
+
+// tokenLocation returns where the given token sits, if it is still active.
+func (e *ActionExecutor) tokenLocation(id int64) (ast.Node, bool) {
+	for _, token := range e.tokens {
+		if token.ID == id {
+			return token.Location, true
+		}
+	}
+	return nil, false
+}
+
+// PausedAt returns the breakpoint node the last run stopped at, or "" when the
+// run was not stopped by a breakpoint.
+func (e *ActionExecutor) PausedAt() string {
+	return e.pausedAt
+}
+
+// ActionNodeName returns the declared name of an action graph node, or "" when
+// the node is anonymous or not a named node kind.
+func ActionNodeName(node ast.Node) string {
+	switch n := node.(type) {
+	case *ast.InitialNode:
+		return n.Name
+	case *ast.FinalNode:
+		return n.Name
+	case *ast.ForkNode:
+		return n.Name
+	case *ast.JoinNode:
+		return n.Name
+	case *ast.MergeNode:
+		return n.Name
+	case *ast.DecisionNode:
+		return n.Name
+	case *ast.ActionExecutionNode:
+		return n.Name
+	case *ast.StateNode:
+		return n.Name
+	case *ast.Usage:
+		if n.Ident.Name != "" {
+			return n.Ident.Name
+		}
+		return n.Ident.ShortName
+	case *ast.Definition:
+		if n.Ident.Name != "" {
+			return n.Ident.Name
+		}
+		return n.Ident.ShortName
+	default:
+		return ""
+	}
+}
+
+// NodeNames returns the declared names of the action's graph nodes, in
+// declaration order. Anonymous nodes are omitted; a debugger uses it to check
+// that a breakpoint names a node that exists.
+func (e *ActionExecutor) NodeNames() []string {
+	names := make([]string, 0, len(e.graph.Nodes))
+	for _, node := range e.graph.Nodes {
+		if name := ActionNodeName(node); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // extractGraph builds node and edge maps from action AST.
@@ -782,6 +909,7 @@ func (e *ActionExecutor) SetBreakpoint(nodeName string) {
 // ClearBreakpoints removes all breakpoints.
 func (e *ActionExecutor) ClearBreakpoints() {
 	e.breakpoints = make(map[string]bool)
+	e.firedBreakpoints = make(map[breakpointVisit]bool)
 }
 
 // SetTrace sets the trace recorder for this executor.
