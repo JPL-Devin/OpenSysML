@@ -4,8 +4,9 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 97/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 3/100 files have semantic errors (5 total errors)  
+**Status:** 98/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: 2/100 files have semantic errors (4 total errors), both pinned OMG bugs  
+**Note**: `training_examples_expected.txt` still records `33. Analysis/Trade Study Analysis Example` with 1 error and is regenerated in a follow-up change, so the gate reports that file as "now clean" until then  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -387,6 +388,45 @@ own remaining false positives.
 
 ---
 
+### Verdicts for the objective-typing re-pin (97/100 → 98/100)
+
+One entry drifted; every other file kept its exact count. This reaches the
+**98/100** ceiling implied above: the only errors left are the two pinned
+`start`/`done` OMG bugs.
+
+**Genuinely cleaner (verified, not silently unchecked)**
+
+| File | Was | Verdict |
+|---|---|---|
+| `33. Analysis/Trade Study Analysis Example` | 1 × `objective cannot be typed by requirementDef (kind mismatch)` | Real fix: the checker was wrong. `objective : MaximizeObjective;` names `requirement def MaximizeObjective :> TradeStudyObjective` (`Domain Libraries/Analysis/TradeStudies.sysml:98`), and an `objective` *is* a requirement — an `ObjectiveMembership`'s `ownedObjectiveRequirement` is a `RequirementUsage` (SysML v2 §8.3.22.4, mirrored by `derived ref item objectiveRequirement : RequirementUsage[0..1]` in `Systems Library/SysML.sysml:77`). The kind check still runs on the usage; it now consults the requirement-definition kinds instead of the structural ones, and an objective typed by anything else (a `part def`, an `action def`) still reports. |
+
+**What changed**
+
+`compatibleTyping` in `internal/core/passes/typecheck.go` had one row covering
+`subject` and `objective` together, accepting the structural definition kinds for
+both. The two memberships are not the same shape, so the row was split:
+
+- `objective` accepts a `RequirementDefinition` or one of its specializations
+  (`ConcernDefinition`, `ViewpointDefinition`, via the new `isRequirementDefKind`)
+  and nothing else. This is a *narrowing*: `objective o : Vehicle` (a `part def`)
+  was accepted before and now reports.
+- `subject` keeps the structural kinds. A `SubjectMembership`'s
+  `ownedSubjectParameter` is an unconstrained `Usage` (SysML v2 §8.3.21), and the
+  stdlib types subjects with structural definitions throughout
+  (`subject subj : View[1]` in `Systems Library/Views.sysml:61`), so the row that
+  was right for `subject` stays as it was.
+
+Both directions are locked by unit tests in
+`internal/core/passes/typecheck_kinds_test.go`
+(`TestTypeCheckObjectiveTypedByRequirementDefOK`,
+`TestTypeCheckObjectiveTypedByConcernDefOK`,
+`TestTypeCheckObjectiveTypedByPartDefError`,
+`TestTypeCheckObjectiveTypedByActionDefError`,
+`TestTypeCheckSubjectTypedByPartDefOK`,
+`TestTypeCheckSubjectTypedByRequirementDefError`).
+
+---
+
 ### Verdicts for the import-in-definition-body re-pin (89/100)
 
 One entry drifted; every other file kept its exact count.
@@ -436,14 +476,14 @@ is not touched here.
 
 ## Error Classification
 
-The 5 errors recorded on the current baseline, per file (the counts are exactly
-the ones in `training_examples_expected.txt`):
+The 4 errors on the current baseline, per file (`training_examples_expected.txt`
+still lists the third file below and is regenerated separately):
 
 | File | n | Cause |
 |---|---|---|
 | `27. Occurrences/Time Slice and Snapshot Example` | 2 | OMG bug: `start`/`done` should be `startShot`/`endShot` |
 | `28. Individuals/Individuals and Time Slices` | 2 | same OMG bug |
-| `33. Analysis/Trade Study Analysis Example` | 1 | kind tables reject an `objective` typed by a `requirement def` |
+| `33. Analysis/Trade Study Analysis Example` | 0 | clean since the objective-typing re-pin above |
 
 ### Bugs in the OMG Materials (4 errors, 2 files)
 
@@ -453,11 +493,14 @@ the ones in `training_examples_expected.txt`):
 - **Cause**: Files use `snapshot sale = start` and `snapshot junked = done` but KerML defines these as `startShot` and `endShot` (Occurrences.kerml:348, 364)
 - **Fix**: Change `start` → `startShot`, `done` → `endShot` in the OMG files
 
-### Type System Limitations (1 error, 1 file)
+### Type System Limitations (0 errors)
 
-- `33. Analysis/Trade Study Analysis Example` (1): `objective cannot be typed by requirementDef (kind mismatch)`. The file writes `objective : MaximizeObjective;`, and the standard library declares `requirement def MaximizeObjective :> TradeStudyObjective` (`Domain Libraries/Analysis/TradeStudies.sysml:98`), so the type is the one the library intends. The `UsageObjective` row of the kind table in `passes/typecheck.go` accepts only the structural definition kinds and not `requirementDef`, which is what an objective is.
+None recorded: the `objective`/`requirement def` kind-table gap that stood here
+was fixed (see the objective-typing re-pin above).
 
 ### Resolved Historically ✅
+
+- `objective cannot be typed by requirementDef` (`33. Analysis/Trade Study Analysis Example`): the kind table now types an `objective` with a requirement definition, as `ObjectiveMembership` requires; the file is clean.
 
 - `alternative` (`33. Analysis/Trade Study Analysis Example`): the file's `:>> alternative` is now matched against `alternatives` through implicit redefinition, so the former "OMG typo" verdict no longer applies to this file; the one error it still emits is the objective kind-table gap above.
 - Connection- and interface-usage end names (`09. Connections`, `11. Interfaces`, `13. Flows`, 6 errors): fixed by implicit redefinition of connector ends by position and by resolving a connector end's reference target in the enclosing scope (see the connector-end-redefinition re-pin above).
