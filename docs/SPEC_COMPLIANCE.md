@@ -103,11 +103,11 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 54 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×9, state×26, accept×1)
-- 31 robustness subtests (deadlock, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references)
-- 164 runtime unit tests
+- 56 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×11, state×26, accept×1)
+- 33 robustness subtests (deadlock, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references)
+- 166 runtime unit tests
 - 36 golden AST fixtures (including pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
-- 22 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, calc and constraint evaluation)
+- 24 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation)
 - 49 negative parser subtests
 - 1,500+ total tests passing
 
@@ -177,7 +177,8 @@ Each row documents one behavioral semantic feature:
 | Nested requirements | `context.go:148` `EvaluateRequirement` (recursive) | `requirement_nested.sysml` | ✅ Faithful |
 | `satisfy <name>` is an `OwnedReferenceSubsetting` of an existing usage, not a typing (SysML v2 §8.3.21.10 `SatisfyRequirementUsage`) | `parser/defusage.go` `parseDefUsage` (`ast.RelSubsets`) | `parser/testdata/parse/satisfy_reference.golden` | ✅ Faithful |
 | `referencedFeatureTarget().oclIsKindOf(RequirementUsage)` — satisfy/verify may only reference a requirement usage (incl. viewpoint/concern usages) | `passes/typecheck.go` `compatMessage`, `isRequirementUsageKind` | `passes/typecheck_test.go` `TestTypeCheckSatisfyRequirementUsageOK`, `TestTypeCheckSatisfyViewpointUsageOK`, `TestTypeCheckSatisfyNonRequirementUsageError` | ✅ Faithful |
-| An `ObjectiveMembership`'s `ownedObjectiveRequirement` is a `RequirementUsage` (SysML v2 §8.3.22.4), so an `objective` is typed by a requirement definition or a specialization of one, never by a structural definition; a `SubjectMembership`'s `ownedSubjectParameter` is an unconstrained `Usage` (§8.3.21) and keeps the structural kinds | `passes/typecheck.go` `compatibleTyping`, `isRequirementDefKind` | `passes/typecheck_kinds_test.go` `TestTypeCheckObjectiveTypedByRequirementDefOK`, `TestTypeCheckObjectiveTypedByConcernDefOK`, `TestTypeCheckObjectiveTypedByPartDefError`, `TestTypeCheckObjectiveTypedByActionDefError`, `TestTypeCheckSubjectTypedByPartDefOK`, `TestTypeCheckSubjectTypedByRequirementDefError` | ✅ Faithful |
+| An `ObjectiveMembership`'s `ownedObjectiveRequirement` is a `RequirementUsage` (SysML v2 §8.3.22.4), so an `objective` is typed by a requirement definition or a specialization of one, never by a structural definition | `passes/typecheck.go` `compatibleTyping`, `isRequirementDefKind` | `passes/typecheck_kinds_test.go` `TestTypeCheckObjectiveTypedByRequirementDefOK`, `TestTypeCheckObjectiveTypedByConcernDefOK`, `TestTypeCheckObjectiveTypedByPartDefError`, `TestTypeCheckObjectiveTypedByActionDefError` | ✅ Faithful |
+| A `SubjectMembership`'s `ownedSubjectParameter` is an unconstrained `Usage` (SysML v2 §8.3.21), so a definition of any kind types a `subject` — including the `port def` and `action def` the OMG training models use — and the rule applies however the requirement body is written, not only when the subject happens to parse as a usage | `passes/typecheck.go` `checkSubjectMember`, `compatibleTyping` | `passes/typecheck_subject_test.go` `TestTypeCheckSubjectIsCheckedWhateverPrecedesIt`, `TestTypeCheckRequirementUsageSubjectIsChecked`, `TestTypeCheckSubjectWithoutResolvableTypeIsNotATypeError`; `typecheck_kinds_test.go` `TestTypeCheckSubjectTypedByAnyDefKindOK`, `TestTypeCheckSubjectTypedByUsageError` | ✅ Faithful |
 
 ### Action (UML 2.5.1 §16 Activities)
 
@@ -192,7 +193,7 @@ Each row documents one behavioral semantic feature:
 | Action execution nodes | `action_executor.go:528` stepActionExecutionNode | `action_control_flow.sysml` | ✅ Faithful |
 | Nested action invocation | `action_executor.go:582` stepNestedAction, `invoke_action.go` invokeAction | `invoke_action_test.go:TestInvokeActionPassesParametersBothWays` | ✅ Faithful |
 | Send statement (message passing) | `lower/action_graph.go` lowerBody; `runtime/signal.go` buildMessage, post | `action_send_accept.sysml`, `lower/action_body_test.go:TestActionBodyLowering`, `signal_test.go:TestActionMessageReachesStateMachine` | ✅ Faithful (a message is typed by what was sent and addressed to the named receiver) |
-| Accept action (message consumption) | `action_executor.go` stepNestedAction accept case; `runtime/signal.go` TakeMessage | `action_send_accept.sysml`, `action_accept_message.sysml`, `robustness_test.go:send_reaches_only_its_addressee`, `:accept_of_unsent_type` | ⚠️ Approximate (an accept takes the oldest message of its declared type addressed to it, and reports `ErrNoMatchingMessage` otherwise; SysML would suspend and wait) |
+| Accept action (message consumption suspends the action) | `action_executor.go` stepNestedAction accept case (parks the token as `Token.Wait`), Step (StateWaiting), RunToCompletion, deadlockError; `executor_common.go` AcceptWait; `runtime/signal.go` TakeMessage | `action_accept_suspends_until_message.sysml` + trace golden, `action_accept_two_waiters.sysml` + trace golden, `action_send_accept.sysml`, `action_accept_message.sysml`, `signal_test.go:TestAcceptParksTokenUntilMessageArrives`, `:TestParkedAcceptTakesOnlyItsOwnMessage`, `robustness_test.go:accept_deadlock_never_satisfied`, `:accept_deadlock_reports_every_waiting_accept`, `:send_reaches_only_its_addressee`, `:accept_of_unsent_type`, `:send_via_unconnected_port` | ⚠️ Approximate (an accept with no message it can take suspends the action at that node and resumes when one arrives, from a parallel branch or from another executor sharing the context; a run whose every remaining token is parked reports `ErrAcceptDeadlock` rather than hanging. Suspension is bounded by the executor: a nested action invoked synchronously, and an action driven by `RunToCompletion`, cannot wait for a message posted after the call begins) |
 | Send through a port (`send x via p`) | `lower/connection.go` lowerConnections, PeerPorts; `runtime/signal.go` postVia, arrivedAt | `action_port_communication.sysml` + trace golden, `lower/connection_test.go:TestLowerConnectionsFromActionBody`, `signal_test.go:TestSendViaPortReachesConnectedAccept`, `robustness_test.go:send_via_unconnected_port` | ⚠️ Approximate (the message reaches every port connected to the sending port by a connector declared in the same behavior body; a port of the enclosing part is not visible to the behavior, and conjugation and port direction do not restrict routing) |
 | Accept through a port (`accept msg : T via p`) | `lower/action_graph.go` acceptPort; `runtime/action_executor.go` stepNestedAction accept case | `action_port_communication.sysml`, `lower/connection_test.go:TestLowerAcceptRecordsViaPort`, `signal_test.go:TestPortRoutedMessageBypassesPortlessAccept`, `:TestAddressedMessageBypassesPortAccept` | ✅ Faithful (an accept on a port takes only messages routed to that port, and an accept on none takes only addressed messages) |
 | Object flow (pin-to-pin data) | `action_executor.go:673` applyDataFlows | `action_output.sysml` | ✅ Faithful |
@@ -440,8 +441,8 @@ are tracked here):
 | `eval.go` | Expression evaluation (operators, literals, features) | ~758 |
 | `value.go` | Runtime value representation (ValConst, ValString, ValInstance) | ~150 |
 | `trace.go` | Deterministic execution and calc-evaluation trace recording, canonical value rendering | ~290 |
-| `conformance_test.go` | Conformance gate (54 cases) | ~470 |
-| `robustness_test.go` | Failure-mode tests (31 subtests) | ~660 |
+| `conformance_test.go` | Conformance gate (56 cases) | ~470 |
+| `robustness_test.go` | Failure-mode tests (33 subtests) | ~660 |
 | `trace_test.go` | Golden trace test infrastructure | ~200 |
 | `trace_calc_test.go` | Trace determinism and canonical rendering unit tests | ~180 |
 
@@ -466,24 +467,24 @@ are tracked here):
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
-- Execution conformance cases: 54 (all passing)
+- Execution conformance cases: 56 (all passing)
 - gRPC conformance cases: 5 (all passing)
-- Robustness subtests: 31 (all passing)
+- Robustness subtests: 33 (all passing)
 - Golden AST fixtures: 36
-- Golden execution traces: 22
+- Golden execution traces: 24
 - Negative parser subtests: 49
 
-**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 54 total):
+**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 56 total):
 - Calc: 10 conformance + 10 golden traces (includes unary, coercion and qualified-name evaluation)
 - Constraint: 3 conformance + 3 golden traces
 - Requirement: 5 conformance
-- Action: 9 conformance + 2 golden traces
+- Action: 11 conformance + 4 golden traces
 - State: 26 conformance + 7 golden traces
 - Accept: 1 conformance (`accept_then_transition`)
 
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
-- Execution conformance: 54/54 cases passing
+- Execution conformance: 56/56 cases passing
 - Training examples: 98/100 clean (2 files / 4 errors, both pinned OMG source bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
 

@@ -1,0 +1,6 @@
+step 1: token 1@*ast.ForkNode
+step 2: token 2@listenNumber, token 3@listenText, token 4@gate
+step 3: token 2@listenNumber, token 3@listenText, token 4@sender
+step 4: token 2@*ast.JoinNode, token 3@*ast.JoinNode, token 4@*ast.JoinNode
+step 5: token 5@*ast.FinalNode
+step 6: no active tokens

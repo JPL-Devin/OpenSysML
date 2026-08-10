@@ -427,9 +427,57 @@ Both directions are locked by unit tests in
 (`TestTypeCheckObjectiveTypedByRequirementDefOK`,
 `TestTypeCheckObjectiveTypedByConcernDefOK`,
 `TestTypeCheckObjectiveTypedByPartDefError`,
-`TestTypeCheckObjectiveTypedByActionDefError`,
-`TestTypeCheckSubjectTypedByPartDefOK`,
-`TestTypeCheckSubjectTypedByRequirementDefError`).
+`TestTypeCheckObjectiveTypedByActionDefError`).
+
+> **Superseded in part.** The `subject` half of this verdict was wrong, and the
+> corpus could not show it because most subjects were never checked at all. See
+> the subject re-pin below.
+
+---
+
+### Verdicts for the subject usage-kind re-pin (98/100, no count change)
+
+No expectation entry moved, so `training_examples_expected.txt` is untouched.
+This section records a rule change that *would* have moved one had it not been
+corrected, which is the case the adjudication process exists for.
+
+**What was wrong**
+
+A `subject` reached the usage-kind rules only when it happened to parse as an
+`ast.Usage`. The requirement-specific body path produces an `ast.SubjectMember`
+instead, and the type checker walked only usages — so whether a subject was
+checked depended on which keyword opened the body:
+
+```sysml
+requirement def R { subject s : A; }              // not checked
+requirement def R { attribute x; subject s : A; } // checked
+requirement R     { subject s : A; }              // never checked (a requirement
+                                                  // usage always takes that path)
+```
+
+**What the corpus then showed**
+
+Checking every subject turned `32. Requirements/Requirement Definitions` red with
+two errors, and they were *ours*, not the model's:
+
+| File | New errors | Verdict |
+|---|---|---|
+| `32. Requirements/Requirement Definitions` | `subject cannot be typed by portDef`, `subject cannot be typed by actionDef` | False positive. The file declares `port def ClutchPort;` and `action def GenerateTorque;` and subjects them directly (`subject clutchPort: ClutchPort;`, `subject generateTorque: GenerateTorque;`). A `SubjectMembership`'s `ownedSubjectParameter` is an unconstrained `Usage` (SysML v2 §8.3.21) — there is no kind restriction to violate. |
+
+**What changed**
+
+`compatibleTyping` accepted only `partDef | attributeDef | itemDef |
+occurrenceDef | individualDef` for a `subject`. That list contradicted the
+comment directly above it and the OMG's own models, and it survived because the
+subjects that would have failed it escaped the check. `subject` now accepts any
+definition kind; a subject typed by a *usage* is still an error, since that is
+the general typing rule rather than a kind rule.
+
+This retires `TestTypeCheckSubjectTypedByRequirementDefError`, which asserted
+that a `requirement def` may not type a subject. It had no basis in §8.3.21 and
+contradicted the sentence above it; the replacement,
+`TestTypeCheckSubjectTypedByAnyDefKindOK`, pins the kinds the corpus and the
+stdlib actually use.
 
 ---
 
@@ -561,7 +609,7 @@ directory and fails if any file's diagnostics differ between the two.
 
 ## Conclusion
 
-**Implementation Status**: Core behavioral semantics complete (54/54 execution conformance cases passing).
+**Implementation Status**: Core behavioral semantics complete (56/56 execution conformance cases passing).
 
 **Training Example Status**: 98/100 clean (2 files, 4 errors). What remains is two files that use
 feature names KerML does not define (`start`/`done` instead of `startShot`/`endShot`) — bugs in the
