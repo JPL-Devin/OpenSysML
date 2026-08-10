@@ -103,9 +103,9 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 56 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×11, state×26, accept×1)
-- 33 robustness subtests (deadlock, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references)
-- 166 runtime unit tests
+- 59 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×11, state×26, accept×1, instance×3)
+- 35 robustness subtests (deadlock, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references)
+- 174 runtime unit tests
 - 36 golden AST fixtures (including pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
 - 24 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation)
 - 49 negative parser subtests
@@ -461,8 +461,8 @@ are tracked here):
 | `eval.go` | Expression evaluation (operators, literals, features) | ~758 |
 | `value.go` | Runtime value representation (ValConst, ValString, ValInstance) | ~150 |
 | `trace.go` | Deterministic execution and calc-evaluation trace recording, canonical value rendering | ~290 |
-| `conformance_test.go` | Conformance gate (56 cases) | ~470 |
-| `robustness_test.go` | Failure-mode tests (33 subtests) | ~660 |
+| `conformance_test.go` | Conformance gate (59 cases) | ~470 |
+| `robustness_test.go` | Failure-mode tests (35 subtests) | ~660 |
 | `trace_test.go` | Golden trace test infrastructure | ~200 |
 | `trace_calc_test.go` | Trace determinism and canonical rendering unit tests | ~180 |
 
@@ -487,25 +487,25 @@ are tracked here):
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
-- Execution conformance cases: 58 (all passing)
+- Execution conformance cases: 59 (all passing)
 - gRPC conformance cases: 5 (all passing)
 - Robustness subtests: 35 (all passing)
 - Golden AST fixtures: 36
 - Golden execution traces: 24
 - Negative parser subtests: 49
 
-**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 58 total):
+**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 59 total):
 - Calc: 10 conformance + 10 golden traces (includes unary, coercion and qualified-name evaluation)
 - Constraint: 3 conformance + 3 golden traces
 - Requirement: 5 conformance
 - Action: 11 conformance + 4 golden traces
 - State: 26 conformance + 7 golden traces
 - Accept: 1 conformance (`accept_then_transition`)
-- Instance: 2 conformance (`instance_derived_slots`, `instance_constraint_binding`)
+- Instance: 3 conformance (`instance_derived_slots`, `instance_constraint_binding`, `instance_inherited_constraint`)
 
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
-- Execution conformance: 58/58 cases passing
+- Execution conformance: 59/59 cases passing
 - Training examples: 98/100 clean (2 files / 4 errors, both pinned OMG source bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
 
