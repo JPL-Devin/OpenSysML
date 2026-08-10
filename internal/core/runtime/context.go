@@ -37,6 +37,16 @@ type Context struct {
 	// messages are the signals in flight, oldest first. The bus is context-wide,
 	// so a message one behavior sends can be accepted in another.
 	messages []Message
+
+	// derivingSlots holds the slots whose defaults are being evaluated, so a
+	// default that refers back to its own slot is reported as a cycle.
+	derivingSlots map[slotRef]bool
+}
+
+// slotRef identifies one slot of one instance.
+type slotRef struct {
+	instance int64
+	feature  string
 }
 
 // NewContext creates a runtime context backed by the given semantic model.
@@ -56,6 +66,8 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		instances:  make(map[int64]*Instance),
 		features:   make(map[*symbols.Symbol][]EffectiveFeature),
 		calcShapes: make(map[*symbols.Symbol]*calcShape),
+
+		derivingSlots: make(map[slotRef]bool),
 	}
 }
 
@@ -103,10 +115,19 @@ func (ctx *Context) registerInstance(inst *Instance) {
 	ctx.instances[inst.ID] = inst
 }
 
-// EvaluateConstraint evaluates a constraint definition/usage.
+// EvaluateConstraint evaluates a constraint definition/usage against the
+// declared defaults of the features it refers to.
 // Returns (satisfied, error). If IsAssert=true, violation is an error.
 // If IsAssert=false (assume), always returns (true, nil) but logs assumptions.
 func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope) (bool, error) {
+	return ctx.EvaluateConstraintOn(sym, scope, nil)
+}
+
+// EvaluateConstraintOn evaluates a constraint against a concrete instance: a
+// feature the constraint names resolves to that instance's slot, so the same
+// constraint can pass for one instance and fail for another. A nil instance
+// evaluates against declared defaults, as EvaluateConstraint does.
+func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
 	// Extract constraint members
 	var members []ast.Node
 
@@ -140,7 +161,7 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 		}
 
 		// Evaluate constraint expression
-		result, err := ctx.EvalWithScope(constraintMember.Expression, scope)
+		result, err := NewEvalContextIn(ctx, scope, self).Eval(constraintMember.Expression)
 		if err != nil {
 			return false, fmt.Errorf("constraint %s: evaluation failed: %w", sym.Name, err)
 		}
@@ -161,7 +182,7 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 		// Handle assert vs assume
 		if constraintMember.IsAssert {
 			if !satisfied {
-				return false, fmt.Errorf("constraint %s: assertion failed", sym.Name)
+				return false, fmt.Errorf("constraint %s: %w", sym.Name, ErrConstraintViolated)
 			}
 		}
 		// assume: always pass (assumptions are trusted)
@@ -170,10 +191,18 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 	return true, nil
 }
 
-// EvaluateRequirement evaluates a requirement definition/usage.
+// EvaluateRequirement evaluates a requirement definition/usage against the
+// declared defaults of the features it refers to.
 // Returns (satisfied, error). Validates subject/actor types and evaluates assume/require expressions.
 // Assume members always pass (trusted), require members must evaluate to true.
 func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scope) (bool, error) {
+	return ctx.EvaluateRequirementOn(sym, scope, nil)
+}
+
+// EvaluateRequirementOn evaluates a requirement against a concrete instance,
+// binding the features it names to that instance's slots. A nil instance
+// evaluates against declared defaults, as EvaluateRequirement does.
+func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
 	// Extract requirement members
 	var members []ast.Node
 
@@ -193,7 +222,7 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 	}
 
 	// Create evaluation context with frame for requirement-local bindings
-	evalCtx := NewEvalContext(ctx, scope)
+	evalCtx := NewEvalContextIn(ctx, scope, self)
 	reqBindings := make(map[string]Value)
 	evalCtx.Push(reqBindings)
 

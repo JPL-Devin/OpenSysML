@@ -96,6 +96,32 @@ This directory contains behavioral execution conformance tests. Each test consis
 - `bindings`: variable bindings for requirement evaluation
 - `satisfied`: boolean, whether requirement is satisfied
 
+### For Instances (`Instantiate`)
+
+```json
+{
+  "type": "instance",
+  "instantiate": "test::Vehicle",
+  "slots": {
+    "mass": {"type": "Real", "value": 1500.0},
+    "doubled": {"type": "Real", "value": 3000.0}
+  },
+  "constraints": {
+    "withinLimit": true,
+    "overLimit": false
+  }
+}
+```
+
+- `instantiate`: qualified name of the type to instantiate
+- `slots`: expected values of the instance's own slots, materialized on demand
+  — a default expression that reads sibling features (including through a
+  nested part, `mass + engine.derated`) is evaluated against this object rather
+  than constant-folded. Keys are slot names, not paths.
+- `constraints`: expected verdict per constraint feature the instance carries,
+  evaluated bound to the instance. `false` means the assertion evaluated to
+  false (`ErrConstraintViolated`), not that evaluation failed.
+
 ## Value Format
 
 All values use this format:

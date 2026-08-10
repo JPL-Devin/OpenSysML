@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -255,9 +256,23 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	// Try feature reference lookup, simple ("%eval x") or qualified
 	// ("%eval Demo::Vehicle::mass").
 	if isSymbolReference(expr) {
-		sym, _, lerr := s.lookupSymbol(expr)
+		sym, fqn, lerr := s.lookupSymbol(expr)
 		if lerr != nil {
 			return []string{"error: " + lerr.Error()}, false, nil
+		}
+		// An instantiated owner makes this a question about that object: read
+		// the slot, which carries the value the instance actually holds.
+		if inst, owner := s.owningInstance(fqn); inst != nil {
+			if _, ok := inst.Slots[sym.Name]; ok {
+				slot, err := inst.GetSlot(ctx, sym.Name)
+				if err != nil {
+					return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
+				}
+				return []string{
+					fmt.Sprintf("✓ %s%s", expr, onInstance(inst, owner)),
+					fmt.Sprintf("  = %s", formatValue(slot.Value)),
+				}, false, nil
+			}
 		}
 		usage, ok := sym.Decl.(*ast.Usage)
 		if !ok || usage.Value == nil {
@@ -406,7 +421,14 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 		return lines, false, nil
 	}
 
-	for _, feat := range features {
+	for i := range features {
+		feat := &features[i]
+		// A constraint the part carries has no value; what it has is a verdict
+		// about this instance, which is the useful thing to show.
+		if feat.Symbol != nil && feat.Symbol.Kind == symbols.SymbolConstraintUsage {
+			lines = append(lines, fmt.Sprintf("  %s: %s", feat.Name, constraintVerdict(ctx, feat, inst)))
+			continue
+		}
 		slot, err := inst.GetSlot(ctx, feat.Name)
 		if err != nil {
 			lines = append(lines, fmt.Sprintf("  %s: <error: %v>", feat.Name, err))
@@ -416,6 +438,25 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 	}
 
 	return lines, false, nil
+}
+
+// constraintVerdict evaluates a constraint feature against the instance that
+// carries it and renders the outcome for a slot listing.
+func constraintVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *runtime.Instance) string {
+	if feat.Symbol == nil {
+		return "<constraint>"
+	}
+	passed, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
+	switch {
+	case errors.Is(err, runtime.ErrConstraintViolated):
+		return "<constraint: violated>"
+	case err != nil:
+		return fmt.Sprintf("<constraint: %v>", err)
+	case passed:
+		return "<constraint: satisfied>"
+	default:
+		return "<constraint: violated>"
+	}
 }
 
 // doInstances lists all instantiated objects.
@@ -561,7 +602,7 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 		return []string{"error: no declarations loaded"}, false, nil
 	}
 
-	sym, _, lerr := s.lookupSymbol(name)
+	sym, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
 		return []string{"error: " + lerr.Error()}, false, nil
 	}
@@ -571,17 +612,46 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 		return []string{"error: " + err.Error()}, false, nil
 	}
 
-	passed, err := ctx.EvaluateConstraint(sym, doc.Scope)
+	// Evaluate against the instance that carries the constraint when one has
+	// been created, so the verdict is about concrete values.
+	inst, owner := s.owningInstance(fqn)
+	scope := doc.Scope
+	if inst != nil {
+		scope = sym.OwnerScope
+	}
+	passed, err := ctx.EvaluateConstraintOn(sym, scope, inst)
 	if err != nil || !passed {
 		return []string{
-			fmt.Sprintf("✗ Constraint %s failed", name),
-			fmt.Sprintf("  Error: %v", err),
+			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
+			"  " + verdictDetail(err),
 		}, false, nil
 	}
 
 	return []string{
-		fmt.Sprintf("✓ Constraint %s passed", name),
+		fmt.Sprintf("✓ Constraint %s passed%s", name, onInstance(inst, owner)),
 	}, false, nil
+}
+
+// verdictDetail explains a failed verdict: an assertion that evaluated to
+// false is the model's answer, not a malfunction, so it is not an error line.
+func verdictDetail(err error) string {
+	switch {
+	case err == nil:
+		return "Assertion evaluated to false"
+	case errors.Is(err, runtime.ErrConstraintViolated):
+		return "Assertion evaluated to false"
+	default:
+		return fmt.Sprintf("Error: %v", err)
+	}
+}
+
+// onInstance renders the " (on <owner> ID: n)" suffix that marks a result as
+// being about one object rather than about declared defaults.
+func onInstance(inst *runtime.Instance, owner string) string {
+	if inst == nil {
+		return ""
+	}
+	return fmt.Sprintf(" (on %s ID: %d)", owner, inst.ID)
 }
 
 // doRequirement evaluates a requirement definition.
@@ -591,7 +661,7 @@ func (s *Session) doRequirement(name string) ([]string, bool, error) {
 		return []string{"error: no declarations loaded"}, false, nil
 	}
 
-	sym, _, lerr := s.lookupSymbol(name)
+	sym, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
 		return []string{"error: " + lerr.Error()}, false, nil
 	}
@@ -601,16 +671,21 @@ func (s *Session) doRequirement(name string) ([]string, bool, error) {
 		return []string{"error: " + err.Error()}, false, nil
 	}
 
-	passed, err := ctx.EvaluateRequirement(sym, doc.Scope)
+	inst, owner := s.owningInstance(fqn)
+	scope := doc.Scope
+	if inst != nil {
+		scope = sym.OwnerScope
+	}
+	passed, err := ctx.EvaluateRequirementOn(sym, scope, inst)
 	if err != nil || !passed {
 		return []string{
-			fmt.Sprintf("✗ Requirement %s failed", name),
-			fmt.Sprintf("  Error: %v", err),
+			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),
+			"  " + verdictDetail(err),
 		}, false, nil
 	}
 
 	return []string{
-		fmt.Sprintf("✓ Requirement %s satisfied", name),
+		fmt.Sprintf("✓ Requirement %s satisfied%s", name, onInstance(inst, owner)),
 	}, false, nil
 }
 
@@ -623,7 +698,7 @@ func (s *Session) doAction(name string) ([]string, bool, error) {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
-	sym, _, lerr := s.lookupSymbol(name)
+	sym, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
 		return []string{"error: " + lerr.Error()}, false, nil
 	}
@@ -641,6 +716,7 @@ func (s *Session) doAction(name string) ([]string, bool, error) {
 	// Store session
 	s.actionExec = &actionSession{
 		name:     name,
+		rootName: rootNameOf(fqn, name),
 		symbol:   sym,
 		executor: exec,
 	}
@@ -849,7 +925,7 @@ func (s *Session) doStateMachine(name string) ([]string, bool, error) {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
-	sym, _, lerr := s.lookupSymbol(name)
+	sym, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
 		return []string{"error: " + lerr.Error()}, false, nil
 	}
@@ -867,6 +943,7 @@ func (s *Session) doStateMachine(name string) ([]string, bool, error) {
 	// Store session
 	s.stateExec = &stateSession{
 		name:     name,
+		rootName: rootNameOf(fqn, name),
 		symbol:   sym,
 		executor: exec,
 		now:      exec.CurrentTime(),

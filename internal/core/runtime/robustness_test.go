@@ -51,6 +51,76 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("perform_reference_cycle", testPerformReferenceCycle)
 	t.Run("state_subaction_reference_of_missing_action", testStateSubactionReferenceOfMissingAction)
 	t.Run("state_subaction_reference_feature_chain", testStateSubactionReferenceFeatureChain)
+	t.Run("cyclic_derived_slot", testCyclicDerivedSlot)
+	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
+}
+
+// testCyclicDerivedSlot: two derived defaults that read each other are reported
+// as a cycle instead of recursing until the step budget runs out.
+func testCyclicDerivedSlot(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Loop {
+				attribute a = b + 1.0;
+				attribute b = a + 1.0;
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Loop", ast.DefPart)
+	if sym == nil {
+		t.Fatal("Loop part def not found")
+	}
+
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+
+	done := make(chan struct{})
+	var slotErr error
+	go func() {
+		defer close(done)
+		_, slotErr = inst.GetSlot(ctx, "a")
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetSlot hung on a cyclic derived slot")
+	}
+
+	if !errors.Is(slotErr, ErrCyclicSlot) {
+		t.Fatalf("GetSlot error = %v, want ErrCyclicSlot", slotErr)
+	}
+}
+
+// testDerivedSlotOverMissingFeature: a derived default that names something the
+// instance does not have fails with the slot named, rather than silently
+// leaving the slot empty.
+func testDerivedSlotOverMissingFeature(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Broken {
+				attribute derived = missing * 2.0;
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Broken", ast.DefPart)
+	if sym == nil {
+		t.Fatal("Broken part def not found")
+	}
+
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+
+	_, err = inst.GetSlot(ctx, "derived")
+	if err == nil {
+		t.Fatal("GetSlot succeeded on a default over an undeclared feature")
+	}
+	if !strings.Contains(err.Error(), "derived") {
+		t.Errorf("error %q does not name the slot", err)
+	}
 }
 
 // testStateSubactionReferenceOfMissingAction: an entry action given by

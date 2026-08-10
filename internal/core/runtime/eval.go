@@ -14,6 +14,7 @@ import (
 type EvalContext struct {
 	ctx    *Context           // runtime context
 	scope  *symbols.Scope     // scope context for name resolution
+	self   *Instance          // instance a feature name resolves against, nil when unbound
 	frames []map[string]Value // stack of local bindings (innermost = frames[len-1])
 	trace  *TraceRecorder     // evaluation trace recorder, nil when not tracing
 }
@@ -30,6 +31,15 @@ func NewEvalContext(ctx *Context, scope *symbols.Scope) *EvalContext {
 	}
 }
 
+// NewEvalContextIn creates an evaluation context bound to an instance, so that
+// a feature name resolves to that instance's slot value rather than to the
+// declared default of the same name.
+func NewEvalContextIn(ctx *Context, scope *symbols.Scope, self *Instance) *EvalContext {
+	ec := NewEvalContext(ctx, scope)
+	ec.self = self
+	return ec
+}
+
 // evalIn returns a context that resolves names in scope while sharing this
 // one's bindings and trace, for a body member written in another declaration's
 // scope (an inherited calc result or parameter default).
@@ -37,7 +47,7 @@ func (ec *EvalContext) evalIn(scope *symbols.Scope) *EvalContext {
 	if scope == nil || scope == ec.scope {
 		return ec
 	}
-	return &EvalContext{ctx: ec.ctx, scope: scope, frames: ec.frames, trace: ec.trace}
+	return &EvalContext{ctx: ec.ctx, scope: scope, self: ec.self, frames: ec.frames, trace: ec.trace}
 }
 
 // Push adds a new frame to the stack (on calc invocation, lambda entry).
@@ -177,6 +187,15 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		if val, ok := ec.Lookup(name); ok {
 			return val, nil
 		}
+		// Then the bound instance: a slot holds the value this object actually
+		// carries, which overrides the declared default the scope would yield.
+		if ec.self != nil {
+			if val, ok, err := ec.selfSlotValue(name); err != nil {
+				return Value{}, err
+			} else if ok {
+				return val, nil
+			}
+		}
 		// Try scope lookup (sibling attributes, inherited members)
 		if ec.scope != nil {
 			if sym, ok := ec.scope.LookupLocal(name); ok && sym != nil {
@@ -232,6 +251,26 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 	}
 }
 
+// selfSlotValue reads the named slot of the bound instance. Reports whether the
+// instance has such a slot; an error means the slot exists but could not be
+// materialized.
+func (ec *EvalContext) selfSlotValue(name string) (Value, bool, error) {
+	if _, ok := ec.self.Slots[name]; !ok {
+		return Value{}, false, nil
+	}
+	slot, err := ec.self.GetSlot(ec.ctx, name)
+	if err != nil {
+		return Value{}, true, err
+	}
+	if slot.Values.Kind != ValInvalid {
+		return slot.Values, true, nil
+	}
+	if slot.Value.Kind == ValInvalid {
+		return Value{}, true, fmt.Errorf("%w: %s", ErrUninitializedSlot, name)
+	}
+	return slot.Value, true, nil
+}
+
 // evalFeatureChain evaluates a feature chain expression (e.g., obj.member.submember).
 func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) {
 	// Evaluate the operand (left side of the chain)
@@ -260,9 +299,14 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 	currentInst := inst
 	for i, part := range n.Member.Parts {
 		memberName := part.Text
-		slot, ok := currentInst.Slots[memberName]
-		if !ok {
+		if _, ok := currentInst.Slots[memberName]; !ok {
 			return Value{}, fmt.Errorf("member %s not found in instance", memberName)
+		}
+		// Read through GetSlot so a derived or composite member is materialized
+		// on demand rather than read as an empty slot.
+		slot, err := currentInst.GetSlot(ec.ctx, memberName)
+		if err != nil {
+			return Value{}, err
 		}
 
 		// Get the slot's value

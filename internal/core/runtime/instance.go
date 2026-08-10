@@ -51,9 +51,10 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 			Materialized: false,
 		}
 
-		// Evaluate default value if present and scalar
+		// Fold constant defaults eagerly. A default that is not constant may read
+		// sibling slots of this very instance, so it is left to GetSlot, which
+		// evaluates it against the finished instance.
 		if feat.DefaultValue != nil && feat.Multiplicity.Upper.Value <= 1 {
-			// Use semantics.Eval for constant defaults (Tier 3 will use full evaluator)
 			if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 				slot.Value = Value{Kind: ValConst, Const: semVal}
 				slot.Materialized = true
@@ -79,6 +80,18 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 
 	// If already materialized, return
 	if slot.Materialized {
+		return slot, nil
+	}
+
+	// A default that did not constant-fold is a derived value: evaluate it
+	// against this instance, so that it sees the sibling slots it refers to.
+	if slot.Feature.DefaultValue != nil && slot.Feature.Multiplicity.Upper.Value <= 1 {
+		val, err := ctx.evalSlotDefault(inst, slot, name)
+		if err != nil {
+			return nil, err
+		}
+		slot.Value = val
+		slot.Materialized = true
 		return slot, nil
 	}
 
@@ -125,4 +138,26 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 	}
 
 	return slot, nil
+}
+
+// evalSlotDefault evaluates a slot's default-value expression bound to the
+// owning instance. Recursion back through the slot being computed is reported
+// as ErrCyclicSlot rather than recursing until the step budget runs out.
+func (ctx *Context) evalSlotDefault(inst *Instance, slot *Slot, name string) (Value, error) {
+	key := slotRef{instance: inst.ID, feature: name}
+	if ctx.derivingSlots[key] {
+		return Value{}, fmt.Errorf("%w: %s.%s", ErrCyclicSlot, inst.Type.Name, name)
+	}
+	ctx.derivingSlots[key] = true
+	defer delete(ctx.derivingSlots, key)
+
+	scope := slot.Feature.DeclScope()
+	if scope == nil {
+		scope = inst.Type.OwnerScope
+	}
+	val, err := NewEvalContextIn(ctx, scope, inst).Eval(slot.Feature.DefaultValue)
+	if err != nil {
+		return Value{}, fmt.Errorf("slot %s.%s: %w", inst.Type.Name, name, err)
+	}
+	return val, nil
 }

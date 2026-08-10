@@ -43,14 +43,21 @@ type Session struct {
 
 // actionSession holds an active action executor debugging session.
 type actionSession struct {
-	name     string
+	name string
+	// rootName is the top-level declaration the debugged action lives under.
+	// Resubmitting that declaration rewrites the graph the executor is running,
+	// which is what ends the session; an unrelated submission does not.
+	rootName string
 	symbol   *symbols.Symbol
 	executor *runtime.ActionExecutor
 }
 
 // stateSession holds an active state machine executor debugging session.
 type stateSession struct {
-	name     string
+	name string
+	// rootName is the top-level declaration the debugged state machine lives
+	// under; see actionSession.rootName.
+	rootName string
 	symbol   *symbols.Symbol
 	executor *runtime.StateExecutor
 	// now is the debugger's clock. The executor's own clock only moves when an
@@ -127,12 +134,11 @@ func (s *Session) Submit(src string) Result {
 	s.ws.Open(docName, []byte(joined), s.version)
 	// The document is a new AST and scope tree, so anything derived from the
 	// previous one is stale — including instances, whose IDs restart with the
-	// new runtime context, and any debugging session bound to the old graph.
+	// new runtime context.
 	s.idx = nil
 	s.rtCtx = nil
 	s.instances = make(map[string]*runtime.Instance)
-	s.actionExec = nil
-	s.stateExec = nil
+	notices := s.dropStaleDebugSessions(declared)
 	diags := s.ws.Diagnostics(docName)
 	var members []ast.Node
 	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
@@ -143,7 +149,50 @@ func (s *Session) Submit(src string) Result {
 		Declared:    declared,
 		Diagnostics: diags,
 		Source:      joined,
+		Notices:     notices,
 	}
+}
+
+// dropStaleDebugSessions ends the debugging sessions whose declaration this
+// submission rewrote, and reports each one it ended. A session over an
+// untouched declaration survives: it keeps running against the graph and
+// runtime context it started with, so stepping through a behavior does not
+// require avoiding the prompt.
+func (s *Session) dropStaleDebugSessions(declared []string) []string {
+	if len(declared) == 0 {
+		return nil
+	}
+	redeclared := make(map[string]bool, len(declared))
+	for _, n := range declared {
+		redeclared[n] = true
+	}
+	var notices []string
+	if s.actionExec != nil && redeclared[s.actionExec.rootName] {
+		notices = append(notices, debugSessionEnded("action", s.actionExec.name, s.actionExec.rootName))
+		s.actionExec = nil
+	}
+	if s.stateExec != nil && redeclared[s.stateExec.rootName] {
+		notices = append(notices, debugSessionEnded("state", s.stateExec.name, s.stateExec.rootName))
+		s.stateExec = nil
+	}
+	return notices
+}
+
+func debugSessionEnded(kind, name, rootName string) string {
+	return fmt.Sprintf("note: %s debugging session for %q ended (%s was redeclared)", kind, name, rootName)
+}
+
+// rootNameOf returns the top-level declaration name a fully-qualified name
+// lives under, which is the granularity at which a submission replaces
+// declarations.
+func rootNameOf(fqn, fallback string) string {
+	if fqn == "" {
+		fqn = fallback
+	}
+	if cut := strings.Index(fqn, "::"); cut >= 0 {
+		return fqn[:cut]
+	}
+	return fqn
 }
 
 // Clear resets the session, dropping all accumulated declarations.

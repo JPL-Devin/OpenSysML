@@ -165,6 +165,21 @@ Each row documents one behavioral semantic feature:
 | Bare expression as invariant | `context.go:81` | `constraint_literal.sysml` | ✅ Faithful |
 | Unresolved feature reference | `resolve` package + `eval.go` | `robustness_test.go:testConstraintMissingFeature` | ✅ Faithful |
 | Negated constraint (assert not) | `eval.go:483` evalNeg | `constraint_negation.sysml` | ✅ Faithful |
+| A constraint a type carries is evaluated against an instance of it, so it reads that object's slots rather than declared defaults | `context.go` `EvaluateConstraintOn`, `eval.go` `NewEvalContextIn`/`selfSlotValue` | `instance_constraint_binding.sysml`, `repl/instance_test.go:TestConstraintBindsToInstance` | ✅ Faithful |
+| A false assertion is a verdict, not a malfunction (`ErrConstraintViolated`), and is distinguishable from an evaluation failure | `errors.go` `ErrConstraintViolated`, `context.go` `EvaluateConstraintOn` | `repl/instance_test.go:TestConstraintEvaluationErrorIsNotAViolation` | ✅ Faithful |
+
+### Instantiation and Feature Values (SysML v2 §7.6 Feature Values, KerML §8.3)
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| A literal default is folded at instantiation | `instance.go` `Instantiate` | `instance_derived_slots.sysml` (`folded`) | ✅ Faithful |
+| A default that reads sibling features is derived per instance, evaluated against that object's slots on demand | `instance.go` `GetSlot`/`evalSlotDefault`, `eval.go` `selfSlotValue` | `instance_derived_slots.sysml` (`doubled`) | ✅ Faithful |
+| A default reaching through a nested part reads that part's own derived values | `eval.go` `evalFeatureChain` (via `GetSlot`) | `instance_derived_slots.sysml` (`total`) | ✅ Faithful |
+| A default expression resolves declarations in the scope that declared the feature, while instance slots take precedence | `shape.go` `EffectiveFeature.DeclScope`, `eval.go` `EvalContext.self` | `instance_derived_slots.sysml` | ✅ Faithful |
+| Mutually dependent defaults report a cycle rather than recursing to the step budget | `context.go` `derivingSlots`, `errors.go` `ErrCyclicSlot` | `robustness_test.go:cyclic_derived_slot` | ✅ Faithful |
+| A default over an undeclared feature fails naming the slot | `instance.go` `evalSlotDefault` | `robustness_test.go:derived_slot_over_missing_feature` | ✅ Faithful |
+
+⚠️ A multi-valued feature (upper bound > 1) keeps its declared default unevaluated; only single-valued defaults are materialized.
 
 ### Requirement
 
@@ -467,24 +482,25 @@ are tracked here):
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
-- Execution conformance cases: 56 (all passing)
+- Execution conformance cases: 58 (all passing)
 - gRPC conformance cases: 5 (all passing)
-- Robustness subtests: 33 (all passing)
+- Robustness subtests: 35 (all passing)
 - Golden AST fixtures: 36
 - Golden execution traces: 24
 - Negative parser subtests: 49
 
-**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 56 total):
+**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 58 total):
 - Calc: 10 conformance + 10 golden traces (includes unary, coercion and qualified-name evaluation)
 - Constraint: 3 conformance + 3 golden traces
 - Requirement: 5 conformance
 - Action: 11 conformance + 4 golden traces
 - State: 26 conformance + 7 golden traces
 - Accept: 1 conformance (`accept_then_transition`)
+- Instance: 2 conformance (`instance_derived_slots`, `instance_constraint_binding`)
 
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
-- Execution conformance: 56/56 cases passing
+- Execution conformance: 58/58 cases passing
 - Training examples: 98/100 clean (2 files / 4 errors, both pinned OMG source bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
 

@@ -52,6 +52,15 @@ var (
 	// maxCalcNestingDepth, which a recursive calc would otherwise do until the
 	// process ran out of stack.
 	ErrCalcRecursionLimit = errors.New("calc recursion limit exceeded")
+
+	// ErrConstraintViolated is returned when an asserted constraint evaluates to
+	// false. It is a verdict about the model, not a failure to evaluate, so
+	// callers can tell the two apart.
+	ErrConstraintViolated = errors.New("assertion failed")
+
+	// ErrCyclicSlot is returned when a slot's default value depends, directly or
+	// through other slots, on the slot being computed.
+	ErrCyclicSlot = errors.New("cyclic slot dependency")
 )
 
 // EvalError wraps an evaluation error with source context.

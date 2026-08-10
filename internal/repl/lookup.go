@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -61,6 +62,24 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 		return matches[0], idx.GetFQN(matches[0]), nil
 	default:
 		return nil, "", ambiguousError(name, matches, idx)
+	}
+}
+
+// owningInstance returns the instance a symbol's fully-qualified name belongs
+// to — the instance created for the nearest enclosing type — so that a
+// constraint or attribute is evaluated against the object that carries it
+// rather than against its declared defaults. The second result is the FQN that
+// instance was created under, for reporting.
+func (s *Session) owningInstance(fqn string) (*runtime.Instance, string) {
+	for owner := fqn; ; {
+		cut := strings.LastIndex(owner, "::")
+		if cut < 0 {
+			return nil, ""
+		}
+		owner = owner[:cut]
+		if inst, ok := s.instances[owner]; ok {
+			return inst, owner
+		}
 	}
 }
 
