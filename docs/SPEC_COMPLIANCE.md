@@ -106,9 +106,9 @@
 - 54 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×9, state×26, accept×1)
 - 31 robustness subtests (deadlock, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references)
 - 164 runtime unit tests
-- 35 golden AST fixtures (including pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
+- 36 golden AST fixtures (including pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
 - 22 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, calc and constraint evaluation)
-- 44 negative parser subtests
+- 49 negative parser subtests
 - 1,500+ total tests passing
 
 ---
@@ -177,7 +177,8 @@ Each row documents one behavioral semantic feature:
 | Nested requirements | `context.go:148` `EvaluateRequirement` (recursive) | `requirement_nested.sysml` | ✅ Faithful |
 | `satisfy <name>` is an `OwnedReferenceSubsetting` of an existing usage, not a typing (SysML v2 §8.3.21.10 `SatisfyRequirementUsage`) | `parser/defusage.go` `parseDefUsage` (`ast.RelSubsets`) | `parser/testdata/parse/satisfy_reference.golden` | ✅ Faithful |
 | `referencedFeatureTarget().oclIsKindOf(RequirementUsage)` — satisfy/verify may only reference a requirement usage (incl. viewpoint/concern usages) | `passes/typecheck.go` `compatMessage`, `isRequirementUsageKind` | `passes/typecheck_test.go` `TestTypeCheckSatisfyRequirementUsageOK`, `TestTypeCheckSatisfyViewpointUsageOK`, `TestTypeCheckSatisfyNonRequirementUsageError` | ✅ Faithful |
-| An `ObjectiveMembership`'s `ownedObjectiveRequirement` is a `RequirementUsage` (SysML v2 §8.3.22.4), so an `objective` is typed by a requirement definition or a specialization of one, never by a structural definition; a `SubjectMembership`'s `ownedSubjectParameter` is an unconstrained `Usage` (§8.3.21) and keeps the structural kinds | `passes/typecheck.go` `compatibleTyping`, `isRequirementDefKind` | `passes/typecheck_kinds_test.go` `TestTypeCheckObjectiveTypedByRequirementDefOK`, `TestTypeCheckObjectiveTypedByConcernDefOK`, `TestTypeCheckObjectiveTypedByPartDefError`, `TestTypeCheckObjectiveTypedByActionDefError`, `TestTypeCheckSubjectTypedByPartDefOK`, `TestTypeCheckSubjectTypedByRequirementDefError` | ✅ Faithful |
+| An `ObjectiveMembership`'s `ownedObjectiveRequirement` is a `RequirementUsage` (SysML v2 §8.3.22.4), so an `objective` is typed by a requirement definition or a specialization of one, never by a structural definition | `passes/typecheck.go` `compatibleTyping`, `isRequirementDefKind` | `passes/typecheck_kinds_test.go` `TestTypeCheckObjectiveTypedByRequirementDefOK`, `TestTypeCheckObjectiveTypedByConcernDefOK`, `TestTypeCheckObjectiveTypedByPartDefError`, `TestTypeCheckObjectiveTypedByActionDefError` | ✅ Faithful |
+| A `SubjectMembership`'s `ownedSubjectParameter` is an unconstrained `Usage` (SysML v2 §8.3.21), so a definition of any kind types a `subject` — including the `port def` and `action def` the OMG training models use — and the rule applies however the requirement body is written, not only when the subject happens to parse as a usage | `passes/typecheck.go` `checkSubjectMember`, `compatibleTyping` | `passes/typecheck_subject_test.go` `TestTypeCheckSubjectIsCheckedWhateverPrecedesIt`, `TestTypeCheckRequirementUsageSubjectIsChecked`, `TestTypeCheckSubjectWithoutResolvableTypeIsNotATypeError`; `typecheck_kinds_test.go` `TestTypeCheckSubjectTypedByAnyDefKindOK`, `TestTypeCheckSubjectTypedByUsageError` | ✅ Faithful |
 
 ### Action (UML 2.5.1 §16 Activities)
 

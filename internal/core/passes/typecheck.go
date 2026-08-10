@@ -104,6 +104,27 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.infer(scope, m.Value)
 	case *ast.ActionExecutionNode:
 		tc.expr.infer(scope, m.Expression)
+	case *ast.SubjectMember:
+		tc.checkSubjectMember(scope, m)
+	}
+}
+
+// checkSubjectMember types a `subject` declared through the requirement body
+// path, which yields a SubjectMember rather than a Usage and so would otherwise
+// escape the usage-kind rules.
+func (tc *typeChecker) checkSubjectMember(scope *symbols.Scope, m *ast.SubjectMember) {
+	if m.TypeRef != nil {
+		tc.checkTypeTarget(scope, m.TypeRef, ast.RelTyping, declKind{useKind: ast.UsageSubject})
+	}
+	if m.BindingExpr != nil {
+		tc.expr.infer(scope, m.BindingExpr)
+	}
+	if len(m.Body) > 0 {
+		body := scope
+		if child := childScopeOf(scope, m); child != nil {
+			body = child
+		}
+		tc.walk(body, m.Body)
 	}
 }
 
@@ -161,38 +182,44 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 		if rel == nil || rel.Target == nil {
 			continue
 		}
-		// Unwrap FeatureReference if needed
-		targetNode := rel.Target
-		if fr, ok := targetNode.(*ast.FeatureReference); ok {
-			targetNode = fr.Name
+		tc.checkTypeTarget(scope, rel.Target, rel.Kind, decl)
+	}
+}
+
+// checkTypeTarget checks one relationship target against the kind rules for the
+// declaration carrying it.
+func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, relKind ast.RelationshipKind, decl declKind) {
+	// Unwrap FeatureReference if needed
+	targetNode := target
+	if fr, ok := targetNode.(*ast.FeatureReference); ok {
+		targetNode = fr.Name
+	}
+	qn, isQN := targetNode.(*ast.QualifiedName)
+	if !isQN {
+		return
+	}
+	sym, ok := tc.resolver.ResolveQualified(scope, qn)
+	if !ok || sym == nil {
+		return // unresolved: name-resolution tier owns this
+	}
+	// Resolve aliases to their underlying types for typing relationships and
+	// for a satisfy reference, both of which check the target's kind.
+	targetSym := sym
+	aliasMatters := relKind == ast.RelTyping ||
+		(relKind == ast.RelSubsets && decl.useKind == ast.UsageSatisfy)
+	if aliasMatters && sym.Kind == symbols.SymbolAlias {
+		if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
+			targetSym = resolved
 		}
-		qn, isQN := targetNode.(*ast.QualifiedName)
-		if !isQN {
-			continue
-		}
-		sym, ok := tc.resolver.ResolveQualified(scope, qn)
-		if !ok || sym == nil {
-			continue // unresolved: name-resolution tier owns this
-		}
-		// Resolve aliases to their underlying types for typing relationships and
-		// for a satisfy reference, both of which check the target's kind.
-		targetSym := sym
-		aliasMatters := rel.Kind == ast.RelTyping ||
-			(rel.Kind == ast.RelSubsets && decl.useKind == ast.UsageSatisfy)
-		if aliasMatters && sym.Kind == symbols.SymbolAlias {
-			if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
-				targetSym = resolved
-			}
-		}
-		if msg := compatMessage(decl, rel.Kind, targetSym.Kind); msg != "" {
-			tc.diags = append(tc.diags, Diagnostic{
-				Severity: SeverityError,
-				Span:     rel.Target.Span(),
-				Message:  msg,
-				Code:     "type",
-				Source:   "type",
-			})
-		}
+	}
+	if msg := compatMessage(decl, relKind, targetSym.Kind); msg != "" {
+		tc.diags = append(tc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     target.Span(),
+			Message:  msg,
+			Code:     "type",
+			Source:   "type",
+		})
 	}
 }
 
@@ -620,13 +647,10 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 	}
 
 	// A SubjectMembership's ownedSubjectParameter is an unconstrained Usage (SysML
-	// v2 §8.3.21), so a subject is typed by any structural definition.
+	// v2 §8.3.21), so any definition types a subject — the OMG training models
+	// subject a `port def` and an `action def` as well as structural definitions.
 	if useKind == ast.UsageSubject {
-		return defKind == symbols.SymbolPartDef ||
-			defKind == symbols.SymbolAttributeDef ||
-			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef ||
-			defKind == symbols.SymbolIndividualDef
+		return true
 	}
 
 	return false
