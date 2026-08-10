@@ -449,7 +449,7 @@ func testAcceptDeadlockReportsEveryWaitingAccept(t *testing.T) {
 	if !errors.Is(err, ErrAcceptDeadlock) {
 		t.Fatalf("expected ErrAcceptDeadlock, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "accept text waiting for a message of type String") {
+	if !strings.Contains(err.Error(), "accept text waiting since step 4 for a message of type String") {
 		t.Errorf("expected the still-waiting accept in the report, got: %v", err)
 	}
 	if strings.Contains(err.Error(), "accept n ") {

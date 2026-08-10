@@ -28,13 +28,14 @@ type AcceptWait struct {
 	ParamName  string // the accept parameter the message will bind to
 	SignalType string // the type awaited, empty when the accept named none
 	ViaPort    string // the port awaited on, empty when the accept named none
-	Since      int    // step count at which the token parked
+	Since      int    // the step during which the token parked, numbered as the trace numbers steps
 }
 
-// String describes what a parked token is waiting for, for error messages.
+// String describes what a parked token is waiting for, and since when, for
+// error messages and for the REPL's view of a suspended executor.
 func (w AcceptWait) String() string {
-	return fmt.Sprintf("accept %s waiting for a message of type %s%s",
-		w.ParamName, orAny(w.SignalType), viaSuffix(w.ViaPort))
+	return fmt.Sprintf("accept %s waiting since step %d for a message of type %s%s",
+		w.ParamName, w.Since, orAny(w.SignalType), viaSuffix(w.ViaPort))
 }
 
 // ExecutionState tracks executor state.

@@ -672,7 +672,9 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 					ParamName:  accept.ParamName,
 					SignalType: accept.SignalType,
 					ViaPort:    accept.ViaPort,
-					Since:      e.stepCount,
+					// stepCount is incremented once the step finishes, so the
+					// step now in progress is the next one.
+					Since: e.stepCount + 1,
 				}
 			}
 			return nil

@@ -442,6 +442,11 @@ func TestAcceptParksTokenUntilMessageArrives(t *testing.T) {
 	if tokens[0].Wait.ParamName != "n" || tokens[0].Wait.SignalType != "Integer" {
 		t.Errorf("unexpected wait: %+v", *tokens[0].Wait)
 	}
+	// Step 1 moves the token off `start` onto the accept; step 2 finds nothing
+	// it can take and parks it there.
+	if tokens[0].Wait.Since != 2 {
+		t.Errorf("expected the token to have parked at step 2, got %d", tokens[0].Wait.Since)
+	}
 
 	// A message posted from outside the action resumes it.
 	ctx.PostMessage(Message{
