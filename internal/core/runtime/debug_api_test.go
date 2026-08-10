@@ -218,6 +218,48 @@ func TestStateExecutorDebugAccessors(t *testing.T) {
 	}
 }
 
+// RunDoRound advances a state's do behavior without dispatching an event, so a
+// debugger can run work that is due now while leaving a future event queued.
+func TestRunDoRoundRunsDoWorkOnly(t *testing.T) {
+	exec := stateExecutorForSource(t, "Slow", `package test {
+		state Slow {
+			attribute count = 0;
+			initial init;
+			state working {
+				do { count = count + 1; }
+				accept after 100 then done;
+			}
+			final done;
+			init then working;
+		}
+	}`)
+
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent: %v", err)
+	}
+	if !exec.HasPendingDoWork() {
+		t.Fatal("HasPendingDoWork() = false, want the do behavior of working pending")
+	}
+
+	queued := exec.EventQueue().Len()
+	ran, err := exec.RunDoRound()
+	if err != nil {
+		t.Fatalf("RunDoRound: %v", err)
+	}
+	if ran != 1 {
+		t.Errorf("RunDoRound() ran %d actions, want 1", ran)
+	}
+	if got := exec.EventQueue().Len(); got != queued {
+		t.Errorf("event queue length = %d, want %d (no event dispatched)", got, queued)
+	}
+	if got := exec.CurrentTime(); got != 0 {
+		t.Errorf("CurrentTime() = %v, want 0 (the future event is untouched)", got)
+	}
+	if exec.HasPendingDoWork() {
+		t.Error("HasPendingDoWork() = true after the behavior's only action ran")
+	}
+}
+
 // ActiveStates reports every region's state for an orthogonal machine, where
 // CurrentState has no single answer to give.
 func TestActiveStatesCoversOrthogonalRegions(t *testing.T) {

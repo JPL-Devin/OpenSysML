@@ -324,6 +324,18 @@ func TestStateDebuggerAdvancesByTime(t *testing.T) {
 	wants(t, run(t, s, "%advance 5"), "No pending work - simulation time is now 20.00")
 }
 
+// A do behavior is due now, so a small advance must run it even when the only
+// queued event is far past the deadline.
+func TestAdvanceRunsDoWorkWithFarFutureEvent(t *testing.T) {
+	s := loadFixture(t, "testdata/state_do_far_event.sysml")
+	run(t, s, "%state Slow")
+
+	wants(t, run(t, s, "%advance 1"),
+		"Current state: working",
+		"Do behavior actions run: 2")
+	wants(t, run(t, s, "%current"), "count = 2", "Time: 1.00")
+}
+
 func TestAdvanceRejectsBadDuration(t *testing.T) {
 	s := loadFixture(t, "testdata/state_debug.sysml")
 	run(t, s, "%state Cycle")

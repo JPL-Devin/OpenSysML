@@ -999,11 +999,23 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 	// Bound the drain so a machine that keeps queueing work cannot hang the REPL.
 	const maxAdvanceEvents = 10000
 	processed := 0
-	for exec.HasPendingWork() && exec.State() == runtime.StateRunning && processed < maxAdvanceEvents {
-		// Only events due by the deadline are in scope; a do behavior with
-		// actions left runs regardless, since it is due now.
+	doActions := 0
+	for exec.HasPendingWork() && exec.State() == runtime.StateRunning && processed+doActions < maxAdvanceEvents {
 		if queue := exec.EventQueue(); queue.Len() > 0 && queue.Peek().Timestamp > deadline {
-			break
+			// Events past the deadline are out of scope, but a do behavior with
+			// actions left is due now, so run it without dispatching them.
+			if !exec.HasPendingDoWork() {
+				break
+			}
+			ran, err := exec.RunDoRound()
+			if err != nil {
+				return []string{fmt.Sprintf("error: do behavior failed: %v", err)}, false, nil
+			}
+			if ran == 0 {
+				break
+			}
+			doActions += ran
+			continue
 		}
 		if err := exec.ProcessNextEvent(); err != nil {
 			return []string{fmt.Sprintf("error: event processing failed: %v", err)}, false, nil
@@ -1017,6 +1029,10 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
 		fmt.Sprintf("  Last event at: %.2f", exec.CurrentTime()),
 		fmt.Sprintf("  Remaining events: %d", exec.EventQueue().Len()),
+	}
+
+	if doActions > 0 {
+		out = append(out, fmt.Sprintf("  Do behavior actions run: %d", doActions))
 	}
 
 	if exec.State() == runtime.StateCompleted {
