@@ -127,6 +127,19 @@ package B { part def Widget { attribute size = 2.0; } }`)
 	wants(t, run(t, s, "%slots B::Widget"), "size = 2.00")
 }
 
+// Declarations submitted after a lookup must be visible: the symbol index and
+// runtime context are derived from a document that Submit replaces.
+func TestLookupSeesDeclarationsAddedAfterFirstLookup(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package Demo { part def Vehicle { attribute mass = 1500.0; } }`)
+	wants(t, run(t, s, "%instantiate Demo::Vehicle"), "✓ Created instance of Demo::Vehicle")
+
+	s.Submit(`package Demo { part def Trailer { attribute mass = 900.0; } }`)
+	wants(t, run(t, s, "%instantiate Demo::Trailer"), "✓ Created instance of Demo::Trailer")
+	wants(t, run(t, s, "%slots Trailer"), "mass = 900.00")
+	wants(t, run(t, s, "%eval Demo::Trailer::mass"), "900.00")
+}
+
 func TestSlotsWithoutInstance(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%slots Vehicle"), "no instance of", "%instantiate")

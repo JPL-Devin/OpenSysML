@@ -122,6 +122,10 @@ func (s *Session) Submit(src string) Result {
 	joined := s.accept(src)
 	s.version++
 	s.ws.Open(docName, []byte(joined), s.version)
+	// The document is a new AST and scope tree, so anything derived from the
+	// previous one is stale.
+	s.idx = nil
+	s.rtCtx = nil
 	diags := s.ws.Diagnostics(docName)
 	var members []ast.Node
 	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
