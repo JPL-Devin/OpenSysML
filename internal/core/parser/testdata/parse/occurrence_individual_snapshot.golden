@@ -1,0 +1,63 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="IndividualsAndSnapshots" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="occurrence" abstract=false variation=false name="Flight"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle"))
+      (Membership visibility="default"
+        (Definition kind="individual" abstract=false variation=false name="TestSystem"
+          (Relationship kind="specializes" target=Vehicle
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="testSystem" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+          (Relationship kind="typing" target=TestSystem
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="testVehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+          (Relationship kind="typing" target=TestSystem
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="occurrence" name="testFlight" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+          (Relationship kind="typing" target=Flight
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="occurrence" name="takeoff" ref=false direction="none" composite=false derived=false ordered=false nonunique=false snapshot=true
+          (Relationship kind="typing" target=Flight
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="vehicleAtTakeoff" ref=false direction="none" composite=false derived=false ordered=false nonunique=false snapshot=true
+          (Relationship kind="typing" target=Vehicle
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="occurrence" name="atLiftoff" ref=false direction="none" composite=false derived=false ordered=false nonunique=false snapshot=true
+          (Relationship kind="typing" target=Flight
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="System"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="testVehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+              (Relationship kind="typing" target=TestSystem
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="spareVehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+              (Relationship kind="typing" target=TestSystem
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="occurrence" name="spareAtTakeoff" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true snapshot=true
+              (Relationship kind="typing" target=Flight
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="vehicleAtLanding" ref=false direction="none" composite=false derived=false ordered=false nonunique=false snapshot=true
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="collectData" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="part" name="subjectVehicle" ref=false direction="in" composite=false derived=false ordered=false nonunique=false individual=true
+                  (Relationship kind="typing" target=TestSystem
+                    (*ast.QualifiedName))))
+              (Membership visibility="default"
+                (Usage kind="part" name="vehicleState" ref=false direction="in" composite=false derived=false ordered=false nonunique=false snapshot=true
+                  (Relationship kind="typing" target=Flight
+                    (*ast.QualifiedName)))))))))))

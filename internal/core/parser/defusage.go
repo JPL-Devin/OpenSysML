@@ -88,7 +88,9 @@ var notKindPrefixKeywords = map[string]bool{
 	"actor": true, "expose": true, "render": true, "perform": true,
 	"include": true, "exhibit": true, "variant": true, "event": true,
 	"timeslice": true, "snapshot": true, "transition": true, "bind": true,
-	"in": true, "out": true, "inout": true,
+	// `individual part p` keeps the modifier; the prefix path would drop it.
+	"individual": true,
+	"in":         true, "out": true, "inout": true,
 }
 
 // usageKindKeywords maps a single kind keyword to its UsageKind.
@@ -355,22 +357,17 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			}
 			m.isEvent = true
 		case "individual":
-			// Check if standalone def/usage: individual def/occurrence/part ...
-			// If followed by def/usage keyword OR typing colon, it's def/usage keyword, not modifier
+			// `individual` is a modifier orthogonal to the kind keyword (SysML v2
+			// §8.3.9.11), except before `def` or a typing/specialization token,
+			// where it is the declaration's own keyword.
 			nextTok := p.peekN(1)
 			if nextTok.Kind == lexer.Colon || nextTok.Kind == lexer.ColonGt || nextTok.Kind == lexer.ColonGtGt {
 				// individual : Type → anonymous usage
 				return m
 			}
-			if nextTok.Kind == lexer.Keyword {
-				if nextTok.KeywordID == "def" {
-					// individual def → DefIndividual keyword
-					return m
-				}
-				if _, isUsageKw := usageKindKeywords[nextTok.KeywordID]; isUsageKw {
-					// individual <usageKind> → usage keyword, not modifier
-					return m
-				}
+			if nextTok.Kind == lexer.Keyword && nextTok.KeywordID == "def" {
+				// individual def → DefIndividual keyword
+				return m
 			}
 			m.isIndividual = true
 		case "snapshot":
@@ -520,6 +517,10 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 
 		p.advance() // consume the kind keyword
+		// `snapshot s` is an occurrence usage whose portionKind is snapshot.
+		if kw == "snapshot" {
+			mods.isSnapshot = true
+		}
 		isAll := p.acceptKeyword("all")
 
 		// Special case: include use case <name> (full form)
@@ -703,6 +704,12 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		return applyPrefixes(nil)
 	}
 	p.advance() // consume the kind keyword
+
+	// `individual : T` is an anonymous individual occurrence usage; `snapshot` is
+	// handled with the usage-only keywords above.
+	if kw == "individual" {
+		mods.isIndividual = true
+	}
 
 	// Parse 'all' modifier if present (appears after keyword, before name)
 	isAll := p.acceptKeyword("all")
@@ -1031,20 +1038,22 @@ func (p *Parser) isAnonymousSuccession() bool {
 
 func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isAll bool) *ast.Usage {
 	u := &ast.Usage{
-		Kind:        kind,
-		IsAbstract:  mods.isAbstract,
-		IsReference: mods.isReference,
-		IsAll:       isAll,
-		IsEnd:       mods.isEnd,
-		IsChain:     mods.isChain,
-		IsConstant:  mods.isConstant,
-		IsEvent:     mods.isEvent,
-		Visibility:  mods.visibility,
-		Direction:   mods.direction,
-		IsComposite: mods.isComposite,
-		IsDerived:   mods.isDerived,
-		IsOrdered:   mods.isOrdered,
-		IsNonunique: mods.isNonunique,
+		Kind:         kind,
+		IsAbstract:   mods.isAbstract,
+		IsReference:  mods.isReference,
+		IsAll:        isAll,
+		IsEnd:        mods.isEnd,
+		IsChain:      mods.isChain,
+		IsConstant:   mods.isConstant,
+		IsEvent:      mods.isEvent,
+		IsIndividual: mods.isIndividual,
+		IsSnapshot:   mods.isSnapshot,
+		Visibility:   mods.visibility,
+		Direction:    mods.direction,
+		IsComposite:  mods.isComposite,
+		IsDerived:    mods.isDerived,
+		IsOrdered:    mods.isOrdered,
+		IsNonunique:  mods.isNonunique,
 	}
 
 	// Apply early multiplicity if present (for "end [mult] ref ..." syntax)

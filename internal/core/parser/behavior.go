@@ -386,9 +386,9 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		IsOrdered:     postMods.isOrdered,
 		IsNonunique:   postMods.isNonunique,
 		IsEvent:       isEvent,
+		IsIndividual:  isIndividual,
+		IsSnapshot:    isSnapshot,
 	}
-	// Note: isIndividual, isSnapshot consumed but not stored in AST (no fields yet)
-	_, _ = isIndividual, isSnapshot
 	usage.NodeSpan = p.spanFrom(start)
 
 	// Wrap in Membership

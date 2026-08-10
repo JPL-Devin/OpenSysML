@@ -182,6 +182,12 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.IsEnd {
 			b.WriteString(` end=true`)
 		}
+		if v.IsIndividual {
+			b.WriteString(` individual=true`)
+		}
+		if v.IsSnapshot {
+			b.WriteString(` snapshot=true`)
+		}
 		writeChildren(b, depth, usageChildren(v))
 		return
 	case *FlowEnds:
