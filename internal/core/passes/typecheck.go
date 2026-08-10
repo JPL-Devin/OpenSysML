@@ -482,6 +482,16 @@ func isRequirementUsageKind(k symbols.SymbolKind) bool {
 	return false
 }
 
+// isRequirementDefKind reports whether k is a RequirementDefinition or one of
+// its specializations (ConcernDefinition, ViewpointDefinition).
+func isRequirementDefKind(k symbols.SymbolKind) bool {
+	switch k {
+	case symbols.SymbolRequirementDef, symbols.SymbolConcernDef, symbols.SymbolViewpointDef:
+		return true
+	}
+	return false
+}
+
 // isCompatibleTyping checks if a usage kind can be typed by a definition kind.
 // Allows structural compatibility: part/attribute/item/occurrence can cross-type
 // since they're all structural classifiers in SysML.
@@ -558,8 +568,17 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 			defKind == symbols.SymbolIndividualDef
 	}
 
-	// Subject/objective are structural usages (requirement elements)
-	if useKind == ast.UsageSubject || useKind == ast.UsageObjective {
+	// SysML v2 §8.3.22.4: an ObjectiveMembership's ownedObjectiveRequirement is a
+	// RequirementUsage, so an objective is typed by a RequirementDefinition or one
+	// of its specializations (`objective : MaximizeObjective`, a requirement def in
+	// Domain Libraries/Analysis/TradeStudies.sysml).
+	if useKind == ast.UsageObjective {
+		return isRequirementDefKind(defKind)
+	}
+
+	// A SubjectMembership's ownedSubjectParameter is an unconstrained Usage (SysML
+	// v2 §8.3.21), so a subject is typed by any structural definition.
+	if useKind == ast.UsageSubject {
 		return defKind == symbols.SymbolPartDef ||
 			defKind == symbols.SymbolAttributeDef ||
 			defKind == symbols.SymbolItemDef ||
