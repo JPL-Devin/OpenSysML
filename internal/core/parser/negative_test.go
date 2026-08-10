@@ -57,6 +57,13 @@ func TestNegative(t *testing.T) {
 		{"end_unclosed_multiplicity", "connection def C { end [1 part bead : T; }"},
 		{"connector_end_no_reference_target", "part p { connection : C connect bead references to rim; }"},
 		{"flow_source_without_target", "part def C { item Fuel; part a; flow f of Fuel from a; }"},
+
+		// Occurrence modifiers (`individual`, `snapshot`) on a usage.
+		{"individual_modifier_no_member", "individual ;"},
+		{"individual_usage_no_type", "individual testSystem : ;"},
+		{"individual_usage_no_body", "individual testSystem : TestSystem"},
+		{"snapshot_usage_no_type", "snapshot occurrence takeoff : ;"},
+		{"individual_parameter_no_type", "action a { in individual v : ; }"},
 	}
 
 	for _, tt := range tests {

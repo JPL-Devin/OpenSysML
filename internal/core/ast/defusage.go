@@ -391,6 +391,8 @@ type Usage struct {
 	IsChain       bool // 'chain' feature modifier
 	IsConstant    bool // 'constant' feature modifier
 	IsEvent       bool // 'event' modifier for event-driven occurrences
+	IsIndividual  bool // 'individual' modifier: OccurrenceUsage::isIndividual
+	IsSnapshot    bool // 'snapshot' modifier: OccurrenceUsage::portionKind = snapshot
 	IsAccept      bool // 'accept' action for message consumption
 	IsResult      bool // declared with 'return': the result parameter of a calculation/expression
 	Visibility    Visibility

@@ -51,9 +51,11 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 			}
 		case *ast.Usage:
 			tc.checkRelationships(scope, d.Relationships, declKind{
-				useKind:   d.Kind,
-				direction: d.Direction,
-				isEnd:     d.IsEnd,
+				useKind:      d.Kind,
+				direction:    d.Direction,
+				isEnd:        d.IsEnd,
+				isIndividual: d.IsIndividual,
+				isSnapshot:   d.IsSnapshot,
 			})
 			tc.expr.checkUsageValue(scope, d)
 			if child := childScopeOf(scope, d); child != nil {
@@ -133,6 +135,25 @@ type declKind struct {
 	// isEnd marks a feature declared with the `end` modifier, whose type is that
 	// of the feature it connects and so escapes the usage-kind taxonomy.
 	isEnd bool
+	// isIndividual and isSnapshot carry the `individual` and `snapshot` usage
+	// modifiers (SysML v2 §8.3.9.11: `OccurrenceUsage::isIndividual` and
+	// `OccurrenceUsage::portionKind`). Either makes the declaration an
+	// occurrence usage, whatever kind keyword declares it.
+	isIndividual bool
+	isSnapshot   bool
+}
+
+// isOccurrenceUsage reports whether the `individual` or `snapshot` modifier
+// makes the declaration an occurrence usage.
+func (d declKind) isOccurrenceUsage() bool { return d.isIndividual || d.isSnapshot }
+
+// occurrenceModifier names the occurrence modifier the declaration carries, for
+// diagnostics.
+func (d declKind) occurrenceModifier() string {
+	if d.isIndividual {
+		return "individual"
+	}
+	return "snapshot"
 }
 
 func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Relationship, decl declKind) {
@@ -237,7 +258,14 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		if decl.isEnd {
 			return ""
 		}
-		if !isCompatibleTyping(useKind, direction, target) {
+		// An `individual` or `snapshot` usage is an occurrence usage, and an
+		// occurrence is disjoint with the data values an attribute or enumeration
+		// definition classifies (SysML v2 §8.4.5.1), so name the modifier that
+		// makes the typing wrong rather than the kind keyword.
+		if decl.isOccurrenceUsage() && isDataTypeDefKind(target) {
+			return fmt.Sprintf("%s usage cannot be typed by %s (an occurrence usage may not be typed by a data type)", decl.occurrenceModifier(), target)
+		}
+		if !isCompatibleTyping(useKind, direction, target, decl.isOccurrenceUsage()) {
 			return fmt.Sprintf("%s cannot be typed by %s (kind mismatch)", useKind, target)
 		}
 	case ast.RelReferences, ast.RelCrosses, ast.RelVia, ast.RelAnnotates, ast.RelSubject:
@@ -472,6 +500,14 @@ func isOccurrenceDefKind(k symbols.SymbolKind) bool {
 	return occurrenceDefSymbolKinds[k]
 }
 
+// isDataTypeDefKind reports whether k classifies data values rather than
+// occurrences: an attribute definition is a DataType and an enumeration
+// definition an AttributeDefinition (SysML v2 §8.3.7.2, §8.3.8.2). Occurrences
+// are disjoint with data values (§8.4.5.1).
+func isDataTypeDefKind(k symbols.SymbolKind) bool {
+	return k == symbols.SymbolAttributeDef || k == symbols.SymbolEnumerationDef
+}
+
 // isRequirementUsageKind reports whether k is a RequirementUsage or one of its
 // specializations (ViewpointUsage, ConcernUsage).
 func isRequirementUsageKind(k symbols.SymbolKind) bool {
@@ -485,7 +521,14 @@ func isRequirementUsageKind(k symbols.SymbolKind) bool {
 // isCompatibleTyping checks if a usage kind can be typed by a definition kind.
 // Allows structural compatibility: part/attribute/item/occurrence can cross-type
 // since they're all structural classifiers in SysML.
-func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, defKind symbols.SymbolKind) bool {
+// isOccurrenceUsage marks a usage carrying the `individual` or `snapshot`
+// modifier. Such a usage is an OccurrenceUsage whatever kind keyword declares it
+// (SysML v2 §8.3.9.11), so it may be typed by an occurrence definition of any
+// kind, on top of whatever its kind keyword admits.
+func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, defKind symbols.SymbolKind, isOccurrenceUsage bool) bool {
+	if isOccurrenceUsage && isOccurrenceDefKind(defKind) {
+		return true
+	}
 	if compatibleTyping(useKind, direction, defKind) {
 		return true
 	}

@@ -1031,20 +1031,22 @@ func (p *Parser) isAnonymousSuccession() bool {
 
 func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isAll bool) *ast.Usage {
 	u := &ast.Usage{
-		Kind:        kind,
-		IsAbstract:  mods.isAbstract,
-		IsReference: mods.isReference,
-		IsAll:       isAll,
-		IsEnd:       mods.isEnd,
-		IsChain:     mods.isChain,
-		IsConstant:  mods.isConstant,
-		IsEvent:     mods.isEvent,
-		Visibility:  mods.visibility,
-		Direction:   mods.direction,
-		IsComposite: mods.isComposite,
-		IsDerived:   mods.isDerived,
-		IsOrdered:   mods.isOrdered,
-		IsNonunique: mods.isNonunique,
+		Kind:         kind,
+		IsAbstract:   mods.isAbstract,
+		IsReference:  mods.isReference,
+		IsAll:        isAll,
+		IsEnd:        mods.isEnd,
+		IsChain:      mods.isChain,
+		IsConstant:   mods.isConstant,
+		IsEvent:      mods.isEvent,
+		IsIndividual: mods.isIndividual,
+		IsSnapshot:   mods.isSnapshot,
+		Visibility:   mods.visibility,
+		Direction:    mods.direction,
+		IsComposite:  mods.isComposite,
+		IsDerived:    mods.isDerived,
+		IsOrdered:    mods.isOrdered,
+		IsNonunique:  mods.isNonunique,
 	}
 
 	// Apply early multiplicity if present (for "end [mult] ref ..." syntax)
