@@ -3,9 +3,9 @@ package repl
 import "github.com/Open-MBEE/Systemica/internal/core/ast"
 
 // declaredNames returns the replaceable top-level names introduced by a parsed
-// submission, in source order. Only Package/Namespace/Alias declarations carry a
-// name that the redefine-replaces logic acts on; imports/comments/etc. declare
-// nothing replaceable.
+// submission, in source order. A named declaration is replaceable: re-typing it
+// supersedes the earlier snippet and invalidates anything debugging it.
+// Imports/comments/etc. declare nothing replaceable.
 func declaredNames(root *ast.RootNamespace) []string {
 	if root == nil {
 		return nil
@@ -23,6 +23,10 @@ func declaredNames(root *ast.RootNamespace) []string {
 		case *ast.Namespace:
 			name = d.Ident.Name
 		case *ast.Alias:
+			name = d.Ident.Name
+		case *ast.Definition:
+			name = d.Ident.Name
+		case *ast.Usage:
 			name = d.Ident.Name
 		}
 		if name != "" {

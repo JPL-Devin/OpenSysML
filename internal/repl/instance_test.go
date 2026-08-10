@@ -140,6 +140,23 @@ func TestRedeclarationEndsDebuggerWithNotice(t *testing.T) {
 	wants(t, run(t, s, "%step"), "no active action session")
 }
 
+// A behavior typed straight at the prompt owns itself, so redeclaring it ends
+// the session the same way redeclaring its package does.
+func TestTopLevelRedeclarationEndsDebugger(t *testing.T) {
+	const tally = "action tally {\n\tattribute total = 0;\n\tfirst start;\n\taction accumulate {\n\t\tassign total := total + 5;\n\t}\n\tdone end;\n\tthen start accumulate;\n\tthen accumulate end;\n}"
+	s := NewSession()
+	if res := s.Submit(tally); len(res.Diagnostics) > 0 {
+		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+	}
+	run(t, s, "%action tally")
+
+	res := s.Submit(tally)
+	if len(res.Notices) != 1 || !strings.Contains(res.Notices[0], `action debugging session for "tally" ended`) {
+		t.Fatalf("notices = %v, want an ended-session note", res.Notices)
+	}
+	wants(t, run(t, s, "%step"), "no active action session")
+}
+
 // The same contract for the state machine debugger.
 func TestStateDebuggerSurvivesUnrelatedSubmission(t *testing.T) {
 	s := loadFixture(t, "testdata/state_debug.sysml")
