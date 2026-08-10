@@ -52,9 +52,8 @@ func (r *Resolver) resolveTarget(scope *symbols.Scope, target ast.Node, hide *re
 // declaration of that name — local, inherited or imported — is a valid target.
 //
 // namingTarget hides the one feature a reference named, whoever is resolving
-// it: the semantic model reads a redefinition from another document without
-// knowing it is a naming feature, and must still reach the redefined feature
-// rather than the feature that borrowed its name.
+// it: the semantic model reads a redefinition without knowing it is a naming
+// feature, and must still reach the redefined feature.
 type refFilter struct {
 	decl         ast.Node
 	namingTarget ast.Node

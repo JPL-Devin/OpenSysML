@@ -47,10 +47,8 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 	return resolution{}
 }
 
-// visibleMember resolves name as a member of sym, skipping what hide covers. A
-// filter that hides sym's own declarations leaves only the contributed members;
-// otherwise a hidden declaration falls back to them, so a feature that borrowed
-// a name does not mask the feature it borrowed it from.
+// visibleMember resolves name as a member of sym, skipping what hide covers, so
+// that a feature which borrowed a name does not mask the one it took it from.
 func (r *Resolver) visibleMember(sym *symbols.Symbol, name string, hide *refFilter) (*symbols.Symbol, bool) {
 	if hide.contributedOnly() {
 		// The owner's own declarations are the local bindings already filtered
@@ -67,13 +65,10 @@ func (r *Resolver) visibleMember(sym *symbols.Symbol, name string, hide *refFilt
 	return r.lookupContributedMember(sym, name)
 }
 
-// implicitlyNamedMember returns the member of scope declared without a name
-// that binds name: a nameless feature takes the effective name of the feature
-// it redefines (KerML 7.3.4.5), and when the redefinition is the implicit one
-// matching a behavior's parameters by position (SysML 7.6.5) the target is
-// known only to the semantic model, so the binding is made here rather than
-// when scopes are built. `action shoot : Shoot { in item; }` binds `image` when
-// that is what `Shoot`'s first input parameter is called.
+// implicitlyNamedMember returns the anonymous member of scope that binds name by
+// implicitly redefining a parameter so called (KerML 7.3.4.5, SysML 7.6.5):
+// `action shoot : Shoot { in item; }` binds `image`. That target is known only
+// to the semantic model, hence the binding here and not when scopes are built.
 func (r *Resolver) implicitlyNamedMember(scope *symbols.Scope, name string, hide *refFilter) (*symbols.Symbol, bool) {
 	model, ok := r.model.(supertypeLookup)
 	if !ok || scope == nil || name == "" {
@@ -100,10 +95,8 @@ func (r *Resolver) implicitlyNamedMember(scope *symbols.Scope, name string, hide
 }
 
 // impliesNamingFeature reports whether sym is a nameless parameter whose naming
-// feature is implicit. A declared relationship would have named it already when
-// scopes were built, and only redefinition and reference subsetting name a
-// feature — a subsetting does not — so a declaration with any of them is left
-// alone.
+// feature is implicit: any declared relationship other than a typing would have
+// named it, or ruled it out, when scopes were built.
 func impliesNamingFeature(sym *symbols.Symbol) bool {
 	usage, ok := sym.Decl.(*ast.Usage)
 	if !ok || !isParameter(sym) {

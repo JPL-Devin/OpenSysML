@@ -291,14 +291,9 @@ func (r *Resolver) resolveTrigger(scope *symbols.Scope, trigger ast.Node) {
 }
 
 // checkInheritedNames reports each usage declared in scope whose name is
-// already the name of a member its owner inherits. A namespace's names are
-// distinct, and inherited memberships count (SysML 7.6.1, KerML 7.3.2.1); the
-// declaration keeps its own meaning — it does not redefine the inherited
-// feature — so this is a diagnostic, not a resolution rule.
-//
-// Redefining the inherited feature is how the same name is used legitimately,
-// whether declared (`part engine :>> engine;`) or implicit, which is why
-// parameters and declarations that name a naming feature are exempt.
+// already the name of a member its owner inherits: a namespace's names are
+// distinct, and inherited memberships count (SysML 7.6.1, KerML 7.3.2.1).
+// Redefining what it shares the name with is how the name is used legitimately.
 func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
 	owner := scope.Owner()
 	if r.model == nil || owner == nil || parameterizedByName(owner) {
@@ -319,12 +314,9 @@ func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
 }
 
 // parameterizedByName reports whether sym is a case or requirement, whose
-// subject, actors, stakeholders and objective redefine the ones it inherits by
-// name rather than by position (SysML 7.18.4, 7.19.4). That redefinition is not
-// modelled, and the features are not distinguishable from ordinary ones here
-// (`actor` parses as an attribute usage), so the conflict rule is not applied
-// inside a case or requirement body at all: a genuine conflict there, on a
-// feature that is not one of those roles, goes unreported too.
+// subject, actors and stakeholders redefine the inherited ones by name (SysML
+// 7.18.4, 7.19.4). That is not modelled and not distinguishable from an
+// ordinary feature here, so the conflict rule skips such a body entirely.
 func parameterizedByName(sym *symbols.Symbol) bool {
 	switch decl := sym.Decl.(type) {
 	case *ast.Usage:
@@ -344,9 +336,8 @@ func parameterizedByName(sym *symbols.Symbol) bool {
 }
 
 // conflictable reports whether a symbol is a usage whose name has to be
-// distinct from the inherited ones: a feature that redefines what it shares the
-// name with does not conflict with it, and a parameter redefines its inherited
-// counterpart implicitly.
+// distinct from the inherited ones: a redefining feature does not conflict with
+// what it redefines, and a parameter redefines its counterpart implicitly.
 func conflictable(sym *symbols.Symbol) bool {
 	usage, ok := sym.Decl.(*ast.Usage)
 	if !ok || sym.EffectiveName || isParameter(sym) {
@@ -364,8 +355,7 @@ func conflictable(sym *symbols.Symbol) bool {
 }
 
 // redefines reports whether sym specializes target, which is how a declaration
-// legitimately reuses an inherited name — a case usage's subject and actors
-// redefine the ones it inherits without saying so (SysML 7.19.4).
+// legitimately reuses an inherited name.
 func (r *Resolver) redefines(sym, target *symbols.Symbol) bool {
 	model, ok := r.model.(supertypeLookup)
 	if !ok {
@@ -455,9 +445,8 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 // Searches for the feature in parent definitions (following specialization relationships).
 //
 // decl owns the redefinition. An unnamed redefining feature takes the redefined
-// feature's name (KerML 7.3.4.5), binding it in the very scope the target is
-// looked up in, so — as for a reference subsetting — that borrowed binding is
-// invisible to the target, which names the redefined feature itself.
+// feature's name (KerML 7.3.4.5), so that borrowed binding is hidden from the
+// target, which names the redefined feature itself.
 func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedName, decl ast.Node) {
 	// If already resolved, skip
 	if qn == nil || len(qn.Parts) == 0 {
@@ -556,11 +545,9 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 	r.resolveQualified(scope, qn, hide)
 }
 
-// recordRedefined records sym as what the single-segment redefinition target qn
-// names. The result is memoized as qn's resolution as well, so that a later
-// query — the semantic model reading the same relationship to build the
-// specialization graph — sees the redefined feature rather than re-running an
-// unfiltered walk that would find the redefining feature's own borrowed name.
+// recordRedefined records sym as what the redefinition target qn names, and
+// memoizes it, so a later unfiltered query — the semantic model reading the
+// same relationship — does not find the borrowed name instead.
 func (r *Resolver) recordRedefined(qn *ast.QualifiedName, sym *symbols.Symbol) {
 	r.recordPart(qn, 0, sym)
 	r.memo[qn] = resolution{sym: sym, ok: true}

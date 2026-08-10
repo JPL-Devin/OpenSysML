@@ -69,10 +69,9 @@ func (s *Scope) DefineAnonymous(sym *Symbol) {
 	s.anonymousMembers = append(s.anonymousMembers, sym)
 }
 
-// AnonymousMembers returns the members declared in this scope without a name,
-// in declaration order. A feature among them may still have an effective name,
-// taken from a feature it implicitly redefines, which only the semantic model
-// knows (KerML 7.3.4.5).
+// AnonymousMembers returns the members declared without a name, in declaration
+// order. One may still have an effective name, taken from a feature it
+// implicitly redefines, which only the semantic model knows (KerML 7.3.4.5).
 func (s *Scope) AnonymousMembers() []*Symbol {
 	out := make([]*Symbol, len(s.anonymousMembers))
 	copy(out, s.anonymousMembers)
