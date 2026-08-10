@@ -484,8 +484,10 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 - No regressions: All tests pass on every commit
 
 > The training-example gate needs the corpus, which is not vendored: run
-> `./scripts/download-training-examples.sh` first. CI does not download it, so the gate
-> **skips in CI** — it has to be run locally before claiming a change is clean.
+> `./scripts/download-training-examples.sh` first. The gate skips while the corpus is
+> absent, so run the script before claiming a change is clean locally. CI downloads it
+> (`.github/workflows/pr.yml`) and sets `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`, which turns
+> an absent corpus into a failure, so the gate can no longer skip green there.
 > The gate runs against an empty semantic cache (`t.Setenv("XDG_CACHE_HOME", t.TempDir())`),
 > so it reports the same 97/100 on any machine.
 
