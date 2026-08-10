@@ -140,6 +140,20 @@ func TestLookupSeesDeclarationsAddedAfterFirstLookup(t *testing.T) {
 	wants(t, run(t, s, "%eval Demo::Trailer::mass"), "900.00")
 }
 
+// A submission discards the runtime context, which restarts instance IDs, so
+// instances created before it must not survive into the new one.
+func TestInstancesDoNotOutliveTheirRuntimeContext(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package Demo { part def Vehicle { attribute mass = 1500.0; } }`)
+	wants(t, run(t, s, "%instantiate Demo::Vehicle"), "ID: 1")
+	wants(t, run(t, s, "%instances"), "Demo::Vehicle")
+
+	s.Submit(`package Demo { part def Trailer { attribute mass = 900.0; } }`)
+	wants(t, run(t, s, "%instances"), "(no instances created)")
+	wants(t, run(t, s, "%instantiate Demo::Trailer"), "ID: 1")
+	rejects(t, run(t, s, "%instances"), "Demo::Vehicle")
+}
+
 func TestSlotsWithoutInstance(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%slots Vehicle"), "no instance of", "%instantiate")
