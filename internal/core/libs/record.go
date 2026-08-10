@@ -12,7 +12,7 @@ import (
 
 // formatVersion is the on-disk index record format version. Bump it whenever
 // the persisted shape changes; a mismatch invalidates all cached records.
-const formatVersion = 7
+const formatVersion = 8
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.
 // It deliberately excludes the AST-backed Decl and the Scope/OwnerScope
@@ -23,9 +23,15 @@ type symRecord struct {
 	ShortName       string // short name (e.g., "kg" for "kilogram"), empty if none
 	Kind            symbols.SymbolKind
 	Span            source.Span
-	Supers          []string // FQNs of the generalization targets (see supersOf)
-	WildcardImports []string // for packages: FQNs of wildcard-imported packages
-	AliasTarget     string   // for aliases: raw target text of "alias X for Y"
+	Supers          []string         // FQNs of the generalization targets (see supersOf)
+	WildcardImports []wildcardImport // for packages: its `import X::*` declarations
+	AliasTarget     string           // for aliases: raw target text of "alias X for Y"
+}
+
+// wildcardImport is the gob-encodable projection of symbols.WildcardImport.
+type wildcardImport struct {
+	Target  string
+	Private bool
 }
 
 // IndexRecord is the serializable snapshot of one library document's symbols.
@@ -147,9 +153,9 @@ func qualifiedNameText(qn *ast.QualifiedName) string {
 	return b.String()
 }
 
-// wildcardImportsOf extracts FQNs of wildcard-imported packages from a Package/Namespace.
-// Returns nil for non-namespace nodes.
-func wildcardImportsOf(decl ast.Node) []string {
+// wildcardImportsOf extracts the `import X::*` declarations of a Package or
+// Namespace, target text and visibility. Returns nil for non-namespace nodes.
+func wildcardImportsOf(decl ast.Node) []wildcardImport {
 	var members []ast.Node
 	switch d := decl.(type) {
 	case *ast.Package:
@@ -160,13 +166,16 @@ func wildcardImportsOf(decl ast.Node) []string {
 		return nil
 	}
 
-	var out []string
+	var out []wildcardImport
 	for _, m := range members {
 		imp, ok := m.(*ast.Import)
 		if !ok || imp.Kind != ast.ImportNamespace || imp.Imported == nil {
 			continue
 		}
-		out = append(out, qualifiedNameText(imp.Imported))
+		out = append(out, wildcardImport{
+			Target:  qualifiedNameText(imp.Imported),
+			Private: imp.Visibility == ast.VisibilityPrivate,
+		})
 	}
 	return out
 }

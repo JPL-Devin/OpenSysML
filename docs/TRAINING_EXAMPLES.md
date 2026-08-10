@@ -503,14 +503,11 @@ go test -run TestTrainingExamplesSemanticErrors ./internal/core/model -v
 
 This generates error frequency analysis and per-file diagnostics.
 
-**Known issue — the first run on a cold semantic cache under-reports.** With no
-stdlib cache on disk (`$XDG_CACHE_HOME/sysml-ls`, or `~/.cache/sysml-ls`), the
-gate reports 86/100 (14 files, 34 errors): the extra diagnostics are false
-`unresolved reference`s for stdlib names such as `kg`, `mm`, `s`, `h`,
-`SysML::PartUsage` and `KerML::Element`. The same run populates the cache, so
-every later run reports the recorded 97/100. The numbers in this file are the warm-cache result, which is
-what the expectation file pins; a cold-cache run is a false negative, not a
-regression in the corpus.
+The gate indexes the standard library from an empty semantic cache — it points
+`XDG_CACHE_HOME` at a temporary directory — so it reports the same numbers on a
+fresh machine as on one whose `~/.cache/sysml-ls` is already populated.
+`TestTrainingExamplesCacheStateIndependent` runs the corpus twice over one cache
+directory and fails if any file's diagnostics differ between the two.
 
 ---
 

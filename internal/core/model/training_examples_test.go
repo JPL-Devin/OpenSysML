@@ -31,6 +31,50 @@ const (
 func TestTrainingExamplesSemanticErrors(t *testing.T) {
 	files := trainingFiles(t)
 
+	// Measure the implementation rather than the developer's machine: an empty
+	// semantic cache makes the run index the standard library by parsing it,
+	// which is what a fresh checkout, the LSP on a new machine, and CI all do.
+	// TestTrainingExamplesCacheStateIndependent pins that the restored-from-
+	// cache run agrees with it.
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	got := trainingErrorCounts(t, files)
+
+	if *updateTraining {
+		writeTrainingExpected(t, len(files), got)
+		return
+	}
+
+	total, want := readTrainingExpected(t)
+	if total != len(files) {
+		t.Errorf("corpus has %d .sysml files, expectations were recorded against %d; "+
+			"re-download the pinned corpus or regenerate with -update-training",
+			len(files), total)
+	}
+
+	for _, path := range sortedKeys(want) {
+		switch gotCount, ok := got[path]; {
+		case !ok:
+			t.Errorf("%s: expected %d error(s) but the file is now clean; "+
+				"remove it from %s", path, want[path], trainingExpected)
+		case gotCount != want[path]:
+			t.Errorf("%s: %d error(s), expected %d", path, gotCount, want[path])
+		}
+	}
+	for _, path := range sortedKeys(got) {
+		if _, ok := want[path]; !ok {
+			t.Errorf("%s: %d new error(s), previously clean", path, got[path])
+		}
+	}
+
+	t.Logf("%d/%d training files clean", len(files)-len(got), len(files))
+}
+
+// trainingErrorCounts opens the whole corpus in one workspace and returns the
+// number of error diagnostics per file, logging each file's messages.
+func trainingErrorCounts(t *testing.T, files []string) map[string]int {
+	t.Helper()
+
 	got := make(map[string]int, len(files))
 	ws := NewWorkspace()
 	current := ""
@@ -66,35 +110,35 @@ func TestTrainingExamplesSemanticErrors(t *testing.T) {
 			t.Logf("%s: %s", path, strings.Join(errs, "; "))
 		}
 	}
+	return got
+}
 
-	if *updateTraining {
-		writeTrainingExpected(t, len(files), got)
-		return
+// The persistent library cache is a performance optimisation: restoring a
+// reduced record instead of parsing the library must not change a single
+// diagnostic. Both runs share one cache directory, so the first populates it
+// and the second reads it back.
+func TestTrainingExamplesCacheStateIndependent(t *testing.T) {
+	files := trainingFiles(t)
+	if testing.Short() {
+		t.Skip("indexes the whole corpus twice")
 	}
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
-	total, want := readTrainingExpected(t)
-	if total != len(files) {
-		t.Errorf("corpus has %d .sysml files, expectations were recorded against %d; "+
-			"re-download the pinned corpus or regenerate with -update-training",
-			len(files), total)
-	}
+	cold := trainingErrorCounts(t, files)
+	warm := trainingErrorCounts(t, files)
 
-	for _, path := range sortedKeys(want) {
-		switch gotCount, ok := got[path]; {
-		case !ok:
-			t.Errorf("%s: expected %d error(s) but the file is now clean; "+
-				"remove it from %s", path, want[path], trainingExpected)
-		case gotCount != want[path]:
-			t.Errorf("%s: %d error(s), expected %d", path, gotCount, want[path])
+	for _, path := range sortedKeys(cold) {
+		if warm[path] != cold[path] {
+			t.Errorf("%s: %d error(s) on an empty cache, %d on a populated one",
+				path, cold[path], warm[path])
 		}
 	}
-	for _, path := range sortedKeys(got) {
-		if _, ok := want[path]; !ok {
-			t.Errorf("%s: %d new error(s), previously clean", path, got[path])
+	for _, path := range sortedKeys(warm) {
+		if _, ok := cold[path]; !ok {
+			t.Errorf("%s: clean on an empty cache, %d error(s) on a populated one",
+				path, warm[path])
 		}
 	}
-
-	t.Logf("%d/%d training files clean", len(files)-len(got), len(files))
 }
 
 // TestRequirementDefinitionsFile pins one training file that exercises

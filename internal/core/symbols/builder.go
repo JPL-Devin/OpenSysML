@@ -251,6 +251,7 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 	}
 	sym := &Symbol{
 		Name:          name,
+		ShortName:     id.ShortName,
 		Kind:          kind,
 		Decl:          decl,
 		Visibility:    vis,

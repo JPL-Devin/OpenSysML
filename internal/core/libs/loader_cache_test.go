@@ -1,10 +1,13 @@
 package libs
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -124,6 +127,113 @@ func TestLoaderRequireResolvedSkipsUnresolvedRecord(t *testing.T) {
 			t.Fatalf("cached %s despite the unresolved supertype ScalarValues::Real", e.Name())
 		}
 	}
+}
+
+// equivalenceLibrary is a library exercising every piece of index state a
+// record round-trip has to preserve: a chain of wildcard imports across sibling
+// packages, a short name, an alias, and a specialization across files.
+const equivalenceLibrary = `package Lib {
+	public import Core::*;
+	package Root {
+		part def Element;
+		attribute def <kg> Kilogram;
+	}
+	package Core {
+		public import Root::*;
+		part def Type :> Element;
+	}
+	alias Elem for Root::Element;
+}`
+
+// A persistent cache is a performance optimisation, so indexing a library by
+// parsing it and indexing it by restoring its record must leave the resolver
+// looking at the same thing: the same fully-qualified names, and the same
+// supertypes, wildcard imports and alias targets under each of them.
+func TestParsedAndRestoredIndexesAreEquivalent(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "lib.sysml"), []byte(equivalenceLibrary), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	cacheDir := t.TempDir()
+
+	parsed := loadWholeLibrary(t, dir, cacheDir)   // cache miss: parses, then persists
+	restored := loadWholeLibrary(t, dir, cacheDir) // cache hit: restores the record
+
+	// A pair of equally empty indexes would compare equal, so pin the content
+	// that only the full import chain Lib -> Core -> Root can produce.
+	for _, fqn := range []string{"Lib::Root::Element", "Lib::Core::Element", "Lib::Element", "Lib::kg"} {
+		if len(parsed.LookupQualified(fqn)) != 1 {
+			t.Fatalf("the parsed index does not register %s", fqn)
+		}
+	}
+
+	want := snapshotIndex(parsed)
+	got := snapshotIndex(restored)
+	for _, fqn := range want.fqns {
+		if got.entries[fqn] != want.entries[fqn] {
+			t.Errorf("%s:\n  parsed:   %s\n  restored: %s", fqn, want.entries[fqn], got.entries[fqn])
+		}
+	}
+	for _, fqn := range got.fqns {
+		if _, ok := want.entries[fqn]; !ok {
+			t.Errorf("%s is registered only after a cache restore: %s", fqn, got.entries[fqn])
+		}
+	}
+}
+
+// loadWholeLibrary indexes every file of the library in dir through a loader
+// backed by cacheDir, expanding imports and persisting records exactly as
+// model.loadStdlib does.
+func loadWholeLibrary(t *testing.T, dir, cacheDir string) *symbols.Index {
+	t.Helper()
+	src := NewDirSource(dir)
+	ld := NewLoader(src, &Cache{dir: cacheDir})
+	idx := symbols.NewIndex()
+	for _, name := range src.List() {
+		if err := ld.Load(name, idx); err != nil {
+			t.Fatalf("load %s: %v", name, err)
+		}
+	}
+	idx.ExpandWildcardImports()
+	ld.Persist(idx)
+	return idx
+}
+
+// indexView is a description of an index that does not depend on how it was
+// populated: every registered fully-qualified name, and the resolver-visible
+// state of the symbols under it. It deliberately ignores symbols.Symbol.Name,
+// which holds a local name on the parse path and a qualified one on the
+// restore path.
+type indexView struct {
+	fqns    []string
+	entries map[string]string
+}
+
+func snapshotIndex(idx *symbols.Index) indexView {
+	r := resolve.New(idx)
+	view := indexView{fqns: idx.FQNs(), entries: map[string]string{}}
+	for _, fqn := range view.fqns {
+		var descs []string
+		for _, sym := range idx.LookupQualified(fqn) {
+			descs = append(descs, describeSymbol(sym, idx, r))
+		}
+		sort.Strings(descs)
+		view.entries[fqn] = fmt.Sprintf("%v imports=%v", descs, idx.WildcardImportsOf(fqn))
+	}
+	return view
+}
+
+// describeSymbol renders the state a symbol contributes to name resolution.
+// A parsed symbol carries it in its declaration, a restored one in the fields
+// its record populated; both must describe the same thing.
+func describeSymbol(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) string {
+	supers, alias, short := sym.SuperFQNs, sym.AliasTargetFQN, sym.ShortName
+	if sym.Decl != nil {
+		supers, _ = supersOf(sym, idx, r)
+		alias = aliasTargetOf(sym.Decl)
+	}
+	sort.Strings(supers)
+	return fmt.Sprintf("kind=%v short=%q supers=%v alias=%q", sym.Kind, short, supers, alias)
 }
 
 func TestIndexAddRecordsRemovable(t *testing.T) {
