@@ -168,3 +168,30 @@ func TestPeerPortsSpansMultiEndAndMultipleConnections(t *testing.T) {
 		}
 	}
 }
+
+// The anonymous inline form declares no connection name, but its ends must
+// still reach routing.
+func TestLowerAnonymousNaryConnectionKeepsEveryEnd(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action a {
+			port p1;
+			port p2;
+			port p3;
+			connect (p1, p2, p3);
+			first start;
+			done end;
+			then start end;
+		}
+	`)
+	if len(graph.Connections) != 1 {
+		t.Fatalf("Connections = %v, want one connection", graph.Connections)
+	}
+	if got := graph.Connections[0].Ends; len(got) != 3 {
+		t.Fatalf("lowered ends = %v, want three", got)
+	}
+	for _, port := range []string{"p1", "p2", "p3"} {
+		if peers := PeerPorts(graph.Connections, port); len(peers) != 2 {
+			t.Errorf("PeerPorts(%s) = %v, want the other two ends", port, peers)
+		}
+	}
+}

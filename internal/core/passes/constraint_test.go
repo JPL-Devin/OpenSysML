@@ -150,6 +150,17 @@ func TestConstraintConnectionNaryEndCountReachesTheChecker(t *testing.T) {
 	}
 }
 
+// The anonymous inline form reaches the arity checker with its real end count.
+func TestConstraintAnonymousNaryConnectionEndCountReachesTheChecker(t *testing.T) {
+	src := "part def C { part a; part b; part c; connect (a, b, c); }"
+	if hasCode(constraintDiags(t, src), "connector-ends") {
+		t.Fatalf("a three-end anonymous connection should be allowed")
+	}
+	if !hasCode(constraintDiags(t, "part def C { part a; connect (a); }"), "connector-ends") {
+		t.Fatalf("a one-end anonymous connection should be reported")
+	}
+}
+
 func TestConstraintConnectionSingleEndFails(t *testing.T) {
 	diags := constraintDiags(t,
 		"part def C { part a; connection conn connect (a); }")
