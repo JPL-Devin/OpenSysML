@@ -284,7 +284,7 @@ func TestStateDebuggerAdvancesByTime(t *testing.T) {
 
 	// The completion transition out of `init` is due now; the transition out of
 	// `waiting` is scheduled at 10, so a shorter advance stops before it.
-	wants(t, run(t, s, "%advance 1"), "Advanced to 1.00 (1 event(s) processed)", "Current state: waiting", "Time: 0.00")
+	wants(t, run(t, s, "%advance 1"), "Advanced through 1.00 (1 event(s) processed)", "Current state: waiting", "Time: 0.00")
 	wants(t, run(t, s, "%advance 9"), "0 event(s) processed", "Current state: waiting")
 
 	wants(t, run(t, s, "%advance 10"), "Current state: working", "Time: 10.00")

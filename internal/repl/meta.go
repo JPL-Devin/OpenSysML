@@ -1005,7 +1005,7 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 	}
 
 	out := []string{
-		fmt.Sprintf("✓ Advanced to %.2f (%d event(s) processed)", deadline, processed),
+		fmt.Sprintf("✓ Advanced through %.2f (%d event(s) processed)", deadline, processed),
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
 		fmt.Sprintf("  Time: %.2f", exec.CurrentTime()),
 		fmt.Sprintf("  Remaining events: %d", exec.EventQueue().Len()),
