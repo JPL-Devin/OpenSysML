@@ -70,8 +70,11 @@ func (r *Resolver) visibleMember(sym *symbols.Symbol, name string, hide *refFilt
 // `action shoot : Shoot { in item; }` binds `image`. That target is known only
 // to the semantic model, hence the binding here and not when scopes are built.
 func (r *Resolver) implicitlyNamedMember(scope *symbols.Scope, name string, hide *refFilter) (*symbols.Symbol, bool) {
+	if scope == nil || name == "" || !scope.HasAnonymousMembers() {
+		return nil, false
+	}
 	model, ok := r.model.(supertypeLookup)
-	if !ok || scope == nil || name == "" {
+	if !ok {
 		return nil, false
 	}
 	for _, sym := range scope.AnonymousMembers() {

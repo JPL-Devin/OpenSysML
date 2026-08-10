@@ -69,6 +69,11 @@ func (s *Scope) DefineAnonymous(sym *Symbol) {
 	s.anonymousMembers = append(s.anonymousMembers, sym)
 }
 
+// HasAnonymousMembers reports whether any member is declared without a name.
+func (s *Scope) HasAnonymousMembers() bool {
+	return len(s.anonymousMembers) > 0
+}
+
 // AnonymousMembers returns the members declared without a name, in declaration
 // order. One may still have an effective name, taken from a feature it
 // implicitly redefines, which only the semantic model knows (KerML 7.3.4.5).
