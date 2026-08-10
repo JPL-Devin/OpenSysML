@@ -357,28 +357,35 @@ sysml> %requirement SafetyReq
 **Action execution (step-by-step):**
 ```sysml
 sysml> action SimpleWorkflow {
-...>     first start initial;
-...>     action compute { return 42; }
-...>     done end final;
-...>     then initial compute;
-...>     then compute final;
+...>     attribute result = 0;
+...>     first start;
+...>     action compute { assign result := 42; }
+...>     done end;
+...>     then start compute;
+...>     then compute end;
 ...> }
 ✓ SimpleWorkflow
 
 sysml> %action SimpleWorkflow
-Action: SimpleWorkflow
-Tokens: 1
-State: Ready
+✓ Started action executor for "SimpleWorkflow"
+  State: Running
+  Tokens: 1
 
 sysml> %step
-Tokens: 1 (at compute)
+✓ Step complete
+  State: Running
+  Tokens: 1
 
 sysml> %tokens
-Token 1: compute { }
+Active tokens (1):
+  Token 1 @ compute
+    result = 0
 
 sysml> %continue
-✓ Completed
-Result: 42
+✓ Action completed
+  Final state: Completed
+  Results:
+    result = 42
 ```
 
 **State machine execution:**

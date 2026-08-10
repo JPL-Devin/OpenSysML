@@ -78,21 +78,29 @@ sysml> %constraint ValidSpeed
 **Action & state debugging:**
 ```bash
 sysml> %action MyWorkflow
-Action: MyWorkflow
-Tokens: 1
-State: Ready
+✓ Started action executor for "MyWorkflow"
+  State: Running
+  Tokens: 1
 
-sysml> %step
-Tokens: 3  (fork created parallel paths)
-
-sysml> %tokens
-Token 1: processA { input: 100 }
-Token 2: processB { input: 100 }
-Token 3: processC { input: 100 }
+sysml> %break compute
+✓ Breakpoint set at node "compute"
+  %continue runs until a token reaches it
 
 sysml> %continue
-✓ Completed
-Result: 360
+⏸ Paused at breakpoint "compute"
+  State: Suspended
+  Tokens: 1
+
+sysml> %tokens
+Active tokens (1):
+  Token 1 @ compute
+    result = 0
+
+sysml> %continue
+✓ Action completed
+  Final state: Completed
+  Results:
+    result = 42
 
 sysml> %state TrafficLight
 ✓ Started state machine executor for "TrafficLight"
