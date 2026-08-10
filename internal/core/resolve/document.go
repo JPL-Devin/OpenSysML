@@ -1,7 +1,10 @@
 package resolve
 
 import (
+	"fmt"
+
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -83,6 +86,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveRelationships(scope, d, d.Relationships)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
+			r.checkInheritedNames(child)
 		}
 	case *ast.Usage:
 		r.resolvePrefixes(scope, d.Prefixes)
@@ -143,6 +147,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 		if child != nil {
 			r.walkMembers(child, d.Members)
+			r.checkInheritedNames(child)
 		}
 	case *ast.SubjectMember:
 		// Resolve subject type reference
@@ -285,6 +290,110 @@ func (r *Resolver) resolveTrigger(scope *symbols.Scope, trigger ast.Node) {
 	}
 }
 
+// checkInheritedNames reports each usage declared in scope whose name is
+// already the name of a member its owner inherits. A namespace's names are
+// distinct, and inherited memberships count (SysML 7.6.1, KerML 7.3.2.1); the
+// declaration keeps its own meaning — it does not redefine the inherited
+// feature — so this is a diagnostic, not a resolution rule.
+//
+// Redefining the inherited feature is how the same name is used legitimately,
+// whether declared (`part engine :>> engine;`) or implicit, which is why
+// parameters and declarations that name a naming feature are exempt.
+func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
+	owner := scope.Owner()
+	if r.model == nil || owner == nil || parameterizedByName(owner) {
+		return
+	}
+	for _, name := range scope.MemberNames() {
+		for _, sym := range scope.LookupLocalAll(name) {
+			if !conflictable(sym) || sym.Name != name {
+				continue
+			}
+			inherited, ok := r.lookupContributedMember(owner, name)
+			if !ok || inherited == sym || r.redefines(sym, inherited) {
+				continue
+			}
+			r.nameConflict(sym, inherited)
+		}
+	}
+}
+
+// parameterizedByName reports whether sym is a case or requirement, whose
+// subject, actors, stakeholders and objective redefine the ones it inherits by
+// name rather than by position (SysML 7.18.4, 7.19.4). That redefinition is not
+// modelled yet, so a like-named feature there is left undiagnosed rather than
+// reported as the conflict it is not.
+func parameterizedByName(sym *symbols.Symbol) bool {
+	switch decl := sym.Decl.(type) {
+	case *ast.Usage:
+		switch decl.Kind {
+		case ast.UsageRequirement, ast.UsageCase, ast.UsageAnalysisCase,
+			ast.UsageVerificationCase, ast.UsageUseCase:
+			return true
+		}
+	case *ast.Definition:
+		switch decl.Kind {
+		case ast.DefRequirement, ast.DefCase, ast.DefAnalysisCase,
+			ast.DefVerificationCase, ast.DefUseCase:
+			return true
+		}
+	}
+	return false
+}
+
+// conflictable reports whether a symbol is a usage whose name has to be
+// distinct from the inherited ones: a feature that redefines what it shares the
+// name with does not conflict with it, and a parameter redefines its inherited
+// counterpart implicitly.
+func conflictable(sym *symbols.Symbol) bool {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || sym.EffectiveName || isParameter(sym) {
+		return false
+	}
+	for _, rel := range usage.Relationships {
+		if rel == nil {
+			continue
+		}
+		if rel.Kind == ast.RelRedefines || rel.Kind == ast.RelReferences {
+			return false
+		}
+	}
+	return true
+}
+
+// redefines reports whether sym specializes target, which is how a declaration
+// legitimately reuses an inherited name — a case usage's subject and actors
+// redefine the ones it inherits without saying so (SysML 7.19.4).
+func (r *Resolver) redefines(sym, target *symbols.Symbol) bool {
+	model, ok := r.model.(supertypeLookup)
+	if !ok {
+		return false
+	}
+	for _, sup := range model.DirectSupertypes(sym) {
+		if sup == target {
+			return true
+		}
+	}
+	return false
+}
+
+// nameConflict records that sym redeclares an inherited name.
+func (r *Resolver) nameConflict(sym, inherited *symbols.Symbol) {
+	span := sym.NameSpan
+	if span == (source.Span{}) {
+		span = sym.DeclSpan
+	}
+	from := inherited.Name
+	if inherited.OwnerScope != nil && inherited.OwnerScope.Owner() != nil {
+		from = inherited.OwnerScope.Owner().Name + "::" + from
+	}
+	r.Diagnostics = append(r.Diagnostics, Diagnostic{
+		Span:    span,
+		Message: fmt.Sprintf("name conflict: %s is already the name of the inherited feature %s", sym.Name, from),
+		Code:    CodeNameConflict,
+	})
+}
+
 // childScope finds the child scope whose node is decl.
 func (r *Resolver) childScope(scope *symbols.Scope, decl ast.Node) *symbols.Scope {
 	for _, c := range scope.Children() {
@@ -318,7 +427,7 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 			// Special case: redefinitions should resolve in inherited scope
 			if rel.Kind == ast.RelRedefines {
 				if qn, ok := target.(*ast.QualifiedName); ok {
-					r.resolveRedefinition(scope, qn, rels)
+					r.resolveRedefinition(scope, qn, decl)
 					continue
 				}
 			}
@@ -342,17 +451,22 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 
 // resolveRedefinition resolves a redefinition target by looking up the inheritance chain.
 // Searches for the feature in parent definitions (following specialization relationships).
-func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedName, rels []*ast.Relationship) {
+//
+// decl owns the redefinition. An unnamed redefining feature takes the redefined
+// feature's name (KerML 7.3.4.5), binding it in the very scope the target is
+// looked up in, so — as for a reference subsetting — that borrowed binding is
+// invisible to the target, which names the redefined feature itself.
+func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedName, decl ast.Node) {
 	// If already resolved, skip
 	if qn == nil || len(qn.Parts) == 0 {
 		return
 	}
 
+	hide := &refFilter{decl: decl}
+
 	// For single-name redefinitions (most common: :>> payload), look in inherited scope
 	if len(qn.Parts) == 1 {
 		featureName := qn.Parts[0].Text
-
-		// DEBUG
 
 		// The scope passed here is the OWNER's scope (where the member with :>> lives)
 		// We need to find the owner's specialization relationships
@@ -367,11 +481,11 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 			ownerRels = owner.Relationships
 		case *ast.Package:
 			// Package has no relationships, member must be at package level
-			r.ResolveQualified(scope, qn)
+			r.resolveQualified(scope, qn, hide)
 			return
 		default:
 			// Not a definition/usage, fall back
-			r.ResolveQualified(scope, qn)
+			r.resolveQualified(scope, qn, hide)
 			return
 		}
 
@@ -400,7 +514,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 			// Try scope-based lookup first (for live-parsed definitions)
 			if parentSym.Scope != nil {
 				if sym, ok := parentSym.Scope.LookupLocal(featureName); ok {
-					r.recordPart(qn, 0, sym)
+					r.recordRedefined(qn, sym)
 					return
 				}
 			} else {
@@ -409,7 +523,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 				if r.idx != nil {
 					candidates := r.idx.LookupQualified(fqn)
 					if len(candidates) == 1 {
-						r.recordPart(qn, 0, candidates[0])
+						r.recordRedefined(qn, candidates[0])
 						return
 					} else if len(candidates) > 1 {
 					} else {
@@ -431,13 +545,23 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		// model also knows the implicit ones — a library base, or the baseType
 		// a semantic-metadata keyword contributes (SysML v2 §7.27.3).
 		if sym, ok := r.lookupContributedMember(scope.Owner(), featureName); ok {
-			r.recordPart(qn, 0, sym)
+			r.recordRedefined(qn, sym)
 			return
 		}
 	}
 
 	// Fall back to standard resolution if not found in parents
-	r.ResolveQualified(scope, qn)
+	r.resolveQualified(scope, qn, hide)
+}
+
+// recordRedefined records sym as what the single-segment redefinition target qn
+// names. The result is memoized as qn's resolution as well, so that a later
+// query — the semantic model reading the same relationship to build the
+// specialization graph — sees the redefined feature rather than re-running an
+// unfiltered walk that would find the redefining feature's own borrowed name.
+func (r *Resolver) recordRedefined(qn *ast.QualifiedName, sym *symbols.Symbol) {
+	r.recordPart(qn, 0, sym)
+	r.memo[qn] = resolution{sym: sym, ok: true}
 }
 
 // findSpecializationTargets returns symbols for all specialization targets in the relationship list.
@@ -510,7 +634,7 @@ func (r *Resolver) searchInheritedFeature(parentSym *symbols.Symbol, featureName
 		}
 
 		if sym, ok := gp.Scope.LookupLocal(featureName); ok {
-			r.recordPart(qn, 0, sym)
+			r.recordRedefined(qn, sym)
 			return true
 		}
 
@@ -551,7 +675,7 @@ func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featur
 		if r.idx != nil {
 			candidates := r.idx.LookupQualified(fqn)
 			if len(candidates) == 1 {
-				r.recordPart(qn, 0, candidates[0])
+				r.recordRedefined(qn, candidates[0])
 				return true
 			}
 		}

@@ -189,4 +189,10 @@ type Symbol struct {
 	// EffectiveName reports that Name was taken from the feature this
 	// declaration references rather than declared (KerML Feature::effectiveName).
 	EffectiveName bool
+
+	// NamingTarget is the reference that named this symbol when EffectiveName
+	// is set: the target of its reference subsetting or redefinition. Resolving
+	// that reference must not see the name it gave away, or it would resolve to
+	// the feature that borrowed it (KerML 7.3.4.5).
+	NamingTarget ast.Node
 }

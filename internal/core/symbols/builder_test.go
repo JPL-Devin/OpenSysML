@@ -150,3 +150,93 @@ func TestBuildAnonymousUsageNotNamed(t *testing.T) {
 		t.Fatalf("expected 1 child scope for the anonymous usage, got %d", len(car.Scope.Children()))
 	}
 }
+
+// A feature declared without a name takes the name of the feature its single
+// owned redefinition names (KerML 7.3.4.5): `part :>> engine;` declares
+// `engine`, and a qualified target contributes its last segment.
+func TestUnnamedRedefinitionTakesRedefinedName(t *testing.T) {
+	root := build(t, `package P {
+		part def Vehicle { part engine; attribute mass; }
+		part v : Vehicle { part :>> engine; attribute :>> Vehicle::mass; }
+	}`)
+
+	pkg, _ := root.LookupLocal("P")
+	v, _ := pkg.Scope.LookupLocal("v")
+	for _, name := range []string{"engine", "mass"} {
+		sym, ok := v.Scope.LookupLocal(name)
+		if !ok {
+			t.Fatalf("v members = %v, want %s", v.Scope.MemberNames(), name)
+		}
+		if !sym.EffectiveName {
+			t.Fatalf("%s should be marked as an effective name, not a declared one", name)
+		}
+	}
+}
+
+// A declared name is the feature's name whatever it redefines.
+func TestRedefinitionDoesNotOverrideDeclaredName(t *testing.T) {
+	root := build(t, `package P {
+		part def Vehicle { part engine; }
+		part v : Vehicle { part motor :>> engine; }
+	}`)
+
+	pkg, _ := root.LookupLocal("P")
+	v, _ := pkg.Scope.LookupLocal("v")
+	if _, ok := v.Scope.LookupLocal("motor"); !ok {
+		t.Fatalf("v members = %v, want motor", v.Scope.MemberNames())
+	}
+	if _, ok := v.Scope.LookupLocal("engine"); ok {
+		t.Fatalf("v should not bind the redefined name when motor is declared")
+	}
+}
+
+// A reference subsetting is the naming feature when a declaration has both
+// (KerML 7.3.4.5 prefers the referenced feature over the redefined one).
+func TestReferenceSubsettingOutranksRedefinitionAsNamingFeature(t *testing.T) {
+	root := build(t, `package P {
+		action takePicture;
+		action def Camera { action shoot; }
+		part camera : Camera { perform action :>> shoot references takePicture; }
+	}`)
+
+	pkg, _ := root.LookupLocal("P")
+	camera, _ := pkg.Scope.LookupLocal("camera")
+	if _, ok := camera.Scope.LookupLocal("takePicture"); !ok {
+		t.Fatalf("camera members = %v, want takePicture", camera.Scope.MemberNames())
+	}
+	if _, ok := camera.Scope.LookupLocal("shoot"); ok {
+		t.Fatalf("camera should be named by the referenced feature, not the redefined one")
+	}
+}
+
+// Two redefinitions have no single naming feature, so the declaration stays
+// anonymous rather than picking one of the redefined names.
+func TestTwoRedefinitionsLeaveFeatureAnonymous(t *testing.T) {
+	root := build(t, `package P {
+		part def Vehicle { part engine; part motor; }
+		part v : Vehicle { part :>> engine :>> motor; }
+	}`)
+
+	pkg, _ := root.LookupLocal("P")
+	v, _ := pkg.Scope.LookupLocal("v")
+	if names := v.Scope.MemberNames(); len(names) != 0 {
+		t.Fatalf("v members = %v, want none", names)
+	}
+}
+
+// The reference that named a feature is recorded, so resolving it can skip the
+// name it gave away.
+func TestNamingFeatureIsRecordedOnTheSymbol(t *testing.T) {
+	root := build(t, `package P {
+		part def Vehicle { part engine; }
+		part v : Vehicle { part :>> engine; }
+	}`)
+
+	pkg, _ := root.LookupLocal("P")
+	v, _ := pkg.Scope.LookupLocal("v")
+	engine, _ := v.Scope.LookupLocal("engine")
+	usage := engine.Decl.(*ast.Usage)
+	if engine.NamingTarget != ast.AsQualifiedName(usage.Relationships[0].Target) {
+		t.Fatalf("NamingTarget = %v, want the redefinition's target", engine.NamingTarget)
+	}
+}

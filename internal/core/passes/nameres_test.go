@@ -81,3 +81,107 @@ func TestNameResolutionPassReportsAmbiguous(t *testing.T) {
 		t.Fatalf("got %+v, want source=name-resolution code=ambiguous severity=error", d)
 	}
 }
+
+// nameresDiags runs the pass over one document and returns its diagnostics.
+func nameresDiags(t *testing.T, src string) []Diagnostic {
+	t.Helper()
+	ctx, root := nameresCtx(t, "a.sysml", src)
+	return NameResolutionPass{}.Run(ctx, "a.sysml", root)
+}
+
+// An unnamed parameter takes the effective name of the parameter it implicitly
+// redefines, and that name resolves in the owning scope (KerML 7.3.4.5,
+// SysML 7.6.5).
+func TestImplicitlyRedefiningParameterBindsRedefinedName(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		item def Image;
+		action def Shoot { in image : Image; }
+		action shoot : Shoot {
+			in item;
+			attribute x = image;
+		}
+	}`)
+	if len(got) != 0 {
+		t.Fatalf("got %+v, want no diagnostics: image names the anonymous parameter", got)
+	}
+}
+
+// The name is the redefined parameter's, not the keyword the parameter was
+// declared with.
+func TestImplicitlyRedefiningParameterDoesNotBindItsKeyword(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		item def Image;
+		action def Shoot { in image : Image; }
+		action shoot : Shoot {
+			in item;
+			attribute x = item;
+		}
+	}`)
+	if len(got) != 1 || got[0].Code != "unresolved" {
+		t.Fatalf("got %+v, want one unresolved diagnostic for item", got)
+	}
+}
+
+// A nested usage sharing a name with an inherited feature is a name conflict:
+// it is a distinct feature, not a redefinition of the inherited one
+// (SysML 7.6.1, KerML 7.3.2.1).
+func TestNameResolutionPassReportsInheritedNameConflict(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		part def Engine;
+		part def Vehicle { part engine : Engine; }
+		part v : Vehicle { part engine; }
+	}`)
+	if len(got) != 1 {
+		t.Fatalf("got %+v, want one diagnostic", got)
+	}
+	d := got[0]
+	if d.Code != "name-conflict" || d.Source != "name-resolution" || d.Severity != SeverityError {
+		t.Fatalf("got %+v, want code=name-conflict source=name-resolution severity=error", d)
+	}
+	if want := "name conflict: engine is already the name of the inherited feature Vehicle::engine"; d.Message != want {
+		t.Fatalf("message = %q, want %q", d.Message, want)
+	}
+	if d.Span.Len != len("engine") {
+		t.Fatalf("span = %+v, want the declared name's span", d.Span)
+	}
+}
+
+// Redefining the inherited feature is how the name is legitimately reused.
+func TestRedeclaredInheritedNameIsNoConflictWhenRedefined(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		part def Engine;
+		part def Vehicle { part engine : Engine; }
+		part v : Vehicle { part engine :>> engine; }
+		part w : Vehicle { part :>> engine; }
+	}`)
+	if len(got) != 0 {
+		t.Fatalf("got %+v, want no diagnostics", got)
+	}
+}
+
+// A parameter redefines its inherited counterpart by position, and a case's
+// features redefine theirs by name, so neither conflicts.
+func TestInheritedNameConflictExemptsRedefiningFeatures(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		part def Vehicle;
+		action def Shoot { in image; }
+		action shoot : Shoot { in image; }
+		use case def Drive { subject vehicle : Vehicle; }
+		use case drive : Drive { subject vehicle; }
+	}`)
+	if len(got) != 0 {
+		t.Fatalf("got %+v, want no diagnostics", got)
+	}
+}
+
+// A name that is not inherited is not a conflict.
+func TestDistinctNestedNameIsNoConflict(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		part def Engine;
+		part def Vehicle { part engine : Engine; }
+		part v : Vehicle { part motor; }
+	}`)
+	if len(got) != 0 {
+		t.Fatalf("got %+v, want no diagnostics", got)
+	}
+}
