@@ -321,8 +321,10 @@ func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
 // parameterizedByName reports whether sym is a case or requirement, whose
 // subject, actors, stakeholders and objective redefine the ones it inherits by
 // name rather than by position (SysML 7.18.4, 7.19.4). That redefinition is not
-// modelled yet, so a like-named feature there is left undiagnosed rather than
-// reported as the conflict it is not.
+// modelled, and the features are not distinguishable from ordinary ones here
+// (`actor` parses as an attribute usage), so the conflict rule is not applied
+// inside a case or requirement body at all: a genuine conflict there, on a
+// feature that is not one of those roles, goes unreported too.
 func parameterizedByName(sym *symbols.Symbol) bool {
 	switch decl := sym.Decl.(type) {
 	case *ast.Usage:
