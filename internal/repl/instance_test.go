@@ -170,3 +170,17 @@ func TestStateDebuggerSurvivesUnrelatedSubmission(t *testing.T) {
 	}
 	rejects(t, run(t, s, "%current"), "no active")
 }
+
+// A member of a nested part is answered against that part, not against the
+// enclosing object that happens to be the instantiated one.
+func TestNestedPartMemberBindsToTheNestedInstance(t *testing.T) {
+	s := loadFixture(t, "testdata/nested_part.sysml")
+	run(t, s, "%instantiate Nested::Car")
+
+	got := run(t, s, "%eval Nested::Car::engine::mass")
+	wants(t, got, "= 5.00")
+	rejects(t, got, "on Nested::Car ID")
+	wants(t, run(t, s, "%eval Nested::Car::mass"), "on Nested::Car ID", "= 1500.00")
+	wants(t, run(t, s, "%constraint Nested::Car::engine::light"),
+		"passed", "on Nested::Car::engine")
+}

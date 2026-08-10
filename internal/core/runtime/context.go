@@ -98,6 +98,12 @@ func (ctx *Context) incrementStep() error {
 	return nil
 }
 
+// Instance retrieves an instance by ID, so a caller holding a ValInstance can
+// reach the object it names.
+func (ctx *Context) Instance(id int64) (*Instance, bool) {
+	return ctx.getInstance(id)
+}
+
 // getInstance retrieves an instance by ID.
 func (ctx *Context) getInstance(id int64) (*Instance, bool) {
 	inst, ok := ctx.instances[id]
