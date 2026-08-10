@@ -25,6 +25,38 @@ func TestLowerConnectionsFromActionBody(t *testing.T) {
 	}
 }
 
+// An n-ary connection joins every end it declares, and every end is a peer of
+// every other one (SysML v2 §7.13.2): lowering must not truncate to a pair.
+func TestLowerNaryConnectionKeepsEveryEnd(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action a {
+			port p1;
+			port p2;
+			port p3;
+			port p4;
+			connection link connect (p1, p2, p3, p4);
+			first start;
+			done end;
+			then start end;
+		}
+	`)
+	if len(graph.Connections) != 1 {
+		t.Fatalf("Connections = %v, want one connection", graph.Connections)
+	}
+	if got := graph.Connections[0].Ends; len(got) != 4 {
+		t.Fatalf("lowered ends = %v, want four", got)
+	}
+	for _, port := range []string{"p1", "p2", "p3", "p4"} {
+		peers := PeerPorts(graph.Connections, port)
+		if len(peers) != 3 {
+			t.Errorf("PeerPorts(%s) = %v, want the other three ends", port, peers)
+		}
+		if contains(peers, port) {
+			t.Errorf("PeerPorts(%s) = %v, an end is not its own peer", port, peers)
+		}
+	}
+}
+
 // An end that declares its own name attaches to the feature it
 // reference-subsets, so that is what routing must join.
 func TestLowerConnectionEndsThatDeclareTheirOwnName(t *testing.T) {
