@@ -336,6 +336,19 @@ func TestAdvanceRunsDoWorkWithFarFutureEvent(t *testing.T) {
 	wants(t, run(t, s, "%current"), "count = 2", "Time: 1.00")
 }
 
+// Do behavior with an empty event queue is do work, not an event: counting it
+// as one made %advance report events that were never dispatched.
+func TestAdvanceCountsDoWorkSeparatelyFromEvents(t *testing.T) {
+	s := loadFixture(t, "testdata/state_do_no_event.sysml")
+	run(t, s, "%state Work")
+
+	out := run(t, s, "%advance 1")
+	// Two transitions fire (init -> busy, busy -> done) and the three do actions
+	// are reported as do work; counting them as events reported four.
+	wants(t, out, "Advanced to 1.00 (2 event(s) processed)", "Do behavior actions run: 3")
+	wants(t, run(t, s, "%current"), "count = 3")
+}
+
 func TestAdvanceRejectsBadDuration(t *testing.T) {
 	s := loadFixture(t, "testdata/state_debug.sysml")
 	run(t, s, "%state Cycle")
