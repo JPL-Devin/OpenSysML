@@ -20,14 +20,27 @@ const (
 	trainingDir      = "../../../examples/sysml-v2-training"
 	trainingExpected = "testdata/training_examples_expected.txt"
 	trainingSkipHint = "training examples not downloaded (run ./scripts/download-training-examples.sh)"
+
+	// Set in CI so that an absent corpus fails the gate instead of skipping it.
+	trainingRequiredEnv = "SYSTEMICA_REQUIRE_TRAINING_CORPUS"
 )
+
+// skipWithoutTrainingCorpus skips the calling test locally, but fails it when
+// the corpus is declared mandatory, so the gate cannot pass by skipping.
+func skipWithoutTrainingCorpus(t *testing.T, reason string) {
+	t.Helper()
+	if os.Getenv(trainingRequiredEnv) != "" {
+		t.Fatalf("%s=%s but %s: %s", trainingRequiredEnv, os.Getenv(trainingRequiredEnv), reason, trainingSkipHint)
+	}
+	t.Skip(trainingSkipHint)
+}
 
 // The OMG training corpus is a regression gate, not a report: every file that
 // still reports semantic errors is recorded with its error count in
 // testdata/training_examples_expected.txt, so a file that starts failing, stops
 // failing, or changes its number of errors fails this test. The corpus itself is
 // not vendored (see scripts/download-training-examples.sh), so the test skips
-// when it is absent.
+// when it is absent — unless SYSTEMICA_REQUIRE_TRAINING_CORPUS is set, as CI does.
 func TestTrainingExamplesSemanticErrors(t *testing.T) {
 	files := trainingFiles(t)
 
@@ -149,7 +162,7 @@ func TestRequirementDefinitionsFile(t *testing.T) {
 
 	content, err := os.ReadFile(filepath.Join(trainingDir, name))
 	if os.IsNotExist(err) {
-		t.Skip(trainingSkipHint)
+		skipWithoutTrainingCorpus(t, name+" is missing")
 	}
 	if err != nil {
 		t.Fatalf("read %s: %v", name, err)
@@ -169,7 +182,7 @@ func trainingFiles(t *testing.T) []string {
 	t.Helper()
 
 	if _, err := os.Stat(trainingDir); os.IsNotExist(err) {
-		t.Skip(trainingSkipHint)
+		skipWithoutTrainingCorpus(t, trainingDir+" is missing")
 	}
 
 	var files []string
@@ -191,6 +204,10 @@ func trainingFiles(t *testing.T) []string {
 		t.Fatalf("scan %s: %v", trainingDir, err)
 	}
 	sort.Strings(files)
+	// An empty directory is a broken download or a bad cache restore, not a corpus.
+	if len(files) == 0 {
+		skipWithoutTrainingCorpus(t, trainingDir+" holds no .sysml files")
+	}
 	return files
 }
 

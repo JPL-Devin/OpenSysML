@@ -103,12 +103,12 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 51 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×8, state×25)
-- 29 robustness subtests (deadlock, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references)
+- 54 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×9, state×26, accept×1)
+- 31 robustness subtests (deadlock, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references)
 - 164 runtime unit tests
-- 33 golden AST fixtures (including pseudostate, timed-trigger, call-trigger and calc default/invocation parsing tests)
+- 35 golden AST fixtures (including pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
 - 22 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, calc and constraint evaluation)
-- 36 negative parser subtests
+- 44 negative parser subtests
 - 1,500+ total tests passing
 
 ---
@@ -177,6 +177,7 @@ Each row documents one behavioral semantic feature:
 | Nested requirements | `context.go:148` `EvaluateRequirement` (recursive) | `requirement_nested.sysml` | ✅ Faithful |
 | `satisfy <name>` is an `OwnedReferenceSubsetting` of an existing usage, not a typing (SysML v2 §8.3.21.10 `SatisfyRequirementUsage`) | `parser/defusage.go` `parseDefUsage` (`ast.RelSubsets`) | `parser/testdata/parse/satisfy_reference.golden` | ✅ Faithful |
 | `referencedFeatureTarget().oclIsKindOf(RequirementUsage)` — satisfy/verify may only reference a requirement usage (incl. viewpoint/concern usages) | `passes/typecheck.go` `compatMessage`, `isRequirementUsageKind` | `passes/typecheck_test.go` `TestTypeCheckSatisfyRequirementUsageOK`, `TestTypeCheckSatisfyViewpointUsageOK`, `TestTypeCheckSatisfyNonRequirementUsageError` | ✅ Faithful |
+| An `ObjectiveMembership`'s `ownedObjectiveRequirement` is a `RequirementUsage` (SysML v2 §8.3.22.4), so an `objective` is typed by a requirement definition or a specialization of one, never by a structural definition; a `SubjectMembership`'s `ownedSubjectParameter` is an unconstrained `Usage` (§8.3.21) and keeps the structural kinds | `passes/typecheck.go` `compatibleTyping`, `isRequirementDefKind` | `passes/typecheck_kinds_test.go` `TestTypeCheckObjectiveTypedByRequirementDefOK`, `TestTypeCheckObjectiveTypedByConcernDefOK`, `TestTypeCheckObjectiveTypedByPartDefError`, `TestTypeCheckObjectiveTypedByActionDefError`, `TestTypeCheckSubjectTypedByPartDefOK`, `TestTypeCheckSubjectTypedByRequirementDefError` | ✅ Faithful |
 
 ### Action (UML 2.5.1 §16 Activities)
 
@@ -316,6 +317,7 @@ known, so unmodelled types never produce a false positive.
 | Effective name of an unnamed feature that reference-subsets (`perform providePower.generateTorque;` declares `generateTorque`) | `symbols/builder.go` `effectiveIdent`, `ast/namespace.go` `TargetName` | `symbols/perform_test.go`, `model/perform_reference_test.go` | ⚠️ Approximate (the naming feature is the reference subsetting's target only; a redefinition is not yet used as a naming feature) |
 | A reference subsetting resolves outside the name it contributes, while the members its owner inherits and imports stay visible (`part v : V { perform 'provide power'; }`) | `resolve/target.go` `refFilter`, `Resolver.ResolveReferenceTarget`, threaded through `resolve/unqualified.go` `walkUnqualifiedHiding` and applied in `resolve/document.go` `resolveRelationships`, `lsp/walk.go` `refCollector.relationships` (via `model.Workspace.ResolveReferenceInDoc`) and `runtime/invoke_action.go` `resolveActionSymbol`; the inherited half is `semantics/members.go` `Model.LookupContributedMember` | `resolve/target_test.go` `TestReferenceTargetSkipsSelfBinding`, `semantics/reference_test.go` `TestPerformOfInheritedAction`, `lsp/definition_test.go` `TestDefinitionPerformChainMember` (a chain member resolves through its operand, `resolve.Reference.Chain`), `semantics/reference_test.go` `TestReferenceFindsSiblingDeclaredAfterIt`, `model/perform_reference_test.go` (`perform shadowing the action it performs`), `lsp/definition_test.go` `TestDefinitionPerformReference`, `runtime` `TestPerformShorthandRunsTheReferencedAction`, `conformance/action_perform_shorthand.sysml` | ✅ Faithful |
 | The `perform X;` shorthand is an action node named X | `lower/action_graph.go` `getNodeName` | `conformance/action_perform_shorthand.sysml` (`then start increment;` names the perform statement) | ✅ Faithful |
+| N-ary connector ends (`connection link connect (a, b, c)`), SysML v2 7.13.2, 8.3.13 | `parser/defusage.go` `parseConnectorEnds` (parenthesized end list, reached by both the named declaration and the anonymous `connect …;` body member); `passes/constraint.go` `checkConnectorEnds` (arity by kind); `lower/connection.go` `lowerConnections`, `PeerPorts` | `parse/connection_nary.golden`, `parser/connector_ends_nary_test.go` `TestParseNaryConnectorEndsKeepsEveryEnd`, `parser/negative_test.go` (`nary_connect_unclosed`, `nary_connect_trailing_comma`, `nary_connect_empty`), `passes/constraint_test.go` `TestConstraintConnectionNaryEndCountReachesTheChecker`, `lower/connection_test.go` `TestLowerNaryConnectionKeepsEveryEnd` and `TestLowerAnonymousNaryConnectionKeepsEveryEnd`, `parser/connector_ends_nary_test.go` `TestParseAnonymousInlineConnectKeepsEveryEnd`, `conformance/action_port_communication_nary.sysml` and `action_port_communication_nary_anonymous.sysml` | ✅ Faithful (a connection, connector, interface or allocation keeps every end of a parenthesized list end to end — parse, constraint tier, lowering and port routing — whether or not it declares a name, and an interface or allocation beyond two ends is reported) |
 | Anonymous binary allocation (`allocate torqueGenerator to powerTrain`) | `parser/defusage.go` `atAllocateShorthand` | `parse/perform_reference.golden` | ✅ Faithful (both names are connector ends; formerly the first was read as the usage's name) |
 | A declared name wins over an effective one in the same namespace (`part v { perform p; action p; }`) | `symbols/scope.go` `PreferDeclared`, used by `LookupLocal` and `resolve/qualified.go`'s segment walk; `symbols/builder.go` (`Symbol.EffectiveName`) | `semantics/reference_test.go` `TestReferenceFindsSiblingDeclaredAfterIt`, `TestQualifiedNameThroughEffectiveNameIsNotAmbiguous`, `TestRepeatedPerformResolvesToTheAction` | ✅ Faithful |
 | `individual def X :> PartDef`, `x : IndividualDef` kind compatibility, SysML v2 7.9.4 | `passes/typecheck.go` `occurrenceDefSymbolKinds`/`isOccurrenceDefKind` (specialization) and `isCompatibleTyping` (typing) | `passes/typecheck_individuals_test.go`, corpus gate (`Verification Case Usage Example` now clean) | ✅ Faithful (an `individual def` is an occurrence definition, so it may specialize an occurrence definition of any kind and may type a usage wherever an occurrence definition may; specializing a data type — an attribute or enumeration definition — stays an error per 8.4.5.1, and a usage kind that rejects an occurrence definition, such as a port usage, still rejects an individual definition) |
@@ -485,8 +487,10 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 - No regressions: All tests pass on every commit
 
 > The training-example gate needs the corpus, which is not vendored: run
-> `./scripts/download-training-examples.sh` first. CI does not download it, so the gate
-> **skips in CI** — it has to be run locally before claiming a change is clean.
+> `./scripts/download-training-examples.sh` first. The gate skips while the corpus is
+> absent, so run the script before claiming a change is clean locally. CI downloads it
+> (`.github/workflows/pr.yml`) and sets `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`, which turns
+> an absent corpus into a failure, so the gate can no longer skip green there.
 > The gate runs against an empty semantic cache (`t.Setenv("XDG_CACHE_HOME", t.TempDir())`),
 > so it reports the same 97/100 on any machine.
 

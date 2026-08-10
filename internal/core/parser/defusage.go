@@ -1765,40 +1765,22 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return imp
 	}
 
-	// Check for inline connector statement: connect [mult] X to [mult] Y;
-	// This is anonymous connection usage
+	// Anonymous connection usage: `connect X to Y;` or `connect (X, Y, Z);`.
 	if p.atKeyword("connect") {
 		p.advance() // consume 'connect'
 
 		u := &ast.Usage{
 			Kind: ast.UsageConnection,
 		}
-		u.NodeBase.NodeSpan = p.spanFrom(start)
 		u.SetLeadingTrivia(trivia)
 
-		// Parse connector ends with optional multiplicity
-		// First end
-		firstEnd := p.parseConnectorEnd()
-		if firstEnd == nil {
-			p.error(p.peek().Span, "expected connector end after 'connect'")
+		p.parseConnectorEnds(u, "")
+		if len(u.ConnectorEnds) == 0 {
 			return &ast.ErrorNode{Message: "expected connector end"}
-		}
-		u.ConnectorEnds = append(u.ConnectorEnds, firstEnd)
-
-		// Expect 'to' keyword
-		if !p.acceptKeyword("to") {
-			p.error(p.peek().Span, "expected 'to' after first connector end")
-		}
-
-		// Second end
-		secondEnd := p.parseConnectorEnd()
-		if secondEnd == nil {
-			p.error(p.peek().Span, "expected connector end after 'to'")
-		} else {
-			u.ConnectorEnds = append(u.ConnectorEnds, secondEnd)
 		}
 
 		p.expect(lexer.Semicolon, "expected ';' after connect statement")
+		u.NodeBase.NodeSpan = p.spanFrom(start)
 
 		m := &ast.Membership{
 			Visibility: vis,

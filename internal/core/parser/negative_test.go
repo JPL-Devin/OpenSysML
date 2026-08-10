@@ -57,6 +57,11 @@ func TestNegative(t *testing.T) {
 		{"end_unclosed_multiplicity", "connection def C { end [1 part bead : T; }"},
 		{"connector_end_no_reference_target", "part p { connection : C connect bead references to rim; }"},
 		{"flow_source_without_target", "part def C { item Fuel; part a; flow f of Fuel from a; }"},
+		{"nary_connect_unclosed", "part def C { part a; part b; connection conn connect (a, b; }"},
+		{"nary_connect_trailing_comma", "part def C { part a; part b; connection conn connect (a, b, ); }"},
+		{"nary_connect_empty", "part def C { connection conn connect (); }"},
+		{"anonymous_nary_connect_unclosed", "part def C { part a; part b; connect (a, b; }"},
+		{"anonymous_nary_connect_empty", "part def C { connect (); }"},
 
 		// Occurrence modifiers (`individual`, `snapshot`) on a usage.
 		{"individual_modifier_no_member", "individual ;"},
