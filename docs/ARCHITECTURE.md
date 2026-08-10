@@ -206,7 +206,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 ### Tier 5 — Behavioral Interpreter ✅ Complete
 
 **Package:** `internal/core/runtime`  
-**Status:** Complete with 1,500+ tests. Conformance gate: 51/51 cases passing (calc/constraint/requirement/action/state all functional).  
+**Status:** Complete with 1,500+ tests. Conformance gate: 54/54 cases passing (calc/constraint/requirement/action/state all functional).  
 **Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for detailed compliance mapping (~98% faithful implementation).
 
 **Architecture:**

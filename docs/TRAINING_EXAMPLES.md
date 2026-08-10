@@ -561,10 +561,10 @@ directory and fails if any file's diagnostics differ between the two.
 
 ## Conclusion
 
-**Implementation Status**: Core behavioral semantics complete (51/51 execution conformance cases passing).
+**Implementation Status**: Core behavioral semantics complete (54/54 execution conformance cases passing).
 
-**Training Example Status**: 97/100 clean (3 files, 5 errors). What remains is:
-1. Two files that use feature names KerML does not define (`start`/`done` instead of `startShot`/`endShot`) — bugs in the OMG material
-2. One kind-table gap: an `objective` typed by a `requirement def`
+**Training Example Status**: 98/100 clean (2 files, 4 errors). What remains is two files that use
+feature names KerML does not define (`start`/`done` instead of `startShot`/`endShot`) — bugs in the
+OMG material, so 98/100 is the ceiling.
 
 The runtime implementation is **production-ready for complete SysML v2 models**. Training example "failures" reflect incomplete example files, not missing runtime features.
