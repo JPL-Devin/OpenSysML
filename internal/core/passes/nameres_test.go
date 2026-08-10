@@ -174,6 +174,19 @@ func TestInheritedNameConflictExemptsRedefiningFeatures(t *testing.T) {
 	}
 }
 
+// A concern and a viewpoint are requirements, so their bodies are exempt too.
+func TestInheritedNameConflictExemptsConcernsAndViewpoints(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		concern def C { stakeholder s; }
+		concern c : C { stakeholder s; }
+		viewpoint def V { stakeholder t; }
+		viewpoint v : V { stakeholder t; }
+	}`)
+	if len(got) != 0 {
+		t.Fatalf("got %+v, want no diagnostics", got)
+	}
+}
+
 // A name that is not inherited is not a conflict.
 func TestDistinctNestedNameIsNoConflict(t *testing.T) {
 	got := nameresDiags(t, `package P {

@@ -313,22 +313,24 @@ func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
 	}
 }
 
-// parameterizedByName reports whether sym is a case or requirement, whose
-// subject, actors and stakeholders redefine the inherited ones by name (SysML
-// 7.18.4, 7.19.4). That is not modelled and not distinguishable from an
-// ordinary feature here, so the conflict rule skips such a body entirely.
+// parameterizedByName reports whether sym is a case or requirement — including
+// a concern or viewpoint, which are requirements — whose subject, actors and
+// stakeholders redefine the inherited ones by name (SysML 7.18.4, 7.19.4). That
+// is not modelled and not distinguishable from an ordinary feature here, so the
+// conflict rule skips such a body entirely.
 func parameterizedByName(sym *symbols.Symbol) bool {
 	switch decl := sym.Decl.(type) {
 	case *ast.Usage:
 		switch decl.Kind {
-		case ast.UsageRequirement, ast.UsageCase, ast.UsageAnalysisCase,
+		case ast.UsageRequirement, ast.UsageSatisfy, ast.UsageConcern,
+			ast.UsageViewpoint, ast.UsageCase, ast.UsageAnalysisCase,
 			ast.UsageVerificationCase, ast.UsageUseCase:
 			return true
 		}
 	case *ast.Definition:
 		switch decl.Kind {
-		case ast.DefRequirement, ast.DefCase, ast.DefAnalysisCase,
-			ast.DefVerificationCase, ast.DefUseCase:
+		case ast.DefRequirement, ast.DefConcern, ast.DefViewpoint, ast.DefCase,
+			ast.DefAnalysisCase, ast.DefVerificationCase, ast.DefUseCase:
 			return true
 		}
 	}
