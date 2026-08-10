@@ -1001,9 +1001,9 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 	processed := 0
 	doActions := 0
 	for exec.HasPendingWork() && exec.State() == runtime.StateRunning && processed+doActions < maxAdvanceEvents {
-		if queue := exec.EventQueue(); queue.Len() > 0 && queue.Peek().Timestamp > deadline {
-			// Events past the deadline are out of scope, but a do behavior with
-			// actions left is due now, so run it without dispatching them.
+		if queue := exec.EventQueue(); queue.Len() == 0 || queue.Peek().Timestamp > deadline {
+			// Nothing to dispatch within the deadline, but a do behavior with
+			// actions left is due now, so run it and count it as do work.
 			if !exec.HasPendingDoWork() {
 				break
 			}
