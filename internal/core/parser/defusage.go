@@ -88,8 +88,7 @@ var notKindPrefixKeywords = map[string]bool{
 	"actor": true, "expose": true, "render": true, "perform": true,
 	"include": true, "exhibit": true, "variant": true, "event": true,
 	"timeslice": true, "snapshot": true, "transition": true, "bind": true,
-	// `individual` before a kind keyword is the occurrence modifier the usage
-	// keeps (`individual part p`), not a prefix to consume and drop.
+	// `individual part p` keeps the modifier; the prefix path would drop it.
 	"individual": true,
 	"in":         true, "out": true, "inout": true,
 }
@@ -358,12 +357,9 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			}
 			m.isEvent = true
 		case "individual":
-			// `individual` before a usage kind keyword is the modifier, not the
-			// kind: `OccurrenceUsage::isIndividual` is orthogonal to the keyword
-			// that declares the usage (SysML v2 §8.3.9.11), so `individual part`
-			// is a part usage that is an individual. Before `def` it is the
-			// definition keyword (`individual def X`), and before a typing or
-			// specialization token it names an anonymous usage.
+			// `individual` is a modifier orthogonal to the kind keyword (SysML v2
+			// §8.3.9.11), except before `def` or a typing/specialization token,
+			// where it is the declaration's own keyword.
 			nextTok := p.peekN(1)
 			if nextTok.Kind == lexer.Colon || nextTok.Kind == lexer.ColonGt || nextTok.Kind == lexer.ColonGtGt {
 				// individual : Type → anonymous usage
@@ -521,8 +517,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 
 		p.advance() // consume the kind keyword
-		// `snapshot s` is an occurrence usage whose portionKind is snapshot
-		// (SysML v2 §8.3.9.11); the keyword names the modifier, so keep it.
+		// `snapshot s` is an occurrence usage whose portionKind is snapshot.
 		if kw == "snapshot" {
 			mods.isSnapshot = true
 		}
@@ -710,9 +705,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	}
 	p.advance() // consume the kind keyword
 
-	// `individual : T` is an anonymous individual occurrence usage: the keyword
-	// naming the kind still names the modifier (SysML v2 §8.3.9.11). `snapshot`
-	// is handled with the usage-only keywords above.
+	// `individual : T` is an anonymous individual occurrence usage; `snapshot` is
+	// handled with the usage-only keywords above.
 	if kw == "individual" {
 		mods.isIndividual = true
 	}

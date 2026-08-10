@@ -66,8 +66,7 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 		fqn, ok = implicitUsageBases[d.Kind]
 		if d.IsIndividual && d.Kind == ast.UsageOccurrence {
 			// An individual occurrence is a life, not an arbitrary occurrence
-			// (SysML v2 §7.9.4), whether the `individual` keyword declares the
-			// usage or modifies an `occurrence` one.
+			// (SysML v2 §7.9.4), however the modifier is spelled.
 			fqn, ok = implicitUsageBases[ast.UsageIndividual]
 		}
 	case *ast.Definition:
