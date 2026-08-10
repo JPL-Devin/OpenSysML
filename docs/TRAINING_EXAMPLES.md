@@ -6,7 +6,6 @@
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
 **Status:** 98/100 files parse and resolve cleanly (0 semantic errors)  
 **Errors**: 2/100 files have semantic errors (4 total errors), both pinned OMG bugs  
-**Note**: `training_examples_expected.txt` still records `33. Analysis/Trade Study Analysis Example` with 1 error and is regenerated in a follow-up change, so the gate reports that file as "now clean" until then  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
@@ -476,14 +475,13 @@ is not touched here.
 
 ## Error Classification
 
-The 4 errors on the current baseline, per file (`training_examples_expected.txt`
-still lists the third file below and is regenerated separately):
+The 4 errors recorded on the current baseline, per file (the counts are exactly
+the ones in `training_examples_expected.txt`):
 
 | File | n | Cause |
 |---|---|---|
 | `27. Occurrences/Time Slice and Snapshot Example` | 2 | OMG bug: `start`/`done` should be `startShot`/`endShot` |
 | `28. Individuals/Individuals and Time Slices` | 2 | same OMG bug |
-| `33. Analysis/Trade Study Analysis Example` | 0 | clean since the objective-typing re-pin above |
 
 ### Bugs in the OMG Materials (4 errors, 2 files)
 
