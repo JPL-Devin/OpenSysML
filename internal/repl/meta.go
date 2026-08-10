@@ -69,6 +69,7 @@ var helpText = []string{
 	"%list               list current session declarations",
 	"%clear              reset the session",
 	"%load <file>        read a file and submit its contents",
+	"%verbosity [level]  show or set output level: quiet, normal or debug",
 	"%quit               exit the REPL",
 	"",
 	"Runtime commands:",
@@ -130,8 +131,17 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		if rerr != nil {
 			return nil, false, fmt.Errorf("load %s: %w", fields[1], rerr)
 		}
-		r := s.Submit(string(data))
-		return renderResult(r), false, nil
+		return renderResult(s.Submit(string(data)), s.verbosity), false, nil
+	case "%verbosity":
+		if len(fields) < 2 {
+			return []string{fmt.Sprintf("verbosity: %s", s.verbosity)}, false, nil
+		}
+		v, verr := ParseVerbosity(fields[1])
+		if verr != nil {
+			return nil, false, verr
+		}
+		s.SetVerbosity(v)
+		return []string{fmt.Sprintf("verbosity: %s", v)}, false, nil
 	case "%quit", "%exit":
 		return []string{"goodbye"}, true, nil
 	case "%instantiate":

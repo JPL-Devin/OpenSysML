@@ -73,7 +73,7 @@ func Loop(r LineReader, out io.Writer, s *Session) error {
 }
 
 func submit(w io.Writer, s *Session, src string) {
-	printLines(w, renderResult(s.Submit(src)))
+	printLines(w, renderResult(s.Submit(src), s.verbosity))
 }
 
 func printLines(w io.Writer, lines []string) {

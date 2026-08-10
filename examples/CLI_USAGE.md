@@ -122,6 +122,8 @@ echo "%load model.sysml
 | Flag | Shorthand | Description |
 |------|-----------|-------------|
 | `--eval <expr>` | `-e` | Evaluate expression and exit (repeatable) |
+| `--debug` | | Report every diagnostic over the whole session buffer, with the pass that produced it |
+| `--quiet` | | Report errors only, suppressing warnings |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
 
