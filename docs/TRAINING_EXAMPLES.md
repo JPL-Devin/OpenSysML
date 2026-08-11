@@ -609,7 +609,7 @@ directory and fails if any file's diagnostics differ between the two.
 
 ## Conclusion
 
-**Implementation Status**: Core behavioral semantics complete (60/60 execution conformance cases passing).
+**Implementation Status**: Core behavioral semantics complete (61/61 execution conformance cases passing).
 
 **Training Example Status**: 98/100 clean (2 files, 4 errors). What remains is two files that use
 feature names KerML does not define (`start`/`done` instead of `startShot`/`endShot`) — bugs in the

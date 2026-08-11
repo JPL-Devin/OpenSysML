@@ -14,7 +14,10 @@ The first tagged release.
   malformed input yields error nodes and diagnostics. All 94 official SysML v2
   standard library files parse clean.
 - Lazy, memoized name resolution and a type system covering conformance,
-  multiplicity, specialization, redefinition and feature chains.
+  multiplicity, specialization, redefinition and feature chains. An unnamed
+  feature takes its effective name from what it redefines or reference-subsets
+  (`:>> power = 250.0;` names, and overrides, `power`), and a nested usage that
+  reuses an inherited name without redefining it is reported.
 - Tiered validation (syntax → name resolution → typing → constraints), where a
   failing tier suppresses the ones above it rather than reporting noise.
 - Measured spec compliance, rule by rule, in
@@ -72,9 +75,6 @@ The first tagged release.
 
 ### Known limitations
 
-- An unnamed redefinition (`:>> power = 250.0;`) does not bind its effective
-  name, so it does not override the value it redefines; the named form
-  (`attribute power redefines Engine::power = 250.0;`) does.
 - A parameter bound by a constraint or requirement usage
   (`constraint limit : MassLimit { in m = mass; }`) is not passed into the
   conditions it inherits from its definition.

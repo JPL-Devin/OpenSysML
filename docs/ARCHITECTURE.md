@@ -258,7 +258,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - **Golden ASTs**: 36 fixtures - `internal/core/parser/testdata/parse/`
 - **Negative tests**: 49 subtests - `internal/core/parser/negative_test.go`
 - **Unit tests**: 42 tests (action, state) - `action_executor_test.go`, `state_executor_test.go`
-- **Conformance gate**: 60 cases (all passing: calc×10, constraint×3, requirement×5, action×11, state×26, accept×1, instance×4) - `conformance_test.go`
+- **Conformance gate**: 61 cases (all passing: calc×10, constraint×3, requirement×5, action×11, state×26, accept×1, instance×5) - `conformance_test.go`
 - **Golden traces**: 24 `.trace.golden` files (calc×10, constraint×3, action×4, state×7) - `trace_test.go`
 - **Robustness**: 35 failure-mode subtests (deadlock, unbound params, missing features, dangling transitions, sourceless accept, step budget, pseudostate dead ends and cycles, history and defer misuse, send/accept misrouting, calc arity/recursion, `perform` reference failures) - `robustness_test.go`
 - **Coverage**: All behavioral types fully functional. Action: 14/14 features ✅. State: 13/13 features ✅. Calc: 8/8 ✅. Constraint: 5/5 ✅. Requirement: 5/5 ✅. Evaluation: 7/7 ✅.
