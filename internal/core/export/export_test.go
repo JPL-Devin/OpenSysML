@@ -118,6 +118,37 @@ part def R;
 	}
 }
 
+// A round trip through RDF drops lexical trivia, which no element owns, but
+// keeps `doc` and `comment` because those are declarations.
+func TestCommentsThroughRDF(t *testing.T) {
+	src := `package Demo {
+	// a lexical line comment
+	doc /* what this package is for */
+	comment about Wheel /* a note on wheels */
+	part def Wheel;
+}`
+	ttl, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	back, err := export.Convert("m.ttl", ttl, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("to sysml: %v", err)
+	}
+	got := string(back)
+	for _, want := range []string{
+		"doc /* what this package is for */",
+		"comment about Wheel /* a note on wheels */",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("round trip dropped the declaration %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "a lexical line comment") {
+		t.Errorf("trivia unexpectedly survived; update the documented limitation:\n%s", got)
+	}
+}
+
 func TestVerbatimHeadsRoundTrip(t *testing.T) {
 	src := `package Connections {
     part def Engine;

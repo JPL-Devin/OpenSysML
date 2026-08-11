@@ -40,6 +40,13 @@
 // back exactly, but a graph produced by another tool will not have the text, and
 // converting such an element to notation then reports it as unsupported rather
 // than guessing at the ends.
+//
+// Lexical comments do not survive a round trip through RDF. Saving straight to
+// notation keeps them, because that path writes the source; converting to Turtle
+// keeps only what the model declares, and `//` and `/* */` trivia is attached to
+// no element. The comment and doc keywords are declarations rather than trivia,
+// so those do convert both ways. A model whose comments matter should be saved
+// to notation, which is why the two paths differ.
 package export
 
 import (

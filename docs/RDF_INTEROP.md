@@ -151,6 +151,22 @@ bounds, filter conditions and succession guards are stored as their notation
 convert back exactly and a consumer reading model structure is unaffected, but
 SPARQL cannot see inside them.
 
+**Lexical comments do not survive the RDF hop.** `//` and `/* */` trivia is
+attached to no element, so a `notation → RDF → notation` round trip drops it:
+
+```sysml
+// this line is lost through .ttl
+package Demo {
+    doc /* this is kept: doc is a declaration, not trivia */
+    comment about Wheel /* kept for the same reason */
+    part def Wheel;
+}
+```
+
+The `comment` and `doc` keywords declare elements, so they convert both ways.
+Save straight to `.sysml` when the trivia matters — that path writes the source
+and keeps everything.
+
 **Declaration heads that bind ends are carried as `sysx:sourceText`.** A
 `connect`, `bind`, `flow`, `succession`, `transition`, `accept` or `satisfy`
 declaration has a head whose participants are not reconstructible from the
