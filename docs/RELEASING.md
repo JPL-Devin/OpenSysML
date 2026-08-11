@@ -34,8 +34,9 @@ Then check the release-facing text:
   version's entry unchanged.
 - `README.md` and `docs/QUICKSTART.md` transcripts match what the binary
   prints. Build it (`make build-sysml`) and paste a few commands through it.
-- `docs/SPEC_COMPLIANCE.md` counts match a real run, and no row claims
-  more than the implementation does.
+- Test counts match a real run and agree across the docs that repeat them
+  (`docs/SPEC_COMPLIANCE.md`, `docs/ARCHITECTURE.md`, `docs/TRAINING_EXAMPLES.md`,
+  `README.md`), and no compliance row claims more than the implementation does.
 
 ## Tagging
 

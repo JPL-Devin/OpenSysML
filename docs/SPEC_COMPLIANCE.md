@@ -105,7 +105,7 @@
 **Test Coverage:**
 - 60 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×11, state×26, accept×1, instance×4)
 - 35 robustness subtests (deadlock, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references)
-- 177 runtime unit tests
+- 182 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
 - 36 golden AST fixtures (including pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
 - 24 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation)
 - 49 negative parser subtests
@@ -462,7 +462,7 @@ are tracked here):
 | `eval.go` | Expression evaluation (operators, literals, features) | ~758 |
 | `value.go` | Runtime value representation (ValConst, ValString, ValInstance) | ~150 |
 | `trace.go` | Deterministic execution and calc-evaluation trace recording, canonical value rendering | ~290 |
-| `conformance_test.go` | Conformance gate (59 cases) | ~470 |
+| `conformance_test.go` | Conformance gate (60 cases) | ~470 |
 | `robustness_test.go` | Failure-mode tests (35 subtests) | ~660 |
 | `trace_test.go` | Golden trace test infrastructure | ~200 |
 | `trace_calc_test.go` | Trace determinism and canonical rendering unit tests | ~180 |
@@ -502,11 +502,11 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 - Action: 11 conformance + 4 golden traces
 - State: 26 conformance + 7 golden traces
 - Accept: 1 conformance (`accept_then_transition`)
-- Instance: 3 conformance (`instance_derived_slots`, `instance_constraint_binding`, `instance_inherited_constraint`)
+- Instance: 4 conformance (`instance_derived_slots`, `instance_constraint_binding`, `instance_inherited_constraint`, `instance_nested_usage_body`)
 
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
-- Execution conformance: 59/59 cases passing
+- Execution conformance: 60/60 cases passing
 - Training examples: 98/100 clean (2 files / 4 errors, both pinned OMG source bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
 
