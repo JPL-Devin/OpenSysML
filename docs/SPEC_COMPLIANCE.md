@@ -87,14 +87,16 @@
 - History pseudostates: shallow and deep restoration (`history` / `shallow history` / `deep history <name>;`)
 - Deferred events: retention and recall across hierarchy and orthogonal regions (`defer <event>[, <event>]*;`)
 
-**Expression Evaluation (7/7 features):**
-- Binary operators (+, -, *, /, <, >, ==, and, or)
+**Expression Evaluation:**
+- Binary operators (+, -, *, /, %, <, >, ==, and, or)
+- Exponentiation (`**`, `^`) over Integer and Real operands, folded and evaluated by one implementation
 - Unary operators (-, not)
 - Literal values (Integer, Real, Boolean, String)
 - Feature reference resolution
 - Qualified name resolution (A::B::C)
 - Type coercion (Integer→Real)
 - Unresolved reference error handling
+- KerML function library: the scalar numeric functions of `RealFunctions`, `RationalFunctions`, `NumericalFunctions`, `IntegerFunctions`, `NaturalFunctions` and `TrigFunctions` (see the Function Library row below)
 
 **Name Resolution:**
 - Inherited feature resolution (follows specialization chains)
@@ -103,11 +105,11 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 61 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×11, state×26, accept×1, instance×5)
-- 35 robustness subtests (deadlock, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references)
-- 183 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
+- 65 conformance cases (all passing: calc×11, constraint×4, requirement×5, action×12, state×26, accept×1, instance×6)
+- 38 robustness subtests (deadlock, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references, a library function outside its domain or with the wrong arity, exponentiation beyond the Integer range)
+- 191 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
 - 36 golden AST fixtures (including pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
-- 24 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation)
+- 27 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation, library function invocation)
 - 49 negative parser subtests
 - 1,500+ total tests passing
 
@@ -282,6 +284,45 @@ Each row documents one behavioral semantic feature:
 | Feature reference resolution | `eval.go:141` evalFeatureReference | `constraint_literal.sysml` | ✅ Faithful |
 | Qualified name resolution (A::B::C) | `eval.go:53` Eval + `resolve/qualified.go` | `calc_qualified_names.sysml` | ✅ Faithful |
 | Type coercion (Integer→Real) | `eval.go:344` toReal | `calc_type_coercion.sysml` | ✅ Faithful |
+| Exponentiation (`**`, `^`) — Integer operands with a non-negative exponent give an Integer (`IntegerFunctions::'**'`), any other numeric pair a Real (`RealFunctions::'**'`) | `semantics/eval.go` `Pow`, shared by the folder's `evalArithmetic` and `runtime/eval.go` `evalArithmetic` | `calc_library_functions.sysml`, `exponentiation_test.go` | ✅ Faithful |
+
+### KerML Function Library (KerML §9.3 Function Library)
+
+The library declares these functions abstractly — a signature and no body — so
+the runtime supplies the implementation. Dispatch is by the declaration's
+qualified name, and a declaration that carries a body is evaluated from that
+body, so a model's own `calc sqrt` is never hijacked. An unqualified call that
+resolves to no declaration dispatches by local name, which is what makes
+`sysml -e "sqrt(2.0)"` evaluable in a model that imports no part of the library.
+
+Arguments follow the vendored signatures: a `Real` parameter accepts an Integer
+(`ScalarValues` declares `Integer :> Rational :> Real`), an `Integer` parameter
+rejects a Real rather than truncating it, and a `Natural` parameter rejects a
+negative value. A result that is not a finite value of the declared type — the
+square root of a negative, an inverse sine outside `[-1.0, 1.0]`, a `floor`
+beyond the Integer range — is reported at evaluation rather than returned as a
+NaN, an infinity or a wrapped integer.
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| `RealFunctions`: `sqrt`, `abs`, `floor`, `round`, `max`, `min` | `runtime/library_functions.go` | `TestLibraryFunctionValues` | ✅ Faithful |
+| `RationalFunctions`/`NumericalFunctions`: `abs`, `max`, `min` (kind-preserving), `isZero`, `isUnit` | `runtime/library_functions.go` | `TestLibraryFunctionValues` | ✅ Faithful |
+| `IntegerFunctions`: `abs`, `max`, `min`; `NaturalFunctions`: `max`, `min` | `runtime/library_functions.go` | `TestLibraryFunctionValues` | ✅ Faithful |
+| `TrigFunctions`: `sin`, `cos`, `tan`, `cot`, `arcsin`, `arccos`, `arctan` | `runtime/library_functions.go` | `TestLibraryFunctionValues` | ✅ Faithful |
+| Domain, arity and argument-type failures reported at evaluation | `runtime/library_functions.go` `bindAndApply` | `TestLibraryFunctionErrors` | ✅ Faithful |
+| A declaration with a body is evaluated from that body | `runtime/library_functions.go` `libraryFunctionFor` | `TestLibraryFunctionDoesNotHijackADeclaredBody` | ✅ Faithful |
+| Named argument binds to the parameter the signature declares (`sin(theta = 0.0)`) | `runtime/library_functions.go` `bindAndApply` | `TestLibraryFunctionNamedArguments` | ✅ Faithful |
+
+Found, not fixed — numeric library features that remain unevaluable:
+
+| Not implemented | Why |
+|---|---|
+| `exp`, `ln`, `log`, `atan2` | The vendored library declares none of them (`TrigFunctions` declares `arctan` over one parameter, and no exponential or logarithm function file exists), so there is no signature to implement against. |
+| `VectorFunctions`, `MatrixFunctions` | Needs a vector value in the evaluator; every value is scalar today. |
+| `SequenceFunctions` beyond `size`/`isEmpty`/`includes` | Needs the sequence semantics of the library's own function bodies, not just element access. |
+| Quantity- and unit-aware arithmetic (`1.62[m/s^2]`) | Needs `MeasurementReferences` unit conformance in the evaluator; the notation parses but no unit is carried through arithmetic. |
+| `ComplexFunctions` | Needs a complex value kind. |
+| Library functions in the checker's own name resolution | An unqualified call to a library function the model does not import evaluates, but the `unresolved-reference` diagnostic still reports the name; importing `RealFunctions::*` clears it. |
 
 ### Static Expression Type Checking (KerML §7.4 Expressions, §8.3 Feature Values)
 

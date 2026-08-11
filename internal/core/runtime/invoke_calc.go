@@ -166,8 +166,13 @@ func (ctx *Context) InvokeCalcNamed(sym *symbols.Symbol, args map[string]Value, 
 }
 
 // invokeCalc resolves the calc's shape and invokes it, the single path every
-// calc invocation takes.
+// calc invocation takes. A function library declaration the library gives no
+// body is applied by its built-in implementation instead.
 func (ctx *Context) invokeCalc(sym *symbols.Symbol, args calcArgs, scope *symbols.Scope) (Value, error) {
+	if fn, ok := ctx.libraryFunctionFor(sym); ok {
+		return fn.invoke(ctx, args)
+	}
+
 	shape, err := ctx.calcShapeOf(sym)
 	if err != nil {
 		return Value{}, err
@@ -308,6 +313,17 @@ func (ctx *Context) calcScope(declarer, invoked *symbols.Symbol, callerScope *sy
 		}
 	}
 	return callerScope
+}
+
+// hasCalcBody reports whether sym's calc chain declares a result expression to
+// evaluate. A library function declared without one — or a symbol loaded from the
+// library index, which carries no declaration at all — has no body.
+func (ctx *Context) hasCalcBody(sym *symbols.Symbol) bool {
+	if sym == nil || sym.Decl == nil || !isCalcDecl(sym.Decl) {
+		return false
+	}
+	result, _ := calcResult(ctx.calcChain(sym))
+	return result != nil
 }
 
 // isCalcDecl reports whether a declaration is a calc definition or calc usage.

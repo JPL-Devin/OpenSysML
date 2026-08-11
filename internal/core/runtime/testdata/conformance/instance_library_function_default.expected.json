@@ -1,0 +1,12 @@
+{
+  "type": "instance",
+  "instantiate": "test::Tank",
+  "slots": {
+    "side": {"type": "Real", "value": 4.0},
+    "tilt": {"type": "Real", "value": 4.0}
+  },
+  "constraints": {
+    "sideFits": true,
+    "sideExceedsTilt": false
+  }
+}
