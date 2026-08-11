@@ -1,0 +1,28 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="LoopForms" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Descend"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="altitude" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="steps" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (WhileLoopActionNode kind="while" variable=""
+            (OperatorExpr operator=">"
+              (FeatureReference name="altitude")
+              (LiteralReal value="0.0"))
+            (*ast.AssignmentActionNode))
+          (WhileLoopActionNode kind="loop" variable=""
+            (OperatorExpr operator="<"
+              (FeatureReference name="altitude")
+              (LiteralReal value="0.0"))
+            (*ast.AssignmentActionNode))
+          (WhileLoopActionNode kind="for" variable="s"
+            (FeatureReference name="steps")
+            (*ast.AssignmentActionNode)))))))

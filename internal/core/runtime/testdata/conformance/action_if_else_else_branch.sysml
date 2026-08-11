@@ -1,0 +1,25 @@
+package test {
+	import ScalarValues::*;
+
+	// The same conditional with a condition that fails takes the else branch.
+	action decide {
+		attribute total : Integer = -1;
+		attribute taken : String = "none";
+		first start;
+
+		action choose {
+			if total > 0 {
+				assign taken := "then";
+				assign total := total + 10;
+			} else {
+				assign taken := "else";
+				assign total := total - 10;
+			}
+		}
+
+		done end;
+
+		then start choose;
+		then choose end;
+	}
+}

@@ -201,6 +201,18 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		child := NewScope(scope, d)
 		child.markBodyLocal()
 		scope.AddChild(child)
+		if d.Kind == ast.LoopFor && d.Variable.Name != "" {
+			// The variable's own span, not the whole loop's: the editor renames
+			// through NameSpan and jumps to DeclSpan.
+			child.Define(d.Variable.Name, &Symbol{
+				Name:       d.Variable.Name,
+				Kind:       SymbolAttributeUsage,
+				Decl:       d,
+				DeclSpan:   d.Variable.NameSpan,
+				NameSpan:   d.Variable.NameSpan,
+				OwnerScope: child,
+			})
+		}
 		buildMembers(child, d.Body)
 	case *ast.IfActionNode:
 		// Each branch is a namespace of its own: `if c { action a; } else { action a; }`

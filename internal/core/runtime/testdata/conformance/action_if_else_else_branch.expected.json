@@ -1,0 +1,13 @@
+{
+	"type": "action",
+	"outputs": {
+		"total": {
+			"type": "Integer",
+			"value": -11
+		},
+		"taken": {
+			"type": "String",
+			"value": "else"
+		}
+	}
+}

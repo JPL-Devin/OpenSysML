@@ -15,11 +15,11 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`, `staticch
 |---|---|
 | OMG training corpus | **98/100 clean** — 2 files / 4 errors, both pinned OMG source bugs (the ceiling) |
 | Stdlib parser conformance | 94/94 clean |
-| Execution conformance cases | 61 |
+| Execution conformance cases | 71 |
 | gRPC conformance cases | 6 |
-| Golden execution traces | 24 |
-| Runtime robustness subtests | 35 |
-| Golden AST fixtures | 36 |
+| Golden execution traces | 33 |
+| Runtime robustness subtests | 39 |
+| Golden AST fixtures | 37 |
 | Negative parser subtests | 49 |
 
 Statement coverage, measured today with `go test -cover ./...`:
@@ -187,6 +187,14 @@ A6; do A6 first and re-test this.
   (legal), a target resolving to a non-vertex (illegal), the sourceless `accept … then` form
   (legal), a junction chain terminating nowhere (illegal, and not a cycle).
 - **Calc recursion** is depth-bounded and rejected rather than evaluated.
+- **A `for` loop iterates a sequence or a set only.** `runtime/action_statements.go` `forElements`
+  reports anything else, because those are the only collections the expression layer produces; a
+  collection built by an expression (a range, a filter) has to wait on that layer. A set is
+  visited in the order its canonical rendering sorts in, since a set has no order of its own.
+- **A body member that is not an executable statement fails the run.** A nested action
+  declaration or a `perform` written inside a loop or an `if` branch body is lowered to
+  `lower.Unsupported` and reported when reached, since neither has succession semantics inside a
+  block. Executing them means giving a block its own token flow.
 
 ## A5 — visibility rules
 
@@ -217,6 +225,10 @@ never the total, and land it only while the corpus sits at its 98/100 ceiling.
   require an explicit name and diagnose the ambiguous form. Reaches
   `internal/core/symbols/builder.go`, since the modifier is also not reflected in the symbol
   kind.
+- `for step in c { … }` is rejected: `parseForAction` wants an `Identifier`, and `step` is the
+  KerML keyword, so the loop becomes an error node with three diagnostics. The keyword-in-name
+  handling that `parser/defusage.go` `atKindPrefix` does for declarations is missing here (and
+  the REPL does not print load-time parse diagnostics, so the file looks accepted).
 - `action a { in snapshot ; }` parses with zero diagnostics — an anonymous untyped parameter is
   silently accepted (also `in event ;`). Reproduce first; it was never re-verified after the
   occurrence-modifier work.

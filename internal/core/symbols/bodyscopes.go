@@ -179,6 +179,7 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		if child := bodyScopeChild(scope, d); child != nil {
 			body = child
 		}
+		bodyScopesInExpr(scope, d.Collection)
 		bodyScopesInExpr(body, d.Condition)
 		buildBodyScopes(body, d.Body)
 	case *ast.IfActionNode:

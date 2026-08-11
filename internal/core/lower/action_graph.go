@@ -71,6 +71,66 @@ type Assign struct {
 
 func (Assign) statement() {}
 
+// Declare is a lowered declaration in a body-local block: `attribute i = 0;`
+// written inside a loop or an `if` branch. The name it declares is a member of
+// that block, so the executor binds it in the block's own frame and discards it
+// when the block exits. Value is nil when the declaration carried none.
+type Declare struct {
+	Name  string
+	Value ast.Node
+	Node  ast.Node // the declaration itself, for diagnostics
+}
+
+func (Declare) statement() {}
+
+// Block is a lowered body-local statement list: the body of a loop or of one
+// branch of a conditional. It is a namespace of its own (symbols/builder.go), so
+// the names its Declare statements introduce do not leak out of it.
+type Block struct {
+	Statements []Statement
+	Node       ast.Node // the loop or branch the block belongs to
+}
+
+// Loop is a lowered loop statement. Kind says when the condition is tested:
+// before each iteration (`while`), after each iteration (`loop … until`), or
+// not at all, iteration being driven by a collection (`for`).
+//
+// Condition and Collection stay expressions because their values are only known
+// at execution time. The iteration count is bounded by the executor's step
+// budget, so a loop that never terminates fails the run rather than hanging it.
+type Loop struct {
+	Kind       ast.LoopKind
+	Condition  ast.Node // nil for `for`, and for a `loop` written without `until`
+	Variable   string   // `for` only: the name each element is bound to
+	Collection ast.Node // `for` only: the collection iterated over
+	Body       Block
+	Node       ast.Node // the loop itself, for diagnostics
+}
+
+func (Loop) statement() {}
+
+// If is a lowered conditional. The condition is evaluated in the enclosing
+// body, outside both branches. Else is nil when the conditional declared none.
+type If struct {
+	Condition ast.Node
+	Then      Block
+	Else      *Block
+	Node      ast.Node // the conditional itself, for diagnostics
+}
+
+func (If) statement() {}
+
+// Unsupported is a body member the lowering layer recognizes but cannot yet
+// turn into an executable statement. It is lowered rather than dropped so that
+// reaching it fails the execution with a diagnostic instead of silently
+// producing a wrong answer. Description names the construct.
+type Unsupported struct {
+	Description string
+	Node        ast.Node
+}
+
+func (Unsupported) statement() {}
+
 // Accept is a lowered accept parameter: `action r accept msg : Warning;`.
 // SignalType is the parameter's declared type, empty when it was declared
 // without one, in which case the node accepts a message of any type.
@@ -137,6 +197,11 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 				graph.Nodes = append(graph.Nodes, n)
 				lowerBody(graph, n)
 			}
+		case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode, *ast.SendStatement:
+			// A statement is executed as part of an action node's body; written
+			// directly among the action's own members it has no name a
+			// succession could reach, hence no position in the token flow.
+			return nil, fmt.Errorf("%s written directly in an action body has no position in the token flow: declare it inside an action node", statementKeyword(n))
 		}
 	}
 
@@ -223,18 +288,8 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 func lowerBody(graph *ActionGraph, node *ast.Usage) {
 	for _, member := range node.Members {
 		switch m := unwrapMembership(member).(type) {
-		case *ast.SendStatement:
-			graph.Bodies[node] = append(graph.Bodies[node], Send{
-				Message: m.Message,
-				Target:  ast.SimpleName(m.Target),
-				IsVia:   m.IsVia,
-			})
-		case *ast.AssignmentActionNode:
-			graph.Bodies[node] = append(graph.Bodies[node], Assign{
-				Target: ast.SimpleName(m.Target),
-				Value:  m.Value,
-				Node:   m,
-			})
+		case *ast.SendStatement, *ast.AssignmentActionNode, *ast.WhileLoopActionNode, *ast.IfActionNode:
+			graph.Bodies[node] = append(graph.Bodies[node], lowerStatement(m))
 		case *ast.Usage:
 			if !m.IsAccept {
 				continue
@@ -246,6 +301,79 @@ func lowerBody(graph *ActionGraph, node *ast.Usage) {
 			}
 		}
 	}
+}
+
+// lowerStatement lowers one executable body statement. Every form it recognizes
+// is lowered losslessly; a form it does not becomes Unsupported, so the executor
+// reports it rather than skipping it.
+func lowerStatement(member ast.Node) Statement {
+	switch m := member.(type) {
+	case *ast.SendStatement:
+		return Send{
+			Message: m.Message,
+			Target:  ast.SimpleName(m.Target),
+			IsVia:   m.IsVia,
+		}
+	case *ast.AssignmentActionNode:
+		return Assign{
+			Target: ast.SimpleName(m.Target),
+			Value:  m.Value,
+			Node:   m,
+		}
+	case *ast.WhileLoopActionNode:
+		return Loop{
+			Kind:       m.Kind,
+			Condition:  m.Condition,
+			Variable:   m.Variable.Name,
+			Collection: m.Collection,
+			Body:       lowerBlock(m, m.Body),
+			Node:       m,
+		}
+	case *ast.IfActionNode:
+		lowered := If{Condition: m.Condition, Node: m}
+		if m.Then != nil {
+			lowered.Then = lowerBlock(m.Then, m.Then.Body)
+		}
+		if m.Else != nil {
+			block := lowerBlock(m.Else, m.Else.Body)
+			lowered.Else = &block
+		}
+		return lowered
+	case *ast.Usage:
+		// An attribute declared in a body-local block is a member of that block:
+		// it holds a value the block's statements read and write.
+		if m.Kind == ast.UsageAttribute && m.Ident.Name != "" {
+			return Declare{Name: m.Ident.Name, Value: m.Value, Node: m}
+		}
+		return Unsupported{Description: usageDescription(m), Node: m}
+	default:
+		return Unsupported{Description: fmt.Sprintf("%T", member), Node: member}
+	}
+}
+
+// lowerBlock lowers the body of a loop or of one branch of a conditional. owner
+// is the node the block belongs to, which is the element that owns the block's
+// body-local namespace.
+func lowerBlock(owner ast.Node, members []ast.Node) Block {
+	block := Block{Node: owner}
+	for _, member := range members {
+		actual := unwrapMembership(member)
+		if actual == nil {
+			continue
+		}
+		block.Statements = append(block.Statements, lowerStatement(actual))
+	}
+	return block
+}
+
+// usageDescription names a usage declared where a statement was expected, for
+// the error the executor reports when it reaches it.
+func usageDescription(u *ast.Usage) string {
+	kind := u.Kind.String()
+	if name := getNodeName(u); name != "" {
+		return fmt.Sprintf("%s usage %q", kind, name)
+	}
+	return fmt.Sprintf("anonymous %s usage", kind)
 }
 
 // acceptPort returns the port an accept action routes through
@@ -356,4 +484,20 @@ func parsePinReference(nodes []ast.Node, qname *ast.QualifiedName) (ast.Node, st
 	nodeQname := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: nodeName}}}
 	node := findNodeByName(nodes, nodeQname)
 	return node, pinName
+}
+
+// statementKeyword names a body statement for a diagnostic.
+func statementKeyword(node ast.Node) string {
+	switch n := node.(type) {
+	case *ast.WhileLoopActionNode:
+		return "a '" + n.Kind.String() + "' loop"
+	case *ast.IfActionNode:
+		return "an 'if' conditional"
+	case *ast.AssignmentActionNode:
+		return "an assignment"
+	case *ast.SendStatement:
+		return "a 'send'"
+	default:
+		return fmt.Sprintf("a %T statement", n)
+	}
 }

@@ -31,6 +31,10 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
+	t.Run("non_terminating_loop_exhausts_step_budget", testNonTerminatingLoopExhaustsStepBudget)
+	t.Run("loop_body_declaration_does_not_leak", testLoopBodyDeclarationDoesNotLeak)
+	t.Run("loop_body_of_unexecutable_statement", testLoopBodyOfUnexecutableStatement)
+	t.Run("statement_directly_in_an_action_body", testStatementDirectlyInAnActionBody)
 	t.Run("fork_branches_share_region", testForkBranchesShareRegion)
 	t.Run("join_with_one_incoming_branch", testJoinWithOneIncomingBranch)
 	t.Run("region_pseudostate_without_satisfied_guard", testRegionPseudostateWithoutSatisfiedGuard)
@@ -1117,6 +1121,176 @@ func testStepBudgetExceeded(t *testing.T) {
 	}
 	if !errors.Is(err, ErrStepLimitExceeded) {
 		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// testNonTerminatingLoopExhaustsStepBudget: a loop whose condition never fails
+// spends a step per iteration, so it ends the execution with
+// ErrStepLimitExceeded instead of hanging whoever drove it (a REPL or the LSP).
+func testNonTerminatingLoopExhaustsStepBudget(t *testing.T) {
+	src := `
+		package test {
+			action spinner {
+				attribute total : Integer = 0;
+				first start;
+				action spin {
+					while total >= 0 {
+						assign total := total + 1;
+					}
+				}
+				done end;
+				then start spin;
+				then spin end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	ctx.maxSteps = 20
+	ctx.steps = 0
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "spinner", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action spinner not found")
+	}
+
+	_, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatal("expected the step budget to be exceeded, the action completed")
+	}
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// testLoopBodyDeclarationDoesNotLeak: a loop body and an `if` branch body are
+// namespaces of their own, so a name one of them declares is not a member of the
+// action and does not appear among its results.
+func testLoopBodyDeclarationDoesNotLeak(t *testing.T) {
+	src := `
+		package test {
+			action counter {
+				attribute total : Integer = 0;
+				first start;
+				action accumulate {
+					while total < 3 {
+						attribute bump : Integer = 1;
+						assign total := total + bump;
+						if total == 2 {
+							attribute marker : Integer = 9;
+							assign total := total + marker;
+						}
+					}
+				}
+				done end;
+				then start accumulate;
+				then accumulate end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "counter", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action counter not found")
+	}
+
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	// 1, then 2 which the conditional lifts to 11, which ends the loop.
+	total, ok := outputs["total"]
+	if !ok {
+		t.Fatal("total missing from the action's results")
+	}
+	if total.Const.Int != 11 {
+		t.Errorf("total = %v, want 11", FormatTraceValue(total))
+	}
+	for _, local := range []string{"bump", "marker"} {
+		if _, ok := outputs[local]; ok {
+			t.Errorf("body-local %s leaked into the action's results: %v", local, outputs)
+		}
+	}
+}
+
+// testLoopBodyOfUnexecutableStatement: a body member the lowering layer cannot
+// turn into a statement is reported when it is reached, rather than skipped —
+// silently dropping it would give a wrong answer with no diagnostic.
+func testLoopBodyOfUnexecutableStatement(t *testing.T) {
+	src := `
+		package test {
+			action counter {
+				attribute total : Integer = 0;
+				first start;
+				action accumulate {
+					while total < 3 {
+						action inner;
+						assign total := total + 1;
+					}
+				}
+				done end;
+				then start accumulate;
+				then accumulate end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "counter", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action counter not found")
+	}
+
+	_, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatal("expected an unexecutable loop body member to be reported")
+	}
+	if !strings.Contains(err.Error(), "not executable") {
+		t.Errorf("error does not name the unexecutable member: %v", err)
+	}
+}
+
+// testStatementDirectlyInAnActionBody: a statement written among the action's
+// own members has no name a succession can reach, so it is reported rather than
+// ignored.
+func testStatementDirectlyInAnActionBody(t *testing.T) {
+	cases := map[string]string{
+		"while":      "while total < 5 { assign total := total + 1; }",
+		"if":         "if total < 5 { assign total := total + 1; }",
+		"assignment": "assign total := total + 1;",
+	}
+
+	for name, stmt := range cases {
+		t.Run(name, func(t *testing.T) {
+			src := `
+				package test {
+					action counter {
+						attribute total : Integer = 0;
+						first start;
+						` + stmt + `
+						done end;
+						then start end;
+					}
+				}
+			`
+			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "counter", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action counter not found")
+			}
+
+			_, err := ctx.ExecuteAction(sym)
+			if err == nil {
+				t.Fatalf("expected a top-level %s to be reported", name)
+			}
+			if !strings.Contains(err.Error(), "no position in the token flow") {
+				t.Errorf("error does not explain why the statement cannot run: %v", err)
+			}
+		})
 	}
 }
 
