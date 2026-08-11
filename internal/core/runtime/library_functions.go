@@ -405,7 +405,9 @@ func integerResult(x float64) (semantics.Value, error) {
 	if math.IsNaN(x) {
 		return semantics.Value{}, fmt.Errorf("%w: argument outside the function's domain", semantics.ErrArithmeticDomain)
 	}
-	if math.IsInf(x, 0) || x > math.MaxInt64 || x < math.MinInt64 {
+	// MaxInt64 has no float64, so compare against 2^63, the next value up, which
+	// does: a whole Real reaching it is already outside the Integer range.
+	if math.IsInf(x, 0) || x >= -float64(math.MinInt64) || x < math.MinInt64 {
 		return semantics.Value{}, fmt.Errorf("%w: %v exceeds the Integer range", semantics.ErrArithmeticOverflow, x)
 	}
 	return semantics.Value{Kind: semantics.ValInt, Int: int64(x)}, nil

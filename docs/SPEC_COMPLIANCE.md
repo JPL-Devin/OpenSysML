@@ -88,7 +88,7 @@
 - Deferred events: retention and recall across hierarchy and orthogonal regions (`defer <event>[, <event>]*;`)
 
 **Expression Evaluation:**
-- Binary operators (+, -, *, /, %, <, >, ==, and, or)
+- Binary operators (+, -, *, /, <, >, ==, and, or)
 - Exponentiation (`**`, `^`) over Integer and Real operands, folded and evaluated by one implementation
 - Unary operators (-, not)
 - Literal values (Integer, Real, Boolean, String)
@@ -322,6 +322,7 @@ Found, not fixed — numeric library features that remain unevaluable:
 | `SequenceFunctions` beyond `size`/`isEmpty`/`includes` | Needs the sequence semantics of the library's own function bodies, not just element access. |
 | Quantity- and unit-aware arithmetic (`1.62[m/s^2]`) | Needs `MeasurementReferences` unit conformance in the evaluator; the notation parses but no unit is carried through arithmetic. |
 | `ComplexFunctions` | Needs a complex value kind. |
+| Remainder (`%`) outside constant folding | `semantics/eval.go` folds it over literals, but `runtime/eval.go` `evalOperator` routes only `+ - * / **` to arithmetic, so `%` over a feature reports `unsupported operator`. |
 | Library functions in the checker's own name resolution | An unqualified call to a library function the model does not import evaluates, but the `unresolved-reference` diagnostic still reports the name; importing `RealFunctions::*` clears it. |
 
 ### Static Expression Type Checking (KerML §7.4 Expressions, §8.3 Feature Values)

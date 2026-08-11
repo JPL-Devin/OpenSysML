@@ -53,6 +53,7 @@ func TestLibraryFunctionValues(t *testing.T) {
 		{"RealFunctions::floor", []Value{constReal(-2.1)}, semantics.Value{Kind: semantics.ValInt, Int: -3}},
 		{"RealFunctions::round", []Value{constReal(2.5)}, semantics.Value{Kind: semantics.ValInt, Int: 3}},
 		{"RealFunctions::round", []Value{constReal(-2.5)}, semantics.Value{Kind: semantics.ValInt, Int: -3}},
+		{"RealFunctions::floor", []Value{constReal(math.MinInt64)}, semantics.Value{Kind: semantics.ValInt, Int: math.MinInt64}},
 		{"RealFunctions::max", []Value{constReal(2), constInt(7)}, semantics.Value{Kind: semantics.ValReal, Real: 7}},
 		{"RealFunctions::min", []Value{constReal(2), constInt(7)}, semantics.Value{Kind: semantics.ValReal, Real: 2}},
 		{"RationalFunctions::abs", []Value{constReal(-0.5)}, semantics.Value{Kind: semantics.ValReal, Real: 0.5}},
@@ -109,6 +110,10 @@ func TestLibraryFunctionErrors(t *testing.T) {
 		// cot does, at zero.
 		{"cotangent of a zero sine", "TrigFunctions::cot", []Value{constReal(0)}, semantics.ErrArithmeticOverflow},
 		{"floor beyond the Integer range", "RealFunctions::floor", []Value{constReal(1e300)}, semantics.ErrArithmeticOverflow},
+		// 2^63 is the least Real above the Integer range, and the only one the
+		// int64 conversion would silently wrap.
+		{"floor at the Integer boundary", "RealFunctions::floor", []Value{constReal(-float64(math.MinInt64))}, semantics.ErrArithmeticOverflow},
+		{"round at the Integer boundary", "RealFunctions::round", []Value{constReal(-float64(math.MinInt64))}, semantics.ErrArithmeticOverflow},
 		{"absolute value of the least Integer", "IntegerFunctions::abs", []Value{constInt(math.MinInt64)}, semantics.ErrArithmeticOverflow},
 		{"too few arguments", "RealFunctions::max", []Value{constReal(1)}, ErrCalcArity},
 		{"too many arguments", "RealFunctions::sqrt", []Value{constReal(1), constReal(2)}, ErrCalcArity},
