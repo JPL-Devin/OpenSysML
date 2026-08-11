@@ -165,11 +165,15 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 }
 
 // CompositeTypeOf returns what a feature is materialized from, or nil for one
-// that holds a value rather than an object. A usage with members of its own is
+// that holds a value rather than an object — a written default takes precedence
+// over instantiation, as in GetSlot above. A usage with members of its own is
 // instantiated as itself, so its body governs and an untyped nested part
 // materializes at all. Answering costs no allocation, so a caller walking an
 // object graph can decide whether to descend before descending.
 func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
+	if feat.DefaultValue != nil && (isScalarFeature(feat) || feat.Type == nil) {
+		return nil
+	}
 	if feat.Symbol != nil && isCompositeUsage(feat.Symbol) && len(declMembers(feat.Symbol.Decl)) > 0 {
 		return feat.Symbol
 	}

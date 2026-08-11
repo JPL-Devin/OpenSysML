@@ -105,7 +105,7 @@
 **Test Coverage:**
 - 60 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×11, state×26, accept×1, instance×4)
 - 35 robustness subtests (deadlock, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references)
-- 182 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
+- 183 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
 - 36 golden AST fixtures (including pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
 - 24 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation)
 - 49 negative parser subtests

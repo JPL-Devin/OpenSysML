@@ -190,6 +190,34 @@ func TestNestedUsageBodyOverridesItsType(t *testing.T) {
 	}
 }
 
+// A written default takes precedence over instantiation in GetSlot, so the
+// feature holds that value and is not something to materialize an object from.
+func TestCompositeTypeOfIgnoresDefaultedFeature(t *testing.T) {
+	src := `
+		attribute def Temp {
+			attribute v = 1.0;
+		}
+		part def Gauge {
+			attribute plain : Temp;
+			attribute written : Temp = 5.0;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	features := ctx.FeaturesOf(resolveSymbol(t, root, "Gauge"))
+	for i := range features {
+		feat := &features[i]
+		composite := ctx.CompositeTypeOf(feat)
+		if feat.Name == "written" && composite != nil {
+			t.Errorf("written holds 5.0, but reports %s as composite", composite.Name)
+		}
+		if feat.Name == "plain" && composite == nil {
+			t.Error("plain is materialized from Temp, want it reported as composite")
+		}
+	}
+}
+
 // An untyped nested part is still an object: its body is its shape, so it
 // materializes and its members hold values.
 func TestUntypedNestedPartMaterializes(t *testing.T) {
