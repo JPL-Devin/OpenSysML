@@ -294,7 +294,7 @@ func (m *Model) Conforms(a, b *symbols.Symbol) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	if a == b {
+	if a == b || isAnything(b) {
 		return true
 	}
 	for _, s := range m.AllSupertypes(a) {
@@ -303,6 +303,14 @@ func (m *Model) Conforms(a, b *symbols.Symbol) bool {
 		}
 	}
 	return false
+}
+
+// isAnything reports whether sym is Base::Anything, the classifier every type
+// specializes (KerML 8.3.2.1), whether or not the chain to it is declared.
+func isAnything(sym *symbols.Symbol) bool {
+	return sym != nil && (sym.Name == "Base::Anything" ||
+		(sym.Name == "Anything" && sym.OwnerScope != nil && sym.OwnerScope.Owner() != nil &&
+			sym.OwnerScope.Owner().Name == "Base"))
 }
 
 // HasSpecializationCycle reports whether sym participates in a specialization

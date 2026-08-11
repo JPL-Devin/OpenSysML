@@ -50,14 +50,43 @@ func (r *Resolver) resolveTarget(scope *symbols.Scope, target ast.Node, hide *re
 // target is looked up in; the target names the referenced feature, never a
 // reference to it, so such borrowed bindings are invisible to it while a
 // declaration of that name — local, inherited or imported — is a valid target.
-type refFilter struct{ decl ast.Node }
+//
+// namingTarget hides the one feature a reference named, whoever is resolving
+// it: the semantic model reads a redefinition without knowing it is a naming
+// feature, and must still reach the redefined feature.
+type refFilter struct {
+	decl         ast.Node
+	namingTarget ast.Node
+}
 
 // hides reports whether sym is a binding a reference target must not see.
 func (f *refFilter) hides(sym *symbols.Symbol) bool {
 	if f == nil || sym == nil {
 		return false
 	}
-	return sym.Decl == f.decl || sym.EffectiveName
+	if f.decl != nil && (sym.Decl == f.decl || sym.EffectiveName) {
+		return true
+	}
+	return f.namingTarget != nil && sym.NamingTarget == f.namingTarget
+}
+
+// contributedOnly reports whether a scope owner's own declarations are hidden,
+// leaving only what it inherits or reference-subsets.
+func (f *refFilter) contributedOnly() bool {
+	return f != nil && f.decl != nil
+}
+
+// hiding returns f extended to hide whatever target named a feature. A nil f
+// yields a filter that hides only that.
+func (f *refFilter) hiding(target ast.Node) *refFilter {
+	if target == nil {
+		return f
+	}
+	out := refFilter{namingTarget: target}
+	if f != nil {
+		out.decl = f.decl
+	}
+	return &out
 }
 
 // lookupLocal is Scope.LookupLocal with the hidden bindings removed. A nil
@@ -123,7 +152,7 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 		return r.memberChain(owner, ref.QN)
 	}
 	if ref.Redefines {
-		r.resolveRedefinition(ref.Scope, ref.QN, nil)
+		r.resolveRedefinition(ref.Scope, ref.QN, ref.Referrer)
 		return r.PartSymbol(ref.QN, len(ref.QN.Parts)-1)
 	}
 	return r.resolveQualified(ref.Scope, ref.QN, hide)
@@ -153,6 +182,9 @@ func (r *Resolver) memberChain(owner *symbols.Symbol, qn *ast.QualifiedName) (*s
 		next, ok := r.lookupMember(cur, part.Text)
 		if !ok && cur.Scope != nil {
 			next, ok = cur.Scope.LookupLocal(part.Text)
+		}
+		if !ok {
+			next, ok = r.implicitlyNamedMember(cur.Scope, part.Text, nil)
 		}
 		if !ok {
 			return nil, false

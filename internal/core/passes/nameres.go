@@ -28,9 +28,12 @@ func (NameResolutionPass) Run(ctx *Context, name string, root *ast.RootNamespace
 	}
 	out := make([]Diagnostic, 0, len(rd))
 	for _, d := range rd {
-		code := "unresolved"
-		if strings.HasPrefix(d.Message, "ambiguous") {
-			code = "ambiguous"
+		code := d.Code
+		if code == "" {
+			code = "unresolved"
+			if strings.HasPrefix(d.Message, "ambiguous") {
+				code = "ambiguous"
+			}
 		}
 		out = append(out, Diagnostic{
 			Severity: SeverityError,

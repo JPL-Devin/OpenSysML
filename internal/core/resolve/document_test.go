@@ -482,3 +482,25 @@ func TestResolve_Track3Integration(t *testing.T) {
 		})
 	}
 }
+
+// A redefinition target names the redefined feature, never the unnamed feature
+// that took its name (KerML 7.3.4.5).
+func TestRedefinitionTargetSkipsTheNameItGaveAway(t *testing.T) {
+	src := `package P { part engine; part v { part :>> engine; } }`
+	r := resolveDoc(t, "d.sysml", src)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("got %v, want no diagnostics", r.Diagnostics)
+	}
+
+	root := r.Index().DocumentRoot("d.sysml")
+	pkg, _ := root.LookupLocal("P")
+	declared, _ := pkg.Scope.LookupLocal("engine")
+	v, _ := pkg.Scope.LookupLocal("v")
+	borrowed, _ := v.Scope.LookupLocal("engine")
+
+	qn := ast.AsQualifiedName(borrowed.Decl.(*ast.Usage).Relationships[0].Target)
+	got, ok := r.PartSymbol(qn, 0)
+	if !ok || got != declared {
+		t.Fatalf("target resolved to %v, want the declared P::engine", got)
+	}
+}
