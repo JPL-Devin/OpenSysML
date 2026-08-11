@@ -2,6 +2,8 @@ package parser
 
 import (
 	"fmt"
+	"strings"
+	"unicode"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
@@ -824,9 +826,45 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], mods, isAll))
 }
 
+// declaredKeyword returns the kind keyword as written in the head that starts
+// at the given offset: the last word before the cursor that names a kind. It
+// recovers which synonym the author chose, since several map to one kind.
+func (p *Parser) declaredKeyword(start int, isKind func(string) bool) string {
+	head := p.src.Text(p.spanFrom(start))
+	found := ""
+	word := strings.Builder{}
+	flush := func() {
+		if word.Len() > 0 && isKind(word.String()) {
+			found = word.String()
+		}
+		word.Reset()
+	}
+	for _, r := range head {
+		if r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) {
+			word.WriteRune(r)
+			continue
+		}
+		flush()
+	}
+	flush()
+	return found
+}
+
+func usageKeywordName(word string) bool {
+	_, ok := usageKindKeywords[word]
+	return ok
+}
+
+func definitionKeywordName(word string) bool {
+	_, ok := definitionKindKeywords[word]
+	return ok
+}
+
 func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featureMods, isAll bool) *ast.Definition {
+	keyword := p.declaredKeyword(start, definitionKeywordName)
 	def := &ast.Definition{
 		Kind:        kind,
+		Keyword:     keyword,
 		IsAbstract:  mods.isAbstract,
 		IsVariation: mods.isVariation,
 		IsAll:       isAll,
@@ -1110,6 +1148,7 @@ func (p *Parser) isAnonymousSuccession() bool {
 func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isAll bool) *ast.Usage {
 	u := &ast.Usage{
 		Kind:         kind,
+		Keyword:      p.declaredKeyword(start, usageKeywordName),
 		IsAbstract:   mods.isAbstract,
 		IsReference:  mods.isReference,
 		IsAll:        isAll,
@@ -2392,7 +2431,17 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// `composite item i`, `derived attribute c`. The declaration is parsed
 		// as usual and the modifiers already consumed are applied to it.
 		if isKindKeyword(p.peek()) || p.atKindPrefix() {
+			// A keyword that only qualifies the kind after it is consumed first:
+			// `derived var feature x` declares a feature, not a `var`.
+			for p.at(lexer.Keyword) && p.atKindPrefix() && !isKindKeyword(p.peek()) {
+				p.advance()
+			}
 			decl := p.parseDeclaration(start)
+			if decl == nil {
+				en := p.errorNodeSkip(start, "expected a declaration after a feature modifier")
+				en.SetLeadingTrivia(trivia)
+				return en
+			}
 			applyFeatureMods(decl, mods)
 			mem := &ast.Membership{Visibility: mods.visibility, Member: decl}
 			mem.NodeSpan = p.spanFrom(start)
@@ -2671,10 +2720,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 // usage — a feature reference with an optional body — which SysML.xtext spells
 // `OwnedReferenceSubsetting FeatureSpecializationPart? ValuePart?` followed by
 // an `ActionBody` (PerformActionUsageDeclaration; SysML v2 §7.17.6). The keyword
-// that introduced it, if any, is already consumed; kw only names it in errors.
+// that introduced it is already consumed; kw carries it for errors and to record
+// which synonym was written.
 func (p *Parser) parsePerformedActionReference(start int, mods featureMods, kw string) *ast.Usage {
 	u := &ast.Usage{
 		Kind:        ast.UsageAction,
+		Keyword:     kw,
 		IsAbstract:  mods.isAbstract,
 		IsReference: mods.isReference,
 		IsEnd:       mods.isEnd,

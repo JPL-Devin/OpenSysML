@@ -43,6 +43,7 @@ const (
 	xNamespaceImport = "isNamespaceImport"
 	xRecursive       = "isRecursive"
 	xExpose          = "isExpose"
+	xDeclaredKeyword = "declaredKeyword"
 )
 
 // Metaclass names for the constructs that have no SysML metaclass of their own
@@ -102,6 +103,34 @@ type encoder struct {
 	declared map[string]bool
 }
 
+// declaredKeyword records the kind keyword as written when it is a synonym of
+// the canonical one, so the notation comes back as the author spelled it rather
+// than rewritten. A synonym written in a shape the decoder cannot rebuild is
+// refused instead: returning the canonical keyword would be a different model.
+func (e *encoder) declaredKeyword(subject rdf.Term, node ast.Node, written, canonical, named string) error {
+	if written == "" || written == canonical {
+		return nil
+	}
+	// A two-word kind keyword such as `use case` is written one word at a time;
+	// its last word is not a synonym of the whole.
+	for _, word := range strings.Fields(canonical) {
+		if written == word {
+			return nil
+		}
+	}
+	// The keyword introduces a declaration whose subject is its name. Without
+	// one the keyword takes an inline reference instead (`perform a`), a shape
+	// rebuilt from the relationship rather than the head.
+	if named == "" {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the `%s` declaration at %s", written, e.where(node)),
+			Note: fmt.Sprintf("it names no element of its own, so the notation cannot be rebuilt from the graph and would come back as `%s`, a different declaration", canonical),
+		}
+	}
+	e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(written))
+	return nil
+}
+
 // collect walks the tree recording every qualified name it declares. A name
 // declared twice in one namespace is reported: the qualified name is an
 // element's identity in the graph, so two such members would merge into one.
@@ -142,12 +171,19 @@ func (e *encoder) encode(members []ast.Node, owner string, ownerTerm rdf.Term) e
 }
 
 func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner string, ownerTerm rdf.Term, index int, wrapper ast.Node) error {
+	// A `then` prefix marks whatever membership follows it, which need not wrap a
+	// usage, so the refusal is checked for every member kind.
+	if err := e.succession(node, wrapper); err != nil {
+		return err
+	}
 	name, _ := declaredNameAndMembers(node)
 	fqn := qualify(owner, name, index)
 	subject := rdf.ElementIRI(fqn)
 
-	head := func(metaclass string) {
-		e.graph.Add(subject, rdf.IRI(rdf.RDFType), rdf.SysMLTerm(metaclass))
+	// A metaclass name this mapping invents is typed in the Systemica namespace,
+	// so a consumer can tell it from the standard OMG vocabulary.
+	head := func(metaclass rdf.Term) {
+		e.graph.Add(subject, rdf.IRI(rdf.RDFType), metaclass)
 		e.graph.Add(subject, e.sysml(pQualifiedName), rdf.String(fqn))
 		if ownerTerm.Value != "" {
 			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
@@ -160,7 +196,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 
 	switch n := node.(type) {
 	case *ast.Package:
-		head("Package")
+		head(rdf.SysMLTerm("Package"))
 		e.ident(subject, n.Ident)
 		e.flags(subject, []boolProperty{
 			{"isLibraryPackage", n.IsLibrary},
@@ -171,7 +207,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return e.encode(n.Members, fqn, subject)
 
 	case *ast.Namespace:
-		head("Namespace")
+		head(rdf.SysMLTerm("Namespace"))
 		e.ident(subject, n.Ident)
 		e.prefixes(subject, n.Prefixes)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
@@ -182,8 +218,11 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		if !ok {
 			return &UnsupportedError{What: fmt.Sprintf("definition kind %q at %s", n.Kind, e.where(n))}
 		}
-		head(metaclass)
+		head(rdf.SysMLTerm(metaclass))
 		e.ident(subject, n.Ident)
+		if err := e.declaredKeyword(subject, n, n.Keyword, definitionKeyword(n.Kind), n.Ident.Name); err != nil {
+			return err
+		}
 		e.flags(subject, []boolProperty{
 			{"isAbstract", n.IsAbstract},
 			{"isVariation", n.IsVariation},
@@ -201,8 +240,11 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		if !ok {
 			return &UnsupportedError{What: fmt.Sprintf("usage kind %q at %s", n.Kind, e.where(n))}
 		}
-		head(metaclass)
+		head(rdf.SysMLTerm(metaclass))
 		e.ident(subject, n.Ident)
+		if err := e.declaredKeyword(subject, n, n.Keyword, usageKeyword(n.Kind), n.Ident.Name); err != nil {
+			return err
+		}
 		e.flags(subject, []boolProperty{
 			{"isAbstract", n.IsAbstract},
 			{"isReference", n.IsReference},
@@ -230,9 +272,6 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		if n.Value != nil {
 			e.graph.Add(subject, e.sysml(pValue), rdf.String(e.text(n.Value)))
 		}
-		if err := e.succession(n, wrapper); err != nil {
-			return err
-		}
 		// A declaration head that binds ends (connect/bind/flow/succession),
 		// a transition, an accept action or a satisfy usage is kept as source
 		// text: its head is not reconstructible from the properties above.
@@ -244,7 +283,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return e.encode(n.Members, fqn, subject)
 
 	case *ast.Import:
-		head("Import")
+		head(rdf.SysMLTerm("Import"))
 		e.graph.Add(subject, e.sysml(pImportedNamespace), rdf.String(qualifiedText(n.Imported)))
 		e.flags(subject, []boolProperty{
 			{pIsImportAll, n.IsAll},
@@ -259,14 +298,14 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return e.encode(n.Body, fqn, subject)
 
 	case *ast.Alias:
-		head(mAlias)
+		head(rdf.SystemicaTerm(mAlias))
 		e.ident(subject, n.Ident)
 		e.graph.Add(subject, e.sysml(pAliasFor), e.reference(owner, qualifiedText(n.For)))
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
 	case *ast.Dependency:
-		head("Dependency")
+		head(rdf.SysMLTerm("Dependency"))
 		e.ident(subject, n.Ident)
 		for _, client := range n.Clients {
 			e.graph.Add(subject, e.sysml(pClient), e.reference(owner, qualifiedText(client)))
@@ -279,7 +318,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return e.encode(n.Body, fqn, subject)
 
 	case *ast.Comment:
-		head("Comment")
+		head(rdf.SysMLTerm("Comment"))
 		e.ident(subject, n.Ident)
 		for _, about := range n.About {
 			e.graph.Add(subject, e.sysml(pAnnotatedElement), e.reference(owner, qualifiedText(about)))
@@ -291,7 +330,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return nil
 
 	case *ast.Documentation:
-		head("Documentation")
+		head(rdf.SysMLTerm("Documentation"))
 		e.ident(subject, n.Ident)
 		if n.Locale != "" {
 			e.graph.Add(subject, e.sysml(pLocale), rdf.String(unquote(n.Locale)))
@@ -300,21 +339,21 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return nil
 
 	case *ast.TextualRepresentation:
-		head("TextualRepresentation")
+		head(rdf.SysMLTerm("TextualRepresentation"))
 		e.ident(subject, n.Ident)
 		e.graph.Add(subject, e.sysml(pLanguage), rdf.String(unquote(n.Language)))
 		e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.file.Text(n.BodySpan))))
 		return nil
 
 	case *ast.MultiplicityDecl:
-		head(mMultiplicity)
+		head(rdf.SystemicaTerm(mMultiplicity))
 		e.ident(subject, n.Ident)
 		e.multiplicity(subject, n.Range)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Members, fqn, subject)
 
 	case *ast.FilterMember:
-		head(mFilter)
+		head(rdf.SystemicaTerm(mFilter))
 		e.graph.Add(subject, e.sysx(xFilter), rdf.String(e.text(n.Condition)))
 		return nil
 

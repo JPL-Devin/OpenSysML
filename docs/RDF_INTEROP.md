@@ -110,13 +110,19 @@ decode back exactly.
   `sysml:supplier`, `sysml:body`, `sysml:language`, `sysml:locale`,
   `sysml:annotatedElement`
 
-The three `sysx:` properties:
+The `sysx:` properties:
 
 | Property | Why it exists |
 |----------|---------------|
 | `sysx:memberIndex` | Declaration order. The notation is sensitive to the order of members; an RDF graph is an unordered set, so the index is what lets a conversion back to notation reproduce the original sequence. |
 | `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. |
 | `sysx:sourceText` | The verbatim source of the constructs described under *Limitations*. |
+| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. |
+
+Three metaclass names have no counterpart in the OMG vocabulary and are typed in
+the `sysx:` namespace rather than `sysml:`, so a consumer can tell them from the
+standard metaclasses: `sysx:Alias`, `sysx:FilterMember` and
+`sysx:MultiplicityDeclaration`.
 
 Comments, documentation and textual representations convert as their own
 elements (`sysml:Comment`, `sysml:Documentation`, `sysml:TextualRepresentation`)
@@ -137,6 +143,8 @@ same model, and the second conversion to RDF proves it.
 **A save to `.sysml` is different, and is exact.** It writes the session's own
 source through the formatter rather than re-printing the graph, so comments,
 notes and spacing survive. Only the `.ttl` direction goes through the mapping.
+The syntax is still checked: every direction rejects notation the parser cannot
+read, so a save never quietly reformats a model that will not parse.
 
 ## Limitations
 
@@ -189,6 +197,19 @@ tell which members a succession sequences, and will not guess at execution order
 
 Making the parser record successions unambiguously is roadmap item D4; until
 then, behavioral models that sequence steps with `then` convert only to notation.
+
+**Two keyword prefixes are normalized away.** `variant` and `include` prefix a
+kind keyword the AST records on its own, and the prefix is not recorded, so
+`variant part a : A;` comes back as `part a : A;` and `include U;` as a plain
+use-case reference. Unlike the synonyms above these cannot be detected at
+conversion time, so they are normalized rather than reported — the one place
+this mapping changes a model without saying so. Recording them in the parser is
+roadmap item D5. Save straight to `.sysml` when they matter.
+
+**A synonym keyword that names no element of its own is refused.** `perform a : A`
+puts its subject in an inline reference rather than a declared name, a shape the
+graph cannot rebuild; writing it back as the canonical `action` would be a
+different declaration, so it is reported instead.
 
 **A name declared twice in one namespace is refused.** An element's identity in
 the graph is its qualified name, so `part def A; part def A;` in one container

@@ -332,3 +332,55 @@ func TestTermPredicates(t *testing.T) {
 		t.Error("an integer should carry the xsd:integer datatype")
 	}
 }
+
+// A long literal is delimited by `"""`, so a value that ends in a quote or
+// embeds three of them must be escaped or it closes the literal early.
+func TestLongLiteralQuotesSurviveRoundTrip(t *testing.T) {
+	for _, value := range []string{
+		"\"a\" +\n    \"b\"",
+		"line\n\"",
+		"line\n\"\"\"inside\"\"\"",
+		"trailing pair\n\"\"",
+	} {
+		g := NewGraph()
+		g.Add(ElementIRI("A"), IRI(SysML+"value"), String(value))
+		parsed, err := ParseTurtle(WriteTurtle(g))
+		if err != nil {
+			t.Errorf("value %q does not parse back: %v\n%s", value, err, WriteTurtle(g))
+			continue
+		}
+		got, ok := parsed.Lexical(ElementIRI("A"), SysML+"value")
+		if !ok || got != value {
+			t.Errorf("value %q came back as %q (ok=%v)", value, got, ok)
+		}
+	}
+}
+
+// Two bindings can both match one IRI. Map iteration is randomised, so the
+// abbreviation must be chosen rather than whichever is reached first.
+func TestPrefixChoiceIsDeterministic(t *testing.T) {
+	const doc = `@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix a: <urn:sysmlv2:> .
+@prefix elmt: <urn:sysmlv2:element:> .
+elmt:A a sysml:Package .
+`
+	want := ""
+	for i := 0; i < 50; i++ {
+		g, err := ParseTurtle([]byte(doc))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := string(WriteTurtle(g))
+		if want == "" {
+			want = got
+			continue
+		}
+		if got != want {
+			t.Fatalf("writing the same graph twice differed:\n%s\n---\n%s", want, got)
+		}
+	}
+	// The longest matching namespace is the most specific abbreviation.
+	if !strings.Contains(want, "elmt:A") {
+		t.Errorf("want the most specific prefix elmt:, got:\n%s", want)
+	}
+}

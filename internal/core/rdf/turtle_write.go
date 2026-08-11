@@ -38,19 +38,13 @@ func writePrefixes(b *strings.Builder, g *Graph) {
 // the metaclass of an element is the first thing a reader sees.
 func writeSubject(b *strings.Builder, g *Graph, subject Term) {
 	b.WriteString(g.term(subject) + "\n")
-	var (
-		predicates  []string
-		byPredicate = map[string][]Term{}
-	)
-	for _, t := range g.triples {
-		if !t.Subject.Equal(subject) {
-			continue
-		}
-		if _, seen := byPredicate[t.Predicate.Value]; !seen {
-			predicates = append(predicates, t.Predicate.Value)
-		}
-		byPredicate[t.Predicate.Value] = append(byPredicate[t.Predicate.Value], t.Object)
+	si := g.subjects()[subject]
+	if si == nil {
+		return
 	}
+	byPredicate := si.objects
+	predicates := make([]string, len(si.predicates))
+	copy(predicates, si.predicates)
 	sort.SliceStable(predicates, func(i, j int) bool {
 		return predicates[i] == RDFType && predicates[j] != RDFType
 	})
@@ -84,14 +78,23 @@ func (g *Graph) term(t Term) string {
 		}
 		return out
 	}
+	// Overlapping bindings can both match and map order is randomised, so the
+	// best candidate is chosen outright: the longest namespace gives the most
+	// specific abbreviation, and the smallest label breaks a tie.
+	bestLabel, bestNS := "", ""
 	for label, ns := range g.Prefixes {
 		if !strings.HasPrefix(t.Value, ns) {
 			continue
 		}
-		local := strings.TrimPrefix(t.Value, ns)
-		if isPrefixedLocalName(local) {
-			return label + ":" + local
+		if !isPrefixedLocalName(strings.TrimPrefix(t.Value, ns)) {
+			continue
 		}
+		if bestLabel == "" || len(ns) > len(bestNS) || (len(ns) == len(bestNS) && label < bestLabel) {
+			bestLabel, bestNS = label, ns
+		}
+	}
+	if bestLabel != "" {
+		return bestLabel + ":" + strings.TrimPrefix(t.Value, bestNS)
 	}
 	return "<" + t.Value + ">"
 }

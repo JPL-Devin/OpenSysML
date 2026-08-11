@@ -119,6 +119,58 @@ part def R;
 	}
 }
 
+// Several kind keywords are synonyms that the AST records as one kind, so the
+// keyword as written is carried through the graph rather than normalized.
+func TestKindKeywordSynonymsSurviveRDF(t *testing.T) {
+	for _, decl := range []string{
+		"datatype D;",
+		"feature f;",
+		"function def F;",
+		"message m;",
+		"allocate al;",
+		"timeslice ts;",
+		"snapshot sn;",
+	} {
+		src := "package P {\n\t" + decl + "\n}"
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("%s: to turtle: %v", decl, err)
+		}
+		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("%s: back to notation: %v", decl, err)
+		}
+		if !strings.Contains(string(back), decl) {
+			t.Errorf("the keyword of %q was rewritten:\n%s", decl, back)
+		}
+	}
+}
+
+// A synonym keyword whose declaration names no element of its own takes an
+// inline reference, a shape the graph cannot rebuild, so it is reported rather
+// than written back as the canonical keyword — a different declaration.
+func TestUnrebuildableSynonymIsUnsupported(t *testing.T) {
+	src := "package P {\n\taction def A;\n\tpart def Q {\n\t\tperform a : A;\n\t}\n}"
+	_, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("want an UnsupportedError for a `perform` reference, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "perform") {
+		t.Errorf("the error should name the keyword: %v", err)
+	}
+}
+
+// Every direction rejects notation the parser cannot read, including the
+// notation-to-notation save: formatting broken input would suggest it is valid.
+func TestSysMLToSysMLChecksSyntax(t *testing.T) {
+	_, err := export.Convert("bad.sysml", []byte("package P {\n\tpart ((( ;\n}"), export.FormatSysML, export.FormatSysML)
+	var syntax *export.SyntaxError
+	if !errors.As(err, &syntax) {
+		t.Fatalf("want a SyntaxError, got %v", err)
+	}
+}
+
 // A succession cannot be placed from the AST flag alone, so it is reported
 // rather than written back in a position that would change execution order.
 func TestSuccessionIsUnsupported(t *testing.T) {
@@ -137,6 +189,21 @@ func TestSuccessionIsUnsupported(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "then") {
 		t.Errorf("the error should name the construct: %v", err)
+	}
+}
+
+// A `then` prefix marks whatever membership follows it, which need not wrap a
+// usage, so the refusal has to reach every member kind rather than usages only.
+func TestSuccessionOnNonUsageIsUnsupported(t *testing.T) {
+	for _, src := range []string{
+		"package P {\n\tpart def Q {\n\t\tthen part def B;\n\t}\n}",
+		"package P {\n\tpart def Q {\n\t\tthen package Inner { }\n\t}\n}",
+	} {
+		_, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Errorf("want an UnsupportedError for %q, got %v", src, err)
+		}
 	}
 }
 
@@ -297,6 +364,35 @@ func TestForeignGraph(t *testing.T) {
 	want := "package Demo { part def Engine; part engine : Engine[1]; }"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// A declaration built from a property the graph does not carry cannot be
+// written: reporting it beats emitting notation that will not parse.
+func TestMissingRequiredPropertyIsUnsupported(t *testing.T) {
+	const head = `@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:systemica:sysml:> .
+@prefix elmt: <urn:sysmlv2:element:> .
+
+<urn:sysmlv2:element:P> a sysml:Package ; sysml:declaredName "P" .
+`
+	for name, subject := range map[string]string{
+		"alias without aliasedElement": `<urn:sysmlv2:element:P::X> a sysx:Alias ;
+    sysml:declaredName "X" ; sysml:owningNamespace elmt:P .`,
+		"dependency without supplier": `<urn:sysmlv2:element:P::D> a sysml:Dependency ;
+    sysml:declaredName "D" ; sysml:owningNamespace elmt:P ; sysml:client "A" .`,
+		"representation without language": `<urn:sysmlv2:element:P::R> a sysml:TextualRepresentation ;
+    sysml:declaredName "R" ; sysml:owningNamespace elmt:P ; sysml:body "x" .`,
+		"import without importedNamespace": `<urn:sysmlv2:element:P::I> a sysml:Import ;
+    sysml:owningNamespace elmt:P .`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := export.Convert("m.ttl", []byte(head+subject), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("want an UnsupportedError, got %v", err)
+			}
+		})
 	}
 }
 

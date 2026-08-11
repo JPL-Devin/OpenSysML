@@ -212,21 +212,24 @@ func (d *decoder) head(el *element) (string, error) {
 	case "Package", "Namespace":
 		return d.namespaceHead(el), nil
 	case "Import":
-		return d.importHead(el), nil
+		return d.importHead(el)
 	case mAlias:
-		return d.aliasHead(el), nil
+		return d.aliasHead(el)
 	case "Dependency":
-		return d.dependencyHead(el), nil
+		return d.dependencyHead(el)
 	case "Comment":
 		return d.commentHead(el), nil
 	case "Documentation":
 		return d.documentationHead(el), nil
 	case "TextualRepresentation":
-		return d.representationHead(el), nil
+		return d.representationHead(el)
 	case mMultiplicity:
 		return d.multiplicityHead(el), nil
 	case mFilter:
-		condition, _ := d.stringOf(el, rdf.Systemica+xFilter)
+		condition, ok := d.stringOf(el, rdf.Systemica+xFilter)
+		if !ok {
+			return "", d.missing(el, "sysx:"+xFilter, "a filter is its condition")
+		}
 		return "filter " + condition, nil
 	}
 	if kind, ok := metaclassDefinition[el.metaclass]; ok {
@@ -280,7 +283,7 @@ func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) string {
 	if d.boolOf(el, rdf.SysML+"isEvent") {
 		words = append(words, "event")
 	}
-	words = append(words, definitionKeyword(kind))
+	words = append(words, d.keywordOr(el, definitionKeyword(kind)))
 	if d.boolOf(el, rdf.SysML+"isAll") {
 		words = append(words, "all")
 	}
@@ -311,6 +314,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 	} else if direction, ok := d.stringOf(el, rdf.SysML+pDirection); ok {
 		words = append(words, direction)
 	}
+	keyword := d.keywordOr(el, usageKeyword(kind))
 	for _, flag := range []struct {
 		property string
 		keyword  string
@@ -324,15 +328,23 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 		{"isEnd", "end"},
 		{"isReference", "ref"},
 	} {
+		// A keyword such as `snapshot` is both a modifier and a kind keyword;
+		// writing it here as well as below would declare it twice.
+		if flag.keyword == keyword {
+			continue
+		}
 		if d.boolOf(el, rdf.SysML+flag.property) {
 			words = append(words, flag.keyword)
 		}
 	}
-	keyword := usageKeyword(kind)
 	if d.boolOf(el, rdf.SysML+"isConjugated") {
 		keyword = "~" + keyword
 	}
 	words = append(words, keyword)
+	// `chain` qualifies the kind keyword it follows, unlike the modifiers above.
+	if d.boolOf(el, rdf.SysML+"isChain") {
+		words = append(words, "chain")
+	}
 	if d.boolOf(el, rdf.SysML+"isAll") {
 		words = append(words, "all")
 	}
@@ -375,7 +387,16 @@ func (d *decoder) acceptParam(el *element) *element {
 	return nil
 }
 
-func (d *decoder) importHead(el *element) string {
+// missing reports a graph element that cannot be written back as notation
+// because a property its declaration is built from is absent.
+func (d *decoder) missing(el *element, property, why string) error {
+	return &UnsupportedError{
+		What: fmt.Sprintf("the element <%s>", el.iri),
+		Note: fmt.Sprintf("it has no %s, and %s, so no valid declaration can be written for it", property, why),
+	}
+}
+
+func (d *decoder) importHead(el *element) (string, error) {
 	var words []string
 	if keyword := d.visibility(el); keyword != "" {
 		words = append(words, keyword)
@@ -388,7 +409,10 @@ func (d *decoder) importHead(el *element) string {
 	if d.boolOf(el, rdf.SysML+pIsImportAll) {
 		words = append(words, "all")
 	}
-	imported, _ := d.stringOf(el, rdf.SysML+pImportedNamespace)
+	imported, ok := d.stringOf(el, rdf.SysML+pImportedNamespace)
+	if !ok {
+		return "", d.missing(el, "sysml:"+pImportedNamespace, "an import names the namespace it imports")
+	}
 	switch {
 	case d.boolOf(el, rdf.Systemica+xRecursive):
 		imported += "::**"
@@ -399,22 +423,25 @@ func (d *decoder) importHead(el *element) string {
 	if filter, ok := d.stringOf(el, rdf.Systemica+xFilter); ok {
 		words = append(words, "["+filter+"]")
 	}
-	return strings.Join(words, " ")
+	return strings.Join(words, " "), nil
 }
 
-func (d *decoder) aliasHead(el *element) string {
+func (d *decoder) aliasHead(el *element) (string, error) {
 	var words []string
 	if keyword := d.visibility(el); keyword != "" {
 		words = append(words, keyword)
 	}
 	words = append(words, "alias")
 	words = append(words, d.identWords(el)...)
-	words = append(words, "for", d.referenceText(el, rdf.SysML+pAliasFor))
-
-	return strings.Join(words, " ")
+	for_ := d.referenceText(el, rdf.SysML+pAliasFor)
+	if for_ == "" {
+		return "", d.missing(el, "sysml:"+pAliasFor, "an alias names the element it stands for")
+	}
+	words = append(words, "for", for_)
+	return strings.Join(words, " "), nil
 }
 
-func (d *decoder) dependencyHead(el *element) string {
+func (d *decoder) dependencyHead(el *element) (string, error) {
 	var words []string
 	words = append(words, d.prefixWords(el)...)
 	if keyword := d.visibility(el); keyword != "" {
@@ -422,29 +449,32 @@ func (d *decoder) dependencyHead(el *element) string {
 	}
 	words = append(words, "dependency")
 	words = append(words, d.identWords(el)...)
+	clients := d.referenceList(el, rdf.SysML+pClient)
+	suppliers := d.referenceList(el, rdf.SysML+pSupplier)
+	if len(clients) == 0 {
+		return "", d.missing(el, "sysml:"+pClient, "a dependency runs from at least one client")
+	}
+	if len(suppliers) == 0 {
+		return "", d.missing(el, "sysml:"+pSupplier, "a dependency runs to at least one supplier")
+	}
 	// `from` is what separates the clients from a name: without it, the first
 	// client would be read as the dependency's own name.
-	words = append(words, "from")
-	words = append(words, strings.Join(d.referenceList(el, rdf.SysML+pClient), ", "))
-	words = append(words, "to")
-	words = append(words, strings.Join(d.referenceList(el, rdf.SysML+pSupplier), ", "))
-	return strings.Join(words, " ")
+	words = append(words, "from", strings.Join(clients, ", "))
+	words = append(words, "to", strings.Join(suppliers, ", "))
+	return strings.Join(words, " "), nil
 }
 
 func (d *decoder) commentHead(el *element) string {
-	var words []string
-	ident := d.identWords(el)
-	about := d.referenceList(el, rdf.SysML+pAnnotatedElement)
-	if len(ident) > 0 || len(about) > 0 || d.hasLocale(el) {
-		words = append(words, "comment")
-		words = append(words, ident...)
-		if len(about) > 0 {
-			words = append(words, "about", strings.Join(about, ", "))
-		}
+	// The keyword is what makes this a declared element rather than lexical
+	// trivia, so it is written even when nothing identifies the comment.
+	words := []string{"comment"}
+	words = append(words, d.identWords(el)...)
+	if about := d.referenceList(el, rdf.SysML+pAnnotatedElement); len(about) > 0 {
+		words = append(words, "about", strings.Join(about, ", "))
 	}
 	words = append(words, d.localeWords(el)...)
 	body, _ := d.stringOf(el, rdf.SysML+pBody)
-	return strings.TrimSpace(strings.Join(words, " ") + " /*" + body + "*/")
+	return strings.Join(words, " ") + " /*" + body + "*/"
 }
 
 func (d *decoder) documentationHead(el *element) string {
@@ -455,13 +485,16 @@ func (d *decoder) documentationHead(el *element) string {
 	return strings.Join(words, " ") + " /*" + body + "*/"
 }
 
-func (d *decoder) representationHead(el *element) string {
+func (d *decoder) representationHead(el *element) (string, error) {
 	words := []string{"rep"}
 	words = append(words, d.identWords(el)...)
-	language, _ := d.stringOf(el, rdf.SysML+pLanguage)
+	language, ok := d.stringOf(el, rdf.SysML+pLanguage)
+	if !ok {
+		return "", d.missing(el, "sysml:"+pLanguage, "a textual representation states the language it is written in")
+	}
 	body, _ := d.stringOf(el, rdf.SysML+pBody)
 	words = append(words, "language", strconv.Quote(language))
-	return strings.Join(words, " ") + " /*" + body + "*/"
+	return strings.Join(words, " ") + " /*" + body + "*/", nil
 }
 
 func (d *decoder) multiplicityHead(el *element) string {
@@ -475,17 +508,21 @@ func (d *decoder) multiplicityHead(el *element) string {
 
 // A comment or doc declaration whose head carries a locale needs the `locale`
 // keyword written back out.
-func (d *decoder) hasLocale(el *element) bool {
-	_, ok := d.stringOf(el, rdf.SysML+pLocale)
-	return ok
-}
-
 func (d *decoder) localeWords(el *element) []string {
 	locale, ok := d.stringOf(el, rdf.SysML+pLocale)
 	if !ok {
 		return nil
 	}
 	return []string{"locale", strconv.Quote(locale)}
+}
+
+// keywordOr returns the kind keyword the author wrote, falling back to the
+// canonical one when the graph does not record a synonym.
+func (d *decoder) keywordOr(el *element, canonical string) string {
+	if written, ok := d.stringOf(el, rdf.Systemica+xDeclaredKeyword); ok && written != "" {
+		return written
+	}
+	return canonical
 }
 
 func (d *decoder) identWords(el *element) []string {

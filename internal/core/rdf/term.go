@@ -99,6 +99,17 @@ type Graph struct {
 	// Prefixes maps prefix label to namespace IRI for serialization. It never
 	// affects the meaning of the graph.
 	Prefixes map[string]string
+
+	// index groups statements by subject. It is built on the first lookup and
+	// dropped whenever a triple is added.
+	index map[Term]*subjectIndex
+}
+
+// subjectIndex holds one subject's statements, keeping predicates in insertion
+// order so serialization stays stable.
+type subjectIndex struct {
+	predicates []string
+	objects    map[string][]Term
 }
 
 // NewGraph returns an empty graph carrying the SysML prefix bindings.
@@ -122,6 +133,28 @@ func (g *Graph) AddTriple(t Triple) {
 	}
 	g.seen[t] = true
 	g.triples = append(g.triples, t)
+	g.index = nil
+}
+
+// subjects returns the per-subject index, building it if needed. Without it a
+// property read scans every triple, making a decode quadratic in model size.
+func (g *Graph) subjects() map[Term]*subjectIndex {
+	if g.index != nil {
+		return g.index
+	}
+	g.index = make(map[Term]*subjectIndex)
+	for _, t := range g.triples {
+		si := g.index[t.Subject]
+		if si == nil {
+			si = &subjectIndex{objects: make(map[string][]Term)}
+			g.index[t.Subject] = si
+		}
+		if _, seen := si.objects[t.Predicate.Value]; !seen {
+			si.predicates = append(si.predicates, t.Predicate.Value)
+		}
+		si.objects[t.Predicate.Value] = append(si.objects[t.Predicate.Value], t.Object)
+	}
+	return g.index
 }
 
 // Triples returns the triples in insertion order. The result aliases the
@@ -148,22 +181,29 @@ func (g *Graph) Subjects() []Term {
 // Objects returns the objects of every (subject, predicate) statement, in
 // insertion order.
 func (g *Graph) Objects(subject Term, predicate string) []Term {
-	var out []Term
-	for _, t := range g.triples {
-		if t.Subject.Equal(subject) && t.Predicate.Value == predicate {
-			out = append(out, t.Object)
-		}
+	si := g.subjects()[subject]
+	if si == nil {
+		return nil
 	}
+	found := si.objects[predicate]
+	if len(found) == 0 {
+		return nil
+	}
+	// Copied so a caller appending to the result cannot reach into the index.
+	out := make([]Term, len(found))
+	copy(out, found)
 	return out
 }
 
 // Object returns the first object of (subject, predicate) and whether one
 // exists. A property the mapping treats as single-valued is read with this.
 func (g *Graph) Object(subject Term, predicate string) (Term, bool) {
-	for _, t := range g.triples {
-		if t.Subject.Equal(subject) && t.Predicate.Value == predicate {
-			return t.Object, true
-		}
+	si := g.subjects()[subject]
+	if si == nil {
+		return Term{}, false
+	}
+	if found := si.objects[predicate]; len(found) > 0 {
+		return found[0], true
 	}
 	return Term{}, false
 }
@@ -203,7 +243,7 @@ func (g *Graph) Type(subject Term) string {
 // long form when the value contains a newline so that embedded source text
 // stays readable.
 func quoteLiteral(value string) string {
-	if strings.Contains(value, "\n") && !strings.Contains(value, `"""`) {
+	if strings.Contains(value, "\n") {
 		return `"""` + escapeLong(value) + `"""`
 	}
 	return `"` + escapeShort(value) + `"`
@@ -231,13 +271,16 @@ func escapeShort(value string) string {
 }
 
 // escapeLong escapes only what a triple-quoted Turtle string cannot hold
-// literally, keeping newlines and tabs as themselves.
+// literally, keeping newlines and tabs as themselves. Quotes are escaped so a
+// value ending in one, or embedding `"""`, cannot close the literal early.
 func escapeLong(value string) string {
 	var b strings.Builder
 	for _, r := range value {
 		switch r {
 		case '\\':
 			b.WriteString(`\\`)
+		case '"':
+			b.WriteString(`\"`)
 		case '\r':
 			b.WriteString(`\r`)
 		default:

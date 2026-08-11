@@ -133,6 +133,11 @@ func Convert(name string, data []byte, from, to Format) ([]byte, error) {
 	switch {
 	case from == FormatSysML && to == FormatSysML:
 		// A save of textual notation: keep every lexeme, fix the indentation.
+		// The syntax is still checked, so no direction accepts input the parser
+		// cannot read.
+		if err := checkSyntax(name, data); err != nil {
+			return nil, err
+		}
 		out, err := format.Source(name, data, format.DefaultOptions)
 		if err != nil {
 			return nil, err
@@ -169,14 +174,31 @@ func SysMLToRDF(name string, data []byte) (*rdf.Graph, error) {
 	file := source.New(name, data)
 	p := parser.New(file)
 	root := p.ParseFile()
-	if len(p.Diagnostics) > 0 {
-		lines := file.Lines()
-		messages := make([]string, 0, len(p.Diagnostics))
-		for _, diag := range p.Diagnostics {
-			pos := lines.PosAt(diag.Span.Offset)
-			messages = append(messages, fmt.Sprintf("%d:%d: %s", pos.Line, pos.Col, diag.Message))
-		}
-		return nil, &SyntaxError{Name: name, Messages: messages}
+	if err := syntaxError(name, file, p); err != nil {
+		return nil, err
 	}
 	return ToRDF(file, root)
+}
+
+// checkSyntax reports the notation's syntax errors, if any.
+func checkSyntax(name string, data []byte) error {
+	file := source.New(name, data)
+	p := parser.New(file)
+	p.ParseFile()
+	return syntaxError(name, file, p)
+}
+
+// syntaxError turns a parse's diagnostics into a SyntaxError, or nil when the
+// input parsed clean.
+func syntaxError(name string, file *source.SourceFile, p *parser.Parser) error {
+	if len(p.Diagnostics) == 0 {
+		return nil
+	}
+	lines := file.Lines()
+	messages := make([]string, 0, len(p.Diagnostics))
+	for _, diag := range p.Diagnostics {
+		pos := lines.PosAt(diag.Span.Offset)
+		messages = append(messages, fmt.Sprintf("%d:%d: %s", pos.Line, pos.Col, diag.Message))
+	}
+	return &SyntaxError{Name: name, Messages: messages}
 }

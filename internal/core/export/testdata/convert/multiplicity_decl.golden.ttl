@@ -12,7 +12,7 @@ elmt:Mult
     sysx:hasBody "true"^^xsd:boolean .
 
 elmt:Mult::exactlyOne
-    a sysml:MultiplicityDeclaration ;
+    a sysx:MultiplicityDeclaration ;
     sysml:qualifiedName "Mult::exactlyOne" ;
     sysml:owningNamespace elmt:Mult ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -22,7 +22,7 @@ elmt:Mult::exactlyOne
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Mult::optional
-    a sysml:MultiplicityDeclaration ;
+    a sysx:MultiplicityDeclaration ;
     sysml:qualifiedName "Mult::optional" ;
     sysml:owningNamespace elmt:Mult ;
     sysx:memberIndex "1"^^xsd:integer ;

@@ -305,6 +305,23 @@ member and populating `SuccessionTarget` — after which the mapping can carry a
 edge and the restriction lifts. Worth checking whether the runtime *should* be consuming this
 flag, since a model's step order currently depends on member order alone.
 
+## D5 — the parser drops the `variant` and `include` keyword prefixes
+
+`variant part a : A;` and `include U;` prefix a kind keyword the AST already records on its
+own, and the prefix itself is recorded nowhere: both parse to the same node as the unprefixed
+form. A `notation → RDF → notation` round trip therefore returns `part a : A;` and a plain
+use-case reference, which is the one place the RDF mapping changes a model without reporting
+it (`docs/RDF_INTEROP.md`, *Limitations*).
+
+The synonym keywords that *are* distinguishable — `datatype`, `feature`, `function`,
+`snapshot`, `timeslice`, `message`, `allocate` and the rest — are carried as
+`sysx:declaredKeyword` and round-trip byte-identically
+(`export_test.go:TestKindKeywordSynonymsSurviveRDF`). Doing the same for these two means the
+parser recording the prefix, most likely as a field alongside `ast.Usage.Keyword`, after which
+the encoder can carry it and the documented exception goes away. Worth checking at the same
+time whether anything downstream *should* distinguish a variant from a plain member, since
+variation semantics currently rest on the enclosing `variation` definition alone.
+
 ---
 
 # How to run the next batch

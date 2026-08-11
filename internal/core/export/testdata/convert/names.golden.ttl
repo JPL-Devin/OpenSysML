@@ -21,7 +21,7 @@ elmt:Named::Vehicle
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Named::Car
-    a sysml:Alias ;
+    a sysx:Alias ;
     sysml:qualifiedName "Named::Car" ;
     sysml:owningNamespace elmt:Named ;
     sysx:memberIndex "1"^^xsd:integer ;
