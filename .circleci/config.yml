@@ -96,6 +96,8 @@ jobs:
             pip install -e .
             pip install pytest pytest-mock
       
+      # The integration tests skip without a service on localhost:50051, and
+      # starting one here fails test_lifecycle: see NEXT_STEPS.md §P1.
       - run:
           name: Run Python tests
           command: |
@@ -156,6 +158,27 @@ jobs:
             GOOS=windows GOARCH=amd64 make build-lsp VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
             mv bin/sysml-lsp dist/sysml-lsp-windows-amd64.exe
             
+            # The gRPC service backs the Python client, which downloads one
+            # file per platform and verifies it against a .sha256 sidecar, so
+            # these are published raw rather than archived. They are built into
+            # a subdirectory to keep them out of the archive globs below.
+            mkdir -p dist/grpc
+            
+            GOOS=linux GOARCH=amd64 make build-grpc VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-grpc dist/grpc/sysml-grpc-linux-amd64
+            
+            GOOS=linux GOARCH=arm64 make build-grpc VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-grpc dist/grpc/sysml-grpc-linux-arm64
+            
+            GOOS=darwin GOARCH=amd64 make build-grpc VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-grpc dist/grpc/sysml-grpc-darwin-amd64
+            
+            GOOS=darwin GOARCH=arm64 make build-grpc VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-grpc dist/grpc/sysml-grpc-darwin-arm64
+            
+            GOOS=windows GOARCH=amd64 make build-grpc VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-grpc dist/grpc/sysml-grpc-windows-amd64.exe
+            
             # Create tarballs
             cd dist
             for binary in sysml-*; do
@@ -186,6 +209,11 @@ jobs:
             # Checksums over every published archive, so a Homebrew formula
             # (or a careful user) can verify a download.
             sha256sum ./*.tar.gz ./*.zip | sed 's|\./||' > SHA256SUMS.txt
+            
+            # Same for the raw gRPC binaries, plus a per-file sidecar, which is
+            # the only checksum pysysml reads.
+            (cd grpc && sha256sum sysml-grpc-* >> ../SHA256SUMS.txt)
+            (cd grpc && for f in sysml-grpc-*; do sha256sum "$f" > "$f.sha256"; done)
             cat SHA256SUMS.txt
       
       - store_artifacts:
@@ -218,6 +246,7 @@ jobs:
             # Move only tarballs to a release directory
             mkdir -p dist/release
             mv dist/*.tar.gz dist/*.zip dist/release/ 2>/dev/null || true
+            mv dist/grpc/* dist/release/
             mv dist/SHA256SUMS.txt dist/release/
             echo "Release artifacts:"
             ls -la dist/release/

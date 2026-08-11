@@ -267,7 +267,7 @@ func (s *Service) Instantiate(ctx context.Context, req *pb.InstantiateRequest) (
 	}
 
 	return &pb.InstantiateResponse{
-		Instance: InstanceToProto(inst, cached.Index),
+		Instance: InstanceToProto(runtimeCtx, inst, cached.Index),
 	}, nil
 }
 

@@ -1,9 +1,9 @@
 # Releasing Systemica
 
 A release is cut by pushing a `v*` tag. Everything after that is CircleCI: the
-`release` workflow runs the test suite, cross-compiles `sysml` and `sysml-lsp`
-for five platforms, and publishes the archives to a GitHub release. Nothing is
-published from a laptop.
+`release` workflow runs the test suite, cross-compiles `sysml`, `sysml-lsp` and
+`sysml-grpc` for five platforms, and publishes them to a GitHub release. Nothing
+is published from a laptop.
 
 ## Before tagging
 
@@ -60,10 +60,13 @@ fails the suite fails the release workflow before anything is published.
   `sysml-lsp-<os>-<arch>.tar.gz` (`.zip` on Windows);
 - bundle archives — `systemica-<os>-<arch>.tar.gz` holding both binaries under
   their plain names, which is the layout Homebrew and a PATH install expect;
-- `SHA256SUMS.txt` over every archive.
+- `sysml-grpc-<os>-<arch>`, published raw with a `.sha256` sidecar rather than
+  archived, because that is what `pysysml` downloads and verifies
+  (`python/pysysml/binary.py`) when it starts the service for a Python caller;
+- `SHA256SUMS.txt` over every archive and every `sysml-grpc` binary.
 
 Platforms: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64,
-windows/amd64. `sysml-grpc` is not released; it is built from source.
+windows/amd64.
 
 `publish-github-release` uploads them with `ghr`, using a token from
 `GITHUB_TOKEN`, `GH_TOKEN` or `CIRCLE_TOKEN` in the CircleCI project settings.
@@ -82,6 +85,18 @@ that release's assets rather than appending duplicates.
    ```
 
    `--version` must report the tag, not `dev`.
+
+   Then check the path `pysysml` takes, since it reads the sidecar rather than
+   `SHA256SUMS.txt`:
+
+   ```bash
+   PYSYSML_GITHUB_REPO=Open-MBEE/Systemica python -c \
+     "from pysysml.binary import download_binary; print(download_binary('latest'))"
+   ~/.pysysml/bin/sysml-grpc -version
+   ```
+
+   A checksum mismatch there means the sidecar and the binary came from
+   different builds.
 
 2. **Render the Homebrew formula** and commit it to the tap repository
    `Open-MBEE/homebrew-tap` (not this repository — the copy here is a template
