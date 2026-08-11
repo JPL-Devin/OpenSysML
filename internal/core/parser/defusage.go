@@ -1193,23 +1193,15 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			}
 		}
 
-		// Check for optional "by" clause
+		// Check for optional "by" clause. Per SatisfyRequirementUsage the `by`
+		// operand names the subject of the satisfaction, never the usage itself,
+		// so it is always recorded as a subject relationship.
 		if p.acceptKeyword("by") {
-			subjTarget := p.parseRelationshipTarget()
-			if subjTarget != nil {
-				// Store subject as identification or relationship depending on node type
-				// If it's a simple qualified name, use as identification
-				// If it's a feature chain or other expression, store as relationship
-				if qn, ok := subjTarget.(*ast.QualifiedName); ok && len(qn.Parts) > 0 && u.Ident.Name == "" {
-					u.Ident.Name = qn.Parts[0].Text
-					u.Ident.NameSpan = qn.Parts[0].Span
-				} else {
-					// Store as a subject relationship for complex expressions
-					u.Relationships = append(u.Relationships, &ast.Relationship{
-						Kind:   ast.RelSubject,
-						Target: subjTarget,
-					})
-				}
+			if subjTarget := p.parseRelationshipTarget(); subjTarget != nil {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelSubject,
+					Target: subjTarget,
+				})
 			}
 		}
 
