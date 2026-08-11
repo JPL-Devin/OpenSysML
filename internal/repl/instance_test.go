@@ -234,3 +234,17 @@ func TestSlotsStopAtRecursiveContainment(t *testing.T) {
 		t.Errorf("expected a bounded listing, got %d lines:\n%s", n, got)
 	}
 }
+
+// Nesting multiplies, and every expansion materializes an object, so a wide
+// model is truncated rather than listed in full.
+func TestSlotsTruncateWideNesting(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Leaf { attribute v = 1.0; } part def Mid { part leaves : Leaf[20]; } part def Top { part mids : Mid[20]; }")
+	run(t, s, "%instantiate Top")
+
+	got := run(t, s, "%slots Top")
+	wants(t, got, "… (listing truncated)")
+	if n := strings.Count(got, "\n"); n > maxSlotLines+10 {
+		t.Errorf("listing ran to %d lines, want it bounded near %d:\n%.400s", n, maxSlotLines, got)
+	}
+}
