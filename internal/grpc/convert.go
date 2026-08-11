@@ -291,11 +291,22 @@ func ProtoToValue(pv *pb.Value) runtime.Value {
 	}
 }
 
-// InstanceToProto converts runtime.Instance to protobuf Instance.
-func InstanceToProto(inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
+// InstanceToProto converts runtime.Instance to protobuf Instance. Slots are read
+// through Instance.GetSlot, so a derived default is evaluated against the
+// instance rather than reported as an unmaterialized slot.
+func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
 	pbSlots := make(map[string]*pb.SlotValue)
 
-	for name, slot := range inst.Slots {
+	for name := range inst.Slots {
+		slot, err := inst.GetSlot(rt, name)
+		if err != nil {
+			pbSlots[name] = &pb.SlotValue{
+				FeatureName: name,
+				Value:       &pb.Value{Kind: &pb.Value_Null{Null: err.Error()}},
+			}
+			continue
+		}
+
 		pbSlot := &pb.SlotValue{
 			FeatureName:  name,
 			Materialized: slot.Materialized,

@@ -40,13 +40,17 @@ Download `systemica-windows-amd64.zip` from [releases](https://github.com/Open-M
 - `sysml` — Interactive REPL
 - `sysml-lsp` — Language Server Protocol server
 
-`sysml-grpc` (which backs the Python bindings) is not part of the release archives; build it from source with `make build-grpc`.
+`sysml-grpc` — the service the Python bindings talk to — is published as a raw
+`sysml-grpc-<os>-<arch>` file with a `.sha256` sidecar rather than in an archive, because
+`pysysml` downloads and verifies it itself (see [python/README.md](../python/README.md)).
+`make build-grpc` builds it from source.
 
 **Archive layout:** `systemica-<os>-<arch>.tar.gz` bundles contain both binaries under their
 plain names (`sysml`, `sysml-lsp`); the older single-binary `sysml-<os>-<arch>.tar.gz` and
 `sysml-lsp-<os>-<arch>.tar.gz` archives are still published. The bundles and
 `SHA256SUMS.txt` are produced from the next tagged release onward; for earlier releases use
-the single-binary archives. `SHA256SUMS.txt` covers every archive:
+the single-binary archives. `SHA256SUMS.txt` covers every archive and every published
+`sysml-grpc` binary:
 
 ```bash
 curl -fLO https://github.com/Open-MBEE/Systemica/releases/latest/download/SHA256SUMS.txt

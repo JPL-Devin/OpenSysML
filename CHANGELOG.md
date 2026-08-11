@@ -66,12 +66,17 @@ The first tagged release.
 - `sysml-lsp`, a Language Server Protocol server (diagnostics, hover,
   completion, go-to-definition).
 - `sysml-grpc` plus Python bindings (`python/`) for driving parse and execution
-  from a notebook, including DataFrame output. Built from source; not part of
-  the release archives.
-- Releases publish per-binary and bundle archives for linux/amd64,
+  from a notebook, including DataFrame output. `Instantiate` reads slots the way
+  the REPL does, so a derived attribute comes back evaluated rather than
+  unmaterialized. The service binary is published with the release, so `pysysml`
+  can fetch and checksum-verify one instead of requiring a Go toolchain:
+  `download_binary('latest')`, or set `PYSYSML_GRPC_VERSION` and let
+  `pysysml.connect()` start it.
+- Releases publish per-binary and bundle archives, and the raw
+  `sysml-grpc-<os>-<arch>` binaries with `.sha256` sidecars, for linux/amd64,
   linux/arm64, darwin/amd64, darwin/arm64 and windows/amd64, with
-  `SHA256SUMS.txt`. macOS and Windows binaries are unsigned — see
-  [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
+  `SHA256SUMS.txt` over all of them. macOS and Windows binaries are unsigned —
+  see [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
 
 ### Known limitations
 

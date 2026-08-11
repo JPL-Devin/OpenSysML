@@ -489,7 +489,7 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
 - Execution conformance cases: 61 (all passing)
-- gRPC conformance cases: 5 (all passing)
+- gRPC conformance cases: 6 (all passing)
 - Robustness subtests: 35 (all passing)
 - Golden AST fixtures: 36
 - Golden execution traces: 24
@@ -533,7 +533,7 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 | GetSymbol | service.go:126-145 | ✅ Faithful | service_test.go:TestGetSymbol_* |
 | GetDiagnostics | service.go:148-169 (parser + semantic) | ✅ Faithful | runtime_test.go (implicit) |
 | Evaluate | service.go:172-227 | ✅ Faithful | runtime_test.go:TestEvaluate_*, conformance `evaluate_arithmetic` |
-| Instantiate | service.go:230-262 | ✅ Faithful | runtime_test.go:TestInstantiate_*, conformance `instantiate_part` |
+| Instantiate | service.go:230-262 (slots read through `Instance.GetSlot`, so a derived default is evaluated against the instance) | ⚠️ Approximate — a composite slot marshals as the child instance's id, and no RPC returns that instance, so a nested object is not reachable over gRPC | runtime_test.go:TestInstantiate_*, conformance `instantiate_part`, `instantiate_derived_slot` |
 | ExecuteAction | service.go:265-312 | ✅ Faithful | runtime_test.go:TestExecuteAction_*, conformance `execute_action_inputs`, `execute_action_no_initial` |
 | ExecuteState | service.go:315-355 | ✅ Faithful | runtime_test.go:TestExecuteState_*, conformance `execute_state_transitions` |
 
@@ -541,7 +541,7 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Current:**
 - ✅ Layer 1 (Golden AST): Covered via parser tests (fixtures in internal/core/parser/testdata/)
-- ✅ Layer 2 (Execution conformance): `internal/grpc/conformance_test.go` drives `Evaluate`, `Instantiate`, `ExecuteAction` and `ExecuteState` from `.sysml` + `.expected.json` pairs in `internal/grpc/testdata/conformance/` (5 cases, one of them a failure mode), each parsed through the `ParseFile` RPC so the whole wrapper is exercised. Schema: that directory's `README.md`.
+- ✅ Layer 2 (Execution conformance): `internal/grpc/conformance_test.go` drives `Evaluate`, `Instantiate`, `ExecuteAction` and `ExecuteState` from `.sysml` + `.expected.json` pairs in `internal/grpc/testdata/conformance/` (6 cases, one of them a failure mode), each parsed through the `ParseFile` RPC so the whole wrapper is exercised. Schema: that directory's `README.md`.
 - ✅ Layer 3 (Golden traces): N/A — the wrapper adds no ordering behavior of its own; traces are pinned at the runtime tier.
 - ✅ Layer 4 (Robustness): `internal/grpc/robustness_test.go` covers the wrapper's failure modes (unknown model hash, unknown symbol, malformed expression); execution-level failure modes stay pinned in `internal/core/runtime/robustness_test.go`.
 
@@ -557,5 +557,7 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Go gRPC layer:**
 - convert.go:40 - SymbolToProto.Attributes always empty (semantic layer not ready)
+- `Instance` carries only the instance asked for: a slot holding an object reports
+  that object's id, which no RPC resolves
 
 These are documented for transparency; none block production use.
