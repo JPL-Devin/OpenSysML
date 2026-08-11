@@ -34,6 +34,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("non_terminating_loop_exhausts_step_budget", testNonTerminatingLoopExhaustsStepBudget)
 	t.Run("loop_body_declaration_does_not_leak", testLoopBodyDeclarationDoesNotLeak)
 	t.Run("loop_body_of_unexecutable_statement", testLoopBodyOfUnexecutableStatement)
+	t.Run("statement_directly_in_an_action_body", testStatementDirectlyInAnActionBody)
 	t.Run("fork_branches_share_region", testForkBranchesShareRegion)
 	t.Run("join_with_one_incoming_branch", testJoinWithOneIncomingBranch)
 	t.Run("region_pseudostate_without_satisfied_guard", testRegionPseudostateWithoutSatisfiedGuard)
@@ -1250,6 +1251,46 @@ func testLoopBodyOfUnexecutableStatement(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not executable") {
 		t.Errorf("error does not name the unexecutable member: %v", err)
+	}
+}
+
+// testStatementDirectlyInAnActionBody: a statement written among the action's
+// own members has no name a succession can reach, so it is reported rather than
+// ignored.
+func testStatementDirectlyInAnActionBody(t *testing.T) {
+	cases := map[string]string{
+		"while":      "while total < 5 { assign total := total + 1; }",
+		"if":         "if total < 5 { assign total := total + 1; }",
+		"assignment": "assign total := total + 1;",
+	}
+
+	for name, stmt := range cases {
+		t.Run(name, func(t *testing.T) {
+			src := `
+				package test {
+					action counter {
+						attribute total : Integer = 0;
+						first start;
+						` + stmt + `
+						done end;
+						then start end;
+					}
+				}
+			`
+			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "counter", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action counter not found")
+			}
+
+			_, err := ctx.ExecuteAction(sym)
+			if err == nil {
+				t.Fatalf("expected a top-level %s to be reported", name)
+			}
+			if !strings.Contains(err.Error(), "no position in the token flow") {
+				t.Errorf("error does not explain why the statement cannot run: %v", err)
+			}
+		})
 	}
 }
 

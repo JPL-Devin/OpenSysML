@@ -197,6 +197,11 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 				graph.Nodes = append(graph.Nodes, n)
 				lowerBody(graph, n)
 			}
+		case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode, *ast.SendStatement:
+			// A statement is executed as part of an action node's body; written
+			// directly among the action's own members it has no name a
+			// succession could reach, hence no position in the token flow.
+			return nil, fmt.Errorf("%s written directly in an action body has no position in the token flow: declare it inside an action node", statementKeyword(n))
 		}
 	}
 
@@ -479,4 +484,20 @@ func parsePinReference(nodes []ast.Node, qname *ast.QualifiedName) (ast.Node, st
 	nodeQname := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: nodeName}}}
 	node := findNodeByName(nodes, nodeQname)
 	return node, pinName
+}
+
+// statementKeyword names a body statement for a diagnostic.
+func statementKeyword(node ast.Node) string {
+	switch n := node.(type) {
+	case *ast.WhileLoopActionNode:
+		return "a '" + n.Kind.String() + "' loop"
+	case *ast.IfActionNode:
+		return "an 'if' conditional"
+	case *ast.AssignmentActionNode:
+		return "an assignment"
+	case *ast.SendStatement:
+		return "a 'send'"
+	default:
+		return fmt.Sprintf("a %T statement", n)
+	}
 }
