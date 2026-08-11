@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	primaryPrompt = "> "
-	contPrompt    = "... "
+	primaryPrompt = "sysml> "
+	contPrompt    = "  ...> "
 )
 
 // LineReader yields input lines; the prompt argument switches between primary
@@ -35,7 +35,7 @@ func Loop(r LineReader, out io.Writer, s *Session) error {
 		}
 		// Meta commands only at the primary prompt with an empty buffer.
 		if buf.Len() == 0 && isMeta(line) {
-			metaOut, quit, merr := s.runMeta(line)
+			metaOut, quit, merr := s.RunMeta(line)
 			printLines(w, metaOut)
 			_ = w.Flush()
 			if merr != nil {
@@ -73,7 +73,7 @@ func Loop(r LineReader, out io.Writer, s *Session) error {
 }
 
 func submit(w io.Writer, s *Session, src string) {
-	printLines(w, renderResult(s.Submit(src)))
+	printLines(w, renderResult(s.Submit(src), s.verbosity))
 }
 
 func printLines(w io.Writer, lines []string) {

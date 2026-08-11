@@ -23,18 +23,15 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 			return resolution{sym: sym, ok: true}
 		}
 
-		// Check inherited members if model available
-		if hide == nil {
-			if sym, ok := r.lookupMember(s.Owner(), name); ok {
-				return resolution{sym: sym, ok: true}
-			}
-		} else if sym, ok := r.lookupContributedMember(s.Owner(), name); ok {
-			// The owner's own declarations are the local bindings already
-			// filtered above, so only contributed ones remain.
+		if sym, ok := r.implicitlyNamedMember(s, name, hide); ok {
 			return resolution{sym: sym, ok: true}
 		}
 
-		if sym, ok := r.lookupImports(s, name); ok {
+		if sym, ok := r.visibleMember(s.Owner(), name, hide); ok {
+			return resolution{sym: sym, ok: true}
+		}
+
+		if sym, ok := r.lookupImports(s, name); ok && !hide.hides(sym) {
 			return resolution{sym: sym, ok: true}
 		}
 	}
@@ -44,10 +41,95 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 		}
 	}
 	// Final fallback: check global index (cross-document top-level names)
-	if sym, n := r.lookupGlobalTop(name); n == 1 {
+	if sym, n := r.lookupGlobalTop(name); n == 1 && !hide.hides(sym) {
 		return resolution{sym: sym, ok: true}
 	}
 	return resolution{}
+}
+
+// visibleMember resolves name as a member of sym, skipping what hide covers, so
+// that a feature which borrowed a name does not mask the one it took it from.
+func (r *Resolver) visibleMember(sym *symbols.Symbol, name string, hide *refFilter) (*symbols.Symbol, bool) {
+	if hide.contributedOnly() {
+		// The owner's own declarations are the local bindings already filtered
+		// by the caller, so only contributed ones remain.
+		return r.lookupContributedMember(sym, name)
+	}
+	found, ok := r.lookupMember(sym, name)
+	if !ok {
+		return nil, false
+	}
+	if !hide.hides(found) {
+		return found, true
+	}
+	return r.lookupContributedMember(sym, name)
+}
+
+// implicitlyNamedMember returns the anonymous member of scope that binds name by
+// implicitly redefining a parameter so called (KerML 7.3.4.5, SysML 7.6.5):
+// `action shoot : Shoot { in item; }` binds `image`. That target is known only
+// to the semantic model, hence the binding here and not when scopes are built.
+func (r *Resolver) implicitlyNamedMember(scope *symbols.Scope, name string, hide *refFilter) (*symbols.Symbol, bool) {
+	if scope == nil || name == "" || !scope.HasAnonymousMembers() {
+		return nil, false
+	}
+	model, ok := r.model.(supertypeLookup)
+	if !ok {
+		return nil, false
+	}
+	for _, sym := range scope.AnonymousMembers() {
+		if r.naming[sym] || hide.hides(sym) || !impliesNamingFeature(sym) {
+			continue
+		}
+		r.naming[sym] = true
+		var redefined *symbols.Symbol
+		count := 0
+		for _, sup := range model.DirectSupertypes(sym) {
+			if isParameter(sup) {
+				redefined = sup
+				count++
+			}
+		}
+		delete(r.naming, sym)
+		// One redefinition names the feature; several need not agree on a
+		// name, so the feature stays anonymous (KerML 7.3.4.5).
+		if count == 1 && simpleName(redefined) == name {
+			return sym, true
+		}
+	}
+	return nil, false
+}
+
+// impliesNamingFeature reports whether sym is a nameless parameter whose naming
+// feature is implicit: any declared relationship other than a typing would have
+// named it, or ruled it out, when scopes were built.
+func impliesNamingFeature(sym *symbols.Symbol) bool {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || !isParameter(sym) {
+		return false
+	}
+	for _, rel := range usage.Relationships {
+		if rel != nil && rel.Kind != ast.RelTyping {
+			return false
+		}
+	}
+	return true
+}
+
+// isParameter reports whether sym is declared as a directed feature or a
+// result, the features an implicit redefinition matches (SysML 7.6.5).
+func isParameter(sym *symbols.Symbol) bool {
+	usage, ok := sym.Decl.(*ast.Usage)
+	return ok && (usage.Direction != ast.DirNone || usage.IsResult)
+}
+
+// simpleName is sym's own name without the qualification an indexed symbol
+// carries.
+func simpleName(sym *symbols.Symbol) string {
+	if i := strings.LastIndex(sym.Name, "::"); i >= 0 {
+		return sym.Name[i+2:]
+	}
+	return sym.Name
 }
 
 // lookupImports checks every import declared directly in scope for a member
@@ -62,7 +144,11 @@ func (r *Resolver) lookupImports(scope *symbols.Scope, name string) (*symbols.Sy
 	return nil, false
 }
 
-// importsOf returns the *ast.Import declarations directly in a namespace-bearing node.
+// importsOf returns the *ast.Import declarations directly in a namespace-bearing
+// node. In KerML an Import is a Relationship owned by any Namespace, and a
+// definition or usage body is itself a Namespace, so imports declared inside a
+// definition/usage body apply to that body's scope (and, through the ordinary
+// parent-scope walk, to every scope nested within it).
 func importsOf(node ast.Node) []*ast.Import {
 	var members []ast.Node
 	switch n := node.(type) {
@@ -71,6 +157,10 @@ func importsOf(node ast.Node) []*ast.Import {
 	case *ast.Namespace:
 		members = n.Members
 	case *ast.RootNamespace:
+		members = n.Members
+	case *ast.Definition:
+		members = n.Members
+	case *ast.Usage:
 		members = n.Members
 	default:
 		return nil
@@ -108,7 +198,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 			return target, true
 		}
 		if imp.IsRecursive && target.Scope != nil {
-			if sym, ok := lookupInSubtree(target.Scope, name, map[*symbols.Scope]bool{}); ok {
+			if sym, ok := lookupInSubtree(target.Scope, name, imp, map[*symbols.Scope]bool{}); ok {
 				return sym, true
 			}
 		}
@@ -140,25 +230,27 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		}
 	}
 	if imp.IsRecursive {
-		if sym, ok := lookupInSubtree(target.Scope, name, map[*symbols.Scope]bool{}); ok && visibleThroughImport(imp, sym) {
+		if sym, ok := lookupInSubtree(target.Scope, name, imp, map[*symbols.Scope]bool{}); ok {
 			return sym, true
 		}
 	}
 	return nil, false
 }
 
-// lookupInSubtree searches a scope and all descendant scopes for name.
-func lookupInSubtree(scope *symbols.Scope, name string, seen map[*symbols.Scope]bool) (*symbols.Symbol, bool) {
+// lookupInSubtree searches a scope and all descendant scopes for a match on
+// name that imp may surface. A match the import cannot surface does not end the
+// walk: another scope in the subtree may hold a visible one.
+func lookupInSubtree(scope *symbols.Scope, name string, imp *ast.Import, seen map[*symbols.Scope]bool) (*symbols.Symbol, bool) {
 	// A body-local name is not a member of the namespace being imported.
 	if scope == nil || seen[scope] || scope.BodyLocal() {
 		return nil, false
 	}
 	seen[scope] = true
-	if sym, ok := scope.LookupLocal(name); ok {
+	if sym, ok := scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) {
 		return sym, true
 	}
 	for _, child := range scope.Children() {
-		if sym, ok := lookupInSubtree(child, name, seen); ok {
+		if sym, ok := lookupInSubtree(child, name, imp, seen); ok {
 			return sym, true
 		}
 	}

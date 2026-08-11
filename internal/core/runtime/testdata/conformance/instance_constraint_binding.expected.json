@@ -1,0 +1,11 @@
+{
+  "type": "instance",
+  "instantiate": "test::Vehicle",
+  "slots": {
+    "gross": {"type": "Real", "value": 1800.0}
+  },
+  "constraints": {
+    "withinLimit": true,
+    "overLimit": false
+  }
+}

@@ -39,6 +39,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
+	t.Run("accept_deadlock_never_satisfied", testAcceptDeadlockNeverSatisfied)
+	t.Run("accept_deadlock_reports_every_waiting_accept", testAcceptDeadlockReportsEveryWaitingAccept)
 	t.Run("history_outside_composite_state", testHistoryOutsideCompositeState)
 	t.Run("history_without_record_or_default", testHistoryWithoutRecordOrDefault)
 	t.Run("defer_of_non_deferrable_trigger", testDeferOfNonDeferrableTrigger)
@@ -47,6 +49,134 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 	t.Run("perform_of_missing_action", testPerformOfMissingAction)
 	t.Run("perform_reference_cycle", testPerformReferenceCycle)
+	t.Run("state_subaction_reference_of_missing_action", testStateSubactionReferenceOfMissingAction)
+	t.Run("state_subaction_reference_feature_chain", testStateSubactionReferenceFeatureChain)
+	t.Run("cyclic_derived_slot", testCyclicDerivedSlot)
+	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
+}
+
+// testCyclicDerivedSlot: two derived defaults that read each other are reported
+// as a cycle instead of recursing until the step budget runs out.
+func testCyclicDerivedSlot(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Loop {
+				attribute a = b + 1.0;
+				attribute b = a + 1.0;
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Loop", ast.DefPart)
+	if sym == nil {
+		t.Fatal("Loop part def not found")
+	}
+
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+
+	done := make(chan struct{})
+	var slotErr error
+	go func() {
+		defer close(done)
+		_, slotErr = inst.GetSlot(ctx, "a")
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetSlot hung on a cyclic derived slot")
+	}
+
+	if !errors.Is(slotErr, ErrCyclicSlot) {
+		t.Fatalf("GetSlot error = %v, want ErrCyclicSlot", slotErr)
+	}
+}
+
+// testDerivedSlotOverMissingFeature: a derived default that names something the
+// instance does not have fails with the slot named, rather than silently
+// leaving the slot empty.
+func testDerivedSlotOverMissingFeature(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Broken {
+				attribute derived = missing * 2.0;
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Broken", ast.DefPart)
+	if sym == nil {
+		t.Fatal("Broken part def not found")
+	}
+
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+
+	_, err = inst.GetSlot(ctx, "derived")
+	if err == nil {
+		t.Fatal("GetSlot succeeded on a default over an undeclared feature")
+	}
+	if !strings.Contains(err.Error(), "derived") {
+		t.Errorf("error %q does not name the slot", err)
+	}
+}
+
+// testStateSubactionReferenceOfMissingAction: an entry action given by
+// reference to a name nothing declares fails at execution, naming the target.
+func testStateSubactionReferenceOfMissingAction(t *testing.T) {
+	ctx, machine := loadState(t, `package test {
+		state Machine {
+			initial init;
+			state active {
+				entry noSuchAction;
+			}
+			final done;
+
+			init then active;
+			active then done;
+		}
+	}`, "Machine")
+
+	if _, _, err := ctx.ExecuteStateWithEvents(machine, nil); err == nil {
+		t.Fatal("expected an unresolved entry action reference to fail")
+	} else if !strings.Contains(err.Error(), "noSuchAction") {
+		t.Errorf("error should name the unresolved action, got: %v", err)
+	}
+}
+
+// testStateSubactionReferenceFeatureChain: a feature-chain reference parses but
+// is not invocable, so it must report what it named rather than an empty name.
+func testStateSubactionReferenceFeatureChain(t *testing.T) {
+	ctx, machine := loadState(t, `package test {
+		action def CoolDown {
+			first start;
+			done end;
+			then start end;
+		}
+
+		state Machine {
+			part controller {
+				action coolDown : CoolDown;
+			}
+
+			initial init;
+			state active {
+				exit controller.coolDown;
+			}
+			final done;
+
+			init then active;
+			active then done;
+		}
+	}`, "Machine")
+
+	if _, _, err := ctx.ExecuteStateWithEvents(machine, nil); err == nil {
+		t.Fatal("expected a feature-chain action reference to fail")
+	} else if !strings.Contains(err.Error(), "coolDown") {
+		t.Errorf("error should name the chained action, got: %v", err)
+	}
 }
 
 // testPerformOfMissingAction: a perform statement naming nothing resolvable is
@@ -295,8 +425,9 @@ func testHistoryWithoutRecordOrDefault(t *testing.T) {
 	}
 }
 
-// testSendViaUnconnectedPort: a port with no connection reaches no one, so an
-// accept waiting on the message must report rather than hang or bind nothing.
+// testSendViaUnconnectedPort: a port with no connection reaches no one, so the
+// accept waiting on the message suspends forever — which must be reported as a
+// deadlock rather than hanging or binding nothing.
 func testSendViaUnconnectedPort(t *testing.T) {
 	_, err := executeActionSource(t, "pipeline", `package P {
 		action pipeline {
@@ -314,8 +445,85 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error: nothing connects outPort to inPort")
 	}
-	if !errors.Is(err, ErrNoMatchingMessage) {
-		t.Errorf("expected ErrNoMatchingMessage, got: %v", err)
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+}
+
+// testAcceptDeadlockNeverSatisfied: an accept nothing can ever satisfy suspends
+// the action, and a suspension that can never end must be reported as a typed
+// deadlock rather than hanging.
+func testAcceptDeadlockNeverSatisfied(t *testing.T) {
+	done := make(chan error, 1)
+	go func() {
+		_, err := executeActionSource(t, "pipeline", `package P {
+			action pipeline {
+				first start;
+				action reader accept n : Integer;
+				done end;
+				then start reader;
+				then reader end;
+			}
+		}`)
+		done <- err
+	}()
+
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("an action waiting for a message that cannot arrive did not terminate")
+	}
+
+	if err == nil {
+		t.Fatal("expected a deadlock error, the suspended accept completed")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+	for _, want := range []string{"accept n", "Integer"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected %q in the deadlock report, got: %v", want, err)
+		}
+	}
+}
+
+// testAcceptDeadlockReportsEveryWaitingAccept: with two accepts parked in
+// parallel branches and only one message in flight, the accept that can proceed
+// does, and the report names the one still waiting rather than the whole action.
+func testAcceptDeadlockReportsEveryWaitingAccept(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action sender { send 7 to reader; }
+			fork split;
+			action reader accept n : Integer;
+			action recorder { assign got := n; }
+			action listener accept text : String;
+			join sync;
+			done end;
+			then start sender;
+			then sender split;
+			then split reader;
+			then split listener;
+			then reader recorder;
+			then recorder sync;
+			then listener sync;
+			then sync end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected a deadlock error: no String is ever sent")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Fatalf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "accept text waiting since step 4 for a message of type String") {
+		t.Errorf("expected the still-waiting accept in the report, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "accept n ") {
+		t.Errorf("the Integer accept was satisfied and must not be reported as waiting: %v", err)
 	}
 }
 

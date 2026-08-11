@@ -42,6 +42,36 @@ func TestInstantiate_SimplePartDef(t *testing.T) {
 	}
 }
 
+// An unbounded upper bound carries the numeric value 0, so a feature declared
+// [*] must not be mistaken for a scalar and filled with a single default.
+func TestInstantiate_UnboundedDefaultIsNotAScalar(t *testing.T) {
+	src := `
+		part def Wheel {
+			attribute diameter: Real = 0.5;
+		}
+		part def Car {
+			part wheels: Wheel[0..*] = 1;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Car"))
+	if err != nil {
+		t.Fatalf("Instantiate failed: %v", err)
+	}
+	slot, err := inst.GetSlot(ctx, "wheels")
+	if err != nil {
+		t.Fatalf("GetSlot failed: %v", err)
+	}
+	if slot.Value.Kind != ValInvalid {
+		t.Errorf("unbounded slot holds a scalar value %v", slot.Value)
+	}
+	if slot.Values.Kind != ValSequence {
+		t.Errorf("expected a sequence, got %v", slot.Values.Kind)
+	}
+}
+
 func TestInstantiate_IDAllocation(t *testing.T) {
 	src := `part def A {}`
 	model, resolver, root := parseAndBuildModel(t, src)
@@ -104,4 +134,130 @@ func TestGetSlot_LazyComposite(t *testing.T) {
 	if childInst.Type.Name != "Engine" {
 		t.Errorf("expected Engine type, got %s", childInst.Type.Name)
 	}
+}
+
+// A multi-valued feature holds its default's contents, not <unknown>: a single
+// value written on it is the collection's one element.
+func TestMultiValuedDefaultMaterializes(t *testing.T) {
+	src := `
+		part def Rig {
+			attribute mass = 100.0;
+			attribute doubles[0..*] = mass * 2.0;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Rig"))
+	if err != nil {
+		t.Fatalf("Instantiate failed: %v", err)
+	}
+	slot, err := inst.GetSlot(ctx, "doubles")
+	if err != nil {
+		t.Fatalf("GetSlot failed: %v", err)
+	}
+	if slot.Values.Kind != ValSequence {
+		t.Fatalf("Values.Kind = %v, want a sequence", slot.Values.Kind)
+	}
+	elements := slot.Values.Sequence.Elements()
+	if len(elements) != 1 || elements[0].Const.Real != 200.0 {
+		t.Errorf("doubles = %v, want [200]", elements)
+	}
+}
+
+// A nested part usage with a body of its own is an object shaped by that body:
+// what it redeclares must win over what its type declares.
+func TestNestedUsageBodyOverridesItsType(t *testing.T) {
+	src := `
+		part def Engine {
+			attribute power = 200.0;
+		}
+		part def Car {
+			part engine : Engine {
+				attribute power redefines Engine::power = 250.0;
+			}
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	car, err := ctx.Instantiate(resolveSymbol(t, root, "Car"))
+	if err != nil {
+		t.Fatalf("Instantiate failed: %v", err)
+	}
+	if got := nestedReal(t, ctx, car, "engine", "power"); got != 250.0 {
+		t.Errorf("engine.power = %v, want 250 (the usage body's value)", got)
+	}
+}
+
+// A written default takes precedence over instantiation in GetSlot, so the
+// feature holds that value and is not something to materialize an object from.
+func TestCompositeTypeOfIgnoresDefaultedFeature(t *testing.T) {
+	src := `
+		attribute def Temp {
+			attribute v = 1.0;
+		}
+		part def Gauge {
+			attribute plain : Temp;
+			attribute written : Temp = 5.0;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	features := ctx.FeaturesOf(resolveSymbol(t, root, "Gauge"))
+	for i := range features {
+		feat := &features[i]
+		composite := ctx.CompositeTypeOf(feat)
+		if feat.Name == "written" && composite != nil {
+			t.Errorf("written holds 5.0, but reports %s as composite", composite.Name)
+		}
+		if feat.Name == "plain" && composite == nil {
+			t.Error("plain is materialized from Temp, want it reported as composite")
+		}
+	}
+}
+
+// An untyped nested part is still an object: its body is its shape, so it
+// materializes and its members hold values.
+func TestUntypedNestedPartMaterializes(t *testing.T) {
+	src := `
+		part def Car {
+			attribute mass = 1500.0;
+			part engine {
+				attribute power = 300.0;
+			}
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	car, err := ctx.Instantiate(resolveSymbol(t, root, "Car"))
+	if err != nil {
+		t.Fatalf("Instantiate failed: %v", err)
+	}
+	if got := nestedReal(t, ctx, car, "engine", "power"); got != 300.0 {
+		t.Errorf("engine.power = %v, want 300", got)
+	}
+}
+
+// nestedReal reads a Real out of the instance held by one of inst's slots.
+func nestedReal(t *testing.T, ctx *Context, inst *Instance, slotName, nestedName string) float64 {
+	t.Helper()
+	slot, err := inst.GetSlot(ctx, slotName)
+	if err != nil {
+		t.Fatalf("GetSlot(%q) failed: %v", slotName, err)
+	}
+	if slot.Value.Kind != ValInstance {
+		t.Fatalf("slot %q holds %v, want a nested instance", slotName, slot.Value.Kind)
+	}
+	nested, ok := ctx.Instance(slot.Value.Instance)
+	if !ok {
+		t.Fatalf("slot %q references unknown instance %d", slotName, slot.Value.Instance)
+	}
+	nestedSlot, err := nested.GetSlot(ctx, nestedName)
+	if err != nil {
+		t.Fatalf("GetSlot(%q) failed: %v", nestedName, err)
+	}
+	return nestedSlot.Value.Const.Real
 }

@@ -151,3 +151,24 @@ func TestAllSupertypesSafeOnCycle(t *testing.T) {
 	_ = m.AllSupertypes(sym(t, root, "A"))
 	_ = m.Conforms(sym(t, root, "A"), sym(t, root, "B"))
 }
+
+// Every type specializes Base::Anything (KerML 8.3.2.1), whether or not the
+// chain to it is declared: a part def has none, and its features are still
+// redefinable against a feature typed by Anything.
+func TestConformsToAnything(t *testing.T) {
+	m, root := buildModel(t, `package Base { part def Anything; }
+		part def Engine; part def X;`)
+	base := sym(t, root, "Base")
+	anything := sym(t, base.Scope, "Anything")
+	engine := sym(t, root, "Engine")
+
+	if !m.Conforms(engine, anything) {
+		t.Fatalf("Engine should conform to Base::Anything")
+	}
+	if m.Conforms(anything, engine) {
+		t.Fatalf("Base::Anything should not conform to Engine")
+	}
+	if m.Conforms(engine, sym(t, root, "X")) {
+		t.Fatalf("unrelated X should still not be conformed to")
+	}
+}

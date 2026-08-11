@@ -1,0 +1,7 @@
+{
+  "type": "instance",
+  "instantiate": "test::Car",
+  "slots": {
+    "enginePower": {"type": "Real", "value": 250.0}
+  }
+}

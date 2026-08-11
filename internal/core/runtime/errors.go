@@ -41,10 +41,30 @@ var (
 	// expression, directly or by inheritance.
 	ErrNoResultExpression = errors.New("no result expression")
 
+	// ErrAcceptDeadlock is returned when an action can no longer progress
+	// because every token it has left is parked at an accept, so no token can
+	// post the message any of them waits for. An accept suspends the action
+	// rather than failing, so this is how a suspension that can never end is
+	// reported instead of hanging.
+	ErrAcceptDeadlock = errors.New("accept deadlock")
+
 	// ErrCalcRecursionLimit is returned when calc invocation nests deeper than
 	// maxCalcNestingDepth, which a recursive calc would otherwise do until the
 	// process ran out of stack.
 	ErrCalcRecursionLimit = errors.New("calc recursion limit exceeded")
+
+	// ErrViolated is returned when an asserted constraint or a required
+	// condition evaluates to false. It is a verdict about the model, not a
+	// failure to evaluate, so callers can tell the two apart.
+	ErrViolated = errors.New("evaluated to false")
+
+	// ErrNoConditions is returned when a constraint or requirement carries no
+	// condition to evaluate: reporting a verdict would claim a check that never ran.
+	ErrNoConditions = errors.New("no condition to evaluate")
+
+	// ErrCyclicSlot is returned when a slot's default value depends, directly or
+	// through other slots, on the slot being computed.
+	ErrCyclicSlot = errors.New("cyclic slot dependency")
 )
 
 // EvalError wraps an evaluation error with source context.

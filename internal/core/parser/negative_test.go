@@ -46,7 +46,29 @@ func TestNegative(t *testing.T) {
 		{"deep_without_history", "state s { deep resume; }"},
 		{"shallow_without_history", "state s { shallow resume; }"},
 		{"history_no_semicolon", "state s { history resume state t; }"},
-		{"entry_point_no_name", "state s { entry point ; }"},
+		// `entry point ;` is not malformed: `point` is not reserved, so it is an
+		// entry action referencing a feature named `point`. Dropping the ';' too
+		// leaves a pseudostate declaration that is missing its name.
+		{"entry_point_no_name", "state s { entry point }"},
+		{"entry_reference_no_semicolon", "state s { entry warmUp state t; }"},
+		{"exit_reference_no_semicolon", "state s { exit coolDown state t; }"},
+		{"do_reference_dangling_chain", "state s { do warmUp.; }"},
+		{"end_no_feature", "connection def C { end ; }"},
+		{"end_unclosed_multiplicity", "connection def C { end [1 part bead : T; }"},
+		{"connector_end_no_reference_target", "part p { connection : C connect bead references to rim; }"},
+		{"flow_source_without_target", "part def C { item Fuel; part a; flow f of Fuel from a; }"},
+		{"nary_connect_unclosed", "part def C { part a; part b; connection conn connect (a, b; }"},
+		{"nary_connect_trailing_comma", "part def C { part a; part b; connection conn connect (a, b, ); }"},
+		{"nary_connect_empty", "part def C { connection conn connect (); }"},
+		{"anonymous_nary_connect_unclosed", "part def C { part a; part b; connect (a, b; }"},
+		{"anonymous_nary_connect_empty", "part def C { connect (); }"},
+
+		// Occurrence modifiers (`individual`, `snapshot`) on a usage.
+		{"individual_modifier_no_member", "individual ;"},
+		{"individual_usage_no_type", "individual testSystem : ;"},
+		{"individual_usage_no_body", "individual testSystem : TestSystem"},
+		{"snapshot_usage_no_type", "snapshot occurrence takeoff : ;"},
+		{"individual_parameter_no_type", "action a { in individual v : ; }"},
 	}
 
 	for _, tt := range tests {

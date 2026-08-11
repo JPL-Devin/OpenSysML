@@ -89,12 +89,14 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		// Phase 4: Parser treats 'datatype' uniformly as usage. Builder classifies based on context.
 		// If usage is attribute kind with specializes/subsets but no typing, treat as definition.
 		kind := classifyUsage(d)
-		id := effectiveIdent(d)
+		id, namingTarget := effectiveIdent(d)
 		sym := newSymbol(id, kind, d, vis, child, scope, trivia)
-		sym.EffectiveName = id != d.Ident
+		sym.EffectiveName = namingTarget != nil
+		sym.NamingTarget = namingTarget
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
+		buildConnectorEnds(child, d)
 	case *ast.SubstateMember:
 		// SubstateMember represents simple state declaration: state <name>;
 		// Create a state usage symbol for it
@@ -219,6 +221,26 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	}
 }
 
+// buildConnectorEnds registers a symbol for every end of a connector usage that
+// declares a name (`connect bead references t.bead`). Such an end is an end
+// feature of the connector itself (SysML v2 §7.13.2), so it is a member of the
+// connector's own scope, never of the scope the connector is declared in.
+func buildConnectorEnds(scope *Scope, u *ast.Usage) {
+	for _, end := range u.ConnectorEnds {
+		if end == nil {
+			continue
+		}
+		id, ok := end.DeclaredName()
+		if !ok {
+			continue
+		}
+		child := NewScope(scope, end)
+		sym := newSymbol(id, SymbolConnectorEnd, end, ast.VisibilityDefault, child, scope, nil)
+		defineIdent(scope, id, sym)
+		scope.AddChild(child)
+	}
+}
+
 // newSymbol builds a Symbol from an identification. scope is the child scope the
 // declaration owns (nil for leaf declarations); owner is the enclosing scope the
 // declaration was declared in. trivia is the leading trivia from the member wrapper.
@@ -230,6 +252,7 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 	}
 	sym := &Symbol{
 		Name:          name,
+		ShortName:     id.ShortName,
 		Kind:          kind,
 		Decl:          decl,
 		Visibility:    vis,
@@ -246,30 +269,48 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 	return sym
 }
 
-// effectiveIdent returns the identification a usage is registered under. A
-// usage declared without a name or short name takes the name of its naming
-// feature (KerML Feature::effectiveName): for a usage with a reference
-// subsetting that is the referenced feature, which is how `perform
-// providePower.generateTorque;` contributes the member `generateTorque` to the
-// part performing it (SysML 7.6.5, 7.17.6 and 8.3.17.14 PerformActionUsage::
-// namingFeature).
+// effectiveIdent returns the identification a usage is registered under, and
+// the reference that supplied it. A usage declared without a name takes the
+// name of its naming feature (KerML 7.3.4.5): the target of its reference
+// subsetting, or else of its single owned redefinition. Two redefinitions leave
+// it anonymous, since they need not agree on a name.
 //
-// The referenced feature's own effective name is approximated by the last
-// segment of the reference, which is the declared name of the feature that
-// segment resolves to; resolution has not run when scopes are built.
-func effectiveIdent(u *ast.Usage) ast.Identification {
+// The naming feature's own effective name is approximated by the reference's
+// last segment, since resolution has not run when scopes are built.
+func effectiveIdent(u *ast.Usage) (ast.Identification, ast.Node) {
 	if u.Ident.Name != "" || u.Ident.ShortName != "" {
-		return u.Ident
+		return u.Ident, nil
 	}
+	var redefinitions []*ast.Relationship
 	for _, rel := range u.Relationships {
-		if rel == nil || rel.Kind != ast.RelReferences {
+		if rel == nil {
 			continue
 		}
-		if name, span := ast.TargetName(rel.Target); name != "" {
-			return ast.Identification{Name: name, NameSpan: span}
+		switch rel.Kind {
+		case ast.RelReferences:
+			if name, span := ast.TargetName(rel.Target); name != "" {
+				return ast.Identification{Name: name, NameSpan: span}, namingTargetNode(rel.Target)
+			}
+		case ast.RelRedefines:
+			redefinitions = append(redefinitions, rel)
 		}
 	}
-	return u.Ident
+	if len(redefinitions) == 1 {
+		if name, span := ast.TargetName(redefinitions[0].Target); name != "" {
+			return ast.Identification{Name: name, NameSpan: span}, namingTargetNode(redefinitions[0].Target)
+		}
+	}
+	return u.Ident, nil
+}
+
+// namingTargetNode returns the node a relationship target is resolved as, so
+// that the resolver can recognise the reference that named a feature: the
+// qualified name a plain reference unwraps to, or the target itself.
+func namingTargetNode(target ast.Node) ast.Node {
+	if qn := ast.AsQualifiedName(target); qn != nil {
+		return qn
+	}
+	return target
 }
 
 // defineIdent registers sym under its short and primary name keys, skipping

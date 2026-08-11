@@ -41,27 +41,45 @@ var implicitUsageBases = map[ast.UsageKind]string{
 	ast.UsageUseCase:          "UseCases::UseCase",
 }
 
+// implicitDefinitionBases maps a definition kind to the qualified name of the
+// standard library definition every definition of that kind implicitly
+// specializes: the base metadata definition is MetadataItem, which supplies
+// `annotatedElement` from Metaobjects::Metaobject (SysML v2 §7.27.2, [KerML,
+// 9.2.17]).
+var implicitDefinitionBases = map[ast.DefinitionKind]string{
+	ast.DefMetadata: "Metadata::MetadataItem",
+}
+
 // implicitBase returns the stdlib definition sym is implicitly typed by, or nil
-// when sym is not an untyped usage of a kind with a known base. A usage that
-// declares any generalization (typing, subsetting, redefinition) takes its
-// supertypes from that declaration instead.
+// when sym is not an untyped usage or definition of a kind with a known base. A
+// declaration that declares any generalization (typing, subsetting,
+// redefinition, specialization) takes its supertypes from that declaration
+// instead.
 func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
-	var kind ast.UsageKind
+	var fqn string
+	var ok bool
 	switch d := sym.Decl.(type) {
 	case *ast.Usage:
-		for _, rel := range d.Relationships {
-			if rel != nil && GeneralizationKind(rel.Kind) {
-				return nil
-			}
+		if declaresGeneralization(d.Relationships) {
+			return nil
 		}
-		kind = d.Kind
+		fqn, ok = implicitUsageBases[d.Kind]
+		if d.IsIndividual && d.Kind == ast.UsageOccurrence {
+			// An individual occurrence is a life, not an arbitrary occurrence
+			// (SysML v2 §7.9.4), however the modifier is spelled.
+			fqn, ok = implicitUsageBases[ast.UsageIndividual]
+		}
+	case *ast.Definition:
+		if declaresGeneralization(d.Relationships) {
+			return nil
+		}
+		fqn, ok = implicitDefinitionBases[d.Kind]
 	case *ast.SubstateMember:
 		// `state s;` in a state body: a bodyless, always-untyped state usage.
-		kind = ast.UsageState
+		fqn, ok = implicitUsageBases[ast.UsageState]
 	default:
 		return nil
 	}
-	fqn, ok := implicitUsageBases[kind]
 	if !ok || m.resolver == nil || m.resolver.Index() == nil {
 		return nil
 	}
@@ -71,4 +89,15 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 		}
 	}
 	return nil
+}
+
+// declaresGeneralization reports whether rels contain a conformance edge, which
+// makes a declaration take its supertypes from the declaration itself.
+func declaresGeneralization(rels []*ast.Relationship) bool {
+	for _, rel := range rels {
+		if rel != nil && GeneralizationKind(rel.Kind) {
+			return true
+		}
+	}
+	return false
 }

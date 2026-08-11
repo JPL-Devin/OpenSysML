@@ -45,12 +45,18 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		switch d := unwrapType(m).(type) {
 		case *ast.Definition:
-			tc.checkRelationships(scope, d.Relationships, true, d.Kind, 0, ast.DirNone)
+			tc.checkRelationships(scope, d.Relationships, declKind{isDef: true, defKind: d.Kind})
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
 		case *ast.Usage:
-			tc.checkRelationships(scope, d.Relationships, false, 0, d.Kind, d.Direction)
+			tc.checkRelationships(scope, d.Relationships, declKind{
+				useKind:      d.Kind,
+				direction:    d.Direction,
+				isEnd:        d.IsEnd,
+				isIndividual: d.IsIndividual,
+				isSnapshot:   d.IsSnapshot,
+			})
 			tc.expr.checkUsageValue(scope, d)
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
@@ -98,6 +104,27 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.infer(scope, m.Value)
 	case *ast.ActionExecutionNode:
 		tc.expr.infer(scope, m.Expression)
+	case *ast.SubjectMember:
+		tc.checkSubjectMember(scope, m)
+	}
+}
+
+// checkSubjectMember types a `subject` declared through the requirement body
+// path, which yields a SubjectMember rather than a Usage and so would otherwise
+// escape the usage-kind rules.
+func (tc *typeChecker) checkSubjectMember(scope *symbols.Scope, m *ast.SubjectMember) {
+	if m.TypeRef != nil {
+		tc.checkTypeTarget(scope, m.TypeRef, ast.RelTyping, declKind{useKind: ast.UsageSubject})
+	}
+	if m.BindingExpr != nil {
+		tc.expr.infer(scope, m.BindingExpr)
+	}
+	if len(m.Body) > 0 {
+		body := scope
+		if child := childScopeOf(scope, m); child != nil {
+			body = child
+		}
+		tc.walk(body, m.Body)
 	}
 }
 
@@ -119,47 +146,85 @@ func (tc *typeChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
 	}
 }
 
-func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Relationship, isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind, direction ast.FeatureDirection) {
+// declKind describes the declaration a relationship is declared on: what the
+// kind-compatibility rules are checked against.
+type declKind struct {
+	isDef     bool
+	defKind   ast.DefinitionKind
+	useKind   ast.UsageKind
+	direction ast.FeatureDirection
+	// isEnd marks a feature declared with the `end` modifier, whose type is that
+	// of the feature it connects and so escapes the usage-kind taxonomy.
+	isEnd bool
+	// isIndividual and isSnapshot carry the `individual` and `snapshot` usage
+	// modifiers (SysML v2 §8.3.9.11: `OccurrenceUsage::isIndividual` and
+	// `OccurrenceUsage::portionKind`). Either makes the declaration an
+	// occurrence usage, whatever kind keyword declares it.
+	isIndividual bool
+	isSnapshot   bool
+}
+
+// isOccurrenceUsage reports whether the `individual` or `snapshot` modifier
+// makes the declaration an occurrence usage.
+func (d declKind) isOccurrenceUsage() bool { return d.isIndividual || d.isSnapshot }
+
+// occurrenceModifier names the occurrence modifier the declaration carries, for
+// diagnostics.
+func (d declKind) occurrenceModifier() string {
+	if d.isIndividual {
+		return "individual"
+	}
+	return "snapshot"
+}
+
+func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Relationship, decl declKind) {
 	for _, rel := range rels {
 		if rel == nil || rel.Target == nil {
 			continue
 		}
-		// Unwrap FeatureReference if needed
-		targetNode := rel.Target
-		if fr, ok := targetNode.(*ast.FeatureReference); ok {
-			targetNode = fr.Name
-		}
-		qn, isQN := targetNode.(*ast.QualifiedName)
-		if !isQN {
-			continue
-		}
-		sym, ok := tc.resolver.ResolveQualified(scope, qn)
-		if !ok || sym == nil {
-			continue // unresolved: name-resolution tier owns this
-		}
-		// Resolve aliases to their underlying types for typing relationships and
-		// for a satisfy reference, both of which check the target's kind.
-		targetSym := sym
-		aliasMatters := rel.Kind == ast.RelTyping ||
-			(rel.Kind == ast.RelSubsets && useKind == ast.UsageSatisfy)
-		if aliasMatters && sym.Kind == symbols.SymbolAlias {
-			if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
-				targetSym = resolved
-			}
-		}
-		if msg := compatMessage(isDef, defKind, useKind, direction, rel.Kind, targetSym.Kind); msg != "" {
-			tc.diags = append(tc.diags, Diagnostic{
-				Severity: SeverityError,
-				Span:     rel.Target.Span(),
-				Message:  msg,
-				Code:     "type",
-				Source:   "type",
-			})
-		}
+		tc.checkTypeTarget(scope, rel.Target, rel.Kind, decl)
 	}
 }
 
-func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind, direction ast.FeatureDirection, rel ast.RelationshipKind, target symbols.SymbolKind) string {
+// checkTypeTarget checks one relationship target against the kind rules for the
+// declaration carrying it.
+func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, relKind ast.RelationshipKind, decl declKind) {
+	// Unwrap FeatureReference if needed
+	targetNode := target
+	if fr, ok := targetNode.(*ast.FeatureReference); ok {
+		targetNode = fr.Name
+	}
+	qn, isQN := targetNode.(*ast.QualifiedName)
+	if !isQN {
+		return
+	}
+	sym, ok := tc.resolver.ResolveQualified(scope, qn)
+	if !ok || sym == nil {
+		return // unresolved: name-resolution tier owns this
+	}
+	// Resolve aliases to their underlying types for typing relationships and
+	// for a satisfy reference, both of which check the target's kind.
+	targetSym := sym
+	aliasMatters := relKind == ast.RelTyping ||
+		(relKind == ast.RelSubsets && decl.useKind == ast.UsageSatisfy)
+	if aliasMatters && sym.Kind == symbols.SymbolAlias {
+		if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
+			targetSym = resolved
+		}
+	}
+	if msg := compatMessage(decl, relKind, targetSym.Kind); msg != "" {
+		tc.diags = append(tc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     target.Span(),
+			Message:  msg,
+			Code:     "type",
+			Source:   "type",
+		})
+	}
+}
+
+func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.SymbolKind) string {
+	isDef, defKind, useKind, direction := decl.isDef, decl.defKind, decl.useKind, decl.direction
 	switch rel {
 	case ast.RelSpecializes:
 		want := defSymbolKind(defKind)
@@ -179,6 +244,14 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		}
 		// Metadata defs can specialize metaclasses (per SysML v2 spec: situation :> SemanticMetadata)
 		if defKind == ast.DefMetadata && target == symbols.SymbolMetaclass {
+			return ""
+		}
+		// `individual def X` is an occurrence definition (equivalent to
+		// `individual occurrence def X`) that individuates the definition it
+		// specializes, so it may specialize an occurrence definition of any kind
+		// (SysML v2 §7.9.4). It may not specialize an attribute definition:
+		// Occurrences::Occurrence is disjoint with Base::DataValues (§8.4.5.1).
+		if defKind == ast.DefIndividual && isOccurrenceDefKind(target) {
 			return ""
 		}
 		if target != want {
@@ -206,7 +279,20 @@ func compatMessage(isDef bool, defKind ast.DefinitionKind, useKind ast.UsageKind
 		if !isDefKind(target) {
 			return fmt.Sprintf("type must be a definition, found %s", target)
 		}
-		if !isCompatibleTyping(useKind, direction, target) {
+		// An end feature is a plain KerML feature typed by whatever the feature it
+		// connects is typed by (`end supplierPort : FuelOutPort`), so the usage-kind
+		// taxonomy does not constrain it.
+		if decl.isEnd {
+			return ""
+		}
+		// An `individual` or `snapshot` usage is an occurrence usage, and an
+		// occurrence is disjoint with the data values an attribute or enumeration
+		// definition classifies (SysML v2 §8.4.5.1), so name the modifier that
+		// makes the typing wrong rather than the kind keyword.
+		if decl.isOccurrenceUsage() && isDataTypeDefKind(target) {
+			return fmt.Sprintf("%s usage cannot be typed by %s (an occurrence usage may not be typed by a data type)", decl.occurrenceModifier(), target)
+		}
+		if !isCompatibleTyping(useKind, direction, target, decl.isOccurrenceUsage()) {
 			return fmt.Sprintf("%s cannot be typed by %s (kind mismatch)", useKind, target)
 		}
 	case ast.RelReferences, ast.RelCrosses, ast.RelVia, ast.RelAnnotates, ast.RelSubject:
@@ -387,6 +473,7 @@ var usageSymbolKinds = map[symbols.SymbolKind]bool{
 	symbols.SymbolAnalysisCaseUsage:     true,
 	symbols.SymbolVerificationCaseUsage: true,
 	symbols.SymbolUseCaseUsage:          true,
+	symbols.SymbolConnectorEnd:          true, // An end of a connect clause is a feature
 	symbols.SymbolAlias:                 true, // Aliases can be subsetting targets
 }
 
@@ -396,6 +483,56 @@ func isDefKind(k symbols.SymbolKind) bool {
 
 func isUsageKind(k symbols.SymbolKind) bool {
 	return usageSymbolKinds[k]
+}
+
+// occurrenceDefSymbolKinds is the set of SymbolKinds that classify a definition
+// that is an OccurrenceDefinition in the SysML v2 abstract syntax (§8.3.9.3):
+// the occurrence definition itself, an individual definition, and every kind
+// whose metaclass directly or indirectly specializes OccurrenceDefinition —
+// items and parts (§8.3.10.2, §8.3.11.2), ports (§8.3.12.5), connections with
+// their interface and allocation specializations (§8.3.13.3, §8.3.14.2,
+// §8.3.15.2), actions and everything derived from them (§8.3.16.2, §8.3.17.3,
+// §8.3.18.5, §8.3.19.2, §8.3.22.2, §8.3.23.2, §8.3.24.3, §8.3.25.3),
+// constraints and requirements (§8.3.20.3, §8.3.21.3, §8.3.21.8, §8.3.26.8),
+// views and renderings (§8.3.26.7, §8.3.26.5) and metadata definitions
+// (§8.3.27.2). Attribute and enumeration definitions are data types, not
+// occurrence definitions (§8.3.7.2, §8.3.8.2).
+var occurrenceDefSymbolKinds = map[symbols.SymbolKind]bool{
+	symbols.SymbolOccurrenceDef:       true,
+	symbols.SymbolIndividualDef:       true,
+	symbols.SymbolItemDef:             true,
+	symbols.SymbolPartDef:             true,
+	symbols.SymbolPortDef:             true,
+	symbols.SymbolConnectionDef:       true,
+	symbols.SymbolInterfaceDef:        true,
+	symbols.SymbolAllocationDef:       true,
+	symbols.SymbolFlowDef:             true,
+	symbols.SymbolActionDef:           true,
+	symbols.SymbolStateDef:            true,
+	symbols.SymbolCalcDef:             true,
+	symbols.SymbolCaseDef:             true,
+	symbols.SymbolAnalysisCaseDef:     true,
+	symbols.SymbolVerificationCaseDef: true,
+	symbols.SymbolUseCaseDef:          true,
+	symbols.SymbolConstraintDef:       true,
+	symbols.SymbolRequirementDef:      true,
+	symbols.SymbolConcernDef:          true,
+	symbols.SymbolViewpointDef:        true,
+	symbols.SymbolViewDef:             true,
+	symbols.SymbolRenderingDef:        true,
+	symbols.SymbolMetadataDef:         true,
+}
+
+func isOccurrenceDefKind(k symbols.SymbolKind) bool {
+	return occurrenceDefSymbolKinds[k]
+}
+
+// isDataTypeDefKind reports whether k classifies data values rather than
+// occurrences: an attribute definition is a DataType and an enumeration
+// definition an AttributeDefinition (SysML v2 §8.3.7.2, §8.3.8.2). Occurrences
+// are disjoint with data values (§8.4.5.1).
+func isDataTypeDefKind(k symbols.SymbolKind) bool {
+	return k == symbols.SymbolAttributeDef || k == symbols.SymbolEnumerationDef
 }
 
 // isRequirementUsageKind reports whether k is a RequirementUsage or one of its
@@ -408,13 +545,49 @@ func isRequirementUsageKind(k symbols.SymbolKind) bool {
 	return false
 }
 
+// isRequirementDefKind reports whether k is a RequirementDefinition or one of
+// its specializations (ConcernDefinition, ViewpointDefinition).
+func isRequirementDefKind(k symbols.SymbolKind) bool {
+	switch k {
+	case symbols.SymbolRequirementDef, symbols.SymbolConcernDef, symbols.SymbolViewpointDef:
+		return true
+	}
+	return false
+}
+
 // isCompatibleTyping checks if a usage kind can be typed by a definition kind.
 // Allows structural compatibility: part/attribute/item/occurrence can cross-type
 // since they're all structural classifiers in SysML.
-func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, defKind symbols.SymbolKind) bool {
+// isOccurrenceUsage marks a usage carrying the `individual` or `snapshot`
+// modifier. Such a usage is an OccurrenceUsage whatever kind keyword declares it
+// (SysML v2 §8.3.9.11), so it may be typed by an occurrence definition of any
+// kind, on top of whatever its kind keyword admits.
+func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, defKind symbols.SymbolKind, isOccurrenceUsage bool) bool {
+	if isOccurrenceUsage && isOccurrenceDefKind(defKind) {
+		return true
+	}
+	if compatibleTyping(useKind, direction, defKind) {
+		return true
+	}
+	// An individual definition is an occurrence definition that individuates the
+	// definition it specializes (SysML v2 §7.9.4), so a usage may be typed by
+	// one wherever it may be typed by an occurrence definition.
+	if defKind == symbols.SymbolIndividualDef {
+		return compatibleTyping(useKind, direction, symbols.SymbolOccurrenceDef)
+	}
+	return false
+}
+
+func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, defKind symbols.SymbolKind) bool {
 	// Exact match always allowed
 	if defKind == usageWantsDefKind(useKind) {
 		return true
+	}
+
+	// SysML v2 §7.27.2: a MetadataDefinition is an ItemDefinition, so it types
+	// whatever an item definition types (`:> annotatedElement : SysML::PartDefinition`).
+	if defKind == symbols.SymbolMetadataDef {
+		defKind = symbols.SymbolItemDef
 	}
 
 	// Attributes can be typed by any structural def (for parameters, properties)
@@ -465,13 +638,19 @@ func isCompatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, d
 			defKind == symbols.SymbolIndividualDef
 	}
 
-	// Subject/objective are structural usages (requirement elements)
-	if useKind == ast.UsageSubject || useKind == ast.UsageObjective {
-		return defKind == symbols.SymbolPartDef ||
-			defKind == symbols.SymbolAttributeDef ||
-			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef ||
-			defKind == symbols.SymbolIndividualDef
+	// SysML v2 §8.3.22.4: an ObjectiveMembership's ownedObjectiveRequirement is a
+	// RequirementUsage, so an objective is typed by a RequirementDefinition or one
+	// of its specializations (`objective : MaximizeObjective`, a requirement def in
+	// Domain Libraries/Analysis/TradeStudies.sysml).
+	if useKind == ast.UsageObjective {
+		return isRequirementDefKind(defKind)
+	}
+
+	// A SubjectMembership's ownedSubjectParameter is an unconstrained Usage (SysML
+	// v2 §8.3.21), so any definition types a subject — the OMG training models
+	// subject a `port def` and an `action def` as well as structural definitions.
+	if useKind == ast.UsageSubject {
+		return true
 	}
 
 	return false

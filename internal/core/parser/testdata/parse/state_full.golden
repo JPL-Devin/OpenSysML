@@ -1,21 +1,39 @@
 (RootNamespace
   (Membership visibility="default"
     (Definition kind="state" abstract=false variation=false name="VehicleLifecycle"
-      (*ast.EntryMember)
-      (*ast.DoMember)
-      (*ast.ExitMember)
+      (EntryMember
+        (Membership visibility="default"
+          (Usage kind="action" name="initSystem" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+      (DoMember
+        (Membership visibility="default"
+          (Usage kind="action" name="monitorHealth" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+      (ExitMember
+        (Membership visibility="default"
+          (Usage kind="action" name="shutdown" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
       (Membership visibility="default"
         (Usage kind="state" name="Off" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (*ast.EntryMember)))
+          (EntryMember
+            (Membership visibility="default"
+              (Usage kind="action" name="logOff" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))))
       (Membership visibility="default"
         (Usage kind="state" name="Idle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (*ast.EntryMember)
-          (*ast.ExitMember)))
+          (EntryMember
+            (Membership visibility="default"
+              (Usage kind="action" name="logIdle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+          (ExitMember
+            (Membership visibility="default"
+              (Usage kind="action" name="logIdleExit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))))
       (Membership visibility="default"
         (Usage kind="state" name="Active" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (*ast.EntryMember)
-          (*ast.DoMember)
-          (*ast.ExitMember)
+          (EntryMember
+            (Membership visibility="default"
+              (Usage kind="action" name="startEngine" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+          (DoMember
+            (Membership visibility="default"
+              (Usage kind="action" name="runEngine" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+          (ExitMember
+            (Membership visibility="default"
+              (Usage kind="action" name="stopEngine" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
           (*ast.SubstateMember)
           (*ast.SubstateMember)
           (*ast.SubstateMember)

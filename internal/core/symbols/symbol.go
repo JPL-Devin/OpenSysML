@@ -76,6 +76,9 @@ const (
 	SymbolAnalysisCaseUsage
 	SymbolVerificationCaseUsage
 	SymbolUseCaseUsage
+	// SymbolConnectorEnd is an end feature a connector usage declares in its
+	// connect clause (`connect bead references t.bead`).
+	SymbolConnectorEnd
 )
 
 var symbolKindNames = map[SymbolKind]string{
@@ -138,6 +141,7 @@ var symbolKindNames = map[SymbolKind]string{
 	SymbolAnalysisCaseUsage:     "analysisCaseUsage",
 	SymbolVerificationCaseUsage: "verificationCaseUsage",
 	SymbolUseCaseUsage:          "useCaseUsage",
+	SymbolConnectorEnd:          "connectorEnd",
 }
 
 // String returns the display name of the kind.
@@ -168,6 +172,11 @@ type Symbol struct {
 
 	DocName string // name of the document that declares this symbol (stamped after Build)
 
+	// SuperFQNs are the fully-qualified names of the specialization targets
+	// (specializes/subsets/redefines), populated for cached library symbols
+	// where Decl=nil. Empty for live-parsed symbols, which use Decl instead.
+	SuperFQNs []string
+
 	// AliasTargetFQN is the raw qualified name text of the alias target
 	// ("alias X for Y" → "Y"), populated for cached stdlib aliases where Decl=nil.
 	// Empty for non-aliases or live-parsed aliases (which use Decl instead).
@@ -180,4 +189,10 @@ type Symbol struct {
 	// EffectiveName reports that Name was taken from the feature this
 	// declaration references rather than declared (KerML Feature::effectiveName).
 	EffectiveName bool
+
+	// NamingTarget is the reference that named this symbol when EffectiveName
+	// is set: the target of its reference subsetting or redefinition. Resolving
+	// that reference must not see the name it gave away, or it would resolve to
+	// the feature that borrowed it (KerML 7.3.4.5).
+	NamingTarget ast.Node
 }

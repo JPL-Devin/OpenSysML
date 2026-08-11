@@ -28,6 +28,7 @@ type Model struct {
 	primTypes     map[*symbols.Symbol]PrimType
 	scalars       map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
 	params        map[*symbols.Symbol]behaviorParameters
+	ends          map[*symbols.Symbol][]*symbols.Symbol
 }
 
 // NewModel creates a semantic model backed by the given name resolver. The
@@ -43,6 +44,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		memberSources: make(map[*symbols.Symbol][]*symbols.Symbol),
 		primTypes:     make(map[*symbols.Symbol]PrimType),
 		params:        make(map[*symbols.Symbol]behaviorParameters),
+		ends:          make(map[*symbols.Symbol][]*symbols.Symbol),
 	}
 }
 
@@ -71,6 +73,8 @@ func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
 	case *ast.Definition:
 		return d.Relationships
 	case *ast.Usage:
+		return d.Relationships
+	case *ast.ConnectorEnd:
 		return d.Relationships
 	default:
 		return nil
@@ -129,6 +133,19 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, target)
 	}
 
+	// A library symbol restored from the cache has no AST: its specialization
+	// edges were resolved when the record was written and are carried as FQNs.
+	for _, fqn := range sym.SuperFQNs {
+		for _, target := range m.resolver.Index().LookupQualified(fqn) {
+			if target == nil || target == sym || seen[target] {
+				continue
+			}
+			seen[target] = true
+			out = append(out, target)
+			break
+		}
+	}
+
 	// SubjectMember has TypeRef instead of Relationships - handle separately
 	if subj, ok := sym.Decl.(*ast.SubjectMember); ok && subj.TypeRef != nil {
 		if target, ok := m.resolver.ResolveQualified(sym.OwnerScope, subj.TypeRef); ok && target != nil {
@@ -169,11 +186,32 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 	}
 
+	// Semantic metadata annotating this element — a `#keyword` prefix — adds the
+	// implicit specialization of its baseType (SysML v2 §7.27.3, §7.27.4).
+	for _, base := range m.semanticMetadataBases(sym) {
+		if base == nil || base == sym || seen[base] {
+			continue
+		}
+		seen[base] = true
+		out = append(out, base)
+	}
+
 	// A parameter of a behavior or step implicitly redefines the corresponding
 	// parameter of each behavior or step its owner specializes, and so takes
 	// that parameter's type when it declares none (see redefinition.go).
 	declared := len(out)
 	for _, redefined := range m.implicitParameterRedefinitions(sym) {
+		if seen[redefined] {
+			continue
+		}
+		seen[redefined] = true
+		out = append(out, redefined)
+	}
+
+	// An end of a connector implicitly redefines the end at its own position of
+	// each connector its owner specializes, and so takes that end's type when it
+	// declares none (see connector.go).
+	for _, redefined := range m.implicitEndRedefinitions(sym) {
 		if seen[redefined] {
 			continue
 		}
@@ -256,7 +294,7 @@ func (m *Model) Conforms(a, b *symbols.Symbol) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	if a == b {
+	if a == b || isAnything(b) {
 		return true
 	}
 	for _, s := range m.AllSupertypes(a) {
@@ -265,6 +303,14 @@ func (m *Model) Conforms(a, b *symbols.Symbol) bool {
 		}
 	}
 	return false
+}
+
+// isAnything reports whether sym is Base::Anything, the classifier every type
+// specializes (KerML 8.3.2.1), whether or not the chain to it is declared.
+func isAnything(sym *symbols.Symbol) bool {
+	return sym != nil && (sym.Name == "Base::Anything" ||
+		(sym.Name == "Anything" && sym.OwnerScope != nil && sym.OwnerScope.Owner() != nil &&
+			sym.OwnerScope.Owner().Name == "Base"))
 }
 
 // HasSpecializationCycle reports whether sym participates in a specialization

@@ -33,25 +33,41 @@ type Session struct {
 
 	// Runtime execution context
 	rtCtx     *runtime.Context
-	instances map[string]*runtime.Instance // name -> instance for %instantiate tracking
+	idx       *symbols.Index               // index over the session document, shared by lookup and runtime
+	instances map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
 
 	// Active executor sessions for debugging
 	actionExec *actionSession
 	stateExec  *stateSession
+
+	// trace records execution steps while tracing is on, nil otherwise.
+	trace *runtime.TraceRecorder
+
+	verbosity Verbosity
 }
 
 // actionSession holds an active action executor debugging session.
 type actionSession struct {
-	name     string
+	name string
+	// rootName is the top-level declaration the debugged action lives under.
+	// Resubmitting that declaration rewrites the graph the executor is running,
+	// which is what ends the session; an unrelated submission does not.
+	rootName string
 	symbol   *symbols.Symbol
 	executor *runtime.ActionExecutor
 }
 
 // stateSession holds an active state machine executor debugging session.
 type stateSession struct {
-	name     string
+	name string
+	// rootName is the top-level declaration the debugged state machine lives
+	// under; see actionSession.rootName.
+	rootName string
 	symbol   *symbols.Symbol
 	executor *runtime.StateExecutor
+	// now is the debugger's clock. The executor's own clock only moves when an
+	// event is processed, so successive %advance calls accumulate here.
+	now float64
 }
 
 // NewSession returns a session over a fresh workspace.
@@ -59,6 +75,7 @@ func NewSession() *Session {
 	return &Session{
 		ws:        model.NewWorkspace(),
 		instances: make(map[string]*runtime.Instance),
+		verbosity: VerbosityNormal,
 	}
 }
 
@@ -73,8 +90,10 @@ func (s *Session) List() []string {
 
 // accept parses src to compute its declared names, drops any earlier snippet
 // whose names intersect, appends the new snippet, and returns the joined
-// <repl> content. It does NOT touch the workspace (Task 4 does).
-func (s *Session) accept(src string) string {
+// <repl> content plus the byte offset where src begins in it. That offset is
+// what scopes a report to the submission just made. It does NOT touch the
+// workspace (Task 4 does).
+func (s *Session) accept(src string) (joined string, offset int) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
 	if len(names) > 0 {
@@ -91,7 +110,8 @@ func (s *Session) accept(src string) string {
 		s.snippets = kept
 	}
 	s.snippets = append(s.snippets, snippet{src: src, names: names})
-	return s.joined()
+	joined = s.joined()
+	return joined, len(joined) - len(src)
 }
 
 func (s *Session) joined() string {
@@ -118,9 +138,16 @@ func intersects(names []string, set map[string]bool) bool {
 // prior snippet (see accept).
 func (s *Session) Submit(src string) Result {
 	declared := declaredNames(parser.New(source.New(docName, []byte(src))).ParseFile())
-	joined := s.accept(src)
+	joined, offset := s.accept(src)
 	s.version++
 	s.ws.Open(docName, []byte(joined), s.version)
+	// The document is a new AST and scope tree, so anything derived from the
+	// previous one is stale — including instances, whose IDs restart with the
+	// new runtime context.
+	s.idx = nil
+	s.rtCtx = nil
+	s.instances = make(map[string]*runtime.Instance)
+	notices := s.dropStaleDebugSessions(declared)
 	diags := s.ws.Diagnostics(docName)
 	var members []ast.Node
 	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
@@ -131,7 +158,51 @@ func (s *Session) Submit(src string) Result {
 		Declared:    declared,
 		Diagnostics: diags,
 		Source:      joined,
+		Offset:      offset,
+		Notices:     notices,
 	}
+}
+
+// dropStaleDebugSessions ends the debugging sessions whose declaration this
+// submission rewrote, and reports each one it ended. A session over an
+// untouched declaration survives: it keeps running against the graph and
+// runtime context it started with, so stepping through a behavior does not
+// require avoiding the prompt.
+func (s *Session) dropStaleDebugSessions(declared []string) []string {
+	if len(declared) == 0 {
+		return nil
+	}
+	redeclared := make(map[string]bool, len(declared))
+	for _, n := range declared {
+		redeclared[n] = true
+	}
+	var notices []string
+	if s.actionExec != nil && redeclared[s.actionExec.rootName] {
+		notices = append(notices, debugSessionEnded("action", s.actionExec.name, s.actionExec.rootName))
+		s.actionExec = nil
+	}
+	if s.stateExec != nil && redeclared[s.stateExec.rootName] {
+		notices = append(notices, debugSessionEnded("state", s.stateExec.name, s.stateExec.rootName))
+		s.stateExec = nil
+	}
+	return notices
+}
+
+func debugSessionEnded(kind, name, rootName string) string {
+	return fmt.Sprintf("note: %s debugging session for %q ended (%s was redeclared)", kind, name, rootName)
+}
+
+// rootNameOf returns the top-level declaration name a fully-qualified name
+// lives under, which is the granularity at which a submission replaces
+// declarations.
+func rootNameOf(fqn, fallback string) string {
+	if fqn == "" {
+		fqn = fallback
+	}
+	if cut := strings.Index(fqn, "::"); cut >= 0 {
+		return fqn[:cut]
+	}
+	return fqn
 }
 
 // Clear resets the session, dropping all accumulated declarations.
@@ -140,6 +211,7 @@ func (s *Session) Clear() {
 	s.snippets = nil
 	s.version = 0
 	s.rtCtx = nil
+	s.idx = nil
 	s.instances = make(map[string]*runtime.Instance)
 	s.actionExec = nil
 	s.stateExec = nil
@@ -151,17 +223,30 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 		return s.rtCtx, nil
 	}
 
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
+	idx := s.symbolIndex()
+	if idx == nil {
 		return nil, fmt.Errorf("no document loaded")
 	}
-
-	// Build fresh index from current document
-	idx := symbols.NewIndex()
-	idx.AddDocument(docName, doc.AST)
 
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	s.rtCtx = runtime.NewContext(model, resolver, 100000)
+	s.rtCtx.SetTrace(s.trace)
 	return s.rtCtx, nil
+}
+
+// symbolIndex lazily indexes the session document, returning nil when nothing
+// is loaded. Name lookup and the runtime context share it.
+func (s *Session) symbolIndex() *symbols.Index {
+	if s.idx != nil {
+		return s.idx
+	}
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		return nil
+	}
+	idx := symbols.NewIndex()
+	idx.AddDocument(docName, doc.AST)
+	s.idx = idx
+	return idx
 }

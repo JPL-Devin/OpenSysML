@@ -18,7 +18,14 @@ cd Systemica
 make build  # builds bin/sysml, bin/sysml-lsp, and bin/sysml-grpc with version info
 make test   # runs all tests
 make lint   # runs staticcheck and gosec, as CI does
+
+./scripts/download-training-examples.sh   # fetch the OMG corpus the gate needs
 ```
+
+The OMG training-corpus gate (`internal/core/model/training_examples_test.go`) skips while
+`examples/sysml-v2-training/` is absent, so run the download script once before trusting a
+local `make test`. CI runs the script itself and sets `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`,
+which makes a missing corpus a failure there instead of a skip.
 
 ## Development Workflow
 
@@ -177,6 +184,13 @@ We use [Semantic Versioning](https://semver.org/):
 
 ## CI/CD
 
+### GitHub Actions
+
+`.github/workflows/pr.yml` is the check that gates pull requests: gofmt, `go vet`,
+`make lint`, the race-enabled test suite, and the binaries. It downloads the OMG training
+corpus before the suite and runs the corpus gate as its own step, so that gate is required
+rather than skipped.
+
 ### CircleCI
 
 All commits and tags trigger CI:
@@ -199,6 +213,7 @@ PRs must pass:
 - [ ] No race conditions
 - [ ] Code formatted (`gofmt`)
 - [ ] Static analysis clean (`make lint`: staticcheck and gosec)
+- [ ] OMG training-corpus gate runs (not skipped) and matches its expectations
 
 ## Project Structure
 

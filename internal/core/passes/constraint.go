@@ -80,7 +80,7 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkMultiplicityRange(sym)
 	cc.checkSubsettingMultiplicity(sym)
 	cc.checkConnectorEnds(sym)
-	cc.checkTypingConformance(sym)
+	cc.checkConnectorEndRedefinition(sym)
 	cc.checkRedefinition(sym)
 }
 
@@ -185,10 +185,11 @@ func (cc *constraintChecker) checkSubsettingMultiplicity(sym *symbols.Symbol) {
 //   - a connection must declare at least two ends (adapts the pilot's
 //     INVALID_CONNECTOR_RELATED_FEATURES rule);
 //   - an interface or allocation is binary — exactly two ends when any are
-//     declared (adapts the binary-specialization rules);
-//   - a flow whose ends are declared must have both a source and a target.
+//     declared (adapts the binary-specialization rules).
 //
-// Usages with no declared ends are treated as abstract and skipped.
+// Usages with no declared ends are treated as abstract and skipped. Flow ends
+// are not checked: they are optional (SysML v2 §8.2.2.16) and must be absent for
+// a message (§8.4.12.2), and a half-declared pair is a parse error.
 func (cc *constraintChecker) checkConnectorEnds(sym *symbols.Symbol) {
 	u, ok := sym.Decl.(*ast.Usage)
 	if !ok {
@@ -214,16 +215,28 @@ func (cc *constraintChecker) checkConnectorEnds(sym *symbols.Symbol) {
 				cc.addConnectorEndsDiag(sym, u, "an allocation must be binary (exactly two ends)")
 			}
 		}
-	case ast.UsageFlow:
-		if u.FlowEnds != nil && (u.FlowEnds.From == nil || u.FlowEnds.To == nil) {
-			cc.diags = append(cc.diags, Diagnostic{
-				Severity: SeverityError,
-				Span:     u.FlowEnds.Span(),
-				Message:  fmt.Sprintf("flow %s must declare both a source and a target end", sym.Name),
-				Code:     "flow-ends",
-				Source:   "constraint",
-			})
-		}
+	}
+}
+
+// checkConnectorEndRedefinition flags an end a connector declares that redefines
+// no end of the connector it specializes. Every end of a typed connector
+// redefines the end at its own position of that type (SysML v2 §7.13.2), so an
+// end beyond the last position of the type refines nothing.
+func (cc *constraintChecker) checkConnectorEndRedefinition(sym *symbols.Symbol) {
+	general, unmatched := cc.model.UnmatchedConnectorEnds(sym)
+	if general == nil {
+		return
+	}
+	declared := cc.model.ConnectorEndCount(general)
+	for _, end := range unmatched {
+		cc.diags = append(cc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     end.DeclSpan,
+			Message: fmt.Sprintf("end %s redefines no end of %s, which declares %d end(s)",
+				end.Name, general.Name, declared),
+			Code:   "connector-ends",
+			Source: "constraint",
+		})
 	}
 }
 
@@ -245,90 +258,6 @@ func (cc *constraintChecker) addConnectorEndsDiag(sym *symbols.Symbol, u *ast.Us
 		Code:     "connector-ends",
 		Source:   "constraint",
 	})
-}
-
-// checkTypingConformance flags a usage whose type does not conform to the type
-// of a usage it subsets (SysML spec: a subsetting usage must have a type that
-// conforms to the type of the subsetted usage). Uses model.Conforms for type
-// conformance checking.
-func (cc *constraintChecker) checkTypingConformance(sym *symbols.Symbol) {
-	// Extract usage typing (via typing relationship)
-	var usageType *symbols.Symbol
-	for _, rel := range semantics.RelationshipsOf(sym) {
-		if rel == nil || rel.Target == nil || rel.Kind != ast.RelTyping {
-			continue
-		}
-		targetNode := rel.Target
-		if fr, ok := targetNode.(*ast.FeatureReference); ok {
-			targetNode = fr.Name
-		}
-		if qn, ok := targetNode.(*ast.QualifiedName); ok {
-			resolved, ok := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
-			if ok && resolved != nil {
-				usageType = resolved
-				break
-			}
-		}
-	}
-
-	if usageType == nil {
-		return // No explicit type, skip
-	}
-
-	// Check all subsets relationships
-	for _, rel := range semantics.RelationshipsOf(sym) {
-		if rel == nil || rel.Target == nil || rel.Kind != ast.RelSubsets {
-			continue
-		}
-		targetNode := rel.Target
-		if fr, ok := targetNode.(*ast.FeatureReference); ok {
-			targetNode = fr.Name
-		}
-		qn, isQN := targetNode.(*ast.QualifiedName)
-		if !isQN {
-			continue
-		}
-		subsetted, resolved := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
-		if !resolved || subsetted == nil {
-			continue
-		}
-
-		// Extract type of subsetted usage
-		var subsettedType *symbols.Symbol
-		for _, subRel := range semantics.RelationshipsOf(subsetted) {
-			if subRel == nil || subRel.Target == nil || subRel.Kind != ast.RelTyping {
-				continue
-			}
-			subTargetNode := subRel.Target
-			if fr, ok := subTargetNode.(*ast.FeatureReference); ok {
-				subTargetNode = fr.Name
-			}
-			if subQn, ok := subTargetNode.(*ast.QualifiedName); ok {
-				subResolved, ok := cc.resolver.ResolveQualified(subsetted.OwnerScope, subQn)
-				if ok && subResolved != nil {
-					subsettedType = subResolved
-					break
-				}
-			}
-		}
-
-		if subsettedType == nil {
-			continue // Subsetted usage has no explicit type, skip
-		}
-
-		// Check conformance: usageType must conform to subsettedType
-		if !cc.model.Conforms(usageType, subsettedType) {
-			cc.diags = append(cc.diags, Diagnostic{
-				Severity: SeverityError,
-				Span:     rel.Target.Span(),
-				Message: fmt.Sprintf(
-					"%s (typed by %s) subsets %s (typed by %s): types do not conform",
-					sym.Name, usageType.Name, subsetted.Name, subsettedType.Name),
-				Code:   "typing-conformance",
-				Source: "constraint",
-			})
-		}
-	}
 }
 
 // checkRedefinition flags a usage that redefines a member without proper

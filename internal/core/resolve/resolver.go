@@ -16,6 +16,14 @@ type MemberLookup interface {
 	LookupContributedMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool)
 }
 
+// supertypeLookup is the part of the semantic model that reports the features a
+// declaration specializes, including the ones it redefines implicitly. A
+// nameless parameter takes its name from the parameter it redefines, which only
+// the model can match (KerML 7.3.4.5). *semantics.Model implements it.
+type supertypeLookup interface {
+	DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol
+}
+
 // resolution is a memoized lookup outcome.
 type resolution struct {
 	sym *symbols.Symbol
@@ -30,7 +38,8 @@ type Resolver struct {
 	resolving   map[ast.Node]bool // cycle detection
 	parts       map[*ast.QualifiedName][]*symbols.Symbol
 	Diagnostics []Diagnostic
-	model       MemberLookup // Optional *semantics.Model for inheritance-aware member lookup
+	model       MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
+	naming      map[*symbols.Symbol]bool // effective names being computed, for cycle detection
 }
 
 // New creates a resolver over the given index.
@@ -40,6 +49,7 @@ func New(idx *symbols.Index) *Resolver {
 		memo:      map[ast.Node]resolution{},
 		resolving: map[ast.Node]bool{},
 		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
+		naming:    map[*symbols.Symbol]bool{},
 	}
 }
 
@@ -121,7 +131,8 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 		return nil, false
 	}
 	r.resolving[qn] = true
-	res := r.walkQualified(scope, qn, hide)
+	// A feature that took its name from qn is never what qn names.
+	res := r.walkQualified(scope, qn, hide.hiding(qn))
 	delete(r.resolving, qn)
 	r.memo[qn] = res
 	return res.sym, res.ok

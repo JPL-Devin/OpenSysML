@@ -1,0 +1,10 @@
+step 1: token 1@split
+step 2: token 2@listenNumber, token 3@listenText, token 4@gate
+step 3: token 2@listenNumber, token 3@listenText, token 4@sender
+eval literal "go" -> "go"
+eval literal 5 -> 5
+step 4: token 2@sync, token 3@sync, token 4@sync
+eval feature n -> 5
+eval feature t -> "go"
+step 5: token 5@end
+step 6: no active tokens

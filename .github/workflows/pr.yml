@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+env:
+  # The OMG training corpus is not vendored. Requiring it here turns "corpus
+  # absent" into a test failure instead of a skip, so the gate cannot pass green
+  # without actually running (see internal/core/model/training_examples_test.go).
+  SYSTEMICA_REQUIRE_TRAINING_CORPUS: "1"
+
 jobs:
   build-and-test:
     name: Build and test
@@ -22,6 +28,26 @@ jobs:
 
       - name: Download modules
         run: go mod download
+
+      # Keyed on the download script, so a change to the pinned pilot tag or the
+      # layout invalidates the cache. A restored cache is still verified below.
+      - name: Cache the OMG training corpus
+        uses: actions/cache@v4
+        with:
+          path: examples/sysml-v2-training
+          key: training-corpus-${{ hashFiles('scripts/download-training-examples.sh') }}
+
+      - name: Download the OMG training corpus
+        run: ./scripts/download-training-examples.sh
+
+      - name: Verify the corpus is present
+        run: |
+          count=$(find examples/sysml-v2-training -name '*.sysml' | wc -l)
+          echo "training corpus: $count .sysml files"
+          if [ "$count" -eq 0 ]; then
+            echo "error: the training corpus is empty; the corpus gate would not run" >&2
+            exit 1
+          fi
 
       - name: Check gofmt
         run: |
@@ -40,6 +66,18 @@ jobs:
 
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      # Re-run the corpus gate on its own so its verdict is legible in the log
+      # and a skip is impossible to miss.
+      - name: Corpus gate
+        run: |
+          set -o pipefail
+          go test -count=1 -v ./internal/core/model -run 'TestTrainingExamples' | tee corpus-gate.log
+          grep -E 'training files clean' corpus-gate.log
+          if grep -qE '^\s*--- SKIP' corpus-gate.log; then
+            echo "error: the corpus gate skipped" >&2
+            exit 1
+          fi
 
       - name: Build binaries
         run: |

@@ -126,39 +126,45 @@ sysml>
 
 #### 1. Define a Simple Part
 
+Library types such as `Real` are not in scope automatically — import them, exactly as a
+`.sysml` file would:
+
 ```sysml
-sysml> part Wheel {
-...>     attribute diameter : Real;
-...>     attribute width : Real;
-...> }
-✓ Wheel
+sysml> import ScalarValues::*;
+✓ import ScalarValues::*
+
+sysml> part def Wheel {
+  ...>     attribute diameter : Real;
+  ...>     attribute width : Real;
+  ...> }
+✓ part def Wheel
 ```
+
+Each accepted declaration is echoed back as `✓ <kind> <name>`.
 
 #### 2. Define a Vehicle
 
 ```sysml
-sysml> part Vehicle {
-...>     part engine {
-...>         attribute power : Real = 150.0;
-...>     }
-...>     part wheels : Wheel[4] {
-...>         :>> diameter = 16.0;
-...>         :>> width = 7.5;
-...>     }
-...> }
-✓ Vehicle
+sysml> part def Vehicle {
+  ...>     attribute mass : Real = 1500.0;
+  ...>     part wheels : Wheel[4];
+  ...> }
+✓ part def Vehicle
 ```
 
 #### 3. Instantiate and Inspect
 
 ```sysml
 sysml> %instantiate Vehicle
-Created instance: Vehicle (ID: 1)
+✓ Created instance of Vehicle
+  ID: 1
+  Use %slots Vehicle to inspect
 
 sysml> %slots Vehicle
 Instance: Vehicle (ID: 1)
-  engine: Instance(ID: 2)
-  wheels: [Instance(ID: 3), Instance(ID: 4), Instance(ID: 5), Instance(ID: 6)]
+Slots:
+  mass = 1500.00
+  wheels = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4), Instance(ID: 5)]
 
 sysml> %instances
 Instances:
@@ -169,13 +175,14 @@ Instances:
 
 ```sysml
 sysml> attribute wheelCount = 4;
-✓ wheelCount
+✓ attribute wheelCount
 
 sysml> attribute totalDiameter = wheelCount * 16.0;
-✓ totalDiameter
+✓ attribute totalDiameter
 
 sysml> %eval totalDiameter
-totalDiameter = 64.0
+✓ totalDiameter
+  = 64.00
 ```
 
 ---
@@ -186,40 +193,46 @@ Create a file `my_model.sysml`:
 
 ```sysml
 package MyModel {
-    part Sensor {
-        attribute reading : Real;
-        attribute threshold : Real = 100.0;
-        
-        calc def isTriggered : Boolean {
-            reading > threshold
-        }
+    part def Sensor {
+        attribute reading = 0.0;
+        attribute threshold = 100.0;
     }
-    
-    part System {
+
+    part def System {
         part sensors : Sensor[3];
     }
 }
 ```
 
-Load it in the REPL:
+Load it in the REPL. `%load` submits the file's contents as if you had typed them, so it
+reports the same `✓` lines; `%list` echoes everything the session currently holds:
 
 ```bash
 $ sysml
 sysml> %load my_model.sysml
-Loaded: my_model.sysml
+✓ package MyModel
 
 sysml> %list
-Declarations:
-  MyModel (package)
-  MyModel::Sensor (part def)
-  MyModel::System (part def)
+package MyModel {
+    part def Sensor {
+        attribute reading = 0.0;
+        attribute threshold = 100.0;
+    }
+
+    part def System {
+        part sensors : Sensor[3];
+    }
+}
 
 sysml> %instantiate MyModel::System
-Created instance: MyModel::System (ID: 1)
+✓ Created instance of MyModel::System
+  ID: 1
+  Use %slots MyModel::System to inspect
 
 sysml> %slots MyModel::System
 Instance: MyModel::System (ID: 1)
-  sensors: [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4)]
+Slots:
+  sensors = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4)]
 ```
 
 ---
@@ -232,6 +245,8 @@ Instance: MyModel::System (ID: 1)
 | `%list` | List all declarations in current session |
 | `%clear` | Clear session (reset all declarations) |
 | `%load <file>` | Load .sysml file into session |
+| `%verbosity [level]` | Show or set output level: `quiet` (errors only), `normal`, `debug` (every diagnostic over the whole buffer) |
+| `%trace [on\|off]` | Show or set execution tracing: each evaluation, calc invocation, action step and state transition |
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create instance from part definition |
 | `%slots <name>` | Show instance slots and values |
@@ -357,81 +372,95 @@ sysml> %requirement SafetyReq
 **Action execution (step-by-step):**
 ```sysml
 sysml> action SimpleWorkflow {
-...>     first start initial;
-...>     action compute { return 42; }
-...>     done end final;
-...>     then initial compute;
-...>     then compute final;
+...>     attribute result = 0;
+...>     first start;
+...>     action compute { assign result := 42; }
+...>     done end;
+...>     then start compute;
+...>     then compute end;
 ...> }
 ✓ SimpleWorkflow
 
 sysml> %action SimpleWorkflow
-Action: SimpleWorkflow
-Tokens: 1
-State: Ready
+✓ Started action executor for "SimpleWorkflow"
+  State: Running
+  Tokens: 1
 
 sysml> %step
-Tokens: 1 (at compute)
+✓ Step complete
+  State: Running
+  Tokens: 1
 
 sysml> %tokens
-Token 1: compute { }
+Active tokens (1):
+  Token 1 @ compute
+    result = 0
 
 sysml> %continue
-✓ Completed
-Result: 42
+✓ Action completed
+  Final state: Completed
+  Results:
+    result = 42
 ```
 
 **State machine execution:**
 ```sysml
 sysml> state TrafficLight {
-...>     entry start green;
-...>     state green;
-...>     state yellow;
-...>     state red;
-...>     done end off;
-...>     
-...>     transition green to yellow after 25;
-...>     transition yellow to red after 5;
-...>     transition red to off after 30;
+...>     initial start;
+...>     state green { accept after 25 then yellow; }
+...>     state yellow { accept after 5 then red; }
+...>     state red { accept after 30 then off; }
+...>     final off;
+...>
+...>     start then green;
 ...> }
-✓ TrafficLight
 
 sysml> %state TrafficLight
-State machine: TrafficLight
-Current: green
-Time: 0.0s
-Events: 1
+✓ Started state machine executor for "TrafficLight"
+  Current state: start
+  Time: 0.00
+  Events: 1
 
-sysml> %advance
-Current: yellow (Time: 25.0s)
+sysml> %advance 25
+✓ Advanced to 25.00 (2 event(s) processed)
+  Current state: yellow
+  Last event at: 25.00
+  Remaining events: 1
 
 sysml> %current
 Current state: yellow
-State stack: [yellow]
-Time: 25.0s
-Events: 1
-State: Running
+Time: 25.00
+Last event at: 25.00
+Execution state: Running
 
-sysml> %advance
-Current: red (Time: 30.0s)
+sysml> %advance 5
+✓ Advanced to 30.00 (1 event(s) processed)
+  Current state: red
+  Last event at: 30.00
+  Remaining events: 1
 
-sysml> %advance
-✓ Final state reached (off)
+sysml> %advance 30
+✓ Advanced to 60.00 (1 event(s) processed)
+  Current state: off
+  Last event at: 60.00
+  Remaining events: 0
+
+✓ State machine completed (final state reached)
 ```
 
 **Action debugging commands:**
 - `%action <name>` — Start action debugging session
 - `%step` — Advance all tokens one step
-- `%continue` — Run to completion
+- `%continue` — Run to completion, or to the first breakpoint hit
 - `%tokens` — Show active tokens with data
-- `%break <node>` — Set breakpoint
+- `%break <node>` — Set breakpoint on a named node; `%continue` stops when a token reaches it
 - `%stop` — Stop debugging
 
 **State machine debugging commands:**
 - `%state <name>` — Start state machine debugging
 - `%events` — Show event queue
 - `%current` — Show current state, stack, data
-- `%advance` — Process next event
+- `%advance <time>` — Advance simulation time by `<time>` units, processing every event due
 - `%stop` — Stop debugging
 
 **See [examples/action-executor-demo.sysml](../examples/action-executor-demo.sysml) and [examples/state-machine-demo.sysml](../examples/state-machine-demo.sysml) for complete workflows.**

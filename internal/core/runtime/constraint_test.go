@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -110,8 +111,8 @@ func TestConstraintEvaluation_AssertWithLiteral(t *testing.T) {
 	if err == nil {
 		t.Fatal("AlwaysFalse should fail")
 	}
-	if !strings.Contains(err.Error(), "assertion failed") {
-		t.Fatalf("Expected 'assertion failed', got: %v", err)
+	if !errors.Is(err, ErrViolated) {
+		t.Fatalf("Expected a violation verdict, got: %v", err)
 	}
 	t.Logf("✓ AlwaysFalse: assertion failed (as expected)")
 }
@@ -198,4 +199,40 @@ func TestConstraintEvaluation_Negation(t *testing.T) {
 		t.Fatal("Negated assertion should pass")
 	}
 	t.Logf("✓ Negated assertion passed")
+}
+
+// A constraint with nothing to check has no verdict: reporting one would claim
+// a check that never ran.
+func TestConstraintWithoutConditionsIsNotAVerdict(t *testing.T) {
+	src := `
+		package test {
+			constraint def Empty { }
+			part def Rig {
+				constraint nothing : Empty;
+			}
+		}
+	`
+	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("test.sysml", file)
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+
+	testPkg := idx.DocumentRoot("test.sysml").Children()[0]
+	rig, ok := testPkg.LookupLocal("Rig")
+	if !ok {
+		t.Fatal("Rig not found")
+	}
+	feat := featureNamed(ctx, rig, "nothing")
+	if feat == nil || feat.Symbol == nil {
+		t.Fatal("constraint feature not found")
+	}
+
+	satisfied, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), nil)
+	if !errors.Is(err, ErrNoConditions) {
+		t.Fatalf("err = %v, want ErrNoConditions", err)
+	}
+	if satisfied {
+		t.Error("an unevaluated constraint reported as satisfied")
+	}
 }

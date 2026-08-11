@@ -3,6 +3,7 @@ package passes
 import (
 	"testing"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -126,6 +127,40 @@ func TestConstraintConnectionNaryOK(t *testing.T) {
 	}
 }
 
+// The constraint tier sees every end an n-ary clause declares, so its arity
+// rules count the real arity rather than a truncated one.
+func TestConstraintConnectionNaryEndCountReachesTheChecker(t *testing.T) {
+	src := "part def C { part a; part b; part c; part d; connection conn connect (a, b, c, d); }"
+	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("<t>", root)
+	syms := idx.LookupQualified("C::conn")
+	if len(syms) != 1 {
+		t.Fatalf("expected one symbol for C::conn, got %d", len(syms))
+	}
+	u, ok := syms[0].Decl.(*ast.Usage)
+	if !ok {
+		t.Fatalf("C::conn declared by %T, want *ast.Usage", syms[0].Decl)
+	}
+	if len(u.ConnectorEnds) != 4 {
+		t.Fatalf("connector ends at the constraint tier = %d, want 4", len(u.ConnectorEnds))
+	}
+	if hasCode(constraintDiags(t, src), "connector-ends") {
+		t.Fatalf("a four-end connection should be allowed")
+	}
+}
+
+// The anonymous inline form reaches the arity checker with its real end count.
+func TestConstraintAnonymousNaryConnectionEndCountReachesTheChecker(t *testing.T) {
+	src := "part def C { part a; part b; part c; connect (a, b, c); }"
+	if hasCode(constraintDiags(t, src), "connector-ends") {
+		t.Fatalf("a three-end anonymous connection should be allowed")
+	}
+	if !hasCode(constraintDiags(t, "part def C { part a; connect (a); }"), "connector-ends") {
+		t.Fatalf("a one-end anonymous connection should be reported")
+	}
+}
+
 func TestConstraintConnectionSingleEndFails(t *testing.T) {
 	diags := constraintDiags(t,
 		"part def C { part a; connection conn connect (a); }")
@@ -174,17 +209,38 @@ func TestConstraintFlowCompleteOK(t *testing.T) {
 	}
 }
 
-func TestConstraintFlowMissingEndsFails(t *testing.T) {
+// A payload-only flow declares no ends. SysML v2 §8.2.2.16 makes the
+// `'from' … 'to' …` part of a FlowDeclaration optional, and §8.4.12.2 requires a
+// message to have no owned flowEnds, so this is well formed.
+func TestConstraintFlowPayloadOnlyHasNoEndsOK(t *testing.T) {
 	diags := constraintDiags(t,
 		"part def C { item Fuel; flow f of Fuel; }")
-	if !hasCode(diags, "flow-ends") {
-		t.Fatalf("expected flow-ends diagnostic for payload-only flow, got %v", diags)
+	if hasCode(diags, "flow-ends") {
+		t.Fatalf("unexpected flow-ends diagnostic for payload-only flow, got %v", diags)
 	}
 }
 
+func TestConstraintMessageWithoutEndsOK(t *testing.T) {
+	diags := constraintDiags(t,
+		"item def SetSpeed; occurrence def I { message setSpeedMessage of SetSpeed; }")
+	if hasCode(diags, "flow-ends") {
+		t.Fatalf("unexpected flow-ends diagnostic for a message without ends, got %v", diags)
+	}
+}
+
+// A flow naming a source but no target is a parse error, pinned by the parser's
+// `flow_source_without_target` negative case, not by this tier.
+
 // --- V-C4 Track 4 Task 13: typing conformance ---
 
-func TestConstraint_TypingConformanceValid(t *testing.T) {
+// Subsetting does not require the subsetting feature's declared type to conform
+// to the subsetted feature's type. Per KerML 8.3.3.3.4, the types of a Feature
+// "are derived from its typings and the types of its subsettings", so the
+// co-domain KerML 8.3.3.3.10 requires to specialize the subsetted co-domain is
+// the intersection of both — it always does, whether or not the declared types
+// are related (KerML 7.3.4.4: a subsetting feature can "add additional feature
+// types").
+func TestConstraintSubsettingConformingTypeOK(t *testing.T) {
 	src := `
 		attribute def Vehicle;
 		attribute def Car specializes Vehicle;
@@ -198,7 +254,7 @@ func TestConstraint_TypingConformanceValid(t *testing.T) {
 	}
 }
 
-func TestConstraint_TypingConformanceInvalid(t *testing.T) {
+func TestConstraintSubsettingUnrelatedTypeOK(t *testing.T) {
 	src := `
 		attribute def Vehicle;
 		attribute def Animal;
@@ -207,8 +263,23 @@ func TestConstraint_TypingConformanceInvalid(t *testing.T) {
 		attribute myPet : Animal subsets vehicles;
 	`
 	diags := constraintDiags(t, src)
-	if !hasCode(diags, "typing-conformance") {
-		t.Fatalf("expected typing-conformance diagnostic, got %v", diags)
+	if hasCode(diags, "typing-conformance") {
+		t.Fatalf("unexpected typing-conformance diagnostic: subsetting intersects types, got %v", diags)
+	}
+}
+
+// The occurrence shape from the OMG `Model Library Example`: `Cause` does not
+// specialize `Situation`, yet `causes :> situations` is well formed.
+func TestConstraintSubsettingOccurrenceUnrelatedTypeOK(t *testing.T) {
+	src := `
+		abstract occurrence def Situation;
+		abstract occurrence situations : Situation[*] nonunique;
+		abstract occurrence def Cause;
+		abstract occurrence causes : Cause[*] nonunique :> situations;
+	`
+	diags := constraintDiags(t, src)
+	if hasCode(diags, "typing-conformance") {
+		t.Fatalf("unexpected typing-conformance diagnostic on the model library shape, got %v", diags)
 	}
 }
 

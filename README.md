@@ -48,28 +48,31 @@ make build
 **Interactive modeling:**
 ```bash
 $ sysml
-sysml> part Wheel { attribute diameter = 16.0; }
-✓ Wheel
+sysml> part def Wheel { attribute diameter = 16.0; }
+✓ part def Wheel
 
 sysml> %instantiate Wheel
-Created instance: Wheel (ID: 1)
+✓ Created instance of Wheel
+  ID: 1
+  Use %slots Wheel to inspect
 
 sysml> %slots Wheel
 Instance: Wheel (ID: 1)
-  diameter: 16.0
+Slots:
+  diameter = 16.00
 ```
 
 **Behavioral execution:**
 ```bash
 sysml> calc add { in x; in y; return x + y; }
-✓ add
+✓ calc add
 
 sysml> %calc add 10 20
 ✓ add(10, 20)
   = 30
 
 sysml> constraint ValidSpeed { assert 65 <= 120; }
-✓ ValidSpeed
+✓ constraint ValidSpeed
 
 sysml> %constraint ValidSpeed
 ✓ Constraint ValidSpeed passed
@@ -78,29 +81,41 @@ sysml> %constraint ValidSpeed
 **Action & state debugging:**
 ```bash
 sysml> %action MyWorkflow
-Action: MyWorkflow
-Tokens: 1
-State: Ready
+✓ Started action executor for "MyWorkflow"
+  State: Running
+  Tokens: 1
 
-sysml> %step
-Tokens: 3  (fork created parallel paths)
-
-sysml> %tokens
-Token 1: processA { input: 100 }
-Token 2: processB { input: 100 }
-Token 3: processC { input: 100 }
+sysml> %break compute
+✓ Breakpoint set at node "compute"
+  %continue runs until a token reaches it
 
 sysml> %continue
-✓ Completed
-Result: 360
+⏸ Paused at breakpoint "compute"
+  State: Suspended
+  Tokens: 1
+
+sysml> %tokens
+Active tokens (1):
+  Token 1 @ compute
+    result = 0
+
+sysml> %continue
+✓ Action completed
+  Final state: Completed
+  Results:
+    result = 42
 
 sysml> %state TrafficLight
-State machine: TrafficLight
-Current: red
-Time: 0.0s
+✓ Started state machine executor for "TrafficLight"
+  Current state: red
+  Time: 0.00
+  Events: 1
 
-sysml> %advance
-Current: green (Time: 30.0s)
+sysml> %advance 30
+✓ Advanced to 30.00 (1 event(s) processed)
+  Current state: green
+  Last event at: 30.00
+  Remaining events: 1
 ```
 
 **See [examples/repl-behavioral-demo.sysml](examples/repl-behavioral-demo.sysml) for comprehensive demos.**
@@ -138,10 +153,10 @@ Current: green (Time: 30.0s)
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (16 golden ASTs, 15 negative tests) |
-| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 12/12 passing) |
-| Action execution engine (Tier 5) | ✅ Complete (5 conformance cases passing) |
-| State machine runtime (Tier 5) | ✅ Complete (10 conformance cases: transitions, accept events, sourceless) |
+| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (36 golden ASTs, 49 negative tests) |
+| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 18/18 passing) |
+| Action execution engine (Tier 5) | ✅ Complete (11 conformance cases passing) |
+| State machine runtime (Tier 5) | ✅ Complete (26 conformance cases: transitions, accept events, sourceless) |
 | REPL debugging commands | ✅ Complete |
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Diagnostics, hover, go-to-definition, references, symbols, completion, formatting, rename (semantic tokens, code actions, signature help not implemented) |
@@ -149,10 +164,10 @@ Current: green (Time: 30.0s)
 | Python client library | ✅ Complete (connection lifecycle, runtime APIs, IPython hooks, DataFrame) |
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
-**Test coverage:** 890+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 16 golden ASTs, 15 negatives, 26 conformance cases, 7 robustness tests.
+**Test coverage:** 1,500+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 36 golden ASTs, 49 negatives, 61 conformance cases, 35 robustness subtests.
 **Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
-**Behavioral execution:** Calc/constraint/requirement fully functional (12/12 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (26/26 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
-**Training examples:** 71/100 files clean, gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
+**Behavioral execution:** Calc/constraint/requirement fully functional (18/18 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (61/61 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
+**Training examples:** 98/100 files clean (2 files, 4 errors), gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
 ## Architecture
@@ -228,7 +243,10 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 
 **Release process:**
 - Every commit: Build + test
-- Tagged releases (`v*`): Multi-platform binaries published to GitHub Releases
+- Tagged releases (`v*`): the suite runs again on the tagged commit, then multi-platform
+  binaries are published to GitHub Releases. Maintainer procedure:
+  [docs/RELEASING.md](docs/RELEASING.md); what changed per release:
+  [CHANGELOG.md](CHANGELOG.md)
 
 **Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
 `sysml-lsp-<os>-<arch>.tar.gz`), `systemica-<os>-<arch>.tar.gz` bundles containing both

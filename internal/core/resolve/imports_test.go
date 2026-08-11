@@ -64,6 +64,65 @@ func TestImportDoesNotLeakNonImported(t *testing.T) {
 	}
 }
 
+// An import owned by a definition body is a Namespace-owned Import and must be
+// consulted when resolving names in that body.
+func TestImportInDefinitionBodyVisibleInBody(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"a.sysml": "package Lib { part def Widget; }",
+		"b.sysml": "package App { part def D { private import Lib::*; part w : Widget; } }",
+	})
+	r := New(idx)
+	appScope := scopeOf(t, idx.DocumentRoot("b.sysml"), "App")
+	dScope := scopeOf(t, appScope, "D")
+	if _, ok := r.ResolveName(dScope, "Widget", &ast.FeatureReference{}); !ok {
+		t.Fatalf("Widget unresolved from definition body that imports it; diags=%v", r.Diagnostics)
+	}
+}
+
+// The import must also reach scopes nested inside the definition body.
+func TestImportInDefinitionBodyVisibleInNestedBody(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"a.sysml": "package Lib { part def Widget; }",
+		"b.sysml": "package App { part def D { private import Lib::*; action a { part w : Widget; } } }",
+	})
+	r := New(idx)
+	appScope := scopeOf(t, idx.DocumentRoot("b.sysml"), "App")
+	dScope := scopeOf(t, appScope, "D")
+	aScope := scopeOf(t, dScope, "a")
+	if _, ok := r.ResolveName(aScope, "Widget", &ast.FeatureReference{}); !ok {
+		t.Fatalf("Widget unresolved from body nested in the importing definition; diags=%v", r.Diagnostics)
+	}
+}
+
+// A package-body import must reach a definition nested inside that package
+// (the pre-existing package case, exercised through a nested scope).
+func TestImportInPackageBodyVisibleInNestedDefinition(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"a.sysml": "package Lib { part def Widget; }",
+		"b.sysml": "package App { private import Lib::*; part def D { part w : Widget; } }",
+	})
+	r := New(idx)
+	appScope := scopeOf(t, idx.DocumentRoot("b.sysml"), "App")
+	dScope := scopeOf(t, appScope, "D")
+	if _, ok := r.ResolveName(dScope, "Widget", &ast.FeatureReference{}); !ok {
+		t.Fatalf("Widget unresolved from definition nested in importing package; diags=%v", r.Diagnostics)
+	}
+}
+
+// An import owned by a definition body is a private membership of that body: it
+// must not be re-surfaced to a namespace that imports the outer definition.
+func TestImportInDefinitionBodyDoesNotLeakToImporter(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"a.sysml": "package Lib { part def Widget; }",
+		"b.sysml": "package App { part def D { private import Lib::*; } import D::*; }",
+	})
+	r := New(idx)
+	appScope := scopeOf(t, idx.DocumentRoot("b.sysml"), "App")
+	if _, ok := r.ResolveName(appScope, "Widget", &ast.FeatureReference{}); ok {
+		t.Fatalf("Widget was imported privately into D and must not leak to importers of D")
+	}
+}
+
 func TestImportRecursiveSkipsBodyLocalNames(t *testing.T) {
 	idx := indexOf(t, map[string]string{
 		"a.sysml": `package Lib {

@@ -138,8 +138,12 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		writeChildren(b, depth, prefixesAnd(v.Prefixes, v.Members))
 		return
 	case *Import:
-		fmt.Fprintf(b, `(Import visibility=%q all=%t kind=%s recursive=%t imported=%q`,
-			visibilityString(v.Visibility), v.IsAll, importKindString(v.Kind), v.IsRecursive, qnString(v.Imported))
+		label := "Import"
+		if v.IsExpose {
+			label = "Expose"
+		}
+		fmt.Fprintf(b, `(%s visibility=%q all=%t kind=%s recursive=%t imported=%q`,
+			label, visibilityString(v.Visibility), v.IsAll, importKindString(v.Kind), v.IsRecursive, qnString(v.Imported))
 		writeChildren(b, depth, v.Body)
 		return
 	case *Alias:
@@ -174,6 +178,15 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			v.IsComposite, v.IsDerived, v.IsOrdered, v.IsNonunique)
 		if v.IsConjugated {
 			b.WriteString(` conjugated=true`)
+		}
+		if v.IsEnd {
+			b.WriteString(` end=true`)
+		}
+		if v.IsIndividual {
+			b.WriteString(` individual=true`)
+		}
+		if v.IsSnapshot {
+			b.WriteString(` snapshot=true`)
 		}
 		writeChildren(b, depth, usageChildren(v))
 		return
@@ -231,6 +244,12 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		if v.Target != nil {
 			kids = append(kids, v.Target)
+		}
+		for _, r := range v.Relationships {
+			kids = append(kids, r)
+		}
+		if v.Reference != nil {
+			kids = append(kids, v.Reference)
 		}
 		writeChildren(b, depth, kids)
 		return
@@ -331,6 +350,18 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 	case *DeferMember:
 		b.WriteString(`(DeferMember`)
 		writeChildren(b, depth, v.Triggers)
+		return
+	case *EntryMember:
+		b.WriteString(`(EntryMember`)
+		writeChildren(b, depth, v.Actions)
+		return
+	case *DoMember:
+		b.WriteString(`(DoMember`)
+		writeChildren(b, depth, v.Actions)
+		return
+	case *ExitMember:
+		b.WriteString(`(ExitMember`)
+		writeChildren(b, depth, v.Actions)
 		return
 	default:
 		fmt.Fprintf(b, `(%T)`, n)

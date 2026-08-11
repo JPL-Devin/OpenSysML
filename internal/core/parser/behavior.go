@@ -386,9 +386,9 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		IsOrdered:     postMods.isOrdered,
 		IsNonunique:   postMods.isNonunique,
 		IsEvent:       isEvent,
+		IsIndividual:  isIndividual,
+		IsSnapshot:    isSnapshot,
 	}
-	// Note: isIndividual, isSnapshot consumed but not stored in AST (no fields yet)
-	_, _ = isIndividual, isSnapshot
 	usage.NodeSpan = p.spanFrom(start)
 
 	// Wrap in Membership
@@ -2230,266 +2230,108 @@ func (p *Parser) parseAcceptTransition(start int) ast.Node {
 	return transition
 }
 
-// parseEntryMember parses: entry { <actions> } OR entry <actionRef> OR entry action <def>
+// stateSubactionKind names which of a state's subactions is being parsed: the
+// StateSubactionKind of SysML.xtext (/* STATES */).
+type stateSubactionKind string
+
+const (
+	subactionEntry stateSubactionKind = "entry"
+	subactionDo    stateSubactionKind = "do"
+	subactionExit  stateSubactionKind = "exit"
+)
+
+// parseEntryMember parses a state's entry subaction; the keyword is consumed.
 func (p *Parser) parseEntryMember(start int) ast.Node {
-	// 'entry' already consumed
-
-	// Check for action reference or inline definition
-	// Patterns:
-	// 1. entry { ... } - action block
-	// 2. entry actionName { ... } - action reference with invocation
-	// 3. entry action name { ... } - inline action definition
-
-	if p.at(lexer.LBrace) {
-		// Pattern 1: entry { ... }
-		p.advance() // consume '{'
-
-		// Parse action sequence (reuse action body parsing logic)
-		var actions []ast.Node
-		for !p.at(lexer.RBrace) && !p.atEOF() {
-			actions = append(actions, p.parseActionMember())
-		}
-
-		p.expect(lexer.RBrace, "expected '}' after entry actions")
-
-		node := &ast.EntryMember{
-			Actions: actions,
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
-	}
-
-	// Check for 'action' keyword (inline definition)
-	if p.atKeyword("action") {
-		// Pattern 3: entry action name { ... }
-		// Parse as action usage/definition
-		action := p.parseBodyMember()
-		node := &ast.EntryMember{
-			Actions: []ast.Node{action},
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
-	}
-
-	// Check for bare semicolon (empty entry action)
-	if p.at(lexer.Semicolon) {
-		p.advance() // consume ';'
-		node := &ast.EntryMember{
-			Actions: nil, // empty
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
-	}
-
-	// Check for behavioral statement (assign, send, bind, etc.)
-	// Pattern: entry assign x := expr;
-	if p.isBehavioralKeyword() {
-		stmt := p.parseActionMember()
-		node := &ast.EntryMember{
-			Actions: []ast.Node{stmt},
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
-	}
-
-	// Check for 'do' keyword followed by braced block: entry do { ... }
-	if p.atKeyword("do") {
-		p.advance() // consume 'do'
-		if p.at(lexer.LBrace) {
-			p.advance() // consume '{'
-
-			// Parse action sequence
-			var actions []ast.Node
-			for !p.at(lexer.RBrace) && !p.atEOF() {
-				actions = append(actions, p.parseActionMember())
-			}
-
-			p.expect(lexer.RBrace, "expected '}' after entry actions")
-
-			node := &ast.EntryMember{
-				Actions: actions,
-			}
-			node.NodeSpan = p.spanFrom(start)
-			return node
-		}
-		// Fall through to parse action reference after 'do'
-	}
-
-	// Pattern 2: entry actionName { ... } - action reference
-	// Parse action reference (qualified name) and optional invocation arguments
-	actionRef := p.parseQualifiedName()
-
-	// Check for invocation arguments body
-	if p.at(lexer.LBrace) {
-		// Parse invocation body (feature bindings): { in vehicle = operatingVehicle; }
-		// For now, skip the body (semantic layer will handle invocation)
-		p.advance() // consume '{'
-
-		for !p.at(lexer.RBrace) && !p.atEOF() {
-			// Parse and discard feature bindings
-			p.parseBodyMember()
-		}
-		p.expect(lexer.RBrace, "expected '}' after action invocation")
-	}
-
-	// Create entry member with action reference
-	node := &ast.EntryMember{
-		Actions: []ast.Node{actionRef}, // Store reference directly for now
-	}
-	node.NodeSpan = p.spanFrom(start)
-	return node
+	return p.parseStateSubaction(start, subactionEntry)
 }
 
-// parseDoMember parses: do { <actions> } OR do action <def>
+// parseDoMember parses a state's do subaction; the keyword is consumed.
 func (p *Parser) parseDoMember(start int) ast.Node {
-	// 'do' already consumed
+	return p.parseStateSubaction(start, subactionDo)
+}
 
-	// Check for 'action' keyword (inline definition)
-	if p.atKeyword("action") {
-		// do action name { ... } - inline action definition
-		action := p.parseBodyMember()
-		node := &ast.DoMember{
-			Actions: []ast.Node{action},
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
+// parseExitMember parses a state's exit subaction; the keyword is consumed.
+func (p *Parser) parseExitMember(start int) ast.Node {
+	return p.parseStateSubaction(start, subactionExit)
+}
+
+// parseStateSubaction parses the action of an entry/do/exit subaction, whose
+// keyword is already consumed:
+//
+//	StateActionUsage : EmptyActionUsage ';' | PerformedActionUsage ActionBody
+//
+// (SysML.xtext, /* STATES */). A performed action is either an inline action
+// usage (`entry action warmUp;`), a behavioral statement (`entry assign x := 1;`)
+// or a reference to an action declared elsewhere (`entry warmUp;`), the last
+// being the reference-subsetting form of PerformActionUsageDeclaration. The
+// braced form (`entry { ... }`) is a Systemica extension over that grammar.
+func (p *Parser) parseStateSubaction(start int, kind stateSubactionKind) ast.Node {
+	actions, err := p.parseStateSubactionActions(start, kind)
+	if err != nil {
+		return err
 	}
-
-	// Check for bare semicolon (empty do action)
-	if p.at(lexer.Semicolon) {
-		p.advance() // consume ';'
-		node := &ast.DoMember{
-			Actions: nil, // empty
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
+	var node ast.Node
+	switch kind {
+	case subactionEntry:
+		node = &ast.EntryMember{NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)}, Actions: actions}
+	case subactionDo:
+		node = &ast.DoMember{NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)}, Actions: actions}
+	case subactionExit:
+		node = &ast.ExitMember{NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)}, Actions: actions}
 	}
-
-	// Behavioral statement: do perform action a : A; / do assign x := e;
-	if p.isBehavioralKeyword() {
-		stmt := p.parseActionMember()
-		node := &ast.DoMember{
-			Actions: []ast.Node{stmt},
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
-	}
-
-	// Check for action reference: do actionName;
-	if p.atName() {
-		actionRef := p.parseQualifiedName()
-		p.expect(lexer.Semicolon, "expected ';' after action reference")
-		node := &ast.DoMember{
-			Actions: []ast.Node{actionRef},
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
-	}
-
-	// Otherwise expect block: do { ... }
-	if !p.at(lexer.LBrace) {
-		p.error(p.peek().Span, "expected '{' or 'action' after 'do'")
-		en := &ast.ErrorNode{Message: "expected '{' after 'do'"}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-	p.advance() // consume '{'
-
-	// Parse action sequence
-	var actions []ast.Node
-	for !p.at(lexer.RBrace) && !p.atEOF() {
-		actions = append(actions, p.parseActionMember())
-	}
-
-	p.expect(lexer.RBrace, "expected '}' after do actions")
-
-	node := &ast.DoMember{
-		Actions: actions,
-	}
-	node.NodeSpan = p.spanFrom(start)
 	return node
 }
 
-// parseExitMember parses: exit { <actions> } OR exit action <def>
-func (p *Parser) parseExitMember(start int) ast.Node {
-	// 'exit' already consumed
-
-	// Check for 'action' keyword (inline definition)
-	if p.atKeyword("action") {
-		// exit action name { ... } - inline action definition
-		action := p.parseBodyMember()
-		node := &ast.ExitMember{
-			Actions: []ast.Node{action},
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
-	}
-
-	// Check for bare semicolon (empty exit action)
+// parseStateSubactionActions parses the action itself, returning an ErrorNode
+// instead when the subaction is followed by something that starts no action.
+func (p *Parser) parseStateSubactionActions(start int, kind stateSubactionKind) ([]ast.Node, ast.Node) {
+	// EmptyActionUsage ';'
 	if p.at(lexer.Semicolon) {
-		p.advance() // consume ';'
-		node := &ast.ExitMember{
-			Actions: nil, // empty
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
+		p.advance()
+		return nil, nil
 	}
 
-	// Behavioral statement: exit perform action a : A; / exit assign x := e;
-	if p.isBehavioralKeyword() {
-		stmt := p.parseActionMember()
-		node := &ast.ExitMember{
-			Actions: []ast.Node{stmt},
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
+	// `<kind> { ... }`, and the `entry do { ... }` spelling of it.
+	if p.at(lexer.LBrace) {
+		return p.parseStateSubactionBlock(kind), nil
 	}
-
-	// Check for 'do' keyword followed by braced block: exit do { ... }
-	if p.atKeyword("do") {
+	if kind != subactionDo && p.atKeyword("do") && p.peekN(1).Kind == lexer.LBrace {
 		p.advance() // consume 'do'
-		if p.at(lexer.LBrace) {
-			p.advance() // consume '{'
-
-			// Parse action sequence
-			var actions []ast.Node
-			for !p.at(lexer.RBrace) && !p.atEOF() {
-				actions = append(actions, p.parseActionMember())
-			}
-
-			p.expect(lexer.RBrace, "expected '}' after exit actions")
-
-			node := &ast.ExitMember{
-				Actions: actions,
-			}
-			node.NodeSpan = p.spanFrom(start)
-			return node
-		}
-		// Fall through if no brace after 'do'
+		return p.parseStateSubactionBlock(kind), nil
 	}
 
-	// Otherwise expect block: exit { ... }
-	if !p.at(lexer.LBrace) {
-		p.error(p.peek().Span, "expected '{' or 'action' after 'exit'")
-		en := &ast.ErrorNode{Message: "expected '{' after 'exit'"}
-		en.NodeSpan = p.spanFrom(start)
-		return en
+	// An inline action usage or definition: `<kind> action warmUp : WarmUp;`.
+	if p.atKeyword("action") {
+		return []ast.Node{p.parseBodyMember()}, nil
 	}
+
+	// A behavioral statement: `<kind> assign x := 1;`, `<kind> send s to t;`.
+	if p.isBehavioralKeyword() {
+		return []ast.Node{p.parseActionMember()}, nil
+	}
+
+	// PerformActionUsageDeclaration by reference: `<kind> warmUp;`.
+	if p.atName() {
+		return []ast.Node{p.parsePerformedActionReference(p.peek().Span.Offset, featureMods{}, string(kind))}, nil
+	}
+
+	msg := fmt.Sprintf("expected an action, an action reference or '{' after '%s'", kind)
+	p.error(p.peek().Span, msg)
+	en := &ast.ErrorNode{Message: msg}
+	en.NodeSpan = p.spanFrom(start)
+	return nil, en
+}
+
+// parseStateSubactionBlock parses the braced action sequence of a subaction;
+// the '{' is at the cursor.
+func (p *Parser) parseStateSubactionBlock(kind stateSubactionKind) []ast.Node {
 	p.advance() // consume '{'
-
-	// Parse action sequence
 	var actions []ast.Node
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		actions = append(actions, p.parseActionMember())
 	}
-
-	p.expect(lexer.RBrace, "expected '}' after exit actions")
-
-	node := &ast.ExitMember{
-		Actions: actions,
-	}
-	node.NodeSpan = p.spanFrom(start)
-	return node
+	p.expect(lexer.RBrace, fmt.Sprintf("expected '}' after %s actions", kind))
+	return actions
 }
 
 // parseSubstateMember parses: state <name>;

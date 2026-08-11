@@ -404,14 +404,14 @@ func (e *StateExecutor) rootToLeaf(state *ast.StateNode) []*ast.StateNode {
 // recordTransitionTrace records one transition in the trace, naming the state
 // left and the state entered.
 func (e *StateExecutor) recordTransitionTrace(trans *lower.Transition, source, target *ast.StateNode) {
-	if e.trace == nil {
+	if e.trace() == nil {
 		return
 	}
 	from := ""
 	if source != nil {
 		from = source.Name
 	}
-	e.trace.RecordStateTransition(from, target.Name, triggerName(trans.Trigger))
+	e.trace().RecordStateTransition(from, target.Name, triggerName(trans.Trigger))
 }
 
 // orderedActiveRegions returns the active orthogonal regions in declaration
