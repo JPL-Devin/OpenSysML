@@ -80,6 +80,8 @@ func nameOrAnon(id ast.Identification) string {
 func importTarget(imp *ast.Import) string {
 	name := qnString(imp.Imported)
 	switch {
+	case imp.Kind == ast.ImportNamespace && imp.IsRecursive:
+		return name + "::*::**"
 	case imp.IsRecursive:
 		return name + "::**"
 	case imp.Kind == ast.ImportNamespace:

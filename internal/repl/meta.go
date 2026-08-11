@@ -437,13 +437,18 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 		fmt.Sprintf("Instance: %s (ID: %d)", fqn, inst.ID),
 		"Slots:",
 	}
-	return append(lines, slotLines(ctx, inst, "  ", map[int64]bool{inst.ID: true})...), false, nil
+	return append(lines, slotLines(ctx, inst, "  ", map[*symbols.Symbol]bool{inst.Type: true}, 0)...), false, nil
 }
 
-// slotLines lists an instance's slots, expanding a slot that holds another
-// instance so a nested part's values are visible where they are held. Seen
-// guards against a containment cycle.
-func slotLines(ctx *runtime.Context, inst *runtime.Instance, indent string, seen map[int64]bool) []string {
+// maxSlotDepth bounds how deep %slots expands nested objects.
+const maxSlotDepth = 8
+
+// slotLines lists an instance's slots, expanding one that holds another
+// instance so a nested part's values are visible where they are held. onPath
+// holds the types being expanded above this one: a slot is materialized by
+// reading it, so a part containing its own kind has no repeating instance ID
+// to detect a cycle by.
+func slotLines(ctx *runtime.Context, inst *runtime.Instance, indent string, onPath map[*symbols.Symbol]bool, depth int) []string {
 	features := ctx.FeaturesOf(inst.Type)
 	if len(features) == 0 {
 		return []string{indent + "(no features)"}
@@ -458,6 +463,10 @@ func slotLines(ctx *runtime.Context, inst *runtime.Instance, indent string, seen
 			lines = append(lines, fmt.Sprintf("%s%s: %s", indent, feat.Name, verdict))
 			continue
 		}
+		if held, elided := elidedNesting(ctx, feat, onPath, depth); elided {
+			lines = append(lines, fmt.Sprintf("%s%s : %s (not expanded: %s)", indent, feat.Name, held, elisionReason(depth)))
+			continue
+		}
 		slot, err := inst.GetSlot(ctx, feat.Name)
 		if err != nil {
 			lines = append(lines, fmt.Sprintf("%s%s: <error: %v>", indent, feat.Name, err))
@@ -465,14 +474,33 @@ func slotLines(ctx *runtime.Context, inst *runtime.Instance, indent string, seen
 		}
 		lines = append(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatSlot(slot)))
 		for _, nested := range nestedInstances(ctx, slot) {
-			if seen[nested.ID] {
-				continue
-			}
-			seen[nested.ID] = true
-			lines = append(lines, slotLines(ctx, nested, indent+"  ", seen)...)
+			onPath[nested.Type] = true
+			lines = append(lines, slotLines(ctx, nested, indent+"  ", onPath, depth+1)...)
+			delete(onPath, nested.Type)
 		}
 	}
 	return lines
+}
+
+// elidedNesting reports whether expanding a feature would revisit a type
+// already on the path or exceed the depth bound, naming the type it holds.
+// Asked before the slot is read, since reading it materializes the object.
+func elidedNesting(ctx *runtime.Context, feat *runtime.EffectiveFeature, onPath map[*symbols.Symbol]bool, depth int) (string, bool) {
+	held := ctx.CompositeTypeOf(feat)
+	if held == nil {
+		return "", false
+	}
+	if depth >= maxSlotDepth || onPath[held] {
+		return held.Name, true
+	}
+	return "", false
+}
+
+func elisionReason(depth int) string {
+	if depth >= maxSlotDepth {
+		return fmt.Sprintf("depth %d", maxSlotDepth)
+	}
+	return "contains its own kind"
 }
 
 // nestedInstances returns the instances a slot holds, whether it carries one

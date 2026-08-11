@@ -120,7 +120,7 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 	}
 
 	// Lazy instantiation: a composite feature holds objects of its own.
-	if composite := ctx.compositeType(slot.Feature); composite != nil {
+	if composite := ctx.CompositeTypeOf(slot.Feature); composite != nil {
 		// Check multiplicity (C2 + C1)
 		mult := slot.Feature.Multiplicity
 		if !mult.Upper.Known || !mult.Lower.Known {
@@ -164,20 +164,20 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 	return slot, nil
 }
 
-// compositeType returns the symbol to instantiate for a composite feature, or
-// nil for a feature that holds a value rather than an object. A usage that
-// declares members of its own is instantiated as itself, so what its body
-// declares wins over what its type declares, and so an untyped nested part
-// materializes at all.
-func (ctx *Context) compositeType(feat *EffectiveFeature) *symbols.Symbol {
+// CompositeTypeOf returns what a feature is materialized from, or nil for one
+// that holds a value rather than an object. A usage with members of its own is
+// instantiated as itself, so its body governs and an untyped nested part
+// materializes at all. Answering costs no allocation, so a caller walking an
+// object graph can decide whether to descend before descending.
+func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
 	if feat.Symbol != nil && isCompositeUsage(feat.Symbol) && len(declMembers(feat.Symbol.Decl)) > 0 {
 		return feat.Symbol
 	}
 	return feat.Type
 }
 
-// isCompositeUsage reports whether a feature symbol is one that holds objects:
-// a part or item, as opposed to an attribute holding a value.
+// isCompositeUsage reports whether a feature symbol holds objects (a part or
+// item) rather than a value.
 func isCompositeUsage(sym *symbols.Symbol) bool {
 	switch sym.Kind {
 	case symbols.SymbolPartUsage, symbols.SymbolItemUsage:

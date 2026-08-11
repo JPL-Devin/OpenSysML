@@ -220,3 +220,17 @@ func TestSlotsExpandCollectionElements(t *testing.T) {
 		t.Errorf("expected both wheels expanded, got:\n%s", got)
 	}
 }
+
+// A part containing its own kind materializes a fresh object per expansion, so
+// nesting is bounded by type rather than by instance identity.
+func TestSlotsStopAtRecursiveContainment(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Node { attribute v = 1.0; part child : Node; }")
+	run(t, s, "%instantiate Node")
+
+	got := run(t, s, "%slots Node")
+	wants(t, got, "v = 1.00", "child : Node (not expanded: contains its own kind)")
+	if n := strings.Count(got, "\n"); n > 5 {
+		t.Errorf("expected a bounded listing, got %d lines:\n%s", n, got)
+	}
+}

@@ -70,8 +70,8 @@ func TestRenderDiagnostics(t *testing.T) {
 // An import confirmation echoes the wildcard too: "import A::B" and
 // "import A::B::*" bring in different things.
 func TestImportSummaryKeepsWildcards(t *testing.T) {
-	root := parseRoot("import A::B; import A::B::*; import A::B::**;")
-	want := []string{"import A::B", "import A::B::*", "import A::B::**"}
+	root := parseRoot("import A::B; import A::B::*; import A::B::**; import A::B::*::**;")
+	want := []string{"import A::B", "import A::B::*", "import A::B::**", "import A::B::*::**"}
 	for i, w := range want {
 		if got := renderMember(root.Members[i]); got != w {
 			t.Errorf("member %d = %q, want %q", i, got, w)
