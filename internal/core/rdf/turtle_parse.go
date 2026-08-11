@@ -92,11 +92,22 @@ func (p *parser) skipIgnorable() {
 	}
 }
 
+// hasKeyword reports whether the input continues with a bare keyword. The
+// keyword form is always followed by whitespace, so a longer word or a prefixed
+// name that starts with the same letters (`base:Thing`) is not one.
 func (p *parser) hasKeyword(word string) bool {
-	if len(p.src)-p.pos < len(word) {
+	end := p.pos + len(word)
+	if len(p.src) < end || !strings.EqualFold(p.src[p.pos:end], word) {
 		return false
 	}
-	return strings.EqualFold(p.src[p.pos:p.pos+len(word)], word)
+	if end == len(p.src) {
+		return false
+	}
+	switch p.src[end] {
+	case ' ', '\t', '\r', '\n':
+		return true
+	}
+	return false
 }
 
 // directive reads '@prefix'/'PREFIX' and '@base'/'BASE'.

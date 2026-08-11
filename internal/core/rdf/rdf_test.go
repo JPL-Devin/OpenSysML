@@ -384,3 +384,22 @@ elmt:A a sysml:Package .
 		t.Errorf("want the most specific prefix elmt:, got:\n%s", want)
 	}
 }
+
+// `PREFIX`/`BASE` are keywords only as whole words: a prefixed name that starts
+// with the same letters is a term, and reading it as a directive would reject a
+// valid document.
+func TestPrefixLikeLabelIsNotADirective(t *testing.T) {
+	const doc = `@prefix base: <urn:x:> .
+@prefix prefixed: <urn:y:> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+base:Thing a sysml:Package .
+prefixed:Other a sysml:Package .
+`
+	g, err := ParseTurtle([]byte(doc))
+	if err != nil {
+		t.Fatalf("a prefixed name beginning with a keyword was rejected: %v", err)
+	}
+	if got := g.Len(); got != 2 {
+		t.Errorf("want 2 triples, got %d", got)
+	}
+}

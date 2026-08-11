@@ -72,7 +72,6 @@ elmt:Synonyms::note
     sysml:owningNamespace elmt:Synonyms ;
     sysx:memberIndex "6"^^xsd:integer ;
     sysml:declaredName "note" ;
-    sysx:declaredKeyword "message" ;
     sysx:sourceText "message note;" .
 
 elmt:Synonyms::budget
