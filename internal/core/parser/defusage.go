@@ -219,6 +219,77 @@ type featureMods struct {
 	earlyMultiplicity *ast.Multiplicity // for "end [mult] ref ..." syntax
 }
 
+// applyFeatureMods transfers modifiers that were consumed before a declaration's
+// kind keyword onto the declaration itself, as in `ref part a : V`. Only
+// modifiers that were present are applied, so a flag the declaration parsed for
+// itself is never cleared.
+func applyFeatureMods(decl ast.Node, mods featureMods) {
+	switch d := decl.(type) {
+	case *ast.Usage:
+		if mods.isAbstract {
+			d.IsAbstract = true
+		}
+		if mods.isReference {
+			d.IsReference = true
+		}
+		if mods.isEnd {
+			d.IsEnd = true
+		}
+		if mods.isChain {
+			d.IsChain = true
+		}
+		if mods.isConstant {
+			d.IsConstant = true
+		}
+		if mods.isEvent {
+			d.IsEvent = true
+		}
+		if mods.isIndividual {
+			d.IsIndividual = true
+		}
+		if mods.isSnapshot {
+			d.IsSnapshot = true
+		}
+		if mods.isComposite {
+			d.IsComposite = true
+		}
+		if mods.isDerived {
+			d.IsDerived = true
+		}
+		if mods.isOrdered {
+			d.IsOrdered = true
+		}
+		if mods.isNonunique {
+			d.IsNonunique = true
+		}
+		if mods.direction != ast.DirNone {
+			d.Direction = mods.direction
+		}
+		if mods.visibility != ast.VisibilityDefault {
+			d.Visibility = mods.visibility
+		}
+		if mods.earlyMultiplicity != nil && d.Multiplicity == nil {
+			d.Multiplicity = mods.earlyMultiplicity
+		}
+	case *ast.Definition:
+		if mods.isAbstract {
+			d.IsAbstract = true
+		}
+		if mods.isVariation {
+			d.IsVariation = true
+		}
+		if mods.isConstant {
+			d.IsConstant = true
+		}
+		if mods.isEvent {
+			d.IsEvent = true
+		}
+		if mods.visibility != ast.VisibilityDefault {
+			d.Visibility = mods.visibility
+		}
+	}
+}
+
 // atKindPrefix reports whether the current keyword qualifies the kind keyword
 // after it instead of being the kind itself, as in `var feature x` or
 // `item part Shape`. When it does not, the second keyword names the declaration
@@ -2311,6 +2382,18 @@ func (p *Parser) parseBodyMember() ast.Node {
 			}
 			// If no definition keyword found, fall through to handle as anonymous feature with modifiers
 			// Pattern: end ref name; - will be handled by anonymous feature parsing below
+		}
+
+		// A feature modifier can precede the kind keyword: `ref part a : V`,
+		// `composite item i`, `derived attribute c`. The declaration is parsed
+		// as usual and the modifiers already consumed are applied to it.
+		if isKindKeyword(p.peek()) || p.atKindPrefix() {
+			decl := p.parseDeclaration(start)
+			applyFeatureMods(decl, mods)
+			mem := &ast.Membership{Visibility: mods.visibility, Member: decl}
+			mem.NodeSpan = p.spanFrom(start)
+			mem.SetLeadingTrivia(trivia)
+			return mem
 		}
 
 		// Check for name + colon (typed) OR direct relationship (anonymous) OR name + relationship OR name + semicolon OR name + multiplicity

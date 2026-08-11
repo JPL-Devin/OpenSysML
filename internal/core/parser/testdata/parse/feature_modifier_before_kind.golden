@@ -1,0 +1,43 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ModifierBeforeKind" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Fleet"
+          (Membership visibility="default"
+            (Usage kind="part" name="shared" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="owned" ref=false direction="none" composite=true derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="count" ref=false direction="none" composite=false derived=true ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="queue" ref=false direction="none" composite=false derived=false ordered=true nonunique=true
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Membership visibility="public"
+            (Usage kind="part" name="exposed" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="private"
+            (Usage kind="part" name="hidden" ref=false direction="none" composite=true derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Move"
+          (Membership visibility="default"
+            (Usage kind="part" name="cargo" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="delivered" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName)))))))))
