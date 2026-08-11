@@ -34,7 +34,7 @@ func TestBlockedAnalysisIsNotReportedAsClean(t *testing.T) {
 	s := NewSession()
 	s.Submit("namespace N { import Missing::X; }")
 	got := strings.Join(renderResult(s.Submit("package P { }"), VerbosityNormal), "\n")
-	wants(t, got, "an earlier error in the session is unresolved")
+	wants(t, got, "an earlier session error is unresolved")
 
 	clean := strings.Join(renderResult(NewSession().Submit("package P { }"), VerbosityNormal), "\n")
 	rejects(t, clean, "unresolved")

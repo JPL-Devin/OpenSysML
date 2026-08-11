@@ -185,3 +185,26 @@ func loadExpectedOutcome(t *testing.T, conformanceDir, testName string) Expected
 	}
 	return expected
 }
+
+// A trace names control nodes by what they do, so an unnamed fork or final
+// node does not surface a Go type name to whoever reads the trace.
+func TestNodeIdentifierNamesControlNodes(t *testing.T) {
+	cases := []struct {
+		node ast.Node
+		want string
+	}{
+		{&ast.InitialNode{}, "initial"},
+		{&ast.FinalNode{}, "final"},
+		{&ast.ForkNode{}, "fork"},
+		{&ast.JoinNode{}, "join"},
+		{&ast.MergeNode{}, "merge"},
+		{&ast.DecisionNode{}, "decision"},
+		{&ast.ForkNode{Name: "split"}, "split"},
+	}
+
+	for _, tc := range cases {
+		if got := nodeIdentifier(tc.node); got != tc.want {
+			t.Errorf("nodeIdentifier(%T) = %q, want %q", tc.node, got, tc.want)
+		}
+	}
+}

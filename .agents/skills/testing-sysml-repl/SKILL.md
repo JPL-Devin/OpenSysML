@@ -131,9 +131,75 @@ rather than printing stale slots. An active `%action`/`%state` debugging session
 not reset by a submission — it keeps running against the executor built from the older document. Per
 the maintainer this is intended; do not report it as a bug.
 
-Also: every submission re-reports diagnostics for the whole accumulated buffer, so one bad snippet
-(e.g. accidentally typing a shell command like `clear` at the `>` prompt) keeps re-printing its
-error on later submissions. `%clear` resets the session.
+Also: analysis still runs over the whole accumulated buffer, but since PR #65 the **report** is
+scoped to the submission just made, so one bad snippet no longer keeps re-printing its error on
+later submissions. Two consequences when testing:
+
+- Reported line/column numbers are **relative to what you just typed** (`Result.Offset` /
+  `baseLine()` in `internal/repl/render.go`), so a one-line submission reports `1:36:` no matter how
+  much is already in the buffer. Only `%verbosity debug` numbers against the whole buffer.
+- While an earlier error is unresolved, a later clean submission prints
+  `note: an earlier session error is unresolved, so deeper checks may not have run here (see it with
+  -debug)` before its summary. That note is expected, not a failure.
+
+Still true: accidentally typing a shell command like `clear` at the `>` prompt is parsed as SysML
+and pollutes the buffer. `%clear` resets the session.
+
+## Output modes and execution tracing (PR #65)
+
+Two independent axes — diagnostics verbosity and execution tracing. Don't conflate them.
+
+```bash
+./bin/sysml -quiet          # errors only (suppresses warnings)
+./bin/sysml                 # default: errors + warnings + summary
+./bin/sysml -debug          # whole-buffer diagnostics, absolute lines, pass names
+./bin/sysml -trace          # execution tracing on from the start
+./bin/sysml -debug -quiet   # rejected: stderr message, exit 2
+```
+
+Prompt equivalents: `%verbosity [quiet|normal|debug]` and `%trace [on|off]`; with no argument each
+**reports** the current setting (`verbosity: normal`, `trace: off`). A bad argument prints guidance
+(`error: unknown verbosity "bogus" (want quiet, normal or debug)`) and leaves the session usable.
+
+To prove quiet actually suppresses something you need a **warning**, which is easy to trigger with a
+mismatched comparison: `attribute flag = 1 == "a";` yields
+`warning: comparing Natural with String is always false`. The strongest test is an A/B in one
+session — submit it at `normal`, then `%verbosity quiet`, then submit an equivalent snippet under a
+different package name and show the warning is gone while the summary line remains.
+
+`%verbosity debug` output starts with
+`[debug] submission at buffer line N; M diagnostic(s) over the whole buffer` and tags each
+diagnostic with the pass that produced it (`[syntax/syntax]`, `[type/type.expr]`).
+
+Tracing prefixes every recorded line with `[trace] `. Evaluation entries are **post-order and
+indented**: sub-expressions appear before, and one level deeper than, the expression that consumed
+them (`internal/core/runtime/trace.go`). `%slots` on a model with derived attributes is the easiest
+way to see a full tree — `derived_package.sysml` gives `eval operator * -> 3000.0` and a nested
+`eval feature power -> 300.0` / `eval operator * -> 270.0` / `eval operator + -> 1770.0`.
+
+The recorder is **drained per command** (`drainTrace` in `internal/repl/trace.go`), so each command
+reports only its own steps. Always assert the negative too: run an unrelated command such as
+`%instances` straight afterwards and confirm it prints **no** `[trace]` lines — a recorder that is
+not cleared would replay the previous command's tree.
+
+### Regression watch: traces during a debugging session
+
+`ActionExecutor.trace()` reads the recorder off `e.ctx` rather than caching it on the executor
+(`internal/core/runtime/action_executor.go`). That is what makes `%trace on` reach an execution
+already under way, and what makes **expression** traces appear alongside step traces. The
+historically broken sequence, worth re-running after any change in this area:
+
+1. `%load internal/repl/testdata/action_debug.sysml`, `%action tally`
+2. submit an unrelated declaration, e.g. `package Unrelated { part def Widget { attribute size = 1.0; } }`
+3. `%trace on`, then `%step` repeatedly
+
+Expect **both** `[trace] step N: token 1@accumulate` **and** `[trace] eval feature total -> 0` /
+`eval literal 5 -> 5` / `eval operator + -> 5`. Bare step lines with no `eval` lines is the bug
+signature. Then `%trace off` must silence output in that same session.
+
+Control nodes are named by what they do, not by Go type: an unnamed fork/join/final reports
+`token 1@fork` / `@join` / `@final` (`nodeIdentifier` in `internal/core/runtime/trace.go`). A `*ast.`
+type name in trace output means a node kind is missing from that switch.
 
 ## Spot-checking the docs against the binary
 

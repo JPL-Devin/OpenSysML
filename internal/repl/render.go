@@ -209,7 +209,7 @@ func scopedDiagnostics(r Result, v Verbosity) []passes.Diagnostic {
 }
 
 // blockedNote warns that a clean report is not a full check.
-const blockedNote = "note: an earlier error in the session is unresolved, so later checks may not have run on this submission (%verbosity debug shows it)"
+const blockedNote = "note: an earlier session error is unresolved, so deeper checks may not have run here (see it with -debug)"
 
 // analysisBlocked reports whether an error outside this submission stopped the
 // higher validation tiers from running over it.
