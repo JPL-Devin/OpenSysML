@@ -1446,27 +1446,13 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			// Inline behavioral body without braces: action name\n assign ...;
 			// The body is a single statement plus any 'then'-chained continuations;
 			// a following statement that is not chained belongs to the enclosing body.
-			// EXCEPT: if 'then' is followed by a declaration keyword (action/feature/etc),
-			// it's namespace-level succession, not behavioral succession - stop parsing body
-			for !p.atEOF() {
-				// Check if 'then' is namespace succession (then <visibility>? <defKeyword>)
-				if p.atKeyword("then") {
-					next := p.peekN(1)
-					// If followed by visibility or definition/usage keyword, it's namespace succession - stop
-					if next.Kind == lexer.Keyword {
-						if _, isVis := map[string]bool{"public": true, "private": true, "protected": true}[next.KeywordID]; isVis {
-							break // namespace succession
-						}
-						if _, isDef := definitionKindKeywords[next.KeywordID]; isDef {
-							break // namespace succession
-						}
-						if _, isUsage := usageKindKeywords[next.KeywordID]; isUsage {
-							break // namespace succession
-						}
-					}
-				}
+			// EXCEPT: a 'then' chaining to a declaration is namespace-level
+			// succession, not behavioral succession - stop parsing body
+			for !p.atEOF() && !p.atNamespaceSuccession() {
 				members = append(members, p.parseActionMember())
-				if !p.atKeyword("then") {
+				// Only an inline statement continues the body; `then a b;` names
+				// members of the enclosing body.
+				if !p.atKeyword("then") || !startsInlineSuccessionStatement(p.peekN(1)) {
 					break
 				}
 			}
