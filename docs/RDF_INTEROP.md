@@ -175,12 +175,33 @@ properties. These round-trip exactly through Systemica. A graph produced by
 *another* tool will not carry the text, and converting such an element to
 notation then reports it as unsupported.
 
+**A `then` succession is refused.** `ast.Membership.HasSuccession` records only
+that a `then` was written, not which two members it sequences — and the parser
+sets it on the member *before* the keyword in some positions and the member
+*after* it in others. Writing the keyword back from that flag would be a guess,
+and a wrong guess reorders execution, so a model containing `then` is reported
+rather than converted:
+
+```
+cannot convert the `then` succession at model.sysml:5:3: this mapping cannot
+tell which members a succession sequences, and will not guess at execution order
+```
+
+Making the parser record successions unambiguously is roadmap item D4; until
+then, behavioral models that sequence steps with `then` convert only to notation.
+
+**A name declared twice in one namespace is refused.** An element's identity in
+the graph is its qualified name, so `part def A; part def A;` in one container
+would merge into a single subject. The duplicate is reported instead.
+
 **Unsupported on the RDF input side**, each an error naming the line or element:
 
 - blank nodes and `[ ... ]` — every element must have a stable IRI
 - RDF collections `( ... )` — order is carried by `sysx:memberIndex`
 - an element with no `rdf:type`, or a metaclass outside the mapping
 - an element whose `sysml:owningNamespace` is not in the graph
+- ownership that forms a cycle, leaving an element no root owns — printing walks
+  down from the roots, so this would otherwise write an empty document
 - Turtle syntax errors, reported with a line number
 - literal shorthands (bare numbers and booleans); literals must be quoted,
   with an `xsd:` datatype where one applies

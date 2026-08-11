@@ -110,7 +110,39 @@ func (d *decoder) build() ([]*element, error) {
 	for _, el := range order {
 		sortByIndex(el.children)
 	}
+	if err := d.checkReachable(roots, order); err != nil {
+		return nil, err
+	}
 	return roots, nil
+}
+
+// checkReachable reports an element that no root owns, which happens when
+// ownership forms a cycle. Printing walks down from the roots, so such an
+// element would be left out of the output without this check.
+func (d *decoder) checkReachable(roots, all []*element) error {
+	seen := make(map[string]bool, len(all))
+	var walk func(el *element)
+	walk = func(el *element) {
+		if seen[el.iri] {
+			return
+		}
+		seen[el.iri] = true
+		for _, child := range el.children {
+			walk(child)
+		}
+	}
+	for _, root := range roots {
+		walk(root)
+	}
+	for _, el := range all {
+		if !seen[el.iri] {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the element <%s>", el.iri),
+				Note: "no root owns it, so its sysml:owningNamespace chain forms a cycle",
+			}
+		}
+	}
+	return nil
 }
 
 // qualifiedName returns the qualified name of an element: the one it carries,
@@ -150,12 +182,22 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 		b.WriteString("\n")
 		return nil
 	}
-	if len(el.children) == 0 && !d.boolOf(el, rdf.Systemica+xHasBody) {
+	// An accept parameter is written into its parent's head, not its body.
+	children := el.children
+	if accept := d.acceptParam(el); accept != nil {
+		children = nil
+		for _, child := range el.children {
+			if child != accept {
+				children = append(children, child)
+			}
+		}
+	}
+	if len(children) == 0 && !d.boolOf(el, rdf.Systemica+xHasBody) {
 		b.WriteString(";\n")
 		return nil
 	}
 	b.WriteString(" {\n")
-	for _, child := range el.children {
+	for _, child := range children {
 		if err := d.print(b, child, depth+1); err != nil {
 			return err
 		}
@@ -295,6 +337,13 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 		words = append(words, "all")
 	}
 	words = append(words, d.identWords(el)...)
+	// The accept shorthand writes its parameter into the head, ahead of the
+	// `via` clause the parent's relationships supply.
+	if accept := d.acceptParam(el); accept != nil {
+		words = append(words, "accept")
+		words = append(words, d.identWords(accept)...)
+		words = append(words, d.relationshipWords(accept)...)
+	}
 	words = append(words, d.relationshipWords(el)...)
 	// A multiplicity binds to the name or type it follows, with no space
 	// before the bracket.
@@ -313,6 +362,17 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 		head += " " + strings.Join(tail, " ")
 	}
 	return head
+}
+
+// acceptParam returns the synthetic parameter of an accept shorthand, whose
+// notation belongs in its parent's declaration head.
+func (d *decoder) acceptParam(el *element) *element {
+	for _, child := range el.children {
+		if d.boolOf(child, rdf.SysML+"isAccept") {
+			return child
+		}
+	}
+	return nil
 }
 
 func (d *decoder) importHead(el *element) string {

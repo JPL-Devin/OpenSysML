@@ -1,6 +1,7 @@
 package export_test
 
 import (
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
@@ -115,6 +116,56 @@ part def R;
 		if !strings.Contains(string(out), want) {
 			t.Errorf("save dropped %q:\n%s", want, out)
 		}
+	}
+}
+
+// A succession cannot be placed from the AST flag alone, so it is reported
+// rather than written back in a position that would change execution order.
+func TestSuccessionIsUnsupported(t *testing.T) {
+	src := `package P {
+	action def A;
+	action def B;
+	action def Move {
+		action a : A;
+		then action b : B;
+	}
+}`
+	_, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("want an UnsupportedError for a `then` succession, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "then") {
+		t.Errorf("the error should name the construct: %v", err)
+	}
+}
+
+// A qualified name identifies an element, so two members of one namespace
+// sharing a name would merge into a single subject.
+func TestDuplicateNameIsUnsupported(t *testing.T) {
+	src := "package P {\n\tpart def A;\n\tpart def A;\n}"
+	_, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("want an UnsupportedError for a duplicate name, got %v", err)
+	}
+}
+
+// Ownership that forms a cycle leaves no root to print from, which would
+// otherwise write an empty document and report success.
+func TestOwnershipCycleIsUnsupported(t *testing.T) {
+	const turtle = `@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix elmt: <urn:sysmlv2:element:> .
+elmt:A a sysml:Package ; sysml:declaredName "A" ; sysml:qualifiedName "A" ;
+  sysml:owningNamespace elmt:B .
+elmt:B a sysml:Package ; sysml:declaredName "B" ; sysml:qualifiedName "B" ;
+  sysml:owningNamespace elmt:A .
+`
+	out, err := export.Convert("cycle.ttl", []byte(turtle), export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("want an UnsupportedError for a containment cycle, got %v (output %q)", err, out)
 	}
 }
 

@@ -1,0 +1,92 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:systemica:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:Accepts
+    a sysml:Package ;
+    sysml:qualifiedName "Accepts" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Accepts" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Accepts::Scene
+    a sysml:ItemDefinition ;
+    sysml:qualifiedName "Accepts::Scene" ;
+    sysml:owningNamespace elmt:Accepts ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Scene" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Accepts::Camera
+    a sysml:PortDefinition ;
+    sysml:qualifiedName "Accepts::Camera" ;
+    sysml:owningNamespace elmt:Accepts ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "Camera" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Accepts::Observe
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "Accepts::Observe" ;
+    sysml:owningNamespace elmt:Accepts ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:declaredName "Observe" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Accepts::Observe::trigger
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "Accepts::Observe::trigger" ;
+    sysml:owningNamespace elmt:Accepts::Observe ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "trigger" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Accepts::Observe::trigger::scene
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Accepts::Observe::trigger::scene" ;
+    sysml:owningNamespace elmt:Accepts::Observe::trigger ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "scene" ;
+    sysml:isAccept "true"^^xsd:boolean ;
+    sysml:direction "out" ;
+    sysml:type elmt:Accepts::Scene ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Accepts::Watch
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "Accepts::Watch" ;
+    sysml:owningNamespace elmt:Accepts ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:declaredName "Watch" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Accepts::Watch::lens
+    a sysml:PortUsage ;
+    sysml:qualifiedName "Accepts::Watch::lens" ;
+    sysml:owningNamespace elmt:Accepts::Watch ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "lens" ;
+    sysml:type elmt:Accepts::Camera ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Accepts::Watch::framed
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "Accepts::Watch::framed" ;
+    sysml:owningNamespace elmt:Accepts::Watch ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "framed" ;
+    sysml:via elmt:Accepts::Watch::lens ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Accepts::Watch::framed::scene
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Accepts::Watch::framed::scene" ;
+    sysml:owningNamespace elmt:Accepts::Watch::framed ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "scene" ;
+    sysml:isAccept "true"^^xsd:boolean ;
+    sysml:direction "out" ;
+    sysml:type elmt:Accepts::Scene ;
+    sysx:hasBody "false"^^xsd:boolean .

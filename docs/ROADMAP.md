@@ -288,6 +288,23 @@ run entirely in-process. Nothing has yet loaded a converted graph into Fuseki vi
 The companion repo's `src/test/resources/docker-compose.yml` brings up Fuseki plus layer1,
 so the harness already exists.
 
+## D4 — the parser records `then` ambiguously, so successions cannot convert
+
+`ast.Membership.HasSuccession` is a bare flag saying a `then` was written, with no record of
+which two members it sequences. Worse, the sites that set it disagree on which side of the
+keyword the flag belongs to: `parser/defusage.go:1582` marks the member *after* `then` (the
+prefix form), while `parser/behavior.go:199` marks the member *before* it (the trailing form).
+`SuccessionTarget` and `SuccessionGuard` exist on the struct but are never assigned by any
+path, and nothing downstream reads any of the three — the runtime does not consume this flag
+at all, which is why the inconsistency has gone unnoticed.
+
+Because of that, `ToRDF` refuses a member carrying a succession rather than guessing a
+position that could reorder execution (`export_test.go:TestSuccessionIsUnsupported`). Fixing
+this means giving the parser one consistent representation — most likely resolving the target
+member and populating `SuccessionTarget` — after which the mapping can carry a real succession
+edge and the restriction lifts. Worth checking whether the runtime *should* be consuming this
+flag, since a model's step order currently depends on member order alone.
+
 ---
 
 # How to run the next batch
@@ -321,4 +338,6 @@ Lessons that survived the last two batches, unchanged because they keep applying
    rough edge a user would otherwise report.
 6. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
    it is the cheapest, and it is what would show whether the Flexo interop claim actually holds
-   before more work is layered on the mapping.
+   before more work is layered on the mapping. **D4** is the one with a correctness question
+   attached — it is a parser inconsistency that predates the conversion work and is worth
+   settling on its own merits, not just to unblock the mapping.

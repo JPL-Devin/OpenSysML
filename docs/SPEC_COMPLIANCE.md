@@ -543,14 +543,20 @@ is used as an input, an output, or an intermediate form.
 | Unsupported RDF reported, never silently dropped | `export.UnsupportedError` | `rdf_test.go:TestParseTurtleRejects`, `export_test.go:TestUnsupportedTurtleConstructs`/`TestUnknownMetaclassIsUnsupported`/`TestForeignGraph` | ✅ Faithful |
 | Expression-valued positions (values, bounds, guards, filters) | carried as source text, not expression trees | `TestRoundTripIsLossless` | ⚠️ Approximate — converts back exactly, but not queryable by SPARQL |
 | End-binding heads (`connect`, `bind`, `flow`, `succession`, `transition`, `accept`, `satisfy`) | carried as `sysx:sourceText` with structural properties alongside | `export_test.go:TestVerbatimHeadsRoundTrip` | ⚠️ Approximate — exact through Systemica; a foreign graph without the text is reported as unsupported rather than guessed |
+| Accept-action shorthand (`action X accept p : T [via Port]`) | parameter encoded structurally; printer rebuilds the shorthand | `export_test.go` fixture `testdata/convert/accept.sysml`, `parser/testdata/parse/accept_action_shorthand.golden` | ✅ Faithful |
+| `then` succession between members | refused: `ast.Membership.HasSuccession` does not say which members it sequences, and the parser sets it on either side depending on position | `export_test.go:TestSuccessionIsUnsupported` | ❌ Rejected rather than guessed (roadmap D4) |
+| Two members of one namespace sharing a name | refused: the qualified name is an element's graph identity | `export_test.go:TestDuplicateNameIsUnsupported` | ❌ Rejected rather than merged |
+| Ownership cycle in an input graph | refused: no root owns the element, so printing would emit an empty document | `export_test.go:TestOwnershipCycleIsUnsupported` | ❌ Rejected rather than emitting an empty file |
 | Lexical `//` and `/* */` trivia across the RDF hop | no element owns trivia; `doc`/`comment` are declarations and do convert | `export_test.go:TestCommentsThroughRDF` | ❌ Not carried through `.ttl` (a direct `.sysml` save keeps it) |
 | Blank nodes, RDF collections, bare literal shorthands | rejected by `rdf.ParseTurtle` | `rdf_test.go:TestParseTurtleRejects` | ❌ Not supported (by design; see RDF_INTEROP.md) |
 
 **Vocabulary:** `sysml:` = `https://www.omg.org/spec/SysML#` and `elmt:` =
 `urn:sysmlv2:element:` match the Flexo MMS SysML v2 service's `Namespaces.kt`, so
 a converted graph loads into that triplestore. Properties the SysML metamodel
-does not define are confined to `sysx:` = `urn:systemica:sysml:` and are limited
-to three: `memberIndex`, `hasBody`, `sourceText`.
+does not define are confined to `sysx:` = `urn:systemica:sysml:`: `memberIndex`,
+`hasBody` and `sourceText` carry order, body presence and verbatim heads, and
+`prefixMetadata`, `filter`, `isNamespaceImport`, `isRecursive` and `isExpose`
+carry notation the metamodel has no property for.
 
 **What can't be claimed:** this is not a normative SysML v2 → RDF/OWL mapping.
 OMG's abstract syntax has no standard RDF serialization, so the property names

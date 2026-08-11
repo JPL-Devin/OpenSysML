@@ -43,8 +43,6 @@ const (
 	xNamespaceImport = "isNamespaceImport"
 	xRecursive       = "isRecursive"
 	xExpose          = "isExpose"
-	xSuccessionTo    = "successionTarget"
-	xSuccessionGuard = "successionGuard"
 )
 
 // Metaclass names for the constructs that have no SysML metaclass of their own
@@ -89,7 +87,9 @@ func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error)
 	// The first pass records which qualified names this document declares, so
 	// the second can decide whether a relationship target is a link to an
 	// element in the graph or a name that resolves outside it.
-	e.collect(root.Members, "")
+	if err := e.collect(root.Members, ""); err != nil {
+		return nil, err
+	}
 	if err := e.encode(root.Members, "", rdf.Term{}); err != nil {
 		return nil, err
 	}
@@ -102,8 +102,10 @@ type encoder struct {
 	declared map[string]bool
 }
 
-// collect walks the tree recording every qualified name it declares.
-func (e *encoder) collect(members []ast.Node, owner string) {
+// collect walks the tree recording every qualified name it declares. A name
+// declared twice in one namespace is reported: the qualified name is an
+// element's identity in the graph, so two such members would merge into one.
+func (e *encoder) collect(members []ast.Node, owner string) error {
 	for i, member := range members {
 		node, _ := unwrapMember(member)
 		name, children := declaredNameAndMembers(node)
@@ -111,9 +113,18 @@ func (e *encoder) collect(members []ast.Node, owner string) {
 		if fqn == "" {
 			continue
 		}
+		if e.declared[fqn] {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the duplicate declaration of %q at %s", name, e.where(node)),
+				Note: "a name identifies an element in the graph, so two members of one namespace cannot share it",
+			}
+		}
 		e.declared[fqn] = true
-		e.collect(children, fqn)
+		if err := e.collect(children, fqn); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // encode walks the members of one namespace, emitting the triples for each.
@@ -219,7 +230,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		if n.Value != nil {
 			e.graph.Add(subject, e.sysml(pValue), rdf.String(e.text(n.Value)))
 		}
-		e.succession(subject, wrapper)
+		if err := e.succession(n, wrapper); err != nil {
+			return err
+		}
 		// A declaration head that binds ends (connect/bind/flow/succession),
 		// a transition, an accept action or a satisfy usage is kept as source
 		// text: its head is not reconstructible from the properties above.
@@ -316,8 +329,15 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 
 // verbatimUsage reports whether a usage's declaration head has to be carried as
 // source text rather than rebuilt from properties.
+//
+// An accept parameter is not verbatim: it is a synthetic member of the accept
+// shorthand, fully described by its direction, type and isAccept flag, and the
+// printer rebuilds the shorthand from those.
 func verbatimUsage(n *ast.Usage) bool {
-	if len(n.ConnectorEnds) > 0 || n.FlowEnds != nil || n.IsAccept {
+	if n.IsAccept {
+		return false
+	}
+	if len(n.ConnectorEnds) > 0 || n.FlowEnds != nil {
 		return true
 	}
 	switch n.Kind {
@@ -406,18 +426,22 @@ func (e *encoder) multiplicity(subject rdf.Term, mult *ast.Multiplicity) {
 	}
 }
 
-// succession records a namespace-level `then` edge, which the membership
-// wrapper carries rather than the member itself.
-func (e *encoder) succession(subject rdf.Term, wrapper ast.Node) {
+// succession reports a member sequenced with `then`, which this mapping cannot
+// represent.
+//
+// ast.Membership.HasSuccession records only that a `then` was present, not which
+// pair of members it sequences, and the parser sets it on the member before the
+// keyword in some positions and the member after it in others. Either placement
+// would therefore be a guess, and writing the keyword back in the wrong place
+// would change the order the model executes in, so the conversion stops instead.
+func (e *encoder) succession(node ast.Node, wrapper ast.Node) error {
 	membership, ok := wrapper.(*ast.Membership)
 	if !ok || !membership.HasSuccession {
-		return
+		return nil
 	}
-	if membership.SuccessionTarget != "" {
-		e.graph.Add(subject, e.sysx(xSuccessionTo), rdf.String(membership.SuccessionTarget))
-	}
-	if membership.SuccessionGuard != nil {
-		e.graph.Add(subject, e.sysx(xSuccessionGuard), rdf.String(e.text(membership.SuccessionGuard)))
+	return &UnsupportedError{
+		What: fmt.Sprintf("the `then` succession at %s", e.where(node)),
+		Note: "this mapping cannot tell which members a succession sequences, and will not guess at execution order",
 	}
 }
 

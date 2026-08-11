@@ -2025,6 +2025,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 				p.advance() // consume 'accept'
 
 				// Parse param: name : Type
+				paramStart := p.peek().Span.Offset
 				paramName := ""
 				var paramType *ast.QualifiedName
 				if p.at(lexer.Identifier) {
@@ -2034,6 +2035,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 				if p.accept2(lexer.Colon) {
 					paramType = p.parseQualifiedName()
 				}
+				paramSpan := p.spanFrom(paramStart)
 
 				// Optional 'via' port
 				var viaPort *ast.QualifiedName
@@ -2064,7 +2066,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 						Direction: ast.DirOut,
 						IsAccept:  true, // Mark as accept parameter
 					}
-					paramUsage.NodeSpan = p.spanFrom(start)
+					// The span covers only the parameter, not the enclosing
+					// declaration it is a synthetic member of.
+					paramUsage.NodeSpan = paramSpan
 					actionUsage.Members = append(actionUsage.Members, &ast.Membership{
 						Member: paramUsage,
 					})
