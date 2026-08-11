@@ -9,9 +9,9 @@ const tracePrefix = "[trace] "
 // Tracing reports whether execution steps are being recorded.
 func (s *Session) Tracing() bool { return s.trace != nil }
 
-// SetTracing turns recording of execution steps on or off. It takes effect on
-// the next runtime context and the next executor, so a debugging session
-// already under way keeps the setting it started with.
+// SetTracing turns recording of execution steps on or off. It takes effect at
+// once, on the session's runtime context and on a debugging session already
+// under way as well as on everything created afterwards.
 func (s *Session) SetTracing(on bool) {
 	switch {
 	case on && s.trace == nil:
