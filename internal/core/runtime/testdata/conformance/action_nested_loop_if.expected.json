@@ -1,0 +1,17 @@
+{
+	"type": "action",
+	"outputs": {
+		"count": {
+			"type": "Integer",
+			"value": 6
+		},
+		"total": {
+			"type": "Integer",
+			"value": 8
+		},
+		"bursts": {
+			"type": "Integer",
+			"value": 1
+		}
+	}
+}

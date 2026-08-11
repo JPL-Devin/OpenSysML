@@ -822,29 +822,9 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	}
 
 	// Execute the node's lowered statements in declaration order.
-	for _, stmt := range e.graph.Bodies[usage] {
-		ec := NewEvalContext(e.ctx, nil)
-		ec.Push(token.Data) // Token data available for evaluation
-
-		switch s := stmt.(type) {
-		case lower.Send:
-			msg, err := ec.buildMessage(e.action.Scope, s)
-			if err != nil {
-				return err
-			}
-			e.ctx.post(e.graph.Connections, msg, s)
-		case lower.Assign:
-			if s.Target == "" {
-				return fmt.Errorf("nested action %s: unsupported assignment target", usage.Ident.Name)
-			}
-			value, err := ec.Eval(s.Value)
-			if err != nil {
-				return fmt.Errorf("eval assignment RHS: %w", err)
-			}
-			token.Data[s.Target] = value
-		default:
-			return fmt.Errorf("nested action %s: unsupported statement %T", usage.Ident.Name, stmt)
-		}
+	env := &stmtEnv{data: token.Data}
+	if err := e.execStatements(usage, e.graph.Bodies[usage], env); err != nil {
+		return err
 	}
 
 	// Advance to successor

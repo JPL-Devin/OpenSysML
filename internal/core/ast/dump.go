@@ -329,6 +329,20 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		fmt.Fprintf(b, `(CallEvent operation=%q parameters=[%s])`,
 			qnString(v.Operation), strings.Join(names, " "))
 		return
+	case *WhileLoopActionNode:
+		// kind and variable distinguish the three loop forms, which the node
+		// shape alone does not.
+		fmt.Fprintf(b, `(WhileLoopActionNode kind=%q variable=%q`, v.Kind.String(), v.Variable.Name)
+		kids := []Node{}
+		if v.Condition != nil {
+			kids = append(kids, v.Condition)
+		}
+		if v.Collection != nil {
+			kids = append(kids, v.Collection)
+		}
+		kids = append(kids, v.Body...)
+		writeChildren(b, depth, kids)
+		return
 	case *IfActionNode:
 		b.WriteString(`(IfActionNode`)
 		kids := []Node{}

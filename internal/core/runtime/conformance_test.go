@@ -38,6 +38,10 @@ type ExpectedOutcome struct {
 	// Action fields
 	Outputs    map[string]ExpectedValue `json:"outputs,omitempty"`
 	TokenCount *int                     `json:"tokenCount,omitempty"`
+	// Error is the text the execution is expected to fail with, for a case whose
+	// contract is a diagnostic rather than a result (a loop that never
+	// terminates). Empty means the execution must succeed.
+	Error string `json:"error,omitempty"`
 
 	// State fields
 	Events      []ExpectedEvent `json:"events,omitempty"` // Events to inject
@@ -181,6 +185,15 @@ func runActionConformance(t *testing.T, ctx *Context, idx *symbols.Index, path s
 
 	// Execute action
 	outputs, err := ctx.ExecuteAction(actionSym)
+	if expected.Error != "" {
+		if err == nil {
+			t.Fatalf("expected execution to fail with %q, it completed with outputs %v", expected.Error, outputs)
+		}
+		if !strings.Contains(err.Error(), expected.Error) {
+			t.Fatalf("execution failed with %q, want an error containing %q", err, expected.Error)
+		}
+		return
+	}
 	if err != nil {
 		t.Fatalf("ExecuteAction failed: %v", err)
 	}

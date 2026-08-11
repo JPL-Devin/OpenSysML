@@ -1,6 +1,7 @@
 package lower
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -64,6 +65,147 @@ func TestActionBodyLowering(t *testing.T) {
 
 	if _, ok := graph.Accepts[nodeNamed(t, graph, "sender")]; ok {
 		t.Error("sender lowered with an accept it does not declare")
+	}
+}
+
+// A loop and a conditional are lowered as body statements of the node they were
+// written in, with the block each one owns lowered in turn, so the executor
+// reads control flow from the graph instead of walking the AST again.
+func TestActionBodyLoopAndConditionalLowering(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action test {
+			attribute total : Integer = 0;
+			attribute steps = (1, 2);
+			first start;
+			action driver {
+				while total < 5 {
+					attribute bump : Integer = 1;
+					assign total := total + bump;
+					if total == 2 {
+						send total to logger;
+					} else {
+						assign total := total + 1;
+					}
+				}
+				loop {
+					assign total := total + 1;
+				} until total > 9;
+				for s in steps {
+					assign total := total + s;
+				}
+			}
+			done end;
+			then start driver;
+			then driver end;
+		}
+	`)
+
+	body := graph.Bodies[nodeNamed(t, graph, "driver")]
+	if len(body) != 3 {
+		t.Fatalf("driver lowered to %d statements, want 3: %#v", len(body), body)
+	}
+
+	while, ok := body[0].(Loop)
+	if !ok {
+		t.Fatalf("statement 0 = %T, want Loop", body[0])
+	}
+	if while.Kind != ast.LoopWhile {
+		t.Errorf("statement 0 kind = %v, want %v", while.Kind, ast.LoopWhile)
+	}
+	if while.Condition == nil {
+		t.Error("a while loop lowered without its condition")
+	}
+	if len(while.Body.Statements) != 3 {
+		t.Fatalf("while body lowered to %d statements, want 3: %#v", len(while.Body.Statements), while.Body.Statements)
+	}
+	if declare, ok := while.Body.Statements[0].(Declare); !ok {
+		t.Errorf("while body statement 0 = %T, want Declare", while.Body.Statements[0])
+	} else if declare.Name != "bump" || declare.Value == nil {
+		t.Errorf("while body statement 0 = %+v, want bump with a value", declare)
+	}
+	nested, ok := while.Body.Statements[2].(If)
+	if !ok {
+		t.Fatalf("while body statement 2 = %T, want If", while.Body.Statements[2])
+	}
+	if nested.Condition == nil {
+		t.Error("a conditional lowered without its condition")
+	}
+	if len(nested.Then.Statements) != 1 {
+		t.Fatalf("then branch lowered to %d statements, want 1", len(nested.Then.Statements))
+	}
+	if send, ok := nested.Then.Statements[0].(Send); !ok {
+		t.Errorf("then branch statement = %T, want Send", nested.Then.Statements[0])
+	} else if send.Target != "logger" {
+		t.Errorf("then branch send target = %q, want %q", send.Target, "logger")
+	}
+	if nested.Else == nil {
+		t.Fatal("a conditional with an else branch lowered without one")
+	}
+	if len(nested.Else.Statements) != 1 {
+		t.Errorf("else branch lowered to %d statements, want 1", len(nested.Else.Statements))
+	}
+
+	until, ok := body[1].(Loop)
+	if !ok {
+		t.Fatalf("statement 1 = %T, want Loop", body[1])
+	}
+	if until.Kind != ast.LoopUntil {
+		t.Errorf("statement 1 kind = %v, want %v", until.Kind, ast.LoopUntil)
+	}
+	if until.Condition == nil {
+		t.Error("a post-condition loop lowered without its until condition")
+	}
+
+	forLoop, ok := body[2].(Loop)
+	if !ok {
+		t.Fatalf("statement 2 = %T, want Loop", body[2])
+	}
+	if forLoop.Kind != ast.LoopFor {
+		t.Errorf("statement 2 kind = %v, want %v", forLoop.Kind, ast.LoopFor)
+	}
+	if forLoop.Variable != "s" {
+		t.Errorf("for loop variable = %q, want %q", forLoop.Variable, "s")
+	}
+	if forLoop.Collection == nil {
+		t.Error("a for loop lowered without its collection")
+	}
+	if forLoop.Condition != nil {
+		t.Error("a for loop lowered with a condition it does not have")
+	}
+}
+
+// A body member that is not an executable statement is lowered to Unsupported
+// rather than dropped, so reaching it reports a diagnostic.
+func TestActionBodyUnexecutableMemberIsLowered(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action test {
+			attribute total : Integer = 0;
+			first start;
+			action driver {
+				while total < 5 {
+					action inner;
+				}
+			}
+			done end;
+			then start driver;
+			then driver end;
+		}
+	`)
+
+	body := graph.Bodies[nodeNamed(t, graph, "driver")]
+	loop, ok := body[0].(Loop)
+	if !ok {
+		t.Fatalf("statement 0 = %T, want Loop", body[0])
+	}
+	if len(loop.Body.Statements) != 1 {
+		t.Fatalf("loop body lowered to %d statements, want 1", len(loop.Body.Statements))
+	}
+	unsupported, ok := loop.Body.Statements[0].(Unsupported)
+	if !ok {
+		t.Fatalf("loop body statement = %T, want Unsupported", loop.Body.Statements[0])
+	}
+	if !strings.Contains(unsupported.Description, "inner") {
+		t.Errorf("description = %q, want it to name the member", unsupported.Description)
 	}
 }
 
