@@ -1,0 +1,109 @@
+step 1: token 1@accumulate
+  eval feature count -> 0
+  eval literal 6 -> 6
+eval operator < -> true
+  eval feature count -> 0
+  eval literal 1 -> 1
+eval operator + -> 1
+  eval feature count -> 1
+  eval literal 3 -> 3
+eval operator == -> false
+  eval feature total -> 0
+  eval literal 1 -> 1
+eval operator + -> 1
+  eval feature count -> 1
+  eval literal 6 -> 6
+eval operator < -> true
+  eval feature count -> 1
+  eval literal 1 -> 1
+eval operator + -> 2
+  eval feature count -> 2
+  eval literal 3 -> 3
+eval operator == -> false
+  eval feature total -> 1
+  eval literal 1 -> 1
+eval operator + -> 2
+  eval feature count -> 2
+  eval literal 6 -> 6
+eval operator < -> true
+  eval feature count -> 2
+  eval literal 1 -> 1
+eval operator + -> 3
+  eval feature count -> 3
+  eval literal 3 -> 3
+eval operator == -> true
+  eval feature bursts -> 0
+  eval literal 1 -> 1
+eval operator + -> 1
+eval literal 0 -> 0
+  eval feature inner -> 0
+  eval literal 3 -> 3
+eval operator < -> true
+  eval feature inner -> 0
+  eval literal 1 -> 1
+eval operator + -> 1
+  eval feature total -> 2
+  eval literal 1 -> 1
+eval operator + -> 3
+  eval feature inner -> 1
+  eval literal 3 -> 3
+eval operator < -> true
+  eval feature inner -> 1
+  eval literal 1 -> 1
+eval operator + -> 2
+  eval feature total -> 3
+  eval literal 1 -> 1
+eval operator + -> 4
+  eval feature inner -> 2
+  eval literal 3 -> 3
+eval operator < -> true
+  eval feature inner -> 2
+  eval literal 1 -> 1
+eval operator + -> 3
+  eval feature total -> 4
+  eval literal 1 -> 1
+eval operator + -> 5
+  eval feature inner -> 3
+  eval literal 3 -> 3
+eval operator < -> false
+  eval feature count -> 3
+  eval literal 6 -> 6
+eval operator < -> true
+  eval feature count -> 3
+  eval literal 1 -> 1
+eval operator + -> 4
+  eval feature count -> 4
+  eval literal 3 -> 3
+eval operator == -> false
+  eval feature total -> 5
+  eval literal 1 -> 1
+eval operator + -> 6
+  eval feature count -> 4
+  eval literal 6 -> 6
+eval operator < -> true
+  eval feature count -> 4
+  eval literal 1 -> 1
+eval operator + -> 5
+  eval feature count -> 5
+  eval literal 3 -> 3
+eval operator == -> false
+  eval feature total -> 6
+  eval literal 1 -> 1
+eval operator + -> 7
+  eval feature count -> 5
+  eval literal 6 -> 6
+eval operator < -> true
+  eval feature count -> 5
+  eval literal 1 -> 1
+eval operator + -> 6
+  eval feature count -> 6
+  eval literal 3 -> 3
+eval operator == -> false
+  eval feature total -> 7
+  eval literal 1 -> 1
+eval operator + -> 8
+  eval feature count -> 6
+  eval literal 6 -> 6
+eval operator < -> false
+step 2: token 1@end
+step 3: no active tokens

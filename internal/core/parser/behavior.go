@@ -90,7 +90,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 				if tok2.Kind == lexer.Colon {
 					m := p.parseBodyMember()
 					if m != nil {
-						if p.atKeyword("then") {
+						if p.atChainedThen() {
 							p.advance()
 							if mem, ok := m.(*ast.Membership); ok {
 								mem.HasSuccession = true
@@ -105,7 +105,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 				if tok2.Kind == lexer.Keyword && tok2.KeywordID == "accept" {
 					m := p.parseBodyMember()
 					if m != nil {
-						if p.atKeyword("then") {
+						if p.atChainedThen() {
 							p.advance()
 							if mem, ok := m.(*ast.Membership); ok {
 								mem.HasSuccession = true
@@ -122,7 +122,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 					tok2.KeywordID == "perform" || tok2.KeywordID == "bind" || tok2.KeywordID == "assign") {
 					m := p.parseBodyMember()
 					if m != nil {
-						if p.atKeyword("then") {
+						if p.atChainedThen() {
 							p.advance()
 							if mem, ok := m.(*ast.Membership); ok {
 								mem.HasSuccession = true
@@ -148,7 +148,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 					if isDeclaration {
 						m := p.parseBodyMember()
 						if m != nil {
-							if p.atKeyword("then") {
+							if p.atChainedThen() {
 								p.advance()
 								if mem, ok := m.(*ast.Membership); ok {
 									mem.HasSuccession = true
@@ -196,7 +196,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 		m := p.parseBodyMember()
 		if m != nil {
 			// Check for namespace-level succession: 'then' after member
-			if p.atKeyword("then") {
+			if p.atChainedThen() {
 				p.advance() // consume 'then'
 				if mem, ok := m.(*ast.Membership); ok {
 					mem.HasSuccession = true
@@ -752,6 +752,47 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 	return node
 }
 
+// atChainedThen reports whether the parser is at a `then` chaining the preceding
+// member to a keyword-introduced declaration or statement (`then action b {...}`,
+// `then send s to t;`) rather than one starting a named succession edge
+// (`then a b;`) over members of the enclosing body.
+func (p *Parser) atChainedThen() bool {
+	return p.atKeyword("then") && p.peekN(1).Kind == lexer.Keyword
+}
+
+// atNamespaceSuccession reports whether the parser is at a `then` chaining to a
+// following declaration (`action a {...} then action b {...}`) rather than one
+// chaining a behavioral statement or starting a succession edge member.
+func (p *Parser) atNamespaceSuccession() bool {
+	if !p.atChainedThen() {
+		return false
+	}
+	next := p.peekN(1)
+	switch next.KeywordID {
+	case "public", "private", "protected":
+		return true
+	}
+	if _, isDef := definitionKindKeywords[next.KeywordID]; isDef {
+		return true
+	}
+	_, isUsage := usageKindKeywords[next.KeywordID]
+	return isUsage
+}
+
+// startsInlineSuccessionStatement reports whether tok, the token after a `then`,
+// starts an inline statement succession (`then assign x := 1;`) rather than a
+// named edge (`then source target;`) over members of the enclosing body.
+func startsInlineSuccessionStatement(tok lexer.Token) bool {
+	if tok.Kind != lexer.Keyword {
+		return false
+	}
+	switch tok.KeywordID {
+	case "assign", "perform", "while", "if", "action":
+		return true
+	}
+	return false
+}
+
 // parseSuccessionEdge parses:
 // 1. then source target [if guard] ; (control flow edge between named nodes)
 // 2. then statement (inline statement succession)
@@ -760,12 +801,8 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 
 	// Check if this is inline statement succession (then followed by behavioral keyword)
 	// Pattern: then assign x := 1; OR then perform foo;
-	if p.at(lexer.Keyword) {
-		kw := p.peek().KeywordID
-		if kw == "assign" || kw == "perform" || kw == "while" || kw == "if" || kw == "action" {
-			// This is inline succession: parse following statement
-			return p.parseActionMember()
-		}
+	if startsInlineSuccessionStatement(p.peek()) {
+		return p.parseActionMember()
 	}
 
 	// Otherwise, parse as named edge: then [source] target;
@@ -882,6 +919,7 @@ func (p *Parser) parseWhileLoopAction(tok lexer.Token) ast.Node {
 	p.expect(lexer.RBrace, "expected '}' after while body")
 
 	node := &ast.WhileLoopActionNode{
+		Kind:      ast.LoopWhile,
 		Condition: condition,
 		Body:      body,
 	}
@@ -892,9 +930,12 @@ func (p *Parser) parseWhileLoopAction(tok lexer.Token) ast.Node {
 func (p *Parser) parseLoopAction(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 
-	// Loop syntax: loop <body-members> until <condition>;
+	// Loop syntax: `loop { <body> } until <condition>;`, or the unbraced
+	// `loop <body-members> until <condition>;`. A braced body ends at its own
+	// '}', so the members following the loop stay with the enclosing body.
 	// Body can contain action declarations, succession, etc.
 	// Parse body as mixed content (declarations + behavioral statements)
+	_, braced := p.accept(lexer.LBrace)
 	var body []ast.Node
 
 	// Parse loop body members until 'until' keyword or closing brace
@@ -929,17 +970,28 @@ func (p *Parser) parseLoopAction(tok lexer.Token) ast.Node {
 		}
 	}
 
+	if braced {
+		p.expect(lexer.RBrace, "expected '}' after loop body")
+	}
+
 	// Parse optional 'until' condition
 	var condition ast.Node
 	if p.acceptKeyword("until") {
 		condition = p.ParseExpression()
 	}
 
-	p.expect(lexer.Semicolon, "expected ';' after loop")
+	// An `until` clause is terminated by a semicolon in either form; a braced
+	// body without one is already complete.
+	if condition != nil || !braced {
+		p.expect(lexer.Semicolon, "expected ';' after loop")
+	} else {
+		p.accept(lexer.Semicolon)
+	}
 
-	// Reuse WhileLoopActionNode with condition (will be post-condition for 'until')
-	// Alternatively, could add separate LoopActionNode with UntilCondition field
+	// The condition an `until` clause carries is tested after each iteration,
+	// which is what LoopUntil records.
 	node := &ast.WhileLoopActionNode{
+		Kind:      ast.LoopUntil,
 		Condition: condition,
 		Body:      body,
 	}
@@ -1011,26 +1063,16 @@ func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
 
 	p.expect(lexer.RBrace, "expected '}'")
 
-	// Create ForLoopActionNode AST node
-	// Since this doesn't exist yet, reuse WhileLoopActionNode structure
-	// Store variable name and collection in condition (hack - proper impl would add ForLoopActionNode)
-	// For now, create simple FeatureReference for variable and store as body member
-	varUsage := &ast.Usage{
-		Kind: ast.UsageAttribute,
-		Ident: ast.Identification{
+	// A `for` loop has no condition: iteration is driven by the collection, and
+	// the variable it binds each element to is a member of the loop's body scope.
+	node := &ast.WhileLoopActionNode{
+		Kind: ast.LoopFor,
+		Body: body,
+		Variable: ast.Identification{
 			Name:     p.src.Text(varTok.Span),
 			NameSpan: varTok.Span,
 		},
-		Value: collection, // Store collection as value
-	}
-	varUsage.NodeSpan = varTok.Span
-
-	// Prepend variable usage to body
-	body = append([]ast.Node{varUsage}, body...)
-
-	node := &ast.WhileLoopActionNode{
-		Condition: nil, // No explicit condition (iteration driven)
-		Body:      body,
+		Collection: collection,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node

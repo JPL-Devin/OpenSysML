@@ -1193,23 +1193,15 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			}
 		}
 
-		// Check for optional "by" clause
+		// Check for optional "by" clause. Per SatisfyRequirementUsage the `by`
+		// operand names the subject of the satisfaction, never the usage itself,
+		// so it is always recorded as a subject relationship.
 		if p.acceptKeyword("by") {
-			subjTarget := p.parseRelationshipTarget()
-			if subjTarget != nil {
-				// Store subject as identification or relationship depending on node type
-				// If it's a simple qualified name, use as identification
-				// If it's a feature chain or other expression, store as relationship
-				if qn, ok := subjTarget.(*ast.QualifiedName); ok && len(qn.Parts) > 0 && u.Ident.Name == "" {
-					u.Ident.Name = qn.Parts[0].Text
-					u.Ident.NameSpan = qn.Parts[0].Span
-				} else {
-					// Store as a subject relationship for complex expressions
-					u.Relationships = append(u.Relationships, &ast.Relationship{
-						Kind:   ast.RelSubject,
-						Target: subjTarget,
-					})
-				}
+			if subjTarget := p.parseRelationshipTarget(); subjTarget != nil {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelSubject,
+					Target: subjTarget,
+				})
 			}
 		}
 
@@ -1452,28 +1444,17 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			}
 		} else if p.isBehavioralKeyword() {
 			// Inline behavioral body without braces: action name\n assign ...;
-			// Parse statements until we hit something that's NOT a behavioral statement
-			// Typically one statement, but could be multiple connected with 'then'
-			// EXCEPT: if 'then' is followed by a declaration keyword (action/feature/etc),
-			// it's namespace-level succession, not behavioral succession - stop parsing body
-			for p.isBehavioralKeyword() && !p.atEOF() {
-				// Check if 'then' is namespace succession (then <visibility>? <defKeyword>)
-				if p.atKeyword("then") {
-					next := p.peekN(1)
-					// If followed by visibility or definition/usage keyword, it's namespace succession - stop
-					if next.Kind == lexer.Keyword {
-						if _, isVis := map[string]bool{"public": true, "private": true, "protected": true}[next.KeywordID]; isVis {
-							break // namespace succession
-						}
-						if _, isDef := definitionKindKeywords[next.KeywordID]; isDef {
-							break // namespace succession
-						}
-						if _, isUsage := usageKindKeywords[next.KeywordID]; isUsage {
-							break // namespace succession
-						}
-					}
-				}
+			// The body is a single statement plus any 'then'-chained continuations;
+			// a following statement that is not chained belongs to the enclosing body.
+			// EXCEPT: a 'then' chaining to a declaration is namespace-level
+			// succession, not behavioral succession - stop parsing body
+			for !p.atEOF() && !p.atNamespaceSuccession() {
 				members = append(members, p.parseActionMember())
+				// Only an inline statement continues the body; `then a b;` names
+				// members of the enclosing body.
+				if !p.atKeyword("then") || !startsInlineSuccessionStatement(p.peekN(1)) {
+					break
+				}
 			}
 			hasBody = true
 		} else {

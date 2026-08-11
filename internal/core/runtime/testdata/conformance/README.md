@@ -23,6 +23,11 @@ This directory contains behavioral execution conformance tests. Each test consis
 
 - `outputs`: map of output parameter names to their final values
 - `tokenCount`: number of tokens processed (optional, for regression detection)
+- `error`: text the execution must fail with, for a case whose contract is a
+  diagnostic rather than a result — a loop that never terminates must end with
+  the step budget's error. Set it instead of `outputs`; a case without it must
+  run to completion. Such a case has no golden trace, since the trace harness
+  drives the same execution to the end.
 
 ### For States (`ExecuteState`)
 
