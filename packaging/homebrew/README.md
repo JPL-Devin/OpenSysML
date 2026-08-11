@@ -62,6 +62,9 @@ creates or publishes it. One-time setup:
    brew audit --strict --online local/systest/systemica
    ```
 
+   `brew tap-new` taps are trusted automatically. A tap you *cloned* by hand on Homebrew 6.x
+   is not, and installing from it needs `brew trust <tap>` first.
+
 ## Per release
 
 The release job publishes stable artifact names, so only two things change per release:
