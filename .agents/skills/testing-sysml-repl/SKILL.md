@@ -113,6 +113,35 @@ An action token that reaches an `accept` with no matching message **parks** inst
 
 Always run these under `timeout` when driving over a pipe; a hang is the failure mode to catch.
 
+## Control flow inside an action node body
+
+`while`, `loop … until` (braced and unbraced), `for … in` and `if`/`else` execute inside an
+`action <node> { … }` body. The whole body runs within **one** token step, so `%step` past the node
+jumps straight from `Token 1 @ <node>` to the successor with the loop's final values already in the
+token data — do not expect one step per iteration. Drive these with the standard shape:
+
+```bash
+printf '%%load f.sysml\n%%action tally\n%%continue\n%%quit\n' | timeout 30 ./bin/sysml
+```
+
+and assert on the exact numbers in the `Results:` block; "it completed" proves nothing, since the
+historical bug (pre-PR #79) was that the statements were *silently dropped at lowering* and the
+action still completed, just with the wrong total. The cheapest way to prove a control-flow change
+is real is an A/B against a binary built from `main` in a `git worktree` — same model, different
+number.
+
+Things that must fail rather than hang: the REPL builds its runtime context with **maxSteps =
+100000** (`internal/repl/session.go`), and every loop iteration spends one step, so a runaway loop
+(or an empty loop body, whose condition can never change) returns
+`error: execution failed: eval … : evaluation step limit exceeded (100000 steps)` in well under a
+second. Always follow the failure with another meta-command (`%tokens`, `%instances`) to prove the
+session survived — `%tokens` still shows the token parked at the node with its partial value. A
+`for` over a non-collection gives
+`action node <n>: 'for' collection must be a sequence or a set, got constant`.
+
+A name declared inside a loop or branch body lives in a block frame and must **not** appear in the
+action's `Results:` — check for the *absence* of the line, not just the right total.
+
 ## Session-accumulation trap (bites both testers and features)
 
 `Session.accept` (internal/repl/session.go) drops any earlier snippet whose **declared names**
@@ -258,6 +287,16 @@ What the slot kinds mean (`ValueToProto`, `convert.go`):
   still alive afterwards with a follow-up `pysysml.eval('1 + 1', ...)`.
 - A nested `part engine : Engine;` marshals as bare `instance_id=N` and **no RPC resolves an id**,
   so the REPL expands the child's slots and Python cannot (`docs/ROADMAP.md` §P2).
+
+`execute_action` is the gRPC twin of the REPL's `%action` + `%continue`, and it is the cheapest way
+to A/B the two surfaces on the same model. The call shapes are **not** the ones the docstrings
+suggest: there is no `parse_file` on `Connection` — use `c.load_from_content(src)` (or `c.load(path)`),
+which returns a `Model` whose hash is `model.hash` (not `.model_hash`). Then
+`c.execute_action("Pkg::action", model.hash)` returns a plain `{name: value}` dict, and a runtime
+failure raises `pysysml.errors.RuntimeError` with the executor's message
+(`action execution failed: execute action: …`). If you must attach to a service you started
+yourself, `pysysml.connect("localhost", 50551, auto_start=False)` avoids the
+`Binary not found at ~/.pysysml/bin/sysml-grpc` error — but prefer the auto-start path per above.
 
 Suite baseline: `cd python && python -m pytest tests/ -q` with no service running should be
 `75 passed, 18 skipped` (~35s). The 18 skips are the integration tests gating on a live service.
