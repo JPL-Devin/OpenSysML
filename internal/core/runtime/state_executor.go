@@ -24,7 +24,6 @@ type StateExecutor struct {
 	ctx          *Context
 	stateMachine *symbols.Symbol
 	state        ExecutionState
-	trace        *TraceRecorder // Optional trace recorder for testing
 
 	// Lowered graph (source of truth)
 	graph *lower.StateGraph
@@ -776,9 +775,9 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 	}
 
 	// Record trace
-	if e.trace != nil {
+	if e.trace() != nil {
 		eventName := triggerName(trans.Trigger)
-		e.trace.RecordStateTransition(fromName, targetState.Name, eventName)
+		e.trace().RecordStateTransition(fromName, targetState.Name, eventName)
 	}
 
 	return nil
@@ -979,8 +978,8 @@ func (e *StateExecutor) fireForkTransition(trans *lower.Transition, fork *ast.Ps
 	if err := e.scheduleTransitionEvents(); err != nil {
 		return fmt.Errorf("schedule events: %w", err)
 	}
-	if e.trace != nil {
-		e.trace.RecordStateTransition(getNodeName(trans.Source), fork.Name, "")
+	if e.trace() != nil {
+		e.trace().RecordStateTransition(getNodeName(trans.Source), fork.Name, "")
 	}
 	return nil
 }
@@ -1244,8 +1243,8 @@ func (e *StateExecutor) runDoRound() (int, error) {
 		}
 		action := activity.pending[0]
 		activity.pending = activity.pending[1:]
-		if e.trace != nil {
-			e.trace.RecordDoStep(activity.state.Name)
+		if e.trace() != nil {
+			e.trace().RecordDoStep(activity.state.Name)
 		}
 		if err := e.executeAction(action); err != nil {
 			return ran, fmt.Errorf("do action in state %s: %w", activity.state.Name, err)
@@ -1478,8 +1477,8 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 	e.stateVisits = append(e.stateVisits, state.Name)
 
 	// Record trace
-	if e.trace != nil {
-		e.trace.RecordStateEntry(state.Name, len(state.Entry) > 0)
+	if e.trace() != nil {
+		e.trace().RecordStateEntry(state.Name, len(state.Entry) > 0)
 	}
 
 	// Execute entry actions
@@ -1598,8 +1597,8 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 	e.stopDoActivity(state)
 
 	// Record trace
-	if e.trace != nil {
-		e.trace.RecordStateExit(state.Name, len(state.Exit) > 0)
+	if e.trace() != nil {
+		e.trace().RecordStateExit(state.Name, len(state.Exit) > 0)
 	}
 
 	// Execute exit actions
@@ -1819,9 +1818,16 @@ func (e *StateExecutor) StateData() map[string]Value {
 	return data
 }
 
-// SetTrace sets the trace recorder for this executor.
+// trace returns the recorder this executor's context is attached to, so turning
+// reporting on or off reaches an execution already under way.
+func (e *StateExecutor) trace() *TraceRecorder {
+	return e.ctx.trace
+}
+
+// SetTrace sets the trace recorder for this executor and the context it
+// evaluates in.
 func (e *StateExecutor) SetTrace(trace *TraceRecorder) {
-	e.trace = trace
+	e.ctx.SetTrace(trace)
 }
 
 // EventQueue returns the event queue (not copied - read-only access).

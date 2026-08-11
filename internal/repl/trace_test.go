@@ -43,3 +43,16 @@ func TestTracingAppliesToAnExistingSession(t *testing.T) {
 
 	wants(t, run(t, s, "%step"), "[trace] step 1:")
 }
+
+// A declaration typed during a debugging session drops the session's runtime
+// context, but the executor evaluates in the one it was created with — turning
+// tracing on has to reach that context too, or the values go unreported.
+func TestTracingReachesADebuggerThatOutlivedItsContext(t *testing.T) {
+	s := loadFixture(t, "testdata/action_debug.sysml")
+	run(t, s, "%action tally")
+	s.Submit("package Unrelated { part def Widget { attribute size = 1.0; } }")
+	run(t, s, "%trace on")
+
+	got := run(t, s, "%step") + run(t, s, "%step")
+	wants(t, got, "[trace] step 1:", "eval ")
+}

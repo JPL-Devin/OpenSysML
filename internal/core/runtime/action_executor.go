@@ -24,7 +24,6 @@ type ActionExecutor struct {
 	// firedBreakpoints records the token visits a breakpoint already stopped on.
 	firedBreakpoints map[breakpointVisit]bool
 	results          map[string]Value  // Accumulated results from consumed final tokens
-	trace            *TraceRecorder    // Optional trace recorder for testing
 	mergeVisited     map[ast.Node]bool // Track merge node visits
 	inputs           map[string]Value  // Input parameter bindings seeded into the initial token
 	pausedAt         string            // Node name RunToCompletion stopped at, empty when it ran to the end
@@ -171,8 +170,8 @@ func (e *ActionExecutor) Step() error {
 	e.stepCount++
 
 	// Record trace after step completes
-	if e.trace != nil {
-		e.trace.RecordActionStep(e.stepCount, e.tokens)
+	if e.trace() != nil {
+		e.trace().RecordActionStep(e.stepCount, e.tokens)
 	}
 
 	return nil
@@ -912,9 +911,16 @@ func (e *ActionExecutor) ClearBreakpoints() {
 	e.firedBreakpoints = make(map[breakpointVisit]bool)
 }
 
-// SetTrace sets the trace recorder for this executor.
+// trace returns the recorder this executor's context is attached to, so turning
+// reporting on or off reaches an execution already under way.
+func (e *ActionExecutor) trace() *TraceRecorder {
+	return e.ctx.trace
+}
+
+// SetTrace sets the trace recorder for this executor and the context it
+// evaluates in.
 func (e *ActionExecutor) SetTrace(trace *TraceRecorder) {
-	e.trace = trace
+	e.ctx.SetTrace(trace)
 }
 
 // ActionSymbol returns the action being executed.

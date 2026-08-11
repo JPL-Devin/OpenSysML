@@ -1,6 +1,8 @@
 step 1: token 1@*ast.ForkNode
 step 2: token 2@reader, token 3@gate
 step 3: token 2@reader, token 3@sender
+eval literal 7 -> 7
 step 4: token 2@*ast.JoinNode, token 3@*ast.JoinNode
+eval feature n -> 7
 step 5: token 4@*ast.FinalNode
 step 6: no active tokens
