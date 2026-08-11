@@ -1,6 +1,6 @@
-# Systemica — NEXT_STEPS
+# Systemica — Roadmap
 
-Baseline: `main` @ `a6c5fd8` plus this branch, verified locally on 2026-08-11 with Go 1.25.0.
+Baseline: `main` @ `a6c5fd8`, verified locally on 2026-08-11 with Go 1.25.0.
 Read `AGENTS.md` first; it governs everything below.
 
 0.0.4 is prepared but **not tagged**. Everything in "Release follow-through" is
