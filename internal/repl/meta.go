@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/export"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
@@ -131,7 +130,7 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		if len(fields) < 2 {
 			return []string{"usage: %load <file>"}, false, nil
 		}
-		data, rerr := os.ReadFile(fields[1])
+		data, rerr := os.ReadFile(expandHome(fields[1]))
 		if rerr != nil {
 			return nil, false, fmt.Errorf("load %s: %w", fields[1], rerr)
 		}
@@ -238,29 +237,6 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 }
 
 // doInstantiate creates an instance of a part def.
-// doSave writes the session's model to path. The format follows the file
-// extension: `.sysml`/`.kerml` writes the notation, `.ttl` writes RDF Turtle.
-func (s *Session) doSave(path string) ([]string, bool, error) {
-	src := s.joined()
-	if strings.TrimSpace(src) == "" {
-		return []string{"nothing to save: the session is empty"}, false, nil
-	}
-	format, err := export.FormatOfPath(path)
-	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
-	}
-	// Diagnostics are positions in the session buffer, not in the file about to
-	// be written, so they are labelled as such.
-	out, err := export.Convert(sessionOrigin, []byte(src), export.FormatSysML, format)
-	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
-	}
-	if err := os.WriteFile(path, out, 0o600); err != nil {
-		return nil, false, fmt.Errorf("save %s: %w", path, err)
-	}
-	return []string{fmt.Sprintf("saved %d bytes of %s to %s", len(out), format, path)}, false, nil
-}
-
 func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {

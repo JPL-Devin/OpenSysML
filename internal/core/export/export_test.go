@@ -486,3 +486,73 @@ func checkGolden(t *testing.T, path string, got []byte) {
 		t.Errorf("%s differs\n--- want ---\n%s\n--- got ---\n%s", path, want, got)
 	}
 }
+
+// A save replaces the previous file only once the new bytes are safely written,
+// and the result is an ordinary readable document.
+func TestWriteFileIsAtomicAndReadable(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "model.sysml")
+
+	replaced, err := export.WriteFile(path, []byte("package P;\n"))
+	if err != nil || replaced {
+		t.Fatalf("first write: replaced=%v err=%v", replaced, err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Errorf("mode = %o, want 644", got)
+	}
+	replaced, err = export.WriteFile(path, []byte("package Q;\n"))
+	if err != nil || !replaced {
+		t.Fatalf("second write: replaced=%v err=%v", replaced, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "package Q;\n" {
+		t.Errorf("content = %q", data)
+	}
+	// No temporary file is left behind.
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("leftover files in %s: %v", dir, entries)
+	}
+}
+
+// A missing parent directory is named rather than surfacing as a bare open(2)
+// failure.
+func TestWriteFileNamesTheMissingDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "absent")
+	_, err := export.WriteFile(filepath.Join(dir, "model.sysml"), []byte("package P;\n"))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), dir) || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("unhelpful error: %v", err)
+	}
+}
+
+// The REPL's tolerant save writes notation it could not fully parse and reports
+// the syntax errors; every other direction still refuses.
+func TestConvertTolerant(t *testing.T) {
+	broken := []byte("package P { part x; }\npart 3x;\n")
+	out, syntax, err := export.ConvertTolerant("<session>", broken, export.FormatSysML, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("sysml to sysml: %v", err)
+	}
+	if syntax == nil {
+		t.Error("expected the syntax errors to be reported")
+	}
+	if !strings.Contains(string(out), "part 3x;") {
+		t.Errorf("the unreadable text was dropped:\n%s", out)
+	}
+	if _, _, err := export.ConvertTolerant("<session>", broken, export.FormatSysML, export.FormatTurtle); err == nil {
+		t.Error("Turtle should still refuse a broken model")
+	}
+}

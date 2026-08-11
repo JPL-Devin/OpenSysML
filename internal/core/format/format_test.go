@@ -1,6 +1,7 @@
 package format
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/Open-MBEE/Systemica/internal/core/libs"
 )
+
+var update = flag.Bool("update", false, "rewrite the .golden files in testdata")
 
 func format(t *testing.T, src string) string {
 	t.Helper()
@@ -159,6 +162,55 @@ func checkStable(t *testing.T, name string, content []byte) {
 	}
 	if string(once) != string(twice) {
 		t.Errorf("%s: formatting is not idempotent", name)
+	}
+}
+
+// TestContinuationGolden locks the indentation of lines that continue the line
+// above them, and checks the result is stable under a second pass.
+func TestContinuationGolden(t *testing.T) {
+	const path = "testdata/continuation.sysml"
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Source(path, src, DefaultOptions)
+	if err != nil {
+		t.Fatalf("Source() error = %v", err)
+	}
+	golden := strings.TrimSuffix(path, ".sysml") + ".golden.sysml"
+	if *update {
+		if err := os.WriteFile(golden, got, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(want) {
+		t.Errorf("%s differs\n--- want ---\n%s\n--- got ---\n%s", golden, want, got)
+	}
+	checkStable(t, path, src)
+}
+
+// A one-level-deeper continuation is what a reader expects; the statement's own
+// level would read as a new statement.
+func TestIndentsContinuationLines(t *testing.T) {
+	got := format(t, "package Q {\nattribute t = \"a\" +\n\"b\";\n}\n")
+	want := "package Q {\n    attribute t = \"a\" +\n        \"b\";\n}\n"
+	if got != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// A declaration whose body is a note ends with that note, so what follows is a
+// new statement rather than a continuation.
+func TestNoteBodyEndsTheStatement(t *testing.T) {
+	got := format(t, "package P {\ndoc /* about P */\npart def Wheel;\n}\n")
+	want := "package P {\n    doc /* about P */\n    part def Wheel;\n}\n"
+	if got != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
 }
 

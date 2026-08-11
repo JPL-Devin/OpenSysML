@@ -47,3 +47,30 @@ func TestSubmitResolvesAcrossSubmissions(t *testing.T) {
 		t.Fatalf("expected unresolved-reference diagnostic")
 	}
 }
+
+// A comment typed on its own line documents the declaration that follows, so
+// redeclaring that declaration replaces the comment with it instead of leaving
+// stale documentation above whatever is current.
+func TestLeadingCommentIsReplacedWithItsDeclaration(t *testing.T) {
+	s := NewSession()
+	s.accept("// doc for A")
+	s.accept("part def A;")
+	joined, _ := s.accept("part def A { part y; }")
+
+	if strings.Contains(joined, "doc for A") {
+		t.Errorf("stale comment survived the redeclaration: %q", joined)
+	}
+	if got := len(s.List()); got != 1 {
+		t.Errorf("want 1 snippet, got %d: %v", got, s.List())
+	}
+}
+
+// A comment with nothing after it is still part of the session and still saved.
+func TestTrailingCommentIsKept(t *testing.T) {
+	s := NewSession()
+	s.accept("part def A;")
+	joined, _ := s.accept("// thinking out loud")
+	if !strings.Contains(joined, "thinking out loud") {
+		t.Errorf("comment dropped: %q", joined)
+	}
+}
