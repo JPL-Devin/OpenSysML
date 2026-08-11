@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/export"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
@@ -69,6 +70,7 @@ var helpText = []string{
 	"%list               list current session declarations",
 	"%clear              reset the session",
 	"%load <file>        read a file and submit its contents",
+	"%save <file>        write the session model to a file (.sysml notation or .ttl RDF)",
 	"%verbosity [level]  show or set output level: quiet, normal or debug",
 	"%trace [on|off]     show or set execution tracing (evaluation, calc, action and state steps)",
 	"%quit               exit the REPL",
@@ -134,6 +136,11 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			return nil, false, fmt.Errorf("load %s: %w", fields[1], rerr)
 		}
 		return renderResult(s.Submit(string(data)), s.verbosity), false, nil
+	case "%save":
+		if len(fields) < 2 {
+			return []string{"usage: %save <file.sysml|file.ttl>"}, false, nil
+		}
+		return s.doSave(fields[1])
 	case "%verbosity":
 		if len(fields) < 2 {
 			return []string{fmt.Sprintf("verbosity: %s", s.verbosity)}, false, nil
@@ -231,6 +238,27 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 }
 
 // doInstantiate creates an instance of a part def.
+// doSave writes the session's model to path. The format follows the file
+// extension: `.sysml`/`.kerml` writes the notation, `.ttl` writes RDF Turtle.
+func (s *Session) doSave(path string) ([]string, bool, error) {
+	src := s.joined()
+	if strings.TrimSpace(src) == "" {
+		return []string{"nothing to save: the session is empty"}, false, nil
+	}
+	format, err := export.FormatOfPath(path)
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	out, err := export.Convert(path, []byte(src), export.FormatSysML, format)
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	if err := os.WriteFile(path, out, 0o644); err != nil {
+		return nil, false, fmt.Errorf("save %s: %w", path, err)
+	}
+	return []string{fmt.Sprintf("saved %d bytes of %s to %s", len(out), format, path)}, false, nil
+}
+
 func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
