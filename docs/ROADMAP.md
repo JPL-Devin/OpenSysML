@@ -75,11 +75,15 @@ would be worse than no package.
 
 ## R3 — Homebrew tap
 
-`packaging/homebrew/` holds a template with `__VERSION__`/`__SHA256_*__` placeholders and
-`scripts/render-homebrew-formula.sh` renders it from a tag's `SHA256SUMS.txt`. The tap
-repository `Open-MBEE/homebrew-tap` does not exist, so the documented
-`brew tap Open-MBEE/tap && brew install systemica` fails. Create it, push the rendered formula
-for 0.0.4, and install it on a real Mac — nothing here has been executed on macOS. Then
+`packaging/homebrew/` holds a template with `__TAG__`/`__SHA256_*__` placeholders and
+`scripts/render-homebrew-formula.sh` renders it from a tag's `SHA256SUMS.txt`. The rendered
+0.0.4 formula has been verified end to end on Linux (`brew install`, `brew test`,
+`brew audit --strict --online`) through a throwaway local tap, but the tap repository
+`Open-MBEE/homebrew-tap` does not exist, so the documented
+`brew tap Open-MBEE/tap && brew install systemica` still fails. Create it (the repository name
+must be `homebrew-tap`; `brew tap x/y` only resolves `x/homebrew-y`), push the rendered
+formula for 0.0.4, and install it on a real Mac — the darwin archives have not been executed
+on macOS. Then
 automate the bump: a release step that opens a PR against the tap keeps the pinned hashes from
 going stale (this is the old C3).
 
