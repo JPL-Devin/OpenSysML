@@ -17,6 +17,7 @@ type Result struct {
 	Declared    []string            // names introduced by THIS submission
 	Diagnostics []passes.Diagnostic // eager analysis over the whole buffer
 	Source      string              // the full joined <repl> content (Task 6 caret rendering)
+	Notices     []string            // side effects of the submission, e.g. a debugging session it ended
 }
 
 // renderSummary returns one summary line per top-level member: "<kind> <name>".
@@ -134,7 +135,7 @@ func caretLine(col, spanLen, lineLen int) string {
 // otherwise the success summary.
 func renderResult(r Result) []string {
 	if len(r.Diagnostics) > 0 {
-		return renderDiagnostics(r.Diagnostics, r.Source)
+		return append(r.Notices, renderDiagnostics(r.Diagnostics, r.Source)...)
 	}
-	return renderSummary(r.Members)
+	return append(r.Notices, renderSummary(r.Members)...)
 }

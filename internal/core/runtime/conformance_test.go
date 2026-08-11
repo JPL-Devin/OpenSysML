@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,7 +33,7 @@ type ExpectedEvent struct {
 
 // ExpectedOutcome represents expected execution result
 type ExpectedOutcome struct {
-	Type string `json:"type"` // "action", "state", "calc", "constraint", "requirement"
+	Type string `json:"type"` // "action", "state", "calc", "constraint", "requirement", "instance"
 
 	// Action fields
 	Outputs    map[string]ExpectedValue `json:"outputs,omitempty"`
@@ -50,6 +51,11 @@ type ExpectedOutcome struct {
 	// Constraint/Requirement fields
 	Bindings  map[string]ExpectedValue `json:"bindings,omitempty"`
 	Satisfied *bool                    `json:"satisfied,omitempty"`
+
+	// Instance fields
+	Instantiate string                   `json:"instantiate,omitempty"` // qualified name of the type to instantiate
+	Slots       map[string]ExpectedValue `json:"slots,omitempty"`       // expected slot values, derived ones included
+	Constraints map[string]bool          `json:"constraints,omitempty"` // constraint feature name -> satisfied on this instance
 }
 
 // TestExecutionConformance runs all behavioral execution conformance tests.
@@ -160,6 +166,8 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 		runConstraintConformance(t, ctx, idx, sysmlPath, expected)
 	case "requirement":
 		runRequirementConformance(t, ctx, idx, sysmlPath, expected)
+	case "instance":
+		runInstanceConformance(t, ctx, idx, expected)
 	default:
 		t.Fatalf("unknown test type: %s", expected.Type)
 	}
@@ -378,6 +386,61 @@ func runRequirementConformance(t *testing.T, ctx *Context, idx *symbols.Index, p
 			t.Errorf("requirement satisfied = %v, want %v", satisfied, *expected.Satisfied)
 		}
 	}
+}
+
+// runInstanceConformance instantiates a type and validates the values its slots
+// hold, including derived defaults, plus the verdict of each constraint the
+// instance carries.
+func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expected ExpectedOutcome) {
+	if expected.Instantiate == "" {
+		t.Fatalf("instance case declares no \"instantiate\" type")
+	}
+	matches := idx.LookupQualified(expected.Instantiate)
+	if len(matches) != 1 {
+		t.Fatalf("instantiate %q: %d matching symbols, want 1", expected.Instantiate, len(matches))
+	}
+	typeSym := matches[0]
+
+	inst, err := ctx.Instantiate(typeSym)
+	if err != nil {
+		t.Fatalf("Instantiate(%s) failed: %v", expected.Instantiate, err)
+	}
+
+	for name, expectedVal := range expected.Slots {
+		slot, err := inst.GetSlot(ctx, name)
+		if err != nil {
+			t.Errorf("slot %q: %v", name, err)
+			continue
+		}
+		validateValue(t, name, expectedVal, slot.Value)
+	}
+
+	for name, wantSatisfied := range expected.Constraints {
+		feat := featureNamed(ctx, typeSym, name)
+		if feat == nil || feat.Symbol == nil {
+			t.Errorf("constraint %q: no such feature on %s", name, expected.Instantiate)
+			continue
+		}
+		satisfied, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
+		if err != nil && !errors.Is(err, ErrViolated) {
+			t.Errorf("constraint %q: %v", name, err)
+			continue
+		}
+		if satisfied != wantSatisfied {
+			t.Errorf("constraint %q: satisfied = %v, want %v", name, satisfied, wantSatisfied)
+		}
+	}
+}
+
+// featureNamed returns the effective feature of typeSym called name, or nil.
+func featureNamed(ctx *Context, typeSym *symbols.Symbol, name string) *EffectiveFeature {
+	features := ctx.FeaturesOf(typeSym)
+	for i := range features {
+		if features[i].Name == name {
+			return &features[i]
+		}
+	}
+	return nil
 }
 
 // findBehavioralSymbol searches for first symbol matching defKind or usageKind,

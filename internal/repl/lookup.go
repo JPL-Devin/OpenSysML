@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -62,6 +63,51 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 	default:
 		return nil, "", ambiguousError(name, matches, idx)
 	}
+}
+
+// owningInstance returns the object a fully-qualified name belongs to: the
+// longest instantiated prefix, then the remaining segments walked through that
+// instance's slots, since a nested part is an object of its own. The second
+// result is the found object's FQN, for reporting.
+func (s *Session) owningInstance(fqn string) (*runtime.Instance, string) {
+	segments := strings.Split(fqn, "::")
+	if len(segments) < 2 {
+		return nil, ""
+	}
+	owner := segments[:len(segments)-1]
+	for i := len(owner); i > 0; i-- {
+		key := strings.Join(owner[:i], "::")
+		inst, ok := s.instances[key]
+		if !ok {
+			continue
+		}
+		return s.walkSlots(inst, key, owner[i:])
+	}
+	return nil, ""
+}
+
+// walkSlots follows a chain of part slots from inst. An unwalkable segment
+// yields no object, since binding to an ancestor would answer about the wrong one.
+func (s *Session) walkSlots(inst *runtime.Instance, name string, segments []string) (*runtime.Instance, string) {
+	if len(segments) == 0 {
+		return inst, name
+	}
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return nil, ""
+	}
+	for _, seg := range segments {
+		slot, serr := inst.GetSlot(ctx, seg)
+		if serr != nil || slot == nil || slot.Value.Kind != runtime.ValInstance {
+			return nil, ""
+		}
+		child, ok := ctx.Instance(slot.Value.Instance)
+		if !ok {
+			return nil, ""
+		}
+		inst, name = child, name+"::"+seg
+	}
+	return inst, name
 }
 
 // ambiguousError reports a name that matched more than one declaration, listing

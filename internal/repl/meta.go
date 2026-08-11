@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -255,9 +256,23 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	// Try feature reference lookup, simple ("%eval x") or qualified
 	// ("%eval Demo::Vehicle::mass").
 	if isSymbolReference(expr) {
-		sym, _, lerr := s.lookupSymbol(expr)
+		sym, fqn, lerr := s.lookupSymbol(expr)
 		if lerr != nil {
 			return []string{"error: " + lerr.Error()}, false, nil
+		}
+		// An instantiated owner makes this a question about that object: read
+		// the slot, which carries the value the instance actually holds.
+		if inst, owner := s.owningInstance(fqn); inst != nil {
+			if _, ok := inst.Slots[sym.Name]; ok {
+				slot, err := inst.GetSlot(ctx, sym.Name)
+				if err != nil {
+					return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
+				}
+				return []string{
+					fmt.Sprintf("✓ %s%s", expr, onInstance(inst, owner)),
+					fmt.Sprintf("  = %s", formatSlot(slot)),
+				}, false, nil
+			}
 		}
 		usage, ok := sym.Decl.(*ast.Usage)
 		if !ok || usage.Value == nil {
@@ -406,16 +421,55 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 		return lines, false, nil
 	}
 
-	for _, feat := range features {
+	for i := range features {
+		feat := &features[i]
+		// A constraint or requirement the part carries has no value; what it has
+		// is a verdict about this instance, which is the useful thing to show.
+		if verdict, ok := featureVerdict(ctx, feat, inst); ok {
+			lines = append(lines, fmt.Sprintf("  %s: %s", feat.Name, verdict))
+			continue
+		}
 		slot, err := inst.GetSlot(ctx, feat.Name)
 		if err != nil {
 			lines = append(lines, fmt.Sprintf("  %s: <error: %v>", feat.Name, err))
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("  %s = %s", feat.Name, formatValue(slot.Value)))
+		lines = append(lines, fmt.Sprintf("  %s = %s", feat.Name, formatSlot(slot)))
 	}
 
 	return lines, false, nil
+}
+
+// featureVerdict evaluates a constraint or requirement feature against the
+// instance that carries it and renders the outcome for a slot listing.
+// Reports false for a feature that holds a value rather than a verdict.
+func featureVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *runtime.Instance) (string, bool) {
+	if feat.Symbol == nil {
+		return "", false
+	}
+	var (
+		kind   string
+		passed bool
+		err    error
+	)
+	switch feat.Symbol.Kind {
+	case symbols.SymbolConstraintUsage:
+		kind = "constraint"
+		passed, err = ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
+	case symbols.SymbolRequirementUsage:
+		kind = "requirement"
+		passed, err = ctx.EvaluateRequirementOn(feat.Symbol, feat.DeclScope(), inst)
+	default:
+		return "", false
+	}
+	switch {
+	case err != nil && !errors.Is(err, runtime.ErrViolated):
+		return fmt.Sprintf("<%s: %v>", kind, err), true
+	case err != nil || !passed:
+		return fmt.Sprintf("<%s: violated>", kind), true
+	default:
+		return fmt.Sprintf("<%s: satisfied>", kind), true
+	}
 }
 
 // doInstances lists all instantiated objects.
@@ -431,7 +485,15 @@ func (s *Session) doInstances() ([]string, bool, error) {
 	return lines, false, nil
 }
 
-// formatValue renders a runtime value for display.
+// formatSlot renders what a slot holds: a multi-valued feature keeps its
+// contents in Values, leaving the scalar Value unset.
+func formatSlot(slot *runtime.Slot) string {
+	if slot.Values.Kind != runtime.ValInvalid {
+		return formatValue(slot.Values)
+	}
+	return formatValue(slot.Value)
+}
+
 func formatValue(val runtime.Value) string {
 	switch val.Kind {
 	case runtime.ValConst:
@@ -454,12 +516,22 @@ func formatValue(val runtime.Value) string {
 	case runtime.ValInstance:
 		return fmt.Sprintf("Instance(ID: %d)", val.Instance)
 	case runtime.ValSequence:
-		return fmt.Sprintf("Sequence[%d]", val.Sequence.Size())
+		return formatElements(val.Sequence.Elements())
 	case runtime.ValSet:
 		return fmt.Sprintf("Set{%d}", val.Set.Size())
 	default:
 		return "<unknown>"
 	}
+}
+
+// formatElements renders a collection's contents, since its size alone answers
+// nothing about what the object holds.
+func formatElements(elements []runtime.Value) string {
+	parts := make([]string, len(elements))
+	for i, el := range elements {
+		parts[i] = formatValue(el)
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 // doCalc invokes a calculation with arguments.
@@ -561,7 +633,7 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 		return []string{"error: no declarations loaded"}, false, nil
 	}
 
-	sym, _, lerr := s.lookupSymbol(name)
+	sym, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
 		return []string{"error: " + lerr.Error()}, false, nil
 	}
@@ -571,17 +643,43 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 		return []string{"error: " + err.Error()}, false, nil
 	}
 
-	passed, err := ctx.EvaluateConstraint(sym, doc.Scope)
+	// Evaluate against the instance that carries the constraint when one has
+	// been created, so the verdict is about concrete values.
+	inst, owner := s.owningInstance(fqn)
+	scope := doc.Scope
+	if inst != nil {
+		scope = sym.OwnerScope
+	}
+	passed, err := ctx.EvaluateConstraintOn(sym, scope, inst)
 	if err != nil || !passed {
 		return []string{
-			fmt.Sprintf("✗ Constraint %s failed", name),
-			fmt.Sprintf("  Error: %v", err),
+			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
+			"  " + verdictDetail("Assertion", err),
 		}, false, nil
 	}
 
 	return []string{
-		fmt.Sprintf("✓ Constraint %s passed", name),
+		fmt.Sprintf("✓ Constraint %s passed%s", name, onInstance(inst, owner)),
 	}, false, nil
+}
+
+// verdictDetail explains a failed verdict: a condition that evaluated to false
+// is the model's answer, not a malfunction, so it is not an error line. what
+// names the kind of condition, e.g. "Assertion" or "Required condition".
+func verdictDetail(what string, err error) string {
+	if err == nil || errors.Is(err, runtime.ErrViolated) {
+		return what + " evaluated to false"
+	}
+	return fmt.Sprintf("Error: %v", err)
+}
+
+// onInstance renders the " (on <owner> ID: n)" suffix that marks a result as
+// being about one object rather than about declared defaults.
+func onInstance(inst *runtime.Instance, owner string) string {
+	if inst == nil {
+		return ""
+	}
+	return fmt.Sprintf(" (on %s ID: %d)", owner, inst.ID)
 }
 
 // doRequirement evaluates a requirement definition.
@@ -591,7 +689,7 @@ func (s *Session) doRequirement(name string) ([]string, bool, error) {
 		return []string{"error: no declarations loaded"}, false, nil
 	}
 
-	sym, _, lerr := s.lookupSymbol(name)
+	sym, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
 		return []string{"error: " + lerr.Error()}, false, nil
 	}
@@ -601,16 +699,21 @@ func (s *Session) doRequirement(name string) ([]string, bool, error) {
 		return []string{"error: " + err.Error()}, false, nil
 	}
 
-	passed, err := ctx.EvaluateRequirement(sym, doc.Scope)
+	inst, owner := s.owningInstance(fqn)
+	scope := doc.Scope
+	if inst != nil {
+		scope = sym.OwnerScope
+	}
+	passed, err := ctx.EvaluateRequirementOn(sym, scope, inst)
 	if err != nil || !passed {
 		return []string{
-			fmt.Sprintf("✗ Requirement %s failed", name),
-			fmt.Sprintf("  Error: %v", err),
+			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),
+			"  " + verdictDetail("Required condition", err),
 		}, false, nil
 	}
 
 	return []string{
-		fmt.Sprintf("✓ Requirement %s satisfied", name),
+		fmt.Sprintf("✓ Requirement %s satisfied%s", name, onInstance(inst, owner)),
 	}, false, nil
 }
 
@@ -623,7 +726,7 @@ func (s *Session) doAction(name string) ([]string, bool, error) {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
-	sym, _, lerr := s.lookupSymbol(name)
+	sym, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
 		return []string{"error: " + lerr.Error()}, false, nil
 	}
@@ -641,6 +744,7 @@ func (s *Session) doAction(name string) ([]string, bool, error) {
 	// Store session
 	s.actionExec = &actionSession{
 		name:     name,
+		rootName: rootNameOf(fqn, name),
 		symbol:   sym,
 		executor: exec,
 	}
@@ -849,7 +953,7 @@ func (s *Session) doStateMachine(name string) ([]string, bool, error) {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
-	sym, _, lerr := s.lookupSymbol(name)
+	sym, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
 		return []string{"error: " + lerr.Error()}, false, nil
 	}
@@ -867,6 +971,7 @@ func (s *Session) doStateMachine(name string) ([]string, bool, error) {
 	// Store session
 	s.stateExec = &stateSession{
 		name:     name,
+		rootName: rootNameOf(fqn, name),
 		symbol:   sym,
 		executor: exec,
 		now:      exec.CurrentTime(),

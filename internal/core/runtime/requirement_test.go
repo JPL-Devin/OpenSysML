@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -67,8 +68,8 @@ func TestRequirementEvaluation_RequireWithLiteral(t *testing.T) {
 	if err == nil {
 		t.Fatal("UnsafeSpeed should fail")
 	}
-	if !strings.Contains(err.Error(), "require condition failed") {
-		t.Fatalf("Expected 'require condition failed', got: %v", err)
+	if !errors.Is(err, ErrViolated) {
+		t.Fatalf("Expected a violation verdict, got: %v", err)
 	}
 	t.Logf("✓ UnsafeSpeed: requirement failed (as expected)")
 }

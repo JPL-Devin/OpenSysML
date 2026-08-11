@@ -10,10 +10,22 @@ import (
 // own + inherited − redefined/masked, carrying type + multiplicity + default.
 type EffectiveFeature struct {
 	Name         string
+	Symbol       *symbols.Symbol // the declaring feature symbol
 	OwnerType    *symbols.Symbol // type that declares this feature (may be supertype)
 	Type         *symbols.Symbol // resolved type (nil if untyped)
 	Multiplicity semantics.Range // from MultiplicityOf (default 1..1)
 	DefaultValue ast.Node        // value-binding expression (nil if none)
+}
+
+// DeclScope returns the scope the feature was declared in, which is the scope a
+// default value written on it must be evaluated in: an inherited feature's
+// default refers to names visible where the supertype was written, not where
+// the instantiated type is.
+func (f *EffectiveFeature) DeclScope() *symbols.Scope {
+	if f.Symbol == nil {
+		return nil
+	}
+	return f.Symbol.OwnerScope
 }
 
 // FeaturesOf returns the ordered, deduplicated effective-feature list for the given type symbol.
@@ -66,6 +78,7 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 		// Store feature; last one wins (redefinition/masking)
 		featureMap[name] = EffectiveFeature{
 			Name:         name,
+			Symbol:       memberSym,
 			OwnerType:    ownerType,
 			Type:         typ,
 			Multiplicity: mult,

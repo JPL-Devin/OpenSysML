@@ -37,6 +37,16 @@ type Context struct {
 	// messages are the signals in flight, oldest first. The bus is context-wide,
 	// so a message one behavior sends can be accepted in another.
 	messages []Message
+
+	// derivingSlots holds the slots whose defaults are being evaluated, so a
+	// default that refers back to its own slot is reported as a cycle.
+	derivingSlots map[slotRef]bool
+}
+
+// slotRef identifies one slot of one instance.
+type slotRef struct {
+	instance int64
+	feature  string
 }
 
 // NewContext creates a runtime context backed by the given semantic model.
@@ -56,6 +66,8 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		instances:  make(map[int64]*Instance),
 		features:   make(map[*symbols.Symbol][]EffectiveFeature),
 		calcShapes: make(map[*symbols.Symbol]*calcShape),
+
+		derivingSlots: make(map[slotRef]bool),
 	}
 }
 
@@ -86,6 +98,12 @@ func (ctx *Context) incrementStep() error {
 	return nil
 }
 
+// Instance retrieves an instance by ID, so a caller holding a ValInstance can
+// reach the object it names.
+func (ctx *Context) Instance(id int64) (*Instance, bool) {
+	return ctx.getInstance(id)
+}
+
 // getInstance retrieves an instance by ID.
 func (ctx *Context) getInstance(id int64) (*Instance, bool) {
 	inst, ok := ctx.instances[id]
@@ -103,44 +121,44 @@ func (ctx *Context) registerInstance(inst *Instance) {
 	ctx.instances[inst.ID] = inst
 }
 
-// EvaluateConstraint evaluates a constraint definition/usage.
+// EvaluateConstraint evaluates a constraint definition/usage against the
+// declared defaults of the features it refers to.
 // Returns (satisfied, error). If IsAssert=true, violation is an error.
 // If IsAssert=false (assume), always returns (true, nil) but logs assumptions.
 func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope) (bool, error) {
-	// Extract constraint members
-	var members []ast.Node
+	return ctx.EvaluateConstraintOn(sym, scope, nil)
+}
 
+// EvaluateConstraintOn evaluates a constraint against a concrete instance: a
+// feature the constraint names resolves to that instance's slot, so the same
+// constraint can pass for one instance and fail for another. A nil instance
+// evaluates against declared defaults, as EvaluateConstraint does.
+func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind != ast.DefConstraint {
 			return false, fmt.Errorf("not a constraint definition: %s", sym.Name)
 		}
-		members = decl.Members
 	case *ast.Usage:
 		if decl.Kind != ast.UsageConstraint {
 			return false, fmt.Errorf("not a constraint usage: %s", sym.Name)
 		}
-		members = decl.Members
 	default:
 		return false, fmt.Errorf("invalid constraint symbol: %s (%T)", sym.Name, sym.Decl)
 	}
 
-	// Evaluate each constraint member
-	for _, member := range members {
-		// Unwrap Membership
-		node := member
-		if membership, ok := member.(*ast.Membership); ok {
-			node = membership.Member
-		}
-
+	// Evaluate each constraint member, inherited ones included
+	evaluated := 0
+	for _, member := range ctx.chainMembers(sym, scope) {
 		// Check for ConstraintMember
-		constraintMember, ok := node.(*ast.ConstraintMember)
+		constraintMember, ok := member.node.(*ast.ConstraintMember)
 		if !ok {
 			continue // skip non-constraint members
 		}
+		evaluated++
 
 		// Evaluate constraint expression
-		result, err := ctx.EvalWithScope(constraintMember.Expression, scope)
+		result, err := NewEvalContextIn(ctx, member.scope, self).Eval(constraintMember.Expression)
 		if err != nil {
 			return false, fmt.Errorf("constraint %s: evaluation failed: %w", sym.Name, err)
 		}
@@ -161,52 +179,91 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 		// Handle assert vs assume
 		if constraintMember.IsAssert {
 			if !satisfied {
-				return false, fmt.Errorf("constraint %s: assertion failed", sym.Name)
+				return false, fmt.Errorf("constraint %s: assertion %w", sym.Name, ErrViolated)
 			}
 		}
 		// assume: always pass (assumptions are trusted)
 	}
 
+	if evaluated == 0 {
+		return false, fmt.Errorf("constraint %s: %w", sym.Name, ErrNoConditions)
+	}
 	return true, nil
 }
 
-// EvaluateRequirement evaluates a requirement definition/usage.
+// scopedMember is a declaration member with the scope it was written in, since
+// an inherited member's names resolve where its supertype was declared.
+type scopedMember struct {
+	node  ast.Node
+	scope *symbols.Scope
+}
+
+// chainMembers returns the members declared by sym's supertypes, most general
+// first, followed by sym's own. A usage that takes its conditions from a
+// definition (constraint limit : MassLimit) carries no members itself.
+func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []scopedMember {
+	var out []scopedMember
+	supers := ctx.model.AllSupertypes(sym)
+	for i := len(supers) - 1; i >= 0; i-- {
+		link := supers[i]
+		if link == nil {
+			continue
+		}
+		linkScope := link.Scope
+		if linkScope == nil {
+			linkScope = link.OwnerScope
+		}
+		for _, node := range declMembers(link.Decl) {
+			out = append(out, scopedMember{node: node, scope: linkScope})
+		}
+	}
+	for _, node := range declMembers(sym.Decl) {
+		out = append(out, scopedMember{node: node, scope: scope})
+	}
+	return out
+}
+
+// EvaluateRequirement evaluates a requirement definition/usage against the
+// declared defaults of the features it refers to.
 // Returns (satisfied, error). Validates subject/actor types and evaluates assume/require expressions.
 // Assume members always pass (trusted), require members must evaluate to true.
 func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scope) (bool, error) {
-	// Extract requirement members
-	var members []ast.Node
+	return ctx.EvaluateRequirementOn(sym, scope, nil)
+}
 
+// EvaluateRequirementOn evaluates a requirement against a concrete instance,
+// binding the features it names to that instance's slots. A nil instance
+// evaluates against declared defaults, as EvaluateRequirement does.
+func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind != ast.DefRequirement {
 			return false, fmt.Errorf("not a requirement definition: %s", sym.Name)
 		}
-		members = decl.Members
 	case *ast.Usage:
 		if decl.Kind != ast.UsageRequirement {
 			return false, fmt.Errorf("not a requirement usage: %s", sym.Name)
 		}
-		members = decl.Members
 	default:
 		return false, fmt.Errorf("invalid requirement symbol: %s (%T)", sym.Name, sym.Decl)
 	}
 
-	// Create evaluation context with frame for requirement-local bindings
-	evalCtx := NewEvalContext(ctx, scope)
+	// Requirement-local bindings are shared by every member, whichever scope it
+	// was declared in.
+	members := ctx.chainMembers(sym, scope)
 	reqBindings := make(map[string]Value)
-	evalCtx.Push(reqBindings)
+	evalIn := func(memberScope *symbols.Scope) *EvalContext {
+		ec := NewEvalContextIn(ctx, memberScope, self)
+		ec.Push(reqBindings)
+		return ec
+	}
 
 	// First pass: process subject/actor bindings
 	for _, member := range members {
-		// Unwrap Membership
-		node := member
-		if membership, ok := member.(*ast.Membership); ok {
-			node = membership.Member
-		}
+		evalCtx := evalIn(member.scope)
 
 		// Handle binding declarations
-		switch rm := node.(type) {
+		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
 			// Subject binding: subject <name> = <expr>;
 			if rm.BindingExpr != nil {
@@ -236,17 +293,15 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 	}
 
 	// Second pass: evaluate assume/require expressions
+	evaluated := 0
 	for _, member := range members {
-		// Unwrap Membership
-		node := member
-		if membership, ok := member.(*ast.Membership); ok {
-			node = membership.Member
-		}
+		evalCtx := evalIn(member.scope)
 
 		// Handle requirement constraints
-		switch rm := node.(type) {
+		switch rm := member.node.(type) {
 		case *ast.AssumeMember:
 			// Assume: evaluate expression (should be true, but doesn't fail requirement)
+			evaluated++
 			_, err := evalCtx.Eval(rm.Expression)
 			if err != nil {
 				return false, fmt.Errorf("requirement %s: assume evaluation failed: %w", sym.Name, err)
@@ -255,6 +310,7 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 
 		case *ast.RequireMember:
 			// Require: must evaluate to true
+			evaluated++
 			result, err := evalCtx.Eval(rm.Expression)
 			if err != nil {
 				return false, fmt.Errorf("requirement %s: require evaluation failed: %w", sym.Name, err)
@@ -269,11 +325,14 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 			}
 
 			if !satisfied {
-				return false, fmt.Errorf("requirement %s: require condition failed", sym.Name)
+				return false, fmt.Errorf("requirement %s: require condition %w", sym.Name, ErrViolated)
 			}
 		}
 	}
 
+	if evaluated == 0 {
+		return false, fmt.Errorf("requirement %s: %w", sym.Name, ErrNoConditions)
+	}
 	return true, nil
 }
 
