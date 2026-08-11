@@ -1,0 +1,39 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:systemica:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:Importer
+    a sysml:Package ;
+    sysml:qualifiedName "Importer" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Importer" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+<urn:sysmlv2:element:Importer::@0>
+    a sysml:Import ;
+    sysml:qualifiedName "Importer::@0" ;
+    sysml:owningNamespace elmt:Importer ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:visibility "private" ;
+    sysml:importedNamespace "ISQ" ;
+    sysx:isNamespaceImport "true"^^xsd:boolean ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:Importer::@1>
+    a sysml:Import ;
+    sysml:qualifiedName "Importer::@1" ;
+    sysml:owningNamespace elmt:Importer ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:importedNamespace "ScalarValues::Real" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:Importer::@2>
+    a sysml:Import ;
+    sysml:qualifiedName "Importer::@2" ;
+    sysml:owningNamespace elmt:Importer ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:importedNamespace "Deep" ;
+    sysx:isRecursive "true"^^xsd:boolean ;
+    sysx:hasBody "false"^^xsd:boolean .

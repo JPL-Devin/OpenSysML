@@ -1,0 +1,32 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:systemica:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:Mult
+    a sysml:Package ;
+    sysml:qualifiedName "Mult" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Mult" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Mult::exactlyOne
+    a sysml:MultiplicityDeclaration ;
+    sysml:qualifiedName "Mult::exactlyOne" ;
+    sysml:owningNamespace elmt:Mult ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "exactlyOne" ;
+    sysml:lowerBound "1" ;
+    sysml:upperBound "1" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Mult::optional
+    a sysml:MultiplicityDeclaration ;
+    sysml:qualifiedName "Mult::optional" ;
+    sysml:owningNamespace elmt:Mult ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "optional" ;
+    sysml:lowerBound "0" ;
+    sysml:upperBound "1" ;
+    sysx:hasBody "false"^^xsd:boolean .
