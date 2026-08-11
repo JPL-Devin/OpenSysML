@@ -262,10 +262,20 @@ workflows:
             tags:
               ignore: /.*/
   
-  # Build and release on tags
+  # Build and release on tags. The suite runs here too: a tag can point at any
+  # commit, so a release is only published from a revision proven green.
   release:
     jobs:
+      - build-and-test:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v.*/
+
       - build-release:
+          requires:
+            - build-and-test
           filters:
             branches:
               ignore: /.*/

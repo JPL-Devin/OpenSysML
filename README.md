@@ -48,28 +48,31 @@ make build
 **Interactive modeling:**
 ```bash
 $ sysml
-sysml> part Wheel { attribute diameter = 16.0; }
-✓ Wheel
+sysml> part def Wheel { attribute diameter = 16.0; }
+✓ part def Wheel
 
 sysml> %instantiate Wheel
-Created instance: Wheel (ID: 1)
+✓ Created instance of Wheel
+  ID: 1
+  Use %slots Wheel to inspect
 
 sysml> %slots Wheel
 Instance: Wheel (ID: 1)
-  diameter: 16.0
+Slots:
+  diameter = 16.00
 ```
 
 **Behavioral execution:**
 ```bash
 sysml> calc add { in x; in y; return x + y; }
-✓ add
+✓ calc add
 
 sysml> %calc add 10 20
 ✓ add(10, 20)
   = 30
 
 sysml> constraint ValidSpeed { assert 65 <= 120; }
-✓ ValidSpeed
+✓ constraint ValidSpeed
 
 sysml> %constraint ValidSpeed
 ✓ Constraint ValidSpeed passed
@@ -161,9 +164,9 @@ sysml> %advance 30
 | Python client library | ✅ Complete (connection lifecycle, runtime APIs, IPython hooks, DataFrame) |
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
-**Test coverage:** 1,500+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 36 golden ASTs, 49 negatives, 59 conformance cases, 35 robustness subtests.
+**Test coverage:** 1,500+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 36 golden ASTs, 49 negatives, 60 conformance cases, 35 robustness subtests.
 **Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
-**Behavioral execution:** Calc/constraint/requirement fully functional (18/18 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (59/59 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
+**Behavioral execution:** Calc/constraint/requirement fully functional (18/18 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (60/60 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
 **Training examples:** 98/100 files clean (2 files, 4 errors), gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
@@ -240,7 +243,10 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 
 **Release process:**
 - Every commit: Build + test
-- Tagged releases (`v*`): Multi-platform binaries published to GitHub Releases
+- Tagged releases (`v*`): the suite runs again on the tagged commit, then multi-platform
+  binaries are published to GitHub Releases. Maintainer procedure:
+  [docs/RELEASING.md](docs/RELEASING.md); what changed per release:
+  [CHANGELOG.md](CHANGELOG.md)
 
 **Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
 `sysml-lsp-<os>-<arch>.tar.gz`), `systemica-<os>-<arch>.tar.gz` bundles containing both

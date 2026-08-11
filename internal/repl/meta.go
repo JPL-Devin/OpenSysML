@@ -437,31 +437,115 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 		fmt.Sprintf("Instance: %s (ID: %d)", fqn, inst.ID),
 		"Slots:",
 	}
+	w := &slotWalk{ctx: ctx, onPath: map[*symbols.Symbol]bool{inst.Type: true}, budget: maxSlotLines}
+	return append(lines, w.lines(inst, "  ", 0)...), false, nil
+}
 
-	// Get effective features to know slot names
-	features := ctx.FeaturesOf(inst.Type)
+const (
+	// maxSlotDepth bounds how deep %slots expands nested objects.
+	maxSlotDepth = 8
+	// maxSlotLines bounds the listing as a whole, since nesting multiplies and
+	// a slot is materialized by reading it: breadth costs objects, not just output.
+	maxSlotLines = 200
+)
+
+// slotWalk expands an object graph for %slots under three bounds: onPath holds
+// the types being expanded above the current one (a part containing its own
+// kind materializes a fresh instance per descent, so instance identity cannot
+// detect the cycle), depth, and a line budget shared across the listing.
+type slotWalk struct {
+	ctx    *runtime.Context
+	onPath map[*symbols.Symbol]bool
+	budget int
+}
+
+func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []string {
+	features := w.ctx.FeaturesOf(inst.Type)
 	if len(features) == 0 {
-		lines = append(lines, "  (no features)")
-		return lines, false, nil
+		return w.emit(nil, indent+"(no features)")
 	}
 
+	var lines []string
 	for i := range features {
+		if w.budget <= 0 {
+			return append(lines, indent+"… (listing truncated)")
+		}
 		feat := &features[i]
 		// A constraint or requirement the part carries has no value; what it has
 		// is a verdict about this instance, which is the useful thing to show.
-		if verdict, ok := featureVerdict(ctx, feat, inst); ok {
-			lines = append(lines, fmt.Sprintf("  %s: %s", feat.Name, verdict))
+		if verdict, ok := featureVerdict(w.ctx, feat, inst); ok {
+			lines = w.emit(lines, fmt.Sprintf("%s%s: %s", indent, feat.Name, verdict))
 			continue
 		}
-		slot, err := inst.GetSlot(ctx, feat.Name)
+		if held, elided := w.elided(feat, depth); elided {
+			lines = w.emit(lines, fmt.Sprintf("%s%s : %s (not expanded: %s)", indent, feat.Name, held, elisionReason(depth)))
+			continue
+		}
+		slot, err := inst.GetSlot(w.ctx, feat.Name)
 		if err != nil {
-			lines = append(lines, fmt.Sprintf("  %s: <error: %v>", feat.Name, err))
+			lines = w.emit(lines, fmt.Sprintf("%s%s: <error: %v>", indent, feat.Name, err))
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("  %s = %s", feat.Name, formatSlot(slot)))
+		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatSlot(slot)))
+		for _, nested := range nestedInstances(w.ctx, slot) {
+			if w.budget <= 0 {
+				return append(lines, indent+"  … (listing truncated)")
+			}
+			w.onPath[nested.Type] = true
+			lines = append(lines, w.lines(nested, indent+"  ", depth+1)...)
+			delete(w.onPath, nested.Type)
+		}
+	}
+	return lines
+}
+
+func (w *slotWalk) emit(lines []string, line string) []string {
+	w.budget--
+	return append(lines, line)
+}
+
+// elided reports whether expanding a feature would revisit a type already on
+// the path or exceed the depth bound, naming the type it holds. Asked before
+// the slot is read, since reading it materializes the object.
+func (w *slotWalk) elided(feat *runtime.EffectiveFeature, depth int) (string, bool) {
+	held := w.ctx.CompositeTypeOf(feat)
+	if held == nil {
+		return "", false
+	}
+	if depth >= maxSlotDepth || w.onPath[held] {
+		return held.Name, true
+	}
+	return "", false
+}
+
+func elisionReason(depth int) string {
+	if depth >= maxSlotDepth {
+		return fmt.Sprintf("depth %d", maxSlotDepth)
+	}
+	return "contains its own kind"
+}
+
+// nestedInstances returns the instances a slot holds, whether it carries one
+// value or a collection of them.
+func nestedInstances(ctx *runtime.Context, slot *runtime.Slot) []*runtime.Instance {
+	values := []runtime.Value{slot.Value}
+	switch slot.Values.Kind {
+	case runtime.ValSequence:
+		values = slot.Values.Sequence.Elements()
+	case runtime.ValSet:
+		values = slot.Values.Set.Elements()
 	}
 
-	return lines, false, nil
+	var out []*runtime.Instance
+	for _, val := range values {
+		if val.Kind != runtime.ValInstance {
+			continue
+		}
+		if nested, ok := ctx.Instance(val.Instance); ok {
+			out = append(out, nested)
+		}
+	}
+	return out
 }
 
 // featureVerdict evaluates a constraint or requirement feature against the

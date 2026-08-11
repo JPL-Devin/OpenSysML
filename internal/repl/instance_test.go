@@ -195,3 +195,56 @@ func TestCollectionSlotsShowTheirContents(t *testing.T) {
 	rejects(t, got, "<unknown>")
 	wants(t, run(t, s, "%eval Coll::Rig::doubles"), "= [200.00]")
 }
+
+// A part held in a slot is worth nothing to the reader as an opaque ID: %slots
+// shows what the nested object holds, indented under the slot that holds it.
+func TestSlotsExpandNestedInstances(t *testing.T) {
+	s := loadFixture(t, "testdata/nested_part.sysml")
+	run(t, s, "%instantiate Nested::Car")
+
+	wants(t, run(t, s, "%slots Nested::Car"),
+		"  engine = Instance(ID: 2)",
+		"    mass = 5.00",
+		"    light: <constraint: satisfied>",
+	)
+}
+
+// Each element of a multi-valued part slot is expanded too.
+func TestSlotsExpandCollectionElements(t *testing.T) {
+	s := loadFixture(t, "testdata/collection_slots.sysml")
+	run(t, s, "%instantiate Coll::Rig")
+
+	got := run(t, s, "%slots Coll::Rig")
+	wants(t, got, "wheels = [Instance(ID: 2), Instance(ID: 3)]")
+	if strings.Count(got, "    radius") != 2 {
+		t.Errorf("expected both wheels expanded, got:\n%s", got)
+	}
+}
+
+// A part containing its own kind materializes a fresh object per expansion, so
+// nesting is bounded by type rather than by instance identity.
+func TestSlotsStopAtRecursiveContainment(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Node { attribute v = 1.0; part child : Node; }")
+	run(t, s, "%instantiate Node")
+
+	got := run(t, s, "%slots Node")
+	wants(t, got, "v = 1.00", "child : Node (not expanded: contains its own kind)")
+	if n := strings.Count(got, "\n"); n > 5 {
+		t.Errorf("expected a bounded listing, got %d lines:\n%s", n, got)
+	}
+}
+
+// Nesting multiplies, and every expansion materializes an object, so a wide
+// model is truncated rather than listed in full.
+func TestSlotsTruncateWideNesting(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Leaf { attribute v = 1.0; } part def Mid { part leaves : Leaf[20]; } part def Top { part mids : Mid[20]; }")
+	run(t, s, "%instantiate Top")
+
+	got := run(t, s, "%slots Top")
+	wants(t, got, "… (listing truncated)")
+	if n := strings.Count(got, "\n"); n > maxSlotLines+10 {
+		t.Errorf("listing ran to %d lines, want it bounded near %d:\n%.400s", n, maxSlotLines, got)
+	}
+}

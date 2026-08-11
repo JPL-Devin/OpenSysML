@@ -119,8 +119,8 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 		return slot, nil
 	}
 
-	// Lazy instantiation: if feature is composite (has a type that's a part/item def)
-	if slot.Feature.Type != nil {
+	// Lazy instantiation: a composite feature holds objects of its own.
+	if composite := ctx.CompositeTypeOf(slot.Feature); composite != nil {
 		// Check multiplicity (C2 + C1)
 		mult := slot.Feature.Multiplicity
 		if !mult.Upper.Known || !mult.Lower.Known {
@@ -129,7 +129,7 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 
 		if !mult.Upper.Infinite && mult.Upper.Value == 1 {
 			// Scalar: instantiate one
-			childInst, err := ctx.Instantiate(slot.Feature.Type)
+			childInst, err := ctx.Instantiate(composite)
 			if err != nil {
 				return nil, err
 			}
@@ -150,7 +150,7 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 			// Determine collection type (Sequence vs Set)
 			seq := NewSequence()
 			for i := 0; i < count; i++ {
-				childInst, err := ctx.Instantiate(slot.Feature.Type)
+				childInst, err := ctx.Instantiate(composite)
 				if err != nil {
 					return nil, err
 				}
@@ -162,6 +162,33 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 	}
 
 	return slot, nil
+}
+
+// CompositeTypeOf returns what a feature is materialized from, or nil for one
+// that holds a value rather than an object — a written default takes precedence
+// over instantiation, as in GetSlot above. A usage with members of its own is
+// instantiated as itself, so its body governs and an untyped nested part
+// materializes at all. Answering costs no allocation, so a caller walking an
+// object graph can decide whether to descend before descending.
+func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
+	if feat.DefaultValue != nil && (isScalarFeature(feat) || feat.Type == nil) {
+		return nil
+	}
+	if feat.Symbol != nil && isCompositeUsage(feat.Symbol) && len(declMembers(feat.Symbol.Decl)) > 0 {
+		return feat.Symbol
+	}
+	return feat.Type
+}
+
+// isCompositeUsage reports whether a feature symbol holds objects (a part or
+// item) rather than a value.
+func isCompositeUsage(sym *symbols.Symbol) bool {
+	switch sym.Kind {
+	case symbols.SymbolPartUsage, symbols.SymbolItemUsage:
+		return true
+	default:
+		return false
+	}
 }
 
 // evalSlotDefault evaluates a slot's default-value expression bound to the

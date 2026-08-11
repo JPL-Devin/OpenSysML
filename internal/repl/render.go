@@ -25,12 +25,12 @@ type Result struct {
 // to an earlier one still sitting in the buffer.
 func (r Result) mine(span source.Span) bool { return span.Offset >= r.Offset }
 
-// renderSummary returns one summary line per top-level member: "<kind> <name>".
+// renderSummary returns one accepted line per top-level member: "✓ <kind> <name>".
 func renderSummary(members []ast.Node) []string {
 	out := make([]string, 0, len(members))
 	for _, m := range members {
 		if line := renderMember(m); line != "" {
-			out = append(out, line)
+			out = append(out, "✓ "+line)
 		}
 	}
 	return out
@@ -51,11 +51,15 @@ func renderMember(m ast.Node) string {
 	case *ast.Alias:
 		return "alias " + nameOrAnon(d.Ident)
 	case *ast.Import:
-		return "import " + qnString(d.Imported)
+		return "import " + importTarget(d)
 	case *ast.Dependency:
 		return "dependency " + nameOrAnon(d.Ident)
 	case *ast.Comment:
 		return "comment"
+	case *ast.Definition:
+		return d.Kind.String() + " def " + nameOrAnon(d.Ident)
+	case *ast.Usage:
+		return d.Kind.String() + " " + nameOrAnon(d.Ident)
 	default:
 		return ""
 	}
@@ -69,6 +73,21 @@ func nameOrAnon(id ast.Identification) string {
 		return "<" + id.ShortName + ">"
 	}
 	return "<anonymous>"
+}
+
+// importTarget echoes what an import names, wildcards included, so the
+// confirmation matches what was typed.
+func importTarget(imp *ast.Import) string {
+	name := qnString(imp.Imported)
+	switch {
+	case imp.Kind == ast.ImportNamespace && imp.IsRecursive:
+		return name + "::*::**"
+	case imp.IsRecursive:
+		return name + "::**"
+	case imp.Kind == ast.ImportNamespace:
+		return name + "::*"
+	}
+	return name
 }
 
 func qnString(qn *ast.QualifiedName) string {
