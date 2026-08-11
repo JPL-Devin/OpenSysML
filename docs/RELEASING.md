@@ -45,8 +45,8 @@ The tag is the version: CircleCI passes `CIRCLE_TAG` to the build as
 
 ```bash
 git checkout main && git pull
-git tag -a v0.1.0 -m "v0.1.0"
-git push origin v0.1.0
+git tag -a v0.0.4 -m "v0.0.4"
+git push origin v0.0.4
 ```
 
 Tags are matched by `/^v.*/` in `.circleci/config.yml`. A tag on a commit that
@@ -75,8 +75,8 @@ that release's assets rather than appending duplicates.
 1. **Verify a download** on at least one platform:
 
    ```bash
-   curl -fLO https://github.com/Open-MBEE/Systemica/releases/download/v0.1.0/systemica-linux-amd64.tar.gz
-   curl -fLO https://github.com/Open-MBEE/Systemica/releases/download/v0.1.0/SHA256SUMS.txt
+   curl -fLO https://github.com/Open-MBEE/Systemica/releases/download/v0.0.4/systemica-linux-amd64.tar.gz
+   curl -fLO https://github.com/Open-MBEE/Systemica/releases/download/v0.0.4/SHA256SUMS.txt
    sha256sum -c SHA256SUMS.txt --ignore-missing
    tar xzf systemica-linux-amd64.tar.gz && ./sysml --version
    ```
@@ -88,7 +88,7 @@ that release's assets rather than appending duplicates.
    with `__VERSION__`/`__SHA256_*__` placeholders):
 
    ```bash
-   scripts/render-homebrew-formula.sh v0.1.0 > Formula/systemica.rb
+   scripts/render-homebrew-formula.sh v0.0.4 > Formula/systemica.rb
    ```
 
    See [packaging/homebrew/README.md](../packaging/homebrew/README.md).

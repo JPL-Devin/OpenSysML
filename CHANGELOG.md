@@ -4,10 +4,9 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/RELEASING.md](docs/RELEASING.md).
 
-## Unreleased — first public release
+## 0.0.4 — 2026-08-10
 
-The first tagged release. Version number is chosen at tag time; rename this
-section to that version and date it.
+The first tagged release.
 
 ### Language and semantics
 
