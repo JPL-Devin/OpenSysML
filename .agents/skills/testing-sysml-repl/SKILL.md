@@ -231,7 +231,7 @@ Do **not** start the service by hand. `Connection._ensure_service`
 (`python/pysysml/connection.py`) probes `localhost:50051` and spawns the binary itself; letting it
 auto-start is both the realistic user path and the only way it writes its pidfile. Attaching to a
 service you started yourself makes `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
-fail — that is the documented `NEXT_STEPS.md` §P1 gap, not a new bug.
+fail — that is the documented `docs/ROADMAP.md` §P1 gap, not a new bug.
 
 Client API shapes that are easy to get wrong:
 
@@ -257,7 +257,7 @@ What the slot kinds mean (`ValueToProto`, `convert.go`):
   `slot Loop.a: slot Loop.b: cyclic slot dependency: Loop.a`, promptly, and prove the service is
   still alive afterwards with a follow-up `pysysml.eval('1 + 1', ...)`.
 - A nested `part engine : Engine;` marshals as bare `instance_id=N` and **no RPC resolves an id**,
-  so the REPL expands the child's slots and Python cannot (`NEXT_STEPS.md` §P2).
+  so the REPL expands the child's slots and Python cannot (`docs/ROADMAP.md` §P2).
 
 Suite baseline: `cd python && python -m pytest tests/ -q` with no service running should be
 `75 passed, 18 skipped` (~35s). The 18 skips are the integration tests gating on a live service.

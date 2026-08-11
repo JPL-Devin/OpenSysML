@@ -97,7 +97,7 @@ jobs:
             pip install pytest pytest-mock
       
       # The integration tests skip without a service on localhost:50051, and
-      # starting one here fails test_lifecycle: see NEXT_STEPS.md §P1.
+      # starting one here fails test_lifecycle: see docs/ROADMAP.md §P1.
       - run:
           name: Run Python tests
           command: |
