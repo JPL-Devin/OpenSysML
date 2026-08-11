@@ -246,14 +246,47 @@ keeps requiring qualified names.
 
 Ordered by what a bug there would cost:
 
-- **`cmd/` is effectively untested** (`cmd/sysml` 6.4%, the other two 0%). `cmd/sysml/main_test.go`
-  covers only how flags become session options; nothing drives any binary as a process. A
-  smoke test per binary — start it, exchange one message, shut it down — would cover the paths
-  a release regression would break first, and `sysml-grpc` is now a published artifact.
+- **`cmd/` is thinly tested** (`cmd/sysml` was 6.4%, the other two 0%). `cmd/sysml/main_test.go`
+  covers only how flags become session options. `cmd/sysml/convert_test.go` now builds and
+  drives the binary as a process for the conversion paths, so the pattern exists to copy; the
+  REPL and LSP/gRPC binaries still have no smoke test — start it, exchange one message, shut it
+  down — and `sysml-grpc` is a published artifact.
 - **`internal/core/resolve` at 54.3%** is the lowest of the semantic packages while carrying the
   most subtle rules (feature chains, redefinition, aliases, cached targets).
 - **`internal/core/ast` at 27.4%** is mostly declarations, so the number is misleading; check
   what is actually uncovered before writing tests for their own sake.
+
+---
+
+# Track D — model persistence and RDF interchange
+
+Saving and SysML ↔ RDF Turtle conversion landed (`internal/core/rdf`,
+`internal/core/export`, `%save`, `sysml -convert`); see
+[`RDF_INTEROP.md`](RDF_INTEROP.md). What that work deliberately left open:
+
+## D1 — expressions are carried as source text, not as triples
+
+Feature values, multiplicity bounds, filter conditions and succession guards are stored as
+their notation. They round-trip exactly, but SPARQL cannot see inside them, so a query like
+"every part whose mass exceeds 1000" is not expressible against the graph. Mapping KerML
+expression trees to RDF is the fix and is a feature in its own right: it needs a node-identity
+scheme for subexpressions, which is the part to design first.
+
+## D2 — end-binding heads depend on `sysx:sourceText`
+
+`connect`, `bind`, `flow`, `succession`, `transition`, `accept` and `satisfy` keep their head
+verbatim, so a graph produced by *another* tool converts to notation only as far as the
+structural properties reach and then reports the element as unsupported. Emitting real end
+triples (`sysml:source`/`sysml:target`/`sysml:connectorEnd`) would remove the dependency; the
+parser already has the ends, so this is an encoder/decoder change rather than a parser one.
+
+## D3 — no round trip against a real triplestore
+
+The vocabulary and element IRIs match Flexo MMS's `Namespaces.kt`, and the round-trip tests
+run entirely in-process. Nothing has yet loaded a converted graph into Fuseki via
+`flexo-mms-sysmlv2` and read it back, which is the only way to confirm the interop claim.
+The companion repo's `src/test/resources/docker-compose.yml` brings up Fuseki plus layer1,
+so the harness already exists.
 
 ---
 
@@ -286,3 +319,6 @@ Lessons that survived the last two batches, unchanged because they keep applying
 4. **A6** last, gated on a per-file corpus diff.
 5. **B1**, **B2** and **Track C** are good filler sessions: small, isolated, and each closes a
    rough edge a user would otherwise report.
+6. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
+   it is the cheapest, and it is what would show whether the Flexo interop claim actually holds
+   before more work is layered on the mapping.

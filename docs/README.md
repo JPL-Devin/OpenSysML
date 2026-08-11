@@ -9,6 +9,7 @@
 
 - **[API Documentation](API.md)** — Complete public API reference for all packages
 - **[Grammar Reference](grammar/README.md)** — SysML v2 grammar production mapping and parser implementation
+- **[Saving & RDF Interop](RDF_INTEROP.md)** — `%save`, `sysml -convert`, and the SysML ↔ RDF Turtle mapping
 - **[macOS Distribution](MACOS_DISTRIBUTION.md)** — Gatekeeper/quarantine analysis and the code-signing decision record
 
 ## Implementation Status
