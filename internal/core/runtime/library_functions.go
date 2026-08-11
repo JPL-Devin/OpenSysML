@@ -140,7 +140,9 @@ func unresolvedLibraryFunction(qn *ast.QualifiedName, written string) (*libraryF
 // declaration that does carry a body is evaluated from that body, so a model
 // that declares its own calc of the same name is never routed here.
 func (ctx *Context) libraryFunctionFor(sym *symbols.Symbol) (*libraryFunction, bool) {
-	if sym == nil {
+	// A declaration that is not a function is not one of these, whatever it is
+	// named. A cached library symbol carries a kind and no Decl.
+	if sym == nil || !isCalcSymbol(sym) {
 		return nil, false
 	}
 	fn, ok := libraryFunctions[ctx.qualifiedSymbolName(sym)]

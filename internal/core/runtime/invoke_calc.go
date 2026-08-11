@@ -338,6 +338,18 @@ func isCalcDecl(decl ast.Node) bool {
 	}
 }
 
+// isCalcSymbol reports whether sym declares a calc, reading its declaration when
+// it has one and its symbol kind otherwise, as a cached library symbol does.
+func isCalcSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	if sym.Decl != nil {
+		return isCalcDecl(sym.Decl)
+	}
+	return sym.Kind == symbols.SymbolCalcDef || sym.Kind == symbols.SymbolCalcUsage
+}
+
 // declMembers returns the body members of a definition or usage, unwrapping the
 // Membership wrappers the parser produces.
 func declMembers(decl ast.Node) []ast.Node {

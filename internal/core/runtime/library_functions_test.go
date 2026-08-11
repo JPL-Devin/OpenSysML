@@ -208,6 +208,44 @@ package mine {
 	}
 }
 
+// A library symbol loaded from the library index carries a kind and no
+// declaration, and dispatches on that kind.
+func TestLibraryFunctionDispatchByCachedSymbol(t *testing.T) {
+	idx := symbols.NewIndex()
+	idx.AddRecords("lib", []symbols.RecordEntry{
+		{FQN: "RealFunctions", Kind: symbols.SymbolPackage},
+		{FQN: "RealFunctions::sqrt", Kind: symbols.SymbolCalcDef},
+		{FQN: "RealFunctions::tolerance", Kind: symbols.SymbolAttributeUsage},
+	})
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+
+	fnSym := lookupOne(t, idx, "RealFunctions::sqrt")
+	if _, ok := ctx.libraryFunctionFor(fnSym); !ok {
+		t.Fatalf("the cached RealFunctions::sqrt did not dispatch to its built-in implementation")
+	}
+	attrSym := lookupOne(t, idx, "RealFunctions::tolerance")
+	if _, ok := ctx.libraryFunctionFor(attrSym); ok {
+		t.Fatalf("a cached attribute dispatched to a built-in implementation")
+	}
+}
+
+// A declaration that is not a calc keeps the not-a-calc diagnostic, however it
+// is named: only a function is a library function.
+func TestLibraryFunctionDoesNotClaimANonCalcDeclaration(t *testing.T) {
+	ctx, idx := contextForSource(t, `package RealFunctions {
+	attribute sqrt = 3.0;
+}`)
+	sym := lookupOne(t, idx, "RealFunctions::sqrt")
+
+	if _, ok := ctx.libraryFunctionFor(sym); ok {
+		t.Fatalf("an attribute named sqrt dispatched to the built-in implementation")
+	}
+	if _, err := ctx.InvokeCalc(sym, []Value{constReal(2)}, nil); !errors.Is(err, ErrNotACalc) {
+		t.Fatalf("InvokeCalc(attribute sqrt) error = %v; want ErrNotACalc", err)
+	}
+}
+
 // contextForSource indexes src as one document and returns a runtime context
 // over it.
 func contextForSource(t *testing.T, src string) (*Context, *symbols.Index) {
