@@ -1444,11 +1444,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 			}
 		} else if p.isBehavioralKeyword() {
 			// Inline behavioral body without braces: action name\n assign ...;
-			// Parse statements until we hit something that's NOT a behavioral statement
-			// Typically one statement, but could be multiple connected with 'then'
+			// The body is a single statement plus any 'then'-chained continuations;
+			// a following statement that is not chained belongs to the enclosing body.
 			// EXCEPT: if 'then' is followed by a declaration keyword (action/feature/etc),
 			// it's namespace-level succession, not behavioral succession - stop parsing body
-			for p.isBehavioralKeyword() && !p.atEOF() {
+			for !p.atEOF() {
 				// Check if 'then' is namespace succession (then <visibility>? <defKeyword>)
 				if p.atKeyword("then") {
 					next := p.peekN(1)
@@ -1466,6 +1466,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 					}
 				}
 				members = append(members, p.parseActionMember())
+				if !p.atKeyword("then") {
+					break
+				}
 			}
 			hasBody = true
 		} else {
