@@ -119,8 +119,8 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 		return slot, nil
 	}
 
-	// Lazy instantiation: if feature is composite (has a type that's a part/item def)
-	if slot.Feature.Type != nil {
+	// Lazy instantiation: a composite feature holds objects of its own.
+	if composite := ctx.compositeType(slot.Feature); composite != nil {
 		// Check multiplicity (C2 + C1)
 		mult := slot.Feature.Multiplicity
 		if !mult.Upper.Known || !mult.Lower.Known {
@@ -129,7 +129,7 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 
 		if !mult.Upper.Infinite && mult.Upper.Value == 1 {
 			// Scalar: instantiate one
-			childInst, err := ctx.Instantiate(slot.Feature.Type)
+			childInst, err := ctx.Instantiate(composite)
 			if err != nil {
 				return nil, err
 			}
@@ -150,7 +150,7 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 			// Determine collection type (Sequence vs Set)
 			seq := NewSequence()
 			for i := 0; i < count; i++ {
-				childInst, err := ctx.Instantiate(slot.Feature.Type)
+				childInst, err := ctx.Instantiate(composite)
 				if err != nil {
 					return nil, err
 				}
@@ -162,6 +162,29 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 	}
 
 	return slot, nil
+}
+
+// compositeType returns the symbol to instantiate for a composite feature, or
+// nil for a feature that holds a value rather than an object. A usage that
+// declares members of its own is instantiated as itself, so what its body
+// declares wins over what its type declares, and so an untyped nested part
+// materializes at all.
+func (ctx *Context) compositeType(feat *EffectiveFeature) *symbols.Symbol {
+	if feat.Symbol != nil && isCompositeUsage(feat.Symbol) && len(declMembers(feat.Symbol.Decl)) > 0 {
+		return feat.Symbol
+	}
+	return feat.Type
+}
+
+// isCompositeUsage reports whether a feature symbol is one that holds objects:
+// a part or item, as opposed to an attribute holding a value.
+func isCompositeUsage(sym *symbols.Symbol) bool {
+	switch sym.Kind {
+	case symbols.SymbolPartUsage, symbols.SymbolItemUsage:
+		return true
+	default:
+		return false
+	}
 }
 
 // evalSlotDefault evaluates a slot's default-value expression bound to the

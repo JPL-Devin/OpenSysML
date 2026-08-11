@@ -164,3 +164,72 @@ func TestMultiValuedDefaultMaterializes(t *testing.T) {
 		t.Errorf("doubles = %v, want [200]", elements)
 	}
 }
+
+// A nested part usage with a body of its own is an object shaped by that body:
+// what it redeclares must win over what its type declares.
+func TestNestedUsageBodyOverridesItsType(t *testing.T) {
+	src := `
+		part def Engine {
+			attribute power = 200.0;
+		}
+		part def Car {
+			part engine : Engine {
+				attribute power redefines Engine::power = 250.0;
+			}
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	car, err := ctx.Instantiate(resolveSymbol(t, root, "Car"))
+	if err != nil {
+		t.Fatalf("Instantiate failed: %v", err)
+	}
+	if got := nestedReal(t, ctx, car, "engine", "power"); got != 250.0 {
+		t.Errorf("engine.power = %v, want 250 (the usage body's value)", got)
+	}
+}
+
+// An untyped nested part is still an object: its body is its shape, so it
+// materializes and its members hold values.
+func TestUntypedNestedPartMaterializes(t *testing.T) {
+	src := `
+		part def Car {
+			attribute mass = 1500.0;
+			part engine {
+				attribute power = 300.0;
+			}
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	car, err := ctx.Instantiate(resolveSymbol(t, root, "Car"))
+	if err != nil {
+		t.Fatalf("Instantiate failed: %v", err)
+	}
+	if got := nestedReal(t, ctx, car, "engine", "power"); got != 300.0 {
+		t.Errorf("engine.power = %v, want 300", got)
+	}
+}
+
+// nestedReal reads a Real out of the instance held by one of inst's slots.
+func nestedReal(t *testing.T, ctx *Context, inst *Instance, slotName, nestedName string) float64 {
+	t.Helper()
+	slot, err := inst.GetSlot(ctx, slotName)
+	if err != nil {
+		t.Fatalf("GetSlot(%q) failed: %v", slotName, err)
+	}
+	if slot.Value.Kind != ValInstance {
+		t.Fatalf("slot %q holds %v, want a nested instance", slotName, slot.Value.Kind)
+	}
+	nested, ok := ctx.Instance(slot.Value.Instance)
+	if !ok {
+		t.Fatalf("slot %q references unknown instance %d", slotName, slot.Value.Instance)
+	}
+	nestedSlot, err := nested.GetSlot(ctx, nestedName)
+	if err != nil {
+		t.Fatalf("GetSlot(%q) failed: %v", nestedName, err)
+	}
+	return nestedSlot.Value.Const.Real
+}

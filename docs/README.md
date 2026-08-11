@@ -20,6 +20,7 @@
 ## Development
 
 - **[Contributing Guide](../CONTRIBUTING.md)** — How to contribute (code, issues, discussions)
+- **[Releasing](RELEASING.md)** — How a release is cut: pre-tag gate, tagging, published artifacts, Homebrew
 - **[Development Docs](development/)** — Historical plans, implementation notes (for maintainers)
 
 ---

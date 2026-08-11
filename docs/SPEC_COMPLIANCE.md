@@ -103,9 +103,9 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 59 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×11, state×26, accept×1, instance×3)
+- 60 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×11, state×26, accept×1, instance×4)
 - 35 robustness subtests (deadlock, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references)
-- 174 runtime unit tests
+- 177 runtime unit tests
 - 36 golden AST fixtures (including pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
 - 24 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation)
 - 49 negative parser subtests
@@ -181,6 +181,7 @@ Each row documents one behavioral semantic feature:
 | Mutually dependent defaults report a cycle rather than recursing to the step budget | `context.go` `derivingSlots`, `errors.go` `ErrCyclicSlot` | `robustness_test.go:cyclic_derived_slot` | ✅ Faithful |
 | A default over an undeclared feature fails naming the slot | `instance.go` `evalSlotDefault` | `robustness_test.go:derived_slot_over_missing_feature` | ✅ Faithful |
 | A multi-valued feature holds its default's contents; a single value written on it is the collection's one element | `instance.go` `GetSlot` | `runtime/instance_test.go:TestMultiValuedDefaultMaterializes`, `repl/instance_test.go:TestCollectionSlotsShowTheirContents` | ✅ Faithful |
+| A nested part usage with a body of its own is instantiated as that usage, so what its body declares wins over what its type declares, and an untyped nested part (`part engine { ... }`) still materializes | `instance.go` `compositeType`, `GetSlot` | `instance_nested_usage_body.sysml`, `runtime/instance_test.go:TestNestedUsageBodyOverridesItsType`, `TestUntypedNestedPartMaterializes` | ⚠️ Approximate — an unnamed redefinition (`:>> power = 250.0;`) does not bind its effective name (see the KerML 7.3.4.5 row above), so the type's value stands; the named form (`attribute power redefines Engine::power = 250.0;`) governs |
 
 ⚠️ A multi-valued feature that is both typed and given a default takes the typed instantiation; the default is not merged into it.
 
@@ -487,14 +488,14 @@ are tracked here):
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
-- Execution conformance cases: 59 (all passing)
+- Execution conformance cases: 60 (all passing)
 - gRPC conformance cases: 5 (all passing)
 - Robustness subtests: 35 (all passing)
 - Golden AST fixtures: 36
 - Golden execution traces: 24
 - Negative parser subtests: 49
 
-**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 59 total):
+**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 60 total):
 - Calc: 10 conformance + 10 golden traces (includes unary, coercion and qualified-name evaluation)
 - Constraint: 3 conformance + 3 golden traces
 - Requirement: 5 conformance

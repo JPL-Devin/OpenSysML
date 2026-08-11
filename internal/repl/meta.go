@@ -437,31 +437,65 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 		fmt.Sprintf("Instance: %s (ID: %d)", fqn, inst.ID),
 		"Slots:",
 	}
+	return append(lines, slotLines(ctx, inst, "  ", map[int64]bool{inst.ID: true})...), false, nil
+}
 
-	// Get effective features to know slot names
+// slotLines lists an instance's slots, expanding a slot that holds another
+// instance so a nested part's values are visible where they are held. Seen
+// guards against a containment cycle.
+func slotLines(ctx *runtime.Context, inst *runtime.Instance, indent string, seen map[int64]bool) []string {
 	features := ctx.FeaturesOf(inst.Type)
 	if len(features) == 0 {
-		lines = append(lines, "  (no features)")
-		return lines, false, nil
+		return []string{indent + "(no features)"}
 	}
 
+	var lines []string
 	for i := range features {
 		feat := &features[i]
 		// A constraint or requirement the part carries has no value; what it has
 		// is a verdict about this instance, which is the useful thing to show.
 		if verdict, ok := featureVerdict(ctx, feat, inst); ok {
-			lines = append(lines, fmt.Sprintf("  %s: %s", feat.Name, verdict))
+			lines = append(lines, fmt.Sprintf("%s%s: %s", indent, feat.Name, verdict))
 			continue
 		}
 		slot, err := inst.GetSlot(ctx, feat.Name)
 		if err != nil {
-			lines = append(lines, fmt.Sprintf("  %s: <error: %v>", feat.Name, err))
+			lines = append(lines, fmt.Sprintf("%s%s: <error: %v>", indent, feat.Name, err))
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("  %s = %s", feat.Name, formatSlot(slot)))
+		lines = append(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatSlot(slot)))
+		for _, nested := range nestedInstances(ctx, slot) {
+			if seen[nested.ID] {
+				continue
+			}
+			seen[nested.ID] = true
+			lines = append(lines, slotLines(ctx, nested, indent+"  ", seen)...)
+		}
+	}
+	return lines
+}
+
+// nestedInstances returns the instances a slot holds, whether it carries one
+// value or a collection of them.
+func nestedInstances(ctx *runtime.Context, slot *runtime.Slot) []*runtime.Instance {
+	values := []runtime.Value{slot.Value}
+	switch slot.Values.Kind {
+	case runtime.ValSequence:
+		values = slot.Values.Sequence.Elements()
+	case runtime.ValSet:
+		values = slot.Values.Set.Elements()
 	}
 
-	return lines, false, nil
+	var out []*runtime.Instance
+	for _, val := range values {
+		if val.Kind != runtime.ValInstance {
+			continue
+		}
+		if nested, ok := ctx.Instance(val.Instance); ok {
+			out = append(out, nested)
+		}
+	}
+	return out
 }
 
 // featureVerdict evaluates a constraint or requirement feature against the

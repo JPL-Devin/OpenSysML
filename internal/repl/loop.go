@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	primaryPrompt = "> "
-	contPrompt    = "... "
+	primaryPrompt = "sysml> "
+	contPrompt    = "  ...> "
 )
 
 // LineReader yields input lines; the prompt argument switches between primary

@@ -34,6 +34,22 @@ func TestKindLabel(t *testing.T) {
 	}
 }
 
+// A definition or usage is the common thing to type at the prompt, so it gets
+// the same kind + name confirmation as a package: silence reads as no-op.
+func TestDefinitionsAndUsagesAreSummarized(t *testing.T) {
+	root := parseRoot("part def Wheel { } attribute wheelCount = 4; calc def area { } action step;")
+	got := []string{}
+	for _, m := range root.Members {
+		got = append(got, renderMember(m))
+	}
+	want := []string{"part def Wheel", "attribute wheelCount", "calc def area", "action step"}
+	for i, w := range want {
+		if got[i] != w {
+			t.Errorf("member %d = %q, want %q", i, got[i], w)
+		}
+	}
+}
+
 func TestRenderDiagnostics(t *testing.T) {
 	s := NewSession()
 	r := s.Submit("namespace N { import Missing::X; }")
@@ -48,5 +64,17 @@ func TestRenderDiagnostics(t *testing.T) {
 	}
 	if !strings.Contains(joined, "^") {
 		t.Errorf("missing caret line: %q", joined)
+	}
+}
+
+// An import confirmation echoes the wildcard too: "import A::B" and
+// "import A::B::*" bring in different things.
+func TestImportSummaryKeepsWildcards(t *testing.T) {
+	root := parseRoot("import A::B; import A::B::*; import A::B::**;")
+	want := []string{"import A::B", "import A::B::*", "import A::B::**"}
+	for i, w := range want {
+		if got := renderMember(root.Members[i]); got != w {
+			t.Errorf("member %d = %q, want %q", i, got, w)
+		}
 	}
 }

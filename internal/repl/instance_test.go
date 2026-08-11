@@ -195,3 +195,28 @@ func TestCollectionSlotsShowTheirContents(t *testing.T) {
 	rejects(t, got, "<unknown>")
 	wants(t, run(t, s, "%eval Coll::Rig::doubles"), "= [200.00]")
 }
+
+// A part held in a slot is worth nothing to the reader as an opaque ID: %slots
+// shows what the nested object holds, indented under the slot that holds it.
+func TestSlotsExpandNestedInstances(t *testing.T) {
+	s := loadFixture(t, "testdata/nested_part.sysml")
+	run(t, s, "%instantiate Nested::Car")
+
+	wants(t, run(t, s, "%slots Nested::Car"),
+		"  engine = Instance(ID: 2)",
+		"    mass = 5.00",
+		"    light: <constraint: satisfied>",
+	)
+}
+
+// Each element of a multi-valued part slot is expanded too.
+func TestSlotsExpandCollectionElements(t *testing.T) {
+	s := loadFixture(t, "testdata/collection_slots.sysml")
+	run(t, s, "%instantiate Coll::Rig")
+
+	got := run(t, s, "%slots Coll::Rig")
+	wants(t, got, "wheels = [Instance(ID: 2), Instance(ID: 3)]")
+	if strings.Count(got, "    radius") != 2 {
+		t.Errorf("expected both wheels expanded, got:\n%s", got)
+	}
+}

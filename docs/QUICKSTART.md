@@ -126,39 +126,45 @@ sysml>
 
 #### 1. Define a Simple Part
 
+Library types such as `Real` are not in scope automatically — import them, exactly as a
+`.sysml` file would:
+
 ```sysml
-sysml> part Wheel {
-...>     attribute diameter : Real;
-...>     attribute width : Real;
-...> }
-✓ Wheel
+sysml> import ScalarValues::*;
+✓ import ScalarValues::*
+
+sysml> part def Wheel {
+  ...>     attribute diameter : Real;
+  ...>     attribute width : Real;
+  ...> }
+✓ part def Wheel
 ```
+
+Each accepted declaration is echoed back as `✓ <kind> <name>`.
 
 #### 2. Define a Vehicle
 
 ```sysml
-sysml> part Vehicle {
-...>     part engine {
-...>         attribute power : Real = 150.0;
-...>     }
-...>     part wheels : Wheel[4] {
-...>         :>> diameter = 16.0;
-...>         :>> width = 7.5;
-...>     }
-...> }
-✓ Vehicle
+sysml> part def Vehicle {
+  ...>     attribute mass : Real = 1500.0;
+  ...>     part wheels : Wheel[4];
+  ...> }
+✓ part def Vehicle
 ```
 
 #### 3. Instantiate and Inspect
 
 ```sysml
 sysml> %instantiate Vehicle
-Created instance: Vehicle (ID: 1)
+✓ Created instance of Vehicle
+  ID: 1
+  Use %slots Vehicle to inspect
 
 sysml> %slots Vehicle
 Instance: Vehicle (ID: 1)
-  engine: Instance(ID: 2)
-  wheels: [Instance(ID: 3), Instance(ID: 4), Instance(ID: 5), Instance(ID: 6)]
+Slots:
+  mass = 1500.00
+  wheels = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4), Instance(ID: 5)]
 
 sysml> %instances
 Instances:
@@ -169,13 +175,14 @@ Instances:
 
 ```sysml
 sysml> attribute wheelCount = 4;
-✓ wheelCount
+✓ attribute wheelCount
 
 sysml> attribute totalDiameter = wheelCount * 16.0;
-✓ totalDiameter
+✓ attribute totalDiameter
 
 sysml> %eval totalDiameter
-totalDiameter = 64.0
+✓ totalDiameter
+  = 64.00
 ```
 
 ---
@@ -186,40 +193,46 @@ Create a file `my_model.sysml`:
 
 ```sysml
 package MyModel {
-    part Sensor {
-        attribute reading : Real;
-        attribute threshold : Real = 100.0;
-        
-        calc def isTriggered : Boolean {
-            reading > threshold
-        }
+    part def Sensor {
+        attribute reading = 0.0;
+        attribute threshold = 100.0;
     }
-    
-    part System {
+
+    part def System {
         part sensors : Sensor[3];
     }
 }
 ```
 
-Load it in the REPL:
+Load it in the REPL. `%load` submits the file's contents as if you had typed them, so it
+reports the same `✓` lines; `%list` echoes everything the session currently holds:
 
 ```bash
 $ sysml
 sysml> %load my_model.sysml
-Loaded: my_model.sysml
+✓ package MyModel
 
 sysml> %list
-Declarations:
-  MyModel (package)
-  MyModel::Sensor (part def)
-  MyModel::System (part def)
+package MyModel {
+    part def Sensor {
+        attribute reading = 0.0;
+        attribute threshold = 100.0;
+    }
+
+    part def System {
+        part sensors : Sensor[3];
+    }
+}
 
 sysml> %instantiate MyModel::System
-Created instance: MyModel::System (ID: 1)
+✓ Created instance of MyModel::System
+  ID: 1
+  Use %slots MyModel::System to inspect
 
 sysml> %slots MyModel::System
 Instance: MyModel::System (ID: 1)
-  sensors: [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4)]
+Slots:
+  sensors = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4)]
 ```
 
 ---
