@@ -100,7 +100,8 @@ that release's assets rather than appending duplicates.
 
 2. **Render the Homebrew formula** and commit it to the tap repository
    `Open-MBEE/homebrew-tap` (not this repository — the copy here is a template
-   with `__VERSION__`/`__SHA256_*__` placeholders):
+   with `__TAG__`/`__SHA256_*__` placeholders; the tap repository name needs the
+   `homebrew-` prefix or `brew tap Open-MBEE/tap` cannot clone it):
 
    ```bash
    scripts/render-homebrew-formula.sh v0.0.4 > Formula/systemica.rb

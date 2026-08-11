@@ -42,9 +42,6 @@ if [ -z "$SUMS" ]; then
   SUMS="$TMP_SUMS"
 fi
 
-# VERSION is the tag without a leading "v", which is what Homebrew expects.
-VERSION="${TAG#v}"
-
 sum_for() {
   local archive="$1" sum
   sum="$(awk -v a="$archive" '$2 == a { print $1 }' "$SUMS")"
@@ -62,7 +59,6 @@ LINUX_AMD64="$(sum_for systemica-linux-amd64.tar.gz)"
 
 sed \
   -e "s|__TAG__|${TAG}|g" \
-  -e "s|__VERSION__|${VERSION}|g" \
   -e "s|__SHA256_DARWIN_ARM64__|${DARWIN_ARM64}|g" \
   -e "s|__SHA256_DARWIN_AMD64__|${DARWIN_AMD64}|g" \
   -e "s|__SHA256_LINUX_ARM64__|${LINUX_ARM64}|g" \
