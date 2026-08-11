@@ -413,3 +413,40 @@ func TestIndexRemoveUnknownDocumentNoop(t *testing.T) {
 		t.Fatalf("P = %d after removing unrelated doc, want 1", len(got))
 	}
 }
+
+// A wildcard import enumerates its target's members from the index, so a
+// re-added document must not leave the removed declaration enumerable.
+func TestExpandWildcardImportsForgetsARemovedMember(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml", "package Lib { namespace Old; }")
+	addDoc(t, idx, "b.sysml", "package App { public import Lib::*; }")
+	idx.ExpandWildcardImports()
+	if got := len(idx.LookupQualified("App::Old")); got != 1 {
+		t.Fatalf("App::Old = %d symbols, want 1", got)
+	}
+
+	addDoc(t, idx, "a.sysml", "package Lib { namespace New; }")
+	idx.ExpandWildcardImports()
+	if got := len(idx.LookupQualified("App::New")); got != 1 {
+		t.Errorf("App::New = %d symbols after re-add, want 1", got)
+	}
+	if got := idx.exportedChildren("Lib"); len(got) != 1 || got[0].Name != "New" {
+		t.Errorf("exportedChildren(Lib) = %v, want just New", got)
+	}
+}
+
+// A library restored from cache is registered by FQN alone, with no scope tree,
+// and a wildcard import of it still surfaces its members.
+func TestExpandWildcardImportsReachesRecordedMembers(t *testing.T) {
+	idx := NewIndex()
+	idx.AddRecords("lib", []RecordEntry{
+		{FQN: "Lib", Kind: SymbolPackage},
+		{FQN: "Lib::Thing", Kind: SymbolNamespace},
+	})
+	addDoc(t, idx, "b.sysml", "package App { public import Lib::*; }")
+	idx.ExpandWildcardImports()
+
+	if got := len(idx.LookupQualified("App::Thing")); got != 1 {
+		t.Errorf("App::Thing = %d symbols, want 1", got)
+	}
+}

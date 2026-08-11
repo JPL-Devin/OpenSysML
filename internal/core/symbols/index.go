@@ -34,6 +34,11 @@ type Index struct {
 	// only key its own members are registered under: a re-export registers the
 	// symbol elsewhere but never copies its subtree.
 	declaredAt map[*Symbol]string
+
+	// children maps a namespace's FQN to the keys registered directly under it,
+	// so enumerating a wildcard import's members costs its members rather than a
+	// scan of every name in the workspace.
+	children map[string]map[string]bool
 }
 
 // WildcardImport is one `import X::*` declaration: the target's raw qualified
@@ -53,6 +58,7 @@ func NewIndex() *Index {
 		reexported:    make(map[string]map[*Symbol]bool),
 		hidden:        make(map[string]map[*Symbol]bool),
 		declaredAt:    make(map[*Symbol]string),
+		children:      make(map[string]map[string]bool),
 	}
 }
 
@@ -199,6 +205,39 @@ func (idx *Index) wildcardTargetAt(key string) (string, bool) {
 	}
 }
 
+// register records sym under fqn, linking fqn to its parent namespace.
+func (idx *Index) register(fqn string, sym *Symbol) {
+	idx.fqn[fqn] = append(idx.fqn[fqn], sym)
+	parent, _ := splitFQN(fqn)
+	if parent == "" {
+		return
+	}
+	if idx.children[parent] == nil {
+		idx.children[parent] = make(map[string]bool)
+	}
+	idx.children[parent][fqn] = true
+}
+
+// unregister drops fqn once no symbol is registered under it.
+func (idx *Index) unregister(fqn string) {
+	parent, _ := splitFQN(fqn)
+	if kids := idx.children[parent]; kids != nil {
+		delete(kids, fqn)
+		if len(kids) == 0 {
+			delete(idx.children, parent)
+		}
+	}
+}
+
+// splitFQN separates fqn into its owning namespace and the name within it.
+func splitFQN(fqn string) (parent, name string) {
+	i := lastIndex(fqn, "::")
+	if i < 0 {
+		return "", fqn
+	}
+	return fqn[:i], fqn[i+2:]
+}
+
 func (idx *Index) hasFQN(fqn string, sym *Symbol) bool {
 	for _, s := range idx.fqn[fqn] {
 		if s == sym {
@@ -236,6 +275,7 @@ func (idx *Index) RemoveDocument(name string) {
 			delete(idx.fqn, e.fqn)
 			delete(idx.reexported, e.fqn)
 			delete(idx.hidden, e.fqn)
+			idx.unregister(e.fqn)
 		} else {
 			idx.fqn[e.fqn] = syms
 		}
@@ -259,7 +299,7 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 
 			// Index under primary FQN
 			fqn := joinFQN(prefix, sym.Name)
-			idx.fqn[fqn] = append(idx.fqn[fqn], sym)
+			idx.register(fqn, sym)
 			idx.declaredAt[sym] = fqn
 			idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: fqn, sym: sym})
 
@@ -271,7 +311,7 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 			}
 			if shortName != "" && shortName != sym.Name {
 				shortFQN := joinFQN(prefix, shortName)
-				idx.fqn[shortFQN] = append(idx.fqn[shortFQN], sym)
+				idx.register(shortFQN, sym)
 				idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: shortFQN, sym: sym})
 			}
 
@@ -486,7 +526,7 @@ func (idx *Index) WildcardImportsOf(fqn string) []WildcardImport {
 func (idx *Index) reexport(fqn string, sym *Symbol, private bool) bool {
 	if !idx.hasFQN(fqn, sym) {
 		// Note: not added to contributions - these are synthetic
-		idx.fqn[fqn] = append(idx.fqn[fqn], sym)
+		idx.register(fqn, sym)
 		idx.markReexported(fqn, sym, private)
 		return true
 	}
@@ -528,18 +568,14 @@ func (idx *Index) markReexported(fqn string, sym *Symbol, private bool) bool {
 // of prefix surfaces: everything but what prefix's own private imports brought
 // in, which stays visible only inside prefix (KerML 8.2.3.3).
 func (idx *Index) exportedChildren(prefix string) []*Symbol {
+	if prefix == "" {
+		return nil // the global namespace is not a wildcard import target
+	}
 	var out []*Symbol
 	seen := make(map[*Symbol]bool)
-	targetPrefix := prefix + "::"
-	for fqn, syms := range idx.fqn {
-		if len(fqn) <= len(targetPrefix) || fqn[:len(targetPrefix)] != targetPrefix {
-			continue
-		}
-		if containsString(fqn[len(targetPrefix):], "::") {
-			continue
-		}
+	for _, fqn := range idx.childKeys(prefix) {
 		hidden := idx.hidden[fqn]
-		for _, sym := range syms {
+		for _, sym := range idx.fqn[fqn] {
 			if seen[sym] || hidden[sym] {
 				continue
 			}
@@ -550,38 +586,39 @@ func (idx *Index) exportedChildren(prefix string) []*Symbol {
 	return out
 }
 
+// childKeys returns the keys registered directly under prefix, in name order so
+// that enumeration does not depend on map iteration order.
+func (idx *Index) childKeys(prefix string) []string {
+	kids := idx.children[prefix]
+	if len(kids) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(kids))
+	for fqn := range kids {
+		out = append(out, fqn)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // LookupDirectChildren returns all symbols whose FQN is exactly prefix::name
 // (direct children of the given prefix). This supports wildcard imports from
 // packages that don't have populated Scopes.
 func (idx *Index) LookupDirectChildren(prefix string) []*Symbol {
+	if prefix == "" {
+		return nil // a document root's members are reached through its scope
+	}
 	var out []*Symbol
 	seen := make(map[*Symbol]bool)
-	targetPrefix := prefix + "::"
-	for fqn, syms := range idx.fqn {
-		// Check if this FQN starts with prefix:: and has no further :: after that
-		if len(fqn) > len(targetPrefix) && fqn[:len(targetPrefix)] == targetPrefix {
-			remainder := fqn[len(targetPrefix):]
-			// Only include if remainder has no "::" (direct child)
-			if !containsString(remainder, "::") {
-				for _, sym := range syms {
-					if !seen[sym] {
-						seen[sym] = true
-						out = append(out, sym)
-					}
-				}
+	for _, fqn := range idx.childKeys(prefix) {
+		for _, sym := range idx.fqn[fqn] {
+			if !seen[sym] {
+				seen[sym] = true
+				out = append(out, sym)
 			}
 		}
 	}
 	return out
-}
-
-func containsString(s, substr string) bool {
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 // GetFQN returns the fully-qualified name for a symbol by walking its owner scope chain.
