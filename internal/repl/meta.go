@@ -253,7 +253,7 @@ func (s *Session) doSave(path string) ([]string, bool, error) {
 	if err != nil {
 		return []string{"error: " + err.Error()}, false, nil
 	}
-	if err := os.WriteFile(path, out, 0o644); err != nil {
+	if err := os.WriteFile(path, out, 0o600); err != nil {
 		return nil, false, fmt.Errorf("save %s: %w", path, err)
 	}
 	return []string{fmt.Sprintf("saved %d bytes of %s to %s", len(out), format, path)}, false, nil

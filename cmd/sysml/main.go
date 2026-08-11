@@ -194,6 +194,7 @@ func runConvert(input string, rest []string) error {
 		to = otherFormat(from)
 	}
 
+	// #nosec G304 -- the input file is the one named on the command line.
 	data, err := os.ReadFile(input)
 	if err != nil {
 		return err
@@ -206,7 +207,7 @@ func runConvert(input string, rest []string) error {
 		_, err := os.Stdout.Write(out)
 		return err
 	}
-	if err := os.WriteFile(outputPath, out, 0o644); err != nil {
+	if err := os.WriteFile(outputPath, out, 0o600); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "wrote %s (%s, %d bytes)\n", outputPath, to, len(out))
