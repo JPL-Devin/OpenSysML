@@ -1,6 +1,6 @@
 ---
 name: testing-sysml-repl
-description: How to build, drive, and record end-to-end tests of the Systemica sysml REPL (bin/sysml) — meta-command behavior, symbol lookup, action/state debugging, and GUI-terminal recording setup.
+description: How to build, drive, and record end-to-end tests of the Systemica sysml REPL (bin/sysml) and the sysml-grpc service with its pysysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC slot serialization, and GUI-terminal recording setup.
 ---
 
 # Testing the `sysml` REPL end-to-end
@@ -213,6 +213,63 @@ captured: they show `Action: MyWorkflow` / `State: Ready` / `Tokens: 1 (at compu
 `✓ Action completed` + `Final state:` + `Results:`. Don't treat that mismatch as a new regression,
 but it is worth flagging.
 
+## The gRPC service and the `pysysml` Python client
+
+The REPL is not the only user-facing surface: `cmd/sysml-grpc` plus `python/pysysml` is the path a
+Python user takes, and the two can disagree. When a change touches `internal/grpc/convert.go` or
+the runtime's slot evaluation, **test both and diff them** — that comparison is the highest-value
+assertion available.
+
+```bash
+export PATH=/usr/local/go/bin:$PATH
+make build && make build-grpc              # -> bin/sysml, bin/sysml-grpc
+mkdir -p ~/.pysysml/bin && cp bin/sysml-grpc ~/.pysysml/bin/   # where the client looks
+pip install -e python/
+```
+
+Do **not** start the service by hand. `Connection._ensure_service`
+(`python/pysysml/connection.py`) probes `localhost:50051` and spawns the binary itself; letting it
+auto-start is both the realistic user path and the only way it writes its pidfile. Attaching to a
+service you started yourself makes `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
+fail — that is the documented `NEXT_STEPS.md` §P1 gap, not a new bug.
+
+Client API shapes that are easy to get wrong:
+
+- `Model.find(name)` returns **one `Symbol` or `None`**, not a list — iterating it raises
+  `TypeError: 'Symbol' object is not iterable`. Use `.id` (FQN), `.name`, `.kind`.
+- `pysysml.instantiate(fqn, file_path=...)` and `pysysml.eval(expr, file_path=..., context_symbol_id=...)`
+  each take *exactly one* of `file_path` / `model_hash`.
+- `Instance.get_slot(name)` returns the raw protobuf `SlotValue`. Read it as
+  `sv.materialized` and `sv.value.WhichOneof('kind')` → `real_value` / `int_value` / `instance_id` /
+  `null`. Printing the `Instance` alone hides exactly the detail under test.
+
+What the slot kinds mean (`ValueToProto`, `convert.go`):
+
+- A **derived** attribute (`attribute doubled = mass * 2.0;`) must arrive as
+  `materialized=True kind=real_value`. `kind=null value='unsupported'` is the pre-fix signature.
+- `null: 'unsupported'` is the generic fallback arm for a slot `GetSlot` returned **unmaterialized
+  without an error** — a feature with no default and no composite type. Both a bare
+  `attribute d : Real;` and a **constraint usage** land here, so the REPL's
+  `massOK: <constraint: satisfied>` has no gRPC equivalent. Check whether that divergence is
+  intended before filing it.
+- `null: '<error text>'` is the real error arm. Force it with cyclic derived attributes
+  (`attribute a = b + 1.0; attribute b = a + 1.0;`) — expect
+  `slot Loop.a: slot Loop.b: cyclic slot dependency: Loop.a`, promptly, and prove the service is
+  still alive afterwards with a follow-up `pysysml.eval('1 + 1', ...)`.
+- A nested `part engine : Engine;` marshals as bare `instance_id=N` and **no RPC resolves an id**,
+  so the REPL expands the child's slots and Python cannot (`NEXT_STEPS.md` §P2).
+
+Suite baseline: `cd python && python -m pytest tests/ -q` with no service running should be
+`75 passed, 18 skipped` (~35s). The 18 skips are the integration tests gating on a live service.
+
+Download paths (`python/pysysml/binary.py`) are testable without a real release: move
+`~/.pysysml/bin/sysml-grpc` aside, unset `PYSYSML_GRPC_VERSION`, and call `ensure_binary()`,
+`resolve_latest_version()`, `download_binary('latest')`. All three must raise `ConnectionError`
+naming the path or URL. `PYSYSML_GITHUB_REPO` overrides the repo. Beware: these hit the
+unauthenticated GitHub API, so repeated runs flip from a truthful `HTTP Error 404: Not Found` to a
+misleading `HTTP Error 403: rate limit exceeded` — rehearse sparingly and report the 404 wording,
+not whichever one the recording happened to catch.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
@@ -224,6 +281,10 @@ DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz
 ```
 
 Enlarge the font before recording with the `ctrl+plus` key combo a few times (`ctrl+shift+plus`
-types literal `+` characters into the shell instead of zooming). Discover expected values with the
+types literal `+` characters into the shell instead of zooming). Konsole starts a shell whose PATH
+lacks the Python that `pip install -e python/` installed into, so `import pysysml` fails there while
+it works from a tool shell; run `source /home/ubuntu/repos/fprime/fprime-venv/bin/activate` (or
+whichever interpreter `python -c 'import sys; print(sys.executable)'` reports in the tool shell)
+as a setup step before recording. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
 over a pipe is not visible in the video and should be reported as weaker evidence.
