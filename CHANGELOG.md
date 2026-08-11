@@ -4,6 +4,22 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/RELEASING.md](docs/RELEASING.md).
 
+## Unreleased
+
+### Language and semantics
+
+- The KerML function library's scalar numeric functions are evaluable: `sqrt`,
+  `abs`, `floor`, `round`, `max`, `min`, `isZero`, `isUnit`, `sin`, `cos`, `tan`,
+  `cot`, `arcsin`, `arccos` and `arctan`. Dispatch is by the declaration's
+  qualified name, so a model's own `calc sqrt` is evaluated from its body.
+- Exponentiation (`**`, `^`) is evaluated, by one implementation the constant
+  folder and the runtime share. Integer operands with a non-negative exponent
+  give an Integer, any other numeric pair a Real.
+- A result that is not a finite value of the declared type — `sqrt(-1.0)`,
+  `arcsin(2.0)`, `0.0 ** -1.0`, integer overflow — is reported where the
+  expression is evaluated instead of folding to a NaN, an infinity or a wrapped
+  integer.
+
 ## 0.0.4 — 2026-08-10
 
 The first tagged release.

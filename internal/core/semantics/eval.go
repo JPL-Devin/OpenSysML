@@ -1,9 +1,22 @@
 package semantics
 
 import (
+	"errors"
+	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+)
+
+var (
+	// ErrArithmeticDomain reports operands an operation is not defined for, such
+	// as a negative base raised to a fractional exponent.
+	ErrArithmeticDomain = errors.New("arithmetic domain error")
+
+	// ErrArithmeticOverflow reports a result outside the range of the kind it
+	// would have: an Integer that does not fit int64, or a non-finite Real.
+	ErrArithmeticOverflow = errors.New("arithmetic overflow")
 )
 
 // ValueKind discriminates a model-level constant value.
@@ -229,9 +242,16 @@ func evalArithmetic(op ast.OperatorKind, l, r Value) (Value, bool) {
 	if !l.IsNumeric() || !r.IsNumeric() {
 		return Value{}, false
 	}
+	if op == ast.OpPow {
+		v, err := Pow(l, r)
+		if err != nil {
+			return Value{}, false
+		}
+		return v, true
+	}
 	// Integer arithmetic when both operands are integers (except division,
 	// which may be fractional — keep it real to avoid silent truncation).
-	if l.Kind == ValInt && r.Kind == ValInt && op != ast.OpDiv && op != ast.OpPow {
+	if l.Kind == ValInt && r.Kind == ValInt && op != ast.OpDiv {
 		return evalIntArith(op, l.Int, r.Int)
 	}
 	return evalRealArith(op, l.asReal(), r.asReal())
@@ -267,23 +287,79 @@ func evalRealArith(op ast.OperatorKind, a, b float64) (Value, bool) {
 			return Value{}, false
 		}
 		return Value{Kind: ValReal, Real: a / b}, true
-	case ast.OpPow:
-		return pow(a, b)
 	}
 	return Value{}, false
 }
 
-// pow computes a**b for non-negative integer exponents (the case bounds use),
-// via repeated multiplication to avoid a math import. Non-integer or negative
-// exponents are outside the supported subset and return ok=false.
-func pow(a, b float64) (Value, bool) {
-	n := int(b)
-	if float64(n) != b || n < 0 {
-		return Value{}, false
+// Pow evaluates l ** r (equivalently l ^ r) — the single implementation the
+// constant folder and the runtime share, so a folded and an evaluated
+// exponentiation agree. Integer operands with a non-negative exponent give an
+// Integer, as IntegerFunctions::'**' declares; every other numeric combination
+// gives a Real, as RealFunctions::'**' does. A result that is not a finite value
+// of that kind is an error rather than a NaN, an infinity, or a wrapped integer:
+// the folder declines on it, the runtime reports it.
+func Pow(l, r Value) (Value, error) {
+	if !l.IsNumeric() || !r.IsNumeric() {
+		return Value{}, fmt.Errorf("%w: ** requires numeric operands", ErrArithmeticDomain)
 	}
-	res := 1.0
-	for i := 0; i < n; i++ {
-		res *= a
+
+	if l.Kind == ValInt && r.Kind == ValInt && r.Int >= 0 {
+		res, ok := intPow(l.Int, r.Int)
+		if !ok {
+			return Value{}, fmt.Errorf("%w: %d ** %d exceeds the Integer range", ErrArithmeticOverflow, l.Int, r.Int)
+		}
+		return Value{Kind: ValInt, Int: res}, nil
 	}
-	return Value{Kind: ValReal, Real: res}, true
+
+	base, exp := l.asReal(), r.asReal()
+	switch {
+	case base == 0 && exp < 0:
+		return Value{}, fmt.Errorf("%w: 0 ** %v is undefined (negative exponent)", ErrArithmeticDomain, exp)
+	case base < 0 && exp != math.Trunc(exp):
+		return Value{}, fmt.Errorf("%w: %v ** %v is not a Real (negative base, fractional exponent)", ErrArithmeticDomain, base, exp)
+	}
+	res := math.Pow(base, exp)
+	if math.IsNaN(res) || math.IsInf(res, 0) {
+		return Value{}, fmt.Errorf("%w: %v ** %v is not a finite Real", ErrArithmeticOverflow, base, exp)
+	}
+	return Value{Kind: ValReal, Real: res}, nil
+}
+
+// intPow computes a**n for n >= 0 by repeated squaring, reporting ok=false when
+// the result leaves the int64 range rather than wrapping.
+func intPow(a, n int64) (int64, bool) {
+	res := int64(1)
+	for n > 0 {
+		if n&1 == 1 {
+			var ok bool
+			if res, ok = mulInt(res, a); !ok {
+				return 0, false
+			}
+		}
+		if n >>= 1; n == 0 {
+			break
+		}
+		var ok bool
+		if a, ok = mulInt(a, a); !ok {
+			return 0, false
+		}
+	}
+	return res, true
+}
+
+// mulInt multiplies two int64 values, reporting ok=false on overflow.
+func mulInt(a, b int64) (int64, bool) {
+	if a == 0 || b == 0 {
+		return 0, true
+	}
+	// The least int64 negated is not an int64, and the division check below
+	// cannot see that case because the quotient equals the dividend.
+	if (a == math.MinInt64 && b == -1) || (b == math.MinInt64 && a == -1) {
+		return 0, false
+	}
+	res := a * b
+	if res/b != a {
+		return 0, false
+	}
+	return res, true
 }

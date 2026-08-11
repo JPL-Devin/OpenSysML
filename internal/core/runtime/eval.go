@@ -341,7 +341,7 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 
 	// Otherwise, recursively eval operands
 	switch n.Operator {
-	case ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpDiv:
+	case ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpDiv, ast.OpPow:
 		return ec.evalArithmetic(n)
 	case ast.OpEq, ast.OpNeq:
 		return ec.evalEquality(n)
@@ -356,7 +356,7 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 	}
 }
 
-// evalArithmetic evaluates arithmetic operators (+, -, *, /).
+// evalArithmetic evaluates arithmetic operators (+, -, *, /, **).
 func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) < 2 {
 		return Value{}, fmt.Errorf("arithmetic operator requires 2 operands")
@@ -373,6 +373,16 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 	// Simplified: assume both are ValConst int/real
 	if left.Kind != ValConst || right.Kind != ValConst {
 		return Value{}, ErrTypeMismatch
+	}
+
+	// Exponentiation shares the folder's implementation, so a folded and an
+	// evaluated `**` agree; the folder declines where this reports the error.
+	if n.Operator == ast.OpPow {
+		res, err := semantics.Pow(left.Const, right.Const)
+		if err != nil {
+			return Value{}, err
+		}
+		return Value{Kind: ValConst, Const: res}, nil
 	}
 
 	// Integer arithmetic
@@ -701,6 +711,12 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	// User-defined calc: resolve target symbol from the evaluation context scope.
 	calcSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.Type)
 	if !ok || calcSym == nil {
+		// A KerML function library function is evaluable even where the model
+		// imports no part of the library, so a name that denotes no declaration
+		// still denotes the library function of that name.
+		if fn, isLib := unresolvedLibraryFunction(n.Type, qualName); isLib {
+			return fn.invoke(ec.ctx, calcArgs{positional: args, named: named})
+		}
 		return Value{}, fmt.Errorf("%w: calc %s", ErrUnresolvedReference, qualName)
 	}
 

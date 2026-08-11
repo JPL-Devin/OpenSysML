@@ -15,11 +15,11 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`, `staticch
 |---|---|
 | OMG training corpus | **98/100 clean** — 2 files / 4 errors, both pinned OMG source bugs (the ceiling) |
 | Stdlib parser conformance | 94/94 clean |
-| Execution conformance cases | 71 |
+| Execution conformance cases | 77 |
 | gRPC conformance cases | 6 |
-| Golden execution traces | 33 |
-| Runtime robustness subtests | 39 |
-| Golden AST fixtures | 37 |
+| Golden execution traces | 36 |
+| Runtime robustness subtests | 42 |
+| Golden AST fixtures | 42 |
 | Negative parser subtests | 49 |
 
 Statement coverage, measured today with `go test -cover ./...`:
@@ -187,6 +187,15 @@ A6; do A6 first and re-test this.
   (legal), a target resolving to a non-vertex (illegal), the sourceless `accept … then` form
   (legal), a junction chain terminating nowhere (illegal, and not a cycle).
 - **Calc recursion** is depth-bounded and rejected rather than evaluated.
+- **Numeric library coverage is scalar only.** The KerML function library's scalar numeric
+  functions and `**` are evaluable (`runtime/library_functions.go`); `VectorFunctions`,
+  `MatrixFunctions`, `ComplexFunctions`, the rest of `SequenceFunctions`, and unit-aware
+  arithmetic (`1.62[m/s^2]`) are not. `TrigFunctions::pi` has no declared value, so the
+  library's own `deg`/`rad` bodies cannot be evaluated — that needs a library *feature* value,
+  a different seam from function dispatch.
+- **An unqualified library function call still reports `unresolved-reference`** while evaluating
+  correctly, because dispatch by local name is a runtime fallback and the checker does not know
+  the library is implicitly in force (A6 is the general fix).
 - **A `for` loop iterates a sequence or a set only.** `runtime/action_statements.go` `forElements`
   reports anything else, because those are the only collections the expression layer produces; a
   collection built by an expression (a range, a filter) has to wait on that layer. A set is

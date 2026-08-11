@@ -55,6 +55,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("perform_reference_cycle", testPerformReferenceCycle)
 	t.Run("state_subaction_reference_of_missing_action", testStateSubactionReferenceOfMissingAction)
 	t.Run("state_subaction_reference_feature_chain", testStateSubactionReferenceFeatureChain)
+	t.Run("library_function_outside_its_domain", testLibraryFunctionOutsideItsDomain)
+	t.Run("library_function_wrong_arity", testLibraryFunctionWrongArity)
+	t.Run("exponentiation_integer_overflow", testExponentiationIntegerOverflow)
 	t.Run("cyclic_derived_slot", testCyclicDerivedSlot)
 	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
 }
@@ -1298,6 +1301,73 @@ func testStatementDirectlyInAnActionBody(t *testing.T) {
 func parseAndBuild(t *testing.T, src string) *ast.RootNamespace {
 	file := parser.New(source.New("<test>", []byte(src))).ParseFile()
 	return file
+}
+
+// testLibraryFunctionOutsideItsDomain: a library function whose argument has no
+// result reports a domain error rather than returning a NaN.
+func testLibraryFunctionOutsideItsDomain(t *testing.T) {
+	src := `
+		package test {
+			calc root {
+				in x : Real;
+				return : Real = sqrt(x);
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "root", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("root calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: -1}}
+	got, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if !errors.Is(err, semantics.ErrArithmeticDomain) {
+		t.Fatalf("sqrt(-1.0) = %+v, %v; want a domain error", got, err)
+	}
+}
+
+// testLibraryFunctionWrongArity: a library function called with the wrong number
+// of arguments reports an arity error rather than reading past its arguments.
+func testLibraryFunctionWrongArity(t *testing.T) {
+	fn, ok := libraryFunctionByName("RealFunctions::max")
+	if !ok {
+		t.Fatal("RealFunctions::max not registered")
+	}
+	_, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, "package test { }"))
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1}}
+	if _, err := fn.invoke(ctx, calcArgs{positional: []Value{arg}}); !errors.Is(err, ErrCalcArity) {
+		t.Fatalf("max(1.0) error = %v, want ErrCalcArity", err)
+	}
+}
+
+// testExponentiationIntegerOverflow: an exponentiation beyond the Integer range
+// is reported rather than wrapping.
+func testExponentiationIntegerOverflow(t *testing.T) {
+	src := `
+		package test {
+			calc power {
+				in b : Integer;
+				in e : Integer;
+				return : Integer = b ** e;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "power", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("power calc not found")
+	}
+
+	base := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1 << 40}}
+	exp := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	got, err := ctx.InvokeCalc(sym, []Value{base, exp}, rootScope)
+	if !errors.Is(err, semantics.ErrArithmeticOverflow) {
+		t.Fatalf("(2**40) ** 3 = %+v, %v; want an overflow error", got, err)
+	}
 }
 
 // Helper: build runtime context from file
