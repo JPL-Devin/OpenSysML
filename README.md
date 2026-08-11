@@ -159,6 +159,7 @@ sysml> %advance 30
 | Action execution engine (Tier 5) | ✅ Complete (11 conformance cases passing) |
 | State machine runtime (Tier 5) | ✅ Complete (26 conformance cases: transitions, accept events, sourceless) |
 | REPL debugging commands | ✅ Complete |
+| Model save & SysML ↔ RDF Turtle conversion (`%save`, `sysml -convert`) | ✅ Complete (see [RDF_INTEROP.md](docs/RDF_INTEROP.md) for the mapping and its limitations) |
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Diagnostics, hover, go-to-definition, references, symbols, completion, formatting, rename (semantic tokens, code actions, signature help not implemented) |
 | gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime RPCs) |
@@ -312,6 +313,7 @@ See [python/INSTALL.md](python/INSTALL.md) for detailed installation and usage i
 
 - **[Quick Start Guide](docs/QUICKSTART.md)** — Get up and running in 5 minutes
 - **[Architecture](docs/ARCHITECTURE.md)** — Complete system architecture, core pipeline, runtime tiers
+- **[Saving & RDF Interop](docs/RDF_INTEROP.md)** — Saving models, and converting between SysML notation and RDF Turtle
 - **[Examples](examples/)** — Runtime demos and behavioral model examples
 
 ## License

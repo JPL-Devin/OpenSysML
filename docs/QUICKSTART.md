@@ -247,6 +247,32 @@ Slots:
 
 ---
 
+## Saving and Converting
+
+`%save` writes the session out. The format follows the extension — `.sysml` for
+notation, `.ttl` for RDF Turtle:
+
+```bash
+sysml> %save my_model.sysml
+saved 148 bytes of sysml to my_model.sysml
+
+sysml> %save my_model.ttl
+saved 1540 bytes of ttl to my_model.ttl
+```
+
+The same conversion is available without starting the REPL:
+
+```bash
+$ sysml -convert my_model.sysml -o my_model.ttl   # notation to RDF
+$ sysml -convert my_model.ttl -o back.sysml       # RDF to notation
+$ sysml -convert my_model.sysml                   # to stdout, in the other format
+```
+
+See [RDF_INTEROP.md](RDF_INTEROP.md) for the vocabulary, the round-trip
+guarantees, and what the mapping does not cover.
+
+---
+
 ## REPL Commands
 
 | Command | Description |
@@ -255,6 +281,7 @@ Slots:
 | `%list` | List all declarations in current session |
 | `%clear` | Clear session (reset all declarations) |
 | `%load <file>` | Load .sysml file into session |
+| `%save <file>` | Write the session model to a file: `.sysml` notation (comments preserved) or `.ttl` RDF |
 | `%verbosity [level]` | Show or set output level: `quiet` (errors only), `normal`, `debug` (every diagnostic over the whole buffer) |
 | `%trace [on\|off]` | Show or set execution tracing: each evaluation, calc invocation, action step and state transition |
 | **Instantiation & Inspection** | |

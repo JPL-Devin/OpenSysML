@@ -1,0 +1,44 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:systemica:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:Outer
+    a sysml:Package ;
+    sysml:qualifiedName "Outer" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Outer" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Outer::Inner
+    a sysml:Package ;
+    sysml:qualifiedName "Outer::Inner" ;
+    sysml:owningNamespace elmt:Outer ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Inner" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Outer::Inner::Widget
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Outer::Inner::Widget" ;
+    sysml:owningNamespace elmt:Outer::Inner ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Widget" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Outer::Inner::Sub
+    a sysml:Namespace ;
+    sysml:qualifiedName "Outer::Inner::Sub" ;
+    sysml:owningNamespace elmt:Outer::Inner ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "Sub" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Outer::Inner::Sub::Gear
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Outer::Inner::Sub::Gear" ;
+    sysml:owningNamespace elmt:Outer::Inner::Sub ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Gear" ;
+    sysx:hasBody "false"^^xsd:boolean .

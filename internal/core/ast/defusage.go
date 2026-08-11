@@ -365,8 +365,11 @@ type Multiplicity struct {
 // Definition is a `part def` / `attribute def` (and future kinds) node.
 type Definition struct {
 	NodeBase
-	Prefixes      []*PrefixMetadata
-	Kind          DefinitionKind
+	Prefixes []*PrefixMetadata
+	Kind     DefinitionKind
+	// Keyword is the kind keyword as written, kept for the same reason as
+	// Usage.Keyword.
+	Keyword       string
 	IsAbstract    bool
 	IsVariation   bool
 	IsAll         bool // 'all' multiplicity propagation modifier
@@ -382,8 +385,12 @@ type Definition struct {
 // Usage is a `part` / `attribute` usage node (and all other usage kinds).
 type Usage struct {
 	NodeBase
-	Prefixes      []*PrefixMetadata
-	Kind          UsageKind
+	Prefixes []*PrefixMetadata
+	Kind     UsageKind
+	// Keyword is the kind keyword as written. Several synonyms map to one Kind
+	// (`datatype`, `feature` and `attribute` all give UsageAttribute), so it is
+	// kept to tell those spellings apart.
+	Keyword       string
 	IsAbstract    bool
 	IsReference   bool
 	IsAll         bool // 'all' multiplicity propagation modifier

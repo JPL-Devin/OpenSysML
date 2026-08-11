@@ -8,9 +8,9 @@
       (Membership visibility="default"
         (Definition kind="occurrence" abstract=false variation=false name="Interaction"
           (Membership visibility="default"
-            (Usage kind="part" name="sender" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+            (Usage kind="part" name="sender" ref=true direction="none" composite=false derived=false ordered=false nonunique=false))
           (Membership visibility="default"
-            (Usage kind="part" name="receiver" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+            (Usage kind="part" name="receiver" ref=true direction="none" composite=false derived=false ordered=false nonunique=false))
           (Membership visibility="default"
             (Usage kind="flow" name="fuelCommandMessage" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="fuelCommand" declared=true)

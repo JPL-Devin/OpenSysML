@@ -520,6 +520,52 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 ---
 
+## Model Persistence and RDF Interchange
+
+**Implementation:** `internal/core/rdf`, `internal/core/export`
+**User surfaces:** `%save` (`internal/repl/meta.go`), `sysml -convert` (`cmd/sysml/main.go`)
+**Reference:** [`RDF_INTEROP.md`](RDF_INTEROP.md) — the mapping, the CLI, and the limitations in full
+
+Two representations are supported, SysML textual notation and RDF Turtle. No JSON
+is used as an input, an output, or an intermediate form.
+
+| Capability | Implementation | Test Case | Status |
+|-----------|----------------|-----------|--------|
+| Save a model as notation, preserving comments and notes | `export.Convert` → `format.Source` (token stream, not an AST re-print) | `export_test.go:TestSaveKeepsComments`, `repl/save_test.go:TestMetaSaveSysML` | ✅ Faithful |
+| Save a model as RDF Turtle | `export.ToRDF` + `rdf.WriteTurtle` | `repl/save_test.go:TestMetaSaveTurtle`, golden `.golden.ttl` fixtures | ✅ Faithful |
+| Notation → RDF for every definition/usage keyword the parser accepts | `export/kinds.go` metaclass tables, `rdf_out.go` `encode` | `export_test.go:TestGoldenConversions` (14 fixtures) | ✅ Faithful |
+| RDF → notation for the mapped subset | `rdf_in.go` `ToSysML` | `export_test.go:TestGoldenConversions`, `TestConvertedNotationParses` | ✅ Faithful |
+| Round trip preserves the graph (`sysml→ttl→sysml→ttl` is stable) | both directions | `export_test.go:TestRoundTripIsLossless` | ✅ Faithful |
+| Deterministic, reversible element IRIs keyed by qualified name | `rdf/vocab.go` `ElementIRI`/`QualifiedNameOf` | `rdf_test.go:TestElementIRIRoundTrip`, `export_test.go:TestElementIRIsAreQualifiedNames` | ✅ Faithful |
+| Declaration order preserved across a format with no order | `sysx:memberIndex` | `TestRoundTripIsLossless` | ✅ Faithful |
+| Turtle writer/parser (prefixes, `a`, `;`/`,` grouping, typed and language literals, long strings, escapes, `@base`) | `rdf/turtle_write.go`, `rdf/turtle_parse.go` | `rdf_test.go:TestTurtleRoundTrip`, `TestParseTurtleForms`, `TestParseTurtleEscapes` | ✅ Faithful |
+| Syntax errors rejected, never partially converted | `export.SyntaxError`, `rdf.ParseError` (with line) | `export_test.go:TestSyntaxErrorIsReported`, `cmd/sysml/convert_test.go:TestConvertErrors` | ✅ Faithful |
+| Unsupported RDF reported, never silently dropped | `export.UnsupportedError` | `rdf_test.go:TestParseTurtleRejects`, `export_test.go:TestUnsupportedTurtleConstructs`/`TestUnknownMetaclassIsUnsupported`/`TestForeignGraph` | ✅ Faithful |
+| Expression-valued positions (values, bounds, guards, filters) | carried as source text, not expression trees | `TestRoundTripIsLossless` | ⚠️ Approximate — converts back exactly, but not queryable by SPARQL |
+| End-binding heads (`connect`, `bind`, `flow`, `succession`, `transition`, `accept`, `satisfy`) | carried as `sysx:sourceText` with structural properties alongside | `export_test.go:TestVerbatimHeadsRoundTrip` | ⚠️ Approximate — exact through Systemica; a foreign graph without the text is reported as unsupported rather than guessed |
+| Accept-action shorthand (`action X accept p : T [via Port]`) | parameter encoded structurally; printer rebuilds the shorthand | `export_test.go` fixture `testdata/convert/accept.sysml`, `parser/testdata/parse/accept_action_shorthand.golden` | ✅ Faithful |
+| `then` succession between members | refused: `ast.Membership.HasSuccession` does not say which members it sequences, and the parser sets it on either side depending on position | `export_test.go:TestSuccessionIsUnsupported` | ❌ Rejected rather than guessed (roadmap D4) |
+| Two members of one namespace sharing a name | refused: the qualified name is an element's graph identity | `export_test.go:TestDuplicateNameIsUnsupported` | ❌ Rejected rather than merged |
+| Ownership cycle in an input graph | refused: no root owns the element, so printing would emit an empty document | `export_test.go:TestOwnershipCycleIsUnsupported` | ❌ Rejected rather than emitting an empty file |
+| Lexical `//` and `/* */` trivia across the RDF hop | no element owns trivia; `doc`/`comment` are declarations and do convert | `export_test.go:TestCommentsThroughRDF` | ❌ Not carried through `.ttl` (a direct `.sysml` save keeps it) |
+| Blank nodes, RDF collections, bare literal shorthands | rejected by `rdf.ParseTurtle` | `rdf_test.go:TestParseTurtleRejects` | ❌ Not supported (by design; see RDF_INTEROP.md) |
+
+**Vocabulary:** `sysml:` = `https://www.omg.org/spec/SysML#` and `elmt:` =
+`urn:sysmlv2:element:` match the Flexo MMS SysML v2 service's `Namespaces.kt`, so
+a converted graph loads into that triplestore. Properties the SysML metamodel
+does not define are confined to `sysx:` = `urn:systemica:sysml:`: `memberIndex`,
+`hasBody` and `sourceText` carry order, body presence and verbatim heads, and
+`prefixMetadata`, `filter`, `isNamespaceImport`, `isRecursive` and `isExpose`
+carry notation the metamodel has no property for.
+
+**What can't be claimed:** this is not a normative SysML v2 → RDF/OWL mapping.
+OMG's abstract syntax has no standard RDF serialization, so the property names
+follow the metamodel's own attribute names and the Flexo service's conventions.
+A model converted here is faithful to *itself* on a round trip; it is not
+guaranteed to be interpreted identically by an unrelated SysML RDF tool.
+
+---
+
 ## gRPC Service Layer
 
 **Implementation:** internal/grpc/service.go  
