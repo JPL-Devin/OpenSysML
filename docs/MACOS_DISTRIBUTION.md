@@ -82,7 +82,7 @@ archive from a tampered one. It is documented in `docs/QUICKSTART.md` as an esca
 ## 4. What this change actually lands
 
 1. **Docs** (`README.md`, `docs/QUICKSTART.md`): a macOS section that recommends
-   `brew tap Open-MBEE/tap && brew install systemica`, with `curl`/`go install` and the
+   `brew install Open-MBEE/tap/systemica`, with `curl`/`go install` and the
    quarantine-clearing + checksum-verification commands as fallbacks.
 2. **Release artifacts** (`.circleci/config.yml`): in addition to the existing per-binary
    archives (unchanged, so existing links keep working), the `build-release` job now
@@ -92,9 +92,9 @@ archive from a tampered one. It is documented in `docs/QUICKSTART.md` as an esca
    download.
 3. **Homebrew formula** (`packaging/homebrew/Formula/systemica.rb`) plus
    `scripts/render-homebrew-formula.sh`, which renders it for a tag from `SHA256SUMS.txt`.
-   Homebrew is the accepted macOS install path until notarization exists. **No tap
-   repository was created**: the maintainer creates `Open-MBEE/homebrew-tap` and pushes the
-   rendered formula — steps in `packaging/homebrew/README.md`.
+   Homebrew is the accepted macOS install path until notarization exists. The tap repository
+   `Open-MBEE/homebrew-tap` now exists and carries the rendered 0.0.4 formula; per-release
+   maintenance steps are in `packaging/homebrew/README.md`.
 
 ## 5. Decision record: notarization
 

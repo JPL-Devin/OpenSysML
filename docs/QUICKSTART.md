@@ -18,12 +18,18 @@ chmod +x /usr/local/bin/sysml
 
 **macOS (Intel or Apple Silicon) — Homebrew is the recommended path:**
 ```bash
-brew tap Open-MBEE/tap
-brew install systemica
+brew install Open-MBEE/tap/systemica
 ```
 This avoids the Gatekeeper prompt described in [macOS: Gatekeeper](#macos-gatekeeper).
-**The tap is not published yet** — these commands work once the maintainer creates
-`Open-MBEE/homebrew-tap`; until then use `go install` or the direct download below.
+
+Use that fully-qualified name rather than tapping first. Homebrew 6 requires third-party taps
+to be trusted before their code is loaded; installing by fully-qualified name trusts only this
+formula, whereas the two-step form needs a trust step in between:
+```bash
+brew tap Open-MBEE/tap
+brew trust --formula Open-MBEE/tap/systemica   # or: brew trust Open-MBEE/tap, for the whole tap
+brew install systemica
+```
 
 **macOS, direct download (fallback):** use `curl`, not a browser.
 ```bash
@@ -66,7 +72,7 @@ an Apple Developer ID or notarized. It is not a broken binary.
 
 Ways to avoid it, best first:
 
-1. **Install with Homebrew** (`brew tap Open-MBEE/tap && brew install systemica`). Homebrew
+1. **Install with Homebrew** (`brew install Open-MBEE/tap/systemica`). Homebrew
    downloads with `curl` and does not quarantine formula binaries. This is the recommended
    path, and the accepted stopgap until the releases are signed and notarized.
 2. **Download with `curl` or `wget`** (as shown above). They do not set the quarantine

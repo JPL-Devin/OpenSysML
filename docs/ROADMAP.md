@@ -76,16 +76,20 @@ would be worse than no package.
 ## R3 — Homebrew tap
 
 `packaging/homebrew/` holds a template with `__TAG__`/`__SHA256_*__` placeholders and
-`scripts/render-homebrew-formula.sh` renders it from a tag's `SHA256SUMS.txt`. The rendered
-0.0.4 formula has been verified end to end on Linux (`brew install`, `brew test`,
-`brew audit --strict --online`) through a throwaway local tap, but the tap repository
-`Open-MBEE/homebrew-tap` does not exist, so the documented
-`brew tap Open-MBEE/tap && brew install systemica` still fails. Create it (the repository name
-must be `homebrew-tap`; `brew tap x/y` only resolves `x/homebrew-y`), push the rendered
-formula for 0.0.4, and install it on a real Mac — the darwin archives have not been executed
-on macOS. Then
-automate the bump: a release step that opens a PR against the tap keeps the pinned hashes from
-going stale (this is the old C3).
+`scripts/render-homebrew-formula.sh` renders it from a tag's `SHA256SUMS.txt`. The tap
+`Open-MBEE/homebrew-tap` exists and carries the 0.0.4 formula: `brew install
+Open-MBEE/tap/systemica` has been verified end to end on Linux (install, `brew test`,
+`brew audit --strict --online`). Two things remain:
+
+- **Install it on a real Mac.** The darwin archives have never been executed on macOS; their
+  checksums match the release manifest and nothing more.
+- **Automate the bump** so the pinned hashes can't go stale (the old C3): a tag-triggered step
+  that renders the formula and opens a PR against the tap. Needs a CI secret with write access
+  to the tap repository.
+
+`homebrew/core` — which would drop the tap and the trust step entirely — is gated on
+[notability](https://docs.brew.sh/Package-Acceptance-Policy#notability) (75 stars / 30 forks /
+30 watchers, or 225 / 90 / 90 self-submitted), so it is not a near-term option.
 
 ## R4 — code signing
 
