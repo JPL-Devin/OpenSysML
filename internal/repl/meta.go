@@ -69,6 +69,8 @@ var helpText = []string{
 	"%list               list current session declarations",
 	"%clear              reset the session",
 	"%load <file>        read a file and submit its contents",
+	"%verbosity [level]  show or set output level: quiet, normal or debug",
+	"%trace [on|off]     show or set execution tracing (evaluation, calc, action and state steps)",
 	"%quit               exit the REPL",
 	"",
 	"Runtime commands:",
@@ -102,7 +104,8 @@ var helpText = []string{
 // RunMeta executes a meta-command (e.g., %eval, %load) and returns the output lines,
 // a quit flag, and any error encountered.
 func (s *Session) RunMeta(line string) (out []string, quit bool, err error) {
-	return s.runMeta(line)
+	out, quit, err = s.runMeta(line)
+	return append(s.drainTrace(), out...), quit, err
 }
 
 func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
@@ -130,8 +133,29 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		if rerr != nil {
 			return nil, false, fmt.Errorf("load %s: %w", fields[1], rerr)
 		}
-		r := s.Submit(string(data))
-		return renderResult(r), false, nil
+		return renderResult(s.Submit(string(data)), s.verbosity), false, nil
+	case "%verbosity":
+		if len(fields) < 2 {
+			return []string{fmt.Sprintf("verbosity: %s", s.verbosity)}, false, nil
+		}
+		v, verr := ParseVerbosity(fields[1])
+		if verr != nil {
+			return []string{"error: " + verr.Error()}, false, nil
+		}
+		s.SetVerbosity(v)
+		return []string{fmt.Sprintf("verbosity: %s", v)}, false, nil
+	case "%trace":
+		if len(fields) >= 2 {
+			switch fields[1] {
+			case "on":
+				s.SetTracing(true)
+			case "off":
+				s.SetTracing(false)
+			default:
+				return []string{fmt.Sprintf("error: unknown trace setting %q (want on or off)", fields[1])}, false, nil
+			}
+		}
+		return []string{fmt.Sprintf("trace: %s", onOff(s.Tracing()))}, false, nil
 	case "%quit", "%exit":
 		return []string{"goodbye"}, true, nil
 	case "%instantiate":
@@ -740,6 +764,7 @@ func (s *Session) doAction(name string) ([]string, bool, error) {
 	if err != nil {
 		return []string{fmt.Sprintf("error: failed to create executor: %v", err)}, false, nil
 	}
+	exec.SetTrace(s.trace)
 
 	// Store session
 	s.actionExec = &actionSession{
@@ -967,6 +992,7 @@ func (s *Session) doStateMachine(name string) ([]string, bool, error) {
 	if err != nil {
 		return []string{fmt.Sprintf("error: failed to create executor: %v", err)}, false, nil
 	}
+	exec.SetTrace(s.trace)
 
 	// Store session
 	s.stateExec = &stateSession{

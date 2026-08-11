@@ -40,6 +40,9 @@ func (r *rlReader) ReadLine(prompt string) (string, error) {
 var (
 	evalExprs   stringSlice
 	showVersion bool
+	debugMode   bool
+	quietMode   bool
+	traceMode   bool
 )
 
 // stringSlice is a custom flag type for multiple values
@@ -64,13 +67,23 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  sysml -e \"5 + 3\"          # Evaluate and exit\n")
 		fmt.Fprintf(os.Stderr, "  sysml -e \"expr\" file.sysml # Load file, evaluate, and exit\n")
 		fmt.Fprintf(os.Stderr, "  sysml file.sysml          # Load file and start REPL\n")
+		fmt.Fprintf(os.Stderr, "  sysml -debug file.sysml   # Load file, reporting every diagnostic\n")
+		fmt.Fprintf(os.Stderr, "  sysml -trace file.sysml   # Load file, reporting each execution step\n")
 	}
 
 	flag.Var(&evalExprs, "eval", "Evaluate expression and exit (can be specified multiple times)")
 	flag.Var(&evalExprs, "e", "Evaluate expression and exit (shorthand)")
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
+	flag.BoolVar(&debugMode, "debug", false, "Report every diagnostic over the whole session buffer, with the pass that produced it")
+	flag.BoolVar(&quietMode, "quiet", false, "Report errors only, suppressing warnings")
+	flag.BoolVar(&traceMode, "trace", false, "Report each execution step: expression evaluation, calc invocation, action tokens, state transitions")
 	flag.Parse()
+
+	if debugMode && quietMode {
+		fmt.Fprintln(os.Stderr, "sysml: -debug and -quiet are mutually exclusive")
+		os.Exit(2)
+	}
 
 	// Handle version flag
 	if showVersion {
@@ -122,6 +135,19 @@ func runInteractive() error {
 	return runInteractiveWithFiles(nil)
 }
 
+// newSession returns a session in the output modes the flags asked for.
+func newSession() *repl.Session {
+	sess := repl.NewSession()
+	switch {
+	case debugMode:
+		sess.SetVerbosity(repl.VerbosityDebug)
+	case quietMode:
+		sess.SetVerbosity(repl.VerbosityQuiet)
+	}
+	sess.SetTracing(traceMode)
+	return sess
+}
+
 func runInteractiveWithFiles(files []string) error {
 	histPath := filepath.Join(os.TempDir(), "sysml-repl.history")
 	rl, err := readline.NewEx(&readline.Config{
@@ -135,7 +161,7 @@ func runInteractiveWithFiles(files []string) error {
 	}
 	defer rl.Close()
 
-	sess := repl.NewSession()
+	sess := newSession()
 
 	// Load files before starting interactive loop
 	for _, file := range files {
@@ -155,7 +181,7 @@ func runInteractiveWithFiles(files []string) error {
 }
 
 func runNonInteractive(files []string, exprs []string) error {
-	sess := repl.NewSession()
+	sess := newSession()
 
 	// Load files first
 	for _, file := range files {

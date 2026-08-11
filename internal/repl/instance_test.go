@@ -134,7 +134,7 @@ func TestRedeclarationEndsDebuggerWithNotice(t *testing.T) {
 	if len(res.Notices) != 1 || !strings.Contains(res.Notices[0], `action debugging session for "tally" ended`) {
 		t.Fatalf("notices = %v, want an ended-session note", res.Notices)
 	}
-	if !strings.Contains(strings.Join(renderResult(res), "\n"), "ended") {
+	if !strings.Contains(strings.Join(renderResult(res, VerbosityNormal), "\n"), "ended") {
 		t.Error("notice was not rendered to the user")
 	}
 	wants(t, run(t, s, "%step"), "no active action session")

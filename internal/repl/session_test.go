@@ -19,7 +19,7 @@ func TestAcceptReplacesByName(t *testing.T) {
 	s := NewSession()
 	s.accept("package P { }")
 	s.accept("namespace N;")
-	joined := s.accept("package P { } // redefined")
+	joined, _ := s.accept("package P { } // redefined")
 	// P should appear once (the new one); N preserved; order = N then new P.
 	if got := s.List(); len(got) != 2 {
 		t.Fatalf("want 2 snippets, got %d: %v", len(got), got)

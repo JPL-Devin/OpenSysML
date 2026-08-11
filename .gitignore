@@ -5,8 +5,9 @@
 *.out
 /archive/
 /.idea/
-sysml
-sysml-lsp
+# Binaries built into the repo root; anchored so cmd/sysml/ is not ignored.
+/sysml
+/sysml-lsp
 
 # Downloaded training examples (run scripts/download-training-examples.sh)
 /examples/sysml-v2-training/

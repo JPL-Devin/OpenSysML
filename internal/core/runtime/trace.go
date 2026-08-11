@@ -338,7 +338,30 @@ func nodeIdentifier(node ast.Node) string {
 			return n.Name
 		}
 		return "state_anonymous"
+	case *ast.InitialNode:
+		return controlNodeName(n.Name, "initial")
+	case *ast.FinalNode:
+		return controlNodeName(n.Name, "final")
+	case *ast.ForkNode:
+		return controlNodeName(n.Name, "fork")
+	case *ast.JoinNode:
+		return controlNodeName(n.Name, "join")
+	case *ast.MergeNode:
+		return controlNodeName(n.Name, "merge")
+	case *ast.DecisionNode:
+		return controlNodeName(n.Name, "decision")
+	case *ast.ActionExecutionNode:
+		return controlNodeName(n.Name, "action")
 	default:
 		return fmt.Sprintf("%T", node)
 	}
+}
+
+// controlNodeName names an unnamed control node by what it does, since a Go
+// type name means nothing to someone reading a trace.
+func controlNodeName(name, kind string) string {
+	if name != "" {
+		return name
+	}
+	return kind
 }

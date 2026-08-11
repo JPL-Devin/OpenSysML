@@ -39,6 +39,11 @@ type Session struct {
 	// Active executor sessions for debugging
 	actionExec *actionSession
 	stateExec  *stateSession
+
+	// trace records execution steps while tracing is on, nil otherwise.
+	trace *runtime.TraceRecorder
+
+	verbosity Verbosity
 }
 
 // actionSession holds an active action executor debugging session.
@@ -70,6 +75,7 @@ func NewSession() *Session {
 	return &Session{
 		ws:        model.NewWorkspace(),
 		instances: make(map[string]*runtime.Instance),
+		verbosity: VerbosityNormal,
 	}
 }
 
@@ -84,8 +90,10 @@ func (s *Session) List() []string {
 
 // accept parses src to compute its declared names, drops any earlier snippet
 // whose names intersect, appends the new snippet, and returns the joined
-// <repl> content. It does NOT touch the workspace (Task 4 does).
-func (s *Session) accept(src string) string {
+// <repl> content plus the byte offset where src begins in it. That offset is
+// what scopes a report to the submission just made. It does NOT touch the
+// workspace (Task 4 does).
+func (s *Session) accept(src string) (joined string, offset int) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
 	if len(names) > 0 {
@@ -102,7 +110,8 @@ func (s *Session) accept(src string) string {
 		s.snippets = kept
 	}
 	s.snippets = append(s.snippets, snippet{src: src, names: names})
-	return s.joined()
+	joined = s.joined()
+	return joined, len(joined) - len(src)
 }
 
 func (s *Session) joined() string {
@@ -129,7 +138,7 @@ func intersects(names []string, set map[string]bool) bool {
 // prior snippet (see accept).
 func (s *Session) Submit(src string) Result {
 	declared := declaredNames(parser.New(source.New(docName, []byte(src))).ParseFile())
-	joined := s.accept(src)
+	joined, offset := s.accept(src)
 	s.version++
 	s.ws.Open(docName, []byte(joined), s.version)
 	// The document is a new AST and scope tree, so anything derived from the
@@ -149,6 +158,7 @@ func (s *Session) Submit(src string) Result {
 		Declared:    declared,
 		Diagnostics: diags,
 		Source:      joined,
+		Offset:      offset,
 		Notices:     notices,
 	}
 }
@@ -221,6 +231,7 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	s.rtCtx = runtime.NewContext(model, resolver, 100000)
+	s.rtCtx.SetTrace(s.trace)
 	return s.rtCtx, nil
 }
 
