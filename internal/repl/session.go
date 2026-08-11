@@ -114,6 +114,10 @@ func (s *Session) accept(src string) (joined string, offset int) {
 	return joined, len(joined) - len(src)
 }
 
+// sessionOrigin names the accumulated session buffer in diagnostics, which
+// belongs to no file on disk.
+const sessionOrigin = "<session>"
+
 func (s *Session) joined() string {
 	parts := make([]string, len(s.snippets))
 	for i, sn := range s.snippets {

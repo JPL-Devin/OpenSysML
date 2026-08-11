@@ -439,9 +439,15 @@ func (e *encoder) succession(node ast.Node, wrapper ast.Node) error {
 	if !ok || !membership.HasSuccession {
 		return nil
 	}
+	// The position is the member the flag hangs off, which may be on either
+	// side of the keyword, so it is described as adjacent rather than exact.
+	what := "the member at " + e.where(node)
+	if name, _ := declaredNameAndMembers(node); name != "" {
+		what = fmt.Sprintf("the member %q at %s", name, e.where(node))
+	}
 	return &UnsupportedError{
-		What: fmt.Sprintf("the `then` succession at %s", e.where(node)),
-		Note: "this mapping cannot tell which members a succession sequences, and will not guess at execution order",
+		What: fmt.Sprintf("the `then` succession beside %s", what),
+		Note: "the keyword sequences this member with the one next to it, but which side it was written on is not recorded, so the conversion will not guess at execution order",
 	}
 }
 

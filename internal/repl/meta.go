@@ -249,7 +249,9 @@ func (s *Session) doSave(path string) ([]string, bool, error) {
 	if err != nil {
 		return []string{"error: " + err.Error()}, false, nil
 	}
-	out, err := export.Convert(path, []byte(src), export.FormatSysML, format)
+	// Diagnostics are positions in the session buffer, not in the file about to
+	// be written, so they are labelled as such.
+	out, err := export.Convert(sessionOrigin, []byte(src), export.FormatSysML, format)
 	if err != nil {
 		return []string{"error: " + err.Error()}, false, nil
 	}
