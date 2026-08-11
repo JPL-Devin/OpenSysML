@@ -1,0 +1,39 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="UnbracedActionBodyBoundary" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="action" name="tally" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="total" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralReal value="0.0")))
+          (*ast.InitialNode)
+          (Membership visibility="default"
+            (Usage kind="action" name="bump" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (*ast.AssignmentActionNode)))
+          (*ast.FinalNode)
+          (*ast.SuccessionEdge)
+          (*ast.SuccessionEdge)))
+      (Membership visibility="default"
+        (Usage kind="action" name="edgesFirst" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="total" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralReal value="0.0")))
+          (*ast.InitialNode)
+          (Membership visibility="default"
+            (Usage kind="action" name="bump" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (*ast.AssignmentActionNode)))
+          (*ast.SuccessionEdge)
+          (*ast.SuccessionEdge)
+          (*ast.FinalNode)))
+      (Membership visibility="default"
+        (Usage kind="action" name="chained" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralInteger value="0")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralInteger value="0")))
+          (Membership visibility="default"
+            (Usage kind="action" name="steps" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (*ast.AssignmentActionNode)
+              (*ast.AssignmentActionNode))))))))
