@@ -16,54 +16,50 @@ The formula deliberately has **no `version` line**: Homebrew scans the version f
 in the release URL, and `brew audit --strict` fails with `version ... is redundant with
 version scanned from URL` if it is also stated explicitly.
 
-## The tap does not exist yet
+## The tap
 
-**`brew tap Open-MBEE/tap && brew install systemica` will not work until the maintainer
-creates `Open-MBEE/homebrew-tap` and pushes a rendered formula.** Nothing in this repository
-creates or publishes it. One-time setup:
+The tap lives in the separate repository [`Open-MBEE/homebrew-tap`][tap] (public, default
+branch `master`), holding one generated file, `Formula/systemica.rb`. Nothing in this
+repository publishes it — the render script writes the file, a maintainer commits it there.
+The repository name must keep the `homebrew-` prefix: `brew tap <user>/<repo>` always expands
+to `github.com/<user>/homebrew-<repo>`, so a repository named plain `tap` cannot be tapped.
 
-1. Create a public GitHub repository named exactly **`Open-MBEE/homebrew-tap`**.
+[tap]: https://github.com/Open-MBEE/homebrew-tap
 
-   > The repository name **must** carry the `homebrew-` prefix. `brew tap <user>/<repo>`
-   > always expands to `github.com/<user>/homebrew-<repo>`, so a repository named just
-   > `Open-MBEE/tap` makes `brew tap Open-MBEE/tap` fail with a clone error — rename it to
-   > `homebrew-tap` (the short `brew tap Open-MBEE/tap` spelling then works unchanged).
-2. Render the formula for the newest release and commit it as **`Formula/systemica.rb`**:
+### Tap trust
 
-   ```bash
-   # in a clone of Open-MBEE/Systemica
-   ./scripts/render-homebrew-formula.sh v0.0.4 > /tmp/systemica.rb
+Since Homebrew 6.0 only official taps are trusted by default; a third-party tap's Ruby is not
+loaded until it is trusted, and there is no way to make a third-party tap trusted for everyone
+(see [Tap Trust](https://docs.brew.sh/Tap-Trust)). Install by **fully-qualified name** —
+`brew install Open-MBEE/tap/systemica` — which trusts just that formula and needs no separate
+step. Tapping first requires `brew trust --formula Open-MBEE/tap/systemica` (or
+`brew trust Open-MBEE/tap` for every current and future formula in the tap) before
+`brew install systemica` will load it. Taps created by `brew tap-new` are trusted
+automatically, which is why the local-tap recipe below needs no trust step.
 
-   # in a clone of Open-MBEE/homebrew-tap
-   mkdir -p Formula && cp /tmp/systemica.rb Formula/systemica.rb
-   git add Formula/systemica.rb
-   git commit -m "systemica 0.0.4"
-   git push
-   ```
+The only route to trusted-by-default is `homebrew/core`, which needs no tap at all but has
+[notability requirements](https://docs.brew.sh/Package-Acceptance-Policy#notability) —
+75 stars / 30 forks / 30 watchers, or 225 / 90 / 90 for a self-submission by the repository
+owner, on a repository at least 30 days old. Systemica is well short of those today.
 
-   The tag must be a release that already has `systemica-<os>-<arch>.tar.gz` archives and
-   `SHA256SUMS.txt` attached. The script fails loudly if a checksum is missing.
-3. Verify before announcing it:
+### Verifying a formula
 
-   ```bash
-   brew tap Open-MBEE/tap
-   brew install --verbose systemica
-   brew test systemica
-   brew audit --strict --online Open-MBEE/tap/systemica
-   ```
+```bash
+brew install --verbose Open-MBEE/tap/systemica
+brew test Open-MBEE/tap/systemica
+brew audit --strict --online Open-MBEE/tap/systemica
+```
 
-   The same three commands verify a formula before the tap exists, by pointing them at a
-   throwaway local tap — this is how the v0.0.4 render was checked:
+The same commands verify a *rendered but unpublished* formula, by pointing them at a
+throwaway local tap — this is how the v0.0.4 render was checked before the tap existed:
 
-   ```bash
-   brew tap-new local/systest --no-git
-   cp /tmp/systemica.rb "$(brew --repository local/systest)/Formula/systemica.rb"
-   brew install local/systest/systemica && brew test local/systest/systemica
-   brew audit --strict --online local/systest/systemica
-   ```
-
-   `brew tap-new` taps are trusted automatically. A tap you *cloned* by hand on Homebrew 6.x
-   is not, and installing from it needs `brew trust <tap>` first.
+```bash
+./scripts/render-homebrew-formula.sh v0.0.4 > /tmp/systemica.rb
+brew tap-new local/systest --no-git
+cp /tmp/systemica.rb "$(brew --repository local/systest)/Formula/systemica.rb"
+brew install local/systest/systemica && brew test local/systest/systemica
+brew audit --strict --online local/systest/systemica
+```
 
 ## Per release
 

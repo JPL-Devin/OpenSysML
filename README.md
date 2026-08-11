@@ -14,8 +14,8 @@ A complete, production-grade SysML v2 implementation in Go—providing language 
 wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-linux-amd64.tar.gz
 tar xzf sysml-linux-amd64.tar.gz && sudo mv sysml-linux-amd64 /usr/local/bin/sysml
 
-# macOS (Intel or Apple Silicon) — see the note below; requires the tap to exist
-brew tap Open-MBEE/tap && brew install systemica
+# macOS (Intel or Apple Silicon) — see the note below
+brew install Open-MBEE/tap/systemica
 ```
 
 **With a Go toolchain (no download, never quarantined):**
@@ -39,9 +39,10 @@ make build
 > [Quick Start](docs/QUICKSTART.md#macos-gatekeeper). Signing/notarization is the eventual
 > fix — [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
 >
-> The tap is not published yet: `brew tap Open-MBEE/tap` works once the maintainer creates
-> `Open-MBEE/homebrew-tap` ([how](packaging/homebrew/README.md)). Until then use `go install`
-> or the direct download.
+> Install by the **fully-qualified** name. Homebrew 6 requires third-party taps to be trusted
+> before their Ruby is loaded, and `brew install Open-MBEE/tap/systemica` trusts just that
+> formula. `brew tap Open-MBEE/tap && brew install systemica` needs
+> `brew trust --formula Open-MBEE/tap/systemica` in between.
 
 ### Try it
 
