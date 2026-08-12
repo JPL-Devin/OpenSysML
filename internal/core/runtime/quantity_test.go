@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -119,6 +120,128 @@ func TestQuantityIncommensurable(t *testing.T) {
 			got, err := evalIn(t, ctx, scope, src)
 			if !errors.Is(err, ErrIncommensurableUnits) {
 				t.Fatalf("%s = %v, %v; want ErrIncommensurableUnits", src, got, err)
+			}
+		})
+	}
+}
+
+// TestQuantityExponentiation raises quantities to constant exponents. The
+// magnitude comes from semantics.Pow, the implementation `**` shares with the
+// folder and the scalar path, so Integer operands with a non-negative exponent
+// keep an Integer magnitude while the unit is raised as a real exponent.
+func TestQuantityExponentiation(t *testing.T) {
+	ctx, scope := quantityContext(t)
+
+	cases := []struct {
+		src      string
+		want     string // rendered value
+		wantKind semantics.ValueKind
+	}{
+		{"(2 [m]) ** 3", "8 [(m)**3]", semantics.ValInt},
+		{"(2.0 [m]) ** 3", "8 [(m)**3]", semantics.ValReal},
+		{"(3.0 [m/s]) ** 2.0", "9 [(m/s)**2]", semantics.ValReal},
+		{"(2.0 [m]) ** -1", "0.5 [(m)**-1]", semantics.ValReal},
+	}
+	for _, tc := range cases {
+		t.Run(tc.src, func(t *testing.T) {
+			got, err := evalIn(t, ctx, scope, tc.src)
+			if err != nil {
+				t.Fatalf("%s: %v", tc.src, err)
+			}
+			if got.Kind != ValQuantity {
+				t.Fatalf("%s = %v (%s), want a quantity", tc.src, got, got.Kind)
+			}
+			if got.Quantity.String() != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, got.Quantity, tc.want)
+			}
+			if got.Quantity.Num.Kind != tc.wantKind {
+				t.Errorf("%s magnitude is %v, want %v", tc.src, got.Quantity.Num.Kind, tc.wantKind)
+			}
+		})
+	}
+}
+
+// TestQuantityExponentiationReports: the magnitude of an exponentiated quantity
+// obeys the same domain and range as a bare number's, so an undefined or
+// non-finite result is reported rather than carried as an Inf or a NaN in a
+// unit.
+func TestQuantityExponentiationReports(t *testing.T) {
+	ctx, scope := quantityContext(t)
+
+	cases := []struct {
+		src     string
+		wantErr error
+	}{
+		{"(0.0 [m]) ** -1.0", semantics.ErrArithmeticDomain},
+		{"(-2.0 [m]) ** 0.5", semantics.ErrArithmeticDomain},
+		{"(1.0e300 [m]) ** 3.0", semantics.ErrArithmeticOverflow},
+	}
+	for _, tc := range cases {
+		t.Run(tc.src, func(t *testing.T) {
+			got, err := evalIn(t, ctx, scope, tc.src)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("%s = %v, %v; want %v", tc.src, got, err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestComposedUnitText renders the unit an operation composes. An operand that
+// is itself composed is parenthesized, since `m/s*kg/s` names a different unit
+// than the product of `m/s` and `kg/s`; an atomic one stays bare.
+func TestComposedUnitText(t *testing.T) {
+	atomic := func(text string) Unit {
+		return Unit{Text: text, Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}
+	}
+	// A bare number contributes no unit: no text, and a dimensionless reduction.
+	number := Unit{Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}
+
+	cases := []struct {
+		name        string
+		left, right Unit
+		op          ast.OperatorKind
+		want        string
+	}{
+		{"atomic times atomic", atomic("m"), atomic("m"), ast.OpMul, "m*m"},
+		{"atomic over atomic", atomic("m"), atomic("s"), ast.OpDiv, "m/s"},
+		{"atomic times composed", atomic("kg"), atomic("m/s"), ast.OpMul, "kg*(m/s)"},
+		{"composed over atomic", atomic("m/s"), atomic("s"), ast.OpDiv, "(m/s)/s"},
+		{"composed times composed", atomic("m/s"), atomic("kg/s"), ast.OpMul, "(m/s)*(kg/s)"},
+		{"composed over composed", atomic("m/s"), atomic("kg/s"), ast.OpDiv, "(m/s)/(kg/s)"},
+		{"exponentiated operand", atomic("(m)**2"), atomic("s"), ast.OpDiv, "((m)**2)/s"},
+		{"quantity scaled by a number", atomic("m/s"), number, ast.OpMul, "m/s"},
+		{"quantity divided by a number", atomic("m/s"), number, ast.OpDiv, "m/s"},
+		{"number scaling a quantity", number, atomic("m/s"), ast.OpMul, "m/s"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := composedUnitText(tc.left, tc.right, tc.op); got != tc.want {
+				t.Errorf("composedUnitText(%s, %s, %s) = %q, want %q", tc.left, tc.right, tc.op, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFormatTraceValueQuantity: a trace of a unit-carrying value names the
+// unit, since a magnitude alone answers nothing about what was computed.
+func TestFormatTraceValueQuantity(t *testing.T) {
+	metre := Unit{Text: "m/s", Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}
+	cases := []struct {
+		name string
+		val  Value
+		want string
+	}{
+		{"real magnitude", Value{Kind: ValQuantity, Quantity: &Quantity{
+			Num: semantics.Value{Kind: semantics.ValReal, Real: 1.5}, Unit: metre}}, "1.5 [m/s]"},
+		{"whole real magnitude", Value{Kind: ValQuantity, Quantity: &Quantity{
+			Num: semantics.Value{Kind: semantics.ValReal, Real: 5}, Unit: metre}}, "5.0 [m/s]"},
+		{"integer magnitude", Value{Kind: ValQuantity, Quantity: &Quantity{
+			Num: semantics.Value{Kind: semantics.ValInt, Int: 5}, Unit: metre}}, "5 [m/s]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := FormatTraceValue(tc.val); got != tc.want {
+				t.Errorf("FormatTraceValue(%s) = %q, want %q", tc.name, got, tc.want)
 			}
 		})
 	}
