@@ -68,6 +68,11 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   `constraint` (`assert constraint x > 0;`) report a missing expression it did
   have, and could exceed the buffer's capacity. A reserved word used as a name
   in an expression still does not resolve; that is a separate gap.
+- `redefines <target> = <value>` is read whatever the target's length: the member
+  is recognized by parsing the target and rewinding when no `=` follows, in place
+  of a scan capped at ten tokens ahead that read
+  `redefines outer.middle.inner.leaf.deeper.deepest.last = 1;` as a body member
+  it could not parse.
 - The evaluation step budget is configurable through `SYSML_MAX_STEPS`, so a
   legitimately long run — a numeric integration in an action body, say — is not
   bounded by a fixed ceiling. A value that is not a positive integer is reported
