@@ -2,7 +2,7 @@ package runtime
 
 import (
 	"fmt"
-	"math"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
@@ -36,7 +36,14 @@ func (u Unit) String() string {
 
 // String renders the quantity as a magnitude in its unit: `1.5 [m/s]`.
 func (q *Quantity) String() string {
-	return fmt.Sprintf("%s [%s]", constText(q.Num), q.Unit)
+	return q.textWithMagnitude(constText(q.Num))
+}
+
+// textWithMagnitude renders the quantity from an already-rendered magnitude, so
+// a caller with its own convention for numbers — a trace, which distinguishes a
+// whole Real from an Integer — keeps it and still names the unit the same way.
+func (q *Quantity) textWithMagnitude(magnitude string) string {
+	return fmt.Sprintf("%s [%s]", magnitude, q.Unit)
 }
 
 // baseMagnitude is the quantity's magnitude expressed over the base units its
@@ -194,19 +201,25 @@ func scaleQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) 
 	return quantityValue(magnitude, unit), nil
 }
 
-// powQuantity raises a quantity to a constant exponent, its unit included.
+// powQuantity raises a quantity to a constant exponent, its unit included. The
+// magnitude goes through semantics.Pow, the one implementation of `**` the
+// folder and the runtime share, so a quantity reports the domain and overflow
+// cases identically to a bare number instead of carrying an Inf or a NaN.
 func powQuantity(base *Quantity, exponent semantics.Value) (Value, error) {
 	if !exponent.IsNumeric() {
 		return Value{}, fmt.Errorf("%w: exponent of a quantity is not a number", ErrTypeMismatch)
 	}
-	exp := toReal(exponent)
-	term := base.Unit.Term.Pow(exp)
-	magnitude := math.Pow(toReal(base.Num), exp)
+	num, err := semantics.Pow(base.Num, exponent)
+	if err != nil {
+		return Value{}, err
+	}
+	term := base.Unit.Term.Pow(toReal(exponent))
 	if term.Dimensionless() {
 		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal,
-			Real: semantics.ConvertMagnitude(magnitude, term.Scale, semantics.UnitScale(1))}}, nil
+			Real: semantics.ConvertMagnitude(toReal(num), term.Scale, semantics.UnitScale(1))}}, nil
 	}
-	return quantityValue(magnitude, Unit{Text: fmt.Sprintf("(%s)%s%s", base.Unit, ast.OpPow, constText(exponent)), Term: term}), nil
+	unit := Unit{Text: fmt.Sprintf("(%s)%s%s", base.Unit, ast.OpPow, constText(exponent)), Term: term}
+	return Value{Kind: ValQuantity, Quantity: &Quantity{Num: num, Unit: unit}}, nil
 }
 
 // composedUnitText renders the unit an operation on two quantities produces. A
@@ -218,7 +231,18 @@ func composedUnitText(left, right Unit, op ast.OperatorKind) string {
 	if left.Text == "" && left.Term.Dimensionless() && op == ast.OpMul {
 		return right.String()
 	}
-	return left.String() + op.String() + right.String()
+	return groupUnitText(left) + op.String() + groupUnitText(right)
+}
+
+// groupUnitText renders a unit as an operand of a composition, parenthesizing
+// one that is itself composed: `(m/s)*(kg/s)` says what it means, while
+// `m/s*kg/s` reads as a different unit than the one composed.
+func groupUnitText(u Unit) string {
+	text := u.String()
+	if strings.ContainsAny(text, "*/^·") {
+		return "(" + text + ")"
+	}
+	return text
 }
 
 // compareQuantities orders two quantities, converting the right one into the
