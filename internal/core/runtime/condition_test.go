@@ -157,6 +157,36 @@ func TestRequirementWithOnlyAssumptionsIsSatisfied(t *testing.T) {
 	}
 }
 
+// A negated element stating only assumptions has nothing to deny, so it is not a
+// verdict either way.
+func TestNegatedConstraintWithOnlyAssumptionsIsNotAVerdict(t *testing.T) {
+	src := `
+		package test {
+			part def Rig {
+				attribute a = 2.0;
+				assert not constraint cn { assume a > 1.0 }
+			}
+		}
+	`
+	ctx, pkg := conditionFixture(t, src)
+	rig := requirementNamed(t, pkg, "Rig")
+	inst, err := ctx.Instantiate(rig)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	feat := featureNamed(ctx, rig, "cn")
+	if feat == nil || feat.Symbol == nil {
+		t.Fatal("constraint feature cn not found")
+	}
+	satisfied, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
+	if !errors.Is(err, ErrNoConditions) {
+		t.Errorf("expected ErrNoConditions, got: %v", err)
+	}
+	if satisfied {
+		t.Error("an assumption alone is not a verdict about a negated element")
+	}
+}
+
 // A `not` written on a nested constraint inverts the single condition of its body.
 func TestNegatedNestedConstraintIsInverted(t *testing.T) {
 	src := `

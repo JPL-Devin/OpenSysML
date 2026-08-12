@@ -129,7 +129,9 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), ErrNoConditions)
 	}
 	features := ctx.conditionFeatures(check.sym)
+	required := false
 	for _, cond := range conds {
+		required = required || cond.required
 		holds, err := ctx.conditionHolds(cond, features, check.self, check.bindings)
 		if err != nil {
 			return false, fmt.Errorf("%s %s: %s evaluation failed: %w", check.kind, check.name(), check.what, err)
@@ -144,6 +146,11 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 		}
 	}
 	if check.negated {
+		// An assumption is trusted rather than checked, so a negated element
+		// stating only assumptions denies nothing.
+		if !required {
+			return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), ErrNoConditions)
+		}
 		return false, &ViolationError{Kind: check.kind, Element: check.name(), What: check.what, Condition: negatedText(conds)}
 	}
 	return true, nil
