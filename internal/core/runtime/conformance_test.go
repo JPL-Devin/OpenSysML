@@ -705,6 +705,17 @@ func validateValue(t *testing.T, name string, expected ExpectedValue, actual Val
 		if actual.Str != want {
 			t.Errorf("%s: value = %q, want %q", name, actual.Str, want)
 		}
+	case "Quantity":
+		// A quantity is compared as rendered, since the unit it carries is as much
+		// of the result as the magnitude is.
+		if actual.Kind != ValQuantity {
+			t.Errorf("%s: type = %v, want Quantity", name, actual.Kind)
+			return
+		}
+		want := expected.Value.(string)
+		if got := actual.Quantity.String(); got != want {
+			t.Errorf("%s: value = %s, want %s", name, got, want)
+		}
 	default:
 		t.Errorf("%s: unknown expected type %s", name, expected.Type)
 	}
