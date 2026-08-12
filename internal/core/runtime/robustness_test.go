@@ -61,8 +61,118 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("library_function_wrong_arity", testLibraryFunctionWrongArity)
 	t.Run("extension_library_function_outside_its_domain", testExtensionLibraryFunctionOutsideItsDomain)
 	t.Run("exponentiation_integer_overflow", testExponentiationIntegerOverflow)
+	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
+	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
+	t.Run("satisfy_bounded_by_the_step_budget", testSatisfyBoundedByTheStepBudget)
 	t.Run("cyclic_derived_slot", testCyclicDerivedSlot)
 	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
+}
+
+// testSatisfyUnresolvedRequirement: a satisfaction assertion whose requirement
+// reference names nothing reports it, rather than evaluating the assertion's own
+// empty body as a verdict about the model.
+func testSatisfyUnresolvedRequirement(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part lander;
+			part context {
+				assert satisfy nosuch by lander;
+			}
+		}
+	`))
+	assertions := ctx.SatisfyAssertionsIn(idx.DocumentRoot("<test>"))
+	if len(assertions) != 1 {
+		t.Fatalf("found %d satisfaction assertions, want 1", len(assertions))
+	}
+
+	satisfied, err := ctx.EvaluateSatisfaction(assertions[0])
+	if err == nil {
+		t.Fatalf("expected an error, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrNoRequirement) {
+		t.Errorf("expected ErrNoRequirement, got: %v", err)
+	}
+	if errors.Is(err, ErrViolated) {
+		t.Error("an unresolved requirement reference is not a violation")
+	}
+	if !strings.Contains(err.Error(), "nosuch") {
+		t.Errorf("error does not name the reference: %v", err)
+	}
+}
+
+// testSatisfyRequirementWithoutConditions: satisfying a requirement that states
+// no condition is not a verdict, since no check ran.
+func testSatisfyRequirementWithoutConditions(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			requirement def Documented {
+				doc /* stated in prose only */
+			}
+			requirement documented : Documented;
+			part lander;
+			part context {
+				assert satisfy documented by lander;
+			}
+		}
+	`))
+	assertions := ctx.SatisfyAssertionsIn(idx.DocumentRoot("<test>"))
+	if len(assertions) != 1 {
+		t.Fatalf("found %d satisfaction assertions, want 1", len(assertions))
+	}
+
+	satisfied, err := ctx.EvaluateSatisfaction(assertions[0])
+	if err == nil {
+		t.Fatalf("expected an error, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrNoConditions) {
+		t.Errorf("expected ErrNoConditions, got: %v", err)
+	}
+	if satisfied {
+		t.Error("a requirement with no condition must not report a verdict")
+	}
+}
+
+// testSatisfyBoundedByTheStepBudget: a satisfaction check is one run, so its
+// condition evaluation spends the run's budget instead of resetting it.
+func testSatisfyBoundedByTheStepBudget(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Lander { attribute verticalSpeed = 1.2; }
+			part lander : Lander;
+			requirement def TouchdownRequirement {
+				subject craft : Lander;
+				attribute maxVerticalSpeed = 1.5;
+				require constraint { craft.verticalSpeed <= maxVerticalSpeed }
+			}
+			requirement touchdown : TouchdownRequirement;
+			part context {
+				assert satisfy touchdown by lander;
+			}
+		}
+	`))
+	assertions := ctx.SatisfyAssertionsIn(idx.DocumentRoot("<test>"))
+	if len(assertions) != 1 {
+		t.Fatalf("found %d satisfaction assertions, want 1", len(assertions))
+	}
+	ctx.maxSteps = 2
+
+	satisfied, err := ctx.EvaluateSatisfaction(assertions[0])
+	if err == nil {
+		t.Fatalf("expected the step budget to bound the check, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+	if errors.Is(err, ErrViolated) {
+		t.Error("an exhausted budget is not a verdict about the model")
+	}
+
+	// The subject is built inside the same run, so a budget exhausted there is
+	// still reported as such rather than as a missing subject.
+	ctx.maxSteps = 0
+	if _, err := ctx.EvaluateSatisfaction(assertions[0]); !errors.Is(err, ErrStepLimitExceeded) || !errors.Is(err, ErrNoSubject) {
+		t.Errorf("expected ErrStepLimitExceeded while building the subject, got: %v", err)
+	}
 }
 
 // testCyclicDerivedSlot: two derived defaults that read each other are reported

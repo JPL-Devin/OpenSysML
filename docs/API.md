@@ -550,6 +550,7 @@ type LineReader interface {
 - `%calc <name> [args...]` — Invoke calculation with arguments
 - `%constraint <name>` — Evaluate constraint
 - `%requirement <name>` — Evaluate requirement
+- `%satisfy [name]` — Evaluate satisfaction assertions (`assert satisfy <requirement> by <part>;`), every one in the model or the ones a named element states
 
 **Usage:**
 ```go

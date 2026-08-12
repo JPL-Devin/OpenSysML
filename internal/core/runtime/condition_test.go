@@ -157,7 +157,37 @@ func TestRequirementWithOnlyAssumptionsIsSatisfied(t *testing.T) {
 	}
 }
 
-// A `not` written on a nested constraint inverts the conditions of its body.
+// A negated element stating only assumptions has nothing to deny, so it is not a
+// verdict either way.
+func TestNegatedConstraintWithOnlyAssumptionsIsNotAVerdict(t *testing.T) {
+	src := `
+		package test {
+			part def Rig {
+				attribute a = 2.0;
+				assert not constraint cn { assume a > 1.0 }
+			}
+		}
+	`
+	ctx, pkg := conditionFixture(t, src)
+	rig := requirementNamed(t, pkg, "Rig")
+	inst, err := ctx.Instantiate(rig)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	feat := featureNamed(ctx, rig, "cn")
+	if feat == nil || feat.Symbol == nil {
+		t.Fatal("constraint feature cn not found")
+	}
+	satisfied, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
+	if !errors.Is(err, ErrNoConditions) {
+		t.Errorf("expected ErrNoConditions, got: %v", err)
+	}
+	if satisfied {
+		t.Error("an assumption alone is not a verdict about a negated element")
+	}
+}
+
+// A `not` written on a nested constraint inverts the single condition of its body.
 func TestNegatedNestedConstraintIsInverted(t *testing.T) {
 	src := `
 		package test {
@@ -215,6 +245,7 @@ func TestNegatedNestedConstraintNegatesTheConjunction(t *testing.T) {
 			part def Rig {
 				constraint oneFails : C { in a = 200.0; in b = 1.0; }
 				constraint bothHold : C { in a = 200.0; in b = 200.0; }
+				constraint neitherHolds : C { in a = 1.0; in b = 1.0; }
 			}
 		}
 	`
@@ -224,7 +255,7 @@ func TestNegatedNestedConstraintNegatesTheConjunction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instantiate: %v", err)
 	}
-	for name, want := range map[string]bool{"oneFails": true, "bothHold": false} {
+	for name, want := range map[string]bool{"oneFails": true, "bothHold": false, "neitherHolds": true} {
 		feat := featureNamed(ctx, rig, name)
 		if feat == nil || feat.Symbol == nil {
 			t.Fatalf("%s: constraint feature not found", name)
@@ -236,6 +267,11 @@ func TestNegatedNestedConstraintNegatesTheConjunction(t *testing.T) {
 		}
 		if satisfied != want {
 			t.Errorf("%s: satisfied = %v, want %v", name, satisfied, want)
+		}
+		// The violation names the denied conjunction, not one of its conditions.
+		var violation *ViolationError
+		if !want && errors.As(err, &violation) && violation.Condition != "not { a > 100; b > 100 }" {
+			t.Errorf("%s: condition = %q, want %q", name, violation.Condition, "not { a > 100; b > 100 }")
 		}
 	}
 }

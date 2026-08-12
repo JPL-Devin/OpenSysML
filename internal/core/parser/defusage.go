@@ -211,6 +211,7 @@ type featureMods struct {
 	isEvent           bool // event modifier for occurrences
 	isIndividual      bool // individual modifier for individuals/snapshots
 	isSnapshot        bool // snapshot modifier for snapshots
+	isNegated         bool // `not` of `assert not <kind>`: the conditions are asserted to be false
 	visibility        ast.Visibility
 	direction         ast.FeatureDirection
 	isComposite       bool
@@ -251,6 +252,9 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 		}
 		if mods.isSnapshot {
 			d.IsSnapshot = true
+		}
+		if mods.isNegated {
+			d.IsNegated = true
 		}
 		if mods.isComposite {
 			d.IsComposite = true
@@ -743,6 +747,15 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// `variant` likewise prefixes a kind when a name follows it
 		// (`variant attribute diameterSmall = 70[mm];`); with no name, the
 		// second keyword is the variant's own name.
+		// `assert not constraint { … }` and `assert not satisfy … by …` negate the
+		// declaration the prefix qualifies (Invariant::isNegated), so the `not`
+		// belongs to it rather than to an expression. It is only a negation when a
+		// kind keyword follows: `assert not (x > 1);` negates an expression.
+		if kindPrefixKeywords[kw] && p.atKeyword("not") && isKindKeyword(p.peekN(1)) {
+			mods.isNegated = true
+			p.advance()
+		}
+
 		kindKeyword := kw
 		if isKindKeyword(p.peek()) &&
 			(kindPrefixKeywords[kw] || (kw == "variant" && !namesDeclaration(p.peekN(1)))) {
@@ -1111,6 +1124,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isA
 	u := &ast.Usage{
 		Kind:         kind,
 		Keyword:      p.declaredKeyword(start, usageKeywordName),
+		IsNegated:    mods.isNegated,
 		IsAbstract:   mods.isAbstract,
 		IsReference:  mods.isReference,
 		IsAll:        isAll,

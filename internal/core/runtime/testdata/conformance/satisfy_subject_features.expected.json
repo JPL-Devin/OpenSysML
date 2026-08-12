@@ -1,0 +1,8 @@
+{
+  "type": "satisfy",
+  "evaluate": "test::analysisContext",
+  "assertions": {
+    "satisfy touchdown by lander01": true,
+    "satisfy touchdown by lander02": false
+  }
+}

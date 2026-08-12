@@ -25,6 +25,21 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   (`Required condition evaluated to false: actualVerticalSpeed <= maxVerticalSpeed`),
   and a feature a condition names but which holds no value is reported as such
   rather than as unresolved.
+- `assert satisfy <requirement> by <part>;` has a verdict of its own: the
+  assertion is evaluated as the requirement usage it is, with the requirement's
+  subject parameter bound to an object of the part named by `by`, so the
+  requirement's conditions — its own and the ones it inherits — read that
+  object's values. A requirement feature carrying no value of its own is read
+  from that object's feature of the same name, as it is when a requirement is
+  evaluated on an instance.
+- `%satisfy` evaluates the satisfaction assertions a model states — every one, or
+  the ones a named element states — since `assert satisfy … by …` is anonymous
+  and could not be named at the prompt before.
+- An assertion can be negated: `assert not constraint { <expr> }` and
+  `assert not satisfy <requirement> by <part>;` hold exactly when the conditions
+  they deny do not, rather than parsing as a declaration named `not`. A negation
+  denies the conditions of the constraint it is written on together — `not (a and
+  b)`, not `not a and not b` — so it holds as soon as one of them fails.
 - The KerML function library's scalar numeric functions are evaluable: `sqrt`,
   `abs`, `floor`, `round`, `max`, `min`, `isZero`, `isUnit`, `sin`, `cos`, `tan`,
   `cot`, `arcsin`, `arccos` and `arctan`. Dispatch is by the declaration's
