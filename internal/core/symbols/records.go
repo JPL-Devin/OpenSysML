@@ -12,6 +12,7 @@ type RecordEntry struct {
 	Supers          []string         // FQNs of the specialization targets of a def/usage
 	WildcardImports []WildcardImport // for packages: its `import X::*` declarations
 	AliasTarget     string           // for aliases: raw target text of "alias X for Y"
+	Unit            *UnitFacts       // for measurement units: their reduction to base units
 }
 
 // AddRecords registers synthetic, AST-less symbols for a document directly by
@@ -29,6 +30,7 @@ func (idx *Index) AddRecords(name string, entries []RecordEntry) {
 			DeclSpan:       e.Span,
 			SuperFQNs:      e.Supers,
 			AliasTargetFQN: e.AliasTarget,
+			Unit:           e.Unit,
 		}
 		idx.register(e.FQN, sym)
 		idx.declaredAt[sym] = e.FQN

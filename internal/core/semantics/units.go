@@ -1,0 +1,562 @@
+package semantics
+
+import (
+	"errors"
+	"fmt"
+	"math"
+	"sort"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
+
+var (
+	// ErrNotAUnit reports a feature used as a measurement reference that is not
+	// one: it does not conform to MeasurementReferences::MeasurementUnit.
+	ErrNotAUnit = errors.New("not a measurement unit")
+
+	// ErrUnitExpr reports an expression in unit position that is not a product
+	// of powers of measurement units.
+	ErrUnitExpr = errors.New("not a measurement unit expression")
+
+	// ErrUnitConversion reports a unit whose conversion to its reference unit is
+	// declared but cannot be read as a number, so no factor can be derived.
+	ErrUnitConversion = errors.New("undetermined unit conversion")
+
+	// ErrUnitCycle reports a unit that is defined, directly or through other
+	// units, in terms of itself.
+	ErrUnitCycle = errors.New("cyclic unit definition")
+)
+
+// Names of the library elements the unit model is defined by (SysML v2
+// Quantities and Units domain library).
+const (
+	fqnMeasurementUnit  = "MeasurementReferences::MeasurementUnit"
+	fqnDimensionOneUnit = "MeasurementReferences::DimensionOneUnit"
+
+	memberUnitConversion   = "unitConversion"
+	memberReferenceUnit    = "referenceUnit"
+	memberConversionFactor = "conversionFactor"
+	memberPrefix           = "prefix"
+)
+
+// Scale is a unit's scale factor as a ratio kept unevaluated, so a conversion
+// whose factor is exact stays exact: `5.4 [km/h]` is `5.4·1000/3600 = 1.5 [m/s]`,
+// where evaluating 1000/3600 first would answer 1.4999999999999998 and make a
+// requirement's `<=` at its boundary come out wrong.
+type Scale struct {
+	Num float64
+	Den float64
+}
+
+// UnitScale is the scale factor n, as a whole ratio.
+func UnitScale(n float64) Scale { return Scale{Num: n, Den: 1} }
+
+// IsZero reports whether the ratio is zero or undefined, which no unit's scale
+// factor is.
+func (s Scale) IsZero() bool { return s.Num == 0 || s.Den == 0 }
+
+// Times returns the product of two ratios.
+func (s Scale) Times(other Scale) Scale {
+	return reduceScale(Scale{Num: s.Num * other.Num, Den: s.Den * other.Den})
+}
+
+// DividedBy returns the quotient of two ratios.
+func (s Scale) DividedBy(other Scale) Scale {
+	return reduceScale(Scale{Num: s.Num * other.Den, Den: s.Den * other.Num})
+}
+
+// Pow raises the ratio to an exponent. A negative exponent inverts the ratio
+// rather than raising it to a negative power, which would evaluate it: `h^-1`
+// stays 1/3600 instead of becoming 0.0002777777777777778.
+func (s Scale) Pow(exp float64) Scale {
+	if exp < 0 {
+		return reduceScale(Scale{Num: math.Pow(s.Den, -exp), Den: math.Pow(s.Num, -exp)})
+	}
+	return reduceScale(Scale{Num: math.Pow(s.Num, exp), Den: math.Pow(s.Den, exp)})
+}
+
+// String renders the ratio, as a ratio when it is not whole.
+func (s Scale) String() string {
+	if s.Den == 1 {
+		return fmt.Sprintf("%g", s.Num)
+	}
+	return fmt.Sprintf("%g/%g", s.Num, s.Den)
+}
+
+// reduceScale cancels a whole common divisor, keeping composed factors small,
+// and normalizes a whole ratio to denominator one.
+func reduceScale(s Scale) Scale {
+	if s.Den == 1 || s.Num == 0 || s.Den == 0 {
+		return s
+	}
+	if isWhole(s.Num) && isWhole(s.Den) {
+		if g := gcd(math.Abs(s.Num), math.Abs(s.Den)); g > 1 {
+			s.Num, s.Den = s.Num/g, s.Den/g
+		}
+	}
+	if s.Den < 0 {
+		s.Num, s.Den = -s.Num, -s.Den
+	}
+	return s
+}
+
+func isWhole(f float64) bool { return f == math.Trunc(f) && !math.IsInf(f, 0) }
+
+func gcd(a, b float64) float64 {
+	for b != 0 {
+		a, b = b, math.Mod(a, b)
+	}
+	return a
+}
+
+// ConvertMagnitude expresses a magnitude given over the scale factor from over
+// the scale factor to, as one ratio so that no intermediate rounding enters.
+func ConvertMagnitude(magnitude float64, from, to Scale) float64 {
+	return magnitude * (from.Num * to.Den) / (from.Den * to.Num)
+}
+
+// UnitFactor is one base unit raised to an exponent.
+type UnitFactor struct {
+	Unit     *symbols.Symbol
+	Exponent float64
+}
+
+// UnitTerm is a measurement unit reduced to a scale factor over base units: the
+// product of Scale and each base unit raised to its exponent. `km/h` reduces to
+// Scale 1000/3600 over `SI::m` and `SI::s^-1`, which is what makes two units
+// comparable — they are commensurable when their factors agree, and a magnitude
+// converts between them by the ratio of their scales.
+//
+// Factors are ordered by base-unit qualified name and carry no zero exponents,
+// so two terms over the same base units compare element-wise.
+type UnitTerm struct {
+	Scale   Scale
+	Factors []UnitFactor
+}
+
+// Dimensionless reports whether the term has no base units, as a count or a
+// ratio of like quantities has.
+func (t UnitTerm) Dimensionless() bool { return len(t.Factors) == 0 }
+
+// Commensurable reports whether both terms are expressed over the same base
+// units with the same exponents, so a magnitude in one converts to the other.
+func (t UnitTerm) Commensurable(other UnitTerm) bool {
+	if len(t.Factors) != len(other.Factors) {
+		return false
+	}
+	for i, f := range t.Factors {
+		g := other.Factors[i]
+		if f.Unit != g.Unit || f.Exponent != g.Exponent {
+			return false
+		}
+	}
+	return true
+}
+
+// DimensionKey identifies the base units the term is over, exponents included
+// but scale excluded: two terms share a key exactly when they are commensurable.
+func (t UnitTerm) DimensionKey() string {
+	out := ""
+	for _, f := range t.Factors {
+		out += fmt.Sprintf("%s^%g;", f.Unit.Name, f.Exponent)
+	}
+	return out
+}
+
+// String renders the term over its base units ("1000·m·s⁻¹"), for a diagnostic
+// that has to say what a unit reduced to.
+func (t UnitTerm) String() string {
+	out := ""
+	if t.Scale != UnitScale(1) {
+		out = t.Scale.String()
+	}
+	for _, f := range t.Factors {
+		if out != "" {
+			out += "·"
+		}
+		out += f.Unit.Name
+		if f.Exponent != 1 {
+			out += fmt.Sprintf("^%g", f.Exponent)
+		}
+	}
+	if out == "" {
+		return "1"
+	}
+	return out
+}
+
+// Times returns the product of two terms.
+func (t UnitTerm) Times(other UnitTerm) UnitTerm {
+	return combine(t, other, 1)
+}
+
+// DividedBy returns the quotient of two terms.
+func (t UnitTerm) DividedBy(other UnitTerm) UnitTerm {
+	return combine(t, other, -1)
+}
+
+// Pow raises the term to an exponent, scale included.
+func (t UnitTerm) Pow(exp float64) UnitTerm {
+	out := UnitTerm{Scale: t.Scale.Pow(exp)}
+	for _, f := range t.Factors {
+		out.Factors = append(out.Factors, UnitFactor{Unit: f.Unit, Exponent: f.Exponent * exp})
+	}
+	return normalizeTerm(out)
+}
+
+// combine multiplies two terms, with the exponents of the second one signed by
+// sign, so that division shares multiplication's accumulation.
+func combine(a, b UnitTerm, sign float64) UnitTerm {
+	scale := a.Scale.Times(b.Scale)
+	if sign < 0 {
+		scale = a.Scale.DividedBy(b.Scale)
+	}
+	out := UnitTerm{Scale: scale}
+	out.Factors = append(out.Factors, a.Factors...)
+	for _, f := range b.Factors {
+		out.Factors = append(out.Factors, UnitFactor{Unit: f.Unit, Exponent: f.Exponent * sign})
+	}
+	return normalizeTerm(out)
+}
+
+// normalizeTerm sums the exponents of repeated base units, drops those that
+// cancel, and orders the rest by qualified name.
+func normalizeTerm(t UnitTerm) UnitTerm {
+	exponents := make(map[*symbols.Symbol]float64, len(t.Factors))
+	order := make([]*symbols.Symbol, 0, len(t.Factors))
+	for _, f := range t.Factors {
+		if _, seen := exponents[f.Unit]; !seen {
+			order = append(order, f.Unit)
+		}
+		exponents[f.Unit] += f.Exponent
+	}
+	out := UnitTerm{Scale: t.Scale}
+	for _, unit := range order {
+		if exponents[unit] == 0 {
+			continue
+		}
+		out.Factors = append(out.Factors, UnitFactor{Unit: unit, Exponent: exponents[unit]})
+	}
+	sort.SliceStable(out.Factors, func(i, j int) bool {
+		return out.Factors[i].Unit.Name < out.Factors[j].Unit.Name
+	})
+	return out
+}
+
+// IsMeasurementUnit reports whether sym is a feature typed by a measurement
+// unit, which is what may stand in the unit position of a quantity expression.
+func (m *Model) IsMeasurementUnit(sym *symbols.Symbol) bool {
+	if m == nil || sym == nil {
+		return false
+	}
+	unitDef := m.libSymbol(fqnMeasurementUnit)
+	if unitDef == nil {
+		// Without the Quantities and Units library there is no unit model to
+		// check against, so a persisted reduction is the only evidence.
+		return sym.Unit != nil
+	}
+	return m.Conforms(sym, unitDef)
+}
+
+// UnitTermOf reduces a measurement unit to base units. A unit declared with a
+// conversion to a reference unit contributes that conversion's factor; a unit
+// declared as an expression of other units reduces through that expression; a
+// unit of dimension one reduces to no base unit at all; and a unit that is
+// declared in terms of nothing else is itself a base unit.
+//
+// The reduction is memoized per symbol. A library symbol restored from cache
+// carries no declaration, so its reduction is read from the facts persisted
+// with it.
+func (m *Model) UnitTermOf(sym *symbols.Symbol) (UnitTerm, error) {
+	if m == nil || sym == nil {
+		return UnitTerm{}, ErrNotAUnit
+	}
+	if cached, ok := m.unitTerms[sym]; ok {
+		return cached, nil
+	}
+	if m.reducingUnit[sym] {
+		return UnitTerm{}, fmt.Errorf("%w: %s", ErrUnitCycle, sym.Name)
+	}
+	if !m.IsMeasurementUnit(sym) {
+		return UnitTerm{}, fmt.Errorf("%w: %s", ErrNotAUnit, sym.Name)
+	}
+
+	m.reducingUnit[sym] = true
+	term, err := m.reduceUnit(sym)
+	delete(m.reducingUnit, sym)
+	if err != nil {
+		return UnitTerm{}, err
+	}
+	m.unitTerms[sym] = term
+	return term, nil
+}
+
+// reduceUnit computes the reduction UnitTermOf memoizes.
+func (m *Model) reduceUnit(sym *symbols.Symbol) (UnitTerm, error) {
+	if sym.Decl == nil {
+		return m.persistedUnitTerm(sym)
+	}
+	if term, declared, err := m.convertedUnitTerm(sym); declared || err != nil {
+		return term, err
+	}
+	if dimOne := m.libSymbol(fqnDimensionOneUnit); dimOne != nil && m.Conforms(sym, dimOne) {
+		return UnitTerm{Scale: UnitScale(1)}, nil
+	}
+	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+		return m.UnitTermOfExpr(sym.OwnerScope, usage.Value)
+	}
+	return UnitTerm{Scale: UnitScale(1), Factors: []UnitFactor{{Unit: sym, Exponent: 1}}}, nil
+}
+
+// persistedUnitTerm rebuilds the reduction persisted with a cached library
+// symbol, resolving each base unit by qualified name.
+func (m *Model) persistedUnitTerm(sym *symbols.Symbol) (UnitTerm, error) {
+	if sym.Unit == nil {
+		return UnitTerm{}, fmt.Errorf("%w: %s", ErrNotAUnit, sym.Name)
+	}
+	if sym.Unit.Irreducible {
+		return UnitTerm{}, fmt.Errorf("%w: %s reduces to no base unit", ErrUnitConversion, sym.Name)
+	}
+	scale := Scale{Num: sym.Unit.ScaleNum, Den: sym.Unit.ScaleDen}
+	if scale.IsZero() {
+		return UnitTerm{}, fmt.Errorf("%w: %s reduces to a zero scale factor", ErrUnitConversion, sym.Name)
+	}
+	term := UnitTerm{Scale: scale}
+	for _, f := range sym.Unit.Factors {
+		base := m.libSymbol(f.FQN)
+		if base == nil {
+			return UnitTerm{}, fmt.Errorf("%w: %s reduces to unknown base unit %s", ErrNotAUnit, sym.Name, f.FQN)
+		}
+		term.Factors = append(term.Factors, UnitFactor{Unit: base, Exponent: f.Exponent})
+	}
+	return normalizeTerm(term), nil
+}
+
+// convertedUnitTerm reduces a unit that binds a conversion to a reference unit:
+// the reference unit's reduction scaled by the conversion factor. It reports
+// declared=false for a unit that binds none — every measurement unit inherits
+// the optional `unitConversion` feature, so only one that names a reference
+// unit converts to anything.
+func (m *Model) convertedUnitTerm(sym *symbols.Symbol) (UnitTerm, bool, error) {
+	conv, ok := m.LookupMember(sym, memberUnitConversion)
+	if !ok {
+		return UnitTerm{}, false, nil
+	}
+	refUnit, ok := m.LookupMember(conv, memberReferenceUnit)
+	if !ok {
+		return UnitTerm{}, false, nil
+	}
+	refExpr := usageValue(refUnit)
+	if refExpr == nil {
+		return UnitTerm{}, false, nil
+	}
+	refTerm, err := m.UnitTermOfExpr(scopeOf(refUnit), refExpr)
+	if err != nil {
+		return UnitTerm{}, true, err
+	}
+	factor, err := m.conversionFactor(sym, conv)
+	if err != nil {
+		return UnitTerm{}, true, err
+	}
+	return refTerm.Times(UnitTerm{Scale: factor}), true, nil
+}
+
+// conversionFactor reads the factor of a unit conversion: the factor it states,
+// or the one its prefix stands for (ConversionByPrefix derives the factor from
+// the prefix rather than stating it).
+func (m *Model) conversionFactor(sym, conv *symbols.Symbol) (Scale, error) {
+	if factor, ok := m.numericMember(conv, memberConversionFactor); ok {
+		return factor, nil
+	}
+	if prefix, ok := m.LookupMember(conv, memberPrefix); ok {
+		if named := m.referencedUnitSymbol(prefix); named != nil {
+			if factor, ok := m.numericMember(named, memberConversionFactor); ok {
+				return factor, nil
+			}
+		}
+	}
+	return Scale{}, fmt.Errorf("%w: %s states no conversion factor", ErrUnitConversion, sym.Name)
+}
+
+// numericMember reads the declared value of sym's named member as a scale
+// factor. A quotient of numbers — a conversion factor is often written as one —
+// is kept as a ratio rather than evaluated.
+func (m *Model) numericMember(sym *symbols.Symbol, name string) (Scale, bool) {
+	member, ok := m.LookupMember(sym, name)
+	if !ok {
+		return Scale{}, false
+	}
+	expr := usageValue(member)
+	if expr == nil {
+		return Scale{}, false
+	}
+	if op, ok := expr.(*ast.OperatorExpr); ok && op.Operator == ast.OpDiv && len(op.Operands) == 2 {
+		num, numOK := m.Eval(op.Operands[0])
+		den, denOK := m.Eval(op.Operands[1])
+		if numOK && denOK && num.IsNumeric() && den.IsNumeric() && den.asReal() != 0 {
+			return reduceScale(Scale{Num: num.asReal(), Den: den.asReal()}), true
+		}
+	}
+	val, ok := m.Eval(expr)
+	if !ok || !val.IsNumeric() {
+		return Scale{}, false
+	}
+	return UnitScale(val.asReal()), true
+}
+
+// referencedUnitSymbol resolves the feature a member's value names, for a value
+// that names another declaration (a prefix, a reference unit) rather than
+// computing one.
+func (m *Model) referencedUnitSymbol(sym *symbols.Symbol) *symbols.Symbol {
+	expr := usageValue(sym)
+	if expr == nil {
+		return nil
+	}
+	qn := qualifiedNameOf(expr)
+	if qn == nil || m.resolver == nil {
+		return nil
+	}
+	target, ok := m.resolver.ResolveQualified(scopeOf(sym), qn)
+	if !ok {
+		return nil
+	}
+	return target
+}
+
+// UnitTermOfExpr reduces an expression in unit position — a measurement unit,
+// or a product, quotient or power of them — resolving names in scope.
+func (m *Model) UnitTermOfExpr(scope *symbols.Scope, node ast.Node) (UnitTerm, error) {
+	switch n := node.(type) {
+	case *ast.FeatureReference:
+		return m.unitTermOfName(scope, n.Name)
+	case *ast.QualifiedName:
+		return m.unitTermOfName(scope, n)
+	case *ast.OperatorExpr:
+		return m.unitTermOfOperator(scope, n)
+	case *ast.LiteralInteger:
+		// `1` is the unit of dimension one written as a number, as `m/m` is.
+		if val, ok := m.Eval(n); ok && val.Kind == ValInt && val.Int == 1 {
+			return UnitTerm{Scale: UnitScale(1)}, nil
+		}
+	}
+	return UnitTerm{}, fmt.Errorf("%w: %T", ErrUnitExpr, node)
+}
+
+// unitTermOfName reduces the unit a qualified name refers to.
+func (m *Model) unitTermOfName(scope *symbols.Scope, qn *ast.QualifiedName) (UnitTerm, error) {
+	if qn == nil || m.resolver == nil {
+		return UnitTerm{}, ErrUnitExpr
+	}
+	sym, ok := m.resolver.ResolveQualified(scope, qn)
+	if !ok || sym == nil {
+		return UnitTerm{}, fmt.Errorf("%w: unresolved unit %s", ErrNotAUnit, QualifiedNameText(qn))
+	}
+	if alias, ok := m.resolver.ResolveAliasTarget(sym); ok {
+		sym = alias
+	}
+	return m.UnitTermOf(sym)
+}
+
+// unitTermOfOperator reduces a product, quotient or power of units.
+func (m *Model) unitTermOfOperator(scope *symbols.Scope, n *ast.OperatorExpr) (UnitTerm, error) {
+	switch n.Operator {
+	case ast.OpMul, ast.OpDiv:
+		if len(n.Operands) != 2 {
+			return UnitTerm{}, fmt.Errorf("%w: %v takes 2 operands, got %d", ErrUnitExpr, n.Operator, len(n.Operands))
+		}
+		left, err := m.UnitTermOfExpr(scope, n.Operands[0])
+		if err != nil {
+			return UnitTerm{}, err
+		}
+		right, err := m.UnitTermOfExpr(scope, n.Operands[1])
+		if err != nil {
+			return UnitTerm{}, err
+		}
+		if n.Operator == ast.OpMul {
+			return left.Times(right), nil
+		}
+		return left.DividedBy(right), nil
+	case ast.OpPow:
+		if len(n.Operands) != 2 {
+			return UnitTerm{}, fmt.Errorf("%w: %v takes 2 operands, got %d", ErrUnitExpr, n.Operator, len(n.Operands))
+		}
+		base, err := m.UnitTermOfExpr(scope, n.Operands[0])
+		if err != nil {
+			return UnitTerm{}, err
+		}
+		exp, ok := m.Eval(n.Operands[1])
+		if !ok || !exp.IsNumeric() {
+			return UnitTerm{}, fmt.Errorf("%w: unit exponent is not a constant number", ErrUnitExpr)
+		}
+		return base.Pow(exp.asReal()), nil
+	default:
+		return UnitTerm{}, fmt.Errorf("%w: operator %v", ErrUnitExpr, n.Operator)
+	}
+}
+
+// libSymbol resolves a library element by qualified name, uniquely or not at
+// all: a name two documents declare is no evidence of the library's element.
+func (m *Model) libSymbol(fqn string) *symbols.Symbol {
+	if m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	if cached, ok := m.libSymbols[fqn]; ok {
+		return cached
+	}
+	var found *symbols.Symbol
+	if matches := m.resolver.Index().LookupQualified(fqn); len(matches) == 1 {
+		found = matches[0]
+	}
+	m.libSymbols[fqn] = found
+	return found
+}
+
+// usageValue returns the value expression a usage declares, or nil.
+func usageValue(sym *symbols.Symbol) ast.Node {
+	if sym == nil {
+		return nil
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		return nil
+	}
+	return usage.Value
+}
+
+// scopeOf returns the scope a symbol's declaration was written in, which is
+// where the names in its value expression resolve.
+func scopeOf(sym *symbols.Symbol) *symbols.Scope {
+	if sym == nil {
+		return nil
+	}
+	return sym.OwnerScope
+}
+
+// qualifiedNameOf returns the qualified name an expression is, unwrapping a
+// feature reference, or nil for an expression that names nothing.
+func qualifiedNameOf(node ast.Node) *ast.QualifiedName {
+	switch n := node.(type) {
+	case *ast.FeatureReference:
+		return n.Name
+	case *ast.QualifiedName:
+		return n
+	default:
+		return nil
+	}
+}
+
+// QualifiedNameText renders a qualified name as "A::B::C".
+func QualifiedNameText(qn *ast.QualifiedName) string {
+	if qn == nil {
+		return ""
+	}
+	out := ""
+	for i, part := range qn.Parts {
+		if i > 0 {
+			out += "::"
+		}
+		out += part.Text
+	}
+	return out
+}

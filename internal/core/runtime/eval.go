@@ -128,6 +128,8 @@ func (ec *EvalContext) eval(node ast.Node) (Value, error) {
 		return ec.evalSelectExpr(n)
 	case *ast.InvocationExpr:
 		return ec.evalInvocation(n)
+	case *ast.IndexExpr:
+		return ec.evalIndexExpr(n)
 	case *ast.BodyExpr:
 		// BodyExpr is not directly evaluated - wrapped as ValExpr for delayed evaluation
 		return Value{Kind: ValExpr, Expr: n}, nil
@@ -409,6 +411,22 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 		return Value{}, err
 	}
 
+	// A quantity carries its unit through arithmetic: a sum converts, a product
+	// composes units.
+	if lq, rq, ok := quantityOperands(left, right); ok {
+		switch n.Operator {
+		case ast.OpAdd, ast.OpSub:
+			return addQuantities(n.Operator, lq, rq)
+		case ast.OpMul, ast.OpDiv:
+			return scaleQuantities(n.Operator, lq, rq)
+		case ast.OpPow:
+			if right.Kind != ValConst {
+				return Value{}, fmt.Errorf("%w: exponent of a quantity is a quantity", ErrTypeMismatch)
+			}
+			return powQuantity(lq, right.Const)
+		}
+	}
+
 	// Simplified: assume both are ValConst int/real
 	if left.Kind != ValConst || right.Kind != ValConst {
 		return Value{}, ErrTypeMismatch
@@ -483,6 +501,12 @@ func (ec *EvalContext) evalEquality(n *ast.OperatorExpr) (Value, error) {
 		return Value{}, err
 	}
 
+	// Quantities compare in a common unit; incommensurable ones are an error,
+	// not an inequality.
+	if lq, rq, ok := quantityOperands(left, right); ok {
+		return equalQuantities(n.Operator, lq, rq)
+	}
+
 	equal := valueEqual(left, right)
 
 	// Handle != operator
@@ -507,6 +531,12 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 	right, err := ec.Eval(n.Operands[1])
 	if err != nil {
 		return Value{}, err
+	}
+
+	// Quantities are ordered in a common unit, so a magnitude is never compared
+	// across units without conversion.
+	if lq, rq, ok := quantityOperands(left, right); ok {
+		return compareQuantities(n.Operator, lq, rq)
 	}
 
 	// Both must be ValConst
@@ -618,6 +648,9 @@ func (ec *EvalContext) evalNeg(n *ast.OperatorExpr) (Value, error) {
 		}
 		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: !operand.Const.Bool}}, nil
 	case ast.OpNeg:
+		if operand.Kind == ValQuantity {
+			return negateQuantity(operand.Quantity), nil
+		}
 		// Arithmetic negation: -number
 		if operand.Kind != ValConst {
 			return Value{}, fmt.Errorf("arithmetic negation requires numeric operand, got %v", operand.Kind)
@@ -802,6 +835,11 @@ func valueEqual(a, b Value) bool {
 		return sequenceEqual(a.Sequence, b.Sequence)
 	case ValSet:
 		return setEqual(a.Set, b.Set)
+	case ValQuantity:
+		// Incommensurable units are not equal here: an equality that has to hold
+		// or fail (a set member, a sequence element) has no error to report.
+		converted, err := b.Quantity.convertTo(a.Quantity.Unit)
+		return err == nil && toReal(a.Quantity.Num) == converted
 	default:
 		return false
 	}

@@ -660,6 +660,8 @@ func formatValue(val runtime.Value) string {
 		return formatElements(val.Sequence.Elements())
 	case runtime.ValSet:
 		return fmt.Sprintf("Set{%d}", val.Set.Size())
+	case runtime.ValQuantity:
+		return val.Quantity.String()
 	default:
 		return "<unknown>"
 	}

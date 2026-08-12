@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -22,7 +23,7 @@ func sampleRecord(name string) *IndexRecord {
 func TestCacheStoreLoadRoundTrip(t *testing.T) {
 	c := &Cache{dir: t.TempDir()}
 	rec := sampleRecord("a.kerml")
-	key := c.keyFor([]byte("content-a"))
+	key := c.keyFor([]byte("content-a"), "set")
 	if err := c.Store(key, rec); err != nil {
 		t.Fatalf("store: %v", err)
 	}
@@ -43,17 +44,22 @@ func TestCacheStoreLoadRoundTrip(t *testing.T) {
 
 func TestCacheLoadUnknownKeyMisses(t *testing.T) {
 	c := &Cache{dir: t.TempDir()}
-	if _, ok := c.Load(c.keyFor([]byte("never-stored"))); ok {
+	if _, ok := c.Load(c.keyFor([]byte("never-stored"), "set")); ok {
 		t.Fatal("Load returned hit for unknown key")
 	}
 }
 
-func TestCacheKeyDependsOnContentAndVersion(t *testing.T) {
+func TestCacheKeyDependsOnContentSetAndVersion(t *testing.T) {
 	c := &Cache{dir: t.TempDir()}
-	k1 := c.keyFor([]byte("alpha"))
-	k2 := c.keyFor([]byte("beta"))
+	k1 := c.keyFor([]byte("alpha"), "set")
+	k2 := c.keyFor([]byte("beta"), "set")
 	if k1 == k2 {
 		t.Fatal("distinct content produced identical cache keys")
+	}
+	// A record persists values reduced from sibling files, so the same content in
+	// a different library set is a different record.
+	if k1 == c.keyFor([]byte("alpha"), "other-set") {
+		t.Fatal("distinct library sets produced identical cache keys")
 	}
 	// A record stored under content "alpha" must not be found by content
 	// "beta" (stale-content miss) — the core cache-key invariant.
@@ -62,6 +68,48 @@ func TestCacheKeyDependsOnContentAndVersion(t *testing.T) {
 	}
 	if _, ok := c.Load(k2); ok {
 		t.Fatal("stale content produced a cache hit")
+	}
+}
+
+func TestCachePruneRemovesOnlyIdleRecords(t *testing.T) {
+	c := &Cache{dir: t.TempDir()}
+	idle, live := c.keyFor([]byte("idle"), "set"), c.keyFor([]byte("live"), "set")
+	for _, key := range []string{idle, live} {
+		if err := c.Store(key, sampleRecord("x")); err != nil {
+			t.Fatalf("store: %v", err)
+		}
+	}
+	stale := time.Now().Add(-maxIdleAge - time.Hour)
+	if err := os.Chtimes(c.path(idle), stale, stale); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+	c.Prune()
+	if _, err := os.Stat(c.path(idle)); !os.IsNotExist(err) {
+		t.Fatalf("a record idle past maxIdleAge survived Prune: %v", err)
+	}
+	if _, ok := c.Load(live); !ok {
+		t.Fatal("Prune removed a record still in use")
+	}
+}
+
+// A record is only written once, so its age has to track its last use: a hit
+// dates it, or pruning would evict the records of an unchanged library.
+func TestCacheLoadDatesTheRecord(t *testing.T) {
+	c := &Cache{dir: t.TempDir()}
+	key := c.keyFor([]byte("content"), "set")
+	if err := c.Store(key, sampleRecord("x")); err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	stale := time.Now().Add(-maxIdleAge - time.Hour)
+	if err := os.Chtimes(c.path(key), stale, stale); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+	if _, ok := c.Load(key); !ok {
+		t.Fatal("Load miss after Store")
+	}
+	c.Prune()
+	if _, ok := c.Load(key); !ok {
+		t.Fatal("Prune removed a record the previous load hit")
 	}
 }
 
@@ -75,7 +123,7 @@ func TestNewCacheCreatesDir(t *testing.T) {
 		t.Fatal("NewCache produced empty dir")
 	}
 	// Store/Load must work against the freshly created dir.
-	key := c.keyFor([]byte("z"))
+	key := c.keyFor([]byte("z"), "set")
 	if err := c.Store(key, sampleRecord("z")); err != nil {
 		t.Fatalf("store into new cache dir: %v", err)
 	}
@@ -90,7 +138,7 @@ func TestCacheStoreIsAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
-	key := c.keyFor([]byte("some content"))
+	key := c.keyFor([]byte("some content"), "set")
 	if err := c.Store(key, sampleRecord("P")); err != nil {
 		t.Fatalf("Store: %v", err)
 	}

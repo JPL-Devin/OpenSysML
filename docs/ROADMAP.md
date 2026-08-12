@@ -15,11 +15,11 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`, `staticch
 |---|---|
 | OMG training corpus | **98/100 clean** — 2 files / 4 errors, both pinned OMG source bugs (the ceiling) |
 | Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative Systemica extension |
-| Execution conformance cases | 78 |
+| Execution conformance cases | 90 |
 | gRPC conformance cases | 6 |
 | Golden execution traces | 37 |
-| Runtime robustness subtests | 43 |
-| Golden AST fixtures | 42 |
+| Runtime robustness subtests | 46 |
+| Golden AST fixtures | 43 |
 | Negative parser subtests | 49 |
 
 Statement coverage, measured today with `go test -cover ./...`:
@@ -160,13 +160,15 @@ conformance cases `requirement_own_attribute`, `requirement_def_body_require`,
 
 What came out of it, recorded under Requirement in `docs/SPEC_COMPLIANCE.md`:
 
-- **A1a — a quantity expression is not evaluated.** `attribute maxVerticalSpeed = 1.5 [m/s];`
-  parses and type-checks, but the runtime has no case for it, so a condition comparing values
-  written with units reports `unsupported node type: *ast.IndexExpr` instead of a verdict. This is
-  what stops the Open-MBEE lunar lander model's `TouchdownRequirement` from reaching a verdict as
-  the model writes it. Runtime values carry no unit, so the semantics to decide first is whether a
-  quantity evaluates to its magnitude (silently ignoring a mismatch between `m/s` and `km/h`) or
-  values carry a unit and comparison converts.
+- **A1a — a quantity expression is not evaluated — done.** A quantity evaluates to a magnitude
+  **and** the measurement reference it is written in (`Quantities::ScalarQuantityValue` is `num` +
+  `mRef`), units reduce to a scale factor over base units read from the Quantities and Units
+  library, and commensurable units convert before a comparison or a sum — `1.5 [m/s] <= 5.4 [km/h]`
+  is true, exactly, at its boundary. Incommensurable units (`1.5 [m/s] <= 2.0 [s]`) are
+  `ErrIncommensurableUnits`, never a comparison of bare magnitudes. The Open-MBEE lunar lander
+  model's `TouchdownRequirement` now reaches a verdict as the model writes it.
+  `semantics/units.go`, `runtime/quantity.go`, conformance cases `requirement_quantity_*`,
+  `constraint_quantity_*`, `calc_quantity_ratio`.
 - **A1b — `assert satisfy <requirement> by <part>;` reaches a verdict — done.** The assertion is
   evaluated as the requirement usage it is, with the requirement's subject parameter bound to an
   object of the `by` feature, so its conditions — its own, and the ones it inherits — read that
@@ -182,9 +184,9 @@ What came out of it, recorded under Requirement in `docs/SPEC_COMPLIANCE.md`:
   an explicit binding. The fallback is the one `%requirement` already applies on an instance, and
   the alternative is to report `ErrNoValue` for the shape the lunar lander model writes and require
   a subject reference in the condition instead. The lunar model's own
-  `assert satisfy touchdown by lander01;` reaches no verdict either way: `1.5 [m/s]` needs A1a, and
-  its `actualVerticalSpeed` is produced by a descent analysis rather than bound by the requirement
-  or held by the part.
+  `assert satisfy touchdown by lander01;` reaches no verdict either way: its `1.5 [m/s]` evaluates
+  now that A1a is done, but its `actualVerticalSpeed` is produced by a descent analysis rather than
+  bound by the requirement or held by the part.
 
 ## A2 — a typed multi-valued feature ignores its default
 
@@ -216,8 +218,8 @@ A6; do A6 first and re-test this.
 - **Calc recursion** is depth-bounded and rejected rather than evaluated.
 - **Numeric library coverage is scalar only.** The KerML function library's scalar numeric
   functions and `**` are evaluable (`runtime/library_functions.go`); `VectorFunctions`,
-  `MatrixFunctions`, `ComplexFunctions`, the rest of `SequenceFunctions`, and unit-aware
-  arithmetic (`1.62[m/s^2]`) are not. `TrigFunctions::pi` has no declared value, so the
+  `MatrixFunctions`, `ComplexFunctions` and the rest of `SequenceFunctions` are not (quantity
+  arithmetic is, as of A1a). `TrigFunctions::pi` has no declared value, so the
   library's own `deg`/`rad` bodies cannot be evaluated — that needs a library *feature* value,
   a different seam from function dispatch.
 - **An unqualified library function call still reports `unresolved-reference`** while evaluating
@@ -410,7 +412,7 @@ Lessons that survived the last two batches, unchanged because they keep applying
    release section.
 2. **P1** and **P2** next: the release now ships the service binary, so the Python surface is
    the newest promise and the least CI-verified.
-3. **A1a** (what is left of A1) and **A2** — the limitations the changelog admits to — then **A4**/**A5** in
+3. **A2** — A1 is done end to end, so it is the limitation the changelog still admits to — then **A4**/**A5** in
    parallel (they share only `docs/SPEC_COMPLIANCE.md`; the two `state_executor.go` items in A4
    must run one at a time).
 4. **A6** last, gated on a per-file corpus diff.

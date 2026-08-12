@@ -116,11 +116,14 @@ type FeatureChainExpr struct {
 	Member  *QualifiedName
 }
 
-// IndexExpr is `operand # ( seq )`.
+// IndexExpr is `operand # ( seq )` or `operand [ seq ]`. The two are distinct
+// syntaxes: bracket form is the quantity operator, which pairs a magnitude with
+// a measurement reference, while `#` indexes a sequence.
 type IndexExpr struct {
 	NodeBase
 	Operand Node
 	Index   Node
+	Bracket bool // written `operand [ seq ]`
 }
 
 // InvocationExpr is `Type ( args )` or `operand -> Type ( args | body | funcref )`.

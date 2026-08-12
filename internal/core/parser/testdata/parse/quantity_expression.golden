@@ -1,0 +1,49 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="quantities" library=false standard=false
+      (Import visibility="default" all=false kind=namespace recursive=false imported="SI")
+      (Membership visibility="default"
+        (Usage kind="attribute" name="maxVerticalSpeed" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (IndexExpr bracket=true
+            (LiteralReal value="1.5")
+            (OperatorExpr operator="/"
+              (FeatureReference name="m")
+              (FeatureReference name="s")))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="descentDistance" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (IndexExpr bracket=true
+            (LiteralReal value="3.0")
+            (FeatureReference name="km"))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="perAreaRate" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (IndexExpr bracket=true
+            (LiteralReal value="2.0")
+            (OperatorExpr operator="/"
+              (FeatureReference name="kg")
+              (OperatorExpr operator="**"
+                (FeatureReference name="m")
+                (LiteralInteger value="2"))))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="count" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (IndexExpr bracket=true
+            (LiteralInteger value="1")
+            (LiteralInteger value="1"))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="third" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (IndexExpr
+            (FeatureReference name="speeds")
+            (LiteralInteger value="3"))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="withinLimit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConstraintMember assert=true negated=false
+            (OperatorExpr operator="<="
+              (IndexExpr bracket=true
+                (LiteralReal value="1.5")
+                (OperatorExpr operator="/"
+                  (FeatureReference name="m")
+                  (FeatureReference name="s")))
+              (IndexExpr bracket=true
+                (LiteralReal value="5.4")
+                (OperatorExpr operator="/"
+                  (FeatureReference name="km")
+                  (FeatureReference name="h"))))))))))

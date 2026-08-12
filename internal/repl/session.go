@@ -267,7 +267,13 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 }
 
 // symbolIndex lazily indexes the session document, returning nil when nothing
-// is loaded. Name lookup and the runtime context share it.
+// is loaded. Name lookup and the runtime context share it, and it carries the
+// standard library too, which the runtime resolves names against — the
+// measurement unit of a quantity expression is one.
+//
+// It is built afresh per submission, off the library cache, rather than
+// outliving the document: an index reused across submissions keeps the
+// re-exports of an import the new document no longer states.
 func (s *Session) symbolIndex() *symbols.Index {
 	if s.idx != nil {
 		return s.idx
@@ -277,7 +283,9 @@ func (s *Session) symbolIndex() *symbols.Index {
 		return nil
 	}
 	idx := symbols.NewIndex()
+	model.LoadStdlibInto(idx)
 	idx.AddDocument(docName, doc.AST)
+	idx.ExpandWildcardImports()
 	s.idx = idx
-	return idx
+	return s.idx
 }
