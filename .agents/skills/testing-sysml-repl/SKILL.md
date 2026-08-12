@@ -495,6 +495,54 @@ Testing notes that generalize to any future built-in:
   `first a then b;` form yields `action has multiple initial nodes`), and `and`/`or` are
   `unsupported operator` in constraint bodies — keep constraint expressions to a single comparison.
 
+## Testing parser changes end-to-end (keyword/symbol parity, dispatch rewrites)
+
+A parser change is only convincing if the *same input file* behaves differently on the two binaries,
+so build an A/B baseline first and keep it around:
+
+```bash
+git worktree add /tmp/mainwt main
+go build -C /tmp/mainwt -o /tmp/mainwt/sysml-main ./cmd/sysml && go build -C /tmp/mainwt -o /tmp/mainwt/sysml-lsp-main ./cmd/sysml-lsp
+```
+
+Three cheap, high-signal sweeps:
+
+1. **Corpus no-diff sweep** — load every model on both binaries and diff the output. Anything other
+   than `0` differences is either the intended change or a regression, and it takes ~4 min.
+   **Both `%load` and the argv positional split the path on whitespace**, and ~80% of the corpus
+   lives under directories like `examples/sysml-v2-training/05. Redefinition/`, so copy each file to
+   a space-free path instead of passing it — and count what you compared, or a sweep that loaded
+   almost nothing still prints a reassuring zero:
+   ```bash
+   n=0; d=0
+   while IFS= read -r -d '' f; do
+     cp "$f" /tmp/sweep.sysml
+     n=$((n+1))
+     diff <(./bin/sysml -quiet /tmp/sweep.sysml </dev/null 2>&1) \
+          <(/tmp/mainwt/sysml-main -quiet /tmp/sweep.sysml </dev/null 2>&1) >/dev/null \
+       || { d=$((d+1)); echo "DIFF: $f"; }
+   done < <(find examples testdata internal/repl/testdata -name '*.sysml' -print0)
+   echo "compared $n, differing $d"
+   ```
+   A `for f in $(find …)` loop word-splits those paths and silently compares nothing for them: on
+   PR #98 that hid three real output changes (better diagnostic spans on `part redefines engine = …`)
+   behind a clean-looking 0.
+2. **Twin table** — for a notation with two spellings, run every degenerate form of *both* spellings
+   through a tiny script and print keyword/symbol/main side by side. Testing only the well-formed
+   forms hides the interesting bugs: on PR #98 the well-formed forms were perfectly at parity while
+   `redefines;`, `redefines = 5;`, `subsets ;`, `crosses ;` were accepted **silently** and their
+   symbol twins `:>>;`, `:>> = 5;`, `:> ;`, `=> ;` all reported `expected a name`. A silently
+   accepted member is invisible in a `✓ package T` line — always pair the load with
+   `%instantiate`/`%slots` to see what the member actually did (there, nothing).
+3. **LSP diagnostics without an editor** — drive `bin/sysml-lsp` over stdio with ~15 lines of Python
+   (`initialize`, `initialized`, `textDocument/didOpen`, sleep 3, read stdout) and count
+   `"severity":1` in the `publishDiagnostics` notification. A file with **no** diagnostics produces
+   **no** notification at all, so treat a missing notification as zero errors rather than a hang.
+   `sysml-lsp: failed reading header line: EOF` on stderr at shutdown is normal.
+
+Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
+(`PATH=$HOME/sdk/go/bin:$HOME/go/bin:$PATH`) before concluding the toolchain is missing.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
