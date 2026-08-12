@@ -300,6 +300,12 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	)
 	if isSymbolReference(expr) {
 		sym, fqn, lookupErr = s.lookupSymbol(expr)
+		// A name several declarations answer to is reported, never resolved to
+		// whichever of them the prompt's scope happens to reach.
+		var ambiguous *AmbiguousNameError
+		if errors.As(lookupErr, &ambiguous) {
+			return []string{"error: " + lookupErr.Error()}, false, nil
+		}
 	}
 	if sym != nil {
 		// An instantiated owner makes this a question about that object: read

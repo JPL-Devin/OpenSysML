@@ -116,6 +116,18 @@ func (s *Session) walkSlots(inst *runtime.Instance, name string, segments []stri
 	return inst, name
 }
 
+// AmbiguousNameError reports a name that matched more than one declaration. It
+// is distinct from a name found nowhere: a command may look elsewhere for the
+// latter, but must never answer about one of several candidates.
+type AmbiguousNameError struct {
+	Name string
+	FQNs []string
+}
+
+func (e *AmbiguousNameError) Error() string {
+	return fmt.Sprintf("symbol %q is ambiguous: %s (use a qualified name)", e.Name, strings.Join(e.FQNs, ", "))
+}
+
 // ambiguousError reports a name that matched more than one declaration, listing
 // the candidates' fully-qualified names rather than picking one of them.
 func ambiguousError(name string, matches []*symbols.Symbol, idx *symbols.Index) error {
@@ -129,7 +141,7 @@ func ambiguousError(name string, matches []*symbols.Symbol, idx *symbols.Index) 
 		}
 	}
 	sort.Strings(fqns)
-	return fmt.Errorf("symbol %q is ambiguous: %s (use a qualified name)", name, strings.Join(fqns, ", "))
+	return &AmbiguousNameError{Name: name, FQNs: fqns}
 }
 
 // collectInScopeTree returns every symbol named name in scope or a nested

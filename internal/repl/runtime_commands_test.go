@@ -506,6 +506,11 @@ func TestPromptScopeIsTheLastNamespaceDeclared(t *testing.T) {
 	wants(t, run(t, s, "%eval b * 3"), "= 6.00")
 	wants(t, run(t, s, "%eval 1.0 [m]"), "unresolved unit m")
 	wants(t, run(t, s, "%eval P1::a + P2::b"), "= 3.00")
+
+	// A name two packages declare is reported, not answered from whichever of
+	// them the prompt scope reaches.
+	s.Submit("package P3 { attribute b = 5.0; }")
+	wants(t, run(t, s, "%eval b"), "is ambiguous", "P2::b", "P3::b")
 }
 
 // %calc parses its arguments as expressions, so an argument that contains
