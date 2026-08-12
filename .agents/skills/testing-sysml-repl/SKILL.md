@@ -19,6 +19,21 @@ make build-sysml                      # -> ./bin/sysml
 Always rebuild after pulling a new commit; a stale `bin/sysml` silently tests the old revision.
 Print `--version` at the start of a recording so the reviewer can see which commit ran.
 
+### A contrast binary from the previous commit
+
+For any fix whose point is "this used to fail", build the parent revision alongside the new one
+and run the same input through both on camera. A worktree keeps the branch checkout untouched:
+
+```bash
+git worktree add /tmp/old<sha> <sha>            # e.g. the commit before the fix
+(cd /tmp/old<sha> && go build -o /tmp/old-sysml ./cmd/sysml)
+git worktree remove /tmp/old<sha>               # when finished
+```
+
+Then `/tmp/old-sysml` vs `./bin/sysml` on identical input is the strongest evidence available —
+it rules out "the test would have passed anyway". Especially valuable for diagnostic wording and
+line/column numbers, where a screenshot of the new behavior alone proves nothing.
+
 ## Two ways to drive it
 
 1. **Non-interactive (fast, for exploration and expected-value discovery).** The REPL reads a
@@ -30,6 +45,41 @@ Print `--version` at the start of a recording so the reviewer can see which comm
    non-zero exit rather than stalling the session.
 2. **Interactive in a GUI terminal (for the recording).** Because the app under test *is* a CLI,
    the recording should show a real terminal session. See the recording setup below.
+
+## Saving and converting models (`%save`, `sysml -convert`)
+
+Format comes from the **file extension**, so a destination without one is rejected before any
+writing happens. That bites on devices and pipes: `-o /dev/null`, `-o /dev/stdout`,
+`-o /dev/fd/63` and a FIFO named without a suffix all need an explicit `-to sysml` / `-to ttl`,
+otherwise you get `cannot tell the format of "/dev/null": it has no extension, so pass -from/-to`
+and no write is attempted. The REPL has no such flags, so `%save` says
+`name the file with a .sysml, .kerml or .ttl extension` instead — check the two surfaces word
+their advice differently and neither mentions the other's remedy.
+
+Things worth setting up as fixtures before a save/write test, since each exercises a different
+branch of `internal/core/export/write.go`:
+
+- a FIFO (`mkfifo`) with a **background reader** — the write blocks until something reads; assert
+  `ls -l` still shows `prw-` afterwards, i.e. the pipe was written through, not renamed over.
+- `/dev/full` — the honest failure path; expect `cannot write /dev/full: no space left on device`
+  and a non-zero exit rather than a success line.
+- a symlink, a link **chain**, a link into another directory, and a **dangling** link — all must
+  stay links, with the file they point at (created, if dangling) holding the new bytes.
+- an existing 0600 file (permissions must survive) next to a brand-new one (0644).
+- a directory chmod-ed 0500 containing a writable file, where the previous content is **longer**
+  than the new model — proves the direct-write fallback truncates instead of leaving stale bytes.
+  Remember to `chmod 700` it again or later cleanup fails.
+- assert the negative too: no leftover `.name.sysml.<digits>` temp files, and failure messages
+  must name the path the user typed rather than the temp file.
+
+Models that convert to Turtle are a narrow set: anything with state substates or a `calc` result
+member still fails with `cannot convert the *ast.SubstateMember/…ResultMember at …`, so use a
+plain `package Demo { part def Engine { attribute power = 300.0; } }` for `.ttl` assertions rather
+than a file from `examples/`.
+
+For formatter changes, the cheap adversarial check is idempotency over real models:
+convert every `examples/*.sysml` with `-to sysml` twice and `diff` the two outputs — all eight
+must be byte-identical, and stderr must stay empty for well-formed input.
 
 ## Fixtures worth knowing
 
