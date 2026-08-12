@@ -309,6 +309,40 @@ unauthenticated GitHub API, so repeated runs flip from a truthful `HTTP Error 40
 misleading `HTTP Error 403: rate limit exceeded` — rehearse sparingly and report the 404 wording,
 not whichever one the recording happened to catch.
 
+## Built-in library functions (sqrt/sin/exp/ln/log/atan2 …)
+
+The runtime supplies bodies for the function-library declarations in
+`internal/core/runtime/library_functions.go`; the non-normative extensions
+(`exp`, `ln`, `log`, `atan2`) live in
+`internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml`.
+Testing notes that generalize to any future built-in:
+
+- The fastest end-to-end surface is the batch flag, which loads a model *and* evaluates
+  expressions against it: `./bin/sysml -e "exp(1.0)" -e "log(8.0, 2.0)" model.sysml`. Several
+  `-e` flags are allowed and each prints `✓ <expr>` then `  = <value>`; a failure prints
+  `error: evaluation failed: ...` and the process still exits 0, so assert on the text, never on
+  the exit code.
+- **`-e` is evaluated in the root scope, not inside the model's package.** So a model that declares
+  its own `calc def exp` is *not* exercised by `-e "exp(2.0)"` (that hits the built-in). To prove
+  shadowing, either use the FQN (`-e "OwnExp::exp(2.0)"`) or read it out of an attribute default
+  with `%instantiate`/`%slots`. Getting this wrong looks exactly like a shadowing bug.
+- Results print to **two decimals**, which hides precision differences. To assert exactness, compare
+  in the model instead: `-e "log(1000.0, 10.0) == 3.0"` → `= true` (the naive `ln(x)/ln(base)`
+  gives 2.9999999999999996 and would print `= 3.00` while being `false`).
+- Domain/overflow handling is deliberate: `realResult` converts NaN/Inf into
+  `arithmetic domain error` / `arithmetic overflow`, so a bad argument must yield an `error:` line,
+  never a number. Worth checking per function (`ln(0.0)`, `log(4.0, 1.0)`, `atan2(0.0, 0.0)`,
+  `exp(1000.0)`), plus wrong arity (`calc argument count mismatch`) and a non-numeric argument
+  (`type mismatch: ... requires a numeric value`).
+- A **bare** call with no `import` still evaluates (the unqualified-name table is always in force)
+  but the checker prints `error: unresolved reference: <name>` for the same call inside a
+  declaration. That divergence is a known rough edge of the built-in dispatch, not a new bug —
+  report it as expected, and use `import SystemicaMathFunctions::*;` in fixtures to avoid it.
+- Fixture gotchas when writing action fixtures by hand: `done` is a reserved keyword (use another
+  name), successions must use the `first start; … done end; then a b;` form (the
+  `first a then b;` form yields `action has multiple initial nodes`), and `and`/`or` are
+  `unsupported operator` in constraint bodies — keep constraint expressions to a single comparison.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
