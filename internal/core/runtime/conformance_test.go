@@ -55,6 +55,9 @@ type ExpectedOutcome struct {
 	// Constraint/Requirement fields
 	Bindings  map[string]ExpectedValue `json:"bindings,omitempty"`
 	Satisfied *bool                    `json:"satisfied,omitempty"`
+	// Evaluate names the element to evaluate, for a case that declares more than
+	// one — a usage and the definition it is typed by. Empty searches the model.
+	Evaluate string `json:"evaluate,omitempty"`
 
 	// Instance fields
 	Instantiate string                   `json:"instantiate,omitempty"` // qualified name of the type to instantiate
@@ -358,7 +361,7 @@ func runCalcConformance(t *testing.T, ctx *Context, idx *symbols.Index, path str
 func runConstraintConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
 	// Find constraint definition/usage
 	rootScope := idx.DocumentRoot(path)
-	constraintSym := findBehavioralSymbol(t, rootScope, ast.DefConstraint, ast.UsageConstraint)
+	constraintSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefConstraint, ast.UsageConstraint)
 
 	// Apply bindings to context (if any)
 	if expected.Bindings != nil {
@@ -367,9 +370,9 @@ func runConstraintConformance(t *testing.T, ctx *Context, idx *symbols.Index, pa
 		t.Logf("constraint bindings application not yet implemented")
 	}
 
-	// Evaluate constraint
-	satisfied, err := ctx.EvaluateConstraint(constraintSym, rootScope)
-	if err != nil {
+	// Evaluate constraint. A violated assertion is a verdict, not a failure.
+	satisfied, err := ctx.EvaluateConstraint(constraintSym, constraintSym.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
 		t.Fatalf("EvaluateConstraint failed: %v", err)
 	}
 
@@ -385,11 +388,12 @@ func runConstraintConformance(t *testing.T, ctx *Context, idx *symbols.Index, pa
 func runRequirementConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
 	// Find requirement definition/usage
 	rootScope := idx.DocumentRoot(path)
-	reqSym := findBehavioralSymbol(t, rootScope, ast.DefRequirement, ast.UsageRequirement)
+	reqSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefRequirement, ast.UsageRequirement)
 
-	// Evaluate requirement using symbol's defining scope (where sibling features visible)
+	// Evaluate requirement using symbol's defining scope (where sibling features
+	// visible). A violated condition is a verdict, not a failure.
 	satisfied, err := ctx.EvaluateRequirement(reqSym, reqSym.OwnerScope)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrViolated) {
 		t.Fatalf("EvaluateRequirement failed: %v", err)
 	}
 
@@ -464,6 +468,19 @@ func findBehavioralSymbol(t *testing.T, scope *symbols.Scope, defKind ast.Defini
 		t.Fatalf("no behavioral symbol found (defKind=%v, usageKind=%v)", defKind, usageKind)
 	}
 	return sym
+}
+
+// namedOrFoundSymbol returns the symbol the case names, or searches the model
+// when it names none.
+func namedOrFoundSymbol(t *testing.T, idx *symbols.Index, fqn string, scope *symbols.Scope, defKind ast.DefinitionKind, usageKind ast.UsageKind) *symbols.Symbol {
+	if fqn == "" {
+		return findBehavioralSymbol(t, scope, defKind, usageKind)
+	}
+	matches := idx.LookupQualified(fqn)
+	if len(matches) != 1 {
+		t.Fatalf("evaluate %q: %d matching symbols, want 1", fqn, len(matches))
+	}
+	return matches[0]
 }
 
 // lookupBehavioralSymbol is findBehavioralSymbol for callers that probe several

@@ -24,19 +24,24 @@
 - Deterministic evaluation trace (parameter binding, sub-expression order, results)
 - Error handling (unbound/unknown parameters, arity, missing return, recursion and step budgets)
 
-**Constraints (5/5 features):**
+**Constraints (7/7 features):**
 - Assert evaluation (boolean satisfaction)
 - Assume evaluation (trusted preconditions)
 - Bare expression as invariant
 - Negated constraints (assert not)
 - Unresolved feature detection
+- Conditions of a nested constraint (`assert constraint [name] { <expr> }`)
+- Parameters a typed usage binds (`constraint limit : MassLimit { in m = mass; }`)
 
-**Requirements (5/5 features):**
-- Require expression evaluation
+**Requirements (8/8 features):**
+- Require expression evaluation, in a requirement definition body as well as a usage
+- Conditions stated through an anonymous nested constraint (`require constraint { <expr> }`)
+- The requirement's own attributes, inherited or rebound, in its conditions
 - Subject binding evaluation
 - Actor binding evaluation  
-- Assume expression evaluation
+- Assume expression evaluation, in both spellings
 - Nested requirements
+- A violated condition names the condition that failed
 
 **Actions (18/18 features):**
 - Initial/final node token placement
@@ -173,7 +178,9 @@ Each row documents one behavioral semantic feature:
 | Negated constraint (assert not) | `eval.go:483` evalNeg | `constraint_negation.sysml` | ✅ Faithful |
 | A constraint a type carries is evaluated against an instance of it, so it reads that object's slots rather than declared defaults | `context.go` `EvaluateConstraintOn`, `eval.go` `NewEvalContextIn`/`selfSlotValue` | `instance_constraint_binding.sysml`, `repl/instance_test.go:TestConstraintBindsToInstance` | ✅ Faithful |
 | A false assertion is a verdict, not a malfunction (`ErrViolated`), and is distinguishable from an evaluation failure | `errors.go` `ErrViolated`, `context.go` `EvaluateConstraintOn` | `repl/instance_test.go:TestConstraintEvaluationErrorIsNotAViolation` | ✅ Faithful |
-| A constraint usage inherits its conditions from the definition it is typed by (`constraint limit : MassLimit;`) | `context.go` `chainMembers` over `semantics.Model.AllSupertypes` | `instance_inherited_constraint.sysml` | ⚠️ Approximate — inherited conditions are evaluated, but a parameter the usage binds (`in m = mass`) is not passed to them |
+| A constraint usage inherits its conditions from the definition it is typed by (`constraint limit : MassLimit;`) | `context.go` `chainMembers` over `semantics.Model.AllSupertypes` | `instance_inherited_constraint.sysml` | ✅ Faithful |
+| A parameter a typed usage binds (`constraint limit : MassLimit { in m = mass; }`) is visible to the conditions it inherits, and masks the declaration it redefines | `condition.go` `conditionFeatures` over `Model.MembersOf`, `eval.go` `evalFeatureReference` | `instance_constraint_bound_parameter.sysml`, `runtime/condition_test.go:TestConstraintUsageBindsInheritedParameter` | ✅ Faithful |
+| The conditions of a nested constraint (`assert constraint [name] { <expr> }`) are the conditions of the member stating it | `parser/behavior.go` `tryParseNestedConstraint`, `condition.go` `appendConditions` | `parser/behavior_require_member_test.go:TestConstraintMemberNestedBody` | ✅ Faithful |
 | A constraint carrying no condition yields no verdict (`ErrNoConditions`) rather than a vacuous pass | `errors.go` `ErrNoConditions`, `context.go` `EvaluateConstraintOn`/`EvaluateRequirementOn` | `runtime/constraint_test.go:TestConstraintWithoutConditionsIsNotAVerdict` | ✅ Faithful |
 
 ### Instantiation and Feature Values (SysML v2 §7.6 Feature Values, KerML §8.3)
@@ -195,17 +202,26 @@ Each row documents one behavioral semantic feature:
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Require expression evaluation | `context.go:148` `EvaluateRequirement` | `requirement_literal.sysml` | ✅ Faithful |
+| Require expression evaluation, in a requirement definition body as well as a usage | `parser/behavior.go` `parseRequirementBody` (both `parseDefinition` and `parseUsage` paths), `condition.go` `conditionsOf` | `requirement_literal.sysml`, `requirement_def_body_require.sysml`, `parser/behavior_require_member_test.go:TestRequirementConditionForms` | ✅ Faithful |
+| A condition stated through an anonymous nested constraint (`require constraint { <expr> }`, the form the OMG Domain Libraries use) is evaluated, and every condition of that body is kept | `parser/behavior.go` `parseNestedConstraintConditions`, `condition.go` `appendConditions` | `requirement_nested_constraint.sysml`, `parser/behavior_require_member_test.go:TestRequireMemberRetainsConditions` | ✅ Faithful |
+| A requirement's conditions see the requirement's own features — declared, inherited, or rebound by a typed usage (`attribute :>> maxVerticalSpeed = 1.5;`) | `condition.go` `conditionFeatures`, `eval.go` `evalFeatureReference` | `requirement_own_attribute.sysml`, `requirement_nested_constraint.sysml`, `runtime/condition_test.go:TestRequirementConditionSeesOwnAttributes` | ✅ Faithful |
+| A feature a condition names but which carries no value reports that (`ErrNoValue`) rather than being unresolved | `errors.go` `ErrNoValue`, `eval.go` `evalFeatureReference` | `runtime/condition_test.go:TestRequirementConditionWithoutValueIsNotUnresolved` | ✅ Faithful |
+| A violated condition names the condition that failed, not only the element stating it | `errors.go` `ViolationError`, `condition.go` `conditionText` | `requirement_violated.sysml`, `runtime/condition_test.go:TestRequirementConditionSeesOwnAttributes` | ✅ Faithful |
 | Subject binding evaluation | `context.go:148` `EvaluateRequirement` (Pass 1) | `requirement_subject.sysml` | ✅ Faithful |
 | Actor binding evaluation | `context.go:148` `EvaluateRequirement` (Pass 1) | `requirement_actor.sysml` | ✅ Faithful |
 | Assume expression evaluation | `context.go:148` `EvaluateRequirement` (Pass 2, doesn't fail) | `requirement_assume.sysml` | ✅ Faithful |
 | A false required condition is a verdict, not a malfunction (`ErrViolated`), like a false assertion | `context.go` `EvaluateRequirementOn`, `errors.go` `ErrViolated` | `repl/instance_test.go:TestRequirementViolationIsAVerdictNotAnError` | ✅ Faithful |
-| A requirement usage inherits assume/require conditions from the definition it is typed by | `context.go` `chainMembers` | `runtime/constraint_test.go:TestConstraintWithoutConditionsIsNotAVerdict` (companion path) | ⚠️ Approximate — as for constraints, bound parameters are not passed |
+| A requirement usage inherits assume/require conditions from the definition it is typed by, and the values it rebinds are the ones those conditions see | `context.go` `chainMembers`, `condition.go` `conditionFeatures` | `requirement_nested_constraint.sysml`, `requirement_violated.sysml` | ✅ Faithful |
+| A `subject` may redeclare the one it inherits (`subject subj : View[1] :>> RequirementCheck::subj;`) | `parser/behavior.go` `parseSubjectMember`, `resolve/document.go`, `passes/typecheck.go` `checkSubjectMember` | `parser/behavior_require_member_test.go:TestRequirementConditionForms`, `libs/stdlib_conformance_test.go` (`Systems Library/Views.sysml`) | ✅ Faithful |
 | Nested requirements | `context.go:148` `EvaluateRequirement` (recursive) | `requirement_nested.sysml` | ✅ Faithful |
 | `satisfy <name>` is an `OwnedReferenceSubsetting` of an existing usage, not a typing (SysML v2 §8.3.21.10 `SatisfyRequirementUsage`) | `parser/defusage.go` `parseDefUsage` (`ast.RelSubsets`) | `parser/testdata/parse/satisfy_reference.golden` | ✅ Faithful |
 | `referencedFeatureTarget().oclIsKindOf(RequirementUsage)` — satisfy/verify may only reference a requirement usage (incl. viewpoint/concern usages) | `passes/typecheck.go` `compatMessage`, `isRequirementUsageKind` | `passes/typecheck_test.go` `TestTypeCheckSatisfyRequirementUsageOK`, `TestTypeCheckSatisfyViewpointUsageOK`, `TestTypeCheckSatisfyNonRequirementUsageError` | ✅ Faithful |
 | An `ObjectiveMembership`'s `ownedObjectiveRequirement` is a `RequirementUsage` (SysML v2 §8.3.22.4), so an `objective` is typed by a requirement definition or a specialization of one, never by a structural definition | `passes/typecheck.go` `compatibleTyping`, `isRequirementDefKind` | `passes/typecheck_kinds_test.go` `TestTypeCheckObjectiveTypedByRequirementDefOK`, `TestTypeCheckObjectiveTypedByConcernDefOK`, `TestTypeCheckObjectiveTypedByPartDefError`, `TestTypeCheckObjectiveTypedByActionDefError` | ✅ Faithful |
 | A `SubjectMembership`'s `ownedSubjectParameter` is an unconstrained `Usage` (SysML v2 §8.3.21), so a definition of any kind types a `subject` — including the `port def` and `action def` the OMG training models use — and the rule applies however the requirement body is written, not only when the subject happens to parse as a usage | `passes/typecheck.go` `checkSubjectMember`, `compatibleTyping` | `passes/typecheck_subject_test.go` `TestTypeCheckSubjectIsCheckedWhateverPrecedesIt`, `TestTypeCheckRequirementUsageSubjectIsChecked`, `TestTypeCheckSubjectWithoutResolvableTypeIsNotATypeError`; `typecheck_kinds_test.go` `TestTypeCheckSubjectTypedByAnyDefKindOK`, `TestTypeCheckSubjectTypedByUsageError` | ✅ Faithful |
+
+⚠️ A quantity expression (`1.5 [m/s]`) is not evaluated, so a condition comparing values written with units reports an unsupported node rather than a verdict. Units are not carried by runtime values, so no conversion is applied either.
+
+⚠️ `assert satisfy <requirement> by <part>;` is parsed and type-checked but is not itself an evaluation entry point: evaluate the requirement (`%requirement <name>`), whose subject-side values come from the instance it is bound to.
 
 ### Action (UML 2.5.1 §16 Activities)
 

@@ -148,16 +148,30 @@ it in the REPL. Either return the reachable sub-instances with the response or a
 These are the ⚠️/❌ rows in `docs/SPEC_COMPLIANCE.md`, in descending order of value. Each is
 one session under the §5.2 four-layer contract.
 
-## A1 — a usage's bound parameter is not passed to inherited conditions
+## A1 — a usage's bound parameter is not passed to inherited conditions — done
 
-```sysml
-constraint limit : MassLimit { in m = mass; }
-```
+Landed: a condition is evaluated against the features of the element stating it, so a
+requirement's own attributes and a parameter a typed usage binds
+(`constraint limit : MassLimit { in m = mass; }`) are visible to conditions inherited from the
+definition, `require <expr>;` parses in a requirement definition body, and the conditions of an
+anonymous nested constraint (`require constraint { <expr> }`) are evaluated. `runtime/condition.go`,
+conformance cases `requirement_own_attribute`, `requirement_def_body_require`,
+`requirement_nested_constraint`, `requirement_violated`, `instance_constraint_bound_parameter`.
 
-The conditions are inherited and evaluated (`context.go` `chainMembers`), but the binding the
-usage writes is not threaded into them, so this form reports an unresolved feature. It is the
-first known limitation listed in `CHANGELOG.md` for 0.0.4 and the most likely thing a user hits
-after the constraint work landed in #63. Same shape for requirements.
+What is left, both recorded as ⚠️ in `docs/SPEC_COMPLIANCE.md` under Requirement:
+
+- **A1a — a quantity expression is not evaluated.** `attribute maxVerticalSpeed = 1.5 [m/s];`
+  parses and type-checks, but the runtime has no case for it, so a condition comparing values
+  written with units reports `unsupported node type: *ast.IndexExpr` instead of a verdict. This is
+  what stops the Open-MBEE lunar lander model's `TouchdownRequirement` from reaching a verdict as
+  the model writes it. Runtime values carry no unit, so the semantics to decide first is whether a
+  quantity evaluates to its magnitude (silently ignoring a mismatch between `m/s` and `km/h`) or
+  values carry a unit and comparison converts.
+- **A1b — `assert satisfy <requirement> by <part>;` is not an evaluation entry point.** It parses
+  and type-checks (#78), and `%requirement` reaches a verdict for a requirement whose attributes
+  are bound to the subject's values, but the assertion itself is never evaluated and an anonymous
+  one cannot be named. Evaluating it means binding the requirement's subject parameter to the `by`
+  operand's instance and evaluating the conditions against that object.
 
 ## A2 — a typed multi-valued feature ignores its default
 
@@ -376,7 +390,7 @@ Lessons that survived the last two batches, unchanged because they keep applying
    release section.
 2. **P1** and **P2** next: the release now ships the service binary, so the Python surface is
    the newest promise and the least CI-verified.
-3. **A1** and **A2** — the two limitations the changelog admits to — then **A4**/**A5** in
+3. **A1a**/**A1b** (what is left of A1) and **A2** — the limitations the changelog admits to — then **A4**/**A5** in
    parallel (they share only `docs/SPEC_COMPLIANCE.md`; the two `state_executor.go` items in A4
    must run one at a time).
 4. **A6** last, gated on a per-file corpus diff.

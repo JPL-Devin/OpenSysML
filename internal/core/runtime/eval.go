@@ -17,6 +17,11 @@ type EvalContext struct {
 	self   *Instance          // instance a feature name resolves against, nil when unbound
 	frames []map[string]Value // stack of local bindings (innermost = frames[len-1])
 	trace  *TraceRecorder     // evaluation trace recorder, nil when not tracing
+
+	// features are the features of the element being evaluated — a requirement's
+	// or constraint's own, inherited and rebound features — which its conditions
+	// may name wherever those conditions were written.
+	features map[string]scopedExpr
 }
 
 // NewEvalContext creates an evaluation context with an empty frame stack. It
@@ -47,7 +52,7 @@ func (ec *EvalContext) evalIn(scope *symbols.Scope) *EvalContext {
 	if scope == nil || scope == ec.scope {
 		return ec
 	}
-	return &EvalContext{ctx: ec.ctx, scope: scope, self: ec.self, frames: ec.frames, trace: ec.trace}
+	return &EvalContext{ctx: ec.ctx, scope: scope, self: ec.self, frames: ec.frames, trace: ec.trace, features: ec.features}
 }
 
 // Push adds a new frame to the stack (on calc invocation, lambda entry).
@@ -195,6 +200,14 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 			} else if ok {
 				return val, nil
 			}
+		}
+		// Then a feature of the element being evaluated: a value a typed usage
+		// binds masks the default carried by the declaration it redefines.
+		if bound, ok := ec.features[name]; ok {
+			if bound.expr == nil {
+				return Value{}, fmt.Errorf("%w for feature %s", ErrNoValue, name)
+			}
+			return ec.evalIn(bound.scope).Eval(bound.expr)
 		}
 		// Try scope lookup (sibling attributes, inherited members)
 		if ec.scope != nil {

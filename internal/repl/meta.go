@@ -805,7 +805,11 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 // is the model's answer, not a malfunction, so it is not an error line. what
 // names the kind of condition, e.g. "Assertion" or "Required condition".
 func verdictDetail(what string, err error) string {
-	if err == nil || errors.Is(err, runtime.ErrViolated) {
+	var violation *runtime.ViolationError
+	switch {
+	case errors.As(err, &violation):
+		return fmt.Sprintf("%s evaluated to false: %s", what, violation.Condition)
+	case err == nil || errors.Is(err, runtime.ErrViolated):
 		return what + " evaluated to false"
 	}
 	return fmt.Sprintf("Error: %v", err)

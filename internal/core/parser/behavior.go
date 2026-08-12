@@ -1515,6 +1515,12 @@ func (p *Parser) parseConstraintMember() ast.Node {
 		isNegated = true
 	}
 
+	// A nested constraint states its conditions in a body rather than inline:
+	// assert constraint [<name>] { <expr> }
+	if node := p.tryParseNestedConstraint(start, isAssert, isNegated); node != nil {
+		return node
+	}
+
 	// Parse expression
 	expr := p.ParseExpression()
 
@@ -1569,24 +1575,11 @@ func (p *Parser) parseRequirementMember() ast.Node {
 	if node := p.tryParseDeclaration(); node != nil {
 		// Validate that tryParseDeclaration didn't just accept garbage
 		// Example: "require ;" gets parsed as anonymous constraint usage by tryParseDeclaration
-		if usage, ok := node.(*ast.Usage); ok {
-			hasName := usage.Ident.Name != ""
-			hasType := len(usage.Relationships) > 0
-			if hasType && usage.Relationships[0].Kind != ast.RelTyping {
-				hasType = false
-			}
-			hasValue := usage.Value != nil
-			hasMembers := len(usage.Members) > 0
-
-			// Anonymous usage with nothing meaningful - likely a keyword we should handle specially
-			if !hasName && !hasType && !hasValue && !hasMembers {
-				// Don't accept this, fall through to fallback below
-			} else {
-				return node // Valid declaration, use it
-			}
-		} else {
-			return node // Non-usage node, trust it
+		if usage, ok := node.(*ast.Usage); !ok || usageIsSubstantive(usage) {
+			return node // Valid declaration, use it
 		}
+		// Nothing meaningful: likely a keyword we should handle specially, so
+		// fall through to the fallback below.
 	}
 
 	// Graceful fallback: parse as general body member (expression, statement, etc.)
@@ -1601,23 +1594,20 @@ func (p *Parser) parseRequirementMember() ast.Node {
 
 	// If fallback produced something suspicious, diagnose it
 	// Example: anonymous usage with no relationships (like bare "require ;")
-	if usage, ok := node.(*ast.Usage); ok {
-		hasName := usage.Ident.Name != ""
-		hasType := len(usage.Relationships) > 0
-		if hasType && usage.Relationships[0].Kind != ast.RelTyping {
-			hasType = false // Only count typing relationships
-		}
-		hasValue := usage.Value != nil
-		hasMembers := len(usage.Members) > 0
-
-		// An anonymous usage with no type, no value, no members is likely garbage
-		if !hasName && !hasType && !hasValue && !hasMembers {
-			p.error(node.Span(), "expected 'subject', 'assume', 'require', 'actor', or a valid body member")
-			return &ast.ErrorNode{Message: "unexpected requirement member"}
-		}
+	if usage, ok := node.(*ast.Usage); ok && !usageIsSubstantive(usage) {
+		p.error(node.Span(), "expected 'subject', 'assume', 'require', 'actor', or a valid body member")
+		return &ast.ErrorNode{Message: "unexpected requirement member"}
 	}
 
 	return node
+}
+
+// usageIsSubstantive reports whether a usage declares anything: a name, a
+// relationship of any kind (`ref concern :>> self : ConcernCheck` takes its name
+// from its redefinition), a value or a body. A usage with none of those came
+// from a keyword the requirement body parser handles itself.
+func usageIsSubstantive(u *ast.Usage) bool {
+	return u.Ident.Name != "" || len(u.Relationships) > 0 || u.Value != nil || len(u.Members) > 0
 }
 
 // parseSubjectMember parses: subject <name> : <Type>; OR subject = <expr>; OR subject <name> = <expr>;
@@ -1639,6 +1629,15 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 			Name:        "", // Empty name means binding inherited subject
 			BindingExpr: value,
 		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+
+	// A bare `subject;` declares the subject parameter without naming or typing
+	// it, as the OMG viewpoint examples write it.
+	if p.at(lexer.Semicolon) {
+		p.advance()
+		node := &ast.SubjectMember{}
 		node.NodeSpan = p.spanFrom(start)
 		return node
 	}
@@ -1700,6 +1699,9 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		mult = p.parseMultiplicity()
 	}
 
+	// A subject may redefine the one it inherits: subject subj : View[1] :>> RequirementCheck::subj;
+	rels, _ := p.parseRelationships(true)
+
 	// Parse optional body or expect semicolon
 	if p.at(lexer.LBrace) {
 		// Body present - parse requirement body recursively
@@ -1707,10 +1709,11 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		members := p.parseRequirementBody()
 
 		node := &ast.SubjectMember{
-			Name:         name,
-			TypeRef:      typeRef,
-			Multiplicity: mult,
-			Body:         members,
+			Name:          name,
+			TypeRef:       typeRef,
+			Multiplicity:  mult,
+			Relationships: rels,
+			Body:          members,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -1719,9 +1722,10 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		p.expect(lexer.Semicolon, "expected ';' or '{' after subject declaration")
 
 		node := &ast.SubjectMember{
-			Name:         name,
-			TypeRef:      typeRef,
-			Multiplicity: mult,
+			Name:          name,
+			TypeRef:       typeRef,
+			Multiplicity:  mult,
+			Relationships: rels,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -1745,24 +1749,8 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 		}
 		p.advance() // consume '{'
 
-		// Parse constraint body members (expressions, doc, etc.)
-		var expr ast.Node
-		for !p.at(lexer.RBrace) && !p.atEOF() {
-			// Allow doc comments
-			if p.atKeyword("doc") {
-				p.parseDocumentation(p.peek().Span.Offset)
-				continue
-			}
-			// Parse constraint expression (store last one)
-			constraintMember := p.parseConstraintMember()
-			if c, ok := constraintMember.(*ast.ConstraintMember); ok && c.Expression != nil {
-				expr = c.Expression
-			}
-		}
-		p.expect(lexer.RBrace, "expected '}' after constraint body")
-
 		node := &ast.AssumeMember{
-			Expression: expr,
+			Body: p.parseNestedConstraintConditions(),
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -1797,24 +1785,8 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 		}
 		p.advance() // consume '{'
 
-		// Parse constraint body members (expressions, doc, etc.)
-		var expr ast.Node
-		for !p.at(lexer.RBrace) && !p.atEOF() {
-			// Allow doc comments
-			if p.atKeyword("doc") {
-				p.parseDocumentation(p.peek().Span.Offset)
-				continue
-			}
-			// Parse constraint expression (store last one)
-			constraintMember := p.parseConstraintMember()
-			if c, ok := constraintMember.(*ast.ConstraintMember); ok && c.Expression != nil {
-				expr = c.Expression
-			}
-		}
-		p.expect(lexer.RBrace, "expected '}' after constraint body")
-
 		node := &ast.RequireMember{
-			Expression: expr,
+			Body: p.parseNestedConstraintConditions(),
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -1849,6 +1821,56 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
+}
+
+// tryParseNestedConstraint parses `constraint [<name>] { <conditions> }`, the
+// nested-constraint form of a constraint member, and returns nil when the member
+// is not that form — `constraint` is a valid feature name, so an expression may
+// legitimately start with it.
+func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool) ast.Node {
+	if !p.atKeyword("constraint") {
+		return nil
+	}
+	cp := p.checkpoint()
+	p.advance() // consume 'constraint'
+	var name string
+	if p.at(lexer.Identifier) {
+		name = p.src.Text(p.peek().Span)
+		p.advance()
+	}
+	if !p.at(lexer.LBrace) {
+		p.restore(cp)
+		return nil
+	}
+	p.advance() // consume '{'
+	node := &ast.ConstraintMember{
+		IsAssert:  isAssert,
+		IsNegated: isNegated,
+		Name:      name,
+		Body:      p.parseNestedConstraintConditions(),
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseNestedConstraintConditions parses the body of the anonymous constraint an
+// `assume`/`require constraint { … }` member owns, through its closing brace,
+// and returns its ConstraintMembers. Every condition is kept: a constraint body
+// may state more than one.
+func (p *Parser) parseNestedConstraintConditions() []ast.Node {
+	var conditions []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		if p.atKeyword("doc") {
+			p.parseDocumentation(p.peek().Span.Offset)
+			continue
+		}
+		member := p.parseConstraintMember()
+		if c, ok := member.(*ast.ConstraintMember); ok && (c.Expression != nil || len(c.Body) > 0) {
+			conditions = append(conditions, c)
+		}
+	}
+	p.expect(lexer.RBrace, "expected '}' after constraint body")
+	return conditions
 }
 
 // parseActorMember parses: actor <name> : <Type>; OR actor <name> = <expr>;
