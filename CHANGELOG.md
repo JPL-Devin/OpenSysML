@@ -26,6 +26,18 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   integer overflow — is reported where the expression is evaluated instead of
   folding to a NaN, an infinity or a wrapped integer.
 
+### Runtime and tooling
+
+- The evaluation step budget is configurable through `SYSML_MAX_STEPS`, so a
+  legitimately long run — a numeric integration in an action body, say — is not
+  bounded by the 100 000-step default, which is still what an unset or empty
+  variable means. A value that is not a positive integer is reported at REPL/CLI
+  startup and at gRPC service construction, naming the variable and the value,
+  rather than falling back to the default silently.
+- The step-limit error reports the budget actually in force and names
+  `SYSML_MAX_STEPS`, so the message says how to raise it. The state machine's own
+  event and do-activity bounds are unchanged and remain fixed.
+
 ## 0.0.4 — 2026-08-10
 
 The first tagged release.

@@ -561,6 +561,42 @@ echo 'part Wheel { attribute diameter = 16.0; }' > test.sysml
 
 ---
 
+## Environment Variables
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `SYSML_LIBRARY_PATH` | unset (use the bundled standard library) | Directory to load the SysML/KerML standard library from instead of the embedded copy |
+| `SYSML_MAX_STEPS` | `100000` | Evaluation step budget: the number of expression evaluations one run may spend before it is reported as a runaway |
+
+The step budget is what turns a non-terminating loop into a reported error
+instead of a hang:
+
+```
+error: execution failed: eval assignment RHS: evaluation step limit exceeded
+(100000 steps; raise SYSML_MAX_STEPS to allow more)
+```
+
+A legitimately long run — a numeric integration in an action body, say — needs a
+higher ceiling, so raise it for that run:
+
+```bash
+SYSML_MAX_STEPS=5000000 sysml descent.sysml
+```
+
+Unset or empty means the default. Anything that is not a positive integer is
+reported at startup (and at gRPC service construction) rather than silently
+ignored:
+
+```bash
+$ SYSML_MAX_STEPS=lots sysml model.sysml
+sysml: SYSML_MAX_STEPS="lots" is not an integer: set it to a positive number of evaluation steps (default 100000)
+```
+
+A state machine's own bounds — the event and do-activity step limits — are fixed
+and not affected by this variable.
+
+---
+
 ## Examples
 
 Check `examples/` directory:
@@ -588,6 +624,10 @@ Check `examples/` directory:
 **Import errors after build:**
 - Run `go mod tidy`
 - Verify Go version: `go version` (need 1.25+)
+
+**Execution stops with "evaluation step limit exceeded":**
+- The run spent its step budget; raise it with `SYSML_MAX_STEPS` (see [Environment Variables](#environment-variables))
+- If the model does not terminate, the budget is reporting a real bug — raising it only delays the error
 
 **Syntax errors:**
 - SysML v2 textual notation only (no graphical/XMI)

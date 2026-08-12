@@ -413,7 +413,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 	// Use runtime context with empty model (no symbols needed for literals)
 	emptyIdx := symbols.NewIndex()
 	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
-	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), 100000)
+	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.maxSteps)
 
 	val, err := ctx.Eval(usage.Value)
 	if err != nil {
@@ -702,7 +702,7 @@ func (s *Session) doCalc(args []string) ([]string, bool, error) {
 		// Use empty context for literal evaluation
 		emptyIdx := symbols.NewIndex()
 		emptyModel := semantics.NewModel(resolve.New(emptyIdx))
-		literalCtx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), 100000)
+		literalCtx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.maxSteps)
 
 		// Parse as attribute inside a part (top-level attribute syntax not supported)
 		src := fmt.Sprintf("part __dummy__ { attribute __arg__ = %s; }", argStr)
