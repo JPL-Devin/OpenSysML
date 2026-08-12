@@ -12,23 +12,48 @@ type fqnEntry struct {
 	sym *Symbol
 }
 
+// reexportKey is one re-export registration: a fully-qualified name and the
+// symbol a wildcard import made reachable under it.
+type reexportKey struct {
+	fqn string
+	sym *Symbol
+}
+
 // Index aggregates symbol information across all documents in a workspace.
 // It owns each document's root scope and a global map from fully-qualified
 // name to the symbol(s) declared under it. Per-document contributions are
 // tracked so a document can be removed or re-added without leaving stale
-// entries.
+// entries — the names it declared and the ones its wildcard imports surfaced
+// alike.
 type Index struct {
-	docRoots      map[string]*Scope           // document name -> root scope
-	fqn           map[string][]*Symbol        // fully-qualified name -> symbols
-	contributions map[string][]fqnEntry       // document name -> entries it added
-	wildcardMeta  map[string][]WildcardImport // package FQN -> its wildcard imports
+	docRoots      map[string]*Scope     // document name -> root scope
+	fqn           map[string][]*Symbol  // fully-qualified name -> symbols
+	contributions map[string][]fqnEntry // document name -> entries it added
+
+	// wildcardMeta holds the wildcard imports of a namespace per document that
+	// declares it, so removing a document stops its imports from being expanded
+	// while the ones another document states through the same namespace survive.
+	wildcardMeta map[string]map[string][]WildcardImport // package FQN -> doc -> its wildcard imports
 
 	// reexported marks the (FQN, symbol) pairs that a wildcard import made
 	// visible rather than the namespace declaring them, so a lookup can prefer
 	// the declared member. hidden is the subset a *private* import surfaced,
-	// which a further wildcard import must not carry on.
+	// which a further wildcard import must not carry on. Both are derived from
+	// reexportDocs and kept alongside it for the lookup path.
 	reexported map[string]map[*Symbol]bool
 	hidden     map[string]map[*Symbol]bool
+
+	// reexportDocs attributes each re-export to every document whose wildcard
+	// imports surface it, recording whether that document surfaces it publicly;
+	// docReexports is the per-document inverse. Two documents importing the same
+	// namespace surface the same names, so removal drops one document's claim and
+	// keeps the registration while another document still makes it.
+	//
+	// This is deliberately not folded into contributions: that is an append-only
+	// slice per document, and a re-export has to be found by (FQN, symbol) to
+	// drop one document's claim, or purged across all documents at once.
+	reexportDocs map[reexportKey]map[string]bool
+	docReexports map[string]map[reexportKey]bool
 
 	// declaredAt maps a symbol to the FQN its declaration gives it, which is the
 	// only key its own members are registered under: a re-export registers the
@@ -39,6 +64,21 @@ type Index struct {
 	// so enumerating a wildcard import's members costs its members rather than a
 	// scan of every name in the workspace.
 	children map[string]map[string]bool
+
+	// dirtyNS records how each namespace's direct members changed since the last
+	// expansion, and lastTargets what each importer's imports resolved to when it
+	// was last expanded — the routes its re-exports came by. Together they bound an
+	// expansion to the importers a change can reach instead of the whole workspace.
+	dirtyNS     map[string]nsChange
+	lastTargets map[string][]resolvedImport
+}
+
+// nsChange is what happened to a namespace's direct members since the last
+// expansion. Gaining members can only add re-exports downstream; losing one, or
+// having one hidden again, can invalidate them.
+type nsChange struct {
+	gained bool
+	lost   bool
 }
 
 // WildcardImport is one `import X::*` declaration: the target's raw qualified
@@ -54,17 +94,26 @@ func NewIndex() *Index {
 		docRoots:      make(map[string]*Scope),
 		fqn:           make(map[string][]*Symbol),
 		contributions: make(map[string][]fqnEntry),
-		wildcardMeta:  make(map[string][]WildcardImport),
+		wildcardMeta:  make(map[string]map[string][]WildcardImport),
 		reexported:    make(map[string]map[*Symbol]bool),
 		hidden:        make(map[string]map[*Symbol]bool),
+		reexportDocs:  make(map[reexportKey]map[string]bool),
+		docReexports:  make(map[string]map[reexportKey]bool),
 		declaredAt:    make(map[*Symbol]string),
 		children:      make(map[string]map[string]bool),
+		dirtyNS:       make(map[string]nsChange),
+		lastTargets:   make(map[string][]resolvedImport),
 	}
 }
 
 // AddDocument builds the scope tree for root and records its symbols under
 // their fully-qualified names. Re-adding the same document name first removes
 // the document's previous contributions, so the index stays exact.
+//
+// The names the document's wildcard imports surface are added by
+// ExpandWildcardImports, which the caller runs once the documents it wants
+// indexed are in: adding a document cannot know whether the target of an import
+// it states is still to come.
 func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 	idx.RemoveDocument(name)
 	rs := Build(root)
@@ -75,14 +124,26 @@ func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 	// Extract wildcard imports from root namespace itself
 	// (root is not a symbol, so indexScope won't process its imports)
 	if wildcards := extractWildcardImports(root); len(wildcards) > 0 {
-		idx.wildcardMeta[""] = wildcards
+		idx.setWildcardImports("", name, wildcards)
 	}
+}
+
+// setWildcardImports records the wildcard imports doc states through the
+// namespace registered under pkgFQN, and marks that namespace for expansion.
+func (idx *Index) setWildcardImports(pkgFQN, doc string, imports []WildcardImport) {
+	if idx.wildcardMeta[pkgFQN] == nil {
+		idx.wildcardMeta[pkgFQN] = make(map[string][]WildcardImport)
+	}
+	idx.wildcardMeta[pkgFQN][doc] = imports
+	delete(idx.lastTargets, pkgFQN) // its import set changed: expand it again
 }
 
 // ExpandWildcardImports adds re-exported symbols for every package with a
 // wildcard import like `import ISQMechanics::*`, making the target's members
-// visible through the importing package's FQN. Call it after all documents are
-// indexed.
+// visible through the importing package's FQN. Call it after the documents to
+// index are in; AddDocument and AddRecords do not expand on their own, while
+// RemoveDocument does, so the index a removal leaves is the one a fresh build
+// over the remaining documents would produce.
 //
 // Imports chain — KerML imports Kernel::*, which imports Core::*, which imports
 // Root::* — so a single pass would only propagate one level and its result
@@ -90,51 +151,201 @@ func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 // Passes therefore repeat until nothing new is re-exported, over the importers
 // in name order, which makes the outcome independent of both map iteration
 // order and of whether a document was parsed or restored from cache.
+//
+// A pass touches only the importers a change since the last expansion can
+// reach: one whose imports changed, one whose import now resolves to a different
+// namespace, and one importing a namespace whose members changed. Calling it
+// when nothing changed costs one resolution of each import and registers
+// nothing, so a caller that expands after every edit pays for the edit rather
+// than for the workspace.
+//
+// An importer whose imports no longer support what it re-exported has those
+// re-exports dropped before the pass derives again, since a re-export can be
+// reached by more than one route and a cycle of imports would otherwise let one
+// support itself. Dropping propagates: it takes members from a namespace, which
+// is a change the importers of *that* namespace see on the next pass.
 func (idx *Index) ExpandWildcardImports() {
-	for idx.expandWildcardImportsPass() {
+	for round := 0; round < expansionRounds; round++ {
+		if !idx.expandRound(false) {
+			return
+		}
+	}
+	// A change whose re-derivation keeps invalidating itself would not settle.
+	// Deriving every importer from an empty re-export state is the computation a
+	// fresh build performs: it only ever adds, so it settles.
+	idx.purgeAllReexports()
+	for idx.expandRound(true) {
 	}
 }
 
-// expandWildcardImportsPass re-exports one level of wildcard imports and
-// reports whether it registered anything new.
-func (idx *Index) expandWildcardImportsPass() bool {
-	added := false
+// expansionRounds bounds the incremental purge-and-derive rounds before
+// expansion falls back to deriving every importer from scratch. Reaching it
+// costs a full re-derivation and changes nothing about the result.
+const expansionRounds = 16
+
+// expandRound brings the importers a change can have reached up to date and
+// reports whether it changed anything. With deriveOnly set it never drops a
+// re-export, which is what a build from an empty re-export state needs.
+func (idx *Index) expandRound(deriveOnly bool) bool {
+	changed := idx.dirtyNS
+	idx.dirtyNS = make(map[string]nsChange)
+	purge, derive := idx.importersToRefresh(changed, deriveOnly)
+	if len(purge) == 0 && len(derive) == 0 {
+		return false
+	}
+	// Every purge lands before any derivation, so that an importer deriving from
+	// another cannot copy re-exports that are about to be dropped.
+	for _, pkgFQN := range purge {
+		idx.purgeReexportsUnder(pkgFQN)
+		delete(idx.lastTargets, pkgFQN)
+	}
+	for _, pkgFQN := range derive {
+		idx.expandImporter(pkgFQN)
+	}
+	return true
+}
+
+// importersToRefresh splits the importers a change can have reached into the
+// ones whose re-exports no longer follow from their imports, and the ones to
+// derive — the former plus those importing a namespace that gained members. Both
+// are in name order, so the outcome does not depend on map iteration order.
+func (idx *Index) importersToRefresh(changed map[string]nsChange, deriveOnly bool) (purge, derive []string) {
 	pkgFQNs := make([]string, 0, len(idx.wildcardMeta))
 	for pkgFQN := range idx.wildcardMeta {
 		pkgFQNs = append(pkgFQNs, pkgFQN)
 	}
 	sort.Strings(pkgFQNs)
+
 	for _, pkgFQN := range pkgFQNs {
-		targets := idx.wildcardMeta[pkgFQN]
-		for _, target := range targets {
-			// Resolve target FQN: may be absolute (ISQMechanics) or relative (Systems)
-			targetFQN := idx.resolveWildcardTarget(pkgFQN, target.Target)
-			if targetFQN == "" {
-				continue // Target not found
+		now := idx.resolveImports(pkgFQN)
+		last, expanded := idx.lastTargets[pkgFQN]
+		if !expanded {
+			derive = append(derive, pkgFQN)
+			continue
+		}
+		// It is stale when an import names another namespace than it did, or when a
+		// namespace it read members from — then or now — lost some.
+		stale := !sameImports(last, now) ||
+			lostMembers(changed, last) || lostMembers(changed, now)
+		if stale {
+			if !deriveOnly {
+				purge = append(purge, pkgFQN)
 			}
-
-			targetChildren := idx.exportedChildren(targetFQN)
-			for _, child := range targetChildren {
-				// Extract child's primary name
-				childName := child.Name
-				if i := lastIndex(childName, "::"); i >= 0 {
-					childName = childName[i+2:]
-				}
-				// Add child under importing package's FQN
-				if idx.reexport(joinFQN(pkgFQN, childName), child, target.Private) {
-					added = true
-				}
-
-				// Also re-export under short name if different from primary name
-				if child.ShortName != "" && child.ShortName != childName {
-					if idx.reexport(joinFQN(pkgFQN, child.ShortName), child, target.Private) {
-						added = true
-					}
-				}
+			derive = append(derive, pkgFQN)
+			continue
+		}
+		for _, imp := range now {
+			if changed[imp.fqn].gained {
+				derive = append(derive, pkgFQN)
+				break
 			}
 		}
 	}
-	return added
+	return purge, derive
+}
+
+// statedImport is one wildcard import as declared: the document stating it, its
+// unresolved target text, and its declared visibility.
+type statedImport struct {
+	doc     string
+	target  string
+	private bool
+}
+
+// resolvedImport is one wildcard import paired with the FQN its target resolves
+// to ("" when the target is unknown or ambiguous).
+type resolvedImport struct {
+	doc     string
+	fqn     string
+	private bool
+}
+
+// imports returns every wildcard import stated through pkgFQN, over the
+// documents in name order so the result does not depend on map iteration order.
+func (idx *Index) imports(pkgFQN string) []statedImport {
+	byDoc := idx.wildcardMeta[pkgFQN]
+	docs := make([]string, 0, len(byDoc))
+	for doc := range byDoc {
+		docs = append(docs, doc)
+	}
+	sort.Strings(docs)
+
+	var out []statedImport
+	for _, doc := range docs {
+		for _, imp := range byDoc[doc] {
+			out = append(out, statedImport{doc: doc, target: imp.Target, private: imp.Private})
+		}
+	}
+	return out
+}
+
+// resolveImports pairs each import stated through pkgFQN with the FQN its target
+// resolves to against the index as it stands.
+func (idx *Index) resolveImports(pkgFQN string) []resolvedImport {
+	stated := idx.imports(pkgFQN)
+	out := make([]resolvedImport, len(stated))
+	for i, imp := range stated {
+		out[i] = resolvedImport{
+			doc:     imp.doc,
+			fqn:     idx.resolveWildcardTarget(pkgFQN, imp.target),
+			private: imp.private,
+		}
+	}
+	return out
+}
+
+// lostMembers reports whether any namespace these imports name lost a member,
+// or had one hidden again, since the last expansion.
+func lostMembers(changed map[string]nsChange, imports []resolvedImport) bool {
+	for _, imp := range imports {
+		if changed[imp.fqn].lost {
+			return true
+		}
+	}
+	return false
+}
+
+// sameImports reports whether two resolutions of a namespace's imports agree, so
+// an expansion can tell that an import now names a different namespace, or none.
+func sameImports(a, b []resolvedImport) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// expandImporter re-exports the visible members of every namespace pkgFQN's
+// imports name, attributing each to the document whose import surfaced it.
+//
+// Each target is resolved as its import is reached, not up front: an import can
+// name what an earlier one in the same namespace brought in, as P's
+// `import Shared::*` names the P::Shared that its `import Outer::*` re-exported.
+func (idx *Index) expandImporter(pkgFQN string) {
+	for _, imp := range idx.imports(pkgFQN) {
+		targetFQN := idx.resolveWildcardTarget(pkgFQN, imp.target)
+		if targetFQN == "" {
+			continue // target not found or ambiguous
+		}
+		for _, child := range idx.exportedChildren(targetFQN) {
+			// Extract child's primary name
+			childName := child.Name
+			if i := lastIndex(childName, "::"); i >= 0 {
+				childName = childName[i+2:]
+			}
+			idx.reexport(joinFQN(pkgFQN, childName), child, imp.doc, imp.private)
+
+			// Also re-export under short name if different from primary name
+			if child.ShortName != "" && child.ShortName != childName {
+				idx.reexport(joinFQN(pkgFQN, child.ShortName), child, imp.doc, imp.private)
+			}
+		}
+	}
+	idx.lastTargets[pkgFQN] = idx.resolveImports(pkgFQN)
 }
 
 // resolveWildcardTarget resolves a wildcard import target name to the
@@ -205,13 +416,12 @@ func (idx *Index) wildcardTargetAt(key string) (string, bool) {
 	}
 }
 
-// register records sym under fqn, linking fqn to its parent namespace.
+// register records sym under fqn, linking fqn to its parent namespace — the
+// document root "" included, so a file-level import's re-exports can be dropped.
 func (idx *Index) register(fqn string, sym *Symbol) {
 	idx.fqn[fqn] = append(idx.fqn[fqn], sym)
 	parent, _ := splitFQN(fqn)
-	if parent == "" {
-		return
-	}
+	idx.markGained(parent)
 	if idx.children[parent] == nil {
 		idx.children[parent] = make(map[string]bool)
 	}
@@ -227,6 +437,45 @@ func (idx *Index) unregister(fqn string) {
 			delete(idx.children, parent)
 		}
 	}
+}
+
+// deregister drops sym from the symbols registered under fqn, forgetting fqn
+// entirely once it names nothing. It leaves declaredAt alone: only the symbol's
+// own declaration owns that entry.
+func (idx *Index) deregister(fqn string, sym *Symbol) {
+	syms := idx.fqn[fqn]
+	for i, s := range syms {
+		if s == sym {
+			syms = append(syms[:i], syms[i+1:]...)
+			break
+		}
+	}
+	if len(syms) == 0 {
+		delete(idx.fqn, fqn)
+		delete(idx.reexported, fqn)
+		delete(idx.hidden, fqn)
+		idx.unregister(fqn)
+	} else {
+		idx.fqn[fqn] = syms
+		clearMark(idx.reexported, fqn, sym)
+		clearMark(idx.hidden, fqn, sym)
+	}
+	parent, _ := splitFQN(fqn)
+	idx.markLost(parent)
+}
+
+// markGained and markLost record how a namespace's direct members changed, which
+// is what the next expansion reads to find the importers a change reached.
+func (idx *Index) markGained(ns string) {
+	change := idx.dirtyNS[ns]
+	change.gained = true
+	idx.dirtyNS[ns] = change
+}
+
+func (idx *Index) markLost(ns string) {
+	change := idx.dirtyNS[ns]
+	change.lost = true
+	idx.dirtyNS[ns] = change
 }
 
 // splitFQN separates fqn into its owning namespace and the name within it.
@@ -258,30 +507,203 @@ func lastIndex(s, substr string) int {
 }
 
 // RemoveDocument drops all of the named document's contributions from the
-// global index and forgets its root scope. Unknown names are a no-op.
+// global index and forgets its root scope: the names it declared, the wildcard
+// imports it stated, and the re-exports those imports surfaced. A re-export a
+// surviving document also surfaces stays, as does the declaredAt entry a
+// surviving declaration owns.
+//
+// Removal re-expands what it invalidated before returning, so the index it
+// leaves is the one a fresh build over the remaining documents produces — a
+// caller does not have to know that removing a document can break a chain of
+// imports (A imports B imports C) or make an ambiguous import target resolvable.
+// Unknown names are a no-op.
 func (idx *Index) RemoveDocument(name string) {
+	if !idx.knows(name) {
+		return
+	}
+
 	for _, e := range idx.contributions[name] {
 		if idx.declaredAt[e.sym] == e.fqn {
 			delete(idx.declaredAt, e.sym)
 		}
-		syms := idx.fqn[e.fqn]
-		for i, s := range syms {
-			if s == e.sym {
-				syms = append(syms[:i], syms[i+1:]...)
-				break
-			}
-		}
-		if len(syms) == 0 {
-			delete(idx.fqn, e.fqn)
-			delete(idx.reexported, e.fqn)
-			delete(idx.hidden, e.fqn)
-			idx.unregister(e.fqn)
-		} else {
-			idx.fqn[e.fqn] = syms
-		}
+		idx.deregister(e.fqn, e.sym)
 	}
 	delete(idx.contributions, name)
 	delete(idx.docRoots, name)
+
+	for pkgFQN, byDoc := range idx.wildcardMeta {
+		if _, ok := byDoc[name]; !ok {
+			continue
+		}
+		delete(byDoc, name)
+		if len(byDoc) == 0 {
+			delete(idx.wildcardMeta, pkgFQN)
+		}
+		delete(idx.lastTargets, pkgFQN) // its import set changed: expand it again
+	}
+
+	for key := range idx.docReexports[name] {
+		idx.dropClaim(key, name)
+	}
+	delete(idx.docReexports, name)
+
+	idx.ExpandWildcardImports()
+}
+
+// knows reports whether the index holds anything for the named document.
+func (idx *Index) knows(name string) bool {
+	if _, ok := idx.contributions[name]; ok {
+		return true
+	}
+	if _, ok := idx.docRoots[name]; ok {
+		return true
+	}
+	if _, ok := idx.docReexports[name]; ok {
+		return true
+	}
+	for _, byDoc := range idx.wildcardMeta {
+		if _, ok := byDoc[name]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// purgeAllReexports drops every re-export in the index, leaving the names the
+// documents declare.
+func (idx *Index) purgeAllReexports() {
+	for key := range idx.reexportDocs {
+		idx.purgeReexport(key)
+	}
+	idx.lastTargets = make(map[string][]resolvedImport)
+}
+
+// purgeReexportsUnder drops every re-export registered directly under pkgFQN,
+// whichever documents claim it. What the surviving documents' imports still
+// support is re-derived by the following expansion.
+func (idx *Index) purgeReexportsUnder(pkgFQN string) {
+	for _, fqn := range idx.childKeys(pkgFQN) {
+		for _, sym := range idx.reexportedAt(fqn) {
+			idx.purgeReexport(reexportKey{fqn: fqn, sym: sym})
+		}
+	}
+}
+
+// reexportedAt returns the symbols a wildcard import surfaced under fqn.
+func (idx *Index) reexportedAt(fqn string) []*Symbol {
+	marks := idx.reexported[fqn]
+	if len(marks) == 0 {
+		return nil
+	}
+	out := make([]*Symbol, 0, len(marks))
+	for sym := range marks {
+		out = append(out, sym)
+	}
+	return out
+}
+
+// reexport registers sym under fqn on behalf of a wildcard import doc states,
+// recording the claim so that removing doc can take it back. An entry the
+// importing namespace declares itself is left alone: a cycle of wildcard imports
+// brings a package its own members back, and they are not borrowed.
+func (idx *Index) reexport(fqn string, sym *Symbol, doc string, private bool) {
+	registered := idx.hasFQN(fqn, sym)
+	if registered && !idx.reexported[fqn][sym] {
+		return // declared here, not borrowed
+	}
+	if !registered {
+		idx.register(fqn, sym)
+	}
+	idx.claimReexport(reexportKey{fqn: fqn, sym: sym}, doc, !private)
+}
+
+// claimReexport records that doc's wildcard import surfaces the re-export key,
+// publicly or not, and updates the marks a lookup reads. A name is exported when
+// any import that surfaced it was public, so a public claim clears the hidden
+// mark a private one left.
+func (idx *Index) claimReexport(key reexportKey, doc string, public bool) {
+	docs := idx.reexportDocs[key]
+	if docs == nil {
+		docs = make(map[string]bool)
+		idx.reexportDocs[key] = docs
+	}
+	if wasPublic, claimed := docs[doc]; claimed && (wasPublic || !public) {
+		return // nothing new
+	}
+	docs[doc] = docs[doc] || public
+	if idx.docReexports[doc] == nil {
+		idx.docReexports[doc] = make(map[reexportKey]bool)
+	}
+	idx.docReexports[doc][key] = true
+	idx.applyReexportMarks(key)
+	parent, _ := splitFQN(key.fqn)
+	idx.markGained(parent) // a public claim can un-hide it, which exports it onward
+}
+
+// dropClaim forgets doc's claim on a re-export, deregistering the name once no
+// document surfaces it any more and re-hiding it when only private imports
+// remain.
+func (idx *Index) dropClaim(key reexportKey, doc string) {
+	docs := idx.reexportDocs[key]
+	if _, claimed := docs[doc]; !claimed {
+		return
+	}
+	delete(docs, doc)
+	if len(docs) == 0 {
+		delete(idx.reexportDocs, key)
+		idx.deregister(key.fqn, key.sym)
+		return
+	}
+	idx.applyReexportMarks(key)
+	parent, _ := splitFQN(key.fqn)
+	idx.markLost(parent) // only private imports may remain, hiding it again
+}
+
+// purgeReexport drops a re-export outright, along with every document's claim
+// on it.
+func (idx *Index) purgeReexport(key reexportKey) {
+	for doc := range idx.reexportDocs[key] {
+		delete(idx.docReexports[doc], key)
+		if len(idx.docReexports[doc]) == 0 {
+			delete(idx.docReexports, doc)
+		}
+	}
+	delete(idx.reexportDocs, key)
+	idx.deregister(key.fqn, key.sym)
+}
+
+// applyReexportMarks brings the reexported and hidden marks in line with the
+// claims on key: a claimed name is re-exported, and hidden while every document
+// that surfaced it did so with a private import (KerML 8.2.3.3).
+func (idx *Index) applyReexportMarks(key reexportKey) {
+	docs := idx.reexportDocs[key]
+	if len(docs) == 0 {
+		clearMark(idx.reexported, key.fqn, key.sym)
+		clearMark(idx.hidden, key.fqn, key.sym)
+		return
+	}
+	setMark(idx.reexported, key.fqn, key.sym)
+	for _, public := range docs {
+		if public {
+			clearMark(idx.hidden, key.fqn, key.sym)
+			return
+		}
+	}
+	setMark(idx.hidden, key.fqn, key.sym)
+}
+
+func setMark(marks map[string]map[*Symbol]bool, fqn string, sym *Symbol) {
+	if marks[fqn] == nil {
+		marks[fqn] = make(map[*Symbol]bool)
+	}
+	marks[fqn][sym] = true
+}
+
+func clearMark(marks map[string]map[*Symbol]bool, fqn string, sym *Symbol) {
+	delete(marks[fqn], sym)
+	if len(marks[fqn]) == 0 {
+		delete(marks, fqn)
+	}
 }
 
 // indexScope walks a scope, recording each distinct symbol under its FQN and
@@ -318,7 +740,7 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 			// Extract wildcard imports from packages/namespaces
 			if sym.Kind == SymbolPackage || sym.Kind == SymbolNamespace {
 				if wildcards := extractWildcardImports(sym.Decl); len(wildcards) > 0 {
-					idx.wildcardMeta[fqn] = wildcards
+					idx.setWildcardImports(fqn, doc, wildcards)
 				}
 			}
 
@@ -514,54 +936,23 @@ func (idx *Index) FQNs() []string {
 }
 
 // WildcardImportsOf returns the wildcard-import targets recorded for the
-// namespace registered under fqn ("" for a document root).
+// namespace registered under fqn ("" for a document root), over the documents
+// declaring it in name order.
 func (idx *Index) WildcardImportsOf(fqn string) []WildcardImport {
-	return idx.wildcardMeta[fqn]
-}
-
-// reexport registers sym under fqn on behalf of a wildcard import and reports
-// whether anything changed. An entry the importing namespace declares itself is
-// left alone: a cycle of wildcard imports brings a package its own members back,
-// and they are not borrowed.
-func (idx *Index) reexport(fqn string, sym *Symbol, private bool) bool {
-	if !idx.hasFQN(fqn, sym) {
-		// Note: not added to contributions - these are synthetic
-		idx.register(fqn, sym)
-		idx.markReexported(fqn, sym, private)
-		return true
+	byDoc := idx.wildcardMeta[fqn]
+	if len(byDoc) == 0 {
+		return nil
 	}
-	if !idx.reexported[fqn][sym] {
-		return false
+	docs := make([]string, 0, len(byDoc))
+	for doc := range byDoc {
+		docs = append(docs, doc)
 	}
-	return idx.markReexported(fqn, sym, private)
-}
-
-// markReexported records that fqn only names sym by way of a wildcard import,
-// hidden while every import that surfaced it was private, and reports whether
-// anything changed. A public import of a name a private one already brought in
-// exports it, so the mark only ever clears.
-func (idx *Index) markReexported(fqn string, sym *Symbol, private bool) bool {
-	if idx.reexported[fqn] == nil {
-		idx.reexported[fqn] = make(map[*Symbol]bool)
+	sort.Strings(docs)
+	var out []WildcardImport
+	for _, doc := range docs {
+		out = append(out, byDoc[doc]...)
 	}
-	switch {
-	case !idx.reexported[fqn][sym]:
-		idx.reexported[fqn][sym] = true
-		if private {
-			if idx.hidden[fqn] == nil {
-				idx.hidden[fqn] = make(map[*Symbol]bool)
-			}
-			idx.hidden[fqn][sym] = true
-		}
-		return true
-	case private:
-		return false
-	case idx.hidden[fqn][sym]:
-		delete(idx.hidden[fqn], sym)
-		return true
-	default:
-		return false
-	}
+	return out
 }
 
 // exportedChildren returns the direct children of prefix that a wildcard import
