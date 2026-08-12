@@ -52,9 +52,6 @@ type Scale struct {
 // UnitScale is the scale factor n, as a whole ratio.
 func UnitScale(n float64) Scale { return Scale{Num: n, Den: 1} }
 
-// Value evaluates the ratio, for a caller that needs one number.
-func (s Scale) Value() float64 { return s.Num / s.Den }
-
 // IsZero reports whether the ratio is zero or undefined, which no unit's scale
 // factor is.
 func (s Scale) IsZero() bool { return s.Num == 0 || s.Den == 0 }
