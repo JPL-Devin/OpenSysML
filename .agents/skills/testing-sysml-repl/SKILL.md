@@ -54,6 +54,10 @@ Print `--version` at the start of a recording so the reviewer can see which comm
 
 ## Things to exercise (and their expected shapes)
 
+- There is **no `%what` command** — check `%help` before believing a task description. The lookup
+  surface for "does this name resolve?" is `%instantiate` / `%slots` / `%eval` (a `part def` is
+  easiest via `%instantiate`, an attribute via `%eval`), all funnelling through
+  `internal/repl/lookup.go`. A request phrased as "`%what`/lookup" means those.
 - Symbol-taking commands: `%instantiate %slots %eval %calc %constraint %requirement %action %state`.
   All go through one helper (`internal/repl/lookup.go`), so test each with a **simple** name and a
   **qualified** one.
@@ -219,6 +223,58 @@ later submissions. Two consequences when testing:
 
 Still true: accidentally typing a shell command like `clear` at the `>` prompt is parsed as SysML
 and pollutes the buffer. `%clear` resets the session.
+
+## The session-long symbol index and wildcard re-exports (PR #95)
+
+`Session.symbolIndex()` (`internal/repl/session.go`) keeps **one** `symbols.Index` for the whole
+session: the stdlib is loaded into it once (`model.LoadStdlibInto`) and only the session document is
+re-indexed, when `doc.Version` changed. So stale/duplicated symbols are the failure mode to hunt,
+and every assertion should be re-checked *late* in a long session, not only on the first submission.
+
+The re-export cycle is the highest-value test, and it distinguishes working from broken in three
+steps (a REPL built before this work fails at the very first one):
+
+```
+package Lib { part def Widget { attribute size = 3.0; } }
+package P { public import Lib::*; }
+%instantiate P::Widget      -> ✓ Created instance of Lib::Widget    (resolved FQN is the DECLARING one)
+package P { }               -> replaces the earlier snippet (same declared name)
+%instantiate P::Widget      -> error: symbol "P::Widget" not found  (re-export unwound)
+%instantiate Lib::Widget    -> ✓ Created instance of Lib::Widget    (purge must not over-remove)
+package P { public import Lib::*; }
+%instantiate P::Widget      -> ✓ ... again, and never "is ambiguous"
+```
+
+Notes that save time:
+
+- A re-export registers the symbol under the importing namespace but **never copies its subtree**:
+  `P::Widget` resolves while `%eval P::Widget::size` is `symbol ... not found`. Use the declaring
+  FQN (`%eval Lib::Widget::size` → `= 3.00`). This is intended (confirmed by the maintainer).
+- Resubmitting the same importing package several times must keep resolving and must never produce
+  `is ambiguous` — duplicate re-export registrations would surface as ambiguity, so assert the
+  negative explicitly.
+- `%clear` drops the document from the index (`idx.RemoveDocument`) but **keeps the loaded library**,
+  so `%clear` followed by more work exercises the removal path directly: expect
+  `error: no declarations loaded (literals work, but feature references need declarations)` (or
+  `error: runtime init: no document loaded` for `%instantiate`) for the old names, then full
+  wildcard expansion again for freshly submitted packages.
+- Because the REPL has a **single** document, a re-index removes and re-adds all of its re-exports
+  wholesale. Index bugs that need one document's member to change while a *different* importing
+  document survives are therefore not reachable from the prompt — verify those in
+  `internal/core/symbols` tests instead of hunting them at the REPL. In particular a top-level
+  (outside any `package`) `import Lib::*;` followed by a submission that drops the surfaced
+  declaration still correctly reports `not found` at the prompt.
+- Stdlib staleness check: quantity/unit evaluation resolves its unit through the session index, so it
+  is the cheapest canary. `package Q1 { import SI::*; attribute speed = 1.5 [m/s]; }` then
+  `%eval Q1::speed` → `= 1.5 [m/s]`, and re-running that exact command after each of ~15 further
+  submissions must print the identical string every time. Without `import SI::*;` the unit is
+  `error: evaluation failed: not a quantity expression: not a measurement unit: unresolved unit m`,
+  which is a fixture mistake, not a regression.
+- Pre-existing noise not caused by index work: ISQ-typed attributes
+  (`attribute m : MassValue = 12.0;`) emit `cannot bind Rational value to a feature typed by
+  ISQBase::MassValue` and a top-level `import Lib::*;` typed before `Lib` exists emits
+  `unresolved reference: Lib`. Both reproduce on `main`; the lookups still succeed. A/B against a
+  `main` binary in a `git worktree` before reporting any diagnostic as new.
 
 ## Output modes and execution tracing (PR #65)
 

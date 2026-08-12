@@ -259,6 +259,36 @@ func TestRemoveDocumentEqualsFreshBuild(t *testing.T) {
 	}
 }
 
+// A file-level import re-exports into the document root, where a name has no
+// enclosing namespace to be dropped along with. Editing away the declaration it
+// surfaced must still take the re-export back.
+func TestEditingTheTargetOfAFileLevelImportDropsItsReexport(t *testing.T) {
+	const importer, target = "a.sysml", "b.sysml"
+	docs := map[string]string{
+		importer: "public import Src::*;",
+		target:   "package Src { part def Kept; part def Dropped; }",
+	}
+	reused := buildIndex(t, docs)
+	if len(reused.LookupQualified("Dropped")) == 0 {
+		t.Fatal("a file-level import should surface Dropped at the document root")
+	}
+
+	docs[target] = "package Src { part def Kept; }"
+	addDoc(t, reused, target, docs[target])
+	reused.ExpandWildcardImports()
+
+	if got := len(reused.LookupQualified("Dropped")); got != 0 {
+		t.Errorf("Dropped = %d symbols after its declaration was edited away, want 0", got)
+	}
+	if len(reused.LookupQualified("Kept")) == 0 {
+		t.Error("Kept no longer resolves through the file-level import")
+	}
+	if got, want := indexState(reused), indexState(buildIndex(t, docs)); got != want {
+		t.Errorf("editing %s left an index a fresh build would not produce:\n%s",
+			target, diffLines(want, got))
+	}
+}
+
 // Dropping every re-export and expanding again rebuilds exactly what was there.
 // That is the state expansion falls back to when its incremental rounds do not
 // settle, so it has to derive the same index.

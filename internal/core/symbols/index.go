@@ -414,14 +414,12 @@ func (idx *Index) wildcardTargetAt(key string) (string, bool) {
 	}
 }
 
-// register records sym under fqn, linking fqn to its parent namespace.
+// register records sym under fqn, linking fqn to its parent namespace — the
+// document root "" included, so a file-level import's re-exports can be dropped.
 func (idx *Index) register(fqn string, sym *Symbol) {
 	idx.fqn[fqn] = append(idx.fqn[fqn], sym)
 	parent, _ := splitFQN(fqn)
 	idx.markGained(parent)
-	if parent == "" {
-		return
-	}
 	if idx.children[parent] == nil {
 		idx.children[parent] = make(map[string]bool)
 	}
