@@ -192,6 +192,16 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		if val, ok := ec.Lookup(name); ok {
 			return val, nil
 		}
+		// Then a feature of the element being evaluated: it is declared inside
+		// that element, so it masks a same-named member of the object carrying
+		// it, and a value a typed usage binds masks the default of the
+		// declaration it redefines.
+		if bound, ok := ec.features[name]; ok {
+			if bound.expr == nil {
+				return Value{}, fmt.Errorf("%w for feature %s", ErrNoValue, name)
+			}
+			return ec.evalIn(bound.scope).Eval(bound.expr)
+		}
 		// Then the bound instance: a slot holds the value this object actually
 		// carries, which overrides the declared default the scope would yield.
 		if ec.self != nil {
@@ -200,14 +210,6 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 			} else if ok {
 				return val, nil
 			}
-		}
-		// Then a feature of the element being evaluated: a value a typed usage
-		// binds masks the default carried by the declaration it redefines.
-		if bound, ok := ec.features[name]; ok {
-			if bound.expr == nil {
-				return Value{}, fmt.Errorf("%w for feature %s", ErrNoValue, name)
-			}
-			return ec.evalIn(bound.scope).Eval(bound.expr)
 		}
 		// Try scope lookup (sibling attributes, inherited members)
 		if ec.scope != nil {
