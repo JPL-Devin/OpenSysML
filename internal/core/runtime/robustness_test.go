@@ -63,6 +63,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("exponentiation_integer_overflow", testExponentiationIntegerOverflow)
 	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
+	t.Run("satisfy_bounded_by_the_step_budget", testSatisfyBoundedByTheStepBudget)
 	t.Run("cyclic_derived_slot", testCyclicDerivedSlot)
 	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
 }
@@ -128,6 +129,42 @@ func testSatisfyRequirementWithoutConditions(t *testing.T) {
 	}
 	if satisfied {
 		t.Error("a requirement with no condition must not report a verdict")
+	}
+}
+
+// testSatisfyBoundedByTheStepBudget: a satisfaction check is one run, so its
+// condition evaluation spends the run's budget instead of resetting it.
+func testSatisfyBoundedByTheStepBudget(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Lander { attribute verticalSpeed = 1.2; }
+			part lander : Lander;
+			requirement def TouchdownRequirement {
+				subject craft : Lander;
+				attribute maxVerticalSpeed = 1.5;
+				require constraint { craft.verticalSpeed <= maxVerticalSpeed }
+			}
+			requirement touchdown : TouchdownRequirement;
+			part context {
+				assert satisfy touchdown by lander;
+			}
+		}
+	`))
+	assertions := ctx.SatisfyAssertionsIn(idx.DocumentRoot("<test>"))
+	if len(assertions) != 1 {
+		t.Fatalf("found %d satisfaction assertions, want 1", len(assertions))
+	}
+	ctx.maxSteps = 2
+
+	satisfied, err := ctx.EvaluateSatisfaction(assertions[0])
+	if err == nil {
+		t.Fatalf("expected the step budget to bound the check, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+	if errors.Is(err, ErrViolated) {
+		t.Error("an exhausted budget is not a verdict about the model")
 	}
 }
 

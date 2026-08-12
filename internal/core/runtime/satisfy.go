@@ -47,17 +47,21 @@ type SatisfyAssertion struct {
 }
 
 // Text renders the assertion as it was written, so an anonymous one can be
-// named in a verdict.
+// named in a verdict. A `satisfy requirement r by p` form declares the
+// requirement rather than referencing one, so it is named by the usage itself.
 func (a *SatisfyAssertion) Text() string {
 	var b strings.Builder
 	if a.Negated {
 		b.WriteString("not ")
 	}
 	b.WriteString("satisfy ")
-	if a.RequirementRef == "" {
-		b.WriteString("?")
-	} else {
+	switch {
+	case a.RequirementRef != "":
 		b.WriteString(a.RequirementRef)
+	case a.Symbol != nil && a.Symbol.Name != "":
+		b.WriteString(a.Symbol.Name)
+	default:
+		b.WriteString("?")
 	}
 	if a.SubjectRef != "" {
 		b.WriteString(" by ")
@@ -167,6 +171,8 @@ func (ctx *Context) EvaluateSatisfaction(a *SatisfyAssertion) (bool, error) {
 // A false verdict is returned as a *ViolationError, which unwraps to
 // ErrViolated: it is an answer about the model, not a failure to evaluate.
 func (ctx *Context) EvaluateSatisfactionOn(a *SatisfyAssertion, subject *Instance) (bool, error) {
+	defer ctx.beginRun()()
+
 	if a == nil || a.Symbol == nil {
 		return false, ErrNotASatisfaction
 	}
