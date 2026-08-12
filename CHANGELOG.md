@@ -15,10 +15,16 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 - Exponentiation (`**`, `^`) is evaluated, by one implementation the constant
   folder and the runtime share. Integer operands with a non-negative exponent
   give an Integer, any other numeric pair a Real.
+- `exp`, `ln`, `log(x, base)` and `atan2(y, x)` are evaluable. The OMG Kernel
+  Function Library declares no signature for any of them, so they are declared in
+  a new non-normative Systemica extension library,
+  `internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml`,
+  which a model reaches with `import SystemicaMathFunctions::*;`. The vendored OMG
+  files are unchanged; the stdlib parse gate is now 95/95 clean.
 - A result that is not a finite value of the declared type — `sqrt(-1.0)`,
-  `arcsin(2.0)`, `0.0 ** -1.0`, integer overflow — is reported where the
-  expression is evaluated instead of folding to a NaN, an infinity or a wrapped
-  integer.
+  `arcsin(2.0)`, `ln(0.0)`, `log(x, 1.0)`, `atan2(0.0, 0.0)`, `0.0 ** -1.0`,
+  integer overflow — is reported where the expression is evaluated instead of
+  folding to a NaN, an infinity or a wrapped integer.
 
 ## 0.0.4 — 2026-08-10
 
