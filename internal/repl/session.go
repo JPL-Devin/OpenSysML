@@ -32,9 +32,10 @@ type Session struct {
 	version  int
 
 	// Runtime execution context
-	rtCtx     *runtime.Context
-	idx       *symbols.Index               // index over the session document, shared by lookup and runtime
-	instances map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
+	rtCtx      *runtime.Context
+	idx        *symbols.Index               // index over the session document, shared by lookup and runtime
+	idxVersion int                          // document version idx holds, 0 when it holds none
+	instances  map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
 
 	// Active executor sessions for debugging
 	actionExec *actionSession
@@ -170,8 +171,8 @@ func (s *Session) Submit(src string) Result {
 	s.ws.Open(docName, []byte(joined), s.version)
 	// The document is a new AST and scope tree, so anything derived from the
 	// previous one is stale — including instances, whose IDs restart with the
-	// new runtime context.
-	s.idx = nil
+	// new runtime context. The index is re-used and brought up to date on the
+	// next lookup instead, which is why it records the version it holds.
 	s.rtCtx = nil
 	s.instances = make(map[string]*runtime.Instance)
 	notices := s.dropStaleDebugSessions(declared)
@@ -239,6 +240,7 @@ func (s *Session) Clear() {
 	s.version = 0
 	s.rtCtx = nil
 	s.idx = nil
+	s.idxVersion = 0
 	s.instances = make(map[string]*runtime.Instance)
 	s.actionExec = nil
 	s.stateExec = nil
@@ -266,18 +268,25 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 	return s.rtCtx, nil
 }
 
-// symbolIndex lazily indexes the session document, returning nil when nothing
-// is loaded. Name lookup and the runtime context share it.
+// symbolIndex indexes the session document, returning nil when nothing is
+// loaded. Name lookup and the runtime context share it.
+//
+// One index serves the whole session: re-indexing the document replaces the
+// names the previous submission declared and the ones its wildcard imports
+// surfaced, so a submission costs its own document rather than a rebuild.
 func (s *Session) symbolIndex() *symbols.Index {
-	if s.idx != nil {
-		return s.idx
-	}
 	doc := s.ws.Document(docName)
 	if doc == nil || doc.Scope == nil {
 		return nil
 	}
-	idx := symbols.NewIndex()
-	idx.AddDocument(docName, doc.AST)
-	s.idx = idx
-	return idx
+	if s.idx != nil && s.idxVersion == doc.Version {
+		return s.idx
+	}
+	if s.idx == nil {
+		s.idx = symbols.NewIndex()
+	}
+	s.idx.AddDocument(docName, doc.AST)
+	s.idx.ExpandWildcardImports()
+	s.idxVersion = doc.Version
+	return s.idx
 }
