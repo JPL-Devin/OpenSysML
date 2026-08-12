@@ -131,28 +131,44 @@ is real is an A/B against a binary built from `main` in a `git worktree` — sam
 number.
 
 Things that must fail rather than hang: the REPL builds its runtime context with a step budget that
-defaults to **100000** (`runtime.DefaultMaxSteps`, `internal/core/runtime/budget.go`; sessions carry
-it via `Session.SetMaxSteps`), and every loop iteration spends one step, so a runaway loop
-(or an empty loop body, whose condition can never change) returns
-`error: execution failed: eval … : evaluation step limit exceeded (100000 steps; raise SYSML_MAX_STEPS to allow more)`
-in well under a second. Always follow the failure with another meta-command (`%tokens`, `%instances`)
+defaults to **10000000** (`runtime.DefaultMaxSteps`, `internal/core/runtime/budget.go`; sessions
+carry the four budgets via `Session.SetBudgets(runtime.Budgets)`), and every loop iteration spends
+several steps, so a runaway loop (or an empty loop body, whose condition can never change) returns
+`error: execution failed: eval … : evaluation step limit exceeded (10000000 steps; raise SYSML_MAX_STEPS to allow more)`
+in under a second (0.7 s measured). Always follow the failure with another meta-command (`%tokens`, `%instances`)
 to prove the session survived — `%tokens` still shows the token parked at the node with its partial value. A
 `for` over a non-collection gives
 `action node <n>: 'for' collection must be a sequence or a set, got constant`.
 
-### Raising the budget with `SYSML_MAX_STEPS` (PR #83)
+### Raising the budgets (PRs #83, #87)
 
-`SYSML_MAX_STEPS` overrides the default for both `bin/sysml` and `bin/sysml-grpc`: unset/empty →
-100000, a positive integer (whitespace is trimmed) → that value, anything else → the binary refuses
-to start (`sysml` exits **2** with `sysml: SYSML_MAX_STEPS="…" is not an integer …` /
+Four variables, one per runaway bound, each counting a different unit — raising one says nothing
+about the others:
+
+| Variable | Default | Counts |
+|---|---|---|
+| `SYSML_MAX_STEPS` | 10000000 | expression evaluations |
+| `SYSML_MAX_ACTION_STEPS` | 1000000 | action token-flow steps |
+| `SYSML_MAX_EVENTS` | 1000000 | state machine events, and the events one `%advance` drains |
+| `SYSML_MAX_DO_STEPS` | 5000000 | do-activity actions, ditto for `%advance` |
+
+Each bounds **one run** — one `%eval`, `%instantiate`, `%calc`, action or state machine, a stepped-
+through run included — not a whole session, so a long session of small operations never runs out; a
+run started inside another shares the outer one's budget. Testing the bound therefore needs a single
+runaway run, not a sequence of evaluations.
+
+Each overrides the default for both `bin/sysml` and `bin/sysml-grpc`: unset/empty → the default, a
+positive integer (whitespace is trimmed) → that value, anything else → the binary refuses to start
+(`sysml` exits **2** with `sysml: SYSML_MAX_STEPS="…" is not an integer …` /
 `… must be greater than zero …`; `sysml-grpc` exits **1** and logs the same error under
-`msg="Invalid service configuration"`). Useful test model — a `while i < N { assign …; assign …; }`
-body costs roughly 10 evaluation steps per iteration, so 10 000 iterations exceed the default and
-15 000 iterations complete at 200000:
+`msg="Invalid service configuration"`). Every unusable value is reported at once, not just the first.
+Useful test model — a `while i < N { assign …; assign …; }` body costs roughly 10 evaluation steps
+per iteration, so a 100 000-iteration loop completes at the default in 0.13 s and a budget of 100000
+stops a 10 000-iteration one:
 
 ```bash
-printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml            # step-limit error
-SYSML_MAX_STEPS=5000000 sh -c "printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml"
+SYSML_MAX_STEPS=100000 sh -c "printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml"   # step-limit error
+printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml                                  # completes at the default
 ```
 
 Note the `sh -c` wrapper: `VAR=x cmd | …` only exports to the first process of the pipeline, so put
