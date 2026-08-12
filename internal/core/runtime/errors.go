@@ -12,6 +12,11 @@ var (
 	// ErrUnresolvedReference is returned when a feature reference cannot be resolved.
 	ErrUnresolvedReference = errors.New("unresolved reference")
 
+	// ErrUnresolvedFeature is returned when an unqualified name in an expression
+	// names nothing the expression's scope, its frames or its object supply, so a
+	// value the model never declared is reported rather than assumed.
+	ErrUnresolvedFeature = errors.New("unresolved feature")
+
 	// ErrTypeMismatch is returned when an operation receives a value of unexpected type.
 	ErrTypeMismatch = errors.New("type mismatch")
 

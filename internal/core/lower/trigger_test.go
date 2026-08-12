@@ -51,7 +51,7 @@ func TestTriggerClassification_SignalTrigger(t *testing.T) {
 		t.Fatal("no state usage found")
 	}
 
-	graph, err := ToStateGraph(stateUsage)
+	graph, err := ToStateGraph(stateUsage, nil)
 	if err != nil {
 		t.Fatalf("ToStateGraph failed: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestTriggerClassification_ChangeEvent(t *testing.T) {
 		t.Fatal("no state usage found")
 	}
 
-	graph, err := ToStateGraph(stateUsage)
+	graph, err := ToStateGraph(stateUsage, nil)
 	if err != nil {
 		t.Fatalf("ToStateGraph failed: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestTriggerClassification_NilCompletion(t *testing.T) {
 		t.Fatal("no state usage found")
 	}
 
-	graph, err := ToStateGraph(stateUsage)
+	graph, err := ToStateGraph(stateUsage, nil)
 	if err != nil {
 		t.Fatalf("ToStateGraph failed: %v", err)
 	}
@@ -280,7 +280,7 @@ func TestTriggerClassification_CallTrigger(t *testing.T) {
 		t.Fatal("no state usage found")
 	}
 
-	graph, err := ToStateGraph(stateUsage)
+	graph, err := ToStateGraph(stateUsage, nil)
 	if err != nil {
 		t.Fatalf("ToStateGraph failed: %v", err)
 	}

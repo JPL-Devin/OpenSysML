@@ -227,11 +227,21 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 				return val, nil
 			}
 		}
-		// Try scope lookup (sibling attributes, inherited members)
+		// Then the scope the expression was written in: a sibling attribute, a
+		// member of an enclosing namespace, or a name an import brought in, found
+		// the way a written reference finds it. The declaration's own value is
+		// evaluated in the scope it was declared in, so the imports in force there
+		// — rather than the ones in force here — answer the names it uses.
 		if ec.scope != nil && !ec.resolving[name] {
-			if sym, ok := ec.scope.LookupLocal(name); ok && sym != nil {
+			if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
 				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
-					return ec.Eval(usage.Value)
+					if ec.resolving == nil {
+						ec.resolving = map[string]bool{}
+					}
+					ec.resolving[name] = true
+					val, err := ec.evalIn(sym.OwnerScope).Eval(usage.Value)
+					delete(ec.resolving, name)
+					return val, err
 				}
 			}
 		}
@@ -245,7 +255,7 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		if declared {
 			return Value{}, fmt.Errorf("%w for feature %s", ErrNoValue, name)
 		}
-		return Value{}, fmt.Errorf("unresolved feature: %s", name)
+		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedFeature, name)
 	}
 
 	// Multi-part qualified names: A::B::x

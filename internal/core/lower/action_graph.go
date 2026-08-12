@@ -9,11 +9,20 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // ActionGraph is the execution IR for actions.
 // Nodes represent control flow points, edges represent flow paths.
 type ActionGraph struct {
+	// Scope is the scope the action's body was declared in, in which every
+	// expression written directly among its members resolves its names. A nested
+	// node or a body-local block carries its own scope instead.
+	Scope *symbols.Scope
+
+	// Attributes are the attribute defaults the action declares, in order.
+	Attributes []Attribute
+
 	// Nodes in the graph (InitialNode, FinalNode, ExecutionNode, etc.)
 	Nodes []ast.Node
 
@@ -60,6 +69,7 @@ type Send struct {
 	Message ast.Node
 	Target  string
 	IsVia   bool
+	Scope   *symbols.Scope // the scope the statement was declared in
 }
 
 func (Send) statement() {}
@@ -69,7 +79,8 @@ func (Send) statement() {}
 type Assign struct {
 	Target string
 	Value  ast.Node
-	Node   ast.Node // the statement itself, for diagnostics
+	Node   ast.Node       // the statement itself, for diagnostics
+	Scope  *symbols.Scope // the scope the statement was declared in
 }
 
 func (Assign) statement() {}
@@ -81,7 +92,8 @@ func (Assign) statement() {}
 type Declare struct {
 	Name  string
 	Value ast.Node
-	Node  ast.Node // the declaration itself, for diagnostics
+	Node  ast.Node       // the declaration itself, for diagnostics
+	Scope *symbols.Scope // the scope the declaration was written in
 }
 
 func (Declare) statement() {}
@@ -92,6 +104,9 @@ func (Declare) statement() {}
 type Block struct {
 	Statements []Statement
 	Node       ast.Node // the loop or branch the block belongs to
+	// Scope is the block's own scope, which its declarations, and a loop's
+	// condition, resolve in.
+	Scope *symbols.Scope
 }
 
 // Loop is a lowered loop statement. Kind says when the condition is tested:
@@ -108,6 +123,9 @@ type Loop struct {
 	Collection ast.Node // `for` only: the collection iterated over
 	Body       Block
 	Node       ast.Node // the loop itself, for diagnostics
+	// Scope is the scope the loop was declared in, which its collection resolves
+	// in; its condition resolves in Body.Scope, which the body declares into.
+	Scope *symbols.Scope
 }
 
 func (Loop) statement() {}
@@ -118,7 +136,8 @@ type If struct {
 	Condition ast.Node
 	Then      Block
 	Else      *Block
-	Node      ast.Node // the conditional itself, for diagnostics
+	Node      ast.Node       // the conditional itself, for diagnostics
+	Scope     *symbols.Scope // the scope the conditional, and so its condition, was declared in
 }
 
 func (If) statement() {}
@@ -130,6 +149,7 @@ func (If) statement() {}
 type Unsupported struct {
 	Description string
 	Node        ast.Node
+	Scope       *symbols.Scope // the scope the member was declared in
 }
 
 func (Unsupported) statement() {}
@@ -147,6 +167,15 @@ type Accept struct {
 	ViaPort    string
 }
 
+// Attribute is a lowered attribute default written among a behavior's members
+// (`attribute h : LengthValue = 500.0 [m];`), whose Value resolves in the
+// graph's own scope.
+type Attribute struct {
+	Name  string
+	Value ast.Node
+	Node  ast.Node // the declaration itself, for diagnostics
+}
+
 // ObjectFlow represents a data flow edge between pins.
 type ObjectFlow struct {
 	SourcePin string
@@ -155,9 +184,12 @@ type ObjectFlow struct {
 }
 
 // ToActionGraph converts an action AST (Usage or Definition) to an ActionGraph.
+// scope is the scope the action's body was declared in — the scope the action
+// itself owns — which every expression the graph carries is evaluated in.
 // Returns error if graph is malformed (e.g., no initial node, dangling edges).
-func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
+func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, error) {
 	graph := &ActionGraph{
+		Scope:     scope,
 		Nodes:     make([]ast.Node, 0),
 		Edges:     make(map[ast.Node][]ast.Node),
 		Guards:    make(map[ast.Node]map[ast.Node]ast.Node),
@@ -198,7 +230,7 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 			// Nested action usage (treat as execution node)
 			if n.Kind == ast.UsageAction {
 				graph.Nodes = append(graph.Nodes, n)
-				lowerBody(graph, n)
+				lowerBody(graph, n, childScope(scope, n))
 			}
 		case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode, *ast.SendStatement:
 			// A statement is executed as part of an action node's body; written
@@ -209,6 +241,7 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 	}
 
 	graph.Connections = lowerConnections(members)
+	graph.Attributes = lowerAttributes(members)
 
 	// Note: Initial node is optional at graph construction time.
 	// The executor's initialize() will validate and return the error if missing.
@@ -288,11 +321,11 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 // lowerBody records a nested action node's statements and the message it waits
 // for, so the executor reads them from the graph rather than walking the node's
 // members again.
-func lowerBody(graph *ActionGraph, node *ast.Usage) {
+func lowerBody(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 	for _, member := range node.Members {
 		switch m := unwrapMembership(member).(type) {
 		case *ast.SendStatement, *ast.AssignmentActionNode, *ast.WhileLoopActionNode, *ast.IfActionNode:
-			graph.Bodies[node] = append(graph.Bodies[node], lowerStatement(m))
+			graph.Bodies[node] = append(graph.Bodies[node], lowerStatement(m, scope))
 		case *ast.Usage:
 			if !m.IsAccept {
 				continue
@@ -306,22 +339,24 @@ func lowerBody(graph *ActionGraph, node *ast.Usage) {
 	}
 }
 
-// lowerStatement lowers one executable body statement. Every form it recognizes
-// is lowered losslessly; a form it does not becomes Unsupported, so the executor
-// reports it rather than skipping it.
-func lowerStatement(member ast.Node) Statement {
+// lowerStatement lowers one executable body statement, in the scope it was
+// written in. Every form it recognizes is lowered losslessly; a form it does not
+// becomes Unsupported, so the executor reports it rather than skipping it.
+func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 	switch m := member.(type) {
 	case *ast.SendStatement:
 		return Send{
 			Message: m.Message,
 			Target:  ast.SimpleName(m.Target),
 			IsVia:   m.IsVia,
+			Scope:   scope,
 		}
 	case *ast.AssignmentActionNode:
 		return Assign{
 			Target: ast.SimpleName(m.Target),
 			Value:  m.Value,
 			Node:   m,
+			Scope:  scope,
 		}
 	case *ast.WhileLoopActionNode:
 		return Loop{
@@ -329,16 +364,17 @@ func lowerStatement(member ast.Node) Statement {
 			Condition:  m.Condition,
 			Variable:   m.Variable.Name,
 			Collection: m.Collection,
-			Body:       lowerBlock(m, m.Body),
+			Body:       lowerBlock(m, m.Body, childScope(scope, m)),
 			Node:       m,
+			Scope:      scope,
 		}
 	case *ast.IfActionNode:
-		lowered := If{Condition: m.Condition, Node: m}
+		lowered := If{Condition: m.Condition, Node: m, Scope: scope}
 		if m.Then != nil {
-			lowered.Then = lowerBlock(m.Then, m.Then.Body)
+			lowered.Then = lowerBlock(m.Then, m.Then.Body, childScope(scope, m.Then))
 		}
 		if m.Else != nil {
-			block := lowerBlock(m.Else, m.Else.Body)
+			block := lowerBlock(m.Else, m.Else.Body, childScope(scope, m.Else))
 			lowered.Else = &block
 		}
 		return lowered
@@ -346,27 +382,46 @@ func lowerStatement(member ast.Node) Statement {
 		// An attribute declared in a body-local block is a member of that block:
 		// it holds a value the block's statements read and write.
 		if name, _ := ast.EffectiveName(m); m.Kind == ast.UsageAttribute && name != "" {
-			return Declare{Name: name, Value: m.Value, Node: m}
+			return Declare{Name: name, Value: m.Value, Node: m, Scope: scope}
 		}
-		return Unsupported{Description: usageDescription(m), Node: m}
+		return Unsupported{Description: usageDescription(m), Node: m, Scope: scope}
 	default:
-		return Unsupported{Description: fmt.Sprintf("%T", member), Node: member}
+		return Unsupported{Description: fmt.Sprintf("%T", member), Node: member, Scope: scope}
 	}
 }
 
 // lowerBlock lowers the body of a loop or of one branch of a conditional. owner
 // is the node the block belongs to, which is the element that owns the block's
-// body-local namespace.
-func lowerBlock(owner ast.Node, members []ast.Node) Block {
-	block := Block{Node: owner}
+// body-local namespace, and scope is the namespace it owns.
+func lowerBlock(owner ast.Node, members []ast.Node, scope *symbols.Scope) Block {
+	block := Block{Node: owner, Scope: scope}
 	for _, member := range members {
 		actual := unwrapMembership(member)
 		if actual == nil {
 			continue
 		}
-		block.Statements = append(block.Statements, lowerStatement(actual))
+		block.Statements = append(block.Statements, lowerStatement(actual, scope))
 	}
 	return block
+}
+
+// lowerAttributes returns the attribute defaults declared among a behavior's
+// members, in order. A redefinition names the attribute it overrides
+// (`attribute :>> x = 5;`), so the effective name is the one bound.
+func lowerAttributes(members []ast.Node) []Attribute {
+	var attrs []Attribute
+	for _, member := range members {
+		usage, ok := unwrapMembership(member).(*ast.Usage)
+		if !ok || usage.Kind != ast.UsageAttribute || usage.Value == nil {
+			continue
+		}
+		name, _ := ast.EffectiveName(usage)
+		if name == "" {
+			continue
+		}
+		attrs = append(attrs, Attribute{Name: name, Value: usage.Value, Node: usage})
+	}
+	return attrs
 }
 
 // usageDescription names a usage declared where a statement was expected, for

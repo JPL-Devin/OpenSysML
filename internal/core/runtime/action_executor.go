@@ -52,8 +52,9 @@ func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, e
 		return nil, fmt.Errorf("symbol %s is not an action", action.Name)
 	}
 
-	// Lower AST to execution graph
-	graph, err := lower.ToActionGraph(action.Decl)
+	// Lower AST to execution graph, in the scope the action's body was written
+	// in, so that everything the graph carries is evaluated where it was declared.
+	graph, err := lower.ToActionGraph(action.Decl, declScope(action))
 	if err != nil {
 		return nil, fmt.Errorf("lower action graph: %w", err)
 	}
@@ -397,42 +398,16 @@ func (e *ActionExecutor) NodeNames() []string {
 	return names
 }
 
-// extractGraph builds node and edge maps from action AST.
-
-// initializeAttributes populates tokenData with attribute default values from action.
+// initializeAttributes populates tokenData with the attribute defaults lowering
+// recorded, evaluated in the scope the action's body was declared in.
 func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error {
-	// Get action node
-	actionNode, ok := e.action.Decl.(*ast.Usage)
-	if !ok {
-		actionDef, ok := e.action.Decl.(*ast.Definition)
-		if !ok {
-			return fmt.Errorf("action symbol has invalid node type")
+	for _, attr := range e.graph.Attributes {
+		ec := NewEvalContext(e.ctx, e.graph.Scope)
+		value, err := ec.Eval(attr.Value)
+		if err != nil {
+			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
 		}
-		actionNode = &ast.Usage{Members: actionDef.Members}
-	}
-
-	// Extract attribute defaults
-	for _, member := range actionNode.Members {
-		// Unwrap Membership if present
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
-		}
-
-		// Check for attribute with value
-		if usage, ok := actualMember.(*ast.Usage); ok && usage.Kind == ast.UsageAttribute {
-			// A redefinition names the attribute it overrides (`attribute :>> x = 5;`).
-			name, _ := ast.EffectiveName(usage)
-			if usage.Value != nil && name != "" {
-				// Evaluate default value
-				ec := NewEvalContext(e.ctx, nil)
-				value, err := ec.Eval(usage.Value)
-				if err != nil {
-					return fmt.Errorf("eval attribute default %s: %w", name, err)
-				}
-				tokenData[name] = value
-			}
-		}
+		tokenData[attr.Name] = value
 	}
 
 	return nil
@@ -696,8 +671,10 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 		return fmt.Errorf("decision node %s has no successors", decisionNode.Name)
 	}
 
-	// Evaluate guards for each successor
-	ec := NewEvalContext(e.ctx, nil)
+	// Evaluate guards for each successor. A guard on an edge is written among the
+	// action's own members, so it resolves in the action's scope; the token's data
+	// is pushed over it, so a token value shadows a same-named declaration.
+	ec := NewEvalContext(e.ctx, e.graph.Scope)
 	ec.Push(token.Data) // Make token data available to guard expressions
 
 	// Two-pass evaluation:
@@ -767,8 +744,9 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 	}
 
 	if node.Expression != nil {
-		// Evaluate inline expression
-		ec := NewEvalContext(e.ctx, nil)
+		// Evaluate inline expression in the action's own scope, the token's data
+		// shadowing it.
+		ec := NewEvalContext(e.ctx, e.graph.Scope)
 		ec.Push(token.Data) // Make token data available
 		result, err := ec.Eval(node.Expression)
 		if err != nil {

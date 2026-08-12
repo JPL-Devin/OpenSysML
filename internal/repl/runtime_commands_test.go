@@ -206,6 +206,22 @@ func TestConstraintPassAndFail(t *testing.T) {
 	wants(t, run(t, s, "%constraint nosuch"), `symbol "nosuch" not found`)
 }
 
+// A condition is evaluated in the scope the element was declared in, not in the
+// document root: a measurement unit an inner package imports is visible to the
+// condition that package writes, with or without an instance to evaluate against.
+func TestConstraintResolvesUnitsOfItsOwnPackage(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package QTest {
+		public import SI::*;
+		constraint def SpeedOK {
+			attribute d = 100.0 [m];
+			attribute t = 10.0 [s];
+			d / t < 20.0 [m] / 1.0 [s]
+		}
+	}`)
+	wants(t, run(t, s, "%constraint QTest::SpeedOK"), "✓ Constraint QTest::SpeedOK passed")
+}
+
 func TestRequirement(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%requirement SafeMass"), "✓ Requirement SafeMass satisfied")

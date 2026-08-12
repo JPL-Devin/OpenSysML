@@ -226,7 +226,7 @@ func actionGraphFor(t *testing.T, src string) *ActionGraph {
 		if !ok || usage.Kind != ast.UsageAction {
 			continue
 		}
-		graph, err := ToActionGraph(usage)
+		graph, err := ToActionGraph(usage, nil)
 		if err != nil {
 			t.Fatalf("ToActionGraph: %v", err)
 		}

@@ -39,7 +39,7 @@ func TestToActionGraph_Simple(t *testing.T) {
 		t.Fatal("no action usage found")
 	}
 
-	graph, err := ToActionGraph(actionUsage)
+	graph, err := ToActionGraph(actionUsage, nil)
 	if err != nil {
 		t.Fatalf("ToActionGraph failed: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestToStateGraph_Simple(t *testing.T) {
 		t.Fatal("no state usage found")
 	}
 
-	graph, err := ToStateGraph(stateUsage)
+	graph, err := ToStateGraph(stateUsage, nil)
 	if err != nil {
 		t.Fatalf("ToStateGraph failed: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestToActionGraph_ForkJoinMergeDecision(t *testing.T) {
 		}
 	}
 
-	graph, err := ToActionGraph(actionUsage)
+	graph, err := ToActionGraph(actionUsage, nil)
 	if err != nil {
 		t.Fatalf("ToActionGraph failed: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestToStateGraph_Regions(t *testing.T) {
 		}
 	}
 
-	graph, err := ToStateGraph(stateUsage)
+	graph, err := ToStateGraph(stateUsage, nil)
 	if err != nil {
 		t.Fatalf("ToStateGraph failed: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestToStateGraph_Pseudostates(t *testing.T) {
 		}
 	}
 
-	graph, err := ToStateGraph(stateUsage)
+	graph, err := ToStateGraph(stateUsage, nil)
 	if err != nil {
 		t.Fatalf("ToStateGraph failed: %v", err)
 	}

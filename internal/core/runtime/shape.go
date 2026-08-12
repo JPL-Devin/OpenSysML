@@ -28,6 +28,21 @@ func (f *EffectiveFeature) DeclScope() *symbols.Scope {
 	return f.Symbol.OwnerScope
 }
 
+// declScope returns the scope a declaration's body was written in: the scope the
+// declaration owns, in which its own members are visible to each other, falling
+// back to the scope it was declared in when it owns none. It is the scope an
+// expression written among its members resolves its names against — an
+// attribute default, a guard, an assignment in a nested action body.
+func declScope(sym *symbols.Symbol) *symbols.Scope {
+	if sym == nil {
+		return nil
+	}
+	if sym.Scope != nil {
+		return sym.Scope
+	}
+	return sym.OwnerScope
+}
+
 // FeaturesOf returns the ordered, deduplicated effective-feature list for the given type symbol.
 // Result: own + inherited − redefined/masked, memoized per symbol.
 func (ctx *Context) FeaturesOf(typeSym *symbols.Symbol) []EffectiveFeature {

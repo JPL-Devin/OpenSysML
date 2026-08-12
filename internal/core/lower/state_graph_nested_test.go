@@ -56,7 +56,7 @@ func TestToStateGraph_NestedPseudostateOwner(t *testing.T) {
 				start then outer;
 			}
 		}
-	`))
+	`), nil)
 	if err != nil {
 		t.Fatalf("ToStateGraph: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestToStateGraph_TopLevelPseudostateHasNoOwner(t *testing.T) {
 				start then pick;
 			}
 		}
-	`))
+	`), nil)
 	if err != nil {
 		t.Fatalf("ToStateGraph: %v", err)
 	}

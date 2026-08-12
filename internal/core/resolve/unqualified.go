@@ -13,6 +13,18 @@ func (r *Resolver) walkUnqualified(scope *symbols.Scope, name string) resolution
 	return r.walkUnqualifiedHiding(scope, name, nil)
 }
 
+// LookupName resolves an unqualified reference from scope the way a written one
+// resolves — the enclosing scope chain, inherited members, imports, then the
+// global index — but records no diagnostic when it finds nothing.
+//
+// It is what an evaluator asks: the names it looks up are not all references the
+// source wrote down (a value bound at run time is looked up the same way), and a
+// miss is for the evaluator to report against the value it was reading.
+func (r *Resolver) LookupName(scope *symbols.Scope, name string) (*symbols.Symbol, bool) {
+	res := r.walkUnqualified(scope, name)
+	return res.sym, res.ok
+}
+
 // walkUnqualifiedHiding is walkUnqualified with the bindings hide covers made
 // invisible. Only those bindings are hidden: each scope's inherited members and
 // imports are still consulted, so a perform statement's borrowed name does not

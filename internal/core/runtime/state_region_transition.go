@@ -73,7 +73,7 @@ func (e *StateExecutor) pseudostateBranch(ps *ast.PseudostateNode) (*lower.Trans
 		return nil, fmt.Errorf("%s %s has no outgoing transitions", ps.Kind, ps.Name)
 	}
 	for _, trans := range outgoing {
-		pass, err := e.passesGuard(trans.Guard)
+		pass, err := e.passesGuard(trans)
 		if err != nil {
 			return nil, fmt.Errorf("%s %s: %w", ps.Kind, ps.Name, err)
 		}
@@ -163,7 +163,7 @@ func (e *StateExecutor) scheduleFromEntered(state *ast.StateNode) error {
 // runEffect performs the actions of a transition's effect, in order.
 func (e *StateExecutor) runEffect(trans *lower.Transition) error {
 	for _, action := range trans.Effect {
-		if err := e.executeAction(action); err != nil {
+		if err := e.executeAction(action, trans.BodyScope); err != nil {
 			return fmt.Errorf("transition effect: %w", err)
 		}
 	}
@@ -182,7 +182,7 @@ func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *l
 		return e.fireTransition(trans)
 	}
 
-	pass, err := e.passesGuard(trans.Guard)
+	pass, err := e.passesGuard(trans)
 	if err != nil || !pass {
 		return err
 	}

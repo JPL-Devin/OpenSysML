@@ -2,11 +2,30 @@ package lower
 
 import (
 	"fmt"
+
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // StateGraph is the execution IR for state machines.
 type StateGraph struct {
+	// Scope is the scope the machine's own body was declared in, in which the
+	// expressions written directly among its members resolve their names.
+	Scope *symbols.Scope
+
+	// Attributes are the attribute defaults the machine declares, in declaration
+	// order: the values its state data starts with.
+	Attributes []Attribute
+
+	// StateScopes: state → the scope that state's body was declared in, which is
+	// what the names in its entry, do and exit behaviors resolve against.
+	StateScopes map[*ast.StateNode]*symbols.Scope
+
+	// declOf: synthesized state → the declaration it was built from, since the
+	// scope tree is keyed by what the scope builder saw rather than by the state
+	// nodes lowering derives from it.
+	declOf map[*ast.StateNode]ast.Node
+
 	// States in the machine (flat list, includes nested)
 	States []*ast.StateNode
 
@@ -61,11 +80,27 @@ type Transition struct {
 	Trigger ast.Node   // TimeEvent, ChangeEvent, SignalEvent, CallEvent, nil = completion
 	Guard   ast.Node   // guard expression, nil = no guard
 	Effect  []ast.Node // effect actions
+
+	// Scope is the scope the transition was declared in, in which the expressions
+	// its trigger carries — a time event's duration, a change event's condition —
+	// resolve their names.
+	Scope *symbols.Scope
+
+	// BodyScope is the scope the transition's guard and effect resolve in. It is
+	// Scope, except for a call trigger, whose parameters are visible to the guard
+	// and effect and nowhere else (`accept setSpeed(v) if v > 0`).
+	BodyScope *symbols.Scope
 }
 
 // ToStateGraph converts a state machine AST (Usage or Definition) to a StateGraph.
-func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
+// scope is the scope the machine's body was declared in — the scope the machine
+// itself owns — from which the scope of every state and transition it carries is
+// derived.
+func ToStateGraph(stateMachineDecl ast.Node, scope *symbols.Scope) (*StateGraph, error) {
 	graph := &StateGraph{
+		Scope:            scope,
+		StateScopes:      make(map[*ast.StateNode]*symbols.Scope),
+		declOf:           make(map[*ast.StateNode]ast.Node),
 		States:           make([]*ast.StateNode, 0),
 		Pseudostates:     make(map[string]*ast.PseudostateNode),
 		PseudostateOwner: make(map[*ast.PseudostateNode]*ast.StateNode),
@@ -90,6 +125,7 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 	}
 
 	graph.Connections = lowerConnections(members)
+	graph.Attributes = lowerAttributes(members)
 
 	// First pass: collect states and pseudostates
 	for _, member := range members {
@@ -97,13 +133,16 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 
 		switch n := actualMember.(type) {
 		case *ast.StateNode:
-			if err := collectStates(graph, n, nil); err != nil {
+			if err := collectStates(graph, n, nil, graph.stateScope(scope, n)); err != nil {
 				return nil, err
 			}
 		case *ast.Usage:
 			// Handle state usages: state declarations parsed as Usage with Kind=UsageState
 			if n.Kind == ast.UsageState {
-				if err := collectStates(graph, stateNodeFromUsage(n), nil); err != nil {
+				// The state node records the usage it came from, so its scope is the
+				// one that usage declares: build it before asking for the scope.
+				state := stateNodeFromUsage(graph, n)
+				if err := collectStates(graph, state, nil, graph.stateScope(scope, state)); err != nil {
 					return nil, err
 				}
 			}
@@ -114,12 +153,13 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 				Name: n.Name,
 			}
 			stateNode.NodeSpan = n.NodeSpan
-			if err := collectStates(graph, stateNode, nil); err != nil {
+			graph.declOf[stateNode] = n
+			if err := collectStates(graph, stateNode, nil, graph.stateScope(scope, stateNode)); err != nil {
 				return nil, err
 			}
 		case *ast.StateRegion:
 			// Top-level region: collect its states, which no state is the parent of
-			if err := collectRegionStates(graph, n, nil); err != nil {
+			if err := collectRegionStates(graph, n, nil, childScope(scope, n)); err != nil {
 				return nil, err
 			}
 		case *ast.PseudostateNode:
@@ -168,7 +208,7 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 	}
 
 	// Third pass: collect transitions
-	if err := collectTransitions(graph, members, nil, nil); err != nil {
+	if err := collectTransitions(graph, members, nil, nil, scope); err != nil {
 		return nil, err
 	}
 
@@ -246,11 +286,14 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 
 // stateNodeFromUsage builds the state node for `state <name> { ... }`, carrying
 // over the entry/do/exit behaviors declared in the body so the executor runs
-// them; without this the body's behaviors are silently dropped.
-func stateNodeFromUsage(usage *ast.Usage) *ast.StateNode {
+// them; without this the body's behaviors are silently dropped. The usage it was
+// built from is recorded, since that is the declaration the scope tree is keyed
+// by.
+func stateNodeFromUsage(graph *StateGraph, usage *ast.Usage) *ast.StateNode {
 	name, _ := ast.EffectiveName(usage)
 	state := &ast.StateNode{Name: name}
 	state.NodeSpan = usage.NodeSpan
+	graph.declOf[state] = usage
 
 	for _, member := range usage.Members {
 		switch m := unwrapMembership(member).(type) {
@@ -271,13 +314,14 @@ func stateNodeFromUsage(usage *ast.Usage) *ast.StateNode {
 		case *ast.SubstateMember:
 			child := &ast.StateNode{Name: m.Name}
 			child.NodeSpan = m.NodeSpan
+			graph.declOf[child] = m
 			state.Substates = append(state.Substates, child)
 		case *ast.Usage:
 			// A state declared inside a composite state is one of its substates:
 			// dropping it here would leave the hierarchy out of the graph and every
 			// transition naming a nested state unresolvable.
 			if m.Kind == ast.UsageState {
-				state.Substates = append(state.Substates, stateNodeFromUsage(m))
+				state.Substates = append(state.Substates, stateNodeFromUsage(graph, m))
 			}
 		}
 	}
@@ -285,8 +329,11 @@ func stateNodeFromUsage(usage *ast.Usage) *ast.StateNode {
 }
 
 // collectStates recursively collects states and builds parent relationships.
-func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNode) error {
+// scope is the scope the state's own body was declared in, from which the scope
+// of each of its substates and regions is derived.
+func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNode, scope *symbols.Scope) error {
 	graph.States = append(graph.States, state)
+	graph.StateScopes[state] = scope
 	if parent != nil {
 		graph.ParentState[state] = parent
 	}
@@ -295,7 +342,7 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 	for _, substate := range state.Substates {
 		switch child := unwrapMembership(substate).(type) {
 		case *ast.StateNode:
-			if err := collectStates(graph, child, state); err != nil {
+			if err := collectStates(graph, child, state, graph.stateScope(scope, child)); err != nil {
 				return err
 			}
 		case *ast.PseudostateNode:
@@ -309,11 +356,22 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 
 	// Collect states in orthogonal regions
 	for _, region := range state.Regions {
-		if err := collectRegionStates(graph, region, state); err != nil {
+		if err := collectRegionStates(graph, region, state, childScope(scope, region)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// stateScope returns the scope state's body was declared in, given the scope of
+// the body that declares it. A state lowering synthesized from a usage or a bare
+// substate declaration is keyed in the scope tree by that declaration.
+func (g *StateGraph) stateScope(parent *symbols.Scope, state *ast.StateNode) *symbols.Scope {
+	decl := ast.Node(state)
+	if origin, ok := g.declOf[state]; ok {
+		decl = origin
+	}
+	return childScope(parent, decl)
 }
 
 // collectRegionStates collects the states an orthogonal region declares, records
@@ -324,7 +382,7 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 // Region members reach here as a state node, a bare `state <name>;` substate or a
 // state usage with a body, each of them possibly wrapped in a membership: a state
 // missed here is a state no transition can name.
-func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast.StateNode) error {
+func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast.StateNode, scope *symbols.Scope) error {
 	for _, member := range region.States {
 		var state *ast.StateNode
 		switch n := unwrapMembership(member).(type) {
@@ -333,11 +391,12 @@ func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast
 		case *ast.SubstateMember:
 			state = &ast.StateNode{Name: n.Name}
 			state.NodeSpan = n.NodeSpan
+			graph.declOf[state] = n
 		case *ast.Usage:
 			if n.Kind != ast.UsageState {
 				continue
 			}
-			state = stateNodeFromUsage(n)
+			state = stateNodeFromUsage(graph, n)
 		case *ast.PseudostateNode:
 			graph.Pseudostates[n.Name] = n
 			if parent != nil {
@@ -351,7 +410,7 @@ func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast
 			continue
 		}
 
-		if err := collectStates(graph, state, parent); err != nil {
+		if err := collectStates(graph, state, parent, graph.stateScope(scope, state)); err != nil {
 			return err
 		}
 		graph.RegionOf[state] = region
@@ -402,7 +461,8 @@ func findStateByName(states []*ast.StateNode, qname *ast.QualifiedName) *ast.Sta
 }
 
 // lowerTransitionEdge converts a TransitionEdge (legacy) to a Transition.
-func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge) (*Transition, error) {
+// scope is the scope the edge was declared in.
+func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge, scope *symbols.Scope) (*Transition, error) {
 	sourceState := findStateByName(graph.States, edge.Source)
 	if sourceState == nil {
 		return nil, fmt.Errorf("transition edge references undefined source state %v", edge.Source)
@@ -414,17 +474,20 @@ func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge) (*Transiti
 	}
 
 	return &Transition{
-		Source:  sourceState,
-		Target:  targetState,
-		Trigger: edge.Trigger,
-		Guard:   edge.Guard,
-		Effect:  edge.Effect,
+		Source:    sourceState,
+		Target:    targetState,
+		Trigger:   edge.Trigger,
+		Guard:     edge.Guard,
+		Effect:    edge.Effect,
+		Scope:     scope,
+		BodyScope: scope,
 	}, nil
 }
 
 // lowerTransitionMember converts a TransitionMember (parser output) to a Transition.
 // containingState is used as the source when member.Source is nil (sourceless accept...then).
-func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, containingState ast.Node) (*Transition, error) {
+// scope is the scope the transition was declared in.
+func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, containingState ast.Node, scope *symbols.Scope) (*Transition, error) {
 	// TransitionMember has: Source (QualifiedName), Target (QualifiedName), Trigger, Guard, Effect ([]Node)
 	// Source and Target can be StateNode or PseudostateNode
 	// Source can be nil for sourceless transitions (accept...then) - use containingState
@@ -515,6 +578,10 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 		Trigger: classifyTrigger(member.Trigger),
 		Guard:   member.Guard,
 		Effect:  member.Effect,
+		Scope:   scope,
+		// A call trigger's parameters are members of a scope of the transition's
+		// own, which its guard and effect resolve in (symbols/bodyscopes.go).
+		BodyScope: symbols.CallTriggerScope(scope, member),
 	}, nil
 }
 
@@ -565,7 +632,8 @@ func classifyTrigger(trigger ast.Node) ast.Node {
 // Handles top-level members and region members.
 // regionStates limits state lookup to states within a specific region (nil = all states).
 // containingState is the enclosing state for sourceless transitions (nil at top level).
-func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates []*ast.StateNode, containingState ast.Node) error {
+// scope is the scope the members were declared in.
+func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates []*ast.StateNode, containingState ast.Node, scope *symbols.Scope) error {
 
 	for _, member := range memberList {
 		actualMember := unwrapMembership(member)
@@ -610,11 +678,13 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 
 						if sourceState != nil && targetState != nil {
 							trans := &Transition{
-								Source:  sourceState,
-								Target:  targetState,
-								Trigger: nil, // Completion transition
-								Guard:   nil,
-								Effect:  nil,
+								Source:    sourceState,
+								Target:    targetState,
+								Trigger:   nil, // Completion transition
+								Guard:     nil,
+								Effect:    nil,
+								Scope:     scope,
+								BodyScope: scope,
 							}
 							graph.Transitions[sourceState] = append(graph.Transitions[sourceState], trans)
 						}
@@ -624,7 +694,7 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 				// Handle state usages (state X { ... }) - recurse into members
 				// This state usage can contain transitions (accept...then, etc.)
 				// Pass this Usage node as the containing state for sourceless transitions
-				if err := collectTransitions(graph, n.Members, nil, n); err != nil {
+				if err := collectTransitions(graph, n.Members, nil, n, childScope(scope, n)); err != nil {
 					return err
 				}
 			}
@@ -655,24 +725,26 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 
 			if sourceState != nil && targetState != nil {
 				trans := &Transition{
-					Source:  sourceState,
-					Target:  targetState,
-					Trigger: nil, // Completion transition
-					Guard:   nil,
-					Effect:  nil,
+					Source:    sourceState,
+					Target:    targetState,
+					Trigger:   nil, // Completion transition
+					Guard:     nil,
+					Effect:    nil,
+					Scope:     scope,
+					BodyScope: scope,
 				}
 				graph.Transitions[sourceState] = append(graph.Transitions[sourceState], trans)
 			}
 		case *ast.TransitionEdge:
 			// Legacy: explicit TransitionEdge nodes (from hand-built tests)
-			trans, err := lowerTransitionEdge(graph, n)
+			trans, err := lowerTransitionEdge(graph, n, scope)
 			if err != nil {
 				return err
 			}
 			graph.Transitions[trans.Source] = append(graph.Transitions[trans.Source], trans)
 		case *ast.TransitionMember:
 			// New: TransitionMember from parser (declarative)
-			trans, err := lowerTransitionMember(graph, n, containingState)
+			trans, err := lowerTransitionMember(graph, n, containingState, scope)
 			if err != nil {
 				return err
 			}
@@ -680,7 +752,11 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 		case *ast.StateNode:
 			// Recurse into state substates to collect transitions within the state
 			// Transitions inside this state have this state as their containing state
-			if err := collectTransitions(graph, n.Substates, nil, n); err != nil {
+			stateScope := graph.StateScopes[n]
+			if stateScope == nil {
+				stateScope = graph.stateScope(scope, n)
+			}
+			if err := collectTransitions(graph, n.Substates, nil, n, stateScope); err != nil {
 				return err
 			}
 		case *ast.StateRegion:
@@ -696,7 +772,7 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 
 			// Recurse into region members with scoped state list
 			// Regions are orthogonal - transitions within them don't inherit a containing state
-			if err := collectTransitions(graph, n.States, statesInRegion, nil); err != nil {
+			if err := collectTransitions(graph, n.States, statesInRegion, nil, childScope(scope, n)); err != nil {
 				return err
 			}
 		}

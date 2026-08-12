@@ -1,0 +1,55 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="descent" library=false standard=false
+      (Import visibility="private" all=false kind=namespace recursive=false imported="SI")
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ISQ")
+      (Membership visibility="default"
+        (Usage kind="action" name="propagate" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="h" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=ISQBase::LengthValue
+                (*ast.QualifiedName))
+              (IndexExpr bracket=true
+                (LiteralReal value="500.0")
+                (FeatureReference name="m"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="v" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=ISQSpaceTime::SpeedValue
+                (*ast.QualifiedName))
+              (OperatorExpr operator="-"
+                (IndexExpr bracket=true
+                  (LiteralReal value="15.0")
+                  (OperatorExpr operator="/"
+                    (FeatureReference name="m")
+                    (FeatureReference name="s"))))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="dt" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=ISQSpaceTime::TimeValue
+                (*ast.QualifiedName))
+              (IndexExpr bracket=true
+                (LiteralReal value="0.2")
+                (FeatureReference name="s"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="g" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=ISQSpaceTime::AccelerationValue
+                (*ast.QualifiedName))
+              (IndexExpr bracket=true
+                (LiteralReal value="1.62")
+                (OperatorExpr operator="/"
+                  (FeatureReference name="m")
+                  (OperatorExpr operator="**"
+                    (FeatureReference name="s")
+                    (LiteralInteger value="2"))))))
+          (*ast.InitialNode)
+          (Usage kind="action" name="integrate" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (WhileLoopActionNode kind="while" variable=""
+              (OperatorExpr operator=">"
+                (FeatureReference name="h")
+                (IndexExpr bracket=true
+                  (LiteralReal value="0.0")
+                  (FeatureReference name="m")))
+              (*ast.AssignmentActionNode)
+              (*ast.AssignmentActionNode)))
+          (*ast.FinalNode)
+          (SuccessionEdge source="start" target="integrate")
+          (SuccessionEdge source="integrate" target="end"))))))
