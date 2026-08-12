@@ -147,8 +147,3 @@ func (ctx *Context) SetBudgets(b Budgets) error {
 	ctx.maxDoSteps = b.MaxDoSteps
 	return nil
 }
-
-// MaxSteps returns the evaluation step budget this context runs under.
-func (ctx *Context) MaxSteps() int64 {
-	return ctx.maxSteps
-}
