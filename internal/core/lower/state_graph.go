@@ -133,13 +133,16 @@ func ToStateGraph(stateMachineDecl ast.Node, scope *symbols.Scope) (*StateGraph,
 
 		switch n := actualMember.(type) {
 		case *ast.StateNode:
-			if err := collectStates(graph, n, nil, scope); err != nil {
+			if err := collectStates(graph, n, nil, graph.stateScope(scope, n)); err != nil {
 				return nil, err
 			}
 		case *ast.Usage:
 			// Handle state usages: state declarations parsed as Usage with Kind=UsageState
 			if n.Kind == ast.UsageState {
-				if err := collectStates(graph, stateNodeFromUsage(graph, n), nil, scope); err != nil {
+				// The state node records the usage it came from, so its scope is the
+				// one that usage declares: build it before asking for the scope.
+				state := stateNodeFromUsage(graph, n)
+				if err := collectStates(graph, state, nil, graph.stateScope(scope, state)); err != nil {
 					return nil, err
 				}
 			}
@@ -151,7 +154,7 @@ func ToStateGraph(stateMachineDecl ast.Node, scope *symbols.Scope) (*StateGraph,
 			}
 			stateNode.NodeSpan = n.NodeSpan
 			graph.declOf[stateNode] = n
-			if err := collectStates(graph, stateNode, nil, scope); err != nil {
+			if err := collectStates(graph, stateNode, nil, graph.stateScope(scope, stateNode)); err != nil {
 				return nil, err
 			}
 		case *ast.StateRegion:

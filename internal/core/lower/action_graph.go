@@ -15,14 +15,12 @@ import (
 // ActionGraph is the execution IR for actions.
 // Nodes represent control flow points, edges represent flow paths.
 type ActionGraph struct {
-	// Scope is the scope the action's own body was declared in, in which every
-	// expression written directly among its members — an attribute default, an
-	// edge guard, an inline expression — resolves its names. A statement written
-	// inside a nested node or a body-local block carries its own scope instead.
+	// Scope is the scope the action's body was declared in, in which every
+	// expression written directly among its members resolves its names. A nested
+	// node or a body-local block carries its own scope instead.
 	Scope *symbols.Scope
 
-	// Attributes are the attribute defaults the action declares, in declaration
-	// order: the values its initial token starts with.
+	// Attributes are the attribute defaults the action declares, in order.
 	Attributes []Attribute
 
 	// Nodes in the graph (InitialNode, FinalNode, ExecutionNode, etc.)
@@ -106,8 +104,8 @@ func (Declare) statement() {}
 type Block struct {
 	Statements []Statement
 	Node       ast.Node // the loop or branch the block belongs to
-	// Scope is the block's own scope, in which the names it declares — and a
-	// loop's condition, which the block's declarations are visible to — resolve.
+	// Scope is the block's own scope, which its declarations, and a loop's
+	// condition, resolve in.
 	Scope *symbols.Scope
 }
 
@@ -125,9 +123,8 @@ type Loop struct {
 	Collection ast.Node // `for` only: the collection iterated over
 	Body       Block
 	Node       ast.Node // the loop itself, for diagnostics
-	// Scope is the scope the loop was declared in, in which its collection
-	// expression resolves. Its condition resolves in Body.Scope, since the
-	// body's own declarations are visible to it (symbols/builder.go).
+	// Scope is the scope the loop was declared in, which its collection resolves
+	// in; its condition resolves in Body.Scope, which the body declares into.
 	Scope *symbols.Scope
 }
 
@@ -170,10 +167,9 @@ type Accept struct {
 	ViaPort    string
 }
 
-// Attribute is a lowered attribute default: `attribute h : LengthValue = 500.0 [m];`
-// written among a behavior's members. Value is the expression the attribute is
-// initialized from, which resolves in the graph's own scope, since that is where
-// the attribute was declared.
+// Attribute is a lowered attribute default written among a behavior's members
+// (`attribute h : LengthValue = 500.0 [m];`), whose Value resolves in the
+// graph's own scope.
 type Attribute struct {
 	Name  string
 	Value ast.Node
@@ -343,10 +339,9 @@ func lowerBody(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 	}
 }
 
-// lowerStatement lowers one executable body statement. scope is the scope the
-// statement was written in, which is what its expressions resolve against.
-// Every form it recognizes is lowered losslessly; a form it does not becomes
-// Unsupported, so the executor reports it rather than skipping it.
+// lowerStatement lowers one executable body statement, in the scope it was
+// written in. Every form it recognizes is lowered losslessly; a form it does not
+// becomes Unsupported, so the executor reports it rather than skipping it.
 func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 	switch m := member.(type) {
 	case *ast.SendStatement:
@@ -411,9 +406,8 @@ func lowerBlock(owner ast.Node, members []ast.Node, scope *symbols.Scope) Block 
 }
 
 // lowerAttributes returns the attribute defaults declared among a behavior's
-// members, in declaration order. A redefinition names the attribute it
-// overrides (`attribute :>> x = 5;`), so the effective name is the one the
-// value is bound to.
+// members, in order. A redefinition names the attribute it overrides
+// (`attribute :>> x = 5;`), so the effective name is the one bound.
 func lowerAttributes(members []ast.Node) []Attribute {
 	var attrs []Attribute
 	for _, member := range members {

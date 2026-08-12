@@ -1,0 +1,9 @@
+{
+	"type": "state",
+	"libraries": true,
+	"finalState": "done",
+	"stateVisits": ["start", "working", "done"],
+	"outputs": {
+		"result": {"type": "Real", "value": 5.0}
+	}
+}
