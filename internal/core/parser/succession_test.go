@@ -90,6 +90,16 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 			[]string{"a->b"},
 		},
 		{
+			"a performed step after a named member is sequenced, not chained",
+			"action A { perform v; then perform t; then perform s; }",
+			[]string{"v->t", "t->s"},
+		},
+		{
+			"a performed step after a statement stays a statement of the block",
+			"action A { while i <= 2 { assign v := 1; then perform body; } }",
+			nil,
+		},
+		{
 			"a calculation body reads the edge form it is written back as",
 			"calc def C { part a; part b; then a b; }",
 			[]string{"a->b"},

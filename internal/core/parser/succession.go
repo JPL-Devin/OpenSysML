@@ -119,6 +119,12 @@ func (b *bodyBuilder) atSuccession() bool {
 			// forms with their own parsers.
 			return false
 		}
+		// A `perform` declares an occurrence usage, so a `then` between it and a
+		// named member before it is a succession over the two; with no named
+		// member before it the keyword chains a statement of one node's body.
+		if kw == "perform" && b.last != "" {
+			return true
+		}
 		if startsInlineSuccessionStatement(next) && kw != "action" {
 			// `then assign …`, `then perform …`, `then while …`, `then if …`
 			// sequence statements inside one node body, where the lowered block
