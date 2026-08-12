@@ -50,6 +50,10 @@ type StateExecutor struct {
 	// entered. Concurrently active states interleave one action per round, so this
 	// order — not map iteration order — decides the interleaving.
 	doActivities []*doActivity
+
+	// runStarted marks this executor's run as begun, so the step budget is reset
+	// once however many calls the run is driven over.
+	runStarted bool
 }
 
 // doActivity is the part of a state's do behavior that has still to run. The
@@ -1154,30 +1158,29 @@ func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*a
 	return nil
 }
 
-// maxStateEvents bounds a single run of the event loop so a cyclic machine
-// reports a typed error instead of spinning forever.
-const maxStateEvents = 10000
-
-// maxDoSteps bounds the do activity actions one run may perform, so a machine
-// that keeps restarting do behaviors reports instead of spinning forever.
-const maxDoSteps = 100000
-
 // RunToCompletion processes queued events until the machine completes or has no
 // event or running do behavior left, at which point it suspends. A state's do
 // behavior runs while the state is active: each run-to-completion step advances
 // every active state's do behavior by one action and then dispatches one event,
 // so concurrently active states interleave instead of one running to the end at
 // entry, and leaving a state abandons the rest of its do behavior.
+//
+// The run is bounded by the context's event and do activity budgets
+// (SYSML_MAX_EVENTS, SYSML_MAX_DO_STEPS), so a cyclic machine reports a typed
+// error instead of spinning forever.
 func (e *StateExecutor) RunToCompletion() error {
-	events, doSteps := 0, 0
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
+	maxStateEvents, maxDoSteps := e.ctx.maxStateEvents, e.ctx.maxDoSteps
+	var events, doSteps int64
 	for e.state == StateRunning {
 		ran, err := e.runDoRound()
 		if err != nil {
 			return err
 		}
-		doSteps += ran
+		doSteps += int64(ran)
 		if doSteps >= maxDoSteps {
-			return fmt.Errorf("state machine exceeded max do activity steps (%d), possible non-terminating do behavior", maxDoSteps)
+			return fmt.Errorf("state machine exceeded max do activity steps (%d steps; raise %s to allow more), possible non-terminating do behavior", maxDoSteps, MaxDoStepsEnvVar)
 		}
 		if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() {
 			if ran > 0 {
@@ -1187,7 +1190,7 @@ func (e *StateExecutor) RunToCompletion() error {
 			return nil
 		}
 		if events >= maxStateEvents {
-			return fmt.Errorf("state machine exceeded max events (%d), possible infinite loop", maxStateEvents)
+			return fmt.Errorf("state machine exceeded max events (%d events; raise %s to allow more), possible infinite loop", maxStateEvents, MaxStateEventsEnvVar)
 		}
 		events++
 		if err := e.processNextEvent(); err != nil {
@@ -1379,6 +1382,8 @@ func (e *StateExecutor) activeStates() []*ast.StateNode {
 
 // initialize sets current state to initial state and enters it.
 func (e *StateExecutor) initialize() error {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	// Use initial state from graph
 	if e.graph.Initial != nil {
 		// Simple state machine with single initial state
@@ -1856,6 +1861,8 @@ func (e *StateExecutor) StateMachineSymbol() *symbols.Symbol {
 // behaviors is progress in itself, so a step that ran one and found no event to
 // dispatch succeeds — the completion transition it enables is queued next.
 func (e *StateExecutor) ProcessNextEvent() error {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	ran, err := e.runDoRound()
 	if err != nil {
 		return err
@@ -1875,6 +1882,8 @@ func (e *StateExecutor) HasPendingWork() bool {
 // RunDoRound advances every active state's do behavior by one action, without
 // dispatching any event, and reports how many actions ran.
 func (e *StateExecutor) RunDoRound() (int, error) {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	return e.runDoRound()
 }
 

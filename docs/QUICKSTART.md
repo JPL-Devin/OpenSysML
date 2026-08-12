@@ -293,6 +293,7 @@ guarantees, and what the mapping does not cover.
 | `%calc <name> [args...]` | Invoke calculation with arguments |
 | `%constraint <name>` | Evaluate constraint (assert/assume) |
 | `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
+| `%satisfy [name]` | Evaluate satisfaction assertions of the model, or of one element |
 | **Control** | |
 | `Ctrl-D` | Exit REPL |
 
@@ -561,6 +562,75 @@ echo 'part Wheel { attribute diameter = 16.0; }' > test.sysml
 
 ---
 
+## Environment Variables
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `SYSML_LIBRARY_PATH` | unset (use the bundled standard library) | Directory to load the SysML/KerML standard library from instead of the embedded copy |
+| `SYSML_MAX_STEPS` | `10000000` | Evaluation step budget: the number of expression evaluations one run may spend before it is reported as a runaway |
+| `SYSML_MAX_ACTION_STEPS` | `1000000` | Token-flow steps one action run may perform |
+| `SYSML_MAX_EVENTS` | `1000000` | Events one state machine run may dispatch, and the events one `%advance` drains |
+| `SYSML_MAX_DO_STEPS` | `5000000` | Do-activity actions one state machine run may perform, and the ones one `%advance` drains |
+
+Each budget is what turns a non-terminating run into a reported error instead of
+a hang. They count incommensurable things — expression evaluations, action token
+steps, dispatched events, do-activity actions — so raising one says nothing about
+the others, and each has its own variable.
+
+A budget bounds **one run** — one `%eval`, one `%instantiate`, one `%calc`, one
+action, one state machine — not a whole session, so a long REPL session of small
+operations never runs out. A run started inside another, an action invoked from
+an expression say, shares the outer run's budget rather than getting a fresh
+one, and so does a run stepped through with `%step`/`%advance`.
+
+The defaults are set by how long a runaway takes to report rather than by memory
+— execution allocates nothing per step (peak RSS is ~34 MB whether a run spends
+ten thousand steps or fifty million), and the only thing a budget makes grow is a
+`%trace`, at 34–83 bytes an entry. At the measured ~13.6M evaluation steps/s and
+~1.9M events/s each default reports a runaway within about a second, and a fully
+traced run at all four ceilings holds ~320 MB.
+
+The evaluation step budget:
+
+```
+error: execution failed: eval assignment RHS: evaluation step limit exceeded
+(10000000 steps; raise SYSML_MAX_STEPS to allow more)
+```
+
+A legitimately long run — a numeric integration in an action body, say — needs a
+higher ceiling, so raise it for that run:
+
+```bash
+SYSML_MAX_STEPS=200000000 sysml descent.sysml
+```
+
+Unset or empty means the default. Anything that is not a positive integer is
+reported at startup (and at gRPC service construction) rather than silently
+ignored:
+
+```bash
+$ SYSML_MAX_STEPS=lots sysml model.sysml
+sysml: SYSML_MAX_STEPS="lots" is not an integer: set it to a positive number of evaluation steps (default 10000000)
+```
+
+The other budgets behave identically, and their errors name the variable that
+raises them:
+
+```
+execution exceeded max steps (1000000 steps; raise SYSML_MAX_ACTION_STEPS to allow more), possible infinite loop
+state machine exceeded max events (1000000 events; raise SYSML_MAX_EVENTS to allow more), possible infinite loop
+state machine exceeded max do activity steps (5000000 steps; raise SYSML_MAX_DO_STEPS to allow more), possible non-terminating do behavior
+```
+
+A long simulation therefore raises the state machine bounds rather than the
+evaluation one:
+
+```bash
+SYSML_MAX_EVENTS=20000000 SYSML_MAX_DO_STEPS=100000000 sysml descent.sysml
+```
+
+---
+
 ## Examples
 
 Check `examples/` directory:
@@ -588,6 +658,10 @@ Check `examples/` directory:
 **Import errors after build:**
 - Run `go mod tidy`
 - Verify Go version: `go version` (need 1.25+)
+
+**Execution stops with "limit exceeded" or "exceeded max":**
+- The run spent one of its budgets; the message names the variable that raises it (see [Environment Variables](#environment-variables))
+- If the model does not terminate, the budget is reporting a real bug — raising it only delays the error
 
 **Syntax errors:**
 - SysML v2 textual notation only (no graphical/XMI)

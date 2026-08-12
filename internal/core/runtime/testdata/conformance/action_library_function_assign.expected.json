@@ -1,0 +1,6 @@
+{
+	"type": "action",
+	"outputs": {
+		"gain": {"type": "Real", "value": 12.0}
+	}
+}

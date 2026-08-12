@@ -14,12 +14,12 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`, `staticch
 | Gate | Count |
 |---|---|
 | OMG training corpus | **98/100 clean** — 2 files / 4 errors, both pinned OMG source bugs (the ceiling) |
-| Stdlib parser conformance | 94/94 clean |
-| Execution conformance cases | 61 |
+| Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative Systemica extension |
+| Execution conformance cases | 78 |
 | gRPC conformance cases | 6 |
-| Golden execution traces | 24 |
-| Runtime robustness subtests | 35 |
-| Golden AST fixtures | 36 |
+| Golden execution traces | 37 |
+| Runtime robustness subtests | 43 |
+| Golden AST fixtures | 42 |
 | Negative parser subtests | 49 |
 
 Statement coverage, measured today with `go test -cover ./...`:
@@ -148,16 +148,43 @@ it in the REPL. Either return the reachable sub-instances with the response or a
 These are the ⚠️/❌ rows in `docs/SPEC_COMPLIANCE.md`, in descending order of value. Each is
 one session under the §5.2 four-layer contract.
 
-## A1 — a usage's bound parameter is not passed to inherited conditions
+## A1 — a usage's bound parameter is not passed to inherited conditions — done
 
-```sysml
-constraint limit : MassLimit { in m = mass; }
-```
+Landed: a condition is evaluated against the features of the element stating it, so a
+requirement's own attributes and a parameter a typed usage binds
+(`constraint limit : MassLimit { in m = mass; }`) are visible to conditions inherited from the
+definition, `require <expr>;` parses in a requirement definition body, and the conditions of an
+anonymous nested constraint (`require constraint { <expr> }`) are evaluated. `runtime/condition.go`,
+conformance cases `requirement_own_attribute`, `requirement_def_body_require`,
+`requirement_nested_constraint`, `requirement_violated`, `instance_constraint_bound_parameter`.
 
-The conditions are inherited and evaluated (`context.go` `chainMembers`), but the binding the
-usage writes is not threaded into them, so this form reports an unresolved feature. It is the
-first known limitation listed in `CHANGELOG.md` for 0.0.4 and the most likely thing a user hits
-after the constraint work landed in #63. Same shape for requirements.
+What came out of it, recorded under Requirement in `docs/SPEC_COMPLIANCE.md`:
+
+- **A1a — a quantity expression is not evaluated.** `attribute maxVerticalSpeed = 1.5 [m/s];`
+  parses and type-checks, but the runtime has no case for it, so a condition comparing values
+  written with units reports `unsupported node type: *ast.IndexExpr` instead of a verdict. This is
+  what stops the Open-MBEE lunar lander model's `TouchdownRequirement` from reaching a verdict as
+  the model writes it. Runtime values carry no unit, so the semantics to decide first is whether a
+  quantity evaluates to its magnitude (silently ignoring a mismatch between `m/s` and `km/h`) or
+  values carry a unit and comparison converts.
+- **A1b — `assert satisfy <requirement> by <part>;` reaches a verdict — done.** The assertion is
+  evaluated as the requirement usage it is, with the requirement's subject parameter bound to an
+  object of the `by` feature, so its conditions — its own, and the ones it inherits — read that
+  object's values. `%satisfy` evaluates every assertion a model states, or the ones one element
+  states, since such an assertion is anonymous; `assert not satisfy … by …` parses and inverts the
+  verdict. `runtime/satisfy.go`, conformance cases `satisfy_subject_binding`,
+  `satisfy_subject_features`, `satisfy_inherited_conditions`, `satisfy_negated`,
+  `satisfy_without_conditions`.
+
+  What is left, recorded as ⚠️ in `docs/SPEC_COMPLIANCE.md` under Requirement: a requirement
+  feature carrying no value of its own is read from the satisfying object's feature of that name,
+  which the spec does not state — it supplies a subject's values through the subject parameter or
+  an explicit binding. The fallback is the one `%requirement` already applies on an instance, and
+  the alternative is to report `ErrNoValue` for the shape the lunar lander model writes and require
+  a subject reference in the condition instead. The lunar model's own
+  `assert satisfy touchdown by lander01;` reaches no verdict either way: `1.5 [m/s]` needs A1a, and
+  its `actualVerticalSpeed` is produced by a descent analysis rather than bound by the requirement
+  or held by the part.
 
 ## A2 — a typed multi-valued feature ignores its default
 
@@ -187,6 +214,30 @@ A6; do A6 first and re-test this.
   (legal), a target resolving to a non-vertex (illegal), the sourceless `accept … then` form
   (legal), a junction chain terminating nowhere (illegal, and not a cycle).
 - **Calc recursion** is depth-bounded and rejected rather than evaluated.
+- **Numeric library coverage is scalar only.** The KerML function library's scalar numeric
+  functions and `**` are evaluable (`runtime/library_functions.go`); `VectorFunctions`,
+  `MatrixFunctions`, `ComplexFunctions`, the rest of `SequenceFunctions`, and unit-aware
+  arithmetic (`1.62[m/s^2]`) are not. `TrigFunctions::pi` has no declared value, so the
+  library's own `deg`/`rad` bodies cannot be evaluated — that needs a library *feature* value,
+  a different seam from function dispatch.
+- **An unqualified library function call still reports `unresolved-reference`** while evaluating
+  correctly, because dispatch by local name is a runtime fallback and the checker does not know
+  the library is implicitly in force (A6 is the general fix). This applies equally to the
+  Systemica extension functions: `import SystemicaMathFunctions::*;` clears the diagnostic, a
+  bare `exp(x)` evaluates but is still reported.
+- **`exp`, `ln`, `log` and `atan2` are a Systemica extension, not OMG.** The vendored library
+  declares no signature for any of them, and the vendored files stay byte-identical, so they are
+  declared in `internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml` — a
+  non-normative package a model reaches with `import SystemicaMathFunctions::*;`. A model meant
+  to be portable to another SysML v2 tool cannot rely on it.
+- **A `for` loop iterates a sequence or a set only.** `runtime/action_statements.go` `forElements`
+  reports anything else, because those are the only collections the expression layer produces; a
+  collection built by an expression (a range, a filter) has to wait on that layer. A set is
+  visited in the order its canonical rendering sorts in, since a set has no order of its own.
+- **A body member that is not an executable statement fails the run.** A nested action
+  declaration or a `perform` written inside a loop or an `if` branch body is lowered to
+  `lower.Unsupported` and reported when reached, since neither has succession semantics inside a
+  block. Executing them means giving a block its own token flow.
 
 ## A5 — visibility rules
 
@@ -217,6 +268,10 @@ never the total, and land it only while the corpus sits at its 98/100 ceiling.
   require an explicit name and diagnose the ambiguous form. Reaches
   `internal/core/symbols/builder.go`, since the modifier is also not reflected in the symbol
   kind.
+- `for step in c { … }` is rejected: `parseForAction` wants an `Identifier`, and `step` is the
+  KerML keyword, so the loop becomes an error node with three diagnostics. The keyword-in-name
+  handling that `parser/defusage.go` `atKindPrefix` does for declarations is missing here (and
+  the REPL does not print load-time parse diagnostics, so the file looks accepted).
 - `action a { in snapshot ; }` parses with zero diagnostics — an anonymous untyped parameter is
   silently accepted (also `in event ;`). Reproduce first; it was never re-verified after the
   occurrence-modifier work.
@@ -355,7 +410,7 @@ Lessons that survived the last two batches, unchanged because they keep applying
    release section.
 2. **P1** and **P2** next: the release now ships the service binary, so the Python surface is
    the newest promise and the least CI-verified.
-3. **A1** and **A2** — the two limitations the changelog admits to — then **A4**/**A5** in
+3. **A1a** (what is left of A1) and **A2** — the limitations the changelog admits to — then **A4**/**A5** in
    parallel (they share only `docs/SPEC_COMPLIANCE.md`; the two `state_executor.go` items in A4
    must run one at a time).
 4. **A6** last, gated on a per-file corpus diff.

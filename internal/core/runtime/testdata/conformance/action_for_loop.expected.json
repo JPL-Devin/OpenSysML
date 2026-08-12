@@ -1,0 +1,13 @@
+{
+	"type": "action",
+	"outputs": {
+		"total": {
+			"type": "Real",
+			"value": 6.5
+		},
+		"visited": {
+			"type": "Integer",
+			"value": 3
+		}
+	}
+}

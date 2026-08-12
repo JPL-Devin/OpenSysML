@@ -30,7 +30,13 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
+	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
+	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
+	t.Run("non_terminating_loop_exhausts_step_budget", testNonTerminatingLoopExhaustsStepBudget)
+	t.Run("loop_body_declaration_does_not_leak", testLoopBodyDeclarationDoesNotLeak)
+	t.Run("loop_body_of_unexecutable_statement", testLoopBodyOfUnexecutableStatement)
+	t.Run("statement_directly_in_an_action_body", testStatementDirectlyInAnActionBody)
 	t.Run("fork_branches_share_region", testForkBranchesShareRegion)
 	t.Run("join_with_one_incoming_branch", testJoinWithOneIncomingBranch)
 	t.Run("region_pseudostate_without_satisfied_guard", testRegionPseudostateWithoutSatisfiedGuard)
@@ -51,8 +57,122 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("perform_reference_cycle", testPerformReferenceCycle)
 	t.Run("state_subaction_reference_of_missing_action", testStateSubactionReferenceOfMissingAction)
 	t.Run("state_subaction_reference_feature_chain", testStateSubactionReferenceFeatureChain)
+	t.Run("library_function_outside_its_domain", testLibraryFunctionOutsideItsDomain)
+	t.Run("library_function_wrong_arity", testLibraryFunctionWrongArity)
+	t.Run("extension_library_function_outside_its_domain", testExtensionLibraryFunctionOutsideItsDomain)
+	t.Run("exponentiation_integer_overflow", testExponentiationIntegerOverflow)
+	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
+	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
+	t.Run("satisfy_bounded_by_the_step_budget", testSatisfyBoundedByTheStepBudget)
 	t.Run("cyclic_derived_slot", testCyclicDerivedSlot)
 	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
+}
+
+// testSatisfyUnresolvedRequirement: a satisfaction assertion whose requirement
+// reference names nothing reports it, rather than evaluating the assertion's own
+// empty body as a verdict about the model.
+func testSatisfyUnresolvedRequirement(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part lander;
+			part context {
+				assert satisfy nosuch by lander;
+			}
+		}
+	`))
+	assertions := ctx.SatisfyAssertionsIn(idx.DocumentRoot("<test>"))
+	if len(assertions) != 1 {
+		t.Fatalf("found %d satisfaction assertions, want 1", len(assertions))
+	}
+
+	satisfied, err := ctx.EvaluateSatisfaction(assertions[0])
+	if err == nil {
+		t.Fatalf("expected an error, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrNoRequirement) {
+		t.Errorf("expected ErrNoRequirement, got: %v", err)
+	}
+	if errors.Is(err, ErrViolated) {
+		t.Error("an unresolved requirement reference is not a violation")
+	}
+	if !strings.Contains(err.Error(), "nosuch") {
+		t.Errorf("error does not name the reference: %v", err)
+	}
+}
+
+// testSatisfyRequirementWithoutConditions: satisfying a requirement that states
+// no condition is not a verdict, since no check ran.
+func testSatisfyRequirementWithoutConditions(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			requirement def Documented {
+				doc /* stated in prose only */
+			}
+			requirement documented : Documented;
+			part lander;
+			part context {
+				assert satisfy documented by lander;
+			}
+		}
+	`))
+	assertions := ctx.SatisfyAssertionsIn(idx.DocumentRoot("<test>"))
+	if len(assertions) != 1 {
+		t.Fatalf("found %d satisfaction assertions, want 1", len(assertions))
+	}
+
+	satisfied, err := ctx.EvaluateSatisfaction(assertions[0])
+	if err == nil {
+		t.Fatalf("expected an error, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrNoConditions) {
+		t.Errorf("expected ErrNoConditions, got: %v", err)
+	}
+	if satisfied {
+		t.Error("a requirement with no condition must not report a verdict")
+	}
+}
+
+// testSatisfyBoundedByTheStepBudget: a satisfaction check is one run, so its
+// condition evaluation spends the run's budget instead of resetting it.
+func testSatisfyBoundedByTheStepBudget(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Lander { attribute verticalSpeed = 1.2; }
+			part lander : Lander;
+			requirement def TouchdownRequirement {
+				subject craft : Lander;
+				attribute maxVerticalSpeed = 1.5;
+				require constraint { craft.verticalSpeed <= maxVerticalSpeed }
+			}
+			requirement touchdown : TouchdownRequirement;
+			part context {
+				assert satisfy touchdown by lander;
+			}
+		}
+	`))
+	assertions := ctx.SatisfyAssertionsIn(idx.DocumentRoot("<test>"))
+	if len(assertions) != 1 {
+		t.Fatalf("found %d satisfaction assertions, want 1", len(assertions))
+	}
+	ctx.maxSteps = 2
+
+	satisfied, err := ctx.EvaluateSatisfaction(assertions[0])
+	if err == nil {
+		t.Fatalf("expected the step budget to bound the check, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+	if errors.Is(err, ErrViolated) {
+		t.Error("an exhausted budget is not a verdict about the model")
+	}
+
+	// The subject is built inside the same run, so a budget exhausted there is
+	// still reported as such rather than as a missing subject.
+	ctx.maxSteps = 0
+	if _, err := ctx.EvaluateSatisfaction(assertions[0]); !errors.Is(err, ErrStepLimitExceeded) || !errors.Is(err, ErrNoSubject) {
+		t.Errorf("expected ErrStepLimitExceeded while building the subject, got: %v", err)
+	}
 }
 
 // testCyclicDerivedSlot: two derived defaults that read each other are reported
@@ -1086,6 +1206,78 @@ func testConstraintMissingFeature(t *testing.T) {
 	t.Log("EvaluateConstraint returned true (missing feature tolerated)")
 }
 
+// testRequirementFeatureWithoutAValue: a condition naming a feature the
+// requirement declares but nothing gives a value to reports ErrNoValue, naming
+// the feature, rather than the unresolved-feature error of a name that is not
+// declared at all.
+func testRequirementFeatureWithoutAValue(t *testing.T) {
+	src := `
+		package test {
+			requirement def TouchdownRequirement {
+				attribute actualVerticalSpeed;
+				attribute maxVerticalSpeed = 1.5;
+				require actualVerticalSpeed <= maxVerticalSpeed;
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "TouchdownRequirement", ast.DefRequirement)
+	if sym == nil {
+		t.Fatal("TouchdownRequirement not found")
+	}
+
+	satisfied, err := ctx.EvaluateRequirement(sym, rootScope)
+	if err == nil {
+		t.Fatalf("expected an error, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrNoValue) {
+		t.Errorf("expected ErrNoValue, got: %v", err)
+	}
+	if errors.Is(err, ErrViolated) {
+		t.Error("a feature without a value is not a violation")
+	}
+	if !strings.Contains(err.Error(), "actualVerticalSpeed") {
+		t.Errorf("error does not name the feature: %v", err)
+	}
+}
+
+// testRequirementFeaturesValuedFromEachOther: two features whose values name each
+// other report a cycle promptly instead of recursing until the step budget runs out.
+func testRequirementFeaturesValuedFromEachOther(t *testing.T) {
+	src := `
+		package test {
+			requirement def R {
+				attribute a = b;
+				attribute b = a;
+				require a <= b;
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "R", ast.DefRequirement)
+	if sym == nil {
+		t.Fatal("R not found")
+	}
+
+	satisfied, err := ctx.EvaluateRequirement(sym, rootScope)
+	if err == nil {
+		t.Fatalf("expected an error, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrCyclicSlot) {
+		t.Errorf("expected ErrCyclicSlot, got: %v", err)
+	}
+}
+
 // testStepBudgetExceeded: evaluation exceeds maxSteps. Each Eval call spends one
 // step, so an expression with more subexpressions than the budget must report
 // ErrStepLimitExceeded rather than run to the end. The operands are a parameter
@@ -1120,10 +1312,273 @@ func testStepBudgetExceeded(t *testing.T) {
 	}
 }
 
+// testNonTerminatingLoopExhaustsStepBudget: a loop whose condition never fails
+// spends a step per iteration, so it ends the execution with
+// ErrStepLimitExceeded instead of hanging whoever drove it (a REPL or the LSP).
+func testNonTerminatingLoopExhaustsStepBudget(t *testing.T) {
+	src := `
+		package test {
+			action spinner {
+				attribute total : Integer = 0;
+				first start;
+				action spin {
+					while total >= 0 {
+						assign total := total + 1;
+					}
+				}
+				done end;
+				then start spin;
+				then spin end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	ctx.maxSteps = 20
+	ctx.steps = 0
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "spinner", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action spinner not found")
+	}
+
+	_, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatal("expected the step budget to be exceeded, the action completed")
+	}
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// testLoopBodyDeclarationDoesNotLeak: a loop body and an `if` branch body are
+// namespaces of their own, so a name one of them declares is not a member of the
+// action and does not appear among its results.
+func testLoopBodyDeclarationDoesNotLeak(t *testing.T) {
+	src := `
+		package test {
+			action counter {
+				attribute total : Integer = 0;
+				first start;
+				action accumulate {
+					while total < 3 {
+						attribute bump : Integer = 1;
+						assign total := total + bump;
+						if total == 2 {
+							attribute marker : Integer = 9;
+							assign total := total + marker;
+						}
+					}
+				}
+				done end;
+				then start accumulate;
+				then accumulate end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "counter", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action counter not found")
+	}
+
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	// 1, then 2 which the conditional lifts to 11, which ends the loop.
+	total, ok := outputs["total"]
+	if !ok {
+		t.Fatal("total missing from the action's results")
+	}
+	if total.Const.Int != 11 {
+		t.Errorf("total = %v, want 11", FormatTraceValue(total))
+	}
+	for _, local := range []string{"bump", "marker"} {
+		if _, ok := outputs[local]; ok {
+			t.Errorf("body-local %s leaked into the action's results: %v", local, outputs)
+		}
+	}
+}
+
+// testLoopBodyOfUnexecutableStatement: a body member the lowering layer cannot
+// turn into a statement is reported when it is reached, rather than skipped —
+// silently dropping it would give a wrong answer with no diagnostic.
+func testLoopBodyOfUnexecutableStatement(t *testing.T) {
+	src := `
+		package test {
+			action counter {
+				attribute total : Integer = 0;
+				first start;
+				action accumulate {
+					while total < 3 {
+						action inner;
+						assign total := total + 1;
+					}
+				}
+				done end;
+				then start accumulate;
+				then accumulate end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "counter", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action counter not found")
+	}
+
+	_, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatal("expected an unexecutable loop body member to be reported")
+	}
+	if !strings.Contains(err.Error(), "not executable") {
+		t.Errorf("error does not name the unexecutable member: %v", err)
+	}
+}
+
+// testStatementDirectlyInAnActionBody: a statement written among the action's
+// own members has no name a succession can reach, so it is reported rather than
+// ignored.
+func testStatementDirectlyInAnActionBody(t *testing.T) {
+	cases := map[string]string{
+		"while":      "while total < 5 { assign total := total + 1; }",
+		"if":         "if total < 5 { assign total := total + 1; }",
+		"assignment": "assign total := total + 1;",
+	}
+
+	for name, stmt := range cases {
+		t.Run(name, func(t *testing.T) {
+			src := `
+				package test {
+					action counter {
+						attribute total : Integer = 0;
+						first start;
+						` + stmt + `
+						done end;
+						then start end;
+					}
+				}
+			`
+			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "counter", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action counter not found")
+			}
+
+			_, err := ctx.ExecuteAction(sym)
+			if err == nil {
+				t.Fatalf("expected a top-level %s to be reported", name)
+			}
+			if !strings.Contains(err.Error(), "no position in the token flow") {
+				t.Errorf("error does not explain why the statement cannot run: %v", err)
+			}
+		})
+	}
+}
+
 // Helper: parse source into AST RootNamespace
 func parseAndBuild(t *testing.T, src string) *ast.RootNamespace {
 	file := parser.New(source.New("<test>", []byte(src))).ParseFile()
 	return file
+}
+
+// testLibraryFunctionOutsideItsDomain: a library function whose argument has no
+// result reports a domain error rather than returning a NaN.
+func testLibraryFunctionOutsideItsDomain(t *testing.T) {
+	src := `
+		package test {
+			calc root {
+				in x : Real;
+				return : Real = sqrt(x);
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "root", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("root calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: -1}}
+	got, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if !errors.Is(err, semantics.ErrArithmeticDomain) {
+		t.Fatalf("sqrt(-1.0) = %+v, %v; want a domain error", got, err)
+	}
+}
+
+// testLibraryFunctionWrongArity: a library function called with the wrong number
+// of arguments reports an arity error rather than reading past its arguments.
+func testLibraryFunctionWrongArity(t *testing.T) {
+	fn, ok := libraryFunctionByName("RealFunctions::max")
+	if !ok {
+		t.Fatal("RealFunctions::max not registered")
+	}
+	_, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, "package test { }"))
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1}}
+	if _, err := fn.invoke(ctx, calcArgs{positional: []Value{arg}}); !errors.Is(err, ErrCalcArity) {
+		t.Fatalf("max(1.0) error = %v, want ErrCalcArity", err)
+	}
+}
+
+// testExtensionLibraryFunctionOutsideItsDomain: a Systemica extension library
+// function reports a domain error the same way a vendored one does — the
+// logarithm of zero has no Real value, and is not returned as an infinity.
+func testExtensionLibraryFunctionOutsideItsDomain(t *testing.T) {
+	src := `
+		package test {
+			calc root {
+				in x : Real;
+				return : Real = ln(x);
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "root", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("root calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 0}}
+	got, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if !errors.Is(err, semantics.ErrArithmeticDomain) {
+		t.Fatalf("ln(0.0) = %+v, %v; want a domain error", got, err)
+	}
+}
+
+// testExponentiationIntegerOverflow: an exponentiation beyond the Integer range
+// is reported rather than wrapping.
+func testExponentiationIntegerOverflow(t *testing.T) {
+	src := `
+		package test {
+			calc power {
+				in b : Integer;
+				in e : Integer;
+				return : Integer = b ** e;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "power", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("power calc not found")
+	}
+
+	base := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1 << 40}}
+	exp := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	got, err := ctx.InvokeCalc(sym, []Value{base, exp}, rootScope)
+	if !errors.Is(err, semantics.ErrArithmeticOverflow) {
+		t.Fatalf("(2**40) ** 3 = %+v, %v; want an overflow error", got, err)
+	}
 }
 
 // Helper: build runtime context from file

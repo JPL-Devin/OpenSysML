@@ -58,6 +58,10 @@ var (
 	// failure to evaluate, so callers can tell the two apart.
 	ErrViolated = errors.New("evaluated to false")
 
+	// ErrNoValue is returned when a feature a condition names carries no value:
+	// neither a slot on the object being checked nor a declared default.
+	ErrNoValue = errors.New("no value")
+
 	// ErrNoConditions is returned when a constraint or requirement carries no
 	// condition to evaluate: reporting a verdict would claim a check that never ran.
 	ErrNoConditions = errors.New("no condition to evaluate")
@@ -65,7 +69,37 @@ var (
 	// ErrCyclicSlot is returned when a slot's default value depends, directly or
 	// through other slots, on the slot being computed.
 	ErrCyclicSlot = errors.New("cyclic slot dependency")
+
+	// ErrNotASatisfaction is returned when a satisfaction assertion is asked of
+	// an element that states none.
+	ErrNotASatisfaction = errors.New("not a satisfaction assertion")
+
+	// ErrNoRequirement is returned when a satisfaction assertion states no
+	// requirement to evaluate: it references none, or references one that
+	// resolves to nothing.
+	ErrNoRequirement = errors.New("no requirement to satisfy")
+
+	// ErrNoSubject is returned when the feature a satisfaction assertion names
+	// with `by` cannot supply a subject: it resolves to nothing, or no object of
+	// it can be created.
+	ErrNoSubject = errors.New("no subject to satisfy the requirement")
 )
+
+// ViolationError reports a condition that evaluated to false, naming the
+// condition so a verdict says which one failed. It unwraps to ErrViolated,
+// since it is a verdict about the model rather than a failure to evaluate.
+type ViolationError struct {
+	Kind      string // "constraint" or "requirement"
+	Element   string // name of the element stating the condition
+	What      string // "assertion" or "require condition"
+	Condition string // the condition, rendered
+}
+
+func (e *ViolationError) Error() string {
+	return fmt.Sprintf("%s %s: %s %v: %s", e.Kind, e.Element, e.What, ErrViolated, e.Condition)
+}
+
+func (e *ViolationError) Unwrap() error { return ErrViolated }
 
 // EvalError wraps an evaluation error with source context.
 type EvalError struct {

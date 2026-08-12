@@ -24,21 +24,26 @@
 - Deterministic evaluation trace (parameter binding, sub-expression order, results)
 - Error handling (unbound/unknown parameters, arity, missing return, recursion and step budgets)
 
-**Constraints (5/5 features):**
+**Constraints (7/7 features):**
 - Assert evaluation (boolean satisfaction)
 - Assume evaluation (trusted preconditions)
 - Bare expression as invariant
 - Negated constraints (assert not)
 - Unresolved feature detection
+- Conditions of a nested constraint (`assert constraint [name] { <expr> }`)
+- Parameters a typed usage binds (`constraint limit : MassLimit { in m = mass; }`)
 
-**Requirements (5/5 features):**
-- Require expression evaluation
+**Requirements (8/8 features):**
+- Require expression evaluation, in a requirement definition body as well as a usage
+- Conditions stated through an anonymous nested constraint (`require constraint { <expr> }`)
+- The requirement's own attributes, inherited or rebound, in its conditions
 - Subject binding evaluation
 - Actor binding evaluation  
-- Assume expression evaluation
+- Assume expression evaluation, in both spellings
 - Nested requirements
+- A violated condition names the condition that failed
 
-**Actions (14/14 features):**
+**Actions (18/18 features):**
 - Initial/final node token placement
 - Fork node (1→N parallelism)
 - Join node (N→1 synchronization)
@@ -46,6 +51,10 @@
 - Decision node (guarded branching)
 - Action execution nodes
 - Nested action invocation
+- Assignment statements in an action node's body
+- Conditional statement (`if <cond> { … } else { … }`), nestable in either direction with a loop
+- Pre-condition loop (`while <cond> { … }`) and post-condition loop (`loop { … } until <cond>;`)
+- Iteration over a collection (`for <x> in <collection> { … }`, ⚠️ over a sequence or a set the expression layer can produce)
 - Send statement (⚠️ typed messages addressed by name or routed through a connected port)
 - Accept action (⚠️ takes the oldest message of its type; no suspension)
 - Object flow (pin-to-pin data)
@@ -87,14 +96,16 @@
 - History pseudostates: shallow and deep restoration (`history` / `shallow history` / `deep history <name>;`)
 - Deferred events: retention and recall across hierarchy and orthogonal regions (`defer <event>[, <event>]*;`)
 
-**Expression Evaluation (7/7 features):**
+**Expression Evaluation:**
 - Binary operators (+, -, *, /, <, >, ==, and, or)
+- Exponentiation (`**`, `^`) over Integer and Real operands, folded and evaluated by one implementation
 - Unary operators (-, not)
 - Literal values (Integer, Real, Boolean, String)
 - Feature reference resolution
 - Qualified name resolution (A::B::C)
 - Type coercion (Integer→Real)
 - Unresolved reference error handling
+- KerML function library: the scalar numeric functions of `RealFunctions`, `RationalFunctions`, `NumericalFunctions`, `IntegerFunctions`, `NaturalFunctions` and `TrigFunctions` (see the Function Library row below)
 
 **Name Resolution:**
 - Inherited feature resolution (follows specialization chains)
@@ -103,11 +114,11 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 61 conformance cases (all passing: calc×10, constraint×3, requirement×5, action×11, state×26, accept×1, instance×5)
-- 35 robustness subtests (deadlock, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references)
-- 183 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
-- 36 golden AST fixtures (including pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
-- 24 golden execution traces (fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation)
+- 78 conformance cases (all passing: calc×12, constraint×4, requirement×5, action×24, state×26, accept×1, instance×6)
+- 43 robustness subtests (deadlock, a non-terminating loop, a body-local declaration that must not leak, a body member that is not executable, a statement written directly among an action's members, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references, a library function outside its domain or with the wrong arity, an extension library function outside its domain, exponentiation beyond the Integer range)
+- 195 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
+- 42 golden AST fixtures (including the three loop forms, pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
+- 37 golden execution traces (loop and conditional bodies, fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation, library function invocation)
 - 49 negative parser subtests
 - 1,500+ total tests passing
 
@@ -149,7 +160,7 @@ Each row documents one behavioral semantic feature:
 | Named argument that names no parameter | `invoke_calc.go` `checkArgs` (`ErrUnknownParameter`) | `robustness_test.go:testCalcUnknownNamedArgument` | ✅ Faithful |
 | Invoked symbol is not a calc | `invoke_calc.go` `calcShapeOf` (`ErrNotACalc`) | `robustness_test.go:testCalcSymbolIsNotACalc` | ✅ Faithful |
 | Recursive calc (direct or mutual) is bounded | `invoke_calc.go` `invokeCalcShape` (`ErrCalcRecursionLimit`, depth 32) | `robustness_test.go:testCalcDirectRecursion`, `:testCalcMutualRecursion` | ⚠️ Approximate (depth-bounded; recursion is rejected rather than evaluated) |
-| Step budget bounds calc evaluation | `context.go` step counter (`ErrStepLimitExceeded`) | `robustness_test.go:testStepBudgetExceeded` | ✅ Faithful |
+| Step budget bounds calc evaluation | `context.go` step counter (`ErrStepLimitExceeded`), budget from `budget.go` `BudgetsFromEnv` (`SYSML_MAX_STEPS`, default 10000000) | `robustness_test.go:testStepBudgetExceeded`, `budget_test.go:TestBudgetFromValue` | ✅ Faithful |
 | Control flow (if/else) in calc | `eval.go` expression evaluation | `robustness_test.go:testDecisionNoSatisfiedGuard` | ✅ Faithful |
 | Missing return expression | `invoke_calc.go` `calcShapeOf` (`ErrNoResultExpression`) | `robustness_test.go:testCalcWithoutResult` | ✅ Faithful |
 | Unary operators (not, -) | `eval.go:483` evalNeg | `calc_unary_operators.sysml` | ✅ Faithful |
@@ -167,7 +178,9 @@ Each row documents one behavioral semantic feature:
 | Negated constraint (assert not) | `eval.go:483` evalNeg | `constraint_negation.sysml` | ✅ Faithful |
 | A constraint a type carries is evaluated against an instance of it, so it reads that object's slots rather than declared defaults | `context.go` `EvaluateConstraintOn`, `eval.go` `NewEvalContextIn`/`selfSlotValue` | `instance_constraint_binding.sysml`, `repl/instance_test.go:TestConstraintBindsToInstance` | ✅ Faithful |
 | A false assertion is a verdict, not a malfunction (`ErrViolated`), and is distinguishable from an evaluation failure | `errors.go` `ErrViolated`, `context.go` `EvaluateConstraintOn` | `repl/instance_test.go:TestConstraintEvaluationErrorIsNotAViolation` | ✅ Faithful |
-| A constraint usage inherits its conditions from the definition it is typed by (`constraint limit : MassLimit;`) | `context.go` `chainMembers` over `semantics.Model.AllSupertypes` | `instance_inherited_constraint.sysml` | ⚠️ Approximate — inherited conditions are evaluated, but a parameter the usage binds (`in m = mass`) is not passed to them |
+| A constraint usage inherits its conditions from the definition it is typed by (`constraint limit : MassLimit;`) | `context.go` `chainMembers` over `semantics.Model.AllSupertypes` | `instance_inherited_constraint.sysml` | ✅ Faithful |
+| A parameter a typed usage binds (`constraint limit : MassLimit { in m = mass; }`) is visible to the conditions it inherits, and masks both the declaration it redefines and a same-named member of the object carrying the usage — including the usage's own name | `condition.go` `conditionFeatures` over `Model.MembersOf`, `eval.go` `evalFeatureReference` | `instance_constraint_bound_parameter.sysml`, `instance_constraint_parameter_name_collision.sysml`, `runtime/condition_test.go:TestConstraintUsageBindsInheritedParameter` | ✅ Faithful |
+| The conditions of a nested constraint (`assert constraint [name] { <expr> }`) are the conditions of the member stating it | `parser/behavior.go` `tryParseNestedConstraint`, `condition.go` `appendConditions` | `parser/behavior_require_member_test.go:TestConstraintMemberNestedBody` | ✅ Faithful |
 | A constraint carrying no condition yields no verdict (`ErrNoConditions`) rather than a vacuous pass | `errors.go` `ErrNoConditions`, `context.go` `EvaluateConstraintOn`/`EvaluateRequirementOn` | `runtime/constraint_test.go:TestConstraintWithoutConditionsIsNotAVerdict` | ✅ Faithful |
 
 ### Instantiation and Feature Values (SysML v2 §7.6 Feature Values, KerML §8.3)
@@ -189,17 +202,30 @@ Each row documents one behavioral semantic feature:
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Require expression evaluation | `context.go:148` `EvaluateRequirement` | `requirement_literal.sysml` | ✅ Faithful |
+| Require expression evaluation, in a requirement definition body as well as a usage | `parser/behavior.go` `parseRequirementBody` (both `parseDefinition` and `parseUsage` paths), `condition.go` `conditionsOf` | `requirement_literal.sysml`, `requirement_def_body_require.sysml`, `parser/behavior_require_member_test.go:TestRequirementConditionForms` | ✅ Faithful |
+| A condition stated through an anonymous nested constraint (`require constraint { <expr> }`, the form the OMG Domain Libraries use) is evaluated, and every condition of that body is kept | `parser/behavior.go` `parseNestedConstraintConditions`, `condition.go` `appendConditions` | `requirement_nested_constraint.sysml`, `parser/behavior_require_member_test.go:TestRequireMemberRetainsConditions` | ✅ Faithful |
+| A requirement's conditions see the requirement's own features — declared, inherited, or rebound by a typed usage (`attribute :>> maxVerticalSpeed = 1.5;`) | `condition.go` `conditionFeatures`, `eval.go` `evalFeatureReference` | `requirement_own_attribute.sysml`, `requirement_nested_constraint.sysml`, `runtime/condition_test.go:TestRequirementConditionSeesOwnAttributes` | ✅ Faithful |
+| A feature a condition names but which carries no value reports that (`ErrNoValue`) rather than being unresolved | `errors.go` `ErrNoValue`, `eval.go` `evalFeatureReference` | `runtime/condition_test.go:TestRequirementConditionWithoutValueIsNotUnresolved` | ✅ Faithful |
+| A violated condition names the condition that failed, not only the element stating it | `errors.go` `ViolationError`, `condition.go` `conditionText` | `requirement_violated.sysml`, `runtime/condition_test.go:TestRequirementConditionSeesOwnAttributes` | ✅ Faithful |
 | Subject binding evaluation | `context.go:148` `EvaluateRequirement` (Pass 1) | `requirement_subject.sysml` | ✅ Faithful |
 | Actor binding evaluation | `context.go:148` `EvaluateRequirement` (Pass 1) | `requirement_actor.sysml` | ✅ Faithful |
 | Assume expression evaluation | `context.go:148` `EvaluateRequirement` (Pass 2, doesn't fail) | `requirement_assume.sysml` | ✅ Faithful |
 | A false required condition is a verdict, not a malfunction (`ErrViolated`), like a false assertion | `context.go` `EvaluateRequirementOn`, `errors.go` `ErrViolated` | `repl/instance_test.go:TestRequirementViolationIsAVerdictNotAnError` | ✅ Faithful |
-| A requirement usage inherits assume/require conditions from the definition it is typed by | `context.go` `chainMembers` | `runtime/constraint_test.go:TestConstraintWithoutConditionsIsNotAVerdict` (companion path) | ⚠️ Approximate — as for constraints, bound parameters are not passed |
+| A requirement usage inherits assume/require conditions from the definition it is typed by, and the values it rebinds are the ones those conditions see | `context.go` `chainMembers`, `condition.go` `conditionFeatures` | `requirement_nested_constraint.sysml`, `requirement_violated.sysml` | ✅ Faithful |
+| A `subject` may redeclare the one it inherits (`subject subj : View[1] :>> RequirementCheck::subj;`) | `parser/behavior.go` `parseSubjectMember`, `resolve/document.go`, `passes/typecheck.go` `checkSubjectMember` | `parser/behavior_require_member_test.go:TestRequirementConditionForms`, `libs/stdlib_conformance_test.go` (`Systems Library/Views.sysml`) | ✅ Faithful |
 | Nested requirements | `context.go:148` `EvaluateRequirement` (recursive) | `requirement_nested.sysml` | ✅ Faithful |
 | `satisfy <name>` is an `OwnedReferenceSubsetting` of an existing usage, not a typing (SysML v2 §8.3.21.10 `SatisfyRequirementUsage`) | `parser/defusage.go` `parseDefUsage` (`ast.RelSubsets`) | `parser/testdata/parse/satisfy_reference.golden` | ✅ Faithful |
 | `referencedFeatureTarget().oclIsKindOf(RequirementUsage)` — satisfy/verify may only reference a requirement usage (incl. viewpoint/concern usages) | `passes/typecheck.go` `compatMessage`, `isRequirementUsageKind` | `passes/typecheck_test.go` `TestTypeCheckSatisfyRequirementUsageOK`, `TestTypeCheckSatisfyViewpointUsageOK`, `TestTypeCheckSatisfyNonRequirementUsageError` | ✅ Faithful |
+| `assert satisfy <requirement> by <part>;` is a verdict of its own: the assertion is evaluated as the requirement usage it is (`SatisfyRequirementUsage`, SysML v2 §8.3.21.10), with the requirement's subject parameter bound to the object the `by` feature supplies, so the conditions read that object's values | `runtime/satisfy.go` `SatisfyAssertionsIn`, `EvaluateSatisfactionOn`, `repl/meta.go` `doSatisfy` | `satisfy_subject_binding.sysml`, `satisfy_inherited_conditions.sysml`, `runtime/satisfy_test.go`, `repl/satisfy_test.go:TestSatisfyVerdicts` | ✅ Faithful |
+| An assertion may be negated (`assert not constraint { … }`, `assert not satisfy … by …`; `Invariant::isNegated`, SysML v2 §8.3.21.10), and holds exactly when the conditions it denies do not | `ast/defusage.go` `Usage.IsNegated`, `parser/defusage.go` `applyFeatureMods`, `runtime/condition.go` `evaluateConditions` | `parser/testdata/parse/assert_negated.golden`, `satisfy_negated.sysml`, `runtime/negation_test.go` | ✅ Faithful |
+| A negated element states no condition it can deny when its body holds only assumptions, which are trusted rather than checked, so it reports `no condition to evaluate` rather than a violation naming none | `runtime/condition.go` `evaluateConditions` | `runtime/condition_test.go` `TestNegatedConstraintWithOnlyAssumptionsIsNotAVerdict` | ✅ Faithful |
+| A negation denies the conditions of the constraint it is written on **together** — `not (a and b)`, not `not a and not b` — so it holds as soon as one of them fails | `runtime/condition.go` `appendConditions`, `conditionHolds` | `runtime/condition_test.go` `TestNegatedNestedConstraintNegatesTheConjunction`, `constraint_negated_group.sysml` | ✅ Faithful |
 | An `ObjectiveMembership`'s `ownedObjectiveRequirement` is a `RequirementUsage` (SysML v2 §8.3.22.4), so an `objective` is typed by a requirement definition or a specialization of one, never by a structural definition | `passes/typecheck.go` `compatibleTyping`, `isRequirementDefKind` | `passes/typecheck_kinds_test.go` `TestTypeCheckObjectiveTypedByRequirementDefOK`, `TestTypeCheckObjectiveTypedByConcernDefOK`, `TestTypeCheckObjectiveTypedByPartDefError`, `TestTypeCheckObjectiveTypedByActionDefError` | ✅ Faithful |
 | A `SubjectMembership`'s `ownedSubjectParameter` is an unconstrained `Usage` (SysML v2 §8.3.21), so a definition of any kind types a `subject` — including the `port def` and `action def` the OMG training models use — and the rule applies however the requirement body is written, not only when the subject happens to parse as a usage | `passes/typecheck.go` `checkSubjectMember`, `compatibleTyping` | `passes/typecheck_subject_test.go` `TestTypeCheckSubjectIsCheckedWhateverPrecedesIt`, `TestTypeCheckRequirementUsageSubjectIsChecked`, `TestTypeCheckSubjectWithoutResolvableTypeIsNotATypeError`; `typecheck_kinds_test.go` `TestTypeCheckSubjectTypedByAnyDefKindOK`, `TestTypeCheckSubjectTypedByUsageError` | ✅ Faithful |
+
+⚠️ A quantity expression (`1.5 [m/s]`) is not evaluated, so a condition comparing values written with units reports an unsupported node rather than a verdict. Units are not carried by runtime values, so no conversion is applied either.
+
+⚠️ A requirement feature that carries no value of its own is read from the satisfying object's feature of that name, which is how a requirement stated over the values it checks (`attribute verticalSpeed;` compared against a limit) reaches a verdict from `by`. The spec supplies a subject's values to a requirement through the subject parameter (`subject lander : Lander;` then `lander.verticalSpeed`) or an explicit binding, not by matching names, so this fallback — the same one `%requirement` applies on an instance — is an approximation, and a requirement whose unbound feature happens to share a name with an unrelated feature of the subject would be checked against it. A requirement whose value comes from neither its own binding nor the subject (the lunar lander model's `actualVerticalSpeed`, produced by an analysis) still has no value to check and reports `ErrNoValue`.
 
 ### Action (UML 2.5.1 §16 Activities)
 
@@ -213,6 +239,17 @@ Each row documents one behavioral semantic feature:
 | Decision node (guarded branching) | `action_executor.go:452` stepDecisionNode | `action_control_flow.sysml` | ✅ Faithful |
 | Action execution nodes | `action_executor.go:528` stepActionExecutionNode | `action_control_flow.sysml` | ✅ Faithful |
 | Nested action invocation | `action_executor.go:582` stepNestedAction, `invoke_action.go` invokeAction | `invoke_action_test.go:TestInvokeActionPassesParametersBothWays` | ✅ Faithful |
+| Assignment statement in a body (`assign x := <expr>`) | `lower/action_graph.go` lowerStatement Assign; `runtime/action_statements.go` execStatement | `action_send_accept.sysml`, `lower/action_body_test.go:TestActionBodyLowering` | ✅ Faithful |
+| Conditional statement (`if <cond> { … } else { … }`) | `lower/action_graph.go` lowerStatement/lowerBlock (`If`); `runtime/action_statements.go` execIf, execBlock | `action_if_else_then_branch.sysml`, `action_if_else_else_branch.sysml`, `action_if_no_else.sysml`, `action_nested_loop_if.sysml` + trace golden, `lower/action_body_test.go:TestActionBodyLoopAndConditionalLowering`, `passes/typecheck_test.go:TestTypeCheckNonBooleanControlFlowConditions` | ✅ Faithful (the condition is evaluated outside both branches; each branch body is a namespace of its own, so the names it declares do not reach the enclosing behavior) |
+| Pre-condition loop (`while <cond> { … }`) | `lower/action_graph.go` lowerStatement (`Loop`, `ast.LoopWhile`); `runtime/action_statements.go` execLoop | `action_while_loop.sysml` + trace golden, `action_while_loop_zero_iterations.sysml`, `parse/action_loop_forms.golden` | ✅ Faithful (tested before every iteration, so the body may run no times) |
+| Post-condition loop (`loop { … } until <cond>;`) | `parser/behavior.go` parseLoopAction; `lower/action_graph.go` (`ast.LoopUntil`); `runtime/action_statements.go` execLoop | `action_loop_until.sysml`, `action_loop_until_repeats.sysml` + trace golden | ✅ Faithful (tested after every iteration, so the body runs at least once) |
+| Iteration over a collection (`for <x> in <collection> { … }`) | `ast/behavior.go` `WhileLoopActionNode.Variable`/`Collection`; `symbols/builder.go` (the variable is a member of the loop's own scope); `runtime/action_statements.go` execForLoop, forElements | `action_for_loop.sysml`, `parse/action_loop_forms.golden` | ⚠️ Approximate (the collection is evaluated once, before the loop is entered, and must evaluate to a sequence or a set — the only collections the expression layer produces; a set is visited in the order its canonical rendering sorts in, since a set has no order of its own) |
+| A non-terminating loop ends the execution rather than hanging it | `runtime/action_statements.go` execLoop (a step per iteration), `context.go` incrementStep | `action_loop_step_budget.sysml`, `robustness_test.go:non_terminating_loop_exhausts_step_budget` | ✅ Faithful (reports `ErrStepLimitExceeded`, the same failure as any other runaway evaluation) |
+| A legitimately long loop runs under a raised budget | `budget.go` `BudgetsFromEnv` (`SYSML_MAX_STEPS`) resolved at the REPL/CLI and gRPC entry points | `budget_test.go:TestRaisedBudgetRunsLongerLoop` | ✅ Faithful (a 10 000-iteration loop that exhausts a 100 000-step budget completes under the default) |
+| The budget bounds one run, not a session | `context.go` `beginRun`/`beginExecutorRun` (the step counter is reset when a run begins; a nested run, and every call into a run a caller drives step by step, shares the outer one's budget) | `budget_test.go:TestStepBudgetIsPerRun`, `:TestStepBudgetHoldsAcrossExecutorDrivenRun`, `:TestStepBudgetIsPerRunForInstancesAndCalcs` | ✅ Faithful |
+| A legitimately long action or simulation runs under raised sibling budgets | `budget.go` `Budgets` (`SYSML_MAX_ACTION_STEPS`, `SYSML_MAX_EVENTS`, `SYSML_MAX_DO_STEPS`), read by `action_executor.go` and `state_executor.go` from the context | `budget_test.go:TestActionStepBudgetIsConfigurable`, `budget_test.go:TestStateBudgetsAreConfigurable` | ✅ Faithful (each bound counts its own unit and its error names the variable that raises it) |
+| A statement written directly among an action's own members is reported, not ignored | `lower/action_graph.go` ToActionGraph first pass, statementKeyword | `robustness_test.go:statement_directly_in_an_action_body` | ✅ Faithful (a statement runs as part of an action node's body; written beside `first`/`then` it has no name a succession could reach, so the execution reports it instead of dropping it) |
+| A body member that is not an executable statement is reported, not skipped | `lower/action_graph.go` `Unsupported`; `runtime/action_statements.go` execStatement | `lower/action_body_test.go:TestActionBodyUnexecutableMemberIsLowered`, `robustness_test.go:loop_body_of_unexecutable_statement` | ✅ Faithful (a declaration in a loop or branch body that the runtime cannot perform — a nested action, a `perform` — fails the execution instead of producing a wrong answer silently) |
 | Send statement (message passing) | `lower/action_graph.go` lowerBody; `runtime/signal.go` buildMessage, post | `action_send_accept.sysml`, `lower/action_body_test.go:TestActionBodyLowering`, `signal_test.go:TestActionMessageReachesStateMachine` | ✅ Faithful (a message is typed by what was sent and addressed to the named receiver) |
 | Accept action (message consumption suspends the action) | `action_executor.go` stepNestedAction accept case (parks the token as `Token.Wait`), Step (StateWaiting), RunToCompletion, deadlockError; `executor_common.go` AcceptWait; `runtime/signal.go` TakeMessage | `action_accept_suspends_until_message.sysml` + trace golden, `action_accept_two_waiters.sysml` + trace golden, `action_send_accept.sysml`, `action_accept_message.sysml`, `signal_test.go:TestAcceptParksTokenUntilMessageArrives`, `:TestParkedAcceptTakesOnlyItsOwnMessage`, `robustness_test.go:accept_deadlock_never_satisfied`, `:accept_deadlock_reports_every_waiting_accept`, `:send_reaches_only_its_addressee`, `:accept_of_unsent_type`, `:send_via_unconnected_port` | ⚠️ Approximate (an accept with no message it can take suspends the action at that node and resumes when one arrives, from a parallel branch or from another executor sharing the context; a run whose every remaining token is parked reports `ErrAcceptDeadlock` rather than hanging. Suspension is bounded by the executor: a nested action invoked synchronously, and an action driven by `RunToCompletion`, cannot wait for a message posted after the call begins) |
 | Send through a port (`send x via p`) | `lower/connection.go` lowerConnections, PeerPorts; `runtime/signal.go` postVia, arrivedAt | `action_port_communication.sysml` + trace golden, `lower/connection_test.go:TestLowerConnectionsFromActionBody`, `signal_test.go:TestSendViaPortReachesConnectedAccept`, `robustness_test.go:send_via_unconnected_port` | ⚠️ Approximate (the message reaches every port connected to the sending port by a connector declared in the same behavior body; a port of the enclosing part is not visible to the behavior, and conjugation and port direction do not restrict routing) |
@@ -220,7 +257,7 @@ Each row documents one behavioral semantic feature:
 | Object flow (pin-to-pin data) | `action_executor.go:673` applyDataFlows | `action_output.sysml` | ✅ Faithful |
 | Succession edges | `lower/action_graph.go:ToActionGraph` | `action_control_flow.sysml` | ✅ Faithful |
 | Deadlock detection | `action_executor.go:72` Step | `action_executor_test.go:TestActionExecutor_Deadlock_JoinStarvation` | ✅ Faithful |
-| Step budget enforcement | `context.go:53` incrementStep | `robustness_test.go:testStepBudgetExceeded` | ✅ Faithful |
+| Step budget enforcement | `context.go` incrementStep; budget configured by `SYSML_MAX_STEPS` (`budget.go` `BudgetsFromEnv`) | `robustness_test.go:testStepBudgetExceeded`, `budget_test.go:TestRaisedBudgetRunsLongerLoop` | ✅ Faithful (the reported limit is the effective one, and names the variable that raises it) |
 
 ### State Machine (UML 2.5.1 §14 StateMachines)
 
@@ -282,6 +319,75 @@ Each row documents one behavioral semantic feature:
 | Feature reference resolution | `eval.go:141` evalFeatureReference | `constraint_literal.sysml` | ✅ Faithful |
 | Qualified name resolution (A::B::C) | `eval.go:53` Eval + `resolve/qualified.go` | `calc_qualified_names.sysml` | ✅ Faithful |
 | Type coercion (Integer→Real) | `eval.go:344` toReal | `calc_type_coercion.sysml` | ✅ Faithful |
+| Exponentiation (`**`, `^`) — Integer operands with a non-negative exponent give an Integer (`IntegerFunctions::'**'`), any other numeric pair a Real (`RealFunctions::'**'`) | `semantics/eval.go` `Pow`, shared by the folder's `evalArithmetic` and `runtime/eval.go` `evalArithmetic` | `calc_library_functions.sysml`, `exponentiation_test.go` | ✅ Faithful |
+
+### KerML Function Library (KerML §9.3 Function Library)
+
+The library declares these functions abstractly — a signature and no body — so
+the runtime supplies the implementation. Dispatch is by the declaration's
+qualified name, and a declaration that carries a body is evaluated from that
+body, so a model's own `calc sqrt` is never hijacked. An unqualified call that
+resolves to no declaration dispatches by local name, which is what makes
+`sysml -e "sqrt(2.0)"` evaluable in a model that imports no part of the library.
+
+Arguments follow the vendored signatures: a `Real` parameter accepts an Integer
+(`ScalarValues` declares `Integer :> Rational :> Real`), an `Integer` parameter
+rejects a Real rather than truncating it, and a `Natural` parameter rejects a
+negative value. A result that is not a finite value of the declared type — the
+square root of a negative, an inverse sine outside `[-1.0, 1.0]`, a `floor`
+beyond the Integer range — is reported at evaluation rather than returned as a
+NaN, an infinity or a wrapped integer.
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| `RealFunctions`: `sqrt`, `abs`, `floor`, `round`, `max`, `min` | `runtime/library_functions.go` | `TestLibraryFunctionValues` | ✅ Faithful |
+| `RationalFunctions`/`NumericalFunctions`: `abs`, `max`, `min` (kind-preserving), `isZero`, `isUnit` | `runtime/library_functions.go` | `TestLibraryFunctionValues` | ✅ Faithful |
+| `IntegerFunctions`: `abs`, `max`, `min`; `NaturalFunctions`: `max`, `min` | `runtime/library_functions.go` | `TestLibraryFunctionValues` | ✅ Faithful |
+| `TrigFunctions`: `sin`, `cos`, `tan`, `cot`, `arcsin`, `arccos`, `arctan` | `runtime/library_functions.go` | `TestLibraryFunctionValues` | ✅ Faithful |
+| Domain, arity and argument-type failures reported at evaluation | `runtime/library_functions.go` `bindAndApply` | `TestLibraryFunctionErrors` | ✅ Faithful |
+| A declaration with a body is evaluated from that body | `runtime/library_functions.go` `libraryFunctionFor` | `TestLibraryFunctionDoesNotHijackADeclaredBody` | ✅ Faithful |
+| Named argument binds to the parameter the signature declares (`sin(theta = 0.0)`) | `runtime/library_functions.go` `bindAndApply` | `TestLibraryFunctionNamedArguments` | ✅ Faithful |
+
+Found, not fixed — numeric library features that remain unevaluable:
+
+| Not implemented | Why |
+|---|---|
+| `VectorFunctions`, `MatrixFunctions` | Needs a vector value in the evaluator; every value is scalar today. |
+| `SequenceFunctions` beyond `size`/`isEmpty`/`includes` | Needs the sequence semantics of the library's own function bodies, not just element access. |
+| Quantity- and unit-aware arithmetic (`1.62[m/s^2]`) | Needs `MeasurementReferences` unit conformance in the evaluator; the notation parses but no unit is carried through arithmetic. |
+| `ComplexFunctions` | Needs a complex value kind. |
+| Remainder (`%`) outside constant folding | `semantics/eval.go` folds it over literals, but `runtime/eval.go` `evalOperator` routes only `+ - * / **` to arithmetic, so `%` over a feature reports `unsupported operator`. |
+| Library functions in the checker's own name resolution | An unqualified call to a library function the model does not import evaluates, but the `unresolved-reference` diagnostic still reports the name; importing `RealFunctions::*` clears it. |
+
+### Systemica Extension Library (non-normative)
+
+The OMG Kernel Function Library declares no exponential, no logarithm and no
+two-argument arctangent: `RealFunctions` has `sqrt`/`floor`/`round`/`abs`/`max`/`min`/`'**'`/`'^'`,
+`TrigFunctions` has `sin`/`cos`/`tan`/`cot`/`arcsin`/`arccos`/`arctan`, and that
+is all. The vendored OMG files stay byte-identical, so the missing signatures are
+declared in a clearly non-normative Systemica extension instead:
+`internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml`. It
+is bundled by the same `embed.FS` as the vendored tree and enters the same
+gates — `TestStdlibConformance` now reports 95/95 clean. It is Systemica code under
+Apache 2.0, not OMG code under EPL-2.0; `internal/core/libs/stdlib/NOTICE` carves
+the subdirectory out of the OMG notice.
+
+**Reachability.** A model writes `import SystemicaMathFunctions::*;` (or calls
+`SystemicaMathFunctions::exp(x)` qualified); both resolve like any other library
+package, with no diagnostic. A *bare* `exp(x)` with no import **evaluates**, by
+the same unqualified-name dispatch a bare `sqrt(x)` uses, but the checker still
+reports `unresolved reference: exp` on the name — exactly the rough edge the
+vendored functions have, no better and no worse. ROADMAP A6 is the general fix.
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| `exp(x)` — e raised to the power x | `runtime/library_functions.go` (`math.Exp`) | `TestLibraryFunctionValues` | ✅ Faithful |
+| `ln(x)` — natural logarithm, defined for `x > 0.0` | `runtime/library_functions.go` `naturalLog` | `TestLibraryFunctionValues`, `TestLibraryFunctionErrors` | ✅ Faithful |
+| `log(x, base)` — logarithm to an explicit base, so base 10 and base e are never confused; base 10 and base 2 use `math.Log10`/`math.Log2`, which are exact where the ratio of logarithms is not | `runtime/library_functions.go` `logToBase` | `TestLibraryFunctionValues`, `TestLibraryFunctionErrors` | ✅ Faithful |
+| `atan2(y, x)` — full-quadrant angle, parameters ordered as in IEEE 754 and `math.Atan2` | `runtime/library_functions.go` `atan2Real` | `TestLibraryFunctionValues`, `TestLibraryFunctionAtan2NamedArguments` | ✅ Faithful |
+| `ln(0.0)`, `ln(-1.0)`, `log(x, 1.0)`, `log(-1.0, 10.0)`, `atan2(0.0, 0.0)` report a domain error; `exp` beyond the Real range reports an overflow | `runtime/library_functions.go` | `TestLibraryFunctionErrors`, `TestRuntimeRobustness/extension_library_function_outside_its_domain` | ✅ Faithful |
+| The shipped declarations and the registered implementations cannot drift (names, parameter names, parameter order) | `runtime/library_functions.go` registry | `TestSystemicaMathFunctionsMatchTheShippedDeclarations` | ✅ Faithful |
+| Evaluable from a `calc def` body | `runtime/invoke_calc.go` | `calc_systemica_math_functions.sysml` + golden trace | ✅ Faithful |
 
 ### Static Expression Type Checking (KerML §7.4 Expressions, §8.3 Feature Values)
 
@@ -297,7 +403,7 @@ known, so unmodelled types never produce a false positive.
 | Boolean operand types (`and or xor implies & \|`, `not`) | `passes/typecheck_expr.go` `checkBinaryBoolean`/`checkUnaryBoolean` | `TestExprAndOnIntegerRejected` | ✅ Faithful |
 | Comparison operand types (`< > <= >=`) | `passes/typecheck_expr.go` `checkComparison` | `TestExprComparisonOfBooleanRejected` | ✅ Faithful |
 | Disjoint `==`/`!=` operands (warning; `'=='` is declared over `Anything`) | `passes/typecheck_expr.go` `checkEquality` | `TestExprEqualityAcrossDisjointTypesWarns` | ✅ Faithful |
-| Boolean-valued contexts (constraint/assume/require, `if`/`while`, guards) | `passes/typecheck.go` `checkBehaviorMember` | `TestExprTransitionGuardMustBeBoolean` | ✅ Faithful |
+| Boolean-valued contexts (constraint/assume/require, `if`/`while`/`until`, guards) | `passes/typecheck.go` `checkBehaviorMember` (recursing into loop and branch bodies, so a nested condition is checked too) | `TestExprTransitionGuardMustBeBoolean`, `TestTypeCheckNonBooleanControlFlowConditions` | ⚠️ Approximate (a condition whose type the expression checker can infer is checked here, before execution; a bare feature reference infers Unknown — see `What We Don't (Yet) Support` — and is caught by the executor instead) |
 | Change-event conditions (`accept when <expr>`, `transition ... when <expr>`) | `passes/typecheck.go` `checkTrigger` | `TestExprAcceptWhenConditionMustBeBoolean` | ⚠️ Approximate (`accept when` is always a condition; after `transition ... when` a bare name is a signal, so only expressions are checked there) |
 | Division/exponentiation result types (`Natural/Natural -> Natural`, `Integer/Integer -> Rational`) | `passes/typecheck_expr.go` `divisionResult` | `TestExprWholeNumberDivisionAndPowerOK` | ✅ Faithful |
 | Calc/action invocation arity, incl. inherited, partially redefined (`:>>`), and arrow-form receiver | `passes/typecheck_expr.go` `effectiveInParameters`/`checkArguments` | `TestExprPartiallyRedefinedParametersKeepInheritedSignature` | ✅ Faithful |
@@ -327,7 +433,7 @@ known, so unmodelled types never produce a false positive.
 | Requirement actor declaration | `symbols/builder.go` ActorMember | `TestBehaviorDeclarationsAreVisible/requirement_actor_binding` | ✅ Faithful |
 | Inherited member through a qualified-name segment (`engine::'4cylEngine'`) | `resolve/qualified.go` `walkQualified` → `semantics.Model.LookupMember` | `model/inherited_scope_resolve_test.go` `TestInheritedMembersAreVisible` | ✅ Faithful |
 | Redefinition target that the redefinition shadows (`part redefines engine`) | `semantics/model.go` `inheritedFeature` | `TestInheritedMembersAreVisible/nested_redefinition`, `TestRedefinitionDoesNotShadowItsTarget` | ✅ Faithful |
-| Loop body as a namespace (`loop { action a; } until a.x`, `for x in c { ... }`) | `symbols/builder.go` WhileLoopActionNode, `resolve/document.go`, `passes/typecheck.go`, `lsp/walk.go` | `TestBodyLocalDeclarationsAreVisible`, `TestBodyLocalNamesDoNotEscape` | ✅ Faithful |
+| Loop body as a namespace (`loop { action a; } until a.x`, `for x in c { ... }`) | `symbols/builder.go` WhileLoopActionNode (including a `for` loop's iteration variable), `resolve/document.go`, `passes/typecheck.go`, `lsp/walk.go`; at execution `runtime/action_statements.go` `stmtEnv` (a frame per entered block) | `TestBodyLocalDeclarationsAreVisible`, `TestBodyLocalNamesDoNotEscape`, `runtime/robustness_test.go:loop_body_declaration_does_not_leak` | ✅ Faithful |
 | Body-expression parameters (`c->forAll { in i : Positive; f(i) }`) | `symbols/bodyscopes.go` `buildBodyScopes` (scope linked into the document tree), read back by `symbols.BodyExprScope` in `resolve/document.go` and `lsp/walk.go` | `TestBodyLocalDeclarationsAreVisible/body_expression_parameter`, `lsp` `TestRenameLeavesBodyExpressionParameters`, `TestRenameBodyExpressionParameterFromDeclaration`, `TestDefinitionBodyExpressionParameter` | ✅ Faithful |
 | Features of the stdlib base type of an untyped usage (`state normal;` → `States::StateAction::done`) | `semantics/implicit.go` `implicitUsageBases`, `Model.implicitBase` via `semantics/model.go` `DirectSupertypes` | `model/implicit_typing_test.go` `TestImplicitUsageBaseTypes`, `TestInheritedMembersResolveThroughUntypedUsage`, `semantics/implicit_test.go`, `lsp/implicit_typing_test.go` | ⚠️ Approximate (the implicit base is the stdlib base *definition* of the usage kind, not the base *feature* it subsets, since library index records carry no specialization edges; connector/succession/flow/binding/satisfy/subject/objective usages take their type from what they relate to and get no base) |
 | Implicit redefinition of behavior/step parameters by position (`out item image;` in `action focus : Focus` redefines `Focus::image`), KerML 7.4.7.2/7.4.7.3, SysML v2 7.17.2 | `semantics/redefinition.go` `Model.implicitParameterRedefinitions`, `Model.parametersOf`, reached from `semantics/model.go` `DirectSupertypes` | `semantics/redefinition_test.go`, `model/implicit_typing_test.go` `TestParameterRedefinitionAccompaniesTheImplicitBase`, `TestImplicitRedefinitionSuppliesInheritedMembers`, `passes/typecheck_expr_test.go` `TestExprRedeclaredParametersMatchByPositionNotName` (the invocation signature matches by the same rule) | ✅ Faithful (owned parameters in lexical order redefine the parameter at the same position of each general behavior or step, matching direction; parameters a single general behavior leaves un-redefined are inherited after the owned ones; the kind's standard library base still applies alongside the redefinition, since the redefined parameter may itself be untyped) |
@@ -398,6 +504,7 @@ are tracked here):
 | Deferred until | Reassess |
 |---|---|
 | A parameter of a behavior or step whose general type comes from the library index | `semantics/redefinition.go` `ownedParameters` reads the declaration's members, so a general behavior with no parsed AST (a cached library symbol) contributes no positions and its parameters are not redefined. Needs parameter order in `IndexRecord`, like the `Supers` row below. |
+| Scalar type inference for a bare feature reference (`passes/typecheck_expr.go` `infer`) | A condition that is a plain name — `while total { … }`, `total : Integer` — infers Unknown, so `checkBoolean` passes it and the executor reports it (`runtime/action_statements.go` `evalCondition`) instead. Once a feature reference infers its declared scalar type, this becomes a typecheck error like the literal and operator cases, and the runtime check goes back to being unreachable. |
 | Specialization edges in the library index (`libs/loader.go` `recordEntries` drops `Supers`) | `implicitUsageBases` maps each usage kind to its stdlib base *definition* because the base *feature* the spec has usages subset would be a dead end for member lookup. With the edges recorded, the map should name the base feature the spec names. |
 
 ### Major UML/SysML Features Not Implemented
@@ -462,8 +569,8 @@ are tracked here):
 | `eval.go` | Expression evaluation (operators, literals, features) | ~758 |
 | `value.go` | Runtime value representation (ValConst, ValString, ValInstance) | ~150 |
 | `trace.go` | Deterministic execution and calc-evaluation trace recording, canonical value rendering | ~290 |
-| `conformance_test.go` | Conformance gate (61 cases) | ~470 |
-| `robustness_test.go` | Failure-mode tests (35 subtests) | ~660 |
+| `conformance_test.go` | Conformance gate (71 cases) | ~480 |
+| `robustness_test.go` | Failure-mode tests (39 subtests) | ~830 |
 | `trace_test.go` | Golden trace test infrastructure | ~200 |
 | `trace_calc_test.go` | Trace determinism and canonical rendering unit tests | ~180 |
 
@@ -488,24 +595,24 @@ are tracked here):
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
-- Execution conformance cases: 61 (all passing)
+- Execution conformance cases: 78 (all passing)
 - gRPC conformance cases: 6 (all passing)
-- Robustness subtests: 35 (all passing)
-- Golden AST fixtures: 36
-- Golden execution traces: 24
+- Robustness subtests: 43 (all passing)
+- Golden AST fixtures: 42
+- Golden execution traces: 37
 - Negative parser subtests: 49
 
-**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 61 total):
-- Calc: 10 conformance + 10 golden traces (includes unary, coercion and qualified-name evaluation)
-- Constraint: 3 conformance + 3 golden traces
+**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 78 total):
+- Calc: 12 conformance + 12 golden traces (includes unary, coercion, qualified-name, KerML library and Systemica extension library function evaluation)
+- Constraint: 4 conformance + 4 golden traces
 - Requirement: 5 conformance
-- Action: 11 conformance + 4 golden traces
+- Action: 24 conformance + 14 golden traces
 - State: 26 conformance + 7 golden traces
 - Accept: 1 conformance (`accept_then_transition`)
-- Instance: 5 conformance (`instance_derived_slots`, `instance_constraint_binding`, `instance_inherited_constraint`, `instance_nested_usage_body`, `instance_unnamed_redefinition`)
+- Instance: 6 conformance (`instance_derived_slots`, `instance_constraint_binding`, `instance_inherited_constraint`, `instance_library_function_default`, `instance_nested_usage_body`, `instance_unnamed_redefinition`)
 
 **Quality Gates:**
-- Parser: 94/94 stdlib files clean
+- Parser: 95/95 stdlib files clean (94 vendored OMG, 1 Systemica extension)
 - Execution conformance: 61/61 cases passing
 - Training examples: 98/100 clean (2 files / 4 errors, both pinned OMG source bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit

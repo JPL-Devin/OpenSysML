@@ -1,0 +1,27 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="AssertNegated" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="requirement" name="touchdown" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="part" name="lander" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="part" name="context" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="constraint" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false negated=true
+              (ConstraintMember assert=true negated=false
+                (OperatorExpr operator="<"
+                  (LiteralInteger value="1")
+                  (LiteralInteger value="2")))))
+          (Membership visibility="default"
+            (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false negated=true
+              (Relationship kind="subsets" target=touchdown
+                (*ast.QualifiedName))
+              (Relationship kind="by" target=lander
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="constraint" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConstraintMember assert=true negated=false
+                (OperatorExpr operator="<"
+                  (LiteralInteger value="1")
+                  (LiteralInteger value="2"))))))))))

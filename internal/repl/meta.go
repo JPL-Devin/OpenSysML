@@ -85,6 +85,7 @@ var helpText = []string{
 	"%calc <name> <args> invoke a calculation with arguments",
 	"%constraint <name>  evaluate a constraint definition",
 	"%requirement <name> evaluate a requirement definition",
+	"%satisfy [name]     evaluate the satisfaction assertions of the model, or of one element",
 	"",
 	"Action debugging:",
 	"%action <name>      start action executor debugging session",
@@ -198,6 +199,8 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			return []string{"usage: %requirement <name>"}, false, nil
 		}
 		return s.doRequirement(fields[1])
+	case "%satisfy":
+		return s.doSatisfy(fields[1:])
 	// Action debugging
 	case "%action":
 		if len(fields) < 2 {
@@ -413,7 +416,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 	// Use runtime context with empty model (no symbols needed for literals)
 	emptyIdx := symbols.NewIndex()
 	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
-	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), 100000)
+	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.budgets.MaxSteps)
 
 	val, err := ctx.Eval(usage.Value)
 	if err != nil {
@@ -702,7 +705,7 @@ func (s *Session) doCalc(args []string) ([]string, bool, error) {
 		// Use empty context for literal evaluation
 		emptyIdx := symbols.NewIndex()
 		emptyModel := semantics.NewModel(resolve.New(emptyIdx))
-		literalCtx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), 100000)
+		literalCtx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.budgets.MaxSteps)
 
 		// Parse as attribute inside a part (top-level attribute syntax not supported)
 		src := fmt.Sprintf("part __dummy__ { attribute __arg__ = %s; }", argStr)
@@ -805,7 +808,11 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 // is the model's answer, not a malfunction, so it is not an error line. what
 // names the kind of condition, e.g. "Assertion" or "Required condition".
 func verdictDetail(what string, err error) string {
-	if err == nil || errors.Is(err, runtime.ErrViolated) {
+	var violation *runtime.ViolationError
+	switch {
+	case errors.As(err, &violation):
+		return fmt.Sprintf("%s evaluated to false: %s", what, violation.Condition)
+	case err == nil || errors.Is(err, runtime.ErrViolated):
 		return what + " evaluated to false"
 	}
 	return fmt.Sprintf("Error: %v", err)
@@ -853,6 +860,93 @@ func (s *Session) doRequirement(name string) ([]string, bool, error) {
 	return []string{
 		fmt.Sprintf("✓ Requirement %s satisfied%s", name, onInstance(inst, owner)),
 	}, false, nil
+}
+
+// doSatisfy evaluates satisfaction assertions: every one the model states, or,
+// given a name, the ones the named element states — or that element itself, when
+// it is a named satisfaction assertion. The usual `assert satisfy r by p;` is
+// anonymous, so the element stating it is how a user reaches it.
+func (s *Session) doSatisfy(args []string) ([]string, bool, error) {
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		return []string{"error: no declarations loaded"}, false, nil
+	}
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+
+	scope := doc.Scope
+	where := "the session"
+	if len(args) > 0 {
+		sym, fqn, lerr := s.lookupSymbol(args[0])
+		if lerr != nil {
+			return []string{"error: " + lerr.Error()}, false, nil
+		}
+		if a, aerr := ctx.SatisfyAssertionOf(sym); aerr == nil {
+			return s.satisfyVerdict(ctx, a), false, nil
+		}
+		if sym.Scope == nil {
+			return []string{fmt.Sprintf("error: %s states no satisfaction assertion", args[0])}, false, nil
+		}
+		scope, where = sym.Scope, fqn
+	}
+
+	assertions := ctx.SatisfyAssertionsIn(scope)
+	if len(assertions) == 0 {
+		return []string{fmt.Sprintf("no satisfaction assertion in %s", where)}, false, nil
+	}
+	var out []string
+	for _, a := range assertions {
+		out = append(out, s.satisfyVerdict(ctx, a)...)
+	}
+	return out, false, nil
+}
+
+// satisfyVerdict renders the verdict of one satisfaction assertion, evaluated
+// against an object of its subject: the one the session already created for that
+// subject, so a `%instantiate` before it is what the verdict is about.
+func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAssertion) []string {
+	subject, owner := s.subjectInstance(a)
+	if subject == nil && a.Subject != nil {
+		// No object of the subject exists yet, so the verdict is about a fresh
+		// one, created here rather than inside the evaluation so it can be named.
+		if inst, serr := ctx.SatisfySubject(a); serr == nil {
+			subject, owner = inst, s.subjectName(a)
+			// Kept like %instantiate would, so a repeated %satisfy is about the
+			// same object rather than another copy of it.
+			s.instances[owner] = inst
+		}
+	}
+	holds, err := ctx.EvaluateSatisfactionOn(a, subject)
+	if err != nil || !holds {
+		return []string{
+			fmt.Sprintf("✗ %s fails%s", a.Text(), onInstance(subject, owner)),
+			"  " + verdictDetail("Required condition", err),
+		}
+	}
+	return []string{fmt.Sprintf("✓ %s holds%s", a.Text(), onInstance(subject, owner))}
+}
+
+// subjectInstance returns the object the session has already created for an
+// assertion's subject, with the name it was created under, or nil for none.
+func (s *Session) subjectInstance(a *runtime.SatisfyAssertion) (*runtime.Instance, string) {
+	name := s.subjectName(a)
+	if inst, ok := s.instances[name]; ok {
+		return inst, name
+	}
+	return nil, ""
+}
+
+// subjectName is the name an assertion's subject is known by: its
+// fully-qualified name, or the reference as written when it resolves to nothing.
+func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
+	if idx := s.symbolIndex(); idx != nil && a.Subject != nil {
+		if fqn := idx.GetFQN(a.Subject); fqn != "" {
+			return fqn
+		}
+	}
+	return a.SubjectRef
 }
 
 // --- Action Debugging Commands ---
@@ -1241,11 +1335,13 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 		return []string{fmt.Sprintf("No pending work - simulation time is now %.2f", deadline)}, false, nil
 	}
 
-	// Bound the drain so a machine that keeps queueing work cannot hang the REPL.
-	const maxAdvanceEvents = 10000
-	processed := 0
-	doActions := 0
-	for exec.HasPendingWork() && exec.State() == runtime.StateRunning && processed+doActions < maxAdvanceEvents {
+	// Bound the drain by the session's own budgets, so a machine that keeps
+	// queueing work cannot hang the REPL and the way to raise the bound is the
+	// same one the executors report.
+	maxEvents, maxDoActions := s.budgets.MaxStateEvents, s.budgets.MaxDoSteps
+	var processed, doActions int64
+	for exec.HasPendingWork() && exec.State() == runtime.StateRunning &&
+		processed < maxEvents && doActions < maxDoActions {
 		if queue := exec.EventQueue(); queue.Len() == 0 || queue.Peek().Timestamp > deadline {
 			// Nothing to dispatch within the deadline, but a do behavior with
 			// actions left is due now, so run it and count it as do work.
@@ -1259,7 +1355,7 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 			if ran == 0 {
 				break
 			}
-			doActions += ran
+			doActions += int64(ran)
 			continue
 		}
 		if err := exec.ProcessNextEvent(); err != nil {
@@ -1278,6 +1374,17 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 
 	if doActions > 0 {
 		out = append(out, fmt.Sprintf("  Do behavior actions run: %d", doActions))
+	}
+
+	// A drain the bound cut short has work left, so say so rather than let it
+	// read as a machine that settled.
+	switch {
+	case processed >= maxEvents:
+		out = append(out, fmt.Sprintf("  Stopped at the event budget (%d events; raise %s to allow more)",
+			maxEvents, runtime.MaxStateEventsEnvVar))
+	case doActions >= maxDoActions:
+		out = append(out, fmt.Sprintf("  Stopped at the do activity budget (%d steps; raise %s to allow more)",
+			maxDoActions, runtime.MaxDoStepsEnvVar))
 	}
 
 	if exec.State() == runtime.StateCompleted {

@@ -17,7 +17,15 @@ type Context struct {
 	steps     int64
 	maxSteps  int64
 	instances map[int64]*Instance
-	features  map[*symbols.Symbol][]EffectiveFeature
+
+	// maxActionSteps, maxStateEvents and maxDoSteps bound the executors this
+	// context runs: token-flow steps, dispatched events, and do activity actions.
+	// Unlike maxSteps they are counted by the executor, not here.
+	maxActionSteps int64
+	maxStateEvents int64
+	maxDoSteps     int64
+
+	features map[*symbols.Symbol][]EffectiveFeature
 
 	// calcShapes memoizes resolved calc invocation interfaces (parameters,
 	// defaults, result expression) per calc symbol.
@@ -33,6 +41,10 @@ type Context struct {
 	// calcDepth is the number of calc invocations currently on the stack,
 	// bounding recursion across nested calc evaluations.
 	calcDepth int
+
+	// runDepth is the number of runs currently under way, so the step counter is
+	// reset per run rather than accumulated over the context's whole life.
+	runDepth int
 
 	// messages are the signals in flight, oldest first. The bus is context-wide,
 	// so a message one behavior sends can be accepted in another.
@@ -50,7 +62,8 @@ type slotRef struct {
 }
 
 // NewContext creates a runtime context backed by the given semantic model.
-// maxSteps sets the runaway guard (step counter limit).
+// maxSteps sets the runaway guard (step counter limit); the executor bounds take
+// their defaults, which SetBudgets replaces.
 // It panics if maxSteps <= 0: the limit is a programmer-supplied invariant, not
 // user input, so callers must pass a positive value.
 func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int64) *Context {
@@ -66,6 +79,10 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		instances:  make(map[int64]*Instance),
 		features:   make(map[*symbols.Symbol][]EffectiveFeature),
 		calcShapes: make(map[*symbols.Symbol]*calcShape),
+
+		maxActionSteps: DefaultMaxActionSteps,
+		maxStateEvents: DefaultMaxStateEvents,
+		maxDoSteps:     DefaultMaxDoSteps,
 
 		derivingSlots: make(map[slotRef]bool),
 	}
@@ -89,11 +106,38 @@ func (ctx *Context) allocateID() int64 {
 	return id
 }
 
+// beginRun starts a run and returns the function that ends it, resetting the
+// step counter so the budget bounds one run rather than a whole session. A run
+// started inside another - an action invoked from an expression, say - shares the
+// outer one's budget, so a runaway cannot escape the bound by starting runs.
+func (ctx *Context) beginRun() func() {
+	if ctx.runDepth == 0 {
+		ctx.steps = 0
+	}
+	ctx.runDepth++
+	return func() { ctx.runDepth-- }
+}
+
+// beginExecutorRun brackets one call into an executor a caller drives itself, step
+// by step - the REPL's %action and %state debuggers - whose run spans many calls
+// and so has no single scope beginRun could bracket. started, held by the
+// executor, marks its run as begun, so the counter is reset once, at its start,
+// and every call of it counts as a run under way.
+func (ctx *Context) beginExecutorRun(started *bool) func() {
+	if ctx.runDepth == 0 && !*started {
+		ctx.steps = 0
+	}
+	*started = true
+	ctx.runDepth++
+	return func() { ctx.runDepth-- }
+}
+
 // incrementStep increments the step counter and returns ErrStepLimitExceeded if limit reached.
+// The error names the effective budget and the variable that raises it.
 func (ctx *Context) incrementStep() error {
 	ctx.steps++
 	if ctx.steps > ctx.maxSteps {
-		return fmt.Errorf("%w (%d steps)", ErrStepLimitExceeded, ctx.maxSteps)
+		return fmt.Errorf("%w (%d steps; raise %s to allow more)", ErrStepLimitExceeded, ctx.maxSteps, MaxStepsEnvVar)
 	}
 	return nil
 }
@@ -134,6 +178,8 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 // constraint can pass for one instance and fail for another. A nil instance
 // evaluates against declared defaults, as EvaluateConstraint does.
 func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
+	defer ctx.beginRun()()
+
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind != ast.DefConstraint {
@@ -147,48 +193,72 @@ func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Sco
 		return false, fmt.Errorf("invalid constraint symbol: %s (%T)", sym.Name, sym.Decl)
 	}
 
-	// Evaluate each constraint member, inherited ones included
-	evaluated := 0
-	for _, member := range ctx.chainMembers(sym, scope) {
-		// Check for ConstraintMember
-		constraintMember, ok := member.node.(*ast.ConstraintMember)
-		if !ok {
-			continue // skip non-constraint members
-		}
-		evaluated++
+	// Evaluate every condition the constraint states, inherited ones included.
+	conds := conditionsOf(ctx.chainMembers(sym, scope))
+	return ctx.evaluateConditions(conditionCheck{
+		sym:     sym,
+		kind:    "constraint",
+		what:    "assertion",
+		self:    self,
+		negated: negatedDecl(sym),
+	}, conds)
+}
 
-		// Evaluate constraint expression
-		result, err := NewEvalContextIn(ctx, member.scope, self).Eval(constraintMember.Expression)
-		if err != nil {
-			return false, fmt.Errorf("constraint %s: evaluation failed: %w", sym.Name, err)
-		}
+// memberBindings evaluates the values members bind by name — a subject or actor
+// supplied by an expression (`actor operator = limit;`) — so a condition naming
+// one reads it. element names the requirement in messages. A non-nil subject is
+// the object supplied from outside (the `by` of a satisfaction assertion): it
+// binds every subject the members declare, whose own binding is then neither
+// evaluated nor used.
+func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members []scopedMember, self *Instance, subject *Instance) (map[string]Value, error) {
+	bindings := make(map[string]Value)
+	features := ctx.conditionFeatures(sym)
+	evalIn := func(memberScope *symbols.Scope) *EvalContext {
+		ec := NewEvalContextIn(ctx, memberScope, self)
+		ec.features = features
+		ec.Push(bindings)
+		return ec
+	}
 
-		// Extract boolean value
-		satisfied := false
-		if result.Kind == ValConst && result.Const.Kind == semantics.ValBool {
-			satisfied = result.Const.Bool
-		} else {
-			return false, fmt.Errorf("constraint %s: expression must evaluate to boolean, got %v", sym.Name, result.Kind)
-		}
-
-		// Apply negation
-		if constraintMember.IsNegated {
-			satisfied = !satisfied
-		}
-
-		// Handle assert vs assume
-		if constraintMember.IsAssert {
-			if !satisfied {
-				return false, fmt.Errorf("constraint %s: assertion %w", sym.Name, ErrViolated)
+	for _, member := range members {
+		var what, name string
+		var expr ast.Node
+		isSubject := false
+		switch rm := member.node.(type) {
+		case *ast.SubjectMember:
+			what, name, expr, isSubject = "subject", rm.Name, rm.BindingExpr, true
+		case *ast.ActorMember:
+			what, name, expr = "actor", rm.Name, rm.BindingExpr
+		case *ast.Usage:
+			if rm.Kind == ast.UsageSubject {
+				name, isSubject = rm.Ident.Name, true
 			}
+		default:
+			continue
 		}
-		// assume: always pass (assumptions are trusted)
+		if isSubject && subject != nil {
+			if name != "" {
+				bindings[name] = Value{Kind: ValInstance, Instance: subject.ID}
+			}
+			continue
+		}
+		if expr == nil {
+			continue
+		}
+		value, err := evalIn(member.scope).Eval(expr)
+		if err != nil {
+			return nil, fmt.Errorf("requirement %s: %s binding evaluation failed: %w", element, what, err)
+		}
+		bindings[name] = value
 	}
+	return bindings, nil
+}
 
-	if evaluated == 0 {
-		return false, fmt.Errorf("constraint %s: %w", sym.Name, ErrNoConditions)
-	}
-	return true, nil
+// negatedDecl reports whether sym's declaration asserts that its conditions do
+// not hold (`assert not constraint { … }`, `assert not satisfy … by …`).
+func negatedDecl(sym *symbols.Symbol) bool {
+	usage, ok := sym.Decl.(*ast.Usage)
+	return ok && usage.IsNegated
 }
 
 // scopedMember is a declaration member with the scope it was written in, since
@@ -235,6 +305,8 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 // binding the features it names to that instance's slots. A nil instance
 // evaluates against declared defaults, as EvaluateRequirement does.
 func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
+	defer ctx.beginRun()()
+
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind != ast.DefRequirement {
@@ -251,89 +323,24 @@ func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Sc
 	// Requirement-local bindings are shared by every member, whichever scope it
 	// was declared in.
 	members := ctx.chainMembers(sym, scope)
-	reqBindings := make(map[string]Value)
-	evalIn := func(memberScope *symbols.Scope) *EvalContext {
-		ec := NewEvalContextIn(ctx, memberScope, self)
-		ec.Push(reqBindings)
-		return ec
-	}
 
 	// First pass: process subject/actor bindings
-	for _, member := range members {
-		evalCtx := evalIn(member.scope)
+	reqBindings, err := ctx.memberBindings(sym, sym.Name, members, self, nil)
 
-		// Handle binding declarations
-		switch rm := member.node.(type) {
-		case *ast.SubjectMember:
-			// Subject binding: subject <name> = <expr>;
-			if rm.BindingExpr != nil {
-				// Evaluate binding expression
-				value, err := evalCtx.Eval(rm.BindingExpr)
-				if err != nil {
-					return false, fmt.Errorf("requirement %s: subject binding evaluation failed: %w", sym.Name, err)
-				}
-
-				// Add binding to evaluation frame
-				reqBindings[rm.Name] = value
-			}
-
-		case *ast.ActorMember:
-			// Actor binding: actor <name> = <expr>;
-			if rm.BindingExpr != nil {
-				// Evaluate binding expression
-				value, err := evalCtx.Eval(rm.BindingExpr)
-				if err != nil {
-					return false, fmt.Errorf("requirement %s: actor binding evaluation failed: %w", sym.Name, err)
-				}
-
-				// Add binding to evaluation frame
-				reqBindings[rm.Name] = value
-			}
-		}
+	if err != nil {
+		return false, err
 	}
 
-	// Second pass: evaluate assume/require expressions
-	evaluated := 0
-	for _, member := range members {
-		evalCtx := evalIn(member.scope)
-
-		// Handle requirement constraints
-		switch rm := member.node.(type) {
-		case *ast.AssumeMember:
-			// Assume: evaluate expression (should be true, but doesn't fail requirement)
-			evaluated++
-			_, err := evalCtx.Eval(rm.Expression)
-			if err != nil {
-				return false, fmt.Errorf("requirement %s: assume evaluation failed: %w", sym.Name, err)
-			}
-			// Assumptions always pass (trusted)
-
-		case *ast.RequireMember:
-			// Require: must evaluate to true
-			evaluated++
-			result, err := evalCtx.Eval(rm.Expression)
-			if err != nil {
-				return false, fmt.Errorf("requirement %s: require evaluation failed: %w", sym.Name, err)
-			}
-
-			// Extract boolean value
-			satisfied := false
-			if result.Kind == ValConst && result.Const.Kind == semantics.ValBool {
-				satisfied = result.Const.Bool
-			} else {
-				return false, fmt.Errorf("requirement %s: require expression must evaluate to boolean, got %v", sym.Name, result.Kind)
-			}
-
-			if !satisfied {
-				return false, fmt.Errorf("requirement %s: require condition %w", sym.Name, ErrViolated)
-			}
-		}
-	}
-
-	if evaluated == 0 {
-		return false, fmt.Errorf("requirement %s: %w", sym.Name, ErrNoConditions)
-	}
-	return true, nil
+	// Second pass: evaluate the assumed and required conditions.
+	conds := conditionsOf(members)
+	return ctx.evaluateConditions(conditionCheck{
+		sym:      sym,
+		kind:     "requirement",
+		what:     "require condition",
+		self:     self,
+		bindings: reqBindings,
+		negated:  negatedDecl(sym),
+	}, conds)
 }
 
 // ExecuteAction executes an action definition/usage to completion.
@@ -346,6 +353,8 @@ func (ctx *Context) ExecuteAction(action *symbols.Symbol) (map[string]Value, err
 // provided input parameter bindings (keyed by parameter name). Inputs override
 // action attribute defaults of the same name. Returns final token data.
 func (ctx *Context) ExecuteActionWithInputs(action *symbols.Symbol, inputs map[string]Value) (map[string]Value, error) {
+	defer ctx.beginRun()()
+
 	// Create executor
 	exec, err := newActionExecutor(ctx, action)
 	if err != nil {
@@ -387,6 +396,8 @@ func (ctx *Context) ExecuteState(stateMachine *symbols.Symbol) (map[string]Value
 // events until completion or suspension. Returns the final state data and the
 // ordered list of visited state names.
 func (ctx *Context) ExecuteStateWithEvents(stateMachine *symbols.Symbol, events []string) (map[string]Value, []string, error) {
+	defer ctx.beginRun()()
+
 	// Create executor
 	exec, err := newStateExecutor(ctx, stateMachine)
 	if err != nil {

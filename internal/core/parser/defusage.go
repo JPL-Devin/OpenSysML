@@ -209,6 +209,7 @@ type featureMods struct {
 	isEvent           bool // event modifier for occurrences
 	isIndividual      bool // individual modifier for individuals/snapshots
 	isSnapshot        bool // snapshot modifier for snapshots
+	isNegated         bool // `not` of `assert not <kind>`: the conditions are asserted to be false
 	visibility        ast.Visibility
 	direction         ast.FeatureDirection
 	isComposite       bool
@@ -249,6 +250,9 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 		}
 		if mods.isSnapshot {
 			d.IsSnapshot = true
+		}
+		if mods.isNegated {
+			d.IsNegated = true
 		}
 		if mods.isComposite {
 			d.IsComposite = true
@@ -741,6 +745,15 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// `variant` likewise prefixes a kind when a name follows it
 		// (`variant attribute diameterSmall = 70[mm];`); with no name, the
 		// second keyword is the variant's own name.
+		// `assert not constraint { … }` and `assert not satisfy … by …` negate the
+		// declaration the prefix qualifies (Invariant::isNegated), so the `not`
+		// belongs to it rather than to an expression. It is only a negation when a
+		// kind keyword follows: `assert not (x > 1);` negates an expression.
+		if kindPrefixKeywords[kw] && p.atKeyword("not") && isKindKeyword(p.peekN(1)) {
+			mods.isNegated = true
+			p.advance()
+		}
+
 		kindKeyword := kw
 		if isKindKeyword(p.peek()) &&
 			(kindPrefixKeywords[kw] || (kw == "variant" && !namesDeclaration(p.peekN(1)))) {
@@ -875,18 +888,16 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 			members = p.parseConstraintBody()
 			hasBody = true
 		}
-	case ast.DefRequirement:
-		// Requirement def bodies: requirement body OR generic
-		// Lookahead: if body starts with requirement keywords → parseRequirementBody
-		// Otherwise → generic parseDefUsageBody
+	case ast.DefRequirement, ast.DefConcern, ast.DefViewpoint:
+		// Requirement def bodies: a requirement member may appear anywhere in the
+		// body, not only first, so the whole body is parsed as a requirement body
+		// (which falls back to general body members). A concern definition is a
+		// requirement definition and a viewpoint definition a concern definition
+		// (SysML v2 §7.19), so all three carry require/assume/subject/actor.
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
-			if p.isRequirementKeyword() {
-				members = p.parseRequirementBody()
-			} else {
-				members = p.parseActionBodyGeneric()
-			}
+			members = p.parseRequirementBody()
 			hasBody = true
 		}
 	case ast.DefState:
@@ -909,33 +920,6 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 	return def
 }
 
-// parseActionBodyGeneric parses generic action def body (same as parseDefUsageBody internals)
-func (p *Parser) parseActionBodyGeneric() []ast.Node {
-	var members []ast.Node
-	for !p.at(lexer.RBrace) && !p.atEOF() {
-		before := p.peek().Span.Offset
-		m := p.parseBodyMember()
-		if m != nil {
-			// Check for namespace-level succession: 'then' after member
-			if p.atKeyword("then") {
-				p.advance() // consume 'then'
-
-				// Apply succession to membership node
-				if mem, ok := m.(*ast.Membership); ok {
-					mem.HasSuccession = true
-					// Target will be next member parsed in loop
-				}
-			}
-			members = append(members, m)
-		}
-		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
-			p.advance()
-		}
-	}
-	p.expect(lexer.RBrace, "expected '}' to close body")
-	return members
-}
-
 // isBehavioralKeyword checks if next token is a behavioral keyword
 func (p *Parser) isBehavioralKeyword() bool {
 	if !p.at(lexer.Keyword) {
@@ -953,15 +937,6 @@ func (p *Parser) isBehavioralKeyword() bool {
 // isResultKeyword checks if next token is 'return'
 func (p *Parser) isResultKeyword() bool {
 	return p.at(lexer.Keyword) && p.peek().KeywordID == "return"
-}
-
-// isRequirementKeyword checks if next token is requirement-related
-func (p *Parser) isRequirementKeyword() bool {
-	if !p.at(lexer.Keyword) {
-		return false
-	}
-	kw := p.peek().KeywordID
-	return kw == "subject" || kw == "assume" || kw == "require" || kw == "actor" || kw == "doc"
 }
 
 // parseUsageIdentification parses identification for usage declarations, with special handling
@@ -1122,6 +1097,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	u := &ast.Usage{
 		Kind:         kind,
 		Keyword:      keyword,
+		IsNegated:    mods.isNegated,
 		IsAbstract:   mods.isAbstract,
 		IsReference:  mods.isReference,
 		IsAll:        isAll,
@@ -1166,30 +1142,26 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			}
 		}
 
-		// Check for optional "by" clause
+		// Check for optional "by" clause. Per SatisfyRequirementUsage the `by`
+		// operand names the subject of the satisfaction, never the usage itself,
+		// so it is always recorded as a subject relationship.
 		if p.acceptKeyword("by") {
-			subjTarget := p.parseRelationshipTarget()
-			if subjTarget != nil {
-				// Store subject as identification or relationship depending on node type
-				// If it's a simple qualified name, use as identification
-				// If it's a feature chain or other expression, store as relationship
-				if qn, ok := subjTarget.(*ast.QualifiedName); ok && len(qn.Parts) > 0 && u.Ident.Name == "" {
-					u.Ident.Name = qn.Parts[0].Text
-					u.Ident.NameSpan = qn.Parts[0].Span
-				} else {
-					// Store as a subject relationship for complex expressions
-					u.Relationships = append(u.Relationships, &ast.Relationship{
-						Kind:   ast.RelSubject,
-						Target: subjTarget,
-					})
-				}
+			if subjTarget := p.parseRelationshipTarget(); subjTarget != nil {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelSubject,
+					Target: subjTarget,
+				})
 			}
 		}
 
-		// Parse body (requirement body) or semicolon
-		members, hasBody := p.parseDefUsageBody()
-		u.Members = members
-		u.HasBody = hasBody
+		// A satisfy usage is a requirement usage (SysML v2 §7.20), so its body
+		// carries requirement members.
+		if p.accept2(lexer.Semicolon) {
+			u.HasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			u.Members = p.parseRequirementBody()
+			u.HasBody = true
+		}
 		u.NodeSpan = p.spanFrom(start)
 		return u
 	}
@@ -1425,28 +1397,17 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			}
 		} else if p.isBehavioralKeyword() {
 			// Inline behavioral body without braces: action name\n assign ...;
-			// Parse statements until we hit something that's NOT a behavioral statement
-			// Typically one statement, but could be multiple connected with 'then'
-			// EXCEPT: if 'then' is followed by a declaration keyword (action/feature/etc),
-			// it's namespace-level succession, not behavioral succession - stop parsing body
-			for p.isBehavioralKeyword() && !p.atEOF() {
-				// Check if 'then' is namespace succession (then <visibility>? <defKeyword>)
-				if p.atKeyword("then") {
-					next := p.peekN(1)
-					// If followed by visibility or definition/usage keyword, it's namespace succession - stop
-					if next.Kind == lexer.Keyword {
-						if _, isVis := map[string]bool{"public": true, "private": true, "protected": true}[next.KeywordID]; isVis {
-							break // namespace succession
-						}
-						if _, isDef := definitionKindKeywords[next.KeywordID]; isDef {
-							break // namespace succession
-						}
-						if _, isUsage := usageKindKeywords[next.KeywordID]; isUsage {
-							break // namespace succession
-						}
-					}
-				}
+			// The body is a single statement plus any 'then'-chained continuations;
+			// a following statement that is not chained belongs to the enclosing body.
+			// EXCEPT: a 'then' chaining to a declaration is namespace-level
+			// succession, not behavioral succession - stop parsing body
+			for !p.atEOF() && !p.atNamespaceSuccession() {
 				members = append(members, p.parseActionMember())
+				// Only an inline statement continues the body; `then a b;` names
+				// members of the enclosing body.
+				if !p.atKeyword("then") || !startsInlineSuccessionStatement(p.peekN(1)) {
+					break
+				}
 			}
 			hasBody = true
 		} else {
@@ -1510,8 +1471,10 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		} else {
 			p.expect(lexer.LBrace, "expected '{' or ';'")
 		}
-	case ast.UsageRequirement:
-		// Requirement bodies: { subject/assume/require/actor ... }
+	case ast.UsageRequirement, ast.UsageConcern, ast.UsageViewpoint:
+		// Requirement bodies: { subject/assume/require/actor ... }. A concern
+		// usage is a requirement usage and a viewpoint usage a concern usage
+		// (SysML v2 §7.19), so they carry the same members.
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {

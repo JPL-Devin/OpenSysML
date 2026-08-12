@@ -72,7 +72,7 @@ func main() {
 	// Create gRPC service (cache is internal to the service)
 	svc, err := sysmlgrpc.NewService(*cacheSize)
 	if err != nil {
-		slog.Error("Invalid cache size", "error", err)
+		slog.Error("Invalid service configuration", "error", err)
 		os.Exit(1)
 	}
 

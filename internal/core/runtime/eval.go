@@ -17,6 +17,15 @@ type EvalContext struct {
 	self   *Instance          // instance a feature name resolves against, nil when unbound
 	frames []map[string]Value // stack of local bindings (innermost = frames[len-1])
 	trace  *TraceRecorder     // evaluation trace recorder, nil when not tracing
+
+	// features are the features of the element being evaluated — a requirement's
+	// or constraint's own, inherited and rebound features — which its conditions
+	// may name wherever those conditions were written.
+	features map[string]scopedExpr
+
+	// resolving holds the features whose own value is being evaluated, so a value
+	// written in terms of a same-named outer one does not resolve to itself.
+	resolving map[string]bool
 }
 
 // NewEvalContext creates an evaluation context with an empty frame stack. It
@@ -47,7 +56,7 @@ func (ec *EvalContext) evalIn(scope *symbols.Scope) *EvalContext {
 	if scope == nil || scope == ec.scope {
 		return ec
 	}
-	return &EvalContext{ctx: ec.ctx, scope: scope, self: ec.self, frames: ec.frames, trace: ec.trace}
+	return &EvalContext{ctx: ec.ctx, scope: scope, self: ec.self, frames: ec.frames, trace: ec.trace, features: ec.features, resolving: ec.resolving}
 }
 
 // Push adds a new frame to the stack (on calc invocation, lambda entry).
@@ -130,6 +139,8 @@ func (ec *EvalContext) eval(node ast.Node) (Value, error) {
 // Eval is the top-level entry point for evaluating an expression in an empty environment.
 // Resolves names from the root scope.
 func (ctx *Context) Eval(node ast.Node) (Value, error) {
+	defer ctx.beginRun()()
+
 	// Use resolver's root scope for name resolution
 	// (In a full implementation, this would track evaluation context scope)
 	ec := NewEvalContext(ctx, nil)
@@ -138,6 +149,8 @@ func (ctx *Context) Eval(node ast.Node) (Value, error) {
 
 // EvalWithScope evaluates an expression with a given scope context for name resolution.
 func (ctx *Context) EvalWithScope(node ast.Node, scope *symbols.Scope) (Value, error) {
+	defer ctx.beginRun()()
+
 	ec := NewEvalContext(ctx, scope)
 	return ec.Eval(node)
 }
@@ -187,6 +200,22 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		if val, ok := ec.Lookup(name); ok {
 			return val, nil
 		}
+		// Then a valued feature of the element being evaluated: it is declared
+		// inside that element, so it masks a same-named member of the object
+		// carrying it, and a value a typed usage binds masks the default of the
+		// declaration it redefines.
+		// A feature whose own value is already being evaluated is skipped, so
+		// `in mass = mass` reads the outer mass rather than itself.
+		bound, declared := ec.features[name]
+		if declared && bound.expr != nil && !ec.resolving[name] {
+			if ec.resolving == nil {
+				ec.resolving = map[string]bool{}
+			}
+			ec.resolving[name] = true
+			val, err := ec.evalIn(bound.scope).Eval(bound.expr)
+			delete(ec.resolving, name)
+			return val, err
+		}
 		// Then the bound instance: a slot holds the value this object actually
 		// carries, which overrides the declared default the scope would yield.
 		if ec.self != nil {
@@ -197,12 +226,22 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 			}
 		}
 		// Try scope lookup (sibling attributes, inherited members)
-		if ec.scope != nil {
+		if ec.scope != nil && !ec.resolving[name] {
 			if sym, ok := ec.scope.LookupLocal(name); ok && sym != nil {
 				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
 					return ec.Eval(usage.Value)
 				}
 			}
+		}
+		// Nothing outside the feature supplies its value, so its own value depends
+		// on itself.
+		if ec.resolving[name] {
+			return Value{}, fmt.Errorf("%w: %s", ErrCyclicSlot, name)
+		}
+		// A feature the element declares but nothing gives a value to is
+		// uninitialized rather than unresolved.
+		if declared {
+			return Value{}, fmt.Errorf("%w for feature %s", ErrNoValue, name)
 		}
 		return Value{}, fmt.Errorf("unresolved feature: %s", name)
 	}
@@ -341,7 +380,7 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 
 	// Otherwise, recursively eval operands
 	switch n.Operator {
-	case ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpDiv:
+	case ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpDiv, ast.OpPow:
 		return ec.evalArithmetic(n)
 	case ast.OpEq, ast.OpNeq:
 		return ec.evalEquality(n)
@@ -356,7 +395,7 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 	}
 }
 
-// evalArithmetic evaluates arithmetic operators (+, -, *, /).
+// evalArithmetic evaluates arithmetic operators (+, -, *, /, **).
 func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) < 2 {
 		return Value{}, fmt.Errorf("arithmetic operator requires 2 operands")
@@ -373,6 +412,16 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 	// Simplified: assume both are ValConst int/real
 	if left.Kind != ValConst || right.Kind != ValConst {
 		return Value{}, ErrTypeMismatch
+	}
+
+	// Exponentiation shares the folder's implementation, so a folded and an
+	// evaluated `**` agree; the folder declines where this reports the error.
+	if n.Operator == ast.OpPow {
+		res, err := semantics.Pow(left.Const, right.Const)
+		if err != nil {
+			return Value{}, err
+		}
+		return Value{Kind: ValConst, Const: res}, nil
 	}
 
 	// Integer arithmetic
@@ -701,6 +750,12 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	// User-defined calc: resolve target symbol from the evaluation context scope.
 	calcSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.Type)
 	if !ok || calcSym == nil {
+		// A KerML function library function is evaluable even where the model
+		// imports no part of the library, so a name that denotes no declaration
+		// still denotes the library function of that name.
+		if fn, isLib := unresolvedLibraryFunction(n.Type, qualName); isLib {
+			return fn.invoke(ec.ctx, calcArgs{positional: args, named: named})
+		}
 		return Value{}, fmt.Errorf("%w: calc %s", ErrUnresolvedReference, qualName)
 	}
 

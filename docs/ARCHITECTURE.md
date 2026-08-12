@@ -17,7 +17,7 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 ### Design Principles
 
 - **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
-- **Completeness:** SysML v2 textual notation support (94/94 stdlib files parse clean)
+- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 Systemica extension)
 - **Executable models:** Not just validation—runtime that instantiates, evaluates, simulates
 - **Incremental & lazy:** Parse immediately, resolve semantics on-demand (gopls/rust-analyzer precedent)
 - **Immutable AST:** All semantic state lives in side tables keyed by node/symbol
@@ -384,6 +384,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 - `%calc <name> [args...]` — Invoke calculation with literal arguments (e.g., `%calc add 10 20`)
 - `%constraint <name>` — Evaluate constraint, check assert/assume satisfaction
 - `%requirement <name>` — Evaluate requirement, validate subject/require/actor conditions
+- `%satisfy [name]` — Evaluate satisfaction assertions, with the requirement's subject bound to the object `by` names
 
 **Action debugging:**
 - `%action <name>` — Start debugging action execution
@@ -447,7 +448,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 
 | Component | Status |
 |-----------|--------|
-| Lexer/Parser (structural + behavioral) | ✅ Operational (94/94 stdlib clean - see [conformance gate](../internal/core/libs/stdlib_conformance_test.go)) |
+| Lexer/Parser (structural + behavioral) | ✅ Operational (95/95 stdlib clean - see [conformance gate](../internal/core/libs/stdlib_conformance_test.go)) |
 | Symbol resolution & type system | ✅ Complete |
 | Validation passes (syntax → constraints) | ✅ Complete |
 | Expression evaluator & instance model (Tiers 1-3) | ✅ Complete |
@@ -461,7 +462,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
 
-**Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
+**Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 
 ---
 
@@ -474,8 +475,8 @@ New grammar features require a **four-layer test contract** to ensure correctnes
 #### 1. Conformance Gate
 - **Purpose:** Ensure stdlib continues to parse cleanly
 - **Location:** `internal/core/libs/stdlib_conformance_test.go`
-- **Test:** `TestStdlibConformance` loads all 94 stdlib files
-- **Acceptance:** 94/94 files parse without errors
+- **Test:** `TestStdlibConformance` loads all 95 bundled library files
+- **Acceptance:** 95/95 files parse without errors
 - **Allowlist:** `testdata/stdlib_known_failures.txt` (currently empty)
 - **Failure mode:** Regression breaks previously-working stdlib files
 

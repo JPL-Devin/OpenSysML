@@ -38,6 +38,10 @@ type ExpectedOutcome struct {
 	// Action fields
 	Outputs    map[string]ExpectedValue `json:"outputs,omitempty"`
 	TokenCount *int                     `json:"tokenCount,omitempty"`
+	// Error is the text the execution is expected to fail with, for a case whose
+	// contract is a diagnostic rather than a result (a loop that never
+	// terminates). Empty means the execution must succeed.
+	Error string `json:"error,omitempty"`
 
 	// State fields
 	Events      []ExpectedEvent `json:"events,omitempty"` // Events to inject
@@ -51,6 +55,14 @@ type ExpectedOutcome struct {
 	// Constraint/Requirement fields
 	Bindings  map[string]ExpectedValue `json:"bindings,omitempty"`
 	Satisfied *bool                    `json:"satisfied,omitempty"`
+	// Evaluate names the element to evaluate, for a case that declares more than
+	// one — a usage and the definition it is typed by. Empty searches the model.
+	Evaluate string `json:"evaluate,omitempty"`
+
+	// Satisfy fields: the verdict expected of each satisfaction assertion the
+	// case states, keyed by the assertion as written ("satisfy r by p"), since
+	// such an assertion is anonymous.
+	Assertions map[string]bool `json:"assertions,omitempty"`
 
 	// Instance fields
 	Instantiate string                   `json:"instantiate,omitempty"` // qualified name of the type to instantiate
@@ -166,6 +178,8 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 		runConstraintConformance(t, ctx, idx, sysmlPath, expected)
 	case "requirement":
 		runRequirementConformance(t, ctx, idx, sysmlPath, expected)
+	case "satisfy":
+		runSatisfyConformance(t, ctx, idx, sysmlPath, expected)
 	case "instance":
 		runInstanceConformance(t, ctx, idx, expected)
 	default:
@@ -181,6 +195,15 @@ func runActionConformance(t *testing.T, ctx *Context, idx *symbols.Index, path s
 
 	// Execute action
 	outputs, err := ctx.ExecuteAction(actionSym)
+	if expected.Error != "" {
+		if err == nil {
+			t.Fatalf("expected execution to fail with %q, it completed with outputs %v", expected.Error, outputs)
+		}
+		if !strings.Contains(err.Error(), expected.Error) {
+			t.Fatalf("execution failed with %q, want an error containing %q", err, expected.Error)
+		}
+		return
+	}
 	if err != nil {
 		t.Fatalf("ExecuteAction failed: %v", err)
 	}
@@ -345,7 +368,7 @@ func runCalcConformance(t *testing.T, ctx *Context, idx *symbols.Index, path str
 func runConstraintConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
 	// Find constraint definition/usage
 	rootScope := idx.DocumentRoot(path)
-	constraintSym := findBehavioralSymbol(t, rootScope, ast.DefConstraint, ast.UsageConstraint)
+	constraintSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefConstraint, ast.UsageConstraint)
 
 	// Apply bindings to context (if any)
 	if expected.Bindings != nil {
@@ -354,9 +377,9 @@ func runConstraintConformance(t *testing.T, ctx *Context, idx *symbols.Index, pa
 		t.Logf("constraint bindings application not yet implemented")
 	}
 
-	// Evaluate constraint
-	satisfied, err := ctx.EvaluateConstraint(constraintSym, rootScope)
-	if err != nil {
+	// Evaluate constraint. A violated assertion is a verdict, not a failure.
+	satisfied, err := ctx.EvaluateConstraint(constraintSym, constraintSym.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
 		t.Fatalf("EvaluateConstraint failed: %v", err)
 	}
 
@@ -372,11 +395,12 @@ func runConstraintConformance(t *testing.T, ctx *Context, idx *symbols.Index, pa
 func runRequirementConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
 	// Find requirement definition/usage
 	rootScope := idx.DocumentRoot(path)
-	reqSym := findBehavioralSymbol(t, rootScope, ast.DefRequirement, ast.UsageRequirement)
+	reqSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefRequirement, ast.UsageRequirement)
 
-	// Evaluate requirement using symbol's defining scope (where sibling features visible)
+	// Evaluate requirement using symbol's defining scope (where sibling features
+	// visible). A violated condition is a verdict, not a failure.
 	satisfied, err := ctx.EvaluateRequirement(reqSym, reqSym.OwnerScope)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrViolated) {
 		t.Fatalf("EvaluateRequirement failed: %v", err)
 	}
 
@@ -386,6 +410,80 @@ func runRequirementConformance(t *testing.T, ctx *Context, idx *symbols.Index, p
 			t.Errorf("requirement satisfied = %v, want %v", satisfied, *expected.Satisfied)
 		}
 	}
+}
+
+// runSatisfyConformance evaluates the satisfaction assertions the case states
+// and validates the verdict of each: the assertion binds the requirement's
+// subject to the object its `by` operand names, so the verdict is about that
+// object's values.
+func runSatisfyConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
+	scope := idx.DocumentRoot(path)
+	if expected.Evaluate != "" {
+		matches := idx.LookupQualified(expected.Evaluate)
+		if len(matches) != 1 {
+			t.Fatalf("evaluate %q: %d matching symbols, want 1", expected.Evaluate, len(matches))
+		}
+		if matches[0].Scope == nil {
+			t.Fatalf("evaluate %q: the element owns no scope, so it states no assertion", expected.Evaluate)
+		}
+		scope = matches[0].Scope
+	}
+
+	assertions := ctx.SatisfyAssertionsIn(scope)
+	if len(assertions) == 0 {
+		t.Fatalf("no satisfaction assertion found")
+	}
+	if expected.Error != "" || expected.Satisfied != nil {
+		if len(assertions) != 1 {
+			t.Fatalf("%d satisfaction assertions found, want 1: name each verdict under \"assertions\"", len(assertions))
+		}
+	}
+
+	verdicts := make(map[string]bool, len(assertions))
+	for _, a := range assertions {
+		satisfied, err := ctx.EvaluateSatisfaction(a)
+		if expected.Error != "" {
+			if err == nil {
+				t.Fatalf("expected evaluation to fail with %q, it reported satisfied = %v", expected.Error, satisfied)
+			}
+			if !strings.Contains(err.Error(), expected.Error) {
+				t.Fatalf("evaluation failed with %q, want an error containing %q", err, expected.Error)
+			}
+			return
+		}
+		if err != nil && !errors.Is(err, ErrViolated) {
+			t.Fatalf("EvaluateSatisfaction(%s) failed: %v", a.Text(), err)
+		}
+		verdicts[a.Text()] = satisfied
+	}
+
+	if expected.Satisfied != nil {
+		for text, satisfied := range verdicts {
+			if satisfied != *expected.Satisfied {
+				t.Errorf("%s: satisfied = %v, want %v", text, satisfied, *expected.Satisfied)
+			}
+		}
+	}
+	for text, want := range expected.Assertions {
+		satisfied, ok := verdicts[text]
+		if !ok {
+			t.Errorf("no assertion %q among %v", text, sortedKeys(verdicts))
+			continue
+		}
+		if satisfied != want {
+			t.Errorf("%s: satisfied = %v, want %v", text, satisfied, want)
+		}
+	}
+}
+
+// sortedKeys returns the keys of m in order, for a deterministic message.
+func sortedKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // runInstanceConformance instantiates a type and validates the values its slots
@@ -451,6 +549,19 @@ func findBehavioralSymbol(t *testing.T, scope *symbols.Scope, defKind ast.Defini
 		t.Fatalf("no behavioral symbol found (defKind=%v, usageKind=%v)", defKind, usageKind)
 	}
 	return sym
+}
+
+// namedOrFoundSymbol returns the symbol the case names, or searches the model
+// when it names none.
+func namedOrFoundSymbol(t *testing.T, idx *symbols.Index, fqn string, scope *symbols.Scope, defKind ast.DefinitionKind, usageKind ast.UsageKind) *symbols.Symbol {
+	if fqn == "" {
+		return findBehavioralSymbol(t, scope, defKind, usageKind)
+	}
+	matches := idx.LookupQualified(fqn)
+	if len(matches) != 1 {
+		t.Fatalf("evaluate %q: %d matching symbols, want 1", fqn, len(matches))
+	}
+	return matches[0]
 }
 
 // lookupBehavioralSymbol is findBehavioralSymbol for callers that probe several

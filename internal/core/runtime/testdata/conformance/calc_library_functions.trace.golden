@@ -1,0 +1,23 @@
+enter calc test::diagonalGain
+  bind x = 3.0 [argument]
+  bind y = 4.0 [argument]
+          eval feature x -> 3.0
+          eval literal 2 -> 2
+        eval operator ** -> 9.0
+          eval feature y -> 4.0
+          eval literal 2 -> 2
+        eval operator ** -> 16.0
+      eval operator + -> 25.0
+      enter calc RealFunctions::sqrt
+        bind x = 25.0 [argument]
+      exit calc RealFunctions::sqrt -> 5.0
+    eval invoke sqrt -> 5.0
+        eval literal 0.0 -> 0.0
+        enter calc TrigFunctions::sin
+          bind theta = 0.0 [argument]
+        exit calc TrigFunctions::sin -> 0.0
+      eval invoke sin -> 0.0
+      eval literal 10.0 -> 10.0
+    eval operator * -> 0.0
+  eval operator + -> 5.0
+exit calc test::diagonalGain -> 5.0

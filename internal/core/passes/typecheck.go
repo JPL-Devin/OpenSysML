@@ -83,20 +83,37 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.infer(scope, m.Expression)
 	case *ast.ConstraintMember:
 		tc.expr.checkBoolean(scope, m.Expression, "constraint expression")
+		tc.walk(scope, m.Body)
 	case *ast.AssumeMember:
 		tc.expr.checkBoolean(scope, m.Expression, "assume expression")
+		tc.walk(scope, m.Body)
 	case *ast.RequireMember:
 		tc.expr.checkBoolean(scope, m.Expression, "require expression")
+		tc.walk(scope, m.Body)
 	case *ast.IfActionNode:
+		// The condition is evaluated before either branch is entered, so it is
+		// checked outside them; each branch's body is checked in its own scope.
 		tc.expr.checkBoolean(scope, m.Condition, "condition of 'if'")
-	case *ast.WhileLoopActionNode:
-		// The condition may read the loop's own body members, which live in the
-		// scope the loop owns.
+		for _, branch := range m.Branches() {
+			tc.checkBehaviorMember(scope, branch)
+		}
+	case *ast.IfBranchNode:
 		body := scope
 		if child := childScopeOf(scope, m); child != nil {
 			body = child
 		}
-		tc.expr.checkBoolean(body, m.Condition, "condition of 'while'")
+		tc.walk(body, m.Body)
+	case *ast.WhileLoopActionNode:
+		// The condition may read the loop's own body members, which live in the
+		// scope the loop owns; the collection a `for` loop iterates over is
+		// evaluated before the loop is entered, so it is checked outside it.
+		body := scope
+		if child := childScopeOf(scope, m); child != nil {
+			body = child
+		}
+		tc.expr.infer(scope, m.Collection)
+		tc.expr.checkBoolean(body, m.Condition, "condition of '"+m.Kind.String()+"'")
+		tc.walk(body, m.Body)
 	case *ast.TransitionMember:
 		tc.expr.checkBoolean(scope, m.Guard, "transition guard")
 		tc.checkTrigger(scope, m.Trigger)
@@ -116,6 +133,7 @@ func (tc *typeChecker) checkSubjectMember(scope *symbols.Scope, m *ast.SubjectMe
 	if m.TypeRef != nil {
 		tc.checkTypeTarget(scope, m.TypeRef, ast.RelTyping, declKind{useKind: ast.UsageSubject})
 	}
+	tc.checkRelationships(scope, m.Relationships, declKind{useKind: ast.UsageSubject})
 	if m.BindingExpr != nil {
 		tc.expr.infer(scope, m.BindingExpr)
 	}

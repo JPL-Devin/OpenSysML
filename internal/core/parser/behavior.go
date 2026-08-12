@@ -90,7 +90,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 				if tok2.Kind == lexer.Colon {
 					m := p.parseBodyMember()
 					if m != nil {
-						if p.atKeyword("then") {
+						if p.atChainedThen() {
 							p.advance()
 							if mem, ok := m.(*ast.Membership); ok {
 								mem.HasSuccession = true
@@ -105,7 +105,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 				if tok2.Kind == lexer.Keyword && tok2.KeywordID == "accept" {
 					m := p.parseBodyMember()
 					if m != nil {
-						if p.atKeyword("then") {
+						if p.atChainedThen() {
 							p.advance()
 							if mem, ok := m.(*ast.Membership); ok {
 								mem.HasSuccession = true
@@ -122,7 +122,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 					tok2.KeywordID == "perform" || tok2.KeywordID == "bind" || tok2.KeywordID == "assign") {
 					m := p.parseBodyMember()
 					if m != nil {
-						if p.atKeyword("then") {
+						if p.atChainedThen() {
 							p.advance()
 							if mem, ok := m.(*ast.Membership); ok {
 								mem.HasSuccession = true
@@ -148,7 +148,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 					if isDeclaration {
 						m := p.parseBodyMember()
 						if m != nil {
-							if p.atKeyword("then") {
+							if p.atChainedThen() {
 								p.advance()
 								if mem, ok := m.(*ast.Membership); ok {
 									mem.HasSuccession = true
@@ -196,7 +196,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 		m := p.parseBodyMember()
 		if m != nil {
 			// Check for namespace-level succession: 'then' after member
-			if p.atKeyword("then") {
+			if p.atChainedThen() {
 				p.advance() // consume 'then'
 				if mem, ok := m.(*ast.Membership); ok {
 					mem.HasSuccession = true
@@ -752,6 +752,47 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 	return node
 }
 
+// atChainedThen reports whether the parser is at a `then` chaining the preceding
+// member to a keyword-introduced declaration or statement (`then action b {...}`,
+// `then send s to t;`) rather than one starting a named succession edge
+// (`then a b;`) over members of the enclosing body.
+func (p *Parser) atChainedThen() bool {
+	return p.atKeyword("then") && p.peekN(1).Kind == lexer.Keyword
+}
+
+// atNamespaceSuccession reports whether the parser is at a `then` chaining to a
+// following declaration (`action a {...} then action b {...}`) rather than one
+// chaining a behavioral statement or starting a succession edge member.
+func (p *Parser) atNamespaceSuccession() bool {
+	if !p.atChainedThen() {
+		return false
+	}
+	next := p.peekN(1)
+	switch next.KeywordID {
+	case "public", "private", "protected":
+		return true
+	}
+	if _, isDef := definitionKindKeywords[next.KeywordID]; isDef {
+		return true
+	}
+	_, isUsage := usageKindKeywords[next.KeywordID]
+	return isUsage
+}
+
+// startsInlineSuccessionStatement reports whether tok, the token after a `then`,
+// starts an inline statement succession (`then assign x := 1;`) rather than a
+// named edge (`then source target;`) over members of the enclosing body.
+func startsInlineSuccessionStatement(tok lexer.Token) bool {
+	if tok.Kind != lexer.Keyword {
+		return false
+	}
+	switch tok.KeywordID {
+	case "assign", "perform", "while", "if", "action":
+		return true
+	}
+	return false
+}
+
 // parseSuccessionEdge parses:
 // 1. then source target [if guard] ; (control flow edge between named nodes)
 // 2. then statement (inline statement succession)
@@ -760,12 +801,8 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 
 	// Check if this is inline statement succession (then followed by behavioral keyword)
 	// Pattern: then assign x := 1; OR then perform foo;
-	if p.at(lexer.Keyword) {
-		kw := p.peek().KeywordID
-		if kw == "assign" || kw == "perform" || kw == "while" || kw == "if" || kw == "action" {
-			// This is inline succession: parse following statement
-			return p.parseActionMember()
-		}
+	if startsInlineSuccessionStatement(p.peek()) {
+		return p.parseActionMember()
 	}
 
 	// Otherwise, parse as named edge: then [source] target;
@@ -882,6 +919,7 @@ func (p *Parser) parseWhileLoopAction(tok lexer.Token) ast.Node {
 	p.expect(lexer.RBrace, "expected '}' after while body")
 
 	node := &ast.WhileLoopActionNode{
+		Kind:      ast.LoopWhile,
 		Condition: condition,
 		Body:      body,
 	}
@@ -892,9 +930,12 @@ func (p *Parser) parseWhileLoopAction(tok lexer.Token) ast.Node {
 func (p *Parser) parseLoopAction(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 
-	// Loop syntax: loop <body-members> until <condition>;
+	// Loop syntax: `loop { <body> } until <condition>;`, or the unbraced
+	// `loop <body-members> until <condition>;`. A braced body ends at its own
+	// '}', so the members following the loop stay with the enclosing body.
 	// Body can contain action declarations, succession, etc.
 	// Parse body as mixed content (declarations + behavioral statements)
+	_, braced := p.accept(lexer.LBrace)
 	var body []ast.Node
 
 	// Parse loop body members until 'until' keyword or closing brace
@@ -929,17 +970,28 @@ func (p *Parser) parseLoopAction(tok lexer.Token) ast.Node {
 		}
 	}
 
+	if braced {
+		p.expect(lexer.RBrace, "expected '}' after loop body")
+	}
+
 	// Parse optional 'until' condition
 	var condition ast.Node
 	if p.acceptKeyword("until") {
 		condition = p.ParseExpression()
 	}
 
-	p.expect(lexer.Semicolon, "expected ';' after loop")
+	// An `until` clause is terminated by a semicolon in either form; a braced
+	// body without one is already complete.
+	if condition != nil || !braced {
+		p.expect(lexer.Semicolon, "expected ';' after loop")
+	} else {
+		p.accept(lexer.Semicolon)
+	}
 
-	// Reuse WhileLoopActionNode with condition (will be post-condition for 'until')
-	// Alternatively, could add separate LoopActionNode with UntilCondition field
+	// The condition an `until` clause carries is tested after each iteration,
+	// which is what LoopUntil records.
 	node := &ast.WhileLoopActionNode{
+		Kind:      ast.LoopUntil,
 		Condition: condition,
 		Body:      body,
 	}
@@ -1011,26 +1063,16 @@ func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
 
 	p.expect(lexer.RBrace, "expected '}'")
 
-	// Create ForLoopActionNode AST node
-	// Since this doesn't exist yet, reuse WhileLoopActionNode structure
-	// Store variable name and collection in condition (hack - proper impl would add ForLoopActionNode)
-	// For now, create simple FeatureReference for variable and store as body member
-	varUsage := &ast.Usage{
-		Kind: ast.UsageAttribute,
-		Ident: ast.Identification{
+	// A `for` loop has no condition: iteration is driven by the collection, and
+	// the variable it binds each element to is a member of the loop's body scope.
+	node := &ast.WhileLoopActionNode{
+		Kind: ast.LoopFor,
+		Body: body,
+		Variable: ast.Identification{
 			Name:     p.src.Text(varTok.Span),
 			NameSpan: varTok.Span,
 		},
-		Value: collection, // Store collection as value
-	}
-	varUsage.NodeSpan = varTok.Span
-
-	// Prepend variable usage to body
-	body = append([]ast.Node{varUsage}, body...)
-
-	node := &ast.WhileLoopActionNode{
-		Condition: nil, // No explicit condition (iteration driven)
-		Body:      body,
+		Collection: collection,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -1473,6 +1515,12 @@ func (p *Parser) parseConstraintMember() ast.Node {
 		isNegated = true
 	}
 
+	// A nested constraint states its conditions in a body rather than inline:
+	// assert constraint [<name>] { <expr> }
+	if node := p.tryParseNestedConstraint(start, isAssert, isNegated); node != nil {
+		return node
+	}
+
 	// Parse expression
 	expr := p.ParseExpression()
 
@@ -1497,7 +1545,12 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 	var members []ast.Node
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
 		members = append(members, p.parseRequirementMember())
+		// Force progress: a member that consumed nothing would spin the loop.
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.advance()
+		}
 	}
 
 	p.expect(lexer.RBrace, "expected '}' after requirement body")
@@ -1527,24 +1580,11 @@ func (p *Parser) parseRequirementMember() ast.Node {
 	if node := p.tryParseDeclaration(); node != nil {
 		// Validate that tryParseDeclaration didn't just accept garbage
 		// Example: "require ;" gets parsed as anonymous constraint usage by tryParseDeclaration
-		if usage, ok := node.(*ast.Usage); ok {
-			hasName := usage.Ident.Name != ""
-			hasType := len(usage.Relationships) > 0
-			if hasType && usage.Relationships[0].Kind != ast.RelTyping {
-				hasType = false
-			}
-			hasValue := usage.Value != nil
-			hasMembers := len(usage.Members) > 0
-
-			// Anonymous usage with nothing meaningful - likely a keyword we should handle specially
-			if !hasName && !hasType && !hasValue && !hasMembers {
-				// Don't accept this, fall through to fallback below
-			} else {
-				return node // Valid declaration, use it
-			}
-		} else {
-			return node // Non-usage node, trust it
+		if usage, ok := node.(*ast.Usage); !ok || usageIsSubstantive(usage) {
+			return node // Valid declaration, use it
 		}
+		// Nothing meaningful: likely a keyword we should handle specially, so
+		// fall through to the fallback below.
 	}
 
 	// Graceful fallback: parse as general body member (expression, statement, etc.)
@@ -1559,23 +1599,20 @@ func (p *Parser) parseRequirementMember() ast.Node {
 
 	// If fallback produced something suspicious, diagnose it
 	// Example: anonymous usage with no relationships (like bare "require ;")
-	if usage, ok := node.(*ast.Usage); ok {
-		hasName := usage.Ident.Name != ""
-		hasType := len(usage.Relationships) > 0
-		if hasType && usage.Relationships[0].Kind != ast.RelTyping {
-			hasType = false // Only count typing relationships
-		}
-		hasValue := usage.Value != nil
-		hasMembers := len(usage.Members) > 0
-
-		// An anonymous usage with no type, no value, no members is likely garbage
-		if !hasName && !hasType && !hasValue && !hasMembers {
-			p.error(node.Span(), "expected 'subject', 'assume', 'require', 'actor', or a valid body member")
-			return &ast.ErrorNode{Message: "unexpected requirement member"}
-		}
+	if usage, ok := node.(*ast.Usage); ok && !usageIsSubstantive(usage) {
+		p.error(node.Span(), "expected 'subject', 'assume', 'require', 'actor', or a valid body member")
+		return &ast.ErrorNode{Message: "unexpected requirement member"}
 	}
 
 	return node
+}
+
+// usageIsSubstantive reports whether a usage declares anything: a name, a
+// relationship of any kind (`ref concern :>> self : ConcernCheck` takes its name
+// from its redefinition), a value or a body. A usage with none of those came
+// from a keyword the requirement body parser handles itself.
+func usageIsSubstantive(u *ast.Usage) bool {
+	return u.Ident.Name != "" || len(u.Relationships) > 0 || u.Value != nil || len(u.Members) > 0
 }
 
 // parseSubjectMember parses: subject <name> : <Type>; OR subject = <expr>; OR subject <name> = <expr>;
@@ -1597,6 +1634,15 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 			Name:        "", // Empty name means binding inherited subject
 			BindingExpr: value,
 		}
+		node.NodeSpan = p.spanFrom(start)
+		return node
+	}
+
+	// A bare `subject;` declares the subject parameter without naming or typing
+	// it, as the OMG viewpoint examples write it.
+	if p.at(lexer.Semicolon) {
+		p.advance()
+		node := &ast.SubjectMember{}
 		node.NodeSpan = p.spanFrom(start)
 		return node
 	}
@@ -1658,6 +1704,9 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		mult = p.parseMultiplicity()
 	}
 
+	// A subject may redefine the one it inherits: subject subj : View[1] :>> RequirementCheck::subj;
+	rels, _ := p.parseRelationships(true)
+
 	// Parse optional body or expect semicolon
 	if p.at(lexer.LBrace) {
 		// Body present - parse requirement body recursively
@@ -1665,10 +1714,11 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		members := p.parseRequirementBody()
 
 		node := &ast.SubjectMember{
-			Name:         name,
-			TypeRef:      typeRef,
-			Multiplicity: mult,
-			Body:         members,
+			Name:          name,
+			TypeRef:       typeRef,
+			Multiplicity:  mult,
+			Relationships: rels,
+			Body:          members,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -1677,9 +1727,10 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		p.expect(lexer.Semicolon, "expected ';' or '{' after subject declaration")
 
 		node := &ast.SubjectMember{
-			Name:         name,
-			TypeRef:      typeRef,
-			Multiplicity: mult,
+			Name:          name,
+			TypeRef:       typeRef,
+			Multiplicity:  mult,
+			Relationships: rels,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -1703,24 +1754,8 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 		}
 		p.advance() // consume '{'
 
-		// Parse constraint body members (expressions, doc, etc.)
-		var expr ast.Node
-		for !p.at(lexer.RBrace) && !p.atEOF() {
-			// Allow doc comments
-			if p.atKeyword("doc") {
-				p.parseDocumentation(p.peek().Span.Offset)
-				continue
-			}
-			// Parse constraint expression (store last one)
-			constraintMember := p.parseConstraintMember()
-			if c, ok := constraintMember.(*ast.ConstraintMember); ok && c.Expression != nil {
-				expr = c.Expression
-			}
-		}
-		p.expect(lexer.RBrace, "expected '}' after constraint body")
-
 		node := &ast.AssumeMember{
-			Expression: expr,
+			Body: p.parseNestedConstraintConditions(),
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -1755,24 +1790,8 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 		}
 		p.advance() // consume '{'
 
-		// Parse constraint body members (expressions, doc, etc.)
-		var expr ast.Node
-		for !p.at(lexer.RBrace) && !p.atEOF() {
-			// Allow doc comments
-			if p.atKeyword("doc") {
-				p.parseDocumentation(p.peek().Span.Offset)
-				continue
-			}
-			// Parse constraint expression (store last one)
-			constraintMember := p.parseConstraintMember()
-			if c, ok := constraintMember.(*ast.ConstraintMember); ok && c.Expression != nil {
-				expr = c.Expression
-			}
-		}
-		p.expect(lexer.RBrace, "expected '}' after constraint body")
-
 		node := &ast.RequireMember{
-			Expression: expr,
+			Body: p.parseNestedConstraintConditions(),
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -1807,6 +1826,61 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
+}
+
+// tryParseNestedConstraint parses `constraint [<name>] { <conditions> }`, the
+// nested-constraint form of a constraint member, and returns nil when the member
+// is not that form — `constraint` is a valid feature name, so an expression may
+// legitimately start with it.
+func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool) ast.Node {
+	if !p.atKeyword("constraint") {
+		return nil
+	}
+	cp := p.checkpoint()
+	p.advance() // consume 'constraint'
+	var name string
+	if p.at(lexer.Identifier) {
+		name = p.src.Text(p.peek().Span)
+		p.advance()
+	}
+	if !p.at(lexer.LBrace) {
+		p.restore(cp)
+		return nil
+	}
+	p.advance() // consume '{'
+	node := &ast.ConstraintMember{
+		IsAssert:  isAssert,
+		IsNegated: isNegated,
+		Name:      name,
+		Body:      p.parseNestedConstraintConditions(),
+	}
+	node.NodeSpan = p.spanFrom(start)
+	return node
+}
+
+// parseNestedConstraintConditions parses the body of the anonymous constraint an
+// `assume`/`require constraint { … }` member owns, through its closing brace,
+// and returns its ConstraintMembers. Every condition is kept: a constraint body
+// may state more than one.
+func (p *Parser) parseNestedConstraintConditions() []ast.Node {
+	var conditions []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
+		if p.atKeyword("doc") {
+			p.parseDocumentation(before)
+			continue
+		}
+		member := p.parseConstraintMember()
+		if c, ok := member.(*ast.ConstraintMember); ok && (c.Expression != nil || len(c.Body) > 0) {
+			conditions = append(conditions, c)
+		}
+		// Force progress: a member that consumed nothing would spin the loop.
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.advance()
+		}
+	}
+	p.expect(lexer.RBrace, "expected '}' after constraint body")
+	return conditions
 }
 
 // parseActorMember parses: actor <name> : <Type>; OR actor <name> = <expr>;

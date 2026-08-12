@@ -9,10 +9,23 @@
         (Usage kind="attribute" name="temp" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="typing" target=Real
             (*ast.QualifiedName))))
-      (*ast.ConstraintMember)
-      (*ast.ConstraintMember)
-      (*ast.ConstraintMember)
-      (*ast.ConstraintMember)
-      (*ast.ConstraintMember)
-      (*ast.ConstraintMember)
-      (*ast.ConstraintMember))))
+      (ConstraintMember assert=true negated=false name="safetyLimit"
+        (ConstraintMember assert=true negated=false
+          (OperatorExpr operator="<"
+            (FeatureReference name="pressure")
+            (LiteralInteger value="100"))))
+      (ConstraintMember assert=false negated=false name="operatingConditions"
+        (ConstraintMember assert=true negated=false
+          (OperatorExpr operator="and"
+            (OperatorExpr operator=">"
+              (FeatureReference name="temp")
+              (LiteralInteger value="0"))
+            (OperatorExpr operator="<"
+              (FeatureReference name="temp")
+              (LiteralInteger value="200")))))
+      (ConstraintMember assert=true negated=false
+        (OperatorExpr operator="<"
+          (OperatorExpr operator="*"
+            (FeatureReference name="pressure")
+            (FeatureReference name="temp"))
+          (LiteralInteger value="10000"))))))
