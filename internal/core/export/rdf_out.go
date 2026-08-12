@@ -242,8 +242,12 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		}
 		head(rdf.SysMLTerm(metaclass))
 		e.ident(subject, n.Ident)
-		if err := e.declaredKeyword(subject, n, n.Keyword, usageKeyword(n.Kind), n.Ident.Name); err != nil {
-			return err
+		// A verbatim head is reproduced as written, so its keyword needs no
+		// reconstructing and never has to be refused.
+		if !verbatimUsage(n) {
+			if err := e.declaredKeyword(subject, n, n.Keyword, usageKeyword(n.Kind), n.Ident.Name); err != nil {
+				return err
+			}
 		}
 		e.flags(subject, []boolProperty{
 			{"isAbstract", n.IsAbstract},

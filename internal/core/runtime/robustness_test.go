@@ -61,6 +61,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("library_function_wrong_arity", testLibraryFunctionWrongArity)
 	t.Run("extension_library_function_outside_its_domain", testExtensionLibraryFunctionOutsideItsDomain)
 	t.Run("exponentiation_integer_overflow", testExponentiationIntegerOverflow)
+	t.Run("quantity_incommensurable_comparison", testQuantityIncommensurableComparison)
+	t.Run("quantity_index_is_not_a_unit", testQuantityIndexIsNotAUnit)
+	t.Run("quantity_cyclic_unit_definition", testQuantityCyclicUnitDefinition)
 	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
 	t.Run("satisfy_bounded_by_the_step_budget", testSatisfyBoundedByTheStepBudget)
@@ -1581,6 +1584,98 @@ func testExponentiationIntegerOverflow(t *testing.T) {
 	}
 }
 
+// testQuantityIncommensurableComparison: comparing quantities whose units
+// measure different things reports ErrIncommensurableUnits instead of comparing
+// the bare magnitudes, which would make 1.5 [m/s] <= 2.0 [s] true.
+func testQuantityIncommensurableComparison(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			public import SI::*;
+			requirement def Touchdown {
+				attribute speed = 1.5 [m/s];
+				attribute duration = 2.0 [s];
+				require speed <= duration;
+			}
+		}
+	`))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Touchdown", ast.DefRequirement)
+	if sym == nil {
+		t.Fatal("Touchdown requirement not found")
+	}
+
+	satisfied, err := ctx.EvaluateRequirement(sym, rootScope)
+	if !errors.Is(err, ErrIncommensurableUnits) {
+		t.Fatalf("satisfied = %v, err = %v; want ErrIncommensurableUnits", satisfied, err)
+	}
+	if errors.Is(err, ErrViolated) {
+		t.Error("incommensurable units are not a violation: neither verdict is an answer")
+	}
+}
+
+// testQuantityIndexIsNotAUnit: a bracketed expression whose index names
+// something that is not a measurement unit reports ErrNotAQuantity rather than
+// evaluating to the bare magnitude.
+func testQuantityIndexIsNotAUnit(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			public import SI::*;
+			attribute notAUnit = 3.0;
+			constraint bogus {
+				1.5 [test::notAUnit] <= 2.0 [m]
+			}
+		}
+	`))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "bogus", ast.DefConstraint)
+	if sym == nil {
+		t.Fatal("bogus constraint not found")
+	}
+
+	satisfied, err := ctx.EvaluateConstraint(sym, rootScope)
+	if !errors.Is(err, ErrNotAQuantity) {
+		t.Fatalf("satisfied = %v, err = %v; want ErrNotAQuantity", satisfied, err)
+	}
+	if !strings.Contains(err.Error(), semantics.ErrNotAUnit.Error()) {
+		t.Errorf("err = %v; want it to report that the index names no measurement unit", err)
+	}
+}
+
+// testQuantityCyclicUnitDefinition: two units defined in terms of each other are
+// reported as a cycle instead of recursing until the stack or step budget runs
+// out.
+func testQuantityCyclicUnitDefinition(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			public import SI::*;
+			attribute unitA : ISQBase::LengthUnit = unitB;
+			attribute unitB : ISQBase::LengthUnit = unitA;
+			constraint cyclic {
+				1.0 [test::unitA] <= 2.0 [test::unitA]
+			}
+		}
+	`))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "cyclic", ast.DefConstraint)
+	if sym == nil {
+		t.Fatal("cyclic constraint not found")
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := ctx.EvaluateConstraint(sym, rootScope)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, semantics.ErrUnitCycle) {
+			t.Fatalf("err = %v; want ErrUnitCycle", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("evaluating a cyclic unit definition did not terminate")
+	}
+}
+
 // Helper: build runtime context from file
 func buildRuntime(t *testing.T, path string, file *ast.RootNamespace) (*symbols.Index, *semantics.Model, *Context) {
 	idx := symbols.NewIndex()
@@ -1589,6 +1684,19 @@ func buildRuntime(t *testing.T, path string, file *ast.RootNamespace) (*symbols.
 	model := semantics.NewModel(resolver)
 	ctx := NewContext(model, resolver, 10000)
 	return idx, model, ctx
+}
+
+// buildRuntimeWithLibraries builds a runtime context over an index that carries
+// the standard library, for a model that names its elements.
+func buildRuntimeWithLibraries(t *testing.T, path string, file *ast.RootNamespace) (*symbols.Index, *semantics.Model, *Context) {
+	t.Helper()
+	idx := symbols.NewIndex()
+	loadLibraries(t, idx)
+	idx.AddDocument(path, file)
+	idx.ExpandWildcardImports()
+	resolver := resolve.New(idx)
+	model := semantics.NewModel(resolver)
+	return idx, model, NewContext(model, resolver, 10000)
 }
 
 // Helper: find symbol by name and kind

@@ -239,8 +239,11 @@ func (s *Session) Clear() {
 	s.snippets = nil
 	s.version = 0
 	s.rtCtx = nil
-	s.idx = nil
-	s.idxVersion = 0
+	if s.idx != nil {
+		// Drop the document, keep the library the index was built with.
+		s.idx.RemoveDocument(docName)
+		s.idxVersion = 0
+	}
 	s.instances = make(map[string]*runtime.Instance)
 	s.actionExec = nil
 	s.stateExec = nil
@@ -269,21 +272,24 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 }
 
 // symbolIndex indexes the session document, returning nil when nothing is
-// loaded. Name lookup and the runtime context share it.
+// loaded. Name lookup and the runtime context share it, and it carries the
+// standard library too, which the runtime resolves names against — the
+// measurement unit of a quantity expression is one.
 //
-// One index serves the whole session: re-indexing the document replaces the
-// names the previous submission declared and the ones its wildcard imports
-// surfaced, so a submission costs its own document rather than a rebuild.
+// One index serves the whole session: the library is loaded into it once, and
+// re-indexing the document takes back the names the previous submission declared
+// and the ones its wildcard imports surfaced, so a submission costs its own
+// document rather than a reload of the library.
 func (s *Session) symbolIndex() *symbols.Index {
 	doc := s.ws.Document(docName)
 	if doc == nil || doc.Scope == nil {
 		return nil
 	}
-	if s.idx != nil && s.idxVersion == doc.Version {
-		return s.idx
-	}
 	if s.idx == nil {
 		s.idx = symbols.NewIndex()
+		model.LoadStdlibInto(s.idx)
+	} else if s.idxVersion == doc.Version {
+		return s.idx
 	}
 	s.idx.AddDocument(docName, doc.AST)
 	s.idx.ExpandWildcardImports()

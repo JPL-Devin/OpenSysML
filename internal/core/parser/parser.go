@@ -10,10 +10,14 @@ import (
 // stream. It buffers non-trivia tokens for lookahead and collects
 // diagnostics; it always produces a tree (ErrorNodes for bad input).
 type Parser struct {
-	src  *source.SourceFile
-	lx   *lexer.Lexer
-	buf  []lexer.Token // lookahead ring of non-trivia tokens
-	triv []ast.Trivia  // trivia pending attachment to the next node
+	src *source.SourceFile
+	lx  *lexer.Lexer
+	// buf holds every non-trivia token read so far and is only appended to;
+	// pos is the read cursor into it. Consuming a token moves the cursor, so a
+	// checkpoint can rewind over what a try-parse consumed.
+	buf  []lexer.Token
+	pos  int
+	triv []ast.Trivia // trivia pending attachment to the next node
 	// Diagnostics are syntax errors: input the parser could not read as
 	// well-formed SysML.
 	Diagnostics []Diagnostic
@@ -28,9 +32,9 @@ type Parser struct {
 
 // parseCheckpoint captures parser state for backtracking.
 type parseCheckpoint struct {
-	bufLen        int
-	trivLen       int
+	pos           int
 	diagnosticLen int
+	warningLen    int
 	pendingSpan   source.Span
 	hadPending    bool
 }
@@ -40,10 +44,11 @@ func New(sf *source.SourceFile) *Parser {
 	return &Parser{src: sf, lx: lexer.New(sf)}
 }
 
-// fill ensures buf has at least n+1 tokens (pulling from the lexer, skipping
-// and recording trivia). The final EOF token is sticky (re-returned).
+// fill ensures buf holds the token n positions ahead of the cursor (pulling
+// from the lexer, skipping and recording trivia). The final EOF token is
+// sticky (re-returned).
 func (p *Parser) fill(n int) {
-	for len(p.buf) <= n {
+	for len(p.buf) <= p.pos+n {
 		tok := p.lx.Next()
 		for tok.IsTrivia() || tok.Kind == lexer.RegularComment {
 			p.triv = append(p.triv, triviaOf(tok))
@@ -85,18 +90,18 @@ func (p *Parser) peek() lexer.Token { return p.peekN(0) }
 // peekN returns the token n positions ahead (0 = current).
 func (p *Parser) peekN(n int) lexer.Token {
 	p.fill(n)
-	if n >= len(p.buf) {
+	if p.pos+n >= len(p.buf) {
 		return p.buf[len(p.buf)-1] // EOF (sticky)
 	}
-	return p.buf[n]
+	return p.buf[p.pos+n]
 }
 
 // advance consumes and returns the current token.
 func (p *Parser) advance() lexer.Token {
 	p.fill(0)
-	tok := p.buf[0]
+	tok := p.buf[p.pos]
 	if tok.Kind != lexer.EOF {
-		p.buf = p.buf[1:]
+		p.pos++
 	}
 	return tok
 }
@@ -184,11 +189,11 @@ func (p *Parser) ParseFile() *ast.RootNamespace {
 	start := p.peek().Span.Offset
 	root := &ast.RootNamespace{}
 	for !p.atEOF() {
-		before := len(p.buf)
+		before := p.pos
 		beforeOff := p.peek().Span.Offset
 		root.Members = append(root.Members, p.parseMember())
 		// Guarantee progress: if nothing was consumed, skip a token.
-		if len(p.buf) == before && p.peek().Span.Offset == beforeOff && !p.atEOF() {
+		if p.pos == before && p.peek().Span.Offset == beforeOff && !p.atEOF() {
 			p.advance()
 		}
 	}
@@ -199,20 +204,24 @@ func (p *Parser) ParseFile() *ast.RootNamespace {
 // checkpoint captures current parser state for backtracking.
 func (p *Parser) checkpoint() parseCheckpoint {
 	return parseCheckpoint{
-		bufLen:        len(p.buf),
-		trivLen:       len(p.triv),
+		pos:           p.pos,
 		diagnosticLen: len(p.Diagnostics),
+		warningLen:    len(p.Warnings),
 		pendingSpan:   p.pendingComment,
 		hadPending:    p.hasPendingComment,
 	}
 }
 
-// restore rewinds parser to a previous checkpoint, discarding consumed tokens
-// and diagnostics. Used for try-parse patterns.
+// restore rewinds parser to a previous checkpoint, un-consuming the tokens the
+// abandoned attempt read and dropping the findings it reported. Used for
+// try-parse patterns.
+//
+// Trivia collected during the attempt is deliberately kept: the lexer yields
+// each trivia token once, so dropping it would lose a comment from the tree.
 func (p *Parser) restore(cp parseCheckpoint) {
-	p.buf = p.buf[:cp.bufLen]
-	p.triv = p.triv[:cp.trivLen]
+	p.pos = cp.pos
 	p.Diagnostics = p.Diagnostics[:cp.diagnosticLen]
+	p.Warnings = p.Warnings[:cp.warningLen]
 	p.pendingComment = cp.pendingSpan
 	p.hasPendingComment = cp.hadPending
 }

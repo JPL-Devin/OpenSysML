@@ -29,6 +29,10 @@ type Model struct {
 	scalars       map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
 	params        map[*symbols.Symbol]behaviorParameters
 	ends          map[*symbols.Symbol][]*symbols.Symbol
+
+	unitTerms    map[*symbols.Symbol]UnitTerm // measurement units reduced to base units
+	reducingUnit map[*symbols.Symbol]bool     // units being reduced, to detect a cycle
+	libSymbols   map[string]*symbols.Symbol   // library elements resolved by qualified name
 }
 
 // NewModel creates a semantic model backed by the given name resolver. The
@@ -45,6 +49,9 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		primTypes:     make(map[*symbols.Symbol]PrimType),
 		params:        make(map[*symbols.Symbol]behaviorParameters),
 		ends:          make(map[*symbols.Symbol][]*symbols.Symbol),
+		unitTerms:     make(map[*symbols.Symbol]UnitTerm),
+		reducingUnit:  make(map[*symbols.Symbol]bool),
+		libSymbols:    make(map[string]*symbols.Symbol),
 	}
 }
 

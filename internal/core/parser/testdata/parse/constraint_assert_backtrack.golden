@@ -1,0 +1,40 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="constraint" abstract=false variation=false name="BacktrackedConditions"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="constraint" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (ConstraintMember assert=true negated=false
+        (OperatorExpr operator=">"
+          (FeatureReference name="constraint")
+          (LiteralInteger value="0")))
+      (ConstraintMember assert=true negated=false
+        (OperatorExpr operator="=="
+          (FeatureReference name="constraint")
+          (FeatureReference name="x")))
+      (ConstraintMember assert=true negated=false
+        (OperatorExpr operator=">"
+          (FeatureChainExpr member="x"
+            (FeatureReference name="constraint"))
+          (LiteralInteger value="0")))
+      (ConstraintMember assert=true negated=false name="positive"
+        (ConstraintMember assert=true negated=false
+          (OperatorExpr operator=">"
+            (FeatureReference name="x")
+            (LiteralInteger value="0"))))
+      (ConstraintMember assert=true negated=false
+        (ConstraintMember assert=true negated=false
+          (OperatorExpr operator="<"
+            (FeatureReference name="x")
+            (LiteralInteger value="10"))))
+      (ConstraintMember assert=true negated=false
+        (FeatureReference name="constraint"))
+      (ConstraintMember assert=true negated=false
+        (OperatorExpr operator=">"
+          (FeatureReference name="x")
+          (LiteralInteger value="0"))))))
