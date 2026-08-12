@@ -66,6 +66,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("exponentiation_integer_overflow", testExponentiationIntegerOverflow)
 	t.Run("quantity_incommensurable_comparison", testQuantityIncommensurableComparison)
 	t.Run("quantity_index_is_not_a_unit", testQuantityIndexIsNotAUnit)
+	t.Run("quantity_unit_shadowed_by_sibling", testQuantityUnitShadowedBySibling)
 	t.Run("quantity_cyclic_unit_definition", testQuantityCyclicUnitDefinition)
 	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
@@ -1727,6 +1728,44 @@ func testQuantityIndexIsNotAUnit(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), semantics.ErrNotAUnit.Error()) {
 		t.Errorf("err = %v; want it to report that the index names no measurement unit", err)
+	}
+}
+
+// testQuantityUnitShadowedBySibling: a unit position naming a sibling that is
+// not a measurement unit reports which declaration it resolved to and the unit
+// that declaration hid, rather than a magnitude in the wrong unit.
+func testQuantityUnitShadowedBySibling(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			public import SI::*;
+			constraint def Tall {
+				attribute m : ScalarValues::Real = 2.0;
+				1.0 [m] > 500.0 [m]
+			}
+		}
+	`))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Tall", ast.DefConstraint)
+	if sym == nil {
+		t.Fatal("Tall constraint not found")
+	}
+
+	satisfied, err := ctx.EvaluateConstraint(sym, sym.OwnerScope)
+	if !errors.Is(err, ErrNotAQuantity) {
+		t.Fatalf("satisfied = %v, err = %v; want ErrNotAQuantity", satisfied, err)
+	}
+	if !errors.Is(err, semantics.ErrNotAUnit) {
+		t.Errorf("err = %v; want it to report that the name is no measurement unit", err)
+	}
+	var shadowed *semantics.ShadowedUnitError
+	if !errors.As(err, &shadowed) {
+		t.Fatalf("err = %v; want a *semantics.ShadowedUnitError", err)
+	}
+	if shadowed.Resolved == nil || shadowed.Namespace != "test::Tall" {
+		t.Errorf("error names %v in %q; want the sibling declared in test::Tall", shadowed.Resolved, shadowed.Namespace)
+	}
+	if shadowed.Shadowed == nil || shadowed.Suggestion != "SI::m" {
+		t.Errorf("error suggests %q; want the qualified spelling SI::m of the hidden unit", shadowed.Suggestion)
 	}
 }
 

@@ -274,6 +274,16 @@ func conditionText(n ast.Node) string {
 			args = append(args, conditionText(arg))
 		}
 		return qualifiedNameToString(e.Type) + "(" + strings.Join(args, ", ") + ")"
+	case *ast.IndexExpr:
+		// The bracket form is a quantity, `1.0 [m]`; `#` indexes a sequence.
+		if e.Bracket {
+			unit := unitText(e.Index)
+			if unit == "" {
+				unit = conditionText(e.Index)
+			}
+			return conditionText(e.Operand) + " [" + unit + "]"
+		}
+		return conditionText(e.Operand) + "#(" + conditionText(e.Index) + ")"
 	}
 	return TraceLabel(n)
 }

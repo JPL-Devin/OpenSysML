@@ -455,3 +455,64 @@ func TestIsSymbolReference(t *testing.T) {
 		}
 	}
 }
+
+// quantitySession is a document whose imports bring in the units and a calc
+// taking quantity arguments, which is what the prompt is asked about below.
+func quantitySession(t *testing.T) *Session {
+	t.Helper()
+	s := NewSession()
+	res := s.Submit(`package QSession {
+		public import SI::*;
+		public import ISQ::*;
+		calc def Fall {
+			in v0 : ISQSpaceTime::SpeedValue;
+			in tb : ISQSpaceTime::TimeValue;
+			return : ISQBase::LengthValue = v0 * tb;
+		}
+	}`)
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+	}
+	return s
+}
+
+// An expression typed at the prompt is evaluated in the namespace the session is
+// working in, so the units that namespace imports resolve unqualified.
+func TestEvalResolvesImportedUnitsUnqualified(t *testing.T) {
+	s := quantitySession(t)
+	wants(t, run(t, s, "%eval 1.0 [m/s]"), "= 1.00 [m/s]")
+	wants(t, run(t, s, "%eval 2.0 [km] + 500.0 [m]"), "= 2.50 [km]")
+	// The unit itself is a declaration the imports make visible: it resolves,
+	// and reports that it holds no value rather than that it is unknown.
+	wants(t, run(t, s, "%eval m"), "has no value to evaluate")
+	rejects(t, run(t, s, "%eval m"), "not found")
+	// A name nothing declares still reports that it is unknown.
+	wants(t, run(t, s, "%eval nosuch"), `symbol "nosuch" not found`)
+
+	// The same scope is what a compound expression names its members in.
+	pkg := NewSession()
+	pkg.Submit("package Demo { attribute mass = 3.0; }")
+	wants(t, run(t, pkg, "%eval mass * 2"), "= 6.00")
+}
+
+// %calc parses its arguments as expressions, so an argument that contains
+// spaces — a quantity, a parenthesized expression, a nested call — survives.
+func TestCalcParsesExpressionArguments(t *testing.T) {
+	s := quantitySession(t)
+	wants(t, run(t, s, "%calc Fall -15.0 [m/s] 8.5 [s]"), "✓ Fall(-15.0 [m/s], 8.5 [s])", "= -127.50 [(m/s)*s]")
+	// The same invocation written the way the notation writes one.
+	wants(t, run(t, s, "%calc Fall(-15.0 [m/s], 8.5 [s])"), "= -127.50 [(m/s)*s]")
+	// A parenthesized subexpression, and a call standing as an argument.
+	wants(t, run(t, s, "%calc Fall (-5.0 [m/s] - 10.0 [m/s]) 8.5 [s]"), "= -127.50 [(m/s)*s]")
+	wants(t, run(t, s, "%calc Fall -15.0 [m/s] (4.0 [s] + 4.5 [s])"), "= -127.50 [(m/s)*s]")
+	// Named arguments are a different production; the limitation is reported.
+	wants(t, run(t, s, "%calc Fall v0=-15.0 [m/s] tb=8.5 [s]"), "named arguments are not supported")
+}
+
+// A quantity's magnitude is a number in a result table like any other, so it is
+// rendered by the same convention as a bare Real.
+func TestFormatValueQuantityUsesRealFormatting(t *testing.T) {
+	s := quantitySession(t)
+	wants(t, run(t, s, "%eval -15.200531548598184 [m/s]"), "= -15.20 [m/s]")
+	wants(t, run(t, s, "%eval 32.99999999999993 [s]"), "= 33.00 [s]")
+}

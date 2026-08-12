@@ -404,3 +404,33 @@ func TestConstraintUsageBindsInheritedParameter(t *testing.T) {
 		}
 	}
 }
+
+// A violated assertion over quantities names its operands as they were written,
+// bracketed unit and all, rather than as the index expression they parse into.
+func TestViolationRendersQuantityOperands(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			public import SI::*;
+			constraint tooShort {
+				1.0 [m] > 500.0 [m]
+			}
+			constraint tooSlow {
+				2.0 [km] / 1.0 [s] < 30.0 [m/s]
+			}
+		}
+	`))
+	pkg := idx.DocumentRoot("<test>").Children()[0]
+
+	for name, want := range map[string]string{
+		"tooShort": "1.0 [m] > 500.0 [m]",
+		"tooSlow":  "2.0 [km] / 1.0 [s] < 30.0 [m/s]",
+	} {
+		satisfied, err := ctx.EvaluateConstraint(requirementNamed(t, pkg, name), pkg)
+		if !errors.Is(err, ErrViolated) {
+			t.Fatalf("%s: satisfied = %v, err = %v; want ErrViolated", name, satisfied, err)
+		}
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v; want it to render the condition as %q", name, err, want)
+		}
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -57,6 +58,11 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 	matches := collectInScopeTree(doc.Scope, name)
 	switch len(matches) {
 	case 0:
+		// A name the session declares nowhere may still be visible where the
+		// prompt evaluates — through an import of that namespace.
+		if sym, ok := resolve.New(idx).LookupName(s.promptScope(doc), name); ok && sym != nil {
+			return sym, idx.GetFQN(sym), nil
+		}
 		return nil, "", fmt.Errorf("symbol %q not found", name)
 	case 1:
 		return matches[0], idx.GetFQN(matches[0]), nil

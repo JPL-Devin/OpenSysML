@@ -36,13 +36,15 @@ func (u Unit) String() string {
 
 // String renders the quantity as a magnitude in its unit: `1.5 [m/s]`.
 func (q *Quantity) String() string {
-	return q.textWithMagnitude(constText(q.Num))
+	return q.TextWithMagnitude(constText(q.Num))
 }
 
-// textWithMagnitude renders the quantity from an already-rendered magnitude, so
+// TextWithMagnitude renders the quantity from an already-rendered magnitude, so
 // a caller with its own convention for numbers — a trace, which distinguishes a
-// whole Real from an Integer — keeps it and still names the unit the same way.
-func (q *Quantity) textWithMagnitude(magnitude string) string {
+// whole Real from an Integer, or a result table, which rounds a Real for
+// display — keeps it and still names the unit the same way. The stored
+// magnitude is untouched.
+func (q *Quantity) TextWithMagnitude(magnitude string) string {
 	return fmt.Sprintf("%s [%s]", magnitude, q.Unit)
 }
 

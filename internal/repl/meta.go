@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/model"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
@@ -187,7 +188,8 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		if len(fields) < 2 {
 			return []string{"usage: %calc <name> [args...]"}, false, nil
 		}
-		return s.doCalc(fields[1:])
+		name, argText := splitCalcArgs(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "%calc")))
+		return s.doCalc(name, argText)
 	case "%constraint":
 		if len(fields) < 2 {
 			return []string{"usage: %constraint <name>"}, false, nil
@@ -287,12 +289,18 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	}
 
 	// Try feature reference lookup, simple ("%eval x") or qualified
-	// ("%eval Demo::Vehicle::mass").
+	// ("%eval Demo::Vehicle::mass"). A name the session did not declare may
+	// still be reachable through an import, which the expression path below
+	// resolves, so a lookup failure is only reported if that path fails too.
+	var (
+		sym       *symbols.Symbol
+		fqn       string
+		lookupErr error
+	)
 	if isSymbolReference(expr) {
-		sym, fqn, lerr := s.lookupSymbol(expr)
-		if lerr != nil {
-			return []string{"error: " + lerr.Error()}, false, nil
-		}
+		sym, fqn, lookupErr = s.lookupSymbol(expr)
+	}
+	if sym != nil {
 		// An instantiated owner makes this a question about that object: read
 		// the slot, which carries the value the instance actually holds.
 		if inst, owner := s.owningInstance(fqn); inst != nil {
@@ -328,6 +336,9 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	root := p.ParseFile()
 
 	if len(p.Diagnostics) > 0 {
+		if lookupErr != nil {
+			return []string{"error: " + lookupErr.Error()}, false, nil
+		}
 		lines := []string{"error: parse failed:"}
 		for _, d := range p.Diagnostics {
 			lines = append(lines, "  "+d.Message)
@@ -354,10 +365,14 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 		return []string{"error: could not parse expression"}, false, nil
 	}
 
-	// Evaluated against the document scope, so a compound expression can name
-	// the session's top-level features.
-	val, err := ctx.EvalWithScope(evalUsage.Value, doc.Scope)
+	// Evaluated in the namespace the session is working in, so a compound
+	// expression names what a member written there would: the session's
+	// features and the units its imports bring in.
+	val, err := ctx.EvalWithScope(evalUsage.Value, s.promptScope(doc))
 	if err != nil {
+		if lookupErr != nil {
+			return []string{"error: " + lookupErr.Error()}, false, nil
+		}
 		return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
 	}
 
@@ -614,18 +629,7 @@ func formatSlot(slot *runtime.Slot) string {
 func formatValue(val runtime.Value) string {
 	switch val.Kind {
 	case runtime.ValConst:
-		switch val.Const.Kind {
-		case semantics.ValInt:
-			return fmt.Sprintf("%d", val.Const.Int)
-		case semantics.ValReal:
-			return fmt.Sprintf("%.2f", val.Const.Real)
-		case semantics.ValBool:
-			return fmt.Sprintf("%v", val.Const.Bool)
-		case semantics.ValInfinity:
-			return "∞"
-		default:
-			return "<unknown const>"
-		}
+		return formatConst(val.Const)
 	case runtime.ValNull:
 		return "null"
 	case runtime.ValString:
@@ -637,9 +641,28 @@ func formatValue(val runtime.Value) string {
 	case runtime.ValSet:
 		return fmt.Sprintf("Set{%d}", val.Set.Size())
 	case runtime.ValQuantity:
-		return val.Quantity.String()
+		// A magnitude is a number like any other in a result table, so it is
+		// rendered as a bare one; the value itself keeps its full precision.
+		return val.Quantity.TextWithMagnitude(formatConst(val.Quantity.Num))
 	default:
 		return "<unknown>"
+	}
+}
+
+// formatConst renders a numeric constant for a result table: a Real to two
+// decimals, which is the session's convention for a displayed number.
+func formatConst(c semantics.Value) string {
+	switch c.Kind {
+	case semantics.ValInt:
+		return fmt.Sprintf("%d", c.Int)
+	case semantics.ValReal:
+		return fmt.Sprintf("%.2f", c.Real)
+	case semantics.ValBool:
+		return fmt.Sprintf("%v", c.Bool)
+	case semantics.ValInfinity:
+		return "∞"
+	default:
+		return "<unknown const>"
 	}
 }
 
@@ -653,15 +676,13 @@ func formatElements(elements []runtime.Value) string {
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
-// doCalc invokes a calculation with arguments.
-func (s *Session) doCalc(args []string) ([]string, bool, error) {
-	if len(args) == 0 {
-		return []string{"usage: %calc <name> [args...]"}, false, nil
-	}
-
-	calcName := args[0]
-	calcArgs := args[1:]
-
+// doCalc invokes a calculation with the arguments the command line states.
+// argText is the raw argument list: a sequence of expressions, which the
+// notation separates with commas and this prompt also accepts separated by
+// whitespace alone. Named arguments (`v0 = ...`) are not supported here — the
+// notation writes them inside an invocation's parentheses, which is a different
+// production than an argument list at a prompt.
+func (s *Session) doCalc(calcName, argText string) ([]string, bool, error) {
 	doc := s.ws.Document(docName)
 	if doc == nil || doc.Scope == nil {
 		return []string{"error: no declarations loaded"}, false, nil
@@ -677,72 +698,109 @@ func (s *Session) doCalc(args []string) ([]string, bool, error) {
 		return []string{"error: " + err.Error()}, false, nil
 	}
 
-	// Parse arguments as literal expressions (no session context needed)
-	argValues := make([]runtime.Value, len(calcArgs))
-	for i, argStr := range calcArgs {
-		// Use empty context for literal evaluation
-		emptyIdx := symbols.NewIndex()
-		emptyModel := semantics.NewModel(resolve.New(emptyIdx))
-		literalCtx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.budgets.MaxSteps)
-
-		// Parse as attribute inside a part (top-level attribute syntax not supported)
-		src := fmt.Sprintf("part __dummy__ { attribute __arg__ = %s; }", argStr)
-		p := parser.New(source.New("arg", []byte(src)))
-		root := p.ParseFile()
-
-		// Ignore parse diagnostics - literals might have unresolved types
-		if len(root.Members) == 0 {
-			return []string{fmt.Sprintf("error: failed to parse argument %q", argStr)}, false, nil
-		}
-
-		// Unwrap Membership if present
-		member := root.Members[0]
-		if membership, ok := member.(*ast.Membership); ok {
-			member = membership.Member
-		}
-
-		// Extract attribute from part body
-		partUsage, ok := member.(*ast.Usage)
-		if !ok || partUsage.Kind != ast.UsagePart {
-			return []string{fmt.Sprintf("error: argument %q: not a part usage", argStr)}, false, nil
-		}
-
-		if len(partUsage.Members) == 0 {
-			return []string{fmt.Sprintf("error: argument %q: empty part body", argStr)}, false, nil
-		}
-
-		// Unwrap first member (attribute)
-		attrMember := partUsage.Members[0]
-		if attrMembership, ok := attrMember.(*ast.Membership); ok {
-			attrMember = attrMembership.Member
-		}
-
-		usage, ok := attrMember.(*ast.Usage)
-		if !ok {
-			return []string{fmt.Sprintf("error: argument %q: first member not usage", argStr)}, false, nil
-		}
-
-		if usage.Value == nil {
-			return []string{fmt.Sprintf("error: argument %q: usage has no value", argStr)}, false, nil
-		}
-
-		val, err := literalCtx.Eval(usage.Value)
-		if err != nil {
-			return []string{fmt.Sprintf("error: evaluation of argument %q failed: %v", argStr, err)}, false, nil
-		}
-		argValues[i] = val
+	exprs, err := parseExprList(argText)
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
 	}
 
-	// Invoke calculation via InvokeCalc
-	result, err := ctx.InvokeCalc(sym, argValues, doc.Scope)
+	// Arguments are evaluated where the prompt evaluates any expression, so a
+	// quantity argument names the units the session's imports bring in.
+	scope := s.promptScope(doc)
+	argValues := make([]runtime.Value, len(exprs))
+	argTexts := make([]string, len(exprs))
+	for i, arg := range exprs {
+		val, err := ctx.EvalWithScope(arg.expr, scope)
+		if err != nil {
+			return []string{fmt.Sprintf("error: evaluation of argument %q failed: %v", arg.text, err)}, false, nil
+		}
+		argValues[i] = val
+		argTexts[i] = arg.text
+	}
+
+	result, err := ctx.InvokeCalc(sym, argValues, scope)
 	if err != nil {
 		return []string{fmt.Sprintf("error: calc invocation failed: %v", err)}, false, nil
 	}
 
 	return []string{
-		fmt.Sprintf("✓ %s(%s)", calcName, strings.Join(calcArgs, ", ")),
+		fmt.Sprintf("✓ %s(%s)", calcName, strings.Join(argTexts, ", ")),
 		fmt.Sprintf("  = %s", formatValue(result)),
 	}, false, nil
+}
+
+// splitCalcArgs splits `%calc`'s tail into the calc's name and its argument
+// list, accepting the invocation form `Fall(a, b)` as well as a bare name
+// followed by arguments.
+func splitCalcArgs(tail string) (name, argText string) {
+	cut := strings.IndexAny(tail, " \t(")
+	if cut < 0 {
+		return tail, ""
+	}
+	name, rest := tail[:cut], strings.TrimSpace(tail[cut:])
+	if closesAtEnd(rest) {
+		return name, rest[1 : len(rest)-1]
+	}
+	return name, rest
+}
+
+// closesAtEnd reports whether text is one parenthesized group: its opening
+// parenthesis is closed by its last character, as an invocation's argument list
+// is and a sequence of parenthesized arguments is not.
+func closesAtEnd(text string) bool {
+	if !strings.HasPrefix(text, "(") || !strings.HasSuffix(text, ")") {
+		return false
+	}
+	depth := 0
+	for i, r := range text {
+		switch r {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i == len(text)-1
+			}
+		}
+	}
+	return false
+}
+
+// argExpr is one parsed argument: its expression and the text it was written as.
+type argExpr struct {
+	expr ast.Node
+	text string
+}
+
+// parseExprList parses an argument list as expressions, so an argument that
+// contains spaces — a quantity, a parenthesized subexpression, a nested
+// invocation — survives as the one expression it is. Successive expressions are
+// separated by a comma or by nothing but whitespace, and each is parsed by the
+// expression parser rather than cut out of the text.
+func parseExprList(text string) ([]argExpr, error) {
+	var out []argExpr
+	rest := strings.TrimLeft(text, " \t")
+	for rest != "" {
+		p := parser.New(source.New("arg", []byte(rest)))
+		expr := p.ParseExpression()
+		if expr == nil {
+			return nil, fmt.Errorf("failed to parse argument list %q", text)
+		}
+		end := p.Offset()
+		if end <= 0 || end > len(rest) {
+			return nil, fmt.Errorf("failed to parse argument %q", rest)
+		}
+		consumed := rest[:end]
+		if _, bad := expr.(*ast.ErrorNode); bad || len(p.Diagnostics) > 0 {
+			return nil, fmt.Errorf("failed to parse argument %q", strings.TrimSpace(consumed))
+		}
+		out = append(out, argExpr{expr: expr, text: strings.TrimSpace(consumed)})
+		rest = strings.TrimLeft(rest[end:], " \t")
+		if strings.HasPrefix(rest, "=") && !strings.HasPrefix(rest, "==") {
+			return nil, fmt.Errorf("named arguments are not supported here; pass arguments positionally")
+		}
+		rest = strings.TrimLeft(strings.TrimPrefix(rest, ","), " \t")
+	}
+	return out, nil
 }
 
 // doConstraint evaluates a constraint definition.
@@ -776,6 +834,39 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 	return []string{
 		fmt.Sprintf("✓ Constraint %s passed%s", name, onInstance(inst, owner)),
 	}, false, nil
+}
+
+// promptScope is the namespace a prompt expression is evaluated in: the last
+// namespace the session declared, whose imports are then visible to it exactly
+// as they are to a member written there (KerML 8.2.3.5.3). A session that
+// declared no namespace evaluates at the document root.
+func (s *Session) promptScope(doc *model.Document) *symbols.Scope {
+	if doc == nil || doc.Scope == nil || doc.AST == nil {
+		return nil
+	}
+	for i := len(doc.AST.Members) - 1; i >= 0; i-- {
+		member := doc.AST.Members[i]
+		if mem, ok := member.(*ast.Membership); ok {
+			member = mem.Member
+		}
+		var ident ast.Identification
+		switch n := member.(type) {
+		case *ast.Package:
+			ident = n.Ident
+		case *ast.Namespace:
+			ident = n.Ident
+		default:
+			continue
+		}
+		name := ident.Name
+		if name == "" {
+			name = ident.ShortName
+		}
+		if sym, ok := doc.Scope.LookupLocal(name); ok && sym != nil && sym.Scope != nil {
+			return sym.Scope
+		}
+	}
+	return doc.Scope
 }
 
 // declaringScope returns the scope an element's conditions were written in,

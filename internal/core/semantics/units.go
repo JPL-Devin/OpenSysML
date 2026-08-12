@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -443,7 +444,10 @@ func (m *Model) UnitTermOfExpr(scope *symbols.Scope, node ast.Node) (UnitTerm, e
 	return UnitTerm{}, fmt.Errorf("%w: %T", ErrUnitExpr, node)
 }
 
-// unitTermOfName reduces the unit a qualified name refers to.
+// unitTermOfName reduces the unit a qualified name refers to. The name is an
+// ordinary feature reference: it resolves to the nearest declaration (KerML
+// 8.2.3.5.4), and one that is not a measurement unit is a typing error rather
+// than a reason to keep searching (KerML 8.2.3.5.1).
 func (m *Model) unitTermOfName(scope *symbols.Scope, qn *ast.QualifiedName) (UnitTerm, error) {
 	if qn == nil || m.resolver == nil {
 		return UnitTerm{}, ErrUnitExpr
@@ -455,7 +459,108 @@ func (m *Model) unitTermOfName(scope *symbols.Scope, qn *ast.QualifiedName) (Uni
 	if alias, ok := m.resolver.ResolveAliasTarget(sym); ok {
 		sym = alias
 	}
+	if !m.IsMeasurementUnit(sym) {
+		return UnitTerm{}, m.shadowedUnit(qn, sym)
+	}
 	return m.UnitTermOf(sym)
+}
+
+// ShadowedUnitError reports a name in unit position that resolved to a
+// declaration which is not a measurement unit, naming the unit it hid.
+type ShadowedUnitError struct {
+	Name       string          // the name as written in unit position
+	Resolved   *symbols.Symbol // the declaration the name resolved to
+	Shadowed   *symbols.Symbol // the measurement unit that declaration hid, or nil
+	Namespace  string          // qualified name of the namespace Resolved was declared in
+	Suggestion string          // qualified spelling that names the shadowed unit
+}
+
+func (e *ShadowedUnitError) Error() string {
+	where := ""
+	if e.Namespace != "" {
+		where = " declared in " + e.Namespace
+	}
+	msg := fmt.Sprintf("%s: %s resolves to the %s %s%s", ErrNotAUnit, e.Name,
+		e.Resolved.Kind, e.Resolved.Name, where)
+	if e.Shadowed == nil {
+		return msg
+	}
+	return fmt.Sprintf("%s, shadowing the measurement unit %s — write %s to name the unit",
+		msg, e.Shadowed.Name, e.Suggestion)
+}
+
+// Unwrap reports the error as a not-a-unit error, which is the condition a
+// caller tests for.
+func (e *ShadowedUnitError) Unwrap() error { return ErrNotAUnit }
+
+// shadowedUnit describes a unit-position name that resolved to a non-unit,
+// including the unit that resolution hid.
+func (m *Model) shadowedUnit(qn *ast.QualifiedName, sym *symbols.Symbol) error {
+	err := &ShadowedUnitError{Name: QualifiedNameText(qn), Resolved: sym, Namespace: namespacePath(sym.OwnerScope)}
+	if outer := m.unitOutside(sym); outer != nil {
+		err.Shadowed = outer
+		// The written name qualified by the unit's namespace, which is the
+		// spelling that reaches the unit from inside the shadowing namespace.
+		err.Suggestion = qualifyAs(m.fqnOf(outer), err.Name)
+	}
+	return err
+}
+
+// unitOutside resolves sym's own name in the enclosing namespace, reporting it
+// only when it is a measurement unit — the unit sym hid from its siblings.
+func (m *Model) unitOutside(sym *symbols.Symbol) *symbols.Symbol {
+	if m.resolver == nil || sym.OwnerScope == nil {
+		return nil
+	}
+	name := sym.Name
+	if i := strings.LastIndex(name, "::"); i >= 0 {
+		name = name[i+2:]
+	}
+	found, ok := m.resolver.LookupName(sym.OwnerScope.Parent(), name)
+	if !ok || found == nil || found == sym {
+		return nil
+	}
+	if alias, ok := m.resolver.ResolveAliasTarget(found); ok {
+		found = alias
+	}
+	if !m.IsMeasurementUnit(found) {
+		return nil
+	}
+	return found
+}
+
+// fqnOf returns the qualified name the index knows a symbol by, or its own name.
+func (m *Model) fqnOf(sym *symbols.Symbol) string {
+	if m.resolver == nil || m.resolver.Index() == nil {
+		return sym.Name
+	}
+	if fqn := m.resolver.Index().GetFQN(sym); fqn != "" {
+		return fqn
+	}
+	return sym.Name
+}
+
+// qualifyAs re-spells a qualified name with its last segment replaced by name,
+// so a unit found as SI::metre is suggested as the SI::m the model wrote.
+func qualifyAs(fqn, name string) string {
+	if i := strings.LastIndex(fqn, "::"); i >= 0 {
+		return fqn[:i+2] + name
+	}
+	return name
+}
+
+// namespacePath renders the qualified name of the namespace a scope belongs to,
+// so a message can say where a declaration lives.
+func namespacePath(scope *symbols.Scope) string {
+	var parts []string
+	for s := scope; s != nil; s = s.Parent() {
+		owner := s.Owner()
+		if owner == nil || owner.Name == "" {
+			continue
+		}
+		parts = append([]string{owner.Name}, parts...)
+	}
+	return strings.Join(parts, "::")
 }
 
 // unitTermOfOperator reduces a product, quotient or power of units.
