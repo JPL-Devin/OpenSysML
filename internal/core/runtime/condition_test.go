@@ -199,6 +199,47 @@ func TestNegatedNestedConstraintIsInverted(t *testing.T) {
 	}
 }
 
+// A `not` on a body of several conditions negates their conjunction, so it holds
+// as soon as one of them fails.
+func TestNegatedNestedConstraintNegatesTheConjunction(t *testing.T) {
+	src := `
+		package test {
+			constraint def C {
+				in a;
+				in b;
+				assert not constraint {
+					a > 100
+					b > 100
+				}
+			}
+			part def Rig {
+				constraint oneFails : C { in a = 200.0; in b = 1.0; }
+				constraint bothHold : C { in a = 200.0; in b = 200.0; }
+			}
+		}
+	`
+	ctx, pkg := conditionFixture(t, src)
+	rig := requirementNamed(t, pkg, "Rig")
+	inst, err := ctx.Instantiate(rig)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	for name, want := range map[string]bool{"oneFails": true, "bothHold": false} {
+		feat := featureNamed(ctx, rig, name)
+		if feat == nil || feat.Symbol == nil {
+			t.Fatalf("%s: constraint feature not found", name)
+		}
+		satisfied, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
+		if err != nil && !errors.Is(err, ErrViolated) {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if satisfied != want {
+			t.Errorf("%s: satisfied = %v, want %v", name, satisfied, want)
+		}
+	}
+}
+
 // An inherited parameter nothing binds still reads a same-named value of the
 // object being checked.
 func TestUnboundParameterFallsBackToInstanceSlot(t *testing.T) {
