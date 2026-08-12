@@ -556,3 +556,73 @@ func TestConvertTolerant(t *testing.T) {
 		t.Error("Turtle should still refuse a broken model")
 	}
 }
+
+// Saving is an edit of the user's file, so a model they had kept private does
+// not become world-readable because they saved it again.
+func TestWriteFileKeepsExistingPermissions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "private.sysml")
+	if err := os.WriteFile(path, []byte("package P;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := export.WriteFile(path, []byte("package Q;\n")); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("mode = %o, want 600", got)
+	}
+}
+
+// A symlink is a pointer to the model, so saving over it updates the model
+// rather than replacing the link with a regular file.
+func TestWriteFileWritesThroughSymlink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real.sysml")
+	link := filepath.Join(dir, "link.sysml")
+	if err := os.WriteFile(real, []byte("package P;\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	replaced, err := export.WriteFile(link, []byte("package Q;\n"))
+	if err != nil || !replaced {
+		t.Fatalf("replaced=%v err=%v", replaced, err)
+	}
+	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the symlink was replaced by a regular file (%v)", err)
+	}
+	data, err := os.ReadFile(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "package Q;\n" {
+		t.Errorf("the linked model was not updated: %q", data)
+	}
+}
+
+// A failed save names the file the user asked for, never the temporary file
+// this package made up.
+func TestWriteFileErrorNamesTheRequestedPath(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	dir := filepath.Join(t.TempDir(), "readonly")
+	if err := os.Mkdir(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "model.sysml")
+	_, err := export.WriteFile(path, []byte("package P;\n"))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("error does not name %s: %v", path, err)
+	}
+	if strings.Contains(err.Error(), ".model.sysml.") {
+		t.Errorf("error leaks the temporary file: %v", err)
+	}
+}

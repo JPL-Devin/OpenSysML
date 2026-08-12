@@ -29,7 +29,8 @@ func (s *Session) doSave(path string) ([]string, bool, error) {
 	}
 	path = expandHome(path)
 	if info, err := os.Stat(path); err == nil && info.IsDir() {
-		return []string{fmt.Sprintf("error: %s is a directory: %s", path, formatAdvice)}, false, nil
+		// Not a format complaint: the extension, if any, is beside the point.
+		return []string{fmt.Sprintf("error: %s is a directory: name the file to write inside it", path)}, false, nil
 	}
 	format, err := export.FormatOfPath(path)
 	if err != nil {
@@ -46,9 +47,10 @@ func (s *Session) doSave(path string) ([]string, bool, error) {
 		lines = append(lines, strings.Split("warning: "+syntax.Error(), "\n")...)
 		lines = append(lines, "warning: the file is saved as typed; fix these and save again")
 	}
+	// WriteFile's errors already name the path, so they are not prefixed again.
 	replaced, err := export.WriteFile(path, out)
 	if err != nil {
-		return nil, false, fmt.Errorf("save %s: %w", path, err)
+		return nil, false, err
 	}
 	saved := fmt.Sprintf("saved %d bytes of %s to %s", len(out), format, path)
 	if replaced {
