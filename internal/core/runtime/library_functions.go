@@ -9,10 +9,11 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// libraryFunction is the built-in implementation of a KerML function library
-// declaration the vendored library declares without a body. Its name is the
-// fully-qualified name dispatch matches, and its parameters carry the names and
-// the order the vendored signature declares, so a named argument binds to the
+// libraryFunction is the built-in implementation of a function library
+// declaration that carries no body: one of the vendored OMG Kernel Function
+// Library, or one of the non-normative Systemica extension library. Its name is
+// the fully-qualified name dispatch matches, and its parameters carry the names
+// and the order the declared signature gives, so a named argument binds to the
 // parameter the library names.
 type libraryFunction struct {
 	name   string
@@ -27,8 +28,8 @@ var libraryFunctions = map[string]*libraryFunction{}
 
 // libraryFunctionsByLocalName maps an unqualified name to the implementation a
 // call denotes when the name resolves to no declaration in the model — the
-// KerML function library is always in force, even in a model that imports no
-// part of it. A name only appears here when every library declaration of it
+// function libraries are always in force, even in a model that imports no part
+// of them. A name only appears here when every library declaration of it
 // means the same operation.
 var libraryFunctionsByLocalName = map[string]*libraryFunction{}
 
@@ -75,6 +76,15 @@ func init() {
 	registerLibraryFunction("TrigFunctions::arccos", []string{"x"}, realUnary(math.Acos))
 	registerLibraryFunction("TrigFunctions::arctan", []string{"x"}, realUnary(math.Atan))
 
+	// SystemicaMathFunctions is the non-normative Systemica extension library
+	// (internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml),
+	// which declares the exponential, logarithmic and two-argument arctangent
+	// functions the OMG Kernel Function Library omits.
+	registerLibraryFunction("SystemicaMathFunctions::exp", []string{"x"}, realUnary(math.Exp))
+	registerLibraryFunction("SystemicaMathFunctions::ln", []string{"x"}, naturalLog)
+	registerLibraryFunction("SystemicaMathFunctions::log", []string{"x", "base"}, logToBase)
+	registerLibraryFunction("SystemicaMathFunctions::atan2", []string{"y", "x"}, atan2Real)
+
 	// The unqualified names, each mapped to the declaration a bare call denotes.
 	// `abs`, `max` and `min` map to the kind-preserving NumericalFunctions
 	// declaration the Real, Rational and Integer ones all specialize.
@@ -94,6 +104,10 @@ func init() {
 		"arcsin": "TrigFunctions::arcsin",
 		"arccos": "TrigFunctions::arccos",
 		"arctan": "TrigFunctions::arctan",
+		"exp":    "SystemicaMathFunctions::exp",
+		"ln":     "SystemicaMathFunctions::ln",
+		"log":    "SystemicaMathFunctions::log",
+		"atan2":  "SystemicaMathFunctions::atan2",
 	})
 }
 
@@ -262,6 +276,53 @@ func tanReal(theta float64) float64 { return math.Sin(theta) / math.Cos(theta) }
 
 // cotReal is cos/sin, the ratio TrigFunctions::cot declares as its body.
 func cotReal(theta float64) float64 { return math.Cos(theta) / math.Sin(theta) }
+
+// naturalLog is SystemicaMathFunctions::ln. The logarithm is defined for a
+// positive argument only: zero and a negative have no Real logarithm, so both
+// are reported rather than returned as an infinity or a NaN.
+func naturalLog(args []semantics.Value) (semantics.Value, error) {
+	x := asReal(args[0])
+	if x <= 0 {
+		return semantics.Value{}, fmt.Errorf("%w: the logarithm of %v is not a Real (requires x > 0.0)", semantics.ErrArithmeticDomain, x)
+	}
+	return realResult(math.Log(x))
+}
+
+// logToBase is SystemicaMathFunctions::log, the logarithm of x to the given
+// base, computed as ln(x)/ln(base). Base 1.0 has no logarithm — every power of
+// it is 1.0 — and neither the argument nor the base may be zero or negative.
+func logToBase(args []semantics.Value) (semantics.Value, error) {
+	x, base := asReal(args[0]), asReal(args[1])
+	switch {
+	case x <= 0:
+		return semantics.Value{}, fmt.Errorf("%w: the logarithm of %v is not a Real (requires x > 0.0)", semantics.ErrArithmeticDomain, x)
+	case base <= 0:
+		return semantics.Value{}, fmt.Errorf("%w: base %v has no logarithm (requires base > 0.0)", semantics.ErrArithmeticDomain, base)
+	case base == 1:
+		return semantics.Value{}, fmt.Errorf("%w: base 1.0 has no logarithm", semantics.ErrArithmeticDomain)
+	}
+	// Base 10 and base 2 have their own library functions, which are exact where
+	// the ratio of logarithms is not: log10(1000.0) is 3.0, ln(1000.0)/ln(10.0)
+	// is 2.9999999999999996.
+	switch base {
+	case 10:
+		return realResult(math.Log10(x))
+	case 2:
+		return realResult(math.Log2(x))
+	}
+	return realResult(math.Log(x) / math.Log(base))
+}
+
+// atan2Real is SystemicaMathFunctions::atan2, the angle to the point (x, y)
+// with the parameters ordered y then x as math.Atan2 orders them. The origin has
+// no angle, which math.Atan2 answers 0 for, so it is reported instead.
+func atan2Real(args []semantics.Value) (semantics.Value, error) {
+	y, x := asReal(args[0]), asReal(args[1])
+	if y == 0 && x == 0 {
+		return semantics.Value{}, fmt.Errorf("%w: atan2(0.0, 0.0) has no angle", semantics.ErrArithmeticDomain)
+	}
+	return realResult(math.Atan2(y, x))
+}
 
 // floorToInteger is RealFunctions::floor, which returns Integer.
 func floorToInteger(args []semantics.Value) (semantics.Value, error) {

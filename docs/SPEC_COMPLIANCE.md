@@ -114,11 +114,11 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 77 conformance cases (all passing: calc×11, constraint×4, requirement×5, action×24, state×26, accept×1, instance×6)
-- 42 robustness subtests (deadlock, a non-terminating loop, a body-local declaration that must not leak, a body member that is not executable, a statement written directly among an action's members, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references, a library function outside its domain or with the wrong arity, exponentiation beyond the Integer range)
-- 193 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
+- 78 conformance cases (all passing: calc×12, constraint×4, requirement×5, action×24, state×26, accept×1, instance×6)
+- 43 robustness subtests (deadlock, a non-terminating loop, a body-local declaration that must not leak, a body member that is not executable, a statement written directly among an action's members, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references, a library function outside its domain or with the wrong arity, an extension library function outside its domain, exponentiation beyond the Integer range)
+- 195 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
 - 42 golden AST fixtures (including the three loop forms, pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
-- 36 golden execution traces (loop and conditional bodies, fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation, library function invocation)
+- 37 golden execution traces (loop and conditional bodies, fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation, library function invocation)
 - 49 negative parser subtests
 - 1,500+ total tests passing
 
@@ -160,7 +160,7 @@ Each row documents one behavioral semantic feature:
 | Named argument that names no parameter | `invoke_calc.go` `checkArgs` (`ErrUnknownParameter`) | `robustness_test.go:testCalcUnknownNamedArgument` | ✅ Faithful |
 | Invoked symbol is not a calc | `invoke_calc.go` `calcShapeOf` (`ErrNotACalc`) | `robustness_test.go:testCalcSymbolIsNotACalc` | ✅ Faithful |
 | Recursive calc (direct or mutual) is bounded | `invoke_calc.go` `invokeCalcShape` (`ErrCalcRecursionLimit`, depth 32) | `robustness_test.go:testCalcDirectRecursion`, `:testCalcMutualRecursion` | ⚠️ Approximate (depth-bounded; recursion is rejected rather than evaluated) |
-| Step budget bounds calc evaluation | `context.go` step counter (`ErrStepLimitExceeded`) | `robustness_test.go:testStepBudgetExceeded` | ✅ Faithful |
+| Step budget bounds calc evaluation | `context.go` step counter (`ErrStepLimitExceeded`), budget from `budget.go` `BudgetsFromEnv` (`SYSML_MAX_STEPS`, default 10000000) | `robustness_test.go:testStepBudgetExceeded`, `budget_test.go:TestBudgetFromValue` | ✅ Faithful |
 | Control flow (if/else) in calc | `eval.go` expression evaluation | `robustness_test.go:testDecisionNoSatisfiedGuard` | ✅ Faithful |
 | Missing return expression | `invoke_calc.go` `calcShapeOf` (`ErrNoResultExpression`) | `robustness_test.go:testCalcWithoutResult` | ✅ Faithful |
 | Unary operators (not, -) | `eval.go:483` evalNeg | `calc_unary_operators.sysml` | ✅ Faithful |
@@ -245,6 +245,9 @@ Each row documents one behavioral semantic feature:
 | Post-condition loop (`loop { … } until <cond>;`) | `parser/behavior.go` parseLoopAction; `lower/action_graph.go` (`ast.LoopUntil`); `runtime/action_statements.go` execLoop | `action_loop_until.sysml`, `action_loop_until_repeats.sysml` + trace golden | ✅ Faithful (tested after every iteration, so the body runs at least once) |
 | Iteration over a collection (`for <x> in <collection> { … }`) | `ast/behavior.go` `WhileLoopActionNode.Variable`/`Collection`; `symbols/builder.go` (the variable is a member of the loop's own scope); `runtime/action_statements.go` execForLoop, forElements | `action_for_loop.sysml`, `parse/action_loop_forms.golden` | ⚠️ Approximate (the collection is evaluated once, before the loop is entered, and must evaluate to a sequence or a set — the only collections the expression layer produces; a set is visited in the order its canonical rendering sorts in, since a set has no order of its own) |
 | A non-terminating loop ends the execution rather than hanging it | `runtime/action_statements.go` execLoop (a step per iteration), `context.go` incrementStep | `action_loop_step_budget.sysml`, `robustness_test.go:non_terminating_loop_exhausts_step_budget` | ✅ Faithful (reports `ErrStepLimitExceeded`, the same failure as any other runaway evaluation) |
+| A legitimately long loop runs under a raised budget | `budget.go` `BudgetsFromEnv` (`SYSML_MAX_STEPS`) resolved at the REPL/CLI and gRPC entry points | `budget_test.go:TestRaisedBudgetRunsLongerLoop` | ✅ Faithful (a 10 000-iteration loop that exhausts a 100 000-step budget completes under the default) |
+| The budget bounds one run, not a session | `context.go` `beginRun`/`beginExecutorRun` (the step counter is reset when a run begins; a nested run, and every call into a run a caller drives step by step, shares the outer one's budget) | `budget_test.go:TestStepBudgetIsPerRun`, `:TestStepBudgetHoldsAcrossExecutorDrivenRun`, `:TestStepBudgetIsPerRunForInstancesAndCalcs` | ✅ Faithful |
+| A legitimately long action or simulation runs under raised sibling budgets | `budget.go` `Budgets` (`SYSML_MAX_ACTION_STEPS`, `SYSML_MAX_EVENTS`, `SYSML_MAX_DO_STEPS`), read by `action_executor.go` and `state_executor.go` from the context | `budget_test.go:TestActionStepBudgetIsConfigurable`, `budget_test.go:TestStateBudgetsAreConfigurable` | ✅ Faithful (each bound counts its own unit and its error names the variable that raises it) |
 | A statement written directly among an action's own members is reported, not ignored | `lower/action_graph.go` ToActionGraph first pass, statementKeyword | `robustness_test.go:statement_directly_in_an_action_body` | ✅ Faithful (a statement runs as part of an action node's body; written beside `first`/`then` it has no name a succession could reach, so the execution reports it instead of dropping it) |
 | A body member that is not an executable statement is reported, not skipped | `lower/action_graph.go` `Unsupported`; `runtime/action_statements.go` execStatement | `lower/action_body_test.go:TestActionBodyUnexecutableMemberIsLowered`, `robustness_test.go:loop_body_of_unexecutable_statement` | ✅ Faithful (a declaration in a loop or branch body that the runtime cannot perform — a nested action, a `perform` — fails the execution instead of producing a wrong answer silently) |
 | Send statement (message passing) | `lower/action_graph.go` lowerBody; `runtime/signal.go` buildMessage, post | `action_send_accept.sysml`, `lower/action_body_test.go:TestActionBodyLowering`, `signal_test.go:TestActionMessageReachesStateMachine` | ✅ Faithful (a message is typed by what was sent and addressed to the named receiver) |
@@ -254,7 +257,7 @@ Each row documents one behavioral semantic feature:
 | Object flow (pin-to-pin data) | `action_executor.go:673` applyDataFlows | `action_output.sysml` | ✅ Faithful |
 | Succession edges | `lower/action_graph.go:ToActionGraph` | `action_control_flow.sysml` | ✅ Faithful |
 | Deadlock detection | `action_executor.go:72` Step | `action_executor_test.go:TestActionExecutor_Deadlock_JoinStarvation` | ✅ Faithful |
-| Step budget enforcement | `context.go:53` incrementStep | `robustness_test.go:testStepBudgetExceeded` | ✅ Faithful |
+| Step budget enforcement | `context.go` incrementStep; budget configured by `SYSML_MAX_STEPS` (`budget.go` `BudgetsFromEnv`) | `robustness_test.go:testStepBudgetExceeded`, `budget_test.go:TestRaisedBudgetRunsLongerLoop` | ✅ Faithful (the reported limit is the effective one, and names the variable that raises it) |
 
 ### State Machine (UML 2.5.1 §14 StateMachines)
 
@@ -349,12 +352,41 @@ Found, not fixed — numeric library features that remain unevaluable:
 
 | Not implemented | Why |
 |---|---|
-| `exp`, `ln`, `log`, `atan2` | The vendored library declares none of them (`TrigFunctions` declares `arctan` over one parameter, and no exponential or logarithm function file exists), so there is no signature to implement against. |
 | `VectorFunctions`, `MatrixFunctions` | Needs a vector value in the evaluator; every value is scalar today. |
 | `SequenceFunctions` beyond `size`/`isEmpty`/`includes` | Needs the sequence semantics of the library's own function bodies, not just element access. |
 | `ComplexFunctions` | Needs a complex value kind. |
 | Remainder (`%`) outside constant folding | `semantics/eval.go` folds it over literals, but `runtime/eval.go` `evalOperator` routes only `+ - * / **` to arithmetic, so `%` over a feature reports `unsupported operator`. |
 | Library functions in the checker's own name resolution | An unqualified call to a library function the model does not import evaluates, but the `unresolved-reference` diagnostic still reports the name; importing `RealFunctions::*` clears it. |
+
+### Systemica Extension Library (non-normative)
+
+The OMG Kernel Function Library declares no exponential, no logarithm and no
+two-argument arctangent: `RealFunctions` has `sqrt`/`floor`/`round`/`abs`/`max`/`min`/`'**'`/`'^'`,
+`TrigFunctions` has `sin`/`cos`/`tan`/`cot`/`arcsin`/`arccos`/`arctan`, and that
+is all. The vendored OMG files stay byte-identical, so the missing signatures are
+declared in a clearly non-normative Systemica extension instead:
+`internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml`. It
+is bundled by the same `embed.FS` as the vendored tree and enters the same
+gates — `TestStdlibConformance` now reports 95/95 clean. It is Systemica code under
+Apache 2.0, not OMG code under EPL-2.0; `internal/core/libs/stdlib/NOTICE` carves
+the subdirectory out of the OMG notice.
+
+**Reachability.** A model writes `import SystemicaMathFunctions::*;` (or calls
+`SystemicaMathFunctions::exp(x)` qualified); both resolve like any other library
+package, with no diagnostic. A *bare* `exp(x)` with no import **evaluates**, by
+the same unqualified-name dispatch a bare `sqrt(x)` uses, but the checker still
+reports `unresolved reference: exp` on the name — exactly the rough edge the
+vendored functions have, no better and no worse. ROADMAP A6 is the general fix.
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| `exp(x)` — e raised to the power x | `runtime/library_functions.go` (`math.Exp`) | `TestLibraryFunctionValues` | ✅ Faithful |
+| `ln(x)` — natural logarithm, defined for `x > 0.0` | `runtime/library_functions.go` `naturalLog` | `TestLibraryFunctionValues`, `TestLibraryFunctionErrors` | ✅ Faithful |
+| `log(x, base)` — logarithm to an explicit base, so base 10 and base e are never confused; base 10 and base 2 use `math.Log10`/`math.Log2`, which are exact where the ratio of logarithms is not | `runtime/library_functions.go` `logToBase` | `TestLibraryFunctionValues`, `TestLibraryFunctionErrors` | ✅ Faithful |
+| `atan2(y, x)` — full-quadrant angle, parameters ordered as in IEEE 754 and `math.Atan2` | `runtime/library_functions.go` `atan2Real` | `TestLibraryFunctionValues`, `TestLibraryFunctionAtan2NamedArguments` | ✅ Faithful |
+| `ln(0.0)`, `ln(-1.0)`, `log(x, 1.0)`, `log(-1.0, 10.0)`, `atan2(0.0, 0.0)` report a domain error; `exp` beyond the Real range reports an overflow | `runtime/library_functions.go` | `TestLibraryFunctionErrors`, `TestRuntimeRobustness/extension_library_function_outside_its_domain` | ✅ Faithful |
+| The shipped declarations and the registered implementations cannot drift (names, parameter names, parameter order) | `runtime/library_functions.go` registry | `TestSystemicaMathFunctionsMatchTheShippedDeclarations` | ✅ Faithful |
+| Evaluable from a `calc def` body | `runtime/invoke_calc.go` | `calc_systemica_math_functions.sysml` + golden trace | ✅ Faithful |
 
 ### Static Expression Type Checking (KerML §7.4 Expressions, §8.3 Feature Values)
 
@@ -562,15 +594,15 @@ are tracked here):
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
-- Execution conformance cases: 77 (all passing)
+- Execution conformance cases: 90 (all passing)
 - gRPC conformance cases: 6 (all passing)
-- Robustness subtests: 42 (all passing)
-- Golden AST fixtures: 42
-- Golden execution traces: 36
+- Robustness subtests: 46 (all passing)
+- Golden AST fixtures: 43
+- Golden execution traces: 37
 - Negative parser subtests: 49
 
-**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 77 total):
-- Calc: 12 conformance + 11 golden traces (includes unary, coercion, qualified-name and library function evaluation)
+**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 90 total):
+- Calc: 13 conformance + 12 golden traces (includes unary, coercion, qualified-name, KerML library and Systemica extension library function evaluation)
 - Constraint: 6 conformance + 4 golden traces
 - Requirement: 8 conformance
 - Action: 24 conformance + 14 golden traces
@@ -579,8 +611,8 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 - Instance: 6 conformance (`instance_derived_slots`, `instance_constraint_binding`, `instance_inherited_constraint`, `instance_library_function_default`, `instance_nested_usage_body`, `instance_unnamed_redefinition`)
 
 **Quality Gates:**
-- Parser: 94/94 stdlib files clean
-- Execution conformance: 89/89 cases passing
+- Parser: 95/95 stdlib files clean (94 vendored OMG, 1 Systemica extension)
+- Execution conformance: 90/90 cases passing
 - Training examples: 98/100 clean (2 files / 4 errors, both pinned OMG source bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
 

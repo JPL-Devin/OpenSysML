@@ -14,11 +14,11 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`, `staticch
 | Gate | Count |
 |---|---|
 | OMG training corpus | **98/100 clean** — 2 files / 4 errors, both pinned OMG source bugs (the ceiling) |
-| Stdlib parser conformance | 94/94 clean |
-| Execution conformance cases | 89 |
+| Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative Systemica extension |
+| Execution conformance cases | 90 |
 | gRPC conformance cases | 6 |
-| Golden execution traces | 36 |
-| Runtime robustness subtests | 45 |
+| Golden execution traces | 37 |
+| Runtime robustness subtests | 46 |
 | Golden AST fixtures | 43 |
 | Negative parser subtests | 49 |
 
@@ -158,7 +158,7 @@ anonymous nested constraint (`require constraint { <expr> }`) are evaluated. `ru
 conformance cases `requirement_own_attribute`, `requirement_def_body_require`,
 `requirement_nested_constraint`, `requirement_violated`, `instance_constraint_bound_parameter`.
 
-What is left, both recorded as ⚠️ in `docs/SPEC_COMPLIANCE.md` under Requirement:
+What came out of it, recorded under Requirement in `docs/SPEC_COMPLIANCE.md`:
 
 - **A1a — a quantity expression is not evaluated — done.** A quantity evaluates to a magnitude
   **and** the measurement reference it is written in (`Quantities::ScalarQuantityValue` is `num` +
@@ -211,7 +211,14 @@ A6; do A6 first and re-test this.
   a different seam from function dispatch.
 - **An unqualified library function call still reports `unresolved-reference`** while evaluating
   correctly, because dispatch by local name is a runtime fallback and the checker does not know
-  the library is implicitly in force (A6 is the general fix).
+  the library is implicitly in force (A6 is the general fix). This applies equally to the
+  Systemica extension functions: `import SystemicaMathFunctions::*;` clears the diagnostic, a
+  bare `exp(x)` evaluates but is still reported.
+- **`exp`, `ln`, `log` and `atan2` are a Systemica extension, not OMG.** The vendored library
+  declares no signature for any of them, and the vendored files stay byte-identical, so they are
+  declared in `internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml` — a
+  non-normative package a model reaches with `import SystemicaMathFunctions::*;`. A model meant
+  to be portable to another SysML v2 tool cannot rely on it.
 - **A `for` loop iterates a sequence or a set only.** `runtime/action_statements.go` `forElements`
   reports anything else, because those are the only collections the expression layer produces; a
   collection built by an expression (a range, a filter) has to wait on that layer. A set is
