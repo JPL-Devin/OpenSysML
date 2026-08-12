@@ -70,6 +70,12 @@ func TestNegative(t *testing.T) {
 		{"individual_usage_no_body", "individual testSystem : TestSystem"},
 		{"snapshot_usage_no_type", "snapshot occurrence takeoff : ;"},
 		{"individual_parameter_no_type", "action a { in individual v : ; }"},
+
+		// A feature specialization keyword after a short name states a
+		// relationship, so a missing target is an error rather than a name.
+		{"short_name_redefines_no_target", "part p { attribute <sn> redefines; }"},
+		{"short_name_redefines_symbol_no_target", "part p { attribute <sn> :>>; }"},
+		{"short_name_defined_by_no_type", "part p { attribute <sn> defined by ; }"},
 	}
 
 	for _, tt := range tests {
