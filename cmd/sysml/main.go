@@ -12,6 +12,7 @@ import (
 	"github.com/chzyer/readline"
 
 	"github.com/Open-MBEE/Systemica/internal/core/export"
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/repl"
 )
 
@@ -49,6 +50,10 @@ var (
 	fromFormat  string
 	toFormat    string
 )
+
+// maxSteps is the evaluation step budget SYSML_MAX_STEPS resolves to, read once
+// at startup.
+var maxSteps = runtime.DefaultMaxSteps
 
 // stringSlice is a custom flag type for multiple values
 type stringSlice []string
@@ -100,6 +105,15 @@ func main() {
 
 	if debugMode && quietMode {
 		fmt.Fprintln(os.Stderr, "sysml: -debug and -quiet are mutually exclusive")
+		os.Exit(2)
+	}
+
+	// Resolve the evaluation step budget before anything runs, so a bad value is
+	// reported at startup rather than mistaken for the default at execution time.
+	var err error
+	maxSteps, err = runtime.MaxStepsFromEnv()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sysml:", err)
 		os.Exit(2)
 	}
 
@@ -232,9 +246,15 @@ func otherFormat(from export.Format) export.Format {
 	return export.FormatSysML
 }
 
-// newSession returns a session in the output modes the flags asked for.
+// newSession returns a session in the output modes the flags asked for, with
+// the evaluation step budget resolved at startup.
 func newSession() *repl.Session {
 	sess := repl.NewSession()
+	if err := sess.SetMaxSteps(maxSteps); err != nil {
+		// Unreachable: maxSteps is validated in main before any session exists.
+		fmt.Fprintln(os.Stderr, "sysml:", err)
+		os.Exit(2)
+	}
 	switch {
 	case debugMode:
 		sess.SetVerbosity(repl.VerbosityDebug)

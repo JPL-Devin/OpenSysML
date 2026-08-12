@@ -43,6 +43,10 @@ type Session struct {
 	// trace records execution steps while tracing is on, nil otherwise.
 	trace *runtime.TraceRecorder
 
+	// maxSteps is the evaluation step budget every runtime context this session
+	// creates is given.
+	maxSteps int64
+
 	verbosity Verbosity
 }
 
@@ -75,8 +79,27 @@ func NewSession() *Session {
 	return &Session{
 		ws:        model.NewWorkspace(),
 		instances: make(map[string]*runtime.Instance),
+		maxSteps:  runtime.DefaultMaxSteps,
 		verbosity: VerbosityNormal,
 	}
+}
+
+// SetMaxSteps sets the evaluation step budget for runtime contexts created from
+// here on. It errors on a non-positive budget, which no evaluation could make
+// progress under.
+func (s *Session) SetMaxSteps(maxSteps int64) error {
+	if maxSteps <= 0 {
+		return fmt.Errorf("evaluation step budget must be greater than zero, got %d", maxSteps)
+	}
+	s.maxSteps = maxSteps
+	s.rtCtx = nil
+	return nil
+}
+
+// MaxSteps returns the evaluation step budget this session gives its runtime
+// contexts.
+func (s *Session) MaxSteps() int64 {
+	return s.maxSteps
 }
 
 // List returns a one-line summary per surviving snippet.
@@ -234,7 +257,7 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	s.rtCtx = runtime.NewContext(model, resolver, 100000)
+	s.rtCtx = runtime.NewContext(model, resolver, s.maxSteps)
 	s.rtCtx.SetTrace(s.trace)
 	return s.rtCtx, nil
 }

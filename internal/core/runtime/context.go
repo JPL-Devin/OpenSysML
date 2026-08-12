@@ -90,10 +90,11 @@ func (ctx *Context) allocateID() int64 {
 }
 
 // incrementStep increments the step counter and returns ErrStepLimitExceeded if limit reached.
+// The error names the effective budget and the variable that raises it.
 func (ctx *Context) incrementStep() error {
 	ctx.steps++
 	if ctx.steps > ctx.maxSteps {
-		return fmt.Errorf("%w (%d steps)", ErrStepLimitExceeded, ctx.maxSteps)
+		return fmt.Errorf("%w (%d steps; raise %s to allow more)", ErrStepLimitExceeded, ctx.maxSteps, MaxStepsEnvVar)
 	}
 	return nil
 }

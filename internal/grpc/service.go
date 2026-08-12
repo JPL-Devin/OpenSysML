@@ -23,16 +23,24 @@ import (
 type Service struct {
 	pb.UnimplementedSysMLServiceServer
 	cache *Cache
+	// maxSteps is the evaluation step budget given to every runtime context the
+	// service creates, read once from the environment at construction.
+	maxSteps int64
 }
 
 // NewService creates a gRPC service with specified cache size. It returns an
-// error if cacheSize is not positive.
+// error if cacheSize is not positive, or if SYSML_MAX_STEPS holds anything but
+// a positive integer.
 func NewService(cacheSize int) (*Service, error) {
 	cache, err := NewCache(cacheSize)
 	if err != nil {
 		return nil, err
 	}
-	return &Service{cache: cache}, nil
+	maxSteps, err := runtime.MaxStepsFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	return &Service{cache: cache, maxSteps: maxSteps}, nil
 }
 
 // ParseFile parses a SysML file and caches the result
@@ -220,7 +228,7 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	// Create runtime context
 	resolver := resolve.New(cached.Index)
 	semModel := semantics.NewModel(resolver)
-	runtimeCtx := runtime.NewContext(semModel, resolver, 100000)
+	runtimeCtx := runtime.NewContext(semModel, resolver, s.maxSteps)
 
 	// Create eval context and evaluate
 	evalCtx := runtime.NewEvalContext(runtimeCtx, scope)
@@ -256,7 +264,7 @@ func (s *Service) Instantiate(ctx context.Context, req *pb.InstantiateRequest) (
 	// Create runtime context
 	resolver := resolve.New(cached.Index)
 	semModel := semantics.NewModel(resolver)
-	runtimeCtx := runtime.NewContext(semModel, resolver, 100000)
+	runtimeCtx := runtime.NewContext(semModel, resolver, s.maxSteps)
 
 	// Instantiate
 	inst, err := runtimeCtx.Instantiate(sym)
@@ -291,7 +299,7 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	// Create runtime context
 	resolver := resolve.New(cached.Index)
 	semModel := semantics.NewModel(resolver)
-	runtimeCtx := runtime.NewContext(semModel, resolver, 100000)
+	runtimeCtx := runtime.NewContext(semModel, resolver, s.maxSteps)
 
 	// Convert inputs from req.Inputs into runtime values for parameter binding.
 	var inputs map[string]runtime.Value
@@ -341,7 +349,7 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	// Create runtime context
 	resolver := resolve.New(cached.Index)
 	semModel := semantics.NewModel(resolver)
-	runtimeCtx := runtime.NewContext(semModel, resolver, 100000)
+	runtimeCtx := runtime.NewContext(semModel, resolver, s.maxSteps)
 
 	// Execute state machine, injecting the requested events and capturing the
 	// real ordered state-visit trace.
