@@ -421,12 +421,26 @@ func findNodeByName(nodes []ast.Node, qname *ast.QualifiedName) ast.Node {
 
 	targetName := qname.Parts[len(qname.Parts)-1].Text
 	for _, node := range nodes {
-		nodeName := getNodeName(node)
-		if nodeName == targetName {
+		if nodeAnswersTo(node, targetName) {
 			return node
 		}
 	}
 	return nil
+}
+
+// nodeAnswersTo reports whether name is one of the keys a node is declared
+// under: its effective name or, for a usage, its declared short name. A short
+// name is a name of its own, so `action <s> :>> takePhoto;` is reachable as
+// both `s` and `takePhoto`.
+func nodeAnswersTo(node ast.Node, name string) bool {
+	if name == "" {
+		return false
+	}
+	if getNodeName(node) == name {
+		return true
+	}
+	u, ok := node.(*ast.Usage)
+	return ok && u.Ident.ShortName == name
 }
 
 // getNodeName extracts the name from a node.

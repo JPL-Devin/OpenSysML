@@ -126,6 +126,39 @@ func TestSetBreakpointStopsRun(t *testing.T) {
 	}
 }
 
+// A step stating a short name and a redefinition answers to both keys, so a
+// breakpoint may name either one.
+func TestBreakpointNamesEitherKeyOfAShortNamedStep(t *testing.T) {
+	const src = `package test {
+	action def Base { action accumulate; }
+	action tally : Base {
+		attribute total = 0;
+		first start;
+		action <acc> :>> accumulate {
+			assign total := total + 5;
+		}
+		done end;
+		then start acc;
+		then acc end;
+	}
+}`
+
+	for _, breakpoint := range []string{"acc", "accumulate"} {
+		ctx, sym := loadAction(t, src, "tally")
+		exec, err := ctx.CreateActionExecutor(sym)
+		if err != nil {
+			t.Fatalf("CreateActionExecutor: %v", err)
+		}
+		exec.SetBreakpoint(breakpoint)
+		if err := exec.RunToCompletion(); err != nil {
+			t.Fatalf("RunToCompletion: %v", err)
+		}
+		if got := exec.PausedAt(); got != breakpoint {
+			t.Errorf("PausedAt() = %q, want %s", got, breakpoint)
+		}
+	}
+}
+
 func TestClearBreakpointsResumesUnconditionally(t *testing.T) {
 	exec := debugActionExecutor(t)
 	exec.SetBreakpoint("accumulate")
