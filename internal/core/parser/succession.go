@@ -277,9 +277,18 @@ func sourceParts(edge *ast.SuccessionEdge) []ast.NameSegment {
 // isEdgeMember reports whether a member is an edge between other members, which
 // declares no name of its own for a succession to reference.
 func isEdgeMember(m ast.Node) bool {
-	switch m.(type) {
+	switch n := m.(type) {
+	case *ast.Membership:
+		return n.Member != nil && isEdgeMember(n.Member)
 	case *ast.SuccessionEdge, *ast.ControlFlowEdge, *ast.ObjectFlowEdge, *ast.TransitionMember:
 		return true
+	case *ast.Usage:
+		// `a then b;` and the connector forms are usages of an edge kind.
+		switch n.Kind {
+		case ast.UsageSuccession, ast.UsageTransition, ast.UsageConnector,
+			ast.UsageFlow, ast.UsageBinding:
+			return true
+		}
 	}
 	return false
 }

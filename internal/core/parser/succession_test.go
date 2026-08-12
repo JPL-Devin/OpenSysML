@@ -69,6 +69,21 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 			"state def S { state a; then state b; }",
 			[]string{"a->b"},
 		},
+		{
+			"a state body's order statement is not the source of the next succession",
+			"state def S { state a; state b; a then b; then state c; }",
+			[]string{"b->c"},
+		},
+		{
+			"a calculation body reads the edge form it is written back as",
+			"calc def C { part a; part b; then a b; }",
+			[]string{"a->b"},
+		},
+		{
+			"a requirement body reads the edge form it is written back as",
+			"requirement def R { part a; part b; then a b; }",
+			[]string{"a->b"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -82,6 +97,57 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A region carries the members of a state body, so a `then` attached to one of
+// its states is the same succession it would be one level up.
+func TestMemberAttachedThenInRegionDesugars(t *testing.T) {
+	p := New(source.New("region.sysml", []byte("state def S { region R { state a; then state b; } }")))
+	file := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+	}
+
+	var edges []*ast.SuccessionEdge
+	for _, member := range file.Members {
+		m, ok := member.(*ast.Membership)
+		if !ok {
+			continue
+		}
+		def, ok := m.Member.(*ast.Definition)
+		if !ok {
+			continue
+		}
+		for _, stateMember := range def.Members {
+			region, ok := stateMember.(*ast.StateRegion)
+			if !ok {
+				continue
+			}
+			for _, regionMember := range region.States {
+				if edge, ok := regionMember.(*ast.SuccessionEdge); ok {
+					edges = append(edges, edge)
+				}
+			}
+		}
+	}
+	if len(edges) != 1 {
+		t.Fatalf("succession edges in the region: %d, want 1", len(edges))
+	}
+	if got := qnText(edges[0].Source) + "->" + qnText(edges[0].Target); got != "a->b" {
+		t.Errorf("succession %s, want a->b", got)
+	}
+}
+
+// qnText spells a qualified name the way a succession end reads.
+func qnText(qn *ast.QualifiedName) string {
+	if qn == nil {
+		return ""
+	}
+	var parts []string
+	for _, part := range qn.Parts {
+		parts = append(parts, part.Text)
+	}
+	return strings.Join(parts, "::")
 }
 
 // A succession edge names its ends, so a `then` beside a member with no name

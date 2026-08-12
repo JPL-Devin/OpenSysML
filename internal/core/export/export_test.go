@@ -255,6 +255,43 @@ func TestSuccessionRoundTrips(t *testing.T) {
 	}
 }
 
+// A succession is written back as the edge form, which every body that can carry
+// a succession has to read for the notation to survive the round trip.
+func TestSuccessionRoundTripsInEveryBody(t *testing.T) {
+	bodies := map[string]string{
+		"definition":  "part def Q {\n\t\tpart a;\n\t\tthen part b;\n\t}",
+		"action":      "action def Q {\n\t\taction a;\n\t\tthen action b;\n\t}",
+		"state":       "state def Q {\n\t\tstate a : S;\n\t\tthen state b : S;\n\t}",
+		"calculation": "calc def Q {\n\t\tpart a;\n\t\tthen part b;\n\t}",
+		"requirement": "requirement def Q {\n\t\tpart a;\n\t\tthen part b;\n\t}",
+	}
+	for name, body := range bodies {
+		t.Run(name, func(t *testing.T) {
+			src := "package P {\n\tstate def S;\n\t" + body + "\n}"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			if !strings.Contains(string(turtle), "sysml:sourceFeature") {
+				t.Fatalf("the graph should carry the succession's ends:\n%s", turtle)
+			}
+			back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			// The notation that came back has to parse, and to declare the same
+			// succession: a body that cannot read the edge form loses the order.
+			again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle again (%s):\n%s\n%v", name, back, err)
+			}
+			if string(again) != string(turtle) {
+				t.Errorf("round trip changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
+			}
+		})
+	}
+}
+
 // A `then` before a member the notation does not allow a succession in front of
 // is a syntax error, so no graph is built from a model whose order is unclear.
 func TestSuccessionOnNonUsageIsASyntaxError(t *testing.T) {

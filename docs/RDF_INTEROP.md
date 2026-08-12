@@ -197,7 +197,10 @@ edge), so the order a model declares survives the hop:
 
 Converting that back writes `then a c;`, which sequences the same pair wherever
 the two members are declared — member order alone would not have carried it
-(`export_test.go:TestSuccessionRoundTrips`).
+(`export_test.go:TestSuccessionRoundTrips`). Every body that can carry a
+succession — definition, usage, action, state (a region included), calculation
+and requirement — reads that form back as the same node, so a second conversion
+yields the same graph (`export_test.go:TestSuccessionRoundTripsInEveryBody`).
 
 A `then` beside a member with no name (`then send Show(x) to screen;`) declares
 an order these ends cannot name. The parser warns (`unnamed-succession-end`) and

@@ -22,6 +22,12 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			body.takeSuccession()
 			continue
 		}
+		// `then a b;` is the edge member a member-attached `then` desugars to,
+		// and so the form a converted model is written back as.
+		if p.atKeyword("then") {
+			body.add(p.parseSuccessionEdge(p.advance()))
+			continue
+		}
 
 		// Check for 'return' keyword → ResultMember
 		if p.isResultKeyword() {
@@ -1494,6 +1500,12 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 			body.takeSuccession()
 			continue
 		}
+		// `then a b;` is the edge member a member-attached `then` desugars to,
+		// and so the form a converted model is written back as.
+		if p.atKeyword("then") {
+			body.add(p.parseSuccessionEdge(p.advance()))
+			continue
+		}
 		body.add(p.parseRequirementMember())
 		// Force progress: a member that consumed nothing would spin the loop.
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
@@ -2018,36 +2030,10 @@ func (p *Parser) parseStateMember() ast.Node {
 			p.advance() // consume 'first'
 			return p.parseInitialNode(p.peek())
 		case "then":
-			// Standalone succession: then <source> <target>; or then <target>; (implicit source)
-			p.advance() // consume 'then'
-
-			// Parse first qualified name
-			firstState := p.parseQualifiedName()
-
-			// Check if there's a second state name (explicit source → target)
-			var sourceState, targetState *ast.QualifiedName
-			if p.at(lexer.Identifier) || p.atNameOrKeyword() {
-				// Two states: then source target;
-				sourceState = firstState
-				targetState = p.parseQualifiedName()
-			} else {
-				// One state: then target; (implicit source)
-				sourceState = nil
-				targetState = firstState
-			}
-
-			p.expect(lexer.Semicolon, "expected ';' after succession target")
-
-			// Create succession
-			succession := &ast.Usage{
-				Kind: ast.UsageSuccession,
-				ConnectorEnds: []*ast.ConnectorEnd{
-					{Target: sourceState},
-					{Target: targetState},
-				},
-			}
-			succession.NodeSpan = p.spanFrom(start)
-			return succession
+			// Standalone succession (`then <source> <target>;`, `then <target>;`):
+			// the same edge node a member-attached `then` desugars to, so a state
+			// body carries one representation of both spellings.
+			return p.parseSuccessionEdge(p.advance())
 		case "accept":
 			// Accept transition: accept <signal> then <state>;
 			return p.parseAcceptTransition(start)
@@ -2474,14 +2460,17 @@ func (p *Parser) parseRegionMember(start int) ast.Node {
 	}
 	p.advance() // consume '{'
 
-	// Parse state members within region
-	var states []ast.Node
+	// A region carries the members of a state body, a member-attached `then`
+	// among them (SysML.xtext StateBodyItem).
+	body := p.newBodyBuilder()
 	for !p.at(lexer.RBrace) && !p.at(lexer.EOF) {
-		member := p.parseStateMember()
-		if member != nil {
-			states = append(states, member)
+		if body.atSuccession() {
+			body.takeSuccession()
+			continue
 		}
+		body.add(p.parseStateMember())
 	}
+	states := body.finish()
 
 	if !p.at(lexer.RBrace) {
 		p.error(p.peek().Span, "expected '}' to close region body")
