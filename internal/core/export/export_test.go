@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/export"
@@ -527,5 +528,206 @@ func checkGolden(t *testing.T, path string, got []byte) {
 	}
 	if string(got) != string(want) {
 		t.Errorf("%s differs\n--- want ---\n%s\n--- got ---\n%s", path, want, got)
+	}
+}
+
+// A save replaces the previous file only once the new bytes are safely written,
+// and the result is an ordinary readable document.
+func TestWriteFileIsAtomicAndReadable(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "model.sysml")
+
+	replaced, err := export.WriteFile(path, []byte("package P;\n"))
+	if err != nil || replaced {
+		t.Fatalf("first write: replaced=%v err=%v", replaced, err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Errorf("mode = %o, want 644", got)
+	}
+	replaced, err = export.WriteFile(path, []byte("package Q;\n"))
+	if err != nil || !replaced {
+		t.Fatalf("second write: replaced=%v err=%v", replaced, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "package Q;\n" {
+		t.Errorf("content = %q", data)
+	}
+	// No temporary file is left behind.
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("leftover files in %s: %v", dir, entries)
+	}
+}
+
+// A missing parent directory is named rather than surfacing as a bare open(2)
+// failure.
+func TestWriteFileNamesTheMissingDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "absent")
+	_, err := export.WriteFile(filepath.Join(dir, "model.sysml"), []byte("package P;\n"))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), dir) || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("unhelpful error: %v", err)
+	}
+}
+
+// The REPL's tolerant save writes notation it could not fully parse and reports
+// the syntax errors; every other direction still refuses.
+func TestConvertTolerant(t *testing.T) {
+	broken := []byte("package P { part x; }\npart 3x;\n")
+	out, syntax, err := export.ConvertTolerant("<session>", broken, export.FormatSysML, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("sysml to sysml: %v", err)
+	}
+	if syntax == nil {
+		t.Error("expected the syntax errors to be reported")
+	}
+	if !strings.Contains(string(out), "part 3x;") {
+		t.Errorf("the unreadable text was dropped:\n%s", out)
+	}
+	if _, _, err := export.ConvertTolerant("<session>", broken, export.FormatSysML, export.FormatTurtle); err == nil {
+		t.Error("Turtle should still refuse a broken model")
+	}
+}
+
+// Saving is an edit of the user's file, so a model they had kept private does
+// not become world-readable because they saved it again.
+func TestWriteFileKeepsExistingPermissions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "private.sysml")
+	if err := os.WriteFile(path, []byte("package P;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := export.WriteFile(path, []byte("package Q;\n")); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("mode = %o, want 600", got)
+	}
+}
+
+// A pipe or a device is a stream, not a file with contents to protect, so it is
+// written as it stands rather than replaced by a rename.
+func TestWriteFileWritesThroughAPipe(t *testing.T) {
+	fifo := filepath.Join(t.TempDir(), "pipe.sysml")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Skipf("mkfifo: %v", err)
+	}
+	read := make(chan string, 1)
+	go func() {
+		data, err := os.ReadFile(fifo)
+		if err != nil {
+			t.Error(err)
+		}
+		read <- string(data)
+	}()
+	replaced, err := export.WriteFile(fifo, []byte("package Q;\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replaced {
+		t.Error("a pipe is not an existing file that was replaced")
+	}
+	if got := <-read; got != "package Q;\n" {
+		t.Errorf("read %q from the pipe", got)
+	}
+	if info, err := os.Stat(fifo); err != nil || info.Mode()&os.ModeNamedPipe == 0 {
+		t.Errorf("the pipe was replaced by a regular file (%v)", err)
+	}
+}
+
+// An existing file inside a directory the user cannot add entries to is still
+// written: the temporary file is impossible there, but the save is not.
+func TestWriteFileFallsBackWhenTheDirectoryIsClosed(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	dir := filepath.Join(t.TempDir(), "closed")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "model.sysml")
+	if err := os.WriteFile(path, []byte("package Longer;\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(dir, 0o700) }()
+	replaced, err := export.WriteFile(path, []byte("package Q;\n"))
+	if err != nil || !replaced {
+		t.Fatalf("replaced=%v err=%v", replaced, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "package Q;\n" {
+		t.Errorf("file = %q, want the new model with nothing of the old one left", data)
+	}
+}
+
+// A symlink is a pointer to the model, so saving over it updates the model
+// rather than replacing the link with a regular file.
+func TestWriteFileWritesThroughSymlink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real.sysml")
+	link := filepath.Join(dir, "link.sysml")
+	if err := os.WriteFile(real, []byte("package P;\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	replaced, err := export.WriteFile(link, []byte("package Q;\n"))
+	if err != nil || !replaced {
+		t.Fatalf("replaced=%v err=%v", replaced, err)
+	}
+	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the symlink was replaced by a regular file (%v)", err)
+	}
+	data, err := os.ReadFile(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "package Q;\n" {
+		t.Errorf("the linked model was not updated: %q", data)
+	}
+}
+
+// A failed save names the file the user asked for, never the temporary file
+// this package made up.
+func TestWriteFileErrorNamesTheRequestedPath(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	dir := filepath.Join(t.TempDir(), "readonly")
+	if err := os.Mkdir(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "model.sysml")
+	_, err := export.WriteFile(path, []byte("package P;\n"))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("error does not name %s: %v", path, err)
+	}
+	if strings.Contains(err.Error(), ".model.sysml.") {
+		t.Errorf("error leaks the temporary file: %v", err)
 	}
 }

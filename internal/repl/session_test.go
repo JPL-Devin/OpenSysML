@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"strings"
 	"testing"
 )
@@ -45,5 +46,47 @@ func TestSubmitResolvesAcrossSubmissions(t *testing.T) {
 	r2 := s.Submit("namespace N { import Missing::X; }")
 	if len(r2.Diagnostics) == 0 {
 		t.Fatalf("expected unresolved-reference diagnostic")
+	}
+}
+
+// A comment typed on its own line documents the declaration that follows, so
+// redeclaring that declaration replaces the comment with it instead of leaving
+// stale documentation above whatever is current.
+func TestLeadingCommentIsReplacedWithItsDeclaration(t *testing.T) {
+	s := NewSession()
+	s.accept("// doc for A")
+	s.accept("part def A;")
+	joined, _ := s.accept("part def A { part y; }")
+
+	if strings.Contains(joined, "doc for A") {
+		t.Errorf("stale comment survived the redeclaration: %q", joined)
+	}
+	if got := len(s.List()); got != 1 {
+		t.Errorf("want 1 snippet, got %d: %v", got, s.List())
+	}
+}
+
+// A comment with nothing after it is still part of the session and still saved.
+func TestTrailingCommentIsKept(t *testing.T) {
+	s := NewSession()
+	s.accept("part def A;")
+	joined, _ := s.accept("// thinking out loud")
+	if !strings.Contains(joined, "thinking out loud") {
+		t.Errorf("comment dropped: %q", joined)
+	}
+}
+
+// A comment folded into the declaration below it must not shift the line
+// numbers of that declaration's diagnostics.
+func TestSubmitReportsTheSubmittedLine(t *testing.T) {
+	s := NewSession()
+	s.Submit("// doc for A")
+	res := s.Submit("part def A { part x : Missing; }")
+	sf := source.New(docName, []byte(res.Source))
+	for _, d := range res.Diagnostics {
+		line := sf.Lines().PosAt(d.Span.Offset).Line - res.baseLine() + 1
+		if line != 1 {
+			t.Errorf("diagnostic reported on line %d of a one-line submission: %s", line, d.Message)
+		}
 	}
 }

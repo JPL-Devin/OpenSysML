@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -81,5 +82,34 @@ func TestNegative(t *testing.T) {
 				t.Errorf("Expected parse errors for malformed input, got none.\nInput: %s", tt.input)
 			}
 		})
+	}
+}
+
+// An unterminated comment swallows the rest of the document, so the parser says
+// so rather than silently returning a tree that is missing everything after it.
+func TestUnterminatedCommentIsReported(t *testing.T) {
+	for _, src := range []string{
+		"part def A;\n/* oops",
+		"part def A;\n//* oops",
+		"part def A;\n/*/",
+		"part def A;\n/* oops\npart def B;\n",
+	} {
+		p := New(source.New("t.sysml", []byte(src)))
+		p.ParseFile()
+		found := false
+		for _, d := range p.Diagnostics {
+			if strings.Contains(d.Message, "unterminated comment") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("ParseFile(%q) diagnostics = %v, want an unterminated comment reported", src, p.Diagnostics)
+		}
+	}
+	// A closed comment is not reported.
+	p := New(source.New("t.sysml", []byte("part def A;\n/* fine */\n//* also fine */\n")))
+	p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Errorf("a closed comment produced %v", p.Diagnostics)
 	}
 }

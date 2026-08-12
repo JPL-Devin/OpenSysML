@@ -52,6 +52,11 @@ func (p *Parser) fill(n int) {
 		tok := p.lx.Next()
 		for tok.IsTrivia() || tok.Kind == lexer.RegularComment {
 			p.triv = append(p.triv, triviaOf(tok))
+			if tok.Unterminated {
+				// Everything after the opener is inside it, so the declarations
+				// that follow are not in the tree at all.
+				p.error(tok.Span, "unterminated comment: missing */")
+			}
 			if tok.Kind == lexer.RegularComment {
 				p.pendingComment = tok.Span
 				p.hasPendingComment = true

@@ -200,7 +200,7 @@ func runConvert(input string, rest []string) error {
 	case outputPath != "":
 		to, err = export.FormatOfPath(outputPath)
 		if err != nil {
-			return err
+			return export.Advise(err, "pass -from/-to")
 		}
 	default:
 		// No -to and no output file: convert to the other format, which is the
@@ -221,10 +221,15 @@ func runConvert(input string, rest []string) error {
 		_, err := os.Stdout.Write(out)
 		return err
 	}
-	if err := os.WriteFile(outputPath, out, 0o600); err != nil {
+	replaced, err := export.WriteFile(outputPath, out)
+	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "wrote %s (%s, %d bytes)\n", outputPath, to, len(out))
+	what := ""
+	if replaced {
+		what = ", replaced the existing file"
+	}
+	fmt.Fprintf(os.Stderr, "wrote %s (%s, %d bytes%s)\n", outputPath, to, len(out), what)
 	return nil
 }
 
@@ -234,7 +239,8 @@ func resolveFormat(flagValue, path string) (export.Format, error) {
 	if flagValue != "" {
 		return export.ParseFormat(flagValue)
 	}
-	return export.FormatOfPath(path)
+	f, err := export.FormatOfPath(path)
+	return f, export.Advise(err, "pass -from/-to")
 }
 
 // otherFormat returns the format to convert to when only the input format is

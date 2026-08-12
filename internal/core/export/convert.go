@@ -50,6 +50,7 @@
 package export
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -95,8 +96,44 @@ func ParseFormat(name string) (Format, error) {
 	return 0, fmt.Errorf("unknown format %q: expected sysml, kerml, ttl, turtle or rdf", name)
 }
 
+// UnknownFormatError reports that a path does not say which format to write.
+// The remedy differs by surface — the command line has -from/-to, the REPL only
+// has the file name — so the caller supplies it with Advise.
+type UnknownFormatError struct {
+	Path string
+	// NoExtension distinguishes a path with no extension from one whose
+	// extension names a format we do not write.
+	NoExtension bool
+	// Advice is the surface's remedy, appended as "…, so <advice>".
+	Advice string
+}
+
+func (e *UnknownFormatError) Error() string {
+	reason := "expected .sysml, .kerml or .ttl"
+	if e.NoExtension {
+		reason = "it has no extension"
+	}
+	msg := fmt.Sprintf("cannot tell the format of %q: %s", e.Path, reason)
+	if e.Advice != "" {
+		msg += ", so " + e.Advice
+	}
+	return msg
+}
+
+// Advise returns err with the surface's remedy attached when it is an
+// *UnknownFormatError, and unchanged otherwise.
+func Advise(err error, advice string) error {
+	var unknown *UnknownFormatError
+	if errors.As(err, &unknown) {
+		return &UnknownFormatError{Path: unknown.Path, NoExtension: unknown.NoExtension, Advice: advice}
+	}
+	return err
+}
+
 // FormatOfPath infers the format from a file extension, so that the common case
-// needs no -from/-to.
+// needs no -from/-to. A path that names no format yields an
+// *UnknownFormatError carrying no advice; pass it through Advise to add the
+// remedy the calling surface offers.
 func FormatOfPath(path string) (Format, error) {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".sysml", ".kerml":
@@ -104,9 +141,9 @@ func FormatOfPath(path string) (Format, error) {
 	case ".ttl", ".turtle":
 		return FormatTurtle, nil
 	case "":
-		return 0, fmt.Errorf("cannot tell the format of %q: it has no extension, so pass -from/-to", path)
+		return 0, &UnknownFormatError{Path: path, NoExtension: true}
 	default:
-		return 0, fmt.Errorf("cannot tell the format of %q: expected .sysml, .kerml or .ttl, so pass -from/-to", path)
+		return 0, &UnknownFormatError{Path: path}
 	}
 }
 
@@ -130,42 +167,60 @@ func (e *SyntaxError) Error() string {
 // from broken input does not hold the declarations it could not read, and a
 // graph built from it would be quietly missing them.
 func Convert(name string, data []byte, from, to Format) ([]byte, error) {
+	out, _, err := convert(name, data, from, to, false)
+	return out, err
+}
+
+// ConvertTolerant is Convert with one difference: notation converted back to
+// notation is written even when the parser could not read all of it, and its
+// syntax errors are returned as a warning instead of an error. That direction
+// re-indents the input rather than building anything from the parse tree, so the
+// output is exactly as valid as the input and refusing it would only strand
+// work that exists nowhere else — which is why the REPL's `%save` uses it for a
+// session buffer. Every other direction builds a graph from the tree, where
+// declarations the parser could not read would be silently missing, so a broken
+// model is still rejected.
+func ConvertTolerant(name string, data []byte, from, to Format) ([]byte, *SyntaxError, error) {
+	return convert(name, data, from, to, true)
+}
+
+func convert(name string, data []byte, from, to Format, tolerateSyntaxErrors bool) ([]byte, *SyntaxError, error) {
 	switch {
 	case from == FormatSysML && to == FormatSysML:
 		// A save of textual notation: keep every lexeme, fix the indentation.
-		// The syntax is still checked, so no direction accepts input the parser
-		// cannot read.
-		if err := checkSyntax(name, data); err != nil {
-			return nil, err
+		syntax := checkSyntax(name, data)
+		if syntax != nil && !tolerateSyntaxErrors {
+			return nil, nil, syntax
 		}
 		out, err := format.Source(name, data, format.DefaultOptions)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return out, nil
+		return out, syntax, nil
 
 	case from == FormatSysML && to == FormatTurtle:
 		graph, err := SysMLToRDF(name, data)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return rdf.WriteTurtle(graph), nil
+		return rdf.WriteTurtle(graph), nil, nil
 
 	case from == FormatTurtle && to == FormatSysML:
 		graph, err := rdf.ParseTurtle(data)
 		if err != nil {
-			return nil, &SyntaxError{Name: name, Messages: []string{err.Error()}}
+			return nil, nil, &SyntaxError{Name: name, Messages: []string{err.Error()}}
 		}
-		return ToSysML(graph)
+		out, err := ToSysML(graph)
+		return out, nil, err
 
 	default:
 		// Turtle to Turtle: read and rewrite, which normalizes the document
 		// and reports anything the reader cannot represent.
 		graph, err := rdf.ParseTurtle(data)
 		if err != nil {
-			return nil, &SyntaxError{Name: name, Messages: []string{err.Error()}}
+			return nil, nil, &SyntaxError{Name: name, Messages: []string{err.Error()}}
 		}
-		return rdf.WriteTurtle(graph), nil
+		return rdf.WriteTurtle(graph), nil, nil
 	}
 }
 
@@ -181,7 +236,7 @@ func SysMLToRDF(name string, data []byte) (*rdf.Graph, error) {
 }
 
 // checkSyntax reports the notation's syntax errors, if any.
-func checkSyntax(name string, data []byte) error {
+func checkSyntax(name string, data []byte) *SyntaxError {
 	file := source.New(name, data)
 	p := parser.New(file)
 	p.ParseFile()
@@ -190,7 +245,7 @@ func checkSyntax(name string, data []byte) error {
 
 // syntaxError turns a parse's diagnostics into a SyntaxError, or nil when the
 // input parsed clean.
-func syntaxError(name string, file *source.SourceFile, p *parser.Parser) error {
+func syntaxError(name string, file *source.SourceFile, p *parser.Parser) *SyntaxError {
 	if len(p.Diagnostics) == 0 {
 		return nil
 	}

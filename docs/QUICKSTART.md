@@ -260,6 +260,27 @@ sysml> %save my_model.ttl
 saved 1540 bytes of ttl to my_model.ttl
 ```
 
+A leading `~` is expanded, an existing file is replaced and the replacement is
+stated, and the write is atomic — an interrupted save leaves the previous file
+intact. A file that already exists keeps its permissions, and a symlink is
+written through rather than replaced.
+
+A session that does not fully parse is still saved as notation: that file is
+your own text re-indented, so the syntax errors are reported as warnings and the
+work is never trapped in the REPL.
+
+```bash
+sysml> %save my_model.sysml
+warning: <session>: 1 syntax error(s):
+  4:6: expected a namespace member
+warning: the file is saved as typed; fix these and save again
+saved 148 bytes of sysml to my_model.sysml (replaced the existing file)
+```
+
+`.ttl` keeps the refusal, because a graph built from a tree the parser only
+partly recovered would be quietly missing declarations. So does
+`sysml -convert`, where the source already exists on disk.
+
 The same conversion is available without starting the REPL:
 
 ```bash

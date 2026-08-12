@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/model"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
@@ -116,10 +117,17 @@ func (s *Session) List() []string {
 // <repl> content plus the byte offset where src begins in it. That offset is
 // what scopes a report to the submission just made. It does NOT touch the
 // workspace (Task 4 does).
+//
+// A submission that declares names takes over the comment lines typed just
+// before it. They document what follows, so folding them into the same snippet
+// makes a later redeclaration replace the comments along with the declaration
+// instead of leaving stale documentation above whatever is current.
 func (s *Session) accept(src string) (joined string, offset int) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
+	var comments string
 	if len(names) > 0 {
+		comments = s.takeLeadingComments()
 		set := make(map[string]bool, len(names))
 		for _, n := range names {
 			set[n] = true
@@ -132,9 +140,47 @@ func (s *Session) accept(src string) (joined string, offset int) {
 		}
 		s.snippets = kept
 	}
-	s.snippets = append(s.snippets, snippet{src: src, names: names})
+	s.snippets = append(s.snippets, snippet{src: comments + src, names: names})
 	joined = s.joined()
+	// The offset marks what the user typed, not the comments folded in front of
+	// it, so diagnostics keep the line numbers of the submission.
 	return joined, len(joined) - len(src)
+}
+
+// takeLeadingComments removes the trailing run of comment-only snippets and
+// returns their text, ready to prefix the declaration they document.
+func (s *Session) takeLeadingComments() string {
+	cut := len(s.snippets)
+	for cut > 0 && isCommentOnly(s.snippets[cut-1].src) {
+		cut--
+	}
+	if cut == len(s.snippets) {
+		return ""
+	}
+	var b strings.Builder
+	for _, sn := range s.snippets[cut:] {
+		b.WriteString(sn.src)
+		b.WriteString("\n")
+	}
+	s.snippets = s.snippets[:cut]
+	return b.String()
+}
+
+// isCommentOnly reports whether a submission is nothing but comments, and so
+// declares nothing of its own to be replaced by name.
+func isCommentOnly(src string) bool {
+	lx := lexer.New(source.New(docName, []byte(src)))
+	comments := 0
+	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		switch tok.Kind {
+		case lexer.Whitespace:
+		case lexer.SLNote, lexer.MLNote, lexer.RegularComment:
+			comments++
+		default:
+			return false
+		}
+	}
+	return comments > 0
 }
 
 // sessionOrigin names the accumulated session buffer in diagnostics, which
