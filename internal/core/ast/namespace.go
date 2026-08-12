@@ -69,6 +69,36 @@ func TargetName(node Node) (string, source.Span) {
 	return last.Text, last.Span
 }
 
+// EffectiveName returns the name a usage answers to: its declared name, or, for
+// an unnamed usage, the name of its reference subsetting, else of its lone
+// redefinition (KerML 7.3.4.5). More than one redefinition leaves it anonymous.
+func EffectiveName(u *Usage) (string, source.Span) {
+	if u == nil {
+		return "", source.Span{}
+	}
+	if u.Ident.Name != "" {
+		return u.Ident.Name, u.Ident.NameSpan
+	}
+	var redefinitions []*Relationship
+	for _, rel := range u.Relationships {
+		if rel == nil {
+			continue
+		}
+		switch rel.Kind {
+		case RelReferences:
+			if name, span := TargetName(rel.Target); name != "" {
+				return name, span
+			}
+		case RelRedefines:
+			redefinitions = append(redefinitions, rel)
+		}
+	}
+	if len(redefinitions) == 1 {
+		return TargetName(redefinitions[0].Target)
+	}
+	return "", source.Span{}
+}
+
 // Identification captures `<shortName> name` or `name` on a declaration.
 type Identification struct {
 	ShortName     string

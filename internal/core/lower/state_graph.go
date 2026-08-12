@@ -248,7 +248,8 @@ func ToStateGraph(stateMachineDecl ast.Node) (*StateGraph, error) {
 // over the entry/do/exit behaviors declared in the body so the executor runs
 // them; without this the body's behaviors are silently dropped.
 func stateNodeFromUsage(usage *ast.Usage) *ast.StateNode {
-	state := &ast.StateNode{Name: usage.Ident.Name}
+	name, _ := ast.EffectiveName(usage)
+	state := &ast.StateNode{Name: name}
 	state.NodeSpan = usage.NodeSpan
 
 	for _, member := range usage.Members {
