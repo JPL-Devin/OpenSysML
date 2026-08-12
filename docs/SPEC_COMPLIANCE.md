@@ -218,8 +218,12 @@ Each row documents one behavioral semantic feature:
 | `referencedFeatureTarget().oclIsKindOf(RequirementUsage)` — satisfy/verify may only reference a requirement usage (incl. viewpoint/concern usages) | `passes/typecheck.go` `compatMessage`, `isRequirementUsageKind` | `passes/typecheck_test.go` `TestTypeCheckSatisfyRequirementUsageOK`, `TestTypeCheckSatisfyViewpointUsageOK`, `TestTypeCheckSatisfyNonRequirementUsageError` | ✅ Faithful |
 | An `ObjectiveMembership`'s `ownedObjectiveRequirement` is a `RequirementUsage` (SysML v2 §8.3.22.4), so an `objective` is typed by a requirement definition or a specialization of one, never by a structural definition | `passes/typecheck.go` `compatibleTyping`, `isRequirementDefKind` | `passes/typecheck_kinds_test.go` `TestTypeCheckObjectiveTypedByRequirementDefOK`, `TestTypeCheckObjectiveTypedByConcernDefOK`, `TestTypeCheckObjectiveTypedByPartDefError`, `TestTypeCheckObjectiveTypedByActionDefError` | ✅ Faithful |
 | A `SubjectMembership`'s `ownedSubjectParameter` is an unconstrained `Usage` (SysML v2 §8.3.21), so a definition of any kind types a `subject` — including the `port def` and `action def` the OMG training models use — and the rule applies however the requirement body is written, not only when the subject happens to parse as a usage | `passes/typecheck.go` `checkSubjectMember`, `compatibleTyping` | `passes/typecheck_subject_test.go` `TestTypeCheckSubjectIsCheckedWhateverPrecedesIt`, `TestTypeCheckRequirementUsageSubjectIsChecked`, `TestTypeCheckSubjectWithoutResolvableTypeIsNotATypeError`; `typecheck_kinds_test.go` `TestTypeCheckSubjectTypedByAnyDefKindOK`, `TestTypeCheckSubjectTypedByUsageError` | ✅ Faithful |
+| A quantity expression (`1.5 [m/s]`) evaluates to a magnitude and the measurement reference it is written in (`Quantities::ScalarQuantityValue` is `num` + `mRef`), so a condition comparing values written with units reaches a verdict | `runtime/quantity.go` `evalIndexExpr`, `value.go` `ValQuantity` | `requirement_quantity_same_unit.sysml`, `runtime/quantity_test.go:TestQuantityEvaluation`, `parser/testdata/parse/quantity_expression.golden` | ✅ Faithful |
+| Commensurable units convert before a comparison or a sum, through `MeasurementUnit::unitConversion` and unit-defining expressions reduced to base units — `1.5 [m/s] <= 5.4 [km/h]` is true, exactly, at its boundary (a conversion factor is kept as a ratio, not evaluated) | `semantics/units.go` `UnitTermOf`, `Scale`, `ConvertMagnitude` | `requirement_quantity_converted_unit.sysml`, `constraint_quantity_sum.sysml`, `semantics/units_test.go:TestScaleStaysExact` | ✅ Faithful |
+| A unit is composed by the operation over quantities (`10 [m] / 2 [s]` is `5 [m/s]`), and a ratio of like quantities is a number of no unit | `runtime/quantity.go` `scaleQuantities`, `semantics/units.go` `UnitTerm.DividedBy` | `constraint_quantity_quotient.sysml`, `calc_quantity_ratio.sysml` | ✅ Faithful |
+| Incommensurable units are a typed error (`ErrIncommensurableUnits`), never a comparison of bare magnitudes that would equate `1.5 [m/s]` with `1.5 [km/h]` | `runtime/errors.go` `ErrIncommensurableUnits`, `quantity.go` `convertTo` | `runtime/robustness_test.go` `quantity_incommensurable_comparison`, `runtime/quantity_test.go:TestQuantityIncommensurable` | ✅ Faithful |
 
-⚠️ A quantity expression (`1.5 [m/s]`) is not evaluated, so a condition comparing values written with units reports an unsupported node rather than a verdict. Units are not carried by runtime values, so no conversion is applied either.
+⚠️ The spec's own `QuantityCalculations::ConvertQuantity(x, targetMRef)` is not an invocable function, and a quantity is not yet an instantiated `ScalarQuantityValue` object whose `num`/`mRef` features can be read by name: the unit is carried on the runtime value, not modelled as a library object. The gRPC value schema has no magnitude-and-unit form, so a quantity crossing that boundary is reported as unsupported rather than serialized as a bare magnitude (`internal/grpc/convert.go`). Sequence indexing (`speeds#(3)`), which the parser represents with the same node, is still unevaluated: the two forms are told apart at the node (`ast.IndexExpr.Bracket`), so indexing is not read as a magnitude in a unit.
 
 ⚠️ `assert satisfy <requirement> by <part>;` is parsed and type-checked but is not itself an evaluation entry point: evaluate the requirement (`%requirement <name>`), whose subject-side values come from the instance it is bound to.
 
@@ -348,7 +352,6 @@ Found, not fixed — numeric library features that remain unevaluable:
 | `exp`, `ln`, `log`, `atan2` | The vendored library declares none of them (`TrigFunctions` declares `arctan` over one parameter, and no exponential or logarithm function file exists), so there is no signature to implement against. |
 | `VectorFunctions`, `MatrixFunctions` | Needs a vector value in the evaluator; every value is scalar today. |
 | `SequenceFunctions` beyond `size`/`isEmpty`/`includes` | Needs the sequence semantics of the library's own function bodies, not just element access. |
-| Quantity- and unit-aware arithmetic (`1.62[m/s^2]`) | Needs `MeasurementReferences` unit conformance in the evaluator; the notation parses but no unit is carried through arithmetic. |
 | `ComplexFunctions` | Needs a complex value kind. |
 | Remainder (`%`) outside constant folding | `semantics/eval.go` folds it over literals, but `runtime/eval.go` `evalOperator` routes only `+ - * / **` to arithmetic, so `%` over a feature reports `unsupported operator`. |
 | Library functions in the checker's own name resolution | An unqualified call to a library function the model does not import evaluates, but the `unresolved-reference` diagnostic still reports the name; importing `RealFunctions::*` clears it. |
@@ -567,9 +570,9 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 - Negative parser subtests: 49
 
 **Coverage by Feature Type** (execution conformance cases, by fixture prefix, 77 total):
-- Calc: 11 conformance + 11 golden traces (includes unary, coercion, qualified-name and library function evaluation)
-- Constraint: 4 conformance + 4 golden traces
-- Requirement: 5 conformance
+- Calc: 12 conformance + 11 golden traces (includes unary, coercion, qualified-name and library function evaluation)
+- Constraint: 6 conformance + 4 golden traces
+- Requirement: 8 conformance
 - Action: 24 conformance + 14 golden traces
 - State: 26 conformance + 7 golden traces
 - Accept: 1 conformance (`accept_then_transition`)
@@ -577,7 +580,7 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Quality Gates:**
 - Parser: 94/94 stdlib files clean
-- Execution conformance: 61/61 cases passing
+- Execution conformance: 89/89 cases passing
 - Training examples: 98/100 clean (2 files / 4 errors, both pinned OMG source bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
 

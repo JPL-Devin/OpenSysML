@@ -254,6 +254,10 @@ func ValueToProto(val runtime.Value) *pb.Value {
 			}
 		}
 		return &pb.Value{Kind: &pb.Value_Sequence{Sequence: &pb.ValueSequence{Elements: pbElements}}}
+	case runtime.ValQuantity:
+		// The wire Value has no magnitude-and-unit form, and sending the bare
+		// magnitude would drop the unit, so the value is reported unsupported.
+		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: quantity value"}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}

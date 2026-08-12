@@ -96,7 +96,20 @@ func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
 			Supers:          s.Supers,
 			WildcardImports: wildcardImportEntries(s.WildcardImports),
 			AliasTarget:     s.AliasTarget,
+			Unit:            unitFactsEntry(s.Unit),
 		}
+	}
+	return out
+}
+
+// unitFactsEntry projects a persisted unit reduction onto its index form.
+func unitFactsEntry(facts *unitFacts) *symbols.UnitFacts {
+	if facts == nil {
+		return nil
+	}
+	out := &symbols.UnitFacts{ScaleNum: facts.ScaleNum, ScaleDen: facts.ScaleDen, Irreducible: facts.Irreducible}
+	for _, f := range facts.Factors {
+		out.Factors = append(out.Factors, symbols.UnitFactorFacts{FQN: f.FQN, Exponent: f.Exponent})
 	}
 	return out
 }

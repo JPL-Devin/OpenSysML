@@ -66,6 +66,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		return
 	case *IndexExpr:
 		b.WriteString(`(IndexExpr`)
+		if v.Bracket {
+			b.WriteString(` bracket=true`)
+		}
 		writeChildren(b, depth, []Node{v.Operand, v.Index})
 		return
 	case *CollectExpr:

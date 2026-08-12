@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/libs"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
@@ -34,6 +35,10 @@ type ExpectedEvent struct {
 // ExpectedOutcome represents expected execution result
 type ExpectedOutcome struct {
 	Type string `json:"type"` // "action", "state", "calc", "constraint", "requirement", "instance"
+	// Libraries loads the standard library into the case's index, for a case
+	// whose model names library elements the runtime resolves — the measurement
+	// unit of a quantity expression is one.
+	Libraries bool `json:"libraries,omitempty"`
 
 	// Action fields
 	Outputs    map[string]ExpectedValue `json:"outputs,omitempty"`
@@ -156,7 +161,13 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 	// Syntax errors will manifest as nil symbols or malformed AST
 
 	idx := symbols.NewIndex()
+	if expected.Libraries {
+		loadLibraries(t, idx)
+	}
 	idx.AddDocument(sysmlPath, file)
+	if expected.Libraries {
+		idx.ExpandWildcardImports()
+	}
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	ctx := NewContext(model, resolver, 10000)
@@ -177,6 +188,23 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 		runInstanceConformance(t, ctx, idx, expected)
 	default:
 		t.Fatalf("unknown test type: %s", expected.Type)
+	}
+}
+
+// loadLibraries loads the standard library into idx, for a case that names its
+// elements.
+func loadLibraries(t *testing.T, idx *symbols.Index) {
+	t.Helper()
+	src := libs.DefaultSource()
+	cache, err := libs.NewCache()
+	if err != nil {
+		cache = nil
+	}
+	loader := libs.NewLoader(src, cache)
+	for _, name := range src.List() {
+		if err := loader.Load(name, idx); err != nil {
+			t.Fatalf("load library %s: %v", name, err)
+		}
 	}
 }
 

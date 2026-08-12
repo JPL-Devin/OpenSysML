@@ -69,6 +69,15 @@ var (
 	// ErrCyclicSlot is returned when a slot's default value depends, directly or
 	// through other slots, on the slot being computed.
 	ErrCyclicSlot = errors.New("cyclic slot dependency")
+
+	// ErrNotAQuantity is returned when `x [y]` is not a quantity expression:
+	// y names no measurement unit, or x is no magnitude.
+	ErrNotAQuantity = errors.New("not a quantity expression")
+
+	// ErrIncommensurableUnits is returned when an operation combines quantities
+	// whose units measure different things, or whose conversion is not derivable
+	// from the library. It is never answered by comparing magnitudes.
+	ErrIncommensurableUnits = errors.New("incommensurable units")
 )
 
 // ViolationError reports a condition that evaluated to false, naming the

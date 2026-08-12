@@ -15,11 +15,11 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`, `staticch
 |---|---|
 | OMG training corpus | **98/100 clean** — 2 files / 4 errors, both pinned OMG source bugs (the ceiling) |
 | Stdlib parser conformance | 94/94 clean |
-| Execution conformance cases | 77 |
+| Execution conformance cases | 89 |
 | gRPC conformance cases | 6 |
 | Golden execution traces | 36 |
-| Runtime robustness subtests | 42 |
-| Golden AST fixtures | 42 |
+| Runtime robustness subtests | 45 |
+| Golden AST fixtures | 43 |
 | Negative parser subtests | 49 |
 
 Statement coverage, measured today with `go test -cover ./...`:
@@ -160,13 +160,15 @@ conformance cases `requirement_own_attribute`, `requirement_def_body_require`,
 
 What is left, both recorded as ⚠️ in `docs/SPEC_COMPLIANCE.md` under Requirement:
 
-- **A1a — a quantity expression is not evaluated.** `attribute maxVerticalSpeed = 1.5 [m/s];`
-  parses and type-checks, but the runtime has no case for it, so a condition comparing values
-  written with units reports `unsupported node type: *ast.IndexExpr` instead of a verdict. This is
-  what stops the Open-MBEE lunar lander model's `TouchdownRequirement` from reaching a verdict as
-  the model writes it. Runtime values carry no unit, so the semantics to decide first is whether a
-  quantity evaluates to its magnitude (silently ignoring a mismatch between `m/s` and `km/h`) or
-  values carry a unit and comparison converts.
+- **A1a — a quantity expression is not evaluated — done.** A quantity evaluates to a magnitude
+  **and** the measurement reference it is written in (`Quantities::ScalarQuantityValue` is `num` +
+  `mRef`), units reduce to a scale factor over base units read from the Quantities and Units
+  library, and commensurable units convert before a comparison or a sum — `1.5 [m/s] <= 5.4 [km/h]`
+  is true, exactly, at its boundary. Incommensurable units (`1.5 [m/s] <= 2.0 [s]`) are
+  `ErrIncommensurableUnits`, never a comparison of bare magnitudes. The Open-MBEE lunar lander
+  model's `TouchdownRequirement` now reaches a verdict as the model writes it.
+  `semantics/units.go`, `runtime/quantity.go`, conformance cases `requirement_quantity_*`,
+  `constraint_quantity_*`, `calc_quantity_ratio`.
 - **A1b — `assert satisfy <requirement> by <part>;` is not an evaluation entry point.** It parses
   and type-checks (#78), and `%requirement` reaches a verdict for a requirement whose attributes
   are bound to the subject's values, but the assertion itself is never evaluated and an anonymous
@@ -203,8 +205,8 @@ A6; do A6 first and re-test this.
 - **Calc recursion** is depth-bounded and rejected rather than evaluated.
 - **Numeric library coverage is scalar only.** The KerML function library's scalar numeric
   functions and `**` are evaluable (`runtime/library_functions.go`); `VectorFunctions`,
-  `MatrixFunctions`, `ComplexFunctions`, the rest of `SequenceFunctions`, and unit-aware
-  arithmetic (`1.62[m/s^2]`) are not. `TrigFunctions::pi` has no declared value, so the
+  `MatrixFunctions`, `ComplexFunctions` and the rest of `SequenceFunctions` are not (quantity
+  arithmetic is, as of A1a). `TrigFunctions::pi` has no declared value, so the
   library's own `deg`/`rad` bodies cannot be evaluated — that needs a library *feature* value,
   a different seam from function dispatch.
 - **An unqualified library function call still reports `unresolved-reference`** while evaluating
@@ -390,7 +392,7 @@ Lessons that survived the last two batches, unchanged because they keep applying
    release section.
 2. **P1** and **P2** next: the release now ships the service binary, so the Python surface is
    the newest promise and the least CI-verified.
-3. **A1a**/**A1b** (what is left of A1) and **A2** — the limitations the changelog admits to — then **A4**/**A5** in
+3. **A1b** (what is left of A1) and **A2** — the limitations the changelog admits to — then **A4**/**A5** in
    parallel (they share only `docs/SPEC_COMPLIANCE.md`; the two `state_executor.go` items in A4
    must run one at a time).
 4. **A6** last, gated on a per-file corpus diff.

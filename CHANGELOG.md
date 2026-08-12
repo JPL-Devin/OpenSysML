@@ -25,6 +25,17 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   (`Required condition evaluated to false: actualVerticalSpeed <= maxVerticalSpeed`),
   and a feature a condition names but which holds no value is reported as such
   rather than as unresolved.
+- A quantity expression (`attribute maxVerticalSpeed = 1.5 [m/s];`) is evaluated.
+  A quantity carries its magnitude and the measurement reference it is written
+  in, as `Quantities::ScalarQuantityValue` (`num` + `mRef`) does. Units reduce to
+  a scale factor over base units through the Quantities and Units library's own
+  `unitConversion` and unit-defining expressions, so commensurable units convert
+  before a comparison or a sum — `1.5 [m/s] <= 5.4 [km/h]` is true, exactly, at
+  its boundary — and an operation whose unit is composed by it keeps that unit
+  (`10 [m] / 2 [s]` is `5 [m/s]`, `4 [m] / 2 [m]` is `2`). An operation between
+  units that measure different things (`1.5 [m/s] <= 2.0 [s]`) is an error, never
+  a comparison of bare magnitudes that would equate `1.5 [m/s]` with
+  `1.5 [km/h]`.
 - The KerML function library's scalar numeric functions are evaluable: `sqrt`,
   `abs`, `floor`, `round`, `max`, `min`, `isZero`, `isUnit`, `sin`, `cos`, `tan`,
   `cot`, `arcsin`, `arccos` and `arctan`. Dispatch is by the declaration's

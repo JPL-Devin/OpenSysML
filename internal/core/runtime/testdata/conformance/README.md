@@ -131,6 +131,17 @@ This directory contains behavioral execution conformance tests. Each test consis
   evaluated bound to the instance. `false` means the assertion evaluated to
   false (`ErrViolated`), not that evaluation failed.
 
+## Standard Library
+
+```json
+{"libraries": true}
+```
+
+Loads the standard library into the case's index, for a case whose model names
+library elements the runtime resolves — the measurement unit of a quantity
+expression (`1.5 [m/s]`) is one. Omit it otherwise: a case that needs no library
+is indexed from its own source alone.
+
 ## Value Format
 
 All values use this format:
