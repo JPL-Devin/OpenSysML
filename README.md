@@ -136,7 +136,7 @@ sysml> %advance 30
 ## Goals
 
 - **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
-- **Completeness:** SysML v2 textual notation support (94/94 stdlib files parse clean)
+- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 Systemica extension)
 - **Executable models:** Instantiate, evaluate, simulate—turn specifications into running systems
 - **Real-world ergonomics:** Multi-file projects, incremental analysis, rich diagnostics
 
@@ -146,7 +146,7 @@ sysml> %advance 30
 
 | Component | Status |
 |-----------|--------|
-| Lexer/Parser (structural + behavioral grammar) | ✅ Operational (94/94 stdlib clean - see [conformance gate](internal/core/libs/stdlib_conformance_test.go)) |
+| Lexer/Parser (structural + behavioral grammar) | ✅ Operational (95/95 stdlib clean - see [conformance gate](internal/core/libs/stdlib_conformance_test.go)) |
 | Symbol resolution & type system | ✅ Complete |
 | Semantic layer (operators, builtins, validation) | ✅ Complete |
 | Feature chain resolution (member access) | ✅ Complete |
@@ -167,7 +167,7 @@ sysml> %advance 30
 
 **Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
 **Test coverage:** 1,500+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 36 golden ASTs, 49 negatives, 61 conformance cases, 35 robustness subtests.
-**Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
+**Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 **Behavioral execution:** Calc/constraint/requirement fully functional (18/18 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (61/61 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
 **Training examples:** 98/100 files clean (2 files, 4 errors), gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
@@ -231,7 +231,7 @@ github.com/Open-MBEE/Systemica
 - **Parser:** Hand-written recursive descent (zero overhead, full error recovery, sub-ms parses)
 - **Grammar source:** OMG pilot Xtext grammars (`SysML.xtext` + `KerMLExpressions`)
 - **Spec compliance:** [OMG SysML v2.1 Beta 1 / KerML 1.1](https://www.omg.org/spec/SysML/2.0) (2026-05 release)
-- **Standard library:** 94 files from [SysML v2 Pilot Implementation 2026-05](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/releases/tag/2026-05)
+- **Standard library:** 94 files from [SysML v2 Pilot Implementation 2026-05](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/releases/tag/2026-05), byte-identical, plus the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension
 - **CI/CD:** CircleCI for automated builds, tests, and releases
 
 ## Releases

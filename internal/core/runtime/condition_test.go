@@ -157,54 +157,6 @@ func TestRequirementWithOnlyAssumptionsIsSatisfied(t *testing.T) {
 	}
 }
 
-// A negation denies the conditions its constraint states together — `not (a and
-// b)`, not `not a and not b` (Invariant::isNegated) — so it holds as soon as one
-// of them fails.
-func TestNegatedNestedConstraintDeniesItsConditionsTogether(t *testing.T) {
-	src := `
-		package test {
-			constraint def C {
-				in a;
-				in b;
-				assert not constraint {
-					a > 100
-					b > 100
-				}
-			}
-			part def Rig {
-				constraint oneHolds : C { in a = 200.0; in b = 1.0; }
-				constraint bothHold : C { in a = 200.0; in b = 200.0; }
-				constraint neitherHolds : C { in a = 1.0; in b = 1.0; }
-			}
-		}
-	`
-	ctx, pkg := conditionFixture(t, src)
-	rig := requirementNamed(t, pkg, "Rig")
-	inst, err := ctx.Instantiate(rig)
-	if err != nil {
-		t.Fatalf("Instantiate: %v", err)
-	}
-	for name, want := range map[string]bool{"oneHolds": true, "bothHold": false, "neitherHolds": true} {
-		feat := featureNamed(ctx, rig, name)
-		if feat == nil || feat.Symbol == nil {
-			t.Fatalf("%s: constraint feature not found", name)
-		}
-		satisfied, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
-		if err != nil && !errors.Is(err, ErrViolated) {
-			t.Errorf("%s: %v", name, err)
-			continue
-		}
-		if satisfied != want {
-			t.Errorf("%s: satisfied = %v, want %v", name, satisfied, want)
-		}
-		// The violation names the denied conjunction, not one of its conditions.
-		var violation *ViolationError
-		if !want && errors.As(err, &violation) && violation.Condition != "not (a > 100 and b > 100)" {
-			t.Errorf("%s: condition = %q, want %q", name, violation.Condition, "not (a > 100 and b > 100)")
-		}
-	}
-}
-
 // A `not` written on a nested constraint inverts the single condition of its body.
 func TestNegatedNestedConstraintIsInverted(t *testing.T) {
 	src := `
@@ -243,6 +195,100 @@ func TestNegatedNestedConstraintIsInverted(t *testing.T) {
 		var violation *ViolationError
 		if !want && errors.As(err, &violation) && violation.Condition != "not a > 100" {
 			t.Errorf("%s: condition = %q, want %q", name, violation.Condition, "not a > 100")
+		}
+	}
+}
+
+// A `not` on a body of several conditions negates their conjunction, so it holds
+// as soon as one of them fails.
+func TestNegatedNestedConstraintNegatesTheConjunction(t *testing.T) {
+	src := `
+		package test {
+			constraint def C {
+				in a;
+				in b;
+				assert not constraint {
+					a > 100
+					b > 100
+				}
+			}
+			part def Rig {
+				constraint oneFails : C { in a = 200.0; in b = 1.0; }
+				constraint bothHold : C { in a = 200.0; in b = 200.0; }
+				constraint neitherHolds : C { in a = 1.0; in b = 1.0; }
+			}
+		}
+	`
+	ctx, pkg := conditionFixture(t, src)
+	rig := requirementNamed(t, pkg, "Rig")
+	inst, err := ctx.Instantiate(rig)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	for name, want := range map[string]bool{"oneFails": true, "bothHold": false, "neitherHolds": true} {
+		feat := featureNamed(ctx, rig, name)
+		if feat == nil || feat.Symbol == nil {
+			t.Fatalf("%s: constraint feature not found", name)
+		}
+		satisfied, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
+		if err != nil && !errors.Is(err, ErrViolated) {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if satisfied != want {
+			t.Errorf("%s: satisfied = %v, want %v", name, satisfied, want)
+		}
+		// The violation names the denied conjunction, not one of its conditions.
+		var violation *ViolationError
+		if !want && errors.As(err, &violation) && violation.Condition != "not { a > 100; b > 100 }" {
+			t.Errorf("%s: condition = %q, want %q", name, violation.Condition, "not { a > 100; b > 100 }")
+		}
+	}
+}
+
+// A parameter bound to a same-named outer feature reads that outer feature
+// rather than resolving to itself.
+func TestParameterBoundToSameNamedFeature(t *testing.T) {
+	src := `
+		package test {
+			constraint def MassLimit {
+				in mass;
+				assert mass <= 1500.0;
+			}
+			part def Vehicle {
+				attribute mass = 1200.0;
+				constraint light : MassLimit { in mass = mass; }
+			}
+			part def Truck {
+				attribute mass = 4000.0;
+				constraint heavy : MassLimit { in mass = mass; }
+			}
+		}
+	`
+	ctx, pkg := conditionFixture(t, src)
+	for _, tc := range []struct {
+		part, constraint string
+		want             bool
+	}{
+		{"Vehicle", "light", true},
+		{"Truck", "heavy", false},
+	} {
+		owner := requirementNamed(t, pkg, tc.part)
+		inst, err := ctx.Instantiate(owner)
+		if err != nil {
+			t.Fatalf("%s: Instantiate: %v", tc.part, err)
+		}
+		feat := featureNamed(ctx, owner, tc.constraint)
+		if feat == nil || feat.Symbol == nil {
+			t.Fatalf("%s: constraint feature not found", tc.constraint)
+		}
+		satisfied, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
+		if err != nil && !errors.Is(err, ErrViolated) {
+			t.Errorf("%s: %v", tc.constraint, err)
+			continue
+		}
+		if satisfied != tc.want {
+			t.Errorf("%s: satisfied = %v, want %v", tc.constraint, satisfied, tc.want)
 		}
 	}
 }

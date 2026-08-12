@@ -132,14 +132,58 @@ action still completed, just with the wrong total. The cheapest way to prove a c
 is real is an A/B against a binary built from `main` in a `git worktree` — same model, different
 number.
 
-Things that must fail rather than hang: the REPL builds its runtime context with **maxSteps =
-100000** (`internal/repl/session.go`), and every loop iteration spends one step, so a runaway loop
-(or an empty loop body, whose condition can never change) returns
-`error: execution failed: eval … : evaluation step limit exceeded (100000 steps)` in well under a
-second. Always follow the failure with another meta-command (`%tokens`, `%instances`) to prove the
-session survived — `%tokens` still shows the token parked at the node with its partial value. A
+Things that must fail rather than hang: the REPL builds its runtime context with a step budget that
+defaults to **10000000** (`runtime.DefaultMaxSteps`, `internal/core/runtime/budget.go`; sessions
+carry the four budgets via `Session.SetBudgets(runtime.Budgets)`), and every loop iteration spends
+several steps, so a runaway loop (or an empty loop body, whose condition can never change) returns
+`error: execution failed: eval … : evaluation step limit exceeded (10000000 steps; raise SYSML_MAX_STEPS to allow more)`
+in under a second (0.7 s measured). Always follow the failure with another meta-command (`%tokens`, `%instances`)
+to prove the session survived — `%tokens` still shows the token parked at the node with its partial value. A
 `for` over a non-collection gives
 `action node <n>: 'for' collection must be a sequence or a set, got constant`.
+
+### Raising the budgets (PRs #83, #87)
+
+Four variables, one per runaway bound, each counting a different unit — raising one says nothing
+about the others:
+
+| Variable | Default | Counts |
+|---|---|---|
+| `SYSML_MAX_STEPS` | 10000000 | expression evaluations |
+| `SYSML_MAX_ACTION_STEPS` | 1000000 | action token-flow steps |
+| `SYSML_MAX_EVENTS` | 1000000 | state machine events, and the events one `%advance` drains |
+| `SYSML_MAX_DO_STEPS` | 5000000 | do-activity actions, ditto for `%advance` |
+
+Each bounds **one run** — one `%eval`, `%instantiate`, `%calc`, action or state machine, a stepped-
+through run included — not a whole session, so a long session of small operations never runs out; a
+run started inside another shares the outer one's budget. Testing the bound therefore needs a single
+runaway run, not a sequence of evaluations.
+
+Each overrides the default for both `bin/sysml` and `bin/sysml-grpc`: unset/empty → the default, a
+positive integer (whitespace is trimmed) → that value, anything else → the binary refuses to start
+(`sysml` exits **2** with `sysml: SYSML_MAX_STEPS="…" is not an integer …` /
+`… must be greater than zero …`; `sysml-grpc` exits **1** and logs the same error under
+`msg="Invalid service configuration"`). Every unusable value is reported at once, not just the first.
+Useful test model — a `while i < N { assign …; assign …; }` body costs roughly 10 evaluation steps
+per iteration, so a 100 000-iteration loop completes at the default in 0.13 s and a budget of 100000
+stops a 10 000-iteration one:
+
+```bash
+SYSML_MAX_STEPS=100000 sh -c "printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml"   # step-limit error
+printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml                                  # completes at the default
+```
+
+Note the `sh -c` wrapper: `VAR=x cmd | …` only exports to the first process of the pipeline, so put
+the whole pipeline inside `sh -c` or the REPL will not see the variable. The gRPC side inherits the
+variable through the pysysml auto-start path (the client spawns `~/.pysysml/bin/sysml-grpc` as a
+child), so `SYSML_MAX_STEPS=300000 python script.py` is enough — but `pkill -f sysml-grpc` first,
+otherwise an already-running service from an earlier value keeps serving.
+
+Tooling trap: running a pysysml script that auto-starts the service from a *non-tty* one-shot shell
+tends to return no output at all (the spawned service holds the pipe). Run such scripts with a tty
+shell (`tty: true`) or inside the GUI terminal, and use the venv interpreter
+(`/home/ubuntu/repos/fprime/fprime-venv/bin/python`) — the default `python` in a plain shell has no
+`pysysml`.
 
 A name declared inside a loop or branch body lives in a block frame and must **not** appear in the
 action's `Results:` — check for the *absence* of the line, not just the right total.
@@ -310,6 +354,40 @@ naming the path or URL. `PYSYSML_GITHUB_REPO` overrides the repo. Beware: these 
 unauthenticated GitHub API, so repeated runs flip from a truthful `HTTP Error 404: Not Found` to a
 misleading `HTTP Error 403: rate limit exceeded` — rehearse sparingly and report the 404 wording,
 not whichever one the recording happened to catch.
+
+## Built-in library functions (sqrt/sin/exp/ln/log/atan2 …)
+
+The runtime supplies bodies for the function-library declarations in
+`internal/core/runtime/library_functions.go`; the non-normative extensions
+(`exp`, `ln`, `log`, `atan2`) live in
+`internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml`.
+Testing notes that generalize to any future built-in:
+
+- The fastest end-to-end surface is the batch flag, which loads a model *and* evaluates
+  expressions against it: `./bin/sysml -e "exp(1.0)" -e "log(8.0, 2.0)" model.sysml`. Several
+  `-e` flags are allowed and each prints `✓ <expr>` then `  = <value>`; a failure prints
+  `error: evaluation failed: ...` and the process still exits 0, so assert on the text, never on
+  the exit code.
+- **`-e` is evaluated in the root scope, not inside the model's package.** So a model that declares
+  its own `calc def exp` is *not* exercised by `-e "exp(2.0)"` (that hits the built-in). To prove
+  shadowing, either use the FQN (`-e "OwnExp::exp(2.0)"`) or read it out of an attribute default
+  with `%instantiate`/`%slots`. Getting this wrong looks exactly like a shadowing bug.
+- Results print to **two decimals**, which hides precision differences. To assert exactness, compare
+  in the model instead: `-e "log(1000.0, 10.0) == 3.0"` → `= true` (the naive `ln(x)/ln(base)`
+  gives 2.9999999999999996 and would print `= 3.00` while being `false`).
+- Domain/overflow handling is deliberate: `realResult` converts NaN/Inf into
+  `arithmetic domain error` / `arithmetic overflow`, so a bad argument must yield an `error:` line,
+  never a number. Worth checking per function (`ln(0.0)`, `log(4.0, 1.0)`, `atan2(0.0, 0.0)`,
+  `exp(1000.0)`), plus wrong arity (`calc argument count mismatch`) and a non-numeric argument
+  (`type mismatch: ... requires a numeric value`).
+- A **bare** call with no `import` still evaluates (the unqualified-name table is always in force)
+  but the checker prints `error: unresolved reference: <name>` for the same call inside a
+  declaration. That divergence is a known rough edge of the built-in dispatch, not a new bug —
+  report it as expected, and use `import SystemicaMathFunctions::*;` in fixtures to avoid it.
+- Fixture gotchas when writing action fixtures by hand: `done` is a reserved keyword (use another
+  name), successions must use the `first start; … done end; then a b;` form (the
+  `first a then b;` form yields `action has multiple initial nodes`), and `and`/`or` are
+  `unsupported operator` in constraint bodies — keep constraint expressions to a single comparison.
 
 ## Recording setup (Linux/Plasma box)
 

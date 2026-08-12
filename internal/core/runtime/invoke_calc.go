@@ -156,12 +156,16 @@ type calcArgs struct {
 // default. The body is evaluated in the calc's own scope, so scope is used only
 // as a fallback for a symbol that owns no scope.
 func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols.Scope) (Value, error) {
+	defer ctx.beginRun()()
+
 	return ctx.invokeCalc(sym, calcArgs{positional: args}, scope)
 }
 
 // InvokeCalcNamed invokes a calculation with arguments bound by parameter name.
 // A parameter with no argument falls back to its declared default.
 func (ctx *Context) InvokeCalcNamed(sym *symbols.Symbol, args map[string]Value, scope *symbols.Scope) (Value, error) {
+	defer ctx.beginRun()()
+
 	return ctx.invokeCalc(sym, calcArgs{named: args}, scope)
 }
 

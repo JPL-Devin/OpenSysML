@@ -416,7 +416,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 	// Use runtime context with empty model (no symbols needed for literals)
 	emptyIdx := symbols.NewIndex()
 	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
-	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), 100000)
+	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.budgets.MaxSteps)
 
 	val, err := ctx.Eval(usage.Value)
 	if err != nil {
@@ -705,7 +705,7 @@ func (s *Session) doCalc(args []string) ([]string, bool, error) {
 		// Use empty context for literal evaluation
 		emptyIdx := symbols.NewIndex()
 		emptyModel := semantics.NewModel(resolve.New(emptyIdx))
-		literalCtx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), 100000)
+		literalCtx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.budgets.MaxSteps)
 
 		// Parse as attribute inside a part (top-level attribute syntax not supported)
 		src := fmt.Sprintf("part __dummy__ { attribute __arg__ = %s; }", argStr)
@@ -1332,11 +1332,13 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 		return []string{fmt.Sprintf("No pending work - simulation time is now %.2f", deadline)}, false, nil
 	}
 
-	// Bound the drain so a machine that keeps queueing work cannot hang the REPL.
-	const maxAdvanceEvents = 10000
-	processed := 0
-	doActions := 0
-	for exec.HasPendingWork() && exec.State() == runtime.StateRunning && processed+doActions < maxAdvanceEvents {
+	// Bound the drain by the session's own budgets, so a machine that keeps
+	// queueing work cannot hang the REPL and the way to raise the bound is the
+	// same one the executors report.
+	maxEvents, maxDoActions := s.budgets.MaxStateEvents, s.budgets.MaxDoSteps
+	var processed, doActions int64
+	for exec.HasPendingWork() && exec.State() == runtime.StateRunning &&
+		processed < maxEvents && doActions < maxDoActions {
 		if queue := exec.EventQueue(); queue.Len() == 0 || queue.Peek().Timestamp > deadline {
 			// Nothing to dispatch within the deadline, but a do behavior with
 			// actions left is due now, so run it and count it as do work.
@@ -1350,7 +1352,7 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 			if ran == 0 {
 				break
 			}
-			doActions += ran
+			doActions += int64(ran)
 			continue
 		}
 		if err := exec.ProcessNextEvent(); err != nil {
@@ -1369,6 +1371,17 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 
 	if doActions > 0 {
 		out = append(out, fmt.Sprintf("  Do behavior actions run: %d", doActions))
+	}
+
+	// A drain the bound cut short has work left, so say so rather than let it
+	// read as a machine that settled.
+	switch {
+	case processed >= maxEvents:
+		out = append(out, fmt.Sprintf("  Stopped at the event budget (%d events; raise %s to allow more)",
+			maxEvents, runtime.MaxStateEventsEnvVar))
+	case doActions >= maxDoActions:
+		out = append(out, fmt.Sprintf("  Stopped at the do activity budget (%d steps; raise %s to allow more)",
+			maxDoActions, runtime.MaxDoStepsEnvVar))
 	}
 
 	if exec.State() == runtime.StateCompleted {

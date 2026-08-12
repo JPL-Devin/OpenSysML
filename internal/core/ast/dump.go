@@ -289,6 +289,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.Multiplicity != nil {
 			kids = append(kids, v.Multiplicity)
 		}
+		for _, r := range v.Relationships {
+			kids = append(kids, r)
+		}
 		kids = append(kids, v.Body...)
 		writeChildren(b, depth, kids)
 		return

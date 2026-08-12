@@ -31,6 +31,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
+	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
 	t.Run("non_terminating_loop_exhausts_step_budget", testNonTerminatingLoopExhaustsStepBudget)
 	t.Run("loop_body_declaration_does_not_leak", testLoopBodyDeclarationDoesNotLeak)
@@ -58,6 +59,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_subaction_reference_feature_chain", testStateSubactionReferenceFeatureChain)
 	t.Run("library_function_outside_its_domain", testLibraryFunctionOutsideItsDomain)
 	t.Run("library_function_wrong_arity", testLibraryFunctionWrongArity)
+	t.Run("extension_library_function_outside_its_domain", testExtensionLibraryFunctionOutsideItsDomain)
 	t.Run("exponentiation_integer_overflow", testExponentiationIntegerOverflow)
 	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
@@ -1200,6 +1202,38 @@ func testRequirementFeatureWithoutAValue(t *testing.T) {
 	}
 }
 
+// testRequirementFeaturesValuedFromEachOther: two features whose values name each
+// other report a cycle promptly instead of recursing until the step budget runs out.
+func testRequirementFeaturesValuedFromEachOther(t *testing.T) {
+	src := `
+		package test {
+			requirement def R {
+				attribute a = b;
+				attribute b = a;
+				require a <= b;
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "R", ast.DefRequirement)
+	if sym == nil {
+		t.Fatal("R not found")
+	}
+
+	satisfied, err := ctx.EvaluateRequirement(sym, rootScope)
+	if err == nil {
+		t.Fatalf("expected an error, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrCyclicSlot) {
+		t.Errorf("expected ErrCyclicSlot, got: %v", err)
+	}
+}
+
 // testStepBudgetExceeded: evaluation exceeds maxSteps. Each Eval call spends one
 // step, so an expression with more subexpressions than the budget must report
 // ErrStepLimitExceeded rather than run to the end. The operands are a parameter
@@ -1447,6 +1481,32 @@ func testLibraryFunctionWrongArity(t *testing.T) {
 	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1}}
 	if _, err := fn.invoke(ctx, calcArgs{positional: []Value{arg}}); !errors.Is(err, ErrCalcArity) {
 		t.Fatalf("max(1.0) error = %v, want ErrCalcArity", err)
+	}
+}
+
+// testExtensionLibraryFunctionOutsideItsDomain: a Systemica extension library
+// function reports a domain error the same way a vendored one does — the
+// logarithm of zero has no Real value, and is not returned as an infinity.
+func testExtensionLibraryFunctionOutsideItsDomain(t *testing.T) {
+	src := `
+		package test {
+			calc root {
+				in x : Real;
+				return : Real = ln(x);
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "root", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("root calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 0}}
+	got, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if !errors.Is(err, semantics.ErrArithmeticDomain) {
+		t.Fatalf("ln(0.0) = %+v, %v; want a domain error", got, err)
 	}
 }
 
