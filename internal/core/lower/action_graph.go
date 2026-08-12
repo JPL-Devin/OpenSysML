@@ -345,8 +345,8 @@ func lowerStatement(member ast.Node) Statement {
 	case *ast.Usage:
 		// An attribute declared in a body-local block is a member of that block:
 		// it holds a value the block's statements read and write.
-		if m.Kind == ast.UsageAttribute && m.Ident.Name != "" {
-			return Declare{Name: m.Ident.Name, Value: m.Value, Node: m}
+		if name, _ := ast.EffectiveName(m); m.Kind == ast.UsageAttribute && name != "" {
+			return Declare{Name: name, Value: m.Value, Node: m}
 		}
 		return Unsupported{Description: usageDescription(m), Node: m}
 	default:
@@ -437,12 +437,26 @@ func findNodeByName(nodes []ast.Node, qname *ast.QualifiedName) ast.Node {
 
 	targetName := qname.Parts[len(qname.Parts)-1].Text
 	for _, node := range nodes {
-		nodeName := getNodeName(node)
-		if nodeName == targetName {
+		if nodeAnswersTo(node, targetName) {
 			return node
 		}
 	}
 	return nil
+}
+
+// nodeAnswersTo reports whether name is one of the keys a node is declared
+// under: its effective name or, for a usage, its declared short name. A short
+// name is a name of its own, so `action <s> :>> takePhoto;` is reachable as
+// both `s` and `takePhoto`.
+func nodeAnswersTo(node ast.Node, name string) bool {
+	if name == "" {
+		return false
+	}
+	if getNodeName(node) == name {
+		return true
+	}
+	u, ok := node.(*ast.Usage)
+	return ok && u.Ident.ShortName == name
 }
 
 // getNodeName extracts the name from a node.
@@ -463,19 +477,12 @@ func getNodeName(node ast.Node) string {
 	case *ast.ActionExecutionNode:
 		return n.Name
 	case *ast.Usage:
-		if n.Ident.Name != "" {
-			return n.Ident.Name
-		}
-		// An unnamed usage is named after the feature it references
+		// An unnamed usage is named after the feature it references or redefines
 		// (`perform increment;` is a node named increment).
-		for _, rel := range n.Relationships {
-			if rel == nil || rel.Kind != ast.RelReferences {
-				continue
-			}
-			if name, _ := ast.TargetName(rel.Target); name != "" {
-				return name
-			}
+		if name, _ := ast.EffectiveName(n); name != "" {
+			return name
 		}
+		return n.Ident.ShortName
 	}
 	return ""
 }

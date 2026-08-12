@@ -104,6 +104,10 @@ must be byte-identical, and stderr must stay empty for well-formed input.
 
 ## Things to exercise (and their expected shapes)
 
+- There is **no `%what` command** — check `%help` before believing a task description. The lookup
+  surface for "does this name resolve?" is `%instantiate` / `%slots` / `%eval` (a `part def` is
+  easiest via `%instantiate`, an attribute via `%eval`), all funnelling through
+  `internal/repl/lookup.go`. A request phrased as "`%what`/lookup" means those.
 - Symbol-taking commands: `%instantiate %slots %eval %calc %constraint %requirement %action %state`.
   All go through one helper (`internal/repl/lookup.go`), so test each with a **simple** name and a
   **qualified** one.
@@ -269,6 +273,58 @@ later submissions. Two consequences when testing:
 
 Still true: accidentally typing a shell command like `clear` at the `>` prompt is parsed as SysML
 and pollutes the buffer. `%clear` resets the session.
+
+## The session-long symbol index and wildcard re-exports (PR #95)
+
+`Session.symbolIndex()` (`internal/repl/session.go`) keeps **one** `symbols.Index` for the whole
+session: the stdlib is loaded into it once (`model.LoadStdlibInto`) and only the session document is
+re-indexed, when `doc.Version` changed. So stale/duplicated symbols are the failure mode to hunt,
+and every assertion should be re-checked *late* in a long session, not only on the first submission.
+
+The re-export cycle is the highest-value test, and it distinguishes working from broken in three
+steps (a REPL built before this work fails at the very first one):
+
+```
+package Lib { part def Widget { attribute size = 3.0; } }
+package P { public import Lib::*; }
+%instantiate P::Widget      -> ✓ Created instance of Lib::Widget    (resolved FQN is the DECLARING one)
+package P { }               -> replaces the earlier snippet (same declared name)
+%instantiate P::Widget      -> error: symbol "P::Widget" not found  (re-export unwound)
+%instantiate Lib::Widget    -> ✓ Created instance of Lib::Widget    (purge must not over-remove)
+package P { public import Lib::*; }
+%instantiate P::Widget      -> ✓ ... again, and never "is ambiguous"
+```
+
+Notes that save time:
+
+- A re-export registers the symbol under the importing namespace but **never copies its subtree**:
+  `P::Widget` resolves while `%eval P::Widget::size` is `symbol ... not found`. Use the declaring
+  FQN (`%eval Lib::Widget::size` → `= 3.00`). This is intended (confirmed by the maintainer).
+- Resubmitting the same importing package several times must keep resolving and must never produce
+  `is ambiguous` — duplicate re-export registrations would surface as ambiguity, so assert the
+  negative explicitly.
+- `%clear` drops the document from the index (`idx.RemoveDocument`) but **keeps the loaded library**,
+  so `%clear` followed by more work exercises the removal path directly: expect
+  `error: no declarations loaded (literals work, but feature references need declarations)` (or
+  `error: runtime init: no document loaded` for `%instantiate`) for the old names, then full
+  wildcard expansion again for freshly submitted packages.
+- Because the REPL has a **single** document, a re-index removes and re-adds all of its re-exports
+  wholesale. Index bugs that need one document's member to change while a *different* importing
+  document survives are therefore not reachable from the prompt — verify those in
+  `internal/core/symbols` tests instead of hunting them at the REPL. In particular a top-level
+  (outside any `package`) `import Lib::*;` followed by a submission that drops the surfaced
+  declaration still correctly reports `not found` at the prompt.
+- Stdlib staleness check: quantity/unit evaluation resolves its unit through the session index, so it
+  is the cheapest canary. `package Q1 { import SI::*; attribute speed = 1.5 [m/s]; }` then
+  `%eval Q1::speed` → `= 1.5 [m/s]`, and re-running that exact command after each of ~15 further
+  submissions must print the identical string every time. Without `import SI::*;` the unit is
+  `error: evaluation failed: not a quantity expression: not a measurement unit: unresolved unit m`,
+  which is a fixture mistake, not a regression.
+- Pre-existing noise not caused by index work: ISQ-typed attributes
+  (`attribute m : MassValue = 12.0;`) emit `cannot bind Rational value to a feature typed by
+  ISQBase::MassValue` and a top-level `import Lib::*;` typed before `Lib` exists emits
+  `unresolved reference: Lib`. Both reproduce on `main`; the lookups still succeed. A/B against a
+  `main` binary in a `git worktree` before reporting any diagnostic as new.
 
 ## Output modes and execution tracing (PR #65)
 
@@ -438,6 +494,108 @@ Testing notes that generalize to any future built-in:
   name), successions must use the `first start; … done end; then a b;` form (the
   `first a then b;` form yields `action has multiple initial nodes`), and `and`/`or` are
   `unsupported operator` in constraint bodies — keep constraint expressions to a single comparison.
+
+## Testing parser changes end-to-end (keyword/symbol parity, dispatch rewrites)
+
+A parser change is only convincing if the *same input file* behaves differently on the two binaries,
+so build an A/B baseline first and keep it around:
+
+```bash
+git worktree add /tmp/mainwt main
+go build -C /tmp/mainwt -o /tmp/mainwt/sysml-main ./cmd/sysml && go build -C /tmp/mainwt -o /tmp/mainwt/sysml-lsp-main ./cmd/sysml-lsp
+```
+
+Three cheap, high-signal sweeps:
+
+1. **Corpus no-diff sweep** — load every model on both binaries and diff the output. Anything other
+   than `0` differences is either the intended change or a regression, and it takes ~4 min.
+   **Both `%load` and the argv positional split the path on whitespace**, and ~80% of the corpus
+   lives under directories like `examples/sysml-v2-training/05. Redefinition/`, so copy each file to
+   a space-free path instead of passing it — and count what you compared, or a sweep that loaded
+   almost nothing still prints a reassuring zero:
+   ```bash
+   n=0; d=0
+   while IFS= read -r -d '' f; do
+     cp "$f" /tmp/sweep.sysml
+     n=$((n+1))
+     diff <(./bin/sysml -quiet /tmp/sweep.sysml </dev/null 2>&1) \
+          <(/tmp/mainwt/sysml-main -quiet /tmp/sweep.sysml </dev/null 2>&1) >/dev/null \
+       || { d=$((d+1)); echo "DIFF: $f"; }
+   done < <(find examples testdata internal/repl/testdata -name '*.sysml' -print0)
+   echo "compared $n, differing $d"
+   ```
+   A `for f in $(find …)` loop word-splits those paths and silently compares nothing for them: on
+   PR #98 that hid three real output changes (better diagnostic spans on `part redefines engine = …`)
+   behind a clean-looking 0.
+2. **Twin table** — for a notation with two spellings, run every degenerate form of *both* spellings
+   through a tiny script and print keyword/symbol/main side by side. Testing only the well-formed
+   forms hides the interesting bugs: on PR #98 the well-formed forms were perfectly at parity while
+   `redefines;`, `redefines = 5;`, `subsets ;`, `crosses ;` were accepted **silently** and their
+   symbol twins `:>>;`, `:>> = 5;`, `:> ;`, `=> ;` all reported `expected a name`. A silently
+   accepted member is invisible in a `✓ package T` line — always pair the load with
+   `%instantiate`/`%slots` to see what the member actually did (there, nothing).
+3. **LSP diagnostics without an editor** — drive `bin/sysml-lsp` over stdio with ~15 lines of Python
+   (`initialize`, `initialized`, `textDocument/didOpen`, sleep 3, read stdout) and count
+   `"severity":1` in the `publishDiagnostics` notification. A file with **no** diagnostics produces
+   **no** notification at all, so treat a missing notification as zero errors rather than a hang.
+   `sysml-lsp: failed reading header line: EOF` on stderr at shutdown is normal.
+4. **LSP hover/definition as a symbol-table probe** — the REPL has **no** `%hover`/`%def`, so a
+   naming/symbol-registration change is best shown through `bin/sysml-lsp`: reuse the stdio driver
+   and add `textDocument/hover` and `textDocument/definition` requests with `id`s, then parse the
+   `Content-Length`-framed replies (searching for `"id":100` in the raw text prints the *tail* of the
+   message, not its body — frame-parse instead). Hover returns a one-liner like
+   `attributeUsage x`, which makes a mis-derived name obvious: on `main` a short-named redefinition
+   hovered as `attributeUsage redefines` and its definition was `null`. Make the sleep before reading
+   stdout configurable (e.g. `LSP_WAIT=8`); 4 s is occasionally too short and yields
+   `NO RESPONSE`/zero diagnostics, which looks like a pass — re-run with a longer wait before
+   believing an empty result.
+5. **Naming probes for a `<shortName>` change** — for `attribute <sn> redefines x = 5;` the
+   assertions that separate working from broken are: `%slots` lists the member as **`x = 5`**
+   (broken revisions show `sn = 5` with `x = 1`, or a bogus `redefines = <unknown>` slot);
+   `%eval T::A::x` **and** `%eval T::A::sn` both evaluate; and an action body doing
+   `assign total := total + x` completes instead of `unresolved feature: x`. Load-level `✓ package T`
+   proves nothing here.
+
+Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
+(`PATH=$HOME/sdk/go/bin:$HOME/go/bin:$PATH`) before concluding the toolchain is missing.
+
+### Naming changes that reach lowering and the runtime
+
+When a parser change alters which declarations carry a name (e.g. `ast.EffectiveName` deriving the
+name from a `redefines`/`references` target), the parse is the *least* interesting surface —
+consumers reading `Usage.Ident.Name` break silently downstream. The probes that actually distinguish
+fixed from broken, each with a visible A/B against `main`:
+
+- **Attribute default** — `attribute redefines x = 5;` in an action body with a statement reading
+  `x`; a lost name surfaces as `error: execution failed: eval assignment RHS: unresolved feature: x`,
+  not as a parse error.
+- **Step ordering** — `action redefines bump { … }` ordered by `then start bump; then bump end;`.
+  A lost name fails at lowering: `succession edge references undefined target node`.
+- **Trace naming** — `%trace on` then `%continue`; the step must print `token 1@bump`. A generic
+  `token 1@usage_action` (the `nodeIdentifier` fallback in `runtime/trace.go`) is the bug signature,
+  and it also reproduces with any unnamed step such as `perform worker;`.
+- **Calc parameter** — `in redefines factor = 3;` overriding an inherited `in factor = 2`. The
+  giveaway is a *wrong number*, not an error: the invocation silently uses the inherited default
+  (`Scaled(7)` → 14 instead of 21), so assert the value, never just "it evaluated".
+- **State** — `state redefines waiting { accept go then active; }`. A lost name makes the sourceless
+  accept vanish: `%state` shows `Events: 0` and `%advance 1` never leaves the initial state.
+
+Ready-made fixtures for all of these live in `internal/core/runtime/testdata/conformance/`
+(`action_redefined_attribute_default[_symbol]`, `action_redefined_step_ordering`,
+`calc_redefined_parameter[_symbol]`, `state_redefined_state_accept[_symbol]`) — load them straight
+into the REPL with `%action test::run` / `%eval test::Scaled(7)` / `%state Test::Machine` rather than
+writing new models. Where only a keyword fixture exists, `sed 's/redefines/:>>/'` gives the symbol
+twin. `action_redefined_step_ordering.sysml` emits a pre-existing
+`name conflict: total is already the name of the inherited feature Base::total` on every revision —
+not a regression.
+
+Adversarial cases for name derivation: a member with two redefinitions
+(`attribute <sn> redefines x, y = 9;`) derives *no* name from them, so it answers to its short name
+(`%slots` shows `sn = 9` and leaves `x`/`y` at their inherited values) with no diagnostic — assert
+which key the value landed under rather than assuming it was dropped. REPL call syntax: named
+arguments work as `Scaled(x = 7, factor = 5)`, but *mixing* positional and named
+(`Scaled(7, factor = 5)`) is a parse error on every revision — don't read that as a
+parameter-naming bug.
 
 ## Recording setup (Linux/Plasma box)
 

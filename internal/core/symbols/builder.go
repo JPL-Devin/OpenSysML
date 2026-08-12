@@ -282,37 +282,23 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 }
 
 // effectiveIdent returns the identification a usage is registered under, and
-// the reference that supplied it. A usage declared without a name takes the
-// name of its naming feature (KerML 7.3.4.5): the target of its reference
-// subsetting, or else of its single owned redefinition. Two redefinitions leave
-// it anonymous, since they need not agree on a name.
+// the reference that supplied it: the name of the usage's naming feature
+// (ast.NamingFeature) keeps its own declared short name.
 //
 // The naming feature's own effective name is approximated by the reference's
 // last segment, since resolution has not run when scopes are built.
 func effectiveIdent(u *ast.Usage) (ast.Identification, ast.Node) {
-	if u.Ident.Name != "" || u.Ident.ShortName != "" {
+	rel := ast.NamingFeature(u)
+	if rel == nil {
 		return u.Ident, nil
 	}
-	var redefinitions []*ast.Relationship
-	for _, rel := range u.Relationships {
-		if rel == nil {
-			continue
-		}
-		switch rel.Kind {
-		case ast.RelReferences:
-			if name, span := ast.TargetName(rel.Target); name != "" {
-				return ast.Identification{Name: name, NameSpan: span}, namingTargetNode(rel.Target)
-			}
-		case ast.RelRedefines:
-			redefinitions = append(redefinitions, rel)
-		}
+	name, span := ast.TargetName(rel.Target)
+	if name == "" {
+		return u.Ident, nil
 	}
-	if len(redefinitions) == 1 {
-		if name, span := ast.TargetName(redefinitions[0].Target); name != "" {
-			return ast.Identification{Name: name, NameSpan: span}, namingTargetNode(redefinitions[0].Target)
-		}
-	}
-	return u.Ident, nil
+	id := u.Ident
+	id.Name, id.NameSpan = name, span
+	return id, namingTargetNode(rel.Target)
 }
 
 // namingTargetNode returns the node a relationship target is resolved as, so

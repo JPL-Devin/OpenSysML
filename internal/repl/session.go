@@ -33,9 +33,10 @@ type Session struct {
 	version  int
 
 	// Runtime execution context
-	rtCtx     *runtime.Context
-	idx       *symbols.Index               // index over the session document, shared by lookup and runtime
-	instances map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
+	rtCtx      *runtime.Context
+	idx        *symbols.Index               // index over the session document, shared by lookup and runtime
+	idxVersion int                          // document version idx holds, 0 when it holds none
+	instances  map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
 
 	// Active executor sessions for debugging
 	actionExec *actionSession
@@ -216,8 +217,8 @@ func (s *Session) Submit(src string) Result {
 	s.ws.Open(docName, []byte(joined), s.version)
 	// The document is a new AST and scope tree, so anything derived from the
 	// previous one is stale — including instances, whose IDs restart with the
-	// new runtime context.
-	s.idx = nil
+	// new runtime context. The index is re-used and brought up to date on the
+	// next lookup instead, which is why it records the version it holds.
 	s.rtCtx = nil
 	s.instances = make(map[string]*runtime.Instance)
 	notices := s.dropStaleDebugSessions(declared)
@@ -284,7 +285,11 @@ func (s *Session) Clear() {
 	s.snippets = nil
 	s.version = 0
 	s.rtCtx = nil
-	s.idx = nil
+	if s.idx != nil {
+		// Drop the document, keep the library the index was built with.
+		s.idx.RemoveDocument(docName)
+		s.idxVersion = 0
+	}
 	s.instances = make(map[string]*runtime.Instance)
 	s.actionExec = nil
 	s.stateExec = nil
@@ -312,26 +317,28 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 	return s.rtCtx, nil
 }
 
-// symbolIndex lazily indexes the session document, returning nil when nothing
-// is loaded. Name lookup and the runtime context share it, and it carries the
+// symbolIndex indexes the session document, returning nil when nothing is
+// loaded. Name lookup and the runtime context share it, and it carries the
 // standard library too, which the runtime resolves names against — the
 // measurement unit of a quantity expression is one.
 //
-// It is built afresh per submission, off the library cache, rather than
-// outliving the document: an index reused across submissions keeps the
-// re-exports of an import the new document no longer states.
+// One index serves the whole session: the library is loaded into it once, and
+// re-indexing the document takes back the names the previous submission declared
+// and the ones its wildcard imports surfaced, so a submission costs its own
+// document rather than a reload of the library.
 func (s *Session) symbolIndex() *symbols.Index {
-	if s.idx != nil {
-		return s.idx
-	}
 	doc := s.ws.Document(docName)
 	if doc == nil || doc.Scope == nil {
 		return nil
 	}
-	idx := symbols.NewIndex()
-	model.LoadStdlibInto(idx)
-	idx.AddDocument(docName, doc.AST)
-	idx.ExpandWildcardImports()
-	s.idx = idx
+	if s.idx == nil {
+		s.idx = symbols.NewIndex()
+		model.LoadStdlibInto(s.idx)
+	} else if s.idxVersion == doc.Version {
+		return s.idx
+	}
+	s.idx.AddDocument(docName, doc.AST)
+	s.idx.ExpandWildcardImports()
+	s.idxVersion = doc.Version
 	return s.idx
 }

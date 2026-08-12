@@ -286,8 +286,8 @@ func (e *ActionExecutor) breakpointHit() string {
 		}
 	}
 	for _, token := range e.tokens {
-		name := ActionNodeName(token.Location)
-		if name == "" || !e.breakpoints[name] {
+		name := e.breakpointNameOf(token.Location)
+		if name == "" {
 			continue
 		}
 		visit := breakpointVisit{token: token.ID, node: token.Location}
@@ -311,6 +311,17 @@ func (e *ActionExecutor) tokenLocation(id int64) (ast.Node, bool) {
 		}
 	}
 	return nil, false
+}
+
+// breakpointNameOf returns the name a breakpoint is set on for the given node,
+// or "" when none is. A node answers to its short name as well as its name.
+func (e *ActionExecutor) breakpointNameOf(node ast.Node) string {
+	for _, name := range ActionNodeNames(node) {
+		if e.breakpoints[name] {
+			return name
+		}
+	}
+	return ""
 }
 
 // PausedAt returns the breakpoint node the last run stopped at, or "" when the
@@ -340,8 +351,8 @@ func ActionNodeName(node ast.Node) string {
 	case *ast.StateNode:
 		return n.Name
 	case *ast.Usage:
-		if n.Ident.Name != "" {
-			return n.Ident.Name
+		if name, _ := ast.EffectiveName(n); name != "" {
+			return name
 		}
 		return n.Ident.ShortName
 	case *ast.Definition:
@@ -354,15 +365,34 @@ func ActionNodeName(node ast.Node) string {
 	}
 }
 
-// NodeNames returns the declared names of the action's graph nodes, in
-// declaration order. Anonymous nodes are omitted; a debugger uses it to check
-// that a breakpoint names a node that exists.
+// ActionNodeNames returns every name a node answers to: its name and, for a
+// usage, its declared short name, which is a name of its own.
+func ActionNodeNames(node ast.Node) []string {
+	name := ActionNodeName(node)
+	var names []string
+	if name != "" {
+		names = append(names, name)
+	}
+	var short string
+	switch n := node.(type) {
+	case *ast.Usage:
+		short = n.Ident.ShortName
+	case *ast.Definition:
+		short = n.Ident.ShortName
+	}
+	if short != "" && short != name {
+		names = append(names, short)
+	}
+	return names
+}
+
+// NodeNames returns the names of the action's graph nodes, in declaration
+// order. Anonymous nodes are omitted; a debugger uses it to check that a
+// breakpoint names a node that exists.
 func (e *ActionExecutor) NodeNames() []string {
 	names := make([]string, 0, len(e.graph.Nodes))
 	for _, node := range e.graph.Nodes {
-		if name := ActionNodeName(node); name != "" {
-			names = append(names, name)
-		}
+		names = append(names, ActionNodeNames(node)...)
 	}
 	return names
 }
@@ -391,14 +421,16 @@ func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error 
 
 		// Check for attribute with value
 		if usage, ok := actualMember.(*ast.Usage); ok && usage.Kind == ast.UsageAttribute {
-			if usage.Value != nil && usage.Ident.Name != "" {
+			// A redefinition names the attribute it overrides (`attribute :>> x = 5;`).
+			name, _ := ast.EffectiveName(usage)
+			if usage.Value != nil && name != "" {
 				// Evaluate default value
 				ec := NewEvalContext(e.ctx, nil)
 				value, err := ec.Eval(usage.Value)
 				if err != nil {
-					return fmt.Errorf("eval attribute default %s: %w", usage.Ident.Name, err)
+					return fmt.Errorf("eval attribute default %s: %w", name, err)
 				}
-				tokenData[usage.Ident.Name] = value
+				tokenData[name] = value
 			}
 		}
 	}
@@ -800,7 +832,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			// A message routed to this accept's port is already addressed by the
 			// connection it travelled over, so the accept's own name does not
 			// have to appear in it.
-			return accept.ViaPort != "" || m.addressedTo(usage.Ident.Name)
+			return accept.ViaPort != "" || m.addressedTo(ActionNodeName(usage))
 		})
 		if !taken {
 			if token.Wait == nil {
@@ -840,10 +872,10 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	// Advance to successor
 	successors := e.graph.Edges[token.Location]
 	if len(successors) == 0 {
-		return fmt.Errorf("nested action %s has no successors", usage.Ident.Name)
+		return fmt.Errorf("nested action %s has no successors", ActionNodeName(usage))
 	}
 	if len(successors) > 1 {
-		return fmt.Errorf("nested action %s has multiple successors", usage.Ident.Name)
+		return fmt.Errorf("nested action %s has multiple successors", ActionNodeName(usage))
 	}
 
 	token.Location = successors[0]

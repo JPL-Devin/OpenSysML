@@ -84,6 +84,12 @@ func TestNegative(t *testing.T) {
 		{"then_before_package", "part def P { part a; then package Inner { } }"},
 		{"then_before_attribute", "part def P { part a; then attribute x; }"},
 		{"then_before_import", "part def P { part a; then import Other::*; }"},
+
+		// A feature specialization keyword after a short name states a
+		// relationship, so a missing target is an error rather than a name.
+		{"short_name_redefines_no_target", "part p { attribute <sn> redefines; }"},
+		{"short_name_redefines_symbol_no_target", "part p { attribute <sn> :>>; }"},
+		{"short_name_defined_by_no_type", "part p { attribute <sn> defined by ; }"},
 	}
 
 	for _, tt := range tests {

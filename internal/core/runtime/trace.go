@@ -331,8 +331,10 @@ func nodeIdentifier(node ast.Node) string {
 
 	switch n := node.(type) {
 	case *ast.Usage:
-		if n.Ident.Name != "" {
-			return n.Ident.Name
+		// A step written as a redefinition is traced under the name it
+		// answers to, the one it redefines.
+		if name, _ := ast.EffectiveName(n); name != "" {
+			return name
 		}
 		return fmt.Sprintf("usage_%s", n.Kind)
 	case *ast.Definition:

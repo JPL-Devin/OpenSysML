@@ -1413,16 +1413,11 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 			// Parse return member (for constraint defs that return result)
 			// Example: return result = expr { doc }
 			members = append(members, p.parseBodyMember())
-		} else if p.atDefUsageStart() {
-			// Definition/usage keyword - parse as body member
-			members = append(members, p.parseBodyMember())
-		} else if p.atKeyword("redefines") || p.atKeyword("subsets") || p.atKeyword("specializes") || p.atKeyword("references") {
-			// Relationship keyword (e.g., redefines partMasses = expr;)
-			// Parse as body member (handles bare relationship statements)
-			members = append(members, p.parseBodyMember())
-		} else if p.at(lexer.Colon) || p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt) {
-			// Relationship keyword without name (e.g., :>> x = value;)
-			// Parse as anonymous feature with relationship
+		} else if p.atDefUsageStart() || p.atRelationshipKeyword() {
+			// A declaration, or a member that states a relationship where its
+			// name would go (`redefines partMasses = expr;`, `:>> x = value;`):
+			// both spellings reach parseBodyMember, which reads them as one form
+			// and diagnoses the relationships that are not member forms.
 			members = append(members, p.parseBodyMember())
 		} else {
 			// Default: parse as constraint expression (bare expression)

@@ -2,6 +2,7 @@ package passes
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
@@ -82,6 +83,7 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkConnectorEnds(sym)
 	cc.checkConnectorEndRedefinition(sym)
 	cc.checkRedefinition(sym)
+	cc.checkUnnamedRedefinitionValue(sym)
 }
 
 // checkSpecializationCycle flags a symbol that participates in a specialization
@@ -257,6 +259,41 @@ func (cc *constraintChecker) addConnectorEndsDiag(sym *symbols.Symbol, u *ast.Us
 		Message:  msg,
 		Code:     "connector-ends",
 		Source:   "constraint",
+	})
+}
+
+// checkUnnamedRedefinitionValue warns about a value on a member that redefines
+// more than one feature: it derives no name (KerML 7.3.4.5), so the value
+// reaches none of them.
+func (cc *constraintChecker) checkUnnamedRedefinitionValue(sym *symbols.Symbol) {
+	u, ok := sym.Decl.(*ast.Usage)
+	if !ok || u.Value == nil || u.Ident.Name != "" {
+		return
+	}
+	var targets []string
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Kind != ast.RelRedefines {
+			continue
+		}
+		if name, _ := ast.TargetName(rel.Target); name != "" {
+			targets = append(targets, name)
+		}
+	}
+	if len(targets) < 2 || ast.NamingFeature(u) != nil {
+		return
+	}
+	binding := "is not reachable by name"
+	if u.Ident.ShortName != "" {
+		binding = fmt.Sprintf("is bound to the short name <%s> only", u.Ident.ShortName)
+	}
+	cc.diags = append(cc.diags, Diagnostic{
+		Severity: SeverityWarning,
+		Span:     u.Value.Span(),
+		Message: fmt.Sprintf(
+			"a member redefining %s derives no name, so this value %s; declare a name or redefine one feature",
+			strings.Join(targets, " and "), binding),
+		Code:   "redefinition-no-derived-name",
+		Source: "constraint",
 	})
 }
 
