@@ -3,6 +3,7 @@ package runtime
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,6 +23,10 @@ import (
 type ExpectedValue struct {
 	Type  string      `json:"type"`
 	Value interface{} `json:"value"`
+	// Unit is the measurement unit a Quantity is expressed in, as written
+	// ("m/s"). A quantity carries it, so a case asserting one pins that the unit
+	// survived the computation rather than only the magnitude.
+	Unit string `json:"unit,omitempty"`
 }
 
 // ExpectedEvent represents an event to inject during state machine execution:
@@ -660,6 +665,15 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 		t.Fatalf("invalid String value type: %T", ev.Value)
 	case "Null":
 		return Value{Kind: ValNull}
+	case "Quantity":
+		v, ok := ev.Value.(float64)
+		if !ok {
+			t.Fatalf("invalid Quantity value type: %T", ev.Value)
+		}
+		return Value{Kind: ValQuantity, Quantity: &Quantity{
+			Num:  semantics.Value{Kind: semantics.ValReal, Real: v},
+			Unit: Unit{Text: ev.Unit},
+		}}
 	default:
 		t.Fatalf("unknown type: %s", ev.Type)
 	}
@@ -704,6 +718,30 @@ func validateValue(t *testing.T, name string, expected ExpectedValue, actual Val
 		want := expected.Value.(string)
 		if actual.Str != want {
 			t.Errorf("%s: value = %q, want %q", name, actual.Str, want)
+		}
+	case "Quantity":
+		if actual.Kind != ValQuantity || actual.Quantity == nil {
+			t.Errorf("%s: type = %v, want Quantity", name, actual.Kind)
+			return
+		}
+		if got := actual.Quantity.Unit.String(); got != expected.Unit {
+			t.Errorf("%s: unit = %q, want %q", name, got, expected.Unit)
+		}
+		want := expected.Value.(float64)
+		got := actual.Quantity.Num
+		switch got.Kind {
+		case semantics.ValReal:
+			// A magnitude computed by repeated arithmetic is compared within a
+			// tolerance: the case pins the physics, not the last bit of a float.
+			if math.Abs(got.Real-want) > 1e-9*math.Max(1, math.Abs(want)) {
+				t.Errorf("%s: magnitude = %v, want %v", name, got.Real, want)
+			}
+		case semantics.ValInt:
+			if float64(got.Int) != want {
+				t.Errorf("%s: magnitude = %d, want %v", name, got.Int, want)
+			}
+		default:
+			t.Errorf("%s: magnitude kind = %v, want a number", name, got.Kind)
 		}
 	default:
 		t.Errorf("%s: unknown expected type %s", name, expected.Type)

@@ -17,7 +17,7 @@ func TestShortNamedReferenceAnswersToBothNames(t *testing.T) {
 			src := "action photo { action d; action <s> " + rel + " takePhoto; first d then " + target + "; }"
 			root := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
 			usage := root.Members[0].(*ast.Membership).Member.(*ast.Usage)
-			graph, err := ToActionGraph(usage)
+			graph, err := ToActionGraph(usage, nil)
 			if err != nil {
 				t.Fatalf("ToActionGraph(%s): %v", src, err)
 			}

@@ -327,6 +327,30 @@ Each row documents one behavioral semantic feature:
 | Qualified name resolution (A::B::C) | `eval.go:53` Eval + `resolve/qualified.go` | `calc_qualified_names.sysml` | ✅ Faithful |
 | Type coercion (Integer→Real) | `eval.go:344` toReal | `calc_type_coercion.sysml` | ✅ Faithful |
 | Exponentiation (`**`, `^`) — Integer operands with a non-negative exponent give an Integer (`IntegerFunctions::'**'`), any other numeric pair a Real (`RealFunctions::'**'`) | `semantics/eval.go` `Pow`, shared by the folder's `evalArithmetic` and `runtime/eval.go` `evalArithmetic` | `calc_library_functions.sysml`, `exponentiation_test.go` | ✅ Faithful |
+| An unqualified name resolves as a written reference does — the enclosing scope chain, inherited members, imports, then the global index — and the declaration it finds is evaluated in *its own* declaring scope, so the imports in force where a value was written answer the names that value uses | `runtime/eval.go` `evalFeatureReference` (scope arm) via `resolve/unqualified.go` `Resolver.LookupName`, `EvalContext.evalIn` | `action_body_package_member.sysml`, `action_body_declarer_scope.sysml`, `body_scope_test.go:TestBodyScopeImportSpellings`, `robustness_test.go:action_body_unresolved_feature` | ✅ Faithful |
+
+#### Scope of an expression in a behavior body
+
+An expression written inside an action or state machine body resolves its names
+in the scope it was **declared** in, and the values live above that scope: a
+frame binding (a token's data, a block-local declaration, a call trigger's
+argument) shadows a same-named declaration the scope reaches, and the innermost
+frame wins. The scope travels with the IR — `internal/core/lower` records it on
+the graph, on each lowered statement and block, on each state and on each
+transition when it lowers them — so the executors read a scope rather than
+re-deriving one from `symbol.Decl` (AGENTS.md §4).
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| An attribute default in a behavior body is evaluated in that body's scope, so a unit an import brought in resolves (`attribute h : LengthValue = 500.0 [m];`) | `lower/action_graph.go` `lowerAttributes` + `ActionGraph.Scope`; `runtime/action_executor.go` `initializeAttributes`; `lower/state_graph.go` + `runtime/state_executor.go` `initializeAttributes` | `action_body_quantity_descent.sysml`, `state_body_quantity_scope.sysml`, `parser/testdata/parse/action_body_quantity_statements.golden` | ✅ Faithful |
+| A statement in a nested action node resolves in *that* node's scope; a statement in a loop body or an `if` branch in the block's own scope | `lower/action_graph.go` `lowerStatement`, `lowerBlock`, `childScope` (`lower/scope.go`); `runtime/action_statements.go` `evalIn` | `action_body_quantity_descent.sysml`, `action_body_shadows_enclosing_scope.sysml` | ✅ Faithful |
+| A decision guard and an inline expression resolve in the action's own scope, the token's data shadowing it | `runtime/action_executor.go` `stepDecisionNode`, `stepActionExecutionNode` | `action_body_shadows_enclosing_scope.sysml`, `action_control_flow.sysml` | ✅ Faithful |
+| A transition's guard, effect, time-event duration and change-event condition resolve in the scope the transition was written in; a call trigger's parameters are visible to its guard and effect and nowhere else | `lower/state_graph.go` `Transition.Scope`/`BodyScope` (via `symbols.CallTriggerScope`); `runtime/state_executor.go` `passesGuard`, `scheduleTransitionsForState`, `pollChangeEvents`, `executeAction`; `runtime/state_region_transition.go` `runEffect` | `state_body_quantity_scope.sysml`, `state_call_trigger_guard.sysml`, `state_call_trigger_regions.sysml` | ✅ Faithful |
+| A state's entry, do and exit behaviors resolve in that state's scope, nested states and orthogonal regions included | `lower/state_graph.go` `StateGraph.StateScopes`, `collectStates`, `collectRegionStates`; `runtime/state_executor.go` `stateScope` | `state_body_quantity_scope.sysml`, `state_concurrent_do.sysml`, `state_region_cross_pseudostate.sysml` | ✅ Faithful |
+| A body member of an inherited or performed behavior is evaluated in the *declarer's* scope, not in the scope performing it | `runtime/invoke_action.go` `invokeAction`, `runtime/context.go` `chainMembers` + `EvalContext.evalIn` | `action_body_declarer_scope.sysml` | ✅ Faithful |
+| A frame binding shadows the enclosing scope, and an inner block shadows an outer one | `runtime/action_statements.go` `evalIn` (frames pushed over the scope), `runtime/eval.go` `evalFeatureReference` (frames consulted first) | `action_body_shadows_enclosing_scope.sysml`, `robustness_test.go:loop_body_declaration_does_not_leak` | ✅ Faithful |
+| A name or unit the declaring scope does not reach is reported, not evaluated as a bare magnitude | `runtime/eval.go` (`ErrUnresolvedFeature`), `semantics/units.go` (`ErrNotAUnit`) | `robustness_test.go:action_body_unresolved_unit`, `:action_body_unresolved_feature`, `:state_body_unresolved_unit` | ✅ Faithful |
+| A `%constraint`/`%requirement` verdict is evaluated in the element's declaring scope, with or without an instance | `repl/meta.go` `declaringScope` | `repl/runtime_commands_test.go:TestConstraintResolvesUnitsOfItsOwnPackage` | ✅ Faithful |
 
 ### KerML Function Library (KerML §9.3 Function Library)
 
@@ -601,25 +625,25 @@ are tracked here):
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
-- Execution conformance cases: 90 (all passing)
+- Execution conformance cases: 113 (all passing)
 - gRPC conformance cases: 6 (all passing)
-- Robustness subtests: 46 (all passing)
-- Golden AST fixtures: 43
-- Golden execution traces: 37
+- Robustness subtests: 54 (all passing)
+- Golden AST fixtures: 52
+- Golden execution traces: 40
 - Negative parser subtests: 49
 
-**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 91 total):
-- Calc: 13 conformance + 12 golden traces (includes unary, coercion, qualified-name, KerML library and Systemica extension library function evaluation)
-- Constraint: 6 conformance + 4 golden traces
-- Requirement: 8 conformance
-- Action: 24 conformance + 14 golden traces
-- State: 27 conformance + 7 golden traces
+**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 113 total):
+- Calc: 15 conformance + 12 golden traces (includes unary, coercion, qualified-name, KerML library and Systemica extension library function evaluation)
+- Constraint: 7 conformance + 4 golden traces
+- Requirement: 12 conformance
+- Action: 35 conformance + 17 golden traces
+- State: 30 conformance + 7 golden traces
 - Accept: 1 conformance (`accept_then_transition`)
-- Instance: 6 conformance (`instance_derived_slots`, `instance_constraint_binding`, `instance_inherited_constraint`, `instance_library_function_default`, `instance_nested_usage_body`, `instance_unnamed_redefinition`)
+- Instance: 8 conformance (`instance_derived_slots`, `instance_constraint_binding`, `instance_inherited_constraint`, `instance_library_function_default`, `instance_nested_usage_body`, `instance_unnamed_redefinition` among them)
 
 **Quality Gates:**
 - Parser: 95/95 stdlib files clean (94 vendored OMG, 1 Systemica extension)
-- Execution conformance: 90/90 cases passing
+- Execution conformance: 113/113 cases passing
 - Training examples: 98/100 clean (2 files / 4 errors, both pinned OMG source bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
 

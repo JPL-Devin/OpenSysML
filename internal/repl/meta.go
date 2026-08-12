@@ -765,11 +765,7 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 	// Evaluate against the instance that carries the constraint when one has
 	// been created, so the verdict is about concrete values.
 	inst, owner := s.owningInstance(fqn)
-	scope := doc.Scope
-	if inst != nil {
-		scope = sym.OwnerScope
-	}
-	passed, err := ctx.EvaluateConstraintOn(sym, scope, inst)
+	passed, err := ctx.EvaluateConstraintOn(sym, declaringScope(sym, doc.Scope), inst)
 	if err != nil || !passed {
 		return []string{
 			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
@@ -780,6 +776,18 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 	return []string{
 		fmt.Sprintf("✓ Constraint %s passed%s", name, onInstance(inst, owner)),
 	}, false, nil
+}
+
+// declaringScope returns the scope an element's conditions were written in,
+// which is what their names — a member of the enclosing package, a measurement
+// unit an import brought in — resolve against. The document root reaches only
+// what the root itself declares, so it is a fallback for a symbol carrying no
+// declaring scope rather than the scope to evaluate in.
+func declaringScope(sym *symbols.Symbol, root *symbols.Scope) *symbols.Scope {
+	if sym != nil && sym.OwnerScope != nil {
+		return sym.OwnerScope
+	}
+	return root
 }
 
 // verdictDetail explains a failed verdict: a condition that evaluated to false
@@ -823,11 +831,7 @@ func (s *Session) doRequirement(name string) ([]string, bool, error) {
 	}
 
 	inst, owner := s.owningInstance(fqn)
-	scope := doc.Scope
-	if inst != nil {
-		scope = sym.OwnerScope
-	}
-	passed, err := ctx.EvaluateRequirementOn(sym, scope, inst)
+	passed, err := ctx.EvaluateRequirementOn(sym, declaringScope(sym, doc.Scope), inst)
 	if err != nil || !passed {
 		return []string{
 			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),

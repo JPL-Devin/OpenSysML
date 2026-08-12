@@ -20,7 +20,7 @@ func TestToStateGraph_DeferNotation(t *testing.T) {
 				start then busy;
 			}
 		}
-	`))
+	`), nil)
 	if err != nil {
 		t.Fatalf("ToStateGraph: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestToStateGraph_DeferInMachineBodyIsReported(t *testing.T) {
 				start then busy;
 			}
 		}
-	`))
+	`), nil)
 	if err == nil {
 		t.Fatal("expected an error for a defer in the state machine body")
 	}
@@ -101,7 +101,7 @@ func TestToStateGraph_DeferInRegionBodyIsReported(t *testing.T) {
 				}
 			}
 		}
-	`))
+	`), nil)
 	if err == nil {
 		t.Fatal("expected an error for a defer in a region body")
 	}
@@ -129,7 +129,7 @@ func TestToStateGraph_HistoryAndPointNotation(t *testing.T) {
 				start then outer;
 			}
 		}
-	`))
+	`), nil)
 	if err != nil {
 		t.Fatalf("ToStateGraph: %v", err)
 	}

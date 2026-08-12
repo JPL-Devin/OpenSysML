@@ -15,11 +15,11 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`, `staticch
 |---|---|
 | OMG training corpus | **98/100 clean** — 2 files / 4 errors, both pinned OMG source bugs (the ceiling) |
 | Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative Systemica extension |
-| Execution conformance cases | 90 |
+| Execution conformance cases | 113 |
 | gRPC conformance cases | 6 |
-| Golden execution traces | 37 |
-| Runtime robustness subtests | 46 |
-| Golden AST fixtures | 43 |
+| Golden execution traces | 40 |
+| Runtime robustness subtests | 54 |
+| Golden AST fixtures | 52 |
 | Negative parser subtests | 49 |
 
 Statement coverage, measured today with `go test -cover ./...`:
@@ -200,34 +200,37 @@ spec question is whether the default supplies elements or replaces the instantia
 reference does not resolve to a type at all rather than because instantiation fails. Related to
 A6; do A6 first and re-test this.
 
-## A3a — a measurement unit does not resolve inside a condition in the REPL path
+## A3a — a measurement unit does not resolve inside a condition in the REPL path — done
 
-Follows A1a, so it is observable only once #89 lands: the A1a bullet above still describes a
-quantity expression as unevaluated on `main`, and everything below was observed on that branch
-(`ec5f1a1`) and on the review branch of #92, not here.
+Closed by the body-scope work. What the entry blamed was wrong on both counts, checked against
+`main` @ `b098dbf` with the corpus gate green:
 
-A unit literal written in a `constraint`/`requirement` condition reports `not a measurement unit:
-unresolved unit m` in the REPL, while an attribute initializer in the same constraint resolves the
-same unit:
+- The **per-submission index rebuild** is gone. `Session.symbolIndex` keeps one index for the
+  session and re-indexes only the document (#95), and `ExpandWildcardImports()` runs on every
+  submission (`internal/repl/session.go`), so the wildcard re-exports of `SI::*` are present when
+  the condition is evaluated. Nothing in `internal/core/symbols` needed to unwind them.
+- The residual failure was a **scope**, not an index: `%constraint`/`%requirement` evaluated an
+  element with no instance against the *document root* scope, which reaches only what the root
+  itself declares — so `20.0 [m]` in a condition inside `package QTest` could not see the `m` that
+  package imported, while `attribute d = 100.0 [m]` could, because a feature default carries its
+  own declaring scope (`EffectiveFeature.DeclScope`). Both meta-commands now evaluate in the
+  element's declaring scope (`declaringScope`, `internal/repl/meta.go`), which is what they already
+  used when an instance carried the element.
 
-```sysml
-package QTest {
-	public import SI::*;
-	constraint def SpeedOK {
-		attribute d = 100.0 [m];      // resolves
-		attribute t = 10.0 [s];
-		d / t < 20.0 [m] / 1.0 [s]    // unresolved unit m
-	}
-}
-```
+The entry's model now passes in the REPL, pinned by
+`TestConstraintResolvesUnitsOfItsOwnPackage` (`internal/repl/runtime_commands_test.go`). The same
+defect in the action and state executors — where every evaluation used a nil scope — is fixed in
+the same change; see `docs/SPEC_COMPLIANCE.md` under "Scope of an expression in a behavior body".
 
-The same model passes as a conformance case — `constraint_quantity_quotient.sysml`, which #89 adds
-under `runtime/testdata/conformance/` — where the stdlib is in the index and
-`ExpandWildcardImports()` has run, so this is the REPL's per-submission index rebuild
-and the wildcard re-export handling, not the runtime. Held out of the A1a review fixes (#92)
-deliberately: the correct fix needs `internal/core/symbols` to unwind wildcard re-exports on
-`RemoveDocument`, or the rebuild in `internal/repl/session.go` (~285) to stop dropping them.
-Same family as A3 and A6; re-test after A6.
+Not closed, and unrelated to the index: a member whose name is a unit's shadows that unit, so
+`package Z { public import SI::*; attribute s = 1.5 [m/s]; }` then `%eval Z::s` reports
+`not a measurement unit: s`. Unqualified resolution finds the nearer declaration, which is what
+name resolution prescribes generally — a unit reference is an ordinary feature reference, and the
+spec gives no rule that a measurement-reference position filters candidates by type. Whether it
+should is a spec question, so nothing was changed. Also open, and a different seam:
+`%calc` cannot parse a quantity argument at the prompt (`%calc Fall -15.0 [m/s]` →
+`unsupported node type: *ast.ErrorNode`), which is the meta-command's argument parser, not
+evaluation.
 
 ## A4 — executor approximations
 

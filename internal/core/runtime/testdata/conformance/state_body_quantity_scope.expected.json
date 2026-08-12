@@ -1,0 +1,13 @@
+{
+	"type": "state",
+	"libraries": true,
+	"finalState": "done",
+	"stateVisits": ["start", "falling", "fast", "done"],
+	"outputs": {
+		"speed": {"type": "Quantity", "value": 1.5, "unit": "m/s"},
+		"margin": {"type": "Quantity", "value": 1.5, "unit": "m/s"},
+		"verdict": {"type": "String", "value": "fast"},
+		"touchdown": {"type": "Quantity", "value": 2.0, "unit": "m/s"},
+		"logged": {"type": "Quantity", "value": 1.75, "unit": "m/s"}
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // stmtEnv is the environment an action node's body statements execute in: the
@@ -58,11 +59,15 @@ func (env *stmtEnv) assign(name string, value Value) {
 	env.data[name] = value
 }
 
-// evalIn returns an evaluation context reading the token's data and the frames
-// of the blocks currently entered, innermost last so that a block-local name
-// shadows an outer one of the same name.
-func (e *ActionExecutor) evalIn(env *stmtEnv) *EvalContext {
-	ec := NewEvalContext(e.ctx, nil)
+// evalIn returns an evaluation context resolving names in scope — the scope the
+// statement being executed was declared in — and reading the token's data and
+// the frames of the blocks currently entered, innermost last so that a
+// block-local name shadows an outer one of the same name.
+//
+// The frames sit above the scope, so a live token value or block-local binding
+// wins over a same-named declaration the scope reaches.
+func (e *ActionExecutor) evalIn(env *stmtEnv, scope *symbols.Scope) *EvalContext {
+	ec := NewEvalContext(e.ctx, scope)
 	ec.Push(env.data)
 	for _, frame := range env.frames {
 		ec.Push(frame)
@@ -84,7 +89,7 @@ func (e *ActionExecutor) execStatements(node ast.Node, stmts []lower.Statement, 
 func (e *ActionExecutor) execStatement(node ast.Node, stmt lower.Statement, env *stmtEnv) error {
 	switch s := stmt.(type) {
 	case lower.Send:
-		msg, err := e.evalIn(env).buildMessage(e.action.Scope, s)
+		msg, err := e.evalIn(env, s.Scope).buildMessage(e.action.Scope, s)
 		if err != nil {
 			return err
 		}
@@ -94,7 +99,7 @@ func (e *ActionExecutor) execStatement(node ast.Node, stmt lower.Statement, env 
 		if s.Target == "" {
 			return fmt.Errorf("action node %s: unsupported assignment target", ActionNodeName(node))
 		}
-		value, err := e.evalIn(env).Eval(s.Value)
+		value, err := e.evalIn(env, s.Scope).Eval(s.Value)
 		if err != nil {
 			return fmt.Errorf("eval assignment RHS: %w", err)
 		}
@@ -103,7 +108,7 @@ func (e *ActionExecutor) execStatement(node ast.Node, stmt lower.Statement, env 
 	case lower.Declare:
 		value := Value{Kind: ValNull}
 		if s.Value != nil {
-			evaluated, err := e.evalIn(env).Eval(s.Value)
+			evaluated, err := e.evalIn(env, s.Scope).Eval(s.Value)
 			if err != nil {
 				return fmt.Errorf("eval declaration %s: %w", s.Name, err)
 			}
@@ -127,7 +132,7 @@ func (e *ActionExecutor) execStatement(node ast.Node, stmt lower.Statement, env 
 func (e *ActionExecutor) execIf(node ast.Node, stmt lower.If, env *stmtEnv) error {
 	// The condition is evaluated outside both branches, so neither branch's
 	// declarations are visible to it.
-	holds, err := e.evalCondition(node, env, stmt.Condition, "condition of 'if'")
+	holds, err := e.evalCondition(node, env, stmt.Condition, stmt.Scope, "condition of 'if'")
 	if err != nil {
 		return err
 	}
@@ -169,7 +174,7 @@ func (e *ActionExecutor) execLoop(node ast.Node, stmt lower.Loop, env *stmtEnv) 
 		}
 
 		if stmt.Kind == ast.LoopWhile {
-			holds, err := e.evalCondition(node, env, stmt.Condition, "condition of 'while'")
+			holds, err := e.evalCondition(node, env, stmt.Condition, stmt.Body.Scope, "condition of 'while'")
 			if err != nil {
 				return err
 			}
@@ -184,7 +189,7 @@ func (e *ActionExecutor) execLoop(node ast.Node, stmt lower.Loop, env *stmtEnv) 
 		}
 
 		if stmt.Kind == ast.LoopUntil && stmt.Condition != nil {
-			holds, err := e.evalCondition(node, env, stmt.Condition, "condition of 'until'")
+			holds, err := e.evalCondition(node, env, stmt.Condition, stmt.Body.Scope, "condition of 'until'")
 			if err != nil {
 				return err
 			}
@@ -204,7 +209,7 @@ func (e *ActionExecutor) execForLoop(node ast.Node, stmt lower.Loop, env *stmtEn
 
 	// The collection is evaluated once, before the loop is entered, so the
 	// iteration is over the value the loop started with.
-	value, err := e.evalIn(env).Eval(stmt.Collection)
+	value, err := e.evalIn(env, stmt.Scope).Eval(stmt.Collection)
 	if err != nil {
 		return fmt.Errorf("eval 'for' collection: %w", err)
 	}
@@ -258,11 +263,11 @@ func forElements(value Value) ([]Value, error) {
 // Boolean is a type error the typecheck pass reports (passes/typecheck.go
 // checkBehaviorMember); an execution that reaches one was never checked, so it
 // is reported here rather than coerced.
-func (e *ActionExecutor) evalCondition(node ast.Node, env *stmtEnv, expr ast.Node, what string) (bool, error) {
+func (e *ActionExecutor) evalCondition(node ast.Node, env *stmtEnv, expr ast.Node, scope *symbols.Scope, what string) (bool, error) {
 	if expr == nil {
 		return false, fmt.Errorf("action node %s: %s is missing", ActionNodeName(node), what)
 	}
-	value, err := e.evalIn(env).Eval(expr)
+	value, err := e.evalIn(env, scope).Eval(expr)
 	if err != nil {
 		return false, fmt.Errorf("eval %s: %w", what, err)
 	}

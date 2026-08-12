@@ -37,6 +37,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("loop_body_declaration_does_not_leak", testLoopBodyDeclarationDoesNotLeak)
 	t.Run("loop_body_of_unexecutable_statement", testLoopBodyOfUnexecutableStatement)
 	t.Run("statement_directly_in_an_action_body", testStatementDirectlyInAnActionBody)
+	t.Run("action_body_unresolved_unit", testActionBodyUnresolvedUnit)
+	t.Run("action_body_unresolved_feature", testActionBodyUnresolvedFeature)
+	t.Run("state_body_unresolved_unit", testStateBodyUnresolvedUnit)
 	t.Run("fork_branches_share_region", testForkBranchesShareRegion)
 	t.Run("join_with_one_incoming_branch", testJoinWithOneIncomingBranch)
 	t.Run("region_pseudostate_without_satisfied_guard", testRegionPseudostateWithoutSatisfiedGuard)
@@ -1482,6 +1485,92 @@ func testStatementDirectlyInAnActionBody(t *testing.T) {
 				t.Errorf("error does not explain why the statement cannot run: %v", err)
 			}
 		})
+	}
+}
+
+// testActionBodyUnresolvedUnit: an action body is evaluated in the scope it was
+// written in, and a unit that scope does not bring in resolves to nothing — the
+// quantity is reported as such rather than evaluated as its bare magnitude.
+func testActionBodyUnresolvedUnit(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			public import ScalarValues::*;
+			action descend {
+				attribute h : Real = 500.0 [furlong];
+				first start;
+				done end;
+				then start end;
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "descend", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action descend not found")
+	}
+
+	out, err := ctx.ExecuteAction(sym)
+	if !errors.Is(err, ErrNotAQuantity) {
+		t.Fatalf("outputs = %v, err = %v; want ErrNotAQuantity", out, err)
+	}
+	if !strings.Contains(err.Error(), semantics.ErrNotAUnit.Error()) {
+		t.Errorf("err = %v; want it to report that the index names no measurement unit", err)
+	}
+}
+
+// testActionBodyUnresolvedFeature: a name no frame, object or enclosing scope
+// supplies is reported as unresolved, so giving a body its declaring scope does
+// not turn a typo into a silent zero.
+func testActionBodyUnresolvedFeature(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			action counter {
+				attribute total : Integer = 0;
+				first start;
+				action bump {
+					assign total := missingName + 1;
+				}
+				done end;
+				then start bump;
+				then bump end;
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "counter", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action counter not found")
+	}
+
+	out, err := ctx.ExecuteAction(sym)
+	if !errors.Is(err, ErrUnresolvedFeature) {
+		t.Fatalf("outputs = %v, err = %v; want ErrUnresolvedFeature", out, err)
+	}
+	if !strings.Contains(err.Error(), "missingName") {
+		t.Errorf("err = %v; want it to name the unresolved feature", err)
+	}
+}
+
+// testStateBodyUnresolvedUnit: the same for a state machine's attribute default,
+// which is evaluated when the machine initializes.
+func testStateBodyUnresolvedUnit(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			public import ScalarValues::*;
+			state monitor {
+				attribute speed : Real = 1.5 [knot];
+				initial start;
+				state running;
+				start then running;
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "monitor", ast.DefState)
+	if sym == nil {
+		t.Fatal("state monitor not found")
+	}
+
+	_, err := ctx.ExecuteState(sym)
+	if !errors.Is(err, ErrNotAQuantity) {
+		t.Fatalf("err = %v; want ErrNotAQuantity", err)
 	}
 }
 
