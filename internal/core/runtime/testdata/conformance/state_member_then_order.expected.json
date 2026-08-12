@@ -1,0 +1,11 @@
+{
+  "type": "state",
+  "finalState": "done",
+  "stateVisits": [
+    "start",
+    "second",
+    "fourth",
+    "third",
+    "done"
+  ]
+}

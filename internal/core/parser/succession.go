@@ -243,10 +243,10 @@ func (b *bodyBuilder) add(m ast.Node) {
 	target := memberDeclaredName(m)
 	b.members = append(b.members, m)
 	if !isEdgeMember(m) {
+		// An unnamed member clears the source too: keeping an older name would
+		// sequence from a member other than the one before the keyword.
 		b.hasMember = true
-		if target != "" {
-			b.last, b.lastSpan = target, m.Span()
-		}
+		b.last, b.lastSpan = target, m.Span()
 	}
 
 	if !pending || !valid {
@@ -343,6 +343,8 @@ func memberDeclaredName(member ast.Node) string {
 	case *ast.DecisionNode:
 		return n.Name
 	case *ast.StateNode:
+		return n.Name
+	case *ast.SubstateMember:
 		return n.Name
 	case *ast.PseudostateNode:
 		return n.Name

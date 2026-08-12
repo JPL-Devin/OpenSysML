@@ -64,6 +64,11 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 			"action def A { action a; action b; then a; }",
 			[]string{"b->a"},
 		},
+		{
+			"the short state form is named, so it is sequenced",
+			"state def S { state a; then state b; }",
+			[]string{"a->b"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -89,6 +94,7 @@ func TestSuccessionUnnamedEndWarns(t *testing.T) {
 		want string
 	}{
 		{"unnamed source", "action def A { action; then action b; }", "sequences from a member with no name"},
+		{"unnamed source after a named member", "action def A { action a; action; then action b; }", "sequences from a member with no name"},
 		{"unnamed target", "action def A { action b; then send msg to port; }", "sequences to a member with no name"},
 		{"anonymous member after the keyword", "action def A { action b; then action { } }", "sequences to a member with no name"},
 		{"anonymous typed member after the keyword", "part def P { part a; then part : T; }", "sequences to a member with no name"},
