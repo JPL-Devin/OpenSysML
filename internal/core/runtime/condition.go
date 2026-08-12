@@ -93,7 +93,11 @@ func (ctx *Context) evaluateConditions(sym *symbols.Symbol, kind, what string, c
 			holds = !holds
 		}
 		if cond.required && !holds {
-			return false, &ViolationError{Kind: kind, Element: sym.Name, What: what, Condition: conditionText(cond.expr)}
+			text := conditionText(cond.expr)
+			if cond.negated {
+				text = "not " + text
+			}
+			return false, &ViolationError{Kind: kind, Element: sym.Name, What: what, Condition: text}
 		}
 	}
 	return true, nil

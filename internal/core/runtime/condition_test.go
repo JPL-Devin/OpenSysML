@@ -191,6 +191,11 @@ func TestNegatedNestedConstraintIsInverted(t *testing.T) {
 		if satisfied != want {
 			t.Errorf("%s: satisfied = %v, want %v", name, satisfied, want)
 		}
+		// The violation names the condition as written, negation included.
+		var violation *ViolationError
+		if !want && errors.As(err, &violation) && violation.Condition != "not a > 100" {
+			t.Errorf("%s: condition = %q, want %q", name, violation.Condition, "not a > 100")
+		}
 	}
 }
 
