@@ -1,6 +1,7 @@
 package passes
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -423,5 +424,92 @@ func TestConstraint_Track4Integration(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A member redefining two features derives no name, so its value reaches
+// neither; the diagnostic is a warning because the declaration is well-formed.
+func TestConstraintUnnamedRedefinitionValue(t *testing.T) {
+	src := `
+		attribute def N;
+		part def B { attribute x : N; attribute y : N; }
+		part def A :> B {
+			attribute <sn> redefines x, y = 9;
+		}
+	`
+	diags := constraintDiags(t, src)
+	var got *Diagnostic
+	for i, d := range diags {
+		if d.Code == "redefinition-no-derived-name" {
+			got = &diags[i]
+		}
+	}
+	if got == nil {
+		t.Fatalf("expected redefinition-no-derived-name diagnostic, got %v", diags)
+	}
+	if got.Severity != SeverityWarning {
+		t.Errorf("severity = %v, want warning", got.Severity)
+	}
+	want := "a member redefining x and y derives no name, so this value is bound to the short name <sn> only; declare a name or redefine one feature"
+	if got.Message != want {
+		t.Errorf("message = %q, want %q", got.Message, want)
+	}
+}
+
+// The symbol spelling reports identically, and a member with no short name says
+// the value is unreachable instead.
+func TestConstraintUnnamedRedefinitionValueSpellings(t *testing.T) {
+	cases := []struct {
+		name   string
+		member string
+		want   string
+	}{
+		{"keyword_short_name", "attribute <sn> redefines x, y = 9;", "bound to the short name <sn> only"},
+		{"symbol_short_name", "attribute <sn> :>> x :>> y = 9;", "bound to the short name <sn> only"},
+		{"keyword_anonymous", "attribute redefines x, y = 9;", "is not reachable by name"},
+		{"symbol_anonymous", "attribute :>> x :>> y = 9;", "is not reachable by name"},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			src := "attribute def N;\npart def B { attribute x : N; attribute y : N; }\n" +
+				"part def A :> B {\n" + tt.member + "\n}"
+			diags := constraintDiags(t, src)
+			if !hasCode(diags, "redefinition-no-derived-name") {
+				t.Fatalf("expected redefinition-no-derived-name, got %v", diags)
+			}
+			for _, d := range diags {
+				if d.Code == "redefinition-no-derived-name" && !strings.Contains(d.Message, tt.want) {
+					t.Errorf("message %q does not contain %q", d.Message, tt.want)
+				}
+			}
+		})
+	}
+}
+
+// A single redefinition derives its name from the target, so its value binds
+// and nothing is reported.
+func TestConstraintSingleRedefinitionValueOK(t *testing.T) {
+	src := `
+		attribute def N;
+		part def B { attribute x : N; }
+		part def A :> B {
+			attribute <sn> redefines x = 5;
+			attribute named redefines x = 6;
+		}
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "redefinition-no-derived-name") {
+		t.Fatalf("unexpected redefinition-no-derived-name, got %v", diags)
+	}
+}
+
+// Two redefinitions without a value derive no name either, but nothing is lost.
+func TestConstraintUnnamedRedefinitionNoValueOK(t *testing.T) {
+	src := `
+		attribute def N;
+		part def B { attribute x : N; attribute y : N; }
+		part def A :> B { attribute <sn> redefines x, y; }
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "redefinition-no-derived-name") {
+		t.Fatalf("unexpected redefinition-no-derived-name, got %v", diags)
 	}
 }
