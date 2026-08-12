@@ -57,6 +57,8 @@ Print `--version` at the start of a recording so the reviewer can see which comm
 - Symbol-taking commands: `%instantiate %slots %eval %calc %constraint %requirement %action %state`.
   All go through one helper (`internal/repl/lookup.go`), so test each with a **simple** name and a
   **qualified** one.
+- `%satisfy` takes no argument (every satisfaction assertion the model states) or the name of the
+  element stating them, since `assert satisfy … by …` is anonymous.
 - Instances are keyed by resolved FQN, so `%instantiate Vehicle` then `%slots Demo::Vehicle` must
   hit the same `ID`, and the reverse spelling too. Differing IDs = broken keying.
 - Qualified attribute access works with a full FQN (`%eval Demo::Engine::power` → `= 300.00`) but a

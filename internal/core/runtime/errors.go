@@ -69,6 +69,20 @@ var (
 	// ErrCyclicSlot is returned when a slot's default value depends, directly or
 	// through other slots, on the slot being computed.
 	ErrCyclicSlot = errors.New("cyclic slot dependency")
+
+	// ErrNotASatisfaction is returned when a satisfaction assertion is asked of
+	// an element that states none.
+	ErrNotASatisfaction = errors.New("not a satisfaction assertion")
+
+	// ErrNoRequirement is returned when a satisfaction assertion states no
+	// requirement to evaluate: it references none, or references one that
+	// resolves to nothing.
+	ErrNoRequirement = errors.New("no requirement to satisfy")
+
+	// ErrNoSubject is returned when the feature a satisfaction assertion names
+	// with `by` cannot supply a subject: it resolves to nothing, or no object of
+	// it can be created.
+	ErrNoSubject = errors.New("no subject to satisfy the requirement")
 )
 
 // ViolationError reports a condition that evaluated to false, naming the

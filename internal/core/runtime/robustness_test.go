@@ -59,8 +59,74 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("library_function_outside_its_domain", testLibraryFunctionOutsideItsDomain)
 	t.Run("library_function_wrong_arity", testLibraryFunctionWrongArity)
 	t.Run("exponentiation_integer_overflow", testExponentiationIntegerOverflow)
+	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
+	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
 	t.Run("cyclic_derived_slot", testCyclicDerivedSlot)
 	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
+}
+
+// testSatisfyUnresolvedRequirement: a satisfaction assertion whose requirement
+// reference names nothing reports it, rather than evaluating the assertion's own
+// empty body as a verdict about the model.
+func testSatisfyUnresolvedRequirement(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part lander;
+			part context {
+				assert satisfy nosuch by lander;
+			}
+		}
+	`))
+	assertions := ctx.SatisfyAssertionsIn(idx.DocumentRoot("<test>"))
+	if len(assertions) != 1 {
+		t.Fatalf("found %d satisfaction assertions, want 1", len(assertions))
+	}
+
+	satisfied, err := ctx.EvaluateSatisfaction(assertions[0])
+	if err == nil {
+		t.Fatalf("expected an error, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrNoRequirement) {
+		t.Errorf("expected ErrNoRequirement, got: %v", err)
+	}
+	if errors.Is(err, ErrViolated) {
+		t.Error("an unresolved requirement reference is not a violation")
+	}
+	if !strings.Contains(err.Error(), "nosuch") {
+		t.Errorf("error does not name the reference: %v", err)
+	}
+}
+
+// testSatisfyRequirementWithoutConditions: satisfying a requirement that states
+// no condition is not a verdict, since no check ran.
+func testSatisfyRequirementWithoutConditions(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			requirement def Documented {
+				doc /* stated in prose only */
+			}
+			requirement documented : Documented;
+			part lander;
+			part context {
+				assert satisfy documented by lander;
+			}
+		}
+	`))
+	assertions := ctx.SatisfyAssertionsIn(idx.DocumentRoot("<test>"))
+	if len(assertions) != 1 {
+		t.Fatalf("found %d satisfaction assertions, want 1", len(assertions))
+	}
+
+	satisfied, err := ctx.EvaluateSatisfaction(assertions[0])
+	if err == nil {
+		t.Fatalf("expected an error, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrNoConditions) {
+		t.Errorf("expected ErrNoConditions, got: %v", err)
+	}
+	if satisfied {
+		t.Error("a requirement with no condition must not report a verdict")
+	}
 }
 
 // testCyclicDerivedSlot: two derived defaults that read each other are reported

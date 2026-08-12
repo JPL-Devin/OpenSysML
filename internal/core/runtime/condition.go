@@ -66,41 +66,104 @@ func appendConditions(out []condition, node ast.Node, scope *symbols.Scope, requ
 	return out
 }
 
-// evaluateConditions evaluates conds in order and reports whether every required
-// one holds. kind and what name the checked element and its conditions in
-// messages ("constraint"/"assertion", "requirement"/"require condition").
-// bindings, when non-nil, are the names the element binds itself (subject, actor).
-func (ctx *Context) evaluateConditions(sym *symbols.Symbol, kind, what string, conds []condition, self *Instance, bindings map[string]Value) (bool, error) {
-	if len(conds) == 0 {
-		return false, fmt.Errorf("%s %s: %w", kind, sym.Name, ErrNoConditions)
+// conditionCheck is one evaluation of the conditions an element states: the
+// element itself, how it is named in messages, and what its conditions are
+// evaluated against.
+type conditionCheck struct {
+	sym  *symbols.Symbol
+	kind string // "constraint", "requirement", "satisfaction"
+	what string // "assertion", "require condition"
+
+	// element names the checked element in messages. Empty takes sym's name,
+	// which an anonymous declaration such as a satisfaction assertion lacks.
+	element string
+
+	// self is the object a feature name resolves against, nil when unbound.
+	self *Instance
+
+	// bindings are the names the element binds itself (subject, actor); nil
+	// binds nothing.
+	bindings map[string]Value
+
+	// negated inverts the verdict: the element asserts that its required
+	// conditions do not all hold (`assert not …`, Invariant::isNegated).
+	negated bool
+}
+
+// name returns how the checked element is named in messages.
+func (c conditionCheck) name() string {
+	if c.element != "" {
+		return c.element
 	}
-	features := ctx.conditionFeatures(sym)
+	return c.sym.Name
+}
+
+// evaluateConditions evaluates conds in order and reports whether every required
+// one holds, or — for a negated element — whether one of them fails.
+func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) (bool, error) {
+	if len(conds) == 0 {
+		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), ErrNoConditions)
+	}
+	features := ctx.conditionFeatures(check.sym)
 	for _, cond := range conds {
-		ec := NewEvalContextIn(ctx, cond.scope, self)
+		ec := NewEvalContextIn(ctx, cond.scope, check.self)
 		ec.features = features
-		if bindings != nil {
-			ec.Push(bindings)
+		if check.bindings != nil {
+			ec.Push(check.bindings)
 		}
 		result, err := ec.Eval(cond.expr)
 		if err != nil {
-			return false, fmt.Errorf("%s %s: %s evaluation failed: %w", kind, sym.Name, what, err)
+			return false, fmt.Errorf("%s %s: %s evaluation failed: %w", check.kind, check.name(), check.what, err)
 		}
 		if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
-			return false, fmt.Errorf("%s %s: %s must evaluate to boolean, got %v", kind, sym.Name, what, result.Kind)
+			return false, fmt.Errorf("%s %s: %s must evaluate to boolean, got %v", check.kind, check.name(), check.what, result.Kind)
 		}
 		holds := result.Const.Bool
 		if cond.negated {
 			holds = !holds
 		}
 		if cond.required && !holds {
+			// A negated element asserts exactly this: one required condition
+			// failing makes the negated assertion hold.
+			if check.negated {
+				return true, nil
+			}
 			text := conditionText(cond.expr)
 			if cond.negated {
 				text = "not " + text
 			}
-			return false, &ViolationError{Kind: kind, Element: sym.Name, What: what, Condition: text}
+			return false, &ViolationError{Kind: check.kind, Element: check.name(), What: check.what, Condition: text}
+		}
+	}
+	if check.negated {
+		return false, &ViolationError{
+			Kind:      check.kind,
+			Element:   check.name(),
+			What:      check.what,
+			Condition: negatedText(conds),
 		}
 	}
 	return true, nil
+}
+
+// negatedText renders what a negated element asserted and did not get: that not
+// every required condition holds.
+func negatedText(conds []condition) string {
+	var texts []string
+	for _, cond := range conds {
+		if !cond.required {
+			continue
+		}
+		text := conditionText(cond.expr)
+		if cond.negated {
+			text = "not " + text
+		}
+		texts = append(texts, text)
+	}
+	if len(texts) == 1 {
+		return "not " + texts[0]
+	}
+	return "not (" + strings.Join(texts, " and ") + ")"
 }
 
 // conditionFeatures returns the features the conditions of sym may name: its

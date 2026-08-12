@@ -384,6 +384,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 - `%calc <name> [args...]` — Invoke calculation with literal arguments (e.g., `%calc add 10 20`)
 - `%constraint <name>` — Evaluate constraint, check assert/assume satisfaction
 - `%requirement <name>` — Evaluate requirement, validate subject/require/actor conditions
+- `%satisfy [name]` — Evaluate satisfaction assertions, with the requirement's subject bound to the object `by` names
 
 **Action debugging:**
 - `%action <name>` — Start debugging action execution

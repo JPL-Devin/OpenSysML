@@ -59,6 +59,11 @@ type ExpectedOutcome struct {
 	// one — a usage and the definition it is typed by. Empty searches the model.
 	Evaluate string `json:"evaluate,omitempty"`
 
+	// Satisfy fields: the verdict expected of each satisfaction assertion the
+	// case states, keyed by the assertion as written ("satisfy r by p"), since
+	// such an assertion is anonymous.
+	Assertions map[string]bool `json:"assertions,omitempty"`
+
 	// Instance fields
 	Instantiate string                   `json:"instantiate,omitempty"` // qualified name of the type to instantiate
 	Slots       map[string]ExpectedValue `json:"slots,omitempty"`       // expected slot values, derived ones included
@@ -173,6 +178,8 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 		runConstraintConformance(t, ctx, idx, sysmlPath, expected)
 	case "requirement":
 		runRequirementConformance(t, ctx, idx, sysmlPath, expected)
+	case "satisfy":
+		runSatisfyConformance(t, ctx, idx, sysmlPath, expected)
 	case "instance":
 		runInstanceConformance(t, ctx, idx, expected)
 	default:
@@ -403,6 +410,80 @@ func runRequirementConformance(t *testing.T, ctx *Context, idx *symbols.Index, p
 			t.Errorf("requirement satisfied = %v, want %v", satisfied, *expected.Satisfied)
 		}
 	}
+}
+
+// runSatisfyConformance evaluates the satisfaction assertions the case states
+// and validates the verdict of each: the assertion binds the requirement's
+// subject to the object its `by` operand names, so the verdict is about that
+// object's values.
+func runSatisfyConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
+	scope := idx.DocumentRoot(path)
+	if expected.Evaluate != "" {
+		matches := idx.LookupQualified(expected.Evaluate)
+		if len(matches) != 1 {
+			t.Fatalf("evaluate %q: %d matching symbols, want 1", expected.Evaluate, len(matches))
+		}
+		if matches[0].Scope == nil {
+			t.Fatalf("evaluate %q: the element owns no scope, so it states no assertion", expected.Evaluate)
+		}
+		scope = matches[0].Scope
+	}
+
+	assertions := ctx.SatisfyAssertionsIn(scope)
+	if len(assertions) == 0 {
+		t.Fatalf("no satisfaction assertion found")
+	}
+	if expected.Error != "" || expected.Satisfied != nil {
+		if len(assertions) != 1 {
+			t.Fatalf("%d satisfaction assertions found, want 1: name each verdict under \"assertions\"", len(assertions))
+		}
+	}
+
+	verdicts := make(map[string]bool, len(assertions))
+	for _, a := range assertions {
+		satisfied, err := ctx.EvaluateSatisfaction(a)
+		if expected.Error != "" {
+			if err == nil {
+				t.Fatalf("expected evaluation to fail with %q, it reported satisfied = %v", expected.Error, satisfied)
+			}
+			if !strings.Contains(err.Error(), expected.Error) {
+				t.Fatalf("evaluation failed with %q, want an error containing %q", err, expected.Error)
+			}
+			return
+		}
+		if err != nil && !errors.Is(err, ErrViolated) {
+			t.Fatalf("EvaluateSatisfaction(%s) failed: %v", a.Text(), err)
+		}
+		verdicts[a.Text()] = satisfied
+	}
+
+	if expected.Satisfied != nil {
+		for text, satisfied := range verdicts {
+			if satisfied != *expected.Satisfied {
+				t.Errorf("%s: satisfied = %v, want %v", text, satisfied, *expected.Satisfied)
+			}
+		}
+	}
+	for text, want := range expected.Assertions {
+		satisfied, ok := verdicts[text]
+		if !ok {
+			t.Errorf("no assertion %q among %v", text, sortedKeys(verdicts))
+			continue
+		}
+		if satisfied != want {
+			t.Errorf("%s: satisfied = %v, want %v", text, satisfied, want)
+		}
+	}
+}
+
+// sortedKeys returns the keys of m in order, for a deterministic message.
+func sortedKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // runInstanceConformance instantiates a type and validates the values its slots

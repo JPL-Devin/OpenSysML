@@ -293,6 +293,7 @@ guarantees, and what the mapping does not cover.
 | `%calc <name> [args...]` | Invoke calculation with arguments |
 | `%constraint <name>` | Evaluate constraint (assert/assume) |
 | `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
+| `%satisfy [name]` | Evaluate satisfaction assertions of the model, or of one element |
 | **Control** | |
 | `Ctrl-D` | Exit REPL |
 

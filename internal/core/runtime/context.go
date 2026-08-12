@@ -149,7 +149,20 @@ func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Sco
 
 	// Evaluate every condition the constraint states, inherited ones included.
 	conds := conditionsOf(ctx.chainMembers(sym, scope))
-	return ctx.evaluateConditions(sym, "constraint", "assertion", conds, self, nil)
+	return ctx.evaluateConditions(conditionCheck{
+		sym:     sym,
+		kind:    "constraint",
+		what:    "assertion",
+		self:    self,
+		negated: negatedDecl(sym),
+	}, conds)
+}
+
+// negatedDecl reports whether sym's declaration asserts that its conditions do
+// not hold (`assert not constraint { … }`, `assert not satisfy … by …`).
+func negatedDecl(sym *symbols.Symbol) bool {
+	usage, ok := sym.Decl.(*ast.Usage)
+	return ok && usage.IsNegated
 }
 
 // scopedMember is a declaration member with the scope it was written in, since
@@ -257,7 +270,14 @@ func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Sc
 
 	// Second pass: evaluate the assumed and required conditions.
 	conds := conditionsOf(members)
-	return ctx.evaluateConditions(sym, "requirement", "require condition", conds, self, reqBindings)
+	return ctx.evaluateConditions(conditionCheck{
+		sym:      sym,
+		kind:     "requirement",
+		what:     "require condition",
+		self:     self,
+		bindings: reqBindings,
+		negated:  negatedDecl(sym),
+	}, conds)
 }
 
 // ExecuteAction executes an action definition/usage to completion.
