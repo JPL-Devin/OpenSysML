@@ -340,8 +340,8 @@ func ActionNodeName(node ast.Node) string {
 	case *ast.StateNode:
 		return n.Name
 	case *ast.Usage:
-		if n.Ident.Name != "" {
-			return n.Ident.Name
+		if name, _ := ast.EffectiveName(n); name != "" {
+			return name
 		}
 		return n.Ident.ShortName
 	case *ast.Definition:
@@ -391,14 +391,16 @@ func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error 
 
 		// Check for attribute with value
 		if usage, ok := actualMember.(*ast.Usage); ok && usage.Kind == ast.UsageAttribute {
-			if usage.Value != nil && usage.Ident.Name != "" {
+			// A redefinition names the attribute it overrides (`attribute :>> x = 5;`).
+			name, _ := ast.EffectiveName(usage)
+			if usage.Value != nil && name != "" {
 				// Evaluate default value
 				ec := NewEvalContext(e.ctx, nil)
 				value, err := ec.Eval(usage.Value)
 				if err != nil {
-					return fmt.Errorf("eval attribute default %s: %w", usage.Ident.Name, err)
+					return fmt.Errorf("eval attribute default %s: %w", name, err)
 				}
-				tokenData[usage.Ident.Name] = value
+				tokenData[name] = value
 			}
 		}
 	}
@@ -800,7 +802,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			// A message routed to this accept's port is already addressed by the
 			// connection it travelled over, so the accept's own name does not
 			// have to appear in it.
-			return accept.ViaPort != "" || m.addressedTo(usage.Ident.Name)
+			return accept.ViaPort != "" || m.addressedTo(ActionNodeName(usage))
 		})
 		if !taken {
 			if token.Wait == nil {
@@ -840,10 +842,10 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	// Advance to successor
 	successors := e.graph.Edges[token.Location]
 	if len(successors) == 0 {
-		return fmt.Errorf("nested action %s has no successors", usage.Ident.Name)
+		return fmt.Errorf("nested action %s has no successors", ActionNodeName(usage))
 	}
 	if len(successors) > 1 {
-		return fmt.Errorf("nested action %s has multiple successors", usage.Ident.Name)
+		return fmt.Errorf("nested action %s has multiple successors", ActionNodeName(usage))
 	}
 
 	token.Location = successors[0]

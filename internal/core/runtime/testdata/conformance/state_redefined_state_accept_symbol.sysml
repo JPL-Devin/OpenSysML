@@ -1,0 +1,21 @@
+package Test {
+    // A state may be written as a redefinition of the one it overrides
+    // (`state :>> waiting`), answering to the name of what it redefines
+    // (KerML 7.3.4.5), so a sourceless accept inside it and a transition naming
+    // it must both still find it.
+    state Machine : Base {
+        initial init;
+        state :>> waiting {
+            accept go then active;
+        }
+        state active;
+        final done;
+
+        init then waiting;
+        active then done;
+    }
+
+    state def Base {
+        state waiting;
+    }
+}

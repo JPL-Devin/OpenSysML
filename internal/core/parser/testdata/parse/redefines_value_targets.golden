@@ -2,18 +2,18 @@
   (Membership visibility="default"
     (Definition kind="part" abstract=false variation=false name="RedefinedValues"
       (Membership visibility="default"
-        (Usage kind="part" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="redefines" target=value
             (*ast.QualifiedName))
           (LiteralInteger value="100")))
       (Membership visibility="default"
-        (Usage kind="part" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="redefines" target=(expr)
             (FeatureChainExpr member="value"
               (FeatureReference name="parent")))
           (LiteralInteger value="100")))
       (Membership visibility="default"
-        (Usage kind="part" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="redefines" target=(expr)
             (FeatureChainExpr member="last"
               (FeatureChainExpr member="deepest"
@@ -24,7 +24,7 @@
                         (FeatureReference name="outer"))))))))
           (LiteralInteger value="1")))
       (Membership visibility="default"
-        (Usage kind="part" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="redefines" target=(expr)
             (FeatureChainExpr member="leaf"
               (FeatureReference name="Outer::Middle::inner")))

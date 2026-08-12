@@ -91,13 +91,18 @@ func calcParameters(chain []*symbols.Symbol) []calcParameter {
 	for _, link := range chain {
 		for _, member := range declMembers(link.Decl) {
 			usage, ok := member.(*ast.Usage)
-			if !ok || usage.Ident.Name == "" {
+			if !ok {
+				continue
+			}
+			// A parameter written as a redefinition names the one it overrides.
+			name, _ := ast.EffectiveName(usage)
+			if name == "" {
 				continue
 			}
 			if usage.Direction != ast.DirIn && usage.Direction != ast.DirInOut {
 				continue
 			}
-			param := calcParameter{Name: usage.Ident.Name, Default: usage.Value, Owner: link}
+			param := calcParameter{Name: name, Default: usage.Value, Owner: link}
 			if at, seen := index[param.Name]; seen {
 				if param.Default == nil {
 					param.Default = params[at].Default

@@ -134,14 +134,16 @@ func (e *StateExecutor) initializeAttributes() error {
 
 		// Check for attribute with value
 		if usage, ok := actualMember.(*ast.Usage); ok && usage.Kind == ast.UsageAttribute {
-			if usage.Value != nil && usage.Ident.Name != "" {
+			// A redefinition names the attribute it overrides (`attribute :>> x = 5;`).
+			name, _ := ast.EffectiveName(usage)
+			if usage.Value != nil && name != "" {
 				// Evaluate default value
 				ec := NewEvalContext(e.ctx, nil)
 				value, err := ec.Eval(usage.Value)
 				if err != nil {
-					return fmt.Errorf("eval attribute default %s: %w", usage.Ident.Name, err)
+					return fmt.Errorf("eval attribute default %s: %w", name, err)
 				}
-				e.stateData[usage.Ident.Name] = value
+				e.stateData[name] = value
 			}
 		}
 	}
