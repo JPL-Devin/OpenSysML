@@ -145,8 +145,8 @@ to prove the session survived — `%tokens` still shows the token parked at the 
 `SYSML_MAX_STEPS` overrides the default for both `bin/sysml` and `bin/sysml-grpc`: unset/empty →
 100000, a positive integer (whitespace is trimmed) → that value, anything else → the binary refuses
 to start (`sysml` exits **2** with `sysml: SYSML_MAX_STEPS="…" is not an integer …` /
-`… must be greater than zero …`; `sysml-grpc` exits **1** and logs the same error, though under the
-misleading `msg="Invalid cache size"` label). Useful test model — a `while i < N { assign …; assign …; }`
+`… must be greater than zero …`; `sysml-grpc` exits **1** and logs the same error under
+`msg="Invalid service configuration"`). Useful test model — a `while i < N { assign …; assign …; }`
 body costs roughly 10 evaluation steps per iteration, so 10 000 iterations exceed the default and
 15 000 iterations complete at 200000:
 
