@@ -25,6 +25,8 @@ type Slot struct {
 // Allocates ID, creates slots per FeaturesOf(sym), evaluates default values,
 // leaves composite features lazy. Returns the instance or an error.
 func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
+	defer ctx.beginRun()()
+
 	// Check step limit (I3)
 	if err := ctx.incrementStep(); err != nil {
 		return nil, err
@@ -80,6 +82,8 @@ func isScalarFeature(feat *EffectiveFeature) bool {
 // GetSlot retrieves the slot for the named feature, materializing it lazily
 // if it's a composite feature that hasn't been accessed yet.
 func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
+	defer ctx.beginRun()()
+
 	slot, ok := inst.Slots[name]
 	if !ok {
 		return nil, fmt.Errorf("slot %q not found in instance %d (type %s)", name, inst.ID, inst.Type.Name)

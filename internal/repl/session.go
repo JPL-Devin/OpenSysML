@@ -43,9 +43,8 @@ type Session struct {
 	// trace records execution steps while tracing is on, nil otherwise.
 	trace *runtime.TraceRecorder
 
-	// maxSteps is the evaluation step budget every runtime context this session
-	// creates is given.
-	maxSteps int64
+	// budgets bounds every runtime context this session creates.
+	budgets runtime.Budgets
 
 	verbosity Verbosity
 }
@@ -79,19 +78,18 @@ func NewSession() *Session {
 	return &Session{
 		ws:        model.NewWorkspace(),
 		instances: make(map[string]*runtime.Instance),
-		maxSteps:  runtime.DefaultMaxSteps,
+		budgets:   runtime.DefaultBudgets(),
 		verbosity: VerbosityNormal,
 	}
 }
 
-// SetMaxSteps sets the evaluation step budget for runtime contexts created from
-// here on. It errors on a non-positive budget, which no evaluation could make
-// progress under.
-func (s *Session) SetMaxSteps(maxSteps int64) error {
-	if maxSteps <= 0 {
-		return fmt.Errorf("evaluation step budget must be greater than zero, got %d", maxSteps)
+// SetBudgets sets the bounds for runtime contexts created from here on. It
+// errors on a non-positive bound, which no run could make progress under.
+func (s *Session) SetBudgets(budgets runtime.Budgets) error {
+	if err := budgets.Validate(); err != nil {
+		return err
 	}
-	s.maxSteps = maxSteps
+	s.budgets = budgets
 	// Dropping the context invalidates everything derived from it, instances
 	// included: their IDs restart with the next context.
 	s.rtCtx = nil
@@ -99,10 +97,9 @@ func (s *Session) SetMaxSteps(maxSteps int64) error {
 	return nil
 }
 
-// MaxSteps returns the evaluation step budget this session gives its runtime
-// contexts.
-func (s *Session) MaxSteps() int64 {
-	return s.maxSteps
+// Budgets returns the bounds this session gives its runtime contexts.
+func (s *Session) Budgets() runtime.Budgets {
+	return s.budgets
 }
 
 // List returns a one-line summary per surviving snippet.
@@ -260,7 +257,11 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	s.rtCtx = runtime.NewContext(model, resolver, s.maxSteps)
+	ctx := runtime.NewContext(model, resolver, s.budgets.MaxSteps)
+	if err := ctx.SetBudgets(s.budgets); err != nil {
+		return nil, err
+	}
+	s.rtCtx = ctx
 	s.rtCtx.SetTrace(s.trace)
 	return s.rtCtx, nil
 }
