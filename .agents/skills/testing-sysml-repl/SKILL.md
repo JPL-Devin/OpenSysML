@@ -452,15 +452,25 @@ git worktree add /tmp/mainwt main
 Three cheap, high-signal sweeps:
 
 1. **Corpus no-diff sweep** — load every model on both binaries and diff the output. Anything other
-   than `0` differences is either the intended change or a regression, and it takes ~4 min:
+   than `0` differences is either the intended change or a regression, and it takes ~4 min.
+   **Both `%load` and the argv positional split the path on whitespace**, and ~80% of the corpus
+   lives under directories like `examples/sysml-v2-training/05. Redefinition/`, so copy each file to
+   a space-free path instead of passing it — and count what you compared, or a sweep that loaded
+   almost nothing still prints a reassuring zero:
    ```bash
-   for f in $(find examples testdata internal/repl/testdata -name '*.sysml'); do
-     diff <(printf "%%load $f\n%%quit\n" | ./bin/sysml 2>&1) <(printf "%%load $f\n%%quit\n" | /tmp/mainwt/sysml-main 2>&1)
-   done
+   n=0; d=0
+   while IFS= read -r -d '' f; do
+     cp "$f" /tmp/sweep.sysml
+     n=$((n+1))
+     diff <(./bin/sysml -quiet /tmp/sweep.sysml </dev/null 2>&1) \
+          <(/tmp/mainwt/sysml-main -quiet /tmp/sweep.sysml </dev/null 2>&1) >/dev/null \
+       || { d=$((d+1)); echo "DIFF: $f"; }
+   done < <(find examples testdata internal/repl/testdata -name '*.sysml' -print0)
+   echo "compared $n, differing $d"
    ```
-   Note `%load` splits its argument on whitespace, so a corpus path such as
-   `examples/sysml-v2-training/05. Redefinition/…` cannot be loaded — copy it to a space-free path
-   first (passing the file as an argv positional works too).
+   A `for f in $(find …)` loop word-splits those paths and silently compares nothing for them: on
+   PR #98 that hid three real output changes (better diagnostic spans on `part redefines engine = …`)
+   behind a clean-looking 0.
 2. **Twin table** — for a notation with two spellings, run every degenerate form of *both* spellings
    through a tiny script and print keyword/symbol/main side by side. Testing only the well-formed
    forms hides the interesting bugs: on PR #98 the well-formed forms were perfectly at parity while
