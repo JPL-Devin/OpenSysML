@@ -344,12 +344,35 @@ func namesDeclaration(t lexer.Token) bool {
 	return false
 }
 
+// atFeatureSpecialization reports whether the current token begins a feature
+// specialization — typing, subsetting, reference, crossing or redefinition
+// (SysML.xtext FeatureSpecialization). Both spellings of each clause answer
+// here (`:`/`defined by`, `:>`/`subsets`, `::>`/`references`, `=>`/`crosses`,
+// `:>>`/`redefines`), so neither can be read differently from the other.
+// `specializes` is excluded: it relates two types (SubclassificationPart).
+func (p *Parser) atFeatureSpecialization() bool {
+	t := p.peek()
+	switch t.Kind {
+	case lexer.Colon, lexer.ColonGt, lexer.ColonGtGt, lexer.ColonColonGt, lexer.EqGt:
+		return true
+	case lexer.Keyword:
+		switch t.KeywordID {
+		case "subsets", "references", "crosses", "redefines":
+			return true
+		case "defined":
+			n := p.peekN(1)
+			return n.Kind == lexer.Keyword && n.KeywordID == "by"
+		}
+	}
+	return false
+}
+
 // atDefUsageStart reports whether the current token begins a def/usage
-// declaration: a feature-modifier keyword or a kind keyword.
+// declaration: a feature specialization stated in place of a name, a
+// conjugation, a feature-modifier keyword or a kind keyword.
 func (p *Parser) atDefUsageStart() bool {
 	t := p.peek()
-	// Check for relationship tokens that can precede kind keyword (e.g., :>> num)
-	if t.Kind == lexer.ColonGt || t.Kind == lexer.ColonGtGt || t.Kind == lexer.Colon || t.Kind == lexer.Tilde {
+	if p.atFeatureSpecialization() || t.Kind == lexer.Tilde {
 		return true
 	}
 	if t.Kind != lexer.Keyword {
@@ -546,11 +569,9 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		return node
 	}
 
-	// Check for relationship tokens before modifiers (e.g., :>> x)
-	// These indicate anonymous usages (attribute is default kind)
-	tok := p.peek()
-	if tok.Kind == lexer.ColonGt || tok.Kind == lexer.ColonGtGt || tok.Kind == lexer.Colon {
-		// No modifiers, no kind keyword - parse as anonymous attribute usage
+	// A specialization where the name would go declares an unnamed usage of the
+	// default kind (`:>> x`, `redefines x`), whichever spelling it was written in.
+	if p.atFeatureSpecialization() {
 		u := p.parseUsage(start, ast.UsageAttribute, "", featureMods{}, false)
 		return applyPrefixes(u)
 	}
@@ -1275,67 +1296,19 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		earlyMultiplicity = p.parseMultiplicity()
 	}
 
-	// Handle shorthand: `feature redefines x` means `feature x redefines x`
-	// Check if relationship keyword followed by simple name (not qualified name or feature chain)
-	// BUT NOT if followed by multiplicity (e.g., `part redefines cyl[4]` is anonymous redefining cyl, not shorthand)
-	var preRels []*ast.Relationship
-	var conjugated bool
-	if p.at(lexer.Keyword) {
-		if relKind, ok := relationshipKeywords[p.peek().KeywordID]; ok {
-			// Peek ahead to see if simple name follows (not :: or . or [)
-			nextTok := p.peekN(1)
-			nextNext := p.peekN(2)
-			isSimpleName := (nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.UnrestrictedName) &&
-				(nextNext.Kind != lexer.ColonColon && nextNext.Kind != lexer.Dot && nextNext.Kind != lexer.LBracket)
-			if isSimpleName {
-				// Shorthand: relationship keyword + simple name
-				p.advance() // consume relationship keyword
-				u.Ident = p.parseIdentification()
-				// Create implicit relationship targeting same name
-				rel := &ast.Relationship{
-					Kind:   relKind,
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: u.Ident.Name, Span: u.Ident.NameSpan}}},
-				}
-				preRels = append(preRels, rel)
-				// Check for additional comma-separated targets (e.g., `feature redefines x, y, z`)
-				// Even in shorthand form, we can have multiple targets after the first
-				for p.accept2(lexer.Comma) {
-					target := p.parseRelationshipTarget()
-					if target != nil {
-						r := &ast.Relationship{Kind: relKind, Target: target}
-						preRels = append(preRels, r)
-					} else {
-						break
-					}
-				}
-			} else {
-				// Normal relationship parsing (qualified names, feature chains, or no name after keyword)
-				preRels, conjugated = p.parseRelationships(true)
-				// A bare flow shorthand `flow x to y` and succession `succession x then y` have no declaration name
-				if !(kind == ast.UsageFlow && p.atFlowShorthand()) && !(kind == ast.UsageSuccession && isAnonymous) {
-					u.Ident = p.parseUsageIdentification(kind)
-				}
-			}
-		} else {
-			// Not a relationship keyword
-			preRels, conjugated = p.parseRelationships(true)
-			// A bare flow shorthand `flow x to y` and anonymous succession `succession x then y` have no declaration name
-			if !(kind == ast.UsageFlow && p.atFlowShorthand()) && !(kind == ast.UsageSuccession && isAnonymous) {
-				u.Ident = p.parseUsageIdentification(kind)
-			}
-		}
-	} else {
-		// No relationship shorthand
-		preRels, conjugated = p.parseRelationships(true)
-		// A bare flow shorthand `flow x to y` and anonymous succession `succession x then y` have no declaration name
-		// Anonymous connector starts with 'from' keyword (e.g., `connector : X from y to z`)
-		skipIdentification := (kind == ast.UsageFlow && p.atFlowShorthand()) ||
-			(kind == ast.UsageSuccession && isAnonymous) ||
-			(kind == ast.UsageAllocation && p.atAllocateShorthand()) ||
-			(kind == ast.UsageConnector && p.atKeyword("from"))
-		if !skipIdentification {
-			u.Ident = p.parseUsageIdentification(kind)
-		}
+	// A declaration stating a specialization before its name has no name to state
+	// (SysML.xtext FeatureDeclaration): `part redefines wheel` is the same unnamed
+	// usage as `part :>> wheel`. The name it answers to is its redefinition's, and
+	// the symbol layer derives that (KerML 7.3.4.5, symbols.effectiveIdent).
+	preRels, conjugated := p.parseRelationships(true)
+	// A bare flow shorthand `flow x to y` and anonymous succession `succession x then y` have no declaration name
+	// Anonymous connector starts with 'from' keyword (e.g., `connector : X from y to z`)
+	skipIdentification := (kind == ast.UsageFlow && p.atFlowShorthand()) ||
+		(kind == ast.UsageSuccession && isAnonymous) ||
+		(kind == ast.UsageAllocation && p.atAllocateShorthand()) ||
+		(kind == ast.UsageConnector && p.atKeyword("from"))
+	if !skipIdentification {
+		u.Ident = p.parseUsageIdentification(kind)
 	}
 
 	// Parse post-identification relationships (e.g., : Type)
@@ -1657,51 +1630,20 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return p.parseResultMember()
 	}
 
-	// Check for redefines statement: `redefines name = expr;` OR `redefines parent.child = expr;`
-	// This is shorthand for anonymous feature with redefines relationship and value
-	// Example: redefines innerSpaceDimension = 0;
-	// Example: redefines parent.value = 100;
-	if p.atKeyword("redefines") {
-		// Read the target and rewind unless a '=' follows, leaving anything else
-		// beginning with `redefines` to the general member path.
-		cp := p.checkpoint()
-		p.advance() // skip "redefines"
-		target := p.parseRelationshipTarget()
-		if target != nil && p.at(lexer.Eq) {
-			p.advance() // consume '='
-			value := p.ParseExpression()
-			p.accept2(lexer.Semicolon)
-
-			u := &ast.Usage{
-				Kind: ast.UsagePart, // Generic feature
-				Relationships: []*ast.Relationship{
-					{
-						Kind:   ast.RelRedefines,
-						Target: target,
-					},
-				},
-				Value: value,
-			}
-			u.NodeBase.NodeSpan = p.spanFrom(start)
-			u.SetLeadingTrivia(trivia)
-
-			m := &ast.Membership{
-				Visibility: vis,
-				Member:     u,
-			}
-			m.NodeBase.NodeSpan = u.Span()
-			m.SetLeadingTrivia(trivia)
-			return m
-		}
-		p.restore(cp)
-	}
-
 	// Check for subset/disjoint constraint statements
 	// Pattern: subset X subsets Y; OR disjoint X from Y;
 	// These are anonymous features with relationships
 	if p.atKeyword("subset") || p.atKeyword("disjoint") {
 		isDisjoint := p.atKeyword("disjoint")
 		p.advance() // skip "subset" or "disjoint"
+
+		// A disjoining states both types it separates (KerML Disjoining), so
+		// `disjoint from y;` is a missing type, not a type named `from`.
+		if isDisjoint && p.atKeyword("from") {
+			en := p.errorNodeSkip(start, "expected the disjoined type before 'from'")
+			en.SetLeadingTrivia(trivia)
+			return en
+		}
 
 		// Parse first target (source)
 		source := p.parseRelationshipTarget()
@@ -1826,59 +1768,6 @@ func (p *Parser) parseBodyMember() ast.Node {
 		m.NodeBase.NodeSpan = u.Span()
 		m.SetLeadingTrivia(trivia)
 		return m
-	}
-
-	// Check for bare redefines/subsets/specializes statement (no visibility/modifiers)
-	// Pattern: redefines <target> = <value>;
-	if p.atKeyword("redefines") || p.atKeyword("subsets") || p.atKeyword("specializes") {
-		relKind := ast.RelRedefines
-		if p.atKeyword("subsets") {
-			relKind = ast.RelSubsets
-		} else if p.atKeyword("specializes") {
-			relKind = ast.RelSpecializes
-		}
-
-		// Lookahead: check if pattern is `<rel> <target> = <value>`
-		hasEq := false
-		for i := 1; i < 10; i++ {
-			tk := p.peekN(i)
-			if tk.Kind == lexer.Eq {
-				hasEq = true
-				break
-			}
-			if tk.Kind != lexer.Identifier && tk.Kind != lexer.Keyword && tk.Kind != lexer.Dot && tk.Kind != lexer.ColonColon {
-				break
-			}
-		}
-
-		if hasEq {
-			p.advance() // skip relationship keyword
-			target := p.parseRelationshipTarget()
-			p.expect(lexer.Eq, "expected '=' in relationship statement")
-			value := p.ParseExpression()
-			p.accept2(lexer.Semicolon)
-
-			u := &ast.Usage{
-				Kind: ast.UsagePart,
-				Relationships: []*ast.Relationship{
-					{
-						Kind:   relKind,
-						Target: target,
-					},
-				},
-				Value: value,
-			}
-			u.NodeBase.NodeSpan = p.spanFrom(start)
-			u.SetLeadingTrivia(trivia)
-
-			m := &ast.Membership{
-				Visibility: vis,
-				Member:     u,
-			}
-			m.NodeBase.NodeSpan = u.Span()
-			m.SetLeadingTrivia(trivia)
-			return m
-		}
 	}
 
 	// Check for inline flow statement: flow [from] X to Y;
@@ -2078,54 +1967,6 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// Merge visibility into mods if it was parsed earlier
 		if hasVisibility {
 			mods.visibility = vis
-		}
-
-		// Check for redefines statement after modifiers: `portion redefines name = expr;`
-		// This is shorthand for anonymous feature with modifiers + redefines relationship + value
-		if p.atKeyword("redefines") {
-			// Lookahead: check if pattern is `redefines <target> = <value>`
-			i := 1
-			for i < 10 {
-				tk := p.peekN(i)
-				if tk.Kind == lexer.Eq {
-					// Found '=' - this is a redefines statement
-					p.advance() // skip "redefines"
-					target := p.parseRelationshipTarget()
-					p.expect(lexer.Eq, "expected '=' in redefines statement")
-					value := p.ParseExpression()
-					p.accept2(lexer.Semicolon)
-
-					u := &ast.Usage{
-						Kind:        ast.UsagePart,
-						IsComposite: mods.isComposite,
-						IsReference: mods.isReference,
-						IsDerived:   mods.isDerived,
-						IsEnd:       mods.isEnd,
-						Relationships: []*ast.Relationship{
-							{
-								Kind:   ast.RelRedefines,
-								Target: target,
-							},
-						},
-						Value: value,
-					}
-					u.NodeBase.NodeSpan = p.spanFrom(start)
-					u.SetLeadingTrivia(trivia)
-
-					m := &ast.Membership{
-						Visibility: mods.visibility,
-						Member:     u,
-					}
-					m.NodeBase.NodeSpan = u.Span()
-					m.SetLeadingTrivia(trivia)
-					return m
-				}
-				if tk.Kind == lexer.Identifier || tk.Kind == lexer.Keyword || tk.Kind == lexer.Dot || tk.Kind == lexer.ColonColon {
-					i++
-					continue
-				}
-				break
-			}
 		}
 
 		// Special case: end shortname [mult] feature name pattern
@@ -2633,7 +2474,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 	inner := p.parseDeclaration(start)
 	if inner == nil {
-		en := p.errorNodeSkip(start, "expected a body member")
+		en := p.errorNodeSkip(start, p.noBodyMemberMessage())
 		en.SetLeadingTrivia(trivia)
 		return en
 	}
@@ -2641,6 +2482,25 @@ func (p *Parser) parseBodyMember() ast.Node {
 	mem.NodeSpan = p.spanFrom(start)
 	mem.SetLeadingTrivia(trivia)
 	return mem
+}
+
+// noBodyMemberMessage reports why the current token starts no body member,
+// naming the missing declaration when a relationship keyword that is not a
+// feature specialization stands in place of one (SysML.xtext
+// SubclassificationPart, TypeRelationshipPart, FeatureRelationshipPart).
+func (p *Parser) noBodyMemberMessage() string {
+	const base = "expected a body member"
+	t := p.peek()
+	if t.Kind != lexer.Keyword {
+		return base
+	}
+	switch t.KeywordID {
+	case "specializes":
+		return base + ": 'specializes' relates two types; a member refines an inherited feature by subsetting it, written 'subsets' or ':>'"
+	case "unions", "intersects", "chains", "inverse", "featured":
+		return base + ": '" + t.KeywordID + "' relates the declaration written before it, so a member cannot begin with it"
+	}
+	return base
 }
 
 // parsePerformedActionReference parses the reference form of a performed action
