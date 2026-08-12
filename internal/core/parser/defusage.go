@@ -2,8 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"strings"
-	"unicode"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
@@ -553,7 +551,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	tok := p.peek()
 	if tok.Kind == lexer.ColonGt || tok.Kind == lexer.ColonGtGt || tok.Kind == lexer.Colon {
 		// No modifiers, no kind keyword - parse as anonymous attribute usage
-		u := p.parseUsage(start, ast.UsageAttribute, featureMods{}, false)
+		u := p.parseUsage(start, ast.UsageAttribute, "", featureMods{}, false)
 		return applyPrefixes(u)
 	}
 
@@ -565,9 +563,9 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		p.advance() // 'case'
 		if p.atKeyword("def") {
 			p.advance() // 'def'
-			return applyPrefixes(p.parseDefinition(start, ast.DefUseCase, mods, false))
+			return applyPrefixes(p.parseDefinition(start, ast.DefUseCase, "use case", mods, false))
 		}
-		return applyPrefixes(p.parseUsage(start, ast.UsageUseCase, mods, false))
+		return applyPrefixes(p.parseUsage(start, ast.UsageUseCase, "use case", mods, false))
 	}
 
 	t := p.peek()
@@ -605,7 +603,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		if kw == "include" && p.atUseCase() {
 			p.advance() // consume 'use'
 			p.advance() // consume 'case'
-			u := p.parseUsage(start, ast.UsageUseCase, mods, isAll)
+			u := p.parseUsage(start, ast.UsageUseCase, "use case", mods, isAll)
 			if u != nil {
 				// Add includes relationship to first typing target
 				// Actually, include use case <name> : Type means: create use case usage <name> typed by Type, with includes semantics
@@ -628,7 +626,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// If succession is followed by flow keyword, parse as flow usage with succession typing
 		if kw == "succession" && p.atKeyword("flow") {
 			p.advance() // consume 'flow'
-			u := p.parseUsage(start, ast.UsageFlow, mods, isAll)
+			u := p.parseUsage(start, ast.UsageFlow, "flow", mods, isAll)
 			// Add implicit succession typing - succession concept applies to this flow
 			// Use typing relationship to indicate this flow has succession semantics
 			if u != nil {
@@ -762,7 +760,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			kindKeyword = p.peek().KeywordID
 			p.advance()
 		}
-		return applyPrefixes(p.parseUsage(start, usageKindKeywords[kindKeyword], mods, isAll))
+		return applyPrefixes(p.parseUsage(start, usageKindKeywords[kindKeyword], kindKeyword, mods, isAll))
 	}
 
 	// Special case: if current token is 'def' (after prefixes/modifiers), parse as generic definition
@@ -770,7 +768,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	if p.atKeyword("def") {
 		p.advance() // consume 'def'
 		// Use generic definition kind (or could extract from prefix)
-		return applyPrefixes(p.parseDefinition(start, ast.DefClass, mods, false))
+		return applyPrefixes(p.parseDefinition(start, ast.DefClass, "", mods, false))
 	}
 
 	defKind, ok := definitionKindKeywords[kw]
@@ -785,7 +783,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// kind of such a usage comes from the metadata, not the syntax.
 		keywordOnlyUsage := len(prefixes) > 0 && (p.at(lexer.Identifier) || p.at(lexer.UnrestrictedName))
 		if hasModifiers || hasNameWithMultOrMods || keywordOnlyUsage {
-			return applyPrefixes(p.parseUsage(start, ast.UsageAttribute, mods, false))
+			return applyPrefixes(p.parseUsage(start, ast.UsageAttribute, "", mods, false))
 		}
 		return applyPrefixes(nil)
 	}
@@ -812,14 +810,16 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// (`item part Shape`). A kind keyword that is not one of those is the
 	// declaration's name (`attribute item : Integer` names the attribute
 	// `item`), and consuming it here would silently discard that name.
+	kindKeyword := kw
 	if p.atSecondaryKind(kw) {
-		defKind = definitionKindKeywords[p.peek().KeywordID]
+		kindKeyword = p.peek().KeywordID
+		defKind = definitionKindKeywords[kindKeyword]
 		p.advance() // consume secondary keyword
 	}
 
 	if p.atKeyword("def") {
 		p.advance() // consume 'def'
-		return applyPrefixes(p.parseDefinition(start, defKind, mods, isAll))
+		return applyPrefixes(p.parseDefinition(start, defKind, kindKeyword, mods, isAll))
 	}
 
 	// Check if this is a definition-only keyword (not in usageKindKeywords)
@@ -828,7 +828,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	_, hasUsageForm := usageKindKeywords[kw]
 	if !hasUsageForm {
 		// Definition-only keyword - parse as definition directly
-		return applyPrefixes(p.parseDefinition(start, defKind, mods, isAll))
+		return applyPrefixes(p.parseDefinition(start, defKind, kindKeyword, mods, isAll))
 	}
 
 	// Note: 'datatype' is treated uniformly as a usage keyword by the parser.
@@ -836,45 +836,16 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// and semantics passes, which have full context (relationships, body structure).
 	// This follows Phase 4 principle: parse syntax uniformly, classify semantically.
 
-	return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], mods, isAll))
+	// A secondary keyword refines a definition's kind (`individual item def`),
+	// but a usage keeps the kind of the first keyword (`item part Shape` is an
+	// item usage), so the keyword recorded here is that first one.
+	return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], kw, mods, isAll))
 }
 
-// declaredKeyword returns the kind keyword as written in the head that starts
-// at the given offset: the last word before the cursor that names a kind. It
-// recovers which synonym the author chose, since several map to one kind.
-func (p *Parser) declaredKeyword(start int, isKind func(string) bool) string {
-	head := p.src.Text(p.spanFrom(start))
-	found := ""
-	word := strings.Builder{}
-	flush := func() {
-		if word.Len() > 0 && isKind(word.String()) {
-			found = word.String()
-		}
-		word.Reset()
-	}
-	for _, r := range head {
-		if r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) {
-			word.WriteRune(r)
-			continue
-		}
-		flush()
-	}
-	flush()
-	return found
-}
-
-func usageKeywordName(word string) bool {
-	_, ok := usageKindKeywords[word]
-	return ok
-}
-
-func definitionKeywordName(word string) bool {
-	_, ok := definitionKindKeywords[word]
-	return ok
-}
-
-func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, mods featureMods, isAll bool) *ast.Definition {
-	keyword := p.declaredKeyword(start, definitionKeywordName)
+// parseDefinition parses a definition. keyword is the kind keyword as consumed
+// from the token stream, kept so a synonym spelling can be told from the
+// canonical one.
+func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword string, mods featureMods, isAll bool) *ast.Definition {
 	def := &ast.Definition{
 		Kind:        kind,
 		Keyword:     keyword,
@@ -1120,10 +1091,12 @@ func (p *Parser) isAnonymousSuccession() bool {
 	return false
 }
 
-func (p *Parser) parseUsage(start int, kind ast.UsageKind, mods featureMods, isAll bool) *ast.Usage {
+// parseUsage parses a usage. keyword is the kind keyword as consumed from the
+// token stream, kept for the same reason as in parseDefinition.
+func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods featureMods, isAll bool) *ast.Usage {
 	u := &ast.Usage{
 		Kind:         kind,
-		Keyword:      p.declaredKeyword(start, usageKeywordName),
+		Keyword:      keyword,
 		IsNegated:    mods.isNegated,
 		IsAbstract:   mods.isAbstract,
 		IsReference:  mods.isReference,

@@ -146,6 +146,49 @@ func TestKindKeywordSynonymsSurviveRDF(t *testing.T) {
 	}
 }
 
+// A keyword sitting in a comment inside a declaration head is trivia, not the
+// declaration's kind, so it must not become the keyword written back.
+func TestCommentInHeadDoesNotChangeKeyword(t *testing.T) {
+	for _, src := range []string{
+		"package P {\n\tattribute // the flow rate\n\t\trate : Real;\n}",
+		"package P {\n\tpart /* a state */ def X;\n}",
+	} {
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("to turtle: %v", err)
+		}
+		if strings.Contains(string(turtle), "declaredKeyword") {
+			t.Errorf("a comment word was recorded as the kind keyword:\n%s", turtle)
+		}
+		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("back to notation: %v", err)
+		}
+		for _, keyword := range []string{"flow ", "state "} {
+			if strings.Contains(string(back), keyword) {
+				t.Errorf("the declaration came back as a %sdeclaration:\n%s", keyword, back)
+			}
+		}
+	}
+}
+
+// A usage whose head is kept verbatim comes back as written, so a synonym
+// keyword on it needs no rebuilding and is not refused.
+func TestVerbatimSynonymConverts(t *testing.T) {
+	src := "package P {\n\trequirement def R;\n\tverify R;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if !strings.Contains(string(back), "verify R;") {
+		t.Errorf("`verify R;` did not survive the round trip:\n%s", back)
+	}
+}
+
 // A synonym keyword whose declaration names no element of its own takes an
 // inline reference, a shape the graph cannot rebuild, so it is reported rather
 // than written back as the canonical keyword — a different declaration.

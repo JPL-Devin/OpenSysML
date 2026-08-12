@@ -138,9 +138,8 @@ var relationshipSyntax = map[ast.RelationshipKind]string{
 
 // Reverse lookups, derived once so the two directions cannot disagree.
 var (
-	metaclassDefinition  = map[string]ast.DefinitionKind{}
-	metaclassUsage       = map[string]ast.UsageKind{}
-	propertyRelationship = map[string]ast.RelationshipKind{}
+	metaclassDefinition = map[string]ast.DefinitionKind{}
+	metaclassUsage      = map[string]ast.UsageKind{}
 )
 
 func init() {
@@ -149,9 +148,6 @@ func init() {
 	}
 	for kind, name := range usageMetaclass {
 		metaclassUsage[name] = kind
-	}
-	for kind, name := range relationshipProperty {
-		propertyRelationship[name] = kind
 	}
 }
 
