@@ -63,7 +63,9 @@ func (s *Session) doSave(path string) ([]string, bool, error) {
 // the prompt is expected to understand even though no shell has been through
 // the line.
 func expandHome(path string) string {
-	if path != "~" && !strings.HasPrefix(path, "~"+string(filepath.Separator)) {
+	// Either separator: `~/` is what a user types even where the separator is
+	// a backslash.
+	if path != "~" && !(len(path) > 1 && path[0] == '~' && os.IsPathSeparator(path[1])) {
 		return path
 	}
 	home, err := os.UserHomeDir()
