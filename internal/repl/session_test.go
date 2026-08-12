@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"strings"
 	"testing"
 )
@@ -72,5 +73,20 @@ func TestTrailingCommentIsKept(t *testing.T) {
 	joined, _ := s.accept("// thinking out loud")
 	if !strings.Contains(joined, "thinking out loud") {
 		t.Errorf("comment dropped: %q", joined)
+	}
+}
+
+// A comment folded into the declaration below it must not shift the line
+// numbers of that declaration's diagnostics.
+func TestSubmitReportsTheSubmittedLine(t *testing.T) {
+	s := NewSession()
+	s.Submit("// doc for A")
+	res := s.Submit("part def A { part x : Missing; }")
+	sf := source.New(docName, []byte(res.Source))
+	for _, d := range res.Diagnostics {
+		line := sf.Lines().PosAt(d.Span.Offset).Line - res.baseLine() + 1
+		if line != 1 {
+			t.Errorf("diagnostic reported on line %d of a one-line submission: %s", line, d.Message)
+		}
 	}
 }

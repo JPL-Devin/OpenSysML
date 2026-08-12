@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/export"
@@ -573,6 +574,67 @@ func TestWriteFileKeepsExistingPermissions(t *testing.T) {
 	}
 	if got := info.Mode().Perm(); got != 0o600 {
 		t.Errorf("mode = %o, want 600", got)
+	}
+}
+
+// A pipe or a device is a stream, not a file with contents to protect, so it is
+// written as it stands rather than replaced by a rename.
+func TestWriteFileWritesThroughAPipe(t *testing.T) {
+	fifo := filepath.Join(t.TempDir(), "pipe.sysml")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Skipf("mkfifo: %v", err)
+	}
+	read := make(chan string, 1)
+	go func() {
+		data, err := os.ReadFile(fifo)
+		if err != nil {
+			t.Error(err)
+		}
+		read <- string(data)
+	}()
+	replaced, err := export.WriteFile(fifo, []byte("package Q;\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replaced {
+		t.Error("a pipe is not an existing file that was replaced")
+	}
+	if got := <-read; got != "package Q;\n" {
+		t.Errorf("read %q from the pipe", got)
+	}
+	if info, err := os.Stat(fifo); err != nil || info.Mode()&os.ModeNamedPipe == 0 {
+		t.Errorf("the pipe was replaced by a regular file (%v)", err)
+	}
+}
+
+// An existing file inside a directory the user cannot add entries to is still
+// written: the temporary file is impossible there, but the save is not.
+func TestWriteFileFallsBackWhenTheDirectoryIsClosed(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	dir := filepath.Join(t.TempDir(), "closed")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "model.sysml")
+	if err := os.WriteFile(path, []byte("package Longer;\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(dir, 0o700) }()
+	replaced, err := export.WriteFile(path, []byte("package Q;\n"))
+	if err != nil || !replaced {
+		t.Fatalf("replaced=%v err=%v", replaced, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "package Q;\n" {
+		t.Errorf("file = %q, want the new model with nothing of the old one left", data)
 	}
 }
 

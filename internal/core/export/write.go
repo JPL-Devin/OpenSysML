@@ -9,88 +9,114 @@ import (
 
 // newFileMode is the permission a model that did not exist yet is created with:
 // readable like any other document the user writes, since a model is not a
-// secret. A file that does exist keeps the permissions it has — a save is an
-// edit of the user's file, not a decision about who may read it.
+// secret. A file that does exist keeps the permissions it has.
 const newFileMode = 0o644
 
 // WriteFile writes a converted model to path, reporting whether it replaced a
 // file that was already there.
 //
-// The write is atomic: the bytes go to a temporary file in the same directory,
-// are flushed to disk, and are renamed over path, so an interrupted or failing
-// write leaves the previous model intact rather than a truncated or empty one.
-// A symlink is written through rather than replaced, and an existing file keeps
-// its permissions. A parent directory that does not exist is named in the
-// error, which a bare open(2) failure does not make clear.
+// A regular file is written atomically: the bytes go to a temporary file in the
+// same directory, are flushed, and are renamed over the destination, so an
+// interrupted write leaves the previous model intact rather than a truncated or
+// empty one. An existing file keeps its permissions, and a symlink is written
+// through rather than replaced.
+//
+// Anything that is not a regular file — a terminal, a pipe, /dev/null, a
+// process substitution — is written directly, since there is no previous
+// content to protect and replacing it by rename would destroy the pipe or
+// device the user pointed at.
 func WriteFile(path string, data []byte) (replaced bool, err error) {
-	// The temporary file has to be created beside the file that is actually
-	// being replaced, both so the rename stays within one filesystem and so
-	// writing to a symlink updates what it points at instead of unlinking it.
-	target, err := resolveLink(path)
+	target, info, err := destination(path)
 	if err != nil {
 		return false, err
 	}
-	dir := filepath.Dir(target)
-	info, err := os.Stat(dir)
 	switch {
-	case os.IsNotExist(err):
-		return false, fmt.Errorf("cannot write %s: directory %s does not exist", path, dir)
-	case err != nil:
-		return false, err
-	case !info.IsDir():
-		return false, fmt.Errorf("cannot write %s: %s is not a directory", path, dir)
+	case info == nil:
+		return false, writeAtomic(path, target, newFileMode, data)
+	case info.IsDir():
+		return false, fmt.Errorf("cannot write %s: it is a directory", path)
+	case !info.Mode().IsRegular():
+		return false, writeThrough(path, target, 0, data)
 	}
-	mode := os.FileMode(newFileMode)
-	if info, err := os.Stat(target); err == nil {
-		if info.IsDir() {
-			return false, fmt.Errorf("cannot write %s: it is a directory", path)
+	err = writeAtomic(path, target, info.Mode().Perm(), data)
+	if errors.Is(err, os.ErrPermission) {
+		// The file is writable but its directory is not, so the temporary file
+		// cannot be created; the model is what the user wants saved.
+		if direct := writeThrough(path, target, os.O_TRUNC, data); direct == nil {
+			return true, nil
 		}
-		replaced = true
-		mode = info.Mode().Perm()
 	}
+	return err == nil, err
+}
 
+// writeAtomic writes data beside target and renames it over target.
+func writeAtomic(path, target string, mode os.FileMode, data []byte) (err error) {
+	dir := filepath.Dir(target)
+	info, serr := os.Stat(dir)
+	switch {
+	case os.IsNotExist(serr):
+		return fmt.Errorf("cannot write %s: directory %s does not exist", path, dir)
+	case serr != nil:
+		return serr
+	case !info.IsDir():
+		return fmt.Errorf("cannot write %s: %s is not a directory", path, dir)
+	}
 	tmp, err := os.CreateTemp(dir, "."+filepath.Base(target)+".*")
 	if err != nil {
-		// The temporary name is ours, not something the user asked for, so the
-		// failure is reported against the path they did name.
-		return false, fmt.Errorf("cannot write %s: %w", path, underlying(err))
+		return writeError(path, err)
 	}
 	name := tmp.Name()
 	defer func() {
 		if err != nil {
 			_ = os.Remove(name)
-			err = fmt.Errorf("cannot write %s: %w", path, underlying(err))
+			err = writeError(path, err)
 		}
 	}()
 	if _, err = tmp.Write(data); err != nil {
 		_ = tmp.Close()
-		return replaced, err
+		return err
 	}
 	// Without this the rename can reach the disk before the bytes do, which
 	// after a crash leaves an empty file where the previous model was.
 	if err = tmp.Sync(); err != nil {
 		_ = tmp.Close()
-		return replaced, err
+		return err
 	}
 	if err = tmp.Close(); err != nil {
-		return replaced, err
+		return err
 	}
 	// CreateTemp makes the file 0600, which is not what a saved document is.
-	// #nosec G302 -- deliberate: a new model gets newFileMode, an existing one
-	// keeps the permissions it already had.
+	// #nosec G302 -- deliberate: see newFileMode.
 	if err = os.Chmod(name, mode); err != nil {
-		return replaced, err
+		return err
 	}
 	if err = os.Rename(name, target); err != nil {
-		return replaced, err
+		return err
 	}
 	syncDir(dir)
-	return replaced, nil
+	return nil
 }
 
-// syncDir flushes the directory entry the rename created. It is best-effort:
-// the model is already written, so a filesystem that does not allow this is no
-// reason to report the save as failed.
+// writeThrough writes data into target as it stands, without replacing it. A
+// pipe or device takes no O_TRUNC, so the caller passes the flags.
+func writeThrough(path, target string, flags int, data []byte) error {
+	// #nosec G304 -- target is the destination the caller asked to write.
+	f, err := os.OpenFile(target, os.O_WRONLY|flags, 0)
+	if err != nil {
+		return writeError(path, err)
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return writeError(path, err)
+	}
+	if err := f.Close(); err != nil {
+		return writeError(path, err)
+	}
+	return nil
+}
+
+// syncDir flushes the directory entry the rename created. Best-effort: the
+// model is already written, so a filesystem that refuses is not a failed save.
 func syncDir(dir string) {
 	// #nosec G304 -- dir is the directory of the path the caller asked to write.
 	f, err := os.Open(dir)
@@ -101,41 +127,58 @@ func syncDir(dir string) {
 	_ = f.Close()
 }
 
-// resolveLink returns the file a save should actually write: path itself, or
-// what it points at when it is a symlink, so that saving over a linked model
-// updates the model rather than turning the link into a regular file. A
-// dangling link resolves to nothing, so path is written as it stands.
-func resolveLink(path string) (string, error) {
-	info, err := os.Lstat(path)
+// destination returns the file a save should write and what is there now, which
+// is nil when nothing is. A symlink resolves to what it points at, so saving
+// over a linked model updates the model instead of unlinking it; a link that
+// resolves to nothing is written where it points.
+func destination(path string) (target string, info os.FileInfo, err error) {
+	info, err = os.Stat(path)
 	switch {
 	case os.IsNotExist(err):
-		return path, nil
+		// A dangling symlink is written where it points, so the link survives.
+		return resolveRegular(path), nil, nil
 	case err != nil:
-		return "", err
-	case info.Mode()&os.ModeSymlink == 0:
-		return path, nil
+		return "", nil, err
+	case !info.Mode().IsRegular():
+		// A pipe or device is opened as named: resolving it would land on
+		// something like /proc/self/fd's pipe:[…], which cannot be opened.
+		return path, info, nil
 	}
-	target, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		// A link into a directory that does not exist yet: report it against
-		// the destination rather than the link.
-		if resolved, rerr := os.Readlink(path); rerr == nil {
-			if !filepath.IsAbs(resolved) {
-				resolved = filepath.Join(filepath.Dir(path), resolved)
-			}
-			return resolved, nil
-		}
-		return "", err
-	}
-	return target, nil
+	return resolveRegular(path), info, nil
 }
 
-// underlying strips the wrapper *os.PathError adds, whose path is the temporary
-// file the caller never named.
-func underlying(err error) error {
+// resolveRegular returns what path points at when it is a symlink, and path
+// itself otherwise.
+func resolveRegular(path string) string {
+	info, err := os.Lstat(path)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return path
+	}
+	return readLink(path)
+}
+
+// readLink follows a chain of symlinks as far as it resolves, so that a link to
+// a link to a model still writes the model.
+func readLink(path string) string {
+	for range 64 {
+		next, err := os.Readlink(path)
+		if err != nil {
+			return path
+		}
+		if !filepath.IsAbs(next) {
+			next = filepath.Join(filepath.Dir(path), next)
+		}
+		path = next
+	}
+	return path
+}
+
+// writeError reports a failure against the path the caller named, dropping the
+// *os.PathError whose path may be the temporary file it never asked for.
+func writeError(path string, err error) error {
 	var pathErr *os.PathError
 	if errors.As(err, &pathErr) {
-		return pathErr.Err
+		err = pathErr.Err
 	}
-	return err
+	return fmt.Errorf("cannot write %s: %w", path, err)
 }

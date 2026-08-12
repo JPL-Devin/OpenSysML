@@ -102,8 +102,9 @@ func (s *Session) List() []string {
 func (s *Session) accept(src string) (joined string, offset int) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
+	var comments string
 	if len(names) > 0 {
-		src = s.takeLeadingComments() + src
+		comments = s.takeLeadingComments()
 		set := make(map[string]bool, len(names))
 		for _, n := range names {
 			set[n] = true
@@ -116,8 +117,10 @@ func (s *Session) accept(src string) (joined string, offset int) {
 		}
 		s.snippets = kept
 	}
-	s.snippets = append(s.snippets, snippet{src: src, names: names})
+	s.snippets = append(s.snippets, snippet{src: comments + src, names: names})
 	joined = s.joined()
+	// The offset marks what the user typed, not the comments folded in front of
+	// it, so diagnostics keep the line numbers of the submission.
 	return joined, len(joined) - len(src)
 }
 

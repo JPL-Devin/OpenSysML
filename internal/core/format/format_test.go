@@ -245,3 +245,40 @@ func TestSourceNormalizesMixedLineEndingsToLF(t *testing.T) {
 		t.Errorf("carriage return survived: %q", got)
 	}
 }
+
+// An unterminated block comment runs to the end of the file, so the trailing
+// newline the formatter normally guarantees would land inside that comment and
+// change its own text — which used to trip the idempotence check and refuse the
+// save the session most needs to make.
+func TestSourceKeepsAnUnterminatedComment(t *testing.T) {
+	for _, src := range []string{
+		"part def A;\n/* oops",
+		"part def A;\n/* oops\n",
+		"doc /* unclosed",
+	} {
+		out, err := Source("s.sysml", []byte(src), DefaultOptions)
+		if err != nil {
+			t.Errorf("Source(%q) = %v, want it formatted", src, err)
+			continue
+		}
+		if !strings.HasSuffix(string(out), "oops") && !strings.HasSuffix(string(out), "oops\n") &&
+			!strings.HasSuffix(string(out), "unclosed") {
+			t.Errorf("Source(%q) = %q, the comment text was altered", src, out)
+		}
+	}
+}
+
+// A closing bracket alone on a line belongs to the line that opened it, not one
+// level in from it. Only reachable through a tolerant save, since a trailing
+// comma is a syntax error.
+func TestSourceIndentsAClosingBracketAtStatementLevel(t *testing.T) {
+	src := "package P {\nattribute a = max(1,\n2,\n);\n}\n"
+	want := "package P {\n    attribute a = max(1,\n        2,\n    );\n}\n"
+	out, err := Source("s.sysml", []byte(src), DefaultOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != want {
+		t.Errorf("Source() =\n%s\nwant\n%s", out, want)
+	}
+}

@@ -279,3 +279,29 @@ func TestMetaSaveHelp(t *testing.T) {
 		t.Error("%help should list the save command")
 	}
 }
+
+// The work-loss case the tolerant save exists for: an unterminated comment is
+// exactly what a user types before reaching for %save.
+func TestMetaSaveUnterminatedComment(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def A;")
+	s.Submit("/* oops")
+	path := filepath.Join(t.TempDir(), "out.sysml")
+
+	out, _, err := s.runMeta("%save " + path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(out, "\n"), "saved") {
+		t.Fatalf("expected the work to be saved, got %v", out)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"part def A;", "/* oops"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("saved file is missing %q:\n%s", want, data)
+		}
+	}
+}

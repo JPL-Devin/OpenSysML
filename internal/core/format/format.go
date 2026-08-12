@@ -91,6 +91,7 @@ type formatter struct {
 	prev        lexer.Token
 	started     bool
 	lastCode    lexer.Kind // last non-comment token: what a line break interrupts
+	openComment bool       // the last token is a comment left unterminated
 }
 
 func (f *formatter) run(toks []lexer.Token) []byte {
@@ -108,9 +109,10 @@ func (f *formatter) run(toks []lexer.Token) []byte {
 		f.emit(tok)
 	}
 	out := f.buf.Bytes()
-	if f.started {
+	if f.started && !f.openComment {
 		// Exactly one trailing newline, whether or not the last token was a line
-		// comment that carried its own.
+		// comment that carried its own. An unterminated comment runs to the end of
+		// the file and would swallow it, changing that token's own text.
 		out = append(bytes.TrimRight(out, "\r\n"), f.nl...)
 	}
 	return out
@@ -155,6 +157,7 @@ func (f *formatter) emit(tok lexer.Token) {
 		f.depth++
 	}
 	f.prev, f.started, f.atLineStart = tok, true, false
+	f.openComment = isComment(tok.Kind) && strings.HasPrefix(text, "/*") && !strings.HasSuffix(text, "*/")
 	if !isComment(tok.Kind) {
 		// A trailing comment interrupts nothing, so the token before it is
 		// still what the next line continues.
@@ -210,8 +213,9 @@ func (f *formatter) wantSpace(tok lexer.Token) bool {
 // statement's own level, so only breaks the formatter can be sure about move.
 func (f *formatter) continues(tok lexer.Token) bool {
 	switch tok.Kind {
-	case lexer.LBrace, lexer.RBrace:
-		// A brace on its own line delimits the block it belongs to.
+	case lexer.LBrace, lexer.RBrace, lexer.RParen, lexer.RBracket:
+		// A delimiter on its own line belongs to the line that opened it rather
+		// than one level in from it.
 		return false
 	}
 	return incompleteBefore[f.lastCode] || continuesAfter[tok.Kind]
