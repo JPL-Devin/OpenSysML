@@ -86,6 +86,83 @@ func TestSatisfactionFailsWhenSubjectViolatesRequirement(t *testing.T) {
 	}
 }
 
+// TestSatisfactionSeesRequirementBindings checks that a value the requirement
+// binds by name is visible to the conditions of a satisfaction assertion, as it
+// is when the requirement is evaluated directly.
+func TestSatisfactionSeesRequirementBindings(t *testing.T) {
+	ctx, a := satisfactionOf(t, `
+		package Landing {
+			part def Lander { attribute verticalSpeed; }
+
+			requirement def TouchdownRequirement {
+				subject lander : Lander;
+				attribute certifiedLimit = 1.5;
+				actor operator = certifiedLimit;
+				require constraint {
+					lander.verticalSpeed <= operator
+				}
+			}
+
+			requirement touchdown : TouchdownRequirement;
+
+			part slowLander : Lander {
+				attribute :>> verticalSpeed = 1.2;
+			}
+
+			part analysisContext {
+				assert satisfy touchdown by slowLander;
+			}
+		}
+	`, "satisfy touchdown by slowLander")
+
+	satisfied, err := ctx.EvaluateSatisfaction(a)
+	if err != nil {
+		t.Fatalf("EvaluateSatisfaction: %v", err)
+	}
+	if !satisfied {
+		t.Error("satisfied = false, want true: the actor binding supplies the limit")
+	}
+}
+
+// TestSatisfactionSubjectBindingWinsOverTheRequirementsOwn checks that the object
+// `by` names supplies the subject even when the requirement binds it itself.
+func TestSatisfactionSubjectBindingWinsOverTheRequirementsOwn(t *testing.T) {
+	ctx, a := satisfactionOf(t, `
+		package Landing {
+			part def Lander { attribute verticalSpeed; }
+
+			part slowLander : Lander {
+				attribute :>> verticalSpeed = 1.2;
+			}
+
+			part fastLander : Lander {
+				attribute :>> verticalSpeed = 2.4;
+			}
+
+			requirement def TouchdownRequirement {
+				subject lander : Lander;
+				attribute maxVerticalSpeed = 1.5;
+				require constraint {
+					lander.verticalSpeed <= maxVerticalSpeed
+				}
+			}
+
+			requirement touchdown : TouchdownRequirement {
+				subject = slowLander;
+			}
+
+			part analysisContext {
+				assert satisfy touchdown by fastLander;
+			}
+		}
+	`, "satisfy touchdown by fastLander")
+
+	satisfied, err := ctx.EvaluateSatisfaction(a)
+	if !errors.Is(err, ErrViolated) {
+		t.Fatalf("satisfied = %v, err = %v; want ErrViolated: `by fastLander` supplies the subject", satisfied, err)
+	}
+}
+
 func TestNegatedSatisfactionInvertsTheVerdict(t *testing.T) {
 	ctx, a := satisfactionOf(t, satisfyModel, "not satisfy touchdown by fastLander")
 	satisfied, err := ctx.EvaluateSatisfaction(a)

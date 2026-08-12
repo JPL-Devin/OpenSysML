@@ -158,6 +158,56 @@ func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Sco
 	}, conds)
 }
 
+// memberBindings evaluates the values members bind by name — a subject or actor
+// supplied by an expression (`actor operator = limit;`) — so a condition naming
+// one reads it. element names the requirement in messages. A non-nil subject is
+// the object supplied from outside (the `by` of a satisfaction assertion): it
+// binds every subject the members declare, whose own binding is then neither
+// evaluated nor used.
+func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members []scopedMember, self *Instance, subject *Instance) (map[string]Value, error) {
+	bindings := make(map[string]Value)
+	features := ctx.conditionFeatures(sym)
+	evalIn := func(memberScope *symbols.Scope) *EvalContext {
+		ec := NewEvalContextIn(ctx, memberScope, self)
+		ec.features = features
+		ec.Push(bindings)
+		return ec
+	}
+
+	for _, member := range members {
+		var what, name string
+		var expr ast.Node
+		isSubject := false
+		switch rm := member.node.(type) {
+		case *ast.SubjectMember:
+			what, name, expr, isSubject = "subject", rm.Name, rm.BindingExpr, true
+		case *ast.ActorMember:
+			what, name, expr = "actor", rm.Name, rm.BindingExpr
+		case *ast.Usage:
+			if rm.Kind == ast.UsageSubject {
+				name, isSubject = rm.Ident.Name, true
+			}
+		default:
+			continue
+		}
+		if isSubject && subject != nil {
+			if name != "" {
+				bindings[name] = Value{Kind: ValInstance, Instance: subject.ID}
+			}
+			continue
+		}
+		if expr == nil {
+			continue
+		}
+		value, err := evalIn(member.scope).Eval(expr)
+		if err != nil {
+			return nil, fmt.Errorf("requirement %s: %s binding evaluation failed: %w", element, what, err)
+		}
+		bindings[name] = value
+	}
+	return bindings, nil
+}
+
 // negatedDecl reports whether sym's declaration asserts that its conditions do
 // not hold (`assert not constraint { … }`, `assert not satisfy … by …`).
 func negatedDecl(sym *symbols.Symbol) bool {
@@ -225,47 +275,12 @@ func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Sc
 	// Requirement-local bindings are shared by every member, whichever scope it
 	// was declared in.
 	members := ctx.chainMembers(sym, scope)
-	reqBindings := make(map[string]Value)
-	features := ctx.conditionFeatures(sym)
-	evalIn := func(memberScope *symbols.Scope) *EvalContext {
-		ec := NewEvalContextIn(ctx, memberScope, self)
-		ec.features = features
-		ec.Push(reqBindings)
-		return ec
-	}
 
 	// First pass: process subject/actor bindings
-	for _, member := range members {
-		evalCtx := evalIn(member.scope)
+	reqBindings, err := ctx.memberBindings(sym, sym.Name, members, self, nil)
 
-		// Handle binding declarations
-		switch rm := member.node.(type) {
-		case *ast.SubjectMember:
-			// Subject binding: subject <name> = <expr>;
-			if rm.BindingExpr != nil {
-				// Evaluate binding expression
-				value, err := evalCtx.Eval(rm.BindingExpr)
-				if err != nil {
-					return false, fmt.Errorf("requirement %s: subject binding evaluation failed: %w", sym.Name, err)
-				}
-
-				// Add binding to evaluation frame
-				reqBindings[rm.Name] = value
-			}
-
-		case *ast.ActorMember:
-			// Actor binding: actor <name> = <expr>;
-			if rm.BindingExpr != nil {
-				// Evaluate binding expression
-				value, err := evalCtx.Eval(rm.BindingExpr)
-				if err != nil {
-					return false, fmt.Errorf("requirement %s: actor binding evaluation failed: %w", sym.Name, err)
-				}
-
-				// Add binding to evaluation frame
-				reqBindings[rm.Name] = value
-			}
-		}
+	if err != nil {
+		return false, err
 	}
 
 	// Second pass: evaluate the assumed and required conditions.

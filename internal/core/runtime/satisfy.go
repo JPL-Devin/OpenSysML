@@ -192,13 +192,13 @@ func (ctx *Context) EvaluateSatisfactionOn(a *SatisfyAssertion, subject *Instanc
 	scope := target.OwnerScope
 	members := ctx.chainMembers(target, scope)
 
-	bindings := make(map[string]Value)
-	if subject != nil {
-		// Every subject parameter the chain declares names the same object: the
-		// feature `by` supplies satisfies the requirement (SysML v2 §8.3.17.15).
-		for _, name := range subjectParameterNames(members) {
-			bindings[name] = Value{Kind: ValInstance, Instance: subject.ID}
-		}
+	// Every subject the chain declares names the object `by` supplies, which is
+	// what satisfies the requirement (SysML v2 §8.3.17.15); the other values the
+	// requirement binds by name are visible to its conditions here too, as they
+	// are when the requirement is evaluated directly.
+	bindings, err := ctx.memberBindings(target, a.Text(), members, subject, subject)
+	if err != nil {
+		return false, err
 	}
 
 	conds := conditionsOf(members)
@@ -243,31 +243,6 @@ func declaresConditions(sym *symbols.Symbol) bool {
 		}
 	}
 	return false
-}
-
-// subjectParameterNames returns the names of the subject parameters the members
-// declare, most general first, so a satisfying object can be bound to each.
-func subjectParameterNames(members []scopedMember) []string {
-	var out []string
-	seen := make(map[string]bool)
-	add := func(name string) {
-		if name == "" || seen[name] {
-			return
-		}
-		seen[name] = true
-		out = append(out, name)
-	}
-	for _, member := range members {
-		switch m := member.node.(type) {
-		case *ast.SubjectMember:
-			add(m.Name)
-		case *ast.Usage:
-			if m.Kind == ast.UsageSubject {
-				add(m.Ident.Name)
-			}
-		}
-	}
-	return out
 }
 
 // symbolLabel names a symbol in a message, falling back to its declaration kind
