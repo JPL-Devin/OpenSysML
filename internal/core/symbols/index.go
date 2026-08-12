@@ -225,10 +225,12 @@ func (idx *Index) importersToRefresh(changed map[string]nsChange, deriveOnly boo
 		}
 		// It is stale when an import names another namespace than it did, or when a
 		// namespace it read members from — then or now — lost some.
-		stale := !deriveOnly && (!sameImports(last, now) ||
-			lostMembers(changed, last) || lostMembers(changed, now))
+		stale := !sameImports(last, now) ||
+			lostMembers(changed, last) || lostMembers(changed, now)
 		if stale {
-			purge = append(purge, pkgFQN)
+			if !deriveOnly {
+				purge = append(purge, pkgFQN)
+			}
 			derive = append(derive, pkgFQN)
 			continue
 		}

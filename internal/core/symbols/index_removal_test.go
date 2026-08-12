@@ -289,23 +289,33 @@ func TestEditingTheTargetOfAFileLevelImportDropsItsReexport(t *testing.T) {
 	}
 }
 
-// Dropping every re-export and expanding again rebuilds exactly what was there.
-// That is the state expansion falls back to when its incremental rounds do not
-// settle, so it has to derive the same index.
+// Deriving every importer from an empty re-export state — what expansion falls
+// back to when its incremental rounds do not settle — has to rebuild exactly what
+// was there, including a target that only resolves once another importer has been
+// derived, which takes more than one round.
 func TestExpandWildcardImportsRederivesEverythingFromScratch(t *testing.T) {
 	docs := map[string]string{
-		"a.sysml": "package Mid { public import Lib::*; } package Cycle1 { public import Cycle2::*; }",
+		// Aaa's target exists only once Mid, which sorts after it, has re-exported
+		// Thing, so deriving Aaa again in a later round is what surfaces Aaa::Deep.
+		"a.sysml": "package Mid { public import Lib::*; public import Src::*; } " +
+			"package Cycle1 { public import Cycle2::*; } " +
+			"package Aaa { public import Mid::Thing::*; }",
 		"b.sysml": "package Top { public import Mid::*; } " +
-			"package Cycle2 { public import Cycle1::*; public import Lib::*; }",
+			"package Cycle2 { public import Cycle1::*; public import Lib::*; } " +
+			"package Src { package Thing { part def Deep; } }",
 	}
 	idx := buildIndex(t, docs)
 	want := indexState(idx)
+	if len(idx.LookupQualified("Aaa::Deep")) == 0 {
+		t.Fatal("Aaa::Deep should be surfaced through Mid's re-export of Thing")
+	}
 
 	idx.purgeAllReexports()
 	if got := len(idx.LookupQualified("Top::Widget")); got != 0 {
 		t.Fatalf("Top::Widget = %d symbols after purging re-exports, want 0", got)
 	}
-	idx.ExpandWildcardImports()
+	for idx.expandRound(true) {
+	}
 	if got := indexState(idx); got != want {
 		t.Errorf("re-deriving from scratch did not rebuild the index:\n%s", diffLines(want, got))
 	}
