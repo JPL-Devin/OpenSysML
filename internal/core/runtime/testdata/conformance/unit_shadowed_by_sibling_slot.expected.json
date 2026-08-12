@@ -1,0 +1,15 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::Probe",
+  "slots": {
+    "m": {
+      "type": "Quantity",
+      "value": 1000.0,
+      "unit": "kg"
+    },
+    "h": {
+      "error": "not a measurement unit: m resolves to the attributeUsage m declared in test::"
+    }
+  }
+}

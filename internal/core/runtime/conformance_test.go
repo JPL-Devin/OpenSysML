@@ -27,6 +27,9 @@ type ExpectedValue struct {
 	// ("m/s"). A quantity carries it, so a case asserting one pins that the unit
 	// survived the computation rather than only the magnitude.
 	Unit string `json:"unit,omitempty"`
+	// Error is the text producing this value must fail with, for a slot whose
+	// contract is a diagnostic. Set it instead of type and value.
+	Error string `json:"error,omitempty"`
 }
 
 // ExpectedEvent represents an event to inject during state machine execution:
@@ -387,6 +390,10 @@ func runCalcConformance(t *testing.T, ctx *Context, idx *symbols.Index, path str
 
 	// Invoke calc
 	result, err := ctx.InvokeCalc(calcSym, args, rootScope)
+	if expected.Error != "" {
+		requireError(t, "InvokeCalc", err, expected.Error)
+		return
+	}
 	if err != nil {
 		t.Fatalf("InvokeCalc failed: %v", err)
 	}
@@ -412,6 +419,10 @@ func runConstraintConformance(t *testing.T, ctx *Context, idx *symbols.Index, pa
 
 	// Evaluate constraint. A violated assertion is a verdict, not a failure.
 	satisfied, err := ctx.EvaluateConstraint(constraintSym, constraintSym.OwnerScope)
+	if expected.Error != "" {
+		requireError(t, "EvaluateConstraint", err, expected.Error)
+		return
+	}
 	if err != nil && !errors.Is(err, ErrViolated) {
 		t.Fatalf("EvaluateConstraint failed: %v", err)
 	}
@@ -539,6 +550,10 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 
 	for name, expectedVal := range expected.Slots {
 		slot, err := inst.GetSlot(ctx, name)
+		if expectedVal.Error != "" {
+			requireError(t, "slot "+name, err, expectedVal.Error)
+			continue
+		}
 		if err != nil {
 			t.Errorf("slot %q: %v", name, err)
 			continue
@@ -560,6 +575,20 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 		if satisfied != wantSatisfied {
 			t.Errorf("constraint %q: satisfied = %v, want %v", name, satisfied, wantSatisfied)
 		}
+	}
+}
+
+// requireError checks that what a case states as a diagnostic contract failed
+// with the text it expects, since a case whose subject cannot be evaluated says
+// so rather than asserting a value.
+func requireError(t *testing.T, what string, err error, want string) {
+	t.Helper()
+	if err == nil {
+		t.Errorf("%s: expected an error containing %q, it succeeded", what, want)
+		return
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("%s: failed with %q, want an error containing %q", what, err, want)
 	}
 }
 

@@ -279,18 +279,24 @@ func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []sc
 		if link == nil {
 			continue
 		}
-		linkScope := link.Scope
-		if linkScope == nil {
-			linkScope = link.OwnerScope
-		}
 		for _, node := range declMembers(link.Decl) {
-			out = append(out, scopedMember{node: node, scope: linkScope})
+			out = append(out, scopedMember{node: node, scope: bodyScope(link, link.OwnerScope)})
 		}
 	}
 	for _, node := range declMembers(sym.Decl) {
-		out = append(out, scopedMember{node: node, scope: scope})
+		out = append(out, scopedMember{node: node, scope: bodyScope(sym, scope)})
 	}
 	return out
+}
+
+// bodyScope is the scope a member of sym's body was written in: sym's own body,
+// where its sibling declarations answer a name before the enclosing namespace
+// does (KerML 8.2.3.5.4). fallback covers a declaration that owns no scope.
+func bodyScope(sym *symbols.Symbol, fallback *symbols.Scope) *symbols.Scope {
+	if sym != nil && sym.Scope != nil {
+		return sym.Scope
+	}
+	return fallback
 }
 
 // EvaluateRequirement evaluates a requirement definition/usage against the

@@ -114,6 +114,11 @@ func (p *Parser) advance() lexer.Token {
 // atEOF reports whether the current token is EOF.
 func (p *Parser) atEOF() bool { return p.peek().Kind == lexer.EOF }
 
+// Offset returns the source offset of the next unconsumed token, which is where
+// a caller parsing a sequence of productions continues from. A node's span is
+// not that position: a parenthesized expression's span is its contents.
+func (p *Parser) Offset() int { return p.peek().Span.Offset }
+
 // at reports whether the current token has the given kind.
 func (p *Parser) at(k lexer.Kind) bool { return p.peek().Kind == k }
 

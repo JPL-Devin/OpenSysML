@@ -222,15 +222,17 @@ The entry's model now passes in the REPL, pinned by
 defect in the action and state executors — where every evaluation used a nil scope — is fixed in
 the same change; see `docs/SPEC_COMPLIANCE.md` under "Scope of an expression in a behavior body".
 
-Not closed, and unrelated to the index: a member whose name is a unit's shadows that unit, so
-`package Z { public import SI::*; attribute s = 1.5 [m/s]; }` then `%eval Z::s` reports
-`not a measurement unit: s`. Unqualified resolution finds the nearer declaration, which is what
-name resolution prescribes generally — a unit reference is an ordinary feature reference, and the
-spec gives no rule that a measurement-reference position filters candidates by type. Whether it
-should is a spec question, so nothing was changed. Also open, and a different seam:
-`%calc` cannot parse a quantity argument at the prompt (`%calc Fall -15.0 [m/s]` →
-`unsupported node type: *ast.ErrorNode`), which is the meta-command's argument parser, not
-evaluation.
+Both residual items are closed by the unit-resolution work; see `docs/SPEC_COMPLIANCE.md` under
+"Name in the unit position of a quantity expression" and "Arguments of a `%calc` command".
+
+- A member whose name is a unit's shadows that unit — as ordinary name resolution prescribes
+  (KerML 8.2.3.5.3), the position expecting a measurement unit only decides whether what resolved
+  conforms. That is now the rule on every path, including conditions, which used to reach past the
+  nearer declaration; the diagnostic names the declaration, where it is declared, and the
+  qualified spelling of the unit it hid.
+- `%calc` parses its argument list as expressions, so a quantity, a parenthesized expression or a
+  nested call survives. Named arguments (`v0 = …`) remain out: the notation writes those inside an
+  invocation's parentheses, and the prompt reports the limitation instead of misreading them.
 
 ## A4 — executor approximations
 
@@ -330,12 +332,14 @@ Related: `Session.accept` drops any earlier snippet whose declared names interse
 so re-typing `package Demo { … }` to add a member replaces the whole package body rather than
 merging it.
 
-## B2 — `%eval` of a compound expression cannot reach a package member
+## B2 — `%eval` of a compound expression cannot reach a package member — done
 
-Simple identifiers and qualified names resolve, but a compound expression needs a chosen
-evaluation context. This is a design decision, not a bug: decide whether `%eval` takes an
-optional context (`%eval in Demo::Vehicle : mass * 2`), inherits the last `%instantiate`, or
-keeps requiring qualified names.
+The prompt evaluates in the namespace the session is working in (`Session.promptScope`), which is
+the namespace a member typed at the prompt would be written in, so `mass * 2` and `1.0 [m/s]` name
+that namespace's members and imports. What remains is a choice, not a defect: that namespace is the
+*last* one the session declared, so declaring a scratch package moves it and the earlier package's
+members and imports are then reached by qualified name only. Naming a context explicitly
+(`%eval in Demo::Vehicle : mass * 2`) or following the last `%instantiate` would decide it instead.
 
 ---
 

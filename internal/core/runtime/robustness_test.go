@@ -66,6 +66,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("exponentiation_integer_overflow", testExponentiationIntegerOverflow)
 	t.Run("quantity_incommensurable_comparison", testQuantityIncommensurableComparison)
 	t.Run("quantity_index_is_not_a_unit", testQuantityIndexIsNotAUnit)
+	t.Run("quantity_unit_shadowed_by_sibling", testQuantityUnitShadowedBySibling)
+	t.Run("quantity_qualified_unit_is_not_shadowing", testQuantityQualifiedUnitIsNotShadowing)
+	t.Run("quantity_shadowed_unit_without_a_qualifier", testQuantityShadowedUnitWithoutAQualifier)
 	t.Run("quantity_cyclic_unit_definition", testQuantityCyclicUnitDefinition)
 	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
@@ -1727,6 +1730,116 @@ func testQuantityIndexIsNotAUnit(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), semantics.ErrNotAUnit.Error()) {
 		t.Errorf("err = %v; want it to report that the index names no measurement unit", err)
+	}
+}
+
+// testQuantityUnitShadowedBySibling: a unit position naming a sibling that is
+// not a measurement unit reports which declaration it resolved to and the unit
+// that declaration hid, rather than a magnitude in the wrong unit.
+func testQuantityUnitShadowedBySibling(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			public import SI::*;
+			constraint def Tall {
+				attribute m : ScalarValues::Real = 2.0;
+				1.0 [m] > 500.0 [m]
+			}
+		}
+	`))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Tall", ast.DefConstraint)
+	if sym == nil {
+		t.Fatal("Tall constraint not found")
+	}
+
+	satisfied, err := ctx.EvaluateConstraint(sym, sym.OwnerScope)
+	if !errors.Is(err, ErrNotAQuantity) {
+		t.Fatalf("satisfied = %v, err = %v; want ErrNotAQuantity", satisfied, err)
+	}
+	if !errors.Is(err, semantics.ErrNotAUnit) {
+		t.Errorf("err = %v; want it to report that the name is no measurement unit", err)
+	}
+	var shadowed *semantics.ShadowedUnitError
+	if !errors.As(err, &shadowed) {
+		t.Fatalf("err = %v; want a *semantics.ShadowedUnitError", err)
+	}
+	if shadowed.Resolved == nil || shadowed.Namespace != "test::Tall" {
+		t.Errorf("error names %v in %q; want the sibling declared in test::Tall", shadowed.Resolved, shadowed.Namespace)
+	}
+	if shadowed.Shadowed == nil || shadowed.Suggestion != "SI::m" {
+		t.Errorf("error suggests %q; want the qualified spelling SI::m of the hidden unit", shadowed.Suggestion)
+	}
+}
+
+// testQuantityQualifiedUnitIsNotShadowing: a qualified name in unit position
+// resolves to what it names, so a non-unit is reported as one without a
+// shadowing explanation or a spelling that would not resolve.
+func testQuantityQualifiedUnitIsNotShadowing(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			public import SI::*;
+			attribute m : ScalarValues::Real = 2.0;
+			constraint def Tall {
+				1.0 [test::m] > 500.0 [SI::m]
+			}
+		}
+	`))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Tall", ast.DefConstraint)
+	if sym == nil {
+		t.Fatal("Tall constraint not found")
+	}
+
+	satisfied, err := ctx.EvaluateConstraint(sym, sym.OwnerScope)
+	if !errors.Is(err, semantics.ErrNotAUnit) {
+		t.Fatalf("satisfied = %v, err = %v; want ErrNotAUnit", satisfied, err)
+	}
+	var shadowed *semantics.ShadowedUnitError
+	if !errors.As(err, &shadowed) {
+		t.Fatalf("err = %v; want a *semantics.ShadowedUnitError", err)
+	}
+	if shadowed.Shadowed != nil || shadowed.Suggestion != "" {
+		t.Errorf("error suggests %q for a qualified name; want no shadowing explanation", shadowed.Suggestion)
+	}
+	if !strings.Contains(err.Error(), "test::m resolves to") {
+		t.Errorf("err = %v; want it to name the declaration as written", err)
+	}
+}
+
+// testQuantityShadowedUnitWithoutAQualifier: a hidden unit owned by no namespace
+// has no qualified spelling to offer, so the diagnostic names it without
+// advising the name that just failed.
+func testQuantityShadowedUnitWithoutAQualifier(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		attribute u : ISQBase::LengthUnit = SI::m;
+		package test {
+			attribute u : ScalarValues::Real = 2.0;
+			constraint def Tall {
+				1.0 [u] > 0.5 [SI::m]
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Tall", ast.DefConstraint)
+	if sym == nil {
+		t.Fatal("Tall constraint not found")
+	}
+
+	satisfied, err := ctx.EvaluateConstraint(sym, sym.OwnerScope)
+	if !errors.Is(err, semantics.ErrNotAUnit) {
+		t.Fatalf("satisfied = %v, err = %v; want ErrNotAUnit", satisfied, err)
+	}
+	var shadowed *semantics.ShadowedUnitError
+	if !errors.As(err, &shadowed) {
+		t.Fatalf("err = %v; want a *semantics.ShadowedUnitError", err)
+	}
+	if shadowed.Shadowed == nil {
+		t.Fatalf("err = %v; want it to name the unit the declaration hid", err)
+	}
+	if shadowed.Suggestion != "" {
+		t.Errorf("error suggests %q; want no spelling when none qualifies the unit", shadowed.Suggestion)
+	}
+	if strings.Contains(err.Error(), "write u") {
+		t.Errorf("err = %v; want it not to advise the name that failed", err)
 	}
 }
 
