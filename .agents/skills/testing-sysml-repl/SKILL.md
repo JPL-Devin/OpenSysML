@@ -72,6 +72,15 @@ branch of `internal/core/export/write.go`:
 - assert the negative too: no leftover `.name.sysml.<digits>` temp files, and failure messages
   must name the path the user typed rather than the temp file.
 
+**`-convert x.sysml -to sysml` is a source-preserving formatter, not an AST printer.** It keeps the
+original inline/multi-line layout and reproduces surface notation verbatim (a member-attached
+`then part b;` comes back as `then part b;`, not as the desugared `then a b;`), so its output is
+**not** evidence about what the parser built. To assert on AST/desugaring, use `-to ttl` (generated
+from the tree — e.g. `grep -c SuccessionAsUsage`) or a parser golden fixture. The `.ttl -> .sysml`
+direction *is* a real AST print, so a round-trip through Turtle is the way to see canonical notation.
+A useful corollary: to prove "no relationship was recorded", count the triples in the `.ttl`, never
+grep the reformatted `.sysml`.
+
 Models that convert to Turtle are a narrow set: anything with state substates or a `calc` result
 member still fails with `cannot convert the *ast.SubstateMember/…ResultMember at …`, so use a
 plain `package Demo { part def Engine { attribute power = 300.0; } }` for `.ttl` assertions rather
