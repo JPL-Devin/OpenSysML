@@ -56,6 +56,10 @@ func TestRelationshipKeywordAndSymbolAgree(t *testing.T) {
 		{"ref redefines x;", "ref :>> x;"},
 		{"part redefines x[4];", "part :>> x[4];"},
 		{"derived redefines x = 5;", "derived :>> x = 5;"},
+		{"attribute <sn> redefines x;", "attribute <sn> :>> x;"},
+		{"attribute <sn> subsets y = 5;", "attribute <sn> :> y = 5;"},
+		{"attribute <sn> references y;", "attribute <sn> ::> y;"},
+		{"attribute <sn> defined by Real;", "attribute <sn> : Real;"},
 	}
 	for _, pair := range pairs {
 		t.Run(pair.keyword, func(t *testing.T) {

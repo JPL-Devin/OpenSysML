@@ -286,8 +286,8 @@ func (e *ActionExecutor) breakpointHit() string {
 		}
 	}
 	for _, token := range e.tokens {
-		name := ActionNodeName(token.Location)
-		if name == "" || !e.breakpoints[name] {
+		name := e.breakpointNameOf(token.Location)
+		if name == "" {
 			continue
 		}
 		visit := breakpointVisit{token: token.ID, node: token.Location}
@@ -311,6 +311,17 @@ func (e *ActionExecutor) tokenLocation(id int64) (ast.Node, bool) {
 		}
 	}
 	return nil, false
+}
+
+// breakpointNameOf returns the name a breakpoint is set on for the given node,
+// or "" when none is. A node answers to its short name as well as its name.
+func (e *ActionExecutor) breakpointNameOf(node ast.Node) string {
+	for _, name := range ActionNodeNames(node) {
+		if e.breakpoints[name] {
+			return name
+		}
+	}
+	return ""
 }
 
 // PausedAt returns the breakpoint node the last run stopped at, or "" when the
@@ -354,15 +365,34 @@ func ActionNodeName(node ast.Node) string {
 	}
 }
 
-// NodeNames returns the declared names of the action's graph nodes, in
-// declaration order. Anonymous nodes are omitted; a debugger uses it to check
-// that a breakpoint names a node that exists.
+// ActionNodeNames returns every name a node answers to: its name and, for a
+// usage, its declared short name, which is a name of its own.
+func ActionNodeNames(node ast.Node) []string {
+	name := ActionNodeName(node)
+	var names []string
+	if name != "" {
+		names = append(names, name)
+	}
+	var short string
+	switch n := node.(type) {
+	case *ast.Usage:
+		short = n.Ident.ShortName
+	case *ast.Definition:
+		short = n.Ident.ShortName
+	}
+	if short != "" && short != name {
+		names = append(names, short)
+	}
+	return names
+}
+
+// NodeNames returns the names of the action's graph nodes, in declaration
+// order. Anonymous nodes are omitted; a debugger uses it to check that a
+// breakpoint names a node that exists.
 func (e *ActionExecutor) NodeNames() []string {
 	names := make([]string, 0, len(e.graph.Nodes))
 	for _, node := range e.graph.Nodes {
-		if name := ActionNodeName(node); name != "" {
-			names = append(names, name)
-		}
+		names = append(names, ActionNodeNames(node)...)
 	}
 	return names
 }

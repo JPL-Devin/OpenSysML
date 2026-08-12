@@ -160,6 +160,11 @@ func (p *Parser) parseIdentification() ast.Identification {
 	}
 	// Parse name, but exclude keywords that have special syntax meaning in declaration context
 	// (e.g., "default" introduces a value expression, "connect"/"allocate" introduce connector ends, "first"/"do" for succession, "of" for flow payload)
+	// A feature specialization keyword states a relationship, not a name, and
+	// must read as its symbol does: `<s> references x` is `<s> ::> x`.
+	if p.atFeatureSpecialization() {
+		return id
+	}
 	if p.at(lexer.Keyword) {
 		kw := p.peek().KeywordID
 		switch kw {

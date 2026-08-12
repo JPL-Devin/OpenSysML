@@ -69,17 +69,14 @@ func TargetName(node Node) (string, source.Span) {
 	return last.Text, last.Span
 }
 
-// EffectiveName returns the name a usage answers to: its declared name, or, for
-// an unnamed usage, the name of its reference subsetting, else of its lone
-// redefinition (KerML 7.3.4.5). More than one redefinition leaves it anonymous.
-func EffectiveName(u *Usage) (string, source.Span) {
-	if u == nil {
-		return "", source.Span{}
-	}
-	// A declaration stating either name of its own states no name to derive,
-	// as symbols.effectiveIdent reads it.
-	if u.Ident.Name != "" || u.Ident.ShortName != "" {
-		return u.Ident.Name, u.Ident.NameSpan
+// NamingFeature returns the relationship that names a usage lacking a declared
+// name (KerML 7.3.4.5): its reference subsetting, else its lone redefinition.
+// A usage that declares a name, or redefines more than one feature, has none.
+// A declared short name is no name here: KerML derives effectiveName from
+// declaredName alone.
+func NamingFeature(u *Usage) *Relationship {
+	if u == nil || u.Ident.Name != "" {
+		return nil
 	}
 	var redefinitions []*Relationship
 	for _, rel := range u.Relationships {
@@ -88,15 +85,30 @@ func EffectiveName(u *Usage) (string, source.Span) {
 		}
 		switch rel.Kind {
 		case RelReferences:
-			if name, span := TargetName(rel.Target); name != "" {
-				return name, span
+			if name, _ := TargetName(rel.Target); name != "" {
+				return rel
 			}
 		case RelRedefines:
 			redefinitions = append(redefinitions, rel)
 		}
 	}
 	if len(redefinitions) == 1 {
-		return TargetName(redefinitions[0].Target)
+		return redefinitions[0]
+	}
+	return nil
+}
+
+// EffectiveName returns the name a usage answers to: its declared name, else
+// the name its naming feature supplies.
+func EffectiveName(u *Usage) (string, source.Span) {
+	if u == nil {
+		return "", source.Span{}
+	}
+	if u.Ident.Name != "" {
+		return u.Ident.Name, u.Ident.NameSpan
+	}
+	if rel := NamingFeature(u); rel != nil {
+		return TargetName(rel.Target)
 	}
 	return "", source.Span{}
 }
