@@ -345,7 +345,9 @@ is all. The vendored OMG files stay byte-identical, so the missing signatures ar
 declared in a clearly non-normative Systemica extension instead:
 `internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml`. It
 is bundled by the same `embed.FS` as the vendored tree and enters the same
-gates — `TestStdlibConformance` now reports 95/95 clean.
+gates — `TestStdlibConformance` now reports 95/95 clean. It is Systemica code under
+Apache 2.0, not OMG code under EPL-2.0; `internal/core/libs/stdlib/NOTICE` carves
+the subdirectory out of the OMG notice.
 
 **Reachability.** A model writes `import SystemicaMathFunctions::*;` (or calls
 `SystemicaMathFunctions::exp(x)` qualified); both resolve like any other library
