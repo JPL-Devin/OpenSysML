@@ -46,15 +46,16 @@ package Facade { public import UsesSI::*; }`
 	}
 }
 
-// indexWithStdlib loads every standard library file, as a session does.
+// indexWithStdlib loads every standard library file, as a session does. The
+// cache is the test's own: a symbol restored from a record carries its qualified
+// name where a parsed one carries its local name (index.go), so a shared cache
+// another test populates mid-run would make the two indexes differ over that
+// alone.
 func indexWithStdlib(t *testing.T) *symbols.Index {
 	t.Helper()
 	idx := symbols.NewIndex()
 	src := DefaultSource()
-	cache, err := NewCache()
-	if err != nil {
-		cache = nil
-	}
+	cache := &Cache{dir: t.TempDir()}
 	loader := NewLoader(src, cache)
 	for _, name := range src.List() {
 		if err := loader.Load(name, idx); err != nil {
