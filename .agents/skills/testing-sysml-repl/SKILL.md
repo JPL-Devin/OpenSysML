@@ -110,6 +110,43 @@ must be byte-identical, and stderr must stay empty for well-formed input.
   `error: symbol "Vehicle" is ambiguous: Alpha::Vehicle, Beta::Vehicle (use a qualified name)`.
 - Write your own for parse errors (e.g. `attribute mass = ;` plus a missing `}`): the parser never
   panics, so the REPL should print diagnostics and keep accepting commands.
+- `internal/core/runtime/testdata/conformance/state_body_state_local_member.sysml` — `test::monitor`,
+  whose substate `working` declares `localGain` that its own entry action reads together with the
+  package's `pkgBonus`; `%state monitor` + `%advance 1` reaches `done` with `result = 5.00`. The
+  scope-regression canary for states declared directly in a machine body.
+
+## Testing lexical scope of behavior bodies (declaring-scope changes)
+
+When a change claims "expressions in an action/state body now see their declaring scope", the same
+model must be run on both binaries — but pick fixtures that can actually distinguish the layers,
+because the obvious ones cannot:
+
+- **A state fixture whose states share the machine's imports proves nothing about per-state scope.**
+  If every name a state's behavior uses is also visible from the machine (or the package), a
+  machine-scoped and a state-scoped lookup give identical output. To isolate the state's own scope
+  the state must declare a member that *only* its own scope can answer
+  (`state working { attribute localGain = 4.0; entry { assign result := localGain + pkgBonus; } }`),
+  and for nesting a substate inside a `region` must declare one read by its own entry action.
+  A broken build reports `error: event processing failed: enter state: entry action: eval assignment
+  RHS: unresolved feature: localGain`.
+- **Always include a shadowing case, because the failure mode is a wrong value, not an error.** Give
+  a state (or an action, or a loop/if block) a member whose name also exists at package level with a
+  *different* value, and assert the inner one wins. A build that hands out the enclosing scope
+  completes happily with the package's number (e.g. `result = 100.00` instead of `4.00`), which no
+  error-message check would ever catch. The three-layer action shape (package `h`, action `h`,
+  block-local `h` → `seenAction = 2.00`, `seenBlock = 3.00`) is the equivalent for action bodies.
+- Substates are **not** entered by nesting `initial`/`then` inside a plain `state`; that shape runs
+  the outer entry and completes without ever entering the inner state (`innerRan = 0.00` on every
+  revision, pre-existing). Use the `region` form from `state_fork_join_pseudostate.sysml`, with a
+  transition naming the substate (`transition init to inner;`), or the machine never descends.
+- Quantity values are the cheapest scope probe for imports, since a missing `SI::*` shows up as
+  `not a quantity expression: not a measurement unit: unresolved unit s` rather than a wrong number.
+  Pair each such model with a bare-`Real` rewrite and assert the same magnitudes, which catches a
+  silently dropped unit factor.
+- Comparing whole-session output across binaries with `diff` is a good regression sweep, but the
+  `State data:` / `Results:` blocks are printed in **map iteration order**, so lines legitimately
+  reorder run to run (`leftDone`/`rightDone`, a lone `status`). Diff the *values*, or treat a
+  pure line-reordering diff as identical.
 
 ## Things to exercise (and their expected shapes)
 
@@ -120,6 +157,19 @@ must be byte-identical, and stderr must stay empty for well-formed input.
 - Symbol-taking commands: `%instantiate %slots %eval %calc %constraint %requirement %action %state`.
   All go through one helper (`internal/repl/lookup.go`), so test each with a **simple** name and a
   **qualified** one.
+- `%step` is **action-only**. In a state session it answers
+  `error: no active action session (use %action <name> first)`; drive a state machine with
+  `%advance <time>` instead. That message during a state sweep is expected, not a broken session.
+- When comparing two variants of the same model (e.g. a `private import` version against a
+  `public import` or bare-`Real` rewrite), load each in a **separate REPL process**. Loading both
+  into one session makes the shared simple name ambiguous —
+  `error: symbol "propagate" is ambiguous: DescentQ::propagate, DescentR::propagate (use a qualified
+  name)` — and qualifying it is not a reliable escape, since one bad submission in between can
+  invalidate the other snippet. `./bin/sysml <file>` per variant keeps the runs independent.
+- Meta-commands are only understood at the `sysml>` prompt: a shell habit like `clear; %action foo`
+  is parsed as SysML, pollutes the session buffer, and can make an already-loaded package's symbols
+  stop resolving (`symbol "DescentR::propagate" not found`). Type shell and REPL commands in
+  separate turns, and `%clear` (or restart) if a stray line lands in the buffer.
 - `%satisfy` takes no argument (every satisfaction assertion the model states) or the name of the
   element stating them, since `assert satisfy … by …` is anonymous.
 - Instances are keyed by resolved FQN, so `%instantiate Vehicle` then `%slots Demo::Vehicle` must
