@@ -439,6 +439,44 @@ Testing notes that generalize to any future built-in:
   `first a then b;` form yields `action has multiple initial nodes`), and `and`/`or` are
   `unsupported operator` in constraint bodies — keep constraint expressions to a single comparison.
 
+## Testing parser changes end-to-end (keyword/symbol parity, dispatch rewrites)
+
+A parser change is only convincing if the *same input file* behaves differently on the two binaries,
+so build an A/B baseline first and keep it around:
+
+```bash
+git worktree add /tmp/mainwt main
+(cd /tmp/mainwt && go build -o /tmp/mainwt/sysml-main ./cmd/sysml && go build -o /tmp/mainwt/sysml-lsp-main ./cmd/sysml-lsp)
+```
+
+Three cheap, high-signal sweeps:
+
+1. **Corpus no-diff sweep** — load every model on both binaries and diff the output. Anything other
+   than `0` differences is either the intended change or a regression, and it takes ~4 min:
+   ```bash
+   for f in $(find examples testdata internal/repl/testdata -name '*.sysml'); do
+     diff <(printf "%%load $f\n%%quit\n" | ./bin/sysml 2>&1) <(printf "%%load $f\n%%quit\n" | /tmp/mainwt/sysml-main 2>&1)
+   done
+   ```
+   Note `%load` splits its argument on whitespace, so a corpus path such as
+   `examples/sysml-v2-training/05. Redefinition/…` cannot be loaded — copy it to a space-free path
+   first (passing the file as an argv positional works too).
+2. **Twin table** — for a notation with two spellings, run every degenerate form of *both* spellings
+   through a tiny script and print keyword/symbol/main side by side. Testing only the well-formed
+   forms hides the interesting bugs: on PR #98 the well-formed forms were perfectly at parity while
+   `redefines;`, `redefines = 5;`, `subsets ;`, `crosses ;` were accepted **silently** and their
+   symbol twins `:>>;`, `:>> = 5;`, `:> ;`, `=> ;` all reported `expected a name`. A silently
+   accepted member is invisible in a `✓ package T` line — always pair the load with
+   `%instantiate`/`%slots` to see what the member actually did (there, nothing).
+3. **LSP diagnostics without an editor** — drive `bin/sysml-lsp` over stdio with ~15 lines of Python
+   (`initialize`, `initialized`, `textDocument/didOpen`, sleep 3, read stdout) and count
+   `"severity":1` in the `publishDiagnostics` notification. A file with **no** diagnostics produces
+   **no** notification at all, so treat a missing notification as zero errors rather than a hang.
+   `sysml-lsp: failed reading header line: EOF` on stderr at shutdown is normal.
+
+Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
+(`PATH=$HOME/sdk/go/bin:$HOME/go/bin:$PATH`) before concluding the toolchain is missing.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
