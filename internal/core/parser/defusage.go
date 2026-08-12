@@ -2392,7 +2392,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "verify" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint" ||
 		p.peek().KeywordID == "interaction" || p.peek().KeywordID == "bool" || p.peek().KeywordID == "assoc" || p.peek().KeywordID == "struct" ||
 		p.peek().KeywordID == "class" || p.peek().KeywordID == "predicate")
-	if !isUsageOnlyKwForEnum && p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
+	// A relationship keyword is not a literal's name either: `redefines;` and
+	// `redefines = 5;` are specializations missing their target, diagnosed as
+	// such, exactly as `:>>;` and `:>> = 5;` are.
+	if !isUsageOnlyKwForEnum && !p.atFeatureSpecialization() && p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
 		seg, _ := p.parseNameSegmentRelaxed()
 		id := ast.Identification{Name: seg.Text, NameSpan: seg.Span}
 

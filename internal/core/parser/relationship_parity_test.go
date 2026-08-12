@@ -75,6 +75,33 @@ func TestRelationshipKeywordAndSymbolAgree(t *testing.T) {
 	}
 }
 
+// TestDegenerateRelationshipKeywordDiagnosed checks that a specialization
+// written with its keyword and missing its target is reported exactly as the
+// symbol spelling is: `redefines;` is no more a feature named `redefines` than
+// `:>>;` is, since a reserved word names nothing unquoted.
+func TestDegenerateRelationshipKeywordDiagnosed(t *testing.T) {
+	pairs := []struct{ keyword, symbol string }{
+		{"redefines;", ":>>;"},
+		{"redefines = 5;", ":>> = 5;"},
+		{"subsets ;", ":> ;"},
+		{"references ;", "::> ;"},
+		{"crosses ;", "=> ;"},
+		{"defined by ;", ": ;"},
+	}
+	for _, pair := range pairs {
+		t.Run(pair.keyword, func(t *testing.T) {
+			_, kwDiags := parseMember(t, pair.keyword)
+			_, symDiags := parseMember(t, pair.symbol)
+			if len(kwDiags) == 0 {
+				t.Fatalf("%q parsed without diagnostics, while %q reports %v", pair.keyword, pair.symbol, symDiags)
+			}
+			if kwDiags[0] != symDiags[0] {
+				t.Errorf("%q reports %q, %q reports %q", pair.keyword, kwDiags[0], pair.symbol, symDiags[0])
+			}
+		})
+	}
+}
+
 // TestNonMemberRelationshipsRejected checks the relationship clauses that are
 // not feature specializations, so begin no body member: `specializes` relates
 // two types (SysML.xtext SubclassificationPart) and the type-relationship
