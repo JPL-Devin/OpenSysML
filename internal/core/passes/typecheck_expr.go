@@ -381,7 +381,7 @@ func (ec *exprChecker) checkArguments(
 	if len(e.NamedArgs) > 0 {
 		names := make(map[string]bool, len(params))
 		for _, p := range params {
-			names[p.usage.Ident.Name] = true
+			names[p.name()] = true
 		}
 		for _, arg := range e.NamedArgs {
 			if arg.Name == nil || len(arg.Name.Parts) != 1 {
@@ -434,6 +434,13 @@ func isBehaviorKind(k symbols.SymbolKind) bool {
 type parameter struct {
 	usage *ast.Usage
 	owner *symbols.Symbol
+}
+
+// name returns the name the parameter answers to, which a declaration written
+// as a redefinition takes from what it redefines (`in redefines ifTest;`).
+func (p parameter) name() string {
+	name, _ := ast.EffectiveName(p.usage)
+	return name
 }
 
 // scope returns the scope the parameter's type names resolve in, which is the
@@ -490,7 +497,7 @@ func (ec *exprChecker) mergedParameters(sym *symbols.Symbol, visiting map[*symbo
 		for _, p := range ec.mergedParameters(super, visiting) {
 			// A parameter reached through more than one supertype (a
 			// diamond) contributes one signature entry.
-			if i := indexOfName(inherited, p.usage.Ident.Name); i >= 0 {
+			if i := indexOfName(inherited, p.name()); i >= 0 {
 				inherited[i] = p
 				continue
 			}
@@ -553,7 +560,7 @@ func indexOfName(params []parameter, name string) int {
 		return -1
 	}
 	for i, p := range params {
-		if p.usage.Ident.Name == name {
+		if p.name() == name {
 			return i
 		}
 	}

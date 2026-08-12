@@ -443,18 +443,17 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 		case *ast.StateNode:
 			source = cs
 		case *ast.Usage:
-			// Find the StateNode that corresponds to this Usage
-			// Match by checking if the Usage is the source of any state
+			// Find the StateNode that corresponds to this Usage, which
+			// stateNodeFromUsage named after the state's effective name.
+			name, _ := ast.EffectiveName(cs)
 			for _, s := range graph.States {
-				// StateNode typically comes from the same parse tree - check identity
-				// Or match by name if available
-				if s.Name == cs.Ident.Name {
+				if s.Name == name {
 					source = s
 					break
 				}
 			}
 			if source == nil {
-				return nil, fmt.Errorf("could not resolve containing state Usage %q to StateNode", cs.Ident.Name)
+				return nil, fmt.Errorf("could not resolve containing state Usage %q to StateNode", name)
 			}
 		default:
 			return nil, fmt.Errorf("containing state has unexpected type %T", containingState)

@@ -340,8 +340,8 @@ func ActionNodeName(node ast.Node) string {
 	case *ast.StateNode:
 		return n.Name
 	case *ast.Usage:
-		if n.Ident.Name != "" {
-			return n.Ident.Name
+		if name, _ := ast.EffectiveName(n); name != "" {
+			return name
 		}
 		return n.Ident.ShortName
 	case *ast.Definition:

@@ -76,7 +76,9 @@ func EffectiveName(u *Usage) (string, source.Span) {
 	if u == nil {
 		return "", source.Span{}
 	}
-	if u.Ident.Name != "" {
+	// A declaration stating either name of its own states no name to derive,
+	// as symbols.effectiveIdent reads it.
+	if u.Ident.Name != "" || u.Ident.ShortName != "" {
 		return u.Ident.Name, u.Ident.NameSpan
 	}
 	var redefinitions []*Relationship
