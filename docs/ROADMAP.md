@@ -169,11 +169,24 @@ What came out of it, recorded under Requirement in `docs/SPEC_COMPLIANCE.md`:
   model's `TouchdownRequirement` now reaches a verdict as the model writes it.
   `semantics/units.go`, `runtime/quantity.go`, conformance cases `requirement_quantity_*`,
   `constraint_quantity_*`, `calc_quantity_ratio`.
-- **A1b — `assert satisfy <requirement> by <part>;` is not an evaluation entry point.** It parses
-  and type-checks (#78), and `%requirement` reaches a verdict for a requirement whose attributes
-  are bound to the subject's values, but the assertion itself is never evaluated and an anonymous
-  one cannot be named. Evaluating it means binding the requirement's subject parameter to the `by`
-  operand's instance and evaluating the conditions against that object.
+- **A1b — `assert satisfy <requirement> by <part>;` reaches a verdict — done.** The assertion is
+  evaluated as the requirement usage it is, with the requirement's subject parameter bound to an
+  object of the `by` feature, so its conditions — its own, and the ones it inherits — read that
+  object's values. `%satisfy` evaluates every assertion a model states, or the ones one element
+  states, since such an assertion is anonymous; `assert not satisfy … by …` parses and inverts the
+  verdict. `runtime/satisfy.go`, conformance cases `satisfy_subject_binding`,
+  `satisfy_subject_features`, `satisfy_inherited_conditions`, `satisfy_negated`,
+  `satisfy_without_conditions`.
+
+  What is left, recorded as ⚠️ in `docs/SPEC_COMPLIANCE.md` under Requirement: a requirement
+  feature carrying no value of its own is read from the satisfying object's feature of that name,
+  which the spec does not state — it supplies a subject's values through the subject parameter or
+  an explicit binding. The fallback is the one `%requirement` already applies on an instance, and
+  the alternative is to report `ErrNoValue` for the shape the lunar lander model writes and require
+  a subject reference in the condition instead. The lunar model's own
+  `assert satisfy touchdown by lander01;` reaches no verdict either way: its `1.5 [m/s]` evaluates
+  now that A1a is done, but its `actualVerticalSpeed` is produced by a descent analysis rather than
+  bound by the requirement or held by the part.
 
 ## A2 — a typed multi-valued feature ignores its default
 
@@ -399,7 +412,7 @@ Lessons that survived the last two batches, unchanged because they keep applying
    release section.
 2. **P1** and **P2** next: the release now ships the service binary, so the Python surface is
    the newest promise and the least CI-verified.
-3. **A1b** (what is left of A1) and **A2** — the limitations the changelog admits to — then **A4**/**A5** in
+3. **A2** — A1 is done end to end, so it is the limitation the changelog still admits to — then **A4**/**A5** in
    parallel (they share only `docs/SPEC_COMPLIANCE.md`; the two `state_executor.go` items in A4
    must run one at a time).
 4. **A6** last, gated on a per-file corpus diff.

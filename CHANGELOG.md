@@ -42,6 +42,21 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   edited `SYSML_LIBRARY_PATH` library's old definitions. A record no load has
   hit for 30 days is pruned, since a wider key leaves more records that nothing
   will look up again.
+- `assert satisfy <requirement> by <part>;` has a verdict of its own: the
+  assertion is evaluated as the requirement usage it is, with the requirement's
+  subject parameter bound to an object of the part named by `by`, so the
+  requirement's conditions — its own and the ones it inherits — read that
+  object's values. A requirement feature carrying no value of its own is read
+  from that object's feature of the same name, as it is when a requirement is
+  evaluated on an instance.
+- `%satisfy` evaluates the satisfaction assertions a model states — every one, or
+  the ones a named element states — since `assert satisfy … by …` is anonymous
+  and could not be named at the prompt before.
+- An assertion can be negated: `assert not constraint { <expr> }` and
+  `assert not satisfy <requirement> by <part>;` hold exactly when the conditions
+  they deny do not, rather than parsing as a declaration named `not`. A negation
+  denies the conditions of the constraint it is written on together — `not (a and
+  b)`, not `not a and not b` — so it holds as soon as one of them fails.
 - The KerML function library's scalar numeric functions are evaluable: `sqrt`,
   `abs`, `floor`, `round`, `max`, `min`, `isZero`, `isUnit`, `sin`, `cos`, `tan`,
   `cot`, `arcsin`, `arccos` and `arctan`. Dispatch is by the declaration's
@@ -62,6 +77,14 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 
 ### Runtime and tooling
 
+- A parser try-parse that gives up now rewinds: the token buffer is read through
+  a cursor rather than re-sliced as tokens are consumed, so a checkpoint restores
+  the position it was taken at, along with the diagnostics and warnings the
+  abandoned attempt reported. Backtracking previously left the words the attempt
+  had consumed behind, which made a condition beginning with a feature named
+  `constraint` (`assert constraint x > 0;`) report a missing expression it did
+  have, and could exceed the buffer's capacity. A reserved word used as a name
+  in an expression still does not resolve; that is a separate gap.
 - The evaluation step budget is configurable through `SYSML_MAX_STEPS`, so a
   legitimately long run — a numeric integration in an action body, say — is not
   bounded by a fixed ceiling. A value that is not a positive integer is reported

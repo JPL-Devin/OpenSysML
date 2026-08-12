@@ -191,6 +191,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.IsSnapshot {
 			b.WriteString(` snapshot=true`)
 		}
+		if v.IsNegated {
+			b.WriteString(` negated=true`)
+		}
 		writeChildren(b, depth, usageChildren(v))
 		return
 	case *FlowEnds:

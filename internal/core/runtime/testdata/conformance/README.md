@@ -105,6 +105,31 @@ This directory contains behavioral execution conformance tests. Each test consis
   more than one — a usage and the definition it is typed by. Omit to search the
   model for the first requirement (or constraint) it declares.
 
+### For Satisfaction Assertions (`EvaluateSatisfaction`)
+
+```json
+{
+  "type": "satisfy",
+  "evaluate": "test::analysisContext",
+  "assertions": {
+    "satisfy touchdown by slowLander": true,
+    "not satisfy touchdown by fastLander": true
+  }
+}
+```
+
+- `evaluate`: qualified name of the element stating the assertions, since
+  `assert satisfy r by p;` is anonymous and is reached through its owner. Omit
+  to evaluate every assertion in the model.
+- `assertions`: expected verdict per assertion, keyed by the assertion as
+  written (`not ` prefixed for a negated one). `false` means the requirement
+  evaluated to false against the object its subject binds (`ErrViolated`), not
+  that evaluation failed.
+- `satisfied`: the verdict, for a case stating exactly one assertion.
+- `error`: text the evaluation must fail with, for a case whose contract is a
+  diagnostic — satisfying a requirement that states no condition. Set it
+  instead of a verdict.
+
 ### For Instances (`Instantiate`)
 
 ```json
