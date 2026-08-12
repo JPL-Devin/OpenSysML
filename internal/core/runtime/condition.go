@@ -30,35 +30,37 @@ type scopedExpr struct {
 func conditionsOf(members []scopedMember) []condition {
 	var out []condition
 	for _, member := range members {
-		out = appendConditions(out, member.node, member.scope, true)
+		out = appendConditions(out, member.node, member.scope, true, false)
 	}
 	return out
 }
 
 // appendConditions appends the conditions node states. required says whether the
-// enclosing member requires them to hold or only assumes them.
-func appendConditions(out []condition, node ast.Node, scope *symbols.Scope, required bool) []condition {
+// enclosing member requires them to hold or only assumes them; negated is the
+// negation the enclosing member wrote, which a nested body inherits.
+func appendConditions(out []condition, node ast.Node, scope *symbols.Scope, required, negated bool) []condition {
 	switch m := node.(type) {
 	case *ast.ConstraintMember:
+		negated = negated != m.IsNegated
 		if m.Expression != nil {
-			out = append(out, condition{expr: m.Expression, scope: scope, negated: m.IsNegated, required: required && m.IsAssert})
+			out = append(out, condition{expr: m.Expression, scope: scope, negated: negated, required: required && m.IsAssert})
 		}
 		for _, nested := range m.Body {
-			out = appendConditions(out, nested, scope, required && m.IsAssert)
+			out = appendConditions(out, nested, scope, required && m.IsAssert, negated)
 		}
 	case *ast.RequireMember:
 		if m.Expression != nil {
 			out = append(out, condition{expr: m.Expression, scope: scope, required: true})
 		}
 		for _, nested := range m.Body {
-			out = appendConditions(out, nested, scope, true)
+			out = appendConditions(out, nested, scope, true, false)
 		}
 	case *ast.AssumeMember:
 		if m.Expression != nil {
 			out = append(out, condition{expr: m.Expression, scope: scope})
 		}
 		for _, nested := range m.Body {
-			out = appendConditions(out, nested, scope, false)
+			out = appendConditions(out, nested, scope, false, false)
 		}
 	}
 	return out
