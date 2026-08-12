@@ -802,7 +802,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			// A message routed to this accept's port is already addressed by the
 			// connection it travelled over, so the accept's own name does not
 			// have to appear in it.
-			return accept.ViaPort != "" || m.addressedTo(usage.Ident.Name)
+			return accept.ViaPort != "" || m.addressedTo(ActionNodeName(usage))
 		})
 		if !taken {
 			if token.Wait == nil {
@@ -842,10 +842,10 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	// Advance to successor
 	successors := e.graph.Edges[token.Location]
 	if len(successors) == 0 {
-		return fmt.Errorf("nested action %s has no successors", usage.Ident.Name)
+		return fmt.Errorf("nested action %s has no successors", ActionNodeName(usage))
 	}
 	if len(successors) > 1 {
-		return fmt.Errorf("nested action %s has multiple successors", usage.Ident.Name)
+		return fmt.Errorf("nested action %s has multiple successors", ActionNodeName(usage))
 	}
 
 	token.Location = successors[0]
