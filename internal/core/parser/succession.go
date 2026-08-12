@@ -126,9 +126,10 @@ func (b *bodyBuilder) atSuccession() bool {
 	switch name := p.peekN(nameAt); name.Kind {
 	case lexer.Identifier, lexer.Keyword, lexer.UnrestrictedName:
 	default:
-		// `then action { … }` is an anonymous inline node, not a declaration
-		// that a succession could name.
-		return false
+		// `then part;` and `then action { … }` declare an anonymous member,
+		// which an edge end cannot name: taken so the succession is diagnosed
+		// rather than read as an edge naming the kind keyword.
+		return !b.declares(kw)
 	}
 	// `then <kw> <name>;` is ambiguous: a two-name edge whose source is a
 	// keyword used as a member name (`then flow end;`), or a declaration of

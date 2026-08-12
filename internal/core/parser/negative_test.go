@@ -84,7 +84,6 @@ func TestNegative(t *testing.T) {
 		{"then_before_package", "part def P { part a; then package Inner { } }"},
 		{"then_before_attribute", "part def P { part a; then attribute x; }"},
 		{"then_before_import", "part def P { part a; then import Other::*; }"},
-		{"then_before_typed_anonymous_member", "action a { action b; then part : T; }"},
 	}
 
 	for _, tt := range tests {

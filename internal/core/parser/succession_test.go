@@ -90,6 +90,8 @@ func TestSuccessionUnnamedEndWarns(t *testing.T) {
 	}{
 		{"unnamed source", "action def A { action; then action b; }", "sequences from a member with no name"},
 		{"unnamed target", "action def A { action b; then send msg to port; }", "sequences to a member with no name"},
+		{"anonymous member after the keyword", "action def A { action b; then action { } }", "sequences to a member with no name"},
+		{"anonymous typed member after the keyword", "part def P { part a; then part : T; }", "sequences to a member with no name"},
 	}
 
 	for _, tt := range tests {
