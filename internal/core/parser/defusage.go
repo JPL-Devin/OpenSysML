@@ -1689,8 +1689,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Example: redefines innerSpaceDimension = 0;
 	// Example: redefines parent.value = 100;
 	if p.atKeyword("redefines") {
-		// Read the target and rewind unless a '=' follows, since `redefines`
-		// also opens forms this is not (`redefines target;`, a specialization).
+		// Read the target and rewind unless a '=' follows, leaving anything else
+		// beginning with `redefines` to the general member path.
 		cp := p.checkpoint()
 		p.advance() // skip "redefines"
 		target := p.parseRelationshipTarget()
