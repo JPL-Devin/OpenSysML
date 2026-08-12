@@ -449,8 +449,10 @@ func getNodeName(node ast.Node) string {
 	case *ast.Usage:
 		// An unnamed usage is named after the feature it references or redefines
 		// (`perform increment;` is a node named increment).
-		name, _ := ast.EffectiveName(n)
-		return name
+		if name, _ := ast.EffectiveName(n); name != "" {
+			return name
+		}
+		return n.Ident.ShortName
 	}
 	return ""
 }
