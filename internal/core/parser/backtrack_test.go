@@ -34,6 +34,47 @@ func TestRestoreUnconsumesTokens(t *testing.T) {
 	}
 }
 
+// An attempt that peeks further than it consumes keeps that lookahead across
+// the restore: rewinding un-consumes tokens without dropping tokens already
+// read from the lexer.
+func TestRestoreKeepsLookahead(t *testing.T) {
+	p := newParser("a b c d e f")
+	cp := p.checkpoint()
+	p.advance()
+	p.advance()
+	if got := p.src.Text(p.peekN(3).Span); got != "f" {
+		t.Fatalf("peekN(3) = %q, want f", got)
+	}
+	p.restore(cp)
+	for _, want := range []string{"a", "b", "c", "d", "e", "f"} {
+		if got := p.src.Text(p.advance().Span); got != want {
+			t.Fatalf("re-read = %q, want %q", got, want)
+		}
+	}
+	if !p.atEOF() {
+		t.Fatal("want EOF after re-reading every token")
+	}
+}
+
+// The cursor stops at EOF, so restoring after an attempt that ran off the end
+// still re-reads the whole stream.
+func TestAdvancePastEOFDoesNotMoveCursor(t *testing.T) {
+	p := newParser("a")
+	cp := p.checkpoint()
+	for i := 0; i < 4; i++ {
+		if tok := p.advance(); i > 0 && tok.Kind != lexer.EOF {
+			t.Fatalf("advance %d = %+v, want EOF", i, tok)
+		}
+	}
+	if p.pos != 1 {
+		t.Fatalf("pos = %d, want 1", p.pos)
+	}
+	p.restore(cp)
+	if got := p.src.Text(p.peek().Span); got != "a" {
+		t.Fatalf("peek = %q, want a", got)
+	}
+}
+
 // restore drops the findings the abandoned attempt reported, and does not
 // reach past EOF however many tokens were consumed under the checkpoint.
 func TestRestoreDropsAttemptFindings(t *testing.T) {

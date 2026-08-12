@@ -1662,47 +1662,38 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Example: redefines innerSpaceDimension = 0;
 	// Example: redefines parent.value = 100;
 	if p.atKeyword("redefines") {
-		// Lookahead: check if pattern is `redefines <target> = <value>`
-		// Need to skip past qualified name or feature chain to find '='
-		i := 1
-		for i < 10 { // reasonable lookahead limit
-			tk := p.peekN(i)
-			if tk.Kind == lexer.Eq {
-				// Found pattern - parse it
-				p.advance() // skip "redefines"
-				target := p.parseRelationshipTarget()
-				p.expect(lexer.Eq, "expected '=' after redefines target")
-				value := p.ParseExpression()
-				p.accept2(lexer.Semicolon)
+		// Read the target and rewind unless a '=' follows, leaving anything else
+		// beginning with `redefines` to the general member path.
+		cp := p.checkpoint()
+		p.advance() // skip "redefines"
+		target := p.parseRelationshipTarget()
+		if target != nil && p.at(lexer.Eq) {
+			p.advance() // consume '='
+			value := p.ParseExpression()
+			p.accept2(lexer.Semicolon)
 
-				u := &ast.Usage{
-					Kind: ast.UsagePart, // Generic feature
-					Relationships: []*ast.Relationship{
-						{
-							Kind:   ast.RelRedefines,
-							Target: target,
-						},
+			u := &ast.Usage{
+				Kind: ast.UsagePart, // Generic feature
+				Relationships: []*ast.Relationship{
+					{
+						Kind:   ast.RelRedefines,
+						Target: target,
 					},
-					Value: value,
-				}
-				u.NodeBase.NodeSpan = p.spanFrom(start)
-				u.SetLeadingTrivia(trivia)
+				},
+				Value: value,
+			}
+			u.NodeBase.NodeSpan = p.spanFrom(start)
+			u.SetLeadingTrivia(trivia)
 
-				m := &ast.Membership{
-					Visibility: vis,
-					Member:     u,
-				}
-				m.NodeBase.NodeSpan = u.Span()
-				m.SetLeadingTrivia(trivia)
-				return m
+			m := &ast.Membership{
+				Visibility: vis,
+				Member:     u,
 			}
-			if tk.Kind == lexer.Identifier || tk.Kind == lexer.Dot || tk.Kind == lexer.ColonColon {
-				i++
-				continue
-			}
-			// Hit something else - not redefines statement pattern
-			break
+			m.NodeBase.NodeSpan = u.Span()
+			m.SetLeadingTrivia(trivia)
+			return m
 		}
+		p.restore(cp)
 	}
 
 	// Check for subset/disjoint constraint statements
