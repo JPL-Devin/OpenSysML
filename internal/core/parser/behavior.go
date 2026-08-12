@@ -11,14 +11,21 @@ import (
 // Handles BOTH generic members (parameters like 'in x: Integer;') AND result members ('return expr;').
 // Expects '{' already consumed.
 func (p *Parser) parseCalcBody() []ast.Node {
-	var members []ast.Node
+	body := p.newBodyBuilder()
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
 
+		// A calculation body carries the members of an action body
+		// (SysML.xtext CalculationBodyItem), a member-attached `then` among them.
+		if body.atSuccession() {
+			body.takeSuccession()
+			continue
+		}
+
 		// Check for 'return' keyword → ResultMember
 		if p.isResultKeyword() {
-			members = append(members, p.parseResultMember())
+			body.add(p.parseResultMember())
 		} else {
 			// Try parsing as body member (parameters, doc, import, etc.)
 			// Body member expects: visibility + declaration keyword, or special patterns
@@ -34,16 +41,10 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			// If expression-start but NOT name-declaration pattern, parse as implicit return
 			if p.atExprStart() && !isNameDecl {
 				// Parse as implicit return expression
-				expr := p.ParseExpression()
-				if expr != nil {
-					members = append(members, expr)
-				}
+				body.add(p.ParseExpression())
 			} else {
 				// Parse as generic body member (parameters, etc.)
-				m := p.parseBodyMember()
-				if m != nil {
-					members = append(members, m)
-				}
+				body.add(p.parseBodyMember())
 			}
 		}
 
@@ -54,7 +55,7 @@ func (p *Parser) parseCalcBody() []ast.Node {
 	}
 
 	p.expect(lexer.RBrace, "expected '}' after calc body")
-	return members
+	return body.finish()
 }
 
 // parseActionBody parses the body of an action usage.
@@ -62,14 +63,23 @@ func (p *Parser) parseCalcBody() []ast.Node {
 // parseActionBodyMixed handles action bodies with BOTH declarations and behavioral statements
 // Syntax: { in item x; action nested {...}; first nested then ...; flow ...; }
 func (p *Parser) parseActionBodyMixed() []ast.Node {
-	var members []ast.Node
+	body := p.newBodyBuilder()
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
 
+		// A member-attached `then` sequences the members either side of it, so
+		// the keyword is taken here and the member it prefixes read next time
+		// round, by whichever branch below that member needs (see
+		// succession.go).
+		if body.atSuccession() {
+			body.takeSuccession()
+			continue
+		}
+
 		// Try parsing as direction parameter (in/out/inout item/accept/via)
 		if p.isDirectionKeyword() {
-			members = append(members, p.parseDirectionParameter())
+			body.add(p.parseDirectionParameter())
 			continue
 		}
 
@@ -88,31 +98,13 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 				tok2 := p.peekN(2)
 				// If colon after name → definitely declaration (typing)
 				if tok2.Kind == lexer.Colon {
-					m := p.parseBodyMember()
-					if m != nil {
-						if p.atChainedThen() {
-							p.advance()
-							if mem, ok := m.(*ast.Membership); ok {
-								mem.HasSuccession = true
-							}
-						}
-						members = append(members, m)
-					}
+					body.add(p.parseBodyMember())
 					continue
 				}
 				// If 'accept' keyword after name → declaration (accept action)
 				// Pattern: action <name> accept <param> : Type [via <port>];
 				if tok2.Kind == lexer.Keyword && tok2.KeywordID == "accept" {
-					m := p.parseBodyMember()
-					if m != nil {
-						if p.atChainedThen() {
-							p.advance()
-							if mem, ok := m.(*ast.Membership); ok {
-								mem.HasSuccession = true
-							}
-						}
-						members = append(members, m)
-					}
+					body.add(p.parseBodyMember())
 					continue
 				}
 				// If behavioral keyword after name → declaration with inline statement
@@ -120,16 +112,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 				//          action <name> perform <ref>;
 				if tok2.Kind == lexer.Keyword && (tok2.KeywordID == "send" || tok2.KeywordID == "terminate" ||
 					tok2.KeywordID == "perform" || tok2.KeywordID == "bind" || tok2.KeywordID == "assign") {
-					m := p.parseBodyMember()
-					if m != nil {
-						if p.atChainedThen() {
-							p.advance()
-							if mem, ok := m.(*ast.Membership); ok {
-								mem.HasSuccession = true
-							}
-						}
-						members = append(members, m)
-					}
+					body.add(p.parseBodyMember())
 					continue
 				}
 				// If brace after name, peek inside
@@ -146,64 +129,23 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 						}
 					}
 					if isDeclaration {
-						m := p.parseBodyMember()
-						if m != nil {
-							if p.atChainedThen() {
-								p.advance()
-								if mem, ok := m.(*ast.Membership); ok {
-									mem.HasSuccession = true
-								}
-							}
-							members = append(members, m)
-						}
+						body.add(p.parseBodyMember())
 						continue
 					}
 				}
 			}
 			// Otherwise: treat as behavioral action node
-			members = append(members, p.parseActionMember())
+			body.add(p.parseActionMember())
 			continue
 		}
 
-		// Try parsing as behavioral statement
-		// Special case: 'then action' could be succession OR declaration with succession
-		// Check if it's 'then action name : Type' (declaration) vs 'then action ref' (behavioral)
-		if p.atKeyword("then") && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "action" {
-			// Lookahead: then action <id> : → declaration with succession
-			if p.peekN(2).Kind == lexer.Identifier {
-				tok3 := p.peekN(3)
-				if tok3.Kind == lexer.Colon || (tok3.Kind == lexer.LBrace && p.peekN(4).Kind == lexer.Keyword) {
-					// It's declaration: consume 'then', parse declaration, mark succession
-					p.advance() // consume 'then'
-					m := p.parseBodyMember()
-					if m != nil {
-						if mem, ok := m.(*ast.Membership); ok {
-							mem.HasSuccession = true
-						}
-						members = append(members, m)
-					}
-					continue
-				}
-			}
-		}
-
 		if p.isBehavioralKeyword() {
-			members = append(members, p.parseActionMember())
+			body.add(p.parseActionMember())
 			continue
 		}
 
 		// Try parsing as body member (nested declarations)
-		m := p.parseBodyMember()
-		if m != nil {
-			// Check for namespace-level succession: 'then' after member
-			if p.atChainedThen() {
-				p.advance() // consume 'then'
-				if mem, ok := m.(*ast.Membership); ok {
-					mem.HasSuccession = true
-				}
-			}
-			members = append(members, m)
-		}
+		body.add(p.parseBodyMember())
 
 		// Ensure progress
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
@@ -213,7 +155,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 	}
 
 	p.expect(lexer.RBrace, "expected '}' after action body")
-	return members
+	return body.finish()
 }
 
 // parseActionBody handles pure behavioral bodies (legacy - for inline action statements)
@@ -1542,11 +1484,17 @@ func (p *Parser) parseConstraintMember() ast.Node {
 // Expects '{' already consumed, returns list of requirement members.
 // Syntax: requirement example { subject x : Type; assume x > 0; require x.valid; actor a : Actor; }
 func (p *Parser) parseRequirementBody() []ast.Node {
-	var members []ast.Node
+	body := p.newBodyBuilder()
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
-		members = append(members, p.parseRequirementMember())
+		// A requirement body carries the members of a definition body
+		// (SysML.xtext RequirementBodyItem), a member-attached `then` among them.
+		if body.atSuccession() {
+			body.takeSuccession()
+			continue
+		}
+		body.add(p.parseRequirementMember())
 		// Force progress: a member that consumed nothing would spin the loop.
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
 			p.advance()
@@ -1554,7 +1502,7 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 	}
 
 	p.expect(lexer.RBrace, "expected '}' after requirement body")
-	return members
+	return body.finish()
 }
 
 // parseRequirementMember parses one requirement member: subject/assume/require/actor/doc or general body members
@@ -1947,14 +1895,21 @@ func (p *Parser) parseActorMember(start int) ast.Node {
 // parseStateBody parses the body of a state usage.
 // Expects '{' already consumed, returns list of state members.
 func (p *Parser) parseStateBody() []ast.Node {
-	var members []ast.Node
+	body := p.newBodyBuilder()
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
-		members = append(members, p.parseStateMember())
+		// A member-attached `then` sequences the members either side of it; a
+		// `then` naming states (`then idle done;`) is a member of its own,
+		// which parseStateMember reads (see succession.go).
+		if body.atSuccession() {
+			body.takeSuccession()
+			continue
+		}
+		body.add(p.parseStateMember())
 	}
 
 	p.expect(lexer.RBrace, "expected '}' after state body")
-	return members
+	return body.finish()
 }
 
 // parseStateMember parses one state member: entry/do/exit/state/transition, or general body member.

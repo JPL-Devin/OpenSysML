@@ -156,10 +156,11 @@ func (p *Parser) error(sp source.Span, msg string) {
 }
 
 // warn records a diagnostic for input that parses to the tree the author meant
-// but is not well-formed SysML. It is kept apart from Diagnostics so that
-// callers gating on a clean parse are not blocked by it.
-func (p *Parser) warn(sp source.Span, msg string) {
-	p.Warnings = append(p.Warnings, Diagnostic{Span: sp, Message: msg})
+// but is not well-formed SysML, under the code a consumer reports it by. It is
+// kept apart from Diagnostics so that callers gating on a clean parse are not
+// blocked by it.
+func (p *Parser) warn(sp source.Span, msg, code string) {
+	p.Warnings = append(p.Warnings, Diagnostic{Span: sp, Message: msg, Code: code})
 }
 
 // takeTrivia returns and clears the pending leading trivia.

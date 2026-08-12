@@ -79,14 +79,13 @@ type Identification struct {
 
 // Membership wraps a namespace member with a visibility prefix. Member is
 // the owned element (a Package/Namespace/Dependency/Comment/... or ErrorNode).
-// Succession stores optional 'then' edge to next member (namespace-level succession).
+// A `then` prefixing a member is not recorded here: it sequences the members
+// either side of it rather than describing one of them, so the parser desugars
+// it to a SuccessionEdge of its own (see internal/core/parser/succession.go).
 type Membership struct {
 	NodeBase
-	Visibility       Visibility
-	Member           Node
-	HasSuccession    bool   // true if 'then' keyword follows this member
-	SuccessionTarget string // short name of next member (resolved during semantic analysis)
-	SuccessionGuard  Node   // optional guard expression on succession edge
+	Visibility Visibility
+	Member     Node
 }
 
 // RootNamespace is the top of every parsed file: a flat list of members.

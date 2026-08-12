@@ -29,6 +29,8 @@ const (
 	pLocale            = "locale"
 	pAnnotatedElement  = "annotatedElement"
 	pIsImportAll       = "isImportAll"
+	pSourceFeature     = "sourceFeature"
+	pTargetFeature     = "targetFeature"
 )
 
 // Property names in the Systemica extension namespace: declaration order,
@@ -163,19 +165,14 @@ func (e *encoder) encode(members []ast.Node, owner string, ownerTerm rdf.Term) e
 		if node == nil {
 			continue
 		}
-		if err := e.encodeMember(node, visibility, owner, ownerTerm, i, member); err != nil {
+		if err := e.encodeMember(node, visibility, owner, ownerTerm, i); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner string, ownerTerm rdf.Term, index int, wrapper ast.Node) error {
-	// A `then` prefix marks whatever membership follows it, which need not wrap a
-	// usage, so the refusal is checked for every member kind.
-	if err := e.succession(node, wrapper); err != nil {
-		return err
-	}
+func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner string, ownerTerm rdf.Term, index int) error {
 	name, _ := declaredNameAndMembers(node)
 	fqn := qualify(owner, name, index)
 	subject := rdf.ElementIRI(fqn)
@@ -361,6 +358,23 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		e.graph.Add(subject, e.sysx(xFilter), rdf.String(e.text(n.Condition)))
 		return nil
 
+	case *ast.SuccessionEdge:
+		// A succession, however it was written: as its own member (`then a b;`)
+		// or as a `then` attached to a member, which the parser desugars to this
+		// same node. Its ends are what carries execution order, so they are
+		// mapped as references rather than as the text of the declaration.
+		source, target := qualifiedText(n.Source), qualifiedText(n.Target)
+		if source == "" || target == "" {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the succession at %s", e.where(n)),
+				Note: "it does not name both of the members it sequences, so the order it declares cannot be written back",
+			}
+		}
+		head(rdf.SysMLTerm("SuccessionAsUsage"))
+		e.graph.Add(subject, e.sysml(pSourceFeature), e.reference(owner, source))
+		e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, target))
+		return nil
+
 	case *ast.ErrorNode:
 		return &UnsupportedError{
 			What: fmt.Sprintf("the malformed declaration at %s", e.where(n)),
@@ -466,31 +480,6 @@ func (e *encoder) multiplicity(subject rdf.Term, mult *ast.Multiplicity) {
 	}
 	if mult.Upper != nil {
 		e.graph.Add(subject, e.sysml(pUpperBound), rdf.String(e.text(mult.Upper)))
-	}
-}
-
-// succession reports a member sequenced with `then`, which this mapping cannot
-// represent.
-//
-// ast.Membership.HasSuccession records only that a `then` was present, not which
-// pair of members it sequences, and the parser sets it on the member before the
-// keyword in some positions and the member after it in others. Either placement
-// would therefore be a guess, and writing the keyword back in the wrong place
-// would change the order the model executes in, so the conversion stops instead.
-func (e *encoder) succession(node ast.Node, wrapper ast.Node) error {
-	membership, ok := wrapper.(*ast.Membership)
-	if !ok || !membership.HasSuccession {
-		return nil
-	}
-	// The position is the member the flag hangs off, which may be on either
-	// side of the keyword, so it is described as adjacent rather than exact.
-	what := "the member at " + e.where(node)
-	if name, _ := declaredNameAndMembers(node); name != "" {
-		what = fmt.Sprintf("the member %q at %s", name, e.where(node))
-	}
-	return &UnsupportedError{
-		What: fmt.Sprintf("the `then` succession beside %s", what),
-		Note: "the keyword sequences this member with the one next to it, but which side it was written on is not recorded, so the conversion will not guess at execution order",
 	}
 }
 

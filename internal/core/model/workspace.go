@@ -183,7 +183,7 @@ func (w *Workspace) Diagnostics(name string) []passes.Diagnostic {
 			Severity: passes.SeverityWarning,
 			Span:     pw.Span,
 			Message:  pw.Message,
-			Code:     "reserved-keyword-name",
+			Code:     pw.Code,
 			Source:   "syntax",
 		})
 	}

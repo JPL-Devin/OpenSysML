@@ -70,6 +70,21 @@ func TestNegative(t *testing.T) {
 		{"individual_usage_no_body", "individual testSystem : TestSystem"},
 		{"snapshot_usage_no_type", "snapshot occurrence takeoff : ;"},
 		{"individual_parameter_no_type", "action a { in individual v : ; }"},
+
+		// A member-attached `then` sequences the members either side of it, so
+		// a body with nothing on one side, or a member the notation does not
+		// allow one before, declares no order and is rejected rather than
+		// parsed with the keyword dropped. A `then` beside a member with no
+		// name is legal notation this representation cannot carry and warns
+		// instead (TestSuccessionUnnamedEndWarns).
+		{"leading_then_has_no_source", "action a { then action b; }"},
+		{"trailing_then_has_no_target", "action a { action b; then }"},
+		{"then_then", "action a { action b; then then action c; }"},
+		{"then_before_definition", "action a { action b; then action def C; }"},
+		{"then_before_package", "part def P { part a; then package Inner { } }"},
+		{"then_before_attribute", "part def P { part a; then attribute x; }"},
+		{"then_before_import", "part def P { part a; then import Other::*; }"},
+		{"then_before_typed_anonymous_member", "action a { action b; then part : T; }"},
 	}
 
 	for _, tt := range tests {

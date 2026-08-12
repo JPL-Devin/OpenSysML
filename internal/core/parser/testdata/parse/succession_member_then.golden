@@ -1,0 +1,41 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="MemberAttachedSuccession" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Step"))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Behavioural"
+          (Membership visibility="default"
+            (Usage kind="action" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="b" target="a")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Wrapped"
+          (Membership visibility="default"
+            (Usage kind="action" name="one" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="two" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="one" target="two")))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Structural"
+          (Membership visibility="default"
+            (Usage kind="part" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="part" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (SuccessionEdge source="a" target="b")
+          (Membership visibility="default"
+            (Usage kind="part" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (SuccessionEdge source="b" target="c"))))))

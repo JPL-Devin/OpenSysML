@@ -83,7 +83,7 @@ func TestRestoreDropsAttemptFindings(t *testing.T) {
 	p.advance()
 	p.advance()
 	p.expect(lexer.Semicolon, "expected ';'")
-	p.warn(p.peek().Span, "reserved word as a name")
+	p.warn(p.peek().Span, "reserved word as a name", codeReservedKeywordName)
 	p.restore(cp)
 	if len(p.Diagnostics) != 0 || len(p.Warnings) != 0 {
 		t.Fatalf("restore kept findings: %v / %v", p.Diagnostics, p.Warnings)
