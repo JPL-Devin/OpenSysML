@@ -38,13 +38,16 @@ func NewCache() (*Cache, error) {
 	return &Cache{dir: dir}, nil
 }
 
-// keyFor derives a cache key from the file content and the current format
-// version. Any content change or version bump yields a distinct key, so stale
-// entries are simply never found (miss) rather than requiring explicit
-// invalidation.
-func (c *Cache) keyFor(content []byte) string {
+// keyFor derives a cache key from the file content, the digest of the library
+// set it belongs to, and the current format version. Any change or version bump
+// yields a distinct key, so stale entries are simply never found (miss) rather
+// than requiring explicit invalidation. The set digest is part of the key
+// because a record holds values derived from sibling files — a unit reduction
+// follows a reference unit or prefix declared elsewhere — which the file's own
+// content does not cover.
+func (c *Cache) keyFor(content []byte, setDigest string) string {
 	sum := sha256.Sum256(content)
-	return hex.EncodeToString(sum[:]) + "-v" + strconv.Itoa(formatVersion)
+	return hex.EncodeToString(sum[:]) + "-s" + setDigest + "-v" + strconv.Itoa(formatVersion)
 }
 
 func (c *Cache) path(key string) string {

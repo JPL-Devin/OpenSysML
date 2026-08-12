@@ -22,7 +22,7 @@ func sampleRecord(name string) *IndexRecord {
 func TestCacheStoreLoadRoundTrip(t *testing.T) {
 	c := &Cache{dir: t.TempDir()}
 	rec := sampleRecord("a.kerml")
-	key := c.keyFor([]byte("content-a"))
+	key := c.keyFor([]byte("content-a"), "set")
 	if err := c.Store(key, rec); err != nil {
 		t.Fatalf("store: %v", err)
 	}
@@ -43,17 +43,22 @@ func TestCacheStoreLoadRoundTrip(t *testing.T) {
 
 func TestCacheLoadUnknownKeyMisses(t *testing.T) {
 	c := &Cache{dir: t.TempDir()}
-	if _, ok := c.Load(c.keyFor([]byte("never-stored"))); ok {
+	if _, ok := c.Load(c.keyFor([]byte("never-stored"), "set")); ok {
 		t.Fatal("Load returned hit for unknown key")
 	}
 }
 
-func TestCacheKeyDependsOnContentAndVersion(t *testing.T) {
+func TestCacheKeyDependsOnContentSetAndVersion(t *testing.T) {
 	c := &Cache{dir: t.TempDir()}
-	k1 := c.keyFor([]byte("alpha"))
-	k2 := c.keyFor([]byte("beta"))
+	k1 := c.keyFor([]byte("alpha"), "set")
+	k2 := c.keyFor([]byte("beta"), "set")
 	if k1 == k2 {
 		t.Fatal("distinct content produced identical cache keys")
+	}
+	// A record persists values reduced from sibling files, so the same content in
+	// a different library set is a different record.
+	if k1 == c.keyFor([]byte("alpha"), "other-set") {
+		t.Fatal("distinct library sets produced identical cache keys")
 	}
 	// A record stored under content "alpha" must not be found by content
 	// "beta" (stale-content miss) — the core cache-key invariant.
@@ -75,7 +80,7 @@ func TestNewCacheCreatesDir(t *testing.T) {
 		t.Fatal("NewCache produced empty dir")
 	}
 	// Store/Load must work against the freshly created dir.
-	key := c.keyFor([]byte("z"))
+	key := c.keyFor([]byte("z"), "set")
 	if err := c.Store(key, sampleRecord("z")); err != nil {
 		t.Fatalf("store into new cache dir: %v", err)
 	}
@@ -90,7 +95,7 @@ func TestCacheStoreIsAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
-	key := c.keyFor([]byte("some content"))
+	key := c.keyFor([]byte("some content"), "set")
 	if err := c.Store(key, sampleRecord("P")); err != nil {
 		t.Fatalf("Store: %v", err)
 	}

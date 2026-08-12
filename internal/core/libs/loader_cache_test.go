@@ -11,16 +11,18 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// countingSource wraps a Source and counts Read calls so we can prove a cache
-// hit skips the parse path on the second Load.
+// countingSource wraps a Source and counts how often each file is read.
 type countingSource struct {
 	inner Source
-	reads int
+	reads map[string]int
 }
 
 func (c *countingSource) List() []string { return c.inner.List() }
 func (c *countingSource) Read(name string) ([]byte, error) {
-	c.reads++
+	if c.reads == nil {
+		c.reads = map[string]int{}
+	}
+	c.reads[name]++
 	return c.inner.Read(name)
 }
 
@@ -34,8 +36,12 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	if err := ld.Load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx1); err != nil {
 		t.Fatalf("first Load: %v", err)
 	}
-	if cs.reads != 1 {
-		t.Fatalf("reads after first load = %d, want 1", cs.reads)
+	if len(ld.parsed) != 1 {
+		t.Fatalf("documents parsed on a cold cache = %d, want 1", len(ld.parsed))
+	}
+	// The key covers the whole library set, so every file of it was digested.
+	if len(cs.reads) != len(cs.List()) {
+		t.Fatalf("files read = %d, want the whole set of %d", len(cs.reads), len(cs.List()))
 	}
 	if len(idx1.LookupQualified("ScalarValues::Boolean")) != 1 {
 		t.Fatal("first load did not index ScalarValues::Boolean")
@@ -55,6 +61,9 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	idx2 := symbols.NewIndex()
 	if err := ld.Load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx2); err != nil {
 		t.Fatalf("second Load: %v", err)
+	}
+	if len(ld.parsed) != 0 {
+		t.Fatal("the cached load parsed the file instead of restoring its record")
 	}
 	if len(idx2.LookupQualified("ScalarValues")) != 1 ||
 		len(idx2.LookupQualified("ScalarValues::Boolean")) != 1 {
@@ -99,8 +108,8 @@ func TestLoaderCacheKeepsTypingEdge(t *testing.T) {
 }
 
 // A record whose supertypes are not all reachable yet must not be cached when
-// the loader requires resolution: its key is the content alone, so it would be
-// restored — minus that edge — in a context where the target is present.
+// the loader requires resolution: its key does not describe the index it was
+// built in, so it would be restored — minus that edge — where the target exists.
 func TestLoaderRequireResolvedSkipsUnresolvedRecord(t *testing.T) {
 	dir := t.TempDir()
 	// Specializes ScalarValues::Real, which this directory does not declare.
@@ -234,6 +243,48 @@ func describeSymbol(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver
 	}
 	sort.Strings(supers)
 	return fmt.Sprintf("kind=%v short=%q supers=%v alias=%q", sym.Kind, short, supers, alias)
+}
+
+// A record persists values reduced from sibling files — a unit's scale follows a
+// prefix or reference unit declared elsewhere — so editing any file of a library
+// must invalidate every record of that library, not just the edited file's.
+func TestLoaderCacheInvalidatesSiblingRecords(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.sysml"), []byte("package A { part def Engine; }"), 0o600); err != nil {
+		t.Fatalf("write a.sysml: %v", err)
+	}
+	sibling := filepath.Join(dir, "b.sysml")
+	if err := os.WriteFile(sibling, []byte("package B { part e : A::Engine; }"), 0o600); err != nil {
+		t.Fatalf("write b.sysml: %v", err)
+	}
+	cacheDir := t.TempDir()
+	loadWholeLibrary(t, dir, cacheDir) // cold: parses both, then persists them
+
+	if parsed := loadLibraryParseCount(t, dir, cacheDir); parsed != 0 {
+		t.Fatalf("documents parsed on an unchanged library = %d, want 0", parsed)
+	}
+
+	if err := os.WriteFile(sibling, []byte("package B { part def Wheel; }"), 0o600); err != nil {
+		t.Fatalf("rewrite b.sysml: %v", err)
+	}
+	if parsed := loadLibraryParseCount(t, dir, cacheDir); parsed != 2 {
+		t.Fatalf("documents parsed after editing one file = %d, want 2 (the whole library)", parsed)
+	}
+}
+
+// loadLibraryParseCount indexes the library in dir and reports how many of its
+// files missed the cache and had to be parsed.
+func loadLibraryParseCount(t *testing.T, dir, cacheDir string) int {
+	t.Helper()
+	src := NewDirSource(dir)
+	ld := NewLoader(src, &Cache{dir: cacheDir})
+	idx := symbols.NewIndex()
+	for _, name := range src.List() {
+		if err := ld.Load(name, idx); err != nil {
+			t.Fatalf("load %s: %v", name, err)
+		}
+	}
+	return len(ld.parsed)
 }
 
 func TestIndexAddRecordsRemovable(t *testing.T) {

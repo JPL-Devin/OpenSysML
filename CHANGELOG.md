@@ -35,7 +35,11 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   (`10 [m] / 2 [s]` is `5 [m/s]`, `4 [m] / 2 [m]` is `2`). An operation between
   units that measure different things (`1.5 [m/s] <= 2.0 [s]`) is an error, never
   a comparison of bare magnitudes that would equate `1.5 [m/s]` with
-  `1.5 [km/h]`.
+  `1.5 [km/h]`. A cached library record carries the unit reduction of its
+  symbols, so its key now covers the digest of the whole library set: the
+  reduction follows a prefix or reference unit declared in another file, and a
+  key over one file's content alone kept converting with the factors of an
+  edited `SYSML_LIBRARY_PATH` library's old definitions.
 - The KerML function library's scalar numeric functions are evaluable: `sqrt`,
   `abs`, `floor`, `round`, `max`, `min`, `isZero`, `isUnit`, `sin`, `cos`, `tan`,
   `cot`, `arcsin`, `arccos` and `arctan`. Dispatch is by the declaration's
