@@ -1,8 +1,10 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
@@ -61,6 +63,10 @@ func TestNestedConstraintAttemptRewinds(t *testing.T) {
 	}
 	if len(p.Diagnostics) != 0 {
 		t.Fatalf("diagnostics = %+v", p.Diagnostics)
+	}
+	// The rewound word is back in the tree, not swallowed by the attempt.
+	if dump := ast.Dump(root); !strings.Contains(dump, `(FeatureReference name="constraint")`) {
+		t.Fatalf("condition lost the rewound word:\n%s", dump)
 	}
 }
 
