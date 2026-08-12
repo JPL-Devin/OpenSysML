@@ -75,6 +75,21 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 			[]string{"b->c"},
 		},
 		{
+			"a one-name edge whose target is a keyword the body declares",
+			"action def A { done end; action a; then end; }",
+			[]string{"a->end"},
+		},
+		{
+			"a two-name edge whose source is a keyword the body declares",
+			"action def A { action end; action b; then end b; }",
+			[]string{"end->b"},
+		},
+		{
+			"a member named after the feature it references is a succession end",
+			"action def A { perform a; then action b; }",
+			[]string{"a->b"},
+		},
+		{
 			"a calculation body reads the edge form it is written back as",
 			"calc def C { part a; part b; then a b; }",
 			[]string{"a->b"},

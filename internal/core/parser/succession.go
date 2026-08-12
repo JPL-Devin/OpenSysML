@@ -86,6 +86,11 @@ func (b *bodyBuilder) atSuccession() bool {
 		return false
 	}
 	kw := next.KeywordID
+	if b.namesEdgeEnd(kw) {
+		// `then end;` and `then end b;`: a keyword this body declares a member
+		// with names an edge end, not the kind of a member being declared.
+		return false
+	}
 	if _, ok := namespaceMemberKeywords[kw]; ok {
 		// Diagnosed as an illegal target rather than left to parse as a
 		// namespace member with the keyword dropped.
@@ -101,13 +106,11 @@ func (b *bodyBuilder) atSuccession() bool {
 		// accounted for rather than read as an edge naming the keyword.
 		return true
 	}
-	// The name follows the kind keyword, which `use case` spells in two words.
-	nameAt := 2
 	if kw == "use" {
+		// A use case is the only kind spelled in two words.
 		if word := p.peekN(2); word.Kind != lexer.Keyword || word.KeywordID != "case" {
 			return false
 		}
-		nameAt = 3
 	} else {
 		_, isUsage := usageKindKeywords[kw]
 		_, isDef := definitionKindKeywords[kw]
@@ -123,23 +126,26 @@ func (b *bodyBuilder) atSuccession() bool {
 			return false
 		}
 	}
-	switch name := p.peekN(nameAt); name.Kind {
-	case lexer.Identifier, lexer.Keyword, lexer.UnrestrictedName:
-	default:
-		// `then part;` and `then action { … }` declare an anonymous member,
-		// which an edge end cannot name: taken so the succession is diagnosed
-		// rather than read as an edge naming the kind keyword.
-		return !b.declares(kw)
-	}
-	// `then <kw> <name>;` is ambiguous: a two-name edge whose source is a
-	// keyword used as a member name (`then flow end;`), or a declaration of
-	// <name> prefixed with `then` (`then action b;`). Only a name already
-	// declared in this body can be an edge's source, so the edge reading wins
-	// exactly when the keyword names such a member.
-	if p.peekN(nameAt+1).Kind == lexer.Semicolon && b.declares(kw) {
+	// Anything else after the keyword declares a member the `then` prefixes,
+	// anonymous (`then part;`, `then action { … }`) or named (`then action b;`).
+	return true
+}
+
+// namesEdgeEnd reports whether a keyword after `then` names an edge end rather
+// than the kind of a member being declared: `then <kw>;` and `then <kw> <name>;`
+// are ambiguous, and only a name this body already declares can be an end.
+func (b *bodyBuilder) namesEdgeEnd(kw string) bool {
+	if !b.declares(kw) {
 		return false
 	}
-	return true
+	p := b.p
+	switch p.peekN(2).Kind {
+	case lexer.Semicolon:
+		return true
+	case lexer.Identifier, lexer.Keyword, lexer.UnrestrictedName:
+		return p.peekN(3).Kind == lexer.Semicolon
+	}
+	return false
 }
 
 // declares reports whether a member of this body was declared with this name.
@@ -330,7 +336,12 @@ func memberDeclaredName(member ast.Node) string {
 		}
 		return memberDeclaredName(n.Member)
 	case *ast.Usage:
-		return identifierName(n.Ident)
+		// A usage with no declared name answers to the feature it references or
+		// redefines (`perform doIt;`), the name lowering resolves it by.
+		if name, _ := ast.EffectiveName(n); name != "" {
+			return name
+		}
+		return n.Ident.ShortName
 	case *ast.Definition:
 		return identifierName(n.Ident)
 	case *ast.Package:
