@@ -44,10 +44,13 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   evaluation steps/s and ~1.9M events/s each reports one within about a second,
   and a fully traced run at all four ceilings holds ~320 MB.
 - The evaluation step budget bounds one run rather than a whole session: the
-  counter is reset when a run begins, so a REPL session of many small
-  evaluations no longer exhausts its allowance and starts failing every one. A
-  run started inside another shares the outer run's budget, so a runaway cannot
-  escape the bound by starting runs of its own.
+  counter is reset when a run begins - an evaluation, a constraint or
+  requirement check, an instantiation, a calc invocation, an action or a state
+  machine - so a REPL session of many small evaluations no longer exhausts its
+  allowance and starts failing every one. A run started inside another shares
+  the outer run's budget, as does every call into a run a caller drives step by
+  step (the `%action`/`%state` debuggers), so a runaway cannot escape the bound
+  by starting runs of its own.
 - The REPL's `%advance` no longer stops after a fixed 10 000 events and
   do-activity actions, which could look like a machine that had settled. It is
   bounded by the session's event and do-activity budgets, and says which one cut

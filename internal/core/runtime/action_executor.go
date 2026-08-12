@@ -27,6 +27,10 @@ type ActionExecutor struct {
 	mergeVisited     map[ast.Node]bool // Track merge node visits
 	inputs           map[string]Value  // Input parameter bindings seeded into the initial token
 	pausedAt         string            // Node name RunToCompletion stopped at, empty when it ran to the end
+
+	// runStarted marks this executor's run as begun, so the step budget is reset
+	// once however many calls the run is driven over.
+	runStarted bool
 }
 
 // breakpointVisit identifies one token's stay at one node.
@@ -86,6 +90,8 @@ func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, e
 // Returns an error if a deadlock unrelated to accepts is detected (no progress
 // made and nothing is waiting for a message).
 func (e *ActionExecutor) Step() error {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	if e.state == StateCompleted {
 		return nil // Already completed
 	}
@@ -230,6 +236,8 @@ func (e *ActionExecutor) deadlockError() error {
 // step that makes no progress. A parked action therefore cannot spend the step
 // budget spinning — the budget is only consumed by steps that move something.
 func (e *ActionExecutor) RunToCompletion() error {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	maxSteps := e.ctx.maxActionSteps
 	var steps int64
 
@@ -400,7 +408,7 @@ func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error 
 
 // initialize spawns initial token at InitialNode.
 func (e *ActionExecutor) initialize() error {
-	e.ctx.startRunIfTopLevel()
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
 
 	// Use initial node from graph
 	if e.graph.Initial == nil {

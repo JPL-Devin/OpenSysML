@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 )
 
 // TestBudgetFromValue covers what each variable resolves to: unset, empty,
@@ -432,4 +433,121 @@ func TestStepBudgetIsPerRun(t *testing.T) {
 			t.Errorf("nested runs reset the counter: %d steps after 10 evaluations", ctx.steps)
 		}
 	})
+}
+
+// TestStepBudgetHoldsAcrossExecutorDrivenRun: a run the caller drives step by
+// step - as the REPL's %action debugger does - is one run, so a nested action it
+// invokes shares its budget instead of handing it a fresh one.
+func TestStepBudgetHoldsAcrossExecutorDrivenRun(t *testing.T) {
+	src := `
+		package L {
+			action outer {
+				attribute base = 7;
+				attribute result = 0;
+				first start;
+				perform increment;
+				done end;
+				then start increment;
+				then increment end;
+			}
+			action increment {
+				in base;
+				out result;
+				first begin;
+				action bump { assign result := base + 5; }
+				done finish;
+				then begin bump;
+				then bump finish;
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+
+	// Drive the run the way the debugger does, and report what it spent.
+	run := func(t *testing.T, maxSteps int64) (int64, error) {
+		t.Helper()
+		idx, _, ctx := buildRuntime(t, "<test>", file)
+		ctx.maxSteps = maxSteps
+		sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+		if sym == nil {
+			t.Fatal("action outer not found")
+		}
+		exec, err := newActionExecutor(ctx, sym)
+		if err != nil {
+			t.Fatalf("newActionExecutor: %v", err)
+		}
+		if err := exec.initialize(); err != nil {
+			t.Fatalf("initialize: %v", err)
+		}
+		err = exec.RunToCompletion()
+		return ctx.steps, err
+	}
+
+	// The same action run in one call, whose budget the nested invocation
+	// demonstrably shares: what it spends is what the run costs.
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	ctx.maxSteps = DefaultMaxSteps
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+	if _, err := ctx.ExecuteAction(sym); err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	cost := ctx.steps
+
+	spent, err := run(t, DefaultMaxSteps)
+	if err != nil {
+		t.Fatalf("run failed under the default budget: %v", err)
+	}
+	if spent != cost {
+		t.Fatalf("the driven run spent %d steps against %d for the same action: the nested invocation reset the counter", spent, cost)
+	}
+
+	// One step short of what the run costs: the nested invocation must not hand it
+	// a fresh allowance.
+	if _, err := run(t, cost-1); !errors.Is(err, ErrStepLimitExceeded) {
+		t.Fatalf("expected ErrStepLimitExceeded one step short of the run's cost, got %v", err)
+	}
+}
+
+// TestStepBudgetIsPerRunForInstancesAndCalcs: instantiating and invoking a calc
+// are runs of their own too, so a session of them does not exhaust the budget.
+func TestStepBudgetIsPerRunForInstancesAndCalcs(t *testing.T) {
+	src := `
+		package L {
+			part def P {
+				attribute n = 1;
+				attribute m = n + 1;
+			}
+			calc twice { in x; return : Real = x * 2; }
+		}
+	`
+	file := parseAndBuild(t, src)
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	ctx.maxSteps = 4
+
+	scope := idx.DocumentRoot("<test>")
+	partSym := findSymbolByName(scope, "P", ast.DefPart)
+	if partSym == nil {
+		t.Fatal("part def P not found")
+	}
+	calcSym := findSymbolByName(scope, "twice", ast.DefCalc)
+	if calcSym == nil {
+		t.Fatal("calc twice not found")
+	}
+
+	for i := 0; i < 100; i++ {
+		inst, err := ctx.Instantiate(partSym)
+		if err != nil {
+			t.Fatalf("instantiation %d failed: %v", i, err)
+		}
+		if _, err := inst.GetSlot(ctx, "m"); err != nil {
+			t.Fatalf("slot read %d failed: %v", i, err)
+		}
+		args := []Value{{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 21}}}
+		if _, err := ctx.InvokeCalc(calcSym, args, scope); err != nil {
+			t.Fatalf("calc invocation %d failed: %v", i, err)
+		}
+	}
 }

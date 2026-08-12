@@ -118,14 +118,18 @@ func (ctx *Context) beginRun() func() {
 	return func() { ctx.runDepth-- }
 }
 
-// startRunIfTopLevel resets the step counter for a run an executor drives itself,
-// step by step, over many calls - the REPL's %action and %state debuggers - which
-// has no single scope beginRun could bracket. A run already under way keeps its
-// budget.
-func (ctx *Context) startRunIfTopLevel() {
-	if ctx.runDepth == 0 {
+// beginExecutorRun brackets one call into an executor a caller drives itself, step
+// by step - the REPL's %action and %state debuggers - whose run spans many calls
+// and so has no single scope beginRun could bracket. started, held by the
+// executor, marks its run as begun, so the counter is reset once, at its start,
+// and every call of it counts as a run under way.
+func (ctx *Context) beginExecutorRun(started *bool) func() {
+	if ctx.runDepth == 0 && !*started {
 		ctx.steps = 0
 	}
+	*started = true
+	ctx.runDepth++
+	return func() { ctx.runDepth-- }
 }
 
 // incrementStep increments the step counter and returns ErrStepLimitExceeded if limit reached.

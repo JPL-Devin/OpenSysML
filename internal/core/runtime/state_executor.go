@@ -50,6 +50,10 @@ type StateExecutor struct {
 	// entered. Concurrently active states interleave one action per round, so this
 	// order — not map iteration order — decides the interleaving.
 	doActivities []*doActivity
+
+	// runStarted marks this executor's run as begun, so the step budget is reset
+	// once however many calls the run is driven over.
+	runStarted bool
 }
 
 // doActivity is the part of a state's do behavior that has still to run. The
@@ -1165,6 +1169,8 @@ func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*a
 // (SYSML_MAX_EVENTS, SYSML_MAX_DO_STEPS), so a cyclic machine reports a typed
 // error instead of spinning forever.
 func (e *StateExecutor) RunToCompletion() error {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	maxStateEvents, maxDoSteps := e.ctx.maxStateEvents, e.ctx.maxDoSteps
 	var events, doSteps int64
 	for e.state == StateRunning {
@@ -1376,7 +1382,7 @@ func (e *StateExecutor) activeStates() []*ast.StateNode {
 
 // initialize sets current state to initial state and enters it.
 func (e *StateExecutor) initialize() error {
-	e.ctx.startRunIfTopLevel()
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
 
 	// Use initial state from graph
 	if e.graph.Initial != nil {
@@ -1855,6 +1861,8 @@ func (e *StateExecutor) StateMachineSymbol() *symbols.Symbol {
 // behaviors is progress in itself, so a step that ran one and found no event to
 // dispatch succeeds — the completion transition it enables is queued next.
 func (e *StateExecutor) ProcessNextEvent() error {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	ran, err := e.runDoRound()
 	if err != nil {
 		return err
@@ -1874,6 +1882,8 @@ func (e *StateExecutor) HasPendingWork() bool {
 // RunDoRound advances every active state's do behavior by one action, without
 // dispatching any event, and reports how many actions ran.
 func (e *StateExecutor) RunDoRound() (int, error) {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	return e.runDoRound()
 }
 
