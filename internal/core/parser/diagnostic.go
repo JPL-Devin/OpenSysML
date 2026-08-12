@@ -8,4 +8,13 @@ import "github.com/Open-MBEE/Systemica/internal/core/source"
 type Diagnostic struct {
 	Span    source.Span
 	Message string
+	// Code classifies a warning for the consumers that report it; errors carry
+	// the "syntax" code their reporters give them.
+	Code string
 }
+
+// Warning codes.
+const (
+	codeReservedKeywordName  = "reserved-keyword-name"
+	codeUnnamedSuccessionEnd = "unnamed-succession-end"
+)

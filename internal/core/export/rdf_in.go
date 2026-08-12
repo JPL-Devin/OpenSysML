@@ -232,6 +232,24 @@ func (d *decoder) head(el *element) (string, error) {
 		}
 		return "filter " + condition, nil
 	}
+	// A succession carrying its ends as references is the one the parser builds
+	// for a `then`, written back as the edge form: `then <source> <target>;`
+	// sequences the two members it names wherever they are declared, so the
+	// order survives the round trip. A `succession` declaration whose head was
+	// kept verbatim never reaches here — print() writes its source text.
+	if el.metaclass == "SuccessionAsUsage" {
+		source := d.referenceText(el, rdf.SysML+pSourceFeature)
+		target := d.referenceText(el, rdf.SysML+pTargetFeature)
+		if source != "" && target != "" {
+			return "then " + source + " " + target, nil
+		}
+		// A half-named succession states no order, so it is reported rather than
+		// written back as a bare `succession;` the notation reads as nothing.
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the succession <%s>", el.iri),
+			Note: "it does not name both of the members it sequences, so the order it declares cannot be written back",
+		}
+	}
 	if kind, ok := metaclassDefinition[el.metaclass]; ok {
 		return d.definitionHead(el, kind), nil
 	}

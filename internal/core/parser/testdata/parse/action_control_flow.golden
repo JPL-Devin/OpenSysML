@@ -11,7 +11,7 @@
             (*ast.QualifiedName))))
       (*ast.InitialNode)
       (*ast.FinalNode)
-      (*ast.SuccessionEdge)
+      (SuccessionEdge source="start" target="end")
       (Membership visibility="default"
         (Usage kind="attribute" name="counter" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="typing" target=Integer

@@ -215,38 +215,135 @@ func TestSysMLToSysMLChecksSyntax(t *testing.T) {
 	}
 }
 
-// A succession cannot be placed from the AST flag alone, so it is reported
-// rather than written back in a position that would change execution order.
-func TestSuccessionIsUnsupported(t *testing.T) {
+// A member-attached `then` is a succession edge naming both members it
+// sequences, so the sequencing it declares survives the round trip. Member
+// order alone would not carry it: the declaration order here is the reverse.
+func TestSuccessionRoundTrips(t *testing.T) {
 	src := `package P {
 	action def A;
 	action def B;
 	action def Move {
+		action b : B;
 		action a : A;
-		then action b : B;
+		then action c : A;
 	}
 }`
-	_, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
-	var unsupported *export.UnsupportedError
-	if !errors.As(err, &unsupported) {
-		t.Fatalf("want an UnsupportedError for a `then` succession, got %v", err)
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
 	}
-	if !strings.Contains(err.Error(), "then") {
-		t.Errorf("the error should name the construct: %v", err)
+	for _, want := range []string{"sysml:sourceFeature", "sysml:targetFeature", "SuccessionAsUsage"} {
+		if !strings.Contains(string(turtle), want) {
+			t.Errorf("the graph should carry the succession as %s:\n%s", want, turtle)
+		}
+	}
+	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if !strings.Contains(string(back), "then a c;") {
+		t.Fatalf("the succession should come back naming both its members:\n%s", back)
+	}
+	// The notation that came back declares the same succession: converting it
+	// again yields the same graph, which member order could not have done.
+	again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle again: %v", err)
+	}
+	if string(again) != string(turtle) {
+		t.Errorf("round trip changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
 	}
 }
 
-// A `then` prefix marks whatever membership follows it, which need not wrap a
-// usage, so the refusal has to reach every member kind rather than usages only.
-func TestSuccessionOnNonUsageIsUnsupported(t *testing.T) {
+// A succession is written back as the edge form, which every body that can carry
+// a succession has to read for the notation to survive the round trip.
+func TestSuccessionRoundTripsInEveryBody(t *testing.T) {
+	bodies := map[string]string{
+		"definition":  "part def Q {\n\t\tpart a;\n\t\tthen part b;\n\t}",
+		"action":      "action def Q {\n\t\taction a;\n\t\tthen action b;\n\t}",
+		"state":       "state def Q {\n\t\tstate a : S;\n\t\tthen state b : S;\n\t}",
+		"calculation": "calc def Q {\n\t\tpart a;\n\t\tthen part b;\n\t}",
+		"requirement": "requirement def Q {\n\t\tpart a;\n\t\tthen part b;\n\t}",
+	}
+	for name, body := range bodies {
+		t.Run(name, func(t *testing.T) {
+			src := "package P {\n\tstate def S;\n\t" + body + "\n}"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			if !strings.Contains(string(turtle), "sysml:sourceFeature") {
+				t.Fatalf("the graph should carry the succession's ends:\n%s", turtle)
+			}
+			back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			// The notation that came back has to parse, and to declare the same
+			// succession: a body that cannot read the edge form loses the order.
+			again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle again (%s):\n%s\n%v", name, back, err)
+			}
+			if string(again) != string(turtle) {
+				t.Errorf("round trip changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
+			}
+		})
+	}
+}
+
+// A succession is its two ends, so a graph from elsewhere that names only one of
+// them declares no order: that is reported rather than written back as notation
+// (`succession;`) that says nothing.
+func TestHalfNamedSuccessionInAGraphIsReported(t *testing.T) {
+	const graph = `@prefix elmt: <urn:sysmlv2:element:> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:systemica:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:P
+    a sysml:Package ;
+    sysml:qualifiedName "P" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "P" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:P::a
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "P::a" ;
+    sysml:owningNamespace elmt:P ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "a" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:P::@1>
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "P::@1" ;
+    sysml:owningNamespace elmt:P ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:sourceFeature elmt:P::a .
+`
+	out, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+	if err == nil {
+		t.Fatalf("a succession naming one end converted to:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "does not name both of the members it sequences") {
+		t.Errorf("error %q should say why the order cannot be written back", err)
+	}
+}
+
+// A `then` before a member the notation does not allow a succession in front of
+// is a syntax error, so no graph is built from a model whose order is unclear.
+func TestSuccessionOnNonUsageIsASyntaxError(t *testing.T) {
 	for _, src := range []string{
-		"package P {\n\tpart def Q {\n\t\tthen part def B;\n\t}\n}",
-		"package P {\n\tpart def Q {\n\t\tthen package Inner { }\n\t}\n}",
+		"package P {\n\tpart def Q {\n\t\tpart a;\n\t\tthen part def B;\n\t}\n}",
+		"package P {\n\tpart def Q {\n\t\tpart a;\n\t\tthen package Inner { }\n\t}\n}",
+		"package P {\n\tpart def Q {\n\t\tpart a;\n\t\tthen attribute x;\n\t}\n}",
 	} {
 		_, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
-		var unsupported *export.UnsupportedError
-		if !errors.As(err, &unsupported) {
-			t.Errorf("want an UnsupportedError for %q, got %v", src, err)
+		var syntax *export.SyntaxError
+		if !errors.As(err, &syntax) {
+			t.Errorf("want a SyntaxError for %q, got %v", src, err)
 		}
 	}
 }

@@ -183,20 +183,29 @@ properties. These round-trip exactly through Systemica. A graph produced by
 *another* tool will not carry the text, and converting such an element to
 notation then reports it as unsupported.
 
-**A `then` succession is refused.** `ast.Membership.HasSuccession` records only
-that a `then` was written, not which two members it sequences — and the parser
-sets it on the member *before* the keyword in some positions and the member
-*after* it in others. Writing the keyword back from that flag would be a guess,
-and a wrong guess reorders execution, so a model containing `then` is reported
-rather than converted:
+**A `then` succession carries its two ends.** Every `then` is one node naming
+the members it sequences, whether it was written as its own member (`then a b;`)
+or attached to one (`then action b : B;`, which the parser desugars to the same
+edge), so the order a model declares survives the hop:
 
-```
-cannot convert the `then` succession at model.sysml:5:3: this mapping cannot
-tell which members a succession sequences, and will not guess at execution order
+```turtle
+<urn:sysmlv2:element:P::Move::@2>
+    a sysml:SuccessionAsUsage ;
+    sysml:sourceFeature elmt:P::Move::a ;
+    sysml:targetFeature elmt:P::Move::c .
 ```
 
-Making the parser record successions unambiguously is roadmap item D4; until
-then, behavioral models that sequence steps with `then` convert only to notation.
+Converting that back writes `then a c;`, which sequences the same pair wherever
+the two members are declared — member order alone would not have carried it
+(`export_test.go:TestSuccessionRoundTrips`). Every body that can carry a
+succession — definition, usage, action, state (a region included), calculation
+and requirement — reads that form back as the same node, so a second conversion
+yields the same graph (`export_test.go:TestSuccessionRoundTripsInEveryBody`).
+
+A `then` beside a member with no name (`then send Show(x) to screen;`) declares
+an order these ends cannot name. The parser warns (`unnamed-succession-end`) and
+records no edge, so the conversion carries the members without it; an edge that
+reaches the encoder naming only one end is reported rather than written back.
 
 **Two keyword prefixes are normalized away.** `variant` and `include` prefix a
 kind keyword the AST records on its own, and the prefix is not recorded, so

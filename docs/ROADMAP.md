@@ -382,22 +382,37 @@ run entirely in-process. Nothing has yet loaded a converted graph into Fuseki vi
 The companion repo's `src/test/resources/docker-compose.yml` brings up Fuseki plus layer1,
 so the harness already exists.
 
-## D4 — the parser records `then` ambiguously, so successions cannot convert
+## D4 — the parser records `then` ambiguously, so successions cannot convert — done
 
-`ast.Membership.HasSuccession` is a bare flag saying a `then` was written, with no record of
-which two members it sequences. Worse, the sites that set it disagree on which side of the
-keyword the flag belongs to: `parser/defusage.go:1582` marks the member *after* `then` (the
-prefix form), while `parser/behavior.go:199` marks the member *before* it (the trailing form).
-`SuccessionTarget` and `SuccessionGuard` exist on the struct but are never assigned by any
-path, and nothing downstream reads any of the three — the runtime does not consume this flag
-at all, which is why the inconsistency has gone unnoticed.
+Landed: a member-attached `then` is desugared at parse time into the `*ast.SuccessionEdge` the
+edge notation (`then a b;`) already built, synthesised into the enclosing body with the member
+before the keyword as its source and the member after it as its target
+(`parser/succession.go`). `HasSuccession`, `SuccessionTarget` and `SuccessionGuard` are gone
+from `ast.Membership` along with every site that set them, so there is one representation of a
+succession, and the lowering and RDF paths that already honoured the edge form now honour every
+`then`: execution follows the edges rather than member order (conformance case
+`action_member_then_order`, whose declaration order is the reverse of its execution order), and
+the mapping emits `sysml:SuccessionAsUsage` with `sourceFeature`/`targetFeature` and reads it
+back (`export_test.go:TestSuccessionRoundTrips`). The one-name form (`then b;`) is completed the
+same way, from the member before it, rather than leaving its source empty for a consumer to
+guess at.
 
-Because of that, `ToRDF` refuses a member carrying a succession rather than guessing a
-position that could reorder execution (`export_test.go:TestSuccessionIsUnsupported`). Fixing
-this means giving the parser one consistent representation — most likely resolving the target
-member and populating `SuccessionTarget` — after which the mapping can carry a real succession
-edge and the restriction lifts. Worth checking whether the runtime *should* be consuming this
-flag, since a model's step order currently depends on member order alone.
+What the account of the bug above got wrong, measured before the change: the two sites did not
+disagree about which member the flag marked. The body loop tested for `then` immediately after
+parsing the previous member, so the trailing site claimed the keyword first and the prefix site
+was reachable only for a leading `then` — one rule plus an unreachable-in-practice branch, not
+two contradictory ones. `SuccessionGuard` was indeed never assigned, and no notation would have
+filled it: SysML.xtext's `EmptySuccession` is `'then'` plus two empty ends and has no guard slot
+— a guard needs `GuardedSuccession`, its own member spelled
+`first <source> if <guard> then <target>` — so the field went without replacement, and
+`then part b if a;` is the syntax error it already was.
+
+What is left, recorded as ⚠️ in `docs/SPEC_COMPLIANCE.md`: a succession edge names its ends, so
+a `then` beside a member with no name — `then send Show(x) to screen;`, or a `then` after an
+anonymous member — declares an order this representation cannot carry. It warns
+(`unnamed-succession-end`) rather than silently dropping the keyword or failing a legal model.
+Carrying it needs an end that refers to a member by identity rather than by name, which is a
+change to the edge node, the lowering that resolves ends by name, and the RDF ends alike.
 
 ## D5 — the parser drops the `variant` and `include` keyword prefixes
 
@@ -449,6 +464,6 @@ Lessons that survived the last two batches, unchanged because they keep applying
    rough edge a user would otherwise report.
 6. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
    it is the cheapest, and it is what would show whether the Flexo interop claim actually holds
-   before more work is layered on the mapping. **D4** is the one with a correctness question
-   attached — it is a parser inconsistency that predates the conversion work and is worth
-   settling on its own merits, not just to unblock the mapping.
+   before more work is layered on the mapping. **D4** is done; what it left behind — a succession
+   end that refers to an unnamed member — belongs with **D2**, since both want real end triples
+   rather than names or text.

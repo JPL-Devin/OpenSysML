@@ -1489,30 +1489,30 @@ func (p *Parser) parseDefUsageBody() (members []ast.Node, hasBody bool) {
 	if _, ok := p.expect(lexer.LBrace, "expected '{' or ';' after declaration"); !ok {
 		return nil, false
 	}
+	body := p.newBodyBuilder()
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
-		m := p.parseBodyMember()
-		if m != nil {
-			// Check for namespace-level succession: 'then' after member
-			if p.atKeyword("then") {
-				p.advance() // consume 'then'
-
-				// Apply succession to membership node
-				if mem, ok := m.(*ast.Membership); ok {
-					mem.HasSuccession = true
-					// Optional: parse guard condition if present
-					// For now, store target will be resolved during semantic analysis
-					// We just mark that this member has a succession edge
-				}
-			}
-			members = append(members, m)
+		// A member-attached `then` sequences the members either side of it, so
+		// the keyword is taken here and the member it prefixes read next time
+		// round (see succession.go).
+		if body.atSuccession() {
+			body.takeSuccession()
+			continue
 		}
+		// `then a b;` is a succession member naming two members of this body,
+		// which is the form a member-attached `then` desugars to and so the
+		// form a converted model is written back as.
+		if p.atKeyword("then") {
+			body.add(p.parseSuccessionEdge(p.advance()))
+			continue
+		}
+		body.add(p.parseBodyMember())
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
 			p.advance()
 		}
 	}
 	p.expect(lexer.RBrace, "expected '}' to close body")
-	return members, true
+	return body.finish(), true
 }
 
 // parseBodyMember parses one body member: an optional visibility prefix
@@ -1524,18 +1524,16 @@ func (p *Parser) parseBodyMember() ast.Node {
 	trivia := p.takeTrivia()
 	vis := p.parseVisibility()
 
-	// Check for 'then' prefix (namespace-level succession marker)
-	// Pattern: then include use case ...; OR then done;
-	// Consume 'then', parse declaration, mark with HasSuccession
+	// A member-attached `then` is taken by the body loop, which owns the member
+	// list the succession it desugars to is synthesised into (see
+	// succession.go). One reaching here belongs to a body that keeps no such
+	// list, so there is nowhere to put the succession: report it rather than
+	// parse the member with the keyword dropped, which would silently sequence
+	// nothing.
 	if p.atKeyword("then") {
-		p.advance() // consume 'then'
-
-		// Recursively parse the member after 'then'
-		innerMember := p.parseBodyMember()
-		if mem, ok := innerMember.(*ast.Membership); ok {
-			mem.HasSuccession = true
-		}
-		return innerMember
+		tok := p.advance()
+		p.error(tok.Span, "`then` cannot prefix a member here: a succession sequences two members of a definition, usage, action, state, calculation or requirement body")
+		return p.parseBodyMember()
 	}
 
 	// Check for `#MetadataType` prefix (user-defined keyword)

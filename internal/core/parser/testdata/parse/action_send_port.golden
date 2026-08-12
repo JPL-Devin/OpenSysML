@@ -39,7 +39,7 @@
                   (Relationship kind="typing" target=Integer
                     (*ast.QualifiedName))))))
           (*ast.FinalNode)
-          (*ast.SuccessionEdge)
-          (*ast.SuccessionEdge)
-          (*ast.SuccessionEdge)
-          (*ast.SuccessionEdge))))))
+          (SuccessionEdge source="start" target="sender")
+          (SuccessionEdge source="sender" target="notifier")
+          (SuccessionEdge source="notifier" target="reader")
+          (SuccessionEdge source="reader" target="end"))))))

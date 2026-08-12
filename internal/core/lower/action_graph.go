@@ -5,6 +5,9 @@ package lower
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 )
 
@@ -220,7 +223,7 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 			if n.Successor != nil {
 				targetNode := findNodeByName(graph.Nodes, n.Successor)
 				if targetNode == nil {
-					return nil, fmt.Errorf("initial node %s successor references undefined target %v", n.Name, n.Successor)
+					return nil, fmt.Errorf("initial node %s successor references undefined target %s", n.Name, edgeEndName(n.Successor))
 				}
 				graph.Edges[n] = append(graph.Edges[n], targetNode)
 				if n.Guard != nil {
@@ -235,10 +238,10 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 			targetNode := findNodeByName(graph.Nodes, n.Target)
 
 			if sourceNode == nil {
-				return nil, fmt.Errorf("succession edge references undefined source node %v", n.Source)
+				return nil, fmt.Errorf("succession edge references undefined source node %s", edgeEndName(n.Source))
 			}
 			if targetNode == nil {
-				return nil, fmt.Errorf("succession edge references undefined target node %v", n.Target)
+				return nil, fmt.Errorf("succession edge references undefined target node %s", edgeEndName(n.Target))
 			}
 			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
 		case *ast.ControlFlowEdge:
@@ -246,10 +249,10 @@ func ToActionGraph(actionDecl ast.Node) (*ActionGraph, error) {
 			targetNode := findNodeByName(graph.Nodes, n.Target)
 
 			if sourceNode == nil {
-				return nil, fmt.Errorf("control flow edge references undefined source %v", n.Source)
+				return nil, fmt.Errorf("control flow edge references undefined source %s", edgeEndName(n.Source))
 			}
 			if targetNode == nil {
-				return nil, fmt.Errorf("control flow edge references undefined target %v", n.Target)
+				return nil, fmt.Errorf("control flow edge references undefined target %s", edgeEndName(n.Target))
 			}
 			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
 
@@ -414,6 +417,19 @@ func unwrapMembership(node ast.Node) ast.Node {
 }
 
 // findNodeByName looks up a node by its qualified name.
+// edgeEndName renders the name an edge end names, for a message about a node
+// the body does not declare.
+func edgeEndName(qname *ast.QualifiedName) string {
+	if qname == nil || len(qname.Parts) == 0 {
+		return "an unnamed node"
+	}
+	var parts []string
+	for _, part := range qname.Parts {
+		parts = append(parts, part.Text)
+	}
+	return strconv.Quote(strings.Join(parts, "::"))
+}
+
 func findNodeByName(nodes []ast.Node, qname *ast.QualifiedName) ast.Node {
 	if qname == nil || len(qname.Parts) == 0 {
 		return nil

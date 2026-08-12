@@ -175,7 +175,7 @@ func (p *Parser) parseIdentification() ast.Identification {
 		// Any other keyword here is the name the author meant, so it is read as
 		// one rather than dropped. SysML reserves it though (KerML §7.2.4): only
 		// an unrestricted name may spell a keyword.
-		p.warn(p.peek().Span, fmt.Sprintf("%q is a reserved keyword; write '%s' to use it as a name", kw, kw))
+		p.warn(p.peek().Span, fmt.Sprintf("%q is a reserved keyword; write '%s' to use it as a name", kw, kw), codeReservedKeywordName)
 	}
 	if seg, ok := p.parseNameSegmentRelaxed(); ok {
 		id.Name = seg.Text

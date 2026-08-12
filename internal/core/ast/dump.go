@@ -410,6 +410,10 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		b.WriteString(`(ExitMember`)
 		writeChildren(b, depth, v.Actions)
 		return
+	case *SuccessionEdge:
+		// The ends are what a `then` says, whether the author wrote the edge
+		// form or the parser desugared a member-attached keyword into it.
+		fmt.Fprintf(b, `(SuccessionEdge source=%q target=%q)`, qnString(v.Source), qnString(v.Target))
 	default:
 		fmt.Fprintf(b, `(%T)`, n)
 	}
