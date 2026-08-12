@@ -495,6 +495,19 @@ func TestEvalResolvesImportedUnitsUnqualified(t *testing.T) {
 	wants(t, run(t, pkg, "%eval mass * 2"), "= 6.00")
 }
 
+// The namespace the session works in is the last one it declared, so declaring
+// another moves it: the earlier package is then reached by qualified name.
+func TestPromptScopeIsTheLastNamespaceDeclared(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P1 { public import SI::*; attribute a = 1.0; }")
+	wants(t, run(t, s, "%eval 1.0 [m]"), "= 1.00 [m]")
+
+	s.Submit("package P2 { attribute b = 2.0; }")
+	wants(t, run(t, s, "%eval b * 3"), "= 6.00")
+	wants(t, run(t, s, "%eval 1.0 [m]"), "unresolved unit m")
+	wants(t, run(t, s, "%eval P1::a + P2::b"), "= 3.00")
+}
+
 // %calc parses its arguments as expressions, so an argument that contains
 // spaces — a quantity, a parenthesized expression, a nested call — survives.
 func TestCalcParsesExpressionArguments(t *testing.T) {
@@ -507,6 +520,19 @@ func TestCalcParsesExpressionArguments(t *testing.T) {
 	wants(t, run(t, s, "%calc Fall -15.0 [m/s] (4.0 [s] + 4.5 [s])"), "= -127.50 [(m/s)*s]")
 	// Named arguments are a different production; the limitation is reported.
 	wants(t, run(t, s, "%calc Fall v0=-15.0 [m/s] tb=8.5 [s]"), "named arguments are not supported")
+}
+
+// A whitespace-separated argument may be signed: `5 -3` is two arguments, while
+// `5 - 3` — an expression left unfinished across the space — is one.
+func TestCalcSeparatesSignedArguments(t *testing.T) {
+	s := loadFixture(t, "testdata/vehicle_package.sysml")
+	wants(t, run(t, s, "%calc add 5 -3"), "✓ add(5, -3)", "= 2")
+	wants(t, run(t, s, "%calc add 5, -3"), "✓ add(5, -3)", "= 2")
+	wants(t, run(t, s, "%calc add -5 -3"), "✓ add(-5, -3)", "= -8")
+	wants(t, run(t, s, "%calc add (2 + 3) -3"), "✓ add((2 + 3), -3)", "= 2")
+	wants(t, run(t, s, "%calc add 5 - 3"), `parameter "y" has no argument`)
+	// Malformed input is diagnosed rather than parsed past.
+	wants(t, run(t, s, "%calc add (5 3"), "failed to parse argument")
 }
 
 // A quantity's magnitude is a number in a result table like any other, so it is

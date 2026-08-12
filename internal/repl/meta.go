@@ -773,34 +773,130 @@ type argExpr struct {
 
 // parseExprList parses an argument list as expressions, so an argument that
 // contains spaces — a quantity, a parenthesized subexpression, a nested
-// invocation — survives as the one expression it is. Successive expressions are
-// separated by a comma or by nothing but whitespace, and each is parsed by the
-// expression parser rather than cut out of the text.
+// invocation — survives as the one expression it is.
 func parseExprList(text string) ([]argExpr, error) {
 	var out []argExpr
-	rest := strings.TrimLeft(text, " \t")
-	for rest != "" {
-		p := parser.New(source.New("arg", []byte(rest)))
-		expr := p.ParseExpression()
-		if expr == nil {
-			return nil, fmt.Errorf("failed to parse argument list %q", text)
-		}
-		end := p.Offset()
-		if end <= 0 || end > len(rest) {
-			return nil, fmt.Errorf("failed to parse argument %q", rest)
-		}
-		consumed := rest[:end]
-		if _, bad := expr.(*ast.ErrorNode); bad || len(p.Diagnostics) > 0 {
-			return nil, fmt.Errorf("failed to parse argument %q", strings.TrimSpace(consumed))
-		}
-		out = append(out, argExpr{expr: expr, text: strings.TrimSpace(consumed)})
-		rest = strings.TrimLeft(rest[end:], " \t")
-		if strings.HasPrefix(rest, "=") && !strings.HasPrefix(rest, "==") {
+	for _, arg := range splitArgs(text) {
+		if isNamedArgument(arg) {
 			return nil, fmt.Errorf("named arguments are not supported here; pass arguments positionally")
 		}
-		rest = strings.TrimLeft(strings.TrimPrefix(rest, ","), " \t")
+		expr, err := parseWholeExpr(arg)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, argExpr{expr: expr, text: arg})
 	}
 	return out, nil
+}
+
+// splitArgs cuts an argument list into one text per argument. A comma separates
+// arguments, and so does whitespace — except where the fragment after it
+// continues the expression before it, as a quantity's unit does.
+func splitArgs(text string) []string {
+	var args []string
+	for _, group := range splitTopLevel(text) {
+		var buf string
+		for _, frag := range group {
+			switch {
+			case buf == "":
+				buf = frag
+			case continuesExpr(buf, frag):
+				buf += " " + frag
+			default:
+				args = append(args, buf)
+				buf = frag
+			}
+		}
+		if buf != "" {
+			args = append(args, buf)
+		}
+	}
+	return args
+}
+
+// continuesExpr reports whether frag continues the expression buf holds rather
+// than starting the next argument: a unit or index bracket does, as does a
+// fragment that is no expression on its own or that follows an unfinished one
+// (`5 - 3` is one argument, `5 -3` is two).
+func continuesExpr(buf, frag string) bool {
+	if strings.HasPrefix(frag, "[") || strings.HasPrefix(frag, "#") {
+		return true
+	}
+	if _, err := parseWholeExpr(frag); err != nil {
+		return true
+	}
+	_, err := parseWholeExpr(buf)
+	return err != nil
+}
+
+// splitTopLevel splits text at commas outside any bracket or string, each group
+// as the whitespace-separated fragments it is written in.
+func splitTopLevel(text string) [][]string {
+	var groups [][]string
+	var frags []string
+	var frag strings.Builder
+	depth, quoted := 0, false
+
+	flushFrag := func() {
+		if frag.Len() > 0 {
+			frags = append(frags, frag.String())
+			frag.Reset()
+		}
+	}
+	for _, r := range text {
+		switch {
+		case quoted:
+			if r == '"' {
+				quoted = false
+			}
+		case r == '"':
+			quoted = true
+		case r == '(' || r == '[':
+			depth++
+		case r == ')' || r == ']':
+			depth--
+		case depth == 0 && r == ',':
+			flushFrag()
+			groups = append(groups, frags)
+			frags = nil
+			continue
+		case depth == 0 && (r == ' ' || r == '\t'):
+			flushFrag()
+			continue
+		}
+		frag.WriteRune(r)
+	}
+	flushFrag()
+	return append(groups, frags)
+}
+
+// isNamedArgument reports whether text binds a name (`v0 = 1.0`), which is a
+// production of an invocation rather than of an argument list at the prompt.
+func isNamedArgument(text string) bool {
+	for i, r := range text {
+		if r != '=' || i == 0 || i+1 == len(text) {
+			continue
+		}
+		if strings.ContainsRune("=<>!+-*/", rune(text[i-1])) || text[i+1] == '=' {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// parseWholeExpr parses text as one complete expression, reporting text the
+// expression parser does not consume in full.
+func parseWholeExpr(text string) (ast.Node, error) {
+	p := parser.New(source.New("arg", []byte(text)))
+	expr := p.ParseExpression()
+	if expr == nil {
+		return nil, fmt.Errorf("failed to parse argument %q", text)
+	}
+	if _, bad := expr.(*ast.ErrorNode); bad || len(p.Diagnostics) > 0 || p.Offset() != len(text) {
+		return nil, fmt.Errorf("failed to parse argument %q", text)
+	}
+	return expr, nil
 }
 
 // doConstraint evaluates a constraint definition.

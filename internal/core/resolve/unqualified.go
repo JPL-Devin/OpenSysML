@@ -268,3 +268,10 @@ func lookupInSubtree(scope *symbols.Scope, name string, imp *ast.Import, seen ma
 	}
 	return nil, false
 }
+
+// LookupNameExcluding resolves name from scope as LookupName does, with decl's
+// own binding hidden: what the name resolves to where decl does not declare it.
+func (r *Resolver) LookupNameExcluding(scope *symbols.Scope, name string, decl ast.Node) (*symbols.Symbol, bool) {
+	res := r.walkUnqualifiedHiding(scope, name, &refFilter{decl: decl})
+	return res.sym, res.ok
+}

@@ -336,9 +336,10 @@ merging it.
 
 The prompt evaluates in the namespace the session is working in (`Session.promptScope`), which is
 the namespace a member typed at the prompt would be written in, so `mass * 2` and `1.0 [m/s]` name
-that namespace's members and imports. What remains is a choice, not a defect: reaching *another*
-package's members unqualified would need a stated context (`%eval in Demo::Vehicle : mass * 2`) or
-the last `%instantiate`; a qualified name reaches them today.
+that namespace's members and imports. What remains is a choice, not a defect: that namespace is the
+*last* one the session declared, so declaring a scratch package moves it and the earlier package's
+members and imports are then reached by qualified name only. Naming a context explicitly
+(`%eval in Demo::Vehicle : mass * 2`) or following the last `%instantiate` would decide it instead.
 
 ---
 

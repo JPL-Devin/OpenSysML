@@ -506,8 +506,8 @@ func (m *Model) shadowedUnit(qn *ast.QualifiedName, sym *symbols.Symbol) error {
 	return err
 }
 
-// unitOutside resolves sym's own name in the enclosing namespace, reporting it
-// only when it is a measurement unit — the unit sym hid from its siblings.
+// unitOutside resolves sym's own name where sym does not declare it, reporting
+// it only when it is a measurement unit — the unit sym hid from its siblings.
 func (m *Model) unitOutside(sym *symbols.Symbol) *symbols.Symbol {
 	if m.resolver == nil || sym.OwnerScope == nil {
 		return nil
@@ -516,7 +516,7 @@ func (m *Model) unitOutside(sym *symbols.Symbol) *symbols.Symbol {
 	if i := strings.LastIndex(name, "::"); i >= 0 {
 		name = name[i+2:]
 	}
-	found, ok := m.resolver.LookupName(sym.OwnerScope.Parent(), name)
+	found, ok := m.resolver.LookupNameExcluding(sym.OwnerScope, name, sym.Decl)
 	if !ok || found == nil || found == sym {
 		return nil
 	}
