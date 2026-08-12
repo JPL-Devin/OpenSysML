@@ -24,6 +24,8 @@ func TestSetMaxSteps(t *testing.T) {
 		t.Fatalf("getOrCreateRuntime: %v", err)
 	}
 
+	s.instances["P::Q"] = &runtime.Instance{ID: 1}
+
 	if err := s.SetMaxSteps(4200); err != nil {
 		t.Fatalf("SetMaxSteps: %v", err)
 	}
@@ -36,6 +38,10 @@ func TestSetMaxSteps(t *testing.T) {
 	}
 	if got := ctx.MaxSteps(); got != 4200 {
 		t.Errorf("runtime context budget = %d, want 4200", got)
+	}
+	// Instances belonged to the discarded context, whose IDs the new one reuses.
+	if len(s.instances) != 0 {
+		t.Errorf("instances survived the new context: %v", s.instances)
 	}
 
 	for _, bad := range []int64{0, -1} {

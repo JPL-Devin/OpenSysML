@@ -92,7 +92,10 @@ func (s *Session) SetMaxSteps(maxSteps int64) error {
 		return fmt.Errorf("evaluation step budget must be greater than zero, got %d", maxSteps)
 	}
 	s.maxSteps = maxSteps
+	// Dropping the context invalidates everything derived from it, instances
+	// included: their IDs restart with the next context.
 	s.rtCtx = nil
+	s.instances = make(map[string]*runtime.Instance)
 	return nil
 }
 

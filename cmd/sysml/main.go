@@ -108,15 +108,6 @@ func main() {
 		os.Exit(2)
 	}
 
-	// Resolve the evaluation step budget before anything runs, so a bad value is
-	// reported at startup rather than mistaken for the default at execution time.
-	var err error
-	maxSteps, err = runtime.MaxStepsFromEnv()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "sysml:", err)
-		os.Exit(2)
-	}
-
 	// Handle version flag
 	if showVersion {
 		fmt.Printf("sysml %s\n", Version)
@@ -135,6 +126,17 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+
+	// Resolve the evaluation step budget before any model runs, so a bad value is
+	// reported at startup rather than mistaken for the default at execution time.
+	// Reporting the version and converting a model evaluate nothing, so they are
+	// handled above and do not depend on the budget.
+	var err error
+	maxSteps, err = runtime.MaxStepsFromEnv()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sysml:", err)
+		os.Exit(2)
 	}
 
 	// Non-interactive mode: files + eval expressions, execute and exit
