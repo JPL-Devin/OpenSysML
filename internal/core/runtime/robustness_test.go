@@ -62,6 +62,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("extension_library_function_outside_its_domain", testExtensionLibraryFunctionOutsideItsDomain)
 	t.Run("exponentiation_integer_overflow", testExponentiationIntegerOverflow)
 	t.Run("quantity_incommensurable_comparison", testQuantityIncommensurableComparison)
+	t.Run("quantity_exponentiation_outside_its_domain", testQuantityExponentiationOutsideItsDomain)
 	t.Run("quantity_index_is_not_a_unit", testQuantityIndexIsNotAUnit)
 	t.Run("quantity_cyclic_unit_definition", testQuantityCyclicUnitDefinition)
 	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
@@ -1610,6 +1611,30 @@ func testQuantityIncommensurableComparison(t *testing.T) {
 	}
 	if errors.Is(err, ErrViolated) {
 		t.Error("incommensurable units are not a violation: neither verdict is an answer")
+	}
+}
+
+// testQuantityExponentiationOutsideItsDomain: raising a quantity to an exponent
+// the shared `**` semantics is not defined for reports the same error the scalar
+// path does, rather than a magnitude of +Inf with a unit attached.
+func testQuantityExponentiationOutsideItsDomain(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			public import SI::*;
+			calc def Inverse {
+				return : ScalarValues::Real = (0.0 [m]) ** -1.0;
+			}
+		}
+	`))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Inverse", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("Inverse calc def not found")
+	}
+
+	got, err := ctx.InvokeCalc(sym, nil, rootScope)
+	if !errors.Is(err, semantics.ErrArithmeticDomain) {
+		t.Fatalf("(0.0 [m]) ** -1.0 = %+v, %v; want an arithmetic domain error", got, err)
 	}
 }
 

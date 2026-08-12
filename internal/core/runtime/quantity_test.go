@@ -73,6 +73,32 @@ func TestQuantityEvaluation(t *testing.T) {
 	}
 }
 
+// TestComposedQuantityUnit evaluates the composed units end to end, so the
+// rendering the model sees is the one the helper produces.
+func TestComposedQuantityUnit(t *testing.T) {
+	ctx, scope := quantityContext(t)
+
+	cases := []struct{ src, want string }{
+		{"10.0 [m] / 2.0 [s]", "5 [m/s]"},
+		{"(10.0 [m] / 2.0 [s]) * (3.0 [kg] / 1.0 [s])", "15 [(m/s)*(kg/s)]"},
+		{"(2.0 [m] * 3.0 [m]) * 2.0 [s]", "12 [(m*m)*s]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.src, func(t *testing.T) {
+			got, err := evalIn(t, ctx, scope, tc.src)
+			if err != nil {
+				t.Fatalf("%s: %v", tc.src, err)
+			}
+			if got.Kind != ValQuantity {
+				t.Fatalf("%s = %v (%s), want a quantity", tc.src, got, got.Kind)
+			}
+			if got.Quantity.String() != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, got.Quantity, tc.want)
+			}
+		})
+	}
+}
+
 // TestQuantityComparison compares quantities across commensurable units,
 // including at the exact boundary the lunar-lander requirement sits on.
 func TestQuantityComparison(t *testing.T) {

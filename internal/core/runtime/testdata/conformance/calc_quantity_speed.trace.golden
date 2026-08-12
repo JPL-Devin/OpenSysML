@@ -1,0 +1,7 @@
+enter calc test::Speed
+      eval literal 10.0 -> 10.0
+    eval index -> 10.0 [m]
+      eval literal 4.0 -> 4.0
+    eval index -> 4.0 [s]
+  eval operator / -> 2.5 [m/s]
+exit calc test::Speed -> 2.5 [m/s]

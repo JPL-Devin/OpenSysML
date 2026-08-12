@@ -1,0 +1,8 @@
+{
+  "type": "calc",
+  "libraries": true,
+  "result": {
+    "type": "Quantity",
+    "value": "2.5 [m/s]"
+  }
+}
