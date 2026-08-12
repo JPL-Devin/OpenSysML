@@ -194,6 +194,42 @@ func TestNegatedNestedConstraintIsInverted(t *testing.T) {
 	}
 }
 
+// An inherited parameter nothing binds still reads a same-named value of the
+// object being checked.
+func TestUnboundParameterFallsBackToInstanceSlot(t *testing.T) {
+	src := `
+		package test {
+			constraint def MassLimit {
+				in m;
+				in limit;
+				m <= limit
+			}
+			part def Vehicle {
+				attribute m = 1200.0;
+				attribute limit = 1500.0;
+				constraint mass : MassLimit;
+			}
+		}
+	`
+	ctx, pkg := conditionFixture(t, src)
+	vehicle := requirementNamed(t, pkg, "Vehicle")
+	inst, err := ctx.Instantiate(vehicle)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	feat := featureNamed(ctx, vehicle, "mass")
+	if feat == nil || feat.Symbol == nil {
+		t.Fatal("constraint feature not found")
+	}
+	satisfied, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), inst)
+	if err != nil {
+		t.Fatalf("EvaluateConstraintOn: %v", err)
+	}
+	if !satisfied {
+		t.Error("an unbound parameter should read the checked object's value")
+	}
+}
+
 // A parameter a constraint usage binds is visible to the condition it inherits
 // from the definition it is typed by.
 func TestConstraintUsageBindsInheritedParameter(t *testing.T) {

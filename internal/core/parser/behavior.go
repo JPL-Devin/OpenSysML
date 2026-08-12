@@ -1545,7 +1545,12 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 	var members []ast.Node
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
 		members = append(members, p.parseRequirementMember())
+		// Force progress: a member that consumed nothing would spin the loop.
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.advance()
+		}
 	}
 
 	p.expect(lexer.RBrace, "expected '}' after requirement body")
@@ -1860,13 +1865,18 @@ func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool) a
 func (p *Parser) parseNestedConstraintConditions() []ast.Node {
 	var conditions []ast.Node
 	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
 		if p.atKeyword("doc") {
-			p.parseDocumentation(p.peek().Span.Offset)
+			p.parseDocumentation(before)
 			continue
 		}
 		member := p.parseConstraintMember()
 		if c, ok := member.(*ast.ConstraintMember); ok && (c.Expression != nil || len(c.Body) > 0) {
 			conditions = append(conditions, c)
+		}
+		// Force progress: a member that consumed nothing would spin the loop.
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.advance()
 		}
 	}
 	p.expect(lexer.RBrace, "expected '}' after constraint body")

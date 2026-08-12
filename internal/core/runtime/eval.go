@@ -192,14 +192,12 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		if val, ok := ec.Lookup(name); ok {
 			return val, nil
 		}
-		// Then a feature of the element being evaluated: it is declared inside
-		// that element, so it masks a same-named member of the object carrying
-		// it, and a value a typed usage binds masks the default of the
+		// Then a valued feature of the element being evaluated: it is declared
+		// inside that element, so it masks a same-named member of the object
+		// carrying it, and a value a typed usage binds masks the default of the
 		// declaration it redefines.
-		if bound, ok := ec.features[name]; ok {
-			if bound.expr == nil {
-				return Value{}, fmt.Errorf("%w for feature %s", ErrNoValue, name)
-			}
+		bound, declared := ec.features[name]
+		if declared && bound.expr != nil {
 			return ec.evalIn(bound.scope).Eval(bound.expr)
 		}
 		// Then the bound instance: a slot holds the value this object actually
@@ -218,6 +216,11 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 					return ec.Eval(usage.Value)
 				}
 			}
+		}
+		// A feature the element declares but nothing gives a value to is
+		// uninitialized rather than unresolved.
+		if declared {
+			return Value{}, fmt.Errorf("%w for feature %s", ErrNoValue, name)
 		}
 		return Value{}, fmt.Errorf("unresolved feature: %s", name)
 	}
