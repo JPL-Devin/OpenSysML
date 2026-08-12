@@ -543,6 +543,80 @@ Three cheap, high-signal sweeps:
 Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
 (`PATH=$HOME/sdk/go/bin:$HOME/go/bin:$PATH`) before concluding the toolchain is missing.
 
+## Testing parser/naming changes end-to-end
+
+A parser or naming change is only convincing if the *same input file* behaves differently on two
+binaries, so build an A/B baseline first and keep it around:
+
+```bash
+git worktree add /tmp/mainwt main     # or reuse an existing worktree such as /home/ubuntu/mainwt
+(cd /tmp/mainwt && go build -o /tmp/mainwt/sysml-main ./cmd/sysml && go build -o /tmp/mainwt/sysml-lsp-main ./cmd/sysml-lsp)
+```
+
+Three cheap, high-signal sweeps:
+
+1. **Corpus no-diff sweep** — load every model on both binaries and diff the output; anything other
+   than `0` differences is either the intended change or a regression (~4 min for 412 files):
+   ```bash
+   for f in $(find examples testdata internal/repl/testdata -name '*.sysml'); do
+     diff <(printf "%%load $f\n%%quit\n" | ./bin/sysml 2>&1) <(printf "%%load $f\n%%quit\n" | /tmp/mainwt/sysml-main 2>&1)
+   done
+   ```
+   Note `%load` splits its argument on whitespace, so a corpus path such as
+   `examples/sysml-v2-training/05. Redefinition/…` cannot be loaded — copy it to a space-free path
+   first (passing the file as an argv positional works too).
+2. **Twin table** — for a notation with two spellings, run every *degenerate* form of both spellings
+   through a tiny script and print keyword/symbol/main side by side. Testing only well-formed forms
+   hides the interesting bugs: on PR #98 the well-formed forms were at parity while `redefines;`,
+   `subsets ;`, `crosses ;`, `references ;` were accepted **silently** and their symbol twins all
+   said `expected a name`. A silently accepted member is invisible in a `✓ package T` line — always
+   pair the load with `%instantiate`/`%slots` to see what the member actually did.
+3. **LSP diagnostics without an editor** — drive `bin/sysml-lsp` over stdio with ~15 lines of Python
+   (`initialize`, `initialized`, `textDocument/didOpen`, sleep 3, read stdout) and count
+   `"severity":1` in the `publishDiagnostics` notification. A file with **no** diagnostics produces
+   **no** notification at all, so treat a missing notification as zero errors rather than a hang.
+   `sysml-lsp: failed reading header line: EOF` on stderr at shutdown is normal.
+
+Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
+(`PATH=$HOME/sdk/go/bin:$HOME/go/bin:$PATH`) before concluding the toolchain is missing.
+
+### Naming changes that reach lowering and the runtime
+
+When a parser change stops naming a declaration (e.g. `ast.EffectiveName` deriving a name from a
+`redefines`/`references` target instead of the parser inventing one), the parse is the *least*
+interesting surface — consumers reading `Usage.Ident.Name` break silently downstream. The probes
+that actually distinguish fixed from broken, each with a visible A/B against `main`:
+
+- **Attribute default** — `attribute redefines x = 5;` in an action body with a statement reading
+  `x`; a lost name surfaces as `error: execution failed: eval assignment RHS: unresolved feature: x`,
+  not as a parse error.
+- **Step ordering** — `action redefines bump { … }` ordered by `then start bump; then bump end;`.
+  A lost name fails at lowering: `succession edge references undefined target node`.
+- **Trace naming** — `%trace on` then `%continue`; the step must print `token 1@bump`. A generic
+  `token 1@usage_action` (the `nodeIdentifier` fallback in `runtime/trace.go`) is the bug signature,
+  and it also reproduces with any unnamed step such as `perform worker;`.
+- **Calc parameter** — `in redefines factor = 3;` overriding an inherited `in factor = 2`. The
+  giveaway is a *wrong number*, not an error: the invocation silently uses the inherited default
+  (`Scaled(7)` → 14 instead of 21), so assert the value, never just "it evaluated".
+- **State** — `state redefines waiting { accept go then active; }`. A lost name makes the sourceless
+  accept vanish: `%state` shows `Events: 0` and `%advance 1` never leaves the initial state.
+
+Ready-made fixtures for all of these live in `internal/core/runtime/testdata/conformance/`
+(`action_redefined_attribute_default[_symbol]`, `action_redefined_step_ordering`,
+`calc_redefined_parameter[_symbol]`, `state_redefined_state_accept[_symbol]`) — load them straight
+into the REPL with `%action test::run` / `%eval test::Scaled(7)` / `%state Test::Machine` rather than
+writing new models. Where only a keyword fixture exists, `sed 's/redefines/:>>/'` gives the symbol
+twin. `action_redefined_step_ordering.sysml` emits a pre-existing
+`name conflict: total is already the name of the inherited feature Base::total` on every revision —
+not a regression.
+
+Adversarial cases for name derivation: two redefinitions on one member
+(`attribute redefines x, y = 9;`) and a short-name-only declaration (`attribute <sn> :>> x = 5;`)
+must both derive *no* name — the member then simply does not appear in the action's `Results:`, with
+no diagnostic, so check for the **absence** of the line. REPL call syntax: named arguments work as
+`Scaled(x = 7, factor = 5)`, but *mixing* positional and named (`Scaled(7, factor = 5)`) is a parse
+error on every revision — don't read that as a parameter-naming bug.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
