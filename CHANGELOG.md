@@ -45,6 +45,13 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 
 ### Runtime and tooling
 
+- A parser try-parse that gives up now rewinds: the token buffer is read through
+  a cursor rather than re-sliced as tokens are consumed, so a checkpoint restores
+  the position it was taken at, along with the diagnostics and warnings the
+  abandoned attempt reported. Backtracking previously left the words the attempt
+  had consumed behind, which made a condition beginning with a feature named
+  `constraint` (`assert constraint x > 0;`) report an expression it did not have,
+  and could exceed the buffer's capacity.
 - The evaluation step budget is configurable through `SYSML_MAX_STEPS`, so a
   legitimately long run — a numeric integration in an action body, say — is not
   bounded by a fixed ceiling. A value that is not a positive integer is reported
