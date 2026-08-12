@@ -494,9 +494,13 @@ func (e *ShadowedUnitError) Error() string {
 func (e *ShadowedUnitError) Unwrap() error { return ErrNotAUnit }
 
 // shadowedUnit describes a unit-position name that resolved to a non-unit,
-// including the unit that resolution hid.
+// including the unit that resolution hid. Only a simple name can shadow one, so
+// a qualified name is reported without that explanation.
 func (m *Model) shadowedUnit(qn *ast.QualifiedName, sym *symbols.Symbol) error {
 	err := &ShadowedUnitError{Name: QualifiedNameText(qn), Resolved: sym, Namespace: namespacePath(sym.OwnerScope)}
+	if len(qn.Parts) != 1 {
+		return err
+	}
 	if outer := m.unitOutside(sym); outer != nil {
 		err.Shadowed = outer
 		// The written name qualified by the unit's namespace, which is the

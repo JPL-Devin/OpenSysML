@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/model"
@@ -871,18 +872,46 @@ func splitTopLevel(text string) [][]string {
 }
 
 // isNamedArgument reports whether text binds a name (`v0 = 1.0`), which is a
-// production of an invocation rather than of an argument list at the prompt.
+// production of an invocation rather than of an argument list at the prompt. The
+// binding is the argument's own: an `=` nested in a call, in a bracket or in a
+// string belongs to that expression.
 func isNamedArgument(text string) bool {
+	depth, quoted := 0, false
 	for i, r := range text {
-		if r != '=' || i == 0 || i+1 == len(text) {
-			continue
+		switch {
+		case quoted:
+			if r == '"' {
+				quoted = false
+			}
+		case r == '"':
+			quoted = true
+		case r == '(' || r == '[':
+			depth++
+		case r == ')' || r == ']':
+			depth--
+		case depth == 0 && r == '=' && i > 0 && i+1 < len(text):
+			if text[i+1] == '=' || strings.ContainsRune("=<>!+-*/", rune(text[i-1])) {
+				continue
+			}
+			return isIdentifier(strings.TrimSpace(text[:i]))
 		}
-		if strings.ContainsRune("=<>!+-*/", rune(text[i-1])) || text[i+1] == '=' {
-			continue
-		}
-		return true
 	}
 	return false
+}
+
+// isIdentifier reports whether text is one bare name, the only thing a named
+// argument's left side can be.
+func isIdentifier(text string) bool {
+	if text == "" {
+		return false
+	}
+	for i, r := range text {
+		if r == '_' || unicode.IsLetter(r) || (i > 0 && unicode.IsDigit(r)) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // parseWholeExpr parses text as one complete expression, reporting text the

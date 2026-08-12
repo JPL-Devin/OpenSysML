@@ -67,6 +67,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("quantity_incommensurable_comparison", testQuantityIncommensurableComparison)
 	t.Run("quantity_index_is_not_a_unit", testQuantityIndexIsNotAUnit)
 	t.Run("quantity_unit_shadowed_by_sibling", testQuantityUnitShadowedBySibling)
+	t.Run("quantity_qualified_unit_is_not_shadowing", testQuantityQualifiedUnitIsNotShadowing)
 	t.Run("quantity_cyclic_unit_definition", testQuantityCyclicUnitDefinition)
 	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
@@ -1766,6 +1767,41 @@ func testQuantityUnitShadowedBySibling(t *testing.T) {
 	}
 	if shadowed.Shadowed == nil || shadowed.Suggestion != "SI::m" {
 		t.Errorf("error suggests %q; want the qualified spelling SI::m of the hidden unit", shadowed.Suggestion)
+	}
+}
+
+// testQuantityQualifiedUnitIsNotShadowing: a qualified name in unit position
+// resolves to what it names, so a non-unit is reported as one without a
+// shadowing explanation or a spelling that would not resolve.
+func testQuantityQualifiedUnitIsNotShadowing(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			public import SI::*;
+			attribute m : ScalarValues::Real = 2.0;
+			constraint def Tall {
+				1.0 [test::m] > 500.0 [SI::m]
+			}
+		}
+	`))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Tall", ast.DefConstraint)
+	if sym == nil {
+		t.Fatal("Tall constraint not found")
+	}
+
+	satisfied, err := ctx.EvaluateConstraint(sym, sym.OwnerScope)
+	if !errors.Is(err, semantics.ErrNotAUnit) {
+		t.Fatalf("satisfied = %v, err = %v; want ErrNotAUnit", satisfied, err)
+	}
+	var shadowed *semantics.ShadowedUnitError
+	if !errors.As(err, &shadowed) {
+		t.Fatalf("err = %v; want a *semantics.ShadowedUnitError", err)
+	}
+	if shadowed.Shadowed != nil || shadowed.Suggestion != "" {
+		t.Errorf("error suggests %q for a qualified name; want no shadowing explanation", shadowed.Suggestion)
+	}
+	if !strings.Contains(err.Error(), "test::m resolves to") {
+		t.Errorf("err = %v; want it to name the declaration as written", err)
 	}
 }
 

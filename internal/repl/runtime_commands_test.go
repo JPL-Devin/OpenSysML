@@ -531,6 +531,10 @@ func TestCalcSeparatesSignedArguments(t *testing.T) {
 	wants(t, run(t, s, "%calc add -5 -3"), "✓ add(-5, -3)", "= -8")
 	wants(t, run(t, s, "%calc add (2 + 3) -3"), "✓ add((2 + 3), -3)", "= 2")
 	wants(t, run(t, s, "%calc add 5 - 3"), `parameter "y" has no argument`)
+	// An `=` inside an argument's own parentheses binds that call's parameter,
+	// not the argument, so only the argument's own binding is refused.
+	wants(t, run(t, s, "%calc add add(x = 1, y = 2) 4"), "✓ add(add(x = 1, y = 2), 4)", "= 7")
+	wants(t, run(t, s, "%calc add a=1 2"), "named arguments are not supported")
 	// Malformed input is diagnosed rather than parsed past.
 	wants(t, run(t, s, "%calc add (5 3"), "failed to parse argument")
 }

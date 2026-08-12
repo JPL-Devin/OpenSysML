@@ -656,6 +656,66 @@ arguments work as `Scaled(x = 7, factor = 5)`, but *mixing* positional and named
 (`Scaled(7, factor = 5)`) is a parse error on every revision — don't read that as a
 parameter-naming bug.
 
+## Quantities, unit-name resolution and prompt scope
+
+A name in the unit position of `x [u]` is an ordinary feature reference, so it resolves to the
+**nearest** declaration and then must conform to a measurement unit. Testing anything in this area:
+
+- There are **four** evaluator paths that reach a unit name and they must agree: a slot
+  (`%instantiate` + `%slots`), an action (`%action`), a calc (`%calc`), and a constraint
+  (`%constraint`). The constraint path historically diverged — it reached past a nearer declaration
+  and silently converted in metres, giving a *wrong answer with no error*, so always include
+  `%constraint` and assert the diagnostic, never just "the other three agree".
+- The high-value fixture shape is a body that declares `attribute m` (mass!) next to
+  `500.0 [m]`, with `public import SI::*` in the enclosing package. Expect, verbatim, from all four:
+  `not a measurement unit: m resolves to the attributeUsage m declared in <NS>, shadowing the
+  measurement unit SI::metre — write SI::m to name the unit`. Ready-made:
+  `internal/core/runtime/testdata/conformance/unit_shadowed_by_sibling_{slot,action,calc,constraint}.sysml`,
+  plus `unit_shadowed_by_local_unit` (a sibling that *is* a unit must still evaluate) and
+  `unit_undeclared` (`unresolved unit furlong` — a different message, assert it stays different).
+- Assert the **neighbouring** quantity too: `1000.0 [kg]` next to the shadowing `m` must still print
+  `m = 1000.00 [kg]`. A too-broad fix breaks that and no error-message check would notice.
+- The remedy clause (`— write SI::m …`) comes from resolving the name again with the shadowing
+  declaration hidden, so it is produced for a shadow declared inside a body *and* for one declared
+  at package level next to the `import SI::*` itself. A message that stops at
+  `… m resolves to the attributeUsage m declared in ADV` means that second lookup failed — worth
+  reporting, since the package-level shadow is the likely real-world spelling.
+
+**Prompt scope.** `%eval`/`%calc` evaluate in the scope of the **last namespace the session
+declared** (`Session.promptScope`), which is what makes `%eval 1.0 [m/s]` work for a loaded package
+that imports `SI::*`. Consequences to test deliberately, because they surprise users:
+
+- Typing a *new* package mid-session moves the prompt scope: after
+  `package Demo { attribute mass = 3.0; }`, `%eval mass * 2` = `6.00` but `%eval 1.0 [m]` starts
+  failing `unresolved unit m` (Demo imports nothing).
+- With two packages, only the last one's members resolve unqualified (`%eval b * 3` works,
+  `%eval a + b` is `unresolved feature: a`); qualify them (`%eval P1::a + P2::b` = `3.00`).
+- `%eval <unit>` (e.g. `%eval m`) resolves through that scope and answers
+  `error: "m" has no value to evaluate`, not `symbol "m" not found` — the latter is the pre-fix
+  signature.
+
+**`%calc` arguments** are parsed as a list of expressions, so an argument containing spaces survives.
+All of these must give the same result: `%calc P::Fall 10.0 [m/s], 3.0 [s]` (comma),
+`%calc P::Fall(10.0 [m/s], 3.0 [s])` (invocation form), `%calc P::Fall 10.0 [m/s] 3.0 [s]`
+(whitespace only), `%calc P::Fall (1.0 + 9.0) [m/s], 3.0 [s]` (parenthesized subexpression),
+a nested invocation as an argument, and a trailing comma (accepted silently). Whitespace separates
+two arguments only where each side is a complete expression, so `%calc add 5 -3` is two arguments
+while `%calc add 5 - 3` is one subtraction (and then reports `parameter "y" has no argument`) —
+check a signed second argument both ways. Malformed input must
+diagnose and leave the session usable — named args → `named arguments are not supported here; pass
+arguments positionally`; unbalanced paren → `failed to parse argument "(…"`; a lone `,` →
+`failed to parse argument ","`; no args / `()` → `unbound parameter: …`; too many →
+`calc argument count mismatch`. Pre-fix signature: `evaluation of argument "[m/s]," failed:
+unsupported node type: *ast.ErrorNode`. Follow the sweep with `%eval 1 + 1` → `= 2`.
+
+**Quantity rendering.** Two separate printers, both worth an A/B against the parent commit:
+a violated assertion renders the bracket form as source (`Assertion evaluated to false:
+1.0 [m] > 500.0 [m]`; a missing `*ast.IndexExpr` case shows `index > index`), and a result table
+formats the magnitude like a bare Real (`%action test::propagate` +`%continue` on
+`internal/core/runtime/testdata/conformance/action_body_quantity_descent.sysml` → `t = 17.20 [s]`,
+`h = -0.42 [m]`, `v = -42.86 [m/s]`; raw floats such as `17.19999999999997 [s]` are the pre-fix
+signature). Note the action in that file is named **`propagate`**, not `descent`.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
