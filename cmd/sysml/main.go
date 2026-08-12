@@ -12,6 +12,7 @@ import (
 	"github.com/chzyer/readline"
 
 	"github.com/Open-MBEE/Systemica/internal/core/export"
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/repl"
 )
 
@@ -49,6 +50,9 @@ var (
 	fromFormat  string
 	toFormat    string
 )
+
+// budgets holds the run bounds the environment resolves to, read once at startup.
+var budgets = runtime.DefaultBudgets()
 
 // stringSlice is a custom flag type for multiple values
 type stringSlice []string
@@ -121,6 +125,16 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+
+	// Resolve the run bounds before any model runs, so a bad value is reported at
+	// startup rather than mistaken for the default at execution time. Reporting the
+	// version and converting a model evaluate nothing, so they are handled above.
+	var err error
+	budgets, err = runtime.BudgetsFromEnv()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sysml:", err)
+		os.Exit(2)
 	}
 
 	// Non-interactive mode: files + eval expressions, execute and exit
@@ -232,9 +246,15 @@ func otherFormat(from export.Format) export.Format {
 	return export.FormatSysML
 }
 
-// newSession returns a session in the output modes the flags asked for.
+// newSession returns a session in the output modes the flags asked for, under
+// the run bounds resolved at startup.
 func newSession() *repl.Session {
 	sess := repl.NewSession()
+	if err := sess.SetBudgets(budgets); err != nil {
+		// Unreachable: budgets are validated in main before any session exists.
+		fmt.Fprintln(os.Stderr, "sysml:", err)
+		os.Exit(2)
+	}
 	switch {
 	case debugMode:
 		sess.SetVerbosity(repl.VerbosityDebug)

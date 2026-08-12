@@ -40,7 +40,7 @@ func demo1_ExpressionEval() {
 	`
 
 	model, resolver, root := parseModel(code)
-	ctx := runtime.NewContext(model, resolver, 100000)
+	ctx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)
 
 	// Evaluate sum
 	sumSym, _ := root.LookupLocal("sum")
@@ -91,7 +91,7 @@ func demo2_PartInstantiation() {
 	`
 
 	model, resolver, root := parseModel(code)
-	ctx := runtime.NewContext(model, resolver, 100000)
+	ctx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)
 
 	// Instantiate Wheel
 	wheelSym, _ := root.LookupLocal("Wheel")
@@ -146,7 +146,7 @@ func demo3_NestedParts() {
 	`
 
 	model, resolver, root := parseModel(code)
-	ctx := runtime.NewContext(model, resolver, 100000)
+	ctx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)
 
 	// Instantiate Vehicle
 	vehicleSym, _ := root.LookupLocal("Vehicle")

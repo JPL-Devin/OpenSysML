@@ -399,7 +399,10 @@ Registered KerML builtins:
 
 Tier 1-3 (Instances & Expressions):
 ```go
-ctx := runtime.NewContext(model, resolver, 100000)
+// Honour the SYSML_MAX_* budgets instead of the defaults with:
+//   budgets, err := runtime.BudgetsFromEnv()
+//   err = ctx.SetBudgets(budgets)
+ctx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)
 inst, _ := ctx.Instantiate(wheelSym)
 val, _ := ctx.GetSlot(inst, diameterSym)
 result, _ := ctx.InvokeCalc(addSym, []Value{v1, v2}, scope)
@@ -631,7 +634,7 @@ import (
     "github.com/Open-MBEE/Systemica/internal/core/runtime"
 )
 
-rtCtx := runtime.NewContext(model, resolver, 100000)
+rtCtx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)
 inst, _ := rtCtx.Instantiate(wheelSym)
 diameterSlot, _ := inst.GetSlot(rtCtx, "diameter")
 fmt.Println(diameterSlot.Value) // Value{Kind: ValConst, Real: 16.0}

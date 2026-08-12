@@ -43,6 +43,9 @@ type Session struct {
 	// trace records execution steps while tracing is on, nil otherwise.
 	trace *runtime.TraceRecorder
 
+	// budgets bounds every runtime context this session creates.
+	budgets runtime.Budgets
+
 	verbosity Verbosity
 }
 
@@ -75,8 +78,28 @@ func NewSession() *Session {
 	return &Session{
 		ws:        model.NewWorkspace(),
 		instances: make(map[string]*runtime.Instance),
+		budgets:   runtime.DefaultBudgets(),
 		verbosity: VerbosityNormal,
 	}
+}
+
+// SetBudgets sets the bounds for runtime contexts created from here on. It
+// errors on a non-positive bound, which no run could make progress under.
+func (s *Session) SetBudgets(budgets runtime.Budgets) error {
+	if err := budgets.Validate(); err != nil {
+		return err
+	}
+	s.budgets = budgets
+	// Dropping the context invalidates everything derived from it, instances
+	// included: their IDs restart with the next context.
+	s.rtCtx = nil
+	s.instances = make(map[string]*runtime.Instance)
+	return nil
+}
+
+// Budgets returns the bounds this session gives its runtime contexts.
+func (s *Session) Budgets() runtime.Budgets {
+	return s.budgets
 }
 
 // List returns a one-line summary per surviving snippet.
@@ -234,7 +257,11 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	s.rtCtx = runtime.NewContext(model, resolver, 100000)
+	ctx := runtime.NewContext(model, resolver, s.budgets.MaxSteps)
+	if err := ctx.SetBudgets(s.budgets); err != nil {
+		return nil, err
+	}
+	s.rtCtx = ctx
 	s.rtCtx.SetTrace(s.trace)
 	return s.rtCtx, nil
 }

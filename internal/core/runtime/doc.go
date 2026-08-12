@@ -5,7 +5,7 @@
 //
 //	// Create runtime context
 //	model := semantics.NewModel(resolver)
-//	ctx := runtime.NewContext(model, resolver, 100000)
+//	ctx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)
 //
 //	// Instantiate a part
 //	partSym := resolveSymbol(root, "MyCar")
