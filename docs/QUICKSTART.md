@@ -567,9 +567,16 @@ echo 'part Wheel { attribute diameter = 16.0; }' > test.sysml
 |----------|---------|---------|
 | `SYSML_LIBRARY_PATH` | unset (use the bundled standard library) | Directory to load the SysML/KerML standard library from instead of the embedded copy |
 | `SYSML_MAX_STEPS` | `100000` | Evaluation step budget: the number of expression evaluations one run may spend before it is reported as a runaway |
+| `SYSML_MAX_ACTION_STEPS` | `10000` | Token-flow steps one action run may perform |
+| `SYSML_MAX_EVENTS` | `10000` | Events one state machine run may dispatch |
+| `SYSML_MAX_DO_STEPS` | `100000` | Do-activity actions one state machine run may perform |
 
-The step budget is what turns a non-terminating loop into a reported error
-instead of a hang:
+Each budget is what turns a non-terminating run into a reported error instead of
+a hang. They count incommensurable things — expression evaluations, action token
+steps, dispatched events, do-activity actions — so raising one says nothing about
+the others, and each has its own variable.
+
+The evaluation step budget:
 
 ```
 error: execution failed: eval assignment RHS: evaluation step limit exceeded
@@ -592,8 +599,21 @@ $ SYSML_MAX_STEPS=lots sysml model.sysml
 sysml: SYSML_MAX_STEPS="lots" is not an integer: set it to a positive number of evaluation steps (default 100000)
 ```
 
-A state machine's own bounds — the event and do-activity step limits — are fixed
-and not affected by this variable.
+The other budgets behave identically, and their errors name the variable that
+raises them:
+
+```
+execution exceeded max steps (10000 steps; raise SYSML_MAX_ACTION_STEPS to allow more), possible infinite loop
+state machine exceeded max events (10000 events; raise SYSML_MAX_EVENTS to allow more), possible infinite loop
+state machine exceeded max do activity steps (100000 steps; raise SYSML_MAX_DO_STEPS to allow more), possible non-terminating do behavior
+```
+
+A long simulation therefore raises the state machine bounds rather than the
+evaluation one:
+
+```bash
+SYSML_MAX_EVENTS=200000 SYSML_MAX_DO_STEPS=2000000 sysml descent.sysml
+```
 
 ---
 
@@ -625,8 +645,8 @@ Check `examples/` directory:
 - Run `go mod tidy`
 - Verify Go version: `go version` (need 1.25+)
 
-**Execution stops with "evaluation step limit exceeded":**
-- The run spent its step budget; raise it with `SYSML_MAX_STEPS` (see [Environment Variables](#environment-variables))
+**Execution stops with "limit exceeded" or "exceeded max":**
+- The run spent one of its budgets; the message names the variable that raises it (see [Environment Variables](#environment-variables))
 - If the model does not terminate, the budget is reporting a real bug — raising it only delays the error
 
 **Syntax errors:**

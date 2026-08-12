@@ -230,8 +230,8 @@ func (e *ActionExecutor) deadlockError() error {
 // step that makes no progress. A parked action therefore cannot spend the step
 // budget spinning — the budget is only consumed by steps that move something.
 func (e *ActionExecutor) RunToCompletion() error {
-	const maxSteps = 10000
-	steps := 0
+	maxSteps := e.ctx.maxActionSteps
+	var steps int64
 
 	e.pausedAt = ""
 	if e.state == StateSuspended {
@@ -248,7 +248,7 @@ func (e *ActionExecutor) RunToCompletion() error {
 		}
 
 		if steps >= maxSteps {
-			return fmt.Errorf("execution exceeded max steps (%d), possible infinite loop", maxSteps)
+			return fmt.Errorf("execution exceeded max steps (%d steps; raise %s to allow more), possible infinite loop", maxSteps, MaxActionStepsEnvVar)
 		}
 
 		if err := e.Step(); err != nil {

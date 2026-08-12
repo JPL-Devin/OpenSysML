@@ -1154,30 +1154,27 @@ func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*a
 	return nil
 }
 
-// maxStateEvents bounds a single run of the event loop so a cyclic machine
-// reports a typed error instead of spinning forever.
-const maxStateEvents = 10000
-
-// maxDoSteps bounds the do activity actions one run may perform, so a machine
-// that keeps restarting do behaviors reports instead of spinning forever.
-const maxDoSteps = 100000
-
 // RunToCompletion processes queued events until the machine completes or has no
 // event or running do behavior left, at which point it suspends. A state's do
 // behavior runs while the state is active: each run-to-completion step advances
 // every active state's do behavior by one action and then dispatches one event,
 // so concurrently active states interleave instead of one running to the end at
 // entry, and leaving a state abandons the rest of its do behavior.
+//
+// The run is bounded by the context's event and do activity budgets
+// (SYSML_MAX_EVENTS, SYSML_MAX_DO_STEPS), so a cyclic machine reports a typed
+// error instead of spinning forever.
 func (e *StateExecutor) RunToCompletion() error {
-	events, doSteps := 0, 0
+	maxStateEvents, maxDoSteps := e.ctx.maxStateEvents, e.ctx.maxDoSteps
+	var events, doSteps int64
 	for e.state == StateRunning {
 		ran, err := e.runDoRound()
 		if err != nil {
 			return err
 		}
-		doSteps += ran
+		doSteps += int64(ran)
 		if doSteps >= maxDoSteps {
-			return fmt.Errorf("state machine exceeded max do activity steps (%d), possible non-terminating do behavior", maxDoSteps)
+			return fmt.Errorf("state machine exceeded max do activity steps (%d steps; raise %s to allow more), possible non-terminating do behavior", maxDoSteps, MaxDoStepsEnvVar)
 		}
 		if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() {
 			if ran > 0 {
@@ -1187,7 +1184,7 @@ func (e *StateExecutor) RunToCompletion() error {
 			return nil
 		}
 		if events >= maxStateEvents {
-			return fmt.Errorf("state machine exceeded max events (%d), possible infinite loop", maxStateEvents)
+			return fmt.Errorf("state machine exceeded max events (%d events; raise %s to allow more), possible infinite loop", maxStateEvents, MaxStateEventsEnvVar)
 		}
 		events++
 		if err := e.processNextEvent(); err != nil {

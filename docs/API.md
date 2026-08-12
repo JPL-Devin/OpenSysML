@@ -399,8 +399,9 @@ Registered KerML builtins:
 
 Tier 1-3 (Instances & Expressions):
 ```go
-// Honour SYSML_MAX_STEPS instead of the default with:
-//   maxSteps, err := runtime.MaxStepsFromEnv()
+// Honour the SYSML_MAX_* budgets instead of the defaults with:
+//   budgets, err := runtime.BudgetsFromEnv()
+//   err = ctx.SetBudgets(budgets)
 ctx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)
 inst, _ := ctx.Instantiate(wheelSym)
 val, _ := ctx.GetSlot(inst, diameterSym)

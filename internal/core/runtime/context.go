@@ -17,7 +17,15 @@ type Context struct {
 	steps     int64
 	maxSteps  int64
 	instances map[int64]*Instance
-	features  map[*symbols.Symbol][]EffectiveFeature
+
+	// maxActionSteps, maxStateEvents and maxDoSteps bound the executors this
+	// context runs: token-flow steps, dispatched events, and do activity actions.
+	// Unlike maxSteps they are counted by the executor, not here.
+	maxActionSteps int64
+	maxStateEvents int64
+	maxDoSteps     int64
+
+	features map[*symbols.Symbol][]EffectiveFeature
 
 	// calcShapes memoizes resolved calc invocation interfaces (parameters,
 	// defaults, result expression) per calc symbol.
@@ -50,7 +58,8 @@ type slotRef struct {
 }
 
 // NewContext creates a runtime context backed by the given semantic model.
-// maxSteps sets the runaway guard (step counter limit).
+// maxSteps sets the runaway guard (step counter limit); the executor bounds take
+// their defaults, which SetBudgets replaces.
 // It panics if maxSteps <= 0: the limit is a programmer-supplied invariant, not
 // user input, so callers must pass a positive value.
 func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int64) *Context {
@@ -66,6 +75,10 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		instances:  make(map[int64]*Instance),
 		features:   make(map[*symbols.Symbol][]EffectiveFeature),
 		calcShapes: make(map[*symbols.Symbol]*calcShape),
+
+		maxActionSteps: DefaultMaxActionSteps,
+		maxStateEvents: DefaultMaxStateEvents,
+		maxDoSteps:     DefaultMaxDoSteps,
 
 		derivingSlots: make(map[slotRef]bool),
 	}

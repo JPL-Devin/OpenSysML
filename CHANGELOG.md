@@ -29,8 +29,14 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   startup and at gRPC service construction, naming the variable and the value,
   rather than falling back to the default silently.
 - The step-limit error reports the budget actually in force and names
-  `SYSML_MAX_STEPS`, so the message says how to raise it. The state machine's own
-  event and do-activity bounds are unchanged and remain fixed.
+  `SYSML_MAX_STEPS`, so the message says how to raise it.
+- The three sibling runaway bounds are configurable the same way, each through
+  its own variable, since they count incommensurable units: an action run's
+  token-flow steps through `SYSML_MAX_ACTION_STEPS` (default 10 000), a state
+  machine run's dispatched events through `SYSML_MAX_EVENTS` (default 10 000) and
+  its do-activity actions through `SYSML_MAX_DO_STEPS` (default 100 000). Each
+  error names the variable that raises it, so a long simulation is no longer
+  capped by a bound with no way out.
 
 ## 0.0.4 — 2026-08-10
 
