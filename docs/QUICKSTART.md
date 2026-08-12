@@ -576,6 +576,11 @@ a hang. They count incommensurable things — expression evaluations, action tok
 steps, dispatched events, do-activity actions — so raising one says nothing about
 the others, and each has its own variable.
 
+A budget bounds **one run** — one `%eval`, one action, one state machine — not a
+whole session, so a long REPL session of small evaluations never runs out. A run
+started inside another, an action invoked from an expression say, shares the
+outer run's budget rather than getting a fresh one.
+
 The defaults are set by how long a runaway takes to report rather than by memory
 — execution allocates nothing per step (peak RSS is ~34 MB whether a run spends
 ten thousand steps or fifty million), and the only thing a budget makes grow is a

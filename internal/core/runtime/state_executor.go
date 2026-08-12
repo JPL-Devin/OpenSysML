@@ -1376,6 +1376,8 @@ func (e *StateExecutor) activeStates() []*ast.StateNode {
 
 // initialize sets current state to initial state and enters it.
 func (e *StateExecutor) initialize() error {
+	e.ctx.startRunIfTopLevel()
+
 	// Use initial state from graph
 	if e.graph.Initial != nil {
 		// Simple state machine with single initial state

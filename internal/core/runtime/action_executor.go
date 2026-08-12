@@ -400,6 +400,8 @@ func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error 
 
 // initialize spawns initial token at InitialNode.
 func (e *ActionExecutor) initialize() error {
+	e.ctx.startRunIfTopLevel()
+
 	// Use initial node from graph
 	if e.graph.Initial == nil {
 		return fmt.Errorf("no initial node found in action %s", e.action.Name)

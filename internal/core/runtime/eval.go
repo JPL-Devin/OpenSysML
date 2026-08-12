@@ -130,6 +130,8 @@ func (ec *EvalContext) eval(node ast.Node) (Value, error) {
 // Eval is the top-level entry point for evaluating an expression in an empty environment.
 // Resolves names from the root scope.
 func (ctx *Context) Eval(node ast.Node) (Value, error) {
+	defer ctx.beginRun()()
+
 	// Use resolver's root scope for name resolution
 	// (In a full implementation, this would track evaluation context scope)
 	ec := NewEvalContext(ctx, nil)
@@ -138,6 +140,8 @@ func (ctx *Context) Eval(node ast.Node) (Value, error) {
 
 // EvalWithScope evaluates an expression with a given scope context for name resolution.
 func (ctx *Context) EvalWithScope(node ast.Node, scope *symbols.Scope) (Value, error) {
+	defer ctx.beginRun()()
+
 	ec := NewEvalContext(ctx, scope)
 	return ec.Eval(node)
 }

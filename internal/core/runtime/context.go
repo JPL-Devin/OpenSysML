@@ -42,6 +42,10 @@ type Context struct {
 	// bounding recursion across nested calc evaluations.
 	calcDepth int
 
+	// runDepth is the number of runs currently under way, so the step counter is
+	// reset per run rather than accumulated over the context's whole life.
+	runDepth int
+
 	// messages are the signals in flight, oldest first. The bus is context-wide,
 	// so a message one behavior sends can be accepted in another.
 	messages []Message
@@ -102,6 +106,28 @@ func (ctx *Context) allocateID() int64 {
 	return id
 }
 
+// beginRun starts a run and returns the function that ends it, resetting the
+// step counter so the budget bounds one run rather than a whole session. A run
+// started inside another - an action invoked from an expression, say - shares the
+// outer one's budget, so a runaway cannot escape the bound by starting runs.
+func (ctx *Context) beginRun() func() {
+	if ctx.runDepth == 0 {
+		ctx.steps = 0
+	}
+	ctx.runDepth++
+	return func() { ctx.runDepth-- }
+}
+
+// startRunIfTopLevel resets the step counter for a run an executor drives itself,
+// step by step, over many calls - the REPL's %action and %state debuggers - which
+// has no single scope beginRun could bracket. A run already under way keeps its
+// budget.
+func (ctx *Context) startRunIfTopLevel() {
+	if ctx.runDepth == 0 {
+		ctx.steps = 0
+	}
+}
+
 // incrementStep increments the step counter and returns ErrStepLimitExceeded if limit reached.
 // The error names the effective budget and the variable that raises it.
 func (ctx *Context) incrementStep() error {
@@ -148,6 +174,8 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 // constraint can pass for one instance and fail for another. A nil instance
 // evaluates against declared defaults, as EvaluateConstraint does.
 func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
+	defer ctx.beginRun()()
+
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind != ast.DefConstraint {
@@ -249,6 +277,8 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 // binding the features it names to that instance's slots. A nil instance
 // evaluates against declared defaults, as EvaluateRequirement does.
 func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
+	defer ctx.beginRun()()
+
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind != ast.DefRequirement {
@@ -360,6 +390,8 @@ func (ctx *Context) ExecuteAction(action *symbols.Symbol) (map[string]Value, err
 // provided input parameter bindings (keyed by parameter name). Inputs override
 // action attribute defaults of the same name. Returns final token data.
 func (ctx *Context) ExecuteActionWithInputs(action *symbols.Symbol, inputs map[string]Value) (map[string]Value, error) {
+	defer ctx.beginRun()()
+
 	// Create executor
 	exec, err := newActionExecutor(ctx, action)
 	if err != nil {
@@ -401,6 +433,8 @@ func (ctx *Context) ExecuteState(stateMachine *symbols.Symbol) (map[string]Value
 // events until completion or suspension. Returns the final state data and the
 // ordered list of visited state names.
 func (ctx *Context) ExecuteStateWithEvents(stateMachine *symbols.Symbol, events []string) (map[string]Value, []string, error) {
+	defer ctx.beginRun()()
+
 	// Create executor
 	exec, err := newStateExecutor(ctx, stateMachine)
 	if err != nil {

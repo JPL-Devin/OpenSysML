@@ -204,6 +204,10 @@ func TestStepLimitErrorNamesEffectiveBudgetAndVariable(t *testing.T) {
 	model, resolver, _ := parseAndBuildModel(t, src)
 	ctx := NewContext(model, resolver, 3)
 
+	// The bound is per run, so the evaluations have to spend one run's budget
+	// rather than a run each.
+	defer ctx.beginRun()()
+
 	var err error
 	for i := 0; i < 4 && err == nil; i++ {
 		_, err = ctx.Eval(&ast.LiteralInteger{Value: "1"})
@@ -366,4 +370,66 @@ func TestStateBudgetsAreConfigurable(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestStepBudgetIsPerRun: the budget bounds one run, so a session of many runs
+// does not exhaust it, while a runaway inside a single run still trips it and a
+// run started from inside another shares the outer one's budget.
+func TestStepBudgetIsPerRun(t *testing.T) {
+	t.Run("each_run_starts_fresh", func(t *testing.T) {
+		src := `part def Simple {}`
+		model, resolver, _ := parseAndBuildModel(t, src)
+		ctx := NewContext(model, resolver, 4)
+
+		// Far more evaluations than the budget, but one per run.
+		for i := 0; i < 100; i++ {
+			if _, err := ctx.Eval(&ast.LiteralInteger{Value: "1"}); err != nil {
+				t.Fatalf("evaluation %d of its own run failed: %v", i, err)
+			}
+		}
+	})
+
+	t.Run("one_run_still_bounded", func(t *testing.T) {
+		src := `
+			package L {
+				action loopn {
+					attribute i = 0;
+					first start;
+					action go { while i < 10000 { assign i := i + 1; } }
+					done end;
+					then start go;
+					then go end;
+				}
+			}
+		`
+		file := parseAndBuild(t, src)
+		idx, _, ctx := buildRuntime(t, "<test>", file)
+		ctx.maxSteps = 100
+		sym := findSymbolByName(idx.DocumentRoot("<test>"), "loopn", ast.DefAction)
+		if sym == nil {
+			t.Fatal("action loopn not found")
+		}
+		if _, err := ctx.ExecuteAction(sym); !errors.Is(err, ErrStepLimitExceeded) {
+			t.Fatalf("expected ErrStepLimitExceeded within one run, got %v", err)
+		}
+	})
+
+	t.Run("nested_run_shares_the_budget", func(t *testing.T) {
+		src := `part def Simple {}`
+		model, resolver, _ := parseAndBuildModel(t, src)
+		ctx := NewContext(model, resolver, 100)
+
+		// Standing in for an action invoked from an expression: the inner run must
+		// not hand the outer one a fresh allowance.
+		end := ctx.beginRun()
+		defer end()
+		for i := 0; i < 10; i++ {
+			if _, err := ctx.Eval(&ast.LiteralInteger{Value: "1"}); err != nil {
+				t.Fatalf("nested evaluation %d failed: %v", i, err)
+			}
+		}
+		if ctx.steps < 10 {
+			t.Errorf("nested runs reset the counter: %d steps after 10 evaluations", ctx.steps)
+		}
+	})
 }
