@@ -34,7 +34,6 @@ type Session struct {
 	// Runtime execution context
 	rtCtx     *runtime.Context
 	idx       *symbols.Index               // index over the session document, shared by lookup and runtime
-	libIdx    *symbols.Index               // the same index, kept across submissions for the library it holds
 	instances map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
 
 	// Active executor sessions for debugging
@@ -240,9 +239,6 @@ func (s *Session) Clear() {
 	s.version = 0
 	s.rtCtx = nil
 	s.idx = nil
-	if s.libIdx != nil {
-		s.libIdx.RemoveDocument(docName)
-	}
 	s.instances = make(map[string]*runtime.Instance)
 	s.actionExec = nil
 	s.stateExec = nil
@@ -271,10 +267,13 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 }
 
 // symbolIndex lazily indexes the session document, returning nil when nothing
-// is loaded. Name lookup and the runtime context share it. It carries the
-// standard library too, which the runtime resolves against — the measurement
-// unit of a quantity expression is one — and which outlives the document rather
-// than being parsed again on every submission.
+// is loaded. Name lookup and the runtime context share it, and it carries the
+// standard library too, which the runtime resolves names against — the
+// measurement unit of a quantity expression is one.
+//
+// It is built afresh per submission, off the library cache, rather than
+// outliving the document: an index reused across submissions keeps the
+// re-exports of an import the new document no longer states.
 func (s *Session) symbolIndex() *symbols.Index {
 	if s.idx != nil {
 		return s.idx
@@ -283,12 +282,10 @@ func (s *Session) symbolIndex() *symbols.Index {
 	if doc == nil || doc.Scope == nil {
 		return nil
 	}
-	if s.libIdx == nil {
-		s.libIdx = symbols.NewIndex()
-		model.LoadStdlibInto(s.libIdx)
-	}
-	s.libIdx.AddDocument(docName, doc.AST)
-	s.libIdx.ExpandWildcardImports()
-	s.idx = s.libIdx
+	idx := symbols.NewIndex()
+	model.LoadStdlibInto(idx)
+	idx.AddDocument(docName, doc.AST)
+	idx.ExpandWildcardImports()
+	s.idx = idx
 	return s.idx
 }
