@@ -74,12 +74,14 @@ func (l *Loader) Load(name string, idx *symbols.Index) error {
 // Persist caches a reduced record of every document this loader parsed. It is
 // separate from Load because a record holds resolved supertype names: a
 // specialization target in one library file may be declared in another, so
-// records can only be built once every file has been indexed.
+// records can only be built once every file has been indexed. Records the
+// library has stopped asking for are pruned here, where a write already happened.
 func (l *Loader) Persist(idx *symbols.Index) {
 	if l.cache == nil {
 		l.parsed = nil
 		return
 	}
+	defer l.cache.Prune()
 	r := resolve.New(idx)
 	for _, p := range l.parsed {
 		rec, resolved := recordFromIndex(p.name, idx, r)

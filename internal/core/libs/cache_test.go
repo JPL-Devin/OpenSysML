@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -67,6 +68,48 @@ func TestCacheKeyDependsOnContentSetAndVersion(t *testing.T) {
 	}
 	if _, ok := c.Load(k2); ok {
 		t.Fatal("stale content produced a cache hit")
+	}
+}
+
+func TestCachePruneRemovesOnlyIdleRecords(t *testing.T) {
+	c := &Cache{dir: t.TempDir()}
+	idle, live := c.keyFor([]byte("idle"), "set"), c.keyFor([]byte("live"), "set")
+	for _, key := range []string{idle, live} {
+		if err := c.Store(key, sampleRecord("x")); err != nil {
+			t.Fatalf("store: %v", err)
+		}
+	}
+	stale := time.Now().Add(-maxIdleAge - time.Hour)
+	if err := os.Chtimes(c.path(idle), stale, stale); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+	c.Prune()
+	if _, err := os.Stat(c.path(idle)); !os.IsNotExist(err) {
+		t.Fatalf("a record idle past maxIdleAge survived Prune: %v", err)
+	}
+	if _, ok := c.Load(live); !ok {
+		t.Fatal("Prune removed a record still in use")
+	}
+}
+
+// A record is only written once, so its age has to track its last use: a hit
+// dates it, or pruning would evict the records of an unchanged library.
+func TestCacheLoadDatesTheRecord(t *testing.T) {
+	c := &Cache{dir: t.TempDir()}
+	key := c.keyFor([]byte("content"), "set")
+	if err := c.Store(key, sampleRecord("x")); err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	stale := time.Now().Add(-maxIdleAge - time.Hour)
+	if err := os.Chtimes(c.path(key), stale, stale); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+	if _, ok := c.Load(key); !ok {
+		t.Fatal("Load miss after Store")
+	}
+	c.Prune()
+	if _, ok := c.Load(key); !ok {
+		t.Fatal("Prune removed a record the previous load hit")
 	}
 }
 

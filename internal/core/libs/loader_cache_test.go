@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -270,6 +271,35 @@ func TestLoaderCacheInvalidatesSiblingRecords(t *testing.T) {
 	if parsed := loadLibraryParseCount(t, dir, cacheDir); parsed != 2 {
 		t.Fatalf("documents parsed after editing one file = %d, want 2 (the whole library)", parsed)
 	}
+
+	// The records of the library as it was are now unreachable, so the next
+	// persist prunes them once they have gone unused for long enough.
+	stale := time.Now().Add(-maxIdleAge - time.Hour)
+	for _, name := range idxFiles(t, cacheDir) {
+		if err := os.Chtimes(filepath.Join(cacheDir, name), stale, stale); err != nil {
+			t.Fatalf("backdate %s: %v", name, err)
+		}
+	}
+	loadWholeLibrary(t, dir, cacheDir)
+	if files := idxFiles(t, cacheDir); len(files) != 2 {
+		t.Fatalf("records in the cache = %d, want the 2 of the current library: %v", len(files), files)
+	}
+}
+
+// idxFiles lists the record files in a cache directory.
+func idxFiles(t *testing.T, cacheDir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		t.Fatalf("read cache dir: %v", err)
+	}
+	var names []string
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) == ".idx" {
+			names = append(names, e.Name())
+		}
+	}
+	return names
 }
 
 // loadLibraryParseCount indexes the library in dir and reports how many of its

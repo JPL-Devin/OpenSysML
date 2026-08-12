@@ -39,7 +39,9 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   symbols, so its key now covers the digest of the whole library set: the
   reduction follows a prefix or reference unit declared in another file, and a
   key over one file's content alone kept converting with the factors of an
-  edited `SYSML_LIBRARY_PATH` library's old definitions.
+  edited `SYSML_LIBRARY_PATH` library's old definitions. A record no load has
+  hit for 30 days is pruned, since a wider key leaves more records that nothing
+  will look up again.
 - The KerML function library's scalar numeric functions are evaluable: `sqrt`,
   `abs`, `floor`, `round`, `max`, `min`, `isZero`, `isUnit`, `sin`, `cos`, `tan`,
   `cot`, `arcsin`, `arccos` and `arctan`. Dispatch is by the declaration's

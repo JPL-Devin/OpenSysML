@@ -9,7 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 )
+
+// maxIdleAge is how long a record no load has looked up is kept. A key describes
+// the content it was built from, so a record whose key stops being produced —
+// after a format bump, or an edit to any file of its library — is never found
+// again and only takes up space.
+const maxIdleAge = 30 * 24 * time.Hour
 
 // Cache persists reduced library IndexRecords to disk keyed by content hash and
 // format version. A hit lets the loader skip lexing/parsing entirely. The same
@@ -67,7 +74,33 @@ func (c *Cache) Load(key string) (*IndexRecord, bool) {
 	if err := gob.NewDecoder(bytes.NewReader(data)).Decode(&rec); err != nil {
 		return nil, false
 	}
+	// Date the hit, so Prune reads the file's age as the age of its last use.
+	now := time.Now()
+	_ = os.Chtimes(c.path(key), now, now)
 	return &rec, true
+}
+
+// Prune removes records that no load has hit for maxIdleAge. Cache entries are
+// otherwise never invalidated explicitly — a key that no longer matches is
+// simply missed — so without this the directory keeps every record any library
+// version ever produced.
+func (c *Cache) Prune() {
+	entries, err := os.ReadDir(c.dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-maxIdleAge)
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".idx" {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || !info.ModTime().Before(cutoff) {
+			continue
+		}
+		// #nosec G703 -- removal failure leaves a stale record, which is benign.
+		_ = os.Remove(filepath.Join(c.dir, e.Name()))
+	}
 }
 
 // Store gob-encodes rec and writes it to <dir>/<key>.idx atomically: it writes a
