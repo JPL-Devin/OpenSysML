@@ -255,15 +255,19 @@ func TestSourceKeepsAnUnterminatedComment(t *testing.T) {
 		"part def A;\n/* oops",
 		"part def A;\n/* oops\n",
 		"doc /* unclosed",
+		"part def A;\n//* oops", // a documentation note, opener "//*"
+		"part def A;\n/*/",      // ends with "*/" but is the opener itself
+		"part def A;\n//*/",
+		"package P {\n/* oops", // still open inside a block
 	} {
 		out, err := Source("s.sysml", []byte(src), DefaultOptions)
 		if err != nil {
 			t.Errorf("Source(%q) = %v, want it formatted", src, err)
 			continue
 		}
-		if !strings.HasSuffix(string(out), "oops") && !strings.HasSuffix(string(out), "oops\n") &&
-			!strings.HasSuffix(string(out), "unclosed") {
-			t.Errorf("Source(%q) = %q, the comment text was altered", src, out)
+		comment := src[strings.Index(src, "/"):]
+		if !strings.HasSuffix(string(out), comment) {
+			t.Errorf("Source(%q) = %q, want it to end with the comment as typed", src, out)
 		}
 	}
 }
