@@ -234,7 +234,7 @@ func (ctx *Context) SatisfySubject(a *SatisfyAssertion) (*Instance, error) {
 	}
 	inst, err := ctx.Instantiate(a.Subject)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w: %v", a.Text(), ErrNoSubject, err)
+		return nil, fmt.Errorf("%s: %w: %w", a.Text(), ErrNoSubject, err)
 	}
 	return inst, nil
 }

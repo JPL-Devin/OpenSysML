@@ -913,6 +913,9 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 		// one, created here rather than inside the evaluation so it can be named.
 		if inst, serr := ctx.SatisfySubject(a); serr == nil {
 			subject, owner = inst, s.subjectName(a)
+			// Kept like %instantiate would, so a repeated %satisfy is about the
+			// same object rather than another copy of it.
+			s.instances[owner] = inst
 		}
 	}
 	holds, err := ctx.EvaluateSatisfactionOn(a, subject)

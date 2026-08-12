@@ -166,6 +166,13 @@ func testSatisfyBoundedByTheStepBudget(t *testing.T) {
 	if errors.Is(err, ErrViolated) {
 		t.Error("an exhausted budget is not a verdict about the model")
 	}
+
+	// The subject is built inside the same run, so a budget exhausted there is
+	// still reported as such rather than as a missing subject.
+	ctx.maxSteps = 0
+	if _, err := ctx.EvaluateSatisfaction(assertions[0]); !errors.Is(err, ErrStepLimitExceeded) || !errors.Is(err, ErrNoSubject) {
+		t.Errorf("expected ErrStepLimitExceeded while building the subject, got: %v", err)
+	}
 }
 
 // testCyclicDerivedSlot: two derived defaults that read each other are reported

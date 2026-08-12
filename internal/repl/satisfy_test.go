@@ -32,3 +32,13 @@ func TestSatisfyUsesInstantiatedSubject(t *testing.T) {
 	wants(t, run(t, s, "%satisfy Landing::analysisContext"),
 		"✓ satisfy touchdown by slowLander holds (on Landing::slowLander ID: 1)")
 }
+
+// TestRepeatedSatisfyKeepsItsSubject checks that a subject created by %satisfy
+// itself is kept, so repeating the command is about the same object.
+func TestRepeatedSatisfyKeepsItsSubject(t *testing.T) {
+	s := loadFixture(t, "testdata/satisfy_landing.sysml")
+	first := "✓ satisfy touchdown by slowLander holds (on Landing::slowLander ID: 1)"
+	wants(t, run(t, s, "%satisfy Landing::analysisContext"), first)
+	wants(t, run(t, s, "%satisfy Landing::analysisContext"), first)
+	wants(t, run(t, s, "%slots Landing::slowLander"), "verticalSpeed")
+}
