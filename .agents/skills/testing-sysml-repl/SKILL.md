@@ -539,53 +539,32 @@ Three cheap, high-signal sweeps:
    `"severity":1` in the `publishDiagnostics` notification. A file with **no** diagnostics produces
    **no** notification at all, so treat a missing notification as zero errors rather than a hang.
    `sysml-lsp: failed reading header line: EOF` on stderr at shutdown is normal.
-
-Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
-(`PATH=$HOME/sdk/go/bin:$HOME/go/bin:$PATH`) before concluding the toolchain is missing.
-
-## Testing parser/naming changes end-to-end
-
-A parser or naming change is only convincing if the *same input file* behaves differently on two
-binaries, so build an A/B baseline first and keep it around:
-
-```bash
-git worktree add /tmp/mainwt main     # or reuse an existing worktree such as /home/ubuntu/mainwt
-go build -C /tmp/mainwt -o /tmp/mainwt/sysml-main ./cmd/sysml && go build -C /tmp/mainwt -o /tmp/mainwt/sysml-lsp-main ./cmd/sysml-lsp
-```
-
-Three cheap, high-signal sweeps:
-
-1. **Corpus no-diff sweep** — load every model on both binaries and diff the output; anything other
-   than `0` differences is either the intended change or a regression (~4 min for 412 files):
-   ```bash
-   for f in $(find examples testdata internal/repl/testdata -name '*.sysml'); do
-     diff <(printf "%%load $f\n%%quit\n" | ./bin/sysml 2>&1) <(printf "%%load $f\n%%quit\n" | /tmp/mainwt/sysml-main 2>&1)
-   done
-   ```
-   Note that **both `%load` and the argv positional** split the path on whitespace, so a corpus path
-   such as `examples/sysml-v2-training/05. Redefinition/…` cannot be loaded either way — copy it to a
-   space-free path first.
-2. **Twin table** — for a notation with two spellings, run every *degenerate* form of both spellings
-   through a tiny script and print keyword/symbol/main side by side. Testing only well-formed forms
-   hides the interesting bugs: on PR #98 the well-formed forms were at parity while `redefines;`,
-   `subsets ;`, `crosses ;`, `references ;` were accepted **silently** and their symbol twins all
-   said `expected a name`. A silently accepted member is invisible in a `✓ package T` line — always
-   pair the load with `%instantiate`/`%slots` to see what the member actually did.
-3. **LSP diagnostics without an editor** — drive `bin/sysml-lsp` over stdio with ~15 lines of Python
-   (`initialize`, `initialized`, `textDocument/didOpen`, sleep 3, read stdout) and count
-   `"severity":1` in the `publishDiagnostics` notification. A file with **no** diagnostics produces
-   **no** notification at all, so treat a missing notification as zero errors rather than a hang.
-   `sysml-lsp: failed reading header line: EOF` on stderr at shutdown is normal.
+4. **LSP hover/definition as a symbol-table probe** — the REPL has **no** `%hover`/`%def`, so a
+   naming/symbol-registration change is best shown through `bin/sysml-lsp`: reuse the stdio driver
+   and add `textDocument/hover` and `textDocument/definition` requests with `id`s, then parse the
+   `Content-Length`-framed replies (searching for `"id":100` in the raw text prints the *tail* of the
+   message, not its body — frame-parse instead). Hover returns a one-liner like
+   `attributeUsage x`, which makes a mis-derived name obvious: on `main` a short-named redefinition
+   hovered as `attributeUsage redefines` and its definition was `null`. Make the sleep before reading
+   stdout configurable (e.g. `LSP_WAIT=8`); 4 s is occasionally too short and yields
+   `NO RESPONSE`/zero diagnostics, which looks like a pass — re-run with a longer wait before
+   believing an empty result.
+5. **Naming probes for a `<shortName>` change** — for `attribute <sn> redefines x = 5;` the
+   assertions that separate working from broken are: `%slots` lists the member as **`x = 5`**
+   (broken revisions show `sn = 5` with `x = 1`, or a bogus `redefines = <unknown>` slot);
+   `%eval T::A::x` **and** `%eval T::A::sn` both evaluate; and an action body doing
+   `assign total := total + x` completes instead of `unresolved feature: x`. Load-level `✓ package T`
+   proves nothing here.
 
 Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
 (`PATH=$HOME/sdk/go/bin:$HOME/go/bin:$PATH`) before concluding the toolchain is missing.
 
 ### Naming changes that reach lowering and the runtime
 
-When a parser change stops naming a declaration (e.g. `ast.EffectiveName` deriving a name from a
-`redefines`/`references` target instead of the parser inventing one), the parse is the *least*
-interesting surface — consumers reading `Usage.Ident.Name` break silently downstream. The probes
-that actually distinguish fixed from broken, each with a visible A/B against `main`:
+When a parser change alters which declarations carry a name (e.g. `ast.EffectiveName` deriving the
+name from a `redefines`/`references` target), the parse is the *least* interesting surface —
+consumers reading `Usage.Ident.Name` break silently downstream. The probes that actually distinguish
+fixed from broken, each with a visible A/B against `main`:
 
 - **Attribute default** — `attribute redefines x = 5;` in an action body with a statement reading
   `x`; a lost name surfaces as `error: execution failed: eval assignment RHS: unresolved feature: x`,
@@ -610,12 +589,13 @@ twin. `action_redefined_step_ordering.sysml` emits a pre-existing
 `name conflict: total is already the name of the inherited feature Base::total` on every revision —
 not a regression.
 
-Adversarial cases for name derivation: two redefinitions on one member
-(`attribute redefines x, y = 9;`) and a short-name-only declaration (`attribute <sn> :>> x = 5;`)
-must both derive *no* name — the member then simply does not appear in the action's `Results:`, with
-no diagnostic, so check for the **absence** of the line. REPL call syntax: named arguments work as
-`Scaled(x = 7, factor = 5)`, but *mixing* positional and named (`Scaled(7, factor = 5)`) is a parse
-error on every revision — don't read that as a parameter-naming bug.
+Adversarial cases for name derivation: a member with two redefinitions
+(`attribute <sn> redefines x, y = 9;`) derives *no* name from them, so it answers to its short name
+(`%slots` shows `sn = 9` and leaves `x`/`y` at their inherited values) with no diagnostic — assert
+which key the value landed under rather than assuming it was dropped. REPL call syntax: named
+arguments work as `Scaled(x = 7, factor = 5)`, but *mixing* positional and named
+(`Scaled(7, factor = 5)`) is a parse error on every revision — don't read that as a
+parameter-naming bug.
 
 ## Recording setup (Linux/Plasma box)
 
