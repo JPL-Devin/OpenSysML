@@ -1,0 +1,70 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Conditions" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="MassLimit"
+          (Usage kind="attribute" name="mass" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Real
+              (*ast.QualifiedName)))
+          (Usage kind="attribute" name="limit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Real
+              (*ast.QualifiedName)))
+          (AssumeMember
+            (OperatorExpr operator=">"
+              (FeatureReference name="mass")
+              (LiteralReal value="0.0")))
+          (RequireMember
+            (OperatorExpr operator="<="
+              (FeatureReference name="mass")
+              (FeatureReference name="limit")))
+          (RequireMember
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator="<="
+                (FeatureReference name="mass")
+                (FeatureReference name="limit")))
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator=">"
+                (FeatureReference name="mass")
+                (LiteralReal value="0.0"))))))
+      (Membership visibility="default"
+        (Usage kind="requirement" name="massOfVehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=MassLimit
+            (*ast.QualifiedName))
+          (SubjectMember name="vehicle" type="Vehicle"
+            (Multiplicity range=false
+              (LiteralInteger value="1"))
+            (Relationship kind="redefines" target=MassLimit::vehicle
+              (*ast.QualifiedName)))
+          (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="redefines" target=limit
+              (*ast.QualifiedName))
+            (LiteralReal value="1500.0"))
+          (AssumeMember
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator=">"
+                (FeatureReference name="limit")
+                (LiteralReal value="0.0"))))))
+      (Membership visibility="default"
+        (Definition kind="concern" abstract=false variation=false name="Weight"
+          (SubjectMember name="" type="")
+          (RequireMember
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator="<"
+                (LiteralInteger value="1")
+                (LiteralInteger value="2"))))))
+      (Membership visibility="default"
+        (Definition kind="viewpoint" abstract=false variation=false name="Sizing"
+          (RequireMember
+            (OperatorExpr operator="<"
+              (LiteralInteger value="1")
+              (LiteralInteger value="2")))))
+      (Membership visibility="default"
+        (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="subsets" target=massOfVehicle
+            (*ast.QualifiedName))
+          (Relationship kind="by" target=vehicle01
+            (*ast.QualifiedName))
+          (RequireMember
+            (OperatorExpr operator="<"
+              (LiteralInteger value="1")
+              (LiteralInteger value="2"))))))))

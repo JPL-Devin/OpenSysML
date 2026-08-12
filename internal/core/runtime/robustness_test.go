@@ -30,6 +30,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
+	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
+	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
 	t.Run("non_terminating_loop_exhausts_step_budget", testNonTerminatingLoopExhaustsStepBudget)
 	t.Run("loop_body_declaration_does_not_leak", testLoopBodyDeclarationDoesNotLeak)
@@ -1092,6 +1094,78 @@ func testConstraintMissingFeature(t *testing.T) {
 	}
 
 	t.Log("EvaluateConstraint returned true (missing feature tolerated)")
+}
+
+// testRequirementFeatureWithoutAValue: a condition naming a feature the
+// requirement declares but nothing gives a value to reports ErrNoValue, naming
+// the feature, rather than the unresolved-feature error of a name that is not
+// declared at all.
+func testRequirementFeatureWithoutAValue(t *testing.T) {
+	src := `
+		package test {
+			requirement def TouchdownRequirement {
+				attribute actualVerticalSpeed;
+				attribute maxVerticalSpeed = 1.5;
+				require actualVerticalSpeed <= maxVerticalSpeed;
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "TouchdownRequirement", ast.DefRequirement)
+	if sym == nil {
+		t.Fatal("TouchdownRequirement not found")
+	}
+
+	satisfied, err := ctx.EvaluateRequirement(sym, rootScope)
+	if err == nil {
+		t.Fatalf("expected an error, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrNoValue) {
+		t.Errorf("expected ErrNoValue, got: %v", err)
+	}
+	if errors.Is(err, ErrViolated) {
+		t.Error("a feature without a value is not a violation")
+	}
+	if !strings.Contains(err.Error(), "actualVerticalSpeed") {
+		t.Errorf("error does not name the feature: %v", err)
+	}
+}
+
+// testRequirementFeaturesValuedFromEachOther: two features whose values name each
+// other report a cycle promptly instead of recursing until the step budget runs out.
+func testRequirementFeaturesValuedFromEachOther(t *testing.T) {
+	src := `
+		package test {
+			requirement def R {
+				attribute a = b;
+				attribute b = a;
+				require a <= b;
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "R", ast.DefRequirement)
+	if sym == nil {
+		t.Fatal("R not found")
+	}
+
+	satisfied, err := ctx.EvaluateRequirement(sym, rootScope)
+	if err == nil {
+		t.Fatalf("expected an error, got satisfied = %v", satisfied)
+	}
+	if !errors.Is(err, ErrCyclicSlot) {
+		t.Errorf("expected ErrCyclicSlot, got: %v", err)
+	}
 }
 
 // testStepBudgetExceeded: evaluation exceeds maxSteps. Each Eval call spends one

@@ -160,6 +160,7 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	case *ast.SubjectMember:
 		c.add(scope, d.TypeRef)
 		c.multiplicity(scope, d.Multiplicity)
+		c.relationships(scope, d, d.Relationships)
 		c.expr(scope, d.BindingExpr)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Body)
@@ -172,8 +173,10 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.expr(scope, d.Expression)
 	case *ast.ConstraintMember:
 		c.expr(scope, d.Expression)
+		c.walkMembers(scope, d.Body)
 	case *ast.AssumeMember:
 		c.expr(scope, d.Expression)
+		c.walkMembers(scope, d.Body)
 	case *ast.RequireMember:
 		c.expr(scope, d.Expression)
 		c.walkMembers(scope, d.Body)

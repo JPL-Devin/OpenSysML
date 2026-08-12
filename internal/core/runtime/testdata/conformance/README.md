@@ -99,7 +99,11 @@ This directory contains behavioral execution conformance tests. Each test consis
 ```
 
 - `bindings`: variable bindings for requirement evaluation
-- `satisfied`: boolean, whether requirement is satisfied
+- `satisfied`: boolean, whether requirement is satisfied. `false` means a
+  condition evaluated to false (`ErrViolated`), not that evaluation failed.
+- `evaluate`: qualified name of the element to evaluate, for a case declaring
+  more than one — a usage and the definition it is typed by. Omit to search the
+  model for the first requirement (or constraint) it declares.
 
 ### For Instances (`Instantiate`)
 

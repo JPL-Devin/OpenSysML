@@ -58,6 +58,10 @@ var (
 	// failure to evaluate, so callers can tell the two apart.
 	ErrViolated = errors.New("evaluated to false")
 
+	// ErrNoValue is returned when a feature a condition names carries no value:
+	// neither a slot on the object being checked nor a declared default.
+	ErrNoValue = errors.New("no value")
+
 	// ErrNoConditions is returned when a constraint or requirement carries no
 	// condition to evaluate: reporting a verdict would claim a check that never ran.
 	ErrNoConditions = errors.New("no condition to evaluate")
@@ -66,6 +70,22 @@ var (
 	// through other slots, on the slot being computed.
 	ErrCyclicSlot = errors.New("cyclic slot dependency")
 )
+
+// ViolationError reports a condition that evaluated to false, naming the
+// condition so a verdict says which one failed. It unwraps to ErrViolated,
+// since it is a verdict about the model rather than a failure to evaluate.
+type ViolationError struct {
+	Kind      string // "constraint" or "requirement"
+	Element   string // name of the element stating the condition
+	What      string // "assertion" or "require condition"
+	Condition string // the condition, rendered
+}
+
+func (e *ViolationError) Error() string {
+	return fmt.Sprintf("%s %s: %s %v: %s", e.Kind, e.Element, e.What, ErrViolated, e.Condition)
+}
+
+func (e *ViolationError) Unwrap() error { return ErrViolated }
 
 // EvalError wraps an evaluation error with source context.
 type EvalError struct {

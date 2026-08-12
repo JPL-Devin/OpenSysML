@@ -317,9 +317,11 @@ type ResultMember struct {
 // Syntax: assert <expression>; or assume <expression>;
 type ConstraintMember struct {
 	NodeBase
-	IsAssert   bool // true for 'assert', false for 'assume'
-	IsNegated  bool // true if 'not' keyword present (assert not expr)
-	Expression Node // the constraint expression
+	IsAssert   bool   // true for 'assert', false for 'assume'
+	IsNegated  bool   // true if 'not' keyword present (assert not expr)
+	Expression Node   // the constraint expression, nil when stated through Body
+	Name       string // name of the nested constraint, when it has one
+	Body       []Node // conditions of a nested constraint: assert constraint { <expr> }
 }
 
 // Phase C2: Requirement Body Members
@@ -328,27 +330,29 @@ type ConstraintMember struct {
 // Syntax: subject <name> : <Type>; OR subject = <expr>;
 type SubjectMember struct {
 	NodeBase
-	Name         string
-	TypeRef      *QualifiedName // subject type (for declaration form)
-	Multiplicity *Multiplicity  // optional multiplicity
-	Body         []Node         // optional nested members
-	BindingExpr  Node           // binding expression (for binding form: subject = <expr>;)
+	Name          string
+	TypeRef       *QualifiedName  // subject type (for declaration form)
+	Multiplicity  *Multiplicity   // optional multiplicity
+	Relationships []*Relationship // specializations written after the type (`:>> RequirementCheck::subj`)
+	Body          []Node          // optional nested members
+	BindingExpr   Node            // binding expression (for binding form: subject = <expr>;)
 }
 
 // AssumeMember represents an assumption in a requirement body.
-// Syntax: assume <expression>;
+// Syntax: assume <expression>; OR assume constraint { <expression>... }
 type AssumeMember struct {
 	NodeBase
-	Expression Node // assumption condition
+	Expression Node   // assumption condition (for expression form)
+	Body       []Node // ConstraintMembers of the nested constraint (for the braced form)
 }
 
 // RequireMember represents a requirement constraint.
-// Syntax: require <expression>; OR require <name> { body }
+// Syntax: require <expression>; OR require constraint { <expression>... } OR require <name> { body }
 type RequireMember struct {
 	NodeBase
 	Expression Node   // requirement condition (for expression form)
 	Name       string // optional name (for body form)
-	Body       []Node // optional nested members (for body form)
+	Body       []Node // nested members: ConstraintMembers for the braced form, requirement members for the named form
 }
 
 // ActorMember represents an actor declaration in a requirement/use case.

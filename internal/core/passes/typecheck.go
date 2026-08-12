@@ -83,10 +83,13 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.infer(scope, m.Expression)
 	case *ast.ConstraintMember:
 		tc.expr.checkBoolean(scope, m.Expression, "constraint expression")
+		tc.walk(scope, m.Body)
 	case *ast.AssumeMember:
 		tc.expr.checkBoolean(scope, m.Expression, "assume expression")
+		tc.walk(scope, m.Body)
 	case *ast.RequireMember:
 		tc.expr.checkBoolean(scope, m.Expression, "require expression")
+		tc.walk(scope, m.Body)
 	case *ast.IfActionNode:
 		// The condition is evaluated before either branch is entered, so it is
 		// checked outside them; each branch's body is checked in its own scope.
@@ -130,6 +133,7 @@ func (tc *typeChecker) checkSubjectMember(scope *symbols.Scope, m *ast.SubjectMe
 	if m.TypeRef != nil {
 		tc.checkTypeTarget(scope, m.TypeRef, ast.RelTyping, declKind{useKind: ast.UsageSubject})
 	}
+	tc.checkRelationships(scope, m.Relationships, declKind{useKind: ast.UsageSubject})
 	if m.BindingExpr != nil {
 		tc.expr.infer(scope, m.BindingExpr)
 	}

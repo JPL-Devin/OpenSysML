@@ -8,6 +8,23 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 
 ### Language and semantics
 
+- A requirement or constraint condition is evaluated against the features of the
+  element stating it, so it sees that element's own attributes, the ones it
+  inherits from the definition it is typed by, and the values a usage rebinds
+  (`attribute :>> maxVerticalSpeed = 1.5;`, `constraint limit : MassLimit { in m = mass; }`).
+  This was the first known limitation listed for 0.0.4.
+- `require <expr>;` and `assume <expr>;` parse in a requirement definition body,
+  not only in a usage, as do the `concern def`, `viewpoint def` and
+  `satisfy … by …` bodies that share the member set. A `subject` may redeclare
+  the one it inherits (`subject subj : View[1] :>> RequirementCheck::subj;`).
+- A condition stated through a nested constraint — `require constraint { <expr> }`,
+  `assert constraint [name] { <expr> }` — is evaluated, with every condition of
+  that body kept rather than only the last. A requirement carrying no condition
+  still has no verdict rather than passing vacuously.
+- A violated condition reports which condition failed
+  (`Required condition evaluated to false: actualVerticalSpeed <= maxVerticalSpeed`),
+  and a feature a condition names but which holds no value is reported as such
+  rather than as unresolved.
 - The KerML function library's scalar numeric functions are evaluable: `sqrt`,
   `abs`, `floor`, `round`, `max`, `min`, `isZero`, `isUnit`, `sin`, `cos`, `tan`,
   `cot`, `arcsin`, `arccos` and `arctan`. Dispatch is by the declaration's
@@ -140,6 +157,7 @@ The first tagged release.
 
 - A parameter bound by a constraint or requirement usage
   (`constraint limit : MassLimit { in m = mass; }`) is not passed into the
-  conditions it inherits from its definition.
+  conditions it inherits from its definition. *(Fixed after this release; see
+  the Unreleased section.)*
 - A multi-valued feature that is both typed and given a default takes the typed
   instantiation; the default is not merged into it.

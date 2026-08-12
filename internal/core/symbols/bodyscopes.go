@@ -120,8 +120,10 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		bodyScopesInExpr(scope, d.Expression)
 	case *ast.ConstraintMember:
 		bodyScopesInExpr(scope, d.Expression)
+		buildBodyScopes(scope, d.Body)
 	case *ast.AssumeMember:
 		bodyScopesInExpr(scope, d.Expression)
+		buildBodyScopes(scope, d.Body)
 	case *ast.RequireMember:
 		bodyScopesInExpr(scope, d.Expression)
 		buildBodyScopes(scope, d.Body)

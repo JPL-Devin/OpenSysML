@@ -286,6 +286,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.Multiplicity != nil {
 			kids = append(kids, v.Multiplicity)
 		}
+		for _, r := range v.Relationships {
+			kids = append(kids, r)
+		}
 		kids = append(kids, v.Body...)
 		writeChildren(b, depth, kids)
 		return
@@ -294,9 +297,33 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			// Body form: require name { body }
 			fmt.Fprintf(b, `(RequireMember name=%q`, v.Name)
 			writeChildren(b, depth, v.Body)
+		} else if v.Expression == nil {
+			// Nested-constraint form: require constraint { expr }
+			b.WriteString(`(RequireMember`)
+			writeChildren(b, depth, v.Body)
 		} else {
 			// Expression form: require expr;
 			b.WriteString(`(RequireMember`)
+			writeChildren(b, depth, []Node{v.Expression})
+		}
+		return
+	case *AssumeMember:
+		b.WriteString(`(AssumeMember`)
+		if v.Expression == nil {
+			writeChildren(b, depth, v.Body)
+		} else {
+			writeChildren(b, depth, []Node{v.Expression})
+		}
+		return
+	case *ConstraintMember:
+		fmt.Fprintf(b, `(ConstraintMember assert=%t negated=%t`, v.IsAssert, v.IsNegated)
+		if v.Expression == nil {
+			// Nested-constraint form: assert constraint [name] { expr }
+			if v.Name != "" {
+				fmt.Fprintf(b, ` name=%q`, v.Name)
+			}
+			writeChildren(b, depth, v.Body)
+		} else {
 			writeChildren(b, depth, []Node{v.Expression})
 		}
 		return
