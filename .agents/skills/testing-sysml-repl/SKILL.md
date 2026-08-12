@@ -539,9 +539,63 @@ Three cheap, high-signal sweeps:
    `"severity":1` in the `publishDiagnostics` notification. A file with **no** diagnostics produces
    **no** notification at all, so treat a missing notification as zero errors rather than a hang.
    `sysml-lsp: failed reading header line: EOF` on stderr at shutdown is normal.
+4. **LSP hover/definition as a symbol-table probe** — the REPL has **no** `%hover`/`%def`, so a
+   naming/symbol-registration change is best shown through `bin/sysml-lsp`: reuse the stdio driver
+   and add `textDocument/hover` and `textDocument/definition` requests with `id`s, then parse the
+   `Content-Length`-framed replies (searching for `"id":100` in the raw text prints the *tail* of the
+   message, not its body — frame-parse instead). Hover returns a one-liner like
+   `attributeUsage x`, which makes a mis-derived name obvious: on `main` a short-named redefinition
+   hovered as `attributeUsage redefines` and its definition was `null`. Make the sleep before reading
+   stdout configurable (e.g. `LSP_WAIT=8`); 4 s is occasionally too short and yields
+   `NO RESPONSE`/zero diagnostics, which looks like a pass — re-run with a longer wait before
+   believing an empty result.
+5. **Naming probes for a `<shortName>` change** — for `attribute <sn> redefines x = 5;` the
+   assertions that separate working from broken are: `%slots` lists the member as **`x = 5`**
+   (broken revisions show `sn = 5` with `x = 1`, or a bogus `redefines = <unknown>` slot);
+   `%eval T::A::x` **and** `%eval T::A::sn` both evaluate; and an action body doing
+   `assign total := total + x` completes instead of `unresolved feature: x`. Load-level `✓ package T`
+   proves nothing here.
 
 Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
 (`PATH=$HOME/sdk/go/bin:$HOME/go/bin:$PATH`) before concluding the toolchain is missing.
+
+### Naming changes that reach lowering and the runtime
+
+When a parser change alters which declarations carry a name (e.g. `ast.EffectiveName` deriving the
+name from a `redefines`/`references` target), the parse is the *least* interesting surface —
+consumers reading `Usage.Ident.Name` break silently downstream. The probes that actually distinguish
+fixed from broken, each with a visible A/B against `main`:
+
+- **Attribute default** — `attribute redefines x = 5;` in an action body with a statement reading
+  `x`; a lost name surfaces as `error: execution failed: eval assignment RHS: unresolved feature: x`,
+  not as a parse error.
+- **Step ordering** — `action redefines bump { … }` ordered by `then start bump; then bump end;`.
+  A lost name fails at lowering: `succession edge references undefined target node`.
+- **Trace naming** — `%trace on` then `%continue`; the step must print `token 1@bump`. A generic
+  `token 1@usage_action` (the `nodeIdentifier` fallback in `runtime/trace.go`) is the bug signature,
+  and it also reproduces with any unnamed step such as `perform worker;`.
+- **Calc parameter** — `in redefines factor = 3;` overriding an inherited `in factor = 2`. The
+  giveaway is a *wrong number*, not an error: the invocation silently uses the inherited default
+  (`Scaled(7)` → 14 instead of 21), so assert the value, never just "it evaluated".
+- **State** — `state redefines waiting { accept go then active; }`. A lost name makes the sourceless
+  accept vanish: `%state` shows `Events: 0` and `%advance 1` never leaves the initial state.
+
+Ready-made fixtures for all of these live in `internal/core/runtime/testdata/conformance/`
+(`action_redefined_attribute_default[_symbol]`, `action_redefined_step_ordering`,
+`calc_redefined_parameter[_symbol]`, `state_redefined_state_accept[_symbol]`) — load them straight
+into the REPL with `%action test::run` / `%eval test::Scaled(7)` / `%state Test::Machine` rather than
+writing new models. Where only a keyword fixture exists, `sed 's/redefines/:>>/'` gives the symbol
+twin. `action_redefined_step_ordering.sysml` emits a pre-existing
+`name conflict: total is already the name of the inherited feature Base::total` on every revision —
+not a regression.
+
+Adversarial cases for name derivation: a member with two redefinitions
+(`attribute <sn> redefines x, y = 9;`) derives *no* name from them, so it answers to its short name
+(`%slots` shows `sn = 9` and leaves `x`/`y` at their inherited values) with no diagnostic — assert
+which key the value landed under rather than assuming it was dropped. REPL call syntax: named
+arguments work as `Scaled(x = 7, factor = 5)`, but *mixing* positional and named
+(`Scaled(7, factor = 5)`) is a parse error on every revision — don't read that as a
+parameter-naming bug.
 
 ## Recording setup (Linux/Plasma box)
 
