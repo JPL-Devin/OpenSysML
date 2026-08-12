@@ -68,6 +68,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("quantity_index_is_not_a_unit", testQuantityIndexIsNotAUnit)
 	t.Run("quantity_unit_shadowed_by_sibling", testQuantityUnitShadowedBySibling)
 	t.Run("quantity_qualified_unit_is_not_shadowing", testQuantityQualifiedUnitIsNotShadowing)
+	t.Run("quantity_shadowed_unit_without_a_qualifier", testQuantityShadowedUnitWithoutAQualifier)
 	t.Run("quantity_cyclic_unit_definition", testQuantityCyclicUnitDefinition)
 	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
@@ -1802,6 +1803,43 @@ func testQuantityQualifiedUnitIsNotShadowing(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "test::m resolves to") {
 		t.Errorf("err = %v; want it to name the declaration as written", err)
+	}
+}
+
+// testQuantityShadowedUnitWithoutAQualifier: a hidden unit owned by no namespace
+// has no qualified spelling to offer, so the diagnostic names it without
+// advising the name that just failed.
+func testQuantityShadowedUnitWithoutAQualifier(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		attribute u : ISQBase::LengthUnit = SI::m;
+		package test {
+			attribute u : ScalarValues::Real = 2.0;
+			constraint def Tall {
+				1.0 [u] > 0.5 [SI::m]
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Tall", ast.DefConstraint)
+	if sym == nil {
+		t.Fatal("Tall constraint not found")
+	}
+
+	satisfied, err := ctx.EvaluateConstraint(sym, sym.OwnerScope)
+	if !errors.Is(err, semantics.ErrNotAUnit) {
+		t.Fatalf("satisfied = %v, err = %v; want ErrNotAUnit", satisfied, err)
+	}
+	var shadowed *semantics.ShadowedUnitError
+	if !errors.As(err, &shadowed) {
+		t.Fatalf("err = %v; want a *semantics.ShadowedUnitError", err)
+	}
+	if shadowed.Shadowed == nil {
+		t.Fatalf("err = %v; want it to name the unit the declaration hid", err)
+	}
+	if shadowed.Suggestion != "" {
+		t.Errorf("error suggests %q; want no spelling when none qualifies the unit", shadowed.Suggestion)
+	}
+	if strings.Contains(err.Error(), "write u") {
+		t.Errorf("err = %v; want it not to advise the name that failed", err)
 	}
 }
 

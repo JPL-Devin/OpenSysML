@@ -485,6 +485,9 @@ func (e *ShadowedUnitError) Error() string {
 	if e.Shadowed == nil {
 		return msg
 	}
+	if e.Suggestion == "" {
+		return fmt.Sprintf("%s, shadowing the measurement unit %s", msg, e.Shadowed.Name)
+	}
 	return fmt.Sprintf("%s, shadowing the measurement unit %s — write %s to name the unit",
 		msg, e.Shadowed.Name, e.Suggestion)
 }
@@ -504,8 +507,11 @@ func (m *Model) shadowedUnit(qn *ast.QualifiedName, sym *symbols.Symbol) error {
 	if outer := m.unitOutside(sym); outer != nil {
 		err.Shadowed = outer
 		// The written name qualified by the unit's namespace, which is the
-		// spelling that reaches the unit from inside the shadowing namespace.
-		err.Suggestion = qualifyAs(m.fqnOf(outer), err.Name)
+		// spelling that reaches the unit from inside the shadowing namespace. A
+		// unit owned by no namespace has no such spelling to offer.
+		if qualified := qualifyAs(m.fqnOf(outer), err.Name); qualified != err.Name {
+			err.Suggestion = qualified
+		}
 	}
 	return err
 }
