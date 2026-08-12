@@ -163,6 +163,39 @@ func TestMemberAttachedThenInRegionDesugars(t *testing.T) {
 	}
 }
 
+// A one-name succession takes the member before it as its source whether or not
+// it carries a guard, so the two spellings reach lowering alike.
+func TestOneNameGuardedEdgeTakesTheMemberBefore(t *testing.T) {
+	p := New(source.New("guard.sysml", []byte("action def A { action a; action b; then a if x; }")))
+	file := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+	}
+
+	var edge *ast.ControlFlowEdge
+	for _, member := range file.Members {
+		m, ok := member.(*ast.Membership)
+		if !ok {
+			continue
+		}
+		def, ok := m.Member.(*ast.Definition)
+		if !ok {
+			continue
+		}
+		for _, defMember := range def.Members {
+			if e, ok := defMember.(*ast.ControlFlowEdge); ok {
+				edge = e
+			}
+		}
+	}
+	if edge == nil {
+		t.Fatal("a guarded succession should be a control flow edge")
+	}
+	if got := qnText(edge.Source) + "->" + qnText(edge.Target); got != "b->a" {
+		t.Errorf("guarded succession %s, want b->a", got)
+	}
+}
+
 // qnText spells a qualified name the way a succession end reads.
 func qnText(qn *ast.QualifiedName) string {
 	if qn == nil {

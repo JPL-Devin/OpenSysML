@@ -292,6 +292,46 @@ func TestSuccessionRoundTripsInEveryBody(t *testing.T) {
 	}
 }
 
+// A succession is its two ends, so a graph from elsewhere that names only one of
+// them declares no order: that is reported rather than written back as notation
+// (`succession;`) that says nothing.
+func TestHalfNamedSuccessionInAGraphIsReported(t *testing.T) {
+	const graph = `@prefix elmt: <urn:sysmlv2:element:> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:systemica:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:P
+    a sysml:Package ;
+    sysml:qualifiedName "P" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "P" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:P::a
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "P::a" ;
+    sysml:owningNamespace elmt:P ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "a" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:P::@1>
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "P::@1" ;
+    sysml:owningNamespace elmt:P ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:sourceFeature elmt:P::a .
+`
+	out, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+	if err == nil {
+		t.Fatalf("a succession naming one end converted to:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "does not name both of the members it sequences") {
+		t.Errorf("error %q should say why the order cannot be written back", err)
+	}
+}
+
 // A `then` before a member the notation does not allow a succession in front of
 // is a syntax error, so no graph is built from a model whose order is unclear.
 func TestSuccessionOnNonUsageIsASyntaxError(t *testing.T) {

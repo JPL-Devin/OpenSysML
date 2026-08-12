@@ -243,6 +243,12 @@ func (d *decoder) head(el *element) (string, error) {
 		if source != "" && target != "" {
 			return "then " + source + " " + target, nil
 		}
+		// A half-named succession states no order, so it is reported rather than
+		// written back as a bare `succession;` the notation reads as nothing.
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the succession <%s>", el.iri),
+			Note: "it does not name both of the members it sequences, so the order it declares cannot be written back",
+		}
 	}
 	if kind, ok := metaclassDefinition[el.metaclass]; ok {
 		return d.definitionHead(el, kind), nil

@@ -248,8 +248,10 @@ func (b *bodyBuilder) add(m ast.Node) {
 
 	// `then <target>;` leaves its source to the member before it, the same member
 	// a member-attached `then` sequences from, rather than to a consumer's guess.
-	if edge, ok := m.(*ast.SuccessionEdge); ok && len(sourceParts(edge)) == 0 && b.last != "" {
-		edge.Source = memberReference(b.last, b.lastSpan)
+	if b.last != "" {
+		if source := unnamedEdgeSource(m); source != nil {
+			*source = memberReference(b.last, b.lastSpan)
+		}
 	}
 
 	target := memberDeclaredName(m)
@@ -277,13 +279,22 @@ func unnamedEndWarning(end string) string {
 	return fmt.Sprintf("`then` sequences %s a member with no name, so no succession is recorded for it: name that member, or write the succession as its own member", end)
 }
 
-// sourceParts returns the name segments an edge's source end names, which the
-// one-name notation (`then b;`) leaves empty.
-func sourceParts(edge *ast.SuccessionEdge) []ast.NameSegment {
-	if edge.Source == nil {
+// unnamedEdgeSource addresses the source end of an edge member, guarded or not,
+// when the one-name notation (`then b;`, `then b if x;`) left it unnamed.
+func unnamedEdgeSource(m ast.Node) **ast.QualifiedName {
+	var end **ast.QualifiedName
+	switch n := m.(type) {
+	case *ast.SuccessionEdge:
+		end = &n.Source
+	case *ast.ControlFlowEdge:
+		end = &n.Source
+	default:
 		return nil
 	}
-	return edge.Source.Parts
+	if *end != nil && len((*end).Parts) != 0 {
+		return nil
+	}
+	return end
 }
 
 // isEdgeMember reports whether a member is an edge between other members, which
