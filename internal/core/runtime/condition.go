@@ -10,12 +10,15 @@ import (
 )
 
 // condition is one boolean check a constraint or requirement states, with the
-// scope its expression resolves names in.
+// scope its expression resolves names in. A condition with a group holds when
+// every condition in it does, which is what a negation denies as a whole
+// (Invariant::isNegated denies the constraint, not each of its conditions).
 type condition struct {
 	expr     ast.Node
 	scope    *symbols.Scope
 	negated  bool
 	required bool // an assumption is trusted rather than required to hold
+	group    []condition
 }
 
 // scopedExpr is an expression with the scope its names resolve in.
@@ -30,37 +33,47 @@ type scopedExpr struct {
 func conditionsOf(members []scopedMember) []condition {
 	var out []condition
 	for _, member := range members {
-		out = appendConditions(out, member.node, member.scope, true, false)
+		out = appendConditions(out, member.node, member.scope, true)
 	}
 	return out
 }
 
 // appendConditions appends the conditions node states. required says whether the
-// enclosing member requires them to hold or only assumes them; negated is the
-// negation the enclosing member wrote, which a nested body inherits.
-func appendConditions(out []condition, node ast.Node, scope *symbols.Scope, required, negated bool) []condition {
+// enclosing member requires them to hold or only assumes them. A negation denies
+// the conditions its member states together rather than one by one.
+func appendConditions(out []condition, node ast.Node, scope *symbols.Scope, required bool) []condition {
 	switch m := node.(type) {
 	case *ast.ConstraintMember:
-		negated = negated != m.IsNegated
+		required = required && m.IsAssert
+		var stated []condition
 		if m.Expression != nil {
-			out = append(out, condition{expr: m.Expression, scope: scope, negated: negated, required: required && m.IsAssert})
+			stated = append(stated, condition{expr: m.Expression, scope: scope, required: required})
 		}
 		for _, nested := range m.Body {
-			out = appendConditions(out, nested, scope, required && m.IsAssert, negated)
+			stated = appendConditions(stated, nested, scope, required)
+		}
+		switch {
+		case !m.IsNegated:
+			out = append(out, stated...)
+		case len(stated) == 1:
+			stated[0].negated = !stated[0].negated
+			out = append(out, stated[0])
+		case len(stated) > 1:
+			out = append(out, condition{scope: scope, negated: true, required: required, group: stated})
 		}
 	case *ast.RequireMember:
 		if m.Expression != nil {
 			out = append(out, condition{expr: m.Expression, scope: scope, required: true})
 		}
 		for _, nested := range m.Body {
-			out = appendConditions(out, nested, scope, true, false)
+			out = appendConditions(out, nested, scope, true)
 		}
 	case *ast.AssumeMember:
 		if m.Expression != nil {
 			out = append(out, condition{expr: m.Expression, scope: scope})
 		}
 		for _, nested := range m.Body {
-			out = appendConditions(out, nested, scope, false, false)
+			out = appendConditions(out, nested, scope, false)
 		}
 	}
 	return out
@@ -106,21 +119,11 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 	}
 	features := ctx.conditionFeatures(check.sym)
 	for _, cond := range conds {
-		ec := NewEvalContextIn(ctx, cond.scope, check.self)
-		ec.features = features
-		if check.bindings != nil {
-			ec.Push(check.bindings)
-		}
-		result, err := ec.Eval(cond.expr)
+		// An assumption is evaluated too — a broken one is still an error — but
+		// only a required condition has to hold.
+		holds, err := ctx.conditionHolds(check, cond, features)
 		if err != nil {
-			return false, fmt.Errorf("%s %s: %s evaluation failed: %w", check.kind, check.name(), check.what, err)
-		}
-		if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
-			return false, fmt.Errorf("%s %s: %s must evaluate to boolean, got %v", check.kind, check.name(), check.what, result.Kind)
-		}
-		holds := result.Const.Bool
-		if cond.negated {
-			holds = !holds
+			return false, err
 		}
 		if cond.required && !holds {
 			// A negated element asserts exactly this: one required condition
@@ -128,11 +131,7 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 			if check.negated {
 				return true, nil
 			}
-			text := conditionText(cond.expr)
-			if cond.negated {
-				text = "not " + text
-			}
-			return false, &ViolationError{Kind: check.kind, Element: check.name(), What: check.what, Condition: text}
+			return false, &ViolationError{Kind: check.kind, Element: check.name(), What: check.what, Condition: conditionTextOf(cond)}
 		}
 	}
 	if check.negated {
@@ -146,6 +145,66 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 	return true, nil
 }
 
+// conditionHolds reports whether one condition holds, its own negation applied.
+// A condition stating a group holds when every required condition in the group
+// does, so denying the group denies their conjunction.
+func (ctx *Context) conditionHolds(check conditionCheck, cond condition, features map[string]scopedExpr) (bool, error) {
+	holds := true
+	if cond.group != nil {
+		for _, nested := range cond.group {
+			nestedHolds, err := ctx.conditionHolds(check, nested, features)
+			if err != nil {
+				return false, err
+			}
+			if nested.required && !nestedHolds {
+				holds = false
+			}
+		}
+	} else {
+		ec := NewEvalContextIn(ctx, cond.scope, check.self)
+		ec.features = features
+		if check.bindings != nil {
+			ec.Push(check.bindings)
+		}
+		result, err := ec.Eval(cond.expr)
+		if err != nil {
+			return false, fmt.Errorf("%s %s: %s evaluation failed: %w", check.kind, check.name(), check.what, err)
+		}
+		if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
+			return false, fmt.Errorf("%s %s: %s must evaluate to boolean, got %v", check.kind, check.name(), check.what, result.Kind)
+		}
+		holds = result.Const.Bool
+	}
+	if cond.negated {
+		holds = !holds
+	}
+	return holds, nil
+}
+
+// conditionTextOf renders a condition as it was written, negation included.
+func conditionTextOf(cond condition) string {
+	if cond.group == nil {
+		if cond.negated {
+			return "not " + conditionText(cond.expr)
+		}
+		return conditionText(cond.expr)
+	}
+	var texts []string
+	for _, nested := range cond.group {
+		if nested.required {
+			texts = append(texts, conditionTextOf(nested))
+		}
+	}
+	text := strings.Join(texts, " and ")
+	if !cond.negated {
+		return text
+	}
+	if len(texts) > 1 {
+		return "not (" + text + ")"
+	}
+	return "not " + text
+}
+
 // negatedText renders what a negated element asserted and did not get: that not
 // every required condition holds.
 func negatedText(conds []condition) string {
@@ -154,11 +213,7 @@ func negatedText(conds []condition) string {
 		if !cond.required {
 			continue
 		}
-		text := conditionText(cond.expr)
-		if cond.negated {
-			text = "not " + text
-		}
-		texts = append(texts, text)
+		texts = append(texts, conditionTextOf(cond))
 	}
 	if len(texts) == 1 {
 		return "not " + texts[0]

@@ -37,7 +37,9 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   and could not be named at the prompt before.
 - An assertion can be negated: `assert not constraint { <expr> }` and
   `assert not satisfy <requirement> by <part>;` hold exactly when the conditions
-  they deny do not, rather than parsing as a declaration named `not`.
+  they deny do not, rather than parsing as a declaration named `not`. A negation
+  denies the conditions of the constraint it is written on together — `not (a and
+  b)`, not `not a and not b` — so it holds as soon as one of them fails.
 - The KerML function library's scalar numeric functions are evaluable: `sqrt`,
   `abs`, `floor`, `round`, `max`, `min`, `isZero`, `isUnit`, `sin`, `cos`, `tan`,
   `cot`, `arcsin`, `arccos` and `arctan`. Dispatch is by the declaration's

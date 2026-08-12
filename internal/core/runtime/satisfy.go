@@ -238,7 +238,7 @@ func (ctx *Context) SatisfySubject(a *SatisfyAssertion) (*Instance, error) {
 // without referencing another requirement.
 func declaresConditions(sym *symbols.Symbol) bool {
 	for _, node := range declMembers(sym.Decl) {
-		if len(appendConditions(nil, node, nil, true, false)) > 0 {
+		if len(appendConditions(nil, node, nil, true)) > 0 {
 			return true
 		}
 	}
