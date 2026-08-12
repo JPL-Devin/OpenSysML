@@ -550,7 +550,7 @@ binaries, so build an A/B baseline first and keep it around:
 
 ```bash
 git worktree add /tmp/mainwt main     # or reuse an existing worktree such as /home/ubuntu/mainwt
-(cd /tmp/mainwt && go build -o /tmp/mainwt/sysml-main ./cmd/sysml && go build -o /tmp/mainwt/sysml-lsp-main ./cmd/sysml-lsp)
+go build -C /tmp/mainwt -o /tmp/mainwt/sysml-main ./cmd/sysml && go build -C /tmp/mainwt -o /tmp/mainwt/sysml-lsp-main ./cmd/sysml-lsp
 ```
 
 Three cheap, high-signal sweeps:
