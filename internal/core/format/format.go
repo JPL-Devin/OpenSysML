@@ -91,7 +91,7 @@ type formatter struct {
 	prev        lexer.Token
 	started     bool
 	lastCode    lexer.Kind // last non-comment token: what a line break interrupts
-	openComment bool       // the last token is a comment left unterminated
+	openComment bool       // the last token is a comment the lexer never saw closed
 }
 
 func (f *formatter) run(toks []lexer.Token) []byte {
@@ -157,7 +157,7 @@ func (f *formatter) emit(tok lexer.Token) {
 		f.depth++
 	}
 	f.prev, f.started, f.atLineStart = tok, true, false
-	f.openComment = unterminatedComment(tok.Kind, text)
+	f.openComment = tok.Unterminated
 	if !isComment(tok.Kind) {
 		// A trailing comment interrupts nothing, so the token before it is
 		// still what the next line continues.
@@ -168,22 +168,6 @@ func (f *formatter) emit(tok lexer.Token) {
 		// after it start from wherever it ended.
 		f.atLineStart = strings.TrimSpace(text[i+1:]) == ""
 	}
-}
-
-// unterminatedComment reports whether tok is a block comment or documentation
-// note left unclosed, which the lexer runs to the end of the file: anything
-// appended after it would become part of its own text.
-func unterminatedComment(kind lexer.Kind, text string) bool {
-	var opener string
-	switch kind {
-	case lexer.MLNote:
-		opener = "//*"
-	case lexer.RegularComment:
-		opener = "/*"
-	default:
-		return false
-	}
-	return !strings.HasSuffix(strings.TrimPrefix(text, opener), "*/")
 }
 
 // trailingNewlines counts the line endings already at the end of the buffer; a
