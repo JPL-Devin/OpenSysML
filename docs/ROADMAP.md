@@ -200,6 +200,10 @@ A6; do A6 first and re-test this.
 
 ## A3a — a measurement unit does not resolve inside a condition in the REPL path
 
+Follows A1a, so it is observable only once #89 lands: the A1a bullet above still describes a
+quantity expression as unevaluated on `main`, and everything below was observed on that branch
+(`ec5f1a1`) and on the review branch of #92, not here.
+
 A unit literal written in a `constraint`/`requirement` condition reports `not a measurement unit:
 unresolved unit m` in the REPL, while an attribute initializer in the same constraint resolves the
 same unit:
@@ -215,9 +219,9 @@ package QTest {
 }
 ```
 
-The same model passes as a conformance case
-(`runtime/testdata/conformance/constraint_quantity_quotient.sysml`), where the stdlib is in the
-index and `ExpandWildcardImports()` has run — so this is the REPL's per-submission index rebuild
+The same model passes as a conformance case — `constraint_quantity_quotient.sysml`, which #89 adds
+under `runtime/testdata/conformance/` — where the stdlib is in the index and
+`ExpandWildcardImports()` has run, so this is the REPL's per-submission index rebuild
 and the wildcard re-export handling, not the runtime. Held out of the A1a review fixes (#92)
 deliberately: the correct fix needs `internal/core/symbols` to unwind wildcard re-exports on
 `RemoveDocument`, or the rebuild in `internal/repl/session.go` (~285) to stop dropping them.
