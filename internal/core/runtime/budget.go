@@ -10,16 +10,23 @@ import (
 
 // Default bounds on one run. Each one stops a different kind of runaway, so each
 // counts a different thing and has its own variable.
+//
+// The sizes are set by how long a runaway takes to report, not by memory:
+// execution allocates nothing per step (peak RSS is ~34MB whether a run spends
+// 10 thousand steps or 50 million), and the only thing a budget makes grow is a
+// %trace, at 34-83 bytes an entry. Measured rates are ~13.6M evaluation steps/s
+// and ~1.9M events/s, so these defaults report a runaway within about a second
+// each, and a fully traced run at all four ceilings holds ~320MB.
 const (
 	// DefaultMaxSteps bounds expression evaluations.
-	DefaultMaxSteps int64 = 100000
+	DefaultMaxSteps int64 = 10000000
 	// DefaultMaxActionSteps bounds the token-flow steps one action run performs.
-	DefaultMaxActionSteps int64 = 10000
+	DefaultMaxActionSteps int64 = 1000000
 	// DefaultMaxStateEvents bounds the events one state machine run dispatches.
-	DefaultMaxStateEvents int64 = 10000
+	DefaultMaxStateEvents int64 = 1000000
 	// DefaultMaxDoSteps bounds the do activity actions one state machine run
 	// performs.
-	DefaultMaxDoSteps int64 = 100000
+	DefaultMaxDoSteps int64 = 5000000
 )
 
 // Environment variables overriding the defaults above, following the

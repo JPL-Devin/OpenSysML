@@ -58,3 +58,33 @@ func TestSetBudgets(t *testing.T) {
 		t.Errorf("a refused set changed the bounds to %+v", got)
 	}
 }
+
+// TestAdvanceIsBoundedBySessionBudgets: %advance drains a machine that never
+// settles up to the session's own bounds, and says which one stopped it instead
+// of looking like a machine that had settled.
+func TestAdvanceIsBoundedBySessionBudgets(t *testing.T) {
+	t.Run("event_budget", func(t *testing.T) {
+		s := loadFixture(t, "testdata/state_spin.sysml")
+		budgets := runtime.DefaultBudgets()
+		budgets.MaxStateEvents = 7
+		if err := s.SetBudgets(budgets); err != nil {
+			t.Fatalf("SetBudgets: %v", err)
+		}
+		run(t, s, "%state Spin")
+		wants(t, run(t, s, "%advance 1000"),
+			"(7 event(s) processed)",
+			"Stopped at the event budget (7 events; raise "+runtime.MaxStateEventsEnvVar)
+	})
+
+	t.Run("do_budget", func(t *testing.T) {
+		s := loadFixture(t, "testdata/state_spin.sysml")
+		budgets := runtime.DefaultBudgets()
+		budgets.MaxDoSteps = 5
+		if err := s.SetBudgets(budgets); err != nil {
+			t.Fatalf("SetBudgets: %v", err)
+		}
+		run(t, s, "%state Spin")
+		wants(t, run(t, s, "%advance 1000"),
+			"Stopped at the do activity budget (5 steps; raise "+runtime.MaxDoStepsEnvVar)
+	})
+}

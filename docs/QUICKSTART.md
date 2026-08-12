@@ -566,28 +566,35 @@ echo 'part Wheel { attribute diameter = 16.0; }' > test.sysml
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `SYSML_LIBRARY_PATH` | unset (use the bundled standard library) | Directory to load the SysML/KerML standard library from instead of the embedded copy |
-| `SYSML_MAX_STEPS` | `100000` | Evaluation step budget: the number of expression evaluations one run may spend before it is reported as a runaway |
-| `SYSML_MAX_ACTION_STEPS` | `10000` | Token-flow steps one action run may perform |
-| `SYSML_MAX_EVENTS` | `10000` | Events one state machine run may dispatch |
-| `SYSML_MAX_DO_STEPS` | `100000` | Do-activity actions one state machine run may perform |
+| `SYSML_MAX_STEPS` | `10000000` | Evaluation step budget: the number of expression evaluations one run may spend before it is reported as a runaway |
+| `SYSML_MAX_ACTION_STEPS` | `1000000` | Token-flow steps one action run may perform |
+| `SYSML_MAX_EVENTS` | `1000000` | Events one state machine run may dispatch, and the events one `%advance` drains |
+| `SYSML_MAX_DO_STEPS` | `5000000` | Do-activity actions one state machine run may perform, and the ones one `%advance` drains |
 
 Each budget is what turns a non-terminating run into a reported error instead of
 a hang. They count incommensurable things — expression evaluations, action token
 steps, dispatched events, do-activity actions — so raising one says nothing about
 the others, and each has its own variable.
 
+The defaults are set by how long a runaway takes to report rather than by memory
+— execution allocates nothing per step (peak RSS is ~34 MB whether a run spends
+ten thousand steps or fifty million), and the only thing a budget makes grow is a
+`%trace`, at 34–83 bytes an entry. At the measured ~13.6M evaluation steps/s and
+~1.9M events/s each default reports a runaway within about a second, and a fully
+traced run at all four ceilings holds ~320 MB.
+
 The evaluation step budget:
 
 ```
 error: execution failed: eval assignment RHS: evaluation step limit exceeded
-(100000 steps; raise SYSML_MAX_STEPS to allow more)
+(10000000 steps; raise SYSML_MAX_STEPS to allow more)
 ```
 
 A legitimately long run — a numeric integration in an action body, say — needs a
 higher ceiling, so raise it for that run:
 
 ```bash
-SYSML_MAX_STEPS=5000000 sysml descent.sysml
+SYSML_MAX_STEPS=200000000 sysml descent.sysml
 ```
 
 Unset or empty means the default. Anything that is not a positive integer is
@@ -596,23 +603,23 @@ ignored:
 
 ```bash
 $ SYSML_MAX_STEPS=lots sysml model.sysml
-sysml: SYSML_MAX_STEPS="lots" is not an integer: set it to a positive number of evaluation steps (default 100000)
+sysml: SYSML_MAX_STEPS="lots" is not an integer: set it to a positive number of evaluation steps (default 10000000)
 ```
 
 The other budgets behave identically, and their errors name the variable that
 raises them:
 
 ```
-execution exceeded max steps (10000 steps; raise SYSML_MAX_ACTION_STEPS to allow more), possible infinite loop
-state machine exceeded max events (10000 events; raise SYSML_MAX_EVENTS to allow more), possible infinite loop
-state machine exceeded max do activity steps (100000 steps; raise SYSML_MAX_DO_STEPS to allow more), possible non-terminating do behavior
+execution exceeded max steps (1000000 steps; raise SYSML_MAX_ACTION_STEPS to allow more), possible infinite loop
+state machine exceeded max events (1000000 events; raise SYSML_MAX_EVENTS to allow more), possible infinite loop
+state machine exceeded max do activity steps (5000000 steps; raise SYSML_MAX_DO_STEPS to allow more), possible non-terminating do behavior
 ```
 
 A long simulation therefore raises the state machine bounds rather than the
 evaluation one:
 
 ```bash
-SYSML_MAX_EVENTS=200000 SYSML_MAX_DO_STEPS=2000000 sysml descent.sysml
+SYSML_MAX_EVENTS=20000000 SYSML_MAX_DO_STEPS=100000000 sysml descent.sysml
 ```
 
 ---

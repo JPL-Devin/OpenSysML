@@ -222,9 +222,9 @@ func TestStepLimitErrorNamesEffectiveBudgetAndVariable(t *testing.T) {
 	}
 }
 
-// TestRaisedBudgetRunsLongerLoop: a 10 000-iteration loop exhausts the default
-// budget and completes under a raised one, which is the point of making the
-// budget configurable.
+// TestRaisedBudgetRunsLongerLoop: a 10 000-iteration loop exhausts the 100 000
+// steps that used to be the default and completes under today's, which is the
+// point of both raising the default and making it configurable.
 func TestRaisedBudgetRunsLongerLoop(t *testing.T) {
 	src := `
 		package L {
@@ -252,19 +252,19 @@ func TestRaisedBudgetRunsLongerLoop(t *testing.T) {
 		return err
 	}
 
-	t.Run("default_budget_stops_it", func(t *testing.T) {
-		err := runLoop(t, DefaultMaxSteps)
+	t.Run("old_default_stops_it", func(t *testing.T) {
+		err := runLoop(t, 100000)
 		if err == nil {
-			t.Fatal("expected the default budget to stop the loop")
+			t.Fatal("expected a budget of 100000 steps to stop the loop")
 		}
 		if !errors.Is(err, ErrStepLimitExceeded) {
 			t.Fatalf("expected ErrStepLimitExceeded, got %v", err)
 		}
 	})
 
-	t.Run("raised_budget_completes_it", func(t *testing.T) {
-		if err := runLoop(t, 5000000); err != nil {
-			t.Fatalf("loop failed under a raised budget: %v", err)
+	t.Run("current_default_completes_it", func(t *testing.T) {
+		if err := runLoop(t, DefaultMaxSteps); err != nil {
+			t.Fatalf("loop failed under the default budget: %v", err)
 		}
 	})
 }

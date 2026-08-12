@@ -24,19 +24,29 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 
 - The evaluation step budget is configurable through `SYSML_MAX_STEPS`, so a
   legitimately long run — a numeric integration in an action body, say — is not
-  bounded by the 100 000-step default, which is still what an unset or empty
-  variable means. A value that is not a positive integer is reported at REPL/CLI
-  startup and at gRPC service construction, naming the variable and the value,
-  rather than falling back to the default silently.
+  bounded by a fixed ceiling. A value that is not a positive integer is reported
+  at REPL/CLI startup and at gRPC service construction, naming the variable and
+  the value, rather than falling back to the default silently.
 - The step-limit error reports the budget actually in force and names
   `SYSML_MAX_STEPS`, so the message says how to raise it.
 - The three sibling runaway bounds are configurable the same way, each through
   its own variable, since they count incommensurable units: an action run's
-  token-flow steps through `SYSML_MAX_ACTION_STEPS` (default 10 000), a state
-  machine run's dispatched events through `SYSML_MAX_EVENTS` (default 10 000) and
-  its do-activity actions through `SYSML_MAX_DO_STEPS` (default 100 000). Each
-  error names the variable that raises it, so a long simulation is no longer
-  capped by a bound with no way out.
+  token-flow steps through `SYSML_MAX_ACTION_STEPS`, a state machine run's
+  dispatched events through `SYSML_MAX_EVENTS` and its do-activity actions
+  through `SYSML_MAX_DO_STEPS`. Each error names the
+  variable that raises it, so a long simulation is no longer capped by a bound
+  with no way out.
+- The defaults are raised to 10 000 000 evaluation steps, 1 000 000 action
+  token-flow steps, 1 000 000 events and 5 000 000 do-activity steps (from
+  100 000 / 10 000 / 10 000 / 100 000). Execution allocates nothing per step —
+  peak RSS is ~34 MB whether a run spends ten thousand steps or fifty million —
+  so the sizes are set by how long a runaway takes to report: at ~13.6M
+  evaluation steps/s and ~1.9M events/s each reports one within about a second,
+  and a fully traced run at all four ceilings holds ~320 MB.
+- The REPL's `%advance` no longer stops after a fixed 10 000 events and
+  do-activity actions, which could look like a machine that had settled. It is
+  bounded by the session's event and do-activity budgets, and says which one cut
+  a drain short.
 
 ## 0.0.4 — 2026-08-10
 
