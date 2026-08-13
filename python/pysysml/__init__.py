@@ -8,11 +8,14 @@ from pysysml.model import Model
 from pysysml.symbol import Symbol
 from pysysml.diagnostic import Diagnostic
 from pysysml.instance import Instance
-from pysysml.errors import PySysMLError, ConnectionError, RuntimeError
+from pysysml.errors import (
+    PySysMLError, ConnectionError, RuntimeError, SlotError, UnsupportedValueError,
+)
 
 __all__ = [
     "Connection", "Model", "Symbol", "Diagnostic", "Instance",
-    "PySysMLError", "ConnectionError", "RuntimeError",
+    "PySysMLError", "ConnectionError", "RuntimeError", "SlotError",
+    "UnsupportedValueError",
     "load", "connect",
     "eval", "instantiate",
     "__version__"

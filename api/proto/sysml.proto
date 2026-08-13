@@ -89,6 +89,7 @@ message SlotValue {
   Value value = 2;               // for scalar slots
   repeated Value values = 3;     // for collection slots
   bool materialized = 4;
+  string error = 5;              // set when slot evaluation failed; value is unset
 }
 
 // InstantiateRequest requests instantiation of a part/usage
@@ -102,6 +103,9 @@ message InstantiateResponse {
   Instance instance = 1;
   string error = 2;
   repeated Diagnostic diagnostics = 3;
+  // Every instance reachable from `instance`, including `instance` itself, so a
+  // client can resolve an `instance_id` slot value without a follow-up RPC.
+  repeated Instance instances = 4;
 }
 
 // ExecuteActionRequest requests action execution

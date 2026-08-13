@@ -295,6 +295,62 @@ func ProtoToValue(pv *pb.Value) runtime.Value {
 	}
 }
 
+// InstanceGraphToProto converts inst and every instance reachable from it. The
+// root is returned first; runtime instances live only for the duration of a
+// request, so the whole reachable graph is serialized while the context is alive.
+func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) (*pb.Instance, []*pb.Instance) {
+	var all []*pb.Instance
+	seen := make(map[int64]bool)
+
+	var walk func(*runtime.Instance) *pb.Instance
+	walk = func(cur *runtime.Instance) *pb.Instance {
+		if seen[cur.ID] {
+			return nil
+		}
+		seen[cur.ID] = true
+
+		pbInst := InstanceToProto(rt, cur, idx)
+		all = append(all, pbInst)
+
+		for _, slot := range pbInst.Slots {
+			for _, id := range instanceRefs(slot) {
+				child, ok := rt.Instance(id)
+				if !ok {
+					continue
+				}
+				walk(child)
+			}
+		}
+		return pbInst
+	}
+
+	root := walk(inst)
+	return root, all
+}
+
+// instanceRefs collects the instance IDs a slot value references, scalar or not.
+func instanceRefs(slot *pb.SlotValue) []int64 {
+	var ids []int64
+	var collect func(*pb.Value)
+	collect = func(v *pb.Value) {
+		switch k := v.GetKind().(type) {
+		case *pb.Value_InstanceId:
+			ids = append(ids, k.InstanceId)
+		case *pb.Value_Sequence:
+			for _, elem := range k.Sequence.GetElements() {
+				collect(elem)
+			}
+		}
+	}
+	if slot.Value != nil {
+		collect(slot.Value)
+	}
+	for _, v := range slot.Values {
+		collect(v)
+	}
+	return ids
+}
+
 // InstanceToProto converts runtime.Instance to protobuf Instance. Slots are read
 // through Instance.GetSlot, so a derived default is evaluated against the
 // instance rather than reported as an unmaterialized slot.
@@ -306,7 +362,7 @@ func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 		if err != nil {
 			pbSlots[name] = &pb.SlotValue{
 				FeatureName: name,
-				Value:       &pb.Value{Kind: &pb.Value_Null{Null: err.Error()}},
+				Error:       err.Error(),
 			}
 			continue
 		}

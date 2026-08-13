@@ -11,6 +11,7 @@ from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
 from pysysml.binary import ensure_binary
 from pysysml.errors import ConnectionError
+from pysysml.values import value_to_python
 
 
 def _get_lockfile_path():
@@ -255,7 +256,8 @@ class Connection:
             wrapped_diags = [Diagnostic(d) for d in response.diagnostics]
             raise PyRuntimeError(response.error, diagnostics=wrapped_diags)
         
-        return Instance(response.instance)
+        graph = {inst.id: inst for inst in response.instances}
+        return Instance(response.instance, graph)
     
     def execute_action(self, action_symbol_id, model_hash, inputs=None):
         """Execute an action definition.
@@ -350,24 +352,12 @@ class Connection:
             raise ValueError(f"Unsupported Python type: {type(py_value)}")
     
     def _value_to_python(self, pb_value):
-        """Convert protobuf Value to Python type."""
-        kind = pb_value.WhichOneof('kind')
-        if kind == 'int_value':
-            return pb_value.int_value
-        elif kind == 'real_value':
-            return pb_value.real_value
-        elif kind == 'bool_value':
-            return pb_value.bool_value
-        elif kind == 'string_value':
-            return pb_value.string_value
-        elif kind == 'instance_id':
-            return pb_value.instance_id  # return ID for now
-        elif kind == 'sequence':
-            return [self._value_to_python(v) for v in pb_value.sequence.elements]
-        elif kind == 'null':
-            return None
-        else:
-            return None
+        """Convert protobuf Value to Python type.
+
+        Instance references outside an Instantiate response are returned as
+        their integer id; there is no instance graph to resolve them against.
+        """
+        return value_to_python(pb_value)
     
     def _probe_service(self, host, port, timeout=5.0):
         """Check if sysml-grpc service is running and responsive.

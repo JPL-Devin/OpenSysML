@@ -47,10 +47,58 @@ model = pysysml.load("model.sysml")
 for d in model.diagnostics:
     print(d)
 
-vehicle = model.root.find("Demo::Vehicle")
-instance = pysysml.instantiate("Demo::Vehicle", file_path="model.sysml")
-print(instance.slots)
 print(pysysml.eval("1 + 2 * 3", file_path="model.sysml"))
+```
+
+### Inspecting symbols
+
+`Model.find` takes a **short** name and searches the symbol tree:
+
+```python
+vehicle = model.find("Vehicle")   # not model.root.find(...), and not an FQN
+vehicle.attributes()              # [Symbol(id='Demo::Vehicle::mass', kind='attributeUsage')]
+vehicle.parts()                   # [Symbol(id='Demo::Vehicle::engine', kind='partUsage')]
+vehicle.get_attr("mass")          # Symbol, or None if there is no such attribute
+```
+
+`model.get("Demo::Vehicle")` looks a symbol up by fully-qualified name instead.
+
+### Instances
+
+Slot values come back as Python values, and a slot holding an object comes back
+as a nested `Instance`:
+
+```python
+inst = pysysml.instantiate("Demo::Vehicle", model_hash=model.hash)
+
+inst.mass                 # 1500.0
+inst["mass"]              # 1500.0
+inst.engine               # Instance(id=2, type='Demo::Engine', slots=1)
+inst.engine.power         # 300.0
+inst.slots                # {'mass': 1500.0, 'engine': Instance(...)}
+inst.get("missing", 0)    # 0
+```
+
+Integers, reals, booleans, strings and sequences map to `int`, `float`, `bool`,
+`str` and `list`. Unknown names raise `AttributeError` (attribute access) or
+`KeyError` (item access), so `hasattr`, `copy` and `pickle` behave.
+
+The raw protobuf stays reachable: `get_slot(name)` returns the `SlotValue`
+message, and `raw_slots` is the whole map.
+
+```python
+inst.get_slot("mass").materialized         # True
+inst.get_slot("engine").value.instance_id  # 2
+```
+
+A slot the service could not evaluate — a cyclic derived attribute, say — is
+never reported as `None`. Attribute and item access raise `SlotError`, while
+`slots` carries the `SlotError` as that entry's value so the rest of the
+instance stays inspectable.
+
+```python
+cyclic.a             # raises SlotError: slot 'a': ... cyclic slot dependency
+cyclic.slots["a"]    # SlotError(...)
 ```
 
 `pysysml.connect(host, port, auto_start=True)` returns a `Connection` when you
@@ -66,8 +114,7 @@ pytest -m integration python/tests/     # needs a running sysml-grpc
 
 # Regenerate protobuf bindings (from the repository root)
 pip install grpcio-tools
-python -m grpc_tools.protoc -Iapi --python_out=python/pysysml/proto \
-  --grpc_python_out=python/pysysml/proto api/sysml.proto
+make python-proto
 ```
 
 ## Modules

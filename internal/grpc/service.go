@@ -284,8 +284,10 @@ func (s *Service) Instantiate(ctx context.Context, req *pb.InstantiateRequest) (
 		}, nil
 	}
 
+	root, all := InstanceGraphToProto(runtimeCtx, inst, cached.Index)
 	return &pb.InstantiateResponse{
-		Instance: InstanceToProto(runtimeCtx, inst, cached.Index),
+		Instance:  root,
+		Instances: all,
 	}, nil
 }
 
