@@ -111,10 +111,13 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			b.WriteString(`]`)
 		}
 		var kids []Node
-		// Add param values to children
+		// Add param values and the specializations they declare to children
 		for _, p := range v.Params {
 			if p.Value != nil {
 				kids = append(kids, p.Value)
+			}
+			for _, r := range p.Relationships {
+				kids = append(kids, r)
 			}
 		}
 		if v.Result != nil {

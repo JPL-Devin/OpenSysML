@@ -1,0 +1,72 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="collections" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="attribute" name="xs" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (SequenceExpr
+            (LiteralInteger value="1")
+            (LiteralInteger value="2")
+            (LiteralInteger value="3"))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="doubled" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (CollectExpr
+            (FeatureReference name="xs")
+            (BodyExpr params=[x]
+              (OperatorExpr operator="*"
+                (FeatureReference name="x")
+                (LiteralInteger value="2"))))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="large" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (SelectExpr
+            (FeatureReference name="xs")
+            (BodyExpr params=[x]
+              (OperatorExpr operator=">"
+                (FeatureReference name="x")
+                (LiteralInteger value="1"))))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="nested" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (CollectExpr
+            (FeatureReference name="xs")
+            (BodyExpr params=[x]
+              (SelectExpr
+                (FeatureReference name="xs")
+                (BodyExpr params=[y]
+                  (OperatorExpr operator=">"
+                    (FeatureReference name="y")
+                    (FeatureReference name="x"))))))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="count" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (InvocationExpr type="size"
+            (FeatureReference name="xs"))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="kept" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (InvocationExpr type="select"
+            (FeatureReference name="xs")
+            (BodyExpr params=[x]
+              (OperatorExpr operator=">"
+                (FeatureReference name="x")
+                (LiteralInteger value="1"))))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="joined" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (InvocationExpr type="union"
+            (FeatureReference name="xs")
+            (SequenceExpr
+              (LiteralInteger value="4")
+              (LiteralInteger value="5")))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="total" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (InvocationExpr type="SequenceFunctions::size"
+            (FeatureReference name="xs"))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="third" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (IndexExpr
+            (FeatureReference name="xs")
+            (LiteralInteger value="3"))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="typed" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (CollectExpr
+            (FeatureReference name="xs")
+            (BodyExpr params=[x:Integer]
+              (Relationship kind="subsets" target=ISQ::mass
+                (*ast.QualifiedName))
+              (FeatureReference name="x"))))))))

@@ -111,6 +111,24 @@ func TestNegative(t *testing.T) {
 		// A rendering reference takes no value: ViewRenderingUsage has no
 		// ValuePart, unlike the performed action reference that shares its shape.
 		{"render_reference_value", "view def V { render r = 3; }"},
+
+		// The sequence index and the collection notations: `#` indexes through a
+		// parenthesized index and `.?` selects through a body, so each is
+		// rejected where the notation it needs is absent rather than parsed as
+		// the operand alone.
+		{"index_no_paren", "attribute x = xs#3;"},
+		{"index_no_index", "attribute x = xs#();"},
+		{"index_unclosed", "attribute x = xs#(1;"},
+		{"index_bracket_unclosed", "attribute x = 5 [m;"},
+		{"index_bracket_empty", "attribute x = 5 [];"},
+		{"select_no_body", "attribute x = xs.?;"},
+		{"select_expression_body", "attribute x = xs.? x > 1;"},
+		{"select_unclosed_body", "attribute x = xs.?{in x; x > 1;"},
+		{"collect_unclosed_body", "attribute x = xs.{in x; x * 2;"},
+		{"body_param_no_name", "attribute x = xs.{in ; 1};"},
+		{"body_param_no_type", "attribute x = xs.{in y : ; 1};"},
+		{"receiver_no_operation", "attribute x = xs->;"},
+		{"receiver_unclosed_args", "attribute x = xs->union((1, 2);"},
 	}
 
 	for _, tt := range tests {

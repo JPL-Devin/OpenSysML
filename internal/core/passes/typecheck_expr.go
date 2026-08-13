@@ -2,6 +2,7 @@ package passes
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
@@ -147,8 +148,169 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 			ec.infer(scope, el)
 		}
 		return semantics.PrimUnknown
+	case *ast.IndexExpr:
+		return ec.inferIndex(scope, e)
+	case *ast.CollectExpr:
+		return ec.inferCollect(scope, e)
+	case *ast.SelectExpr:
+		return ec.inferSelect(scope, e)
+	case *ast.BodyExpr:
+		return ec.inferBody(scope, e)
 	}
 	return semantics.PrimUnknown
+}
+
+// inferIndex types `seq#(i)`, the sequence index, and `n [unit]`, the quantity
+// expression the notation shares its node with — the bracket the expression was
+// written with says which of the two it is.
+func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semantics.PrimType {
+	if e.Bracket {
+		// The unit is a library name, checked by the units pass rather than typed
+		// here; the magnitude is an expression of its own and is checked.
+		ec.infer(scope, e.Operand)
+		return semantics.PrimUnknown
+	}
+
+	// `SequenceFunctions::'#'` declares `in index: Positive[1]`, so a Real, a
+	// Boolean or a String names no position. Whether a whole number names one is
+	// known from the value, so an Integer index is checked at evaluation.
+	index := ec.infer(scope, e.Index)
+	if !semantics.PrimConforms(index, semantics.PrimInteger) && e.Index != nil {
+		ec.errorf(e.Index.Span(), "sequence index must be an Integer, found %s", index)
+	}
+
+	// The index of a sequence of one scalar type is a value of that type, which
+	// is what makes `(1, 2, 3)#(2) + 1` checkable. Typing the elements here is
+	// what walks them, so they are not inferred a second time below.
+	var elem semantics.PrimType
+	if seq, isSeq := e.Operand.(*ast.SequenceExpr); isSeq {
+		elem = ec.commonElementType(scope, seq)
+	} else {
+		elem = ec.infer(scope, e.Operand)
+	}
+
+	// A literal index names a position at check time, so an index the operand
+	// cannot have is an error before the model is ever run: index 0 for a
+	// notation counting from 1, and any index beyond a sequence written out.
+	if lit, ok := e.Index.(*ast.LiteralInteger); ok {
+		if written, err := strconv.ParseInt(lit.Value, 10, 64); err == nil {
+			length, known := int64(0), false
+			if seq, isSeq := e.Operand.(*ast.SequenceExpr); isSeq {
+				length, known = writtenLength(seq)
+			}
+			switch {
+			case written == 0:
+				ec.errorf(lit.Span(), "sequence index counts from 1, found 0")
+			case known && written > length:
+				ec.errorf(lit.Span(), "sequence index %d is outside 1..%d", written, length)
+			}
+		}
+	}
+
+	return elem
+}
+
+// writtenLength answers how many elements a sequence expression holds, and
+// whether that is knowable at all: a KerML sequence is flat, so an element that
+// is itself multi-valued contributes its own elements and the length is known
+// only from the values.
+func writtenLength(seq *ast.SequenceExpr) (int64, bool) {
+	for _, el := range seq.Elements {
+		if !isSingleValued(el) {
+			return 0, false
+		}
+	}
+	return int64(len(seq.Elements)), true
+}
+
+// isSingleValued reports whether an expression written as a sequence element is
+// one value whatever the model holds — a literal is, a name or a call may be a
+// collection.
+func isSingleValued(el ast.Node) bool {
+	switch el.(type) {
+	case *ast.LiteralInteger, *ast.LiteralReal, *ast.LiteralString, *ast.LiteralBool:
+		return true
+	default:
+		return false
+	}
+}
+
+// commonElementType returns the scalar type every element of a sequence
+// expression conforms to, or PrimUnknown where they have none in common or any
+// one of them has no known type: PrimConforms holds of PrimUnknown either way
+// round, so it decides conformance but cannot merge types.
+func (ec *exprChecker) commonElementType(scope *symbols.Scope, seq *ast.SequenceExpr) semantics.PrimType {
+	common := semantics.PrimUnknown
+	unknown := false
+	for i, el := range seq.Elements {
+		elem := ec.infer(scope, el)
+		if elem == semantics.PrimUnknown {
+			// Every element is still typed, so an error inside one is reported.
+			unknown = true
+			continue
+		}
+		if i == 0 || common == semantics.PrimUnknown {
+			common = elem
+			continue
+		}
+		switch {
+		case elem == common:
+		case semantics.PrimConforms(elem, common):
+		case semantics.PrimConforms(common, elem):
+			common = elem
+		default:
+			unknown = true
+		}
+	}
+	if unknown {
+		return semantics.PrimUnknown
+	}
+	return common
+}
+
+// inferCollect types `operand.{in x; ...}`, the collect notation: a sequence of
+// the body's results, which is no scalar of its own. Its purpose here is to
+// check the body, in the scope its parameters are declared in.
+func (ec *exprChecker) inferCollect(scope *symbols.Scope, e *ast.CollectExpr) semantics.PrimType {
+	ec.infer(scope, e.Operand)
+	ec.infer(scope, e.Body)
+	return semantics.PrimUnknown
+}
+
+// inferSelect types `operand.?{in x; ...}`, the select notation. The library
+// declares the selector's result `Boolean[1]`, so a body that answers something
+// else is reported here rather than only where the model is run.
+func (ec *exprChecker) inferSelect(scope *symbols.Scope, e *ast.SelectExpr) semantics.PrimType {
+	ec.infer(scope, e.Operand)
+	if body, ok := e.Body.(*ast.BodyExpr); ok && body.Result != nil {
+		ec.checkBoolean(ec.bodyScope(scope, body), body.Result, "select predicate")
+		return semantics.PrimUnknown
+	}
+	ec.infer(scope, e.Body)
+	return semantics.PrimUnknown
+}
+
+// inferBody types a body expression as the type of the result it states,
+// checking that result in the scope the body's parameters are declared in.
+func (ec *exprChecker) inferBody(scope *symbols.Scope, e *ast.BodyExpr) semantics.PrimType {
+	inner := ec.bodyScope(scope, e)
+	for i := range e.Params {
+		ec.infer(scope, e.Params[i].Value)
+	}
+	if e.Result == nil {
+		return semantics.PrimUnknown
+	}
+	return ec.infer(inner, e.Result)
+}
+
+// bodyScope returns the scope a body expression's result is written in: its
+// parameters are declarations of that scope, the same one the resolver and the
+// runtime read the body's names in.
+func (ec *exprChecker) bodyScope(scope *symbols.Scope, body *ast.BodyExpr) *symbols.Scope {
+	if scope == nil {
+		return nil
+	}
+	return symbols.BodyExprScope(scope, body)
 }
 
 func (ec *exprChecker) inferQualified(scope *symbols.Scope, qn *ast.QualifiedName) semantics.PrimType {
@@ -424,6 +586,12 @@ func (ec *exprChecker) checkArguments(
 	params []parameter,
 ) {
 	if len(e.NamedArgs) > 0 {
+		// A receiver binds by position, so which parameter it binds to is
+		// unstated beside arguments that bind by name (runtime/eval.go reports
+		// the same call).
+		if e.Operand != nil {
+			ec.errorf(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
+		}
 		names := make(map[string]bool, len(params))
 		for _, p := range params {
 			names[p.name()] = true

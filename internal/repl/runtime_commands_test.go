@@ -192,6 +192,34 @@ func TestEvalErrors(t *testing.T) {
 	wants(t, run(t, empty, "%eval mass"), "no declarations loaded")
 }
 
+// An expression of literals alone is answered without any declarations, so a
+// failure of one is the answer and is reported as it is: declaring something
+// would not change it, and "no declarations loaded" would say to try.
+func TestEvalReportsTheAnswerOfALiteralExpressionThatFails(t *testing.T) {
+	empty := NewSession()
+	wants(t, run(t, empty, "%eval (1, 2, 3)#(0)"), "sequence index 0 is outside 1..3")
+	wants(t, run(t, empty, "%eval (1, 2, 3)#(1.5)"),
+		"sequence index requires an Integer index")
+	wants(t, run(t, empty, "%eval (1, 2, 3).{in x; in y; x}"),
+		"calls its body with 1 argument(s), but it declares 2 parameter(s)")
+	// A name is the one failure declarations do answer, so it still says so.
+	wants(t, run(t, empty, "%eval mass + 1"), "no declarations loaded")
+}
+
+// A collection operation is answered from literals alone, but a name the
+// session declares is that declaration's: the library implementation cannot
+// answer for a calc the session wrote under the same name.
+func TestEvalPrefersASessionDeclarationOverALibraryOperation(t *testing.T) {
+	empty := NewSession()
+	wants(t, run(t, empty, "%eval size((1, 2, 3))"), "= 3")
+	wants(t, run(t, empty, "%eval sum((1, 2, 3))"), "= 6")
+
+	own := NewSession()
+	own.Submit("calc sum { in a; in b; return : Integer = a + b; }")
+	wants(t, run(t, own, "%eval sum(1, 2)"), "= 3")
+	wants(t, run(t, own, "%eval sum((1, 2, 3))"), "error:")
+}
+
 func TestCalcWithPositionalArgs(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%calc add 20 22"), "✓ add(20, 22)", "= 42")

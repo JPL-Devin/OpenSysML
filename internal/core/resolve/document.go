@@ -777,6 +777,7 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			if p.Type != nil {
 				r.ResolveQualified(scope, p.Type)
 			}
+			r.resolveRelationships(scope, v, p.Relationships)
 			r.resolveExpr(scope, p.Value)
 		}
 		// A body expression's parameters live in a scope of their own, built

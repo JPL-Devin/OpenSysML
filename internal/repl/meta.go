@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/model"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
@@ -391,6 +392,14 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 
 // tryEvalLiteral attempts to evaluate standalone literal expressions.
 func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
+	// A name the session declares is answered by that declaration, so the empty
+	// model this pass evaluates in must not answer for it: a library operation
+	// reached by its unqualified name would otherwise stand in for a calc the
+	// session wrote under the same name.
+	if s.declaresANameIn(expr) {
+		return nil, false
+	}
+
 	// Parse as standalone attribute
 	src := fmt.Sprintf("attribute __lit__ = %s;", expr)
 	p := parser.New(source.New("literal", []byte(src)))
@@ -418,7 +427,15 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 
 	val, err := ctx.Eval(usage.Value)
 	if err != nil {
-		// Not evaluable as literal (needs session symbols)
+		// A failure the session's declarations could answer — a name or a unit
+		// this empty model knows nothing of — is not the answer, so the
+		// expression is evaluated again in the session. A failure that is the
+		// answer to an expression of literals alone, such as an index that names
+		// no position, is reported here instead of being hidden behind "no
+		// declarations loaded".
+		if isLiteralAnswerError(err) {
+			return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, true
+		}
 		return nil, false
 	}
 
@@ -426,6 +443,53 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(val)),
 	}, true
+}
+
+// declaresANameIn reports whether the session declares any name the expression
+// uses, in the document root or in the namespace a prompt expression is
+// evaluated in.
+func (s *Session) declaresANameIn(expr string) bool {
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		return false
+	}
+	scopes := []*symbols.Scope{doc.Scope}
+	if prompt := s.promptScope(doc); prompt != nil && prompt != doc.Scope {
+		scopes = append(scopes, prompt)
+	}
+	src := source.New("literal", []byte(expr))
+	lx := lexer.New(src)
+	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		if tok.Kind != lexer.Identifier && tok.Kind != lexer.UnrestrictedName {
+			continue
+		}
+		for _, scope := range scopes {
+			if sym, ok := scope.LookupLocal(src.Text(tok.Span)); ok && sym != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isLiteralAnswerError reports whether err is what an expression of literals
+// alone evaluates to, rather than a failure the declarations of a session could
+// answer. An index outside a written sequence, a body called with arguments it
+// declares no parameters for, or an operand of the wrong kind is the answer
+// whatever is declared; an unresolved name or unit is not.
+func isLiteralAnswerError(err error) bool {
+	for _, answer := range []error{
+		runtime.ErrIndexOutOfRange,
+		runtime.ErrBodyArity,
+		runtime.ErrTypeMismatch,
+		runtime.ErrMultiplicityViolation,
+		runtime.ErrStepLimitExceeded,
+	} {
+		if errors.Is(err, answer) {
+			return true
+		}
+	}
+	return false
 }
 
 // isSymbolReference reports whether expr names a symbol — a single identifier

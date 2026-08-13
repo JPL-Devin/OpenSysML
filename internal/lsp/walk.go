@@ -386,6 +386,7 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		for i := range v.Params {
 			p := &v.Params[i]
 			c.add(scope, p.Type)
+			c.relationships(scope, v, p.Relationships)
 			c.expr(scope, p.Value)
 		}
 		// The same scope the resolver uses, so a reference to a parameter and
