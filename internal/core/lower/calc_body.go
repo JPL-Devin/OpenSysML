@@ -37,6 +37,9 @@ func CalcBody(members []ast.Node, scope *symbols.Scope) []Statement {
 			stmts = append(stmts, stmt)
 		case *ast.Definition, *ast.Documentation, *ast.Comment, *ast.Import:
 			// Declares a member of the calculation, not a step of it.
+		case *ast.SuccessionEdge:
+			// A calculation body runs its steps in declaration order, so a
+			// succession states nothing the order does not already state.
 		case *ast.ResultMember:
 			results = append(results, Return{Value: m.Expression, Node: m, Scope: scope})
 		default:

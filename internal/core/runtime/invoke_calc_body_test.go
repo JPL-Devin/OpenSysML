@@ -271,3 +271,33 @@ func TestCalcResultIsAnsweredAfterTheSteps(t *testing.T) {
 		t.Fatalf("twice(4) = %s, want 8: an expression result is not dropped by what follows it", FormatTraceValue(doubled))
 	}
 }
+
+// successionModel writes a succession among the members of a calculation body,
+// the form `then a b;` a member-attached `then` is written back as.
+const successionModel = `
+package test {
+	calc def sequenced {
+		in n;
+		action first;
+		action second;
+		then first second;
+		return : Integer = n + 1;
+	}
+}
+`
+
+// TestCalcBodySuccessionIsNotAStep requires a succession among a calculation's
+// members to leave the computation alone: the body states its order already.
+func TestCalcBodySuccessionIsNotAStep(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, successionModel))
+	root := idx.DocumentRoot("<test>")
+
+	sequenced, scope := calcByName(t, root, "test", "sequenced")
+	value, err := ctx.InvokeCalc(sequenced, []Value{constInt(3)}, scope)
+	if err != nil {
+		t.Fatalf("InvokeCalc: %v", err)
+	}
+	if value.Const.Int != 4 {
+		t.Fatalf("sequenced(3) = %s, want 4", FormatTraceValue(value))
+	}
+}

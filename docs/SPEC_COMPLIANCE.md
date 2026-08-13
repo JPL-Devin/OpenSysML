@@ -335,9 +335,10 @@ Each row documents one behavioral semantic feature:
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Binary operators (+, -, *, /, <, >, ==) | `eval.go:265` evalOperator | `calc_simple_add.sysml` | ✅ Faithful |
-| Boolean operators (and, or) | `eval.go:435` evalLogical | `constraint_literal.sysml` | ✅ Faithful |
-| Unary operators (-, not) | `eval.go:483` evalNeg | `calc_unary_operators.sysml` | ✅ Faithful |
+| Binary operators (+, -, *, /, %, **, <, >, ==, ===) | `eval.go` evalOperator → evalArithmetic/evalComparison/evalEquality/evalIdentity | `calc_simple_add.sysml`, `calc_modulo_operator.sysml`, `calc_identity_operators.sysml` | ✅ Faithful |
+| Boolean operators (and, or, xor, implies), short-circuiting where they can | `eval.go` evalLogical | `constraint_literal.sysml`, `calc_boolean_operators.sysml` | ✅ Faithful |
+| Unary operators (-, +, not) | `eval.go` evalUnary | `calc_unary_operators.sysml` | ✅ Faithful |
+| Conditional (`if c ? a else b`) and null coalescing (`??`), both lazy | `eval.go` evalConditional/evalNullCoalesce | `calc_conditional_branch.sysml`, `calc_null_coalesce.sysml` | ✅ Faithful |
 | Literal values (Integer, Real, Boolean, String) | `eval.go:109` evalLiteral* | `calc_simple_add.sysml` | ✅ Faithful |
 | Feature reference resolution | `eval.go:141` evalFeatureReference | `constraint_literal.sysml` | ✅ Faithful |
 | Qualified name resolution (A::B::C) | `eval.go:53` Eval + `resolve/qualified.go` | `calc_qualified_names.sysml` | ✅ Faithful |
@@ -405,7 +406,6 @@ Found, not fixed — numeric library features that remain unevaluable:
 | `VectorFunctions`, `MatrixFunctions` | Needs a vector value in the evaluator; every value is scalar today. |
 | `SequenceFunctions` beyond `size`/`isEmpty`/`includes` | Needs the sequence semantics of the library's own function bodies, not just element access. |
 | `ComplexFunctions` | Needs a complex value kind. |
-| Remainder (`%`) outside constant folding | `semantics/eval.go` folds it over literals, but `runtime/eval.go` `evalOperator` routes only `+ - * / **` to arithmetic, so `%` over a feature reports `unsupported operator`. |
 | Library functions in the checker's own name resolution | An unqualified call to a library function the model does not import evaluates, but the `unresolved-reference` diagnostic still reports the name; importing `RealFunctions::*` clears it. |
 
 ### Systemica Extension Library (non-normative)
