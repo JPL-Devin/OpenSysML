@@ -46,6 +46,10 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 		if sym, ok := r.lookupImports(s, name); ok && !hide.hides(sym) {
 			return resolution{sym: sym, ok: true}
 		}
+
+		if sym, ok := r.lookupInheritedImports(s, name); ok && !hide.hides(sym) {
+			return resolution{sym: sym, ok: true}
+		}
 	}
 	if root := rootOf(scope); root != nil {
 		if sym, ok := hide.lookupLocal(root, name); ok {
