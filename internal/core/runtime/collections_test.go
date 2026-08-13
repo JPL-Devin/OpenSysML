@@ -314,8 +314,13 @@ func TestCollectionOperationErrors(t *testing.T) {
 		{"xs->subsequence(1, 4)", ErrIndexOutOfRange},
 		{"xs->subsequence(0)", ErrIndexOutOfRange},
 		{"xs->collect {in x; x + \"a\"}", ErrTypeMismatch},
+		// An index outside the sequence names no element to remove and is
+		// reported, where the vendored body would answer the sequence unchanged
+		// (docs/SPEC_COMPLIANCE.md records the divergence).
 		{"xs->excludingAt(4)", ErrIndexOutOfRange},
 		{"xs->excludingAt(2, 1)", ErrIndexOutOfRange},
+		{"xs->excludingAt(2, 9)", ErrIndexOutOfRange},
+		{"()->excludingAt(1)", ErrIndexOutOfRange},
 		{"xs->reduce {in a; a}", ErrBodyArity},
 		// minimize declares `ScalarValue[1..*]`, so it has no answer for an
 		// empty collection and says so rather than answering nothing.
@@ -331,6 +336,57 @@ func TestCollectionOperationErrors(t *testing.T) {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
 			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// A KerML sequence is flat: writing collections side by side is the same
+// sequence as concatenating them, which is what makes SequenceFunctions::union
+// the sequence expression `(seq1, seq2)`. A mapper answering several values
+// contributes them all, for the same reason.
+func TestSequenceExpressionsAreFlat(t *testing.T) {
+	tests := []struct {
+		expr string
+		want []int64
+	}{
+		{"(xs, ys)", []int64{1, 2, 3, 2, 4}},
+		{"xs->union(ys)", []int64{1, 2, 3, 2, 4}},
+		{"(xs, ys, factor)", []int64{1, 2, 3, 2, 4, 10}},
+		{"((xs, ys), 5)", []int64{1, 2, 3, 2, 4, 5}},
+		// null is the empty sequence, so it contributes no element.
+		{"(xs, null)", []int64{1, 2, 3}},
+		{"xs.{in x; (x, x)}", []int64{1, 1, 2, 2, 3, 3}},
+	}
+	for _, tt := range tests {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if err != nil {
+			t.Errorf("%s: %v", tt.expr, err)
+			continue
+		}
+		if !equalInts(intsOf(t, got), tt.want) {
+			t.Errorf("%s = %v, want %v", tt.expr, intsOf(t, got), tt.want)
+		}
+	}
+
+	// The operations count the flattened elements, so the two spellings of a
+	// union answer alike and an index reaches an element rather than a sequence.
+	scalars := []struct {
+		expr string
+		want int64
+	}{
+		{"(xs, ys)->size()", 5},
+		{"xs->union(ys)->size()", 5},
+		{"(xs, ys)#(4)", 2},
+		{"(xs, ys)->sum()", 12},
+	}
+	for _, tt := range scalars {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if err != nil {
+			t.Errorf("%s: %v", tt.expr, err)
+			continue
+		}
+		if !valueEqual(got, integerValue(tt.want)) {
+			t.Errorf("%s = %v, want %d", tt.expr, got, tt.want)
 		}
 	}
 }

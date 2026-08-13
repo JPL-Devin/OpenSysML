@@ -559,18 +559,22 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
+	// The mapper returns `Anything[0..*]`, so a mapper answering several values
+	// contributes them all: the collected sequence is flat, as every KerML
+	// sequence is.
 	var mapped []Value
 	for _, elem := range elementsOf(args[0]) {
 		val, err := ec.applyBody(body, elem)
 		if err != nil {
 			return Value{}, err
 		}
-		// Charged one at a time: the result grows with the collection read, so a
-		// run over the ceiling is reported before it is held.
-		if err := ec.ctx.chargeElements(1); err != nil {
+		// Charged as the result grows, so a run over the ceiling is reported
+		// before the whole mapping is held.
+		contributed := elementsOf(val)
+		if err := ec.ctx.chargeElements(int64(len(contributed))); err != nil {
 			return Value{}, err
 		}
-		mapped = append(mapped, val)
+		mapped = append(mapped, contributed...)
 	}
 	return sequenceOf(mapped), nil
 }
