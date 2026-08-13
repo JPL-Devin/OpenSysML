@@ -172,7 +172,8 @@ declared raises `TypeMismatchError` rather than returning a wrongly typed value.
 | `Integer`, `Natural` | `int` |
 | `Boolean` | `bool` |
 | `String` | `str` |
-| usage typed by a definition in the model | that definition's generated class |
+| usage typed by a definition that reduces to a library scalar (`attribute def Celsius :> Real`) | that scalar (`float`) |
+| usage typed by any other definition in the model | that definition's generated class |
 | multiplicity `1`, `1..1`, or undeclared | `X` |
 | multiplicity `0..1` | `X \| None` |
 | `*`, `0..*`, `n..m` with upper > 1 | `list[X]` |

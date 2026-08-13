@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
@@ -260,5 +261,60 @@ func TestTypeFactsAbsentForNonDefUsage(t *testing.T) {
 	}
 	if len(pkg.Specializations) != 0 {
 		t.Errorf("Specializations: got %d, want 0", len(pkg.Specializations))
+	}
+}
+
+// TestSymbolContextConcurrentConversion verifies that converting symbols of one
+// cached model from several goroutines is safe: the shared resolver and
+// semantic model memoize into plain maps, so conversion must serialize.
+func TestSymbolContextConcurrentConversion(t *testing.T) {
+	srv := mustNewService(t, 10)
+	parsed, err := srv.ParseFile(context.Background(), &pb.ParseFileRequest{
+		Source: &pb.ParseFileRequest_Content{Content: `
+package Demo {
+    import ScalarValues::*;
+    part def Engine {
+        attribute power : Real;
+    }
+    part def Vehicle :> Engine {
+        attribute mass : Real;
+        part engine : Engine;
+        part wheels : Engine[0..*];
+    }
+}
+`},
+	})
+	if err != nil {
+		t.Fatalf("ParseFile: %v", err)
+	}
+
+	fqns := []string{"Demo::Engine", "Demo::Engine::power", "Demo::Vehicle", "Demo::Vehicle::mass", "Demo::Vehicle::engine", "Demo::Vehicle::wheels"}
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for _, fqn := range fqns {
+				resp, err := srv.GetSymbol(context.Background(), &pb.GetSymbolRequest{
+					ModelHash: parsed.ModelHash,
+					SymbolId:  fqn,
+				})
+				if err != nil || resp.Symbol == nil {
+					t.Errorf("GetSymbol(%s): %v %s", fqn, err, resp.GetError())
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Speculative resolution during conversion must not accumulate diagnostics
+	// on the model's shared resolver.
+	cached, ok := srv.cache.Get(parsed.ModelHash)
+	if !ok {
+		t.Fatal("model missing from cache")
+	}
+	if diags := cached.SymbolContext().Resolver.Diagnostics; len(diags) != 0 {
+		t.Errorf("shared resolver accumulated %d diagnostics: %v", len(diags), diags)
 	}
 }

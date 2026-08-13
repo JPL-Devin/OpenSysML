@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"strconv"
+	"sync"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -16,10 +17,33 @@ const fqnScalarQuantityValue = "Quantities::ScalarQuantityValue"
 // SymbolContext holds what converting a symbol to proto needs besides the
 // symbol: its index, and the resolver and semantic model that answer what its
 // declared names refer to. Their memoization is why it is shared per model.
+//
+// The resolver and semantic model memoize into plain maps, so a shared context
+// must be used by one goroutine at a time; Lock serializes concurrent
+// conversions of the same model.
 type SymbolContext struct {
+	mu sync.Mutex
+
 	Index     *symbols.Index
 	Resolver  *resolve.Resolver
 	Semantics *semantics.Model
+}
+
+// Lock takes exclusive use of the context's resolver and semantic model, and
+// returns the function releasing it.
+func (sc *SymbolContext) Lock() func() {
+	sc.mu.Lock()
+	// Resolution during conversion is speculative: a name that does not resolve
+	// is reported as unresolved type facts, not as a model diagnostic. Dropping
+	// what it appended keeps the shared resolver's diagnostics from growing with
+	// every request.
+	diags := len(sc.Resolver.Diagnostics)
+	return func() {
+		if len(sc.Resolver.Diagnostics) > diags {
+			sc.Resolver.Diagnostics = sc.Resolver.Diagnostics[:diags]
+		}
+		sc.mu.Unlock()
+	}
 }
 
 // NewSymbolContext builds a conversion context over a symbol index.

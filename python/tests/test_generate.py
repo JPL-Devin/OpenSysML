@@ -102,6 +102,16 @@ def test_element_type_generated_class():
     assert mapped.decoder == "_t.as_typed(Engine)"
 
 
+def test_element_type_scalar_definition_maps_to_its_scalar():
+    """A definition that reduces to a library scalar holds that scalar, not an instance."""
+    mapped = element_type(
+        TypeFacts(declared="Celsius", resolved_id="Demo::Celsius", primitive="Real"),
+        {"Demo::Celsius": "Celsius"},
+    )
+    assert mapped.annotation == "float"
+    assert mapped.decoder == "_t.as_float"
+
+
 def test_element_type_unmapped_primitive_is_object():
     """Complex and Number have no sound Python type and say so."""
     mapped = element_type(TypeFacts(primitive="Complex"), {})

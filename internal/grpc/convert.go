@@ -25,6 +25,8 @@ func SymbolToProto(sym *symbols.Symbol, idx *symbols.Index) *pb.SymbolInfo {
 // SymbolToProtoIn converts a Symbol to protobuf SymbolInfo in an existing
 // conversion context.
 func SymbolToProtoIn(sym *symbols.Symbol, sc *SymbolContext) *pb.SymbolInfo {
+	defer sc.Lock()()
+
 	idx := sc.Index
 	info := &pb.SymbolInfo{
 		Id:       idx.GetFQN(sym), // Fully qualified name

@@ -177,14 +177,16 @@ def element_type(type_facts: Optional[TypeFacts], names: Dict[str, str]) -> Pyth
             f"quantity in [{unit}]; the wire format carries no magnitude-and-unit value",
         )
 
-    if type_facts.resolved_id and type_facts.resolved_id in names:
-        generated = names[type_facts.resolved_id]
-        return PythonType(generated, f"_t.as_typed({generated})")
-
+    # A definition reducing to a library scalar holds that scalar, not an
+    # instance, even when it has a generated class of its own.
     primitive = type_facts.primitive
     if primitive in PRIMITIVE_TYPES:
         python = PRIMITIVE_TYPES[primitive]
         return PythonType(python, f"_t.as_{python}")
+
+    if type_facts.resolved_id and type_facts.resolved_id in names:
+        generated = names[type_facts.resolved_id]
+        return PythonType(generated, f"_t.as_typed({generated})")
 
     if primitive in UNMAPPED_PRIMITIVES:
         return PythonType("object", "_t.as_object", f"SysML {primitive} has no Python counterpart")
