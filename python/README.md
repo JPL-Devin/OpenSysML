@@ -6,10 +6,13 @@ Python client for Systemica: parse, inspect and execute SysML v2 models over the
 ## Installation
 
 ```bash
-pip install -e python/          # from the repository root
+pip install pysysml             # from PyPI, once the first release is published
+pip install -e python/          # or from a checkout, at the repository root
 ```
 
 Dependencies (`grpcio`, `protobuf>=7.35.1`, `filelock`, `psutil`) come with it.
+They publish wheels for CPython 3.10 and later only, which is what
+`requires-python` says.
 
 ## Getting the service binary
 
@@ -21,7 +24,7 @@ find it at `~/.pysysml/bin/sysml-grpc`. Three ways to put it there:
 python -c "from pysysml.binary import download_binary; download_binary('latest')"
 
 # 2. Let pysysml.connect() download it on first use
-export PYSYSML_GRPC_VERSION=latest      # or a tag like v0.0.4
+export PYSYSML_GRPC_VERSION=latest      # or a tag like v0.0.5
 
 # 3. Build from source
 make build-grpc && mkdir -p ~/.pysysml/bin && cp bin/sysml-grpc ~/.pysysml/bin/
@@ -30,6 +33,10 @@ make build-grpc && mkdir -p ~/.pysysml/bin && cp bin/sysml-grpc ~/.pysysml/bin/
 Without one of those, `connect()` raises `ConnectionError` rather than
 downloading anything unasked. `PYSYSML_GITHUB_REPO` overrides the repository
 releases are fetched from (default `Open-MBEE/Systemica`).
+
+The published releases up to v0.0.4 carry the `sysml`/`sysml-lsp` archives only;
+`sysml-grpc` binaries are published from the next release onward, so until then
+build it from source (option 3).
 
 ## Usage
 

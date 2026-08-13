@@ -86,6 +86,8 @@ sysml> %action MyWorkflow
   State: Running
   Tokens: 1
 
+Use %step to advance, %tokens to inspect, %continue to run to completion
+
 sysml> %break compute
 ✓ Breakpoint set at node "compute"
   %continue runs until a token reaches it
@@ -94,6 +96,8 @@ sysml> %continue
 ⏸ Paused at breakpoint "compute"
   State: Suspended
   Tokens: 1
+
+Use %tokens to inspect, %step or %continue to resume
 
 sysml> %tokens
 Active tokens (1):
@@ -111,6 +115,8 @@ sysml> %state TrafficLight
   Current state: red
   Time: 0.00
   Events: 1
+
+Use %events to see queue, %current for state, %advance <time> to step
 
 sysml> %advance 30
 ✓ Advanced to 30.00 (1 event(s) processed)
@@ -154,10 +160,10 @@ sysml> %advance 30
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (36 golden ASTs, 49 negative tests) |
-| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 18/18 passing) |
-| Action execution engine (Tier 5) | ✅ Complete (11 conformance cases passing) |
-| State machine runtime (Tier 5) | ✅ Complete (26 conformance cases: transitions, accept events, sourceless) |
+| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (52 golden ASTs, 59 negative tests) |
+| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 46 calc/constraint/requirement/satisfy cases passing) |
+| Action execution engine (Tier 5) | ✅ Complete (35 conformance cases passing) |
+| State machine runtime (Tier 5) | ✅ Complete (31 conformance cases: transitions, accept events, sourceless) |
 | REPL debugging commands | ✅ Complete |
 | Model save & SysML ↔ RDF Turtle conversion (`%save`, `sysml -convert`) | ✅ Complete (see [RDF_INTEROP.md](docs/RDF_INTEROP.md) for the mapping and its limitations) |
 | Standard library bundling | ✅ Complete |
@@ -165,10 +171,10 @@ sysml> %advance 30
 | gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime RPCs) |
 | Python client library | ✅ Complete (connection lifecycle, runtime APIs, IPython hooks, DataFrame) |
 
-**Current commit:** All tests pass (`go test ./...`), builds clean (`go build ./...`).
-**Test coverage:** 1,500+ tests covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 36 golden ASTs, 49 negatives, 61 conformance cases, 35 robustness subtests.
+**Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).
+**Test coverage:** 2,465 tests and subtests (2,460 pass, 5 skip themselves; 1,384 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 52 golden ASTs, 59 negatives, 121 conformance cases, 40 golden traces, 57 robustness subtests.
 **Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
-**Behavioral execution:** Calc/constraint/requirement fully functional (18/18 tests). Action/state executors complete with nested invocation, control flow keywords, send statement (61/61 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
+**Behavioral execution:** Calc/constraint/requirement/satisfy fully functional. Action/state executors complete with nested invocation, control flow keywords, loop and conditional statements, send statement (121/121 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
 **Training examples:** 98/100 files clean (2 files, 4 errors), gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
@@ -249,6 +255,9 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
   binaries are published to GitHub Releases. Maintainer procedure:
   [docs/RELEASING.md](docs/RELEASING.md); what changed per release:
   [CHANGELOG.md](CHANGELOG.md)
+- The Python client is released on its own tag (`pysysml-v*`), which uploads `pysysml` to
+  PyPI — its version is not coupled to the core's, since it resolves a `sysml-grpc` binary
+  at runtime from whichever release the caller names
 
 **Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
 `sysml-lsp-<os>-<arch>.tar.gz`), `systemica-<os>-<arch>.tar.gz` bundles containing both
@@ -281,7 +290,9 @@ go build -o bin/sysml-grpc ./cmd/sysml-grpc
 
 **Installation:**
 ```bash
-# Install from source (development mode)
+pip install pysysml          # from PyPI, once the first release is published
+
+# Or from a checkout, in development mode
 pip install -e python/
 ```
 

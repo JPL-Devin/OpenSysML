@@ -3,7 +3,8 @@
 Baseline: `main` @ `a6c5fd8`, verified locally on 2026-08-11 with Go 1.25.0.
 Read `AGENTS.md` first; it governs everything below.
 
-0.0.4 is prepared but **not tagged**. Everything in "Release follow-through" is
+0.0.4 is released, from `Open-MBEE/Systemica` main at `a554b20` (promoted through Open-MBEE
+PR #47). 0.0.5 is prepared but **not tagged**. Everything in "Release follow-through" is
 maintainer- or account-gated; everything after it is ordinary engineering work.
 
 ## Where the repository stands
@@ -15,12 +16,12 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`, `staticch
 |---|---|
 | OMG training corpus | **98/100 clean** — 2 files / 4 errors, both pinned OMG source bugs (the ceiling) |
 | Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative Systemica extension |
-| Execution conformance cases | 113 |
+| Execution conformance cases | 121 |
 | gRPC conformance cases | 6 |
 | Golden execution traces | 40 |
-| Runtime robustness subtests | 54 |
+| Runtime robustness subtests | 57 |
 | Golden AST fixtures | 52 |
-| Negative parser subtests | 49 |
+| Negative parser subtests | 59 |
 
 Statement coverage, measured today with `go test -cover ./...`:
 
@@ -46,12 +47,16 @@ drifted file and record the verdict in `docs/TRAINING_EXAMPLES.md`.
 
 # Release follow-through
 
-## R1 — tag 0.0.4 (maintainer, blocking everything else in this section)
+## R1 — tag 0.0.5 (maintainer, blocking everything else in this section)
+
+Releases live on `Open-MBEE/Systemica`; development happens on `JPL-Devin/Systemica`, which
+has no tags at all. So the tag is preceded by promoting `main` upstream, as 0.0.4 was through
+Open-MBEE PR #47:
 
 ```bash
-git checkout main && git pull
-git tag -a v0.0.4 -m "v0.0.4"
-git push origin v0.0.4
+# on Open-MBEE/Systemica, after main carries the release commit
+git tag -a v0.0.5 -m "v0.0.5"
+git push origin v0.0.5
 ```
 
 The publish job needs `GITHUB_TOKEN`, `GH_TOKEN` or `CIRCLE_TOKEN` in the CircleCI project.
@@ -59,19 +64,26 @@ Without one the tag builds artifacts and then fails at publish, having created n
 Nobody has verified which is set. Full procedure and post-tag verification:
 `docs/RELEASING.md`.
 
-## R2 — publish `pysysml` to PyPI
+## R2 — publish `pysysml` to PyPI (account-gated remainder)
 
-`python/pyproject.toml` declares `pysysml` 0.1.0 and nothing has ever been uploaded, so the
-`pip install pysysml` promised in `docs/design/python-grpc-bindings.md` does not work; the only
-install route is `pip install -e python/` from a clone. Needs: a PyPI project and API token in
-CI, a publish job gated on the tag, and a decision on version coupling — the package version
-(0.1.0) and the Systemica release it fetches a service binary from (0.0.4) are independent
-today, which is defensible but undocumented.
+The job exists: `publish-pypi` in the `release-python` workflow, filtered to `pysysml-v*`,
+building a wheel and an sdist, checking them with `twine check --strict`, installing the wheel
+into a clean virtualenv and only then uploading. The version is declared once, in
+`python/pysysml/_version.py`, and a tag that disagrees with it fails before upload. The
+package keeps its own version line on purpose: it resolves a `sysml-grpc` binary at runtime
+from whichever release the caller names, so its version and the core's are not lockstep.
+See `docs/RELEASING.md`.
+
+What remains is account-gated and cannot be done from a session: create the PyPI project's
+first release with an account-scoped token, then replace it with a project-scoped one; create
+the restricted CircleCI context `pypi-publish` holding `PYPI_API_TOKEN` (and optionally
+`TEST_PYPI_API_TOKEN` for pre-release tags).
 
 Also decide the default download repository. `python/pysysml/binary.py` defaults to
 `Open-MBEE/Systemica`, releases are currently cut from `JPL-Devin/Systemica`, and
-`PYSYSML_GITHUB_REPO` is the override. A PyPI package pointing at a repository with no releases
-would be worse than no package.
+`PYSYSML_GITHUB_REPO` is the override. Note that no released tag carries `sysml-grpc` assets
+yet — v0.0.4's assets are the `sysml`/`sysml-lsp` archives only — so `pysysml` cannot fetch a
+binary until 0.0.5 is released, and `pip install pysysml` should not be advertised before it.
 
 ## R3 — Homebrew tap
 

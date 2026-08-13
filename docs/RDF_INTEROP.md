@@ -215,6 +215,32 @@ conversion time, so they are normalized rather than reported — the one place
 this mapping changes a model without saying so. Recording them in the parser is
 roadmap item D5. Save straight to `.sysml` when they matter.
 
+**A condition or a behavior statement is refused.** The mapping covers model
+*structure* — packages, definitions, usages, features, imports, connectors,
+successions, satisfy assertions — and has no metaclass for the members that state
+a condition or a step, so converting a model containing one reports the member
+rather than dropping it. Measured against the built binary, each of these is
+`cannot convert the <node> at <file>:<line>`:
+
+| written | refused as |
+|---|---|
+| `require <expr>;`, `require constraint { … }` | `*ast.RequireMember` |
+| `assume <expr>;` | `*ast.AssumeMember` |
+| a constraint body's condition, `assert constraint { … }` | `*ast.ConstraintMember` |
+| `subject s : X;` | `*ast.SubjectMember` |
+| `return <expr>;` computing a value (a bare `return x;` converts) | `*ast.ResultMember` |
+| `assign x := 1;` | `*ast.AssignmentActionNode` |
+| `if … { … }`, `while`/`loop`/`for … in …` | `*ast.IfActionNode`, `*ast.WhileLoopActionNode` |
+| `state s { … }` inside a state machine | `*ast.SubstateMember` |
+| `accept … then …`, a transition member | `*ast.TransitionMember` |
+| `entry`/`do`/`exit` | `*ast.EntryMember`, `*ast.DoMember`, `*ast.ExitMember` |
+
+So a requirement that states a condition, and any state machine or action body
+that carries statements, cannot be exported to Turtle today; save to `.sysml`
+instead. Carrying them needs the expression-tree mapping (roadmap D1) and
+metaclasses for the behavioral members, not a wider fallback — a graph missing a
+model's conditions would be worse than a refusal.
+
 **A synonym keyword that names no element of its own is refused.** `perform a : A`
 puts its subject in an inline reference rather than a declared name, a shape the
 graph cannot rebuild; writing it back as the canonical `action` would be a

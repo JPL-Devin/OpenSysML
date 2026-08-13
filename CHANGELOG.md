@@ -6,6 +6,8 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Unreleased
 
+## 0.0.5 — 2026-08-12
+
 ### Language and semantics
 
 - A requirement or constraint condition is evaluated against the features of the
@@ -74,6 +76,40 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   `arcsin(2.0)`, `ln(0.0)`, `log(x, 1.0)`, `atan2(0.0, 0.0)`, `0.0 ** -1.0`,
   integer overflow — is reported where the expression is evaluated instead of
   folding to a NaN, an infinity or a wrapped integer.
+- A unit written unqualified is resolved through the imports in scope, and a name
+  a declaration shadows is reported with the declaration that shadows it and the
+  way out: `m resolves to the attributeUsage m declared in SH, shadowing the
+  measurement unit SI::metre — write SI::m to name the unit`. The rule and the
+  message are the same wherever a quantity is evaluated — a part's attribute, an
+  action or state body, a calc invocation, a constraint or requirement condition,
+  and an expression typed at the prompt.
+- A quantity value renders like the bare Real it measures, magnitude first and
+  unit in brackets (`v = -15.20 [m/s]`, `= 5.00 [SI::m/SI::s]`), in results,
+  execution traces and slot listings alike, in place of full float precision.
+- `%calc` accepts quantity arguments in every argument form it accepts numbers
+  in — comma-separated, whitespace-separated, invocation form, and a
+  parenthesized subexpression — so `%calc P::Fall 10.0 [m/s], 3.0 [s]` invokes
+  the calculation rather than reading the bracket as a sequence index.
+- An attribute default written in an action or state body is evaluated in the
+  scope that declares it, so a unit or a type an enclosing package imports
+  resolves there (`attribute h : LengthValue = 500.0 [m];`), and a body-local
+  name is not resolved against the namespace the session happens to be in.
+- The loop and conditional statements of an action body execute: `while`, `loop`,
+  `for … in …` and `if … { … } else { … }` lower to real decision and merge
+  nodes, so a body that iterates reaches its final node with the values it
+  computed rather than deadlocking.
+- A `then` written as a member of a body (`then loopIt end;`, `then start
+  compute;`) is a succession edge in the lowered graph, like the standalone form,
+  rather than a member the runtime had no edge for.
+- A relationship written with a keyword and one written with its symbol are the
+  same relationship end to end — `specializes`/`:>`, `subsets`/`:>`,
+  `redefines`/`:>>`, `references`/`::>` — so hover, go-to-definition, completion
+  and the index report the same thing whichever spelling a model uses. A feature
+  that takes its effective name from what it redefines is read under that name by
+  the same paths, including its short name.
+- `assert satisfy <requirement> by <part>;` parses with the `by` subject named
+  by a qualified name, and an action body that is not braced ends where its
+  statement ends rather than swallowing the member that follows it.
 
 ### Runtime and tooling
 
@@ -123,6 +159,66 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   do-activity actions, which could look like a machine that had settled. It is
   bounded by the session's event and do-activity budgets, and says which one cut
   a drain short.
+- A session is written out: `%save <file>` writes the notation (`.sysml`) or the
+  RDF graph (`.ttl`) chosen by the extension, atomically, replacing an existing
+  file and saying so. A session that does not fully parse still saves as
+  notation — the text as typed, re-indented, with the syntax errors reported as
+  warnings — so work is never trapped in the REPL; `.ttl` keeps the refusal,
+  since a graph built from a partly recovered tree would be quietly missing
+  declarations.
+- `sysml -convert` converts a model between the notation and RDF Turtle in both
+  directions, round-tripping packages, definitions, usages, features, imports,
+  connectors, successions (including a `then` written as a body member) and
+  satisfy assertions. What the mapping normalizes and what it refuses is
+  documented in [docs/RDF_INTEROP.md](docs/RDF_INTEROP.md); a refused construct
+  is reported with its node and position rather than dropped.
+- Removing a document unwinds what its wildcard re-exports contributed, so a
+  name a removed file re-exported no longer resolves, and the workspace reuses
+  the index slot the document held rather than growing one per edit — an editing
+  session's memory no longer climbs with the number of reindexes.
+- The `sysml-grpc` service binary is published with the release, one per
+  platform (linux/amd64, linux/arm64, darwin/amd64, darwin/arm64,
+  windows/amd64), each with a `.sha256` sidecar and covered by
+  `SHA256SUMS.txt`. `pysysml` downloads the binary matching the release it is
+  told to use, verifies it against its sidecar, caches it under `~/.pysysml/bin`
+  and starts it — so a Python caller needs no Go toolchain. (v0.0.4 described
+  this; the release assets it publishes do not include the binaries, and this is
+  the first release that does.)
+- Homebrew installation is live: `brew install Open-MBEE/tap/systemica` installs
+  both binaries from the published bundle, verified by checksum, and avoids the
+  macOS quarantine prompt that a browser download sets. See
+  [packaging/homebrew/README.md](packaging/homebrew/README.md).
+- `pysysml` is published to PyPI by CircleCI, on its own `pysysml-v*` tag, from
+  one declared version (`python/pysysml/_version.py`) that the packaging
+  metadata and `pysysml.__version__` both read — a tag that disagrees with it
+  fails the job before anything is uploaded. `python/setup.py` is gone;
+  `pyproject.toml` declares the build. See
+  [docs/RELEASING.md](docs/RELEASING.md#releasing-pysysml-to-pypi).
+
+### Known limitations
+
+- RDF/Turtle conversion has no mapping for a member that states a condition or a
+  step, so a model containing one is reported rather than converted: `require`
+  and `assume` members, a constraint body's condition, `subject`, a computed
+  `return`, `assign`, `if`/`while`/`loop`/`for`, substates, transitions and
+  `entry`/`do`/`exit` (`cannot convert the *ast.RequireMember at <file>:<line>`).
+  A requirement stating a condition, and any state machine or action body with
+  statements, must be saved as `.sysml`. The full list is in
+  [docs/RDF_INTEROP.md](docs/RDF_INTEROP.md).
+- The REPL's prompt evaluates in the *last* namespace the session declared. After
+  typing a second package, the first package's members and the units its imports
+  brought in are reached by qualified name only (`1.0 [SI::m]`, not `1.0 [m]`).
+- Re-typing a declaration whose name the session already holds replaces the
+  earlier snippet rather than merging into it, so adding a member to a package by
+  re-typing the package drops the members left out of the new text.
+- A multi-valued feature that is both typed and given a default takes the typed
+  instantiation; the default is not merged into it (as in 0.0.4).
+- An attribute declared with a type but no value (`attribute diameter : Real;`)
+  instantiates as an object of that type rather than an unset value, so `%slots`
+  shows `diameter = Instance(ID: n)` with `(no features)` under it.
+- The macOS and Windows binaries are unsigned, so a browser download is
+  quarantined by Gatekeeper or flagged by SmartScreen. Install with Homebrew or
+  `curl`; see [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
 
 ## 0.0.4 — 2026-08-10
 
@@ -203,6 +299,6 @@ The first tagged release.
 - A parameter bound by a constraint or requirement usage
   (`constraint limit : MassLimit { in m = mass; }`) is not passed into the
   conditions it inherits from its definition. *(Fixed after this release; see
-  the Unreleased section.)*
+  0.0.5.)*
 - A multi-valued feature that is both typed and given a default takes the typed
   instantiation; the default is not merged into it.

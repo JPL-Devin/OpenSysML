@@ -54,8 +54,9 @@ Download `systemica-windows-amd64.zip` from [releases](https://github.com/Open-M
 **Archive layout:** `systemica-<os>-<arch>.tar.gz` bundles contain both binaries under their
 plain names (`sysml`, `sysml-lsp`); the older single-binary `sysml-<os>-<arch>.tar.gz` and
 `sysml-lsp-<os>-<arch>.tar.gz` archives are still published. The bundles and
-`SHA256SUMS.txt` are produced from the next tagged release onward; for earlier releases use
-the single-binary archives. `SHA256SUMS.txt` covers every archive and every published
+`SHA256SUMS.txt` are published from v0.0.4 onward; for earlier releases use the
+single-binary archives. The `sysml-grpc` binaries and their sidecars are published from the
+next release onward, and `SHA256SUMS.txt` covers every archive and every published
 `sysml-grpc` binary:
 
 ```bash
@@ -144,13 +145,15 @@ sysml> import ScalarValues::*;
 ✓ import ScalarValues::*
 
 sysml> part def Wheel {
-  ...>     attribute diameter : Real;
-  ...>     attribute width : Real;
+  ...>     attribute diameter : Real = 16.0;
+  ...>     attribute width : Real = 7.5;
   ...> }
 ✓ part def Wheel
 ```
 
-Each accepted declaration is echoed back as `✓ <kind> <name>`.
+Each accepted declaration is echoed back as `✓ <kind> <name>`. A brace opens a
+continuation (`...>`) that runs to the matching one — but a **blank line ends the
+submission**, so leave none inside a declaration you are typing.
 
 #### 2. Define a Vehicle
 
@@ -175,6 +178,14 @@ Instance: Vehicle (ID: 1)
 Slots:
   mass = 1500.00
   wheels = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4), Instance(ID: 5)]
+    diameter = 16.00
+    width = 7.50
+    diameter = 16.00
+    width = 7.50
+    diameter = 16.00
+    width = 7.50
+    diameter = 16.00
+    width = 7.50
 
 sysml> %instances
 Instances:
@@ -243,7 +254,15 @@ sysml> %slots MyModel::System
 Instance: MyModel::System (ID: 1)
 Slots:
   sensors = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4)]
+    reading = 0.00
+    threshold = 100.00
+    reading = 0.00
+    threshold = 100.00
+    reading = 0.00
+    threshold = 100.00
 ```
+
+A composite slot lists the features of each of its objects under it, in order.
 
 ---
 
@@ -254,10 +273,10 @@ notation, `.ttl` for RDF Turtle:
 
 ```bash
 sysml> %save my_model.sysml
-saved 148 bytes of sysml to my_model.sysml
+saved 181 bytes of sysml to my_model.sysml (replaced the existing file)
 
 sysml> %save my_model.ttl
-saved 1540 bytes of ttl to my_model.ttl
+saved 1872 bytes of ttl to my_model.ttl
 ```
 
 A leading `~` is expanded, an existing file is replaced and the replacement is
@@ -274,7 +293,7 @@ sysml> %save my_model.sysml
 warning: <session>: 1 syntax error(s):
   4:6: expected a namespace member
 warning: the file is saved as typed; fix these and save again
-saved 148 bytes of sysml to my_model.sysml (replaced the existing file)
+saved 181 bytes of sysml to my_model.sysml (replaced the existing file)
 ```
 
 `.ttl` keeps the refusal, because a graph built from a tree the parser only
@@ -355,11 +374,13 @@ part Vehicle {
 ### 2. Composite Structures
 
 ```sysml
-part Engine {
+import ScalarValues::*;
+
+part def Engine {
     attribute power : Real = 200.0;
 }
 
-part Car {
+part def Car {
     part engine : Engine {
         :>> power = 250.0;  // Redefine nested feature
     }
@@ -368,11 +389,16 @@ part Car {
 
 Instantiate and inspect:
 ```sysml
-%instantiate Car
-%slots Car
+sysml> %instantiate Car
+✓ Created instance of Car
+  ID: 1
+  Use %slots Car to inspect
+
+sysml> %slots Car
 Instance: Car (ID: 1)
-  engine: Instance(ID: 2)
-    power: 250.0
+Slots:
+  engine = Instance(ID: 2)
+    power = 250.00
 ```
 
 ### 3. Multiplicity
@@ -389,11 +415,11 @@ part System {
 **Calculations:**
 ```sysml
 sysml> calc distance {
-...>     in x;
-...>     in y;
-...>     return (x * x + y * y);
-...> }
-✓ distance
+  ...>     in x;
+  ...>     in y;
+  ...>     return (x * x + y * y);
+  ...> }
+✓ calc distance
 
 sysml> %calc distance 3 4
 ✓ distance(3, 4)
@@ -403,10 +429,10 @@ sysml> %calc distance 3 4
 **Constraints:**
 ```sysml
 sysml> constraint ValidSpeed {
-...>     assert 65 > 0;
-...>     assert 65 <= 120;
-...> }
-✓ ValidSpeed
+  ...>     assert 65 > 0;
+  ...>     assert 65 <= 120;
+  ...> }
+✓ constraint ValidSpeed
 
 sysml> %constraint ValidSpeed
 ✓ Constraint ValidSpeed passed
@@ -415,10 +441,10 @@ sysml> %constraint ValidSpeed
 **Requirements:**
 ```sysml
 sysml> requirement SafetyReq {
-...>     assume 65 > 0;
-...>     require 100 > 50;
-...> }
-✓ SafetyReq
+  ...>     assume 65 > 0;
+  ...>     require 100 > 50;
+  ...> }
+✓ requirement SafetyReq
 
 sysml> %requirement SafetyReq
 ✓ Requirement SafetyReq satisfied
@@ -431,19 +457,21 @@ sysml> %requirement SafetyReq
 **Action execution (step-by-step):**
 ```sysml
 sysml> action SimpleWorkflow {
-...>     attribute result = 0;
-...>     first start;
-...>     action compute { assign result := 42; }
-...>     done end;
-...>     then start compute;
-...>     then compute end;
-...> }
-✓ SimpleWorkflow
+  ...>     attribute result = 0;
+  ...>     first start;
+  ...>     action compute { assign result := 42; }
+  ...>     done end;
+  ...>     then start compute;
+  ...>     then compute end;
+  ...> }
+✓ action SimpleWorkflow
 
 sysml> %action SimpleWorkflow
 ✓ Started action executor for "SimpleWorkflow"
   State: Running
   Tokens: 1
+
+Use %step to advance, %tokens to inspect, %continue to run to completion
 
 sysml> %step
 ✓ Step complete
@@ -465,20 +493,22 @@ sysml> %continue
 **State machine execution:**
 ```sysml
 sysml> state TrafficLight {
-...>     initial start;
-...>     state green { accept after 25 then yellow; }
-...>     state yellow { accept after 5 then red; }
-...>     state red { accept after 30 then off; }
-...>     final off;
-...>
-...>     start then green;
-...> }
+  ...>     initial start;
+  ...>     state green { accept after 25 then yellow; }
+  ...>     state yellow { accept after 5 then red; }
+  ...>     state red { accept after 30 then off; }
+  ...>     final off;
+  ...>     start then green;
+  ...> }
+✓ state TrafficLight
 
 sysml> %state TrafficLight
 ✓ Started state machine executor for "TrafficLight"
   Current state: start
   Time: 0.00
   Events: 1
+
+Use %events to see queue, %current for state, %advance <time> to step
 
 sysml> %advance 25
 ✓ Advanced to 25.00 (2 event(s) processed)
