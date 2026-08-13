@@ -1,0 +1,12 @@
+{
+  "type": "calcUsage",
+  "evaluate": "test::spanOfFive",
+  "outputs": {
+    "width": {"type": "Integer", "value": 2},
+    "top": {"type": "Integer", "value": 6}
+  },
+  "reads": {
+    "test::tenTop": {"type": "Integer", "value": 11},
+    "test::tenWidth": {"type": "Integer", "value": 2}
+  }
+}
