@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
 )
@@ -193,5 +194,63 @@ package Demo {
 	}
 	if slot.Materialized {
 		t.Error("errored slot must not be reported as materialized")
+	}
+}
+
+// TestInstantiate_SelfReferentialPartTerminates verifies a part that contains
+// its own kind is not expanded forever: reading a composite slot materializes
+// the object it holds, so the walk must stop at a type already on the path.
+func TestInstantiate_SelfReferentialPartTerminates(t *testing.T) {
+	content := `
+package Demo {
+  part def Node {
+    attribute v = 1;
+    part next : Node;
+  }
+}
+`
+	done := make(chan *pb.InstantiateResponse, 1)
+	go func() {
+		done <- instantiate(t, content, "graph-self-referential", "Demo::Node")
+	}()
+
+	select {
+	case resp := <-done:
+		if len(resp.Instances) != 1 {
+			t.Errorf("expected only the root instance, got %d", len(resp.Instances))
+		}
+		if id := resp.Instance.Slots["next"].Value.GetInstanceId(); id == 0 {
+			t.Error("expected the unexpanded child to stay a bare instance id")
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("Instantiate did not terminate on a self-referential part")
+	}
+}
+
+// TestInstantiate_MutuallyRecursivePartsTerminate verifies the path check also
+// breaks a cycle that spans two definitions.
+func TestInstantiate_MutuallyRecursivePartsTerminate(t *testing.T) {
+	content := `
+package Demo {
+  part def A {
+    part b : B;
+  }
+  part def B {
+    part a : A;
+  }
+}
+`
+	done := make(chan *pb.InstantiateResponse, 1)
+	go func() {
+		done <- instantiate(t, content, "graph-mutual-recursion", "Demo::A")
+	}()
+
+	select {
+	case resp := <-done:
+		if len(resp.Instances) != 2 {
+			t.Errorf("expected A and B only, got %d instances", len(resp.Instances))
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("Instantiate did not terminate on mutually recursive parts")
 	}
 }

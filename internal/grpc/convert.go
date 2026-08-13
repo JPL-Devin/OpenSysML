@@ -295,36 +295,55 @@ func ProtoToValue(pv *pb.Value) runtime.Value {
 	}
 }
 
+const (
+	// maxGraphDepth bounds how deep Instantiate expands nested objects.
+	maxGraphDepth = 8
+	// maxGraphInstances caps how many instances one response serializes.
+	maxGraphInstances = 1000
+)
+
 // InstanceGraphToProto converts inst and every instance reachable from it. The
 // root is returned first; runtime instances live only for the duration of a
 // request, so the whole reachable graph is serialized while the context is alive.
+//
+// Expansion stops at a child whose type is already on the path, at maxGraphDepth
+// and at maxGraphInstances: reading a composite slot materializes the object it
+// holds, so a self-referential part would otherwise instantiate forever. An
+// unexpanded child stays a bare instance id.
 func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) (*pb.Instance, []*pb.Instance) {
 	var all []*pb.Instance
 	seen := make(map[int64]bool)
+	onPath := make(map[*symbols.Symbol]bool)
 
-	var walk func(*runtime.Instance) *pb.Instance
-	walk = func(cur *runtime.Instance) *pb.Instance {
-		if seen[cur.ID] {
+	var walk func(*runtime.Instance, int) *pb.Instance
+	walk = func(cur *runtime.Instance, depth int) *pb.Instance {
+		if seen[cur.ID] || len(all) >= maxGraphInstances {
 			return nil
 		}
 		seen[cur.ID] = true
+		onPath[cur.Type] = true
+		defer delete(onPath, cur.Type)
 
 		pbInst := InstanceToProto(rt, cur, idx)
 		all = append(all, pbInst)
 
+		if depth >= maxGraphDepth {
+			return pbInst
+		}
+
 		for _, slot := range pbInst.Slots {
 			for _, id := range instanceRefs(slot) {
 				child, ok := rt.Instance(id)
-				if !ok {
+				if !ok || onPath[child.Type] {
 					continue
 				}
-				walk(child)
+				walk(child, depth+1)
 			}
 		}
 		return pbInst
 	}
 
-	root := walk(inst)
+	root := walk(inst, 0)
 	return root, all
 }
 

@@ -83,6 +83,10 @@ Integers, reals, booleans, strings and sequences map to `int`, `float`, `bool`,
 `str` and `list`. Unknown names raise `AttributeError` (attribute access) or
 `KeyError` (item access), so `hasattr`, `copy` and `pickle` behave.
 
+The service expands the object graph to depth 8 and stops at a type already on
+the path, so a part containing its own kind terminates; a child it did not
+expand comes back as its bare integer id rather than an `Instance`.
+
 The raw protobuf stays reachable: `get_slot(name)` returns the `SlotValue`
 message, and `raw_slots` is the whole map.
 

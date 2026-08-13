@@ -141,7 +141,10 @@ job's comment in `.circleci/config.yml` records this.
 evaluated instead of unmaterialized (conformance `instantiate_derived_slot`). A slot holding an
 *object* still marshals as that child instance's id, but `InstantiateResponse.instances` now
 carries every instance reachable from the root, so `part engine : Engine` expands for a Python
-caller (`inst.engine.power`) as `%slots` expands it in the REPL. A `GetInstance` RPC was
+caller (`inst.engine.power`) as `%slots` expands it in the REPL. Expansion is bounded the way
+`%slots` bounds it — depth 8, and no descent into a type already on the path, since reading a
+composite slot materializes the object it holds and a self-referential part would otherwise
+instantiate forever; an unexpanded child stays a bare id. A `GetInstance` RPC was
 rejected: runtime instances live in the request's `runtime.Context` and do not survive the
 call, so an id is only meaningful against the response that carried it — noted as a limitation
 in `docs/SPEC_COMPLIANCE.md`.
