@@ -5,6 +5,11 @@ from typing import List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from pysysml.proto import sysml_pb2
 
+# Kind strings emitted by the service (internal/core/symbols: symbolKindNames).
+# Matched case-insensitively so older PascalCase producers still work.
+ATTRIBUTE_KINDS = frozenset({"attributedef", "attributeusage"})
+PART_KINDS = frozenset({"partdef", "partusage"})
+
 
 class Symbol:
     """Represents a symbol in the SysML model (definition or usage).
@@ -15,7 +20,7 @@ class Symbol:
     Attributes:
         id: Unique symbol identifier (fully-qualified name)
         name: Simple name of the symbol
-        kind: SysML element kind (e.g., "PartDef", "AttributeUsage")
+        kind: SysML element kind (e.g., "partDef", "attributeUsage")
     """
     
     def __init__(self, pb_symbol: "sysml_pb2.SymbolInfo", client: Optional[object], model_hash: str):
@@ -78,26 +83,20 @@ class Symbol:
         return result
     
     def attributes(self) -> List["Symbol"]:
-        """Return child symbols that are attributes.
-        
-        Filters children to only those with 'Attribute' in their kind
-        (e.g., AttributeUsage, PartAttributeUsage, AttributeDef).
+        """Return child symbols that are attribute definitions or usages.
         
         Returns:
             List of attribute Symbol objects
         """
-        return [child for child in self.children() if "Attribute" in child.kind]
+        return [child for child in self.children() if child.kind.lower() in ATTRIBUTE_KINDS]
     
     def parts(self) -> List["Symbol"]:
-        """Return child symbols that are parts.
-        
-        Filters children to only those with 'Part' in their kind
-        (e.g., PartUsage, PartDef).
+        """Return child symbols that are part definitions or usages.
         
         Returns:
             List of part Symbol objects
         """
-        return [child for child in self.children() if "Part" in child.kind]
+        return [child for child in self.children() if child.kind.lower() in PART_KINDS]
     
     def get_attr(self, name: str) -> Optional["Symbol"]:
         """Get attribute by name.

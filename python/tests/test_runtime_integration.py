@@ -67,6 +67,92 @@ class TestRuntimeIntegration:
         assert instance.type_symbol_id == "Test::SimplePart"
         assert instance.id > 0
     
+    def test_instantiate_returns_pythonic_values(self):
+        """Slot values arrive as Python scalars, not protobuf messages."""
+        src = '''
+        package Demo {
+            part def Engine {
+                attribute power = 300.0;
+            }
+            part def Vehicle {
+                attribute mass = 1500.0;
+                part engine : Engine;
+            }
+        }
+        '''
+        model = self.conn.load_from_content(src)
+
+        vehicle = self.conn.instantiate("Demo::Vehicle", model.hash)
+
+        assert vehicle.mass == 1500.0
+        assert vehicle["mass"] == 1500.0
+        # Raw protobuf stays reachable.
+        assert vehicle.get_slot("mass").materialized is True
+
+    def test_instantiate_resolves_nested_instances(self):
+        """A part slot resolves to a nested Instance, not a bare id."""
+        from pysysml.instance import Instance
+
+        src = '''
+        package Demo {
+            part def Engine {
+                attribute power = 300.0;
+            }
+            part def Vehicle {
+                attribute mass = 1500.0;
+                part engine : Engine;
+            }
+        }
+        '''
+        model = self.conn.load_from_content(src)
+
+        vehicle = self.conn.instantiate("Demo::Vehicle", model.hash)
+
+        assert isinstance(vehicle.engine, Instance)
+        assert vehicle.engine.type_symbol_id == "Demo::Engine"
+        assert vehicle.engine.power == 300.0
+
+    def test_instantiate_cyclic_attribute_reports_error(self):
+        """A cyclic derived attribute surfaces as SlotError, never as None."""
+        from pysysml.errors import SlotError
+
+        src = '''
+        package Demo {
+            part def Cyclic {
+                attribute a = b + 1.0;
+                attribute b = a + 1.0;
+            }
+        }
+        '''
+        model = self.conn.load_from_content(src)
+
+        inst = self.conn.instantiate("Demo::Cyclic", model.hash)
+
+        with pytest.raises(SlotError, match="cyclic"):
+            inst.a
+        assert isinstance(inst.slots["a"], SlotError)
+
+    def test_symbol_attributes_and_parts(self):
+        """Symbol filtering works against the kinds the service really emits."""
+        src = '''
+        package Demo {
+            part def Engine {
+                attribute power = 300.0;
+            }
+            part def Vehicle {
+                attribute mass = 1500.0;
+                part engine : Engine;
+            }
+        }
+        '''
+        model = self.conn.load_from_content(src)
+
+        vehicle = model.find("Vehicle")
+        assert vehicle is not None
+        assert [a.name for a in vehicle.attributes()] == ["mass"]
+        assert [p.name for p in vehicle.parts()] == ["engine"]
+        assert vehicle.get_attr("mass").name == "mass"
+
     def test_eval_invalid_expression_raises(self):
         """Test that invalid expression raises RuntimeError."""
         src = 'package Test { }'

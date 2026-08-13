@@ -19,6 +19,7 @@ GOSEC_VERSION := v2.22.5
 # Build output directory
 BIN_DIR := bin
 PYTHON_DIR := python
+PYTHON ?= python3
 
 all: build test python-test ## Build and test everything
 
@@ -81,11 +82,14 @@ version: ## Show version information
 
 python-proto: ## Regenerate Python protobuf stubs
 	@echo "Regenerating Python protobuf stubs..."
-	@command -v protoc >/dev/null 2>&1 || { echo "Error: protoc not found. Install protobuf compiler."; exit 1; }
-	protoc --proto_path=api/proto \
+	@$(PYTHON) -c "import grpc_tools.protoc" >/dev/null 2>&1 || { echo "Error: grpcio-tools not installed. Run: $(PYTHON) -m pip install grpcio-tools"; exit 1; }
+	$(PYTHON) -m grpc_tools.protoc --proto_path=api/proto \
 	       --python_out=$(PYTHON_DIR)/pysysml/proto \
 	       --grpc_python_out=$(PYTHON_DIR)/pysysml/proto \
 	       api/proto/sysml.proto
+	@# generated stubs import each other by top-level name; make it package-relative
+	sed -i.bak 's/^import sysml_pb2 as sysml__pb2$$/from . import sysml_pb2 as sysml__pb2/' $(PYTHON_DIR)/pysysml/proto/sysml_pb2_grpc.py
+	@rm -f $(PYTHON_DIR)/pysysml/proto/sysml_pb2_grpc.py.bak
 	@echo "✓ Regenerated Python stubs"
 
 python-install: ## Install Python package in editable mode

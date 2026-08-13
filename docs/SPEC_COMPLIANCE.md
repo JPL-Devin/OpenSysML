@@ -721,7 +721,7 @@ guaranteed to be interpreted identically by an unrelated SysML RDF tool.
 | GetSymbol | service.go:126-145 | ✅ Faithful | service_test.go:TestGetSymbol_* |
 | GetDiagnostics | service.go:148-169 (parser + semantic) | ✅ Faithful | runtime_test.go (implicit) |
 | Evaluate | service.go:172-227 | ✅ Faithful | runtime_test.go:TestEvaluate_*, conformance `evaluate_arithmetic` |
-| Instantiate | service.go:230-262 (slots read through `Instance.GetSlot`, so a derived default is evaluated against the instance) | ⚠️ Approximate — a composite slot marshals as the child instance's id, and no RPC returns that instance, so a nested object is not reachable over gRPC | runtime_test.go:TestInstantiate_*, conformance `instantiate_part`, `instantiate_derived_slot` |
+| Instantiate | service.go (slots read through `Instance.GetSlot`, so a derived default is evaluated against the instance; `InstanceGraphToProto` in convert.go returns every instance reachable from the root in `InstantiateResponse.instances`) | ✅ Faithful — a composite slot still marshals as the child's id, and that child is carried in the same response, so a nested object is reachable over gRPC without a follow-up RPC; expansion is bounded at depth 8 and stops at a type already on the path, as `%slots` bounds it, so a self-referential part cannot instantiate forever | runtime_test.go:TestInstantiate_*, instance_graph_test.go:TestInstantiate_ReturnsNestedInstances, `_ReturnsDeepNestedInstances`, `_CollectionOfInstances`, `_SlotErrorReported`, `_SelfReferentialPartTerminates`, `_MutuallyRecursivePartsTerminate`, conformance `instantiate_part`, `instantiate_derived_slot` |
 | ExecuteAction | service.go:265-312 | ✅ Faithful | runtime_test.go:TestExecuteAction_*, conformance `execute_action_inputs`, `execute_action_no_initial` |
 | ExecuteState | service.go:315-355 | ✅ Faithful | runtime_test.go:TestExecuteState_*, conformance `execute_state_transitions` |
 
@@ -739,13 +739,14 @@ guaranteed to be interpreted identically by an unrelated SysML RDF tool.
 
 **Python bindings:**
 - connection.py:488 - PID ownership check uses substring match - spoofable
-- connection.py:353 - instance_id returns bare int64 (loses type info)
+- an `instance_id` outside an `Instantiate` response (an `Evaluate` result, say)
+  is still a bare int64: those responses carry no instance graph to resolve it
 - __init__.py:11-16 - Shadows builtins (RuntimeError, eval)
 - binary.py:82,89 - Checksum same-origin (no pinned hash)
 
 **Go gRPC layer:**
 - convert.go:40 - SymbolToProto.Attributes always empty (semantic layer not ready)
-- `Instance` carries only the instance asked for: a slot holding an object reports
-  that object's id, which no RPC resolves
+- runtime instances are request-local, so an id is resolvable only against the
+  response that carried it; there is no RPC that fetches an instance by id later
 
 These are documented for transparency; none block production use.

@@ -118,3 +118,53 @@ def test_execute_state_visits_states():
             assert result['states_visited'] == ['Initial', 'Active', 'Done']
             assert result['final_context'] == {}
             mock_stub.ExecuteState.assert_called_once()
+
+
+def test_execute_action_unsupported_output_keeps_the_others():
+    """One value the wire format cannot represent must not discard the result."""
+    from pysysml.errors import UnsupportedValueError
+
+    with patch('grpc.insecure_channel'):
+        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
+            mock_stub = Mock()
+            mock_stub_cls.return_value = mock_stub
+
+            mock_stub.ExecuteAction.return_value = sysml_pb2.ExecuteActionResponse(
+                outputs={
+                    'result': sysml_pb2.Value(int_value=42),
+                    'speed': sysml_pb2.Value(null="unsupported: quantity value"),
+                },
+                error="",
+            )
+
+            conn = Connection(auto_start=False)
+            outputs = conn.execute_action("Test::MyAction", "model-hash")
+
+            assert outputs['result'] == 42
+            assert isinstance(outputs['speed'], UnsupportedValueError)
+
+
+def test_execute_state_unsupported_context_value_is_reported_in_place():
+    """A final-context value the service cannot send is kept as its error."""
+    from pysysml.errors import UnsupportedValueError
+
+    with patch('grpc.insecure_channel'):
+        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
+            mock_stub = Mock()
+            mock_stub_cls.return_value = mock_stub
+
+            mock_stub.ExecuteState.return_value = sysml_pb2.ExecuteStateResponse(
+                states_visited=['Initial', 'Done'],
+                final_context={
+                    'count': sysml_pb2.Value(int_value=1),
+                    'speed': sysml_pb2.Value(null="unsupported: quantity value"),
+                },
+                error="",
+            )
+
+            conn = Connection(auto_start=False)
+            result = conn.execute_state("Test::StateMachine", "model-hash")
+
+            assert result['states_visited'] == ['Initial', 'Done']
+            assert result['final_context']['count'] == 1
+            assert isinstance(result['final_context']['speed'], UnsupportedValueError)

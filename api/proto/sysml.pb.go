@@ -575,6 +575,7 @@ type SlotValue struct {
 	Value         *Value                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`   // for scalar slots
 	Values        []*Value               `protobuf:"bytes,3,rep,name=values,proto3" json:"values,omitempty"` // for collection slots
 	Materialized  bool                   `protobuf:"varint,4,opt,name=materialized,proto3" json:"materialized,omitempty"`
+	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"` // set when slot evaluation failed; value is unset
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -637,6 +638,13 @@ func (x *SlotValue) GetMaterialized() bool {
 	return false
 }
 
+func (x *SlotValue) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 // InstantiateRequest requests instantiation of a part/usage
 type InstantiateRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -692,10 +700,13 @@ func (x *InstantiateRequest) GetSymbolId() string {
 
 // InstantiateResponse contains the created instance
 type InstantiateResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Instance      *Instance              `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
-	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
-	Diagnostics   []*Diagnostic          `protobuf:"bytes,3,rep,name=diagnostics,proto3" json:"diagnostics,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Instance    *Instance              `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
+	Error       string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	Diagnostics []*Diagnostic          `protobuf:"bytes,3,rep,name=diagnostics,proto3" json:"diagnostics,omitempty"`
+	// Every instance reachable from `instance`, including `instance` itself, so a
+	// client can resolve an `instance_id` slot value without a follow-up RPC.
+	Instances     []*Instance `protobuf:"bytes,4,rep,name=instances,proto3" json:"instances,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -747,6 +758,13 @@ func (x *InstantiateResponse) GetError() string {
 func (x *InstantiateResponse) GetDiagnostics() []*Diagnostic {
 	if x != nil {
 		return x.Diagnostics
+	}
+	return nil
+}
+
+func (x *InstantiateResponse) GetInstances() []*Instance {
+	if x != nil {
+		return x.Instances
 	}
 	return nil
 }
@@ -1549,20 +1567,22 @@ const file_sysml_proto_rawDesc = "" +
 	"\n" +
 	"SlotsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12&\n" +
-	"\x05value\x18\x02 \x01(\v2\x10.sysml.SlotValueR\x05value:\x028\x01\"\x9c\x01\n" +
+	"\x05value\x18\x02 \x01(\v2\x10.sysml.SlotValueR\x05value:\x028\x01\"\xb2\x01\n" +
 	"\tSlotValue\x12!\n" +
 	"\ffeature_name\x18\x01 \x01(\tR\vfeatureName\x12\"\n" +
 	"\x05value\x18\x02 \x01(\v2\f.sysml.ValueR\x05value\x12$\n" +
 	"\x06values\x18\x03 \x03(\v2\f.sysml.ValueR\x06values\x12\"\n" +
-	"\fmaterialized\x18\x04 \x01(\bR\fmaterialized\"P\n" +
+	"\fmaterialized\x18\x04 \x01(\bR\fmaterialized\x12\x14\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\"P\n" +
 	"\x12InstantiateRequest\x12\x1d\n" +
 	"\n" +
 	"model_hash\x18\x01 \x01(\tR\tmodelHash\x12\x1b\n" +
-	"\tsymbol_id\x18\x02 \x01(\tR\bsymbolId\"\x8d\x01\n" +
+	"\tsymbol_id\x18\x02 \x01(\tR\bsymbolId\"\xbc\x01\n" +
 	"\x13InstantiateResponse\x12+\n" +
 	"\binstance\x18\x01 \x01(\v2\x0f.sysml.InstanceR\binstance\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x123\n" +
-	"\vdiagnostics\x18\x03 \x03(\v2\x11.sysml.DiagnosticR\vdiagnostics\"\xe9\x01\n" +
+	"\vdiagnostics\x18\x03 \x03(\v2\x11.sysml.DiagnosticR\vdiagnostics\x12-\n" +
+	"\tinstances\x18\x04 \x03(\v2\x0f.sysml.InstanceR\tinstances\"\xe9\x01\n" +
 	"\x14ExecuteActionRequest\x12\x1d\n" +
 	"\n" +
 	"model_hash\x18\x01 \x01(\tR\tmodelHash\x12(\n" +
@@ -1698,40 +1718,41 @@ var file_sysml_proto_depIdxs = []int32{
 	18, // 8: sysml.SlotValue.values:type_name -> sysml.Value
 	8,  // 9: sysml.InstantiateResponse.instance:type_name -> sysml.Instance
 	20, // 10: sysml.InstantiateResponse.diagnostics:type_name -> sysml.Diagnostic
-	23, // 11: sysml.ExecuteActionRequest.inputs:type_name -> sysml.ExecuteActionRequest.InputsEntry
-	24, // 12: sysml.ExecuteActionResponse.outputs:type_name -> sysml.ExecuteActionResponse.OutputsEntry
-	20, // 13: sysml.ExecuteActionResponse.diagnostics:type_name -> sysml.Diagnostic
-	25, // 14: sysml.ExecuteStateResponse.final_context:type_name -> sysml.ExecuteStateResponse.FinalContextEntry
-	20, // 15: sysml.ExecuteStateResponse.diagnostics:type_name -> sysml.Diagnostic
-	26, // 16: sysml.SymbolInfo.metadata:type_name -> sysml.SymbolInfo.MetadataEntry
-	17, // 17: sysml.SymbolInfo.attributes:type_name -> sysml.AttributeInfo
-	18, // 18: sysml.AttributeInfo.value:type_name -> sysml.Value
-	19, // 19: sysml.Value.sequence:type_name -> sysml.ValueSequence
-	18, // 20: sysml.ValueSequence.elements:type_name -> sysml.Value
-	21, // 21: sysml.Diagnostic.span:type_name -> sysml.Span
-	9,  // 22: sysml.Instance.SlotsEntry.value:type_name -> sysml.SlotValue
-	18, // 23: sysml.ExecuteActionRequest.InputsEntry.value:type_name -> sysml.Value
-	18, // 24: sysml.ExecuteActionResponse.OutputsEntry.value:type_name -> sysml.Value
-	18, // 25: sysml.ExecuteStateResponse.FinalContextEntry.value:type_name -> sysml.Value
-	0,  // 26: sysml.SysMLService.ParseFile:input_type -> sysml.ParseFileRequest
-	2,  // 27: sysml.SysMLService.GetSymbol:input_type -> sysml.GetSymbolRequest
-	4,  // 28: sysml.SysMLService.GetDiagnostics:input_type -> sysml.DiagnosticsRequest
-	6,  // 29: sysml.SysMLService.Evaluate:input_type -> sysml.EvaluateRequest
-	10, // 30: sysml.SysMLService.Instantiate:input_type -> sysml.InstantiateRequest
-	12, // 31: sysml.SysMLService.ExecuteAction:input_type -> sysml.ExecuteActionRequest
-	14, // 32: sysml.SysMLService.ExecuteState:input_type -> sysml.ExecuteStateRequest
-	1,  // 33: sysml.SysMLService.ParseFile:output_type -> sysml.ParseFileResponse
-	3,  // 34: sysml.SysMLService.GetSymbol:output_type -> sysml.SymbolResponse
-	5,  // 35: sysml.SysMLService.GetDiagnostics:output_type -> sysml.DiagnosticsResponse
-	7,  // 36: sysml.SysMLService.Evaluate:output_type -> sysml.EvaluateResponse
-	11, // 37: sysml.SysMLService.Instantiate:output_type -> sysml.InstantiateResponse
-	13, // 38: sysml.SysMLService.ExecuteAction:output_type -> sysml.ExecuteActionResponse
-	15, // 39: sysml.SysMLService.ExecuteState:output_type -> sysml.ExecuteStateResponse
-	33, // [33:40] is the sub-list for method output_type
-	26, // [26:33] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	8,  // 11: sysml.InstantiateResponse.instances:type_name -> sysml.Instance
+	23, // 12: sysml.ExecuteActionRequest.inputs:type_name -> sysml.ExecuteActionRequest.InputsEntry
+	24, // 13: sysml.ExecuteActionResponse.outputs:type_name -> sysml.ExecuteActionResponse.OutputsEntry
+	20, // 14: sysml.ExecuteActionResponse.diagnostics:type_name -> sysml.Diagnostic
+	25, // 15: sysml.ExecuteStateResponse.final_context:type_name -> sysml.ExecuteStateResponse.FinalContextEntry
+	20, // 16: sysml.ExecuteStateResponse.diagnostics:type_name -> sysml.Diagnostic
+	26, // 17: sysml.SymbolInfo.metadata:type_name -> sysml.SymbolInfo.MetadataEntry
+	17, // 18: sysml.SymbolInfo.attributes:type_name -> sysml.AttributeInfo
+	18, // 19: sysml.AttributeInfo.value:type_name -> sysml.Value
+	19, // 20: sysml.Value.sequence:type_name -> sysml.ValueSequence
+	18, // 21: sysml.ValueSequence.elements:type_name -> sysml.Value
+	21, // 22: sysml.Diagnostic.span:type_name -> sysml.Span
+	9,  // 23: sysml.Instance.SlotsEntry.value:type_name -> sysml.SlotValue
+	18, // 24: sysml.ExecuteActionRequest.InputsEntry.value:type_name -> sysml.Value
+	18, // 25: sysml.ExecuteActionResponse.OutputsEntry.value:type_name -> sysml.Value
+	18, // 26: sysml.ExecuteStateResponse.FinalContextEntry.value:type_name -> sysml.Value
+	0,  // 27: sysml.SysMLService.ParseFile:input_type -> sysml.ParseFileRequest
+	2,  // 28: sysml.SysMLService.GetSymbol:input_type -> sysml.GetSymbolRequest
+	4,  // 29: sysml.SysMLService.GetDiagnostics:input_type -> sysml.DiagnosticsRequest
+	6,  // 30: sysml.SysMLService.Evaluate:input_type -> sysml.EvaluateRequest
+	10, // 31: sysml.SysMLService.Instantiate:input_type -> sysml.InstantiateRequest
+	12, // 32: sysml.SysMLService.ExecuteAction:input_type -> sysml.ExecuteActionRequest
+	14, // 33: sysml.SysMLService.ExecuteState:input_type -> sysml.ExecuteStateRequest
+	1,  // 34: sysml.SysMLService.ParseFile:output_type -> sysml.ParseFileResponse
+	3,  // 35: sysml.SysMLService.GetSymbol:output_type -> sysml.SymbolResponse
+	5,  // 36: sysml.SysMLService.GetDiagnostics:output_type -> sysml.DiagnosticsResponse
+	7,  // 37: sysml.SysMLService.Evaluate:output_type -> sysml.EvaluateResponse
+	11, // 38: sysml.SysMLService.Instantiate:output_type -> sysml.InstantiateResponse
+	13, // 39: sysml.SysMLService.ExecuteAction:output_type -> sysml.ExecuteActionResponse
+	15, // 40: sysml.SysMLService.ExecuteState:output_type -> sysml.ExecuteStateResponse
+	34, // [34:41] is the sub-list for method output_type
+	27, // [27:34] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_sysml_proto_init() }
