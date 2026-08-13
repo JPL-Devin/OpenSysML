@@ -27,7 +27,10 @@ func declaredNames(root *ast.RootNamespace) []string {
 		case *ast.Definition:
 			name = d.Ident.Name
 		case *ast.Usage:
-			name = d.Ident.Name
+			// A usage that declares no name of its own answers to its
+			// reference's or redefinition's, which is the name re-typing it
+			// supersedes (ast.EffectiveName).
+			name, _ = ast.EffectiveName(d)
 		}
 		if name != "" {
 			out = append(out, name)

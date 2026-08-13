@@ -57,7 +57,9 @@ var usageMetaclass = map[ast.UsageKind]string{
 	ast.UsageView:             "ViewUsage",
 	ast.UsageViewpoint:        "ViewpointUsage",
 	ast.UsageRendering:        "RenderingUsage",
+	ast.UsageViewRendering:    "ViewRenderingMembership",
 	ast.UsageConcern:          "ConcernUsage",
+	ast.UsageFramedConcern:    "FramedConcernMembership",
 	ast.UsageConnection:       "ConnectionUsage",
 	ast.UsageConnector:        "ConnectorAsUsage",
 	ast.UsageSuccession:       "SuccessionAsUsage",
@@ -77,6 +79,8 @@ var usageMetaclass = map[ast.UsageKind]string{
 	ast.UsageRequirement:      "RequirementUsage",
 	ast.UsageSatisfy:          "SatisfyRequirementUsage",
 	ast.UsageSubject:          "SubjectMembership",
+	ast.UsageActor:            "ActorMembership",
+	ast.UsageStakeholder:      "StakeholderMembership",
 	ast.UsageObjective:        "ObjectiveMembership",
 	ast.UsageCase:             "CaseUsage",
 	ast.UsageAnalysisCase:     "AnalysisCaseUsage",
@@ -95,6 +99,21 @@ var usageMetaclass = map[ast.UsageKind]string{
 // printer able to reconstruct a declaration head from the metaclass alone.
 func definitionKeyword(kind ast.DefinitionKind) string { return kind.String() }
 func usageKeyword(kind ast.UsageKind) string           { return kind.String() }
+
+// memberDeclarationKeyword gives the kind keyword a member usage states after
+// its own keyword when it declares an element rather than referencing one, or
+// "" for a kind with no such form: `render rendering r : AsTree` declares a
+// rendering where `render r` names one (SysML.xtext ViewRenderingUsage,
+// FramedConcernUsage).
+func memberDeclarationKeyword(kind ast.UsageKind) string {
+	switch kind {
+	case ast.UsageViewRendering:
+		return "rendering"
+	case ast.UsageFramedConcern:
+		return "concern"
+	}
+	return ""
+}
 
 // relationshipProperty maps a declaration-head relationship to its RDF
 // predicate name in the SysML vocabulary.

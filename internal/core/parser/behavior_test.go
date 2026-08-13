@@ -480,18 +480,26 @@ func TestParseRequirementBody_Actor(t *testing.T) {
 		t.Fatalf("expected 1 node, got %d", len(nodes))
 	}
 
-	actor, ok := nodes[0].(*ast.ActorMember)
+	actor, ok := nodes[0].(*ast.Usage)
 	if !ok {
-		t.Errorf("node 0: expected *ast.ActorMember, got %T", nodes[0])
-	} else {
-		if actor.Name != "driver" {
-			t.Errorf("ActorMember.Name: expected 'driver', got '%s'", actor.Name)
-		}
-		if actor.TypeRef == nil {
-			t.Errorf("ActorMember.TypeRef is nil")
-		} else if len(actor.TypeRef.Parts) != 1 || actor.TypeRef.Parts[0].Text != "Driver" {
-			t.Errorf("ActorMember.TypeRef: expected 'Driver', got %+v", actor.TypeRef.Parts)
-		}
+		t.Fatalf("node 0: expected *ast.Usage, got %T", nodes[0])
+	}
+	if actor.Kind != ast.UsageActor {
+		t.Errorf("actor kind: expected UsageActor, got %v", actor.Kind)
+	}
+	if actor.Ident.Name != "driver" {
+		t.Errorf("actor name: expected 'driver', got '%s'", actor.Ident.Name)
+	}
+	if len(actor.Relationships) != 1 {
+		t.Fatalf("actor relationships: expected 1, got %d", len(actor.Relationships))
+	}
+	rel := actor.Relationships[0]
+	if rel.Kind != ast.RelTyping {
+		t.Errorf("actor relationship kind: expected typing, got %v", rel.Kind)
+	}
+	qn, ok := rel.Target.(*ast.QualifiedName)
+	if !ok || len(qn.Parts) != 1 || qn.Parts[0].Text != "Driver" {
+		t.Errorf("actor type: expected 'Driver', got %+v", rel.Target)
 	}
 }
 
@@ -525,8 +533,10 @@ func TestParseRequirementBody_Complete(t *testing.T) {
 	}
 
 	// Check actor
-	if _, ok := nodes[3].(*ast.ActorMember); !ok {
-		t.Errorf("node 3: expected *ast.ActorMember, got %T", nodes[3])
+	if usage, ok := nodes[3].(*ast.Usage); !ok {
+		t.Errorf("node 3: expected *ast.Usage, got %T", nodes[3])
+	} else if usage.Kind != ast.UsageActor {
+		t.Errorf("node 3: expected UsageActor, got %v", usage.Kind)
 	}
 }
 

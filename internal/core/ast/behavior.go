@@ -355,15 +355,6 @@ type RequireMember struct {
 	Body       []Node // nested members: ConstraintMembers for the braced form, requirement members for the named form
 }
 
-// ActorMember represents an actor declaration in a requirement/use case.
-// Syntax: actor <name> : <Type>; OR actor <name> = <expr>;
-type ActorMember struct {
-	NodeBase
-	Name        string
-	TypeRef     *QualifiedName // actor type (for declaration form)
-	BindingExpr Node           // binding expression (for binding form: actor = <expr>;)
-}
-
 // Phase C4: State Body Members
 
 // EntryMember represents entry behavior in a state body.

@@ -131,7 +131,19 @@ const (
 	UsageView
 	UsageViewpoint
 	UsageRendering
+	// UsageViewRendering is the rendering a view body names with `render`
+	// (SysML.xtext ViewRenderingMember/ViewRenderingUsage, SysML v2 §8.3.26): a
+	// RenderingUsage owned by a ViewRenderingMembership, which either references
+	// an existing rendering (`render asTreeDiagram;`) or declares one
+	// (`render rendering r : AsTree;`).
+	UsageViewRendering
 	UsageConcern
+	// UsageFramedConcern is the concern a requirement, concern or viewpoint body
+	// frames with `frame` (SysML.xtext FramedConcernMember/FramedConcernUsage,
+	// SysML v2 §8.3.20): a ConcernUsage owned by a FramedConcernMembership,
+	// either referencing an existing concern (`frame 'system breakdown';`) or
+	// declaring one (`frame concern c : SafetyConcern;`).
+	UsageFramedConcern
 	// Tier B.
 	UsageConnection
 	UsageConnector
@@ -153,6 +165,14 @@ const (
 	UsageRequirement
 	UsageSatisfy // satisfy requirement ... by ...
 	UsageSubject
+	// UsageActor is an actor of a requirement, use case or viewpoint
+	// (SysML.xtext ActorMember/ActorUsage, SysML v2 §8.3.19): a PartUsage owned
+	// by an ActorMembership. The notation declares it; it has no reference form.
+	UsageActor
+	// UsageStakeholder is a stakeholder of a requirement, concern or viewpoint
+	// (SysML.xtext StakeholderMember/StakeholderUsage, SysML v2 §8.3.19): a
+	// PartUsage owned by a StakeholderMembership, declared like an actor.
+	UsageStakeholder
 	UsageObjective
 	UsageCase
 	UsageAnalysisCase
@@ -189,8 +209,12 @@ func (k UsageKind) String() string {
 		return "viewpoint"
 	case UsageRendering:
 		return "rendering"
+	case UsageViewRendering:
+		return "render"
 	case UsageConcern:
 		return "concern"
+	case UsageFramedConcern:
+		return "frame"
 	case UsageConnection:
 		return "connection"
 	case UsageConnector:
@@ -229,6 +253,10 @@ func (k UsageKind) String() string {
 		return "satisfy"
 	case UsageSubject:
 		return "subject"
+	case UsageActor:
+		return "actor"
+	case UsageStakeholder:
+		return "stakeholder"
 	case UsageObjective:
 		return "objective"
 	case UsageCase:

@@ -1711,7 +1711,9 @@ func (e *StateExecutor) executeAction(action ast.Node, scope *symbols.Scope) err
 }
 
 // stateActionName names a state action in diagnostics, falling back to what it
-// references when the usage is anonymous (`entry a.b;`).
+// references when the usage is anonymous (`entry a.b;`). This is deliberately
+// not ast.EffectiveName: a diagnostic names the whole path written, `a.b`,
+// where the effective name is just the feature named, `b`.
 func stateActionName(u *ast.Usage) string {
 	if u.Ident.Name != "" {
 		return u.Ident.Name

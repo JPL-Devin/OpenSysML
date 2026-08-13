@@ -397,10 +397,14 @@ func usageWantsDefKind(k ast.UsageKind) symbols.SymbolKind {
 		return symbols.SymbolViewDef
 	case ast.UsageViewpoint:
 		return symbols.SymbolViewpointDef
-	case ast.UsageRendering:
+	case ast.UsageRendering, ast.UsageViewRendering:
 		return symbols.SymbolRenderingDef
-	case ast.UsageConcern:
+	case ast.UsageConcern, ast.UsageFramedConcern:
 		return symbols.SymbolConcernDef
+	case ast.UsageActor, ast.UsageStakeholder:
+		// An actor and a stakeholder are part usages, so a part definition types
+		// them (SysML v2 §8.3.19).
+		return symbols.SymbolPartDef
 	case ast.UsageConnection:
 		return symbols.SymbolConnectionDef
 	case ast.UsageFlow:

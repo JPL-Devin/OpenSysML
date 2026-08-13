@@ -127,8 +127,6 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 	case *ast.RequireMember:
 		bodyScopesInExpr(scope, d.Expression)
 		buildBodyScopes(scope, d.Body)
-	case *ast.ActorMember:
-		bodyScopesInExpr(scope, d.BindingExpr)
 	case *ast.EntryMember:
 		buildBodyScopes(scope, d.Actions)
 	case *ast.DoMember:

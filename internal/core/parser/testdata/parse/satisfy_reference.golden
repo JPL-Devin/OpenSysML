@@ -2,6 +2,8 @@
   (Membership visibility="default"
     (Package name="SatisfyReference" library=false standard=false
       (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="VehicleSpecification"))
+      (Membership visibility="default"
         (Usage kind="requirement" name="vehicleSpecification" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
       (Membership visibility="default"
         (Usage kind="viewpoint" name="perspective" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
@@ -17,6 +19,12 @@
                 (*ast.QualifiedName))))
           (Membership visibility="default"
             (Usage kind="satisfy" name="viewpointConformance" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="by" target=vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="satisfy" name="conformance" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=VehicleSpecification
+                (*ast.QualifiedName))
               (Relationship kind="by" target=vehicle
                 (*ast.QualifiedName))))))
       (Membership visibility="default"

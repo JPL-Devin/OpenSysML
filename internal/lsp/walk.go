@@ -180,9 +180,6 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	case *ast.RequireMember:
 		c.expr(scope, d.Expression)
 		c.walkMembers(scope, d.Body)
-	case *ast.ActorMember:
-		c.add(scope, d.TypeRef)
-		c.expr(scope, d.BindingExpr)
 	case *ast.EntryMember:
 		c.walkMembers(scope, d.Actions)
 	case *ast.DoMember:

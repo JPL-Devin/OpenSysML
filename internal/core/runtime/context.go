@@ -227,11 +227,12 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
 			what, name, expr, isSubject = "subject", rm.Name, rm.BindingExpr, true
-		case *ast.ActorMember:
-			what, name, expr = "actor", rm.Name, rm.BindingExpr
 		case *ast.Usage:
-			if rm.Kind == ast.UsageSubject {
-				name, isSubject = rm.Ident.Name, true
+			switch rm.Kind {
+			case ast.UsageSubject:
+				name, isSubject = effectiveName(rm), true
+			case ast.UsageActor:
+				what, name, expr = "actor", effectiveName(rm), rm.Value
 			}
 		default:
 			continue
@@ -252,6 +253,13 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		bindings[name] = value
 	}
 	return bindings, nil
+}
+
+// effectiveName is the name a usage answers to, which for a member written as a
+// reference is its reference's rather than a declared one (ast.EffectiveName).
+func effectiveName(u *ast.Usage) string {
+	name, _ := ast.EffectiveName(u)
+	return name
 }
 
 // negatedDecl reports whether sym's declaration asserts that its conditions do
