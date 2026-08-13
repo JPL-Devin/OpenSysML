@@ -145,19 +145,34 @@ elmt:Synonyms::Vehicle::alsoSafe
     sysml:type elmt:Synonyms::Safe ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:Synonyms::AsTree
+    a sysml:RenderingDefinition ;
+    sysml:qualifiedName "Synonyms::AsTree" ;
+    sysml:owningNamespace elmt:Synonyms ;
+    sysx:memberIndex "12"^^xsd:integer ;
+    sysml:declaredName "AsTree" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
 elmt:Synonyms::Dashboard
     a sysml:ViewDefinition ;
     sysml:qualifiedName "Synonyms::Dashboard" ;
     sysml:owningNamespace elmt:Synonyms ;
-    sysx:memberIndex "12"^^xsd:integer ;
+    sysx:memberIndex "13"^^xsd:integer ;
     sysml:declaredName "Dashboard" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Synonyms::Dashboard::display
-    a sysml:AttributeUsage ;
-    sysml:qualifiedName "Synonyms::Dashboard::display" ;
+<urn:sysmlv2:element:Synonyms::Dashboard::@0>
+    a sysml:ViewRenderingMembership ;
+    sysml:qualifiedName "Synonyms::Dashboard::@0" ;
     sysml:owningNamespace elmt:Synonyms::Dashboard ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysml:declaredName "display" ;
-    sysx:declaredKeyword "render" ;
+    sysml:references "display" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:Synonyms::Dashboard::@1>
+    a sysml:ViewRenderingMembership ;
+    sysml:qualifiedName "Synonyms::Dashboard::@1" ;
+    sysml:owningNamespace elmt:Synonyms::Dashboard ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:type elmt:Synonyms::AsTree ;
     sysx:hasBody "false"^^xsd:boolean .

@@ -1527,9 +1527,6 @@ func (p *Parser) parseRequirementMember() ast.Node {
 	if p.acceptKeyword("require") {
 		return p.parseRequireMember(start)
 	}
-	if p.acceptKeyword("actor") {
-		return p.parseActorMember(start)
-	}
 
 	// Try general declaration (nested requirements, features, etc.)
 	if node := p.tryParseDeclaration(); node != nil {
@@ -1836,65 +1833,6 @@ func (p *Parser) parseNestedConstraintConditions() []ast.Node {
 	}
 	p.expect(lexer.RBrace, "expected '}' after constraint body")
 	return conditions
-}
-
-// parseActorMember parses: actor <name> : <Type>; OR actor <name> = <expr>;
-func (p *Parser) parseActorMember(start int) ast.Node {
-	// 'actor' already consumed
-
-	// Expect identifier
-	if !p.at(lexer.Identifier) {
-		p.error(p.peek().Span, "expected identifier after 'actor'")
-		en := &ast.ErrorNode{Message: "expected identifier after 'actor'"}
-		if !p.atEOF() && !p.at(lexer.RBrace) {
-			p.advance()
-		}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-
-	nameToken := p.peek()
-	name := p.src.Text(nameToken.Span)
-	p.advance()
-
-	// Check if followed by '=' (binding form: actor <name> = <expr>;)
-	if p.at(lexer.Eq) {
-		p.advance() // consume '='
-
-		// Parse value expression
-		value := p.ParseExpression()
-
-		// Expect semicolon
-		p.expect(lexer.Semicolon, "expected ';' after actor binding")
-
-		node := &ast.ActorMember{
-			Name:        name,
-			BindingExpr: value,
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
-	}
-
-	// Otherwise expect ':' for typed declaration
-	if !p.at(lexer.Colon) {
-		p.error(p.peek().Span, "expected ':' or '=' after actor name")
-		en := &ast.ErrorNode{Message: "expected ':' or '=' after actor name"}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-	p.advance() // consume ':'
-
-	// Parse type
-	typeRef := p.parseQualifiedName()
-
-	p.expect(lexer.Semicolon, "expected ';' after actor declaration")
-
-	node := &ast.ActorMember{
-		Name:    name,
-		TypeRef: typeRef,
-	}
-	node.NodeSpan = p.spanFrom(start)
-	return node
 }
 
 // Phase C4: State Body Parsing

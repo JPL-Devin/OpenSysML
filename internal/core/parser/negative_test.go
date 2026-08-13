@@ -90,6 +90,22 @@ func TestNegative(t *testing.T) {
 		{"short_name_redefines_no_target", "part p { attribute <sn> redefines; }"},
 		{"short_name_redefines_symbol_no_target", "part p { attribute <sn> :>>; }"},
 		{"short_name_defined_by_no_type", "part p { attribute <sn> defined by ; }"},
+
+		// The notation has no definition of a rendering a view names, of a
+		// concern a body frames, or of a stakeholder or actor: those keywords own
+		// a usage, not a definition (SysML.xtext ViewRenderingUsage,
+		// FramedConcernUsage, StakeholderUsage, ActorUsage). `render ;` and
+		// `frame ;` are absent deliberately: `frame` and `render` are legal
+		// names, so those declare a feature so named rather than being errors.
+		{"render_definition", "view def V { render def R; }"},
+		{"frame_definition", "viewpoint def V { frame def C; }"},
+		{"stakeholder_definition", "stakeholder def Reviewer;"},
+		{"actor_definition", "actor def Operator;"},
+		{"stakeholder_no_declaration", "viewpoint def V { stakeholder ; }"},
+		{"actor_no_declaration", "requirement def R { actor ; }"},
+		// A rendering reference takes no value: ViewRenderingUsage has no
+		// ValuePart, unlike the performed action reference that shares its shape.
+		{"render_reference_value", "view def V { render r = 3; }"},
 	}
 
 	for _, tt := range tests {

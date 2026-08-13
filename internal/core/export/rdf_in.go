@@ -2,6 +2,7 @@ package export
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -366,6 +367,18 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 	if d.boolOf(el, rdf.SysML+"isAll") {
 		words = append(words, "all")
 	}
+	// A `render`/`frame` reference writes its target as a bare name; without one the
+	// member declares a usage, spelling out the kind keyword (SysML.xtext
+	// ViewRenderingUsage, FramedConcernUsage) even when it declares no name.
+	var skip []ast.RelationshipKind
+	if noun := memberDeclarationKeyword(kind); noun != "" {
+		if targets := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences]); len(targets) > 0 {
+			words = append(words, strings.Join(targets, ", "))
+			skip = append(skip, ast.RelReferences)
+		} else {
+			words = append(words, noun)
+		}
+	}
 	words = append(words, d.identWords(el)...)
 	// The accept shorthand writes its parameter into the head, ahead of the
 	// `via` clause the parent's relationships supply.
@@ -374,7 +387,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 		words = append(words, d.identWords(accept)...)
 		words = append(words, d.relationshipWords(accept)...)
 	}
-	words = append(words, d.relationshipWords(el)...)
+	words = append(words, d.relationshipWords(el, skip...)...)
 	// A multiplicity binds to the name or type it follows, with no space
 	// before the bracket.
 	head := strings.Join(words, " ") + d.multiplicityText(el)
@@ -572,9 +585,12 @@ func (d *decoder) visibility(el *element) string {
 
 // relationshipWords renders the typing and specialization clauses of a
 // declaration head, in the order the grammar expects.
-func (d *decoder) relationshipWords(el *element) []string {
+func (d *decoder) relationshipWords(el *element, skip ...ast.RelationshipKind) []string {
 	var words []string
 	for _, kind := range relationshipOrder {
+		if slices.Contains(skip, kind) {
+			continue
+		}
 		targets := d.referenceList(el, rdf.SysML+relationshipProperty[kind])
 		if len(targets) == 0 {
 			continue

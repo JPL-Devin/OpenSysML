@@ -184,11 +184,6 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	case *ast.RequireMember:
 		r.resolveExpr(scope, d.Expression)
 		r.walkMembers(scope, d.Body)
-	case *ast.ActorMember:
-		if d.TypeRef != nil {
-			r.ResolveQualified(scope, d.TypeRef)
-		}
-		r.resolveExpr(scope, d.BindingExpr)
 	case *ast.EntryMember:
 		r.walkMembers(scope, d.Actions)
 	case *ast.DoMember:
@@ -334,7 +329,8 @@ func parameterizedByName(sym *symbols.Symbol) bool {
 	case *ast.Usage:
 		switch decl.Kind {
 		case ast.UsageRequirement, ast.UsageSatisfy, ast.UsageConcern,
-			ast.UsageViewpoint, ast.UsageCase, ast.UsageAnalysisCase,
+			ast.UsageFramedConcern, ast.UsageViewpoint,
+			ast.UsageCase, ast.UsageAnalysisCase,
 			ast.UsageVerificationCase, ast.UsageUseCase:
 			return true
 		}

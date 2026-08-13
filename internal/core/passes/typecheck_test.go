@@ -127,6 +127,52 @@ func TestTypeCheckSatisfyNonRequirementUsageError(t *testing.T) {
 	}
 }
 
+// The declaration form is a requirement usage, so a requirement definition —
+// or a concern or viewpoint definition, which are requirement definitions —
+// types it. This is the whole parser fixture parse/satisfy_reference.sysml at
+// the tier the typing is judged, since a parser golden cannot see it.
+func TestTypeCheckSatisfyDeclarationTypedByRequirementDefOK(t *testing.T) {
+	src := `
+		package SatisfyReference {
+			requirement def VehicleSpecification;
+			requirement vehicleSpecification;
+			viewpoint perspective;
+			part vehicle;
+
+			part context {
+				satisfy vehicleSpecification by vehicle;
+				satisfy requirement viewpointConformance by vehicle;
+				satisfy requirement conformance : VehicleSpecification by vehicle;
+			}
+
+			view def StructureView {
+				satisfy perspective;
+			}
+		}
+	`
+	if diags := typeDiags(t, src); len(diags) != 0 {
+		t.Fatalf("expected no type diagnostics, got %v", diags)
+	}
+}
+
+// Typing the declaration form with something that is not a requirement
+// definition stays an error.
+func TestTypeCheckSatisfyDeclarationTypedByPartDefError(t *testing.T) {
+	src := `
+		package P {
+			part def Vehicle;
+			part vehicle;
+			part ctx {
+				satisfy requirement r : Vehicle by vehicle;
+			}
+		}
+	`
+	diags := typeDiags(t, src)
+	if len(diags) != 1 {
+		t.Fatalf("expected one type diagnostic, got %v", diags)
+	}
+}
+
 // An alias for a requirement usage is a legal satisfy target.
 func TestTypeCheckSatisfyAliasOfRequirementUsageOK(t *testing.T) {
 	src := `

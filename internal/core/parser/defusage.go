@@ -124,9 +124,9 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"allocation":  ast.UsageAllocation,
 	"allocate":    ast.UsageAllocation, // Short form for allocation usage
 	"binding":     ast.UsageBinding,
-	"actor":       ast.UsageAttribute, // Use case actor
-	"render":      ast.UsageAttribute, // View rendering
-	"bind":        ast.UsageBinding,   // shorthand for binding
+	"actor":       ast.UsageActor,         // actor of a requirement, use case or viewpoint
+	"render":      ast.UsageViewRendering, // rendering a view body names
+	"bind":        ast.UsageBinding,       // shorthand for binding
 	// Tier C.
 	"action":       ast.UsageAction,
 	"perform":      ast.UsageAction, // perform keyword creates action usage
@@ -148,8 +148,8 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"include":      ast.UsageUseCase, // include creates use case usage with includes relationship
 	"subject":      ast.UsageSubject,
 	"objective":    ast.UsageObjective,
-	"stakeholder":  ast.UsageAttribute, // stakeholder in viewpoints/concerns
-	"frame":        ast.UsageAttribute, // frame in viewpoints/views
+	"stakeholder":  ast.UsageStakeholder,
+	"frame":        ast.UsageFramedConcern,
 	"case":         ast.UsageCase,
 	"analysis":     ast.UsageAnalysisCase,
 	"verification": ast.UsageVerificationCase,
@@ -612,12 +612,39 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parsePerformedActionReference(start, mods, "perform"))
 		}
 
+		// A member keyword can also be an ordinary name: KerML has no `frame` or
+		// `render` keyword, and the Kernel Semantic Library writes `in frame :
+		// SpatialFrame[1]`. Read the keyword as the declaration's own name
+		// unless what follows can begin the member form.
+		if (kw == "frame" || kw == "render") && !p.atMemberKeywordUsedAsKeyword(kw) {
+			return applyPrefixes(p.parseUsage(start, ast.UsageAttribute, "", mods, false))
+		}
+
 		p.advance() // consume the kind keyword
 		// `snapshot s` is an occurrence usage whose portionKind is snapshot.
 		if kw == "snapshot" {
 			mods.isSnapshot = true
 		}
 		isAll := p.acceptKeyword("all")
+
+		// `render` names the rendering a view uses (ViewRenderingMember) and
+		// `frame` the concern a requirement frames (FramedConcernMember). Each
+		// owns a usage that either references an existing element —
+		// `render asTreeDiagram;`, `frame 'system breakdown';` — or declares one
+		// after the kind keyword the notation spells out, `render rendering r`
+		// and `frame concern c` (SysML.xtext ViewRenderingUsage,
+		// FramedConcernUsage; SysML v2 §8.3.20, §8.3.26). Only the declaration
+		// form states a name.
+		if kw == "render" || kw == "frame" {
+			declKeyword, noun, body := "rendering", "rendering", p.parseDefUsageBodyMembers
+			if kw == "frame" {
+				declKeyword, noun, body = "concern", "concern", p.parseRequirementBody
+			}
+			if p.acceptKeyword(declKeyword) {
+				return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], kw, mods, isAll))
+			}
+			return applyPrefixes(p.parseReferenceMemberUsage(start, usageKindKeywords[kw], kw, noun, mods, body, false))
+		}
 
 		// Special case: include use case <name> (full form)
 		// If include is followed by "use case", consume them and parse as use case with includes relationship
@@ -1145,22 +1172,29 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	// Full form: satisfy [requirement] <name> by <name> { body }
 	// Short form: satisfy/verify <name>;
 	if kind == ast.UsageSatisfy {
-		// Per SatisfyRequirementUsage: without the `requirement` keyword the name is
-		// a reference subsetting of an existing requirement usage, not a typing;
-		// with the keyword it declares a new requirement usage.
-		declaresRequirement := p.acceptKeyword("requirement")
-
-		reqName := p.parseQualifiedName()
-		if reqName != nil {
-			if declaresRequirement && len(reqName.Parts) == 1 {
-				u.Ident.Name = reqName.Parts[0].Text
-				u.Ident.NameSpan = reqName.Parts[0].Span
-			} else {
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelSubsets,
-					Target: reqName,
-				})
+		// The declaration form is a full UsageDeclaration, so it may state a
+		// type as well as a name (`satisfy requirement r : Req1 by v;`), while
+		// the reference form names an existing requirement usage and declares
+		// nothing.
+		if p.acceptKeyword("requirement") {
+			// The UsageDeclaration is optional, and `by` introduces the subject
+			// rather than naming the satisfaction (`satisfy requirement by v;`).
+			if !p.atKeyword("by") {
+				u.Ident = p.parseUsageIdentification(kind)
 			}
+			declRels, conjugated := p.parseRelationships(true)
+			u.Relationships = append(u.Relationships, declRels...)
+			u.IsConjugated = conjugated
+		} else if reqName := p.parseQualifiedName(); reqName != nil {
+			u.Relationships = append(u.Relationships, &ast.Relationship{
+				Kind:   ast.RelSubsets,
+				Target: reqName,
+			})
+		}
+
+		// ValuePart? — a satisfy usage may bind a value like any usage.
+		if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
+			u.Value = p.ParseExpression()
 		}
 
 		// Check for optional "by" clause. Per SatisfyRequirementUsage the `by`
@@ -1444,10 +1478,12 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		} else {
 			p.expect(lexer.LBrace, "expected '{' or ';'")
 		}
-	case ast.UsageRequirement, ast.UsageConcern, ast.UsageViewpoint:
+	case ast.UsageRequirement, ast.UsageConcern, ast.UsageViewpoint, ast.UsageFramedConcern:
 		// Requirement bodies: { subject/assume/require/actor ... }. A concern
 		// usage is a requirement usage and a viewpoint usage a concern usage
-		// (SysML v2 §7.19), so they carry the same members.
+		// (SysML v2 §7.19), so they carry the same members; a framed concern is
+		// a concern usage and its declaration form ends in a RequirementBody
+		// (SysML.xtext FramedConcernUsage).
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
@@ -1489,6 +1525,12 @@ func (p *Parser) parseDefUsageBody() (members []ast.Node, hasBody bool) {
 	if _, ok := p.expect(lexer.LBrace, "expected '{' or ';' after declaration"); !ok {
 		return nil, false
 	}
+	return p.parseDefUsageBodyMembers(), true
+}
+
+// parseDefUsageBodyMembers parses the members of a definition/usage body up to
+// and including its closing brace, with the opening brace already consumed.
+func (p *Parser) parseDefUsageBodyMembers() []ast.Node {
 	body := p.newBodyBuilder()
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
@@ -1512,7 +1554,7 @@ func (p *Parser) parseDefUsageBody() (members []ast.Node, hasBody bool) {
 		}
 	}
 	p.expect(lexer.RBrace, "expected '}' to close body")
-	return body.finish(), true
+	return body.finish()
 }
 
 // parseBodyMember parses one body member: an optional visibility prefix
@@ -2389,7 +2431,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" ||
 		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "verify" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint" ||
 		p.peek().KeywordID == "interaction" || p.peek().KeywordID == "bool" || p.peek().KeywordID == "assoc" || p.peek().KeywordID == "struct" ||
-		p.peek().KeywordID == "class" || p.peek().KeywordID == "predicate")
+		p.peek().KeywordID == "class" || p.peek().KeywordID == "predicate" ||
+		// A view or viewpoint member keyword names no literal either: `render;`
+		// and `frame;` are members missing the reference they are written with
+		// (ViewRenderingUsage, FramedConcernUsage), diagnosed as such.
+		p.peek().KeywordID == "render" || p.peek().KeywordID == "frame" ||
+		p.peek().KeywordID == "stakeholder" || p.peek().KeywordID == "actor")
 	// A relationship keyword is not a literal's name either: `redefines;` and
 	// `redefines = 5;` are specializations missing their target, diagnosed as
 	// such, exactly as `:>>;` and `:>> = 5;` are.
@@ -2511,8 +2558,48 @@ func (p *Parser) noBodyMemberMessage() string {
 // that introduced it is already consumed; kw carries it for errors and to record
 // which synonym was written.
 func (p *Parser) parsePerformedActionReference(start int, mods featureMods, kw string) *ast.Usage {
+	return p.parseReferenceMemberUsage(start, ast.UsageAction, kw, "action", mods, p.parseActionBodyMixed, true)
+}
+
+// atMemberKeywordUsedAsKeyword reports whether the `frame` or `render` token at
+// the cursor introduces a member rather than being the name of the declaration
+// it starts. Both member forms continue with the referenced name or with the
+// notation's own kind keyword (SysML.xtext ViewRenderingUsage,
+// FramedConcernUsage), so anything else — a multiplicity, a specialization, a
+// type, a body — can only follow a name, and `frame` and `render` are legal
+// names in KerML.
+func (p *Parser) atMemberKeywordUsedAsKeyword(kw string) bool {
+	next := p.peekN(1)
+	switch next.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
+		return true
+	case lexer.Keyword:
+		if kw == "frame" {
+			return next.KeywordID == "concern"
+		}
+		return next.KeywordID == "rendering"
+	}
+	return false
+}
+
+// parseReferenceMemberUsage parses the reference form that SysML.xtext spells
+// `ownedRelationship += OwnedReferenceSubsetting FeatureSpecializationPart?
+// ValuePart?` followed by the member's body: a performed action
+// (PerformActionUsageDeclaration), the rendering a view names
+// (ViewRenderingUsage) and the concern a requirement frames
+// (FramedConcernUsage) are all written that way. Such a member names an
+// existing feature and declares no name of its own, so the reference is
+// recorded as a ReferenceSubsetting and the identification left empty; the name
+// the member answers to is its reference's (KerML 7.3.4.5, ast.EffectiveName).
+//
+// The introducing keyword is already consumed; kw records which synonym was
+// written, noun names the referenced element in diagnostics, parseBody parses
+// the body members once '{' is consumed, and allowValue states whether the
+// notation admits a `ValuePart`: a performed action does, the rendering a view
+// names and the concern a requirement frames do not.
+func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, noun string, mods featureMods, parseBody func() []ast.Node, allowValue bool) *ast.Usage {
 	u := &ast.Usage{
-		Kind:        ast.UsageAction,
+		Kind:        kind,
 		Keyword:     kw,
 		IsAbstract:  mods.isAbstract,
 		IsReference: mods.isReference,
@@ -2530,7 +2617,7 @@ func (p *Parser) parsePerformedActionReference(start int, mods featureMods, kw s
 			Target: target,
 		})
 	} else {
-		p.error(p.peek().Span, fmt.Sprintf("expected an action reference after '%s'", kw))
+		p.error(p.peek().Span, fmt.Sprintf("expected a %s reference after '%s'", noun, kw))
 	}
 
 	// FeatureSpecializationPart? ValuePart?
@@ -2540,7 +2627,7 @@ func (p *Parser) parsePerformedActionReference(start int, mods featureMods, kw s
 	specRels, conjugated := p.parseRelationships(true)
 	u.Relationships = append(u.Relationships, specRels...)
 	u.IsConjugated = conjugated
-	if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
+	if allowValue && (p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default")) {
 		u.Value = p.ParseExpression()
 	}
 
@@ -2549,10 +2636,10 @@ func (p *Parser) parsePerformedActionReference(start int, mods featureMods, kw s
 		u.HasBody = false
 	case p.at(lexer.LBrace):
 		p.advance()
-		u.Members = p.parseActionBodyMixed()
+		u.Members = parseBody()
 		u.HasBody = true
 	case target != nil:
-		p.error(p.peek().Span, fmt.Sprintf("expected ';' or '{' after '%s' action reference", kw))
+		p.error(p.peek().Span, fmt.Sprintf("expected ';' or '{' after '%s' %s reference", kw, noun))
 	}
 
 	u.NodeSpan = p.spanFrom(start)

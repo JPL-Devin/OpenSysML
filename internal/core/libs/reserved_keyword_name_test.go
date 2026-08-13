@@ -21,6 +21,10 @@ func TestStdlibReservedKeywordNames(t *testing.T) {
 	want := []string{
 		`Domain Libraries/Metadata/ImageMetadata.sysml: "type"`,
 		`Domain Libraries/Quantities and Units/ISQChemistryMolecular.sysml: "multiplicity"`,
+		// KerML has no `frame` keyword, so the Kernel Semantic Library writes
+		// `in frame : SpatialFrame[1]`. The name is read and warned about here
+		// rather than dropped, which is what it used to be.
+		`Kernel Libraries/Kernel Semantic Library/SpatialFrames.kerml: "frame"`,
 		`Kernel Libraries/Kernel Semantic Library/StatePerformances.kerml: "entry"`,
 		`Kernel Libraries/Kernel Semantic Library/StatePerformances.kerml: "exit"`,
 		`Kernel Libraries/Kernel Semantic Library/TransitionPerformances.kerml: "accept"`,
