@@ -127,6 +127,17 @@ func (shape *calcShape) output(name string) (calcOutput, bool) {
 	return calcOutput{}, false
 }
 
+// bindsOwnOutput reports whether the usage itself binds one of the outputs read
+// from it, whose value the environment reading the usage answers.
+func (shape *calcShape) bindsOwnOutput() bool {
+	for _, out := range shape.Outputs {
+		if out.Value != nil && out.Owner == shape.Sym {
+			return true
+		}
+	}
+	return false
+}
+
 // outputNames renders the output features the calc declares, for a diagnostic
 // about one it does not.
 func (shape *calcShape) outputNames() string {
@@ -174,18 +185,34 @@ func (shape *calcShape) designatedOutput() (calcOutput, error) {
 			names = append(names, out.Name)
 		}
 		return calcOutput{}, fmt.Errorf(
-			"%w: calc %s computes %d output features (%s) and designates no result; declare a calc usage of it and read the outputs as features",
-			ErrAmbiguousResult, shape.Name, len(valued), strings.Join(names, ", "),
+			"%w: calc %s computes %d output features (%s) and designates no result; read them from a calc usage instead: %s",
+			ErrAmbiguousResult, shape.Name, len(valued), strings.Join(names, ", "), shape.usageSpelling(valued[0].Name),
 		)
 	}
 }
 
-// calcUsageKey identifies one evaluation of one calc usage: the usage and the
-// object whose state it reads, so two objects carrying the same usage do not
-// share the values computed for either.
+// usageSpelling writes the calc usage a modeler declares to read the outputs of
+// a calc that designates no result, with the inputs it has to bind.
+func (shape *calcShape) usageSpelling(output string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "calc c : %s {", shape.Name)
+	for _, param := range shape.Params {
+		fmt.Fprintf(&b, " in %s = ...;", param.Name)
+	}
+	fmt.Fprintf(&b, " } then read c.%s", output)
+	return b.String()
+}
+
+// calcUsageKey identifies one evaluation of one calc usage: the usage, the
+// object whose state it reads, and the values its inputs bound to, so neither
+// two objects nor two enclosing invocations share the values computed for one.
+// outer holds the enclosing bindings as well for a usage binding an output of
+// its own, which is evaluated in them rather than from the inputs alone.
 type calcUsageKey struct {
 	sym      *symbols.Symbol
 	instance int64
+	inputs   string
+	outer    string
 }
 
 // calcRun is one evaluation of a calc: the environment its computation left
@@ -193,10 +220,13 @@ type calcUsageKey struct {
 // the run is created, so reading several outputs of a calc usage does not run
 // its body again.
 type calcRun struct {
-	shape  *calcShape
-	scope  *symbols.Scope // scope of whoever reads the usage, for a calc that owns none
-	self   *Instance      // object the usage is a feature of, nil when unbound
-	env    map[string]Value
+	shape *calcShape
+	scope *symbols.Scope // scope of whoever reads the usage, for a calc that owns none
+	self  *Instance      // object the usage is a feature of, nil when unbound
+	env   map[string]Value
+	// outer is the environment of the evaluation reading the usage, for a usage
+	// nested in a calc: the bindings the usage itself declares are written there.
+	outer  *EvalContext
 	result Value
 	// returned reports whether the computation returned a value, which a calc
 	// whose outputs are all features does not.
@@ -206,6 +236,9 @@ type calcRun struct {
 	// output written in terms of itself is reported as a cycle rather than
 	// evaluated until the step budget runs out.
 	computing map[string]bool
+	// onStack reports whether this evaluation already holds a nesting slot, so
+	// the outputs of it that name each other do not count a level apiece.
+	onStack bool
 }
 
 // newCalcRun holds the environment one evaluation of a calc computed.
@@ -235,7 +268,7 @@ type CalcOutputValue struct {
 func (ctx *Context) CalcUsageOutput(sym *symbols.Symbol, name string, scope *symbols.Scope, self *Instance) (Value, error) {
 	defer ctx.beginRun()()
 
-	run, err := ctx.calcUsageRun(sym, scope, self)
+	run, err := ctx.calcUsageRun(NewEvalContextIn(ctx, scope, self), sym)
 	if err != nil {
 		return Value{}, err
 	}
@@ -247,7 +280,7 @@ func (ctx *Context) CalcUsageOutput(sym *symbols.Symbol, name string, scope *sym
 func (ctx *Context) CalcUsageOutputs(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) ([]CalcOutputValue, error) {
 	defer ctx.beginRun()()
 
-	run, err := ctx.calcUsageRun(sym, scope, self)
+	run, err := ctx.calcUsageRun(NewEvalContextIn(ctx, scope, self), sym)
 	if err != nil {
 		return nil, err
 	}
@@ -266,25 +299,17 @@ func (ctx *Context) CalcUsageOutputs(sym *symbols.Symbol, scope *symbols.Scope, 
 }
 
 // calcUsageRun returns the evaluation of a calc usage that the values read from
-// it come from, running its body the first time it is needed. The run is
-// memoized per usage and object for the current run of the context, so two
-// outputs read from one usage answer from one execution while a later run
-// recomputes them against whatever state it finds.
-func (ctx *Context) calcUsageRun(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (*calcRun, error) {
+// it come from, running its body the first time it is needed. reader is the
+// evaluation reading the usage, whose environment the usage's own input
+// bindings are evaluated in. The run is memoized per usage, object and bound
+// inputs for the current run of the context, so two outputs read from one usage
+// answer from one execution while a different set of inputs gets its own.
+func (ctx *Context) calcUsageRun(reader *EvalContext, sym *symbols.Symbol) (*calcRun, error) {
 	if !isCalcUsageSymbol(sym) {
 		return nil, fmt.Errorf(
 			"%w: %s does not evaluate output features", ErrNotACalcUsage, ctx.qualifiedSymbolName(sym),
 		)
 	}
-
-	key := calcUsageKey{sym: sym}
-	if self != nil {
-		key.instance = self.ID
-	}
-	if run, ok := ctx.calcUsageRuns[key]; ok {
-		return run, nil
-	}
-
 	if err := ctx.checkCalcTyping(sym); err != nil {
 		return nil, err
 	}
@@ -292,12 +317,82 @@ func (ctx *Context) calcUsageRun(sym *symbols.Symbol, scope *symbols.Scope, self
 	if err != nil {
 		return nil, err
 	}
-	run, err := ctx.runCalcUsage(shape, scope, self)
+
+	leave, err := ctx.enterCalc(shape.Name)
+	if err != nil {
+		return nil, err
+	}
+	defer leave()
+
+	ec, nested, env, err := ctx.bindCalcUsage(shape, reader)
+	if err != nil {
+		return nil, err
+	}
+
+	key := calcUsageKey{sym: sym, inputs: calcInputsKey(shape, env)}
+	if reader.self != nil {
+		key.instance = reader.self.ID
+	}
+	if shape.bindsOwnOutput() {
+		key.outer = calcEnvKey(reader)
+	}
+	// The inputs are bound before the key is known, so a usage read again with
+	// the same inputs answers from the run it already has. A calc is pure, so
+	// evaluating its input bindings a second time observes nothing.
+	if run, ok := ctx.calcUsageRuns[key]; ok {
+		if ec.trace != nil {
+			ec.trace.RecordCalcUsageReuse(shape.Name)
+		}
+		return run, nil
+	}
+
+	run, err := ctx.runCalcUsage(shape, ec, nested, env, reader)
 	if err != nil {
 		return nil, err
 	}
 	ctx.calcUsageRuns[key] = run
 	return run, nil
+}
+
+// bindCalcUsage binds a calc usage's inputs, answering with the environment the
+// usage's body runs in, the environment reading it (null unless it is nested in
+// a calc), and the bindings themselves.
+func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext) (*EvalContext, *EvalContext, map[string]Value, error) {
+	ec := NewEvalContextIn(ctx, ctx.calcScope(shape.BodyOwner, shape.Sym, reader.scope), reader.self)
+	if ec.trace != nil {
+		ec.trace.RecordCalcEnter(shape.Name)
+	}
+
+	env := make(map[string]Value, len(shape.Params))
+	ec.Push(env)
+
+	// A usage declared among a calc's members is written in that calc's body, so
+	// its own bindings see the parameters and locals of the evaluation reading it,
+	// and none of the inputs being bound here, so every input resolves names in
+	// the enclosing environment alike.
+	var nested *EvalContext
+	if enclosedByCalc(shape.Sym) {
+		nested = reader.nestedEnv(ctx.calcScope(shape.Sym, shape.Sym, reader.scope))
+	}
+
+	// A usage passes no arguments: every input binds from the value the usage or
+	// its definition declares for it.
+	if err := ctx.bindCalcParameters(shape, ec, calcArgs{}, reader.scope, env, nested); err != nil {
+		if ec.trace != nil {
+			ec.trace.RecordCalcExitError(shape.Name, err)
+		}
+		return nil, nil, nil, err
+	}
+	return ec, nested, env, nil
+}
+
+// enclosedByCalc reports whether sym is declared among a calc's members, at any
+// depth of usages, rather than in a part or a package.
+func enclosedByCalc(sym *symbols.Symbol) bool {
+	if sym == nil || sym.OwnerScope == nil {
+		return false
+	}
+	return isCalcSymbol(sym.OwnerScope.Owner())
 }
 
 // checkCalcTyping rejects a calc usage typed by something that is not a calc: it
@@ -316,36 +411,12 @@ func (ctx *Context) checkCalcTyping(sym *symbols.Symbol) error {
 	return nil
 }
 
-// runCalcUsage binds a calc usage's inputs and runs its computation once,
+// runCalcUsage runs a calc usage's computation once over its bound inputs,
 // keeping the environment the computation ends with so the usage's outputs can
 // be evaluated against it.
-func (ctx *Context) runCalcUsage(shape *calcShape, scope *symbols.Scope, self *Instance) (*calcRun, error) {
-	if ctx.calcDepth >= maxCalcNestingDepth {
-		return nil, fmt.Errorf(
-			"%w: calc %s nested more than %d deep (recursive calc?)",
-			ErrCalcRecursionLimit, shape.Name, maxCalcNestingDepth,
-		)
-	}
-	ctx.calcDepth++
-	defer func() { ctx.calcDepth-- }()
-
-	ec := NewEvalContextIn(ctx, ctx.calcScope(shape.BodyOwner, shape.Sym, scope), self)
-	if ec.trace != nil {
-		ec.trace.RecordCalcEnter(shape.Name)
-	}
-
-	env := make(map[string]Value, len(shape.Params))
-	ec.Push(env)
-
-	// A usage passes no arguments: every input binds from the value the usage or
-	// its definition declares for it.
-	if err := ctx.bindCalcParameters(shape, ec, calcArgs{}, scope, env); err != nil {
-		if ec.trace != nil {
-			ec.trace.RecordCalcExitError(shape.Name, err)
-		}
-		return nil, err
-	}
-
+func (ctx *Context) runCalcUsage(
+	shape *calcShape, ec, nested *EvalContext, env map[string]Value, reader *EvalContext,
+) (*calcRun, error) {
 	result, returned, err := ctx.runCalcSteps(shape, env)
 	if err != nil {
 		if ec.trace != nil {
@@ -361,8 +432,8 @@ func (ctx *Context) runCalcUsage(shape *calcShape, scope *symbols.Scope, self *I
 		}
 	}
 
-	run := newCalcRun(shape, scope, self, env)
-	run.result, run.returned = result, returned
+	run := newCalcRun(shape, reader.scope, reader.self, env)
+	run.outer, run.result, run.returned = nested, result, returned
 	// A computation that returned has produced the calc's designated output, so
 	// reading that output by name answers from the run rather than evaluating
 	// the same expression again.
@@ -419,11 +490,15 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 	run.computing[out.Name] = true
 	defer delete(run.computing, out.Name)
 
-	ec := NewEvalContextIn(ctx, ctx.calcScope(out.Owner, run.shape.Sym, run.scope), run.self)
-	ec.Push(run.env)
-	ec.calcRun = run
+	// An output is evaluated after the run that produced it has left the stack,
+	// so the chain of usages a binding reads through is counted here.
+	leave, err := run.enter(ctx)
+	if err != nil {
+		return Value{}, err
+	}
+	defer leave()
 
-	value, err := ec.Eval(out.Value)
+	value, err := run.bindingEnv(ctx, out.Owner).Eval(out.Value)
 	if err != nil {
 		return Value{}, fmt.Errorf("calc %s: output %s: %w", run.shape.Name, run.outputDescription(out), err)
 	}
@@ -431,6 +506,35 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 		run.outputs[out.Name] = value
 	}
 	return value, nil
+}
+
+// enter counts this evaluation onto the calc stack while one of its outputs is
+// worked out, unless it is counted already — by the invocation running it, or by
+// an output of the same run whose binding named this one.
+func (run *calcRun) enter(ctx *Context) (func(), error) {
+	if run.onStack {
+		return func() {}, nil
+	}
+	leave, err := ctx.enterCalc(run.shape.Name)
+	if err != nil {
+		return nil, err
+	}
+	run.onStack = true
+	return func() { run.onStack = false; leave() }, nil
+}
+
+// bindingEnv is the environment one of this run's bindings is evaluated in: the
+// calc's own, over the environment reading the usage for a binding the usage
+// itself declares, which is written in the enclosing calc's body.
+func (run *calcRun) bindingEnv(ctx *Context, owner *symbols.Symbol) *EvalContext {
+	scope := ctx.calcScope(owner, run.shape.Sym, run.scope)
+	ec := NewEvalContextIn(ctx, scope, run.self)
+	if run.outer != nil && owner == run.shape.Sym {
+		ec = run.outer.nestedEnv(scope)
+	}
+	ec.Push(run.env)
+	ec.calcRun = run
+	return ec
 }
 
 // outputDescription names an output for a diagnostic, saying what an anonymous
@@ -478,7 +582,7 @@ func (ec *EvalContext) evalCalcUsageMembers(sym *symbols.Symbol, parts []ast.Nam
 	if len(parts) == 0 {
 		return Value{}, fmt.Errorf("empty member chain")
 	}
-	run, err := ec.ctx.calcUsageRun(sym, ec.scope, ec.self)
+	run, err := ec.ctx.calcUsageRun(ec, sym)
 	if err != nil {
 		return Value{}, err
 	}
