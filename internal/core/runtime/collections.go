@@ -541,13 +541,16 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
+	// The mapper returns `Anything[0..*]`, so a mapper answering several values
+	// contributes them all: the collected sequence is flat, as every KerML
+	// sequence is.
 	var mapped []Value
 	for _, elem := range elementsOf(args[0]) {
 		val, err := ec.applyBody(body, elem)
 		if err != nil {
 			return Value{}, err
 		}
-		mapped = append(mapped, val)
+		mapped = append(mapped, elementsOf(val)...)
 	}
 	return sequenceOf(mapped), nil
 }

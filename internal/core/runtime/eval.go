@@ -836,7 +836,10 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 	}
 }
 
-// evalSequenceExpr evaluates a sequence expression (1, 2, 3).
+// evalSequenceExpr evaluates a sequence expression, `(1, 2, 3)`. A KerML
+// sequence is flat: an element that is itself a collection contributes its
+// elements, which is what makes SequenceFunctions::union the sequence
+// expression `(seq1, seq2)` rather than a two-element sequence of sequences.
 func (ec *EvalContext) evalSequenceExpr(n *ast.SequenceExpr) (Value, error) {
 	seq := NewSequence()
 	for _, elem := range n.Elements {
@@ -844,7 +847,9 @@ func (ec *EvalContext) evalSequenceExpr(n *ast.SequenceExpr) (Value, error) {
 		if err != nil {
 			return Value{}, err
 		}
-		seq.Append(val)
+		for _, e := range elementsOf(val) {
+			seq.Append(e)
+		}
 	}
 	return Value{Kind: ValSequence, Sequence: seq}, nil
 }

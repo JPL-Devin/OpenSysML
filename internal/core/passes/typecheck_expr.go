@@ -194,17 +194,45 @@ func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semant
 	// notation counting from 1, and any index beyond a sequence written out.
 	if lit, ok := e.Index.(*ast.LiteralInteger); ok {
 		if written, err := strconv.ParseInt(lit.Value, 10, 64); err == nil {
-			seq, isSeq := e.Operand.(*ast.SequenceExpr)
+			length, known := int64(0), false
+			if seq, isSeq := e.Operand.(*ast.SequenceExpr); isSeq {
+				length, known = writtenLength(seq)
+			}
 			switch {
 			case written == 0:
 				ec.errorf(lit.Span(), "sequence index counts from 1, found 0")
-			case isSeq && written > int64(len(seq.Elements)):
-				ec.errorf(lit.Span(), "sequence index %d is outside 1..%d", written, len(seq.Elements))
+			case known && written > length:
+				ec.errorf(lit.Span(), "sequence index %d is outside 1..%d", written, length)
 			}
 		}
 	}
 
 	return elem
+}
+
+// writtenLength answers how many elements a sequence expression holds, and
+// whether that is knowable at all: a KerML sequence is flat, so an element that
+// is itself multi-valued contributes its own elements and the length is known
+// only from the values.
+func writtenLength(seq *ast.SequenceExpr) (int64, bool) {
+	for _, el := range seq.Elements {
+		if !isSingleValued(el) {
+			return 0, false
+		}
+	}
+	return int64(len(seq.Elements)), true
+}
+
+// isSingleValued reports whether an expression written as a sequence element is
+// one value whatever the model holds — a literal is, a name or a call may be a
+// collection.
+func isSingleValued(el ast.Node) bool {
+	switch el.(type) {
+	case *ast.LiteralInteger, *ast.LiteralReal, *ast.LiteralString, *ast.LiteralBool:
+		return true
+	default:
+		return false
+	}
 }
 
 // commonElementType returns the scalar type every element of a sequence
