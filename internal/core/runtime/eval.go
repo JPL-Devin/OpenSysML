@@ -891,6 +891,15 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	// Build qualified name string for builtin lookup
 	qualName := qualifiedNameToString(n.Type)
 
+	// A receiver binds by position, so it has no meaning beside arguments that
+	// bind by name: reported rather than evaluated and dropped.
+	if n.Operand != nil && len(n.NamedArgs) > 0 {
+		return Value{}, fmt.Errorf(
+			"%w: %s is called with a receiver and named arguments",
+			ErrReceiverWithNamedArgs, qualName,
+		)
+	}
+
 	// Eval args in source order. An operand is the first argument of the
 	// invocation it is written before: `seq->size()` invokes size with seq, which
 	// is how the semantics layer reads the same expression (passes/

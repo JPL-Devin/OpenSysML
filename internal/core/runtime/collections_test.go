@@ -322,12 +322,44 @@ func TestCollectionOperationErrors(t *testing.T) {
 		{"()->minimize {in x; x}", ErrMultiplicityViolation},
 		{"()->maximize {in x; x}", ErrMultiplicityViolation},
 		{"flags->maximize {in x; x}", ErrTypeMismatch},
+		// A receiver binds by position, so it names no parameter of a call whose
+		// arguments are named: reported rather than dropped.
+		{"xs->size(seq = xs)", ErrReceiverWithNamedArgs},
+		{"xs->collect(source = xs)", ErrReceiverWithNamedArgs},
 	}
 	for _, tt := range tests {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
 			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
 		}
+	}
+}
+
+// A receiver written before a call whose arguments are named binds to no
+// parameter: the receiver binds by position and the arguments by name, so the
+// call is reported rather than computed as if the receiver had never been
+// written. This holds of a calc the model declares as much as of a library one.
+func TestReceiverWithNamedArgumentsIsReported(t *testing.T) {
+	src := `
+package test {
+	attribute factor = 10;
+	calc scale { in n; return : Integer = n * 2; }
+	attribute result = factor->scale(n = 1);
+}`
+	model, resolver, root := parseAndBuildModel(t, src)
+	pkg, _ := root.LookupLocal("test")
+	sym, ok := pkg.Scope.LookupLocal("result")
+	if !ok || sym == nil {
+		t.Fatal("attribute result not found")
+	}
+	decl, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		t.Fatalf("result declares %T, want a usage", sym.Decl)
+	}
+	ec := NewEvalContext(NewContext(model, resolver, 10000), pkg.Scope)
+	got, err := ec.Eval(decl.Value)
+	if !errors.Is(err, ErrReceiverWithNamedArgs) {
+		t.Fatalf("factor->scale(n = 1) = (%v, %v), want %v", got, err, ErrReceiverWithNamedArgs)
 	}
 }
 

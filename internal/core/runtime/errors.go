@@ -145,6 +145,12 @@ var (
 	// declaring two parameters has no second argument to receive.
 	ErrBodyArity = errors.New("body parameter count mismatch")
 
+	// ErrReceiverWithNamedArgs is returned when a receiver is written before a
+	// call whose arguments are named, `x->f(a = 1)`. The receiver binds by
+	// position and the arguments by name, so which parameter the receiver binds
+	// to is unstated; it is reported rather than dropped.
+	ErrReceiverWithNamedArgs = errors.New("receiver combined with named arguments")
+
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
 	// it can be created.

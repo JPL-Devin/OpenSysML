@@ -548,6 +548,12 @@ func (ec *exprChecker) checkArguments(
 	params []parameter,
 ) {
 	if len(e.NamedArgs) > 0 {
+		// A receiver binds by position, so which parameter it binds to is
+		// unstated beside arguments that bind by name (runtime/eval.go reports
+		// the same call).
+		if e.Operand != nil {
+			ec.errorf(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
+		}
 		names := make(map[string]bool, len(params))
 		for _, p := range params {
 			names[p.name()] = true
