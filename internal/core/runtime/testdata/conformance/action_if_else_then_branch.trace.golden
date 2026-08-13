@@ -1,10 +1,13 @@
 step 1: token 1@choose
-  eval feature total -> 1
-  eval literal 0 -> 0
-eval operator > -> true
-eval literal "then" -> "then"
-  eval feature total -> 1
-  eval literal 10 -> 10
-eval operator + -> 11
+stmt if
+    eval feature total -> 1
+    eval literal 0 -> 0
+  eval operator > -> true
+  stmt assign taken
+    eval literal "then" -> "then"
+  stmt assign total
+      eval feature total -> 1
+      eval literal 10 -> 10
+    eval operator + -> 11
 step 2: token 1@end
 step 3: no active tokens

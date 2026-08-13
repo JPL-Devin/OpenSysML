@@ -2,7 +2,8 @@ enter calc test::scaled
   bind x = 7 [argument]
   eval literal 2 -> 2
   bind factor = 2 [default]
-    eval feature x -> 7
-    eval feature factor -> 2
-  eval operator * -> 14
+  stmt return
+      eval feature x -> 7
+      eval feature factor -> 2
+    eval operator * -> 14
 exit calc test::scaled -> 14

@@ -28,6 +28,11 @@ type Parser struct {
 
 	pendingComment    source.Span // span of the most recent /* */ regular comment
 	hasPendingComment bool
+
+	// calcBodyDepth counts the calculation bodies being parsed, so a `return`
+	// reached in a statement position inside one is read as an early return
+	// rather than as a result parameter declaration.
+	calcBodyDepth int
 }
 
 // parseCheckpoint captures parser state for backtracking.

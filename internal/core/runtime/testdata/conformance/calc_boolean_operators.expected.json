@@ -1,0 +1,17 @@
+{
+  "type": "calc",
+  "inputs": [
+    {
+      "type": "Boolean",
+      "value": true
+    },
+    {
+      "type": "Boolean",
+      "value": false
+    }
+  ],
+  "result": {
+    "type": "String",
+    "value": "one"
+  }
+}

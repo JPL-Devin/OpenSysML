@@ -1,21 +1,28 @@
 step 1: token 1@accumulate
-  eval feature total -> 0
-  eval literal 2 -> 2
-eval operator + -> 2
-  eval feature total -> 2
-  eval literal 6 -> 6
-eval operator >= -> false
-  eval feature total -> 2
-  eval literal 2 -> 2
-eval operator + -> 4
-  eval feature total -> 4
-  eval literal 6 -> 6
-eval operator >= -> false
-  eval feature total -> 4
-  eval literal 2 -> 2
-eval operator + -> 6
-  eval feature total -> 6
-  eval literal 6 -> 6
-eval operator >= -> true
+stmt loop until
+  iteration 1
+    stmt assign total
+        eval feature total -> 0
+        eval literal 2 -> 2
+      eval operator + -> 2
+      eval feature total -> 2
+      eval literal 6 -> 6
+    eval operator >= -> false
+  iteration 2
+    stmt assign total
+        eval feature total -> 2
+        eval literal 2 -> 2
+      eval operator + -> 4
+      eval feature total -> 4
+      eval literal 6 -> 6
+    eval operator >= -> false
+  iteration 3
+    stmt assign total
+        eval feature total -> 4
+        eval literal 2 -> 2
+      eval operator + -> 6
+      eval feature total -> 6
+      eval literal 6 -> 6
+    eval operator >= -> true
 step 2: token 1@end
 step 3: no active tokens

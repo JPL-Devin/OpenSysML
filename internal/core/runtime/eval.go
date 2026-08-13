@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -383,7 +384,24 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 	return Value{}, fmt.Errorf("unexpected: fell through feature chain evaluation")
 }
 
-// evalOperator evaluates an operator expression.
+// unimplementedOperators names the operators the runtime does not evaluate and
+// says what each would need, so reaching one reports why rather than "unsupported".
+var unimplementedOperators = map[ast.OperatorKind]string{
+	ast.OpBitNot:  "bitwise complement is declared by no function library the runtime applies",
+	ast.OpHasType: "classification needs the runtime type of a value, which values do not carry yet",
+	ast.OpIsType:  "classification needs the runtime type of a value, which values do not carry yet",
+	ast.OpAt:      "classification needs the runtime type of a value, which values do not carry yet",
+	ast.OpMetaAt:  "metadata classification needs the metadata of a value at runtime",
+	ast.OpAs:      "a cast needs the runtime type of a value, which values do not carry yet",
+	ast.OpMeta:    "metadata access is evaluated from a MetadataAccessExpression, not this operator",
+	ast.OpRange:   "a range is not a value kind the runtime carries",
+	ast.OpAll:     "'all' needs the extent of a type, which the runtime does not enumerate",
+	ast.OpIndex:   "indexing is evaluated from an IndexExpression, not this operator",
+}
+
+// evalOperator evaluates an operator expression. A constant one is answered by
+// the folder; every other operator the folder recognizes is evaluated here, so
+// an operand that depends on a parameter does not make the operator fail.
 func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 	// Try constant folding first
 	if semVal, ok := ec.ctx.model.Eval(n); ok {
@@ -392,22 +410,96 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 
 	// Otherwise, recursively eval operands
 	switch n.Operator {
-	case ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpDiv, ast.OpPow:
+	case ast.OpConditional:
+		return ec.evalConditional(n)
+	case ast.OpNullCoalesce:
+		return ec.evalNullCoalesce(n)
+	case ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpDiv, ast.OpMod, ast.OpPow:
 		return ec.evalArithmetic(n)
 	case ast.OpEq, ast.OpNeq:
 		return ec.evalEquality(n)
+	case ast.OpEqEqEq, ast.OpNeqEqEq:
+		return ec.evalIdentity(n)
 	case ast.OpLt, ast.OpLe, ast.OpGt, ast.OpGe:
 		return ec.evalComparison(n)
-	case ast.OpAnd, ast.OpOr:
+	case ast.OpAnd, ast.OpConditionalAnd, ast.OpOr, ast.OpConditionalOr, ast.OpXor, ast.OpImplies:
 		return ec.evalLogical(n)
-	case ast.OpNeg, ast.OpNot:
-		return ec.evalNeg(n)
+	case ast.OpNeg, ast.OpPos, ast.OpNot:
+		return ec.evalUnary(n)
 	default:
-		return Value{}, fmt.Errorf("unsupported operator: %v", n.Operator)
+		if why, ok := unimplementedOperators[n.Operator]; ok {
+			return Value{}, fmt.Errorf("%w: '%s': %s", ErrUnsupportedOperator, n.Operator, why)
+		}
+		return Value{}, fmt.Errorf("%w: '%s'", ErrUnsupportedOperator, n.Operator)
 	}
 }
 
-// evalArithmetic evaluates arithmetic operators (+, -, *, /, **).
+// evalConditional evaluates `if c ? a else b`, evaluating only the branch the
+// condition selects — the other one is never evaluated, so a guarded recursion
+// terminates at its base case.
+func (ec *EvalContext) evalConditional(n *ast.OperatorExpr) (Value, error) {
+	if len(n.Operands) != 3 {
+		return Value{}, fmt.Errorf("conditional requires 3 operands, got %d", len(n.Operands))
+	}
+	cond, err := ec.Eval(n.Operands[0])
+	if err != nil {
+		return Value{}, err
+	}
+	held, err := boolOperand("condition of 'if'", cond)
+	if err != nil {
+		return Value{}, err
+	}
+	if held {
+		return ec.Eval(n.Operands[1])
+	}
+	return ec.Eval(n.Operands[2])
+}
+
+// evalNullCoalesce evaluates `a ?? b`, evaluating b only when a is null.
+func (ec *EvalContext) evalNullCoalesce(n *ast.OperatorExpr) (Value, error) {
+	if len(n.Operands) != 2 {
+		return Value{}, fmt.Errorf("'??' requires 2 operands, got %d", len(n.Operands))
+	}
+	left, err := ec.Eval(n.Operands[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if left.Kind != ValNull {
+		return left, nil
+	}
+	return ec.Eval(n.Operands[1])
+}
+
+// evalIdentity evaluates the identity operators (===, !==). Two values are the
+// same one when they have the same kind and the same content, so an Integer is
+// never identical to a Real of equal magnitude.
+func (ec *EvalContext) evalIdentity(n *ast.OperatorExpr) (Value, error) {
+	if len(n.Operands) != 2 {
+		return Value{}, fmt.Errorf("identity requires 2 operands, got %d", len(n.Operands))
+	}
+	left, err := ec.Eval(n.Operands[0])
+	if err != nil {
+		return Value{}, err
+	}
+	right, err := ec.Eval(n.Operands[1])
+	if err != nil {
+		return Value{}, err
+	}
+
+	same := left.Kind == right.Kind
+	if same && left.Kind == ValConst {
+		same = left.Const.Kind == right.Const.Kind
+	}
+	if same {
+		same = valueEqual(left, right)
+	}
+	if n.Operator == ast.OpNeqEqEq {
+		same = !same
+	}
+	return boolValue(same), nil
+}
+
+// evalArithmetic evaluates arithmetic operators (+, -, *, /, %, **).
 func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) < 2 {
 		return Value{}, fmt.Errorf("arithmetic operator requires 2 operands")
@@ -434,6 +526,8 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 				return Value{}, fmt.Errorf("%w: exponent of a quantity is a quantity", ErrTypeMismatch)
 			}
 			return powQuantity(lq, right.Const)
+		case ast.OpMod:
+			return Value{}, fmt.Errorf("%w: '%%' is not defined for a quantity", ErrTypeMismatch)
 		}
 	}
 
@@ -467,6 +561,11 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 				return Value{}, fmt.Errorf("division by zero")
 			}
 			result = left.Const.Int / right.Const.Int
+		case ast.OpMod:
+			if right.Const.Int == 0 {
+				return Value{}, fmt.Errorf("division by zero")
+			}
+			result = left.Const.Int % right.Const.Int
 		}
 		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: result}}, nil
 	}
@@ -484,6 +583,11 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 		result = leftReal * rightReal
 	case ast.OpDiv:
 		result = leftReal / rightReal
+	case ast.OpMod:
+		if rightReal == 0 {
+			return Value{}, fmt.Errorf("division by zero")
+		}
+		result = math.Mod(leftReal, rightReal)
 	}
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: result}}, nil
 }
@@ -591,58 +695,76 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: result}}, nil
 }
 
-// evalLogical evaluates logical operators (&&, ||) with short-circuit.
+// evalLogical evaluates the Boolean binary operators. `and`, `or` and `implies`
+// decide on their left operand alone where they can, so the operand a guard
+// rules out is never evaluated.
 func (ec *EvalContext) evalLogical(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 2 {
 		return Value{}, fmt.Errorf("logical operator requires 2 operands, got %d", len(n.Operands))
 	}
 
-	// Evaluate left operand
 	left, err := ec.Eval(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
-	if left.Kind != ValConst || left.Const.Kind != semantics.ValBool {
-		return Value{}, fmt.Errorf("logical operator requires bool operands, got %v", left.Kind)
+	l, err := boolOperand(fmt.Sprintf("left operand of '%s'", n.Operator), left)
+	if err != nil {
+		return Value{}, err
 	}
 
-	// Short-circuit for &&: if left is false, return false
-	if n.Operator == ast.OpAnd && !left.Const.Bool {
-		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: false}}, nil
+	switch n.Operator {
+	case ast.OpAnd, ast.OpConditionalAnd:
+		if !l {
+			return boolValue(false), nil
+		}
+	case ast.OpOr, ast.OpConditionalOr:
+		if l {
+			return boolValue(true), nil
+		}
+	case ast.OpImplies:
+		if !l {
+			return boolValue(true), nil
+		}
 	}
 
-	// Short-circuit for ||: if left is true, return true
-	if n.Operator == ast.OpOr && left.Const.Bool {
-		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: true}}, nil
-	}
-
-	// Evaluate right operand
 	right, err := ec.Eval(n.Operands[1])
 	if err != nil {
 		return Value{}, err
 	}
-	if right.Kind != ValConst || right.Const.Kind != semantics.ValBool {
-		return Value{}, fmt.Errorf("logical operator requires bool operands, got %v", right.Kind)
+	r, err := boolOperand(fmt.Sprintf("right operand of '%s'", n.Operator), right)
+	if err != nil {
+		return Value{}, err
 	}
 
-	// Compute result
 	var result bool
 	switch n.Operator {
-	case ast.OpAnd:
-		result = left.Const.Bool && right.Const.Bool
-	case ast.OpOr:
-		result = left.Const.Bool || right.Const.Bool
+	case ast.OpAnd, ast.OpConditionalAnd:
+		result = l && r
+	case ast.OpOr, ast.OpConditionalOr:
+		result = l || r
+	case ast.OpXor:
+		result = l != r
+	case ast.OpImplies:
+		result = !l || r
 	default:
-		return Value{}, fmt.Errorf("unsupported logical operator: %v", n.Operator)
+		return Value{}, fmt.Errorf("%w: '%s' is not a Boolean operator", ErrUnsupportedOperator, n.Operator)
 	}
-
-	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: result}}, nil
+	return boolValue(result), nil
 }
 
-// evalNeg evaluates unary negation (-, not).
-func (ec *EvalContext) evalNeg(n *ast.OperatorExpr) (Value, error) {
+// boolOperand reads a Boolean out of a value, naming what was expected when the
+// value is not one.
+func boolOperand(what string, v Value) (bool, error) {
+	if v.Kind != ValConst || v.Const.Kind != semantics.ValBool {
+		return false, fmt.Errorf("%w: %s must be Boolean, got %s", ErrTypeMismatch, what, v.Kind)
+	}
+	return v.Const.Bool, nil
+}
+
+// evalUnary evaluates the unary operators (-, +, not).
+func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 1 {
-		return Value{}, fmt.Errorf("negation requires 1 operand, got %d", len(n.Operands))
+		return Value{}, fmt.Errorf("unary operator requires 1 operand, got %d", len(n.Operands))
 	}
 
 	operand, err := ec.Eval(n.Operands[0])
@@ -656,22 +778,25 @@ func (ec *EvalContext) evalNeg(n *ast.OperatorExpr) (Value, error) {
 		if operand.Kind != ValConst || operand.Const.Kind != semantics.ValBool {
 			return Value{}, fmt.Errorf("logical not requires bool operand, got %v", operand.Kind)
 		}
-		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: !operand.Const.Bool}}, nil
-	case ast.OpNeg:
+		return boolValue(!operand.Const.Bool), nil
+	case ast.OpNeg, ast.OpPos:
 		if operand.Kind == ValQuantity {
+			if n.Operator == ast.OpPos {
+				return operand, nil
+			}
 			return negateQuantity(operand.Quantity), nil
 		}
-		// Arithmetic negation: -number
+		// Arithmetic sign: -number, +number
 		if operand.Kind != ValConst {
-			return Value{}, fmt.Errorf("arithmetic negation requires numeric operand, got %v", operand.Kind)
+			return Value{}, fmt.Errorf("unary '%s' requires numeric operand, got %v", n.Operator, operand.Kind)
 		}
-		result, ok := semantics.EvalUnary(ast.OpNeg, operand.Const)
+		result, ok := semantics.EvalUnary(n.Operator, operand.Const)
 		if !ok {
-			return Value{}, fmt.Errorf("arithmetic negation failed for %v", operand.Const)
+			return Value{}, fmt.Errorf("unary '%s' is not defined for %v", n.Operator, operand.Const)
 		}
 		return Value{Kind: ValConst, Const: result}, nil
 	default:
-		return Value{}, fmt.Errorf("unsupported negation operator: %v", n.Operator)
+		return Value{}, fmt.Errorf("%w: '%s' is not a unary operator", ErrUnsupportedOperator, n.Operator)
 	}
 }
 

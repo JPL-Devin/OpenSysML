@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,12 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
+	t.Run("calc_non_terminating_loop", testCalcNonTerminatingLoop)
+	t.Run("calc_body_never_returns", testCalcBodyNeverReturns)
+	t.Run("calc_send_is_rejected", testCalcSendIsRejected)
+	t.Run("calc_terminate_is_rejected", testCalcTerminateIsRejected)
+	t.Run("calc_assignment_outside_the_calc", testCalcAssignmentOutsideTheCalc)
+	t.Run("calc_non_boolean_condition", testCalcNonBooleanCondition)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
@@ -1962,4 +1969,160 @@ func findSymbolByName(scope *symbols.Scope, name string, kind ast.DefinitionKind
 		}
 	}
 	return nil
+}
+
+// invokeCalcInSource invokes calcName with one Integer argument and returns the
+// error, on its own goroutine so a body that never terminates fails the case
+// instead of stalling the suite. maxSteps bounds the run.
+func invokeCalcInSource(t *testing.T, src, calcName string, arg int64, maxSteps int64) error {
+	t.Helper()
+
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	ctx.maxSteps = maxSteps
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, calcName, ast.DefCalc)
+	if sym == nil {
+		t.Fatalf("calc %s not found", calcName)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		value := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: arg}}
+		result, err := ctx.InvokeCalc(sym, []Value{value}, rootScope)
+		if err == nil {
+			err = fmt.Errorf("calc %s returned %s, expected it to fail", calcName, FormatTraceValue(result))
+		}
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(10 * time.Second):
+		t.Fatalf("calc %s did not terminate", calcName)
+		return nil
+	}
+}
+
+// testCalcNonTerminatingLoop: a calc loop whose condition always holds spends
+// the context's step budget, so it fails the invocation instead of hanging the
+// REPL, LSP or gRPC caller that drove it.
+func testCalcNonTerminatingLoop(t *testing.T) {
+	src := `
+		package test {
+			calc spin {
+				in n: Integer;
+				attribute i : Integer = 0;
+				while i >= 0 {
+					i = i + 1;
+				}
+				return : Integer = i;
+			}
+		}
+	`
+	err := invokeCalcInSource(t, src, "spin", 1, 20)
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// testCalcBodyNeverReturns: a body that computes but reaches no `return` states
+// no result, which is an error rather than a null value.
+func testCalcBodyNeverReturns(t *testing.T) {
+	src := `
+		package test {
+			calc maybe {
+				in n: Integer;
+				attribute total : Integer = 0;
+				if n > 0 {
+					total = n;
+				}
+				if n < 0 {
+					return : Integer = total;
+				}
+			}
+		}
+	`
+	err := invokeCalcInSource(t, src, "maybe", 5, 10000)
+	if !errors.Is(err, ErrCalcNoReturn) {
+		t.Errorf("expected ErrCalcNoReturn, got: %v", err)
+	}
+}
+
+// testCalcSendIsRejected: a calculation computes a value and nothing else, so a
+// send in its body is rejected rather than posted.
+func testCalcSendIsRejected(t *testing.T) {
+	src := `
+		package test {
+			attribute def Ping;
+			calc noisy {
+				in n: Integer;
+				send Ping() to listener;
+				return : Integer = n;
+			}
+		}
+	`
+	err := invokeCalcInSource(t, src, "noisy", 1, 10000)
+	if !errors.Is(err, ErrCalcSideEffect) {
+		t.Errorf("expected ErrCalcSideEffect, got: %v", err)
+	}
+}
+
+// testCalcTerminateIsRejected: `terminate` ends an execution, which a
+// calculation has no business doing.
+func testCalcTerminateIsRejected(t *testing.T) {
+	src := `
+		package test {
+			calc halting {
+				in n: Integer;
+				terminate;
+				return : Integer = n;
+			}
+		}
+	`
+	err := invokeCalcInSource(t, src, "halting", 1, 10000)
+	if !errors.Is(err, ErrCalcSideEffect) {
+		t.Errorf("expected ErrCalcSideEffect, got: %v", err)
+	}
+}
+
+// testCalcAssignmentOutsideTheCalc: a calc may write its own parameters and
+// locals; a name it does not declare belongs to the model around it and writing
+// it would be an effect, so it is rejected.
+func testCalcAssignmentOutsideTheCalc(t *testing.T) {
+	src := `
+		package test {
+			attribute shared : Integer = 0;
+			calc leaky {
+				in n: Integer;
+				shared = n;
+				return : Integer = n;
+			}
+		}
+	`
+	err := invokeCalcInSource(t, src, "leaky", 3, 10000)
+	if !errors.Is(err, ErrCalcExternalAssignment) {
+		t.Errorf("expected ErrCalcExternalAssignment, got: %v", err)
+	}
+}
+
+// testCalcNonBooleanCondition: a condition that is not Boolean is a type error
+// the typecheck pass reports; an execution that reaches one anyway says so
+// rather than coercing the value.
+func testCalcNonBooleanCondition(t *testing.T) {
+	src := `
+		package test {
+			calc counting {
+				in n: Integer;
+				while n {
+					return : Integer = 1;
+				}
+				return : Integer = 0;
+			}
+		}
+	`
+	err := invokeCalcInSource(t, src, "counting", 3, 10000)
+	if err == nil || !strings.Contains(err.Error(), "must evaluate to a Boolean") {
+		t.Errorf("expected a non-Boolean condition error, got: %v", err)
+	}
 }

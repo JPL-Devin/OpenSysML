@@ -1,21 +1,24 @@
 enter calc test::combine
   bind a = 3 [argument]
   bind b = 4 [argument]
-      eval feature a -> 3
-      enter calc test::double
-        bind x = 3 [argument]
-          eval feature x -> 3
-          eval literal 2 -> 2
-        eval operator * -> 6
-      exit calc test::double -> 6
-    eval invoke double -> 6
-      eval feature b -> 4
-      enter calc test::double
-        bind x = 4 [argument]
-          eval feature x -> 4
-          eval literal 2 -> 2
-        eval operator * -> 8
-      exit calc test::double -> 8
-    eval invoke double -> 8
-  eval operator + -> 14
+  stmt return
+        eval feature a -> 3
+        enter calc test::double
+          bind x = 3 [argument]
+          stmt return
+              eval feature x -> 3
+              eval literal 2 -> 2
+            eval operator * -> 6
+        exit calc test::double -> 6
+      eval invoke double -> 6
+        eval feature b -> 4
+        enter calc test::double
+          bind x = 4 [argument]
+          stmt return
+              eval feature x -> 4
+              eval literal 2 -> 2
+            eval operator * -> 8
+        exit calc test::double -> 8
+      eval invoke double -> 8
+    eval operator + -> 14
 exit calc test::combine -> 14

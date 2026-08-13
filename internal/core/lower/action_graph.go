@@ -142,6 +142,49 @@ type If struct {
 
 func (If) statement() {}
 
+// Return is a lowered `return`: the value the enclosing behavior computes,
+// possibly from inside a block. Value is nil when it named no expression.
+type Return struct {
+	Value ast.Node
+	Node  ast.Node       // the return itself, for diagnostics
+	Scope *symbols.Scope // the scope the returned expression was written in
+}
+
+func (Return) statement() {}
+
+// EffectKind names a statement that acts on the world outside the body it
+// stands in.
+type EffectKind int
+
+const (
+	EffectPerform EffectKind = iota
+	EffectAccept
+	EffectTerminate
+)
+
+func (k EffectKind) String() string {
+	switch k {
+	case EffectPerform:
+		return "perform"
+	case EffectAccept:
+		return "accept"
+	case EffectTerminate:
+		return "terminate"
+	default:
+		return "effect"
+	}
+}
+
+// Effect is a statement acting on the world outside the body — perform, accept,
+// terminate — lowered so a host rejecting it (a calculation) can say so.
+type Effect struct {
+	Kind  EffectKind
+	Node  ast.Node
+	Scope *symbols.Scope // the scope the statement was declared in
+}
+
+func (Effect) statement() {}
+
 // Unsupported is a body member the lowering layer recognizes but cannot yet
 // turn into an executable statement. It is lowered rather than dropped so that
 // reaching it fails the execution with a diagnostic instead of silently
@@ -378,11 +421,15 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 			lowered.Else = &block
 		}
 		return lowered
+	case *ast.ResultMember:
+		return Return{Value: m.Expression, Node: m, Scope: scope}
+	case *ast.PerformActionNode:
+		return Effect{Kind: EffectPerform, Node: m, Scope: scope}
+	case *ast.TerminateStatement:
+		return Effect{Kind: EffectTerminate, Node: m, Scope: scope}
 	case *ast.Usage:
-		// An attribute declared in a body-local block is a member of that block:
-		// it holds a value the block's statements read and write.
-		if name, _ := ast.EffectiveName(m); m.Kind == ast.UsageAttribute && name != "" {
-			return Declare{Name: name, Value: m.Value, Node: m, Scope: scope}
+		if stmt, ok := usageStatement(m, scope); ok {
+			return stmt
 		}
 		return Unsupported{Description: usageDescription(m), Node: m, Scope: scope}
 	default:

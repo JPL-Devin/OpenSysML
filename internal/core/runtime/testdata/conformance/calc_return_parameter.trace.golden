@@ -3,7 +3,8 @@ enter calc test::acc
   bind tp = 1.0 [default]
   eval literal 4.0 -> 4.0
   bind tm = 4.0 [default]
-    eval feature tp -> 1.0
-    eval feature tm -> 4.0
-  eval operator / -> 0.25
+  stmt return
+      eval feature tp -> 1.0
+      eval feature tm -> 4.0
+    eval operator / -> 0.25
 exit calc test::acc -> 0.25

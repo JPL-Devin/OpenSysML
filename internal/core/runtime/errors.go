@@ -46,6 +46,27 @@ var (
 	// expression, directly or by inheritance.
 	ErrNoResultExpression = errors.New("no result expression")
 
+	// ErrUnsupportedOperator is returned when an operator has no runtime
+	// evaluation, so an expression naming it fails rather than yielding nothing.
+	ErrUnsupportedOperator = errors.New("unsupported operator")
+
+	// ErrCalcNoReturn is returned when a calc body runs to its end without
+	// returning: it computed no result, which is not the same as a null one.
+	ErrCalcNoReturn = errors.New("calculation returned no value")
+
+	// ErrCalcSideEffect is returned when a calc body states an effect on the
+	// world outside it — send, perform, accept, terminate. A calculation
+	// computes a value, so an effect is rejected rather than performed.
+	ErrCalcSideEffect = errors.New("side effect in a calculation body")
+
+	// ErrCalcExternalAssignment is returned when a calc body assigns to a name it
+	// does not declare itself, which would make the calculation impure.
+	ErrCalcExternalAssignment = errors.New("assignment outside the calculation body")
+
+	// ErrReturnOutsideCalc is returned when a `return` is executed by a host that
+	// has no result to return, an action node's body.
+	ErrReturnOutsideCalc = errors.New("'return' outside a calculation body")
+
 	// ErrAcceptDeadlock is returned when an action can no longer progress
 	// because every token it has left is parked at an accept, so no token can
 	// post the message any of them waits for. An accept suspends the action
