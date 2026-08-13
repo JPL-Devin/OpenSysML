@@ -612,14 +612,11 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parsePerformedActionReference(start, mods, "perform"))
 		}
 
-		// A member keyword can also be an ordinary name: KerML has no `frame`
-		// keyword, and the Kernel Semantic Library writes `in frame :
-		// SpatialFrame[1]`. A type after the keyword can only follow a name, so
-		// the declaration takes the default kind and reads the keyword as its
-		// identification rather than dropping it. `frame;` and `frame { … }`
-		// are left to the member forms below, where a missing reference is
-		// reported rather than read as an untyped feature named `frame`.
-		if (kw == "frame" || kw == "render") && p.peekN(1).Kind == lexer.Colon {
+		// A member keyword can also be an ordinary name: KerML has no `frame` or
+		// `render` keyword, and the Kernel Semantic Library writes `in frame :
+		// SpatialFrame[1]`. Read the keyword as the declaration's own name
+		// unless what follows can begin the member form.
+		if (kw == "frame" || kw == "render") && !p.atMemberKeywordUsedAsKeyword(kw) {
 			return applyPrefixes(p.parseUsage(start, ast.UsageAttribute, "", mods, false))
 		}
 
@@ -2558,6 +2555,27 @@ func (p *Parser) noBodyMemberMessage() string {
 // which synonym was written.
 func (p *Parser) parsePerformedActionReference(start int, mods featureMods, kw string) *ast.Usage {
 	return p.parseReferenceMemberUsage(start, ast.UsageAction, kw, "action", mods, p.parseActionBodyMixed, true)
+}
+
+// atMemberKeywordUsedAsKeyword reports whether the `frame` or `render` token at
+// the cursor introduces a member rather than being the name of the declaration
+// it starts. Both member forms continue with the referenced name or with the
+// notation's own kind keyword (SysML.xtext ViewRenderingUsage,
+// FramedConcernUsage), so anything else — a multiplicity, a specialization, a
+// type, a body — can only follow a name, and `frame` and `render` are legal
+// names in KerML.
+func (p *Parser) atMemberKeywordUsedAsKeyword(kw string) bool {
+	next := p.peekN(1)
+	switch next.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
+		return true
+	case lexer.Keyword:
+		if kw == "frame" {
+			return next.KeywordID == "concern"
+		}
+		return next.KeywordID == "rendering"
+	}
+	return false
 }
 
 // parseReferenceMemberUsage parses the reference form that SysML.xtext spells

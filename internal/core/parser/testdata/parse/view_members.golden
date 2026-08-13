@@ -49,4 +49,17 @@
           (Membership visibility="default"
             (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="subsets" target=SafetyViewpoint
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Anchored"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="frame" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Engineer
+                (*ast.QualifiedName))
+              (Multiplicity range=true
+                (LiteralInteger value="0")
+                (LiteralInteger value="1"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="render" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=frame
                 (*ast.QualifiedName)))))))))

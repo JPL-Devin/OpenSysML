@@ -91,15 +91,12 @@ func TestNegative(t *testing.T) {
 		{"short_name_redefines_symbol_no_target", "part p { attribute <sn> :>>; }"},
 		{"short_name_defined_by_no_type", "part p { attribute <sn> defined by ; }"},
 
-		// A view or viewpoint member written as a reference states the element
-		// it names, so a missing one is an error rather than an untyped feature
-		// named after the keyword. The notation has no definition of a
-		// rendering a view names, of a concern a body frames, or of a
-		// stakeholder or actor: those keywords own a usage, not a definition
-		// (SysML.xtext ViewRenderingUsage, FramedConcernUsage, StakeholderUsage,
-		// ActorUsage).
-		{"render_no_reference", "view def V { render ; }"},
-		{"frame_no_reference", "viewpoint def V { frame ; }"},
+		// The notation has no definition of a rendering a view names, of a
+		// concern a body frames, or of a stakeholder or actor: those keywords own
+		// a usage, not a definition (SysML.xtext ViewRenderingUsage,
+		// FramedConcernUsage, StakeholderUsage, ActorUsage). `render ;` and
+		// `frame ;` are absent deliberately: `frame` and `render` are legal
+		// names, so those declare a feature so named rather than being errors.
 		{"render_definition", "view def V { render def R; }"},
 		{"frame_definition", "viewpoint def V { frame def C; }"},
 		{"stakeholder_definition", "stakeholder def Reviewer;"},
