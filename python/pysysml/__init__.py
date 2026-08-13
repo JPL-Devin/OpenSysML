@@ -8,14 +8,18 @@ from pysysml.model import Model
 from pysysml.symbol import Symbol
 from pysysml.diagnostic import Diagnostic
 from pysysml.instance import Instance
+from pysysml.typed import TypedObject
+from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
 from pysysml.errors import (
-    PySysMLError, ConnectionError, RuntimeError, SlotError, UnsupportedValueError,
+    PySysMLError, ConnectionError, RuntimeError, SlotError, TypeMismatchError,
+    UnsupportedValueError,
 )
 
 __all__ = [
     "Connection", "Model", "Symbol", "Diagnostic", "Instance",
+    "TypedObject", "TypeFacts", "Multiplicity", "Specialization", "SymbolFacts",
     "PySysMLError", "ConnectionError", "RuntimeError", "SlotError",
-    "UnsupportedValueError",
+    "TypeMismatchError", "UnsupportedValueError",
     "load", "connect",
     "eval", "instantiate",
     "__version__"

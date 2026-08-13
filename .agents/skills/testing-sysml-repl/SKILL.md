@@ -531,7 +531,24 @@ yourself, `pysysml.connect("localhost", 50551, auto_start=False)` avoids the
 `Binary not found at ~/.pysysml/bin/sysml-grpc` error — but prefer the auto-start path per above.
 
 Suite baseline: `cd python && python -m pytest tests/ -q` with no service running should be
-`75 passed, 18 skipped` (~35s). The 18 skips are the integration tests gating on a live service.
+`148 passed, 24 skipped` (~40s; it was `75 passed, 18 skipped` before the Tier 1/Tier 2 client
+work), and `158 passed, 14 skipped` with a service running. The skips are the integration
+tests gating on a live service. `pytest` is **not**
+installed in `~/pysysml-venv` by default — `~/pysysml-venv/bin/pip install pytest` first, or
+`python -m pytest` fails with `No module named pytest` (the `pytest` on `PATH` belongs to an
+unrelated venv and cannot import `pysysml`).
+
+A test that skips with no service and fails with one is never actually green — treat it as a
+reportable defect, not a known gap. Two lifecycle traps caused exactly that: a
+`Connection(auto_start=False)` used to release a refcount it never took (fixed), and any test
+that shells out to a pysysml subprocess lets that subprocess's exit decrement the shared
+refcount, so such tests must isolate `HOME` for the child.
+
+Liveness check: after `test_lifecycle` runs, `pgrep -af sysml-grpc` still lists a `<defunct>`
+zombie, so it lies. Use `ss -ltn | grep 50051` to decide whether a service is really listening.
+To hold a service alive for a whole test run, keep a client process open, e.g.
+`(setsid python -c "import pysysml,time; pysysml.connect(); time.sleep(300)" &)` — a plain
+backgrounded `python -c` from a non-tty shell may exit before it prints, so verify the port.
 
 Download paths (`python/pysysml/binary.py`) are testable without a real release: move
 `~/.pysysml/bin/sysml-grpc` aside, unset `PYSYSML_GRPC_VERSION`, and call `ensure_binary()`,
@@ -540,6 +557,35 @@ naming the path or URL. `PYSYSML_GITHUB_REPO` overrides the repo. Beware: these 
 unauthenticated GitHub API, so repeated runs flip from a truthful `HTTP Error 404: Not Found` to a
 misleading `HTTP Error 403: rate limit exceeded` — rehearse sparingly and report the 404 wording,
 not whichever one the recording happened to catch.
+
+## Typed codegen (`python -m pysysml.generate`, Tier 2)
+
+`python -m pysysml.generate <model.sysml> [-o out.py] [--host --port]` loads the model through
+the **live service** (so it auto-starts `sysml-grpc`) and prints/writes one class per SysML
+definition deriving from `pysysml.typed.TypedObject`. Useful facts when testing it:
+
+- The reference fixture is `internal/repl/testdata/vehicle_package.sysml` and the committed
+  golden is `python/tests/golden/vehicle_types.py`; `cmp` them for a byte-for-byte assertion and
+  generate twice + `cmp` for determinism. Emission is FQN-ordered with base classes first.
+- Only instance-slot usages become properties (`attribute/part/item/occurrence/port/enum`);
+  `calc`, `constraint` and `requirement` members are deliberately absent — a generated class
+  that grows a `withinMassLimit` property is a bug, not progress.
+- Annotations are the whole point: `attribute power = 300.0;` must render `-> float` and
+  `part engine : Engine;` must render `-> Engine`. If everything renders `object`, the typefacts
+  path (`internal/grpc/typefacts.go` → `SymbolInfo.type_info`) is broken.
+- Static-check evidence needs `MYPYPATH=<repo>/python mypy --follow-imports=silent script.py`
+  and the venv mypy (`~/pysysml-venv/bin/mypy`). Without `MYPYPATH`, mypy silently treats
+  `TypedObject` as `Any` and *misses* attribute-typo errors, so a "clean" mypy run proves nothing
+  until you have seen it also flag a deliberate misuse (`v.mas`, `v.mass + "x"`).
+- Adversarial cases that distinguish working from broken, all reachable through a generated
+  property: cyclic derived attributes (`a = b + 1.0; b = a + 1.0;`) must raise pysysml
+  `SlotError` rather than returning `None`; and running *stale* generated code against a model
+  whose attribute type changed (e.g. `mass = "heavy"`) must raise
+  `TypeMismatchError: slot 'mass': expected float, got 'heavy'`.
+- Do not try to force a type mismatch inside the model — the checker rejects
+  `attribute count : Integer = 4.0 / 2.0;` with `cannot bind Rational value to a feature typed
+  by Integer`, and `Integer`/`String` need `import ScalarValues::*;` or generation exits 1 with
+  `error: unresolved reference: Integer`.
 
 ## Built-in library functions (sqrt/sin/exp/ln/log/atan2 …)
 

@@ -123,6 +123,8 @@ class Connection:
         self._address = f"{host}:{port}"
         self._process = None
         self._cleaned_up = False
+        # Only connections that took a reference may release one on close.
+        self._holds_refcount = False
         
         # Auto-start service if requested
         if auto_start:
@@ -444,6 +446,7 @@ class Connection:
                 if self._probe_service(self.host, self.port):
                     # Service running - increment refcount and return
                     _increment_refcount()
+                    self._holds_refcount = True
                     atexit.register(self._cleanup_service)
                     return
                 
@@ -477,6 +480,7 @@ class Connection:
                         
                         # Increment refcount
                         _increment_refcount()
+                        self._holds_refcount = True
                         
                         # Register cleanup
                         atexit.register(self._cleanup_service)
@@ -502,9 +506,10 @@ class Connection:
     
     def _cleanup_service(self):
         """Clean up service process with reference counting."""
-        if self._cleaned_up:
+        if self._cleaned_up or not self._holds_refcount:
             return
         self._cleaned_up = True
+        self._holds_refcount = False
         
         lockfile_path = _get_lockfile_path()
         lock = FileLock(lockfile_path, timeout=5)

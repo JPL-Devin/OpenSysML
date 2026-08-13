@@ -145,6 +145,54 @@ message SymbolInfo {
   map<string, string> metadata = 4;  // multiplicity, type, etc
   repeated string child_ids = 5;     // References to children
   repeated AttributeInfo attributes = 6;
+  // Static type facts; unset when the element is not a def/usage.
+  TypeInfo type_info = 7;
+  // Declared multiplicity; unset when none is declared.
+  MultiplicityInfo multiplicity = 8;
+  // Every generalization edge declared, in declaration order. metadata["type"]
+  // and metadata["specializes"] report only the first, kept for compatibility.
+  repeated Specialization specializations = 9;
+}
+
+// Specialization is one generalization edge an element declares.
+message Specialization {
+  // Relationship kind: "specializes", "subsets", "redefines" or "typing".
+  string kind = 1;
+  // The target as written in the source ("Engine", "Demo::Engine").
+  string declared = 2;
+  // FQN of the resolved target; empty when the name does not resolve.
+  string target_id = 3;
+  // Symbol kind of the resolved target ("partDef", ...); empty when unresolved.
+  string target_kind = 4;
+}
+
+// TypeInfo is the static type of a usage, or the classification of a
+// definition, as far as the service derives it without running the model.
+message TypeInfo {
+  // Type name as written; empty when none is declared.
+  string declared = 1;
+  // FQN of the resolved type; empty when unresolved or undeclared.
+  string resolved_id = 2;
+  // Symbol kind of the resolved type ("partDef", "attributeDef", ...).
+  string resolved_kind = 3;
+  // Library scalar the type reduces to ("Boolean", "Integer", "Real", ...);
+  // empty when it is not a scalar value type.
+  string primitive = 4;
+  // Origin of `primitive`: "declared" (from the declared or inherited type),
+  // "value" (inferred from the default value), or empty.
+  string primitive_source = 5;
+  // Values carry a measurement unit. The wire Value has no quantity form, so
+  // such a slot reads as unsupported.
+  bool quantity = 6;
+  // Unit as written when the default value names one ("m/s"), else empty.
+  string unit = 7;
+}
+
+// MultiplicityInfo is a declared multiplicity range. A bound the service cannot
+// evaluate statically is empty.
+message MultiplicityInfo {
+  string lower = 1;  // "0", "1", … or "*"
+  string upper = 2;  // "1", "*", …
 }
 
 // AttributeInfo represents an attribute with its value

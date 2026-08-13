@@ -324,10 +324,11 @@ def test_ensure_service_timeout(tmp_home):
 
 
 def test_cleanup_service():
-    """Test _cleanup_service decrements refcount."""
+    """Test _cleanup_service decrements a refcount held by this connection."""
     with patch('grpc.insecure_channel'):
         with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             conn = Connection(auto_start=False)
+            conn._holds_refcount = True
             
             # Mock refcount file
             with patch('pysysml.connection._decrement_refcount') as mock_decr:
@@ -340,6 +341,18 @@ def test_cleanup_service():
                 
                 # Instance state should be cleared
                 assert conn._process is None
+
+
+def test_cleanup_service_without_refcount():
+    """A connection that never took a reference must not release one."""
+    with patch('grpc.insecure_channel'):
+        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+            conn = Connection(auto_start=False)
+
+            with patch('pysysml.connection._decrement_refcount') as mock_decr:
+                conn._cleanup_service()
+
+                mock_decr.assert_not_called()
 
 
 def test_auto_start_enabled():

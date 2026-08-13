@@ -27,6 +27,24 @@ class SlotError(PySysMLError):
         self.message = message
 
 
+class TypeMismatchError(PySysMLError):
+    """Raised when a slot holds a value of another type than its generated view declares.
+
+    Attributes:
+        feature_name (str): Name of the slot
+        expected (str): Type the generated class declares
+        value: The value actually decoded from the slot
+    """
+
+    def __init__(self, feature_name, expected, value):
+        super().__init__(
+            f"slot {feature_name!r}: expected {expected}, got {value!r}"
+        )
+        self.feature_name = feature_name
+        self.expected = expected
+        self.value = value
+
+
 class RuntimeError(PySysMLError):
     """Raised when a runtime operation (eval/instantiate/execute) fails.
 

@@ -14,8 +14,18 @@ import (
 )
 
 // SymbolToProto converts a Symbol to protobuf SymbolInfo.
-// This is the public API for gRPC service use.
+// This is the public API for gRPC service use. It builds a conversion context
+// of its own; a caller converting several symbols of one model should build one
+// with NewSymbolContext and call SymbolToProtoIn, so that name resolution is
+// memoized across the symbols.
 func SymbolToProto(sym *symbols.Symbol, idx *symbols.Index) *pb.SymbolInfo {
+	return SymbolToProtoIn(sym, NewSymbolContext(idx))
+}
+
+// SymbolToProtoIn converts a Symbol to protobuf SymbolInfo in an existing
+// conversion context.
+func SymbolToProtoIn(sym *symbols.Symbol, sc *SymbolContext) *pb.SymbolInfo {
+	idx := sc.Index
 	info := &pb.SymbolInfo{
 		Id:       idx.GetFQN(sym), // Fully qualified name
 		Name:     sym.Name,
@@ -37,6 +47,13 @@ func SymbolToProto(sym *symbols.Symbol, idx *symbols.Index) *pb.SymbolInfo {
 		}
 		info.ChildIds = childIDs
 	}
+
+	// Static type facts: the resolved type, the declared multiplicity and every
+	// generalization edge. These are what a client needs to reconstruct the
+	// element's type without re-deriving it from the metadata strings.
+	info.TypeInfo = sc.typeInfoOf(sym)
+	info.Multiplicity = sc.multiplicityOf(sym)
+	info.Specializations = sc.specializationsOf(sym)
 
 	// Attributes populated later when semantic layer ready
 	info.Attributes = []*pb.AttributeInfo{}

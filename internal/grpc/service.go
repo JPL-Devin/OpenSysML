@@ -168,7 +168,7 @@ func (s *Service) GetSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.
 
 	// Convert first match to proto
 	return &pb.SymbolResponse{
-		Symbol: SymbolToProto(syms[0], cached.Index),
+		Symbol: SymbolToProtoIn(syms[0], cached.SymbolContext()),
 	}, nil
 }
 
@@ -413,7 +413,7 @@ func (s *Service) buildParseResponse(modelHash string, model *CachedModel) *pb.P
 				}
 			}
 		} else {
-			rootSymbol = SymbolToProto(rootSyms[0], model.Index)
+			rootSymbol = SymbolToProtoIn(rootSyms[0], model.SymbolContext())
 		}
 	}
 
