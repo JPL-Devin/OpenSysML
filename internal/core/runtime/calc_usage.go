@@ -662,6 +662,43 @@ func (ec *EvalContext) calcUsageOperand(operand ast.Node) (*symbols.Symbol, bool
 	return sym, true
 }
 
+// occurrenceOperand reports whether the operand of a feature chain names an
+// occurrence — a part or item — carrying no value of its own. A local binding of
+// the same name is the value the expression names, so a frame masks it.
+func (ec *EvalContext) occurrenceOperand(operand ast.Node) (*symbols.Symbol, bool) {
+	ref, ok := operand.(*ast.FeatureReference)
+	if !ok || ref.Name == nil || len(ref.Name.Parts) == 0 || ec.ctx.resolver == nil {
+		return nil, false
+	}
+	if len(ref.Name.Parts) == 1 {
+		if _, bound := ec.Lookup(ref.Name.Parts[0].Text); bound {
+			return nil, false
+		}
+	}
+	sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, ref.Name)
+	if !ok || !isOccurrenceUsage(sym) {
+		return nil, false
+	}
+	return sym, true
+}
+
+// calcUsageMemberValue reads parts from a calc usage a part declares, running it
+// against that object so its inputs read the object's slots. Naming the usage
+// itself names no value: its outputs are what it computes.
+func (ec *EvalContext) calcUsageMemberValue(sym *symbols.Symbol, self *Instance, parts []ast.NameSegment) (Value, error) {
+	if len(parts) == 0 {
+		return Value{}, fmt.Errorf(
+			"%w: calc usage %s computes output features (%s); read one of them",
+			ErrNoValue, sym.Name, ec.ctx.calcUsageOutputSummary(sym),
+		)
+	}
+	scope := sym.OwnerScope
+	if scope == nil {
+		scope = ec.scope
+	}
+	return NewEvalContextIn(ec.ctx, scope, self).evalCalcUsageMembers(sym, parts)
+}
+
 // calcUsageOutputSummary describes what a calc usage computes, for a diagnostic
 // about reading the usage itself rather than one of its outputs.
 func (ctx *Context) calcUsageOutputSummary(sym *symbols.Symbol) string {

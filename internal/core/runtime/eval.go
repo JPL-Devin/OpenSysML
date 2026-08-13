@@ -376,12 +376,23 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 	if n.Member == nil || len(n.Member.Parts) == 0 {
 		return Value{}, fmt.Errorf("empty member chain")
 	}
+	base, parts := chainBase(n)
 
 	// A calc usage carries no value of its own: its output features are computed
 	// by evaluating it, so `c.a` runs the usage — once — and reads the output
 	// from that evaluation rather than from a slot.
-	if sym, ok := ec.calcUsageOperand(n.Operand); ok {
-		return ec.evalCalcUsageMembers(sym, n.Member.Parts)
+	if sym, ok := ec.calcUsageOperand(base); ok {
+		return ec.evalCalcUsageMembers(sym, parts)
+	}
+
+	// A part carries no value of its own: it denotes an occurrence, whose features
+	// `lander.mass.mDry` reads, so the chain is read from that object.
+	if sym, ok := ec.occurrenceOperand(base); ok {
+		inst, err := ec.ctx.occurrenceOf(sym)
+		if err != nil {
+			return Value{}, fmt.Errorf("usage %s: %w", sym.Name, err)
+		}
+		return ec.chainMemberValue(Value{Kind: ValInstance, Instance: inst.ID}, parts, sym.Name)
 	}
 
 	// Evaluate the operand (left side of the chain)
@@ -403,12 +414,26 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 	return ec.chainMemberValue(operand, n.Member.Parts, "")
 }
 
+// chainBase flattens a nested feature chain: `lander.mass.mDry` is one chain of
+// members from `lander`, not a chain through the value of `lander.mass`.
+func chainBase(n *ast.FeatureChainExpr) (ast.Node, []ast.NameSegment) {
+	operand, parts := n.Operand, n.Member.Parts
+	for {
+		inner, ok := operand.(*ast.FeatureChainExpr)
+		if !ok || inner.Member == nil || len(inner.Member.Parts) == 0 {
+			return operand, parts
+		}
+		parts = append(append([]ast.NameSegment{}, inner.Member.Parts...), parts...)
+		operand = inner.Operand
+	}
+}
+
 // chainMemberValue reads the members named by parts from the object value names,
 // navigating through the objects the intermediate members name. from names the
 // member value came from, for a diagnostic about chaining through it.
 func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, from string) (Value, error) {
 	current, name := value, from
-	for _, part := range parts {
+	for i, part := range parts {
 		if current.Kind != ValInstance {
 			return Value{}, fmt.Errorf("cannot chain through non-instance member %s", name)
 		}
@@ -418,6 +443,11 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 		}
 		name = part.Text
 		if _, ok := inst.Slots[name]; !ok {
+			// A calc usage is an evaluation rather than a slot, so its outputs are
+			// read from a run of it against this object.
+			if sym, found := ec.ctx.model.LookupMember(inst.Type, name); found && isCalcUsageSymbol(sym) {
+				return ec.calcUsageMemberValue(sym, inst, parts[i+1:])
+			}
 			return Value{}, fmt.Errorf("member %s not found in instance", name)
 		}
 		// Read through GetSlot so a derived or composite member is materialized

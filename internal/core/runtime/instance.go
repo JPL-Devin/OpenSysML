@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -70,6 +71,42 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 	ctx.registerInstance(inst)
 
 	return inst, nil
+}
+
+// occurrenceOf returns the object a usage denotes, materializing it once: a part
+// declared in a package names one occurrence, so reading its features twice
+// reads the same object.
+func (ctx *Context) occurrenceOf(sym *symbols.Symbol) (*Instance, error) {
+	if id, ok := ctx.occurrences[sym]; ok {
+		if inst, ok := ctx.instances[id]; ok {
+			return inst, nil
+		}
+	}
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		return nil, err
+	}
+	ctx.occurrences[sym] = inst.ID
+	return inst, nil
+}
+
+// isOccurrenceUsage reports whether sym declares a usage that is an occurrence:
+// a part, item or individual, which is a thing with features rather than a
+// value, so a chain through it reads the features of that thing.
+func isOccurrenceUsage(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Value != nil {
+		return false
+	}
+	switch usage.Kind {
+	case ast.UsagePart, ast.UsageItem, ast.UsageOccurrence, ast.UsageIndividual:
+		return true
+	default:
+		return false
+	}
 }
 
 // isScalarFeature reports whether a feature holds at most one value. An

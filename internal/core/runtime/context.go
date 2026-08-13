@@ -33,14 +33,16 @@ type Context struct {
 
 	// calcUsageRuns holds the evaluation of each calc usage read in an activation
 	// under way, so reading several outputs of one usage answers from one
-	// execution of its body. An activation's evaluations are dropped when it ends,
-	// since a usage reading mutable state must not answer a later activation from
-	// an earlier one's values.
+	// execution of its body. An activation's evaluations end with it.
 	calcUsageRuns map[int64]map[calcUsageKey]*calcRun
 
 	// activations numbers the body activations begun in this context: a calc
 	// invocation, a block entry, a loop iteration, a body application.
 	activations int64
+
+	// occurrences holds the object each usage carrying no value of its own
+	// denotes, so a feature chain through a part reads one occurrence of it.
+	occurrences map[*symbols.Symbol]int64
 
 	// trace records evaluation, nil when not tracing.
 	trace *TraceRecorder
@@ -97,6 +99,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxStateEvents: DefaultMaxStateEvents,
 		maxDoSteps:     DefaultMaxDoSteps,
 
+		occurrences:   make(map[*symbols.Symbol]int64),
 		derivingSlots: make(map[slotRef]bool),
 	}
 }
@@ -154,8 +157,8 @@ func (ctx *Context) newActivation() int64 {
 	return ctx.activations
 }
 
-// endActivation forgets what an activation computed, once it has ended, together
-// with the activations of the calc usage evaluations it held.
+// endActivation forgets what an activation computed, once it has ended, and the
+// activations of the calc usage evaluations it held.
 func (ctx *Context) endActivation(activation int64) {
 	runs, ok := ctx.calcUsageRuns[activation]
 	if !ok {
