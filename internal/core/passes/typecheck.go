@@ -668,6 +668,13 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 		return isRequirementDefKind(defKind)
 	}
 
+	// A SatisfyRequirementUsage is a RequirementUsage (SysML v2 §8.3.19), so the
+	// declaration form `satisfy requirement r : Req1 by v` is typed by a
+	// RequirementDefinition or one of its specializations.
+	if useKind == ast.UsageSatisfy {
+		return isRequirementDefKind(defKind)
+	}
+
 	// A SubjectMembership's ownedSubjectParameter is an unconstrained Usage (SysML
 	// v2 §8.3.21), so any definition types a subject — the OMG training models
 	// subject a `port def` and an `action def` as well as structural definitions.
