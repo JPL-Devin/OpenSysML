@@ -394,3 +394,18 @@ func controlNodeName(name, kind string) string {
 	}
 	return kind
 }
+
+// RecordCalcUsageExit closes the nesting level of a calc usage's evaluation,
+// which computes the usage's output features rather than one result, so there is
+// no single value to record for it.
+func (tr *TraceRecorder) RecordCalcUsageExit(name string) {
+	tr.closeLevel()
+	tr.record(fmt.Sprintf("exit calc %s", name))
+}
+
+// RecordCalcOutput records the value one output feature of a calc usage took.
+// The outputs appear after the one evaluation of the usage's body they are read
+// from, which is how the trace shows that reading several of them ran it once.
+func (tr *TraceRecorder) RecordCalcOutput(calc, output string, value Value) {
+	tr.record(fmt.Sprintf("output %s.%s = %s", calc, output, FormatTraceValue(value)))
+}

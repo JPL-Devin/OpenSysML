@@ -36,6 +36,13 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_terminate_is_rejected", testCalcTerminateIsRejected)
 	t.Run("calc_assignment_outside_the_calc", testCalcAssignmentOutsideTheCalc)
 	t.Run("calc_non_boolean_condition", testCalcNonBooleanCondition)
+	t.Run("calc_usage_unbound_input", testCalcUsageUnboundInput)
+	t.Run("calc_usage_unknown_output", testCalcUsageUnknownOutput)
+	t.Run("calc_usage_cyclic_outputs", testCalcUsageCyclicOutputs)
+	t.Run("calc_usage_specializes_a_non_calc", testCalcUsageSpecializesANonCalc)
+	t.Run("calc_usage_step_budget", testCalcUsageStepBudget)
+	t.Run("calc_usage_output_without_a_value", testCalcUsageOutputWithoutAValue)
+	t.Run("multiple_outputs_invoked_as_an_expression", testMultipleOutputsInvokedAsAnExpression)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
@@ -2124,5 +2131,192 @@ func testCalcNonBooleanCondition(t *testing.T) {
 	err := invokeCalcInSource(t, src, "counting", 3, 10000)
 	if err == nil || !strings.Contains(err.Error(), "must evaluate to a Boolean") {
 		t.Errorf("expected a non-Boolean condition error, got: %v", err)
+	}
+}
+
+// calcUsageOutputInSource reads one output feature of the named calc usage and
+// returns the error the read reports, on its own goroutine so a body that never
+// terminates fails the case instead of stalling the suite. maxSteps bounds the
+// run.
+func calcUsageOutputInSource(t *testing.T, src, usageName, output string, maxSteps int64) error {
+	t.Helper()
+
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	ctx.maxSteps = maxSteps
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, usageName, ast.DefCalc)
+	if sym == nil {
+		t.Fatalf("calc usage %s not found", usageName)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		value, err := ctx.CalcUsageOutput(sym, output, sym.OwnerScope, nil)
+		if err == nil {
+			err = fmt.Errorf("output %s of %s answered %s, expected the read to fail",
+				output, usageName, FormatTraceValue(value))
+		}
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(10 * time.Second):
+		t.Fatalf("reading output %s of %s did not terminate", output, usageName)
+		return nil
+	}
+}
+
+// testCalcUsageUnboundInput: a usage that leaves an input of its calc with
+// neither a value nor a default computes nothing, since a usage passes no
+// arguments to stand in for one.
+func testCalcUsageUnboundInput(t *testing.T) {
+	src := `
+		package test {
+			calc def Two {
+				in n : Integer;
+				out a = n + 1;
+				out b = n * 2;
+			}
+			calc c : Two;
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "a", 10000)
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("expected ErrUnboundParameter, got: %v", err)
+	}
+}
+
+// testCalcUsageUnknownOutput: a name the calc declares no output for is a
+// modeling error, not an empty value.
+func testCalcUsageUnknownOutput(t *testing.T) {
+	src := `
+		package test {
+			calc def Two {
+				in n : Integer;
+				out a = n + 1;
+				out b = n * 2;
+			}
+			calc c : Two { in n = 5; }
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "nope", 10000)
+	if !errors.Is(err, ErrUnknownOutput) {
+		t.Errorf("expected ErrUnknownOutput, got: %v", err)
+	}
+	if err != nil && !strings.Contains(err.Error(), "a, b") {
+		t.Errorf("error should name the outputs the calc does declare, got: %v", err)
+	}
+}
+
+// testCalcUsageCyclicOutputs: outputs valued from each other have no value to
+// compute, which is reported as the cycle it is rather than spending the step
+// budget or hanging.
+func testCalcUsageCyclicOutputs(t *testing.T) {
+	src := `
+		package test {
+			calc def Knot {
+				in n : Integer;
+				out a = b + 1;
+				out b = a + n;
+			}
+			calc c : Knot { in n = 1; }
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "a", 10000)
+	if !errors.Is(err, ErrCyclicOutput) {
+		t.Errorf("expected ErrCyclicOutput, got: %v", err)
+	}
+}
+
+// testCalcUsageSpecializesANonCalc: a calc usage typed by something that is not
+// a calc inherits no parameters, outputs or body from it, so the specialization
+// is reported rather than the outputs it appears to be missing.
+func testCalcUsageSpecializesANonCalc(t *testing.T) {
+	src := `
+		package test {
+			part def Chassis {
+				attribute mass : Integer = 4;
+			}
+			calc c : Chassis;
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "mass", 10000)
+	if !errors.Is(err, ErrNotACalc) {
+		t.Errorf("expected ErrNotACalc, got: %v", err)
+	}
+}
+
+// testCalcUsageStepBudget: a usage whose body never terminates spends the step
+// budget of the run reading its output, so the read fails instead of hanging
+// whoever drove it.
+func testCalcUsageStepBudget(t *testing.T) {
+	src := `
+		package test {
+			calc def Spin {
+				in n : Integer;
+				attribute i : Integer = 0;
+				while i >= 0 {
+					i = i + 1;
+				}
+				out reached = i;
+			}
+			calc c : Spin { in n = 1; }
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "reached", 20)
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// testCalcUsageOutputWithoutAValue: an output the calc declares but binds no
+// value to computes nothing, so reading it says so rather than answering null.
+func testCalcUsageOutputWithoutAValue(t *testing.T) {
+	src := `
+		package test {
+			calc def Half {
+				in n : Integer;
+				out a = n + 1;
+				out b : Integer;
+			}
+			calc c : Half { in n = 5; }
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "b", 10000)
+	if !errors.Is(err, ErrNoValue) {
+		t.Errorf("expected ErrNoValue, got: %v", err)
+	}
+}
+
+// testMultipleOutputsInvokedAsAnExpression: an invocation of a function yields
+// exactly one result (KerML 7.4.9), so invoking a calc that computes several
+// outputs and designates no result is reported rather than answered with
+// whichever output happens to come first.
+func testMultipleOutputsInvokedAsAnExpression(t *testing.T) {
+	src := `
+		package test {
+			calc def Two {
+				in n : Integer;
+				out a = n + 1;
+				out b = n * 2;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Two", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("Two calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 5}}
+	result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatalf("expected the invocation to be rejected, it answered %s", FormatTraceValue(result))
+	}
+	if !errors.Is(err, ErrAmbiguousResult) {
+		t.Errorf("expected ErrAmbiguousResult, got: %v", err)
 	}
 }

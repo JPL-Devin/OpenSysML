@@ -31,6 +31,13 @@ type Context struct {
 	// defaults, result expression) per calc symbol.
 	calcShapes map[*symbols.Symbol]*calcShape
 
+	// calcUsageRuns holds the evaluation of each calc usage read during the
+	// current run, keyed by usage and object, so reading several outputs of one
+	// usage runs its body once. It is dropped when a run ends, since a usage whose
+	// outputs depend on mutable state must not answer a later run from an earlier
+	// one's values.
+	calcUsageRuns map[calcUsageKey]*calcRun
+
 	// trace records evaluation, nil when not tracing.
 	trace *TraceRecorder
 
@@ -80,6 +87,8 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		features:   make(map[*symbols.Symbol][]EffectiveFeature),
 		calcShapes: make(map[*symbols.Symbol]*calcShape),
 
+		calcUsageRuns: make(map[calcUsageKey]*calcRun),
+
 		maxActionSteps: DefaultMaxActionSteps,
 		maxStateEvents: DefaultMaxStateEvents,
 		maxDoSteps:     DefaultMaxDoSteps,
@@ -113,6 +122,7 @@ func (ctx *Context) allocateID() int64 {
 func (ctx *Context) beginRun() func() {
 	if ctx.runDepth == 0 {
 		ctx.steps = 0
+		ctx.calcUsageRuns = make(map[calcUsageKey]*calcRun)
 	}
 	ctx.runDepth++
 	return func() { ctx.runDepth-- }
@@ -126,6 +136,7 @@ func (ctx *Context) beginRun() func() {
 func (ctx *Context) beginExecutorRun(started *bool) func() {
 	if ctx.runDepth == 0 && !*started {
 		ctx.steps = 0
+		ctx.calcUsageRuns = make(map[calcUsageKey]*calcRun)
 	}
 	*started = true
 	ctx.runDepth++

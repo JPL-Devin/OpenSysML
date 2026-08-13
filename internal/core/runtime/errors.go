@@ -114,6 +114,25 @@ var (
 	// resolves to nothing.
 	ErrNoRequirement = errors.New("no requirement to satisfy")
 
+	// ErrNotACalcUsage is returned when an output feature is read from a symbol
+	// that is not a calc usage: only a usage carries an evaluation whose outputs
+	// are features.
+	ErrNotACalcUsage = errors.New("not a calc usage")
+
+	// ErrUnknownOutput is returned when a name read from a calc usage is not one
+	// of the output features its calc declares.
+	ErrUnknownOutput = errors.New("unknown output")
+
+	// ErrCyclicOutput is returned when an output feature's binding depends,
+	// directly or through other outputs, on the output being computed.
+	ErrCyclicOutput = errors.New("cyclic output dependency")
+
+	// ErrAmbiguousResult is returned when a calc declaring several output
+	// features is invoked as an expression. A function invocation has exactly
+	// one result (KerML 7.4.9), so a calc that designates none has no value to
+	// hand back and is read through a calc usage's output features instead.
+	ErrAmbiguousResult = errors.New("calculation has no single result")
+
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
 	// it can be created.

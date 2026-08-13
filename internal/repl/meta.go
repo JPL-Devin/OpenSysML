@@ -689,6 +689,10 @@ func formatElements(elements []runtime.Value) string {
 // whitespace alone. Named arguments (`v0 = ...`) are not supported here — the
 // notation writes them inside an invocation's parentheses, which is a different
 // production than an argument list at a prompt.
+//
+// A calc usage named without arguments binds its inputs from its own members,
+// so it is evaluated as a usage and every output feature it computes is listed
+// from that one run (SysML 7.17).
 func (s *Session) doCalc(calcName, argText string) ([]string, bool, error) {
 	doc := s.ws.Document(docName)
 	if doc == nil || doc.Scope == nil {
@@ -703,6 +707,12 @@ func (s *Session) doCalc(calcName, argText string) ([]string, bool, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return []string{"error: " + err.Error()}, false, nil
+	}
+
+	if strings.TrimSpace(argText) == "" {
+		if lines, handled := s.calcUsageOutputs(ctx, sym, calcName); handled {
+			return lines, false, nil
+		}
 	}
 
 	exprs, err := parseExprList(argText)
@@ -733,6 +743,30 @@ func (s *Session) doCalc(calcName, argText string) ([]string, bool, error) {
 		fmt.Sprintf("✓ %s(%s)", calcName, strings.Join(argTexts, ", ")),
 		fmt.Sprintf("  = %s", formatValue(result)),
 	}, false, nil
+}
+
+// calcUsageOutputs lists the outputs of a calc usage evaluated from its own
+// member values. It reports handled=false when the name is not a calc usage, or
+// is one that computes no output features, so those keep being invoked as
+// calculations with an empty argument list.
+func (s *Session) calcUsageOutputs(ctx *runtime.Context, sym *symbols.Symbol, calcName string) ([]string, bool) {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Kind != ast.UsageCalc {
+		return nil, false
+	}
+	outputs, err := ctx.CalcUsageOutputs(sym, sym.OwnerScope, nil)
+	if err != nil {
+		return []string{"error: calc usage evaluation failed: " + err.Error()}, true
+	}
+	if len(outputs) == 0 {
+		return nil, false
+	}
+	lines := make([]string, 0, len(outputs)+1)
+	lines = append(lines, fmt.Sprintf("✓ %s", calcName))
+	for _, out := range outputs {
+		lines = append(lines, fmt.Sprintf("  %s = %s", out.Name, formatValue(out.Value)))
+	}
+	return lines, true
 }
 
 // splitCalcArgs splits `%calc`'s tail into the calc's name and its argument

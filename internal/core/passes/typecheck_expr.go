@@ -18,6 +18,9 @@ type exprChecker struct {
 	resolver *resolve.Resolver
 	model    *semantics.Model
 	diags    []Diagnostic
+	// chaining guards the type of a feature read through a chain against a
+	// feature whose value names itself, directly or through another feature.
+	chaining map[*symbols.Symbol]bool
 }
 
 func (ec *exprChecker) errorf(span source.Span, format string, args ...any) {
@@ -131,6 +134,8 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 		return ec.inferQualified(scope, e.Name)
 	case *ast.QualifiedName:
 		return ec.inferQualified(scope, e)
+	case *ast.FeatureChainExpr:
+		return ec.inferFeatureChain(scope, e)
 	case *ast.OperatorExpr:
 		return ec.inferOperator(scope, e)
 	case *ast.InvocationExpr:
@@ -155,6 +160,46 @@ func (ec *exprChecker) inferQualified(scope *symbols.Scope, qn *ast.QualifiedNam
 		return semantics.PrimUnknown
 	}
 	return ec.model.PrimTypeOf(sym)
+}
+
+// inferFeatureChain types a feature chain (`c.a`) as the feature its last
+// segment names. The segments of a chain are members of the preceding segment
+// rather than of the enclosing scope (SysML 7.6.6), which is how a calc usage's
+// `out` feature — inherited from the calc it is typed by — is reached.
+func (ec *exprChecker) inferFeatureChain(scope *symbols.Scope, e *ast.FeatureChainExpr) semantics.PrimType {
+	sym, ok := ec.resolver.ResolveTarget(scope, e)
+	if !ok || sym == nil {
+		// An unresolved chain is reported by the name-resolution tier; typing it
+		// again here would double-report it.
+		return semantics.PrimUnknown
+	}
+	return ec.featurePrimType(sym)
+}
+
+// featurePrimType returns the scalar type of the feature sym declares, falling
+// back to the type of the value it is bound to when it declares none: an `out a
+// = n + 1` of a calc carries its type in its default.
+func (ec *exprChecker) featurePrimType(sym *symbols.Symbol) semantics.PrimType {
+	if prim := ec.model.PrimTypeOf(sym); prim != semantics.PrimUnknown {
+		return prim
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Value == nil || sym.OwnerScope == nil {
+		return semantics.PrimUnknown
+	}
+	if ec.chaining[sym] {
+		return semantics.PrimUnknown
+	}
+	if ec.chaining == nil {
+		ec.chaining = make(map[*symbols.Symbol]bool)
+	}
+	ec.chaining[sym] = true
+	defer delete(ec.chaining, sym)
+	// The value belongs to the declaring scope, and is checked there in its own
+	// right, so this only reads its type: diagnostics raised here would be
+	// reported once per reader.
+	silent := exprChecker{resolver: ec.resolver, model: ec.model, chaining: ec.chaining}
+	return silent.infer(sym.OwnerScope, usage.Value)
 }
 
 func (ec *exprChecker) inferOperator(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {

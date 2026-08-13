@@ -25,6 +25,7 @@
 - Qualified names (A::B::C)
 - Deterministic evaluation trace (parameter binding, sub-expression order, results)
 - Error handling (unbound/unknown parameters, arity, missing return, recursion and step budgets)
+- Calc usages as multi-output consumers: a usage's `out` features resolve, typecheck and evaluate as features (`attribute z = c.b;`), from one run of the body per usage per object
 
 **Constraints (7/7 features):**
 - Assert evaluation (boolean satisfaction)
@@ -116,11 +117,11 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 132 conformance cases (all passing: calc×26, constraint×7, requirement×12, satisfy×5, unit×7, action×35, state×31, accept×1, instance×8)
-- 63 robustness subtests (deadlock, a non-terminating loop, a non-terminating calc loop, a calc body that never returns, a send or a `terminate` inside a calc, an assignment outside a calc body, a non-Boolean calc condition, a body-local declaration that must not leak, a body member that is not executable, a statement written directly among an action's members, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references, a library function outside its domain or with the wrong arity, an extension library function outside its domain, exponentiation beyond the Integer range)
+- 137 conformance cases (all passing: calc×26, calcUsage×4, constraint×7, requirement×12, satisfy×5, unit×7, action×35, state×31, accept×1, instance×9)
+- 70 robustness subtests (deadlock, a non-terminating loop, a calc usage leaving an input unbound, reading an output it does not declare or one with no value, outputs valued from each other, a usage typed by something that is not a calc, a usage body spending the step budget, an invocation of a calc that computes several outputs and designates no result, a non-terminating calc loop, a calc body that never returns, a send or a `terminate` inside a calc, an assignment outside a calc body, a non-Boolean calc condition, a body-local declaration that must not leak, a body member that is not executable, a statement written directly among an action's members, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references, a library function outside its domain or with the wrong arity, an extension library function outside its domain, exponentiation beyond the Integer range)
 - 233 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
 - 53 golden AST fixtures (including the three loop forms, pseudostate, timed-trigger, call-trigger, calc default/invocation, calc statement bodies and n-ary connector-end parsing tests)
-- 46 golden execution traces (loop and conditional bodies, calc statement bodies and their loop iterations, fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation, library function invocation)
+- 50 golden execution traces (loop and conditional bodies, one calc usage body run feeding several output reads, calc statement bodies and their loop iterations, fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation, library function invocation)
 - 64 negative parser subtests
 - 2,465 tests and subtests, of which 2,460 pass and 5 skip (`go test -race -count=1 -v ./...`; 1,384 top-level `Test` functions). The skips are unimplemented-expression and requirement-subject cases that skip themselves.
 
@@ -173,13 +174,36 @@ Each row documents one behavioral semantic feature:
 | Control flow (if/else) in calc, including the conditional expression `if c ? a else b` evaluated lazily | `runtime/statements.go` `ifStatement`; `eval.go` `evalConditional` | `calc_conditional_branch.sysml`, `calc_conditional_operator_base_case.sysml` | ✅ Faithful |
 | A non-Boolean `if`/loop condition in a calc is a type error, and a diagnostic at runtime | `passes/typecheck.go` `checkBehaviorMember`; `runtime/statements.go` `condition` | `typecheck_calc_body_test.go:TestCalcBodyNonBooleanWhileCondition`, `robustness_test.go:testCalcNonBooleanCondition` | ✅ Faithful |
 | Statements and loop iterations in the evaluation trace | `trace.go` `RecordStatement`/`RecordLoopIteration` | `calc_iterative_factorial.trace.golden`, `calc_early_return_from_loop.trace.golden` | ✅ Faithful |
-| Missing return expression | `invoke_calc.go` `calcShapeOf` (`ErrNoResultExpression`: no result expression and no returning body) | `robustness_test.go:testCalcWithoutResult` | ✅ Faithful |
+| Missing return expression | `invoke_calc.go` `calcShapeOf` (`ErrNoResultExpression`: no result expression, no returning body and no output features) | `robustness_test.go:testCalcWithoutResult` | ✅ Faithful |
+| A calc usage's members are the parameters and outputs of the calc it is typed by, reachable through a feature chain (SysML 7.6.6, 7.17) | `resolve/target.go` `ResolveTarget`/`memberChain` + `resolve/document.go` `resolveMemberChain` → `semantics` `Model.LookupMember` | `passes/typecheck_calc_usage_test.go:TestCalcUsageOutputTypesAsTheOutputItNames`, `:TestCalcUsageOutputInsideAPartDefinition` | ✅ Faithful |
+| An output read through a chain types as that output declares, or as its default computes when it declares no type | `passes/typecheck_expr.go` `inferFeatureChain`/`featurePrimType` | `passes/typecheck_calc_usage_test.go:TestCalcUsageOutputTypedByItsDefaultIsChecked`, `:TestCalcUsageDeclaredOutputTypeIsChecked` | ✅ Faithful |
+| Reading a name the calc declares no output for is unresolved, reported once by the name-resolution tier | `resolve/document.go` `resolveMemberChain`; `runtime/calc_usage.go` `calcRun.output` (`ErrUnknownOutput`) | `passes/typecheck_calc_usage_test.go:TestCalcUsageUnknownOutputIsUnresolved`, `robustness_test.go:testCalcUsageUnknownOutput` | ✅ Faithful |
+| A calc usage evaluates its body once and every `out` feature it declares is readable from that run (SysML 7.17) | `runtime/calc_usage.go` `CalcUsageOutput`/`CalcUsageOutputs`/`calcUsageRun` → `invoke_calc.go` `calcShapeOf`/`bindCalcParameters` → `runtime/statements.go` `stmtEngine` | `calc_usage_multiple_outputs.sysml`, `calc_usage_statement_body.sysml`, `calc_usage_inherited_parameters.sysml`, `calc_usage_instance_slots.sysml` | ✅ Faithful |
+| Reading several outputs of one usage runs the body once, per usage and per object, reset with the run | `runtime/calc_usage.go` `calcUsageRun` (`calcUsageKey`) + `context.go` `beginRun`/`beginExecutorRun` | `calc_usage_multiple_outputs.trace.golden`, `calc_usage_statement_body.trace.golden`, `calc_usage_inherited_parameters.trace.golden` | ✅ Faithful |
+| A usage's inputs bind from its own member values, falling back to the defaults declared along its specialization chain, and may name a sibling feature of the object carrying the usage | `runtime/calc_usage.go` `calcUsageRun` → `invoke_calc.go` `bindCalcParameters`/`calcParameters` | `calc_usage_inherited_parameters.sysml`, `calc_usage_instance_slots.sysml` | ✅ Faithful |
+| An `out` default evaluates in the calc's own scope and may name inputs, body locals and other outputs | `runtime/calc_usage.go` `calcRun.output`/`lookupOutput` + `eval.go` `EvalContext.calcRun` | `calc_usage_statement_body.sysml`, `calc_usage_inherited_parameters.sysml` | ✅ Faithful |
+| An output feature fed into a feature's default value (the parametric-budget pattern) | `eval.go` `evalFeatureChain`/`evalCalcUsageMembers` | `calc_usage_multiple_outputs.sysml`, `calc_usage_instance_slots.sysml` | ✅ Faithful |
+| Outputs valued from each other are a cyclic dependency, not a hang or a spent step budget | `runtime/calc_usage.go` `calcRun.output` (`ErrCyclicOutput`) | `robustness_test.go:testCalcUsageCyclicOutputs` | ✅ Faithful |
+| A usage leaving an input unbound, or reading an output with no value, is reported | `runtime/calc_usage.go` `calcUsageRun` (`ErrUnboundParameter`), `calcRun.output` (`ErrNoValue`) | `robustness_test.go:testCalcUsageUnboundInput`, `:testCalcUsageOutputWithoutAValue` | ✅ Faithful |
+| A calc usage typed by something that is not a calc is reported | `invoke_calc.go` `calcShapeOf` (`ErrNotACalc`) | `robustness_test.go:testCalcUsageSpecializesANonCalc` | ✅ Faithful |
+| The step budget bounds a usage's body the way it bounds an invocation | `runtime/calc_usage.go` `CalcUsageOutput` `beginRun` → `context.go` `incrementStep` (`ErrStepLimitExceeded`) | `robustness_test.go:testCalcUsageStepBudget` | ✅ Faithful |
+| An invocation yields exactly one result (KerML 7.4.9), so invoking a calc that computes several outputs and designates no result is rejected rather than answered with the first of them | `runtime/calc_usage.go` `calcShape.designatedOutput` (`ErrAmbiguousResult`) | `robustness_test.go:testMultipleOutputsInvokedAsAnExpression`, `repl/runtime_commands_test.go:TestCalcWithSeveralOutputsIsNotInvocable` | ✅ Faithful |
+| A calc with exactly one output and no `return` is invocable, that output being its result | `runtime/calc_usage.go` `calcShape.designatedOutput` | `calc_usage_single_output.sysml` | ✅ Faithful |
+| `%calc` on a calc usage lists the outputs of one evaluation; a chain into a usage evaluates at the prompt | `repl/meta.go` `doCalc`/`calcUsageOutputs` | `repl/runtime_commands_test.go:TestCalcUsageOutputsAtThePrompt` | ✅ Faithful |
+| A calc usage's outputs are evaluation results, not slots of an object | `runtime/calc_usage.go` (no instance materialization) | `calc_usage_instance_slots.sysml` (the features fed by the outputs are slots; the usage itself is not) | ⚠️ Approximate (`%instances` and export show the features valued from outputs, not the usage's outputs themselves) |
 | Boolean operators evaluated at runtime (`and`, `or`, `xor`, `implies`, short-circuiting where they can) | `eval.go` `evalLogical` | `calc_boolean_operators.sysml` | ✅ Faithful |
 | Identity (`===`, `!==`), null coalescing (`??`, lazy) and remainder (`%`) evaluated at runtime | `eval.go` `evalIdentity`/`evalNullCoalesce`/`evalArithmetic` | `calc_identity_operators.sysml`, `calc_null_coalesce.sysml`, `calc_modulo_operator.sysml` | ✅ Faithful |
 | An operator with no runtime evaluation (classification, cast, range, `all`, bitwise complement) reports why | `eval.go` `unimplementedOperators` (`ErrUnsupportedOperator`) | `eval_operator_test.go:TestUnimplementedOperatorReportsWhy` | ❌ Not implemented (rejected with a typed diagnostic naming what it would need) |
 | Unary operators (not, -, +) | `eval.go` `evalUnary` | `calc_unary_operators.sysml` | ✅ Faithful |
 | Type coercion (Integer→Real) | `eval.go:344` toReal | `calc_type_coercion.sysml` | ✅ Faithful |
 | Qualified names (A::B::C) | `eval.go` + `resolve/` | `calc_qualified_names.sysml` | ✅ Faithful |
+
+A calc usage with several `out` features, a usage nested in a part, and a chain
+into one (`c.a`) are all existing productions — a directed feature member of a
+usage body and `FeatureChainExpr` — so multi-output calc usages added no grammar
+and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
+(a typed calc usage binding an inherited parameter in its body) and
+`calc_statement_body.sysml` lock the parse structure they reuse.
 
 ### Constraint
 
