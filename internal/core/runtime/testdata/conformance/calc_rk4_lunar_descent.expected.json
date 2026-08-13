@@ -1,0 +1,6 @@
+{
+  "type": "calc",
+  "evaluate": "test::Propagate",
+  "inputs": [{"type": "Integer", "value": 3}],
+  "result": {"type": "Real", "value": 15001.719185373526}
+}

@@ -48,6 +48,11 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("nested_calc_usage_recursion_depth", testNestedCalcUsageRecursionDepth)
 	t.Run("nested_calc_usage_step_budget", testNestedCalcUsageStepBudget)
 	t.Run("multiple_outputs_invoked_as_an_expression", testMultipleOutputsInvokedAsAnExpression)
+	t.Run("body_local_usage_of_a_non_calc", testBodyLocalUsageOfANonCalc)
+	t.Run("body_local_declaration_not_executable", testBodyLocalDeclarationNotExecutable)
+	t.Run("range_bound_is_not_an_integer", testRangeBoundIsNotAnInteger)
+	t.Run("range_spends_the_step_budget", testRangeSpendsTheStepBudget)
+	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
@@ -2540,5 +2545,139 @@ func testNestedCalcUsageStepBudget(t *testing.T) {
 	err := calcUsageOutputInSource(t, src, "c", "d", 20)
 	if !errors.Is(err, ErrStepLimitExceeded) {
 		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// calcErrorWithLibraries invokes the named calc of package test in src, with the
+// standard library indexed, and answers the error it fails with.
+func calcErrorWithLibraries(t *testing.T, src, calcName string, args []Value, maxSteps int64) error {
+	t.Helper()
+
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	ctx.maxSteps = maxSteps
+	sym, scope := calcByName(t, idx.DocumentRoot("<test>"), "test", calcName)
+
+	done := make(chan error, 1)
+	go func() {
+		result, err := ctx.InvokeCalc(sym, args, scope)
+		if err == nil {
+			err = fmt.Errorf("calc %s returned %s, expected it to fail", calcName, FormatTraceValue(result))
+		}
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(10 * time.Second):
+		t.Fatalf("calc %s did not terminate", calcName)
+		return nil
+	}
+}
+
+// testBodyLocalUsageOfANonCalc: a body-local usage typed by something that is no
+// calc is reported when the declaration is reached, not skipped.
+func testBodyLocalUsageOfANonCalc(t *testing.T) {
+	src := `
+		package test {
+			part def Thing;
+			calc def Holder {
+				in n : Integer;
+				attribute i : Integer = 0;
+				while i < n {
+					calc r : Thing;
+					assign i := i + 1;
+				}
+				i
+			}
+		}
+	`
+	err := calcErrorWithLibraries(t, src, "Holder", []Value{constInt(1)}, 10000)
+	if !errors.Is(err, ErrNotACalc) {
+		t.Errorf("expected ErrNotACalc, got: %v", err)
+	}
+}
+
+// testBodyLocalDeclarationNotExecutable: a declaration in a body the runtime has
+// no execution for names itself rather than passing silently.
+func testBodyLocalDeclarationNotExecutable(t *testing.T) {
+	src := `
+		package test {
+			calc def Holder {
+				in n : Integer;
+				if n > 0 {
+					part broken;
+				}
+				n
+			}
+		}
+	`
+	err := calcErrorWithLibraries(t, src, "Holder", []Value{constInt(1)}, 10000)
+	if err == nil || !strings.Contains(err.Error(), "broken") {
+		t.Errorf("error should name the declaration it cannot execute, got: %v", err)
+	}
+}
+
+// testRangeBoundIsNotAnInteger: `..` declares Integer bounds, so a Real bound is
+// the type mismatch it is rather than a truncated range.
+func testRangeBoundIsNotAnInteger(t *testing.T) {
+	src := `
+		package test {
+			calc def Span {
+				in n : Integer;
+				attribute r = 1.5..n;
+				n
+			}
+		}
+	`
+	err := calcErrorWithLibraries(t, src, "Span", []Value{constInt(3)}, 10000)
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("expected ErrTypeMismatch, got: %v", err)
+	}
+}
+
+// testRangeSpendsTheStepBudget: each element a range generates costs a step, so
+// a range too large to hold fails the run rather than exhausting memory.
+func testRangeSpendsTheStepBudget(t *testing.T) {
+	src := `
+		package test {
+			calc def Span {
+				in n : Integer;
+				attribute r = 1..1000000;
+				n
+			}
+		}
+	`
+	err := calcErrorWithLibraries(t, src, "Span", []Value{constInt(3)}, 100)
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// testUsageReadThroughAPartWithoutAnOutput: a chain through a part that stops at
+// a calc usage names the outputs to read instead of answering no value.
+func testUsageReadThroughAPartWithoutAnOutput(t *testing.T) {
+	src := `
+		package test {
+			calc def Two {
+				in n : Integer;
+				out a = n + 1;
+				out b = n * 2;
+			}
+			part holder {
+				calc c : Two { in n = 5; }
+			}
+			calc def Probe {
+				in n : Integer;
+				holder.c
+			}
+		}
+	`
+	err := calcErrorWithLibraries(t, src, "Probe", []Value{constInt(1)}, 10000)
+	if !errors.Is(err, ErrNoValue) {
+		t.Errorf("expected ErrNoValue, got: %v", err)
+	}
+	if err != nil && !strings.Contains(err.Error(), "a, b") {
+		t.Errorf("error should name the outputs to read, got: %v", err)
 	}
 }

@@ -1,0 +1,5 @@
+{
+  "type": "calc",
+  "evaluate": "test::Interleaved",
+  "result": {"type": "Real", "value": 1010.0}
+}

@@ -105,7 +105,7 @@ func (Declare) statement() {}
 // execution of the block.
 type DeclareUsage struct {
 	Name  string
-	Node  *ast.Usage
+	Node  *ast.Usage     // the declaration itself, for diagnostics
 	Scope *symbols.Scope // the scope the usage was declared in
 }
 
