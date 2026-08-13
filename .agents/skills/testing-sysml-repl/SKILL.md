@@ -296,9 +296,67 @@ Tooling trap: running a pysysml script that auto-starts the service from a *non-
 tends to return no output at all (the spawned service holds the pipe). Run such scripts with a tty
 shell (`tty: true`) or inside the GUI terminal, and use the venv interpreter
 (`~/pysysml-venv/bin/python`) — the default `python` in a plain shell has no `pysysml`.
+**The venv is not always at `~/pysysml-venv`**: some sessions ship `/home/ubuntu/sysml-venv`
+instead, and the system `python` may have a protobuf too new for the generated stubs. Resolve it
+once with `ls -d /home/ubuntu/*venv*` and check `<venv>/bin/python -c 'import pysysml'` before
+blaming the client. A one-shot non-tty `<venv>/bin/python script.py` did work in practice, so try
+it before falling back to a tty shell.
 
 A name declared inside a loop or branch body lives in a block frame and must **not** appear in the
 action's `Results:` — check for the *absence* of the line, not just the right total.
+
+## Calc usage semantics: activation snapshots, body-local usages, integer ranges (PR #118)
+
+These four runtime areas are cheap to test from the prompt and each has an unambiguous A/B against
+a pre-fix binary, so build the contrast binary from the merge-base first (see above).
+
+- **A calc usage's outputs must all come from one input binding per activation.** The probe is a
+  pair of calc defs that differ only in *statement order*: one reads `p.a`, assigns the feature the
+  input names, then reads `p.b`; the other reads both outputs before the assignment. Both must give
+  the **same** number — the read order is not observable. The pre-fix signature is the interleaved
+  one answering from mixed state (e.g. `1020.00` against `1010.00`). `%calc` on each is enough;
+  ready-made as `internal/core/runtime/testdata/conformance/calc_usage_outputs_one_binding.sysml`.
+  Two assertions must accompany it, since the fix relaxes the memoization key and could over-share:
+  a genuine output cycle (`out a = b + 1.0; out b = a + 1.0;`) still has to report
+  `cyclic output dependency: output a of calc … depends on itself`, and two usages of one calc def
+  with **different** arguments must keep their own values (`p1` at `k=1.0` next to `p2` at `k=5.0`
+  → `1005.00`, never `1001` or `5005`).
+- **Body-local calc usages inside a `while`/`if`/`for` body** used to fail at
+  `calc usage "<name>" in a body is not executable`. The realistic fixture is
+  `conformance/calc_rk4_lunar_descent.sysml` (four body-local stage usages `k1..k4` in a `for` body
+  plus a nested steering usage): `%calc test::Propagate 3` → `= 15001.72`, and the gRPC side gives
+  the full-precision `15001.719185373526` that the `.expected.json` pins. **The REPL prints two
+  decimals**, so assert exactness through pysysml `eval`, not the prompt. Keep a two-line `while`
+  variant around too — it shows the removed error message on camera, which the RK4 file cannot,
+  because on a pre-fix binary RK4 dies earlier on `..`.
+- **`..` is the ordered integer sequence the stdlib declares**, not a value kind of its own
+  (pre-fix: `unsupported operator: '..': a range is not a value kind the runtime carries`). Five
+  prompt evals cover it: `(1..5)->collect { in i; i * i }` → `[1, 4, 9, 16, 25]`, `3..1` → `[]`
+  (descending is empty, not an error), `1..2.5` → `type mismatch: '..' requires Integer bounds`,
+  `(1..4)->SequenceFunctions::subsequence(2, 3)` → `[2, 3]` (a stdlib function defined *via* a
+  range), and `conformance/calc_integer_range.sysml`'s `%calc test::RangeSum 4` → `= 44`, which
+  folds `collect`/`select`/`for i in 1..n`/`sum`/`size`/`#(2)` into one number. Loading that
+  fixture prints pre-existing tier-2 `unresolved reference: collect` / `select` diagnostics on
+  **every** revision — not a regression. Note ranges need a loaded document: on a bare REPL the
+  evals answer `no declarations loaded`, which is not the range path at all.
+- **A calc usage nested in a part is readable through a feature chain.** `%eval Pkg::lander.mass.mDry`
+  and `%eval Pkg::lander.dryMass` (an attribute whose default reads the usage) both answer the
+  number; pre-fix both were `usage Pkg::lander has no value`. Reading the usage **without** naming
+  an output must name the outputs instead:
+  `no value: calc usage mass computes output features (mProp, mDry, mWet); read one of them`.
+  The model lives in `internal/core/runtime/part_feature_chain_test.go` as `partChainModel` — copy
+  it rather than inventing constants, and take the expected value from that test
+  (`mDry = 100.0 + 250.0 * 0.4` → `200.00`); task descriptions quoting other magnitudes usually
+  refer to an earlier draft of the model.
+- **`pysysml` `Model.find` must accept the FQN it reports**: `m.find("Rhs")` and
+  `m.find("test::Rhs")` return the same symbol (`.id == 'test::Rhs'`) and `m.find("test::Missing")`
+  is `None`. Remember the package name in the fixture decides the FQN spelling.
+
+Because all five reach the *same* statement engine, feature-chain evaluation and calc memoization,
+follow them with the cheap canaries: `%action tally` + `%continue` → `total = 5`, a
+`%state Debug::Cycle` + `%advance 1` + `%advance 9` sweep → `working` at `Time: 10.00`, and a gRPC
+`get_slot` on `Demo::Vehicle` (`mass` → `materialized=True kind=real_value`, `engine` →
+`kind=instance_id`).
 
 ## Session-accumulation trap (bites both testers and features)
 
