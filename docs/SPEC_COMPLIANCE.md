@@ -269,7 +269,7 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 | An execution trace of a unit-carrying value renders the magnitude and the unit (`5.0 [m/s]`), as the REPL prints a quantity | `runtime/trace.go` `FormatTraceValue` | `action_quantity_assign.trace.golden`, `runtime/quantity_test.go:TestFormatTraceValueQuantity` | ✅ Faithful |
 | Incommensurable units are a typed error (`ErrIncommensurableUnits`), never a comparison of bare magnitudes that would equate `1.5 [m/s]` with `1.5 [km/h]` | `runtime/errors.go` `ErrIncommensurableUnits`, `quantity.go` `convertTo` | `runtime/robustness_test.go` `quantity_incommensurable_comparison`, `runtime/quantity_test.go:TestQuantityIncommensurable` | ✅ Faithful |
 
-⚠️ The spec's own `QuantityCalculations::ConvertQuantity(x, targetMRef)` is not an invocable function, and a quantity is not yet an instantiated `ScalarQuantityValue` object whose `num`/`mRef` features can be read by name: the unit is carried on the runtime value, not modelled as a library object. The gRPC value schema has no magnitude-and-unit form, so a quantity crossing that boundary is reported as unsupported rather than serialized as a bare magnitude (`internal/grpc/convert.go`). Sequence indexing (`speeds#(3)`), which the parser represents with the same node, is still unevaluated: the two forms are told apart at the node (`ast.IndexExpr.Bracket`), so indexing is not read as a magnitude in a unit.
+⚠️ The spec's own `QuantityCalculations::ConvertQuantity(x, targetMRef)` is not an invocable function, and a quantity is not yet an instantiated `ScalarQuantityValue` object whose `num`/`mRef` features can be read by name: the unit is carried on the runtime value, not modelled as a library object. The gRPC value schema has no magnitude-and-unit form, so a quantity crossing that boundary is reported as unsupported rather than serialized as a bare magnitude (`internal/grpc/convert.go`). Sequence indexing (`speeds#(3)`), which the parser represents with the same node, is evaluated as the index it is (see *Sequence Indexing and Collection Operations* below): the two forms are told apart at the node (`ast.IndexExpr.Bracket`), so an index is never read as a magnitude in a unit, nor a quantity as an index.
 
 ⚠️ A requirement feature that carries no value of its own is read from the satisfying object's feature of that name, which is how a requirement stated over the values it checks (`attribute verticalSpeed;` compared against a limit) reaches a verdict from `by`. The spec supplies a subject's values to a requirement through the subject parameter (`subject lander : Lander;` then `lander.verticalSpeed`) or an explicit binding, not by matching names, so this fallback — the same one `%requirement` applies on an instance — is an approximation, and a requirement whose unbound feature happens to share a name with an unrelated feature of the subject would be checked against it. A requirement whose value comes from neither its own binding nor the subject (the lunar lander model's `actualVerticalSpeed`, produced by an analysis) still has no value to check and reports `ErrNoValue`.
 
@@ -428,9 +428,76 @@ Found, not fixed — numeric library features that remain unevaluable:
 | Not implemented | Why |
 |---|---|
 | `VectorFunctions`, `MatrixFunctions` | Needs a vector value in the evaluator; every value is scalar today. |
-| `SequenceFunctions` beyond `size`/`isEmpty`/`includes` | Needs the sequence semantics of the library's own function bodies, not just element access. |
 | `ComplexFunctions` | Needs a complex value kind. |
 | Library functions in the checker's own name resolution | An unqualified call to a library function the model does not import evaluates, but the `unresolved-reference` diagnostic still reports the name; importing `RealFunctions::*` clears it. |
+
+### Sequence Indexing and Collection Operations (KerML §9.3 `SequenceFunctions`, `CollectionFunctions`, `ControlFunctions`)
+
+A KerML sequence is not a value of its own kind: every value is a sequence — of
+one element where it is a scalar, of none where it is null — which is how the
+library's own `isEmpty` is `seq == null` and how `1->size()` is 1. The runtime
+takes that view of a value in `runtime/collections.go` `elementsOf`, so the
+operations agree with the library's definitions for a scalar and for null as
+well as for a sequence or a set.
+
+The index is **1-based**, verified against the vendored declaration rather than
+assumed: `SequenceFunctions::'#'` declares `in index: Positive[1]` and
+`SequenceFunctions::head` is defined as `seq#(1)`, `last` as `seq#(size(seq))`
+and `subsequence` as `(startIndex..endIndex)->collect {in i; seq#(i)}`. An index
+of 0 is therefore not a position, and is reported rather than read as the first
+element.
+
+The library declares each operation with a body — `size` recursively as `if
+isEmpty(seq)? 0 else size(tail(seq)) + 1` — but that body is the specification
+of the operation, not the way to compute it, so a name denoting the library
+declaration dispatches to the implementation while a model's own declaration of
+that name is still evaluated from its own body.
+
+The three notations a model can write an operation in — the collect/select
+notation (`xs.{in x; …}`, `xs.?{in x; …}`), the receiver form
+(`xs->collect {…}`, `xs->size()`) and the plain call (`size(xs)`,
+`SequenceFunctions::size(xs)`) — all reach one implementation per operation, so
+they cannot drift apart.
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| `seq#(i)` is the i-th element counting from 1 (`SequenceFunctions::'#'`, `in index: Positive[1]`), and an index of 0, a negative index or one past the end is a typed error rather than an empty or zero value | `runtime/collections.go` `evalSequenceIndex`, `elementAt`, `indexOf`; `runtime/quantity.go` `evalIndexExpr` (non-bracket arm) | `runtime/collections_test.go` `TestSequenceIndexing`, `TestSequenceIndexingErrors`; conformance `calc_sequence_index`, `calc_sequence_index_out_of_range`, `calc_sequence_index_zero`, `calc_sequence_index_non_integer`; `robustness_test.go:sequence_index_names_no_position` | ✅ Faithful |
+| The index and the quantity expression share one AST node and are told apart by the notation that produced them (`ast.IndexExpr.Bracket`), so `5 [m]` is a quantity and `xs#(1)` is an element | `parser/expr.go` (`Hash` and `LBracket` arms), `runtime/quantity.go` `evalIndexExpr` | `parser/testdata/parse/quantity_expression.golden`, `parse/collection_operations.golden`; `runtime/collections_test.go` `TestSequenceIndexKeepsQuantityForm`; conformance `calc_sequence_index_and_quantity_form`; `parser/negative_test.go` (`index_no_paren`, `index_bracket_empty`) | ✅ Faithful |
+| An index that is not one whole number (a Real, a Boolean, a string, a collection) is a typed error, statically where it is written as a literal and at evaluation otherwise | `passes/typecheck_expr.go` `inferIndex` (index conforms to `Natural`, a literal 0 and a literal past a written sequence's length); `runtime/collections.go` `indexOf` | `passes/typecheck_index_test.go` `TestIndexNonIntegerIndexReported`, `TestIndexZeroReported`, `TestIndexPastWrittenSequenceReported`; `runtime/collections_test.go` `TestSequenceIndexingErrors` | ✅ Faithful |
+| `collect` answers the mapper's result for each element, in order, with the parameter the body itself declares bound to the element and the scope the body was written in still visible | `runtime/collections.go` `builtinControlCollect`, `applyBody`; `runtime/eval.go` `evalCollectExpr`, `evalCollectionNotation` | `runtime/collections_test.go` `TestCollectionResults`; conformance `calc_collect_over_sequence`, `calc_collect_names_outer_variable`, `calc_nested_collection_operations` | ✅ Faithful |
+| `select`/`reject`/`selectOne`/`forAll`/`exists` require the `Boolean[1]` result their `expr` parameter declares, and a selector answering anything else is a typed error rather than a dropped element | `runtime/collections.go` `filter`, `quantify`, `applyPredicate` | `runtime/collections_test.go` `TestCollectionResults`, `TestCollectionOperationErrors`; conformance `calc_select_over_sequence`, `calc_select_predicate_not_boolean`; `robustness_test.go:select_predicate_is_not_a_condition` | ✅ Faithful |
+| A body called with a number of arguments it declares no parameters for is a typed error (`ErrBodyArity`), never a call with a parameter left unbound | `runtime/collections.go` `bodyOf` | `runtime/collections_test.go` `TestCollectionOperationErrors`; conformance `calc_collection_body_wrong_arity`; `robustness_test.go:collection_body_of_the_wrong_arity`; `parser/negative_test.go` (`body_param_no_name`) | ✅ Faithful |
+| `SequenceFunctions`: `#`, `size`, `isEmpty`, `notEmpty`, `includes`, `includesOnly`, `excludes`, `equals`, `same`, `union`, `intersection`, `including`, `excluding`, `subsequence`, `excludingAt`, `head`, `tail`, `last` — each computing what the vendored body specifies, `equals` by value and `same` by identity | `runtime/collections.go`, registered in `runtime/builtins.go` | `runtime/collections_test.go` `TestCollectionResults`, `TestCollectionScalarResults`; conformance `calc_collection_aggregators` | ✅ Faithful |
+| `CollectionFunctions`: `size`, `isEmpty`, `notEmpty`, `contains`, `containsAll`, `head`, `tail`, `last`, `#` over a collection's elements, a set included | `runtime/collections.go`, `runtime/builtins.go` | `runtime/collections_test.go` `TestCollectionScalarResults`, `TestCollectionOperationsOverSets` | ✅ Faithful |
+| An operation over an empty collection answers the empty collection and never calls its body, since there is no element to call it with | `runtime/collections.go` `elementsOf` (an empty collection yields no elements) | conformance `calc_collection_ops_over_empty`; `runtime/collections_test.go` `TestCollectionResults` | ✅ Faithful |
+| `ControlFunctions`: `collect`, `select`, `selectOne`, `reject`, `reduce`, `forAll`, `exists`, `allTrue`, `anyTrue`, `minimize`, `maximize` | `runtime/collections.go`, `runtime/builtins.go` | `runtime/collections_test.go` `TestCollectionResults`, `TestCollectionScalarResults`, `TestCollectionOperationErrors` | ✅ Faithful |
+| `NumericalFunctions::sum`/`product` and the specializations that fix the identity of an empty aggregation (`sum0(collection, 0)`, `product1(collection, 1)`), keeping the elements' kind: Integers sum to an Integer, a Real anywhere makes the result a Real, and an overflowing sum or product is reported rather than wrapped | `runtime/collections.go` `aggregate`, `foldNumeric` | `runtime/collections_test.go` `TestCollectionScalarResults`; conformance `calc_empty_collection_aggregation` | ✅ Faithful |
+| The unqualified, qualified and receiver (`->`) forms of an operation are one implementation, so `(1,2,3)->size()`, `size((1,2,3))` and `SequenceFunctions::size((1,2,3))` cannot disagree; a name the model itself declares still resolves to that declaration | `runtime/builtins.go` `builtinsByLocalName`, `Context.builtinFor`; `runtime/eval.go` `evalInvocation` (receiver prepended as the first argument) | `runtime/collections_test.go` `TestCollectionScalarResults`; conformance `calc_collection_receiver_form` | ✅ Faithful |
+| A collection operation is an expression wherever an expression is allowed, including inside a calc body's `while` and `for` loops | `runtime/collections.go`, `runtime/action_statements.go` | conformance `calc_collection_ops_in_for_loop`, `calc_collection_ops_in_while_loop` | ✅ Faithful |
+| Every operation is bounded by the evaluation step budget, since each call of its body spends steps | `runtime/eval.go` `Context.step` | `robustness_test.go:collection_operation_step_budget` | ✅ Faithful |
+
+⚠️ A body parameter takes its type from the element type of whatever the operand
+turns out to hold, which the expression checker does not track: an expression
+over the parameter (`xs.?{in e; e + 1}`) therefore has no static type, and its
+selector is checked at evaluation rather than where it is written. Statically the
+checker reports what it can know — a selector whose result type *is* known and is
+not Boolean, a non-`Natural` index, a literal index of 0 or past a sequence
+written out (`passes/typecheck_expr.go` `inferIndex`, `inferSelect`) — and the
+runtime checks the rest, so no wrong answer results from what is left unchecked.
+
+Found, not implemented — declared collection operations this runtime does not
+evaluate. Each is a typed `unresolved reference` or `unsupported` error, never a
+wrong answer:
+
+| Not implemented | Why |
+|---|---|
+| `SequenceFunctions::includingAt` | The vendored body is `(seq->subsequence(1, index - 1), values, seq->subsequence(index + 1))`, which drops the element at `index` rather than inserting before it. Implementing it literally would silently lose an element; implementing the evident intent would invent semantics the vendored library does not state. Left out until the OMG text is adjudicated (compare `excludingAt`, whose body is consistent and which is implemented). |
+| `CollectionFunctions::'array#'` and the `Array`/`Matrix` collections | Needs a multi-dimensional array value; the runtime's collection values are a sequence and a set. |
+| `ComplexFunctions::sum`/`product`, `VectorFunctions`/`MatrixFunctions` aggregation | Needs a complex and a vector value kind (see the numeric library table above). |
+| A reducer named rather than written (`->reduce min`, as the library's own `minimize` is defined) | A function-valued *name* is not a runtime value: `reduce` takes the body expression form (`->reduce {in a; in b; …}`), and `minimize`/`maximize` are implemented directly rather than through `reduce min`. A named reducer is reported as a type error, not read as a body. |
+| `SequenceFunctions::add`/`addAt`/`remove`/`removeAt`, `CollectionFunctions` mutators | These are `behavior`s, not functions: they declare an `inout` sequence, so they need mutable accumulation the language layer does not have. Deliberately out of scope. |
+| Set coverage in the conformance corpus | No expression of the language produces a set today — a `ValSet` arises only through the embedding API — so the operations over a set are pinned at the unit level (`TestCollectionOperationsOverSets`, `elementsOf`) rather than by a `.sysml` fixture. A set-valued expression is separate work. |
+| `at`, `first`, `reverse` | Not declared by the Kernel Function Library at all (`head`, `#(1)` and `last` are the declared spellings). Not implemented rather than invented. |
 
 ### Systemica Extension Library (non-normative)
 

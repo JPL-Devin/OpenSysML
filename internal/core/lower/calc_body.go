@@ -105,7 +105,7 @@ func isExpressionNode(node ast.Node) bool {
 		*ast.LiteralInfinity, *ast.NullExpr, *ast.FeatureReference, *ast.FeatureChainExpr,
 		*ast.OperatorExpr, *ast.SequenceExpr, *ast.CollectExpr, *ast.SelectExpr,
 		*ast.InvocationExpr, *ast.IndexExpr, *ast.BodyExpr, *ast.ConstructorExpr,
-		*ast.MetadataAccessExpr, *ast.CastExpr, *ast.LambdaExpr:
+		*ast.MetadataAccessExpr, *ast.CastExpr:
 		return true
 	default:
 		return false

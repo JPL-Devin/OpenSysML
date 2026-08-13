@@ -513,17 +513,26 @@ func (ec *EvalContext) evalIdentity(n *ast.OperatorExpr) (Value, error) {
 		return Value{}, err
 	}
 
-	same := left.Kind == right.Kind
-	if same && left.Kind == ValConst {
-		same = left.Const.Kind == right.Const.Kind
-	}
-	if same {
-		same = valueEqual(left, right)
-	}
+	same := valueIdentical(left, right)
 	if n.Operator == ast.OpNeqEqEq {
 		same = !same
 	}
 	return boolValue(same), nil
+}
+
+// valueIdentical reports whether two values are the same value, which is what
+// the identity operator `===` and SequenceFunctions::same ask. Identity is
+// stricter than equality: a value of another kind, or a constant of another
+// kind, is never the same value, so an Integer is not identical to a Real of
+// equal magnitude.
+func valueIdentical(left, right Value) bool {
+	if left.Kind != right.Kind {
+		return false
+	}
+	if left.Kind == ValConst && left.Const.Kind != right.Const.Kind {
+		return false
+	}
+	return valueEqual(left, right)
 }
 
 // evalArithmetic evaluates arithmetic operators (+, -, *, /, %, **).
@@ -840,71 +849,41 @@ func (ec *EvalContext) evalSequenceExpr(n *ast.SequenceExpr) (Value, error) {
 	return Value{Kind: ValSequence, Sequence: seq}, nil
 }
 
-// evalCollectExpr evaluates `operand . body` — map over collection.
+// evalCollectExpr evaluates `operand.{in x; ...}`, the collect notation, which
+// KerML defines as ControlFunctions::collect of the operand and the body. It
+// evaluates through that one implementation, so the notation and the call
+// `collect(seq, {in x; ...})` compute the same result.
 func (ec *EvalContext) evalCollectExpr(n *ast.CollectExpr) (Value, error) {
-	operand, err := ec.Eval(n.Operand)
-	if err != nil {
-		return Value{}, err
-	}
-
-	var elements []Value
-	switch operand.Kind {
-	case ValSequence:
-		elements = operand.Sequence.Elements()
-	case ValSet:
-		elements = operand.Set.Elements()
-	default:
-		return Value{}, fmt.Errorf("%w: collect operand must be collection", ErrTypeMismatch)
-	}
-
-	result := NewSequence()
-	for _, elem := range elements {
-		// Push 'it' binding for body
-		ec.Push(map[string]Value{"it": elem})
-		val, err := ec.Eval(n.Body)
-		ec.Pop()
-		if err != nil {
-			return Value{}, err
-		}
-		result.Append(val)
-	}
-
-	return Value{Kind: ValSequence, Sequence: result}, nil
+	return ec.evalCollectionNotation("collect", n.Operand, n.Body, builtinControlCollect)
 }
 
-// evalSelectExpr evaluates `operand .? body` — filter collection.
+// evalSelectExpr evaluates `operand.?{in x; ...}`, the select notation, which
+// KerML defines as ControlFunctions::select of the operand and the body.
 func (ec *EvalContext) evalSelectExpr(n *ast.SelectExpr) (Value, error) {
-	operand, err := ec.Eval(n.Operand)
+	return ec.evalCollectionNotation("select", n.Operand, n.Body, builtinControlSelect)
+}
+
+// evalCollectionNotation evaluates a notation whose meaning is a library
+// function of an operand and a body: the body is evaluated to the function it
+// denotes rather than to a value, and the operation decides what to call it
+// with.
+func (ec *EvalContext) evalCollectionNotation(
+	notation string,
+	operandExpr, bodyExpr ast.Node,
+	fn func(*EvalContext, []Value) (Value, error),
+) (Value, error) {
+	operand, err := ec.Eval(operandExpr)
 	if err != nil {
 		return Value{}, err
 	}
-
-	var elements []Value
-	switch operand.Kind {
-	case ValSequence:
-		elements = operand.Sequence.Elements()
-	case ValSet:
-		elements = operand.Set.Elements()
-	default:
-		return Value{}, fmt.Errorf("%w: select operand must be collection", ErrTypeMismatch)
+	if bodyExpr == nil {
+		return Value{}, fmt.Errorf("%w: %s states no body", ErrNoResultExpression, notation)
 	}
-
-	result := NewSequence()
-	for _, elem := range elements {
-		ec.Push(map[string]Value{"it": elem})
-		predVal, err := ec.Eval(n.Body)
-		ec.Pop()
-		if err != nil {
-			return Value{}, err
-		}
-
-		// Check if predicate is true (ValConst boolean)
-		if predVal.Kind == ValConst && predVal.Const.Kind == semantics.ValBool && predVal.Const.Bool {
-			result.Append(elem)
-		}
+	body, err := ec.Eval(bodyExpr)
+	if err != nil {
+		return Value{}, err
 	}
-
-	return Value{Kind: ValSequence, Sequence: result}, nil
+	return fn(ec, []Value{operand, body})
 }
 
 // evalInvocation evaluates a function/calc invocation.
@@ -912,9 +891,16 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	// Build qualified name string for builtin lookup
 	qualName := qualifiedNameToString(n.Type)
 
-	// Eval args in source order
-	args := make([]Value, len(n.Args))
-	for i, arg := range n.Args {
+	// Eval args in source order. An operand is the first argument of the
+	// invocation it is written before: `seq->size()` invokes size with seq, which
+	// is how the semantics layer reads the same expression (passes/
+	// typecheck_expr.go), so the two agree on which parameter an argument binds.
+	exprs := n.Args
+	if n.Operand != nil {
+		exprs = append([]ast.Node{n.Operand}, n.Args...)
+	}
+	args := make([]Value, len(exprs))
+	for i, arg := range exprs {
 		val, err := ec.Eval(arg)
 		if err != nil {
 			return Value{}, err
@@ -951,7 +937,28 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 		if fn, isLib := unresolvedLibraryFunction(n.Type, qualName); isLib {
 			return fn.invoke(ec.ctx, calcArgs{positional: args, named: named})
 		}
+		// The same holds of the collection functions: `seq->size()` and `size(seq)`
+		// denote SequenceFunctions::size, whose implementation the qualified name
+		// reaches above. Only an unqualified name the model declares nothing for
+		// gets here, so a model's own `size` calc still denotes itself.
+		if fn, isBuiltin := builtinsByLocalName[qualName]; isBuiltin {
+			if len(named) > 0 {
+				return Value{}, fmt.Errorf("%w: builtin %s takes positional arguments only", ErrUnknownParameter, qualName)
+			}
+			return fn(ec, args)
+		}
 		return Value{}, fmt.Errorf("%w: calc %s", ErrUnresolvedReference, qualName)
+	}
+
+	// A name that resolves to one of the collection function declarations is
+	// computed by the implementation of that operation, whatever notation the
+	// call was written in and whether or not the library declaration carries a
+	// body to evaluate instead.
+	if fn, isBuiltin := ec.ctx.builtinFor(calcSym); isBuiltin {
+		if len(named) > 0 {
+			return Value{}, fmt.Errorf("%w: builtin %s takes positional arguments only", ErrUnknownParameter, qualName)
+		}
+		return fn(ec, args)
 	}
 
 	// Every invocation goes through the one calc path, so an expression and a

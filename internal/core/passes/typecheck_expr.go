@@ -2,6 +2,7 @@ package passes
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
@@ -147,8 +148,129 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 			ec.infer(scope, el)
 		}
 		return semantics.PrimUnknown
+	case *ast.IndexExpr:
+		return ec.inferIndex(scope, e)
+	case *ast.CollectExpr:
+		return ec.inferCollect(scope, e)
+	case *ast.SelectExpr:
+		return ec.inferSelect(scope, e)
+	case *ast.BodyExpr:
+		return ec.inferBody(scope, e)
 	}
 	return semantics.PrimUnknown
+}
+
+// inferIndex types `seq#(i)`, the sequence index, and `n [unit]`, the quantity
+// expression the notation shares its node with — the bracket the expression was
+// written with says which of the two it is.
+func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semantics.PrimType {
+	if e.Bracket {
+		// A quantity is a magnitude in a unit, not a scalar of the lattice: the
+		// unit is a name of the measurement reference library, checked as such by
+		// the units pass rather than typed here. The magnitude is an expression in
+		// its own right and is checked.
+		ec.infer(scope, e.Operand)
+		return semantics.PrimUnknown
+	}
+
+	// SequenceFunctions::'#' declares `in index: Positive[1]`: one whole number,
+	// counting from 1. A Real, a Boolean or a String names no position.
+	index := ec.infer(scope, e.Index)
+	if !semantics.PrimConforms(index, semantics.PrimNatural) && e.Index != nil {
+		ec.errorf(e.Index.Span(), "sequence index must be Natural, found %s", index)
+	}
+	elem := ec.infer(scope, e.Operand)
+
+	// A literal index names a position at check time, so an index the operand
+	// cannot have is an error before the model is ever run: index 0 for a
+	// notation counting from 1, and any index beyond a sequence written out.
+	if lit, ok := e.Index.(*ast.LiteralInteger); ok {
+		if written, err := strconv.ParseInt(lit.Value, 10, 64); err == nil {
+			seq, isSeq := e.Operand.(*ast.SequenceExpr)
+			switch {
+			case written == 0:
+				ec.errorf(lit.Span(), "sequence index counts from 1, found 0")
+			case isSeq && written > int64(len(seq.Elements)):
+				ec.errorf(lit.Span(), "sequence index %d is outside 1..%d", written, len(seq.Elements))
+			}
+		}
+	}
+
+	// The index of a sequence of one scalar type is a value of that type, which
+	// is what makes `(1, 2, 3)#(2) + 1` checkable. A sequence of mixed types has
+	// no one scalar type and stays unknown.
+	if seq, ok := e.Operand.(*ast.SequenceExpr); ok {
+		return ec.commonElementType(scope, seq)
+	}
+	return elem
+}
+
+// commonElementType returns the scalar type every element of a sequence
+// expression conforms to, or PrimUnknown where the elements have none in
+// common.
+func (ec *exprChecker) commonElementType(scope *symbols.Scope, seq *ast.SequenceExpr) semantics.PrimType {
+	common := semantics.PrimUnknown
+	for i, el := range seq.Elements {
+		elem := ec.infer(scope, el)
+		if i == 0 {
+			common = elem
+			continue
+		}
+		switch {
+		case elem == common:
+		case semantics.PrimConforms(elem, common):
+		case semantics.PrimConforms(common, elem):
+			common = elem
+		default:
+			return semantics.PrimUnknown
+		}
+	}
+	return common
+}
+
+// inferCollect types `operand.{in x; ...}`, the collect notation: a sequence of
+// the body's results, which is no scalar of its own. Its purpose here is to
+// check the body, in the scope its parameters are declared in.
+func (ec *exprChecker) inferCollect(scope *symbols.Scope, e *ast.CollectExpr) semantics.PrimType {
+	ec.infer(scope, e.Operand)
+	ec.infer(scope, e.Body)
+	return semantics.PrimUnknown
+}
+
+// inferSelect types `operand.?{in x; ...}`, the select notation. The library
+// declares the selector's result `Boolean[1]`, so a body that answers something
+// else is reported here rather than only where the model is run.
+func (ec *exprChecker) inferSelect(scope *symbols.Scope, e *ast.SelectExpr) semantics.PrimType {
+	ec.infer(scope, e.Operand)
+	if body, ok := e.Body.(*ast.BodyExpr); ok && body.Result != nil {
+		ec.checkBoolean(ec.bodyScope(scope, body), body.Result, "select predicate")
+		return semantics.PrimUnknown
+	}
+	ec.infer(scope, e.Body)
+	return semantics.PrimUnknown
+}
+
+// inferBody types a body expression as the type of the result it states,
+// checking that result in the scope the body's parameters are declared in.
+func (ec *exprChecker) inferBody(scope *symbols.Scope, e *ast.BodyExpr) semantics.PrimType {
+	inner := ec.bodyScope(scope, e)
+	for i := range e.Params {
+		ec.infer(scope, e.Params[i].Value)
+	}
+	if e.Result == nil {
+		return semantics.PrimUnknown
+	}
+	return ec.infer(inner, e.Result)
+}
+
+// bodyScope returns the scope a body expression's result is written in: its
+// parameters are declarations of that scope, the same one the resolver and the
+// runtime read the body's names in.
+func (ec *exprChecker) bodyScope(scope *symbols.Scope, body *ast.BodyExpr) *symbols.Scope {
+	if scope == nil {
+		return nil
+	}
+	return symbols.BodyExprScope(scope, body)
 }
 
 func (ec *exprChecker) inferQualified(scope *symbols.Scope, qn *ast.QualifiedName) semantics.PrimType {

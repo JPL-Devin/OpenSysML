@@ -91,9 +91,14 @@ func (s *Sequence) Elements() []Value {
 	return s.elements
 }
 
-// Set is an unordered unique collection (map-backed, using valueKey for equality).
+// Set is a unique collection (map-backed, using valueKey for equality). A set
+// has no inherent order, but enumerating one has to answer in some order, and
+// insertion order is the one order a set does carry: it makes a sequence
+// derived from a set — what `select` and `collect` over a set return —
+// reproducible instead of dependent on map iteration.
 type Set struct {
 	elements map[valueKey]Value
+	order    []valueKey
 }
 
 // NewSet creates an empty Set.
@@ -104,6 +109,9 @@ func NewSet() *Set {
 // Add inserts a value into the set (deduplicates by valueKey).
 func (s *Set) Add(val Value) {
 	key := valueKeyFunc(val)
+	if _, exists := s.elements[key]; !exists {
+		s.order = append(s.order, key)
+	}
 	s.elements[key] = val
 }
 
@@ -118,11 +126,11 @@ func (s *Set) Size() int {
 	return len(s.elements)
 }
 
-// Elements returns all elements in arbitrary order.
+// Elements returns all elements, in the order they were added.
 func (s *Set) Elements() []Value {
 	result := make([]Value, 0, len(s.elements))
-	for _, v := range s.elements {
-		result = append(result, v)
+	for _, key := range s.order {
+		result = append(result, s.elements[key])
 	}
 	return result
 }

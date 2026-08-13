@@ -72,11 +72,12 @@ func constText(v semantics.Value) string {
 
 // evalIndexExpr evaluates `magnitude [unit]`, the quantity expression: a
 // number and the measurement reference it is expressed in. The sequence index
-// `seq#(i)` shares the node but not the meaning, and is not evaluated here.
+// `seq#(i)` shares the node but not the meaning; the bracket the notation was
+// written with is what tells the two apart, and the index is evaluated as the
+// sequence operation it is (collections.go).
 func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 	if !n.Bracket {
-		// The sequence index is a separate operation and stays unsupported.
-		return Value{}, fmt.Errorf("unsupported node type: %T", n)
+		return ec.evalSequenceIndex(n)
 	}
 	term, err := ec.ctx.model.UnitTermOfExpr(ec.scope, n.Index)
 	if err != nil {

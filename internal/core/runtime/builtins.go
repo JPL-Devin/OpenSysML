@@ -1,91 +1,153 @@
 package runtime
 
 import (
-	"errors"
-	"fmt"
-
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
+// builtins maps the fully-qualified name of a Kernel Function Library function
+// to its implementation. These are the functions whose parameters or results are
+// collections, or whose arguments are bodies rather than values, which the
+// scalar library registry (library_functions.go) cannot express: it applies to
+// semantics.Values, while these need runtime values and an evaluation context to
+// call a body with.
 var builtins map[string]func(*EvalContext, []Value) (Value, error)
+
+// builtinsByLocalName maps an unqualified name to the declaration a bare or
+// arrow-form call denotes — `(1,2,3)->size()` and `size((1,2,3))` are
+// `SequenceFunctions::size`. A name appears here only where every library
+// declaration of it means the same operation, and dispatch reaches it only for
+// a name the model itself declares nothing for, so a user-declared calc of the
+// same name still resolves to itself.
+var builtinsByLocalName map[string]func(*EvalContext, []Value) (Value, error)
 
 func init() {
 	builtins = map[string]func(*EvalContext, []Value) (Value, error){
-		"SequenceFunctions::size":      builtinSequenceSize,
-		"SequenceFunctions::isEmpty":   builtinSequenceIsEmpty,
-		"SequenceFunctions::includes":  builtinSequenceIncludes,
-		"CollectionFunctions::size":    builtinCollectionSize,
-		"CollectionFunctions::isEmpty": builtinCollectionIsEmpty,
-		"ControlFunctions::select":     builtinControlSelect,
-		"ControlFunctions::collect":    builtinControlCollect,
+		// SequenceFunctions: the operations on general sequences of values.
+		"SequenceFunctions::#":            builtinSequenceIndex,
+		"SequenceFunctions::size":         builtinSequenceSize,
+		"SequenceFunctions::isEmpty":      builtinSequenceIsEmpty,
+		"SequenceFunctions::notEmpty":     builtinSequenceNotEmpty,
+		"SequenceFunctions::includes":     builtinSequenceIncludes,
+		"SequenceFunctions::includesOnly": builtinSequenceIncludesOnly,
+		"SequenceFunctions::excludes":     builtinSequenceExcludes,
+		"SequenceFunctions::equals":       builtinSequenceEquals,
+		"SequenceFunctions::same":         builtinSequenceSame,
+		"SequenceFunctions::union":        builtinSequenceUnion,
+		"SequenceFunctions::intersection": builtinSequenceIntersection,
+		"SequenceFunctions::including":    builtinSequenceIncluding,
+		"SequenceFunctions::excluding":    builtinSequenceExcluding,
+		"SequenceFunctions::subsequence":  builtinSequenceSubsequence,
+		"SequenceFunctions::excludingAt":  builtinSequenceExcludingAt,
+		"SequenceFunctions::head":         builtinSequenceHead,
+		"SequenceFunctions::tail":         builtinSequenceTail,
+		"SequenceFunctions::last":         builtinSequenceLast,
+
+		// CollectionFunctions: the same operations on a Collection, each defined
+		// by the library as the sequence operation over the collection's
+		// elements.
+		"CollectionFunctions::#":           builtinSequenceIndex,
+		"CollectionFunctions::size":        builtinSequenceSize,
+		"CollectionFunctions::isEmpty":     builtinSequenceIsEmpty,
+		"CollectionFunctions::notEmpty":    builtinSequenceNotEmpty,
+		"CollectionFunctions::contains":    builtinCollectionContains,
+		"CollectionFunctions::containsAll": builtinCollectionContainsAll,
+		"CollectionFunctions::head":        builtinSequenceHead,
+		"CollectionFunctions::tail":        builtinSequenceTail,
+		"CollectionFunctions::last":        builtinSequenceLast,
+
+		// ControlFunctions: the operations whose argument is a body the
+		// operation itself decides the evaluation of.
+		"ControlFunctions::select":    builtinControlSelect,
+		"ControlFunctions::selectOne": builtinControlSelectOne,
+		"ControlFunctions::reject":    builtinControlReject,
+		"ControlFunctions::collect":   builtinControlCollect,
+		"ControlFunctions::forAll":    builtinControlForAll,
+		"ControlFunctions::exists":    builtinControlExists,
+		"ControlFunctions::allTrue":   builtinControlAllTrue,
+		"ControlFunctions::anyTrue":   builtinControlAnyTrue,
+		"ControlFunctions::reduce":    builtinControlReduce,
+		"ControlFunctions::minimize":  builtinControlMinimize,
+		"ControlFunctions::maximize":  builtinControlMaximize,
+
+		// NumericalFunctions::sum and ::product, and the specializations that
+		// fix the identity element of an empty aggregation: sum of Integers is
+		// `sum0(collection, 0)` and product is `product1(collection, 1)`. The
+		// result keeps the elements' kind, so IntegerFunctions::sum of Integers
+		// is an Integer, as its `return : Integer[1]` declares.
+		// ComplexFunctions and VectorFunctions declare sum and product too, over
+		// values this runtime has no representation of; they are left out rather
+		// than answered wrongly (docs/SPEC_COMPLIANCE.md).
+		"NumericalFunctions::sum":     builtinNumericalSum,
+		"NumericalFunctions::product": builtinNumericalProduct,
+		"IntegerFunctions::sum":       builtinNumericalSum,
+		"IntegerFunctions::product":   builtinNumericalProduct,
+		"RationalFunctions::sum":      builtinNumericalSum,
+		"RationalFunctions::product":  builtinNumericalProduct,
+		"RealFunctions::sum":          builtinNumericalSum,
+		"RealFunctions::product":      builtinNumericalProduct,
 	}
-}
 
-func builtinSequenceSize(ec *EvalContext, args []Value) (Value, error) {
-	if len(args) != 1 {
-		return Value{}, errors.New("SequenceFunctions::size: expected 1 argument")
-	}
-
-	col := args[0]
-	var sz int64
-	switch col.Kind {
-	case ValSequence:
-		sz = int64(col.Sequence.Size())
-	case ValSet:
-		sz = int64(col.Set.Size())
-	default:
-		return Value{}, errors.New("SequenceFunctions::size: expected collection")
-	}
-
-	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: sz}}, nil
-}
-
-func builtinSequenceIsEmpty(ec *EvalContext, args []Value) (Value, error) {
-	if len(args) != 1 {
-		return Value{}, errors.New("SequenceFunctions::isEmpty: expected 1 argument")
-	}
-
-	sizeVal, err := builtinSequenceSize(ec, args)
-	if err != nil {
-		return Value{}, err
-	}
-
-	isEmpty := sizeVal.Const.Int == 0
-	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: isEmpty}}, nil
-}
-
-func builtinSequenceIncludes(ec *EvalContext, args []Value) (Value, error) {
-	if len(args) != 2 {
-		return Value{}, errors.New("SequenceFunctions::includes: expected 2 arguments")
-	}
-
-	seq := args[0]
-	target := args[1]
-
-	if seq.Kind != ValSequence {
-		return Value{}, errors.New("SequenceFunctions::includes: first argument must be a sequence")
-	}
-
-	// Empty sequence contains nothing
-	if seq.Sequence == nil {
-		return boolValue(false), nil
-	}
-
-	// Check each element
-	for i := 0; i < seq.Sequence.Size(); i++ {
-		elem, err := seq.Sequence.At(i)
-		if err != nil {
-			return Value{}, err
+	builtinsByLocalName = map[string]func(*EvalContext, []Value) (Value, error){}
+	for local, fqn := range map[string]string{
+		"size":         "SequenceFunctions::size",
+		"isEmpty":      "SequenceFunctions::isEmpty",
+		"notEmpty":     "SequenceFunctions::notEmpty",
+		"includes":     "SequenceFunctions::includes",
+		"includesOnly": "SequenceFunctions::includesOnly",
+		"excludes":     "SequenceFunctions::excludes",
+		"equals":       "SequenceFunctions::equals",
+		"same":         "SequenceFunctions::same",
+		"union":        "SequenceFunctions::union",
+		"intersection": "SequenceFunctions::intersection",
+		"including":    "SequenceFunctions::including",
+		"excluding":    "SequenceFunctions::excluding",
+		"subsequence":  "SequenceFunctions::subsequence",
+		"excludingAt":  "SequenceFunctions::excludingAt",
+		"head":         "SequenceFunctions::head",
+		"tail":         "SequenceFunctions::tail",
+		"last":         "SequenceFunctions::last",
+		"contains":     "CollectionFunctions::contains",
+		"containsAll":  "CollectionFunctions::containsAll",
+		"select":       "ControlFunctions::select",
+		"selectOne":    "ControlFunctions::selectOne",
+		"reject":       "ControlFunctions::reject",
+		"collect":      "ControlFunctions::collect",
+		"forAll":       "ControlFunctions::forAll",
+		"exists":       "ControlFunctions::exists",
+		"allTrue":      "ControlFunctions::allTrue",
+		"anyTrue":      "ControlFunctions::anyTrue",
+		"reduce":       "ControlFunctions::reduce",
+		"minimize":     "ControlFunctions::minimize",
+		"maximize":     "ControlFunctions::maximize",
+		"sum":          "NumericalFunctions::sum",
+		"product":      "NumericalFunctions::product",
+	} {
+		fn, ok := builtins[fqn]
+		if !ok {
+			panic("runtime: unqualified name " + local + " maps to unregistered built-in " + fqn)
 		}
-		if valueEqual(elem, target) {
-			return boolValue(true), nil
-		}
+		builtinsByLocalName[local] = fn
 	}
-
-	return boolValue(false), nil
 }
 
+// builtinFor returns the implementation of the library declaration sym is,
+// where it is one of the collection functions. Unlike the scalar library
+// functions, these declarations do carry bodies — SequenceFunctions::size is
+// defined recursively as `if isEmpty(seq)? 0 else size(tail(seq)) + 1` — but
+// the body is the specification of the operation, not the way to compute it, so
+// a name that denotes the library declaration is computed by the implementation
+// of that operation. A calc the model declares itself resolves to its own
+// symbol, whose qualified name is not one of these.
+func (ctx *Context) builtinFor(sym *symbols.Symbol) (func(*EvalContext, []Value) (Value, error), bool) {
+	if sym == nil {
+		return nil, false
+	}
+	fn, ok := builtins[ctx.qualifiedSymbolName(sym)]
+	return fn, ok
+}
+
+// boolValue wraps a Boolean result.
 func boolValue(b bool) Value {
 	return Value{
 		Kind: ValConst,
@@ -94,136 +156,4 @@ func boolValue(b bool) Value {
 			Bool: b,
 		},
 	}
-}
-
-func builtinCollectionSize(ec *EvalContext, args []Value) (Value, error) {
-	return builtinSequenceSize(ec, args)
-}
-
-func builtinCollectionIsEmpty(ec *EvalContext, args []Value) (Value, error) {
-	return builtinSequenceIsEmpty(ec, args)
-}
-
-func builtinControlSelect(ec *EvalContext, args []Value) (Value, error) {
-	if len(args) != 2 {
-		return Value{}, errors.New("ControlFunctions::select: expected 2 arguments")
-	}
-
-	// First arg must be collection
-	col := args[0]
-	var elements []Value
-	switch col.Kind {
-	case ValSequence:
-		if col.Sequence == nil {
-			elements = []Value{}
-		} else {
-			elements = col.Sequence.Elements()
-		}
-	case ValSet:
-		elements = col.Set.Elements()
-	default:
-		return Value{}, errors.New("ControlFunctions::select: first argument must be collection")
-	}
-
-	// Second arg must be ValExpr wrapping BodyExpr
-	if args[1].Kind != ValExpr {
-		return Value{}, errors.New("ControlFunctions::select: second argument must be body expression")
-	}
-
-	bodyExpr, ok := args[1].Expr.(*ast.BodyExpr)
-	if !ok {
-		return Value{}, errors.New("ControlFunctions::select: second argument must be BodyExpr")
-	}
-
-	// Expect exactly one parameter
-	if len(bodyExpr.Params) != 1 {
-		return Value{}, errors.New("ControlFunctions::select: body expression must have exactly one parameter")
-	}
-
-	paramName := bodyExpr.Params[0].Name
-
-	// Filter elements
-	result := NewSequence()
-	for _, elem := range elements {
-		// Bind parameter to element
-		ec.Push(map[string]Value{paramName: elem})
-
-		// Evaluate predicate
-		predVal, err := ec.Eval(bodyExpr.Result)
-		ec.Pop()
-
-		if err != nil {
-			return Value{}, err
-		}
-
-		// Check if predicate returns boolean
-		if predVal.Kind != ValConst || predVal.Const.Kind != semantics.ValBool {
-			return Value{}, fmt.Errorf("ControlFunctions::select: predicate must return boolean, got %v", predVal.Kind)
-		}
-
-		// Check if predicate is true
-		if predVal.Const.Bool {
-			result.Append(elem)
-		}
-	}
-
-	return Value{Kind: ValSequence, Sequence: result}, nil
-}
-
-func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
-	if len(args) != 2 {
-		return Value{}, errors.New("ControlFunctions::collect: expected 2 arguments")
-	}
-
-	// First arg must be collection
-	col := args[0]
-	var elements []Value
-	switch col.Kind {
-	case ValSequence:
-		if col.Sequence == nil {
-			elements = []Value{}
-		} else {
-			elements = col.Sequence.Elements()
-		}
-	case ValSet:
-		elements = col.Set.Elements()
-	default:
-		return Value{}, errors.New("ControlFunctions::collect: first argument must be collection")
-	}
-
-	// Second arg must be ValExpr wrapping BodyExpr
-	if args[1].Kind != ValExpr {
-		return Value{}, errors.New("ControlFunctions::collect: second argument must be body expression")
-	}
-
-	bodyExpr, ok := args[1].Expr.(*ast.BodyExpr)
-	if !ok {
-		return Value{}, errors.New("ControlFunctions::collect: second argument must be BodyExpr")
-	}
-
-	// Expect exactly one parameter
-	if len(bodyExpr.Params) != 1 {
-		return Value{}, errors.New("ControlFunctions::collect: body expression must have exactly one parameter")
-	}
-
-	paramName := bodyExpr.Params[0].Name
-
-	// Map elements
-	result := NewSequence()
-	for _, elem := range elements {
-		// Bind parameter to element
-		ec.Push(map[string]Value{paramName: elem})
-
-		// Evaluate mapping expression
-		mappedVal, err := ec.Eval(bodyExpr.Result)
-		ec.Pop()
-
-		if err != nil {
-			return Value{}, err
-		}
-
-		result.Append(mappedVal)
-	}
-
-	return Value{Kind: ValSequence, Sequence: result}, nil
 }

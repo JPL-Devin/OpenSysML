@@ -133,6 +133,18 @@ var (
 	// hand back and is read through a calc usage's output features instead.
 	ErrAmbiguousResult = errors.New("calculation has no single result")
 
+	// ErrIndexOutOfRange is returned when a sequence index names no position of
+	// the sequence it indexes. Sequence indices are 1-based (KerML
+	// SequenceFunctions::'#' takes `index: Positive[1]`), so 0 is out of range
+	// as much as size+1 is.
+	ErrIndexOutOfRange = errors.New("sequence index out of range")
+
+	// ErrBodyArity is returned when the body expression a collection operation
+	// is given declares a number of parameters the operation cannot call it
+	// with: `select` calls its selector with one element, so a selector
+	// declaring two parameters has no second argument to receive.
+	ErrBodyArity = errors.New("body parameter count mismatch")
+
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
 	// it can be created.

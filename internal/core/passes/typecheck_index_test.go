@@ -1,0 +1,94 @@
+package passes
+
+import "testing"
+
+// An index is a position, so a value that is not a whole number is reported
+// where it is written rather than only when the expression is evaluated.
+func TestIndexNonIntegerIndexReported(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute x = (1, 2, 3)#(1.5); }`,
+		"sequence index must be Natural")
+}
+
+func TestIndexStringIndexReported(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute x = (1, 2, 3)#("a"); }`,
+		"sequence index must be Natural")
+}
+
+// The library declares `in index: Positive[1]`, so 0 is not a position.
+func TestIndexZeroReported(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute x = (1, 2, 3)#(0); }`,
+		"sequence index counts from 1")
+}
+
+// The length is known only where the sequence itself is written out; there the
+// index is checked against it.
+func TestIndexPastWrittenSequenceReported(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute x = (1, 2, 3)#(4); }`,
+		"sequence index 4 is outside 1..3")
+}
+
+func TestIndexInRangeOK(t *testing.T) {
+	wantNoDiags(t, `package P { attribute x = (1, 2, 3)#(3); }`)
+}
+
+// An index of a value whose length the checker does not know is not reported:
+// the runtime checks the position it turns out to be.
+func TestIndexOfReferenceNotReported(t *testing.T) {
+	wantNoDiags(t, `package P { attribute xs = (1, 2, 3); attribute x = xs#(4); }`)
+}
+
+// The element type of a written sequence is the type of the indexing, so
+// binding it to a feature of another type is reported.
+func TestIndexElementTypeIsCheckedAgainstTheBinding(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute x : ScalarValues::Boolean = (1, 2, 3)#(1); }`,
+		"cannot bind Natural value to a feature typed by Boolean")
+}
+
+// A sequence of no one scalar type has no element type, so indexing it is
+// checked no further here; the runtime answers the element it turns out to be.
+func TestIndexOfMixedSequenceHasNoElementType(t *testing.T) {
+	wantNoDiags(t, `package P { attribute x : ScalarValues::Boolean = (1, "a")#(1); }`)
+}
+
+// The bracket form is a quantity, not an index, so the unit name in it is not
+// checked as a position.
+func TestQuantityBracketFormIsNotIndexed(t *testing.T) {
+	wantNoDiags(t, `package P { attribute def m; attribute x = 5 [m]; }`)
+}
+
+// A selector states a condition, so a body whose result is of a known type that
+// is not Boolean is reported where it is written.
+func TestSelectNonBooleanBodyReported(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute xs = (1, 2, 3); attribute x = xs.?{in e; 1}; }`,
+		"select predicate must be Boolean")
+}
+
+func TestSelectBooleanBodyOK(t *testing.T) {
+	wantNoDiags(t, `package P { attribute xs = (1, 2, 3); attribute x = xs.?{in e; e > 1}; }`)
+}
+
+// A body parameter's type is the element type of whatever the operand turns out
+// to hold, which the checker does not track, so an expression over the parameter
+// has no static type and is left to the runtime rather than guessed at.
+func TestBodyParameterHasNoStaticType(t *testing.T) {
+	wantNoDiags(t, `package P { attribute xs = (1, 2, 3); attribute x = xs.?{in e; e + 1}; }`)
+}
+
+func TestCollectBodyOK(t *testing.T) {
+	wantNoDiags(t, `package P { attribute xs = (1, 2, 3); attribute x = xs.{in e; e * 2}; }`)
+}
+
+// A body parameter is visible in the body and nowhere else.
+func TestBodyParameterIsNotVisibleOutsideTheBody(t *testing.T) {
+	diags := exprDiags(t,
+		`package P { attribute xs = (1, 2, 3); attribute x = xs.{in e; e * 2}; attribute y = e; }`)
+	if len(diags) != 0 {
+		t.Fatalf("expected the type tier to leave the outside reference to the name tier, got %v", diags)
+	}
+}

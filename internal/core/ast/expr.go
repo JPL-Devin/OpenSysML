@@ -177,7 +177,11 @@ type BodyParam struct {
 	Value        Node           // optional default value (e.g., in x = expr)
 	IsReference  bool           // true if 'ref' modifier present
 	Members      []Node         // optional body members (e.g., in x { doc ... })
-	Span         source.Span
+	// Relationships are the specializations the parameter declares other than
+	// its typing, which Type carries: `in p :> ISQ::mass` subsets a feature
+	// rather than naming a type.
+	Relationships []*Relationship
+	Span          source.Span
 }
 
 // SequenceExpr is a comma-separated list of expressions (flattened).
@@ -197,11 +201,4 @@ type CastExpr struct {
 	NodeBase
 	TargetType   *QualifiedName
 	Multiplicity *Multiplicity
-}
-
-// LambdaExpr represents a lambda/closure: {in param :> Type; body}
-type LambdaExpr struct {
-	NodeBase
-	Parameters []Node // Body parameters (direction params)
-	Body       Node   // Expression body
 }

@@ -1,0 +1,4 @@
+{
+  "type": "calc",
+  "error": "predicate must return boolean"
+}

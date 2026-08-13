@@ -89,6 +89,100 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("satisfy_bounded_by_the_step_budget", testSatisfyBoundedByTheStepBudget)
 	t.Run("cyclic_derived_slot", testCyclicDerivedSlot)
 	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
+	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
+	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
+	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
+	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
+	t.Run("collection_operation_step_budget", testCollectionOperationStepBudget)
+}
+
+// testSequenceIndexNamesNoPosition: an index outside the sequence, or one that
+// is not a whole number, is reported. Answering nothing would make `seq#(i)`
+// read as an empty value everywhere a model indexes past the end.
+func testSequenceIndexNamesNoPosition(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{"xs#(4)", ErrIndexOutOfRange},
+		{"xs#(0)", ErrIndexOutOfRange},
+		{"xs#(0 - 1)", ErrIndexOutOfRange},
+		{"()#(1)", ErrIndexOutOfRange},
+		{"xs#(1.5)", ErrTypeMismatch},
+		{"xs#(ys)", ErrTypeMismatch},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testCollectionOperandOfTheWrongKind: an operation given something that is not
+// the kind of value it operates on reports it rather than reading the value as a
+// collection of itself or as nothing.
+func testCollectionOperandOfTheWrongKind(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{"xs->select(2)", ErrTypeMismatch},
+		{"xs->collect(xs)", ErrTypeMismatch},
+		{`sum((1, "a"))`, ErrTypeMismatch},
+		{"product(flags)", ErrTypeMismatch},
+		{"xs->subsequence(1, 4)", ErrIndexOutOfRange},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testCollectionBodyOfTheWrongArity: a body an operation calls with one element
+// but that declares no parameter, or two, is reported. Binding what it declares
+// and dropping the rest would answer from a parameter that was never given a
+// value.
+func testCollectionBodyOfTheWrongArity(t *testing.T) {
+	for _, expr := range []string{
+		"xs->collect {}",
+		"xs->collect {in x; in y; x}",
+		"xs->select {in x; in y; x > 0}",
+		"xs.{in x; in y; x}",
+	} {
+		got, err := evalCollectionExpr(t, expr)
+		if !errors.Is(err, ErrBodyArity) {
+			t.Errorf("%s = (%v, %v), want ErrBodyArity", expr, got, err)
+		}
+	}
+}
+
+// testSelectPredicateIsNotACondition: a selector answering something that is not
+// a boolean is reported. Reading a non-boolean as false would silently drop
+// every element, which is a wrong answer rather than a failure.
+func testSelectPredicateIsNotACondition(t *testing.T) {
+	for _, expr := range []string{
+		"xs.?{in x; x + 1}",
+		"xs->select {in x; x * 2}",
+		"xs->reject {in x; 1}",
+		"xs->forAll {in x; x}",
+		`xs->exists {in x; "yes"}`,
+	} {
+		got, err := evalCollectionExpr(t, expr)
+		if !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("%s = (%v, %v), want ErrTypeMismatch", expr, got, err)
+		}
+	}
+}
+
+// testCollectionOperationStepBudget: an operation calls its body once per
+// element, and each call spends the context's budget, so a collection large
+// enough for the budget fails the evaluation instead of running unbounded.
+func testCollectionOperationStepBudget(t *testing.T) {
+	got, err := evalCollectionExprBounded(t, "xs.{in x; x * factor}", 3)
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("collect under a budget of 3 = (%v, %v), want ErrStepLimitExceeded", got, err)
+	}
 }
 
 // testSatisfyUnresolvedRequirement: a satisfaction assertion whose requirement

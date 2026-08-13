@@ -248,15 +248,60 @@ func TestFormatTraceValueQuantity(t *testing.T) {
 }
 
 // TestSequenceIndexIsNotAQuantity: `seq#(i)` shares its node with a quantity
-// expression but is a different operation, and stays unimplemented rather than
-// being read as a magnitude in a unit.
+// expression but is a different operation — it indexes the sequence rather than
+// reading the index as a measurement unit, and an index it cannot answer is
+// reported as an index error and not as a malformed quantity.
 func TestSequenceIndexIsNotAQuantity(t *testing.T) {
 	ctx, scope := quantityContext(t)
+
 	got, err := evalIn(t, ctx, scope, "speeds#(2)")
-	if err == nil {
-		t.Fatalf("speeds#(2) = %v, want an error", got)
+	if err != nil {
+		t.Fatalf("speeds#(2): %v", err)
 	}
-	if errors.Is(err, ErrNotAQuantity) {
+	if got.Kind != ValConst || got.Const.Kind != semantics.ValReal || got.Const.Real != 2.0 {
+		t.Errorf("speeds#(2) = %v, want the real 2.0", got)
+	}
+
+	if _, err := evalIn(t, ctx, scope, "speeds#(4)"); !errors.Is(err, ErrIndexOutOfRange) {
+		t.Errorf("speeds#(4) error = %v, want ErrIndexOutOfRange", err)
+	}
+	if _, err := evalIn(t, ctx, scope, "speeds#(4)"); errors.Is(err, ErrNotAQuantity) {
 		t.Errorf("a sequence index is not a malformed quantity: %v", err)
+	}
+}
+
+// TestQuantityAndIndexNotationsCoexist pins both meanings of the shared node in
+// one place: the bracket form is a quantity, the parenthesized form an index,
+// and a model can write the two of them in one expression.
+func TestQuantityAndIndexNotationsCoexist(t *testing.T) {
+	ctx, scope := quantityContext(t)
+
+	quantity, err := evalIn(t, ctx, scope, "5 [m]")
+	if err != nil {
+		t.Fatalf("5 [m]: %v", err)
+	}
+	if quantity.Kind != ValQuantity || quantity.Quantity.String() != "5 [m]" {
+		t.Errorf("5 [m] = %v (%s), want the quantity 5 [m]", quantity, quantity.Kind)
+	}
+
+	// The index of a sequence of quantities is a quantity, so the two notations
+	// compose: `(1 [m], 2 [m])#(2)` is `2 [m]`.
+	indexed, err := evalIn(t, ctx, scope, "(1 [m], 2 [m])#(2)")
+	if err != nil {
+		t.Fatalf("(1 [m], 2 [m])#(2): %v", err)
+	}
+	if indexed.Kind != ValQuantity || indexed.Quantity.String() != "2 [m]" {
+		t.Errorf("(1 [m], 2 [m])#(2) = %v (%s), want the quantity 2 [m]", indexed, indexed.Kind)
+	}
+
+	// An index that is not a whole number is an index error, not a unit: the
+	// notation `speeds#(1.5)` names no position of the sequence.
+	if _, err := evalIn(t, ctx, scope, "speeds#(1.5)"); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("speeds#(1.5) error = %v, want ErrTypeMismatch", err)
+	}
+	// A unit named where an index belongs stays a quantity error, since the
+	// bracket says the expression is a quantity.
+	if _, err := evalIn(t, ctx, scope, "speeds [m]"); !errors.Is(err, ErrNotAQuantity) {
+		t.Errorf("speeds [m] error = %v, want ErrNotAQuantity", err)
 	}
 }
