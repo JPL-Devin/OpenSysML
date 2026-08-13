@@ -15,7 +15,9 @@ package Synonyms {
         assert safe : Safe;
         inv alsoSafe : Safe;
     }
+    rendering def AsTree;
     view def Dashboard {
         render display;
+        render rendering : AsTree;
     }
 }

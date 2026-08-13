@@ -12,6 +12,7 @@ package ViewMembers {
 		frame safety;
 		frame concern c : SafetyConcern;
 		frame concern SafetyConcern;
+		frame concern : SafetyConcern;
 		stakeholder se : Engineer;
 		actor reviewer : Person;
 	}
@@ -25,6 +26,7 @@ package ViewMembers {
 	view def Derived :> Base {
 		render asTree;
 		render rendering r2 : AsTree;
+		render rendering : AsTree;
 		satisfy SafetyViewpoint;
 	}
 

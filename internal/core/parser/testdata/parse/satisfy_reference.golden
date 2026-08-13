@@ -26,6 +26,16 @@
               (Relationship kind="typing" target=VehicleSpecification
                 (*ast.QualifiedName))
               (Relationship kind="by" target=vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="by" target=vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=VehicleSpecification
+                (*ast.QualifiedName))
+              (Relationship kind="by" target=vehicle
                 (*ast.QualifiedName))))))
       (Membership visibility="default"
         (Definition kind="view" abstract=false variation=false name="StructureView"

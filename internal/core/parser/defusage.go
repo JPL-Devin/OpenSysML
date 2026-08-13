@@ -1177,7 +1177,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		// the reference form names an existing requirement usage and declares
 		// nothing.
 		if p.acceptKeyword("requirement") {
-			u.Ident = p.parseUsageIdentification(kind)
+			// The UsageDeclaration is optional, and `by` introduces the subject
+			// rather than naming the satisfaction (`satisfy requirement by v;`).
+			if !p.atKeyword("by") {
+				u.Ident = p.parseUsageIdentification(kind)
+			}
 			declRels, conjugated := p.parseRelationships(true)
 			u.Relationships = append(u.Relationships, declRels...)
 			u.IsConjugated = conjugated

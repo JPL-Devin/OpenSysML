@@ -367,22 +367,19 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 	if d.boolOf(el, rdf.SysML+"isAll") {
 		words = append(words, "all")
 	}
-	ident := d.identWords(el)
-	// `render` and `frame` name an existing element unless the kind keyword the
-	// notation spells out follows them, which is what distinguishes their
-	// declaration form (SysML.xtext ViewRenderingUsage, FramedConcernUsage). The
-	// reference form writes its target as a bare name, so the `references`
-	// relationship it carries belongs here rather than in a clause.
+	// A `render`/`frame` reference writes its target as a bare name; without one the
+	// member declares a usage, spelling out the kind keyword (SysML.xtext
+	// ViewRenderingUsage, FramedConcernUsage) even when it declares no name.
 	var skip []ast.RelationshipKind
 	if noun := memberDeclarationKeyword(kind); noun != "" {
-		if len(ident) > 0 {
-			words = append(words, noun)
-		} else if targets := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences]); len(targets) > 0 {
+		if targets := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences]); len(targets) > 0 {
 			words = append(words, strings.Join(targets, ", "))
 			skip = append(skip, ast.RelReferences)
+		} else {
+			words = append(words, noun)
 		}
 	}
-	words = append(words, ident...)
+	words = append(words, d.identWords(el)...)
 	// The accept shorthand writes its parameter into the head, ahead of the
 	// `via` clause the parent's relationships supply.
 	if accept := d.acceptParam(el); accept != nil {

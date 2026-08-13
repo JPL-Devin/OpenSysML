@@ -22,6 +22,9 @@
             (Relationship kind="typing" target=SafetyConcern
               (*ast.QualifiedName)))
           (Usage kind="frame" name="SafetyConcern" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (Usage kind="frame" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=SafetyConcern
+              (*ast.QualifiedName)))
           (Usage kind="stakeholder" name="se" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
             (Relationship kind="typing" target=Engineer
               (*ast.QualifiedName)))
@@ -44,6 +47,10 @@
                 (*ast.QualifiedName))))
           (Membership visibility="default"
             (Usage kind="render" name="r2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=AsTree
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="render" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=AsTree
                 (*ast.QualifiedName))))
           (Membership visibility="default"
