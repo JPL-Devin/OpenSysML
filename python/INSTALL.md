@@ -1,5 +1,16 @@
 # Installing pysysml
 
+## From PyPI
+
+```bash
+pip install pysysml
+```
+
+Published from CircleCI on a `pysysml-v*` tag; the first such release creates the
+project on PyPI, so until it is cut this installs nothing and the source install
+below is the only route. See
+[docs/RELEASING.md](../docs/RELEASING.md#releasing-pysysml-to-pypi).
+
 ## From source
 
 From the repository root:

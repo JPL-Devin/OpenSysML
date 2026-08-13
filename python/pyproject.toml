@@ -1,13 +1,36 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+# setuptools 77 is the first release that accepts a PEP 639 SPDX `license`
+# expression and `license-files`.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pysysml"
-version = "0.1.0"
-description = "Python client library for Systemica SysML v2 parser"
+dynamic = ["version"]
+description = "Python client library for Systemica, a SysML v2 parser and execution runtime"
 readme = "README.md"
-requires-python = ">=3.8"
+# grpcio 1.83 and protobuf 7.35 publish wheels for CPython 3.10 and later only,
+# so anything older cannot install the dependency set below.
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Open-MBEE" }]
+keywords = ["sysml", "sysmlv2", "kerml", "mbse", "systems-engineering"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Compilers",
+]
 dependencies = [
     "grpcio>=1.83.0",
     "protobuf>=7.35.1",
@@ -21,6 +44,19 @@ dev = [
     "pytest-mock>=3.10.0",
     "grpcio-tools>=1.83.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Open-MBEE/Systemica"
+Repository = "https://github.com/Open-MBEE/Systemica"
+Documentation = "https://github.com/Open-MBEE/Systemica/blob/main/python/README.md"
+Changelog = "https://github.com/Open-MBEE/Systemica/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Open-MBEE/Systemica/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "pysysml._version.VERSION" }
+
+[tool.setuptools.packages.find]
+include = ["pysysml*"]
 
 [tool.pytest.ini_options]
 markers = [
