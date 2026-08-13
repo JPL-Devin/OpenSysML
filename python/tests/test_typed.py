@@ -166,6 +166,14 @@ def sports_car_instance():
     return Instance(pb, {5: pb})
 
 
+def test_the_type_errors_are_reachable_from_the_package():
+    """A caller catches these the documented way, through the package namespace."""
+    import pysysml
+
+    assert pysysml.InstanceTypeError is InstanceTypeError
+    assert issubclass(pysysml.MissingCapabilityError, pysysml.PySysMLError)
+
+
 def test_from_instance_rejects_an_instance_of_another_type():
     """A wrong-type instance fails at from_instance, naming both types."""
     with pytest.raises(InstanceTypeError) as excinfo:

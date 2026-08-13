@@ -65,7 +65,9 @@ UNMAPPED_PRIMITIVES = frozenset({"Complex", "Number"})
 
 # Members TypedObject itself provides; a property of the same name would shadow
 # the machinery the accessors use, so such a feature is renamed.
-RESERVED_MEMBERS = frozenset({"instance", "from_instance", "sysml_id", "_instance"})
+RESERVED_MEMBERS = frozenset(
+    {"instance", "from_instance", "unchecked", "sysml_id", "_instance"}
+)
 
 
 def is_definition_kind(kind: str) -> bool:

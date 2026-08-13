@@ -10,15 +10,18 @@ from pysysml.diagnostic import Diagnostic
 from pysysml.instance import Instance
 from pysysml.typed import TypedObject
 from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
+from pysysml.capabilities import MissingCapabilityError, ServerInfo
 from pysysml.errors import (
-    PySysMLError, ConnectionError, RuntimeError, SlotError, TypeMismatchError,
-    UnsupportedValueError,
+    PySysMLError, ConnectionError, InstanceTypeError, RuntimeError, SlotError,
+    TypeMismatchError, UnsupportedValueError,
 )
 
 __all__ = [
     "Connection", "Model", "Symbol", "Diagnostic", "Instance",
     "TypedObject", "TypeFacts", "Multiplicity", "Specialization", "SymbolFacts",
-    "PySysMLError", "ConnectionError", "RuntimeError", "SlotError",
+    "ServerInfo",
+    "PySysMLError", "ConnectionError", "InstanceTypeError",
+    "MissingCapabilityError", "RuntimeError", "SlotError",
     "TypeMismatchError", "UnsupportedValueError",
     "load", "connect",
     "eval", "instantiate",
