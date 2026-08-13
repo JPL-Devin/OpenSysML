@@ -223,3 +223,51 @@ func TestCalcStatementBodyIsLoweredOnce(t *testing.T) {
 		t.Fatalf("body owner of %s is %T, want the calc definition", first.Name, first.BodyOwner.Decl)
 	}
 }
+
+// resultPlacementModel declares the result of each calculation before the steps
+// computing it, and states one result as a bare expression followed by a note.
+const resultPlacementModel = `
+package test {
+	calc def factorial {
+		in n;
+		return : Integer = acc;
+		attribute acc = 1;
+		attribute i = 1;
+		while i <= n {
+			acc = acc * i;
+			i = i + 1;
+		}
+	}
+	calc def twice {
+		in n;
+		n * 2
+		doc /* the result is the expression above */
+	}
+}
+`
+
+// TestCalcResultIsAnsweredAfterTheSteps requires the result a body declares to
+// be evaluated once the steps have run, wherever among the members it is
+// written: a result parameter names the answer, it does not stop the body.
+func TestCalcResultIsAnsweredAfterTheSteps(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, resultPlacementModel))
+	root := idx.DocumentRoot("<test>")
+
+	factorial, scope := calcByName(t, root, "test", "factorial")
+	value, err := ctx.InvokeCalc(factorial, []Value{constInt(6)}, scope)
+	if err != nil {
+		t.Fatalf("InvokeCalc: %v", err)
+	}
+	if value.Const.Int != 720 {
+		t.Fatalf("factorial(6) = %s, want 720: the loop must run before the result is read", FormatTraceValue(value))
+	}
+
+	twice, twiceScope := calcByName(t, root, "test", "twice")
+	doubled, err := ctx.InvokeCalc(twice, []Value{constInt(4)}, twiceScope)
+	if err != nil {
+		t.Fatalf("InvokeCalc: %v", err)
+	}
+	if doubled.Const.Int != 8 {
+		t.Fatalf("twice(4) = %s, want 8: an expression result is not dropped by what follows it", FormatTraceValue(doubled))
+	}
+}

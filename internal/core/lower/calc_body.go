@@ -8,6 +8,8 @@ import (
 // CalcBody lowers the computation a calculation body states, in declaration
 // order and in the scope it was written in. A member stating no computation —
 // an input parameter, documentation, a nested definition — is skipped.
+// A result the body declares names the value answered with, not a step, so it
+// runs after the steps; a `return` inside a branch or loop stops the body there.
 func CalcBody(members []ast.Node, scope *symbols.Scope) []Statement {
 	body := make([]ast.Node, 0, len(members))
 	for _, member := range members {
@@ -16,32 +18,36 @@ func CalcBody(members []ast.Node, scope *symbols.Scope) []Statement {
 		}
 	}
 
-	var stmts []Statement
-	for i, member := range body {
+	var stmts, results []Statement
+	for _, member := range body {
 		switch m := member.(type) {
 		case *ast.Usage:
 			if m.Direction == ast.DirIn || m.Direction == ast.DirInOut {
 				// An input parameter is bound by the invocation, not by the body.
 				continue
 			}
-			if stmt, ok := usageStatement(m, scope); ok {
-				stmts = append(stmts, stmt)
+			stmt, ok := usageStatement(m, scope)
+			if !ok {
+				continue
 			}
+			if _, isResult := stmt.(Return); isResult {
+				results = append(results, stmt)
+				continue
+			}
+			stmts = append(stmts, stmt)
 		case *ast.Definition, *ast.Documentation, *ast.Comment, *ast.Import:
 			// Declares a member of the calculation, not a step of it.
+		case *ast.ResultMember:
+			results = append(results, Return{Value: m.Expression, Node: m, Scope: scope})
 		default:
-			// A trailing expression is the value the calculation returns
-			// (`calc def C { in x; x + 1 }`).
 			if isExpressionNode(member) {
-				if i == len(body)-1 {
-					stmts = append(stmts, Return{Value: member, Node: member, Scope: scope})
-				}
+				results = append(results, Return{Value: member, Node: member, Scope: scope})
 				continue
 			}
 			stmts = append(stmts, lowerStatement(member, scope))
 		}
 	}
-	return stmts
+	return append(stmts, results...)
 }
 
 // usageStatement lowers a usage written in a statement position: a bound result

@@ -1179,7 +1179,9 @@ func (p *Parser) atCalcStatement() bool {
 
 // atConditionalExpression reports whether the `if` at the cursor starts a
 // conditional expression (`if c ? a else b`) rather than an if statement, by
-// looking for the '?' that ends its condition.
+// looking for the '?' that ends its condition. A brace is counted like a
+// parenthesis, so a condition holding a body expression (`xs->exists{...}`) is
+// scanned past instead of being read as the block of an if statement.
 func (p *Parser) atConditionalExpression() bool {
 	depth := 0
 	for i := 1; ; i++ {
@@ -1187,15 +1189,18 @@ func (p *Parser) atConditionalExpression() bool {
 		switch tok.Kind {
 		case lexer.EOF:
 			return false
-		case lexer.LParen, lexer.LBracket:
+		case lexer.LParen, lexer.LBracket, lexer.LBrace:
 			depth++
-		case lexer.RParen, lexer.RBracket:
+		case lexer.RParen, lexer.RBracket, lexer.RBrace:
+			if depth == 0 {
+				return false
+			}
 			depth--
 		case lexer.Question:
 			if depth == 0 {
 				return true
 			}
-		case lexer.LBrace, lexer.RBrace, lexer.Semicolon:
+		case lexer.Semicolon:
 			if depth == 0 {
 				return false
 			}
