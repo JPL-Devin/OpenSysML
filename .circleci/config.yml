@@ -113,7 +113,7 @@ jobs:
   # trusted-publishing (OIDC) support for CircleCI — the supported providers are
   # GitHub Actions, Google Cloud, ActiveState and GitLab CI/CD, and
   # pypi/warehouse#13888 is the open request — so this authenticates with an API
-  # token supplied by the restricted `pypi-publish` context. An upload cannot be
+  # token supplied by the restricted `pypi` context. An upload cannot be
   # taken back (a version can be yanked, never re-uploaded), so everything that
   # can fail is made to fail before `twine upload` runs: the tag/version check,
   # `twine check --strict`, an install of the built wheel into a clean
@@ -137,7 +137,7 @@ jobs:
               if [ -z "${TEST_PYPI_API_TOKEN:-}" ]; then
                 echo "Error: TEST_PYPI_API_TOKEN is not set, and ${CIRCLE_TAG} names a"
                 echo "pre-release version, which is published to TestPyPI."
-                echo "Add it to the 'pypi-publish' context (Organization Settings ->"
+                echo "Add it to the 'pypi' context (Organization Settings ->"
                 echo "Contexts) as a TestPyPI API token. See docs/RELEASING.md."
                 exit 1
               fi
@@ -145,7 +145,7 @@ jobs:
               echo "Error: PYPI_API_TOKEN is not set. This job authenticates to PyPI"
               echo "with an API token, not OIDC, and refuses to run twine without one"
               echo "rather than failing later with a 403."
-              echo "Add it to the 'pypi-publish' context (Organization Settings ->"
+              echo "Add it to the 'pypi' context (Organization Settings ->"
               echo "Contexts) and make sure this job references that context."
               echo "See docs/RELEASING.md."
               exit 1
@@ -476,7 +476,7 @@ workflows:
           # Last, and only after the Go suite and the Python client's own tests
           # have passed on this revision: an upload cannot be undone.
           context:
-            - pypi-publish
+            - pypi
           requires:
             - build-and-test
             - python-test
