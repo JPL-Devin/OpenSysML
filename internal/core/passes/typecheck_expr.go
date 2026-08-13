@@ -236,13 +236,20 @@ func isSingleValued(el ast.Node) bool {
 }
 
 // commonElementType returns the scalar type every element of a sequence
-// expression conforms to, or PrimUnknown where the elements have none in
-// common.
+// expression conforms to, or PrimUnknown where they have none in common or any
+// one of them has no known type: PrimConforms holds of PrimUnknown either way
+// round, so it decides conformance but cannot merge types.
 func (ec *exprChecker) commonElementType(scope *symbols.Scope, seq *ast.SequenceExpr) semantics.PrimType {
 	common := semantics.PrimUnknown
+	unknown := false
 	for i, el := range seq.Elements {
 		elem := ec.infer(scope, el)
-		if i == 0 {
+		if elem == semantics.PrimUnknown {
+			// Every element is still typed, so an error inside one is reported.
+			unknown = true
+			continue
+		}
+		if i == 0 || common == semantics.PrimUnknown {
 			common = elem
 			continue
 		}
@@ -252,8 +259,11 @@ func (ec *exprChecker) commonElementType(scope *symbols.Scope, seq *ast.Sequence
 		case semantics.PrimConforms(common, elem):
 			common = elem
 		default:
-			return semantics.PrimUnknown
+			unknown = true
 		}
+	}
+	if unknown {
+		return semantics.PrimUnknown
 	}
 	return common
 }

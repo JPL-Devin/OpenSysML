@@ -91,6 +91,17 @@ func TestIndexOfMixedSequenceHasNoElementType(t *testing.T) {
 	wantNoDiags(t, `package P { attribute x : ScalarValues::Boolean = (1, "a")#(1); }`)
 }
 
+// An element whose type is not known leaves the element type of the sequence
+// unknowable, so nothing is reported about what an index of it holds: `flag` is
+// a Boolean here, and typing the sequence from the elements that happen to be
+// known would reject the model for it.
+func TestIndexOfSequenceWithAnUntypedElementIsNotReported(t *testing.T) {
+	wantNoDiags(t, `package P {
+		attribute flag = true;
+		attribute y : ScalarValues::Boolean = (1, flag)#(2);
+	}`)
+}
+
 // The bracket form is a quantity, not an index, so the unit name in it is not
 // checked as a position.
 func TestQuantityBracketFormIsNotIndexed(t *testing.T) {
