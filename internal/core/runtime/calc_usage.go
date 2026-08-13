@@ -127,6 +127,17 @@ func (shape *calcShape) output(name string) (calcOutput, bool) {
 	return calcOutput{}, false
 }
 
+// bindsOwnOutput reports whether the usage itself binds one of the outputs read
+// from it, whose value the environment reading the usage answers.
+func (shape *calcShape) bindsOwnOutput() bool {
+	for _, out := range shape.Outputs {
+		if out.Value != nil && out.Owner == shape.Sym {
+			return true
+		}
+	}
+	return false
+}
+
 // outputNames renders the output features the calc declares, for a diagnostic
 // about one it does not.
 func (shape *calcShape) outputNames() string {
@@ -195,10 +206,13 @@ func (shape *calcShape) usageSpelling(output string) string {
 // calcUsageKey identifies one evaluation of one calc usage: the usage, the
 // object whose state it reads, and the values its inputs bound to, so neither
 // two objects nor two enclosing invocations share the values computed for one.
+// outer holds the enclosing bindings as well for a usage binding an output of
+// its own, which is evaluated in them rather than from the inputs alone.
 type calcUsageKey struct {
 	sym      *symbols.Symbol
 	instance int64
 	inputs   string
+	outer    string
 }
 
 // calcRun is one evaluation of a calc: the environment its computation left
@@ -316,6 +330,9 @@ func (ctx *Context) calcUsageRun(reader *EvalContext, sym *symbols.Symbol) (*cal
 	if reader.self != nil {
 		key.instance = reader.self.ID
 	}
+	if shape.bindsOwnOutput() {
+		key.outer = calcEnvKey(reader)
+	}
 	// The inputs are bound before the key is known, so a usage read again with
 	// the same inputs answers from the run it already has. A calc is pure, so
 	// evaluating its input bindings a second time observes nothing.
@@ -347,11 +364,12 @@ func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext) (*EvalC
 	ec.Push(env)
 
 	// A usage declared among a calc's members is written in that calc's body, so
-	// its own bindings see the parameters and locals of the evaluation reading it.
+	// its own bindings see the parameters and locals of the evaluation reading it,
+	// and none of the inputs being bound here, so every input resolves names in
+	// the enclosing environment alike.
 	var nested *EvalContext
 	if enclosedByCalc(shape.Sym) {
 		nested = reader.nestedEnv(ctx.calcScope(shape.Sym, shape.Sym, reader.scope))
-		nested.Push(env)
 	}
 
 	// A usage passes no arguments: every input binds from the value the usage or

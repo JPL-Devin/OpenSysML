@@ -29,6 +29,27 @@ func calcInputsKey(shape *calcShape, env map[string]Value) string {
 	return b.String()
 }
 
+// calcEnvKey renders the bindings of the evaluation reading a calc usage, for a
+// usage whose own output bindings that environment answers.
+func calcEnvKey(reader *EvalContext) string {
+	var b strings.Builder
+	for _, frame := range reader.frames {
+		names := make([]string, 0, len(frame))
+		for name := range frame {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			b.WriteString(name)
+			b.WriteByte('=')
+			b.WriteString(valueKeyString(frame[name]))
+			b.WriteByte(';')
+		}
+		b.WriteByte('|')
+	}
+	return b.String()
+}
+
 // valueKeyString renders a value so that no two values of different kinds or
 // contents render alike: each kind is tagged, collections are rendered
 // element-wise (a set by its sorted elements, which do not depend on insertion

@@ -7,6 +7,7 @@
   },
   "reads": {
     "test::tenTop": {"type": "Integer", "value": 11},
-    "test::tenWidth": {"type": "Integer", "value": 2}
+    "test::tenWidth": {"type": "Integer", "value": 2},
+    "test::swappedD": {"type": "Integer", "value": 21}
   }
 }

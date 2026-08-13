@@ -31,4 +31,29 @@ package test {
 
 	attribute tenTop = spanOfTen.top;
 	attribute tenWidth = spanOfTen.width;
+
+	calc def Pair {
+		in n : Integer;
+		in m : Integer;
+		out d = n * 10 + m;
+	}
+
+	// Every input binds in the enclosing environment, so the two values swap:
+	// `in m = n` reads the enclosing `n`, not the `n` bound just above it.
+	calc def Swap {
+		in n : Integer;
+		in m : Integer;
+		calc p : Pair {
+			in n = m;
+			in m = n;
+		}
+		out d = p.d;
+	}
+
+	calc swapped : Swap {
+		in n = 1;
+		in m = 2;
+	}
+
+	attribute swappedD = swapped.d;
 }

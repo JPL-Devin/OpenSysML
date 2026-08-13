@@ -168,8 +168,60 @@ func TestNestedCalcUsageShadowsEnclosingName(t *testing.T) {
 	wantInt(t, outputs, "top", 6)
 }
 
+// Every input of a nested usage binds in the enclosing environment, so one
+// input naming another's name reads the enclosing feature, not the sibling
+// binding just written.
+func TestNestedCalcUsageInputsDoNotSeeSiblings(t *testing.T) {
+	src := `
+		package test {
+			calc def Two {
+				in n : Integer;
+				in m : Integer;
+				out d = n * 10 + m;
+			}
+			calc def Outer {
+				in n : Integer;
+				in m : Integer;
+				calc s : Two { in n = m; in m = n; }
+				out d = s.d;
+			}
+			calc c : Outer { in n = 1; in m = 2; }
+		}
+	`
+	outputs := nestedUsageOutputs(t, src, "c")
+	wantInt(t, outputs, "d", 21)
+}
+
+// An output the usage itself binds is evaluated in the enclosing environment,
+// so two invocations within one run do not share the first one's value.
+func TestNestedCalcUsageOwnOutputPerInvocation(t *testing.T) {
+	src := `
+		package test {
+			calc def Base {
+				out a = 0;
+			}
+			calc def Outer {
+				in m : Integer;
+				calc s : Base { out a = m * 2; }
+				out d = s.a;
+			}
+			calc def Pair {
+				calc one : Outer { in m = 1; }
+				calc two : Outer { in m = 2; }
+				out d1 = one.d;
+				out d2 = two.d;
+			}
+			calc p : Pair;
+		}
+	`
+	outputs := nestedUsageOutputs(t, src, "p")
+	wantInt(t, outputs, "d1", 2)
+	wantInt(t, outputs, "d2", 4)
+}
+
 // One nested usage read from two enclosing invocations whose arguments differ
-// computes each invocation's values, not the first's twice.
+// computes each invocation's values, not the first's twice, within one run
+// where both reach the same memoized runs.
 func TestNestedCalcUsageRunsPerInputs(t *testing.T) {
 	src := `
 		package test {
@@ -183,25 +235,18 @@ func TestNestedCalcUsageRunsPerInputs(t *testing.T) {
 				calc s : Split { in n = n; }
 				out top = s.high;
 			}
-			calc five : Span { in n = 5; }
-			calc ten : Span { in n = 10; }
+			calc def Both {
+				calc five : Span { in n = 5; }
+				calc ten : Span { in n = 10; }
+				out ofFive = five.top;
+				out ofTen = ten.top;
+			}
+			calc both : Both;
 		}
 	`
-	// One runtime, so the two enclosing invocations reach the same memoized
-	// runs of the nested usage they share.
-	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
-	rootScope := idx.DocumentRoot("<test>")
-	for name, want := range map[string]int64{"five": 6, "ten": 11} {
-		sym := findSymbolByName(rootScope, name, ast.DefCalc)
-		if sym == nil {
-			t.Fatalf("calc usage %s not found", name)
-		}
-		outputs, err := ctx.CalcUsageOutputs(sym, sym.OwnerScope, nil)
-		if err != nil {
-			t.Fatalf("reading the outputs of %s: %v", name, err)
-		}
-		wantInt(t, outputs, "top", want)
-	}
+	outputs := nestedUsageOutputs(t, src, "both")
+	wantInt(t, outputs, "ofFive", 6)
+	wantInt(t, outputs, "ofTen", 11)
 }
 
 // A nested usage read through an object keeps that object's state in reach: an
