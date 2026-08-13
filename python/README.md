@@ -205,7 +205,9 @@ dodge one.
 - **Generics and enumerations.** No generic parameters, and an `enumDef` becomes a
   plain class rather than a Python `Enum`.
 - **Name collisions.** Two definitions with the same simple name both get
-  path-qualified class names (`A_Thing`, `B_Thing`).
+  path-qualified class names (`A_Thing`, `B_Thing`). A feature named like a member
+  `TypedObject` provides (`instance`, `from_instance`, `sysml_id`) gets a trailing
+  underscore (`instance_`); the SysML slot name it reads is unchanged.
 
 `pysysml.connect(host, port, auto_start=True)` returns a `Connection` when you
 want to manage the service yourself; the module-level functions share a lazily

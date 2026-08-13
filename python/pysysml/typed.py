@@ -137,8 +137,11 @@ def optional_slot(
 def list_slot(
     obj: TypedObject, feature_name: str, decode: Callable[[str, object], T]
 ) -> List[T]:
-    """Return the decoded values of a multi-valued slot."""
-    value = _require(obj, feature_name)
+    """Return the decoded values of a multi-valued slot; an absent or null slot is empty."""
+    instance = obj.instance
+    if feature_name not in instance:
+        return []
+    value = instance[feature_name]
     if value is None:
         return []
     if not isinstance(value, list):

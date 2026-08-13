@@ -161,6 +161,24 @@ def test_feature_type_multiplicity(multiplicity, expected):
     assert mapped.annotation == expected
 
 
+def test_feature_named_like_a_typed_object_member_is_renamed():
+    """A feature named `instance` must not shadow the accessor machinery it uses."""
+    source = render_module(
+        [
+            definition(
+                "Demo::Vehicle",
+                features=[feature("instance", type_facts=TypeFacts(primitive="Real"))],
+            )
+        ]
+    )
+    assert "def instance_(self) -> float:" in source
+    assert '_t.slot(self, "instance", _t.as_float)' in source
+
+    namespace: dict = {}
+    exec(compile(source, "generated", "exec"), namespace)
+    assert namespace["Vehicle"].instance is not None
+
+
 def test_class_names_disambiguate_collisions():
     """Two definitions of the same simple name both get qualified class names."""
     definitions = [definition("A::Thing"), definition("B::Thing"), definition("A::Other")]

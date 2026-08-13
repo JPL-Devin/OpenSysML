@@ -51,6 +51,10 @@ PRIMITIVE_TYPES = {
 # Library scalars with no sound Python counterpart, mapped to `object`.
 UNMAPPED_PRIMITIVES = frozenset({"Complex", "Number"})
 
+# Members TypedObject itself provides; a property of the same name would shadow
+# the machinery the accessors use, so such a feature is renamed.
+RESERVED_MEMBERS = frozenset({"instance", "from_instance", "sysml_id", "_instance"})
+
 
 def is_definition_kind(kind: str) -> bool:
     """Whether a symbol kind declares a type, e.g. ``partDef`` or ``metaclass``."""
@@ -162,6 +166,14 @@ def _identifier(name: str) -> str:
     if keyword.iskeyword(cleaned):
         cleaned += "_"
     return cleaned
+
+
+def property_name(name: str) -> str:
+    """Python name of the property for a feature; the SysML slot name is unchanged."""
+    identifier = _identifier(name)
+    if identifier in RESERVED_MEMBERS:
+        identifier += "_"
+    return identifier
 
 
 def element_type(type_facts: Optional[TypeFacts], names: Dict[str, str]) -> PythonType:
@@ -290,9 +302,11 @@ def _render_class(definition: Definition, names: Dict[str, str]) -> List[str]:
 
 def _render_property(feature: Feature, names: Dict[str, str]) -> List[str]:
     python_type = feature_type(feature, names)
-    identifier = _identifier(feature.name)
+    identifier = property_name(feature.name)
     lines = ["    @property", f"    def {identifier}(self) -> {python_type.annotation}:"]
     doc = f"{feature.facts.kind} {feature.facts.id}."
+    if _identifier(feature.name) in RESERVED_MEMBERS:
+        doc += f' Renamed from "{feature.name}", which TypedObject already defines.'
     if python_type.comment:
         doc += f" Mapped to {python_type.annotation}: {python_type.comment}."
     lines.append(f'        """{doc}"""')

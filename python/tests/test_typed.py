@@ -126,6 +126,15 @@ def test_list_slot_decodes_every_element():
     assert v.ratios == [1.5, 2.0]
 
 
+def test_list_slot_is_empty_when_absent_or_null():
+    """A collection slot the instance never carried, or holding null, reads as empty."""
+    pb = sysml_pb2.Instance(id=4, type_symbol_id="Demo::Vehicle", slots={})
+    assert Vehicle.from_instance(Instance(pb)).ratios == []
+
+    null = vehicle_instance(ratios=scalar_slot("ratios", null=""))
+    assert Vehicle.from_instance(null).ratios == []
+
+
 def test_typed_objects_compare_by_instance_identity():
     """Two views of the same instance are equal; different classes are not."""
     inst = vehicle_instance()
