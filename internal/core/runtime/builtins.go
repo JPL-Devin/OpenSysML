@@ -80,12 +80,16 @@ func init() {
 		// than answered wrongly (docs/SPEC_COMPLIANCE.md).
 		"NumericalFunctions::sum":     builtinNumericalSum,
 		"NumericalFunctions::product": builtinNumericalProduct,
-		"IntegerFunctions::sum":       builtinNumericalSum,
-		"IntegerFunctions::product":   builtinNumericalProduct,
-		"RationalFunctions::sum":      builtinNumericalSum,
-		"RationalFunctions::product":  builtinNumericalProduct,
-		"RealFunctions::sum":          builtinNumericalSum,
-		"RealFunctions::product":      builtinNumericalProduct,
+		// IntegerFunctions::'..', the range, whose result the library declares
+		// `Integer[0..*]`: an ordered sequence, not a value kind of its own.
+		"IntegerFunctions::..": builtinIntegerRange,
+
+		"IntegerFunctions::sum":      builtinNumericalSum,
+		"IntegerFunctions::product":  builtinNumericalProduct,
+		"RationalFunctions::sum":     builtinNumericalSum,
+		"RationalFunctions::product": builtinNumericalProduct,
+		"RealFunctions::sum":         builtinNumericalSum,
+		"RealFunctions::product":     builtinNumericalProduct,
 	}
 
 	builtinsByLocalName = map[string]func(*EvalContext, []Value) (Value, error){}
