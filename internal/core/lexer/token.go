@@ -131,6 +131,10 @@ type Token struct {
 	Kind      Kind
 	Span      source.Span
 	KeywordID string // populated for Kind==Keyword
+	// Unterminated marks a comment or note the scanner ran to the end of the
+	// file without finding its closing "*/", so everything after the opener —
+	// possibly the rest of the document — is inside it.
+	Unterminated bool
 }
 
 // IsTrivia reports whether the token is hidden trivia (skipped by the parser).

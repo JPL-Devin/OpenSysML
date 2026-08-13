@@ -96,6 +96,8 @@ jobs:
             pip install -e .
             pip install pytest pytest-mock
       
+      # The integration tests skip without a service on localhost:50051, and
+      # starting one here fails test_lifecycle: see docs/ROADMAP.md §P1.
       - run:
           name: Run Python tests
           command: |
@@ -106,6 +108,133 @@ jobs:
           name: Verify import
           command: |
             python3 -c "import pysysml; print(f'pysysml {pysysml.__version__} imported successfully')"
+
+  # Publishes pysysml to PyPI on a `pysysml-v<version>` tag. PyPI has no
+  # trusted-publishing (OIDC) support for CircleCI — the supported providers are
+  # GitHub Actions, Google Cloud, ActiveState and GitLab CI/CD, and
+  # pypi/warehouse#13888 is the open request — so this authenticates with an API
+  # token supplied by the restricted `pypi-publish` context. An upload cannot be
+  # taken back (a version can be yanked, never re-uploaded), so everything that
+  # can fail is made to fail before `twine upload` runs: the tag/version check,
+  # `twine check --strict`, an install of the built wheel into a clean
+  # virtualenv, and a refusal when the version is already on the index.
+  publish-pypi:
+    executor: python-executor
+    steps:
+      - checkout
+
+      - run:
+          name: Install build tooling
+          command: python -m pip install --upgrade pip build twine packaging
+
+      - run:
+          name: Require the publishing token
+          command: |
+            # A pre-release version goes to TestPyPI (the dry run described in
+            # docs/RELEASING.md), everything else to PyPI, so only the token for
+            # the index actually being used is required.
+            if [ "$(python python/scripts/check_version.py --pre-release)" = "yes" ]; then
+              if [ -z "${TEST_PYPI_API_TOKEN:-}" ]; then
+                echo "Error: TEST_PYPI_API_TOKEN is not set, and ${CIRCLE_TAG} names a"
+                echo "pre-release version, which is published to TestPyPI."
+                echo "Add it to the 'pypi-publish' context (Organization Settings ->"
+                echo "Contexts) as a TestPyPI API token. See docs/RELEASING.md."
+                exit 1
+              fi
+            elif [ -z "${PYPI_API_TOKEN:-}" ]; then
+              echo "Error: PYPI_API_TOKEN is not set. This job authenticates to PyPI"
+              echo "with an API token, not OIDC, and refuses to run twine without one"
+              echo "rather than failing later with a 403."
+              echo "Add it to the 'pypi-publish' context (Organization Settings ->"
+              echo "Contexts) and make sure this job references that context."
+              echo "See docs/RELEASING.md."
+              exit 1
+            fi
+
+      - run:
+          name: Resolve the version from the tag
+          command: |
+            # Fails loudly when the tag names a version other than the one the
+            # package would publish, before anything is built.
+            VERSION="$(python python/scripts/check_version.py)"
+            PRE_RELEASE="$(python python/scripts/check_version.py --pre-release)"
+            echo "export PYSYSML_VERSION=${VERSION}" >> "$BASH_ENV"
+            echo "export PYSYSML_PRE_RELEASE=${PRE_RELEASE}" >> "$BASH_ENV"
+            echo "Publishing pysysml ${VERSION} (pre-release: ${PRE_RELEASE})"
+
+      - run:
+          name: Refuse a version the index already has
+          command: |
+            if [ "$PYSYSML_PRE_RELEASE" = "yes" ]; then
+              INDEX_HOST="test.pypi.org"
+            else
+              INDEX_HOST="pypi.org"
+            fi
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+              "https://${INDEX_HOST}/pypi/pysysml/${PYSYSML_VERSION}/json")
+            if [ "$STATUS" = "200" ]; then
+              echo "Error: pysysml ${PYSYSML_VERSION} is already on ${INDEX_HOST}."
+              echo "A PyPI version is immutable: it can be yanked but never replaced,"
+              echo "so this job fails rather than half-publishing. Re-running a"
+              echo "release for the same version is therefore not an operation PyPI"
+              echo "supports, unlike publish-github-release, which replaces assets"
+              echo "with 'ghr -delete'. Bump the version in"
+              echo "python/pysysml/_version.py and tag pysysml-v<new version>."
+              exit 1
+            fi
+            echo "${INDEX_HOST} has no pysysml ${PYSYSML_VERSION} (HTTP ${STATUS}); continuing"
+
+      - run:
+          name: Build the wheel and the sdist
+          command: |
+            rm -rf python/dist
+            python -m build --outdir python/dist python/
+            ls -l python/dist
+
+      - run:
+          name: Check the metadata (twine check --strict)
+          command: python -m twine check --strict python/dist/*
+
+      - run:
+          name: Install the built wheel into a clean virtualenv and import it
+          command: |
+            # A broken artifact fails the job rather than PyPI.
+            python -m venv /tmp/verify-wheel
+            /tmp/verify-wheel/bin/python -m pip install --upgrade pip
+            /tmp/verify-wheel/bin/python -m pip install python/dist/*.whl
+            # The backslash is CircleCI's escape for a literal heredoc operator
+            # in a 2.1 config; the shell sees a plain heredoc.
+            /tmp/verify-wheel/bin/python - \<<'EOF'
+            import os
+            import pysysml
+            expected = os.environ["PYSYSML_VERSION"]
+            assert pysysml.__version__ == expected, (
+                f"installed wheel reports {pysysml.__version__}, expected {expected}"
+            )
+            print(f"pysysml {pysysml.__version__} imported from the built wheel")
+            EOF
+
+      - run:
+          name: Upload to the index
+          command: |
+            # The token is read straight into twine's environment: nothing here
+            # echoes it, and nothing in this job prints the environment.
+            export TWINE_USERNAME=__token__
+            if [ "$PYSYSML_PRE_RELEASE" = "yes" ]; then
+              export TWINE_REPOSITORY_URL=https://test.pypi.org/legacy/
+              export TWINE_PASSWORD="$TEST_PYPI_API_TOKEN"
+              echo "Uploading pysysml ${PYSYSML_VERSION} to TestPyPI"
+            else
+              export TWINE_PASSWORD="$PYPI_API_TOKEN"
+              echo "Uploading pysysml ${PYSYSML_VERSION} to PyPI"
+            fi
+            # No --skip-existing: a version that appeared since the check above
+            # must fail the job rather than pass silently.
+            python -m twine upload python/dist/*
+
+      - store_artifacts:
+          path: python/dist
+          destination: pysysml-dist
 
   build-release:
     executor: go-executor
@@ -156,6 +285,27 @@ jobs:
             GOOS=windows GOARCH=amd64 make build-lsp VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
             mv bin/sysml-lsp dist/sysml-lsp-windows-amd64.exe
             
+            # The gRPC service backs the Python client, which downloads one
+            # file per platform and verifies it against a .sha256 sidecar, so
+            # these are published raw rather than archived. They are built into
+            # a subdirectory to keep them out of the archive globs below.
+            mkdir -p dist/grpc
+            
+            GOOS=linux GOARCH=amd64 make build-grpc VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-grpc dist/grpc/sysml-grpc-linux-amd64
+            
+            GOOS=linux GOARCH=arm64 make build-grpc VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-grpc dist/grpc/sysml-grpc-linux-arm64
+            
+            GOOS=darwin GOARCH=amd64 make build-grpc VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-grpc dist/grpc/sysml-grpc-darwin-amd64
+            
+            GOOS=darwin GOARCH=arm64 make build-grpc VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-grpc dist/grpc/sysml-grpc-darwin-arm64
+            
+            GOOS=windows GOARCH=amd64 make build-grpc VERSION="$VERSION" COMMIT="$COMMIT" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+            mv bin/sysml-grpc dist/grpc/sysml-grpc-windows-amd64.exe
+            
             # Create tarballs
             cd dist
             for binary in sysml-*; do
@@ -186,6 +336,11 @@ jobs:
             # Checksums over every published archive, so a Homebrew formula
             # (or a careful user) can verify a download.
             sha256sum ./*.tar.gz ./*.zip | sed 's|\./||' > SHA256SUMS.txt
+            
+            # Same for the raw gRPC binaries, plus a per-file sidecar, which is
+            # the only checksum pysysml reads.
+            (cd grpc && sha256sum sysml-grpc-* >> ../SHA256SUMS.txt)
+            (cd grpc && for f in sysml-grpc-*; do sha256sum "$f" > "$f.sha256"; done)
             cat SHA256SUMS.txt
       
       - store_artifacts:
@@ -218,6 +373,7 @@ jobs:
             # Move only tarballs to a release directory
             mkdir -p dist/release
             mv dist/*.tar.gz dist/*.zip dist/release/ 2>/dev/null || true
+            mv dist/grpc/* dist/release/
             mv dist/SHA256SUMS.txt dist/release/
             echo "Release artifacts:"
             ls -la dist/release/
@@ -290,3 +446,42 @@ workflows:
               ignore: /.*/
             tags:
               only: /^v.*/
+
+  # Publish pysysml to PyPI on its own tag. The package's version is not
+  # lockstep with the core's: it resolves a sysml-grpc binary at runtime from
+  # whichever release the caller asks for (PYSYSML_GRPC_VERSION, or 'latest'),
+  # not from a release matching its own version, so a client fix should not need
+  # a core release and a core release should not need a PyPI upload. Keeping the
+  # irreversible half on its own tag also keeps `v*` re-runnable, which
+  # publish-github-release relies on ('ghr -delete').
+  release-python:
+    jobs:
+      - build-and-test:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^pysysml-v.*/
+
+      - python-test:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^pysysml-v.*/
+
+      - publish-pypi:
+          # Last, and only after the Go suite and the Python client's own tests
+          # have passed on this revision: an upload cannot be undone.
+          context:
+            - pypi-publish
+          requires:
+            - build-and-test
+            - python-test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^pysysml-v.*/

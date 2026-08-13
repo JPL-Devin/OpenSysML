@@ -39,6 +39,12 @@ func valueKeyFunc(v Value) valueKey {
 		key.colHash = hashSequence(v.Sequence)
 	case ValSet:
 		key.colHash = hashSet(v.Set)
+	case ValQuantity:
+		// Keyed on the base-unit form, so `1 [km]` and `1000 [m]` are one element.
+		if v.Quantity != nil {
+			key.realVal = v.Quantity.baseMagnitude()
+			key.strVal = v.Quantity.Unit.Term.DimensionKey()
+		}
 	}
 	return key
 }

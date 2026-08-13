@@ -209,6 +209,24 @@ func TestReferenceSubsettingOutranksRedefinitionAsNamingFeature(t *testing.T) {
 	}
 }
 
+// A declared short name is no declared name: KerML derives effectiveName from
+// declaredName alone, so the naming feature still names the declaration and the
+// short name is its own key.
+func TestShortNameLeavesTheNamingFeatureInPlace(t *testing.T) {
+	root := build(t, `package P {
+		part def Vehicle { part engine; }
+		part v : Vehicle { part <e> :>> engine; }
+	}`)
+
+	pkg, _ := root.LookupLocal("P")
+	v, _ := pkg.Scope.LookupLocal("v")
+	for _, name := range []string{"e", "engine"} {
+		if _, ok := v.Scope.LookupLocal(name); !ok {
+			t.Fatalf("v members = %v, want %s", v.Scope.MemberNames(), name)
+		}
+	}
+}
+
 // Two redefinitions have no single naming feature, so the declaration stays
 // anonymous rather than picking one of the redefined names.
 func TestTwoRedefinitionsLeaveFeatureAnonymous(t *testing.T) {

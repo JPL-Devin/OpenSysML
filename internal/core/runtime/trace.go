@@ -241,6 +241,13 @@ func FormatTraceValue(v Value) string {
 		}
 		sort.Strings(parts)
 		return "{" + strings.Join(parts, ", ") + "}"
+	case ValQuantity:
+		if v.Quantity == nil {
+			return v.Kind.String()
+		}
+		// A unit-carrying value is rendered as the REPL renders it, with the
+		// magnitude in the trace's own convention for numbers.
+		return v.Quantity.TextWithMagnitude(formatConst(v.Quantity.Num))
 	case ValExpr:
 		return fmt.Sprintf("expr(%s)", TraceLabel(v.Expr))
 	default:
@@ -324,8 +331,10 @@ func nodeIdentifier(node ast.Node) string {
 
 	switch n := node.(type) {
 	case *ast.Usage:
-		if n.Ident.Name != "" {
-			return n.Ident.Name
+		// A step written as a redefinition is traced under the name it
+		// answers to, the one it redefines.
+		if name, _ := ast.EffectiveName(n); name != "" {
+			return name
 		}
 		return fmt.Sprintf("usage_%s", n.Kind)
 	case *ast.Definition:

@@ -9,7 +9,10 @@
 // The rules are deliberately conservative: line breaks the author wrote are
 // preserved, so the formatter never joins or splits a line. It fixes
 // indentation, trailing whitespace, runs of blank lines, and the padding just
-// inside brackets and before separators. Line endings are emitted in the
+// inside brackets and before separators. A line that continues the statement
+// above it — the author broke a declaration or expression across lines — is
+// indented one level deeper than that statement, so it still reads as a
+// continuation rather than as a new statement. Line endings are emitted in the
 // document's own dominant style, so a CRLF file stays CRLF throughout.
 package format
 
@@ -87,6 +90,8 @@ type formatter struct {
 	pendingWS   bool // same-line whitespace seen since the last emitted token
 	prev        lexer.Token
 	started     bool
+	lastCode    lexer.Kind // last non-comment token: what a line break interrupts
+	openComment bool       // the last token is a comment the lexer never saw closed
 }
 
 func (f *formatter) run(toks []lexer.Token) []byte {
@@ -104,9 +109,10 @@ func (f *formatter) run(toks []lexer.Token) []byte {
 		f.emit(tok)
 	}
 	out := f.buf.Bytes()
-	if f.started {
+	if f.started && !f.openComment {
 		// Exactly one trailing newline, whether or not the last token was a line
-		// comment that carried its own.
+		// comment that carried its own. An unterminated comment runs to the end of
+		// the file and would swallow it, changing that token's own text.
 		out = append(bytes.TrimRight(out, "\r\n"), f.nl...)
 	}
 	return out
@@ -142,7 +148,7 @@ func (f *formatter) emit(tok lexer.Token) {
 	f.pendingNL, f.pendingWS = 0, false
 
 	if f.atLineStart {
-		f.writeIndent()
+		f.writeIndent(f.continues(tok))
 	}
 	text := normalizeNewlines(f.text(tok), f.nl)
 	f.buf.WriteString(text)
@@ -151,6 +157,12 @@ func (f *formatter) emit(tok lexer.Token) {
 		f.depth++
 	}
 	f.prev, f.started, f.atLineStart = tok, true, false
+	f.openComment = tok.Unterminated
+	if !isComment(tok.Kind) {
+		// A trailing comment interrupts nothing, so the token before it is
+		// still what the next line continues.
+		f.lastCode = tok.Kind
+	}
 	if i := strings.LastIndexByte(text, '\n'); i >= 0 {
 		// A multi-line note or block comment is emitted verbatim; the tokens
 		// after it start from wherever it ended.
@@ -194,12 +206,71 @@ func (f *formatter) wantSpace(tok lexer.Token) bool {
 	return true
 }
 
-func (f *formatter) writeIndent() {
+// continues reports whether the line tok begins carries on the line above it,
+// which is the case when the break falls inside a phrase: either the token
+// before it cannot end one, or tok itself cannot start one. A break the author
+// made anywhere else — after a declaration's name, say — is left at the
+// statement's own level, so only breaks the formatter can be sure about move.
+func (f *formatter) continues(tok lexer.Token) bool {
+	switch tok.Kind {
+	case lexer.LBrace, lexer.RBrace, lexer.RParen, lexer.RBracket:
+		// A delimiter on its own line belongs to the line that opened it rather
+		// than one level in from it.
+		return false
+	}
+	return incompleteBefore[f.lastCode] || continuesAfter[tok.Kind]
+}
+
+func isComment(k lexer.Kind) bool {
+	switch k {
+	case lexer.SLNote, lexer.MLNote, lexer.RegularComment:
+		return true
+	}
+	return false
+}
+
+// infix are the tokens that join two operands or two clauses, so a line break
+// on either side of one falls inside a phrase.
+var infix = []lexer.Kind{
+	lexer.Pipe, lexer.Amp, lexer.EqEq, lexer.NotEq, lexer.EqEqEq, lexer.NotEqEq,
+	lexer.Lt, lexer.Gt, lexer.Le, lexer.Ge, lexer.DotDot,
+	lexer.Plus, lexer.Minus, lexer.Star, lexer.Slash, lexer.Percent,
+	lexer.StarStar, lexer.Caret, lexer.Dot, lexer.Arrow, lexer.DotQuestion,
+	lexer.Comma, lexer.ColonColon, lexer.Eq, lexer.Colon, lexer.ColonEq,
+	lexer.ColonGt, lexer.ColonGtGt, lexer.ColonColonGt, lexer.EqGt,
+}
+
+// incompleteBefore are the tokens that cannot end a phrase: an infix operator,
+// an unclosed bracket, or a prefix awaiting its operand.
+var incompleteBefore = kindSet(infix, []lexer.Kind{
+	lexer.LParen, lexer.LBracket, lexer.Question, lexer.QuestionQ,
+	lexer.Tilde, lexer.At, lexer.AtAt, lexer.Hash, lexer.Dollar,
+})
+
+// continuesAfter are the tokens that cannot start a statement, so a line
+// beginning with one continues the line above.
+var continuesAfter = kindSet(infix)
+
+func kindSet(groups ...[]lexer.Kind) map[lexer.Kind]bool {
+	set := map[lexer.Kind]bool{}
+	for _, group := range groups {
+		for _, kind := range group {
+			set[kind] = true
+		}
+	}
+	return set
+}
+
+func (f *formatter) writeIndent(continuation bool) {
+	depth := f.depth
+	if continuation {
+		depth++
+	}
 	if f.opts.UseTabs {
-		f.buf.WriteString(strings.Repeat("\t", f.depth))
+		f.buf.WriteString(strings.Repeat("\t", depth))
 		return
 	}
-	f.buf.WriteString(strings.Repeat(" ", f.depth*f.opts.IndentWidth))
+	f.buf.WriteString(strings.Repeat(" ", depth*f.opts.IndentWidth))
 }
 
 func (f *formatter) text(tok lexer.Token) string {

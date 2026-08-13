@@ -6,9 +6,11 @@ import platform
 import pytest
 from unittest.mock import patch, Mock, mock_open
 from pysysml.binary import (
+    default_github_repo,
     detect_platform,
     get_binary_path,
     download_binary,
+    resolve_latest_version,
     verify_checksum,
     ensure_binary
 )
@@ -159,3 +161,67 @@ def test_download_binary_fails_on_checksum_mismatch():
                             from pysysml.errors import ConnectionError
                             with pytest.raises(ConnectionError, match="Checksum mismatch"):
                                 download_binary(version, github_repo)
+
+
+def test_default_github_repo_env_override(monkeypatch):
+    """Test $PYSYSML_GITHUB_REPO overrides the default repository."""
+    monkeypatch.delenv('PYSYSML_GITHUB_REPO', raising=False)
+    assert default_github_repo() == 'Open-MBEE/Systemica'
+
+    monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'JPL-Devin/Systemica')
+    assert default_github_repo() == 'JPL-Devin/Systemica'
+
+
+def test_resolve_latest_version():
+    """Test latest release tag is read from the GitHub API."""
+    payload = b'{"tag_name": "v0.0.4"}'
+    with patch('urllib.request.urlopen') as mock_urlopen:
+        mock_urlopen.return_value = Mock(
+            __enter__=Mock(return_value=Mock(read=Mock(return_value=payload))),
+            __exit__=Mock(return_value=False))
+        assert resolve_latest_version('Open-MBEE/Systemica') == 'v0.0.4'
+        url = str(mock_urlopen.call_args_list[0][0][0])
+        assert url == 'https://api.github.com/repos/Open-MBEE/Systemica/releases/latest'
+
+
+def test_resolve_latest_version_without_tag():
+    """Test a release carrying no tag is reported rather than returned."""
+    from pysysml.errors import ConnectionError
+    with patch('urllib.request.urlopen') as mock_urlopen:
+        mock_urlopen.return_value = Mock(
+            __enter__=Mock(return_value=Mock(read=Mock(return_value=b'{}'))),
+            __exit__=Mock(return_value=False))
+        with pytest.raises(ConnectionError, match="no tag name"):
+            resolve_latest_version('Open-MBEE/Systemica')
+
+
+def test_download_binary_latest_resolves_tag():
+    """Test version='latest' downloads from the resolved tag."""
+    mock_binary_data = b'fake binary content'
+    actual_checksum = hashlib.sha256(mock_binary_data).hexdigest()
+    mock_checksum_data = f"{actual_checksum}  sysml-grpc-linux-amd64\n".encode()
+
+    with patch('pysysml.binary.resolve_latest_version', return_value='v0.0.4') as mock_resolve:
+        with patch('urllib.request.urlopen') as mock_urlopen:
+            mock_urlopen.side_effect = [
+                Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_checksum_data))), __exit__=Mock(return_value=False)),
+                Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_binary_data))), __exit__=Mock(return_value=False))
+            ]
+            with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
+                with patch('builtins.open', mock_open(read_data=mock_binary_data)):
+                    with patch('os.makedirs'), patch('os.chmod'), patch('os.rename'):
+                        download_binary(version='latest')
+
+            mock_resolve.assert_called_once_with('Open-MBEE/Systemica')
+            for call in mock_urlopen.call_args_list:
+                assert 'releases/download/v0.0.4/sysml-grpc-linux-amd64' in str(call[0][0])
+
+
+def test_ensure_binary_downloads_version_from_env(monkeypatch):
+    """Test $PYSYSML_GRPC_VERSION enables auto-download when no binary is present."""
+    monkeypatch.setenv('PYSYSML_GRPC_VERSION', 'v0.0.4')
+    with patch('os.path.exists', return_value=False):
+        with patch('pysysml.binary.download_binary') as mock_download:
+            mock_download.return_value = '/fake/path/sysml-grpc'
+            assert ensure_binary() == '/fake/path/sysml-grpc'
+            mock_download.assert_called_once_with(version='v0.0.4')

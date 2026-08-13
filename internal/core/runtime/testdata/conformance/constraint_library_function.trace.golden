@@ -1,0 +1,9 @@
+      eval literal 16.0 -> 16.0
+      enter calc RealFunctions::sqrt
+        bind x = 16.0 [argument]
+      exit calc RealFunctions::sqrt -> 4.0
+    eval invoke sqrt -> 4.0
+    eval literal 2.0 -> 2.0
+  eval operator * -> 8.0
+  eval operator ** -> 8.0
+eval operator >= -> true

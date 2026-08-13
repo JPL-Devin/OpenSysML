@@ -1,6 +1,7 @@
 package passes
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
@@ -140,5 +141,101 @@ func TestTypeCheckSatisfyAliasOfRequirementUsageOK(t *testing.T) {
 	`
 	if diags := typeDiags(t, src); len(diags) != 0 {
 		t.Fatalf("expected no type diagnostics for satisfy through an alias, got %v", diags)
+	}
+}
+
+// A non-Boolean loop or branch condition is a type error, and it is reported at
+// typecheck: the executor evaluates conditions it was told are Boolean.
+func TestTypeCheckNonBooleanControlFlowConditions(t *testing.T) {
+	cases := map[string]string{
+		"while": `
+			package P {
+				action a {
+					action driver {
+						while 5 { }
+					}
+				}
+			}
+		`,
+		"until": `
+			package P {
+				action a {
+					action driver {
+						loop { } until 5;
+					}
+				}
+			}
+		`,
+		"if": `
+			package P {
+				action a {
+					action driver {
+						if 5 { }
+					}
+				}
+			}
+		`,
+		// A condition nested in a loop body is checked too, so a body the
+		// executor now runs cannot carry an unchecked condition.
+		"nested in a loop body": `
+			package P {
+				action a {
+					action driver {
+						while true {
+							if 5 { }
+						}
+					}
+				}
+			}
+		`,
+		// And a condition nested in a branch body, the other direction of nesting.
+		"nested in a branch body": `
+			package P {
+				action a {
+					action driver {
+						if true {
+							while 5 { }
+						}
+					}
+				}
+			}
+		`,
+	}
+
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			diags := typeDiags(t, src)
+			if len(diags) != 1 {
+				t.Fatalf("expected one type diagnostic for a non-Boolean %s condition, got %v", name, diags)
+			}
+			if !strings.Contains(diags[0].Message, "must be Boolean") {
+				t.Errorf("diagnostic does not report the condition's type: %q", diags[0].Message)
+			}
+		})
+	}
+}
+
+// A Boolean condition in any of the loop forms is accepted, including one that
+// reads a name the loop's own body declares.
+func TestTypeCheckBooleanControlFlowConditionsOK(t *testing.T) {
+	src := `
+		package P {
+			action a {
+				attribute total = 0;
+				attribute steps = (1, 2);
+				action driver {
+					while total < 5 {
+						attribute bump = 1;
+						assign total := total + bump;
+						if total == 2 { assign total := total + 1; } else { assign total := total - 1; }
+					}
+					loop { assign total := total + 1; } until total > 9;
+					for s in steps { assign total := total + s; }
+				}
+			}
+		}
+	`
+	if diags := typeDiags(t, src); len(diags) != 0 {
+		t.Fatalf("expected no type diagnostics for the loop forms, got %v", diags)
 	}
 }

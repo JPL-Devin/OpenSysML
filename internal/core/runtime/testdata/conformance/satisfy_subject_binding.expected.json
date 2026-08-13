@@ -1,0 +1,8 @@
+{
+  "type": "satisfy",
+  "evaluate": "test::analysisContext",
+  "assertions": {
+    "satisfy touchdown by slowLander": true,
+    "satisfy touchdown by fastLander": false
+  }
+}

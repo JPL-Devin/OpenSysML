@@ -1,0 +1,5 @@
+{
+  "type": "calc",
+  "libraries": true,
+  "error": "m resolves to the attributeUsage m declared in test, shadowing the measurement unit SI::metre — write SI::m to name the unit"
+}

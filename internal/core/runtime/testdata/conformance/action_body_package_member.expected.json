@@ -1,0 +1,6 @@
+{
+	"type": "action",
+	"outputs": {
+		"r": {"type": "Real", "value": 8.0}
+	}
+}

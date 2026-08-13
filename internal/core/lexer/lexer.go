@@ -233,14 +233,14 @@ func (lx *Lexer) scanSLNote(start int) Token {
 
 func (lx *Lexer) scanMLNote(start int) Token {
 	lx.pos += 3 // consume "//*"
-	lx.consumeUntilStarSlash()
-	return Token{Kind: MLNote, Span: lx.span(start)}
+	closed := lx.consumeUntilStarSlash()
+	return Token{Kind: MLNote, Span: lx.span(start), Unterminated: !closed}
 }
 
 func (lx *Lexer) scanBlockComment(start int) Token {
 	lx.pos += 2 // consume "/*"
-	lx.consumeUntilStarSlash()
-	return Token{Kind: RegularComment, Span: lx.span(start)}
+	closed := lx.consumeUntilStarSlash()
+	return Token{Kind: RegularComment, Span: lx.span(start), Unterminated: !closed}
 }
 
 // scanQuoted scans a quoted literal delimited by quote (' or "), honoring the
@@ -271,16 +271,17 @@ func (lx *Lexer) scanQuoted(start int, quote byte, kind Kind) Token {
 	return Token{Kind: Error, Span: lx.span(start)}
 }
 
-// consumeUntilStarSlash advances until it consumes a closing "*/", or to EOF
-// if unterminated.
-func (lx *Lexer) consumeUntilStarSlash() {
+// consumeUntilStarSlash advances until it consumes a closing "*/", reporting
+// whether it found one; without one it stops at EOF.
+func (lx *Lexer) consumeUntilStarSlash() bool {
 	for lx.pos < len(lx.src) {
 		if lx.src[lx.pos] == '*' && lx.peek(1) == '/' {
 			lx.pos += 2
-			return
+			return true
 		}
 		lx.pos++
 	}
+	return false
 }
 
 func isIdentStart(c byte) bool {

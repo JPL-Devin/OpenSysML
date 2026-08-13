@@ -12,7 +12,7 @@ import (
 
 // formatVersion is the on-disk index record format version. Bump it whenever
 // the persisted shape changes; a mismatch invalidates all cached records.
-const formatVersion = 8
+const formatVersion = 11
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.
 // It deliberately excludes the AST-backed Decl and the Scope/OwnerScope
@@ -26,6 +26,23 @@ type symRecord struct {
 	Supers          []string         // FQNs of the generalization targets (see supersOf)
 	WildcardImports []wildcardImport // for packages: its `import X::*` declarations
 	AliasTarget     string           // for aliases: raw target text of "alias X for Y"
+	Unit            *unitFacts       // for measurement units: their reduction to base units
+}
+
+// unitFacts is the gob-encodable projection of a measurement unit reduced to
+// base units. A restored symbol carries no declaration, so the conversion the
+// unit declares can only be read back from here.
+type unitFacts struct {
+	ScaleNum    float64
+	ScaleDen    float64
+	Factors     []unitFactor
+	Irreducible bool // a unit whose reduction its declaration does not yield
+}
+
+// unitFactor is one base unit of a reduced measurement unit and its exponent.
+type unitFactor struct {
+	FQN      string
+	Exponent float64
 }
 
 // wildcardImport is the gob-encodable projection of symbols.WildcardImport.
@@ -51,14 +68,14 @@ func recordFromIndex(name string, idx *symbols.Index, r *resolve.Resolver) (*Ind
 		return nil, false
 	}
 	rec := &IndexRecord{Name: name}
-	complete := collectScope(root, "", rec, idx, r)
+	complete := collectScope(root, "", rec, semantics.NewModel(r), idx, r)
 	return rec, complete
 }
 
 // collectScope walks scope's members (and child scopes) appending reduced
 // records. prefix is the fully-qualified name of scope's owner ("" at root).
 // Reports whether every specialization target it met resolved.
-func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, idx *symbols.Index, r *resolve.Resolver) bool {
+func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, model *semantics.Model, idx *symbols.Index, r *resolve.Resolver) bool {
 	complete := true
 	for _, sym := range scope.Members() {
 		fqn := sym.Name
@@ -75,12 +92,37 @@ func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, idx *sy
 			Supers:          supers,
 			WildcardImports: wildcardImportsOf(sym.Decl),
 			AliasTarget:     aliasTargetOf(sym.Decl),
+			Unit:            unitFactsOf(sym, model, idx),
 		})
 		if sym.Scope != nil {
-			complete = collectScope(sym.Scope, fqn, rec, idx, r) && complete
+			complete = collectScope(sym.Scope, fqn, rec, model, idx, r) && complete
 		}
 	}
 	return complete
+}
+
+// unitFactsOf reduces a measurement unit to base units, so the reduction
+// survives caching: a restored symbol has no declaration, and the conversion or
+// unit expression the reduction was computed from would be lost with it. A unit
+// whose reduction its declaration does not yield is recorded as irreducible,
+// which is not the same as not being a unit.
+func unitFactsOf(sym *symbols.Symbol, model *semantics.Model, idx *symbols.Index) *unitFacts {
+	if !model.IsMeasurementUnit(sym) {
+		return nil
+	}
+	term, err := model.UnitTermOf(sym)
+	if err != nil {
+		return &unitFacts{Irreducible: true}
+	}
+	facts := &unitFacts{ScaleNum: term.Scale.Num, ScaleDen: term.Scale.Den}
+	for _, f := range term.Factors {
+		baseFQN := idx.GetFQN(f.Unit)
+		if baseFQN == "" {
+			return &unitFacts{Irreducible: true}
+		}
+		facts.Factors = append(facts.Factors, unitFactor{FQN: baseFQN, Exponent: f.Exponent})
+	}
+	return facts
 }
 
 // supersOf resolves the generalization edges declared by a Definition or Usage

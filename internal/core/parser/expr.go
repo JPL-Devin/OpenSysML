@@ -329,7 +329,7 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 			p.advance() // [
 			idx := p.ParseExpression()
 			p.expect(lexer.RBracket, "expected ']'")
-			ix := &ast.IndexExpr{Operand: expr, Index: idx}
+			ix := &ast.IndexExpr{Operand: expr, Index: idx, Bracket: true}
 			ix.NodeSpan = p.spanFrom(start)
 			expr = ix
 

@@ -1,0 +1,13 @@
+{
+	"type": "action",
+	"outputs": {
+		"x": {
+			"type": "Integer",
+			"value": 5
+		},
+		"total": {
+			"type": "Integer",
+			"value": 5
+		}
+	}
+}

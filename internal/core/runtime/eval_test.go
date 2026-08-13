@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -141,12 +142,15 @@ func TestEval_StepLimit(t *testing.T) {
 	model, resolver, _ := parseAndBuildModel(t, src)
 	ctx := NewContext(model, resolver, 5) // very low limit
 
+	// The budget bounds one run, so the literals are evaluated within one rather
+	// than starting a run each.
+	defer ctx.beginRun()()
+
 	// Eval 6 literals → should exceed 5 steps
 	for i := 0; i < 6; i++ {
 		_, err := ctx.Eval(&ast.LiteralInteger{Value: "1"})
 		if err != nil {
-			// Check for step limit error (message format is "evaluation step limit exceeded (5 steps)")
-			if err == ErrStepLimitExceeded || err.Error() == "evaluation step limit exceeded (5 steps)" {
+			if errors.Is(err, ErrStepLimitExceeded) {
 				return // success — limit triggered
 			}
 			t.Fatalf("unexpected error: %v", err)

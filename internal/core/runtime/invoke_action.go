@@ -213,17 +213,23 @@ func actionParameters(decl ast.Node) (in, out []string) {
 			member = membership.Member
 		}
 		usage, ok := member.(*ast.Usage)
-		if !ok || usage.Ident.Name == "" {
+		if !ok {
+			continue
+		}
+		// A parameter may be written as a redefinition of the one it overrides
+		// (`in redefines ifTest;`), naming it by that redefinition.
+		name, _ := ast.EffectiveName(usage)
+		if name == "" {
 			continue
 		}
 		switch usage.Direction {
 		case ast.DirIn:
-			in = append(in, usage.Ident.Name)
+			in = append(in, name)
 		case ast.DirOut:
-			out = append(out, usage.Ident.Name)
+			out = append(out, name)
 		case ast.DirInOut:
-			in = append(in, usage.Ident.Name)
-			out = append(out, usage.Ident.Name)
+			in = append(in, name)
+			out = append(out, name)
 		}
 	}
 	return in, out

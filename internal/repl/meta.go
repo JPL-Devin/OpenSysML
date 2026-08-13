@@ -8,8 +8,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/model"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
@@ -69,6 +71,7 @@ var helpText = []string{
 	"%list               list current session declarations",
 	"%clear              reset the session",
 	"%load <file>        read a file and submit its contents",
+	"%save <file>        write the session model to a file (.sysml notation or .ttl RDF)",
 	"%verbosity [level]  show or set output level: quiet, normal or debug",
 	"%trace [on|off]     show or set execution tracing (evaluation, calc, action and state steps)",
 	"%quit               exit the REPL",
@@ -83,6 +86,7 @@ var helpText = []string{
 	"%calc <name> <args> invoke a calculation with arguments",
 	"%constraint <name>  evaluate a constraint definition",
 	"%requirement <name> evaluate a requirement definition",
+	"%satisfy [name]     evaluate the satisfaction assertions of the model, or of one element",
 	"",
 	"Action debugging:",
 	"%action <name>      start action executor debugging session",
@@ -129,11 +133,16 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		if len(fields) < 2 {
 			return []string{"usage: %load <file>"}, false, nil
 		}
-		data, rerr := os.ReadFile(fields[1])
+		data, rerr := os.ReadFile(expandHome(fields[1]))
 		if rerr != nil {
 			return nil, false, fmt.Errorf("load %s: %w", fields[1], rerr)
 		}
 		return renderResult(s.Submit(string(data)), s.verbosity), false, nil
+	case "%save":
+		if len(fields) < 2 {
+			return []string{"usage: %save <file.sysml|file.ttl>"}, false, nil
+		}
+		return s.doSave(fields[1])
 	case "%verbosity":
 		if len(fields) < 2 {
 			return []string{fmt.Sprintf("verbosity: %s", s.verbosity)}, false, nil
@@ -180,7 +189,8 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		if len(fields) < 2 {
 			return []string{"usage: %calc <name> [args...]"}, false, nil
 		}
-		return s.doCalc(fields[1:])
+		name, argText := splitCalcArgs(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "%calc")))
+		return s.doCalc(name, argText)
 	case "%constraint":
 		if len(fields) < 2 {
 			return []string{"usage: %constraint <name>"}, false, nil
@@ -191,6 +201,8 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			return []string{"usage: %requirement <name>"}, false, nil
 		}
 		return s.doRequirement(fields[1])
+	case "%satisfy":
+		return s.doSatisfy(fields[1:])
 	// Action debugging
 	case "%action":
 		if len(fields) < 2 {
@@ -278,12 +290,24 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	}
 
 	// Try feature reference lookup, simple ("%eval x") or qualified
-	// ("%eval Demo::Vehicle::mass").
+	// ("%eval Demo::Vehicle::mass"). A name the session did not declare may
+	// still be reachable through an import, which the expression path below
+	// resolves, so a lookup failure is only reported if that path fails too.
+	var (
+		sym       *symbols.Symbol
+		fqn       string
+		lookupErr error
+	)
 	if isSymbolReference(expr) {
-		sym, fqn, lerr := s.lookupSymbol(expr)
-		if lerr != nil {
-			return []string{"error: " + lerr.Error()}, false, nil
+		sym, fqn, lookupErr = s.lookupSymbol(expr)
+		// A name several declarations answer to is reported, never resolved to
+		// whichever of them the prompt's scope happens to reach.
+		var ambiguous *AmbiguousNameError
+		if errors.As(lookupErr, &ambiguous) {
+			return []string{"error: " + lookupErr.Error()}, false, nil
 		}
+	}
+	if sym != nil {
 		// An instantiated owner makes this a question about that object: read
 		// the slot, which carries the value the instance actually holds.
 		if inst, owner := s.owningInstance(fqn); inst != nil {
@@ -319,6 +343,9 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	root := p.ParseFile()
 
 	if len(p.Diagnostics) > 0 {
+		if lookupErr != nil {
+			return []string{"error: " + lookupErr.Error()}, false, nil
+		}
 		lines := []string{"error: parse failed:"}
 		for _, d := range p.Diagnostics {
 			lines = append(lines, "  "+d.Message)
@@ -345,10 +372,14 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 		return []string{"error: could not parse expression"}, false, nil
 	}
 
-	// Evaluated against the document scope, so a compound expression can name
-	// the session's top-level features.
-	val, err := ctx.EvalWithScope(evalUsage.Value, doc.Scope)
+	// Evaluated in the namespace the session is working in, so a compound
+	// expression names what a member written there would: the session's
+	// features and the units its imports bring in.
+	val, err := ctx.EvalWithScope(evalUsage.Value, s.promptScope(doc))
 	if err != nil {
+		if lookupErr != nil {
+			return []string{"error: " + lookupErr.Error()}, false, nil
+		}
 		return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
 	}
 
@@ -383,7 +414,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 	// Use runtime context with empty model (no symbols needed for literals)
 	emptyIdx := symbols.NewIndex()
 	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
-	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), 100000)
+	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.budgets.MaxSteps)
 
 	val, err := ctx.Eval(usage.Value)
 	if err != nil {
@@ -605,18 +636,7 @@ func formatSlot(slot *runtime.Slot) string {
 func formatValue(val runtime.Value) string {
 	switch val.Kind {
 	case runtime.ValConst:
-		switch val.Const.Kind {
-		case semantics.ValInt:
-			return fmt.Sprintf("%d", val.Const.Int)
-		case semantics.ValReal:
-			return fmt.Sprintf("%.2f", val.Const.Real)
-		case semantics.ValBool:
-			return fmt.Sprintf("%v", val.Const.Bool)
-		case semantics.ValInfinity:
-			return "∞"
-		default:
-			return "<unknown const>"
-		}
+		return formatConst(val.Const)
 	case runtime.ValNull:
 		return "null"
 	case runtime.ValString:
@@ -627,8 +647,29 @@ func formatValue(val runtime.Value) string {
 		return formatElements(val.Sequence.Elements())
 	case runtime.ValSet:
 		return fmt.Sprintf("Set{%d}", val.Set.Size())
+	case runtime.ValQuantity:
+		// A magnitude is a number like any other in a result table, so it is
+		// rendered as a bare one; the value itself keeps its full precision.
+		return val.Quantity.TextWithMagnitude(formatConst(val.Quantity.Num))
 	default:
 		return "<unknown>"
+	}
+}
+
+// formatConst renders a numeric constant for a result table: a Real to two
+// decimals, which is the session's convention for a displayed number.
+func formatConst(c semantics.Value) string {
+	switch c.Kind {
+	case semantics.ValInt:
+		return fmt.Sprintf("%d", c.Int)
+	case semantics.ValReal:
+		return fmt.Sprintf("%.2f", c.Real)
+	case semantics.ValBool:
+		return fmt.Sprintf("%v", c.Bool)
+	case semantics.ValInfinity:
+		return "∞"
+	default:
+		return "<unknown const>"
 	}
 }
 
@@ -642,15 +683,13 @@ func formatElements(elements []runtime.Value) string {
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
-// doCalc invokes a calculation with arguments.
-func (s *Session) doCalc(args []string) ([]string, bool, error) {
-	if len(args) == 0 {
-		return []string{"usage: %calc <name> [args...]"}, false, nil
-	}
-
-	calcName := args[0]
-	calcArgs := args[1:]
-
+// doCalc invokes a calculation with the arguments the command line states.
+// argText is the raw argument list: a sequence of expressions, which the
+// notation separates with commas and this prompt also accepts separated by
+// whitespace alone. Named arguments (`v0 = ...`) are not supported here — the
+// notation writes them inside an invocation's parentheses, which is a different
+// production than an argument list at a prompt.
+func (s *Session) doCalc(calcName, argText string) ([]string, bool, error) {
 	doc := s.ws.Document(docName)
 	if doc == nil || doc.Scope == nil {
 		return []string{"error: no declarations loaded"}, false, nil
@@ -666,72 +705,233 @@ func (s *Session) doCalc(args []string) ([]string, bool, error) {
 		return []string{"error: " + err.Error()}, false, nil
 	}
 
-	// Parse arguments as literal expressions (no session context needed)
-	argValues := make([]runtime.Value, len(calcArgs))
-	for i, argStr := range calcArgs {
-		// Use empty context for literal evaluation
-		emptyIdx := symbols.NewIndex()
-		emptyModel := semantics.NewModel(resolve.New(emptyIdx))
-		literalCtx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), 100000)
-
-		// Parse as attribute inside a part (top-level attribute syntax not supported)
-		src := fmt.Sprintf("part __dummy__ { attribute __arg__ = %s; }", argStr)
-		p := parser.New(source.New("arg", []byte(src)))
-		root := p.ParseFile()
-
-		// Ignore parse diagnostics - literals might have unresolved types
-		if len(root.Members) == 0 {
-			return []string{fmt.Sprintf("error: failed to parse argument %q", argStr)}, false, nil
-		}
-
-		// Unwrap Membership if present
-		member := root.Members[0]
-		if membership, ok := member.(*ast.Membership); ok {
-			member = membership.Member
-		}
-
-		// Extract attribute from part body
-		partUsage, ok := member.(*ast.Usage)
-		if !ok || partUsage.Kind != ast.UsagePart {
-			return []string{fmt.Sprintf("error: argument %q: not a part usage", argStr)}, false, nil
-		}
-
-		if len(partUsage.Members) == 0 {
-			return []string{fmt.Sprintf("error: argument %q: empty part body", argStr)}, false, nil
-		}
-
-		// Unwrap first member (attribute)
-		attrMember := partUsage.Members[0]
-		if attrMembership, ok := attrMember.(*ast.Membership); ok {
-			attrMember = attrMembership.Member
-		}
-
-		usage, ok := attrMember.(*ast.Usage)
-		if !ok {
-			return []string{fmt.Sprintf("error: argument %q: first member not usage", argStr)}, false, nil
-		}
-
-		if usage.Value == nil {
-			return []string{fmt.Sprintf("error: argument %q: usage has no value", argStr)}, false, nil
-		}
-
-		val, err := literalCtx.Eval(usage.Value)
-		if err != nil {
-			return []string{fmt.Sprintf("error: evaluation of argument %q failed: %v", argStr, err)}, false, nil
-		}
-		argValues[i] = val
+	exprs, err := parseExprList(argText)
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
 	}
 
-	// Invoke calculation via InvokeCalc
-	result, err := ctx.InvokeCalc(sym, argValues, doc.Scope)
+	// Arguments are evaluated where the prompt evaluates any expression, so a
+	// quantity argument names the units the session's imports bring in.
+	scope := s.promptScope(doc)
+	argValues := make([]runtime.Value, len(exprs))
+	argTexts := make([]string, len(exprs))
+	for i, arg := range exprs {
+		val, err := ctx.EvalWithScope(arg.expr, scope)
+		if err != nil {
+			return []string{fmt.Sprintf("error: evaluation of argument %q failed: %v", arg.text, err)}, false, nil
+		}
+		argValues[i] = val
+		argTexts[i] = arg.text
+	}
+
+	result, err := ctx.InvokeCalc(sym, argValues, scope)
 	if err != nil {
 		return []string{fmt.Sprintf("error: calc invocation failed: %v", err)}, false, nil
 	}
 
 	return []string{
-		fmt.Sprintf("✓ %s(%s)", calcName, strings.Join(calcArgs, ", ")),
+		fmt.Sprintf("✓ %s(%s)", calcName, strings.Join(argTexts, ", ")),
 		fmt.Sprintf("  = %s", formatValue(result)),
 	}, false, nil
+}
+
+// splitCalcArgs splits `%calc`'s tail into the calc's name and its argument
+// list, accepting the invocation form `Fall(a, b)` as well as a bare name
+// followed by arguments.
+func splitCalcArgs(tail string) (name, argText string) {
+	cut := strings.IndexAny(tail, " \t(")
+	if cut < 0 {
+		return tail, ""
+	}
+	name, rest := tail[:cut], strings.TrimSpace(tail[cut:])
+	if closesAtEnd(rest) {
+		return name, rest[1 : len(rest)-1]
+	}
+	return name, rest
+}
+
+// closesAtEnd reports whether text is one parenthesized group: its opening
+// parenthesis is closed by its last character, as an invocation's argument list
+// is and a sequence of parenthesized arguments is not.
+func closesAtEnd(text string) bool {
+	if !strings.HasPrefix(text, "(") || !strings.HasSuffix(text, ")") {
+		return false
+	}
+	depth := 0
+	for i, r := range text {
+		switch r {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i == len(text)-1
+			}
+		}
+	}
+	return false
+}
+
+// argExpr is one parsed argument: its expression and the text it was written as.
+type argExpr struct {
+	expr ast.Node
+	text string
+}
+
+// parseExprList parses an argument list as expressions, so an argument that
+// contains spaces — a quantity, a parenthesized subexpression, a nested
+// invocation — survives as the one expression it is.
+func parseExprList(text string) ([]argExpr, error) {
+	var out []argExpr
+	for _, arg := range splitArgs(text) {
+		if isNamedArgument(arg) {
+			return nil, fmt.Errorf("named arguments are not supported here; pass arguments positionally")
+		}
+		expr, err := parseWholeExpr(arg)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, argExpr{expr: expr, text: arg})
+	}
+	return out, nil
+}
+
+// splitArgs cuts an argument list into one text per argument. A comma separates
+// arguments, and so does whitespace — except where the fragment after it
+// continues the expression before it, as a quantity's unit does.
+func splitArgs(text string) []string {
+	var args []string
+	for _, group := range splitTopLevel(text) {
+		var buf string
+		for _, frag := range group {
+			switch {
+			case buf == "":
+				buf = frag
+			case continuesExpr(buf, frag):
+				buf += " " + frag
+			default:
+				args = append(args, buf)
+				buf = frag
+			}
+		}
+		if buf != "" {
+			args = append(args, buf)
+		}
+	}
+	return args
+}
+
+// continuesExpr reports whether frag continues the expression buf holds rather
+// than starting the next argument: a unit or index bracket does, as does a
+// fragment that is no expression on its own or that follows an unfinished one
+// (`5 - 3` is one argument, `5 -3` is two).
+func continuesExpr(buf, frag string) bool {
+	if strings.HasPrefix(frag, "[") || strings.HasPrefix(frag, "#") {
+		return true
+	}
+	if _, err := parseWholeExpr(frag); err != nil {
+		return true
+	}
+	_, err := parseWholeExpr(buf)
+	return err != nil
+}
+
+// splitTopLevel splits text at commas outside any bracket or string, each group
+// as the whitespace-separated fragments it is written in.
+func splitTopLevel(text string) [][]string {
+	var groups [][]string
+	var frags []string
+	var frag strings.Builder
+	depth, quoted := 0, false
+
+	flushFrag := func() {
+		if frag.Len() > 0 {
+			frags = append(frags, frag.String())
+			frag.Reset()
+		}
+	}
+	for _, r := range text {
+		switch {
+		case quoted:
+			if r == '"' {
+				quoted = false
+			}
+		case r == '"':
+			quoted = true
+		case r == '(' || r == '[':
+			depth++
+		case r == ')' || r == ']':
+			depth--
+		case depth == 0 && r == ',':
+			flushFrag()
+			groups = append(groups, frags)
+			frags = nil
+			continue
+		case depth == 0 && (r == ' ' || r == '\t'):
+			flushFrag()
+			continue
+		}
+		frag.WriteRune(r)
+	}
+	flushFrag()
+	return append(groups, frags)
+}
+
+// isNamedArgument reports whether text binds a name (`v0 = 1.0`), which is a
+// production of an invocation rather than of an argument list at the prompt. The
+// binding is the argument's own: an `=` nested in a call, in a bracket or in a
+// string belongs to that expression.
+func isNamedArgument(text string) bool {
+	depth, quoted := 0, false
+	for i, r := range text {
+		switch {
+		case quoted:
+			if r == '"' {
+				quoted = false
+			}
+		case r == '"':
+			quoted = true
+		case r == '(' || r == '[':
+			depth++
+		case r == ')' || r == ']':
+			depth--
+		case depth == 0 && r == '=' && i > 0 && i+1 < len(text):
+			if text[i+1] == '=' || strings.ContainsRune("=<>!+-*/", rune(text[i-1])) {
+				continue
+			}
+			return isIdentifier(strings.TrimSpace(text[:i]))
+		}
+	}
+	return false
+}
+
+// isIdentifier reports whether text is one bare name, the only thing a named
+// argument's left side can be.
+func isIdentifier(text string) bool {
+	if text == "" {
+		return false
+	}
+	for i, r := range text {
+		if r == '_' || unicode.IsLetter(r) || (i > 0 && unicode.IsDigit(r)) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// parseWholeExpr parses text as one complete expression, reporting text the
+// expression parser does not consume in full.
+func parseWholeExpr(text string) (ast.Node, error) {
+	p := parser.New(source.New("arg", []byte(text)))
+	expr := p.ParseExpression()
+	if expr == nil {
+		return nil, fmt.Errorf("failed to parse argument %q", text)
+	}
+	if _, bad := expr.(*ast.ErrorNode); bad || len(p.Diagnostics) > 0 || p.Offset() != len(text) {
+		return nil, fmt.Errorf("failed to parse argument %q", text)
+	}
+	return expr, nil
 }
 
 // doConstraint evaluates a constraint definition.
@@ -754,11 +954,7 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 	// Evaluate against the instance that carries the constraint when one has
 	// been created, so the verdict is about concrete values.
 	inst, owner := s.owningInstance(fqn)
-	scope := doc.Scope
-	if inst != nil {
-		scope = sym.OwnerScope
-	}
-	passed, err := ctx.EvaluateConstraintOn(sym, scope, inst)
+	passed, err := ctx.EvaluateConstraintOn(sym, declaringScope(sym, doc.Scope), inst)
 	if err != nil || !passed {
 		return []string{
 			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
@@ -771,11 +967,60 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 	}, false, nil
 }
 
+// promptScope is the namespace a prompt expression is evaluated in: the last
+// namespace the session declared, whose imports are then visible to it exactly
+// as they are to a member written there (KerML 8.2.3.5.3). A session that
+// declared no namespace evaluates at the document root.
+func (s *Session) promptScope(doc *model.Document) *symbols.Scope {
+	if doc == nil || doc.Scope == nil || doc.AST == nil {
+		return nil
+	}
+	for i := len(doc.AST.Members) - 1; i >= 0; i-- {
+		member := doc.AST.Members[i]
+		if mem, ok := member.(*ast.Membership); ok {
+			member = mem.Member
+		}
+		var ident ast.Identification
+		switch n := member.(type) {
+		case *ast.Package:
+			ident = n.Ident
+		case *ast.Namespace:
+			ident = n.Ident
+		default:
+			continue
+		}
+		name := ident.Name
+		if name == "" {
+			name = ident.ShortName
+		}
+		if sym, ok := doc.Scope.LookupLocal(name); ok && sym != nil && sym.Scope != nil {
+			return sym.Scope
+		}
+	}
+	return doc.Scope
+}
+
+// declaringScope returns the scope an element's conditions were written in,
+// which is what their names — a member of the enclosing package, a measurement
+// unit an import brought in — resolve against. The document root reaches only
+// what the root itself declares, so it is a fallback for a symbol carrying no
+// declaring scope rather than the scope to evaluate in.
+func declaringScope(sym *symbols.Symbol, root *symbols.Scope) *symbols.Scope {
+	if sym != nil && sym.OwnerScope != nil {
+		return sym.OwnerScope
+	}
+	return root
+}
+
 // verdictDetail explains a failed verdict: a condition that evaluated to false
 // is the model's answer, not a malfunction, so it is not an error line. what
 // names the kind of condition, e.g. "Assertion" or "Required condition".
 func verdictDetail(what string, err error) string {
-	if err == nil || errors.Is(err, runtime.ErrViolated) {
+	var violation *runtime.ViolationError
+	switch {
+	case errors.As(err, &violation):
+		return fmt.Sprintf("%s evaluated to false: %s", what, violation.Condition)
+	case err == nil || errors.Is(err, runtime.ErrViolated):
 		return what + " evaluated to false"
 	}
 	return fmt.Sprintf("Error: %v", err)
@@ -808,11 +1053,7 @@ func (s *Session) doRequirement(name string) ([]string, bool, error) {
 	}
 
 	inst, owner := s.owningInstance(fqn)
-	scope := doc.Scope
-	if inst != nil {
-		scope = sym.OwnerScope
-	}
-	passed, err := ctx.EvaluateRequirementOn(sym, scope, inst)
+	passed, err := ctx.EvaluateRequirementOn(sym, declaringScope(sym, doc.Scope), inst)
 	if err != nil || !passed {
 		return []string{
 			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),
@@ -823,6 +1064,93 @@ func (s *Session) doRequirement(name string) ([]string, bool, error) {
 	return []string{
 		fmt.Sprintf("✓ Requirement %s satisfied%s", name, onInstance(inst, owner)),
 	}, false, nil
+}
+
+// doSatisfy evaluates satisfaction assertions: every one the model states, or,
+// given a name, the ones the named element states — or that element itself, when
+// it is a named satisfaction assertion. The usual `assert satisfy r by p;` is
+// anonymous, so the element stating it is how a user reaches it.
+func (s *Session) doSatisfy(args []string) ([]string, bool, error) {
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		return []string{"error: no declarations loaded"}, false, nil
+	}
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+
+	scope := doc.Scope
+	where := "the session"
+	if len(args) > 0 {
+		sym, fqn, lerr := s.lookupSymbol(args[0])
+		if lerr != nil {
+			return []string{"error: " + lerr.Error()}, false, nil
+		}
+		if a, aerr := ctx.SatisfyAssertionOf(sym); aerr == nil {
+			return s.satisfyVerdict(ctx, a), false, nil
+		}
+		if sym.Scope == nil {
+			return []string{fmt.Sprintf("error: %s states no satisfaction assertion", args[0])}, false, nil
+		}
+		scope, where = sym.Scope, fqn
+	}
+
+	assertions := ctx.SatisfyAssertionsIn(scope)
+	if len(assertions) == 0 {
+		return []string{fmt.Sprintf("no satisfaction assertion in %s", where)}, false, nil
+	}
+	var out []string
+	for _, a := range assertions {
+		out = append(out, s.satisfyVerdict(ctx, a)...)
+	}
+	return out, false, nil
+}
+
+// satisfyVerdict renders the verdict of one satisfaction assertion, evaluated
+// against an object of its subject: the one the session already created for that
+// subject, so a `%instantiate` before it is what the verdict is about.
+func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAssertion) []string {
+	subject, owner := s.subjectInstance(a)
+	if subject == nil && a.Subject != nil {
+		// No object of the subject exists yet, so the verdict is about a fresh
+		// one, created here rather than inside the evaluation so it can be named.
+		if inst, serr := ctx.SatisfySubject(a); serr == nil {
+			subject, owner = inst, s.subjectName(a)
+			// Kept like %instantiate would, so a repeated %satisfy is about the
+			// same object rather than another copy of it.
+			s.instances[owner] = inst
+		}
+	}
+	holds, err := ctx.EvaluateSatisfactionOn(a, subject)
+	if err != nil || !holds {
+		return []string{
+			fmt.Sprintf("✗ %s fails%s", a.Text(), onInstance(subject, owner)),
+			"  " + verdictDetail("Required condition", err),
+		}
+	}
+	return []string{fmt.Sprintf("✓ %s holds%s", a.Text(), onInstance(subject, owner))}
+}
+
+// subjectInstance returns the object the session has already created for an
+// assertion's subject, with the name it was created under, or nil for none.
+func (s *Session) subjectInstance(a *runtime.SatisfyAssertion) (*runtime.Instance, string) {
+	name := s.subjectName(a)
+	if inst, ok := s.instances[name]; ok {
+		return inst, name
+	}
+	return nil, ""
+}
+
+// subjectName is the name an assertion's subject is known by: its
+// fully-qualified name, or the reference as written when it resolves to nothing.
+func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
+	if idx := s.symbolIndex(); idx != nil && a.Subject != nil {
+		if fqn := idx.GetFQN(a.Subject); fqn != "" {
+			return fqn
+		}
+	}
+	return a.SubjectRef
 }
 
 // --- Action Debugging Commands ---
@@ -1211,11 +1539,13 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 		return []string{fmt.Sprintf("No pending work - simulation time is now %.2f", deadline)}, false, nil
 	}
 
-	// Bound the drain so a machine that keeps queueing work cannot hang the REPL.
-	const maxAdvanceEvents = 10000
-	processed := 0
-	doActions := 0
-	for exec.HasPendingWork() && exec.State() == runtime.StateRunning && processed+doActions < maxAdvanceEvents {
+	// Bound the drain by the session's own budgets, so a machine that keeps
+	// queueing work cannot hang the REPL and the way to raise the bound is the
+	// same one the executors report.
+	maxEvents, maxDoActions := s.budgets.MaxStateEvents, s.budgets.MaxDoSteps
+	var processed, doActions int64
+	for exec.HasPendingWork() && exec.State() == runtime.StateRunning &&
+		processed < maxEvents && doActions < maxDoActions {
 		if queue := exec.EventQueue(); queue.Len() == 0 || queue.Peek().Timestamp > deadline {
 			// Nothing to dispatch within the deadline, but a do behavior with
 			// actions left is due now, so run it and count it as do work.
@@ -1229,7 +1559,7 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 			if ran == 0 {
 				break
 			}
-			doActions += ran
+			doActions += int64(ran)
 			continue
 		}
 		if err := exec.ProcessNextEvent(); err != nil {
@@ -1248,6 +1578,17 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 
 	if doActions > 0 {
 		out = append(out, fmt.Sprintf("  Do behavior actions run: %d", doActions))
+	}
+
+	// A drain the bound cut short has work left, so say so rather than let it
+	// read as a machine that settled.
+	switch {
+	case processed >= maxEvents:
+		out = append(out, fmt.Sprintf("  Stopped at the event budget (%d events; raise %s to allow more)",
+			maxEvents, runtime.MaxStateEventsEnvVar))
+	case doActions >= maxDoActions:
+		out = append(out, fmt.Sprintf("  Stopped at the do activity budget (%d steps; raise %s to allow more)",
+			maxDoActions, runtime.MaxDoStepsEnvVar))
 	}
 
 	if exec.State() == runtime.StateCompleted {

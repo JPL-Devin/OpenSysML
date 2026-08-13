@@ -1,0 +1,47 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:systemica:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:Deps
+    a sysml:Package ;
+    sysml:qualifiedName "Deps" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Deps" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Deps::A
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Deps::A" ;
+    sysml:owningNamespace elmt:Deps ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "A" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Deps::B
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Deps::B" ;
+    sysml:owningNamespace elmt:Deps ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "B" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:Deps::@2>
+    a sysml:Dependency ;
+    sysml:qualifiedName "Deps::@2" ;
+    sysml:owningNamespace elmt:Deps ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:client elmt:Deps::A ;
+    sysml:supplier elmt:Deps::B ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Deps::named
+    a sysml:Dependency ;
+    sysml:qualifiedName "Deps::named" ;
+    sysml:owningNamespace elmt:Deps ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:declaredName "named" ;
+    sysml:client elmt:Deps::A ;
+    sysml:supplier elmt:Deps::B ;
+    sysx:hasBody "false"^^xsd:boolean .

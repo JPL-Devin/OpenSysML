@@ -152,6 +152,26 @@ func (k SymbolKind) String() string {
 	return "unknown"
 }
 
+// UnitFacts is a measurement unit reduced to a scale factor over base units,
+// each named by its qualified name. It is what a cached library symbol carries
+// in place of the declaration the reduction was computed from.
+type UnitFacts struct {
+	ScaleNum float64
+	ScaleDen float64
+	Factors  []UnitFactorFacts
+
+	// Irreducible marks a measurement unit whose reduction is not derivable
+	// from its declaration, so that it is still known to be a unit.
+	Irreducible bool
+}
+
+// UnitFactorFacts is one base unit of a reduced measurement unit, named by its
+// qualified name, and its exponent.
+type UnitFactorFacts struct {
+	FQN      string
+	Exponent float64
+}
+
 // Symbol describes one declared name. The same declaration may be reachable
 // through more than one Symbol only when it declares both a short and a
 // primary name; in that case a single Symbol is registered under both keys.
@@ -189,6 +209,12 @@ type Symbol struct {
 	// EffectiveName reports that Name was taken from the feature this
 	// declaration references rather than declared (KerML Feature::effectiveName).
 	EffectiveName bool
+
+	// Unit is the reduced measurement-unit form persisted for a cached library
+	// symbol, whose declaration is absent: without it the conversion a unit
+	// declares could not be read back. Nil for a symbol that is not a
+	// measurement unit, and for live-parsed symbols, which use Decl instead.
+	Unit *UnitFacts
 
 	// NamingTarget is the reference that named this symbol when EffectiveName
 	// is set: the target of its reference subsetting or redefinition. Resolving

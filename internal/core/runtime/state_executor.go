@@ -50,6 +50,10 @@ type StateExecutor struct {
 	// entered. Concurrently active states interleave one action per round, so this
 	// order — not map iteration order — decides the interleaving.
 	doActivities []*doActivity
+
+	// runStarted marks this executor's run as begun, so the step budget is reset
+	// once however many calls the run is driven over.
+	runStarted bool
 }
 
 // doActivity is the part of a state's do behavior that has still to run. The
@@ -76,8 +80,9 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 		return nil, fmt.Errorf("symbol %s is not a state machine", stateMachine.Name)
 	}
 
-	// Lower to StateGraph
-	graph, err := lower.ToStateGraph(stateMachine.Decl)
+	// Lower to StateGraph, in the scope the machine's body was written in, so
+	// that everything the graph carries is evaluated where it was declared.
+	graph, err := lower.ToStateGraph(stateMachine.Decl, declScope(stateMachine))
 	if err != nil {
 		return nil, fmt.Errorf("lower state machine: %w", err)
 	}
@@ -108,41 +113,29 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 	return exec, nil
 }
 
-// initializeAttributes populates stateData with attribute default values from state machine.
+// initializeAttributes populates stateData with the attribute defaults lowering
+// recorded, evaluated in the scope the machine's body was declared in.
 func (e *StateExecutor) initializeAttributes() error {
-	// Get state machine node
-	var members []ast.Node
-	if usage, ok := e.stateMachine.Decl.(*ast.Usage); ok {
-		members = usage.Members
-	} else if def, ok := e.stateMachine.Decl.(*ast.Definition); ok {
-		members = def.Members
-	} else {
-		return fmt.Errorf("state machine symbol has invalid node type")
-	}
-
-	// Extract attribute defaults
-	for _, member := range members {
-		// Unwrap Membership if present
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
+	for _, attr := range e.graph.Attributes {
+		ec := NewEvalContext(e.ctx, e.graph.Scope)
+		value, err := ec.Eval(attr.Value)
+		if err != nil {
+			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
 		}
-
-		// Check for attribute with value
-		if usage, ok := actualMember.(*ast.Usage); ok && usage.Kind == ast.UsageAttribute {
-			if usage.Value != nil && usage.Ident.Name != "" {
-				// Evaluate default value
-				ec := NewEvalContext(e.ctx, nil)
-				value, err := ec.Eval(usage.Value)
-				if err != nil {
-					return fmt.Errorf("eval attribute default %s: %w", usage.Ident.Name, err)
-				}
-				e.stateData[usage.Ident.Name] = value
-			}
-		}
+		e.stateData[attr.Name] = value
 	}
 
 	return nil
+}
+
+// stateScope returns the scope a state's body was declared in, which is what
+// the names in its entry, do and exit behaviors resolve against. It falls back
+// to the machine's own scope for a state lowering recorded none for.
+func (e *StateExecutor) stateScope(state *ast.StateNode) *symbols.Scope {
+	if scope := e.graph.StateScopes[state]; scope != nil {
+		return scope
+	}
+	return e.graph.Scope
 }
 
 // getNodeName returns the name of a StateNode or PseudostateNode.
@@ -231,7 +224,7 @@ func (e *StateExecutor) scheduleCompletionTransitions(state *ast.StateNode) erro
 		if trans.Trigger != nil {
 			continue
 		}
-		satisfied, err := e.passesGuard(trans.Guard)
+		satisfied, err := e.passesGuard(trans)
 		if err != nil {
 			return fmt.Errorf("eval completion guard: %w", err)
 		}
@@ -261,8 +254,9 @@ func (e *StateExecutor) scheduleTransitionsForState(state *ast.StateNode) error 
 		if trans.Trigger == nil {
 			continue // scheduled above, once the state's do behavior has finished
 		} else if timeEvent, ok := trans.Trigger.(*ast.TimeEvent); ok {
-			// Evaluate duration expression
-			ec := NewEvalContext(e.ctx, nil)
+			// Evaluate duration expression in the scope the transition was written
+			// in, the machine's data shadowing it.
+			ec := NewEvalContext(e.ctx, trans.Scope)
 			ec.Push(e.stateData)
 			durationVal, err := ec.Eval(timeEvent.Duration)
 			if err != nil {
@@ -499,7 +493,7 @@ func (e *StateExecutor) enabledTransition(state *ast.StateNode, event *Event) (*
 			unbind()
 			return nil, err
 		}
-		pass, err := e.passesGuard(trans.Guard)
+		pass, err := e.passesGuard(trans)
 		if err != nil {
 			unbind()
 			return nil, err
@@ -679,7 +673,7 @@ func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
 		return fmt.Errorf("transition target state not found")
 	}
 
-	pass, err := e.passesGuard(trans.Guard)
+	pass, err := e.passesGuard(trans)
 	if err != nil {
 		return err
 	}
@@ -731,7 +725,7 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 
 	// Execute transition effect
 	for _, action := range trans.Effect {
-		if err := e.executeAction(action); err != nil {
+		if err := e.executeAction(action, trans.BodyScope); err != nil {
 			return fmt.Errorf("transition effect: %w", err)
 		}
 	}
@@ -800,14 +794,16 @@ func isSynchronizationTarget(target ast.Node) bool {
 }
 
 // passesGuard reports whether a transition's guard allows it to fire. A nil
-// guard always passes.
-func (e *StateExecutor) passesGuard(guard ast.Node) (bool, error) {
-	if guard == nil {
+// guard always passes. The guard resolves its names in the scope the transition
+// was written in, with the machine's data shadowing it, so a live value wins
+// over a same-named declaration.
+func (e *StateExecutor) passesGuard(trans *lower.Transition) (bool, error) {
+	if trans == nil || trans.Guard == nil {
 		return true, nil
 	}
-	ec := NewEvalContext(e.ctx, nil)
+	ec := NewEvalContext(e.ctx, trans.BodyScope)
 	ec.Push(e.stateData)
-	val, err := ec.Eval(guard)
+	val, err := ec.Eval(trans.Guard)
 	if err != nil {
 		return false, fmt.Errorf("eval guard: %w", err)
 	}
@@ -836,7 +832,7 @@ func (e *StateExecutor) recordHistory(state *ast.StateNode) *historyRecord {
 // A shallow history restores the substate that was active; a deep history keeps
 // descending, restoring the innermost one.
 func (e *StateExecutor) fireHistoryTransition(trans *lower.Transition, hist *ast.PseudostateNode) error {
-	pass, err := e.passesGuard(trans.Guard)
+	pass, err := e.passesGuard(trans)
 	if err != nil || !pass {
 		return err
 	}
@@ -917,7 +913,7 @@ func (e *StateExecutor) deepestRecorded(state *ast.StateNode, branches map[*ast.
 // taken at once, making one state active per orthogonal region of the composite
 // state that owns them.
 func (e *StateExecutor) fireForkTransition(trans *lower.Transition, fork *ast.PseudostateNode) error {
-	pass, err := e.passesGuard(trans.Guard)
+	pass, err := e.passesGuard(trans)
 	if err != nil || !pass {
 		return err
 	}
@@ -959,7 +955,7 @@ func (e *StateExecutor) fireForkTransition(trans *lower.Transition, fork *ast.Ps
 		return err
 	}
 	for _, action := range trans.Effect {
-		if err := e.executeAction(action); err != nil {
+		if err := e.executeAction(action, trans.BodyScope); err != nil {
 			return fmt.Errorf("transition effect: %w", err)
 		}
 	}
@@ -988,7 +984,7 @@ func (e *StateExecutor) fireForkTransition(trans *lower.Transition, fork *ast.Ps
 // every one of its incoming branches has an active source state; until then the
 // completed branch simply waits.
 func (e *StateExecutor) fireJoinTransition(trans *lower.Transition, join *ast.PseudostateNode) error {
-	pass, err := e.passesGuard(trans.Guard)
+	pass, err := e.passesGuard(trans)
 	if err != nil || !pass {
 		return err
 	}
@@ -1154,30 +1150,29 @@ func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*a
 	return nil
 }
 
-// maxStateEvents bounds a single run of the event loop so a cyclic machine
-// reports a typed error instead of spinning forever.
-const maxStateEvents = 10000
-
-// maxDoSteps bounds the do activity actions one run may perform, so a machine
-// that keeps restarting do behaviors reports instead of spinning forever.
-const maxDoSteps = 100000
-
 // RunToCompletion processes queued events until the machine completes or has no
 // event or running do behavior left, at which point it suspends. A state's do
 // behavior runs while the state is active: each run-to-completion step advances
 // every active state's do behavior by one action and then dispatches one event,
 // so concurrently active states interleave instead of one running to the end at
 // entry, and leaving a state abandons the rest of its do behavior.
+//
+// The run is bounded by the context's event and do activity budgets
+// (SYSML_MAX_EVENTS, SYSML_MAX_DO_STEPS), so a cyclic machine reports a typed
+// error instead of spinning forever.
 func (e *StateExecutor) RunToCompletion() error {
-	events, doSteps := 0, 0
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
+	maxStateEvents, maxDoSteps := e.ctx.maxStateEvents, e.ctx.maxDoSteps
+	var events, doSteps int64
 	for e.state == StateRunning {
 		ran, err := e.runDoRound()
 		if err != nil {
 			return err
 		}
-		doSteps += ran
+		doSteps += int64(ran)
 		if doSteps >= maxDoSteps {
-			return fmt.Errorf("state machine exceeded max do activity steps (%d), possible non-terminating do behavior", maxDoSteps)
+			return fmt.Errorf("state machine exceeded max do activity steps (%d steps; raise %s to allow more), possible non-terminating do behavior", maxDoSteps, MaxDoStepsEnvVar)
 		}
 		if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() {
 			if ran > 0 {
@@ -1187,7 +1182,7 @@ func (e *StateExecutor) RunToCompletion() error {
 			return nil
 		}
 		if events >= maxStateEvents {
-			return fmt.Errorf("state machine exceeded max events (%d), possible infinite loop", maxStateEvents)
+			return fmt.Errorf("state machine exceeded max events (%d events; raise %s to allow more), possible infinite loop", maxStateEvents, MaxStateEventsEnvVar)
 		}
 		events++
 		if err := e.processNextEvent(); err != nil {
@@ -1246,7 +1241,7 @@ func (e *StateExecutor) runDoRound() (int, error) {
 		if e.trace() != nil {
 			e.trace().RecordDoStep(activity.state.Name)
 		}
-		if err := e.executeAction(action); err != nil {
+		if err := e.executeAction(action, e.stateScope(activity.state)); err != nil {
 			return ran, fmt.Errorf("do action in state %s: %w", activity.state.Name, err)
 		}
 		ran++
@@ -1379,6 +1374,8 @@ func (e *StateExecutor) activeStates() []*ast.StateNode {
 
 // initialize sets current state to initial state and enters it.
 func (e *StateExecutor) initialize() error {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	// Use initial state from graph
 	if e.graph.Initial != nil {
 		// Simple state machine with single initial state
@@ -1483,7 +1480,7 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 
 	// Execute entry actions
 	for _, action := range state.Entry {
-		if err := e.executeAction(action); err != nil {
+		if err := e.executeAction(action, e.stateScope(state)); err != nil {
 			return fmt.Errorf("entry action: %w", err)
 		}
 	}
@@ -1603,7 +1600,7 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 
 	// Execute exit actions
 	for _, action := range state.Exit {
-		if err := e.executeAction(action); err != nil {
+		if err := e.executeAction(action, e.stateScope(state)); err != nil {
 			return fmt.Errorf("exit action: %w", err)
 		}
 	}
@@ -1629,12 +1626,14 @@ func (e *StateExecutor) invokeNested(inv actionInvocation) error {
 }
 
 // executeAction executes a single action (used for entry/exit/effect actions).
-func (e *StateExecutor) executeAction(action ast.Node) error {
+// scope is the scope the action was declared in: the state's own scope for an
+// entry, do or exit behavior, and the transition's for an effect.
+func (e *StateExecutor) executeAction(action ast.Node, scope *symbols.Scope) error {
 	switch node := action.(type) {
 	case *ast.ActionExecutionNode:
 		if node.Expression != nil {
 			// Evaluate inline expression
-			ec := NewEvalContext(e.ctx, nil)
+			ec := NewEvalContext(e.ctx, scope)
 			ec.Push(e.stateData) // Make state data available
 			result, err := ec.Eval(node.Expression)
 			if err != nil {
@@ -1659,7 +1658,7 @@ func (e *StateExecutor) executeAction(action ast.Node) error {
 	case *ast.AssignmentActionNode:
 		// Handle assignment (e.g., counter = counter + 1)
 		// Evaluate RHS
-		ec := NewEvalContext(e.ctx, nil)
+		ec := NewEvalContext(e.ctx, scope)
 		ec.Push(e.stateData)
 		rhsVal, err := ec.Eval(node.Value)
 		if err != nil {
@@ -1692,7 +1691,7 @@ func (e *StateExecutor) executeAction(action ast.Node) error {
 	case *ast.SendStatement:
 		// A send in an entry/do/exit/effect action posts to the context bus,
 		// where this machine's own transitions and other behaviors can accept it.
-		ec := NewEvalContext(e.ctx, nil)
+		ec := NewEvalContext(e.ctx, scope)
 		ec.Push(e.stateData)
 		send := lower.Send{
 			Message: node.Message,
@@ -1742,8 +1741,9 @@ func (e *StateExecutor) pollChangeEvents() error {
 
 	for _, trans := range transitions {
 		if changeEvent, ok := trans.Trigger.(*ast.ChangeEvent); ok {
-			// Evaluate condition
-			ec := NewEvalContext(e.ctx, nil)
+			// Evaluate the condition in the scope the transition was written in, the
+			// machine's data shadowing it.
+			ec := NewEvalContext(e.ctx, trans.Scope)
 			ec.Push(e.stateData)
 			condVal, err := ec.Eval(changeEvent.Condition)
 			if err != nil {
@@ -1856,6 +1856,8 @@ func (e *StateExecutor) StateMachineSymbol() *symbols.Symbol {
 // behaviors is progress in itself, so a step that ran one and found no event to
 // dispatch succeeds — the completion transition it enables is queued next.
 func (e *StateExecutor) ProcessNextEvent() error {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	ran, err := e.runDoRound()
 	if err != nil {
 		return err
@@ -1875,6 +1877,8 @@ func (e *StateExecutor) HasPendingWork() bool {
 // RunDoRound advances every active state's do behavior by one action, without
 // dispatching any event, and reports how many actions ran.
 func (e *StateExecutor) RunDoRound() (int, error) {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	return e.runDoRound()
 }
 

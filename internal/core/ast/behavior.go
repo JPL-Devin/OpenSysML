@@ -63,11 +63,48 @@ type PerformActionNode struct {
 	ActionRef Node // qualified name or invocation expression
 }
 
-// WhileLoopActionNode represents a while loop: while condition { body }
+// LoopKind discriminates the loop forms, which share one node because they
+// share a body and a condition but differ in when the condition is tested.
+type LoopKind int
+
+const (
+	// LoopWhile is `while <cond> { body }`: the condition is tested before every
+	// iteration, so a body may run zero times.
+	LoopWhile LoopKind = iota
+	// LoopUntil is `loop { body } until <cond>;`: the condition is tested after
+	// every iteration, so the body runs at least once. A loop written without an
+	// `until` clause has no condition and iterates until the step budget stops it.
+	LoopUntil
+	// LoopFor is `for <var> in <collection> { body }`: the body runs once per
+	// element of the collection, with the element bound to the loop's variable.
+	LoopFor
+)
+
+// String renders the loop's introducing keyword.
+func (k LoopKind) String() string {
+	switch k {
+	case LoopUntil:
+		return "loop"
+	case LoopFor:
+		return "for"
+	default:
+		return "while"
+	}
+}
+
+// WhileLoopActionNode represents a loop in an action body, in any of the three
+// forms LoopKind names: `while c { … }`, `loop { … } until c;`, `for x in c { … }`.
 type WhileLoopActionNode struct {
 	NodeBase
-	Condition Node   // boolean expression
+	Kind      LoopKind
+	Condition Node   // boolean expression; nil for `for` and for `loop` without `until`
 	Body      []Node // statements in loop body
+	// Variable is the iteration variable a `for` loop declares. It is a member of
+	// the loop's own body scope, never of the enclosing behavior. Zero for the
+	// other loop forms.
+	Variable Identification
+	// Collection is the expression a `for` loop iterates over, nil otherwise.
+	Collection Node
 }
 
 // IfBranchKind discriminates the two branches of an if action.
@@ -280,9 +317,11 @@ type ResultMember struct {
 // Syntax: assert <expression>; or assume <expression>;
 type ConstraintMember struct {
 	NodeBase
-	IsAssert   bool // true for 'assert', false for 'assume'
-	IsNegated  bool // true if 'not' keyword present (assert not expr)
-	Expression Node // the constraint expression
+	IsAssert   bool   // true for 'assert', false for 'assume'
+	IsNegated  bool   // true if 'not' keyword present (assert not expr)
+	Expression Node   // the constraint expression, nil when stated through Body
+	Name       string // name of the nested constraint, when it has one
+	Body       []Node // conditions of a nested constraint: assert constraint { <expr> }
 }
 
 // Phase C2: Requirement Body Members
@@ -291,27 +330,29 @@ type ConstraintMember struct {
 // Syntax: subject <name> : <Type>; OR subject = <expr>;
 type SubjectMember struct {
 	NodeBase
-	Name         string
-	TypeRef      *QualifiedName // subject type (for declaration form)
-	Multiplicity *Multiplicity  // optional multiplicity
-	Body         []Node         // optional nested members
-	BindingExpr  Node           // binding expression (for binding form: subject = <expr>;)
+	Name          string
+	TypeRef       *QualifiedName  // subject type (for declaration form)
+	Multiplicity  *Multiplicity   // optional multiplicity
+	Relationships []*Relationship // specializations written after the type (`:>> RequirementCheck::subj`)
+	Body          []Node          // optional nested members
+	BindingExpr   Node            // binding expression (for binding form: subject = <expr>;)
 }
 
 // AssumeMember represents an assumption in a requirement body.
-// Syntax: assume <expression>;
+// Syntax: assume <expression>; OR assume constraint { <expression>... }
 type AssumeMember struct {
 	NodeBase
-	Expression Node // assumption condition
+	Expression Node   // assumption condition (for expression form)
+	Body       []Node // ConstraintMembers of the nested constraint (for the braced form)
 }
 
 // RequireMember represents a requirement constraint.
-// Syntax: require <expression>; OR require <name> { body }
+// Syntax: require <expression>; OR require constraint { <expression>... } OR require <name> { body }
 type RequireMember struct {
 	NodeBase
 	Expression Node   // requirement condition (for expression form)
 	Name       string // optional name (for body form)
-	Body       []Node // optional nested members (for body form)
+	Body       []Node // nested members: ConstraintMembers for the braced form, requirement members for the named form
 }
 
 // ActorMember represents an actor declaration in a requirement/use case.

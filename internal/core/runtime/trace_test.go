@@ -62,11 +62,22 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 		t.Fatalf("load source: %v", err)
 	}
 
+	expected := loadExpectedOutcome(t, conformanceDir, testName)
+
 	// Parse and build model
 	file := parser.New(source.New(sysmlPath, sysmlData)).ParseFile()
 
 	idx := symbols.NewIndex()
+	// A case whose model names library elements — the measurement unit of a
+	// quantity is one — resolves them only with the standard library indexed,
+	// exactly as the conformance harness loads it.
+	if expected.Libraries {
+		loadLibraries(t, idx)
+	}
 	idx.AddDocument(sysmlPath, file)
+	if expected.Libraries {
+		idx.ExpandWildcardImports()
+	}
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	ctx := NewContext(model, resolver, 10000)
@@ -87,7 +98,7 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 
 	// Evaluation-based cases (calc, constraint) trace through the context rather
 	// than an executor, and the expected outcome supplies the calc arguments.
-	switch expected := loadExpectedOutcome(t, conformanceDir, testName); expected.Type {
+	switch expected.Type {
 	case "calc":
 		ctx.SetTrace(trace)
 		calcSym := findBehavioralSymbol(t, rootScope, ast.DefCalc, ast.UsageCalc)

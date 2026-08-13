@@ -12,13 +12,16 @@ type RecordEntry struct {
 	Supers          []string         // FQNs of the specialization targets of a def/usage
 	WildcardImports []WildcardImport // for packages: its `import X::*` declarations
 	AliasTarget     string           // for aliases: raw target text of "alias X for Y"
+	Unit            *UnitFacts       // for measurement units: their reduction to base units
 }
 
 // AddRecords registers synthetic, AST-less symbols for a document directly by
 // their fully-qualified names. It first removes any prior contributions for
-// name (idempotent re-add), mirroring AddDocument. Symbols added this way carry
-// no Decl/Scope and are keyed only by FQN, which is sufficient for
-// qualified-name resolution against library content restored from cache.
+// name (idempotent re-add), mirroring AddDocument — the wildcard imports a
+// record carries are expanded by a later ExpandWildcardImports, as a parsed
+// document's are. Symbols added this way carry no Decl/Scope and are keyed only
+// by FQN, which is sufficient for qualified-name resolution against library
+// content restored from cache.
 func (idx *Index) AddRecords(name string, entries []RecordEntry) {
 	idx.RemoveDocument(name)
 	for _, e := range entries {
@@ -29,6 +32,7 @@ func (idx *Index) AddRecords(name string, entries []RecordEntry) {
 			DeclSpan:       e.Span,
 			SuperFQNs:      e.Supers,
 			AliasTargetFQN: e.AliasTarget,
+			Unit:           e.Unit,
 		}
 		idx.register(e.FQN, sym)
 		idx.declaredAt[sym] = e.FQN
@@ -43,7 +47,7 @@ func (idx *Index) AddRecords(name string, entries []RecordEntry) {
 
 		// Store wildcard import metadata
 		if len(e.WildcardImports) > 0 {
-			idx.wildcardMeta[e.FQN] = e.WildcardImports
+			idx.setWildcardImports(e.FQN, name, e.WildcardImports)
 		}
 	}
 }

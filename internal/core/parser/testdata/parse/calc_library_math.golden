@@ -1,0 +1,25 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="calc" abstract=false variation=false name="Hypotenuse"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="a" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="b" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+        (Relationship kind="typing" target=Real
+          (*ast.QualifiedName))
+        (OperatorExpr operator="*"
+          (InvocationExpr type="sqrt"
+            (OperatorExpr operator="+"
+              (OperatorExpr operator="**"
+                (FeatureReference name="a")
+                (LiteralInteger value="2"))
+              (OperatorExpr operator="**"
+                (FeatureReference name="b")
+                (LiteralInteger value="2"))))
+          (InvocationExpr type="cos"
+            (LiteralReal value="0.0")))))))

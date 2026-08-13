@@ -23,6 +23,11 @@ This directory contains behavioral execution conformance tests. Each test consis
 
 - `outputs`: map of output parameter names to their final values
 - `tokenCount`: number of tokens processed (optional, for regression detection)
+- `error`: text the execution must fail with, for a case whose contract is a
+  diagnostic rather than a result — a loop that never terminates must end with
+  the step budget's error. Set it instead of `outputs`; a case without it must
+  run to completion. Such a case has no golden trace, since the trace harness
+  drives the same execution to the end.
 
 ### For States (`ExecuteState`)
 
@@ -94,7 +99,36 @@ This directory contains behavioral execution conformance tests. Each test consis
 ```
 
 - `bindings`: variable bindings for requirement evaluation
-- `satisfied`: boolean, whether requirement is satisfied
+- `satisfied`: boolean, whether requirement is satisfied. `false` means a
+  condition evaluated to false (`ErrViolated`), not that evaluation failed.
+- `evaluate`: qualified name of the element to evaluate, for a case declaring
+  more than one — a usage and the definition it is typed by. Omit to search the
+  model for the first requirement (or constraint) it declares.
+
+### For Satisfaction Assertions (`EvaluateSatisfaction`)
+
+```json
+{
+  "type": "satisfy",
+  "evaluate": "test::analysisContext",
+  "assertions": {
+    "satisfy touchdown by slowLander": true,
+    "not satisfy touchdown by fastLander": true
+  }
+}
+```
+
+- `evaluate`: qualified name of the element stating the assertions, since
+  `assert satisfy r by p;` is anonymous and is reached through its owner. Omit
+  to evaluate every assertion in the model.
+- `assertions`: expected verdict per assertion, keyed by the assertion as
+  written (`not ` prefixed for a negated one). `false` means the requirement
+  evaluated to false against the object its subject binds (`ErrViolated`), not
+  that evaluation failed.
+- `satisfied`: the verdict, for a case stating exactly one assertion.
+- `error`: text the evaluation must fail with, for a case whose contract is a
+  diagnostic — satisfying a requirement that states no condition. Set it
+  instead of a verdict.
 
 ### For Instances (`Instantiate`)
 
@@ -122,6 +156,17 @@ This directory contains behavioral execution conformance tests. Each test consis
   evaluated bound to the instance. `false` means the assertion evaluated to
   false (`ErrViolated`), not that evaluation failed.
 
+## Standard Library
+
+```json
+{"libraries": true}
+```
+
+Loads the standard library into the case's index, for a case whose model names
+library elements the runtime resolves — the measurement unit of a quantity
+expression (`1.5 [m/s]`) is one. Omit it otherwise: a case that needs no library
+is indexed from its own source alone.
+
 ## Value Format
 
 All values use this format:
@@ -136,6 +181,11 @@ Supported types:
 - `Boolean`: JSON boolean
 - `String`: JSON string
 - `Null`: JSON null
+- `Quantity`: JSON number, with the `unit` the magnitude is written in
+
+In place of a value, `error` states the text producing that value must fail with,
+for a slot or result whose contract is a diagnostic (`{"error": "not a
+measurement unit: …"}`).
 
 ## Adding New Cases
 

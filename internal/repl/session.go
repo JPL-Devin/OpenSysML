@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/model"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
@@ -32,9 +33,10 @@ type Session struct {
 	version  int
 
 	// Runtime execution context
-	rtCtx     *runtime.Context
-	idx       *symbols.Index               // index over the session document, shared by lookup and runtime
-	instances map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
+	rtCtx      *runtime.Context
+	idx        *symbols.Index               // index over the session document, shared by lookup and runtime
+	idxVersion int                          // document version idx holds, 0 when it holds none
+	instances  map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
 
 	// Active executor sessions for debugging
 	actionExec *actionSession
@@ -42,6 +44,9 @@ type Session struct {
 
 	// trace records execution steps while tracing is on, nil otherwise.
 	trace *runtime.TraceRecorder
+
+	// budgets bounds every runtime context this session creates.
+	budgets runtime.Budgets
 
 	verbosity Verbosity
 }
@@ -75,8 +80,28 @@ func NewSession() *Session {
 	return &Session{
 		ws:        model.NewWorkspace(),
 		instances: make(map[string]*runtime.Instance),
+		budgets:   runtime.DefaultBudgets(),
 		verbosity: VerbosityNormal,
 	}
+}
+
+// SetBudgets sets the bounds for runtime contexts created from here on. It
+// errors on a non-positive bound, which no run could make progress under.
+func (s *Session) SetBudgets(budgets runtime.Budgets) error {
+	if err := budgets.Validate(); err != nil {
+		return err
+	}
+	s.budgets = budgets
+	// Dropping the context invalidates everything derived from it, instances
+	// included: their IDs restart with the next context.
+	s.rtCtx = nil
+	s.instances = make(map[string]*runtime.Instance)
+	return nil
+}
+
+// Budgets returns the bounds this session gives its runtime contexts.
+func (s *Session) Budgets() runtime.Budgets {
+	return s.budgets
 }
 
 // List returns a one-line summary per surviving snippet.
@@ -93,10 +118,17 @@ func (s *Session) List() []string {
 // <repl> content plus the byte offset where src begins in it. That offset is
 // what scopes a report to the submission just made. It does NOT touch the
 // workspace (Task 4 does).
+//
+// A submission that declares names takes over the comment lines typed just
+// before it. They document what follows, so folding them into the same snippet
+// makes a later redeclaration replace the comments along with the declaration
+// instead of leaving stale documentation above whatever is current.
 func (s *Session) accept(src string) (joined string, offset int) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
+	var comments string
 	if len(names) > 0 {
+		comments = s.takeLeadingComments()
 		set := make(map[string]bool, len(names))
 		for _, n := range names {
 			set[n] = true
@@ -109,10 +141,52 @@ func (s *Session) accept(src string) (joined string, offset int) {
 		}
 		s.snippets = kept
 	}
-	s.snippets = append(s.snippets, snippet{src: src, names: names})
+	s.snippets = append(s.snippets, snippet{src: comments + src, names: names})
 	joined = s.joined()
+	// The offset marks what the user typed, not the comments folded in front of
+	// it, so diagnostics keep the line numbers of the submission.
 	return joined, len(joined) - len(src)
 }
+
+// takeLeadingComments removes the trailing run of comment-only snippets and
+// returns their text, ready to prefix the declaration they document.
+func (s *Session) takeLeadingComments() string {
+	cut := len(s.snippets)
+	for cut > 0 && isCommentOnly(s.snippets[cut-1].src) {
+		cut--
+	}
+	if cut == len(s.snippets) {
+		return ""
+	}
+	var b strings.Builder
+	for _, sn := range s.snippets[cut:] {
+		b.WriteString(sn.src)
+		b.WriteString("\n")
+	}
+	s.snippets = s.snippets[:cut]
+	return b.String()
+}
+
+// isCommentOnly reports whether a submission is nothing but comments, and so
+// declares nothing of its own to be replaced by name.
+func isCommentOnly(src string) bool {
+	lx := lexer.New(source.New(docName, []byte(src)))
+	comments := 0
+	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		switch tok.Kind {
+		case lexer.Whitespace:
+		case lexer.SLNote, lexer.MLNote, lexer.RegularComment:
+			comments++
+		default:
+			return false
+		}
+	}
+	return comments > 0
+}
+
+// sessionOrigin names the accumulated session buffer in diagnostics, which
+// belongs to no file on disk.
+const sessionOrigin = "<session>"
 
 func (s *Session) joined() string {
 	parts := make([]string, len(s.snippets))
@@ -143,8 +217,8 @@ func (s *Session) Submit(src string) Result {
 	s.ws.Open(docName, []byte(joined), s.version)
 	// The document is a new AST and scope tree, so anything derived from the
 	// previous one is stale — including instances, whose IDs restart with the
-	// new runtime context.
-	s.idx = nil
+	// new runtime context. The index is re-used and brought up to date on the
+	// next lookup instead, which is why it records the version it holds.
 	s.rtCtx = nil
 	s.instances = make(map[string]*runtime.Instance)
 	notices := s.dropStaleDebugSessions(declared)
@@ -211,7 +285,11 @@ func (s *Session) Clear() {
 	s.snippets = nil
 	s.version = 0
 	s.rtCtx = nil
-	s.idx = nil
+	if s.idx != nil {
+		// Drop the document, keep the library the index was built with.
+		s.idx.RemoveDocument(docName)
+		s.idxVersion = 0
+	}
 	s.instances = make(map[string]*runtime.Instance)
 	s.actionExec = nil
 	s.stateExec = nil
@@ -230,23 +308,37 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	s.rtCtx = runtime.NewContext(model, resolver, 100000)
+	ctx := runtime.NewContext(model, resolver, s.budgets.MaxSteps)
+	if err := ctx.SetBudgets(s.budgets); err != nil {
+		return nil, err
+	}
+	s.rtCtx = ctx
 	s.rtCtx.SetTrace(s.trace)
 	return s.rtCtx, nil
 }
 
-// symbolIndex lazily indexes the session document, returning nil when nothing
-// is loaded. Name lookup and the runtime context share it.
+// symbolIndex indexes the session document, returning nil when nothing is
+// loaded. Name lookup and the runtime context share it, and it carries the
+// standard library too, which the runtime resolves names against — the
+// measurement unit of a quantity expression is one.
+//
+// One index serves the whole session: the library is loaded into it once, and
+// re-indexing the document takes back the names the previous submission declared
+// and the ones its wildcard imports surfaced, so a submission costs its own
+// document rather than a reload of the library.
 func (s *Session) symbolIndex() *symbols.Index {
-	if s.idx != nil {
-		return s.idx
-	}
 	doc := s.ws.Document(docName)
 	if doc == nil || doc.Scope == nil {
 		return nil
 	}
-	idx := symbols.NewIndex()
-	idx.AddDocument(docName, doc.AST)
-	s.idx = idx
-	return idx
+	if s.idx == nil {
+		s.idx = symbols.NewIndex()
+		model.LoadStdlibInto(s.idx)
+	} else if s.idxVersion == doc.Version {
+		return s.idx
+	}
+	s.idx.AddDocument(docName, doc.AST)
+	s.idx.ExpandWildcardImports()
+	s.idxVersion = doc.Version
+	return s.idx
 }

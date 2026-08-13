@@ -1,12 +1,52 @@
 """Binary management for sysml-grpc service."""
 
 import hashlib
+import json
 import os
 import platform
 import stat
 import urllib.error
 import urllib.request
 from pysysml.errors import ConnectionError
+
+# Releases publish sysml-grpc-<goos>-<goarch> raw, with a .sha256 sidecar.
+# PYSYSML_GITHUB_REPO overrides the repository they are fetched from.
+DEFAULT_GITHUB_REPO = 'Open-MBEE/Systemica'
+
+
+def default_github_repo():
+    """Repository releases are downloaded from.
+
+    Returns:
+        str: owner/repo, from $PYSYSML_GITHUB_REPO or the default
+    """
+    return os.environ.get('PYSYSML_GITHUB_REPO') or DEFAULT_GITHUB_REPO
+
+
+def resolve_latest_version(github_repo=None):
+    """Resolve the tag of the repository's latest published release.
+
+    Args:
+        github_repo (str, optional): GitHub repository (owner/repo)
+
+    Returns:
+        str: Release tag (e.g. 'v0.0.4')
+
+    Raises:
+        ConnectionError: If the release cannot be queried or carries no tag
+    """
+    repo = github_repo or default_github_repo()
+    url = f'https://api.github.com/repos/{repo}/releases/latest'
+    try:
+        with urllib.request.urlopen(url) as response:
+            release = json.loads(response.read().decode('utf-8'))
+    except (urllib.error.URLError, ValueError) as e:
+        raise ConnectionError(f"Failed to resolve latest release from {url}: {e}")
+
+    tag = release.get('tag_name')
+    if not tag:
+        raise ConnectionError(f"Latest release of {repo} has no tag name")
+    return tag
 
 
 def detect_platform():
@@ -52,12 +92,12 @@ def get_binary_path():
     return os.path.join(base_dir, binary_name)
 
 
-def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
+def download_binary(version='latest', github_repo=None):
     """Download sysml-grpc binary from GitHub releases with checksum verification.
     
     Args:
-        version (str): Release version tag (e.g., 'v0.1.0')
-        github_repo (str): GitHub repository (owner/repo)
+        version (str): Release version tag (e.g., 'v0.1.0'), or 'latest'
+        github_repo (str, optional): GitHub repository (owner/repo)
     
     Returns:
         str: Path to downloaded binary
@@ -65,11 +105,9 @@ def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
     Raises:
         RuntimeError: If download fails or checksum mismatch
     """
+    github_repo = github_repo or default_github_repo()
     if version == 'latest':
-        raise NotImplementedError(
-            "version='latest' not yet supported. "
-            "Specify explicit version tag like 'v0.1.0'"
-        )
+        version = resolve_latest_version(github_repo)
     
     goos, goarch = detect_platform()
     binary_name = f'sysml-grpc-{goos}-{goarch}'
@@ -150,9 +188,11 @@ def ensure_binary(force_download=False, version=None):
     
     Args:
         force_download (bool): If True, download even if binary exists
-        version (str, optional): Specific version tag to download (e.g. 'v0.1.0').
-                                 If None, auto-download is disabled - binary must
-                                 be pre-installed via `make build` or manual download.
+        version (str, optional): Specific version tag to download (e.g. 'v0.1.0'),
+                                 or 'latest' for the newest release. If None,
+                                 $PYSYSML_GRPC_VERSION is used; without it
+                                 auto-download is disabled and the binary must be
+                                 pre-installed via `make build` or downloaded manually.
     
     Returns:
         str: Path to binary
@@ -162,6 +202,8 @@ def ensure_binary(force_download=False, version=None):
     """
     from pysysml.errors import ConnectionError
     binary_path = get_binary_path()
+    if version is None:
+        version = os.environ.get('PYSYSML_GRPC_VERSION') or None
     
     # Check if binary already exists and is executable
     if not force_download and os.path.exists(binary_path):
@@ -172,7 +214,8 @@ def ensure_binary(force_download=False, version=None):
     if version is None:
         raise ConnectionError(
             f"Binary not found at {binary_path} and auto-download disabled. "
-            f"Build via `make build` or specify version= parameter for download."
+            f"Build via `make build`, set $PYSYSML_GRPC_VERSION, or specify "
+            f"version= parameter for download."
         )
     
     # Download binary with explicit version

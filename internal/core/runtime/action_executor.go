@@ -27,6 +27,10 @@ type ActionExecutor struct {
 	mergeVisited     map[ast.Node]bool // Track merge node visits
 	inputs           map[string]Value  // Input parameter bindings seeded into the initial token
 	pausedAt         string            // Node name RunToCompletion stopped at, empty when it ran to the end
+
+	// runStarted marks this executor's run as begun, so the step budget is reset
+	// once however many calls the run is driven over.
+	runStarted bool
 }
 
 // breakpointVisit identifies one token's stay at one node.
@@ -48,8 +52,9 @@ func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, e
 		return nil, fmt.Errorf("symbol %s is not an action", action.Name)
 	}
 
-	// Lower AST to execution graph
-	graph, err := lower.ToActionGraph(action.Decl)
+	// Lower AST to execution graph, in the scope the action's body was written
+	// in, so that everything the graph carries is evaluated where it was declared.
+	graph, err := lower.ToActionGraph(action.Decl, declScope(action))
 	if err != nil {
 		return nil, fmt.Errorf("lower action graph: %w", err)
 	}
@@ -86,6 +91,8 @@ func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, e
 // Returns an error if a deadlock unrelated to accepts is detected (no progress
 // made and nothing is waiting for a message).
 func (e *ActionExecutor) Step() error {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	if e.state == StateCompleted {
 		return nil // Already completed
 	}
@@ -230,8 +237,10 @@ func (e *ActionExecutor) deadlockError() error {
 // step that makes no progress. A parked action therefore cannot spend the step
 // budget spinning — the budget is only consumed by steps that move something.
 func (e *ActionExecutor) RunToCompletion() error {
-	const maxSteps = 10000
-	steps := 0
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
+	maxSteps := e.ctx.maxActionSteps
+	var steps int64
 
 	e.pausedAt = ""
 	if e.state == StateSuspended {
@@ -248,7 +257,7 @@ func (e *ActionExecutor) RunToCompletion() error {
 		}
 
 		if steps >= maxSteps {
-			return fmt.Errorf("execution exceeded max steps (%d), possible infinite loop", maxSteps)
+			return fmt.Errorf("execution exceeded max steps (%d steps; raise %s to allow more), possible infinite loop", maxSteps, MaxActionStepsEnvVar)
 		}
 
 		if err := e.Step(); err != nil {
@@ -278,8 +287,8 @@ func (e *ActionExecutor) breakpointHit() string {
 		}
 	}
 	for _, token := range e.tokens {
-		name := ActionNodeName(token.Location)
-		if name == "" || !e.breakpoints[name] {
+		name := e.breakpointNameOf(token.Location)
+		if name == "" {
 			continue
 		}
 		visit := breakpointVisit{token: token.ID, node: token.Location}
@@ -303,6 +312,17 @@ func (e *ActionExecutor) tokenLocation(id int64) (ast.Node, bool) {
 		}
 	}
 	return nil, false
+}
+
+// breakpointNameOf returns the name a breakpoint is set on for the given node,
+// or "" when none is. A node answers to its short name as well as its name.
+func (e *ActionExecutor) breakpointNameOf(node ast.Node) string {
+	for _, name := range ActionNodeNames(node) {
+		if e.breakpoints[name] {
+			return name
+		}
+	}
+	return ""
 }
 
 // PausedAt returns the breakpoint node the last run stopped at, or "" when the
@@ -332,8 +352,8 @@ func ActionNodeName(node ast.Node) string {
 	case *ast.StateNode:
 		return n.Name
 	case *ast.Usage:
-		if n.Ident.Name != "" {
-			return n.Ident.Name
+		if name, _ := ast.EffectiveName(n); name != "" {
+			return name
 		}
 		return n.Ident.ShortName
 	case *ast.Definition:
@@ -346,53 +366,48 @@ func ActionNodeName(node ast.Node) string {
 	}
 }
 
-// NodeNames returns the declared names of the action's graph nodes, in
-// declaration order. Anonymous nodes are omitted; a debugger uses it to check
-// that a breakpoint names a node that exists.
-func (e *ActionExecutor) NodeNames() []string {
-	names := make([]string, 0, len(e.graph.Nodes))
-	for _, node := range e.graph.Nodes {
-		if name := ActionNodeName(node); name != "" {
-			names = append(names, name)
-		}
+// ActionNodeNames returns every name a node answers to: its name and, for a
+// usage, its declared short name, which is a name of its own.
+func ActionNodeNames(node ast.Node) []string {
+	name := ActionNodeName(node)
+	var names []string
+	if name != "" {
+		names = append(names, name)
+	}
+	var short string
+	switch n := node.(type) {
+	case *ast.Usage:
+		short = n.Ident.ShortName
+	case *ast.Definition:
+		short = n.Ident.ShortName
+	}
+	if short != "" && short != name {
+		names = append(names, short)
 	}
 	return names
 }
 
-// extractGraph builds node and edge maps from action AST.
-
-// initializeAttributes populates tokenData with attribute default values from action.
-func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error {
-	// Get action node
-	actionNode, ok := e.action.Decl.(*ast.Usage)
-	if !ok {
-		actionDef, ok := e.action.Decl.(*ast.Definition)
-		if !ok {
-			return fmt.Errorf("action symbol has invalid node type")
-		}
-		actionNode = &ast.Usage{Members: actionDef.Members}
+// NodeNames returns the names of the action's graph nodes, in declaration
+// order. Anonymous nodes are omitted; a debugger uses it to check that a
+// breakpoint names a node that exists.
+func (e *ActionExecutor) NodeNames() []string {
+	names := make([]string, 0, len(e.graph.Nodes))
+	for _, node := range e.graph.Nodes {
+		names = append(names, ActionNodeNames(node)...)
 	}
+	return names
+}
 
-	// Extract attribute defaults
-	for _, member := range actionNode.Members {
-		// Unwrap Membership if present
-		actualMember := member
-		if membership, ok := member.(*ast.Membership); ok {
-			actualMember = membership.Member
+// initializeAttributes populates tokenData with the attribute defaults lowering
+// recorded, evaluated in the scope the action's body was declared in.
+func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error {
+	for _, attr := range e.graph.Attributes {
+		ec := NewEvalContext(e.ctx, e.graph.Scope)
+		value, err := ec.Eval(attr.Value)
+		if err != nil {
+			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
 		}
-
-		// Check for attribute with value
-		if usage, ok := actualMember.(*ast.Usage); ok && usage.Kind == ast.UsageAttribute {
-			if usage.Value != nil && usage.Ident.Name != "" {
-				// Evaluate default value
-				ec := NewEvalContext(e.ctx, nil)
-				value, err := ec.Eval(usage.Value)
-				if err != nil {
-					return fmt.Errorf("eval attribute default %s: %w", usage.Ident.Name, err)
-				}
-				tokenData[usage.Ident.Name] = value
-			}
-		}
+		tokenData[attr.Name] = value
 	}
 
 	return nil
@@ -400,6 +415,8 @@ func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error 
 
 // initialize spawns initial token at InitialNode.
 func (e *ActionExecutor) initialize() error {
+	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
 	// Use initial node from graph
 	if e.graph.Initial == nil {
 		return fmt.Errorf("no initial node found in action %s", e.action.Name)
@@ -654,8 +671,10 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 		return fmt.Errorf("decision node %s has no successors", decisionNode.Name)
 	}
 
-	// Evaluate guards for each successor
-	ec := NewEvalContext(e.ctx, nil)
+	// Evaluate guards for each successor. A guard on an edge is written among the
+	// action's own members, so it resolves in the action's scope; the token's data
+	// is pushed over it, so a token value shadows a same-named declaration.
+	ec := NewEvalContext(e.ctx, e.graph.Scope)
 	ec.Push(token.Data) // Make token data available to guard expressions
 
 	// Two-pass evaluation:
@@ -725,8 +744,9 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 	}
 
 	if node.Expression != nil {
-		// Evaluate inline expression
-		ec := NewEvalContext(e.ctx, nil)
+		// Evaluate inline expression in the action's own scope, the token's data
+		// shadowing it.
+		ec := NewEvalContext(e.ctx, e.graph.Scope)
 		ec.Push(token.Data) // Make token data available
 		result, err := ec.Eval(node.Expression)
 		if err != nil {
@@ -790,7 +810,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			// A message routed to this accept's port is already addressed by the
 			// connection it travelled over, so the accept's own name does not
 			// have to appear in it.
-			return accept.ViaPort != "" || m.addressedTo(usage.Ident.Name)
+			return accept.ViaPort != "" || m.addressedTo(ActionNodeName(usage))
 		})
 		if !taken {
 			if token.Wait == nil {
@@ -822,38 +842,18 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	}
 
 	// Execute the node's lowered statements in declaration order.
-	for _, stmt := range e.graph.Bodies[usage] {
-		ec := NewEvalContext(e.ctx, nil)
-		ec.Push(token.Data) // Token data available for evaluation
-
-		switch s := stmt.(type) {
-		case lower.Send:
-			msg, err := ec.buildMessage(e.action.Scope, s)
-			if err != nil {
-				return err
-			}
-			e.ctx.post(e.graph.Connections, msg, s)
-		case lower.Assign:
-			if s.Target == "" {
-				return fmt.Errorf("nested action %s: unsupported assignment target", usage.Ident.Name)
-			}
-			value, err := ec.Eval(s.Value)
-			if err != nil {
-				return fmt.Errorf("eval assignment RHS: %w", err)
-			}
-			token.Data[s.Target] = value
-		default:
-			return fmt.Errorf("nested action %s: unsupported statement %T", usage.Ident.Name, stmt)
-		}
+	env := &stmtEnv{data: token.Data}
+	if err := e.execStatements(usage, e.graph.Bodies[usage], env); err != nil {
+		return err
 	}
 
 	// Advance to successor
 	successors := e.graph.Edges[token.Location]
 	if len(successors) == 0 {
-		return fmt.Errorf("nested action %s has no successors", usage.Ident.Name)
+		return fmt.Errorf("nested action %s has no successors", ActionNodeName(usage))
 	}
 	if len(successors) > 1 {
-		return fmt.Errorf("nested action %s has multiple successors", usage.Ident.Name)
+		return fmt.Errorf("nested action %s has multiple successors", ActionNodeName(usage))
 	}
 
 	token.Location = successors[0]

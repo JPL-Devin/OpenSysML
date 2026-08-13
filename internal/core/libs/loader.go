@@ -1,6 +1,11 @@
 package libs
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"sort"
+
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -13,10 +18,12 @@ type Loader struct {
 	src   Source
 	cache *Cache
 	// RequireResolved makes Persist skip a document with an unresolved
-	// specialization target: a record is keyed by content alone, so one built in
-	// a partially populated index must not be reused where the target exists.
+	// specialization target: a key does not describe the index a record was built
+	// in, so one built in a partially populated index must not be reused where
+	// the target exists.
 	RequireResolved bool
 	parsed          []pending // documents parsed this session, awaiting Persist
+	digest          string    // memoized digest of the library set (see setDigest)
 }
 
 // pending is a parsed document whose cache record has not been written yet.
@@ -47,7 +54,7 @@ func (l *Loader) Load(name string, idx *symbols.Index) error {
 		return nil
 	}
 
-	key := l.cache.keyFor(content)
+	key := l.cache.keyFor(content, l.setDigest())
 
 	// Cache hit: restore reduced records, skip lexing/parsing entirely.
 	if rec, ok := l.cache.Load(key); ok {
@@ -67,12 +74,14 @@ func (l *Loader) Load(name string, idx *symbols.Index) error {
 // Persist caches a reduced record of every document this loader parsed. It is
 // separate from Load because a record holds resolved supertype names: a
 // specialization target in one library file may be declared in another, so
-// records can only be built once every file has been indexed.
+// records can only be built once every file has been indexed. Records the
+// library has stopped asking for are pruned here, where a write already happened.
 func (l *Loader) Persist(idx *symbols.Index) {
 	if l.cache == nil {
 		l.parsed = nil
 		return
 	}
+	defer l.cache.Prune()
 	r := resolve.New(idx)
 	for _, p := range l.parsed {
 		rec, resolved := recordFromIndex(p.name, idx, r)
@@ -82,6 +91,31 @@ func (l *Loader) Persist(idx *symbols.Index) {
 		_ = l.cache.Store(p.key, rec) // cache write failure is non-fatal
 	}
 	l.parsed = nil
+}
+
+// setDigest hashes the name and content of every file in the source, memoized.
+// It goes into the cache key so a record cannot outlive an edit to a sibling
+// file it drew a value from: a unit reduction follows a reference unit or a
+// prefix declared in another file, and keying on this file alone kept the
+// reduction computed against the old definition. An unreadable file digests as
+// its read error, which still changes the key once it becomes readable.
+func (l *Loader) setDigest() string {
+	if l.digest != "" {
+		return l.digest
+	}
+	names := append([]string(nil), l.src.List()...)
+	sort.Strings(names)
+	h := sha256.New()
+	for _, name := range names {
+		content, err := l.src.Read(name)
+		if err != nil {
+			fmt.Fprintf(h, "%s\x00!%v\x00", name, err)
+			continue
+		}
+		fmt.Fprintf(h, "%s\x00%x\x00", name, sha256.Sum256(content))
+	}
+	l.digest = hex.EncodeToString(h.Sum(nil))
+	return l.digest
 }
 
 // recordEntries projects a persisted IndexRecord onto symbols.RecordEntry.
@@ -96,7 +130,20 @@ func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
 			Supers:          s.Supers,
 			WildcardImports: wildcardImportEntries(s.WildcardImports),
 			AliasTarget:     s.AliasTarget,
+			Unit:            unitFactsEntry(s.Unit),
 		}
+	}
+	return out
+}
+
+// unitFactsEntry projects a persisted unit reduction onto its index form.
+func unitFactsEntry(facts *unitFacts) *symbols.UnitFacts {
+	if facts == nil {
+		return nil
+	}
+	out := &symbols.UnitFacts{ScaleNum: facts.ScaleNum, ScaleDen: facts.ScaleDen, Irreducible: facts.Irreducible}
+	for _, f := range facts.Factors {
+		out.Factors = append(out.Factors, symbols.UnitFactorFacts{FQN: f.FQN, Exponent: f.Exponent})
 	}
 	return out
 }

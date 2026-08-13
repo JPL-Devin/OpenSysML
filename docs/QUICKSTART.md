@@ -18,12 +18,18 @@ chmod +x /usr/local/bin/sysml
 
 **macOS (Intel or Apple Silicon) — Homebrew is the recommended path:**
 ```bash
-brew tap Open-MBEE/tap
-brew install systemica
+brew install Open-MBEE/tap/systemica
 ```
 This avoids the Gatekeeper prompt described in [macOS: Gatekeeper](#macos-gatekeeper).
-**The tap is not published yet** — these commands work once the maintainer creates
-`Open-MBEE/homebrew-tap`; until then use `go install` or the direct download below.
+
+Use that fully-qualified name rather than tapping first. Homebrew 6 requires third-party taps
+to be trusted before their code is loaded; installing by fully-qualified name trusts only this
+formula, whereas the two-step form needs a trust step in between:
+```bash
+brew tap Open-MBEE/tap
+brew trust --formula Open-MBEE/tap/systemica   # or: brew trust Open-MBEE/tap, for the whole tap
+brew install systemica
+```
 
 **macOS, direct download (fallback):** use `curl`, not a browser.
 ```bash
@@ -40,13 +46,18 @@ Download `systemica-windows-amd64.zip` from [releases](https://github.com/Open-M
 - `sysml` — Interactive REPL
 - `sysml-lsp` — Language Server Protocol server
 
-`sysml-grpc` (which backs the Python bindings) is not part of the release archives; build it from source with `make build-grpc`.
+`sysml-grpc` — the service the Python bindings talk to — is published as a raw
+`sysml-grpc-<os>-<arch>` file with a `.sha256` sidecar rather than in an archive, because
+`pysysml` downloads and verifies it itself (see [python/README.md](../python/README.md)).
+`make build-grpc` builds it from source.
 
 **Archive layout:** `systemica-<os>-<arch>.tar.gz` bundles contain both binaries under their
 plain names (`sysml`, `sysml-lsp`); the older single-binary `sysml-<os>-<arch>.tar.gz` and
 `sysml-lsp-<os>-<arch>.tar.gz` archives are still published. The bundles and
-`SHA256SUMS.txt` are produced from the next tagged release onward; for earlier releases use
-the single-binary archives. `SHA256SUMS.txt` covers every archive:
+`SHA256SUMS.txt` are published from v0.0.4 onward; for earlier releases use the
+single-binary archives. The `sysml-grpc` binaries and their sidecars are published from the
+next release onward, and `SHA256SUMS.txt` covers every archive and every published
+`sysml-grpc` binary:
 
 ```bash
 curl -fLO https://github.com/Open-MBEE/Systemica/releases/latest/download/SHA256SUMS.txt
@@ -62,7 +73,7 @@ an Apple Developer ID or notarized. It is not a broken binary.
 
 Ways to avoid it, best first:
 
-1. **Install with Homebrew** (`brew tap Open-MBEE/tap && brew install systemica`). Homebrew
+1. **Install with Homebrew** (`brew install Open-MBEE/tap/systemica`). Homebrew
    downloads with `curl` and does not quarantine formula binaries. This is the recommended
    path, and the accepted stopgap until the releases are signed and notarized.
 2. **Download with `curl` or `wget`** (as shown above). They do not set the quarantine
@@ -134,13 +145,15 @@ sysml> import ScalarValues::*;
 ✓ import ScalarValues::*
 
 sysml> part def Wheel {
-  ...>     attribute diameter : Real;
-  ...>     attribute width : Real;
+  ...>     attribute diameter : Real = 16.0;
+  ...>     attribute width : Real = 7.5;
   ...> }
 ✓ part def Wheel
 ```
 
-Each accepted declaration is echoed back as `✓ <kind> <name>`.
+Each accepted declaration is echoed back as `✓ <kind> <name>`. A brace opens a
+continuation (`...>`) that runs to the matching one — but a **blank line ends the
+submission**, so leave none inside a declaration you are typing.
 
 #### 2. Define a Vehicle
 
@@ -165,6 +178,14 @@ Instance: Vehicle (ID: 1)
 Slots:
   mass = 1500.00
   wheels = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4), Instance(ID: 5)]
+    diameter = 16.00
+    width = 7.50
+    diameter = 16.00
+    width = 7.50
+    diameter = 16.00
+    width = 7.50
+    diameter = 16.00
+    width = 7.50
 
 sysml> %instances
 Instances:
@@ -233,7 +254,62 @@ sysml> %slots MyModel::System
 Instance: MyModel::System (ID: 1)
 Slots:
   sensors = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4)]
+    reading = 0.00
+    threshold = 100.00
+    reading = 0.00
+    threshold = 100.00
+    reading = 0.00
+    threshold = 100.00
 ```
+
+A composite slot lists the features of each of its objects under it, in order.
+
+---
+
+## Saving and Converting
+
+`%save` writes the session out. The format follows the extension — `.sysml` for
+notation, `.ttl` for RDF Turtle:
+
+```bash
+sysml> %save my_model.sysml
+saved 181 bytes of sysml to my_model.sysml (replaced the existing file)
+
+sysml> %save my_model.ttl
+saved 1872 bytes of ttl to my_model.ttl
+```
+
+A leading `~` is expanded, an existing file is replaced and the replacement is
+stated, and the write is atomic — an interrupted save leaves the previous file
+intact. A file that already exists keeps its permissions, and a symlink is
+written through rather than replaced.
+
+A session that does not fully parse is still saved as notation: that file is
+your own text re-indented, so the syntax errors are reported as warnings and the
+work is never trapped in the REPL.
+
+```bash
+sysml> %save my_model.sysml
+warning: <session>: 1 syntax error(s):
+  4:6: expected a namespace member
+warning: the file is saved as typed; fix these and save again
+saved 181 bytes of sysml to my_model.sysml (replaced the existing file)
+```
+
+`.ttl` keeps the refusal, because a graph built from a tree the parser only
+partly recovered would be quietly missing declarations. So does
+`sysml -convert`, where the source already exists on disk.
+
+The same conversion is available without starting the REPL:
+
+```bash
+$ sysml -convert my_model.sysml -o my_model.ttl   # notation to RDF
+$ sysml -convert my_model.ttl -o back.sysml       # RDF to notation
+$ sysml -convert my_model.sysml                   # to stdout, in the other format
+```
+
+See [RDF_INTEROP.md](RDF_INTEROP.md) for the vocabulary, the round-trip
+guarantees, and what the mapping does not cover.
 
 ---
 
@@ -245,6 +321,7 @@ Slots:
 | `%list` | List all declarations in current session |
 | `%clear` | Clear session (reset all declarations) |
 | `%load <file>` | Load .sysml file into session |
+| `%save <file>` | Write the session model to a file: `.sysml` notation (comments preserved) or `.ttl` RDF |
 | `%verbosity [level]` | Show or set output level: `quiet` (errors only), `normal`, `debug` (every diagnostic over the whole buffer) |
 | `%trace [on\|off]` | Show or set execution tracing: each evaluation, calc invocation, action step and state transition |
 | **Instantiation & Inspection** | |
@@ -256,6 +333,7 @@ Slots:
 | `%calc <name> [args...]` | Invoke calculation with arguments |
 | `%constraint <name>` | Evaluate constraint (assert/assume) |
 | `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
+| `%satisfy [name]` | Evaluate satisfaction assertions of the model, or of one element |
 | **Control** | |
 | `Ctrl-D` | Exit REPL |
 
@@ -296,11 +374,13 @@ part Vehicle {
 ### 2. Composite Structures
 
 ```sysml
-part Engine {
+import ScalarValues::*;
+
+part def Engine {
     attribute power : Real = 200.0;
 }
 
-part Car {
+part def Car {
     part engine : Engine {
         :>> power = 250.0;  // Redefine nested feature
     }
@@ -309,11 +389,16 @@ part Car {
 
 Instantiate and inspect:
 ```sysml
-%instantiate Car
-%slots Car
+sysml> %instantiate Car
+✓ Created instance of Car
+  ID: 1
+  Use %slots Car to inspect
+
+sysml> %slots Car
 Instance: Car (ID: 1)
-  engine: Instance(ID: 2)
-    power: 250.0
+Slots:
+  engine = Instance(ID: 2)
+    power = 250.00
 ```
 
 ### 3. Multiplicity
@@ -330,11 +415,11 @@ part System {
 **Calculations:**
 ```sysml
 sysml> calc distance {
-...>     in x;
-...>     in y;
-...>     return (x * x + y * y);
-...> }
-✓ distance
+  ...>     in x;
+  ...>     in y;
+  ...>     return (x * x + y * y);
+  ...> }
+✓ calc distance
 
 sysml> %calc distance 3 4
 ✓ distance(3, 4)
@@ -344,10 +429,10 @@ sysml> %calc distance 3 4
 **Constraints:**
 ```sysml
 sysml> constraint ValidSpeed {
-...>     assert 65 > 0;
-...>     assert 65 <= 120;
-...> }
-✓ ValidSpeed
+  ...>     assert 65 > 0;
+  ...>     assert 65 <= 120;
+  ...> }
+✓ constraint ValidSpeed
 
 sysml> %constraint ValidSpeed
 ✓ Constraint ValidSpeed passed
@@ -356,10 +441,10 @@ sysml> %constraint ValidSpeed
 **Requirements:**
 ```sysml
 sysml> requirement SafetyReq {
-...>     assume 65 > 0;
-...>     require 100 > 50;
-...> }
-✓ SafetyReq
+  ...>     assume 65 > 0;
+  ...>     require 100 > 50;
+  ...> }
+✓ requirement SafetyReq
 
 sysml> %requirement SafetyReq
 ✓ Requirement SafetyReq satisfied
@@ -372,19 +457,21 @@ sysml> %requirement SafetyReq
 **Action execution (step-by-step):**
 ```sysml
 sysml> action SimpleWorkflow {
-...>     attribute result = 0;
-...>     first start;
-...>     action compute { assign result := 42; }
-...>     done end;
-...>     then start compute;
-...>     then compute end;
-...> }
-✓ SimpleWorkflow
+  ...>     attribute result = 0;
+  ...>     first start;
+  ...>     action compute { assign result := 42; }
+  ...>     done end;
+  ...>     then start compute;
+  ...>     then compute end;
+  ...> }
+✓ action SimpleWorkflow
 
 sysml> %action SimpleWorkflow
 ✓ Started action executor for "SimpleWorkflow"
   State: Running
   Tokens: 1
+
+Use %step to advance, %tokens to inspect, %continue to run to completion
 
 sysml> %step
 ✓ Step complete
@@ -406,20 +493,22 @@ sysml> %continue
 **State machine execution:**
 ```sysml
 sysml> state TrafficLight {
-...>     initial start;
-...>     state green { accept after 25 then yellow; }
-...>     state yellow { accept after 5 then red; }
-...>     state red { accept after 30 then off; }
-...>     final off;
-...>
-...>     start then green;
-...> }
+  ...>     initial start;
+  ...>     state green { accept after 25 then yellow; }
+  ...>     state yellow { accept after 5 then red; }
+  ...>     state red { accept after 30 then off; }
+  ...>     final off;
+  ...>     start then green;
+  ...> }
+✓ state TrafficLight
 
 sysml> %state TrafficLight
 ✓ Started state machine executor for "TrafficLight"
   Current state: start
   Time: 0.00
   Events: 1
+
+Use %events to see queue, %current for state, %advance <time> to step
 
 sysml> %advance 25
 ✓ Advanced to 25.00 (2 event(s) processed)
@@ -524,6 +613,75 @@ echo 'part Wheel { attribute diameter = 16.0; }' > test.sysml
 
 ---
 
+## Environment Variables
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `SYSML_LIBRARY_PATH` | unset (use the bundled standard library) | Directory to load the SysML/KerML standard library from instead of the embedded copy |
+| `SYSML_MAX_STEPS` | `10000000` | Evaluation step budget: the number of expression evaluations one run may spend before it is reported as a runaway |
+| `SYSML_MAX_ACTION_STEPS` | `1000000` | Token-flow steps one action run may perform |
+| `SYSML_MAX_EVENTS` | `1000000` | Events one state machine run may dispatch, and the events one `%advance` drains |
+| `SYSML_MAX_DO_STEPS` | `5000000` | Do-activity actions one state machine run may perform, and the ones one `%advance` drains |
+
+Each budget is what turns a non-terminating run into a reported error instead of
+a hang. They count incommensurable things — expression evaluations, action token
+steps, dispatched events, do-activity actions — so raising one says nothing about
+the others, and each has its own variable.
+
+A budget bounds **one run** — one `%eval`, one `%instantiate`, one `%calc`, one
+action, one state machine — not a whole session, so a long REPL session of small
+operations never runs out. A run started inside another, an action invoked from
+an expression say, shares the outer run's budget rather than getting a fresh
+one, and so does a run stepped through with `%step`/`%advance`.
+
+The defaults are set by how long a runaway takes to report rather than by memory
+— execution allocates nothing per step (peak RSS is ~34 MB whether a run spends
+ten thousand steps or fifty million), and the only thing a budget makes grow is a
+`%trace`, at 34–83 bytes an entry. At the measured ~13.6M evaluation steps/s and
+~1.9M events/s each default reports a runaway within about a second, and a fully
+traced run at all four ceilings holds ~320 MB.
+
+The evaluation step budget:
+
+```
+error: execution failed: eval assignment RHS: evaluation step limit exceeded
+(10000000 steps; raise SYSML_MAX_STEPS to allow more)
+```
+
+A legitimately long run — a numeric integration in an action body, say — needs a
+higher ceiling, so raise it for that run:
+
+```bash
+SYSML_MAX_STEPS=200000000 sysml descent.sysml
+```
+
+Unset or empty means the default. Anything that is not a positive integer is
+reported at startup (and at gRPC service construction) rather than silently
+ignored:
+
+```bash
+$ SYSML_MAX_STEPS=lots sysml model.sysml
+sysml: SYSML_MAX_STEPS="lots" is not an integer: set it to a positive number of evaluation steps (default 10000000)
+```
+
+The other budgets behave identically, and their errors name the variable that
+raises them:
+
+```
+execution exceeded max steps (1000000 steps; raise SYSML_MAX_ACTION_STEPS to allow more), possible infinite loop
+state machine exceeded max events (1000000 events; raise SYSML_MAX_EVENTS to allow more), possible infinite loop
+state machine exceeded max do activity steps (5000000 steps; raise SYSML_MAX_DO_STEPS to allow more), possible non-terminating do behavior
+```
+
+A long simulation therefore raises the state machine bounds rather than the
+evaluation one:
+
+```bash
+SYSML_MAX_EVENTS=20000000 SYSML_MAX_DO_STEPS=100000000 sysml descent.sysml
+```
+
+---
+
 ## Examples
 
 Check `examples/` directory:
@@ -551,6 +709,10 @@ Check `examples/` directory:
 **Import errors after build:**
 - Run `go mod tidy`
 - Verify Go version: `go version` (need 1.25+)
+
+**Execution stops with "limit exceeded" or "exceeded max":**
+- The run spent one of its budgets; the message names the variable that raises it (see [Environment Variables](#environment-variables))
+- If the model does not terminate, the budget is reporting a real bug — raising it only delays the error
 
 **Syntax errors:**
 - SysML v2 textual notation only (no graphical/XMI)

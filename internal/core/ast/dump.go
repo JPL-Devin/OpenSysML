@@ -66,6 +66,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		return
 	case *IndexExpr:
 		b.WriteString(`(IndexExpr`)
+		if v.Bracket {
+			b.WriteString(` bracket=true`)
+		}
 		writeChildren(b, depth, []Node{v.Operand, v.Index})
 		return
 	case *CollectExpr:
@@ -188,6 +191,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.IsSnapshot {
 			b.WriteString(` snapshot=true`)
 		}
+		if v.IsNegated {
+			b.WriteString(` negated=true`)
+		}
 		writeChildren(b, depth, usageChildren(v))
 		return
 	case *FlowEnds:
@@ -286,6 +292,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.Multiplicity != nil {
 			kids = append(kids, v.Multiplicity)
 		}
+		for _, r := range v.Relationships {
+			kids = append(kids, r)
+		}
 		kids = append(kids, v.Body...)
 		writeChildren(b, depth, kids)
 		return
@@ -294,9 +303,33 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			// Body form: require name { body }
 			fmt.Fprintf(b, `(RequireMember name=%q`, v.Name)
 			writeChildren(b, depth, v.Body)
+		} else if v.Expression == nil {
+			// Nested-constraint form: require constraint { expr }
+			b.WriteString(`(RequireMember`)
+			writeChildren(b, depth, v.Body)
 		} else {
 			// Expression form: require expr;
 			b.WriteString(`(RequireMember`)
+			writeChildren(b, depth, []Node{v.Expression})
+		}
+		return
+	case *AssumeMember:
+		b.WriteString(`(AssumeMember`)
+		if v.Expression == nil {
+			writeChildren(b, depth, v.Body)
+		} else {
+			writeChildren(b, depth, []Node{v.Expression})
+		}
+		return
+	case *ConstraintMember:
+		fmt.Fprintf(b, `(ConstraintMember assert=%t negated=%t`, v.IsAssert, v.IsNegated)
+		if v.Expression == nil {
+			// Nested-constraint form: assert constraint [name] { expr }
+			if v.Name != "" {
+				fmt.Fprintf(b, ` name=%q`, v.Name)
+			}
+			writeChildren(b, depth, v.Body)
+		} else {
 			writeChildren(b, depth, []Node{v.Expression})
 		}
 		return
@@ -328,6 +361,20 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		fmt.Fprintf(b, `(CallEvent operation=%q parameters=[%s])`,
 			qnString(v.Operation), strings.Join(names, " "))
+		return
+	case *WhileLoopActionNode:
+		// kind and variable distinguish the three loop forms, which the node
+		// shape alone does not.
+		fmt.Fprintf(b, `(WhileLoopActionNode kind=%q variable=%q`, v.Kind.String(), v.Variable.Name)
+		kids := []Node{}
+		if v.Condition != nil {
+			kids = append(kids, v.Condition)
+		}
+		if v.Collection != nil {
+			kids = append(kids, v.Collection)
+		}
+		kids = append(kids, v.Body...)
+		writeChildren(b, depth, kids)
 		return
 	case *IfActionNode:
 		b.WriteString(`(IfActionNode`)
@@ -363,6 +410,10 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		b.WriteString(`(ExitMember`)
 		writeChildren(b, depth, v.Actions)
 		return
+	case *SuccessionEdge:
+		// The ends are what a `then` says, whether the author wrote the edge
+		// form or the parser desugared a member-attached keyword into it.
+		fmt.Fprintf(b, `(SuccessionEdge source=%q target=%q)`, qnString(v.Source), qnString(v.Target))
 	default:
 		fmt.Fprintf(b, `(%T)`, n)
 	}

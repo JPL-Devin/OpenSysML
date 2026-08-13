@@ -18,7 +18,8 @@ const (
 	ValInstance
 	ValSequence
 	ValSet
-	ValExpr // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
+	ValExpr     // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
+	ValQuantity // a magnitude and the measurement unit it is expressed in
 )
 
 // String names the kind, so diagnostics quoting it read as more than an index.
@@ -38,6 +39,8 @@ func (k ValueKind) String() string {
 		return "set"
 	case ValExpr:
 		return "expression"
+	case ValQuantity:
+		return "quantity"
 	default:
 		return "invalid"
 	}
@@ -52,6 +55,7 @@ type Value struct {
 	Sequence *Sequence       // ValSequence
 	Set      *Set            // ValSet
 	Expr     ast.Node        // ValExpr: unevaluated AST for delayed evaluation
+	Quantity *Quantity       // ValQuantity: magnitude and measurement unit
 }
 
 // Sequence is an ordered collection (slice-backed).

@@ -17,7 +17,7 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 ### Design Principles
 
 - **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
-- **Completeness:** SysML v2 textual notation support (94/94 stdlib files parse clean)
+- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 Systemica extension)
 - **Executable models:** Not just validation—runtime that instantiates, evaluates, simulates
 - **Incremental & lazy:** Parse immediately, resolve semantics on-demand (gopls/rust-analyzer precedent)
 - **Immutable AST:** All semantic state lives in side tables keyed by node/symbol
@@ -206,7 +206,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 ### Tier 5 — Behavioral Interpreter ✅ Complete
 
 **Package:** `internal/core/runtime`  
-**Status:** Complete with 1,500+ tests. Conformance gate: 56/56 cases passing (calc/constraint/requirement/action/state all functional).  
+**Status:** Complete. Conformance gate: 121/121 cases passing (calc/constraint/requirement/satisfy/action/state all functional).  
 **Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for detailed compliance mapping (~98% faithful implementation).
 
 **Architecture:**
@@ -234,7 +234,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
    - Golden trace recording for transitions/entry/exit
    - APIs: `ProcessNextEvent()`, `CurrentState()`, `EventQueue()`, `StateData()`, `SetTrace()`
    - Deferred events: an event no active transition handles is retained while a state deferring it is active, and delivered afterwards in arrival order
-   - **Known limitations:** CallEvent matches any call (`matchesEvent:437` TODO)
+   - CallEvent matches the operation named by the trigger (`signal.go`, `state_executor.go`; `signal_test.go:TestCallEventMatchesOperationName`)
 
 3. **Context Integration** — Public runtime APIs
    - `InvokeCalc(symbol, args)` — Invoke calculation with arguments, return result
@@ -255,12 +255,12 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - Lowering to execution IR lives in `internal/core/lower/` (`ToActionGraph`, `ToStateGraph`)
 
 **Testing:**
-- **Golden ASTs**: 36 fixtures - `internal/core/parser/testdata/parse/`
-- **Negative tests**: 49 subtests - `internal/core/parser/negative_test.go`
+- **Golden ASTs**: 52 fixtures - `internal/core/parser/testdata/parse/`
+- **Negative tests**: 59 subtests - `internal/core/parser/negative_test.go`
 - **Unit tests**: 42 tests (action, state) - `action_executor_test.go`, `state_executor_test.go`
-- **Conformance gate**: 61 cases (all passing: calc×10, constraint×3, requirement×5, action×11, state×26, accept×1, instance×5) - `conformance_test.go`
-- **Golden traces**: 24 `.trace.golden` files (calc×10, constraint×3, action×4, state×7) - `trace_test.go`
-- **Robustness**: 35 failure-mode subtests (deadlock, unbound params, missing features, dangling transitions, sourceless accept, step budget, pseudostate dead ends and cycles, history and defer misuse, send/accept misrouting, calc arity/recursion, `perform` reference failures) - `robustness_test.go`
+- **Conformance gate**: 121 cases (all passing: calc×15, constraint×7, requirement×12, satisfy×5, unit×7, action×35, state×31, accept×1, instance×8) - `conformance_test.go`
+- **Golden traces**: 40 `.trace.golden` files (calc×12, constraint×4, action×17, state×7) - `trace_test.go`
+- **Robustness**: 57 failure-mode subtests (deadlock, unbound params, missing features, dangling transitions, sourceless accept, step budget, pseudostate dead ends and cycles, history and defer misuse, send/accept misrouting, calc arity/recursion, `perform` reference failures) - `robustness_test.go`
 - **Coverage**: All behavioral types fully functional. Action: 14/14 features ✅. State: 13/13 features ✅. Calc: 8/8 ✅. Constraint: 5/5 ✅. Requirement: 5/5 ✅. Evaluation: 7/7 ✅.
 
 **Measured Compliance:** See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for semantic rule → implementation → test case mapping with status (✅ faithful / ⚠️ approximate / ❌ not yet implemented).
@@ -384,6 +384,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 - `%calc <name> [args...]` — Invoke calculation with literal arguments (e.g., `%calc add 10 20`)
 - `%constraint <name>` — Evaluate constraint, check assert/assume satisfaction
 - `%requirement <name>` — Evaluate requirement, validate subject/require/actor conditions
+- `%satisfy [name]` — Evaluate satisfaction assertions, with the requirement's subject bound to the object `by` names
 
 **Action debugging:**
 - `%action <name>` — Start debugging action execution
@@ -447,7 +448,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 
 | Component | Status |
 |-----------|--------|
-| Lexer/Parser (structural + behavioral) | ✅ Operational (94/94 stdlib clean - see [conformance gate](../internal/core/libs/stdlib_conformance_test.go)) |
+| Lexer/Parser (structural + behavioral) | ✅ Operational (95/95 stdlib clean - see [conformance gate](../internal/core/libs/stdlib_conformance_test.go)) |
 | Symbol resolution & type system | ✅ Complete |
 | Validation passes (syntax → constraints) | ✅ Complete |
 | Expression evaluator & instance model (Tiers 1-3) | ✅ Complete |
@@ -461,7 +462,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
 
-**Parser coverage:** 94/94 official SysML v2 standard library files parse cleanly. Conformance verified by [stdlib_conformance_test.go](../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
+**Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 
 ---
 
@@ -474,8 +475,8 @@ New grammar features require a **four-layer test contract** to ensure correctnes
 #### 1. Conformance Gate
 - **Purpose:** Ensure stdlib continues to parse cleanly
 - **Location:** `internal/core/libs/stdlib_conformance_test.go`
-- **Test:** `TestStdlibConformance` loads all 94 stdlib files
-- **Acceptance:** 94/94 files parse without errors
+- **Test:** `TestStdlibConformance` loads all 95 bundled library files
+- **Acceptance:** 95/95 files parse without errors
 - **Allowlist:** `testdata/stdlib_known_failures.txt` (currently empty)
 - **Failure mode:** Regression breaks previously-working stdlib files
 

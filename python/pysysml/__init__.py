@@ -1,7 +1,8 @@
 """pysysml - Python client library for Systemica SysML v2 parser."""
 
-__version__ = "0.1.0"
+from importlib.metadata import PackageNotFoundError, version as _distribution_version
 
+from pysysml._version import VERSION as _declared_version
 from pysysml.connection import Connection
 from pysysml.model import Model
 from pysysml.symbol import Symbol
@@ -13,8 +14,17 @@ __all__ = [
     "Connection", "Model", "Symbol", "Diagnostic", "Instance",
     "PySysMLError", "ConnectionError", "RuntimeError",
     "load", "connect",
-    "eval", "instantiate"
+    "eval", "instantiate",
+    "__version__"
 ]
+
+try:
+    # The version of the distribution actually installed, so a wheel reports
+    # what was published rather than a string kept in step by hand.
+    __version__ = _distribution_version("pysysml")
+except PackageNotFoundError:
+    # Running from a source tree that was never installed.
+    __version__ = _declared_version
 
 # Module-level default connection (lazy singleton)
 _default_connection = None

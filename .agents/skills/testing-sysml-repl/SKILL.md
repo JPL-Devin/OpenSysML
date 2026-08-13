@@ -1,6 +1,6 @@
 ---
 name: testing-sysml-repl
-description: How to build, drive, and record end-to-end tests of the Systemica sysml REPL (bin/sysml) — meta-command behavior, symbol lookup, action/state debugging, and GUI-terminal recording setup.
+description: How to build, drive, and record end-to-end tests of the Systemica sysml REPL (bin/sysml) and the sysml-grpc service with its pysysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC slot serialization, and GUI-terminal recording setup.
 ---
 
 # Testing the `sysml` REPL end-to-end
@@ -19,6 +19,21 @@ make build-sysml                      # -> ./bin/sysml
 Always rebuild after pulling a new commit; a stale `bin/sysml` silently tests the old revision.
 Print `--version` at the start of a recording so the reviewer can see which commit ran.
 
+### A contrast binary from the previous commit
+
+For any fix whose point is "this used to fail", build the parent revision alongside the new one
+and run the same input through both on camera. A worktree keeps the branch checkout untouched:
+
+```bash
+git worktree add /tmp/old<sha> <sha>            # e.g. the commit before the fix
+(cd /tmp/old<sha> && go build -o /tmp/old-sysml ./cmd/sysml)
+git worktree remove /tmp/old<sha>               # when finished
+```
+
+Then `/tmp/old-sysml` vs `./bin/sysml` on identical input is the strongest evidence available —
+it rules out "the test would have passed anyway". Especially valuable for diagnostic wording and
+line/column numbers, where a screenshot of the new behavior alone proves nothing.
+
 ## Two ways to drive it
 
 1. **Non-interactive (fast, for exploration and expected-value discovery).** The REPL reads a
@@ -30,6 +45,50 @@ Print `--version` at the start of a recording so the reviewer can see which comm
    non-zero exit rather than stalling the session.
 2. **Interactive in a GUI terminal (for the recording).** Because the app under test *is* a CLI,
    the recording should show a real terminal session. See the recording setup below.
+
+## Saving and converting models (`%save`, `sysml -convert`)
+
+Format comes from the **file extension**, so a destination without one is rejected before any
+writing happens. That bites on devices and pipes: `-o /dev/null`, `-o /dev/stdout`,
+`-o /dev/fd/63` and a FIFO named without a suffix all need an explicit `-to sysml` / `-to ttl`,
+otherwise you get `cannot tell the format of "/dev/null": it has no extension, so pass -from/-to`
+and no write is attempted. The REPL has no such flags, so `%save` says
+`name the file with a .sysml, .kerml or .ttl extension` instead — check the two surfaces word
+their advice differently and neither mentions the other's remedy.
+
+Things worth setting up as fixtures before a save/write test, since each exercises a different
+branch of `internal/core/export/write.go`:
+
+- a FIFO (`mkfifo`) with a **background reader** — the write blocks until something reads; assert
+  `ls -l` still shows `prw-` afterwards, i.e. the pipe was written through, not renamed over.
+- `/dev/full` — the honest failure path; expect `cannot write /dev/full: no space left on device`
+  and a non-zero exit rather than a success line.
+- a symlink, a link **chain**, a link into another directory, and a **dangling** link — all must
+  stay links, with the file they point at (created, if dangling) holding the new bytes.
+- an existing 0600 file (permissions must survive) next to a brand-new one (0644).
+- a directory chmod-ed 0500 containing a writable file, where the previous content is **longer**
+  than the new model — proves the direct-write fallback truncates instead of leaving stale bytes.
+  Remember to `chmod 700` it again or later cleanup fails.
+- assert the negative too: no leftover `.name.sysml.<digits>` temp files, and failure messages
+  must name the path the user typed rather than the temp file.
+
+**`-convert x.sysml -to sysml` is a source-preserving formatter, not an AST printer.** It keeps the
+original inline/multi-line layout and reproduces surface notation verbatim (a member-attached
+`then part b;` comes back as `then part b;`, not as the desugared `then a b;`), so its output is
+**not** evidence about what the parser built. To assert on AST/desugaring, use `-to ttl` (generated
+from the tree — e.g. `grep -c SuccessionAsUsage`) or a parser golden fixture. The `.ttl -> .sysml`
+direction *is* a real AST print, so a round-trip through Turtle is the way to see canonical notation.
+A useful corollary: to prove "no relationship was recorded", count the triples in the `.ttl`, never
+grep the reformatted `.sysml`.
+
+Models that convert to Turtle are a narrow set: anything with state substates or a `calc` result
+member still fails with `cannot convert the *ast.SubstateMember/…ResultMember at …`, so use a
+plain `package Demo { part def Engine { attribute power = 300.0; } }` for `.ttl` assertions rather
+than a file from `examples/`.
+
+For formatter changes, the cheap adversarial check is idempotency over real models:
+convert every `examples/*.sysml` with `-to sysml` twice and `diff` the two outputs — all eight
+must be byte-identical, and stderr must stay empty for well-formed input.
 
 ## Fixtures worth knowing
 
@@ -51,12 +110,68 @@ Print `--version` at the start of a recording so the reviewer can see which comm
   `error: symbol "Vehicle" is ambiguous: Alpha::Vehicle, Beta::Vehicle (use a qualified name)`.
 - Write your own for parse errors (e.g. `attribute mass = ;` plus a missing `}`): the parser never
   panics, so the REPL should print diagnostics and keep accepting commands.
+- `internal/core/runtime/testdata/conformance/state_body_state_local_member.sysml` — `test::monitor`,
+  whose substate `working` declares `localGain` that its own entry action reads together with the
+  package's `pkgBonus`; `%state monitor` + `%advance 1` reaches `done` with `result = 5.00`. The
+  scope-regression canary for states declared directly in a machine body.
+
+## Testing lexical scope of behavior bodies (declaring-scope changes)
+
+When a change claims "expressions in an action/state body now see their declaring scope", the same
+model must be run on both binaries — but pick fixtures that can actually distinguish the layers,
+because the obvious ones cannot:
+
+- **A state fixture whose states share the machine's imports proves nothing about per-state scope.**
+  If every name a state's behavior uses is also visible from the machine (or the package), a
+  machine-scoped and a state-scoped lookup give identical output. To isolate the state's own scope
+  the state must declare a member that *only* its own scope can answer
+  (`state working { attribute localGain = 4.0; entry { assign result := localGain + pkgBonus; } }`),
+  and for nesting a substate inside a `region` must declare one read by its own entry action.
+  A broken build reports `error: event processing failed: enter state: entry action: eval assignment
+  RHS: unresolved feature: localGain`.
+- **Always include a shadowing case, because the failure mode is a wrong value, not an error.** Give
+  a state (or an action, or a loop/if block) a member whose name also exists at package level with a
+  *different* value, and assert the inner one wins. A build that hands out the enclosing scope
+  completes happily with the package's number (e.g. `result = 100.00` instead of `4.00`), which no
+  error-message check would ever catch. The three-layer action shape (package `h`, action `h`,
+  block-local `h` → `seenAction = 2.00`, `seenBlock = 3.00`) is the equivalent for action bodies.
+- Substates are **not** entered by nesting `initial`/`then` inside a plain `state`; that shape runs
+  the outer entry and completes without ever entering the inner state (`innerRan = 0.00` on every
+  revision, pre-existing). Use the `region` form from `state_fork_join_pseudostate.sysml`, with a
+  transition naming the substate (`transition init to inner;`), or the machine never descends.
+- Quantity values are the cheapest scope probe for imports, since a missing `SI::*` shows up as
+  `not a quantity expression: not a measurement unit: unresolved unit s` rather than a wrong number.
+  Pair each such model with a bare-`Real` rewrite and assert the same magnitudes, which catches a
+  silently dropped unit factor.
+- Comparing whole-session output across binaries with `diff` is a good regression sweep, but the
+  `State data:` / `Results:` blocks are printed in **map iteration order**, so lines legitimately
+  reorder run to run (`leftDone`/`rightDone`, a lone `status`). Diff the *values*, or treat a
+  pure line-reordering diff as identical.
 
 ## Things to exercise (and their expected shapes)
 
+- There is **no `%what` command** — check `%help` before believing a task description. The lookup
+  surface for "does this name resolve?" is `%instantiate` / `%slots` / `%eval` (a `part def` is
+  easiest via `%instantiate`, an attribute via `%eval`), all funnelling through
+  `internal/repl/lookup.go`. A request phrased as "`%what`/lookup" means those.
 - Symbol-taking commands: `%instantiate %slots %eval %calc %constraint %requirement %action %state`.
   All go through one helper (`internal/repl/lookup.go`), so test each with a **simple** name and a
   **qualified** one.
+- `%step` is **action-only**. In a state session it answers
+  `error: no active action session (use %action <name> first)`; drive a state machine with
+  `%advance <time>` instead. That message during a state sweep is expected, not a broken session.
+- When comparing two variants of the same model (e.g. a `private import` version against a
+  `public import` or bare-`Real` rewrite), load each in a **separate REPL process**. Loading both
+  into one session makes the shared simple name ambiguous —
+  `error: symbol "propagate" is ambiguous: DescentQ::propagate, DescentR::propagate (use a qualified
+  name)` — and qualifying it is not a reliable escape, since one bad submission in between can
+  invalidate the other snippet. `./bin/sysml <file>` per variant keeps the runs independent.
+- Meta-commands are only understood at the `sysml>` prompt: a shell habit like `clear; %action foo`
+  is parsed as SysML, pollutes the session buffer, and can make an already-loaded package's symbols
+  stop resolving (`symbol "DescentR::propagate" not found`). Type shell and REPL commands in
+  separate turns, and `%clear` (or restart) if a stray line lands in the buffer.
+- `%satisfy` takes no argument (every satisfaction assertion the model states) or the name of the
+  element stating them, since `assert satisfy … by …` is anonymous.
 - Instances are keyed by resolved FQN, so `%instantiate Vehicle` then `%slots Demo::Vehicle` must
   hit the same `ID`, and the reverse spelling too. Differing IDs = broken keying.
 - Qualified attribute access works with a full FQN (`%eval Demo::Engine::power` → `= 300.00`) but a
@@ -113,6 +228,79 @@ An action token that reaches an `accept` with no matching message **parks** inst
 
 Always run these under `timeout` when driving over a pipe; a hang is the failure mode to catch.
 
+## Control flow inside an action node body
+
+`while`, `loop … until` (braced and unbraced), `for … in` and `if`/`else` execute inside an
+`action <node> { … }` body. The whole body runs within **one** token step, so `%step` past the node
+jumps straight from `Token 1 @ <node>` to the successor with the loop's final values already in the
+token data — do not expect one step per iteration. Drive these with the standard shape:
+
+```bash
+printf '%%load f.sysml\n%%action tally\n%%continue\n%%quit\n' | timeout 30 ./bin/sysml
+```
+
+and assert on the exact numbers in the `Results:` block; "it completed" proves nothing, since the
+historical bug (pre-PR #79) was that the statements were *silently dropped at lowering* and the
+action still completed, just with the wrong total. The cheapest way to prove a control-flow change
+is real is an A/B against a binary built from `main` in a `git worktree` — same model, different
+number.
+
+Things that must fail rather than hang: the REPL builds its runtime context with a step budget that
+defaults to **10000000** (`runtime.DefaultMaxSteps`, `internal/core/runtime/budget.go`; sessions
+carry the four budgets via `Session.SetBudgets(runtime.Budgets)`), and every loop iteration spends
+several steps, so a runaway loop (or an empty loop body, whose condition can never change) returns
+`error: execution failed: eval … : evaluation step limit exceeded (10000000 steps; raise SYSML_MAX_STEPS to allow more)`
+in under a second (0.7 s measured). Always follow the failure with another meta-command (`%tokens`, `%instances`)
+to prove the session survived — `%tokens` still shows the token parked at the node with its partial value. A
+`for` over a non-collection gives
+`action node <n>: 'for' collection must be a sequence or a set, got constant`.
+
+### Raising the budgets (PRs #83, #87)
+
+Four variables, one per runaway bound, each counting a different unit — raising one says nothing
+about the others:
+
+| Variable | Default | Counts |
+|---|---|---|
+| `SYSML_MAX_STEPS` | 10000000 | expression evaluations |
+| `SYSML_MAX_ACTION_STEPS` | 1000000 | action token-flow steps |
+| `SYSML_MAX_EVENTS` | 1000000 | state machine events, and the events one `%advance` drains |
+| `SYSML_MAX_DO_STEPS` | 5000000 | do-activity actions, ditto for `%advance` |
+
+Each bounds **one run** — one `%eval`, `%instantiate`, `%calc`, action or state machine, a stepped-
+through run included — not a whole session, so a long session of small operations never runs out; a
+run started inside another shares the outer one's budget. Testing the bound therefore needs a single
+runaway run, not a sequence of evaluations.
+
+Each overrides the default for both `bin/sysml` and `bin/sysml-grpc`: unset/empty → the default, a
+positive integer (whitespace is trimmed) → that value, anything else → the binary refuses to start
+(`sysml` exits **2** with `sysml: SYSML_MAX_STEPS="…" is not an integer …` /
+`… must be greater than zero …`; `sysml-grpc` exits **1** and logs the same error under
+`msg="Invalid service configuration"`). Every unusable value is reported at once, not just the first.
+Useful test model — a `while i < N { assign …; assign …; }` body costs roughly 10 evaluation steps
+per iteration, so a 100 000-iteration loop completes at the default in 0.13 s and a budget of 100000
+stops a 10 000-iteration one:
+
+```bash
+SYSML_MAX_STEPS=100000 sh -c "printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml"   # step-limit error
+printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml                                  # completes at the default
+```
+
+Note the `sh -c` wrapper: `VAR=x cmd | …` only exports to the first process of the pipeline, so put
+the whole pipeline inside `sh -c` or the REPL will not see the variable. The gRPC side inherits the
+variable through the pysysml auto-start path (the client spawns `~/.pysysml/bin/sysml-grpc` as a
+child), so `SYSML_MAX_STEPS=300000 python script.py` is enough — but `pkill -f sysml-grpc` first,
+otherwise an already-running service from an earlier value keeps serving.
+
+Tooling trap: running a pysysml script that auto-starts the service from a *non-tty* one-shot shell
+tends to return no output at all (the spawned service holds the pipe). Run such scripts with a tty
+shell (`tty: true`) or inside the GUI terminal, and use the venv interpreter
+(`/home/ubuntu/repos/fprime/fprime-venv/bin/python`) — the default `python` in a plain shell has no
+`pysysml`.
+
+A name declared inside a loop or branch body lives in a block frame and must **not** appear in the
+action's `Results:` — check for the *absence* of the line, not just the right total.
+
 ## Session-accumulation trap (bites both testers and features)
 
 `Session.accept` (internal/repl/session.go) drops any earlier snippet whose **declared names**
@@ -144,6 +332,58 @@ later submissions. Two consequences when testing:
 
 Still true: accidentally typing a shell command like `clear` at the `>` prompt is parsed as SysML
 and pollutes the buffer. `%clear` resets the session.
+
+## The session-long symbol index and wildcard re-exports (PR #95)
+
+`Session.symbolIndex()` (`internal/repl/session.go`) keeps **one** `symbols.Index` for the whole
+session: the stdlib is loaded into it once (`model.LoadStdlibInto`) and only the session document is
+re-indexed, when `doc.Version` changed. So stale/duplicated symbols are the failure mode to hunt,
+and every assertion should be re-checked *late* in a long session, not only on the first submission.
+
+The re-export cycle is the highest-value test, and it distinguishes working from broken in three
+steps (a REPL built before this work fails at the very first one):
+
+```
+package Lib { part def Widget { attribute size = 3.0; } }
+package P { public import Lib::*; }
+%instantiate P::Widget      -> ✓ Created instance of Lib::Widget    (resolved FQN is the DECLARING one)
+package P { }               -> replaces the earlier snippet (same declared name)
+%instantiate P::Widget      -> error: symbol "P::Widget" not found  (re-export unwound)
+%instantiate Lib::Widget    -> ✓ Created instance of Lib::Widget    (purge must not over-remove)
+package P { public import Lib::*; }
+%instantiate P::Widget      -> ✓ ... again, and never "is ambiguous"
+```
+
+Notes that save time:
+
+- A re-export registers the symbol under the importing namespace but **never copies its subtree**:
+  `P::Widget` resolves while `%eval P::Widget::size` is `symbol ... not found`. Use the declaring
+  FQN (`%eval Lib::Widget::size` → `= 3.00`). This is intended (confirmed by the maintainer).
+- Resubmitting the same importing package several times must keep resolving and must never produce
+  `is ambiguous` — duplicate re-export registrations would surface as ambiguity, so assert the
+  negative explicitly.
+- `%clear` drops the document from the index (`idx.RemoveDocument`) but **keeps the loaded library**,
+  so `%clear` followed by more work exercises the removal path directly: expect
+  `error: no declarations loaded (literals work, but feature references need declarations)` (or
+  `error: runtime init: no document loaded` for `%instantiate`) for the old names, then full
+  wildcard expansion again for freshly submitted packages.
+- Because the REPL has a **single** document, a re-index removes and re-adds all of its re-exports
+  wholesale. Index bugs that need one document's member to change while a *different* importing
+  document survives are therefore not reachable from the prompt — verify those in
+  `internal/core/symbols` tests instead of hunting them at the REPL. In particular a top-level
+  (outside any `package`) `import Lib::*;` followed by a submission that drops the surfaced
+  declaration still correctly reports `not found` at the prompt.
+- Stdlib staleness check: quantity/unit evaluation resolves its unit through the session index, so it
+  is the cheapest canary. `package Q1 { import SI::*; attribute speed = 1.5 [m/s]; }` then
+  `%eval Q1::speed` → `= 1.5 [m/s]`, and re-running that exact command after each of ~15 further
+  submissions must print the identical string every time. Without `import SI::*;` the unit is
+  `error: evaluation failed: not a quantity expression: not a measurement unit: unresolved unit m`,
+  which is a fixture mistake, not a regression.
+- Pre-existing noise not caused by index work: ISQ-typed attributes
+  (`attribute m : MassValue = 12.0;`) emit `cannot bind Rational value to a feature typed by
+  ISQBase::MassValue` and a top-level `import Lib::*;` typed before `Lib` exists emits
+  `unresolved reference: Lib`. Both reproduce on `main`; the lookups still succeed. A/B against a
+  `main` binary in a `git worktree` before reporting any diagnostic as new.
 
 ## Output modes and execution tracing (PR #65)
 
@@ -213,6 +453,269 @@ captured: they show `Action: MyWorkflow` / `State: Ready` / `Tokens: 1 (at compu
 `✓ Action completed` + `Final state:` + `Results:`. Don't treat that mismatch as a new regression,
 but it is worth flagging.
 
+## The gRPC service and the `pysysml` Python client
+
+The REPL is not the only user-facing surface: `cmd/sysml-grpc` plus `python/pysysml` is the path a
+Python user takes, and the two can disagree. When a change touches `internal/grpc/convert.go` or
+the runtime's slot evaluation, **test both and diff them** — that comparison is the highest-value
+assertion available.
+
+```bash
+export PATH=/usr/local/go/bin:$PATH
+make build && make build-grpc              # -> bin/sysml, bin/sysml-grpc
+mkdir -p ~/.pysysml/bin && cp bin/sysml-grpc ~/.pysysml/bin/   # where the client looks
+pip install -e python/
+```
+
+Do **not** start the service by hand. `Connection._ensure_service`
+(`python/pysysml/connection.py`) probes `localhost:50051` and spawns the binary itself; letting it
+auto-start is both the realistic user path and the only way it writes its pidfile. Attaching to a
+service you started yourself makes `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
+fail — that is the documented `docs/ROADMAP.md` §P1 gap, not a new bug.
+
+Client API shapes that are easy to get wrong:
+
+- `Model.find(name)` returns **one `Symbol` or `None`**, not a list — iterating it raises
+  `TypeError: 'Symbol' object is not iterable`. Use `.id` (FQN), `.name`, `.kind`.
+- `pysysml.instantiate(fqn, file_path=...)` and `pysysml.eval(expr, file_path=..., context_symbol_id=...)`
+  each take *exactly one* of `file_path` / `model_hash`.
+- `Instance.get_slot(name)` returns the raw protobuf `SlotValue`. Read it as
+  `sv.materialized` and `sv.value.WhichOneof('kind')` → `real_value` / `int_value` / `instance_id` /
+  `null`. Printing the `Instance` alone hides exactly the detail under test.
+
+What the slot kinds mean (`ValueToProto`, `convert.go`):
+
+- A **derived** attribute (`attribute doubled = mass * 2.0;`) must arrive as
+  `materialized=True kind=real_value`. `kind=null value='unsupported'` is the pre-fix signature.
+- `null: 'unsupported'` is the generic fallback arm for a slot `GetSlot` returned **unmaterialized
+  without an error** — a feature with no default and no composite type. Both a bare
+  `attribute d : Real;` and a **constraint usage** land here, so the REPL's
+  `massOK: <constraint: satisfied>` has no gRPC equivalent. Check whether that divergence is
+  intended before filing it.
+- `null: '<error text>'` is the real error arm. Force it with cyclic derived attributes
+  (`attribute a = b + 1.0; attribute b = a + 1.0;`) — expect
+  `slot Loop.a: slot Loop.b: cyclic slot dependency: Loop.a`, promptly, and prove the service is
+  still alive afterwards with a follow-up `pysysml.eval('1 + 1', ...)`.
+- A nested `part engine : Engine;` marshals as bare `instance_id=N` and **no RPC resolves an id**,
+  so the REPL expands the child's slots and Python cannot (`docs/ROADMAP.md` §P2).
+
+`execute_action` is the gRPC twin of the REPL's `%action` + `%continue`, and it is the cheapest way
+to A/B the two surfaces on the same model. The call shapes are **not** the ones the docstrings
+suggest: there is no `parse_file` on `Connection` — use `c.load_from_content(src)` (or `c.load(path)`),
+which returns a `Model` whose hash is `model.hash` (not `.model_hash`). Then
+`c.execute_action("Pkg::action", model.hash)` returns a plain `{name: value}` dict, and a runtime
+failure raises `pysysml.errors.RuntimeError` with the executor's message
+(`action execution failed: execute action: …`). If you must attach to a service you started
+yourself, `pysysml.connect("localhost", 50551, auto_start=False)` avoids the
+`Binary not found at ~/.pysysml/bin/sysml-grpc` error — but prefer the auto-start path per above.
+
+Suite baseline: `cd python && python -m pytest tests/ -q` with no service running should be
+`75 passed, 18 skipped` (~35s). The 18 skips are the integration tests gating on a live service.
+
+Download paths (`python/pysysml/binary.py`) are testable without a real release: move
+`~/.pysysml/bin/sysml-grpc` aside, unset `PYSYSML_GRPC_VERSION`, and call `ensure_binary()`,
+`resolve_latest_version()`, `download_binary('latest')`. All three must raise `ConnectionError`
+naming the path or URL. `PYSYSML_GITHUB_REPO` overrides the repo. Beware: these hit the
+unauthenticated GitHub API, so repeated runs flip from a truthful `HTTP Error 404: Not Found` to a
+misleading `HTTP Error 403: rate limit exceeded` — rehearse sparingly and report the 404 wording,
+not whichever one the recording happened to catch.
+
+## Built-in library functions (sqrt/sin/exp/ln/log/atan2 …)
+
+The runtime supplies bodies for the function-library declarations in
+`internal/core/runtime/library_functions.go`; the non-normative extensions
+(`exp`, `ln`, `log`, `atan2`) live in
+`internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml`.
+Testing notes that generalize to any future built-in:
+
+- The fastest end-to-end surface is the batch flag, which loads a model *and* evaluates
+  expressions against it: `./bin/sysml -e "exp(1.0)" -e "log(8.0, 2.0)" model.sysml`. Several
+  `-e` flags are allowed and each prints `✓ <expr>` then `  = <value>`; a failure prints
+  `error: evaluation failed: ...` and the process still exits 0, so assert on the text, never on
+  the exit code.
+- **`-e` is evaluated in the root scope, not inside the model's package.** So a model that declares
+  its own `calc def exp` is *not* exercised by `-e "exp(2.0)"` (that hits the built-in). To prove
+  shadowing, either use the FQN (`-e "OwnExp::exp(2.0)"`) or read it out of an attribute default
+  with `%instantiate`/`%slots`. Getting this wrong looks exactly like a shadowing bug.
+- Results print to **two decimals**, which hides precision differences. To assert exactness, compare
+  in the model instead: `-e "log(1000.0, 10.0) == 3.0"` → `= true` (the naive `ln(x)/ln(base)`
+  gives 2.9999999999999996 and would print `= 3.00` while being `false`).
+- Domain/overflow handling is deliberate: `realResult` converts NaN/Inf into
+  `arithmetic domain error` / `arithmetic overflow`, so a bad argument must yield an `error:` line,
+  never a number. Worth checking per function (`ln(0.0)`, `log(4.0, 1.0)`, `atan2(0.0, 0.0)`,
+  `exp(1000.0)`), plus wrong arity (`calc argument count mismatch`) and a non-numeric argument
+  (`type mismatch: ... requires a numeric value`).
+- A **bare** call with no `import` still evaluates (the unqualified-name table is always in force)
+  but the checker prints `error: unresolved reference: <name>` for the same call inside a
+  declaration. That divergence is a known rough edge of the built-in dispatch, not a new bug —
+  report it as expected, and use `import SystemicaMathFunctions::*;` in fixtures to avoid it.
+- Fixture gotchas when writing action fixtures by hand: `done` is a reserved keyword (use another
+  name), successions must use the `first start; … done end; then a b;` form (the
+  `first a then b;` form yields `action has multiple initial nodes`), and `and`/`or` are
+  `unsupported operator` in constraint bodies — keep constraint expressions to a single comparison.
+
+## Testing parser changes end-to-end (keyword/symbol parity, dispatch rewrites)
+
+A parser change is only convincing if the *same input file* behaves differently on the two binaries,
+so build an A/B baseline first and keep it around:
+
+```bash
+git worktree add /tmp/mainwt main
+go build -C /tmp/mainwt -o /tmp/mainwt/sysml-main ./cmd/sysml && go build -C /tmp/mainwt -o /tmp/mainwt/sysml-lsp-main ./cmd/sysml-lsp
+```
+
+Three cheap, high-signal sweeps:
+
+1. **Corpus no-diff sweep** — load every model on both binaries and diff the output. Anything other
+   than `0` differences is either the intended change or a regression, and it takes ~4 min.
+   **Both `%load` and the argv positional split the path on whitespace**, and ~80% of the corpus
+   lives under directories like `examples/sysml-v2-training/05. Redefinition/`, so copy each file to
+   a space-free path instead of passing it — and count what you compared, or a sweep that loaded
+   almost nothing still prints a reassuring zero:
+   ```bash
+   n=0; d=0
+   while IFS= read -r -d '' f; do
+     cp "$f" /tmp/sweep.sysml
+     n=$((n+1))
+     diff <(./bin/sysml -quiet /tmp/sweep.sysml </dev/null 2>&1) \
+          <(/tmp/mainwt/sysml-main -quiet /tmp/sweep.sysml </dev/null 2>&1) >/dev/null \
+       || { d=$((d+1)); echo "DIFF: $f"; }
+   done < <(find examples testdata internal/repl/testdata -name '*.sysml' -print0)
+   echo "compared $n, differing $d"
+   ```
+   A `for f in $(find …)` loop word-splits those paths and silently compares nothing for them: on
+   PR #98 that hid three real output changes (better diagnostic spans on `part redefines engine = …`)
+   behind a clean-looking 0.
+2. **Twin table** — for a notation with two spellings, run every degenerate form of *both* spellings
+   through a tiny script and print keyword/symbol/main side by side. Testing only the well-formed
+   forms hides the interesting bugs: on PR #98 the well-formed forms were perfectly at parity while
+   `redefines;`, `redefines = 5;`, `subsets ;`, `crosses ;` were accepted **silently** and their
+   symbol twins `:>>;`, `:>> = 5;`, `:> ;`, `=> ;` all reported `expected a name`. A silently
+   accepted member is invisible in a `✓ package T` line — always pair the load with
+   `%instantiate`/`%slots` to see what the member actually did (there, nothing).
+3. **LSP diagnostics without an editor** — drive `bin/sysml-lsp` over stdio with ~15 lines of Python
+   (`initialize`, `initialized`, `textDocument/didOpen`, sleep 3, read stdout) and count
+   `"severity":1` in the `publishDiagnostics` notification. A file with **no** diagnostics produces
+   **no** notification at all, so treat a missing notification as zero errors rather than a hang.
+   `sysml-lsp: failed reading header line: EOF` on stderr at shutdown is normal.
+4. **LSP hover/definition as a symbol-table probe** — the REPL has **no** `%hover`/`%def`, so a
+   naming/symbol-registration change is best shown through `bin/sysml-lsp`: reuse the stdio driver
+   and add `textDocument/hover` and `textDocument/definition` requests with `id`s, then parse the
+   `Content-Length`-framed replies (searching for `"id":100` in the raw text prints the *tail* of the
+   message, not its body — frame-parse instead). Hover returns a one-liner like
+   `attributeUsage x`, which makes a mis-derived name obvious: on `main` a short-named redefinition
+   hovered as `attributeUsage redefines` and its definition was `null`. Make the sleep before reading
+   stdout configurable (e.g. `LSP_WAIT=8`); 4 s is occasionally too short and yields
+   `NO RESPONSE`/zero diagnostics, which looks like a pass — re-run with a longer wait before
+   believing an empty result.
+5. **Naming probes for a `<shortName>` change** — for `attribute <sn> redefines x = 5;` the
+   assertions that separate working from broken are: `%slots` lists the member as **`x = 5`**
+   (broken revisions show `sn = 5` with `x = 1`, or a bogus `redefines = <unknown>` slot);
+   `%eval T::A::x` **and** `%eval T::A::sn` both evaluate; and an action body doing
+   `assign total := total + x` completes instead of `unresolved feature: x`. Load-level `✓ package T`
+   proves nothing here.
+
+Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
+(`PATH=$HOME/sdk/go/bin:$HOME/go/bin:$PATH`) before concluding the toolchain is missing.
+
+### Naming changes that reach lowering and the runtime
+
+When a parser change alters which declarations carry a name (e.g. `ast.EffectiveName` deriving the
+name from a `redefines`/`references` target), the parse is the *least* interesting surface —
+consumers reading `Usage.Ident.Name` break silently downstream. The probes that actually distinguish
+fixed from broken, each with a visible A/B against `main`:
+
+- **Attribute default** — `attribute redefines x = 5;` in an action body with a statement reading
+  `x`; a lost name surfaces as `error: execution failed: eval assignment RHS: unresolved feature: x`,
+  not as a parse error.
+- **Step ordering** — `action redefines bump { … }` ordered by `then start bump; then bump end;`.
+  A lost name fails at lowering: `succession edge references undefined target node`.
+- **Trace naming** — `%trace on` then `%continue`; the step must print `token 1@bump`. A generic
+  `token 1@usage_action` (the `nodeIdentifier` fallback in `runtime/trace.go`) is the bug signature,
+  and it also reproduces with any unnamed step such as `perform worker;`.
+- **Calc parameter** — `in redefines factor = 3;` overriding an inherited `in factor = 2`. The
+  giveaway is a *wrong number*, not an error: the invocation silently uses the inherited default
+  (`Scaled(7)` → 14 instead of 21), so assert the value, never just "it evaluated".
+- **State** — `state redefines waiting { accept go then active; }`. A lost name makes the sourceless
+  accept vanish: `%state` shows `Events: 0` and `%advance 1` never leaves the initial state.
+
+Ready-made fixtures for all of these live in `internal/core/runtime/testdata/conformance/`
+(`action_redefined_attribute_default[_symbol]`, `action_redefined_step_ordering`,
+`calc_redefined_parameter[_symbol]`, `state_redefined_state_accept[_symbol]`) — load them straight
+into the REPL with `%action test::run` / `%eval test::Scaled(7)` / `%state Test::Machine` rather than
+writing new models. Where only a keyword fixture exists, `sed 's/redefines/:>>/'` gives the symbol
+twin. `action_redefined_step_ordering.sysml` emits a pre-existing
+`name conflict: total is already the name of the inherited feature Base::total` on every revision —
+not a regression.
+
+Adversarial cases for name derivation: a member with two redefinitions
+(`attribute <sn> redefines x, y = 9;`) derives *no* name from them, so it answers to its short name
+(`%slots` shows `sn = 9` and leaves `x`/`y` at their inherited values) with no diagnostic — assert
+which key the value landed under rather than assuming it was dropped. REPL call syntax: named
+arguments work as `Scaled(x = 7, factor = 5)`, but *mixing* positional and named
+(`Scaled(7, factor = 5)`) is a parse error on every revision — don't read that as a
+parameter-naming bug.
+
+## Quantities, unit-name resolution and prompt scope
+
+A name in the unit position of `x [u]` is an ordinary feature reference, so it resolves to the
+**nearest** declaration and then must conform to a measurement unit. Testing anything in this area:
+
+- There are **four** evaluator paths that reach a unit name and they must agree: a slot
+  (`%instantiate` + `%slots`), an action (`%action`), a calc (`%calc`), and a constraint
+  (`%constraint`). The constraint path historically diverged — it reached past a nearer declaration
+  and silently converted in metres, giving a *wrong answer with no error*, so always include
+  `%constraint` and assert the diagnostic, never just "the other three agree".
+- The high-value fixture shape is a body that declares `attribute m` (mass!) next to
+  `500.0 [m]`, with `public import SI::*` in the enclosing package. Expect, verbatim, from all four:
+  `not a measurement unit: m resolves to the attributeUsage m declared in <NS>, shadowing the
+  measurement unit SI::metre — write SI::m to name the unit`. Ready-made:
+  `internal/core/runtime/testdata/conformance/unit_shadowed_by_sibling_{slot,action,calc,constraint}.sysml`,
+  plus `unit_shadowed_by_local_unit` (a sibling that *is* a unit must still evaluate) and
+  `unit_undeclared` (`unresolved unit furlong` — a different message, assert it stays different).
+- Assert the **neighbouring** quantity too: `1000.0 [kg]` next to the shadowing `m` must still print
+  `m = 1000.00 [kg]`. A too-broad fix breaks that and no error-message check would notice.
+- The remedy clause (`— write SI::m …`) comes from resolving the name again with the shadowing
+  declaration hidden, so it is produced for a shadow declared inside a body *and* for one declared
+  at package level next to the `import SI::*` itself. A message that stops at
+  `… m resolves to the attributeUsage m declared in ADV` means that second lookup failed — worth
+  reporting, since the package-level shadow is the likely real-world spelling.
+
+**Prompt scope.** `%eval`/`%calc` evaluate in the scope of the **last namespace the session
+declared** (`Session.promptScope`), which is what makes `%eval 1.0 [m/s]` work for a loaded package
+that imports `SI::*`. Consequences to test deliberately, because they surprise users:
+
+- Typing a *new* package mid-session moves the prompt scope: after
+  `package Demo { attribute mass = 3.0; }`, `%eval mass * 2` = `6.00` but `%eval 1.0 [m]` starts
+  failing `unresolved unit m` (Demo imports nothing).
+- With two packages, only the last one's members resolve unqualified (`%eval b * 3` works,
+  `%eval a + b` is `unresolved feature: a`); qualify them (`%eval P1::a + P2::b` = `3.00`).
+- `%eval <unit>` (e.g. `%eval m`) resolves through that scope and answers
+  `error: "m" has no value to evaluate`, not `symbol "m" not found` — the latter is the pre-fix
+  signature.
+
+**`%calc` arguments** are parsed as a list of expressions, so an argument containing spaces survives.
+All of these must give the same result: `%calc P::Fall 10.0 [m/s], 3.0 [s]` (comma),
+`%calc P::Fall(10.0 [m/s], 3.0 [s])` (invocation form), `%calc P::Fall 10.0 [m/s] 3.0 [s]`
+(whitespace only), `%calc P::Fall (1.0 + 9.0) [m/s], 3.0 [s]` (parenthesized subexpression),
+a nested invocation as an argument, and a trailing comma (accepted silently). Whitespace separates
+two arguments only where each side is a complete expression, so `%calc add 5 -3` is two arguments
+while `%calc add 5 - 3` is one subtraction (and then reports `parameter "y" has no argument`) —
+check a signed second argument both ways. Malformed input must
+diagnose and leave the session usable — named args → `named arguments are not supported here; pass
+arguments positionally`; unbalanced paren → `failed to parse argument "(…"`; a lone `,` →
+`failed to parse argument ","`; no args / `()` → `unbound parameter: …`; too many →
+`calc argument count mismatch`. Pre-fix signature: `evaluation of argument "[m/s]," failed:
+unsupported node type: *ast.ErrorNode`. Follow the sweep with `%eval 1 + 1` → `= 2`.
+
+**Quantity rendering.** Two separate printers, both worth an A/B against the parent commit:
+a violated assertion renders the bracket form as source (`Assertion evaluated to false:
+1.0 [m] > 500.0 [m]`; a missing `*ast.IndexExpr` case shows `index > index`), and a result table
+formats the magnitude like a bare Real (`%action test::propagate` +`%continue` on
+`internal/core/runtime/testdata/conformance/action_body_quantity_descent.sysml` → `t = 17.20 [s]`,
+`h = -0.42 [m]`, `v = -42.86 [m/s]`; raw floats such as `17.19999999999997 [s]` are the pre-fix
+signature). Note the action in that file is named **`propagate`**, not `descent`.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
@@ -224,6 +727,10 @@ DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz
 ```
 
 Enlarge the font before recording with the `ctrl+plus` key combo a few times (`ctrl+shift+plus`
-types literal `+` characters into the shell instead of zooming). Discover expected values with the
+types literal `+` characters into the shell instead of zooming). Konsole starts a shell whose PATH
+lacks the Python that `pip install -e python/` installed into, so `import pysysml` fails there while
+it works from a tool shell; run `source /home/ubuntu/repos/fprime/fprime-venv/bin/activate` (or
+whichever interpreter `python -c 'import sys; print(sys.executable)'` reports in the tool shell)
+as a setup step before recording. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
 over a pipe is not visible in the video and should be reported as weaker evidence.

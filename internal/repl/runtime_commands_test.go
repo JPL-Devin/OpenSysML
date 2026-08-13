@@ -206,6 +206,22 @@ func TestConstraintPassAndFail(t *testing.T) {
 	wants(t, run(t, s, "%constraint nosuch"), `symbol "nosuch" not found`)
 }
 
+// A condition is evaluated in the scope the element was declared in, not in the
+// document root: a measurement unit an inner package imports is visible to the
+// condition that package writes, with or without an instance to evaluate against.
+func TestConstraintResolvesUnitsOfItsOwnPackage(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package QTest {
+		public import SI::*;
+		constraint def SpeedOK {
+			attribute d = 100.0 [m];
+			attribute t = 10.0 [s];
+			d / t < 20.0 [m] / 1.0 [s]
+		}
+	}`)
+	wants(t, run(t, s, "%constraint QTest::SpeedOK"), "✓ Constraint QTest::SpeedOK passed")
+}
+
 func TestRequirement(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%requirement SafeMass"), "✓ Requirement SafeMass satisfied")
@@ -438,4 +454,100 @@ func TestIsSymbolReference(t *testing.T) {
 			t.Errorf("%q should not be a symbol reference", expr)
 		}
 	}
+}
+
+// quantitySession is a document whose imports bring in the units and a calc
+// taking quantity arguments, which is what the prompt is asked about below.
+func quantitySession(t *testing.T) *Session {
+	t.Helper()
+	s := NewSession()
+	res := s.Submit(`package QSession {
+		public import SI::*;
+		public import ISQ::*;
+		calc def Fall {
+			in v0 : ISQSpaceTime::SpeedValue;
+			in tb : ISQSpaceTime::TimeValue;
+			return : ISQBase::LengthValue = v0 * tb;
+		}
+	}`)
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+	}
+	return s
+}
+
+// An expression typed at the prompt is evaluated in the namespace the session is
+// working in, so the units that namespace imports resolve unqualified.
+func TestEvalResolvesImportedUnitsUnqualified(t *testing.T) {
+	s := quantitySession(t)
+	wants(t, run(t, s, "%eval 1.0 [m/s]"), "= 1.00 [m/s]")
+	wants(t, run(t, s, "%eval 2.0 [km] + 500.0 [m]"), "= 2.50 [km]")
+	// The unit itself is a declaration the imports make visible: it resolves,
+	// and reports that it holds no value rather than that it is unknown.
+	wants(t, run(t, s, "%eval m"), "has no value to evaluate")
+	rejects(t, run(t, s, "%eval m"), "not found")
+	// A name nothing declares still reports that it is unknown.
+	wants(t, run(t, s, "%eval nosuch"), `symbol "nosuch" not found`)
+
+	// The same scope is what a compound expression names its members in.
+	pkg := NewSession()
+	pkg.Submit("package Demo { attribute mass = 3.0; }")
+	wants(t, run(t, pkg, "%eval mass * 2"), "= 6.00")
+}
+
+// The namespace the session works in is the last one it declared, so declaring
+// another moves it: the earlier package is then reached by qualified name.
+func TestPromptScopeIsTheLastNamespaceDeclared(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P1 { public import SI::*; attribute a = 1.0; }")
+	wants(t, run(t, s, "%eval 1.0 [m]"), "= 1.00 [m]")
+
+	s.Submit("package P2 { attribute b = 2.0; }")
+	wants(t, run(t, s, "%eval b * 3"), "= 6.00")
+	wants(t, run(t, s, "%eval 1.0 [m]"), "unresolved unit m")
+	wants(t, run(t, s, "%eval P1::a + P2::b"), "= 3.00")
+
+	// A name two packages declare is reported, not answered from whichever of
+	// them the prompt scope reaches.
+	s.Submit("package P3 { attribute b = 5.0; }")
+	wants(t, run(t, s, "%eval b"), "is ambiguous", "P2::b", "P3::b")
+}
+
+// %calc parses its arguments as expressions, so an argument that contains
+// spaces — a quantity, a parenthesized expression, a nested call — survives.
+func TestCalcParsesExpressionArguments(t *testing.T) {
+	s := quantitySession(t)
+	wants(t, run(t, s, "%calc Fall -15.0 [m/s] 8.5 [s]"), "✓ Fall(-15.0 [m/s], 8.5 [s])", "= -127.50 [(m/s)*s]")
+	// The same invocation written the way the notation writes one.
+	wants(t, run(t, s, "%calc Fall(-15.0 [m/s], 8.5 [s])"), "= -127.50 [(m/s)*s]")
+	// A parenthesized subexpression, and a call standing as an argument.
+	wants(t, run(t, s, "%calc Fall (-5.0 [m/s] - 10.0 [m/s]) 8.5 [s]"), "= -127.50 [(m/s)*s]")
+	wants(t, run(t, s, "%calc Fall -15.0 [m/s] (4.0 [s] + 4.5 [s])"), "= -127.50 [(m/s)*s]")
+	// Named arguments are a different production; the limitation is reported.
+	wants(t, run(t, s, "%calc Fall v0=-15.0 [m/s] tb=8.5 [s]"), "named arguments are not supported")
+}
+
+// A whitespace-separated argument may be signed: `5 -3` is two arguments, while
+// `5 - 3` — an expression left unfinished across the space — is one.
+func TestCalcSeparatesSignedArguments(t *testing.T) {
+	s := loadFixture(t, "testdata/vehicle_package.sysml")
+	wants(t, run(t, s, "%calc add 5 -3"), "✓ add(5, -3)", "= 2")
+	wants(t, run(t, s, "%calc add 5, -3"), "✓ add(5, -3)", "= 2")
+	wants(t, run(t, s, "%calc add -5 -3"), "✓ add(-5, -3)", "= -8")
+	wants(t, run(t, s, "%calc add (2 + 3) -3"), "✓ add((2 + 3), -3)", "= 2")
+	wants(t, run(t, s, "%calc add 5 - 3"), `parameter "y" has no argument`)
+	// An `=` inside an argument's own parentheses binds that call's parameter,
+	// not the argument, so only the argument's own binding is refused.
+	wants(t, run(t, s, "%calc add add(x = 1, y = 2) 4"), "✓ add(add(x = 1, y = 2), 4)", "= 7")
+	wants(t, run(t, s, "%calc add a=1 2"), "named arguments are not supported")
+	// Malformed input is diagnosed rather than parsed past.
+	wants(t, run(t, s, "%calc add (5 3"), "failed to parse argument")
+}
+
+// A quantity's magnitude is a number in a result table like any other, so it is
+// rendered by the same convention as a bare Real.
+func TestFormatValueQuantityUsesRealFormatting(t *testing.T) {
+	s := quantitySession(t)
+	wants(t, run(t, s, "%eval -15.200531548598184 [m/s]"), "= -15.20 [m/s]")
+	wants(t, run(t, s, "%eval 32.99999999999993 [s]"), "= 33.00 [s]")
 }

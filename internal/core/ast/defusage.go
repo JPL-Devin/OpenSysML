@@ -365,8 +365,11 @@ type Multiplicity struct {
 // Definition is a `part def` / `attribute def` (and future kinds) node.
 type Definition struct {
 	NodeBase
-	Prefixes      []*PrefixMetadata
-	Kind          DefinitionKind
+	Prefixes []*PrefixMetadata
+	Kind     DefinitionKind
+	// Keyword is the kind keyword as written, kept for the same reason as
+	// Usage.Keyword.
+	Keyword       string
 	IsAbstract    bool
 	IsVariation   bool
 	IsAll         bool // 'all' multiplicity propagation modifier
@@ -382,19 +385,27 @@ type Definition struct {
 // Usage is a `part` / `attribute` usage node (and all other usage kinds).
 type Usage struct {
 	NodeBase
-	Prefixes      []*PrefixMetadata
-	Kind          UsageKind
-	IsAbstract    bool
-	IsReference   bool
-	IsAll         bool // 'all' multiplicity propagation modifier
-	IsEnd         bool // 'end' feature modifier
-	IsChain       bool // 'chain' feature modifier
-	IsConstant    bool // 'constant' feature modifier
-	IsEvent       bool // 'event' modifier for event-driven occurrences
-	IsIndividual  bool // 'individual' modifier: OccurrenceUsage::isIndividual
-	IsSnapshot    bool // 'snapshot' modifier: OccurrenceUsage::portionKind = snapshot
-	IsAccept      bool // 'accept' action for message consumption
-	IsResult      bool // declared with 'return': the result parameter of a calculation/expression
+	Prefixes []*PrefixMetadata
+	Kind     UsageKind
+	// Keyword is the kind keyword as written. Several synonyms map to one Kind
+	// (`datatype`, `feature` and `attribute` all give UsageAttribute), so it is
+	// kept to tell those spellings apart.
+	Keyword      string
+	IsAbstract   bool
+	IsReference  bool
+	IsAll        bool // 'all' multiplicity propagation modifier
+	IsEnd        bool // 'end' feature modifier
+	IsChain      bool // 'chain' feature modifier
+	IsConstant   bool // 'constant' feature modifier
+	IsEvent      bool // 'event' modifier for event-driven occurrences
+	IsIndividual bool // 'individual' modifier: OccurrenceUsage::isIndividual
+	IsSnapshot   bool // 'snapshot' modifier: OccurrenceUsage::portionKind = snapshot
+	IsAccept     bool // 'accept' action for message consumption
+	IsResult     bool // declared with 'return': the result parameter of a calculation/expression
+	// IsNegated is the `not` of `assert not constraint { … }` and
+	// `assert not satisfy … by …`: the conditions are asserted to be false
+	// (Invariant::isNegated, SysML v2 §8.3.21.10).
+	IsNegated     bool
 	Visibility    Visibility
 	Direction     FeatureDirection
 	IsComposite   bool

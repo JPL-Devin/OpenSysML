@@ -41,6 +41,13 @@ func NewWorkspace() *Workspace {
 	}
 }
 
+// LoadStdlibInto loads the standard library into idx, for a consumer that
+// resolves library names through an index of its own — the REPL's runtime,
+// which has to resolve the measurement unit a quantity expression names.
+func LoadStdlibInto(idx *symbols.Index) {
+	loadStdlib(idx)
+}
+
 // loadStdlib loads all SysML/KerML standard library files into the given index.
 // Uses cached symbols when available for fast loading. Failures are non-fatal
 // (logged but workspace still usable for non-stdlib models).
@@ -176,7 +183,7 @@ func (w *Workspace) Diagnostics(name string) []passes.Diagnostic {
 			Severity: passes.SeverityWarning,
 			Span:     pw.Span,
 			Message:  pw.Message,
-			Code:     "reserved-keyword-name",
+			Code:     pw.Code,
 			Source:   "syntax",
 		})
 	}

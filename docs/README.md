@@ -9,6 +9,7 @@
 
 - **[API Documentation](API.md)** — Complete public API reference for all packages
 - **[Grammar Reference](grammar/README.md)** — SysML v2 grammar production mapping and parser implementation
+- **[Saving & RDF Interop](RDF_INTEROP.md)** — `%save`, `sysml -convert`, and the SysML ↔ RDF Turtle mapping
 - **[macOS Distribution](MACOS_DISTRIBUTION.md)** — Gatekeeper/quarantine analysis and the code-signing decision record
 
 ## Implementation Status
@@ -16,6 +17,7 @@
 - **[Spec Compliance](SPEC_COMPLIANCE.md)** — What's implemented, what's faithful to UML/SysML specs, what's approximate
 - **[Testing Strategy](TESTING.md)** — Test contracts, coverage policy, how to verify correctness
 - **[Training Examples](TRAINING_EXAMPLES.md)** — Status of OMG training materials (98/100 clean)
+- **[Roadmap](ROADMAP.md)** — The known gaps and release follow-through, in the order they should be picked up
 
 ## Development
 

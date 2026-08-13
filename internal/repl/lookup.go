@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -57,6 +58,11 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 	matches := collectInScopeTree(doc.Scope, name)
 	switch len(matches) {
 	case 0:
+		// A name the session declares nowhere may still be visible where the
+		// prompt evaluates — through an import of that namespace.
+		if sym, ok := resolve.New(idx).LookupName(s.promptScope(doc), name); ok && sym != nil {
+			return sym, idx.GetFQN(sym), nil
+		}
 		return nil, "", fmt.Errorf("symbol %q not found", name)
 	case 1:
 		return matches[0], idx.GetFQN(matches[0]), nil
@@ -110,6 +116,18 @@ func (s *Session) walkSlots(inst *runtime.Instance, name string, segments []stri
 	return inst, name
 }
 
+// AmbiguousNameError reports a name that matched more than one declaration. It
+// is distinct from a name found nowhere: a command may look elsewhere for the
+// latter, but must never answer about one of several candidates.
+type AmbiguousNameError struct {
+	Name string
+	FQNs []string
+}
+
+func (e *AmbiguousNameError) Error() string {
+	return fmt.Sprintf("symbol %q is ambiguous: %s (use a qualified name)", e.Name, strings.Join(e.FQNs, ", "))
+}
+
 // ambiguousError reports a name that matched more than one declaration, listing
 // the candidates' fully-qualified names rather than picking one of them.
 func ambiguousError(name string, matches []*symbols.Symbol, idx *symbols.Index) error {
@@ -123,7 +141,7 @@ func ambiguousError(name string, matches []*symbols.Symbol, idx *symbols.Index) 
 		}
 	}
 	sort.Strings(fqns)
-	return fmt.Errorf("symbol %q is ambiguous: %s (use a qualified name)", name, strings.Join(fqns, ", "))
+	return &AmbiguousNameError{Name: name, FQNs: fqns}
 }
 
 // collectInScopeTree returns every symbol named name in scope or a nested

@@ -158,6 +158,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.resolveExpr(scope, d.Multiplicity.Lower)
 			r.resolveExpr(scope, d.Multiplicity.Upper)
 		}
+		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveExpr(scope, d.BindingExpr)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Body)
@@ -176,8 +177,10 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveExpr(scope, d.Expression)
 	case *ast.ConstraintMember:
 		r.resolveExpr(scope, d.Expression)
+		r.walkMembers(scope, d.Body)
 	case *ast.AssumeMember:
 		r.resolveExpr(scope, d.Expression)
+		r.walkMembers(scope, d.Body)
 	case *ast.RequireMember:
 		r.resolveExpr(scope, d.Expression)
 		r.walkMembers(scope, d.Body)
@@ -246,11 +249,14 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveExpr(scope, d.ActionRef)
 	case *ast.WhileLoopActionNode:
 		// The loop owns its body's declarations, and its condition is checked
-		// against them: `loop { action charging; } until charging.done`.
+		// against them: `loop { action charging; } until charging.done`. The
+		// collection a `for` loop iterates over is evaluated before the loop is
+		// entered, so it resolves outside the body.
 		body := scope
 		if child := r.childScope(scope, d); child != nil {
 			body = child
 		}
+		r.resolveExpr(scope, d.Collection)
 		r.resolveExpr(body, d.Condition)
 		r.walkMembers(body, d.Body)
 	case *ast.IfActionNode:

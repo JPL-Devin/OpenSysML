@@ -160,6 +160,11 @@ func (p *Parser) parseIdentification() ast.Identification {
 	}
 	// Parse name, but exclude keywords that have special syntax meaning in declaration context
 	// (e.g., "default" introduces a value expression, "connect"/"allocate" introduce connector ends, "first"/"do" for succession, "of" for flow payload)
+	// A feature specialization keyword states a relationship, not a name, and
+	// must read as its symbol does: `<s> references x` is `<s> ::> x`.
+	if p.atFeatureSpecialization() {
+		return id
+	}
 	if p.at(lexer.Keyword) {
 		kw := p.peek().KeywordID
 		switch kw {
@@ -170,7 +175,7 @@ func (p *Parser) parseIdentification() ast.Identification {
 		// Any other keyword here is the name the author meant, so it is read as
 		// one rather than dropped. SysML reserves it though (KerML §7.2.4): only
 		// an unrestricted name may spell a keyword.
-		p.warn(p.peek().Span, fmt.Sprintf("%q is a reserved keyword; write '%s' to use it as a name", kw, kw))
+		p.warn(p.peek().Span, fmt.Sprintf("%q is a reserved keyword; write '%s' to use it as a name", kw, kw), codeReservedKeywordName)
 	}
 	if seg, ok := p.parseNameSegmentRelaxed(); ok {
 		id.Name = seg.Text

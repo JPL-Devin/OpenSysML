@@ -254,6 +254,10 @@ func ValueToProto(val runtime.Value) *pb.Value {
 			}
 		}
 		return &pb.Value{Kind: &pb.Value_Sequence{Sequence: &pb.ValueSequence{Elements: pbElements}}}
+	case runtime.ValQuantity:
+		// The wire Value has no magnitude-and-unit form, and sending the bare
+		// magnitude would drop the unit, so the value is reported unsupported.
+		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: quantity value"}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}
@@ -291,11 +295,22 @@ func ProtoToValue(pv *pb.Value) runtime.Value {
 	}
 }
 
-// InstanceToProto converts runtime.Instance to protobuf Instance.
-func InstanceToProto(inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
+// InstanceToProto converts runtime.Instance to protobuf Instance. Slots are read
+// through Instance.GetSlot, so a derived default is evaluated against the
+// instance rather than reported as an unmaterialized slot.
+func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
 	pbSlots := make(map[string]*pb.SlotValue)
 
-	for name, slot := range inst.Slots {
+	for name := range inst.Slots {
+		slot, err := inst.GetSlot(rt, name)
+		if err != nil {
+			pbSlots[name] = &pb.SlotValue{
+				FeatureName: name,
+				Value:       &pb.Value{Kind: &pb.Value_Null{Null: err.Error()}},
+			}
+			continue
+		}
+
 		pbSlot := &pb.SlotValue{
 			FeatureName:  name,
 			Materialized: slot.Materialized,

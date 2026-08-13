@@ -1,0 +1,9 @@
+step 1: token 1@choose
+  eval feature total -> 0
+  eval literal 0 -> 0
+eval operator > -> false
+  eval feature total -> 0
+  eval literal 1 -> 1
+eval operator + -> 1
+step 2: token 1@end
+step 3: no active tokens
