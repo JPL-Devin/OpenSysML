@@ -14,15 +14,21 @@ func indexOf(t *testing.T, docs map[string]string) *symbols.Index {
 	t.Helper()
 	idx := symbols.NewIndex()
 	for name, src := range docs {
-		sf := source.New(name, []byte(src))
-		p := parser.New(sf)
-		root := p.ParseFile()
-		if len(p.Diagnostics) != 0 {
-			t.Fatalf("parse diagnostics for %s: %v", name, p.Diagnostics)
-		}
-		idx.AddDocument(name, root)
+		idx.AddDocument(name, parsedRoot(t, name, src))
 	}
 	return idx
+}
+
+// parsedRoot parses src as the document called name, failing the test on any
+// parse diagnostic.
+func parsedRoot(t *testing.T, name, src string) *ast.RootNamespace {
+	t.Helper()
+	p := parser.New(source.New(name, []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics for %s: %v", name, p.Diagnostics)
+	}
+	return root
 }
 
 func qn(global bool, parts ...string) *ast.QualifiedName {
