@@ -443,15 +443,34 @@ type name in trace output means a node kind is missing from that switch.
 
 ## Spot-checking the docs against the binary
 
-`docs/QUICKSTART.md` and `README.md` contain REPL transcripts that are easy to let rot. The
-traffic-light state-machine transcript (QUICKSTART ~line 396) is real captured output — recreate the
-model in a file, replay `%state TrafficLight`, `%advance 25`, `%current`, `%advance 5`, `%advance 30`
-and diff line for line. The **action-debugging** transcripts in both files are illustrative, not
-captured: they show `Action: MyWorkflow` / `State: Ready` / `Tokens: 1 (at compute)` /
-`Token 1: compute { }` / `✓ Completed` / `Result: 42`, whereas the binary prints
-`✓ Started action executor for "…"` / `State: Running` / `✓ Step complete` / `Token 1 @ compute` /
-`✓ Action completed` + `Final state:` + `Results:`. Don't treat that mismatch as a new regression,
-but it is worth flagging.
+`docs/QUICKSTART.md` and `README.md` contain REPL transcripts that are easy to let rot. Verify them
+by **typing them by hand** at the prompt in a GUI terminal, not over a pipe: some failure modes (a
+blank line inside a braced declaration ending the submission early) only exist interactively.
+Discover the expected values over a pipe first, then do one clean recorded pass.
+
+As of PR #107 the QUICKSTART/README action- and state-debugging transcripts are real captured output
+and match the binary verbatim, including the hint lines
+(`Use %step to advance, %tokens to inspect, %continue to run to completion`,
+`Use %tokens to inspect, %step or %continue to resume`,
+`Use %events to see queue, %current for state, %advance <time> to step`) and the `✓ <kind> <name>`
+echoes (`✓ calc distance`, not `✓ distance`). Treat a mismatch there as a real doc regression now.
+
+Traps worth re-checking after any doc or REPL edit:
+
+- **A blank line inside braces ends the submission.** A transcript that shows one is un-typable; the
+  remainder arrives as a separate submission and produces diagnostics. Assert the whole declaration
+  comes back as a single `✓ state X` with zero diagnostics.
+- **`%save` over an existing file appends `(replaced the existing file)`.** A doc block whose earlier
+  step created or loaded that same file must show the suffix. Byte counts are exact and
+  content-dependent (`saved 181 bytes of sysml` / `saved 1872 bytes of ttl` for the QUICKSTART
+  `MyModel` file) — recompute them whenever the sample model changes.
+- **Snippets using `Real` need `import ScalarValues::*;` in the session**, or the submission is
+  rejected with `error: unresolved reference: Real` and no `✓` echo. A snippet relying on an import
+  made in an earlier, separate doc section fails for a reader who starts a fresh REPL there.
+- The binary's continuation prompt is `  ...>` (two leading spaces); some doc blocks write `...>`.
+- Konsole ligatures render `<=` as `≤` on screen — cosmetic, not a REPL difference.
+- Typing `clear` at the `sysml>` prompt pollutes the buffer (see the session-accumulation trap);
+  restart the REPL rather than trying to recover mid-transcript.
 
 ## The gRPC service and the `pysysml` Python client
 
