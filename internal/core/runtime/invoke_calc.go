@@ -116,8 +116,11 @@ func calcParameters(chain []*symbols.Symbol) []calcParameter {
 			}
 			param := calcParameter{Name: name, Default: usage.Value, Owner: link}
 			if at, seen := index[param.Name]; seen {
+				// A redeclaration binding no value keeps the inherited default,
+				// which is written in the scope of the calc that stated it.
 				if param.Default == nil {
 					param.Default = params[at].Default
+					param.Owner = params[at].Owner
 				}
 				params[at] = param
 				continue
@@ -302,6 +305,8 @@ func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, cal
 	// naming itself is a cycle rather than an evaluation, so it is evaluated
 	// through the same run bookkeeping a calc usage's outputs use.
 	run := newCalcRun(shape, callerScope, nil, bindings)
+	// The invocation already holds this evaluation's nesting slot.
+	run.onStack = true
 	return run.value(ctx, out)
 }
 

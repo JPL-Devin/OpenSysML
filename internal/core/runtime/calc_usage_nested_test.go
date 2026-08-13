@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -247,6 +249,71 @@ func TestNestedCalcUsageRunsPerInputs(t *testing.T) {
 	outputs := nestedUsageOutputs(t, src, "both")
 	wantInt(t, outputs, "ofFive", 6)
 	wantInt(t, outputs, "ofTen", 11)
+}
+
+// An input a nested usage redeclares without binding a value keeps the default
+// its definition declares, which is evaluated in the calc that wrote it — not
+// in the enclosing environment the usage's own bindings are written in.
+func TestNestedCalcUsageInheritedDefaultOfRedeclaredInput(t *testing.T) {
+	src := `
+		package test {
+			calc def Doubler {
+				in a : Integer;
+				in b : Integer = a * 2;
+				out d = b;
+			}
+			calc def Outer {
+				in a : Integer;
+				calc u : Doubler { in a = 1; in :>> b; }
+				out d = u.d;
+			}
+			calc c : Outer { in a = 9; }
+		}
+	`
+	outputs := nestedUsageOutputs(t, src, "c")
+	wantInt(t, outputs, "d", 2)
+}
+
+// Nesting deeper than the recursion limit is what that limit refuses; an
+// evaluation whose answer is an output binding is one level of it, not two.
+func TestNestedCalcUsageDepthCountedOnce(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("package test {\n\tcalc def C0 { out r = 1; }\n")
+	for i := 1; i <= maxCalcNestingDepth-8; i++ {
+		fmt.Fprintf(&b, "\tcalc def C%d { out r = C%d() + 1; }\n", i, i-1)
+	}
+	fmt.Fprintf(&b, "\tcalc def Top { calc deep : C%d; out d = deep.r; }\n", maxCalcNestingDepth-8)
+	b.WriteString("\tcalc top : Top;\n}")
+
+	outputs := nestedUsageOutputs(t, b.String(), "top")
+	wantInt(t, outputs, "d", int64(maxCalcNestingDepth-7))
+}
+
+// A chain of outputs of one calc naming each other is evaluated within that one
+// evaluation, so its length is not bounded by the nesting limit.
+func TestCalcOutputChainIsNotNesting(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("package test {\n\tcalc def Chain {\n\t\tout o0 = 1;\n")
+	for i := 1; i <= maxCalcNestingDepth+8; i++ {
+		fmt.Fprintf(&b, "\t\tout o%d = o%d + 1;\n", i, i-1)
+	}
+	fmt.Fprintf(&b, "\t}\n\tcalc ch : Chain;\n}")
+
+	// Read the last output alone, so the whole chain is evaluated on demand
+	// rather than one output at a time.
+	last := fmt.Sprintf("o%d", maxCalcNestingDepth+8)
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, b.String()))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "ch", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("calc usage ch not found")
+	}
+	value, err := ctx.CalcUsageOutput(sym, last, sym.OwnerScope, nil)
+	if err != nil {
+		t.Fatalf("reading %s: %v", last, err)
+	}
+	if want := int64(maxCalcNestingDepth + 9); value.Kind != ValConst || value.Const.Int != want {
+		t.Errorf("%s = %s, want %d", last, FormatTraceValue(value), want)
+	}
 }
 
 // A nested usage read through an object keeps that object's state in reach: an

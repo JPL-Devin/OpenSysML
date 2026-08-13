@@ -236,6 +236,9 @@ type calcRun struct {
 	// output written in terms of itself is reported as a cycle rather than
 	// evaluated until the step budget runs out.
 	computing map[string]bool
+	// onStack reports whether this evaluation already holds a nesting slot, so
+	// the outputs of it that name each other do not count a level apiece.
+	onStack bool
 }
 
 // newCalcRun holds the environment one evaluation of a calc computed.
@@ -489,7 +492,7 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 
 	// An output is evaluated after the run that produced it has left the stack,
 	// so the chain of usages a binding reads through is counted here.
-	leave, err := ctx.enterCalc(run.shape.Name)
+	leave, err := run.enter(ctx)
 	if err != nil {
 		return Value{}, err
 	}
@@ -503,6 +506,21 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 		run.outputs[out.Name] = value
 	}
 	return value, nil
+}
+
+// enter counts this evaluation onto the calc stack while one of its outputs is
+// worked out, unless it is counted already — by the invocation running it, or by
+// an output of the same run whose binding named this one.
+func (run *calcRun) enter(ctx *Context) (func(), error) {
+	if run.onStack {
+		return func() {}, nil
+	}
+	leave, err := ctx.enterCalc(run.shape.Name)
+	if err != nil {
+		return nil, err
+	}
+	run.onStack = true
+	return func() { run.onStack = false; leave() }, nil
 }
 
 // bindingEnv is the environment one of this run's bindings is evaluated in: the

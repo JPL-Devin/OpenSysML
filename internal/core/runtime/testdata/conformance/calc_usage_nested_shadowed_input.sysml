@@ -56,4 +56,27 @@ package test {
 	}
 
 	attribute swappedD = swapped.d;
+
+	calc def Doubler {
+		in a : Integer;
+		in b : Integer = a * 2;
+		out d = b;
+	}
+
+	// An input redeclared without a value keeps the default its definition
+	// states, evaluated there: `b` is twice the usage's `a`, not the enclosing one.
+	calc def Held {
+		in a : Integer;
+		calc u : Doubler {
+			in a = 1;
+			in :>> b;
+		}
+		out d = u.d;
+	}
+
+	calc held : Held {
+		in a = 9;
+	}
+
+	attribute heldD = held.d;
 }
