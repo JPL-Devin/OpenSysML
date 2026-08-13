@@ -321,12 +321,13 @@ Both residual items are closed by the unit-resolution work; see `docs/SPEC_COMPL
   reaches a specializing view the same way. A feature typing is a generalization edge
   (KerML 8.3.4.6), so an import declared in a definition is also reached from a usage typed by
   it — `part p : Base` sees what `Base` protectedly imports.
-- **`validateExposeOwningNamespace`** — still open, **awaiting a maintainer decision** on the
-  ViewUsage-vs-ViewDefinition reading. The spec (SysML v2 8.3.26.2) and the normative Xtext
-  grammar allow an Expose in a ViewUsage body only, and the OMG corpus (`42. Views`) writes
-  `expose` only in view *usages*; but `resolve/expose_test.go` `TestExposeInViewDefinitionBody`
-  and `parse/view_expose.sysml` pin the lenient reading. Do not weaken either test to make a
-  checker pass.
+- ~~**`validateExposeOwningNamespace`**~~ **Done**, on the maintainer's usage-only reading:
+  `passes/expose.go` `checkExposeOwners` reports every `expose` whose owning namespace is not a
+  view usage (SysML v2 8.3.26.2, and the normative Xtext grammar admits an Expose in
+  `ViewBodyItem` only). A `view def` body is a **warning**, not an error, because Systemica
+  resolves an `expose` there (`resolve/expose_test.go` `TestExposeInViewDefinitionBody`,
+  `parse/view_expose.sysml`) and the OMG corpus (`42. Views`) never writes one; any other owner
+  is an error. A package or namespace body rejects `expose` in the parser already.
 - ~~**A privately wildcard-imported name is still reachable unqualified.**~~ **Done.**
   `resolve/unqualified.go` `matchImport` enumerates a wildcard import's target through
   `symbols/index.go` `LookupDirectChildrenFrom`, which drops what the target imported privately
