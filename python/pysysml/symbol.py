@@ -2,6 +2,8 @@
 
 from typing import List, Optional, TYPE_CHECKING
 
+from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
+
 if TYPE_CHECKING:
     from pysysml.proto import sysml_pb2
 
@@ -56,6 +58,36 @@ class Symbol:
         """Return copy of symbol metadata dictionary."""
         return dict(self._pb.metadata)
     
+    @property
+    def type_facts(self) -> Optional[TypeFacts]:
+        """Return the symbol's static type, or None when it carries no type."""
+        if not self._pb.HasField("type_info"):
+            return None
+        return TypeFacts.from_pb(self._pb.type_info)
+
+    @property
+    def multiplicity(self) -> Optional[Multiplicity]:
+        """Return the declared multiplicity range, or None when undeclared."""
+        if not self._pb.HasField("multiplicity"):
+            return None
+        return Multiplicity.from_pb(self._pb.multiplicity)
+
+    @property
+    def specializations(self) -> List[Specialization]:
+        """Return all generalization edges declared on this symbol."""
+        return [Specialization.from_pb(spec) for spec in self._pb.specializations]
+
+    def facts(self) -> SymbolFacts:
+        """Return this symbol's static facts, detached from the protobuf message."""
+        return SymbolFacts(
+            id=self.id,
+            name=self.name,
+            kind=self.kind,
+            type=self.type_facts,
+            multiplicity=self.multiplicity,
+            specializations=tuple(self.specializations),
+        )
+
     def children(self) -> List["Symbol"]:
         """Return all child symbols.
         

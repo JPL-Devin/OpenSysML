@@ -718,7 +718,7 @@ guaranteed to be interpreted identically by an unrelated SysML RDF tool.
 | RPC | Implementation | Status | Tests |
 |-----|---------------|--------|-------|
 | ParseFile | service.go:39-123 (parser + passes.Analyze + stdlib load) | ✅ Faithful | runtime_test.go:TestParseFile_*, every conformance case |
-| GetSymbol | service.go:126-145 | ✅ Faithful | service_test.go:TestGetSymbol_* |
+| GetSymbol | service.go:126-145; static type facts in typefacts.go (`SymbolInfo.type_info`, `.multiplicity`, `.specializations`) computed by a per-model resolver + semantics context cached on the model and locked for the duration of a conversion | ✅ Faithful — reports the declared and resolved type, the library scalar it reduces to, quantity/unit, the declared multiplicity, and *every* generalization edge (`specializes`, `subsets`, `redefines`, `typing`) in declaration order; an unresolved name is reported unresolved rather than guessed | service_test.go:TestGetSymbol_*, typefacts_test.go:TestTypeInfo*, `TestSpecializations*`, `TestMultiplicity*`, `TestSymbolContextConcurrentConversion` |
 | GetDiagnostics | service.go:148-169 (parser + semantic) | ✅ Faithful | runtime_test.go (implicit) |
 | Evaluate | service.go:172-227 | ✅ Faithful | runtime_test.go:TestEvaluate_*, conformance `evaluate_arithmetic` |
 | Instantiate | service.go (slots read through `Instance.GetSlot`, so a derived default is evaluated against the instance; `InstanceGraphToProto` in convert.go returns every instance reachable from the root in `InstantiateResponse.instances`) | ✅ Faithful — a composite slot still marshals as the child's id, and that child is carried in the same response, so a nested object is reachable over gRPC without a follow-up RPC; expansion is bounded at depth 8 and stops at a type already on the path, as `%slots` bounds it, so a self-referential part cannot instantiate forever | runtime_test.go:TestInstantiate_*, instance_graph_test.go:TestInstantiate_ReturnsNestedInstances, `_ReturnsDeepNestedInstances`, `_CollectionOfInstances`, `_SlotErrorReported`, `_SelfReferentialPartTerminates`, `_MutuallyRecursivePartsTerminate`, conformance `instantiate_part`, `instantiate_derived_slot` |
@@ -738,6 +738,9 @@ guaranteed to be interpreted identically by an unrelated SysML RDF tool.
 ### Known Limitations (Non-blocking)
 
 **Python bindings:**
+- generated typed classes (`pysysml.generate`) cover structural usages only; `subsets`
+  and `redefines` are exported as facts but do not become Python base classes, and
+  redefinition narrowing is not checked
 - connection.py:488 - PID ownership check uses substring match - spoofable
 - an `instance_id` outside an `Instantiate` response (an `Evaluate` result, say)
   is still a bare int64: those responses carry no instance graph to resolve it
@@ -746,6 +749,10 @@ guaranteed to be interpreted identically by an unrelated SysML RDF tool.
 
 **Go gRPC layer:**
 - convert.go:40 - SymbolToProto.Attributes always empty (semantic layer not ready)
+- `metadata["type"]`/`metadata["specializes"]` still report only the first edge, kept
+  for compatibility; `specializations` is the complete list
+- a quantity is exported as `type_info.quantity` + `unit`, but the wire `Value` has no
+  magnitude-and-unit form, so the slot itself still reads as unsupported
 - runtime instances are request-local, so an id is resolvable only against the
   response that carried it; there is no RPC that fetches an instance by id later
 

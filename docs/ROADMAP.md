@@ -131,8 +131,12 @@ Starting a service in the `python-test` job is **not** the fix on its own — ve
 running, the 15 tests pass but `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
 fails, because `Connection._ensure_service` returns early when it probes a healthy service and
 writes no pidfile, so the refcount can never shut that service down and the test cannot find a
-pid to watch. Decide the ownership model first — pysysml should probably not kill a service it
-did not spawn, and the test should then not require it to — then start the service in CI. The
+pid to watch. Half of that ownership model is now in place: a connection releases a reference
+only if it took one, so attaching with `auto_start=False` no longer shuts down a service the
+process never started. The rest of the gap remains: the test still stops a service another
+live process owns, leaving a stale pidfile and refcount behind. Decide the rest of the
+ownership model first — pysysml should probably not kill a service it did not spawn, and the
+test should then not require it to — then start the service in CI. The
 job's comment in `.circleci/config.yml` records this.
 
 ## P2 — a nested object is unreachable over gRPC — done
@@ -149,7 +153,22 @@ rejected: runtime instances live in the request's `runtime.Context` and do not s
 call, so an id is only meaningful against the response that carried it — noted as a limitation
 in `docs/SPEC_COMPLIANCE.md`.
 
-## P3 — smaller Python-side items, all recorded in `docs/SPEC_COMPLIANCE.md`
+## P3 — generated typed classes for a parsed model — done
+
+`python -m pysysml.generate model.sysml -o model_types.py` emits one class per SysML definition,
+each a typed view over the `Instance` P2 made navigable, so `v.mass` completes in an editor and
+`v.mass + "x"` is a mypy error; `pysysml` ships `py.typed`. Codegen reads facts the service now
+resolves rather than scraping them: `SymbolInfo` carries `type_info` (declared and resolved type,
+the library scalar it reduces to, and whether it is a quantity), `multiplicity`, and *every*
+generalization edge in `specializations` — `extractMetadata` exported only the first `specializes`
+of a definition and the first typing of a usage, which cannot express multiple supertypes or tell
+subsetting from redefinition. Known limitations are listed in `python/README.md`; the load-bearing
+ones are that a quantity slot is typed `object` because the wire `Value` has no
+magnitude-and-unit form (the same reason `ValueToProto` reports one as unsupported), that only
+structural usages become properties, and that `subsets`/`redefines` are reported but do not
+become base classes.
+
+## P4 — smaller Python-side items, all recorded in `docs/SPEC_COMPLIANCE.md`
 
 - `connection.py` verifies a pid is the service by substring-matching its cmdline — spoofable.
 - `pysysml.eval` and `pysysml.RuntimeError` shadow builtins.

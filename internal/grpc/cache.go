@@ -19,6 +19,19 @@ type CachedModel struct {
 	Source      *source.SourceFile  // For diagnostic line/col mapping
 	ParseDiags  []parser.Diagnostic // Parser diagnostics
 	PassesDiags []passes.Diagnostic // Semantic pass diagnostics (name-resolution, type, constraint)
+
+	symCtxOnce sync.Once
+	symCtx     *SymbolContext
+}
+
+// SymbolContext returns the conversion context for this model, building it on
+// first use. Name resolution and the semantic relations derived from it are
+// memoized in it, so every symbol converted from one cached model shares one.
+func (m *CachedModel) SymbolContext() *SymbolContext {
+	m.symCtxOnce.Do(func() {
+		m.symCtx = NewSymbolContext(m.Index)
+	})
+	return m.symCtx
 }
 
 // Cache is an LRU cache for parsed models keyed by content hash

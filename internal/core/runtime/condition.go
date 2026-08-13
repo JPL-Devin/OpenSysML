@@ -277,7 +277,7 @@ func conditionText(n ast.Node) string {
 	case *ast.IndexExpr:
 		// The bracket form is a quantity, `1.0 [m]`; `#` indexes a sequence.
 		if e.Bracket {
-			unit := unitText(e.Index)
+			unit := semantics.UnitExprText(e.Index)
 			if unit == "" {
 				unit = conditionText(e.Index)
 			}
