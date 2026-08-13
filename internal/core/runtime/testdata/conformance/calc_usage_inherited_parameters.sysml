@@ -1,4 +1,6 @@
 package test {
+	import ScalarValues::*;
+
 	calc def Scale {
 		in x : Integer;
 		in factor : Integer = 2;

@@ -1,4 +1,6 @@
 package test {
+	import ScalarValues::*;
+
 	// A calc whose body is a computation — locals and a loop — and whose outputs
 	// are features of it. The body runs once; each output is then evaluated
 	// against the environment the body left behind, and an output may name the

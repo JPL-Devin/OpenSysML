@@ -1,4 +1,6 @@
 package test {
+	import ScalarValues::*;
+
 	// The parametric-budget pattern on an object: one calc usage, whose input
 	// reads a slot of the object carrying it, feeding several of the object's
 	// derived slots from one evaluation.

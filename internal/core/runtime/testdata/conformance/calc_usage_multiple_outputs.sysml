@@ -1,4 +1,6 @@
 package test {
+	import ScalarValues::*;
+
 	// An invocation of a function yields exactly one result (KerML 7.4.9), so a
 	// calc computing several values is consumed as a usage whose `out` features
 	// are read by name: the usage binds the inputs, its body runs once, and each
