@@ -133,9 +133,10 @@ fails, because `Connection._ensure_service` returns early when it probes a healt
 writes no pidfile, so the refcount can never shut that service down and the test cannot find a
 pid to watch. Half of that ownership model is now in place: a connection releases a reference
 only if it took one, so attaching with `auto_start=False` no longer shuts down a service the
-process never started. Decide the rest of the ownership model first — pysysml should probably
-not kill a service it did not spawn, and the test should then not require it to — then start
-the service in CI. The
+process never started. The rest of the gap remains: the test still stops a service another
+live process owns, leaving a stale pidfile and refcount behind. Decide the rest of the
+ownership model first — pysysml should probably not kill a service it did not spawn, and the
+test should then not require it to — then start the service in CI. The
 job's comment in `.circleci/config.yml` records this.
 
 ## P2 — a nested object is unreachable over gRPC — done

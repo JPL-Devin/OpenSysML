@@ -546,6 +546,9 @@ refcount, so such tests must isolate `HOME` for the child.
 
 Liveness check: after `test_lifecycle` runs, `pgrep -af sysml-grpc` still lists a `<defunct>`
 zombie, so it lies. Use `ss -ltn | grep 50051` to decide whether a service is really listening.
+`pkill -9 -f sysml-grpc` matches your own shell's command line — use `pkill -9 -x sysml-grpc`.
+A full-suite run stops even a service another process owns, leaving a stale
+`~/.pysysml/sysml-grpc.{pid,refcount}`; clear them before the next liveness test.
 To hold a service alive for a whole test run, keep a client process open, e.g.
 `(setsid python -c "import pysysml,time; pysysml.connect(); time.sleep(300)" &)` — a plain
 backgrounded `python -c` from a non-tty shell may exit before it prints, so verify the port.
