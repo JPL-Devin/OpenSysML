@@ -19,7 +19,10 @@ func TestCalcConditionalExpressionWithBodyCondition(t *testing.T) {
 		{"implicit result", "if n > 0 ? 1 else 0"},
 		{"implicit result over a body expression", "if xs->exists { it > n } ? 1 else 0"},
 		{"implicit result over parentheses", "if (n > 0 and (n < 9)) ? 1 else 0"},
+		{"implicit result over two body expressions", "if xs->exists { it > n } and xs->exists { it < n } ? 1 else 0"},
 		{"body expression in an if statement", "if xs->exists { it > n } { return : Integer = 1; } return : Integer = 0;"},
+		{"if statement before a returned conditional", "if n < 0 { return : Integer = 0; } return if n > 5 ? 1 else 2;"},
+		{"if statement before an implicit conditional result", "if n < 0 { return : Integer = 0; } if n > 5 ? 1 else 2"},
 	}
 
 	for _, tc := range bodies {

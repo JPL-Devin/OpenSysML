@@ -1179,9 +1179,10 @@ func (p *Parser) atCalcStatement() bool {
 
 // atConditionalExpression reports whether the `if` at the cursor starts a
 // conditional expression (`if c ? a else b`) rather than an if statement, by
-// looking for the '?' that ends its condition. A brace is counted like a
-// parenthesis, so a condition holding a body expression (`xs->exists{...}`) is
-// scanned past instead of being read as the block of an if statement.
+// looking for the '?' that ends its condition. A brace group is scanned past
+// only while the condition goes on after it, so a body expression
+// (`xs->exists{...}`) is read as part of the condition while the block of an if
+// statement ends the scan.
 func (p *Parser) atConditionalExpression() bool {
 	depth := 0
 	for i := 1; ; i++ {
@@ -1196,6 +1197,9 @@ func (p *Parser) atConditionalExpression() bool {
 				return false
 			}
 			depth--
+			if depth == 0 && tok.Kind == lexer.RBrace && !continuesCondition(p.peekN(i+1)) {
+				return false
+			}
 		case lexer.Question:
 			if depth == 0 {
 				return true
@@ -1206,6 +1210,18 @@ func (p *Parser) atConditionalExpression() bool {
 			}
 		}
 	}
+}
+
+// continuesCondition reports whether tok can go on the condition of a
+// conditional expression once a brace group of it has closed.
+func continuesCondition(tok lexer.Token) bool {
+	switch tok.Kind {
+	case lexer.Question, lexer.Arrow, lexer.Dot, lexer.LBracket,
+		lexer.Comma, lexer.RParen, lexer.RBracket:
+		return true
+	}
+	_, isOperator := binaryOpForToken(tok)
+	return isOperator
 }
 
 // parseResultMemberIn parses a `return` member. In a statement position

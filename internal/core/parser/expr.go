@@ -54,7 +54,11 @@ type binOp struct {
 
 // binaryOpFor returns the binary operator for the current token, if any.
 func (p *Parser) binaryOpFor() (binOp, bool) {
-	t := p.peek()
+	return binaryOpForToken(p.peek())
+}
+
+// binaryOpForToken returns the binary operator t spells, if any.
+func binaryOpForToken(t lexer.Token) (binOp, bool) {
 	switch t.Kind {
 	case lexer.QuestionQ:
 		return binOp{ast.OpNullCoalesce, precNullCoalesce, false, false}, true
