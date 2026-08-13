@@ -165,25 +165,29 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 // written with says which of the two it is.
 func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semantics.PrimType {
 	if e.Bracket {
-		// A quantity is a magnitude in a unit, not a scalar of the lattice: the
-		// unit is a name of the measurement reference library, checked as such by
-		// the units pass rather than typed here. The magnitude is an expression in
-		// its own right and is checked.
+		// The unit is a library name, checked by the units pass rather than typed
+		// here; the magnitude is an expression of its own and is checked.
 		ec.infer(scope, e.Operand)
 		return semantics.PrimUnknown
 	}
 
-	// SequenceFunctions::'#' declares `in index: Positive[1]`: one whole number,
-	// counting from 1. A Real, a Boolean or a String names no position and is
-	// reported here; whether a whole number is a position the operand has is
-	// known only from the value, so an Integer index — which is what a model
-	// counting in a loop holds — is checked at evaluation, not rejected here for
-	// not being declared `Natural`.
+	// `SequenceFunctions::'#'` declares `in index: Positive[1]`, so a Real, a
+	// Boolean or a String names no position. Whether a whole number names one is
+	// known from the value, so an Integer index is checked at evaluation.
 	index := ec.infer(scope, e.Index)
 	if !semantics.PrimConforms(index, semantics.PrimInteger) && e.Index != nil {
 		ec.errorf(e.Index.Span(), "sequence index must be an Integer, found %s", index)
 	}
-	elem := ec.infer(scope, e.Operand)
+
+	// The index of a sequence of one scalar type is a value of that type, which
+	// is what makes `(1, 2, 3)#(2) + 1` checkable. Typing the elements here is
+	// what walks them, so they are not inferred a second time below.
+	var elem semantics.PrimType
+	if seq, isSeq := e.Operand.(*ast.SequenceExpr); isSeq {
+		elem = ec.commonElementType(scope, seq)
+	} else {
+		elem = ec.infer(scope, e.Operand)
+	}
 
 	// A literal index names a position at check time, so an index the operand
 	// cannot have is an error before the model is ever run: index 0 for a
@@ -200,12 +204,6 @@ func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semant
 		}
 	}
 
-	// The index of a sequence of one scalar type is a value of that type, which
-	// is what makes `(1, 2, 3)#(2) + 1` checkable. A sequence of mixed types has
-	// no one scalar type and stays unknown.
-	if seq, ok := e.Operand.(*ast.SequenceExpr); ok {
-		return ec.commonElementType(scope, seq)
-	}
 	return elem
 }
 

@@ -47,6 +47,14 @@ func TestIndexTypedIntegerNotReported(t *testing.T) {
 	}`)
 }
 
+// An element of the indexed sequence is typed once, so a mistake inside it is
+// reported once rather than for each pass over the elements.
+func TestIndexReportsAnErrorInAnElementOnce(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute x = (1 + true, 2)#(1); }`,
+		"operator '+' is not defined for Natural and Boolean")
+}
+
 // Indexing per iteration is the idiomatic spelling, so the loop variable of a
 // `for` over a sequence of numbers is an index and is not reported.
 func TestIndexByLoopVariableNotReported(t *testing.T) {
