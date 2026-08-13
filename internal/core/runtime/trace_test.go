@@ -110,6 +110,15 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 			unrecordable("invoke calc: %v", err)
 		}
 		traceOutput = trace.String()
+	case "calcUsage":
+		// Reading every output of the usage traces one evaluation of its body,
+		// which is what makes the evaluate-once guarantee visible in the golden.
+		ctx.SetTrace(trace)
+		usageSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefCalc, ast.UsageCalc)
+		if _, err := ctx.CalcUsageOutputs(usageSym, usageSym.OwnerScope, nil); err != nil {
+			unrecordable("evaluate calc usage: %v", err)
+		}
+		traceOutput = trace.String()
 	case "constraint":
 		ctx.SetTrace(trace)
 		constraintSym := findBehavioralSymbol(t, rootScope, ast.DefConstraint, ast.UsageConstraint)

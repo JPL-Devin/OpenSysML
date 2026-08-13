@@ -64,6 +64,11 @@ type ExpectedOutcome struct {
 	// Calc fields
 	Inputs []ExpectedValue `json:"inputs,omitempty"`
 	Result *ExpectedValue  `json:"result,omitempty"`
+	// Reads are the values expressions of the model take, keyed by the qualified
+	// name of the feature whose value binding is evaluated ("M::z"). A calc
+	// usage's outputs are read through such features, so a case states what a
+	// model reading them computes rather than only what the usage produced.
+	Reads map[string]ExpectedValue `json:"reads,omitempty"`
 
 	// Constraint/Requirement fields
 	Bindings  map[string]ExpectedValue `json:"bindings,omitempty"`
@@ -193,6 +198,8 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 		runStateConformance(t, ctx, idx, sysmlPath, expected)
 	case "calc":
 		runCalcConformance(t, ctx, idx, sysmlPath, expected)
+	case "calcUsage":
+		runCalcUsageConformance(t, ctx, idx, sysmlPath, expected)
 	case "constraint":
 		runConstraintConformance(t, ctx, idx, sysmlPath, expected)
 	case "requirement":
@@ -402,6 +409,91 @@ func runCalcConformance(t *testing.T, ctx *Context, idx *symbols.Index, path str
 	if expected.Result != nil {
 		validateValue(t, "result", *expected.Result, result)
 	}
+}
+
+// runCalcUsageConformance evaluates a calc usage and validates the value of each
+// output feature it computes, plus the value of every model feature the case
+// reads those outputs through.
+func runCalcUsageConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
+	rootScope := idx.DocumentRoot(path)
+	usageSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefCalc, ast.UsageCalc)
+
+	outputs, err := ctx.CalcUsageOutputs(usageSym, usageSym.OwnerScope, nil)
+	if expected.Error != "" {
+		requireError(t, "CalcUsageOutputs", err, expected.Error)
+		return
+	}
+	if err != nil {
+		t.Fatalf("CalcUsageOutputs(%s) failed: %v", ctx.qualifiedSymbolName(usageSym), err)
+	}
+
+	values := make(map[string]Value, len(outputs))
+	for _, out := range outputs {
+		values[out.Name] = out.Value
+	}
+	for name, expectedVal := range expected.Outputs {
+		actual, ok := values[name]
+		if !ok {
+			t.Errorf("missing output %q among %v", name, outputNames(outputs))
+			continue
+		}
+		validateValue(t, name, expectedVal, actual)
+	}
+
+	for name, expectedVal := range expected.Reads {
+		validateRead(t, ctx, idx, name, expectedVal)
+	}
+
+	// A calc that designates a result also answers an invocation with it, so a
+	// case may state both what the usage's outputs are and what invoking it
+	// yields — a statement-bodied calc has to get both right.
+	if expected.Result != nil {
+		args := make([]Value, len(expected.Inputs))
+		for i, input := range expected.Inputs {
+			args[i] = expectedToRuntimeValue(t, input)
+		}
+		result, err := ctx.InvokeCalc(usageSym, args, rootScope)
+		if err != nil {
+			t.Fatalf("InvokeCalc(%s) failed: %v", ctx.qualifiedSymbolName(usageSym), err)
+		}
+		validateValue(t, "result", *expected.Result, result)
+	}
+}
+
+// validateRead evaluates the value binding of the named feature, in the scope it
+// is written in, and validates the value it takes.
+func validateRead(t *testing.T, ctx *Context, idx *symbols.Index, name string, expected ExpectedValue) {
+	t.Helper()
+	matches := idx.LookupQualified(name)
+	if len(matches) != 1 {
+		t.Errorf("read %q: %d matching symbols, want 1", name, len(matches))
+		return
+	}
+	usage, ok := matches[0].Decl.(*ast.Usage)
+	if !ok || usage.Value == nil {
+		t.Errorf("read %q: the feature binds no value to evaluate", name)
+		return
+	}
+	value, err := ctx.EvalWithScope(usage.Value, matches[0].OwnerScope)
+	if expected.Error != "" {
+		requireError(t, "read "+name, err, expected.Error)
+		return
+	}
+	if err != nil {
+		t.Errorf("read %q: %v", name, err)
+		return
+	}
+	validateValue(t, name, expected, value)
+}
+
+// outputNames names the outputs an evaluation produced, for a message about one
+// it did not.
+func outputNames(outputs []CalcOutputValue) []string {
+	names := make([]string, 0, len(outputs))
+	for _, out := range outputs {
+		names = append(names, out.Name)
+	}
+	return names
 }
 
 // runConstraintConformance evaluates constraint and validates satisfaction

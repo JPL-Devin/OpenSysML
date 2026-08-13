@@ -580,3 +580,35 @@ func TestFormatValueQuantityUsesRealFormatting(t *testing.T) {
 	wants(t, run(t, s, "%eval -15.200531548598184 [m/s]"), "= -15.20 [m/s]")
 	wants(t, run(t, s, "%eval 32.99999999999993 [s]"), "= 33.00 [s]")
 }
+
+// A calc usage computes output features rather than one result, so %calc lists
+// every output of one evaluation and %eval reads them as features.
+func TestCalcUsageOutputsAtThePrompt(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package M {
+		calc def Two { in n; out a = n + 1; out b = n * 2; }
+		calc c : Two { in n = 5; }
+		attribute z = c.b;
+		part p {
+			calc d : Two { in n = 7; }
+			attribute q = d.a;
+		}
+	}`)
+	wants(t, run(t, s, "%calc M::c"), "✓ M::c", "a = 6", "b = 10")
+	wants(t, run(t, s, "%eval M::c.a"), "= 6")
+	wants(t, run(t, s, "%eval M::c.b"), "= 10")
+	wants(t, run(t, s, "%eval M::z"), "= 10")
+	wants(t, run(t, s, "%eval M::p::q"), "= 8")
+}
+
+// A calculation yields exactly one result, so invoking one that computes several
+// outputs and designates none is reported instead of answering with whichever
+// output comes first.
+func TestCalcWithSeveralOutputsIsNotInvocable(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package M {
+		calc def Two { in n; out a = n + 1; out b = n * 2; }
+	}`)
+	wants(t, run(t, s, "%calc M::Two 5"), "has no single result", "a, b")
+	wants(t, run(t, s, "%eval M::Two(5)"), "has no single result")
+}

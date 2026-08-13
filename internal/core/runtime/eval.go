@@ -27,6 +27,11 @@ type EvalContext struct {
 	// resolving holds the features whose own value is being evaluated, so a value
 	// written in terms of a same-named outer one does not resolve to itself.
 	resolving map[string]bool
+
+	// calcRun is the calc evaluation whose output feature is being computed, so an
+	// output binding written in terms of the calc's other outputs reads them from
+	// the same evaluation. It is nil everywhere else.
+	calcRun *calcRun
 }
 
 // NewEvalContext creates an evaluation context with an empty frame stack. It
@@ -57,7 +62,10 @@ func (ec *EvalContext) evalIn(scope *symbols.Scope) *EvalContext {
 	if scope == nil || scope == ec.scope {
 		return ec
 	}
-	return &EvalContext{ctx: ec.ctx, scope: scope, self: ec.self, frames: ec.frames, trace: ec.trace, features: ec.features, resolving: ec.resolving}
+	return &EvalContext{
+		ctx: ec.ctx, scope: scope, self: ec.self, frames: ec.frames, trace: ec.trace,
+		features: ec.features, resolving: ec.resolving, calcRun: ec.calcRun,
+	}
 }
 
 // Push adds a new frame to the stack (on calc invocation, lambda entry).
@@ -203,6 +211,12 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		if val, ok := ec.Lookup(name); ok {
 			return val, nil
 		}
+		// Then another output feature of the calc whose output is being computed:
+		// an `out` binding may be written in terms of the calc's other outputs,
+		// which are evaluated from the same run of its body.
+		if value, ok, err := ec.calcRun.lookupOutput(ec.ctx, name); ok {
+			return value, err
+		}
 		// Then a valued feature of the element being evaluated: it is declared
 		// inside that element, so it masks a same-named member of the object
 		// carrying it, and a value a typed usage binds masks the default of the
@@ -280,6 +294,11 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 
 	// Walk remaining parts using model.LookupMember (spec requirement)
 	for i := 1; i < len(n.Name.Parts); i++ {
+		// A calc usage's output features are computed rather than declared
+		// values, so the rest of the name is read from an evaluation of the usage.
+		if isCalcUsageSymbol(currentSym) {
+			return ec.evalCalcUsageMembers(currentSym, n.Name.Parts[i:])
+		}
 		memberName := n.Name.Parts[i].Text
 		nextSym, found := ec.ctx.model.LookupMember(currentSym, memberName)
 		if !found {
@@ -293,6 +312,15 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 	case *ast.Usage:
 		if decl.Value != nil {
 			return ec.Eval(decl.Value)
+		}
+		// A calc usage is an evaluation, not a value: it is read through the output
+		// features it computes, since a name it does not designate a result for has
+		// no one value.
+		if isCalcUsageSymbol(currentSym) {
+			return Value{}, fmt.Errorf(
+				"%w: calc usage %s computes output features (%s); read one of them",
+				ErrNoValue, qualifiedNameToString(n.Name), ec.ctx.calcUsageOutputSummary(currentSym),
+			)
 		}
 		return Value{}, fmt.Errorf("usage %s has no value", qualifiedNameToString(n.Name))
 	case *ast.Definition:
@@ -325,6 +353,17 @@ func (ec *EvalContext) selfSlotValue(name string) (Value, bool, error) {
 
 // evalFeatureChain evaluates a feature chain expression (e.g., obj.member.submember).
 func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) {
+	if n.Member == nil || len(n.Member.Parts) == 0 {
+		return Value{}, fmt.Errorf("empty member chain")
+	}
+
+	// A calc usage carries no value of its own: its output features are computed
+	// by evaluating it, so `c.a` runs the usage — once — and reads the output
+	// from that evaluation rather than from a slot.
+	if sym, ok := ec.calcUsageOperand(n.Operand); ok {
+		return ec.evalCalcUsageMembers(sym, n.Member.Parts)
+	}
+
 	// Evaluate the operand (left side of the chain)
 	operand, err := ec.Eval(n.Operand)
 	if err != nil {
@@ -337,51 +376,39 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 	}
 
 	// Get the instance
-	inst, ok := ec.ctx.instances[operand.Instance]
-	if !ok {
+	if _, ok := ec.ctx.instances[operand.Instance]; !ok {
 		return Value{}, fmt.Errorf("instance ID %d not found", operand.Instance)
 	}
 
-	// Walk the member chain
-	if n.Member == nil || len(n.Member.Parts) == 0 {
-		return Value{}, fmt.Errorf("empty member chain")
-	}
+	return ec.chainMemberValue(operand, n.Member.Parts, "")
+}
 
-	// Navigate through the chain
-	currentInst := inst
-	for i, part := range n.Member.Parts {
-		memberName := part.Text
-		if _, ok := currentInst.Slots[memberName]; !ok {
-			return Value{}, fmt.Errorf("member %s not found in instance", memberName)
+// chainMemberValue reads the members named by parts from the object value names,
+// navigating through the objects the intermediate members name. from names the
+// member value came from, for a diagnostic about chaining through it.
+func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, from string) (Value, error) {
+	current, name := value, from
+	for _, part := range parts {
+		if current.Kind != ValInstance {
+			return Value{}, fmt.Errorf("cannot chain through non-instance member %s", name)
+		}
+		inst, ok := ec.ctx.instances[current.Instance]
+		if !ok {
+			return Value{}, fmt.Errorf("instance ID %d not found for member %s", current.Instance, name)
+		}
+		name = part.Text
+		if _, ok := inst.Slots[name]; !ok {
+			return Value{}, fmt.Errorf("member %s not found in instance", name)
 		}
 		// Read through GetSlot so a derived or composite member is materialized
 		// on demand rather than read as an empty slot.
-		slot, err := currentInst.GetSlot(ec.ctx, memberName)
+		slot, err := inst.GetSlot(ec.ctx, name)
 		if err != nil {
 			return Value{}, err
 		}
-
-		// Get the slot's value
-		slotVal := slot.Value
-
-		// If this is the last part, return the value
-		if i == len(n.Member.Parts)-1 {
-			return slotVal, nil
-		}
-
-		// Otherwise, navigate to the next instance
-		if slotVal.Kind != ValInstance {
-			return Value{}, fmt.Errorf("cannot chain through non-instance member %s", memberName)
-		}
-
-		nextInst, ok := ec.ctx.instances[slotVal.Instance]
-		if !ok {
-			return Value{}, fmt.Errorf("instance ID %d not found for member %s", slotVal.Instance, memberName)
-		}
-		currentInst = nextInst
+		current = slot.Value
 	}
-
-	return Value{}, fmt.Errorf("unexpected: fell through feature chain evaluation")
+	return current, nil
 }
 
 // unimplementedOperators names the operators the runtime does not evaluate and

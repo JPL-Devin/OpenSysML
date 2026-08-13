@@ -22,18 +22,24 @@ type calcParameter struct {
 }
 
 // calcShape is a calc's invocation interface: the input parameters it binds, in
-// positional order, and the expression its body returns. Both are resolved
-// across the specialization chain, so a usage typed by a calc definition
-// inherits that definition's parameters and result.
+// positional order, the output features it computes, and the expression its body
+// returns. All are resolved across the specialization chain, so a usage typed by
+// a calc definition inherits that definition's parameters, outputs and result.
 type calcShape struct {
 	Sym    *symbols.Symbol
 	Name   string // qualified name, for diagnostics and traces
 	Params []calcParameter
+	// Outputs are the calc's output features — its `out` parameters and the
+	// result parameter a `return` declares — in declaration order.
+	Outputs []calcOutput
 	// Body is the computation the calc states, lowered in the scope of the calc
 	// that declares it: local declarations, assignments, conditionals, loops and
 	// returns, in declaration order.
 	Body      []lower.Statement
 	BodyOwner *symbols.Symbol // the calc whose body declares Body
+	// Steps is Body without the bindings of its `out` features, which are
+	// evaluated when those features are read rather than run as statements.
+	Steps []lower.Statement
 }
 
 // calcShapeOf resolves the invocation interface of a calc symbol: its
@@ -60,8 +66,10 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 		Sym:       sym,
 		Name:      name,
 		Params:    calcParameters(chain),
+		Outputs:   calcOutputs(chain),
 		Body:      body,
 		BodyOwner: bodyOwner,
+		Steps:     calcSteps(body),
 	}
 	if !lower.Returns(shape.Body) {
 		return nil, fmt.Errorf("%w: calc %s has no return expression", ErrNoResultExpression, name)
@@ -210,22 +218,14 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	bindings := make(map[string]Value, len(shape.Params))
 	ec.Push(bindings)
 
-	for i, param := range shape.Params {
-		defaultScope := ctx.calcScope(param.Owner, shape.Sym, callerScope)
-		value, source, err := ec.evalIn(defaultScope).bindCalcParameter(shape, param, args, i)
-		if err != nil {
-			if ec.trace != nil {
-				ec.trace.RecordCalcExitError(shape.Name, err)
-			}
-			return Value{}, err
-		}
-		bindings[param.Name] = value
+	if err := ctx.bindCalcParameters(shape, ec, args, callerScope, bindings); err != nil {
 		if ec.trace != nil {
-			ec.trace.RecordCalcBind(param.Name, value, source)
+			ec.trace.RecordCalcExitError(shape.Name, err)
 		}
+		return Value{}, err
 	}
 
-	result, err := ctx.runCalcBody(shape, bindings)
+	result, err := ctx.runCalcBody(shape, bindings, callerScope)
 	if ec.trace != nil {
 		if err != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
@@ -239,20 +239,66 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	return result, nil
 }
 
-// runCalcBody runs the calc's lowered body in an environment of its own —
-// bindings holds its parameters and its locals — and requires it to return.
-func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value) (Value, error) {
-	host := &calcStmtHost{}
-	engine := newStmtEngine(ctx, host, bindings)
+// bindCalcParameters binds the calc's input parameters into bindings: each
+// parameter's argument, or, for a parameter no argument supplies, the default
+// declared closest to the invoked calc, evaluated in the scope of the calc
+// declaring it. ec supplies the environment defaults are evaluated in.
+func (ctx *Context) bindCalcParameters(
+	shape *calcShape,
+	ec *EvalContext,
+	args calcArgs,
+	callerScope *symbols.Scope,
+	bindings map[string]Value,
+) error {
+	for i, param := range shape.Params {
+		defaultScope := ctx.calcScope(param.Owner, shape.Sym, callerScope)
+		value, source, err := ec.evalIn(defaultScope).bindCalcParameter(shape, param, args, i)
+		if err != nil {
+			return err
+		}
+		bindings[param.Name] = value
+		if ec.trace != nil {
+			ec.trace.RecordCalcBind(param.Name, value, source)
+		}
+	}
+	return nil
+}
 
-	flow, err := engine.run(shape.Body)
+// runCalcBody runs the calc's computation in an environment of its own —
+// bindings holds its parameters and its locals — and answers with the one value
+// the invocation yields: what the body returned, or, for a body that returns
+// nothing, the calc's designated output feature.
+func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, callerScope *symbols.Scope) (Value, error) {
+	result, returned, err := ctx.runCalcSteps(shape, bindings)
 	if err != nil {
 		return Value{}, err
 	}
-	if flow != flowReturn {
-		return Value{}, fmt.Errorf("%w: calc %s ended without a return", ErrCalcNoReturn, shape.Name)
+	if returned {
+		return result, nil
 	}
-	return host.result, nil
+	out, err := shape.designatedOutput()
+	if err != nil {
+		return Value{}, err
+	}
+	// The designated output's binding may name the calc's other outputs, and one
+	// naming itself is a cycle rather than an evaluation, so it is evaluated
+	// through the same run bookkeeping a calc usage's outputs use.
+	run := newCalcRun(shape, callerScope, nil, bindings)
+	return run.value(ctx, out)
+}
+
+// runCalcSteps runs the calc's lowered computation, reporting whether it
+// returned a value. bindings holds the calc's parameters on the way in and its
+// locals on the way out.
+func (ctx *Context) runCalcSteps(shape *calcShape, bindings map[string]Value) (Value, bool, error) {
+	host := &calcStmtHost{}
+	engine := newStmtEngine(ctx, host, bindings)
+
+	flow, err := engine.run(shape.Steps)
+	if err != nil {
+		return Value{}, false, err
+	}
+	return host.result, flow == flowReturn, nil
 }
 
 // checkArgs rejects an argument list that cannot bind to the parameters at all:
