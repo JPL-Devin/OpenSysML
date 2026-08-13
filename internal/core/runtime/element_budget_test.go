@@ -60,6 +60,37 @@ func TestElementBudgetIsNotTheStepBudget(t *testing.T) {
 	}
 }
 
+// TestElementBudgetCountsElementsHeldNotProduced requires a loop building a small
+// collection each iteration to run: what the budget bounds is the memory a run
+// holds, and an iteration's collection is gone by the next one.
+func TestElementBudgetCountsElementsHeldNotProduced(t *testing.T) {
+	src := `
+		package test {
+			calc def Repeat {
+				attribute i : Integer = 0;
+				attribute acc : Integer = 0;
+				while i < 50 {
+					assign acc := acc + (1..10)->NumericalFunctions::sum();
+					assign i := i + 1;
+				}
+				acc
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	// Room for two iterations' worth of elements, spent 50 times over.
+	ctx.maxElements = 20
+	sym, scope := calcByName(t, idx.DocumentRoot("<test>"), "test", "Repeat")
+
+	result, err := ctx.InvokeCalc(sym, nil, scope)
+	if err != nil {
+		t.Fatalf("InvokeCalc: %v", err)
+	}
+	if result.Const.Int != 2750 {
+		t.Errorf("acc = %d, want 2750", result.Const.Int)
+	}
+}
+
 // TestElementBudgetIsPerRun requires the count to start over with each run, so a
 // session evaluating many collections is not stopped by the ones before.
 func TestElementBudgetIsPerRun(t *testing.T) {

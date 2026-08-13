@@ -623,7 +623,7 @@ echo 'part Wheel { attribute diameter = 16.0; }' > test.sysml
 | `SYSML_MAX_ACTION_STEPS` | `1000000` | Token-flow steps one action run may perform |
 | `SYSML_MAX_EVENTS` | `1000000` | Events one state machine run may dispatch, and the events one `%advance` drains |
 | `SYSML_MAX_DO_STEPS` | `5000000` | Do-activity actions one state machine run may perform, and the ones one `%advance` drains |
-| `SYSML_MAX_ELEMENTS` | `1000000` | Collection elements one run may materialize — the bound on the memory a run holds rather than on the work it does |
+| `SYSML_MAX_ELEMENTS` | `1000000` | Collection elements one evaluation may hold — the bound on the memory a run holds rather than on the work it does |
 
 Each budget is what turns a non-terminating run into a reported error instead of
 a hang. They count incommensurable things — expression evaluations, action token
@@ -648,12 +648,16 @@ that reads as memory: a materialized element is a 104-byte value living as long 
 the collection holding it, and `1..10000000` conjures one per step. Every way of
 materializing a sequence is charged against it — a range, a sequence literal,
 `->collect` and the other collection operations — so the default bounds the
-elements one run holds at ~104 MB, in the same band as the figures above:
+elements held at once at ~104 MB, in the same band as the figures above:
 
 ```
 error: evaluation failed: collection element limit exceeded
 (1000000 elements; raise SYSML_MAX_ELEMENTS to allow more)
 ```
+
+Because it bounds memory and not work, the count is what a statement's evaluation
+holds: a loop building a ten-element collection a million times never approaches
+it, while a single `1..2000000` exceeds it at once.
 
 The evaluation step budget:
 

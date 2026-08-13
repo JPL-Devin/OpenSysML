@@ -20,7 +20,10 @@ import (
 //
 // Collection elements are the exception, and MaxElements is the bound that reads
 // as memory: a materialized element is a 104-byte Value living as long as the
-// collection holding it, and `1..10000000` conjures one per step.
+// collection holding it, and `1..10000000` conjures one per step. It counts the
+// elements one evaluation holds, not the elements a run produced in total, so a
+// loop building a small collection each iteration is not stopped by the ones
+// before it.
 const (
 	// DefaultMaxSteps bounds expression evaluations.
 	DefaultMaxSteps int64 = 10000000
@@ -31,7 +34,7 @@ const (
 	// DefaultMaxDoSteps bounds the do activity actions one state machine run
 	// performs.
 	DefaultMaxDoSteps int64 = 5000000
-	// DefaultMaxElements bounds the collection elements one run materializes,
+	// DefaultMaxElements bounds the collection elements one evaluation holds,
 	// ~104MB of Values.
 	DefaultMaxElements int64 = 1000000
 )

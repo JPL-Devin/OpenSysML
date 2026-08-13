@@ -188,8 +188,15 @@ func (ctx *Context) incrementStep() error {
 	return nil
 }
 
-// chargeElements counts elements a run materializes, which unlike a step is
-// memory the collection holding it keeps, against the element budget.
+// elementScope brackets one evaluation and returns the function releasing what
+// it materialized, so the bound counts elements held at once, not in total.
+func (ctx *Context) elementScope() func() {
+	held := ctx.elements
+	return func() { ctx.elements = held }
+}
+
+// chargeElements counts elements an evaluation materializes, which unlike a step
+// is memory the collection holding it keeps, against the element budget.
 func (ctx *Context) chargeElements(n int64) error {
 	ctx.elements += n
 	// A count that overflowed is past any budget, so it reads as one.

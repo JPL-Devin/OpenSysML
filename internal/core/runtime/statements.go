@@ -102,6 +102,12 @@ func newStmtEngine(ctx *Context, host stmtHost, data map[string]Value) *stmtEngi
 	return &stmtEngine{ctx: ctx, host: host, env: &stmtEnv{data: data}, activation: ctx.newActivation()}
 }
 
+// finish ends the activation the engine's statements ran in, discarding what the
+// calc usages read in them computed.
+func (e *stmtEngine) finish() {
+	e.ctx.endActivation(e.activation)
+}
+
 // evalIn returns an evaluation context resolving names in the scope the
 // statement was written in, reading the behavior's data and the frames entered,
 // innermost last so a block-local name shadows an outer one.
@@ -133,6 +139,9 @@ func (e *stmtEngine) statement(stmt lower.Statement) (stmtFlow, error) {
 		tr.RecordStatement(stmtLabel(stmt))
 		defer tr.EndStatement()
 	}
+	// A statement's collections live no longer than the statement, so the one after
+	// it starts from the elements held before it.
+	defer e.ctx.elementScope()()
 	return e.execute(stmt)
 }
 

@@ -9,13 +9,17 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 ### Runtime
 
 - A fifth runaway bound, `SYSML_MAX_ELEMENTS` (default 1 000 000), bounds the
-  collection elements one run materializes rather than the work it does: an
+  collection elements one evaluation holds rather than the work a run does: an
   element is a 104-byte `Value` living as long as the collection holding it, so
   the default holds ~104 MB of them, in the band the other defaults were sized
   against. Every materializing path is charged — a range, a sequence literal,
   `->collect` and the other collection operations — and exceeding it is
   `ErrElementLimitExceeded` naming the variable, not the step limit: `1..10000000`
-  used to conjure ~1 GB before the step budget reported it.
+  used to conjure ~1 GB before the step budget reported it. A statement releases
+  what it materialized, so a loop building a small collection each iteration is
+  bounded by what it holds rather than by what it has produced in total.
+- An action node's body ends the activation it ran in, so a run stepping the same
+  body many times no longer holds what every execution's calc usages computed.
 - `%budget` prints the five bounds a session runs on with the variable that
   raises each, and a literal expression that spends one is answered with that
   failure instead of "no declarations loaded".
