@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -25,11 +26,14 @@ type calcParameter struct {
 // across the specialization chain, so a usage typed by a calc definition
 // inherits that definition's parameters and result.
 type calcShape struct {
-	Sym         *symbols.Symbol
-	Name        string // qualified name, for diagnostics and traces
-	Params      []calcParameter
-	Result      ast.Node
-	ResultOwner *symbols.Symbol // the calc whose body declares Result
+	Sym    *symbols.Symbol
+	Name   string // qualified name, for diagnostics and traces
+	Params []calcParameter
+	// Body is the computation the calc states, lowered in the scope of the calc
+	// that declares it: local declarations, assignments, conditionals, loops and
+	// returns, in declaration order.
+	Body      []lower.Statement
+	BodyOwner *symbols.Symbol // the calc whose body declares Body
 }
 
 // calcShapeOf resolves the invocation interface of a calc symbol: its
@@ -51,15 +55,15 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	// Most general first, so an inherited parameter keeps the position it has in
 	// the calc that declares it and a redeclaration refines it in place.
 	chain := ctx.calcChain(sym)
-	result, resultOwner := calcResult(chain)
+	body, bodyOwner := calcBody(chain)
 	shape := &calcShape{
-		Sym:         sym,
-		Name:        name,
-		Params:      calcParameters(chain),
-		Result:      result,
-		ResultOwner: resultOwner,
+		Sym:       sym,
+		Name:      name,
+		Params:    calcParameters(chain),
+		Body:      body,
+		BodyOwner: bodyOwner,
 	}
-	if shape.Result == nil {
+	if !lower.Returns(shape.Body) {
 		return nil, fmt.Errorf("%w: calc %s has no return expression", ErrNoResultExpression, name)
 	}
 
@@ -117,34 +121,25 @@ func calcParameters(chain []*symbols.Symbol) []calcParameter {
 	return params
 }
 
-// calcResult returns the result expression the invoked calc evaluates — its own
-// if it declares one, otherwise the closest inherited one — with the calc that
-// declares it, whose scope the expression is written in.
-func calcResult(chain []*symbols.Symbol) (ast.Node, *symbols.Symbol) {
+// calcBody returns the computation the invoked calc runs — its own body if that
+// states one, otherwise the closest inherited one — with the calc that declares
+// it, whose scope the body's statements are written in.
+func calcBody(chain []*symbols.Symbol) ([]lower.Statement, *symbols.Symbol) {
+	var stated []lower.Statement
+	var owner *symbols.Symbol
 	for i := len(chain) - 1; i >= 0; i-- {
-		for _, member := range declMembers(chain[i].Decl) {
-			if expr := resultExpression(member); expr != nil {
-				return expr, chain[i]
-			}
+		link := chain[i]
+		stmts := lower.CalcBody(declMembers(link.Decl), link.Scope)
+		if lower.Returns(stmts) {
+			return stmts, link
+		}
+		// A body that computes but returns nothing leaves an inherited result in
+		// force, so keep looking up the chain before settling for it.
+		if stated == nil && len(stmts) > 0 {
+			stated, owner = stmts, link
 		}
 	}
-	return nil, nil
-}
-
-// resultExpression returns the value a calc body member returns, for either
-// notation: `return <expr>;` and a bound return parameter `return : T = <expr>;`.
-// A return parameter that binds no value only names the result, so it carries no
-// expression and leaves the inherited one in force.
-func resultExpression(member ast.Node) ast.Node {
-	switch m := member.(type) {
-	case *ast.ResultMember:
-		return m.Expression
-	case *ast.Usage:
-		if m.Direction == ast.DirOut {
-			return m.Value
-		}
-	}
-	return nil
+	return stated, owner
 }
 
 // calcArgs are the arguments of one calc invocation. The notation keeps the two
@@ -206,7 +201,7 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	ctx.calcDepth++
 	defer func() { ctx.calcDepth-- }()
 
-	ec := NewEvalContext(ctx, ctx.calcScope(shape.ResultOwner, shape.Sym, callerScope))
+	ec := NewEvalContext(ctx, ctx.calcScope(shape.BodyOwner, shape.Sym, callerScope))
 
 	if ec.trace != nil {
 		ec.trace.RecordCalcEnter(shape.Name)
@@ -230,7 +225,7 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 		}
 	}
 
-	result, err := ec.Eval(shape.Result)
+	result, err := ctx.runCalcBody(shape, bindings)
 	if ec.trace != nil {
 		if err != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
@@ -242,6 +237,22 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 		return Value{}, fmt.Errorf("calc %s: %w", shape.Name, err)
 	}
 	return result, nil
+}
+
+// runCalcBody runs the calc's lowered body in an environment of its own —
+// bindings holds its parameters and its locals — and requires it to return.
+func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value) (Value, error) {
+	host := &calcStmtHost{}
+	engine := newStmtEngine(ctx, host, bindings)
+
+	flow, err := engine.run(shape.Body)
+	if err != nil {
+		return Value{}, err
+	}
+	if flow != flowReturn {
+		return Value{}, fmt.Errorf("%w: calc %s ended without a return", ErrCalcNoReturn, shape.Name)
+	}
+	return host.result, nil
 }
 
 // checkArgs rejects an argument list that cannot bind to the parameters at all:
@@ -331,8 +342,8 @@ func (ctx *Context) hasCalcBody(sym *symbols.Symbol) bool {
 	if sym == nil || sym.Decl == nil || !isCalcDecl(sym.Decl) {
 		return false
 	}
-	result, _ := calcResult(ctx.calcChain(sym))
-	return result != nil
+	body, _ := calcBody(ctx.calcChain(sym))
+	return lower.Returns(body)
 }
 
 // isCalcDecl reports whether a declaration is a calc definition or calc usage.

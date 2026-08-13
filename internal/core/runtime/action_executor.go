@@ -842,8 +842,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	}
 
 	// Execute the node's lowered statements in declaration order.
-	env := &stmtEnv{data: token.Data}
-	if err := e.execStatements(usage, e.graph.Bodies[usage], env); err != nil {
+	if err := e.executeBody(usage, token); err != nil {
 		return err
 	}
 

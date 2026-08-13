@@ -1,0 +1,13 @@
+{
+  "type": "calc",
+  "inputs": [
+    {
+      "type": "Integer",
+      "value": -7
+    }
+  ],
+  "result": {
+    "type": "Integer",
+    "value": -1
+  }
+}

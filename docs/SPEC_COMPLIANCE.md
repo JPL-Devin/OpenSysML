@@ -10,15 +10,17 @@
 
 ### ✅ Fully Implemented & Tested (~98% of Targeted Features)
 
-**Calculations (12/12 features):**
+**Calculations (14/14 features):**
 - Invocation with typed parameters
 - Return expression evaluation (both `return <expr>;` and a bound return parameter `return : T = <expr>;`)
 - Parameter binding (positional + named arguments)
 - Parameter defaults (own and inherited)
 - Inherited parameters and result through a typed calc usage, including redeclaration
 - Nested calc invocation, and invocation from a constraint
-- Control flow (if/else)
-- Unary operators (not, -)
+- Statement bodies: local declarations, assignment, `if`/`else`, `while`, `loop … until`, `for`, and early `return`
+- Purity and termination: a side effect or an outside assignment is rejected, and every loop iteration spends a step of the budget
+- Control flow (if/else), including the conditional expression `if c ? a else b` evaluated lazily at runtime
+- Unary operators (not, -, +)
 - Type coercion (Integer→Real)
 - Qualified names (A::B::C)
 - Deterministic evaluation trace (parameter binding, sub-expression order, results)
@@ -114,12 +116,12 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 121 conformance cases (all passing: calc×15, constraint×7, requirement×12, satisfy×5, unit×7, action×35, state×31, accept×1, instance×8)
-- 57 robustness subtests (deadlock, a non-terminating loop, a body-local declaration that must not leak, a body member that is not executable, a statement written directly among an action's members, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references, a library function outside its domain or with the wrong arity, an extension library function outside its domain, exponentiation beyond the Integer range)
+- 132 conformance cases (all passing: calc×26, constraint×7, requirement×12, satisfy×5, unit×7, action×35, state×31, accept×1, instance×8)
+- 63 robustness subtests (deadlock, a non-terminating loop, a non-terminating calc loop, a calc body that never returns, a send or a `terminate` inside a calc, an assignment outside a calc body, a non-Boolean calc condition, a body-local declaration that must not leak, a body member that is not executable, a statement written directly among an action's members, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references, a library function outside its domain or with the wrong arity, an extension library function outside its domain, exponentiation beyond the Integer range)
 - 233 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
-- 52 golden AST fixtures (including the three loop forms, pseudostate, timed-trigger, call-trigger, calc default/invocation and n-ary connector-end parsing tests)
-- 40 golden execution traces (loop and conditional bodies, fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation, library function invocation)
-- 59 negative parser subtests
+- 53 golden AST fixtures (including the three loop forms, pseudostate, timed-trigger, call-trigger, calc default/invocation, calc statement bodies and n-ary connector-end parsing tests)
+- 46 golden execution traces (loop and conditional bodies, calc statement bodies and their loop iterations, fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation, library function invocation)
+- 64 negative parser subtests
 - 2,465 tests and subtests, of which 2,460 pass and 5 skip (`go test -race -count=1 -v ./...`; 1,384 top-level `Test` functions). The skips are unimplemented-expression and requirement-subject cases that skip themselves.
 
 ---
@@ -159,11 +161,23 @@ Each row documents one behavioral semantic feature:
 | Surplus positional arguments | `invoke_calc.go` `checkArgs` (`ErrCalcArity`) | `robustness_test.go:testCalcTooManyArguments` | ✅ Faithful |
 | Named argument that names no parameter | `invoke_calc.go` `checkArgs` (`ErrUnknownParameter`) | `robustness_test.go:testCalcUnknownNamedArgument` | ✅ Faithful |
 | Invoked symbol is not a calc | `invoke_calc.go` `calcShapeOf` (`ErrNotACalc`) | `robustness_test.go:testCalcSymbolIsNotACalc` | ✅ Faithful |
-| Recursive calc (direct or mutual) is bounded | `invoke_calc.go` `invokeCalcShape` (`ErrCalcRecursionLimit`, depth 32) | `robustness_test.go:testCalcDirectRecursion`, `:testCalcMutualRecursion` | ⚠️ Approximate (depth-bounded; recursion is rejected rather than evaluated) |
+| Recursive calc (direct or mutual) is bounded | `invoke_calc.go` `invokeCalcShape` (`ErrCalcRecursionLimit`, depth 32) | `calc_recursive_base_case.sysml`, `robustness_test.go:testCalcDirectRecursion`, `:testCalcMutualRecursion` | ⚠️ Approximate (a recursion reaching its base case within depth 32 evaluates; a deeper one is rejected rather than evaluated) |
 | Step budget bounds calc evaluation | `context.go` step counter (`ErrStepLimitExceeded`), budget from `budget.go` `BudgetsFromEnv` (`SYSML_MAX_STEPS`, default 10000000) | `robustness_test.go:testStepBudgetExceeded`, `budget_test.go:TestBudgetFromValue` | ✅ Faithful |
-| Control flow (if/else) in calc | `eval.go` expression evaluation | `robustness_test.go:testDecisionNoSatisfiedGuard` | ✅ Faithful |
-| Missing return expression | `invoke_calc.go` `calcShapeOf` (`ErrNoResultExpression`) | `robustness_test.go:testCalcWithoutResult` | ✅ Faithful |
-| Unary operators (not, -) | `eval.go:483` evalNeg | `calc_unary_operators.sysml` | ✅ Faithful |
+| Statement body (SysML v2 7.19, `CalculationBodyItem` carries the items of an action body): local declarations, assignment, `if`/`else`, `while`, `loop … until`, `for`, `return` | `parser/behavior.go` `parseCalcBody`/`atCalcStatement` → `lower/calc_body.go` `CalcBody` → `runtime/statements.go` `stmtEngine` driven by `invoke_calc.go` `runCalcBody` | `calc_statement_body.sysml` (golden AST), `calc_iterative_factorial.sysml`, `calc_conditional_branch.sysml`, `calc_for_over_sequence.sysml`, `calc_loop_until_body.sysml` | ✅ Faithful |
+| Early `return` out of a branch or a loop unwinds the blocks entered | `lower/action_graph.go` `Return` + `runtime/statements.go` `flowReturn` | `calc_early_return_from_loop.sysml` | ✅ Faithful |
+| A body-local declaration of a branch or loop body is that block's own and does not leak | `runtime/statements.go` `stmtEnv` | `passes/typecheck_calc_body_test.go:TestCalcBodyLoopLocalIsNotVisibleOutside` | ✅ Faithful |
+| An inherited body evaluates in the scope of the calculation declaring it | `invoke_calc.go` `calcBody` (specialization chain, as `calcResult`/`calcParameters`) + statement `Scope` carried by the lowered IR | `invoke_calc_body_test.go:TestInheritedCalcBodyRunsInDeclaringScope` | ✅ Faithful |
+| A calculation is pure: `send`, `perform`, `accept`, `terminate` and an assignment to a feature it does not declare are rejected | `runtime/calc_statements.go` (`ErrCalcSideEffect`, `ErrCalcExternalAssignment`) | `robustness_test.go:testCalcSendIsRejected`, `:testCalcTerminateIsRejected`, `:testCalcAssignmentOutsideTheCalc` | ✅ Faithful |
+| A loop in a calculation terminates or fails: every iteration spends a step of the budget | `runtime/statements.go` `loop`/`forLoop` → `context.go` `incrementStep`; `InvokeCalc`/`InvokeCalcNamed` `beginRun` | `robustness_test.go:testCalcNonTerminatingLoop`, `budget_test.go:TestStepBudgetIsPerRunForInstancesAndCalcs` | ✅ Faithful |
+| A body running to its end without returning is an error, not a null result | `invoke_calc.go` `runCalcBody` (`ErrCalcNoReturn`) | `robustness_test.go:testCalcBodyNeverReturns` | ✅ Faithful |
+| Control flow (if/else) in calc, including the conditional expression `if c ? a else b` evaluated lazily | `runtime/statements.go` `ifStatement`; `eval.go` `evalConditional` | `calc_conditional_branch.sysml`, `calc_conditional_operator_base_case.sysml` | ✅ Faithful |
+| A non-Boolean `if`/loop condition in a calc is a type error, and a diagnostic at runtime | `passes/typecheck.go` `checkBehaviorMember`; `runtime/statements.go` `condition` | `typecheck_calc_body_test.go:TestCalcBodyNonBooleanWhileCondition`, `robustness_test.go:testCalcNonBooleanCondition` | ✅ Faithful |
+| Statements and loop iterations in the evaluation trace | `trace.go` `RecordStatement`/`RecordLoopIteration` | `calc_iterative_factorial.trace.golden`, `calc_early_return_from_loop.trace.golden` | ✅ Faithful |
+| Missing return expression | `invoke_calc.go` `calcShapeOf` (`ErrNoResultExpression`: no result expression and no returning body) | `robustness_test.go:testCalcWithoutResult` | ✅ Faithful |
+| Boolean operators evaluated at runtime (`and`, `or`, `xor`, `implies`, short-circuiting where they can) | `eval.go` `evalLogical` | `calc_boolean_operators.sysml` | ✅ Faithful |
+| Identity (`===`, `!==`), null coalescing (`??`, lazy) and remainder (`%`) evaluated at runtime | `eval.go` `evalIdentity`/`evalNullCoalesce`/`evalArithmetic` | `calc_identity_operators.sysml`, `calc_null_coalesce.sysml`, `calc_modulo_operator.sysml` | ✅ Faithful |
+| An operator with no runtime evaluation (classification, cast, range, `all`, bitwise complement) reports why | `eval.go` `unimplementedOperators` (`ErrUnsupportedOperator`) | `eval_operator_test.go:TestUnimplementedOperatorReportsWhy` | ❌ Not implemented (rejected with a typed diagnostic naming what it would need) |
+| Unary operators (not, -, +) | `eval.go` `evalUnary` | `calc_unary_operators.sysml` | ✅ Faithful |
 | Type coercion (Integer→Real) | `eval.go:344` toReal | `calc_type_coercion.sysml` | ✅ Faithful |
 | Qualified names (A::B::C) | `eval.go` + `resolve/` | `calc_qualified_names.sysml` | ✅ Faithful |
 
@@ -321,9 +335,10 @@ Each row documents one behavioral semantic feature:
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| Binary operators (+, -, *, /, <, >, ==) | `eval.go:265` evalOperator | `calc_simple_add.sysml` | ✅ Faithful |
-| Boolean operators (and, or) | `eval.go:435` evalLogical | `constraint_literal.sysml` | ✅ Faithful |
-| Unary operators (-, not) | `eval.go:483` evalNeg | `calc_unary_operators.sysml` | ✅ Faithful |
+| Binary operators (+, -, *, /, %, **, <, >, ==, ===) | `eval.go` evalOperator → evalArithmetic/evalComparison/evalEquality/evalIdentity | `calc_simple_add.sysml`, `calc_modulo_operator.sysml`, `calc_identity_operators.sysml` | ✅ Faithful |
+| Boolean operators (and, or, xor, implies), short-circuiting where they can | `eval.go` evalLogical | `constraint_literal.sysml`, `calc_boolean_operators.sysml` | ✅ Faithful |
+| Unary operators (-, +, not) | `eval.go` evalUnary | `calc_unary_operators.sysml` | ✅ Faithful |
+| Conditional (`if c ? a else b`) and null coalescing (`??`), both lazy | `eval.go` evalConditional/evalNullCoalesce | `calc_conditional_branch.sysml`, `calc_null_coalesce.sysml` | ✅ Faithful |
 | Literal values (Integer, Real, Boolean, String) | `eval.go:109` evalLiteral* | `calc_simple_add.sysml` | ✅ Faithful |
 | Feature reference resolution | `eval.go:141` evalFeatureReference | `constraint_literal.sysml` | ✅ Faithful |
 | Qualified name resolution (A::B::C) | `eval.go:53` Eval + `resolve/qualified.go` | `calc_qualified_names.sysml` | ✅ Faithful |
@@ -391,7 +406,6 @@ Found, not fixed — numeric library features that remain unevaluable:
 | `VectorFunctions`, `MatrixFunctions` | Needs a vector value in the evaluator; every value is scalar today. |
 | `SequenceFunctions` beyond `size`/`isEmpty`/`includes` | Needs the sequence semantics of the library's own function bodies, not just element access. |
 | `ComplexFunctions` | Needs a complex value kind. |
-| Remainder (`%`) outside constant folding | `semantics/eval.go` folds it over literals, but `runtime/eval.go` `evalOperator` routes only `+ - * / **` to arithmetic, so `%` over a feature reports `unsupported operator`. |
 | Library functions in the checker's own name resolution | An unqualified call to a library function the model does not import evaluates, but the `unresolved-reference` diagnostic still reports the name; importing `RealFunctions::*` clears it. |
 
 ### Systemica Extension Library (non-normative)

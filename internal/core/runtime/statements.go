@@ -1,0 +1,397 @@
+package runtime
+
+import (
+	"fmt"
+	"sort"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
+
+// stmtEnv is the environment a body's statements execute in: the behavior's own
+// data, plus one frame per body-local block entered. A frame is discarded when
+// its block exits, so a name it declares never leaks outward.
+type stmtEnv struct {
+	data   map[string]Value
+	frames []map[string]Value
+}
+
+// enter pushes a frame for a block about to run and returns it.
+func (env *stmtEnv) enter() map[string]Value {
+	frame := make(map[string]Value)
+	env.frames = append(env.frames, frame)
+	return frame
+}
+
+// leave discards the frame the innermost entered block declares into.
+func (env *stmtEnv) leave() {
+	if len(env.frames) > 0 {
+		env.frames = env.frames[:len(env.frames)-1]
+	}
+}
+
+// declare binds a name the innermost entered block declares, or a name of the
+// behavior's own data when no block is entered.
+func (env *stmtEnv) declare(name string, value Value) {
+	if depth := len(env.frames); depth > 0 {
+		env.frames[depth-1][name] = value
+		return
+	}
+	env.data[name] = value
+}
+
+// assign writes to the innermost entered block that declares name, or to the
+// behavior's data when that holds the name, and reports whether it found one.
+// A name neither declares is the host's to decide on.
+func (env *stmtEnv) assign(name string, value Value) bool {
+	for i := len(env.frames) - 1; i >= 0; i-- {
+		if _, ok := env.frames[i][name]; ok {
+			env.frames[i][name] = value
+			return true
+		}
+	}
+	if _, ok := env.data[name]; ok {
+		env.data[name] = value
+		return true
+	}
+	return false
+}
+
+// stmtFlow is how a statement list ended: at its last statement, or at a
+// `return` that unwinds every block entered up to the host.
+type stmtFlow int
+
+const (
+	flowNext stmtFlow = iota
+	flowReturn
+)
+
+// stmtHost is the behavior a statement engine runs statements for: it names
+// itself in diagnostics and decides the statements only it can state — sends,
+// returns, assignments reaching outside the body, effects.
+type stmtHost interface {
+	// describe names the host in a diagnostic ("action node step", "calc P::F").
+	describe() string
+	// send states the message a send statement addresses.
+	send(ec *EvalContext, s lower.Send) error
+	// assignOuter writes a name no entered block and no body member declares.
+	assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error
+	// acceptReturn takes the value a `return` yields.
+	acceptReturn(value Value, s lower.Return) error
+	// effect states an effect on the world outside the body.
+	effect(s lower.Effect) error
+}
+
+// stmtEngine runs lowered body statements for a host: declarations,
+// assignments, conditionals, loops and returns, spending one step of the
+// context's budget per loop iteration.
+type stmtEngine struct {
+	ctx  *Context
+	host stmtHost
+	env  *stmtEnv
+}
+
+// newStmtEngine returns an engine running statements against data — the
+// behavior's own values, which its statements read and write.
+func newStmtEngine(ctx *Context, host stmtHost, data map[string]Value) *stmtEngine {
+	return &stmtEngine{ctx: ctx, host: host, env: &stmtEnv{data: data}}
+}
+
+// evalIn returns an evaluation context resolving names in the scope the
+// statement was written in, reading the behavior's data and the frames entered,
+// innermost last so a block-local name shadows an outer one.
+func (e *stmtEngine) evalIn(scope *symbols.Scope) *EvalContext {
+	ec := NewEvalContext(e.ctx, scope)
+	ec.Push(e.env.data)
+	for _, frame := range e.env.frames {
+		ec.Push(frame)
+	}
+	return ec
+}
+
+// run executes statements in declaration order, stopping at a `return`.
+func (e *stmtEngine) run(stmts []lower.Statement) (stmtFlow, error) {
+	for _, stmt := range stmts {
+		flow, err := e.statement(stmt)
+		if err != nil || flow == flowReturn {
+			return flow, err
+		}
+	}
+	return flowNext, nil
+}
+
+// statement executes one lowered statement, recording it in the trace with the
+// evaluations and nested statements it produces underneath it.
+func (e *stmtEngine) statement(stmt lower.Statement) (stmtFlow, error) {
+	if tr := e.ctx.trace; tr != nil {
+		tr.RecordStatement(stmtLabel(stmt))
+		defer tr.EndStatement()
+	}
+	return e.execute(stmt)
+}
+
+// execute runs one lowered statement.
+func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
+	switch s := stmt.(type) {
+	case lower.Send:
+		return flowNext, e.host.send(e.evalIn(s.Scope), s)
+	case lower.Assign:
+		if s.Target == "" {
+			return flowNext, fmt.Errorf("%s: unsupported assignment target", e.host.describe())
+		}
+		value, err := e.evalIn(s.Scope).Eval(s.Value)
+		if err != nil {
+			return flowNext, fmt.Errorf("eval assignment RHS: %w", err)
+		}
+		if e.env.assign(s.Target, value) {
+			return flowNext, nil
+		}
+		return flowNext, e.host.assignOuter(e.env, s.Target, value, s)
+	case lower.Declare:
+		value := Value{Kind: ValNull}
+		if s.Value != nil {
+			evaluated, err := e.evalIn(s.Scope).Eval(s.Value)
+			if err != nil {
+				return flowNext, fmt.Errorf("eval declaration %s: %w", s.Name, err)
+			}
+			value = evaluated
+		}
+		e.env.declare(s.Name, value)
+		return flowNext, nil
+	case lower.Return:
+		value := Value{Kind: ValNull}
+		if s.Value != nil {
+			evaluated, err := e.evalIn(s.Scope).Eval(s.Value)
+			if err != nil {
+				return flowNext, fmt.Errorf("eval returned expression: %w", err)
+			}
+			value = evaluated
+		}
+		if err := e.host.acceptReturn(value, s); err != nil {
+			return flowNext, err
+		}
+		return flowReturn, nil
+	case lower.If:
+		return e.ifStatement(s)
+	case lower.Loop:
+		return e.loop(s)
+	case lower.Effect:
+		return flowNext, e.host.effect(s)
+	case lower.Unsupported:
+		return flowNext, fmt.Errorf("%s: %s in a body is not executable", e.host.describe(), s.Description)
+	default:
+		return flowNext, fmt.Errorf("%s: unsupported statement %T", e.host.describe(), stmt)
+	}
+}
+
+// ifStatement runs the branch its condition selects, or nothing when the
+// condition is false and the conditional declared no else branch.
+func (e *stmtEngine) ifStatement(stmt lower.If) (stmtFlow, error) {
+	// The condition is evaluated outside both branches, so neither branch's
+	// declarations are visible to it.
+	holds, err := e.condition(stmt.Condition, stmt.Scope, "condition of 'if'")
+	if err != nil {
+		return flowNext, err
+	}
+	if holds {
+		return e.block(stmt.Then)
+	}
+	if stmt.Else != nil {
+		return e.block(*stmt.Else)
+	}
+	return flowNext, nil
+}
+
+// block runs a body-local block in a frame of its own.
+func (e *stmtEngine) block(block lower.Block) (stmtFlow, error) {
+	e.env.enter()
+	defer e.env.leave()
+	return e.run(block.Statements)
+}
+
+// loop runs a loop to termination or to the `return` its body reaches. Every
+// iteration spends one step of the budget, so a non-terminating loop fails with
+// ErrStepLimitExceeded instead of hanging its caller.
+func (e *stmtEngine) loop(stmt lower.Loop) (stmtFlow, error) {
+	if stmt.Kind == ast.LoopFor {
+		return e.forLoop(stmt)
+	}
+
+	frame := e.env.enter()
+	defer e.env.leave()
+
+	for iteration := 1; ; iteration++ {
+		if err := e.ctx.incrementStep(); err != nil {
+			return flowNext, err
+		}
+		flow, done, err := e.iteration(stmt, frame, iteration)
+		if err != nil || done || flow == flowReturn {
+			return flow, err
+		}
+	}
+}
+
+// iteration runs one iteration of a conditional loop, reporting whether the
+// loop's condition ended it.
+func (e *stmtEngine) iteration(
+	stmt lower.Loop,
+	frame map[string]Value,
+	iteration int,
+) (stmtFlow, bool, error) {
+	if tr := e.ctx.trace; tr != nil {
+		tr.RecordLoopIteration(iteration)
+		defer tr.EndStatement()
+	}
+
+	if stmt.Kind == ast.LoopWhile {
+		holds, err := e.condition(stmt.Condition, stmt.Body.Scope, "condition of 'while'")
+		if err != nil {
+			return flowNext, true, err
+		}
+		if !holds {
+			return flowNext, true, nil
+		}
+	}
+
+	clear(frame)
+	flow, err := e.run(stmt.Body.Statements)
+	if err != nil || flow == flowReturn {
+		return flow, true, err
+	}
+
+	if stmt.Kind == ast.LoopUntil && stmt.Condition != nil {
+		holds, err := e.condition(stmt.Condition, stmt.Body.Scope, "condition of 'until'")
+		if err != nil {
+			return flowNext, true, err
+		}
+		return flowNext, holds, nil
+	}
+	return flowNext, false, nil
+}
+
+// forLoop runs the body once per element of the loop's collection, with the
+// element bound to the loop's variable in the body's own frame.
+func (e *stmtEngine) forLoop(stmt lower.Loop) (stmtFlow, error) {
+	if stmt.Variable == "" {
+		return flowNext, fmt.Errorf("%s: 'for' loop declares no iteration variable", e.host.describe())
+	}
+
+	// The collection is evaluated once, before the loop is entered, so the
+	// iteration is over the value the loop started with.
+	value, err := e.evalIn(stmt.Scope).Eval(stmt.Collection)
+	if err != nil {
+		return flowNext, fmt.Errorf("eval 'for' collection: %w", err)
+	}
+	elements, err := forElements(value)
+	if err != nil {
+		return flowNext, fmt.Errorf("%s: %w", e.host.describe(), err)
+	}
+
+	frame := e.env.enter()
+	defer e.env.leave()
+
+	for i, element := range elements {
+		if err := e.ctx.incrementStep(); err != nil {
+			return flowNext, err
+		}
+		flow, err := e.forIteration(stmt, frame, element, i+1)
+		if err != nil || flow == flowReturn {
+			return flow, err
+		}
+	}
+	return flowNext, nil
+}
+
+// forIteration runs the body once for one element of the loop's collection.
+func (e *stmtEngine) forIteration(
+	stmt lower.Loop,
+	frame map[string]Value,
+	element Value,
+	iteration int,
+) (stmtFlow, error) {
+	if tr := e.ctx.trace; tr != nil {
+		tr.RecordLoopIteration(iteration)
+		defer tr.EndStatement()
+	}
+	clear(frame)
+	frame[stmt.Variable] = element
+	return e.run(stmt.Body.Statements)
+}
+
+// stmtLabel names a statement for a trace by what it does and, where it has
+// one, the feature or loop variable it acts on.
+func stmtLabel(stmt lower.Statement) string {
+	switch s := stmt.(type) {
+	case lower.Send:
+		return "send"
+	case lower.Assign:
+		return "assign " + s.Target
+	case lower.Declare:
+		return "declare " + s.Name
+	case lower.Return:
+		return "return"
+	case lower.If:
+		return "if"
+	case lower.Loop:
+		switch s.Kind {
+		case ast.LoopFor:
+			return "for " + s.Variable
+		case ast.LoopUntil:
+			return "loop until"
+		default:
+			return "while"
+		}
+	case lower.Effect:
+		return s.Kind.String()
+	case lower.Unsupported:
+		return s.Description
+	default:
+		return fmt.Sprintf("%T", stmt)
+	}
+}
+
+// forElements returns the elements a `for` loop iterates over, in the order it
+// visits them. A set has no order of its own and its backing map does not
+// iterate in a stable one, so its elements are visited in the order their
+// canonical rendering sorts in — the same order a trace renders them in.
+func forElements(value Value) ([]Value, error) {
+	switch value.Kind {
+	case ValSequence:
+		if value.Sequence == nil {
+			return nil, nil
+		}
+		return value.Sequence.Elements(), nil
+	case ValSet:
+		if value.Set == nil {
+			return nil, nil
+		}
+		elements := value.Set.Elements()
+		sort.Slice(elements, func(i, j int) bool {
+			return FormatTraceValue(elements[i]) < FormatTraceValue(elements[j])
+		})
+		return elements, nil
+	default:
+		return nil, fmt.Errorf("'for' collection must be a sequence or a set, got %s", value.Kind)
+	}
+}
+
+// condition evaluates a loop or branch condition. A condition that is not
+// Boolean is a type error the typecheck pass reports (passes/typecheck.go
+// checkBehaviorMember); an execution that reaches one was never checked, so it
+// is reported here rather than coerced.
+func (e *stmtEngine) condition(expr ast.Node, scope *symbols.Scope, what string) (bool, error) {
+	if expr == nil {
+		return false, fmt.Errorf("%s: %s is missing", e.host.describe(), what)
+	}
+	value, err := e.evalIn(scope).Eval(expr)
+	if err != nil {
+		return false, fmt.Errorf("eval %s: %w", what, err)
+	}
+	if value.Kind != ValConst || value.Const.Kind != semantics.ValBool {
+		return false, fmt.Errorf("%s: %s must evaluate to a Boolean, got %s",
+			e.host.describe(), what, value.Kind)
+	}
+	return value.Const.Bool, nil
+}

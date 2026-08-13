@@ -1,0 +1,22 @@
+enter calc test::firstOver
+  bind limit = 3 [argument]
+  stmt declare xs
+      eval literal 1 -> 1
+      eval literal 5 -> 5
+      eval literal 9 -> 9
+    eval sequence of 3 -> (1, 5, 9)
+  stmt for x
+    eval feature xs -> (1, 5, 9)
+    iteration 1
+      stmt if
+          eval feature x -> 1
+          eval feature limit -> 3
+        eval operator > -> false
+    iteration 2
+      stmt if
+          eval feature x -> 5
+          eval feature limit -> 3
+        eval operator > -> true
+        stmt return
+          eval feature x -> 5
+exit calc test::firstOver -> 5

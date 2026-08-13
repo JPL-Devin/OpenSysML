@@ -12,6 +12,8 @@ import (
 // Expects '{' already consumed.
 func (p *Parser) parseCalcBody() []ast.Node {
 	body := p.newBodyBuilder()
+	p.calcBodyDepth++
+	defer func() { p.calcBodyDepth-- }()
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
@@ -32,6 +34,11 @@ func (p *Parser) parseCalcBody() []ast.Node {
 		// Check for 'return' keyword → ResultMember
 		if p.isResultKeyword() {
 			body.add(p.parseResultMember())
+		} else if p.atCalcStatement() {
+			// A behavioural item of a calculation body — a conditional, a loop, an
+			// assignment — is read the way an action body reads it
+			// (SysML.xtext CalculationBodyItem carries ActionBodyItem).
+			body.add(p.parseActionMember())
 		} else {
 			// Try parsing as body member (parameters, doc, import, etc.)
 			// Body member expects: visibility + declaration keyword, or special patterns
@@ -351,6 +358,12 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 // parseActionMember parses one action member: node, edge, or nested declaration.
 func (p *Parser) parseActionMember() ast.Node {
 	start := p.peek().Span.Offset
+
+	// A `return` in a statement position of a calculation body is an early
+	// return: only the body's own members declare its result parameter.
+	if p.calcBodyDepth > 0 && p.isResultKeyword() {
+		return p.parseResultMemberIn(true)
+	}
 
 	// Try general declaration first (nested actions, features, etc.)
 	if node := p.tryParseDeclaration(); node != nil {
@@ -1140,6 +1153,82 @@ func (p *Parser) parseResultBody() []ast.Node {
 //	return <expr>;         -- computed result
 //	return : Type[mult];   -- result parameter (anonymous, type-only)
 func (p *Parser) parseResultMember() ast.Node {
+	return p.parseResultMemberIn(false)
+}
+
+// atCalcStatement reports whether the calculation body continues with a
+// behavioural statement rather than a member declaration or a result
+// expression. `if` also starts a conditional expression, which is told apart by
+// the '?' that follows its condition.
+func (p *Parser) atCalcStatement() bool {
+	if p.at(lexer.Identifier) {
+		next := p.peekN(1).Kind
+		return next == lexer.Eq || next == lexer.ColonEq
+	}
+	if !p.at(lexer.Keyword) {
+		return false
+	}
+	switch p.peek().KeywordID {
+	case "assign", "while", "loop", "for", "send", "perform", "terminate":
+		return true
+	case "if":
+		return !p.atConditionalExpression()
+	}
+	return false
+}
+
+// atConditionalExpression reports whether the `if` at the cursor starts a
+// conditional expression (`if c ? a else b`) rather than an if statement, by
+// looking for the '?' that ends its condition. A brace group is scanned past
+// only while the condition goes on after it, so a body expression
+// (`xs->exists{...}`) is read as part of the condition while the block of an if
+// statement ends the scan.
+func (p *Parser) atConditionalExpression() bool {
+	depth := 0
+	for i := 1; ; i++ {
+		tok := p.peekN(i)
+		switch tok.Kind {
+		case lexer.EOF:
+			return false
+		case lexer.LParen, lexer.LBracket, lexer.LBrace:
+			depth++
+		case lexer.RParen, lexer.RBracket, lexer.RBrace:
+			if depth == 0 {
+				return false
+			}
+			depth--
+			if depth == 0 && tok.Kind == lexer.RBrace && !continuesCondition(p.peekN(i+1)) {
+				return false
+			}
+		case lexer.Question:
+			if depth == 0 {
+				return true
+			}
+		case lexer.Semicolon:
+			if depth == 0 {
+				return false
+			}
+		}
+	}
+}
+
+// continuesCondition reports whether tok can go on the condition of a
+// conditional expression once a brace group of it has closed.
+func continuesCondition(tok lexer.Token) bool {
+	switch tok.Kind {
+	case lexer.Question, lexer.Arrow, lexer.Dot, lexer.LBracket,
+		lexer.Comma, lexer.RParen, lexer.RBracket:
+		return true
+	}
+	_, isOperator := binaryOpForToken(tok)
+	return isOperator
+}
+
+// parseResultMemberIn parses a `return` member. In a statement position
+// (inStatement) a lone name after `return` is the value returned, since a
+// result parameter is declared among the body's own members, not inside a
+// branch or a loop.
+func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 	start := p.peek().Span.Offset
 
 	// Expect 'return' keyword
@@ -1306,7 +1395,7 @@ func (p *Parser) parseResultMember() ast.Node {
 	// `return` introduces a return parameter, so a lone name after it declares
 	// that parameter (`calc acc : Acceleration { return a; }`) rather than
 	// referencing one.
-	if p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
+	if !inStatement && p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,

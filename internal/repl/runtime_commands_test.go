@@ -527,6 +527,35 @@ func TestCalcParsesExpressionArguments(t *testing.T) {
 	wants(t, run(t, s, "%calc Fall v0=-15.0 [m/s] tb=8.5 [s]"), "named arguments are not supported")
 }
 
+// %calc runs a calculation whose body is statements — locals, a loop, an early
+// return — the same way it runs one that is a single expression.
+func TestCalcRunsAStatementBody(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package P {
+		calc def factorial {
+			in n;
+			attribute acc = 1;
+			attribute i = 1;
+			while i <= n {
+				acc = acc * i;
+				i = i + 1;
+			}
+			return : Integer = acc;
+		}
+		calc def firstOver {
+			in limit;
+			for x in (1, 5, 9) {
+				if x > limit { return : Integer = x; }
+			}
+			return : Integer = 0;
+		}
+	}`)
+	wants(t, run(t, s, "%calc P::factorial 6"), "✓ P::factorial(6)", "= 720")
+	wants(t, run(t, s, "%calc P::factorial 0"), "= 1")
+	wants(t, run(t, s, "%calc P::firstOver 3"), "= 5")
+	wants(t, run(t, s, "%calc P::firstOver 100"), "= 0")
+}
+
 // A whitespace-separated argument may be signed: `5 -3` is two arguments, while
 // `5 - 3` — an expression left unfinished across the space — is one.
 func TestCalcSeparatesSignedArguments(t *testing.T) {

@@ -1,0 +1,17 @@
+{
+  "type": "calc",
+  "inputs": [
+    {
+      "type": "Integer",
+      "value": 17
+    },
+    {
+      "type": "Integer",
+      "value": 5
+    }
+  ],
+  "result": {
+    "type": "Integer",
+    "value": 2
+  }
+}
