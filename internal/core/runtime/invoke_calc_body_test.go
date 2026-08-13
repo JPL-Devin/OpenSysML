@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -299,5 +300,39 @@ func TestCalcBodySuccessionIsNotAStep(t *testing.T) {
 	}
 	if value.Const.Int != 4 {
 		t.Fatalf("sequenced(3) = %s, want 4", FormatTraceValue(value))
+	}
+}
+
+// unevaluableResultModel answers with an expression the evaluator has no value
+// kind for, so the body states a result that cannot be computed.
+const unevaluableResultModel = `
+package test {
+	item def Foo { attribute v; }
+	calc def mk {
+		in n;
+		new Foo(n)
+	}
+	calc def unbounded {
+		in n;
+		*
+	}
+}
+`
+
+// TestUnevaluableResultIsNotReportedAsMissing requires a body stating a result
+// the evaluator cannot compute to report that, not that there is no result.
+func TestUnevaluableResultIsNotReportedAsMissing(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, unevaluableResultModel))
+	root := idx.DocumentRoot("<test>")
+
+	for _, name := range []string{"mk", "unbounded"} {
+		calc, scope := calcByName(t, root, "test", name)
+		_, err := ctx.InvokeCalc(calc, []Value{constInt(1)}, scope)
+		if err == nil {
+			t.Fatalf("InvokeCalc(%s) succeeded, want the evaluator to report the expression", name)
+		}
+		if errors.Is(err, ErrNoResultExpression) {
+			t.Fatalf("InvokeCalc(%s) = %v, want the unevaluable expression reported, not a missing result", name, err)
+		}
 	}
 }

@@ -102,9 +102,10 @@ func Returns(stmts []Statement) bool {
 func isExpressionNode(node ast.Node) bool {
 	switch node.(type) {
 	case *ast.LiteralInteger, *ast.LiteralReal, *ast.LiteralBool, *ast.LiteralString,
-		*ast.NullExpr, *ast.FeatureReference, *ast.FeatureChainExpr, *ast.OperatorExpr,
-		*ast.SequenceExpr, *ast.CollectExpr, *ast.SelectExpr, *ast.InvocationExpr,
-		*ast.IndexExpr, *ast.BodyExpr:
+		*ast.LiteralInfinity, *ast.NullExpr, *ast.FeatureReference, *ast.FeatureChainExpr,
+		*ast.OperatorExpr, *ast.SequenceExpr, *ast.CollectExpr, *ast.SelectExpr,
+		*ast.InvocationExpr, *ast.IndexExpr, *ast.BodyExpr, *ast.ConstructorExpr,
+		*ast.MetadataAccessExpr, *ast.CastExpr, *ast.LambdaExpr:
 		return true
 	default:
 		return false
