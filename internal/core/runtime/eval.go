@@ -68,6 +68,18 @@ func (ec *EvalContext) evalIn(scope *symbols.Scope) *EvalContext {
 	}
 }
 
+// nestedEnv returns a context resolving names in scope over this one's
+// environment, for a declaration nested in the body being evaluated: its
+// bindings stay in force under whatever frame the nested declaration pushes.
+func (ec *EvalContext) nestedEnv(scope *symbols.Scope) *EvalContext {
+	frames := make([]map[string]Value, len(ec.frames))
+	copy(frames, ec.frames)
+	return &EvalContext{
+		ctx: ec.ctx, scope: scope, self: ec.self, frames: frames, trace: ec.trace,
+		features: ec.features, resolving: ec.resolving, calcRun: ec.calcRun,
+	}
+}
+
 // Push adds a new frame to the stack (on calc invocation, lambda entry).
 func (ec *EvalContext) Push(bindings map[string]Value) {
 	ec.frames = append(ec.frames, bindings)

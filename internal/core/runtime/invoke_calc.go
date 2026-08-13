@@ -116,8 +116,11 @@ func calcParameters(chain []*symbols.Symbol) []calcParameter {
 			}
 			param := calcParameter{Name: name, Default: usage.Value, Owner: link}
 			if at, seen := index[param.Name]; seen {
+				// A redeclaration binding no value keeps the inherited default,
+				// which is written in the scope of the calc that stated it.
 				if param.Default == nil {
 					param.Default = params[at].Default
+					param.Owner = params[at].Owner
 				}
 				params[at] = param
 				continue
@@ -200,14 +203,11 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 		return Value{}, err
 	}
 
-	if ctx.calcDepth >= maxCalcNestingDepth {
-		return Value{}, fmt.Errorf(
-			"%w: calc %s nested more than %d deep (recursive calc?)",
-			ErrCalcRecursionLimit, shape.Name, maxCalcNestingDepth,
-		)
+	leave, err := ctx.enterCalc(shape.Name)
+	if err != nil {
+		return Value{}, err
 	}
-	ctx.calcDepth++
-	defer func() { ctx.calcDepth-- }()
+	defer leave()
 
 	ec := NewEvalContext(ctx, ctx.calcScope(shape.BodyOwner, shape.Sym, callerScope))
 
@@ -218,7 +218,7 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	bindings := make(map[string]Value, len(shape.Params))
 	ec.Push(bindings)
 
-	if err := ctx.bindCalcParameters(shape, ec, args, callerScope, bindings); err != nil {
+	if err := ctx.bindCalcParameters(shape, ec, args, callerScope, bindings, nil); err != nil {
 		if ec.trace != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
 		}
@@ -239,20 +239,41 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	return result, nil
 }
 
+// enterCalc counts one calc evaluation onto the stack, refusing to go deeper
+// than maxCalcNestingDepth so a recursive calc reports a typed error rather than
+// exhausting the stack. The returned function takes it back off.
+func (ctx *Context) enterCalc(name string) (func(), error) {
+	if ctx.calcDepth >= maxCalcNestingDepth {
+		return nil, fmt.Errorf(
+			"%w: calc %s nested more than %d deep (recursive calc?)",
+			ErrCalcRecursionLimit, name, maxCalcNestingDepth,
+		)
+	}
+	ctx.calcDepth++
+	return func() { ctx.calcDepth-- }, nil
+}
+
 // bindCalcParameters binds the calc's input parameters into bindings: each
 // parameter's argument, or, for a parameter no argument supplies, the default
 // declared closest to the invoked calc, evaluated in the scope of the calc
-// declaring it. ec supplies the environment defaults are evaluated in.
+// declaring it. ec supplies the environment defaults are evaluated in; nested,
+// when non-null, is the environment reading a nested usage, which the bindings
+// the usage itself declares are written in and evaluate against.
 func (ctx *Context) bindCalcParameters(
 	shape *calcShape,
 	ec *EvalContext,
 	args calcArgs,
 	callerScope *symbols.Scope,
 	bindings map[string]Value,
+	nested *EvalContext,
 ) error {
 	for i, param := range shape.Params {
 		defaultScope := ctx.calcScope(param.Owner, shape.Sym, callerScope)
-		value, source, err := ec.evalIn(defaultScope).bindCalcParameter(shape, param, args, i)
+		binder := ec
+		if nested != nil && param.Owner == shape.Sym {
+			binder = nested
+		}
+		value, source, err := binder.evalIn(defaultScope).bindCalcParameter(shape, param, args, i)
 		if err != nil {
 			return err
 		}
@@ -284,6 +305,8 @@ func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, cal
 	// naming itself is a cycle rather than an evaluation, so it is evaluated
 	// through the same run bookkeeping a calc usage's outputs use.
 	run := newCalcRun(shape, callerScope, nil, bindings)
+	// The invocation already holds this evaluation's nesting slot.
+	run.onStack = true
 	return run.value(ctx, out)
 }
 

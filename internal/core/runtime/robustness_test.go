@@ -42,6 +42,11 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_usage_specializes_a_non_calc", testCalcUsageSpecializesANonCalc)
 	t.Run("calc_usage_step_budget", testCalcUsageStepBudget)
 	t.Run("calc_usage_output_without_a_value", testCalcUsageOutputWithoutAValue)
+	t.Run("nested_calc_usage_unbound_input", testNestedCalcUsageUnboundInput)
+	t.Run("nested_calc_usage_unknown_output", testNestedCalcUsageUnknownOutput)
+	t.Run("nested_calc_usage_self_cycle", testNestedCalcUsageSelfCycle)
+	t.Run("nested_calc_usage_recursion_depth", testNestedCalcUsageRecursionDepth)
+	t.Run("nested_calc_usage_step_budget", testNestedCalcUsageStepBudget)
 	t.Run("multiple_outputs_invoked_as_an_expression", testMultipleOutputsInvokedAsAnExpression)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
@@ -2412,5 +2417,128 @@ func testMultipleOutputsInvokedAsAnExpression(t *testing.T) {
 	}
 	if !errors.Is(err, ErrAmbiguousResult) {
 		t.Errorf("expected ErrAmbiguousResult, got: %v", err)
+	}
+	// The diagnostic has to teach the spelling that does work.
+	if err != nil && !strings.Contains(err.Error(), "calc c : test::Two { in n = ...; } then read c.a") {
+		t.Errorf("error should spell out the calc usage to declare, got: %v", err)
+	}
+}
+
+// testNestedCalcUsageUnboundInput: a usage nested in a calc binds its inputs
+// from the enclosing evaluation, and an input nothing there values is reported.
+func testNestedCalcUsageUnboundInput(t *testing.T) {
+	src := `
+		package test {
+			calc def Two {
+				in n : Integer;
+				out a = n + 1;
+				out b = n * 2;
+			}
+			calc def Outer {
+				in m : Integer;
+				calc inner : Two;
+				out d = inner.a;
+			}
+			calc c : Outer { in m = 5; }
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "d", 10000)
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("expected ErrUnboundParameter, got: %v", err)
+	}
+}
+
+// testNestedCalcUsageUnknownOutput: reading a name the nested calc declares no
+// output for is a modeling error wherever the usage is declared.
+func testNestedCalcUsageUnknownOutput(t *testing.T) {
+	src := `
+		package test {
+			calc def Two {
+				in n : Integer;
+				out a = n + 1;
+				out b = n * 2;
+			}
+			calc def Outer {
+				in m : Integer;
+				calc inner : Two { in n = m; }
+				out d = inner.nope;
+			}
+			calc c : Outer { in m = 5; }
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "d", 10000)
+	if !errors.Is(err, ErrUnknownOutput) {
+		t.Errorf("expected ErrUnknownOutput, got: %v", err)
+	}
+}
+
+// testNestedCalcUsageSelfCycle: an input of a nested usage valued from its own
+// name with nothing outside to resolve to stays the cycle it is, rather than
+// being read as the shadowing binding it looks like.
+func testNestedCalcUsageSelfCycle(t *testing.T) {
+	src := `
+		package test {
+			calc def Two {
+				in n : Integer;
+				out a = n + 1;
+				out b = n * 2;
+			}
+			calc def Outer {
+				calc inner : Two { in n = n; }
+				out d = inner.a;
+			}
+			calc c : Outer;
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "d", 10000)
+	if !errors.Is(err, ErrCyclicSlot) {
+		t.Errorf("expected ErrCyclicSlot, got: %v", err)
+	}
+}
+
+// testNestedCalcUsageRecursionDepth: a calc whose nested usage is of itself
+// never bottoms out, so the nesting limit reports it instead of hanging.
+func testNestedCalcUsageRecursionDepth(t *testing.T) {
+	src := `
+		package test {
+			calc def Down {
+				in n : Integer;
+				calc next : Down { in n = n - 1; }
+				out a = next.a;
+				out b = n;
+			}
+			calc c : Down { in n = 3; }
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "a", 1000000)
+	if !errors.Is(err, ErrCalcRecursionLimit) {
+		t.Errorf("expected ErrCalcRecursionLimit, got: %v", err)
+	}
+}
+
+// testNestedCalcUsageStepBudget: the body of a nested usage spends the budget of
+// the run reading it, so a body that never terminates fails the read.
+func testNestedCalcUsageStepBudget(t *testing.T) {
+	src := `
+		package test {
+			calc def Spin {
+				in n : Integer;
+				attribute i : Integer = 0;
+				while i >= 0 {
+					i = i + 1;
+				}
+				out reached = i;
+			}
+			calc def Outer {
+				in m : Integer;
+				calc inner : Spin { in n = m; }
+				out d = inner.reached;
+			}
+			calc c : Outer { in m = 1; }
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "d", 20)
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
 	}
 }
