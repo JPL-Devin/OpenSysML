@@ -10,7 +10,7 @@ from filelock import FileLock, Timeout
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
 from pysysml.binary import ensure_binary
-from pysysml.errors import ConnectionError
+from pysysml.errors import ConnectionError, UnsupportedValueError
 from pysysml.values import value_to_python
 
 
@@ -209,6 +209,7 @@ class Connection:
             
         Raises:
             RuntimeError: If evaluation fails
+            UnsupportedValueError: If the result cannot be represented on the wire
         """
         from pysysml.errors import RuntimeError as PyRuntimeError
         from pysysml.diagnostic import Diagnostic
@@ -268,7 +269,9 @@ class Connection:
             inputs (dict, optional): Input parameter name → value
             
         Returns:
-            dict: Output parameter name → value
+            dict: Output parameter name → value; an output the wire format cannot
+                represent is reported as an UnsupportedValueError in its place,
+                so one such output does not discard the rest
             
         Raises:
             RuntimeError: If execution fails
@@ -291,8 +294,7 @@ class Connection:
             wrapped_diags = [Diagnostic(d) for d in response.diagnostics]
             raise PyRuntimeError(response.error, diagnostics=wrapped_diags)
         
-        # Convert outputs
-        return {name: self._value_to_python(val) for name, val in response.outputs.items()}
+        return self._values_to_python(response.outputs)
     
     def execute_state(self, state_machine_symbol_id, model_hash, events=None):
         """Execute a state machine.
@@ -303,7 +305,9 @@ class Connection:
             events (list, optional): Event names to process
             
         Returns:
-            dict: {'states_visited': [...], 'final_context': {...}}
+            dict: {'states_visited': [...], 'final_context': {...}}; a context value
+                the wire format cannot represent is reported as an
+                UnsupportedValueError in its place
             
         Raises:
             RuntimeError: If execution fails
@@ -325,8 +329,7 @@ class Connection:
         
         return {
             'states_visited': list(response.states_visited),
-            'final_context': {name: self._value_to_python(val) 
-                             for name, val in response.final_context.items()}
+            'final_context': self._values_to_python(response.final_context),
         }
     
     def _python_to_value(self, py_value):
@@ -358,6 +361,20 @@ class Connection:
         their integer id; there is no instance graph to resolve them against.
         """
         return value_to_python(pb_value)
+
+    def _values_to_python(self, pb_values):
+        """Convert a name → Value map, keeping an unsupported value as its error.
+
+        Mirrors Instance.slots: one value the wire format cannot represent must
+        not discard the entries around it.
+        """
+        result = {}
+        for name, pb_value in pb_values.items():
+            try:
+                result[name] = self._value_to_python(pb_value)
+            except UnsupportedValueError as exc:
+                result[name] = exc
+        return result
     
     def _probe_service(self, host, port, timeout=5.0):
         """Check if sysml-grpc service is running and responsive.

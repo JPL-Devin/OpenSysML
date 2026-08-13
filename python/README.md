@@ -101,6 +101,10 @@ cyclic.a             # raises SlotError: slot 'a': ... cyclic slot dependency
 cyclic.slots["a"]    # SlotError(...)
 ```
 
+`execute_action` and `execute_state` apply the same policy to their result maps:
+a value the wire format cannot represent is reported as an
+`UnsupportedValueError` in that entry, leaving the other entries intact.
+
 `pysysml.connect(host, port, auto_start=True)` returns a `Connection` when you
 want to manage the service yourself; the module-level functions share a lazily
 created singleton connection instead. The service is reference-counted across
