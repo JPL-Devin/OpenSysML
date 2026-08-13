@@ -127,17 +127,6 @@ func (shape *calcShape) output(name string) (calcOutput, bool) {
 	return calcOutput{}, false
 }
 
-// bindsOwnOutput reports whether the usage itself binds one of the outputs read
-// from it, whose value the environment reading the usage answers.
-func (shape *calcShape) bindsOwnOutput() bool {
-	for _, out := range shape.Outputs {
-		if out.Value != nil && out.Owner == shape.Sym {
-			return true
-		}
-	}
-	return false
-}
-
 // outputNames renders the output features the calc declares, for a diagnostic
 // about one it does not.
 func (shape *calcShape) outputNames() string {
