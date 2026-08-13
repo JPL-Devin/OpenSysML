@@ -24,6 +24,8 @@ type expectedSlot struct {
 	Materialized bool        `json:"materialized"`
 	ValueKind    string      `json:"value_kind"`
 	Value        interface{} `json:"value"`
+	// Error, when set, is a substring the slot's error must contain.
+	Error string `json:"error"`
 }
 
 // conformanceCase is the schema of a <name>.expected.json fixture. See
@@ -46,6 +48,7 @@ type conformanceCase struct {
 
 	ExpectedResult        *expectedValue           `json:"expected_result,omitempty"`
 	ExpectedSlots         map[string]expectedSlot  `json:"expected_slots,omitempty"`
+	ExpectedInstanceCount int                      `json:"expected_instance_count,omitempty"`
 	ExpectedOutputs       map[string]expectedValue `json:"expected_outputs,omitempty"`
 	ExpectedStatesVisited []string                 `json:"expected_states_visited,omitempty"`
 	ExpectedFinalContext  map[string]expectedValue `json:"expected_final_context,omitempty"`
@@ -178,9 +181,19 @@ func runInstantiateCase(t *testing.T, srv *Service, ctx context.Context, modelHa
 		if slot.Materialized != want.Materialized {
 			t.Errorf("slot %q: materialized = %v, want %v", name, slot.Materialized, want.Materialized)
 		}
+		if want.Error == "" {
+			if slot.Error != "" {
+				t.Errorf("slot %q: unexpected error %q", name, slot.Error)
+			}
+		} else if !strings.Contains(slot.Error, want.Error) {
+			t.Errorf("slot %q: error = %q, want it to contain %q", name, slot.Error, want.Error)
+		}
 		if want.ValueKind != "" {
 			checkValue(t, "slot "+name, expectedValue{Kind: want.ValueKind, Value: want.Value}, slot.Value)
 		}
+	}
+	if tc.ExpectedInstanceCount != 0 && len(resp.Instances) != tc.ExpectedInstanceCount {
+		t.Errorf("instances = %d, want %d", len(resp.Instances), tc.ExpectedInstanceCount)
 	}
 }
 
@@ -321,8 +334,8 @@ func checkValue(t *testing.T, label string, want expectedValue, got *pb.Value) {
 		if got.GetRealValue() != mustFloat(t, want) {
 			t.Errorf("%s: value = %v, want %v", label, got.GetRealValue(), want.Value)
 		}
-	case "null":
-		// The oneof arm carries all the information.
+	case "null", "instance_id":
+		// The oneof arm carries all the information; ids are runtime-assigned.
 	default:
 		if fmt.Sprint(gotValue) != fmt.Sprint(want.Value) {
 			t.Errorf("%s: value = %v, want %v", label, gotValue, want.Value)

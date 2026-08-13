@@ -324,6 +324,8 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 		onPath[cur.Type] = true
 		defer delete(onPath, cur.Type)
 
+		// InstanceToProto reads every slot through GetSlot, which is what
+		// lazily materializes the children the ids below resolve to.
 		pbInst := InstanceToProto(rt, cur, idx)
 		all = append(all, pbInst)
 
@@ -370,6 +372,22 @@ func instanceRefs(slot *pb.SlotValue) []int64 {
 	return ids
 }
 
+// collectionElements returns what a collection slot holds; a multi-valued
+// feature's contents can be either a sequence or a set.
+func collectionElements(val runtime.Value) []runtime.Value {
+	switch val.Kind {
+	case runtime.ValSequence:
+		if val.Sequence != nil {
+			return val.Sequence.Elements()
+		}
+	case runtime.ValSet:
+		if val.Set != nil {
+			return val.Set.Elements()
+		}
+	}
+	return nil
+}
+
 // InstanceToProto converts runtime.Instance to protobuf Instance. Slots are read
 // through Instance.GetSlot, so a derived default is evaluated against the
 // instance rather than reported as an unmaterialized slot.
@@ -394,14 +412,14 @@ func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 		// Check multiplicity to determine scalar vs collection
 		mult := slot.Feature.Multiplicity
 		if !mult.Upper.Infinite && mult.Upper.Value <= 1 {
-			// Scalar slot
-			pbSlot.Value = ValueToProto(slot.Value)
+			// Scalar slot. An unmaterialized one holds no value; marshalling it
+			// anyway would report the empty value as an unsupported null.
+			if slot.Materialized {
+				pbSlot.Value = ValueToProto(slot.Value)
+			}
 		} else {
-			// Collection slot
-			if slot.Values.Kind == runtime.ValSequence && slot.Values.Sequence != nil {
-				for _, elem := range slot.Values.Sequence.Elements() {
-					pbSlot.Values = append(pbSlot.Values, ValueToProto(elem))
-				}
+			for _, elem := range collectionElements(slot.Values) {
+				pbSlot.Values = append(pbSlot.Values, ValueToProto(elem))
 			}
 		}
 

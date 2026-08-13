@@ -154,8 +154,8 @@ package Demo {
 	if id := slot.Value.GetInstanceId(); id != 0 {
 		ids = append(ids, id)
 	}
-	if len(ids) == 0 {
-		t.Skipf("runtime did not materialize wheel instances: %v", slot)
+	if len(ids) != 4 {
+		t.Fatalf("expected 4 wheel instances, got %d: %v", len(ids), slot)
 	}
 
 	graph := byID(resp)
@@ -163,6 +163,31 @@ package Demo {
 		if _, ok := graph[id]; !ok {
 			t.Errorf("wheel instance %d not present in Instances", id)
 		}
+	}
+}
+
+// TestInstantiate_UnmaterializedScalarSlotHasNoValue verifies a scalar feature
+// with nothing to materialize is reported as an empty slot rather than as a
+// value the wire format could not represent.
+func TestInstantiate_UnmaterializedScalarSlotHasNoValue(t *testing.T) {
+	content := `
+package Demo {
+  part def Sensor {
+    attribute reading : Real;
+  }
+}
+`
+	resp := instantiate(t, content, "graph-unmaterialized", "Demo::Sensor")
+
+	slot := resp.Instance.Slots["reading"]
+	if slot == nil {
+		t.Fatal("expected reading slot")
+	}
+	if slot.Materialized {
+		t.Fatalf("expected an unmaterialized slot, got %v", slot)
+	}
+	if slot.Value != nil {
+		t.Errorf("expected no value on an unmaterialized slot, got %v", slot.Value)
 	}
 }
 

@@ -235,3 +235,11 @@ def test_instance_str():
 
     assert "789" in str(inst)
     assert "Test::Part" in str(inst)
+
+def test_graph_is_shared_not_copied():
+    """Nested instances reuse one graph dict instead of copying it per node."""
+    pb_vehicle, graph = vehicle_graph()
+    inst = Instance(pb_vehicle, graph)
+
+    assert inst._graph is graph
+    assert inst.engine._graph is graph

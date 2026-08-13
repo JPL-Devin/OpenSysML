@@ -105,6 +105,12 @@ cyclic.a             # raises SlotError: slot 'a': ... cyclic slot dependency
 cyclic.slots["a"]    # SlotError(...)
 ```
 
+`SlotError` is not an `AttributeError`, so `hasattr` on such a slot propagates it rather than
+returning `False`; use `slots` to inspect an instance whose slots may have failed.
+
+`eval` returns a single value, so a result the wire format cannot represent raises
+`UnsupportedValueError` rather than being reported per entry.
+
 `execute_action` and `execute_state` apply the same policy to their result maps:
 a value the wire format cannot represent is reported as an
 `UnsupportedValueError` in that entry, leaving the other entries intact.

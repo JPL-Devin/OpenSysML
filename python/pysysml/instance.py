@@ -27,8 +27,13 @@ class Instance:
             _wrappers: internal cache shared by all instances of one graph
         """
         self._pb = pb_instance
-        self._graph = dict(graph) if graph else {}
-        self._graph.setdefault(pb_instance.id, pb_instance)
+        # The graph is shared by every instance of one response, never mutated.
+        if not graph:
+            self._graph = {pb_instance.id: pb_instance}
+        elif pb_instance.id in graph:
+            self._graph = graph
+        else:
+            self._graph = {**graph, pb_instance.id: pb_instance}
         self._wrappers = _wrappers if _wrappers is not None else {}
         self._wrappers[pb_instance.id] = self
 

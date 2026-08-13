@@ -72,6 +72,28 @@ class Model:
         
         return None
     
+    def get(self, fqn):
+        """Get symbol by fully-qualified name (e.g., "Demo::Vehicle").
+
+        Args:
+            fqn (str): Fully-qualified name to look up
+
+        Returns:
+            Symbol or None: Matching symbol, or None if not found
+        """
+        if self.root.id == fqn:
+            return self.root
+
+        queue = [self.root]
+        while queue:
+            current = queue.pop(0)
+            for child in current.children():
+                if child.id == fqn:
+                    return child
+                queue.append(child)
+
+        return None
+
     def __str__(self):
         """String representation: 'Model: name (kind)'."""
         return f"Model: {self.root.name} ({self.root.kind})"

@@ -6,6 +6,8 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -242,5 +244,33 @@ package Vehicle {
 	}
 	if enginePb.ChildIds[0] != "Vehicle::Engine::combustionChamber" {
 		t.Errorf("Engine ChildIds[0]: got %q, want %q", enginePb.ChildIds[0], "Vehicle::Engine::combustionChamber")
+	}
+}
+
+// TestCollectionElementsHandlesSetAndSequence verifies a collection slot is
+// marshalled whichever collection kind the runtime left in it.
+func TestCollectionElementsHandlesSetAndSequence(t *testing.T) {
+	one := runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}}
+	two := runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 2}}
+
+	seq := runtime.NewSequence()
+	seq.Append(one)
+	seq.Append(two)
+
+	set := runtime.NewSet()
+	set.Add(one)
+	set.Add(two)
+
+	for name, val := range map[string]runtime.Value{
+		"sequence": {Kind: runtime.ValSequence, Sequence: seq},
+		"set":      {Kind: runtime.ValSet, Set: set},
+	} {
+		if got := len(collectionElements(val)); got != 2 {
+			t.Errorf("%s: got %d elements, want 2", name, got)
+		}
+	}
+
+	if got := collectionElements(runtime.Value{Kind: runtime.ValNull}); got != nil {
+		t.Errorf("non-collection: got %v, want nil", got)
 	}
 }
