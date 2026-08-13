@@ -8,13 +8,20 @@ type a decoded value is expected to have, and reports a mismatch rather than
 returning a wrongly typed value.
 """
 
-from typing import Callable, ClassVar, List, Optional, TypeVar
+from typing import Callable, ClassVar, List, Optional, Set, TypeVar
 
-from pysysml.errors import TypeMismatchError
+from pysysml.errors import InstanceTypeError, TypeMismatchError
 from pysysml.instance import Instance
 
 T = TypeVar("T")
 TypedObjectT = TypeVar("TypedObjectT", bound="TypedObject")
+
+# Every SysML definition a generated class has been defined for in this process,
+# by FQN. It is what makes "this instance's type is not the one this class views"
+# distinguishable from "this client has never heard of this instance's type": the
+# first is a caller error, the second is the usage case below, which the client
+# cannot decide and therefore does not reject.
+_generated_ids: Set[str] = set()
 
 
 class TypedObject:
@@ -28,9 +35,51 @@ class TypedObject:
     def __init__(self, instance: Instance) -> None:
         self._instance = instance
 
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        super().__init_subclass__(**kwargs)
+        if cls.sysml_id:
+            _generated_ids.add(cls.sysml_id)
+
     @classmethod
     def from_instance(cls: "type[TypedObjectT]", instance: Instance) -> TypedObjectT:
-        """Return a typed view over ``instance``."""
+        """Return a typed view over ``instance``, rejecting one of another type.
+
+        Accepted:
+
+        * an instance of exactly this class's definition;
+        * an instance of a definition that specializes it and has a generated
+          class of its own — legitimate polymorphism, recognized because
+          generation emits SysML specialization as Python inheritance;
+        * an instance whose type no generated class in this process describes.
+          The service reports the type of an instantiated *usage* as the usage's
+          own FQN (``Demo::myCar``, not ``Demo::SportsCar``), which no generated
+          class carries, so the client cannot relate it to a definition at all.
+          Rejecting it would break instantiating a usage, which is the ordinary
+          way to get an instance, so an unrecognized type is accepted — the
+          per-slot decoding in this module still reports a wrong shape.
+
+        Rejected: an instance whose type *is* described by a generated class that
+        is not this class or a subclass of it.
+
+        Use :meth:`unchecked` to bypass this deliberately.
+
+        Raises:
+            InstanceTypeError: If the instance's type is known to be another one.
+        """
+        actual = instance.type_symbol_id
+        if actual and actual != cls.sysml_id and actual in _generated_ids:
+            if not any(sub.sysml_id == actual for sub in _subclasses(cls)):
+                raise InstanceTypeError(cls.sysml_id or cls.__name__, actual)
+        return cls(instance)
+
+    @classmethod
+    def unchecked(cls: "type[TypedObjectT]", instance: Instance) -> TypedObjectT:
+        """Return a typed view over ``instance`` without checking its type.
+
+        For a caller who knows better than the reported type — reading the slots
+        of a partially materialized instance, for instance. Accessing a property
+        the instance does not have still raises from the slot decoder.
+        """
         return cls(instance)
 
     @property
@@ -48,6 +97,17 @@ class TypedObject:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(instance={self._instance!r})"
+
+
+def _subclasses(cls: "type[TypedObject]") -> List["type[TypedObject]"]:
+    """Every class deriving from ``cls``, transitively."""
+    found: List["type[TypedObject]"] = []
+    pending = list(cls.__subclasses__())
+    while pending:
+        subclass = pending.pop()
+        found.append(subclass)
+        pending.extend(subclass.__subclasses__())
+    return found
 
 
 def _mismatch(feature_name: str, expected: str, value: object) -> TypeMismatchError:

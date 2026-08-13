@@ -18,7 +18,12 @@ from pathlib import Path
 
 import pytest
 
-from pysysml.generate import generate_source
+from pysysml.generate import (
+    GENERATOR_VERSION,
+    generate_source,
+    main as generate_main,
+    model_stamp,
+)
 from pysysml.typed import TypedObject
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
@@ -158,8 +163,63 @@ def test_golden_matches_live_generation():
 
     with Connection(auto_start=False) as conn:
         model = conn.load(str(FIXTURE))
-        source = generate_source(model)
+        source = generate_source(model, FIXTURE.read_text())
     assert source == GOLDEN.read_text(), f"golden is stale; regenerate with: {REGENERATE}"
+
+
+def test_golden_records_the_model_it_was_generated_from():
+    """The committed golden carries the stamp of the fixture's current content."""
+    module = load_golden()
+    assert module.SYSML_MODEL_HASH == f"sha256:{model_stamp(FIXTURE.read_text())}"
+    assert module.SYSML_GENERATOR_VERSION == GENERATOR_VERSION
+
+
+def test_model_stamp_ignores_line_endings_but_not_content():
+    """The stamp must not churn on a CRLF checkout, and must move on real edits."""
+    text = "package Demo {\n    part def Engine;\n}\n"
+    assert model_stamp(text) == model_stamp(text.replace("\n", "\r\n"))
+    assert model_stamp(text) != model_stamp(text.replace("Engine", "Motor"))
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not service_available(), reason="sysml-grpc service not running")
+def test_check_passes_for_an_unchanged_model_and_fails_for_a_changed_one(tmp_path):
+    """--check is a gate: it accepts a current module and rejects a stale one."""
+    source = tmp_path / "demo.sysml"
+    source.write_text(FIXTURE.read_text())
+    output = tmp_path / "demo_types.py"
+    env = dict(os.environ)
+    # An isolated HOME keeps each CLI run's refcount from stopping the service.
+    env["HOME"] = str(tmp_path)
+
+    def run(*args):
+        return subprocess.run(
+            [sys.executable, "-m", "pysysml.generate", str(source), "-o", str(output), *args],
+            cwd=PYTHON_ROOT,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+    assert run().returncode == 0, "generation failed"
+    generated = output.read_text()
+
+    unchanged = run("--check")
+    assert unchanged.returncode == 0, unchanged.stdout + unchanged.stderr
+
+    source.write_text(FIXTURE.read_text().replace("1500.0", "1600.0"))
+    changed = run("--check")
+    assert changed.returncode == 1
+    assert "is out of date" in changed.stderr
+    assert "regenerate with" in changed.stderr
+    assert output.read_text() == generated, "--check must not write"
+
+
+def test_check_requires_an_output_path(tmp_path):
+    """--check has nothing to compare against without --output."""
+    source = tmp_path / "demo.sysml"
+    source.write_text("package Demo {}\n")
+    assert generate_main([str(source), "--check"]) == 2
 
 
 @pytest.mark.integration

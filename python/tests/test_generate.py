@@ -63,8 +63,11 @@ class FakeSymbol:
 class FakeInstance:
     """An Instance-shaped holder of slot values, for exercising generated accessors."""
 
-    def __init__(self, slots):
+    def __init__(self, slots, type_symbol_id=""):
         self._slots = dict(slots)
+        # from_instance reads the reported type; empty means "not reported",
+        # which it accepts rather than treating as a mismatch.
+        self.type_symbol_id = type_symbol_id
 
     def __contains__(self, name):
         return name in self._slots

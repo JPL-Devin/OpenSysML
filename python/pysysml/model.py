@@ -34,6 +34,11 @@ class Model:
         return self._hash
     
     @property
+    def connection(self):
+        """Get the connection this model was loaded over."""
+        return self._client
+    
+    @property
     def root(self):
         """Get root symbol."""
         return self._root

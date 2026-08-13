@@ -717,6 +717,7 @@ guaranteed to be interpreted identically by an unrelated SysML RDF tool.
 
 | RPC | Implementation | Status | Tests |
 |-----|---------------|--------|-------|
+| GetServerInfo | service.go `Service.GetServerInfo`, capability names in `Capabilities()` | ✅ Faithful — reports the build version (informational; a source build reports `dev`) and the capabilities this build supports by name, currently `type_facts`. A capability is added, never renamed or dropped with its behaviour intact, so a client requires one instead of comparing versions; a service predating this RPC answers `UNIMPLEMENTED`, which the client reads as supporting no capability | service_test.go:TestGetServerInfo, `TestGetServerInfoTypeFactsCapabilityIsHonest`, python/tests/test_capabilities.py |
 | ParseFile | service.go:39-123 (parser + passes.Analyze + stdlib load) | ✅ Faithful | runtime_test.go:TestParseFile_*, every conformance case |
 | GetSymbol | service.go:126-145; static type facts in typefacts.go (`SymbolInfo.type_info`, `.multiplicity`, `.specializations`) computed by a per-model resolver + semantics context cached on the model and locked for the duration of a conversion | ✅ Faithful — reports the declared and resolved type, the library scalar it reduces to, quantity/unit, the declared multiplicity, and *every* generalization edge (`specializes`, `subsets`, `redefines`, `typing`) in declaration order; an unresolved name is reported unresolved rather than guessed | service_test.go:TestGetSymbol_*, typefacts_test.go:TestTypeInfo*, `TestSpecializations*`, `TestMultiplicity*`, `TestSymbolContextConcurrentConversion` |
 | GetDiagnostics | service.go:148-169 (parser + semantic) | ✅ Faithful | runtime_test.go (implicit) |
@@ -741,6 +742,12 @@ guaranteed to be interpreted identically by an unrelated SysML RDF tool.
 - generated typed classes (`pysysml.generate`) cover structural usages only; `subsets`
   and `redefines` are exported as facts but do not become Python base classes, and
   redefinition narrowing is not checked
+- `TypedObject.from_instance` rejects an instance whose type another generated class
+  describes, and accepts a generated subclass of the expected one; it accepts a type
+  no generated class describes, because `Instantiate` on a usage reports the usage's
+  own FQN (`Demo::myCar`), which the client cannot relate to the definition typing
+  it. A wrong-typed instance is therefore caught only when its type has a generated
+  class of its own; `unchecked(instance)` bypasses the check deliberately
 - connection.py:488 - PID ownership check uses substring match - spoofable
 - an `instance_id` outside an `Instantiate` response (an `Evaluate` result, say)
   is still a bare int64: those responses carry no instance graph to resolve it

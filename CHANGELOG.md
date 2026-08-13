@@ -6,6 +6,44 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Unreleased
 
+### Python bindings and `sysml-grpc`
+
+- `Instantiate` returns every instance reachable from the root, so a Python caller
+  expands a composite slot (`inst.engine.power`) instead of holding a bare instance
+  id, and a slot the service could not evaluate is reported in `SlotValue.error`
+  rather than as a null value. On the client, slot values convert to Python
+  scalars, lists and nested `Instance`s, with the raw protobuf still reachable
+  through `get_slot()`/`raw_slots`; attribute and item access raise
+  `AttributeError`/`KeyError`/`SlotError` rather than returning `None`. (#110)
+- `python -m pysysml.generate` emits a Python class per SysML definition —
+  properties that carry the static type and perform the runtime delegation, so an
+  editor completes `inst.mass` and a type checker rejects `inst.mas`. `GetSymbol`
+  reports the type facts this needs (`type_info` with primitive reduction,
+  `multiplicity`, all specialization edges), `pysysml` ships `py.typed`, and
+  emission is deterministic so the output can be committed. (#111)
+- `GetServerInfo` reports the service's build version and the capabilities it
+  supports by name, so a client can require a capability instead of comparing
+  version strings — versions of source and forked builds are not comparable, and a
+  service that predates the RPC answers `UNIMPLEMENTED`, which is itself the
+  answer. Typed generation requires the `type_facts` capability and fails naming
+  the service in use, where it came from and how to replace it. Against a service
+  without it, every generated feature was typed `object`, indistinguishable from a
+  feature that is genuinely untyped: the v0.0.5 `sysml-grpc` predates `type_info`,
+  so a caller letting `pysysml` download the released binary silently got a
+  useless module.
+- A generated module records the model source hash and the generator's emission
+  schema, and `pysysml.generate --check` regenerates in memory and exits non-zero
+  when the committed module is missing or would change, writing nothing — a stale
+  module was previously found at attribute access, or never, since a feature
+  removed from the model keeps type-checking.
+- `TypedObject.from_instance` rejects an instance of another definition, naming
+  both types, instead of accepting it and failing later with a confusing
+  `TypeMismatchError` on the first slot read. An instance of a definition that
+  specializes the expected one is accepted; an instance whose type no generated
+  class describes is accepted too, because instantiating a usage reports the
+  usage's own FQN, which the client cannot relate to a definition.
+  `unchecked(instance)` is the explicit escape hatch.
+
 ## 0.0.5 — 2026-08-12
 
 ### Language and semantics

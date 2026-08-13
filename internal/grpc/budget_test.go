@@ -15,7 +15,7 @@ import (
 func TestNewServiceResolvesBudgets(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		clearBudgetEnv(t)
-		svc, err := NewService(4)
+		svc, err := NewService(4, "test")
 		if err != nil {
 			t.Fatalf("NewService: %v", err)
 		}
@@ -28,7 +28,7 @@ func TestNewServiceResolvesBudgets(t *testing.T) {
 		clearBudgetEnv(t)
 		t.Setenv(runtime.MaxStepsEnvVar, "1234567")
 		t.Setenv(runtime.MaxActionStepsEnvVar, "55555")
-		svc, err := NewService(4)
+		svc, err := NewService(4, "test")
 		if err != nil {
 			t.Fatalf("NewService: %v", err)
 		}
@@ -40,7 +40,7 @@ func TestNewServiceResolvesBudgets(t *testing.T) {
 	t.Run("applied_to_every_context", func(t *testing.T) {
 		clearBudgetEnv(t)
 		t.Setenv(runtime.MaxStepsEnvVar, "777")
-		svc, err := NewService(4)
+		svc, err := NewService(4, "test")
 		if err != nil {
 			t.Fatalf("NewService: %v", err)
 		}
@@ -81,7 +81,7 @@ func TestNewServiceRejectsUnusableBudget(t *testing.T) {
 			t.Run(name+"/"+value, func(t *testing.T) {
 				clearBudgetEnv(t)
 				t.Setenv(name, value)
-				svc, err := NewService(4)
+				svc, err := NewService(4, "test")
 				if err == nil {
 					t.Fatalf("NewService accepted %s=%q", name, value)
 				}

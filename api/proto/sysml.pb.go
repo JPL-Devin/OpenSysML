@@ -1779,6 +1779,107 @@ func (x *Span) GetEndCol() int32 {
 	return 0
 }
 
+// ServerInfoRequest asks the service to describe itself. It carries no fields;
+// the answer does not depend on the caller.
+type ServerInfoRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerInfoRequest) Reset() {
+	*x = ServerInfoRequest{}
+	mi := &file_sysml_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerInfoRequest) ProtoMessage() {}
+
+func (x *ServerInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerInfoRequest.ProtoReflect.Descriptor instead.
+func (*ServerInfoRequest) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{25}
+}
+
+// ServerInfoResponse describes the running service.
+type ServerInfoResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Build version of the service binary, informational only: it is "dev" for a
+	// build without release ldflags, and versions of forks are not comparable.
+	// Feature decisions belong in `capabilities`.
+	Version string `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	// Named capabilities this build supports, each an exact string a client can
+	// require. Capabilities are only ever added, never renamed or removed with
+	// their behaviour intact, so requiring one is stable across releases.
+	// Currently defined:
+	//
+	//	"type_facts" - SymbolInfo carries type_info, multiplicity and
+	//	               specializations, which typed code generation needs.
+	Capabilities  []string `protobuf:"bytes,2,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerInfoResponse) Reset() {
+	*x = ServerInfoResponse{}
+	mi := &file_sysml_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerInfoResponse) ProtoMessage() {}
+
+func (x *ServerInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerInfoResponse.ProtoReflect.Descriptor instead.
+func (*ServerInfoResponse) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ServerInfoResponse) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *ServerInfoResponse) GetCapabilities() []string {
+	if x != nil {
+		return x.Capabilities
+	}
+	return nil
+}
+
 var File_sysml_proto protoreflect.FileDescriptor
 
 const file_sysml_proto_rawDesc = "" +
@@ -1934,8 +2035,13 @@ const file_sysml_proto_rawDesc = "" +
 	"start_line\x18\x02 \x01(\x05R\tstartLine\x12\x1b\n" +
 	"\tstart_col\x18\x03 \x01(\x05R\bstartCol\x12\x19\n" +
 	"\bend_line\x18\x04 \x01(\x05R\aendLine\x12\x17\n" +
-	"\aend_col\x18\x05 \x01(\x05R\x06endCol2\xec\x03\n" +
-	"\fSysMLService\x12>\n" +
+	"\aend_col\x18\x05 \x01(\x05R\x06endCol\"\x13\n" +
+	"\x11ServerInfoRequest\"R\n" +
+	"\x12ServerInfoResponse\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x12\"\n" +
+	"\fcapabilities\x18\x02 \x03(\tR\fcapabilities2\xb2\x04\n" +
+	"\fSysMLService\x12D\n" +
+	"\rGetServerInfo\x12\x18.sysml.ServerInfoRequest\x1a\x19.sysml.ServerInfoResponse\x12>\n" +
 	"\tParseFile\x12\x17.sysml.ParseFileRequest\x1a\x18.sysml.ParseFileResponse\x12;\n" +
 	"\tGetSymbol\x12\x17.sysml.GetSymbolRequest\x1a\x15.sysml.SymbolResponse\x12G\n" +
 	"\x0eGetDiagnostics\x12\x19.sysml.DiagnosticsRequest\x1a\x1a.sysml.DiagnosticsResponse\x12;\n" +
@@ -1956,7 +2062,7 @@ func file_sysml_proto_rawDescGZIP() []byte {
 	return file_sysml_proto_rawDescData
 }
 
-var file_sysml_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_sysml_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_sysml_proto_goTypes = []any{
 	(*ParseFileRequest)(nil),      // 0: sysml.ParseFileRequest
 	(*ParseFileResponse)(nil),     // 1: sysml.ParseFileResponse
@@ -1983,11 +2089,13 @@ var file_sysml_proto_goTypes = []any{
 	(*ValueSequence)(nil),         // 22: sysml.ValueSequence
 	(*Diagnostic)(nil),            // 23: sysml.Diagnostic
 	(*Span)(nil),                  // 24: sysml.Span
-	nil,                           // 25: sysml.Instance.SlotsEntry
-	nil,                           // 26: sysml.ExecuteActionRequest.InputsEntry
-	nil,                           // 27: sysml.ExecuteActionResponse.OutputsEntry
-	nil,                           // 28: sysml.ExecuteStateResponse.FinalContextEntry
-	nil,                           // 29: sysml.SymbolInfo.MetadataEntry
+	(*ServerInfoRequest)(nil),     // 25: sysml.ServerInfoRequest
+	(*ServerInfoResponse)(nil),    // 26: sysml.ServerInfoResponse
+	nil,                           // 27: sysml.Instance.SlotsEntry
+	nil,                           // 28: sysml.ExecuteActionRequest.InputsEntry
+	nil,                           // 29: sysml.ExecuteActionResponse.OutputsEntry
+	nil,                           // 30: sysml.ExecuteStateResponse.FinalContextEntry
+	nil,                           // 31: sysml.SymbolInfo.MetadataEntry
 }
 var file_sysml_proto_depIdxs = []int32{
 	16, // 0: sysml.ParseFileResponse.root:type_name -> sysml.SymbolInfo
@@ -1996,18 +2104,18 @@ var file_sysml_proto_depIdxs = []int32{
 	23, // 3: sysml.DiagnosticsResponse.diagnostics:type_name -> sysml.Diagnostic
 	21, // 4: sysml.EvaluateResponse.result:type_name -> sysml.Value
 	23, // 5: sysml.EvaluateResponse.diagnostics:type_name -> sysml.Diagnostic
-	25, // 6: sysml.Instance.slots:type_name -> sysml.Instance.SlotsEntry
+	27, // 6: sysml.Instance.slots:type_name -> sysml.Instance.SlotsEntry
 	21, // 7: sysml.SlotValue.value:type_name -> sysml.Value
 	21, // 8: sysml.SlotValue.values:type_name -> sysml.Value
 	8,  // 9: sysml.InstantiateResponse.instance:type_name -> sysml.Instance
 	23, // 10: sysml.InstantiateResponse.diagnostics:type_name -> sysml.Diagnostic
 	8,  // 11: sysml.InstantiateResponse.instances:type_name -> sysml.Instance
-	26, // 12: sysml.ExecuteActionRequest.inputs:type_name -> sysml.ExecuteActionRequest.InputsEntry
-	27, // 13: sysml.ExecuteActionResponse.outputs:type_name -> sysml.ExecuteActionResponse.OutputsEntry
+	28, // 12: sysml.ExecuteActionRequest.inputs:type_name -> sysml.ExecuteActionRequest.InputsEntry
+	29, // 13: sysml.ExecuteActionResponse.outputs:type_name -> sysml.ExecuteActionResponse.OutputsEntry
 	23, // 14: sysml.ExecuteActionResponse.diagnostics:type_name -> sysml.Diagnostic
-	28, // 15: sysml.ExecuteStateResponse.final_context:type_name -> sysml.ExecuteStateResponse.FinalContextEntry
+	30, // 15: sysml.ExecuteStateResponse.final_context:type_name -> sysml.ExecuteStateResponse.FinalContextEntry
 	23, // 16: sysml.ExecuteStateResponse.diagnostics:type_name -> sysml.Diagnostic
-	29, // 17: sysml.SymbolInfo.metadata:type_name -> sysml.SymbolInfo.MetadataEntry
+	31, // 17: sysml.SymbolInfo.metadata:type_name -> sysml.SymbolInfo.MetadataEntry
 	20, // 18: sysml.SymbolInfo.attributes:type_name -> sysml.AttributeInfo
 	18, // 19: sysml.SymbolInfo.type_info:type_name -> sysml.TypeInfo
 	19, // 20: sysml.SymbolInfo.multiplicity:type_name -> sysml.MultiplicityInfo
@@ -2020,22 +2128,24 @@ var file_sysml_proto_depIdxs = []int32{
 	21, // 27: sysml.ExecuteActionRequest.InputsEntry.value:type_name -> sysml.Value
 	21, // 28: sysml.ExecuteActionResponse.OutputsEntry.value:type_name -> sysml.Value
 	21, // 29: sysml.ExecuteStateResponse.FinalContextEntry.value:type_name -> sysml.Value
-	0,  // 30: sysml.SysMLService.ParseFile:input_type -> sysml.ParseFileRequest
-	2,  // 31: sysml.SysMLService.GetSymbol:input_type -> sysml.GetSymbolRequest
-	4,  // 32: sysml.SysMLService.GetDiagnostics:input_type -> sysml.DiagnosticsRequest
-	6,  // 33: sysml.SysMLService.Evaluate:input_type -> sysml.EvaluateRequest
-	10, // 34: sysml.SysMLService.Instantiate:input_type -> sysml.InstantiateRequest
-	12, // 35: sysml.SysMLService.ExecuteAction:input_type -> sysml.ExecuteActionRequest
-	14, // 36: sysml.SysMLService.ExecuteState:input_type -> sysml.ExecuteStateRequest
-	1,  // 37: sysml.SysMLService.ParseFile:output_type -> sysml.ParseFileResponse
-	3,  // 38: sysml.SysMLService.GetSymbol:output_type -> sysml.SymbolResponse
-	5,  // 39: sysml.SysMLService.GetDiagnostics:output_type -> sysml.DiagnosticsResponse
-	7,  // 40: sysml.SysMLService.Evaluate:output_type -> sysml.EvaluateResponse
-	11, // 41: sysml.SysMLService.Instantiate:output_type -> sysml.InstantiateResponse
-	13, // 42: sysml.SysMLService.ExecuteAction:output_type -> sysml.ExecuteActionResponse
-	15, // 43: sysml.SysMLService.ExecuteState:output_type -> sysml.ExecuteStateResponse
-	37, // [37:44] is the sub-list for method output_type
-	30, // [30:37] is the sub-list for method input_type
+	25, // 30: sysml.SysMLService.GetServerInfo:input_type -> sysml.ServerInfoRequest
+	0,  // 31: sysml.SysMLService.ParseFile:input_type -> sysml.ParseFileRequest
+	2,  // 32: sysml.SysMLService.GetSymbol:input_type -> sysml.GetSymbolRequest
+	4,  // 33: sysml.SysMLService.GetDiagnostics:input_type -> sysml.DiagnosticsRequest
+	6,  // 34: sysml.SysMLService.Evaluate:input_type -> sysml.EvaluateRequest
+	10, // 35: sysml.SysMLService.Instantiate:input_type -> sysml.InstantiateRequest
+	12, // 36: sysml.SysMLService.ExecuteAction:input_type -> sysml.ExecuteActionRequest
+	14, // 37: sysml.SysMLService.ExecuteState:input_type -> sysml.ExecuteStateRequest
+	26, // 38: sysml.SysMLService.GetServerInfo:output_type -> sysml.ServerInfoResponse
+	1,  // 39: sysml.SysMLService.ParseFile:output_type -> sysml.ParseFileResponse
+	3,  // 40: sysml.SysMLService.GetSymbol:output_type -> sysml.SymbolResponse
+	5,  // 41: sysml.SysMLService.GetDiagnostics:output_type -> sysml.DiagnosticsResponse
+	7,  // 42: sysml.SysMLService.Evaluate:output_type -> sysml.EvaluateResponse
+	11, // 43: sysml.SysMLService.Instantiate:output_type -> sysml.InstantiateResponse
+	13, // 44: sysml.SysMLService.ExecuteAction:output_type -> sysml.ExecuteActionResponse
+	15, // 45: sysml.SysMLService.ExecuteState:output_type -> sysml.ExecuteStateResponse
+	38, // [38:46] is the sub-list for method output_type
+	30, // [30:38] is the sub-list for method input_type
 	30, // [30:30] is the sub-list for extension type_name
 	30, // [30:30] is the sub-list for extension extendee
 	0,  // [0:30] is the sub-list for field type_name
@@ -2065,7 +2175,7 @@ func file_sysml_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sysml_proto_rawDesc), len(file_sysml_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   30,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -35,6 +35,11 @@ class SysMLServiceStub:
         Args:
             channel: A grpc.Channel.
         """
+        self.GetServerInfo = channel.unary_unary(
+                '/sysml.SysMLService/GetServerInfo',
+                request_serializer=sysml__pb2.ServerInfoRequest.SerializeToString,
+                response_deserializer=sysml__pb2.ServerInfoResponse.FromString,
+                _registered_method=True)
         self.ParseFile = channel.unary_unary(
                 '/sysml.SysMLService/ParseFile',
                 request_serializer=sysml__pb2.ParseFileRequest.SerializeToString,
@@ -75,6 +80,15 @@ class SysMLServiceStub:
 class SysMLServiceServicer:
     """SysMLService provides programmatic access to Systemica's parser and runtime
     """
+
+    def GetServerInfo(self, request, context):
+        """Report what this build of the service can do, so a client can require a
+        capability instead of guessing from a version string. A service that
+        predates this RPC answers UNIMPLEMENTED, which is itself the answer.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def ParseFile(self, request, context):
         """Parse a SysML file and return model hash for subsequent queries
@@ -125,6 +139,11 @@ class SysMLServiceServicer:
 
 def add_SysMLServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'GetServerInfo': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetServerInfo,
+                    request_deserializer=sysml__pb2.ServerInfoRequest.FromString,
+                    response_serializer=sysml__pb2.ServerInfoResponse.SerializeToString,
+            ),
             'ParseFile': grpc.unary_unary_rpc_method_handler(
                     servicer.ParseFile,
                     request_deserializer=sysml__pb2.ParseFileRequest.FromString,
@@ -171,6 +190,33 @@ def add_SysMLServiceServicer_to_server(servicer, server):
 class SysMLService:
     """SysMLService provides programmatic access to Systemica's parser and runtime
     """
+
+    @staticmethod
+    def GetServerInfo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/GetServerInfo',
+            sysml__pb2.ServerInfoRequest.SerializeToString,
+            sysml__pb2.ServerInfoResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
 
     @staticmethod
     def ParseFile(request,
