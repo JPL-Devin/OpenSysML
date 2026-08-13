@@ -72,6 +72,67 @@ func TestCalcUsageReadThroughPartChain(t *testing.T) {
 	}
 }
 
+// TestPartChainReadsTheObjectInHand requires a chain evaluated against an object
+// to read that object's own part, redefinitions included, rather than a separate
+// occurrence of the part's declaration.
+func TestPartChainReadsTheObjectInHand(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			part def Wheel { attribute radius : Real = 1.0; }
+			part def Car {
+				part wheel : Wheel { attribute :>> radius = 2.0; }
+				attribute r : Real = wheel.radius;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	car := findSymbolByName(idx.DocumentRoot("<test>"), "Car", ast.DefPart)
+	if car == nil {
+		t.Fatal("part def Car not found")
+	}
+	inst, err := ctx.Instantiate(car)
+	if err != nil {
+		t.Fatalf("instantiate Car: %v", err)
+	}
+	wheel, err := inst.GetSlot(ctx, "wheel")
+	if err != nil {
+		t.Fatalf("Car.wheel: %v", err)
+	}
+	this, ok := ctx.instances[wheel.Value.Instance]
+	if !ok {
+		t.Fatalf("Car.wheel = %s, want the object of this car's wheel", FormatTraceValue(wheel.Value))
+	}
+	if _, err := this.GetSlot(ctx, "radius"); err != nil {
+		t.Fatalf("Car.wheel.radius: %v", err)
+	}
+	this.Slots["radius"].Value = constReal(5.0)
+
+	slot, err := inst.GetSlot(ctx, "r")
+	if err != nil {
+		t.Fatalf("Car.r: %v", err)
+	}
+	if slot.Value.Const.Real != 5.0 {
+		t.Errorf("Car.r = %s, want 5 (the radius this car's wheel carries)", FormatTraceValue(slot.Value))
+	}
+}
+
+// TestPartChainRejectsSeveralOccurrences requires a chain through a usage of
+// several occurrences to be reported rather than answered from one of them.
+func TestPartChainRejectsSeveralOccurrences(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			part def Wheel { attribute radius : Real = 1.0; }
+			part wheels : Wheel[4];
+			attribute probe : Real = wheels.radius;
+		}
+	`
+	if _, err := evalNamedAttribute(t, src, "probe"); err == nil {
+		t.Error("want a diagnostic for a chain through four occurrences, got a value")
+	}
+}
+
 // TestCalcUsageChainDiagnostics requires the chain to name what went wrong: a
 // usage read without naming an output, and a name it declares no output for.
 func TestCalcUsageChainDiagnostics(t *testing.T) {

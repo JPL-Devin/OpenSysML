@@ -51,7 +51,14 @@ func (ec *EvalContext) rangeSequence(op string, lowerVal, upperVal Value) (Value
 	if lower > upper {
 		return sequenceOf(nil), nil
 	}
-	elements := make([]Value, 0, upper-lower+1)
+	// A model-supplied width can overflow or exceed what is allocatable, so it only
+	// hints at the capacity; the step budget below bounds the sequence.
+	const maxHint = 4096
+	hint := upper - lower + 1
+	if hint <= 0 || hint > maxHint {
+		hint = maxHint
+	}
+	elements := make([]Value, 0, hint)
 	for i := lower; ; i++ {
 		if err := ec.ctx.incrementStep(); err != nil {
 			return Value{}, err

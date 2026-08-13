@@ -403,10 +403,10 @@ func (tr *TraceRecorder) RecordCalcUsageExit(name string) {
 	tr.record(fmt.Sprintf("exit calc %s", name))
 }
 
-// RecordCalcUsageReuse closes the nesting level of a calc usage read again with
-// the inputs it already ran over, whose values come from that one run.
+// RecordCalcUsageReuse records a calc usage read again with the inputs it
+// already ran over, whose values come from that one run. It opens no nesting
+// level of its own, since nothing runs.
 func (tr *TraceRecorder) RecordCalcUsageReuse(name string) {
-	tr.closeLevel()
 	tr.record(fmt.Sprintf("reuse calc %s", name))
 }
 

@@ -109,6 +109,13 @@ func isOccurrenceUsage(sym *symbols.Symbol) bool {
 	}
 }
 
+// occursOnce reports whether a usage names at most one occurrence; several
+// occurrences are a collection rather than one object to read features from.
+func (ctx *Context) occursOnce(sym *symbols.Symbol) bool {
+	mult := ctx.extractMultiplicity(sym)
+	return !mult.Upper.Infinite && mult.Upper.Value <= 1
+}
+
 // isScalarFeature reports whether a feature holds at most one value. An
 // unbounded upper bound carries Value 0, so the infinite flag has to be tested
 // separately.

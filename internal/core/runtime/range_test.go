@@ -93,6 +93,25 @@ func TestIntegerRangeSpendsTheStepBudget(t *testing.T) {
 	}
 }
 
+// TestIntegerRangeExtremeBounds requires a range whose width overflows, or
+// exceeds what can be held at all, to report the step budget rather than panic.
+func TestIntegerRangeExtremeBounds(t *testing.T) {
+	for _, expr := range []string{
+		"1..9223372036854775807",
+		"(0 - 9223372036854775807)..9223372036854775807",
+		"(1..9223372036854775807)->collect{in i; i * i}",
+	} {
+		_, err := evalCollectionExprBounded(t, expr, 1000)
+		if err == nil {
+			t.Errorf("%s: want the step budget's error, got a value", expr)
+			continue
+		}
+		if !errors.Is(err, ErrStepLimitExceeded) {
+			t.Errorf("%s: error = %v, want ErrStepLimitExceeded", expr, err)
+		}
+	}
+}
+
 // TestForOverIntegerRange requires `for i in 1..n` to iterate the range, which is
 // the standard way to write an index loop.
 func TestForOverIntegerRange(t *testing.T) {

@@ -651,21 +651,27 @@ func (ec *EvalContext) calcUsageOperand(operand ast.Node) (*symbols.Symbol, bool
 	return sym, true
 }
 
-// occurrenceOperand reports whether the operand of a feature chain names an
-// occurrence — a part or item — carrying no value of its own. A local binding of
-// the same name is the value the expression names, so a frame masks it.
+// occurrenceOperand reports whether the operand of a feature chain names one
+// occurrence — a part or item — that no local binding, and no slot of the object
+// being evaluated, already answers with.
 func (ec *EvalContext) occurrenceOperand(operand ast.Node) (*symbols.Symbol, bool) {
 	ref, ok := operand.(*ast.FeatureReference)
 	if !ok || ref.Name == nil || len(ref.Name.Parts) == 0 || ec.ctx.resolver == nil {
 		return nil, false
 	}
 	if len(ref.Name.Parts) == 1 {
-		if _, bound := ec.Lookup(ref.Name.Parts[0].Text); bound {
+		name := ref.Name.Parts[0].Text
+		if _, bound := ec.Lookup(name); bound {
 			return nil, false
+		}
+		if ec.self != nil {
+			if _, carried := ec.self.Slots[name]; carried {
+				return nil, false
+			}
 		}
 	}
 	sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, ref.Name)
-	if !ok || !isOccurrenceUsage(sym) {
+	if !ok || !isOccurrenceUsage(sym) || !ec.ctx.occursOnce(sym) {
 		return nil, false
 	}
 	return sym, true
