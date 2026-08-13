@@ -478,6 +478,7 @@ they cannot drift apart.
 | A collection operation is an expression wherever an expression is allowed, including inside a calc body's `while` and `for` loops | `runtime/collections.go`, `runtime/action_statements.go` | conformance `calc_collection_ops_in_for_loop`, `calc_collection_ops_in_while_loop` | ✅ Faithful |
 | Every operation is bounded by the evaluation step budget, since each call of its body spends steps | `runtime/eval.go` `Context.step` | `robustness_test.go:collection_operation_step_budget` | ✅ Faithful |
 | A failing expression of literals alone is answered at the prompt with the failure itself, so `sysml -e "(1,2,3)#(0)"` reports the index rather than "no declarations loaded" | `repl/meta.go` `tryEvalLiteral`, `isLiteralAnswerError` | `repl/runtime_commands_test.go` `TestEvalReportsTheAnswerOfALiteralExpressionThatFails` | ✅ Faithful |
+| A name the session declares is answered by that declaration, so the prompt's literal pass declines an expression using one rather than letting a library operation of the same unqualified name stand in for it | `repl/meta.go` `tryEvalLiteral`, `declaresANameIn` | `repl/runtime_commands_test.go` `TestEvalPrefersASessionDeclarationOverALibraryOperation` | ✅ Faithful |
 
 ⚠️ A body parameter takes its type from the element type of whatever the operand
 turns out to hold, which the expression checker does not track: an expression
