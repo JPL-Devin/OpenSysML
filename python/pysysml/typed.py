@@ -16,11 +16,8 @@ from pysysml.instance import Instance
 T = TypeVar("T")
 TypedObjectT = TypeVar("TypedObjectT", bound="TypedObject")
 
-# Every SysML definition a generated class has been defined for in this process,
-# by FQN. It is what makes "this instance's type is not the one this class views"
-# distinguishable from "this client has never heard of this instance's type": the
-# first is a caller error, the second is the usage case below, which the client
-# cannot decide and therefore does not reject.
+# FQNs of every definition a generated class exists for in this process, so a
+# wrong type is distinguishable from one this client has never heard of.
 _generated_ids: Set[str] = set()
 
 

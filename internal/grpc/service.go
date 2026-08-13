@@ -19,15 +19,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// CapabilityTypeFacts is the capability a client requires to read static type
-// facts: SymbolInfo carries type_info, multiplicity and specializations.
-// Typed code generation is unsound without it, since a symbol with no type_info
-// is indistinguishable from a genuinely untyped one.
+// CapabilityTypeFacts names the capability of populating SymbolInfo.type_info,
+// .multiplicity and .specializations, which typed code generation requires.
 const CapabilityTypeFacts = "type_facts"
 
-// capabilities lists what this build of the service supports, in the order it
-// reports them. A capability is only ever added: renaming or dropping one
-// breaks the clients that require it.
+// capabilities is what this build supports, in report order. A capability is
+// only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{CapabilityTypeFacts}
 
 // Capabilities returns the capability names this build of the service reports.
@@ -61,10 +58,9 @@ func NewService(cacheSize int, version string) (*Service, error) {
 	return &Service{cache: cache, budgets: budgets, version: version}, nil
 }
 
-// GetServerInfo reports the service's build version and capabilities. A client
-// that needs a feature should require the capability naming it: a service too
-// old to have this RPC fails the call with UNIMPLEMENTED, which distinguishes
-// "cannot answer" from "answers, without that capability".
+// GetServerInfo reports the service's build version and capabilities. A service
+// too old to have this RPC fails the call with UNIMPLEMENTED, which is itself
+// the answer that it predates every capability.
 func (s *Service) GetServerInfo(ctx context.Context, req *pb.ServerInfoRequest) (*pb.ServerInfoResponse, error) {
 	return &pb.ServerInfoResponse{
 		Version:      s.version,

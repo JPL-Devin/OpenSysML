@@ -124,9 +124,8 @@ class Connection:
         self._address = f"{host}:{port}"
         self._process = None
         self._cleaned_up = False
-        # Where the service being talked to came from, for error messages that
-        # have to name the binary at fault. Set by _ensure_service; a connection
-        # that does not auto-start only knows the address it was pointed at.
+        # Provenance of the service, so an error can name the binary at fault.
+        # Refined by _ensure_service, which knows how it was reached.
         self._origin = f"service at {self._address} (not started by this client)"
         self._server_info = None
         # Only connections that took a reference may release one on close.

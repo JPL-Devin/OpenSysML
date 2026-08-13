@@ -585,6 +585,39 @@ definition deriving from `pysysml.typed.TypedObject`. Useful facts when testing 
   `SlotError` rather than returning `None`; and running *stale* generated code against a model
   whose attribute type changed (e.g. `mass = "heavy"`) must raise
   `TypeMismatchError: slot 'mass': expected float, got 'heavy'`.
+- **Pass the model path absolutely.** The path travels to the service, which opens it relative to
+  *its own* CWD, so `-o` works but `../internal/...` fails with a gRPC `NOT_FOUND: file not found`
+  traceback that looks like a client bug and is not one.
+- **Capability gate (`type_facts`).** Generation calls `GetServerInfo` first and exits 1 without
+  writing anything unless the service reports `type_facts`. To simulate a stale service, keep a
+  pre-`GetServerInfo` binary around — `~/.pysysml/bin/sysml-grpc` from an older release is usually
+  one; check it with a direct `stub.GetServerInfo(...)` (expect `StatusCode.UNIMPLEMENTED`), then
+  run it on a spare port (`-port 50077 -health-port 8099`) and generate with `--port 50077`. Assert
+  the negatives: target file still absent / identical sha256, and stdout mode piped to `wc -c`
+  yields `0` (no silent all-`object` module). The message should name the capability, the service
+  origin and `make build-grpc`. Note the repo blueprint copies the freshly built `bin/sysml-grpc`
+  into `~/.pysysml/bin/`, so in a clean session the cached binary is *current* and no longer serves
+  as the stale fixture — either keep a copy of an older release binary aside first, or stand up a
+  stub gRPC server that answers `GetServerInfo` with `UNIMPLEMENTED`.
+- **`--check`** requires `-o` (exit 2 otherwise), writes nothing, and exits 1 when the target is
+  missing or would change, naming the exact regenerate command. The strong assertion is
+  `sha256sum` before *and* after — exit code alone does not prove nothing was written.
+- Generated modules carry `SYSML_GENERATOR_VERSION` and `SYSML_MODEL_HASH` (sha256 of the
+  newline-normalized model source), so any model edit changes the stamp and therefore the bytes.
+- **`TypedObject.from_instance` guard.** It rejects only an instance whose reported type belongs to
+  a *different* generated class; a generated subclass and an unrecognized type both pass. To cover
+  all three branches you need a fixture with a specialization and a usage, e.g.
+  `part def SportsCar :> Vehicle { ... }` plus `part myCar : SportsCar;` — an instantiated *usage*
+  reports its own FQN (`Demo::myCar`), which no class carries, so it must be accepted. `unchecked()`
+  bypasses the check.
+- **Restarting the service on 50051:** kill it by PID (`ls -l /proc/<pid>/exe` to confirm which
+  binary), not `pkill -f 'bin/sysml-grpc'` — that pattern also matches the tool shell running the
+  command and kills your own session. Rebuilding leaves the old process serving a `(deleted)`
+  binary, which silently tests the previous revision.
+- `python/tests/test_lifecycle.py::TestLifecycleRobustness::test_service_shuts_down_when_last_process_exits`
+  fails (`FileNotFoundError: ~/.pysysml/sysml-grpc.pid`) whenever an externally started service is
+  already listening on 50051 — a known service-ownership gap, reproducible on `main`. Confirm on a
+  `main` worktree before reporting it as a regression.
 - Do not try to force a type mismatch inside the model — the checker rejects
   `attribute count : Integer = 4.0 / 2.0;` with `cannot bind Rational value to a feature typed
   by Integer`, and `Integer`/`String` need `import ScalarValues::*;` or generation exits 1 with
