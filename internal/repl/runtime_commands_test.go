@@ -192,6 +192,20 @@ func TestEvalErrors(t *testing.T) {
 	wants(t, run(t, empty, "%eval mass"), "no declarations loaded")
 }
 
+// An expression of literals alone is answered without any declarations, so a
+// failure of one is the answer and is reported as it is: declaring something
+// would not change it, and "no declarations loaded" would say to try.
+func TestEvalReportsTheAnswerOfALiteralExpressionThatFails(t *testing.T) {
+	empty := NewSession()
+	wants(t, run(t, empty, "%eval (1, 2, 3)#(0)"), "sequence index 0 is outside 1..3")
+	wants(t, run(t, empty, "%eval (1, 2, 3)#(1.5)"),
+		"sequence index requires an Integer index")
+	wants(t, run(t, empty, "%eval (1, 2, 3).{in x; in y; x}"),
+		"calls its body with 1 argument(s), but it declares 2 parameter(s)")
+	// A name is the one failure declarations do answer, so it still says so.
+	wants(t, run(t, empty, "%eval mass + 1"), "no declarations loaded")
+}
+
 func TestCalcWithPositionalArgs(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%calc add 20 22"), "✓ add(20, 22)", "= 42")

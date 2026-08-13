@@ -174,10 +174,14 @@ func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semant
 	}
 
 	// SequenceFunctions::'#' declares `in index: Positive[1]`: one whole number,
-	// counting from 1. A Real, a Boolean or a String names no position.
+	// counting from 1. A Real, a Boolean or a String names no position and is
+	// reported here; whether a whole number is a position the operand has is
+	// known only from the value, so an Integer index — which is what a model
+	// counting in a loop holds — is checked at evaluation, not rejected here for
+	// not being declared `Natural`.
 	index := ec.infer(scope, e.Index)
-	if !semantics.PrimConforms(index, semantics.PrimNatural) && e.Index != nil {
-		ec.errorf(e.Index.Span(), "sequence index must be Natural, found %s", index)
+	if !semantics.PrimConforms(index, semantics.PrimInteger) && e.Index != nil {
+		ec.errorf(e.Index.Span(), "sequence index must be an Integer, found %s", index)
 	}
 	elem := ec.infer(scope, e.Operand)
 

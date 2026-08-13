@@ -101,7 +101,7 @@ func describeValue(val Value) string {
 // and they call elementAtOrEmpty.
 func elementAt(op string, elements []Value, index int64) (Value, error) {
 	if index < 1 || index > int64(len(elements)) {
-		return Value{}, fmt.Errorf("%w: %s index %d is outside 1..%d", ErrIndexOutOfRange, op, index, len(elements))
+		return Value{}, fmt.Errorf("%w: %s %d is outside 1..%d", ErrIndexOutOfRange, op, index, len(elements))
 	}
 	return elements[index-1], nil
 }
@@ -204,7 +204,7 @@ func builtinSequenceIndex(ec *EvalContext, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return elementAt("SequenceFunctions::'#'", elementsOf(args[0]), index)
+	return elementAt("SequenceFunctions::'#' index", elementsOf(args[0]), index)
 }
 
 // builtinSequenceSize is SequenceFunctions::size.

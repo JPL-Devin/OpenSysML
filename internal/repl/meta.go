@@ -418,7 +418,15 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 
 	val, err := ctx.Eval(usage.Value)
 	if err != nil {
-		// Not evaluable as literal (needs session symbols)
+		// A failure the session's declarations could answer — a name or a unit
+		// this empty model knows nothing of — is not the answer, so the
+		// expression is evaluated again in the session. A failure that is the
+		// answer to an expression of literals alone, such as an index that names
+		// no position, is reported here instead of being hidden behind "no
+		// declarations loaded".
+		if isLiteralAnswerError(err) {
+			return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, true
+		}
 		return nil, false
 	}
 
@@ -426,6 +434,26 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(val)),
 	}, true
+}
+
+// isLiteralAnswerError reports whether err is what an expression of literals
+// alone evaluates to, rather than a failure the declarations of a session could
+// answer. An index outside a written sequence, a body called with arguments it
+// declares no parameters for, or an operand of the wrong kind is the answer
+// whatever is declared; an unresolved name or unit is not.
+func isLiteralAnswerError(err error) bool {
+	for _, answer := range []error{
+		runtime.ErrIndexOutOfRange,
+		runtime.ErrBodyArity,
+		runtime.ErrTypeMismatch,
+		runtime.ErrMultiplicityViolation,
+		runtime.ErrStepLimitExceeded,
+	} {
+		if errors.Is(err, answer) {
+			return true
+		}
+	}
+	return false
 }
 
 // isSymbolReference reports whether expr names a symbol — a single identifier

@@ -7,13 +7,13 @@ import "testing"
 func TestIndexNonIntegerIndexReported(t *testing.T) {
 	wantOneDiag(t,
 		`package P { attribute x = (1, 2, 3)#(1.5); }`,
-		"sequence index must be Natural")
+		"sequence index must be an Integer")
 }
 
 func TestIndexStringIndexReported(t *testing.T) {
 	wantOneDiag(t,
 		`package P { attribute x = (1, 2, 3)#("a"); }`,
-		"sequence index must be Natural")
+		"sequence index must be an Integer")
 }
 
 // The library declares `in index: Positive[1]`, so 0 is not a position.
@@ -33,6 +33,34 @@ func TestIndexPastWrittenSequenceReported(t *testing.T) {
 
 func TestIndexInRangeOK(t *testing.T) {
 	wantNoDiags(t, `package P { attribute x = (1, 2, 3)#(3); }`)
+}
+
+// A model counting positions holds them in an `Integer`, which the library's
+// `Positive` parameter accepts a value of: whether that value is a position the
+// operand has is known from the value, so it is checked at evaluation and not
+// reported here.
+func TestIndexTypedIntegerNotReported(t *testing.T) {
+	wantNoDiags(t, `package P {
+		attribute xs = (1, 2, 3);
+		attribute i : ScalarValues::Integer = 2;
+		attribute x = xs#(i);
+	}`)
+}
+
+// Indexing per iteration is the idiomatic spelling, so the loop variable of a
+// `for` over a sequence of numbers is an index and is not reported.
+func TestIndexByLoopVariableNotReported(t *testing.T) {
+	wantNoDiags(t, `package P {
+		private import ScalarValues::*;
+		calc total {
+			attribute xs : Integer[*] = (1, 2, 3);
+			attribute sum : Integer = 0;
+			for i in (1, 2, 3) {
+				sum = sum + xs#(i);
+			}
+			return : Integer = sum;
+		}
+	}`)
 }
 
 // An index of a value whose length the checker does not know is not reported:
