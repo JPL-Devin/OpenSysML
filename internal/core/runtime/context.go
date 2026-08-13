@@ -31,12 +31,16 @@ type Context struct {
 	// defaults, result expression) per calc symbol.
 	calcShapes map[*symbols.Symbol]*calcShape
 
-	// calcUsageRuns holds the evaluation of each calc usage read during the
-	// current run, keyed by usage and object, so reading several outputs of one
-	// usage runs its body once. It is dropped when a run ends, since a usage whose
-	// outputs depend on mutable state must not answer a later run from an earlier
-	// one's values.
-	calcUsageRuns map[calcUsageKey]*calcRun
+	// calcUsageRuns holds the evaluation of each calc usage read in an activation
+	// under way, so reading several outputs of one usage answers from one
+	// execution of its body. An activation's evaluations are dropped when it ends,
+	// since a usage reading mutable state must not answer a later activation from
+	// an earlier one's values.
+	calcUsageRuns map[int64]map[calcUsageKey]*calcRun
+
+	// activations numbers the body activations begun in this context: a calc
+	// invocation, a block entry, a loop iteration, a body application.
+	activations int64
 
 	// trace records evaluation, nil when not tracing.
 	trace *TraceRecorder
@@ -87,7 +91,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		features:   make(map[*symbols.Symbol][]EffectiveFeature),
 		calcShapes: make(map[*symbols.Symbol]*calcShape),
 
-		calcUsageRuns: make(map[calcUsageKey]*calcRun),
+		calcUsageRuns: make(map[int64]map[calcUsageKey]*calcRun),
 
 		maxActionSteps: DefaultMaxActionSteps,
 		maxStateEvents: DefaultMaxStateEvents,
@@ -122,7 +126,7 @@ func (ctx *Context) allocateID() int64 {
 func (ctx *Context) beginRun() func() {
 	if ctx.runDepth == 0 {
 		ctx.steps = 0
-		ctx.calcUsageRuns = make(map[calcUsageKey]*calcRun)
+		ctx.calcUsageRuns = make(map[int64]map[calcUsageKey]*calcRun)
 	}
 	ctx.runDepth++
 	return func() { ctx.runDepth-- }
@@ -136,11 +140,31 @@ func (ctx *Context) beginRun() func() {
 func (ctx *Context) beginExecutorRun(started *bool) func() {
 	if ctx.runDepth == 0 && !*started {
 		ctx.steps = 0
-		ctx.calcUsageRuns = make(map[calcUsageKey]*calcRun)
+		ctx.calcUsageRuns = make(map[int64]map[calcUsageKey]*calcRun)
 	}
 	*started = true
 	ctx.runDepth++
 	return func() { ctx.runDepth-- }
+}
+
+// newActivation begins one activation: the identity of a single execution of a
+// body, which the values a calc usage answers within it belong to.
+func (ctx *Context) newActivation() int64 {
+	ctx.activations++
+	return ctx.activations
+}
+
+// endActivation forgets what an activation computed, once it has ended, together
+// with the activations of the calc usage evaluations it held.
+func (ctx *Context) endActivation(activation int64) {
+	runs, ok := ctx.calcUsageRuns[activation]
+	if !ok {
+		return
+	}
+	delete(ctx.calcUsageRuns, activation)
+	for _, run := range runs {
+		ctx.endActivation(run.activation)
+	}
 }
 
 // incrementStep increments the step counter and returns ErrStepLimitExceeded if limit reached.

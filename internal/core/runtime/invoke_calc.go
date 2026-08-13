@@ -290,7 +290,10 @@ func (ctx *Context) bindCalcParameters(
 // the invocation yields: what the body returned, or, for a body that returns
 // nothing, the calc's designated output feature.
 func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, callerScope *symbols.Scope) (Value, error) {
-	result, returned, err := ctx.runCalcSteps(shape, bindings)
+	result, returned, activation, err := ctx.runCalcSteps(shape, bindings)
+	// The invocation's activation ends with the value it yields, which is the last
+	// thing evaluated in it.
+	defer ctx.endActivation(activation)
 	if err != nil {
 		return Value{}, err
 	}
@@ -305,23 +308,24 @@ func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, cal
 	// naming itself is a cycle rather than an evaluation, so it is evaluated
 	// through the same run bookkeeping a calc usage's outputs use.
 	run := newCalcRun(shape, callerScope, nil, bindings)
+	run.activation = activation
 	// The invocation already holds this evaluation's nesting slot.
 	run.onStack = true
 	return run.value(ctx, out)
 }
 
 // runCalcSteps runs the calc's lowered computation, reporting whether it
-// returned a value. bindings holds the calc's parameters on the way in and its
-// locals on the way out.
-func (ctx *Context) runCalcSteps(shape *calcShape, bindings map[string]Value) (Value, bool, error) {
+// returned a value and the activation it ran in. bindings holds the calc's
+// parameters on the way in and its locals on the way out.
+func (ctx *Context) runCalcSteps(shape *calcShape, bindings map[string]Value) (Value, bool, int64, error) {
 	host := &calcStmtHost{}
 	engine := newStmtEngine(ctx, host, bindings)
 
 	flow, err := engine.run(shape.Steps)
 	if err != nil {
-		return Value{}, false, err
+		return Value{}, false, engine.activation, err
 	}
-	return host.result, flow == flowReturn, nil
+	return host.result, flow == flowReturn, engine.activation, nil
 }
 
 // checkArgs rejects an argument list that cannot bind to the parameters at all:

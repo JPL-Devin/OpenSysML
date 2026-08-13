@@ -32,6 +32,12 @@ type EvalContext struct {
 	// output binding written in terms of the calc's other outputs reads them from
 	// the same evaluation. It is nil everywhere else.
 	calcRun *calcRun
+
+	// activation identifies the execution of the body this evaluation belongs to,
+	// so every output read of one calc usage within it comes from one evaluation
+	// of that usage. It is zero outside a body, where nothing can change between
+	// two reads.
+	activation int64
 }
 
 // NewEvalContext creates an evaluation context with an empty frame stack. It
@@ -65,6 +71,7 @@ func (ec *EvalContext) evalIn(scope *symbols.Scope) *EvalContext {
 	return &EvalContext{
 		ctx: ec.ctx, scope: scope, self: ec.self, frames: ec.frames, trace: ec.trace,
 		features: ec.features, resolving: ec.resolving, calcRun: ec.calcRun,
+		activation: ec.activation,
 	}
 }
 
@@ -77,6 +84,7 @@ func (ec *EvalContext) nestedEnv(scope *symbols.Scope) *EvalContext {
 	return &EvalContext{
 		ctx: ec.ctx, scope: scope, self: ec.self, frames: frames, trace: ec.trace,
 		features: ec.features, resolving: ec.resolving, calcRun: ec.calcRun,
+		activation: ec.activation,
 	}
 }
 
@@ -433,7 +441,6 @@ var unimplementedOperators = map[ast.OperatorKind]string{
 	ast.OpMetaAt:  "metadata classification needs the metadata of a value at runtime",
 	ast.OpAs:      "a cast needs the runtime type of a value, which values do not carry yet",
 	ast.OpMeta:    "metadata access is evaluated from a MetadataAccessExpression, not this operator",
-	ast.OpRange:   "a range is not a value kind the runtime carries",
 	ast.OpAll:     "'all' needs the extent of a type, which the runtime does not enumerate",
 	ast.OpIndex:   "indexing is evaluated from an IndexExpression, not this operator",
 }
@@ -465,6 +472,8 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 		return ec.evalLogical(n)
 	case ast.OpNeg, ast.OpPos, ast.OpNot:
 		return ec.evalUnary(n)
+	case ast.OpRange:
+		return ec.evalRange(n)
 	default:
 		if why, ok := unimplementedOperators[n.Operator]; ok {
 			return Value{}, fmt.Errorf("%w: '%s': %s", ErrUnsupportedOperator, n.Operator, why)

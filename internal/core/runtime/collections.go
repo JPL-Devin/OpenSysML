@@ -170,6 +170,14 @@ func (ec *EvalContext) applyBody(body *ast.BodyExpr, args ...Value) (Value, erro
 	}
 	ec.Push(bindings)
 	defer ec.Pop()
+	// Each application is its own activation, so a calc usage read from the body
+	// is evaluated once per element rather than once for the whole collection.
+	outer, entered := ec.activation, ec.ctx.newActivation()
+	ec.activation = entered
+	defer func() {
+		ec.ctx.endActivation(entered)
+		ec.activation = outer
+	}()
 	// The parameters are declared in a scope of their own, so the result
 	// resolves names there: a parameter is a declaration the body's expression
 	// can name, not only a runtime binding.
