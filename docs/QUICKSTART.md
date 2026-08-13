@@ -273,7 +273,7 @@ notation, `.ttl` for RDF Turtle:
 
 ```bash
 sysml> %save my_model.sysml
-saved 181 bytes of sysml to my_model.sysml
+saved 181 bytes of sysml to my_model.sysml (replaced the existing file)
 
 sysml> %save my_model.ttl
 saved 1872 bytes of ttl to my_model.ttl
@@ -374,6 +374,8 @@ part Vehicle {
 ### 2. Composite Structures
 
 ```sysml
+import ScalarValues::*;
+
 part def Engine {
     attribute power : Real = 200.0;
 }
@@ -413,10 +415,10 @@ part System {
 **Calculations:**
 ```sysml
 sysml> calc distance {
-...>     in x;
-...>     in y;
-...>     return (x * x + y * y);
-...> }
+  ...>     in x;
+  ...>     in y;
+  ...>     return (x * x + y * y);
+  ...> }
 ✓ calc distance
 
 sysml> %calc distance 3 4
@@ -427,9 +429,9 @@ sysml> %calc distance 3 4
 **Constraints:**
 ```sysml
 sysml> constraint ValidSpeed {
-...>     assert 65 > 0;
-...>     assert 65 <= 120;
-...> }
+  ...>     assert 65 > 0;
+  ...>     assert 65 <= 120;
+  ...> }
 ✓ constraint ValidSpeed
 
 sysml> %constraint ValidSpeed
@@ -439,9 +441,9 @@ sysml> %constraint ValidSpeed
 **Requirements:**
 ```sysml
 sysml> requirement SafetyReq {
-...>     assume 65 > 0;
-...>     require 100 > 50;
-...> }
+  ...>     assume 65 > 0;
+  ...>     require 100 > 50;
+  ...> }
 ✓ requirement SafetyReq
 
 sysml> %requirement SafetyReq
@@ -455,13 +457,13 @@ sysml> %requirement SafetyReq
 **Action execution (step-by-step):**
 ```sysml
 sysml> action SimpleWorkflow {
-...>     attribute result = 0;
-...>     first start;
-...>     action compute { assign result := 42; }
-...>     done end;
-...>     then start compute;
-...>     then compute end;
-...> }
+  ...>     attribute result = 0;
+  ...>     first start;
+  ...>     action compute { assign result := 42; }
+  ...>     done end;
+  ...>     then start compute;
+  ...>     then compute end;
+  ...> }
 ✓ action SimpleWorkflow
 
 sysml> %action SimpleWorkflow
@@ -491,13 +493,13 @@ sysml> %continue
 **State machine execution:**
 ```sysml
 sysml> state TrafficLight {
-...>     initial start;
-...>     state green { accept after 25 then yellow; }
-...>     state yellow { accept after 5 then red; }
-...>     state red { accept after 30 then off; }
-...>     final off;
-...>     start then green;
-...> }
+  ...>     initial start;
+  ...>     state green { accept after 25 then yellow; }
+  ...>     state yellow { accept after 5 then red; }
+  ...>     state red { accept after 30 then off; }
+  ...>     final off;
+  ...>     start then green;
+  ...> }
 ✓ state TrafficLight
 
 sysml> %state TrafficLight
