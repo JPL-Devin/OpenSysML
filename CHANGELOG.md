@@ -20,6 +20,9 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   bounded by what it holds rather than by what it has produced in total.
 - An action node's body ends the activation it ran in, so a run stepping the same
   body many times no longer holds what every execution's calc usages computed.
+- A calc usage declared in an action's body binds its inputs from the values that
+  body has reached, as one in a calc's body does: `calc t : Twice { in k = v; }`
+  after `assign v := 2.0` reads 2.0 rather than the value `v` was declared with.
 - `%budget` prints the five bounds a session runs on with the variable that
   raises each, and a literal expression that spends one is answered with that
   failure instead of "no declarations loaded".

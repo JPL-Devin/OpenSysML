@@ -443,6 +443,24 @@ func isCalcSymbol(sym *symbols.Symbol) bool {
 	return sym.Kind == symbols.SymbolCalcDef || sym.Kind == symbols.SymbolCalcUsage
 }
 
+// isActionSymbol reports whether sym declares an action, reading its declaration
+// when it has one and its symbol kind otherwise.
+func isActionSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefAction
+	case *ast.Usage:
+		return d.Kind == ast.UsageAction
+	}
+	if sym.Decl != nil {
+		return false
+	}
+	return sym.Kind == symbols.SymbolActionDef || sym.Kind == symbols.SymbolActionUsage
+}
+
 // declMembers returns the body members of a definition or usage, unwrapping the
 // Membership wrappers the parser produces.
 func declMembers(decl ast.Node) []ast.Node {

@@ -390,12 +390,12 @@ func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext) (*EvalC
 	env := make(map[string]Value, len(shape.Params))
 	ec.Push(env)
 
-	// A usage declared among a calc's members is written in that calc's body, so
-	// its own bindings see the parameters and locals of the evaluation reading it,
-	// and none of the inputs being bound here, so every input resolves names in
-	// the enclosing environment alike.
+	// A usage declared in a behavior's body is written in that body, so its own
+	// bindings see the values the evaluation reading it holds, and none of the
+	// inputs being bound here, so every input resolves names in the enclosing
+	// environment alike.
 	var nested *EvalContext
-	if enclosedByCalc(shape.Sym) {
+	if enclosedByBehaviorBody(shape.Sym) {
 		nested = reader.nestedEnv(ctx.calcScope(shape.Sym, shape.Sym, reader.scope))
 	}
 
@@ -410,16 +410,17 @@ func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext) (*EvalC
 	return ec, nested, env, nil
 }
 
-// enclosedByCalc reports whether sym is declared in a calc's body — among its
-// members, or in a body-local block of it, which declares no owner of its own —
-// rather than in a part or a package.
-func enclosedByCalc(sym *symbols.Symbol) bool {
+// enclosedByBehaviorBody reports whether sym is declared in the body of a
+// behavior that runs statements — a calc or an action, among its members or in a
+// body-local block of it, which declares no owner of its own — rather than in a
+// part or a package, whose members hold no running values.
+func enclosedByBehaviorBody(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
 	}
 	for scope := sym.OwnerScope; scope != nil; scope = scope.Parent() {
 		if owner := scope.Owner(); owner != nil {
-			return isCalcSymbol(owner)
+			return isCalcSymbol(owner) || isActionSymbol(owner)
 		}
 		if !scope.BodyLocal() {
 			return false
