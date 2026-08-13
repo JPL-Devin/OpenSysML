@@ -295,8 +295,7 @@ otherwise an already-running service from an earlier value keeps serving.
 Tooling trap: running a pysysml script that auto-starts the service from a *non-tty* one-shot shell
 tends to return no output at all (the spawned service holds the pipe). Run such scripts with a tty
 shell (`tty: true`) or inside the GUI terminal, and use the venv interpreter
-(`/home/ubuntu/repos/fprime/fprime-venv/bin/python`) — the default `python` in a plain shell has no
-`pysysml`.
+(`~/pysysml-venv/bin/python`) — the default `python` in a plain shell has no `pysysml`.
 
 A name declared inside a loop or branch body lives in a block frame and must **not** appear in the
 action's `Results:` — check for the *absence* of the line, not just the right total.
@@ -511,12 +510,15 @@ What the slot kinds mean (`ValueToProto`, `convert.go`):
   `attribute d : Real;` and a **constraint usage** land here, so the REPL's
   `massOK: <constraint: satisfied>` has no gRPC equivalent. Check whether that divergence is
   intended before filing it.
-- `null: '<error text>'` is the real error arm. Force it with cyclic derived attributes
-  (`attribute a = b + 1.0; attribute b = a + 1.0;`) — expect
-  `slot Loop.a: slot Loop.b: cyclic slot dependency: Loop.a`, promptly, and prove the service is
-  still alive afterwards with a follow-up `pysysml.eval('1 + 1', ...)`.
-- A nested `part engine : Engine;` marshals as bare `instance_id=N` and **no RPC resolves an id**,
-  so the REPL expands the child's slots and Python cannot (`docs/ROADMAP.md` §P2).
+- `SlotValue.error` is the real error arm (the value is left unset). Force it with cyclic derived
+  attributes (`attribute a = b + 1.0; attribute b = a + 1.0;`) — expect
+  `slot Loop.a: slot Loop.b: cyclic slot dependency: Loop.a`, promptly, raised as `SlotError` by
+  the client, and prove the service is still alive afterwards with a follow-up
+  `pysysml.eval('1 + 1', ...)`.
+- A nested `part engine : Engine;` still marshals as bare `instance_id=N`, but
+  `InstantiateResponse.instances` carries every instance reachable from the root, so Python
+  expands the child too (`inst.engine.power`). An id is only resolvable against the response that
+  carried it — runtime instances do not survive the request.
 
 `execute_action` is the gRPC twin of the REPL's `%action` + `%continue`, and it is the cheapest way
 to A/B the two surfaces on the same model. The call shapes are **not** the ones the docstrings
@@ -748,7 +750,7 @@ DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz
 Enlarge the font before recording with the `ctrl+plus` key combo a few times (`ctrl+shift+plus`
 types literal `+` characters into the shell instead of zooming). Konsole starts a shell whose PATH
 lacks the Python that `pip install -e python/` installed into, so `import pysysml` fails there while
-it works from a tool shell; run `source /home/ubuntu/repos/fprime/fprime-venv/bin/activate` (or
+it works from a tool shell; run `source ~/pysysml-venv/bin/activate` (or
 whichever interpreter `python -c 'import sys; print(sys.executable)'` reports in the tool shell)
 as a setup step before recording. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
