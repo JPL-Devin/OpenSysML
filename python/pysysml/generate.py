@@ -35,6 +35,10 @@ GENERATOR_VERSION = "1"
 # service version would churn without the module's content changing.
 MODEL_HASH_ALGORITHM = "sha256"
 
+# What a module rendered without the model source says, so it cannot be mistaken
+# for one stamped with a real hash.
+UNSTAMPED = "unstamped"
+
 # Definition kinds get a class; these usage kinds become properties on the
 # enclosing class. Behavioral and connector usages (action, state, calc,
 # constraint, requirement, connection, flow, interface, allocation, case) are
@@ -273,12 +277,20 @@ def model_stamp(source_text: str) -> str:
     return digest.hexdigest()
 
 
-def render_module(definitions: Sequence[Definition], stamp: str = "") -> str:
+def _hash_literal(stamp: Optional[str]) -> str:
+    """Value of the module's hash stamp, or the unstamped marker without one."""
+    return f"{MODEL_HASH_ALGORITHM}:{stamp}" if stamp else UNSTAMPED
+
+
+def render_module(
+    definitions: Sequence[Definition], stamp: Optional[str] = None
+) -> str:
     """Render a complete, importable Python module for ``definitions``.
 
     ``stamp`` is the :func:`model_stamp` of the model source, recorded in the
     module so a reader — and the ``--check`` gate — can tell what it was
-    generated from.
+    generated from. Without one the module says ``UNSTAMPED`` rather than
+    claim a hash it does not have.
     """
     names = class_names(definitions)
     lines: List[str] = [
@@ -292,7 +304,7 @@ def render_module(definitions: Sequence[Definition], stamp: str = "") -> str:
         f"SYSML_GENERATOR_VERSION = {_literal(GENERATOR_VERSION)}",
         '"""Emission schema this module was generated with."""',
         "",
-        f"SYSML_MODEL_HASH = {_literal(f'{MODEL_HASH_ALGORITHM}:{stamp}')}",
+        f"SYSML_MODEL_HASH = {_literal(_hash_literal(stamp))}",
         '"""Hash of the model source this module was generated from."""',
     ]
     if not definitions:
@@ -366,11 +378,11 @@ def _render_property(feature: Feature, names: Dict[str, str]) -> List[str]:
     return lines
 
 
-def generate_source(model, source_text: str = "") -> str:
+def generate_source(model, source_text: str) -> str:
     """Render the typed module for a loaded :class:`~pysysml.model.Model`.
 
-    ``source_text`` is the model source the module is stamped with; pass the
-    text that was loaded so the stamp identifies this module's input.
+    ``source_text`` is the model source the module is stamped with; it is
+    required so a module cannot silently claim the hash of nothing.
     """
     return render_module(collect_definitions(model.root), model_stamp(source_text))
 

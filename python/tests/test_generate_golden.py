@@ -20,9 +20,11 @@ import pytest
 
 from pysysml.generate import (
     GENERATOR_VERSION,
+    UNSTAMPED,
     generate_source,
     main as generate_main,
     model_stamp,
+    render_module,
 )
 from pysysml.typed import TypedObject
 
@@ -172,6 +174,13 @@ def test_golden_records_the_model_it_was_generated_from():
     module = load_golden()
     assert module.SYSML_MODEL_HASH == f"sha256:{model_stamp(FIXTURE.read_text())}"
     assert module.SYSML_GENERATOR_VERSION == GENERATOR_VERSION
+
+
+def test_a_module_rendered_without_the_source_says_so():
+    """No stamp must read as unstamped, not as the hash of an empty model."""
+    source = render_module([])
+    assert f'SYSML_MODEL_HASH = "{UNSTAMPED}"' in source
+    assert model_stamp("") not in source
 
 
 def test_model_stamp_ignores_line_endings_but_not_content():
