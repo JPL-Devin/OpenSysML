@@ -60,6 +60,19 @@ class FakeSymbol:
         return self._children
 
 
+class FakeInstance:
+    """An Instance-shaped holder of slot values, for exercising generated accessors."""
+
+    def __init__(self, slots):
+        self._slots = dict(slots)
+
+    def __contains__(self, name):
+        return name in self._slots
+
+    def __getitem__(self, name):
+        return self._slots[name]
+
+
 def test_is_definition_kind_covers_service_kinds():
     """Every service kind ending in Def, plus metaclass, declares a type."""
     for kind in ("partDef", "attributeDef", "itemDef", "enumDef", "portDef", "metaclass"):
@@ -177,6 +190,29 @@ def test_feature_named_like_a_typed_object_member_is_renamed():
     namespace: dict = {}
     exec(compile(source, "generated", "exec"), namespace)
     assert namespace["Vehicle"].instance is not None
+
+
+def test_unrestricted_name_with_quotes_is_escaped():
+    """A SysML unrestricted name may carry quotes and backslashes; output must import."""
+    source = render_module(
+        [
+            definition(
+                'Demo::say "hi"\\x',
+                features=[
+                    feature(
+                        'mass "kg"\\x',
+                        type_facts=TypeFacts(primitive="Real"),
+                        owner='Demo::say "hi"\\x',
+                    )
+                ],
+            )
+        ]
+    )
+    namespace: dict = {}
+    exec(compile(source, "generated", "exec"), namespace)
+    generated = namespace["say__hi__x"]
+    assert generated.sysml_id == 'Demo::say "hi"\\x'
+    assert generated.from_instance(FakeInstance({'mass "kg"\\x': 1500.0})).mass__kg__x == 1500.0
 
 
 def test_class_names_disambiguate_collisions():

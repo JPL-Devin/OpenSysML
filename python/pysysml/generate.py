@@ -14,6 +14,7 @@ can be committed as a golden file.
 """
 
 import argparse
+import json
 import keyword
 import sys
 from dataclasses import dataclass, field
@@ -168,6 +169,19 @@ def _identifier(name: str) -> str:
     return cleaned
 
 
+def _literal(text: str) -> str:
+    """Render a SysML name as a Python string literal, escaping quotes and backslashes."""
+    return json.dumps(text, ensure_ascii=False)
+
+
+def _docstring(text: str, indent: str) -> str:
+    """Render a one-line docstring that cannot be terminated by the text it carries."""
+    body = text.replace("\\", "\\\\").replace('"""', '\\"\\"\\"')
+    if body.endswith('"'):
+        body = body[:-1] + '\\"'
+    return f'{indent}"""{body}"""'
+
+
 def property_name(name: str) -> str:
     """Python name of the property for a feature; the SysML slot name is unchanged."""
     identifier = _identifier(name)
@@ -289,10 +303,10 @@ def _render_class(definition: Definition, names: Dict[str, str]) -> List[str]:
     unmapped = [base_id for base_id in definition.base_ids if base_id not in names]
     header = f"class {names[definition.id]}({', '.join(bases) if bases else '_t.TypedObject'}):"
 
-    lines = [header, f'    """{definition.facts.kind} {definition.id}."""', ""]
+    lines = [header, _docstring(f"{definition.facts.kind} {definition.id}.", "    "), ""]
     for base_id in unmapped:
         lines.insert(2, f"    # specializes {base_id}, which has no generated class")
-    lines.append(f'    sysml_id = "{definition.id}"')
+    lines.append(f"    sysml_id = {_literal(definition.id)}")
 
     for feature in definition.features:
         lines.append("")
@@ -309,9 +323,10 @@ def _render_property(feature: Feature, names: Dict[str, str]) -> List[str]:
         doc += f' Renamed from "{feature.name}", which TypedObject already defines.'
     if python_type.comment:
         doc += f" Mapped to {python_type.annotation}: {python_type.comment}."
-    lines.append(f'        """{doc}"""')
+    lines.append(_docstring(doc, "        "))
     lines.append(
-        f'        return {_accessor(feature)}(self, "{feature.name}", {python_type.decoder})'
+        f"        return {_accessor(feature)}"
+        f"(self, {_literal(feature.name)}, {python_type.decoder})"
     )
     return lines
 
