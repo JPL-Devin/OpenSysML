@@ -45,6 +45,23 @@ class TypeMismatchError(PySysMLError):
         self.value = value
 
 
+class InstanceTypeError(PySysMLError):
+    """Raised when a generated typed view is asked to wrap an instance of another type.
+
+    Attributes:
+        expected (str): FQN of the definition the generated class views
+        actual (str): FQN the instance reports as its type
+    """
+
+    def __init__(self, expected, actual):
+        super().__init__(
+            f"instance of {actual!r} is not a {expected!r}; call the generated "
+            f"class's unchecked(instance) to view it without this check"
+        )
+        self.expected = expected
+        self.actual = actual
+
+
 class RuntimeError(PySysMLError):
     """Raised when a runtime operation (eval/instantiate/execute) fails.
 

@@ -63,8 +63,11 @@ class FakeSymbol:
 class FakeInstance:
     """An Instance-shaped holder of slot values, for exercising generated accessors."""
 
-    def __init__(self, slots):
+    def __init__(self, slots, type_symbol_id=""):
         self._slots = dict(slots)
+        # from_instance reads the reported type; empty means "not reported",
+        # which it accepts rather than treating as a mismatch.
+        self.type_symbol_id = type_symbol_id
 
     def __contains__(self, name):
         return name in self._slots
@@ -190,6 +193,25 @@ def test_feature_named_like_a_typed_object_member_is_renamed():
     namespace: dict = {}
     exec(compile(source, "generated", "exec"), namespace)
     assert namespace["Vehicle"].instance is not None
+
+
+def test_feature_named_unchecked_does_not_shadow_the_escape_hatch():
+    """A feature named `unchecked` must not hide the unchecked view classmethod."""
+    source = render_module(
+        [
+            definition(
+                "Demo::Vehicle",
+                features=[feature("unchecked", type_facts=TypeFacts(primitive="Real"))],
+            )
+        ]
+    )
+    assert "def unchecked_(self) -> float:" in source
+
+    namespace: dict = {}
+    exec(compile(source, "generated", "exec"), namespace)
+    vehicle = namespace["Vehicle"]
+    view = vehicle.unchecked(FakeInstance({"unchecked": 1.5}))
+    assert view.unchecked_ == 1.5
 
 
 def test_unrestricted_name_with_quotes_is_escaped():

@@ -4,10 +4,63 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
 )
+
+// TestGetServerInfo verifies the service reports its build version and the
+// capabilities a client can require.
+func TestGetServerInfo(t *testing.T) {
+	srv := mustNewService(t, 10)
+
+	resp, err := srv.GetServerInfo(context.Background(), &pb.ServerInfoRequest{})
+	if err != nil {
+		t.Fatalf("GetServerInfo failed: %v", err)
+	}
+	if resp.Version != "test" {
+		t.Errorf("version = %q, want the version the service was built with", resp.Version)
+	}
+	if !slices.Contains(resp.Capabilities, CapabilityTypeFacts) {
+		t.Errorf("capabilities = %v, want it to contain %q", resp.Capabilities, CapabilityTypeFacts)
+	}
+}
+
+// TestGetServerInfoTypeFactsCapabilityIsHonest verifies the reported
+// type_facts capability matches what SymbolInfo actually carries, so a client
+// that requires it is not told yes by a build that answers without type facts.
+func TestGetServerInfoTypeFactsCapabilityIsHonest(t *testing.T) {
+	srv := mustNewService(t, 10)
+
+	info, err := srv.GetServerInfo(context.Background(), &pb.ServerInfoRequest{})
+	if err != nil {
+		t.Fatalf("GetServerInfo failed: %v", err)
+	}
+	if !slices.Contains(info.Capabilities, CapabilityTypeFacts) {
+		t.Skip("build does not claim the type_facts capability")
+	}
+
+	parsed, err := srv.ParseFile(context.Background(), &pb.ParseFileRequest{
+		Source: &pb.ParseFileRequest_Content{Content: "part def Engine { attribute power = 300.0; }"},
+	})
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+	sym, err := srv.GetSymbol(context.Background(), &pb.GetSymbolRequest{
+		ModelHash: parsed.ModelHash,
+		SymbolId:  "Engine::power",
+	})
+	if err != nil {
+		t.Fatalf("GetSymbol failed: %v", err)
+	}
+	if sym.Symbol == nil {
+		t.Fatalf("GetSymbol returned no symbol: %s", sym.Error)
+	}
+	if sym.Symbol.TypeInfo == nil {
+		t.Error("type_facts is claimed, but a typed attribute carries no type_info")
+	}
+}
 
 // TestParseFile_ValidSyntax verifies ParseFile on well-formed input
 func TestParseFile_ValidSyntax(t *testing.T) {

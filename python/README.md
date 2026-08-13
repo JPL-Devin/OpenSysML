@@ -152,6 +152,43 @@ mypy (or pyright) then reports `v.mas` as an unknown attribute and `v.mass + "x"
 as an unsupported operand pair. `pysysml` ships a `py.typed` marker, so its own
 annotations are used too.
 
+`from_instance` rejects an instance of another definition, naming both types,
+rather than failing later at attribute access. An instance of a definition that
+specializes the expected one is accepted, since its generated class derives from
+the expected class. An instance whose type no generated class describes is
+accepted: instantiating a *usage* reports the usage's own FQN (`Demo::myCar`, not
+`Demo::SportsCar`), which the client cannot relate to a definition, so rejecting
+it would break the ordinary way to obtain an instance. `Vehicle.unchecked(inst)`
+is the explicit escape hatch for a deliberately unchecked view.
+
+#### Keeping a generated module honest
+
+A generated module records what it came from, so a stale one can be detected
+rather than discovered at attribute access (or never, when a removed feature keeps
+type-checking):
+
+```python
+SYSML_GENERATOR_VERSION = "1"   # emission schema of this generator
+SYSML_MODEL_HASH = "sha256:…"   # hash of the model source it was generated from
+```
+
+`--check` regenerates in memory and compares, writing nothing:
+
+```bash
+python -m pysysml.generate model.sysml -o model_types.py --check   # exits 1 if stale
+```
+
+It exits non-zero when the module is missing or would change, naming the command
+that regenerates it, which makes it usable as a CI or pre-commit gate.
+
+Generation requires a service that reports the `type_facts` capability, which it
+asks for over `GetServerInfo`. A service too old to answer that RPC, or one that
+answers without the capability, does not populate `SymbolInfo.type_info`, and
+generating against it would type every feature `object` — indistinguishable from a
+feature that is genuinely untyped. Generation therefore fails, naming the service
+in use, where it came from, and how to replace it, rather than emitting a silently
+useless module.
+
 The generator emits a **runtime `.py`**, not a `.py` + `.pyi` pair: each feature is
 a property that carries the annotation and performs the delegation, so the types
 and the code that implements them cannot drift apart, and there is one artifact to

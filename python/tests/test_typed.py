@@ -3,7 +3,7 @@
 import pytest
 
 from pysysml import typed as _t
-from pysysml.errors import SlotError, TypeMismatchError
+from pysysml.errors import InstanceTypeError, SlotError, TypeMismatchError
 from pysysml.instance import Instance
 from pysysml.proto import sysml_pb2
 
@@ -139,4 +139,91 @@ def test_typed_objects_compare_by_instance_identity():
     """Two views of the same instance are equal; different classes are not."""
     inst = vehicle_instance()
     assert Vehicle.from_instance(inst) == Vehicle.from_instance(inst)
-    assert Vehicle.from_instance(inst) != Engine.from_instance(inst)
+    # An Engine view over a Vehicle is what from_instance now rejects, so the
+    # different-class case is built through the deliberate escape hatch.
+    assert Vehicle.from_instance(inst) != Engine.unchecked(inst)
+
+
+class SportsCar(Vehicle):
+    """Stands in for a generated class of a definition specializing Demo::Vehicle."""
+
+    sysml_id = "Demo::SportsCar"
+
+    @property
+    def top_speed(self) -> float:
+        return _t.slot(self, "topSpeed", _t.as_float)
+
+
+def sports_car_instance():
+    pb = sysml_pb2.Instance(
+        id=5,
+        type_symbol_id="Demo::SportsCar",
+        slots={
+            "mass": scalar_slot("mass", real_value=1200.0),
+            "topSpeed": scalar_slot("topSpeed", real_value=250.0),
+        },
+    )
+    return Instance(pb, {5: pb})
+
+
+def test_the_type_errors_are_reachable_from_the_package():
+    """A caller catches these the documented way, through the package namespace."""
+    import pysysml
+
+    assert pysysml.InstanceTypeError is InstanceTypeError
+    assert issubclass(pysysml.MissingCapabilityError, pysysml.PySysMLError)
+
+
+def test_from_instance_rejects_an_instance_of_another_type():
+    """A wrong-type instance fails at from_instance, naming both types."""
+    with pytest.raises(InstanceTypeError) as excinfo:
+        Engine.from_instance(vehicle_instance())
+    assert excinfo.value.expected == "Demo::Engine"
+    assert excinfo.value.actual == "Demo::Vehicle"
+    assert "Demo::Engine" in str(excinfo.value)
+    assert "Demo::Vehicle" in str(excinfo.value)
+
+
+def test_from_instance_accepts_a_subtype_instance():
+    """A subtype instance is legitimate where its base class is expected."""
+    inst = sports_car_instance()
+    as_base = Vehicle.from_instance(inst)
+    assert as_base.mass == 1200.0
+    assert SportsCar.from_instance(inst).top_speed == 250.0
+
+
+def test_from_instance_accepts_a_type_no_generated_class_describes():
+    """An instantiated usage reports its own FQN, which no class carries.
+
+    The client cannot relate such an id to a definition, so it does not reject
+    it: doing so would break instantiating a usage, the ordinary way to get an
+    instance. Slot decoding still reports a wrong shape.
+    """
+    pb = sysml_pb2.Instance(
+        id=6,
+        type_symbol_id="Demo::myCar",
+        slots={"mass": scalar_slot("mass", real_value=900.0)},
+    )
+    assert Vehicle.from_instance(Instance(pb, {6: pb})).mass == 900.0
+
+
+def test_from_instance_accepts_an_instance_with_no_reported_type():
+    """An instance carrying no type at all is not evidence of a mismatch."""
+    pb = sysml_pb2.Instance(id=7, slots={"mass": scalar_slot("mass", real_value=1.0)})
+    assert Vehicle.from_instance(Instance(pb, {7: pb})).mass == 1.0
+
+
+def test_unchecked_bypasses_the_type_check():
+    """The escape hatch is explicit at the call site and does not check."""
+    view = Engine.unchecked(vehicle_instance())
+    assert view.instance.type_symbol_id == "Demo::Vehicle"
+    with pytest.raises(TypeMismatchError):
+        view.power
+
+
+def test_nested_slot_of_the_wrong_type_is_rejected():
+    """The guard also applies to a nested instance decoded into a typed view."""
+    nested = vehicle_instance(engine=scalar_slot("engine", instance_id=1))
+    with pytest.raises(InstanceTypeError):
+        nested_view = Vehicle.from_instance(nested)
+        nested_view.engine

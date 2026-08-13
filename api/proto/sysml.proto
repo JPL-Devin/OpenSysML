@@ -6,6 +6,11 @@ option go_package = "github.com/Open-MBEE/Systemica/api/proto";
 
 // SysMLService provides programmatic access to Systemica's parser and runtime
 service SysMLService {
+  // Report what this build of the service can do, so a client can require a
+  // capability instead of guessing from a version string. A service that
+  // predates this RPC answers UNIMPLEMENTED, which is itself the answer.
+  rpc GetServerInfo(ServerInfoRequest) returns (ServerInfoResponse);
+
   // Parse a SysML file and return model hash for subsequent queries
   rpc ParseFile(ParseFileRequest) returns (ParseFileResponse);
   
@@ -234,4 +239,23 @@ message Span {
   int32 start_col = 3;
   int32 end_line = 4;
   int32 end_col = 5;
+}
+
+// ServerInfoRequest asks the service to describe itself. It carries no fields;
+// the answer does not depend on the caller.
+message ServerInfoRequest {}
+
+// ServerInfoResponse describes the running service.
+message ServerInfoResponse {
+  // Build version of the service binary, informational only: it is "dev" for a
+  // build without release ldflags, and versions of forks are not comparable.
+  // Feature decisions belong in `capabilities`.
+  string version = 1;
+  // Named capabilities this build supports, each an exact string a client can
+  // require. Capabilities are only ever added, never renamed or removed with
+  // their behaviour intact, so requiring one is stable across releases.
+  // Currently defined:
+  //   "type_facts" - SymbolInfo carries type_info, multiplicity and
+  //                  specializations, which typed code generation needs.
+  repeated string capabilities = 2;
 }

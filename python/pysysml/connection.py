@@ -10,6 +10,7 @@ from filelock import FileLock, Timeout
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
 from pysysml.binary import ensure_binary
+from pysysml.capabilities import ServerInfo
 from pysysml.errors import ConnectionError, UnsupportedValueError
 from pysysml.values import value_to_python
 
@@ -123,6 +124,10 @@ class Connection:
         self._address = f"{host}:{port}"
         self._process = None
         self._cleaned_up = False
+        # Provenance of the service, so an error can name the binary at fault.
+        # Refined by _ensure_service, which knows how it was reached.
+        self._origin = f"service at {self._address} (not started by this client)"
+        self._server_info = None
         # Only connections that took a reference may release one on close.
         self._holds_refcount = False
         
@@ -147,6 +152,39 @@ class Connection:
         """Context manager exit."""
         self.close()
     
+    def server_info(self):
+        """Ask the service what it is and what it supports.
+
+        The answer is cached for the life of the connection: a service does not
+        change build while a channel is open to it.
+
+        Returns:
+            ServerInfo: Reported version and capabilities. ``answered`` is False
+                when the service predates the GetServerInfo RPC, in which case
+                it claims no capabilities.
+        """
+        if self._server_info is None:
+            request = sysml_pb2.ServerInfoRequest()
+            try:
+                response = self._stub.GetServerInfo(request)
+            except grpc.RpcError as e:
+                if e.code() != grpc.StatusCode.UNIMPLEMENTED:
+                    raise
+                self._server_info = ServerInfo(
+                    version='',
+                    capabilities=frozenset(),
+                    answered=False,
+                    origin=self._origin,
+                )
+            else:
+                self._server_info = ServerInfo(
+                    version=response.version,
+                    capabilities=frozenset(response.capabilities),
+                    answered=True,
+                    origin=self._origin,
+                )
+        return self._server_info
+
     def load(self, file_path):
         """Load a SysML model from file.
         
@@ -445,6 +483,10 @@ class Connection:
                 # Check if service already running (another process may have started it)
                 if self._probe_service(self.host, self.port):
                     # Service running - increment refcount and return
+                    self._origin = (
+                        f"service already listening on {self._address}, "
+                        f"not started by this client"
+                    )
                     _increment_refcount()
                     self._holds_refcount = True
                     atexit.register(self._cleanup_service)
@@ -454,6 +496,7 @@ class Connection:
                 binary_path = ensure_binary()
                 if not os.path.exists(binary_path):
                     raise ConnectionError(f"Binary not found after download: {binary_path}")
+                self._origin = f"{binary_path}, started by this client"
                 
                 # Start service
                 process = subprocess.Popen(
