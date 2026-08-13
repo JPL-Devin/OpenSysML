@@ -191,11 +191,11 @@ tag `pysysml-v<that version>`.
 The token lives in a **restricted context**, not in project environment
 variables, so only the release path can read it:
 
-1. In CircleCI, **Organization Settings → Contexts → Create Context**, named
-   `pypi-publish`.
-2. **Restrict it to a security group** (Contexts → `pypi-publish` → *Add
-   security group*) so only that group's members can run a job that uses it. A
-   context with no group restriction is readable by every project job.
+1. In CircleCI, **Organization Settings → Contexts**, in the context named
+   `pypi` (create it if the organization does not have it yet).
+2. **Restrict it to a security group** (Contexts → `pypi` → *Add security
+   group*) so only that group's members can run a job that uses it. A context
+   with no group restriction is readable by every project job.
 3. Add the token as `PYPI_API_TOKEN` (an *environment variable* in that
    context). `TWINE_USERNAME` is `__token__`, set by the job; only the token
    value belongs in the context.
@@ -207,8 +207,14 @@ variables, so only the release path can read it:
 ```yaml
       - publish-pypi:
           context:
-            - pypi-publish
+            - pypi
 ```
+
+Any other variables that context happens to carry are ignored. In particular a
+`PYPI_USERNAME`/`PYPI_PASSWORD` pair cannot publish to PyPI at all: uploads from
+an account with 2FA have required an API token or a trusted publisher since
+2023-06-01, and 2FA has been mandatory for every account since 2024-01-01, so a
+password is answered with a 403.
 
 The job refuses to run `twine` when the variable it needs is absent, naming the
 variable and the context, rather than letting PyPI answer with a 403 that reads
@@ -223,7 +229,7 @@ be created for a project that does not exist. So:
 
 1. **Before the first release**, create an **account-scoped** API token
    (PyPI → Account settings → API tokens → *Add API token*, scope *Entire
-   account*) and put it in the `pypi-publish` context as `PYPI_API_TOKEN`. Treat
+   account*) and put it in the `pypi` context as `PYPI_API_TOKEN`. Treat
    it as a credential that can publish anything the account owns.
 2. **Immediately after the first upload succeeds**, replace it: create a token
    scoped to the `pysysml` project only, update `PYPI_API_TOKEN` in the context,
