@@ -889,15 +889,15 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 
 // evalSequenceExpr evaluates a sequence expression (1, 2, 3).
 func (ec *EvalContext) evalSequenceExpr(n *ast.SequenceExpr) (Value, error) {
-	seq := NewSequence()
+	elements := make([]Value, 0, len(n.Elements))
 	for _, elem := range n.Elements {
 		val, err := ec.Eval(elem)
 		if err != nil {
 			return Value{}, err
 		}
-		seq.Append(val)
+		elements = append(elements, val)
 	}
-	return Value{Kind: ValSequence, Sequence: seq}, nil
+	return ec.newSequence(elements)
 }
 
 // evalCollectExpr evaluates `operand.{in x; ...}`, the collect notation, which

@@ -25,6 +25,11 @@ type Context struct {
 	maxStateEvents int64
 	maxDoSteps     int64
 
+	// elements and maxElements bound the collection elements one run materializes,
+	// which is what its memory grows with, unlike a step.
+	elements    int64
+	maxElements int64
+
 	features map[*symbols.Symbol][]EffectiveFeature
 
 	// calcShapes memoizes resolved calc invocation interfaces (parameters,
@@ -98,6 +103,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxActionSteps: DefaultMaxActionSteps,
 		maxStateEvents: DefaultMaxStateEvents,
 		maxDoSteps:     DefaultMaxDoSteps,
+		maxElements:    DefaultMaxElements,
 
 		occurrences:   make(map[*symbols.Symbol]int64),
 		derivingSlots: make(map[slotRef]bool),
@@ -129,6 +135,7 @@ func (ctx *Context) allocateID() int64 {
 func (ctx *Context) beginRun() func() {
 	if ctx.runDepth == 0 {
 		ctx.steps = 0
+		ctx.elements = 0
 		ctx.calcUsageRuns = make(map[int64]map[calcUsageKey]*calcRun)
 	}
 	ctx.runDepth++
@@ -143,6 +150,7 @@ func (ctx *Context) beginRun() func() {
 func (ctx *Context) beginExecutorRun(started *bool) func() {
 	if ctx.runDepth == 0 && !*started {
 		ctx.steps = 0
+		ctx.elements = 0
 		ctx.calcUsageRuns = make(map[int64]map[calcUsageKey]*calcRun)
 	}
 	*started = true
@@ -176,6 +184,17 @@ func (ctx *Context) incrementStep() error {
 	ctx.steps++
 	if ctx.steps > ctx.maxSteps {
 		return fmt.Errorf("%w (%d steps; raise %s to allow more)", ErrStepLimitExceeded, ctx.maxSteps, MaxStepsEnvVar)
+	}
+	return nil
+}
+
+// chargeElements counts elements a run materializes, which unlike a step is
+// memory the collection holding it keeps, against the element budget.
+func (ctx *Context) chargeElements(n int64) error {
+	ctx.elements += n
+	// A count that overflowed is past any budget, so it reads as one.
+	if ctx.elements > ctx.maxElements || ctx.elements < 0 {
+		return fmt.Errorf("%w (%d elements; raise %s to allow more)", ErrElementLimitExceeded, ctx.maxElements, MaxElementsEnvVar)
 	}
 	return nil
 }

@@ -35,8 +35,8 @@ func (ec *EvalContext) evalRange(n *ast.OperatorExpr) (Value, error) {
 }
 
 // rangeSequence builds the ordered sequence of integers from lower to upper.
-// Every element counts one step of the budget, so a range wider than the budget
-// reports ErrStepLimitExceeded rather than exhausting memory.
+// Every element costs a step and an element of the budgets, so a range too wide
+// to hold is reported before it is held.
 func (ec *EvalContext) rangeSequence(op string, lowerVal, upperVal Value) (Value, error) {
 	lower, err := rangeBound(op, "lower", lowerVal)
 	if err != nil {
@@ -49,10 +49,10 @@ func (ec *EvalContext) rangeSequence(op string, lowerVal, upperVal Value) (Value
 	// A descending range names no integer: the library's own subsequence reaches
 	// one and expects nothing from it.
 	if lower > upper {
-		return sequenceOf(nil), nil
+		return ec.newSequence(nil)
 	}
 	// A model-supplied width can overflow or exceed what is allocatable, so it only
-	// hints at the capacity; the step budget below bounds the sequence.
+	// hints at the capacity; the budgets below bound the sequence.
 	const maxHint = 4096
 	hint := upper - lower + 1
 	if hint <= 0 || hint > maxHint {
@@ -63,12 +63,15 @@ func (ec *EvalContext) rangeSequence(op string, lowerVal, upperVal Value) (Value
 		if err := ec.ctx.incrementStep(); err != nil {
 			return Value{}, err
 		}
+		if err := ec.ctx.chargeElements(1); err != nil {
+			return Value{}, err
+		}
 		elements = append(elements, integerValue(i))
 		if i == upper {
 			break
 		}
 	}
-	return sequenceOf(elements), nil
+	return sequenceOf(elements), nil // charged element by element above
 }
 
 // rangeBound reads one bound of a range: IntegerFunctions::'..' declares both

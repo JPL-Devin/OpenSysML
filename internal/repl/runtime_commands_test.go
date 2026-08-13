@@ -202,6 +202,15 @@ func TestEvalReportsTheAnswerOfALiteralExpressionThatFails(t *testing.T) {
 		"sequence index requires an Integer index")
 	wants(t, run(t, empty, "%eval (1, 2, 3).{in x; in y; x}"),
 		"calls its body with 1 argument(s), but it declares 2 parameter(s)")
+	// A budget the literal expression itself spends is the answer too, and the
+	// session's bounds are the ones in force.
+	budgets := runtime.DefaultBudgets()
+	budgets.MaxElements = 10
+	if err := empty.SetBudgets(budgets); err != nil {
+		t.Fatalf("SetBudgets: %v", err)
+	}
+	wants(t, run(t, empty, "%eval (1..100)->size()"),
+		"collection element limit exceeded (10 elements; raise "+runtime.MaxElementsEnvVar)
 	// A name is the one failure declarations do answer, so it still says so.
 	wants(t, run(t, empty, "%eval mass + 1"), "no declarations loaded")
 }

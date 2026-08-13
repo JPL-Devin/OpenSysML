@@ -158,6 +158,9 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 			return nil, err
 		}
 		if val.Kind != ValSequence && val.Kind != ValSet {
+			if err := ctx.chargeElements(1); err != nil {
+				return nil, err
+			}
 			seq := NewSequence()
 			seq.Append(val)
 			val = Value{Kind: ValSequence, Sequence: seq}
@@ -196,6 +199,9 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 			}
 
 			// Determine collection type (Sequence vs Set)
+			if err := ctx.chargeElements(int64(count)); err != nil {
+				return nil, err
+			}
 			seq := NewSequence()
 			for i := 0; i < count; i++ {
 				childInst, err := ctx.Instantiate(composite)

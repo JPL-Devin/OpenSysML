@@ -52,6 +52,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("body_local_declaration_not_executable", testBodyLocalDeclarationNotExecutable)
 	t.Run("range_bound_is_not_an_integer", testRangeBoundIsNotAnInteger)
 	t.Run("range_spends_the_step_budget", testRangeSpendsTheStepBudget)
+	t.Run("collection_spends_the_element_budget", testCollectionSpendsTheElementBudget)
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
@@ -2651,6 +2652,37 @@ func testRangeSpendsTheStepBudget(t *testing.T) {
 	err := calcErrorWithLibraries(t, src, "Span", []Value{constInt(3)}, 100)
 	if !errors.Is(err, ErrStepLimitExceeded) {
 		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// testCollectionSpendsTheElementBudget: a materialized element is memory the
+// collection keeps, so it has its own ceiling and its own error rather than
+// reading as the step budget's.
+func testCollectionSpendsTheElementBudget(t *testing.T) {
+	src := `
+		package test {
+			calc def Span {
+				in n : Integer;
+				attribute r = (1..1000)->collect{in i; i * i};
+				n
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	ctx.maxElements = 100
+	sym, scope := calcByName(t, idx.DocumentRoot("<test>"), "test", "Span")
+	_, err := ctx.InvokeCalc(sym, []Value{constInt(3)}, scope)
+	if err == nil {
+		t.Fatal("want the element budget's error, got a value")
+	}
+	if !errors.Is(err, ErrElementLimitExceeded) {
+		t.Errorf("expected ErrElementLimitExceeded, got: %v", err)
+	}
+	if errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("error %q also reads as the step budget's", err)
+	}
+	if !strings.Contains(err.Error(), MaxElementsEnvVar) {
+		t.Errorf("error %q does not name %s", err, MaxElementsEnvVar)
 	}
 }
 
