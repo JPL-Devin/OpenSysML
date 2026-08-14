@@ -1090,6 +1090,52 @@ its output rather than in an exit code — so assert on the exact rendered text:
   pre-existing rendering, not evidence of a new bug, so do not report it as one without an A/B
   against `main`.
 
+## Multi-file projects: `%load <path>...` and positional dirs/globs (PR #146)
+
+`sysml <dir|glob|file>...` and `%load <path>...` expand to model files via
+`internal/core/project.Expand`, and every file is accepted before one analysis pass
+(`Session.SubmitAll`), so load order does not affect name resolution. Shapes to expect:
+
+- More than one file prints a `loaded N files:` header listing each path (a single file prints no
+  header — a good tell that the multi-file path was taken).
+- Only `.sysml`/`.kerml` are collected; a `.md` sibling and any **hidden** directory (`.git`,
+  `.hidden`) are skipped. Put an unparseable file inside a `.hidden/` dir: any diagnostic from it
+  means the skip broke.
+- Errors are worth asserting verbatim: `no .sysml or .kerml files in <dir>`,
+  `no model files match "<pattern>"`, `load <file>: open <file>: no such file or directory`, and
+  `usage: %load <file|dir|glob>...` for a bare `%load`.
+- Duplicates dedupe by absolute path, so `file dir/` where `dir` contains `file` loads it once.
+- `~` and quoted paths with spaces work; quote globs in the REPL (`%load "/tmp/p/*.sysml"`) and on
+  the CLI so the shell does not pre-expand them.
+- `-convert` still takes exactly one file: a directory gives
+  `cannot tell the format of "<dir>": it has no extension, so pass -from`.
+
+**Two regressions fixed late in #146 — re-check both after any change to the load path:**
+
+1. *Per-file diagnostic positions.* Diagnostics from a load are printed as
+   `<file>:<line>:<col>: ...` with the line counted from that file's start. With `a-ok.sysml`
+   (5 lines) sorting before `b-bad.sysml` whose line 3 is `attribute z = ;`, a directory load must
+   report `/tmp/bp/b-bad.sysml:3:17:` — the same position the file reports when loaded alone. A
+   joined-buffer line (e.g. `9:17`) or a missing filename is the bug returning
+   (`Session.origins`/`Result.locate` attribute an offset to its file).
+2. *Every loaded file survives the load.* Two files of one load declaring the same top-level name
+   must both stay in the session (`%list` shows both); name-based snippet replacement only
+   supersedes **earlier** submissions. Retyping a declaration at the prompt must still replace what
+   a previous load put there.
+3. *Symlinked directories are walked.* `%load /tmp/link-to-proj` loads the files behind the link,
+   symlinked subdirectories included, each resolved directory at most once so a link cycle
+   terminates; a dangling link is skipped. A project reached through a symlink is a realistic
+   setup, so include one.
+
+To prove order-independence is real rather than accidental, name the referencing file **first**
+alphabetically (e.g. `a-uses.sysml` importing a package declared in `b-defs.sysml`). The pre-#146
+binary emits `unresolved reference: Defs` / `Widget` / `size` on exactly that input, which is the
+strongest available evidence.
+
+Trap while driving the REPL on camera: typing `clear` at the `sysml>` prompt not only errors
+(`1:1: error: expected a namespace member`) but leaves garbage in the session buffer that makes a
+subsequent `%eval Pkg::part.attr` fail with a parse error. `%clear` and re-`%load` recovers.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
