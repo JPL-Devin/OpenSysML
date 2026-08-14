@@ -74,10 +74,13 @@ func (ctx *Context) aliasRedefinedSlots(inst *Instance) {
 }
 
 // subsettingContributions returns the values the features subsetting the named
-// feature contribute to it, in declaration order. Reading a subsetting feature
-// materializes it, so a cycle between subsetting features is reported as
+// feature contribute to it, in declaration order. A redefinition shares one slot
+// under two names, so membership is decided by the slot a subsetted name reads
+// rather than by the name this collection was read under. Reading a subsetting
+// feature materializes it, so a cycle between subsetting features is reported as
 // ErrCyclicSlot rather than recursing until the step budget runs out.
 func (ctx *Context) subsettingContributions(inst *Instance, name string) ([]Value, error) {
+	target := inst.Slots[name]
 	key := slotRef{instance: inst.ID, feature: name}
 	if ctx.collectingSubsets[key] {
 		return nil, fmt.Errorf("%w: %s.%s subsets itself", ErrCyclicSlot, inst.Type.Name, name)
@@ -92,7 +95,7 @@ func (ctx *Context) subsettingContributions(inst *Instance, name string) ([]Valu
 		}
 		subsets := false
 		for _, subsetted := range ctx.relatedFeatureNames(feat.Symbol, inst.Type, ast.RelSubsets) {
-			if subsetted == name {
+			if subsetted == name || (target != nil && inst.Slots[subsetted] == target) {
 				subsets = true
 				break
 			}
