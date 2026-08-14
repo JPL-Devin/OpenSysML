@@ -1160,3 +1160,44 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
   (`expected ';' after transition`), and a nested statement inside a braced effect missing its own
   `;`. An A/B against a binary built from the parent commit is what separates "fixed" from
   "never broken" here.
+
+## Reading a state machine's attribute values, and notation that actually drives it
+
+Discovered while testing inline `entry action { … }` bodies and calc `out` assignment (PR #135).
+
+- **`%current` is the way to read a state machine's attributes.** It prints a `State data:` block
+  (`c = 6`) plus the active configuration / state stack for composite and orthogonal machines.
+  `%eval <attr>` is *not* a substitute: it reports the declared default, and for a name declared in
+  two `state def`s of one package it fails with
+  `error: symbol "c" is ambiguous: P::S1::c, P::S4::c (use a qualified name)`.
+  `%advance <n>` additionally prints `Do behavior actions run: <k>`, which is how you tell a do
+  behavior actually ran from a machine that merely idled (`No pending work - simulation time is now …`).
+- **`transition first a accept when true then z;` never fires.** A `when` trigger is a change
+  trigger evaluated on an event, and a machine with no events sits in `a` forever — so a fixture
+  written that way silently tests *only* the entry behavior and never the exit behavior. To exercise
+  exit behaviors and ordering, use **completion transitions**: `initial start; … then start work;
+  then work done;` (the `state_anonymous_action_body.sysml` conformance fixture is the model to copy).
+- **An inline body is one action per do round.** After a do body has run to its end the state has
+  no more pending work, so further `%advance` calls do not re-run it; a counter incremented by a
+  `do action { … }` reaches 1 and stays there unless a transition re-enters the state. The
+  one-action-per-statement `do { … }` form is what interleaves and re-runs per statement.
+- **Notation gotchas that cost fixture rewrites:**
+  - a self-send must name the machine, statement style: `entry action { send Ping to Driver1; }`
+    with `item def Ping;` — `send Sig() to self` with an `attribute def` parses but never delivers.
+  - inside a body write `perform Work;`, never `perform Work();`
+    (`error: expected ';' or '{' after 'perform' action reference`).
+  - an action a `perform` targets needs `first`/`then` nodes, else
+    `initialize action: no initial node found`.
+  - `then work done do assign x := 1;` does not parse (`expected ';' after succession edge`);
+    use the `transition work to done do assign x := 1;` form for an effect.
+- **`perform <Action>;` inside an inline body** works as of PR #135 (before it, it failed with
+  `state behavior <anonymous>: action usage "Work" in a body is not executable` while the same
+  `perform` in the statement-form body `entry { … perform Work; }` executed). It is a good
+  discriminating fixture whenever body lowering changes.
+- **Calc `out` features:** read them through a usage (`calc c : Def { in n = 5; } attribute a :
+  Integer = c.a;`) and inspect with `%slots <part>`; a failing read shows inline as
+  `a: <error: slot p.a: …>` rather than aborting the listing, so one `%slots` can carry several
+  independent negative assertions. Useful expected strings: `no value: output never assigned`,
+  `output bound more than once` (declaration value plus a body assignment; two *body* assignments
+  are legal, the last one winning), `assignment outside the calculation body: <name> is not declared
+  by the calculation`, `no result expression: calc … has no return expression`.
