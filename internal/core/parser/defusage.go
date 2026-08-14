@@ -333,16 +333,16 @@ func (p *Parser) atSecondaryKind(firstKeyword string) bool {
 	return !namesDeclaration(p.peekN(1))
 }
 
-// atUsageKindKeyword reports whether the current token is a usage kind keyword
-// declaring a usage of that kind, rather than naming one.
-func (p *Parser) atUsageKindKeyword() bool {
+// atPortionedKind reports whether the current token is the kind keyword of the
+// usage a portion prefix portions (`timeslice item : Cargo`). A kind keyword
+// there is always the kind, never the portion's name, since the portion keyword
+// itself is the only kind a bare portion usage declares.
+func (p *Parser) atPortionedKind() bool {
 	if !p.at(lexer.Keyword) {
 		return false
 	}
-	if _, ok := usageKindKeywords[p.peek().KeywordID]; !ok {
-		return false
-	}
-	return !namesDeclaration(p.peekN(1))
+	_, ok := usageKindKeywords[p.peek().KeywordID]
+	return ok
 }
 
 // isKindKeyword reports whether the token is a def or usage kind keyword.
@@ -616,7 +616,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 		mods.portion = portion
 		// Without a kind keyword the portion itself declares an occurrence usage.
-		if !p.atUsageKindKeyword() {
+		if !p.atPortionedKind() {
 			isAll := p.acceptKeyword("all")
 			return applyPrefixes(p.parseUsage(start, ast.UsageOccurrence, tok.KeywordID, mods, isAll))
 		}

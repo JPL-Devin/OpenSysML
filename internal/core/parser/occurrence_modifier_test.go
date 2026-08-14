@@ -149,6 +149,32 @@ func TestParseBarePortionAll(t *testing.T) {
 	}
 }
 
+// A kind keyword after a portion prefix is the portioned usage's kind, whatever
+// follows it: `timeslice item : Cargo;` is an unnamed item usage, not an
+// occurrence named `item`. Both portion keywords must read it the same way.
+func TestParseAnonymousPortionOfTypedKind(t *testing.T) {
+	for _, tt := range []struct {
+		input string
+		want  ast.PortionKind
+	}{
+		{"snapshot item : Cargo;", ast.PortionSnapshot},
+		{"timeslice item : Cargo;", ast.PortionTimeslice},
+		{"snapshot item;", ast.PortionSnapshot},
+		{"timeslice item;", ast.PortionTimeslice},
+	} {
+		u := parseSingleUsage(t, tt.input)
+		if u.Kind != ast.UsageItem {
+			t.Errorf("%s: kind = %v, want item", tt.input, u.Kind)
+		}
+		if u.Ident.Name != "" {
+			t.Errorf("%s: name = %q, want no name", tt.input, u.Ident.Name)
+		}
+		if u.Portion != tt.want {
+			t.Errorf("%s: portion = %q, want %q", tt.input, u.Portion.Keyword(), tt.want.Keyword())
+		}
+	}
+}
+
 // A directed parameter takes the same modifiers through the behavior parser's
 // own parameter path, which must store them too.
 func TestParseDirectionParameterOccurrenceModifiers(t *testing.T) {
