@@ -23,6 +23,18 @@ const (
 	VerdictUnresolved
 )
 
+// String names the status for a report a machine reads.
+func (s VerdictStatus) String() string {
+	switch s {
+	case VerdictHolds:
+		return "holds"
+	case VerdictFails:
+		return "fails"
+	default:
+		return "unresolved"
+	}
+}
+
 // Verdict is the outcome of one checked constraint, requirement or satisfaction
 // assertion. It carries both the status a caller decides on (an exit code, a
 // report) and the lines the REPL prints, so the prompt and a non-interactive
@@ -32,6 +44,8 @@ type Verdict struct {
 	Subject string
 	Status  VerdictStatus
 	Lines   []string
+	// Values are what a run produced, for a caller reporting more than a status.
+	Values []NamedValue
 }
 
 // Holds reports whether the checked condition is satisfied.

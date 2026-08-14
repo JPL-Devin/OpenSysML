@@ -50,6 +50,7 @@ var (
 	fromFormat  string
 	toFormat    string
 	modelChecks checks
+	advanceTime string
 )
 
 // budgets holds the run bounds the environment resolves to, read once at startup.
@@ -85,9 +86,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  sysml -satisfy model.sysml                     # Evaluate every satisfaction assertion\n")
 		fmt.Fprintf(os.Stderr, "  sysml -satisfy=Ctx model.sysml                 # ...only the ones Ctx states\n")
 		fmt.Fprintf(os.Stderr, "  sysml -instantiate p -constraint C model.sysml  # Check C against an object of p\n")
+		fmt.Fprintf(os.Stderr, "  sysml -validate model.sysml                    # Report diagnostics only\n")
+		fmt.Fprintf(os.Stderr, "  sysml -calc \"Fall(3, 4)\" model.sysml           # Invoke a calculation\n")
+		fmt.Fprintf(os.Stderr, "  sysml -action Drive model.sysml                # Run an action to completion\n")
+		fmt.Fprintf(os.Stderr, "  sysml -state Mission -advance 10 model.sysml   # Run a state machine for 10 time units\n")
+		fmt.Fprintf(os.Stderr, "  sysml -satisfy -json model.sysml               # Report the verdicts as JSON\n")
 		fmt.Fprintf(os.Stderr, "\nA check reports its verdict and exits 0 when every verdict holds, 1 when one\n")
-		fmt.Fprintf(os.Stderr, "fails, and 2 when a check could not be made at all, so a model check can gate\n")
-		fmt.Fprintf(os.Stderr, "a build. Each flag may be repeated.\n")
+		fmt.Fprintf(os.Stderr, "fails, and 2 when a check could not be made at all — an unresolved name, a\n")
+		fmt.Fprintf(os.Stderr, "model that did not analyse cleanly — so a model check can gate a build. Each\n")
+		fmt.Fprintf(os.Stderr, "flag may be repeated.\n")
 		fmt.Fprintf(os.Stderr, "\nConversion:\n")
 		fmt.Fprintf(os.Stderr, "  sysml -convert model.sysml -o model.ttl    # SysML notation to RDF Turtle\n")
 		fmt.Fprintf(os.Stderr, "  sysml -convert model.ttl -o model.sysml    # RDF Turtle to SysML notation\n")
@@ -114,7 +121,22 @@ func main() {
 	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
 	flag.Var(&modelChecks.requirements, "requirement", "Evaluate this requirement and exit (repeatable)")
 	flag.Var(&modelChecks.satisfy, "satisfy", "Evaluate every satisfaction assertion, or with -satisfy=<name> those the named element states (repeatable)")
+	flag.BoolVar(&modelChecks.validate, "validate", false, "Analyse the model and report its diagnostics, exiting nonzero on an error")
+	flag.Var(&modelChecks.calcs, "calc", "Invoke this calculation and report what it computed, as -calc \"Fall(3, 4)\" (repeatable)")
+	flag.Var(&modelChecks.actions, "action", "Run this action to completion, as -action \"Drive rover1\" to run it on an object (repeatable)")
+	flag.Var(&modelChecks.states, "state", "Run this state machine, as -state \"Mission rover1\" to run it on an object (repeatable)")
+	flag.StringVar(&advanceTime, "advance", "", "Simulated time units to run each -state machine for (default: only its initial transition)")
+	flag.BoolVar(&modelChecks.jsonOut, "json", false, "Report checks as one JSON document rather than as lines")
 	flag.Parse()
+
+	if advanceTime != "" {
+		duration, err := parseAdvance(advanceTime)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "sysml:", err)
+			os.Exit(2)
+		}
+		modelChecks.advance = duration
+	}
 
 	if debugMode && quietMode {
 		fmt.Fprintln(os.Stderr, "sysml: -debug and -quiet are mutually exclusive")

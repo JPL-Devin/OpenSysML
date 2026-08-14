@@ -57,17 +57,17 @@ const checkModel = `package Rover {
 }
 `
 
-// checkResult is what a build step sees of a model check.
-type checkResult struct {
+// runOutcome is what a build step sees of a model check.
+type runOutcome struct {
 	status         int
 	stdout, stderr string
 }
 
-func (r checkResult) output() string { return r.stdout + r.stderr }
+func (r runOutcome) output() string { return r.stdout + r.stderr }
 
 // check runs the binary on a model written to a temporary file and reports the
 // exit status without failing the test, since the status is what is under test.
-func check(t *testing.T, binary, model string, args ...string) checkResult {
+func check(t *testing.T, binary, model string, args ...string) runOutcome {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "model.sysml")
 	if err := os.WriteFile(path, []byte(model), 0o644); err != nil {
@@ -78,7 +78,7 @@ func check(t *testing.T, binary, model string, args ...string) checkResult {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
-	result := checkResult{stdout: stdout.String(), stderr: stderr.String()}
+	result := runOutcome{stdout: stdout.String(), stderr: stderr.String()}
 	var exit *exec.ExitError
 	switch {
 	case err == nil:
@@ -90,7 +90,7 @@ func check(t *testing.T, binary, model string, args ...string) checkResult {
 	return result
 }
 
-func wantReport(t *testing.T, got checkResult, status int, substrings ...string) {
+func wantReport(t *testing.T, got runOutcome, status int, substrings ...string) {
 	t.Helper()
 	if got.status != status {
 		t.Errorf("exit status = %d, want %d\n%s", got.status, status, got.output())
