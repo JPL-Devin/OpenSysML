@@ -277,6 +277,49 @@ An action token that reaches an `accept` with no matching message **parks** inst
 
 Always run these under `timeout` when driving over a pipe; a hang is the failure mode to catch.
 
+## Standard SysML v2 behavioral notation (flows, triggers, sends, transition effects)
+
+Testing this family end-to-end has a few traps that cost a whole run if hit late:
+
+- **A state machine cannot be handed a signal from the REPL** — there is no `%send`. To exercise
+  `accept <p> : <Item> [via <port>]` interactively, the model must post the message itself:
+  give the machine `port out : P; port in : P; connect out to in;` and a state whose
+  `entry send Item(9) via out;` feeds the transition (the shape of
+  `internal/core/runtime/testdata/conformance/state_transition_accept_via_port.sysml`). The shipped
+  `state_transition_accept_payload.sysml` has **no** sender — its event comes from the
+  `.expected.json` `events` array, so in the REPL it just sits in `idle` forever. That is the
+  harness, not a bug.
+- **Always run a signal-driven state model on both the REPL and the gRPC/conformance path and
+  diff them.** They disagreed until `ProcessNextEvent`/`%advance` learned to dispatch a pending
+  context-bus signal: a port send produced by an entry action was delivered by `RunToCompletion`
+  (gRPC `execute_state`, conformance) but not while stepping, so the machine parked with the
+  attribute at its initial value. `TestAdvanceDeliversPendingPortSignal` locks the parity; a
+  REPL-only result understates the feature and a gRPC-only result hides a debugger gap.
+- **A transition effect is worth testing per effect form**, because they lower differently:
+  `do assign x := <expr>` and a performed-action reference (`do perform Bump then s;`) reach the
+  executor through different lowering paths, and the performed form used to abort with
+  `transition effect: unsupported action type: *ast.Membership`. A parse-only check on such a form
+  proves nothing — always drive the transition and assert the attribute changed.
+- After any change to statement-termination in `parser/behavior.go`, re-run a **negative** case in
+  the same breath: a genuinely missing `;` in an action body (`assign n := n + 1` followed by
+  another statement) must still report `expected ';' after assignment`, and one in a state body
+  must still report `expected '{' or ';' after declaration`.
+- `accept at <t>` / `accept after <d>` in an **action** body are supposed to fail fast with
+  `no clock to wait on: … a time event is only waited on by a state machine's transitions` — check
+  they do not park forever. In a **state** transition, plain `accept after 5` works while
+  `accept after 5 [s]` fails with `schedule events: time duration must be constant, got quantity`;
+  prefer the unitless form unless quantities are the thing under test.
+- Both spellings of a machine's start state work: an explicit `initial <s>;` and the standard
+  `entry; then off;` succession out of the body's own entry subaction. If a bodied
+  `exhibit state s { … }` reports `initialize state machine: no initial state found in state
+  machine <name>`, neither reached lowering — check the state body actually parsed.
+- Corpus regression sweep for parser work: `./bin/sysml <file>` over
+  `/home/ubuntu/corpus/apps/*.sysml` and `/home/ubuntu/corpus/dragon/Dragon.sysml`, counting
+  `error:` lines, is a cheap high-signal gate — read each remaining message and classify it as
+  structural/unresolved-library vs behavioral rather than trusting the count alone.
+- Don't name a pysysml probe script `grpc.py`: `sys.path[0]` shadows the real `grpc` package and
+  pysysml dies with `partially initialized module 'pysysml'`, which looks like a client bug.
+
 ## Control flow inside an action node body
 
 `while`, `loop … until` (braced and unbraced), `for … in` and `if`/`else` execute inside an
