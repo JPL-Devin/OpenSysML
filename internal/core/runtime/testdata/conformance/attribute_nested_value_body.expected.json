@@ -3,11 +3,27 @@
   "instantiate": "test::b",
   "libraries": true,
   "slots": {
-    "material": {"type": "Instance"},
-    "bandCost": {"type": "Instance"},
-    "ringCost": {"type": "Instance"},
-    "assembly": {"type": "Instance"},
-    "declared": {"type": "Instance"}
+    "material": {
+      "type": "Instance"
+    },
+    "bandCost": {
+      "type": "Instance"
+    },
+    "ringCost": {
+      "type": "Instance"
+    },
+    "assembly": {
+      "type": "Instance"
+    },
+    "declared": {
+      "type": "Instance"
+    },
+    "template": {
+      "type": "Instance"
+    },
+    "copy": {
+      "type": "Instance"
+    }
   },
   "constraints": {
     "plainRedefinition": true,
@@ -15,6 +31,8 @@
     "baseNameReadsTheSame": true,
     "twoLevelsDeep": true,
     "declarationWithBody": true,
-    "keepsInheritedDefault": true
+    "keepsInheritedDefault": true,
+    "bodyOnADefinitionsAttribute": true,
+    "valuedWithReDeclaredFeatures": true
   }
 }

@@ -309,11 +309,17 @@ func declaresFeatures(sym *symbols.Symbol) bool {
 	return false
 }
 
-// restatedInValuedBody returns the name of a feature restated in a valued
-// feature's own body, or "" when there is none: the bound value supplies the
-// features, so a restatement of one of them could only be dropped.
+// restatedInValuedBody returns the name of a feature valued again in the body of
+// the declaration that binds a value to it, or "" when there is none: the bound
+// value supplies the features, so a second value for one could only be dropped.
+// A declaration whose body only re-declares features states no second value,
+// and neither does a body over a value the redefined declaration wrote.
 func (ctx *Context) restatedInValuedBody(feat *EffectiveFeature) string {
-	if feat.DefaultValue == nil || feat.Symbol == nil {
+	if feat.Symbol == nil {
+		return ""
+	}
+	decl, ok := feat.Symbol.Decl.(*ast.Usage)
+	if !ok || decl.Value == nil {
 		return ""
 	}
 	inherited := make(map[string]bool)
@@ -322,7 +328,7 @@ func (ctx *Context) restatedInValuedBody(feat *EffectiveFeature) string {
 	}
 	for _, member := range declMembers(feat.Symbol.Decl) {
 		usage, ok := member.(*ast.Usage)
-		if !ok {
+		if !ok || (usage.Value == nil && len(declMembers(usage)) == 0) {
 			continue
 		}
 		if name := restatedFeatureName(usage); name != "" {

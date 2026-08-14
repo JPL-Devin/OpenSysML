@@ -14,7 +14,12 @@ package test {
         attribute assembly : Assembly;
     }
 
-    part def Band :> Ring { attribute bandCost :>> ringCost; }
+    part def Band :> Ring {
+        attribute bandCost :>> ringCost;
+        attribute template : Cost { attribute :>> v = 9.0; }
+        // A body that only re-declares a feature states no second value for it.
+        attribute copy : Cost = template { attribute :>> v; }
+    }
 
     part b : Band {
         attribute :>> material { attribute :>> v = 3.0; }
@@ -28,6 +33,8 @@ package test {
         assert constraint twoLevelsDeep { assembly.piece.v == 5.0 }
         assert constraint declarationWithBody { declared.v == 7.0 }
         assert constraint keepsInheritedDefault { material.w == 2.0 }
+        assert constraint bodyOnADefinitionsAttribute { template.v == 9.0 }
+        assert constraint valuedWithReDeclaredFeatures { copy.v == 9.0 }
     }
 
     part untouched : Band;
