@@ -426,7 +426,7 @@ func (p *Parser) parseActionMember() ast.Node {
 			target := p.parseQualifiedName()
 			p.advance() // consume = or :=
 			value := p.ParseExpression()
-			p.expect(lexer.Semicolon, "expected ';' after assignment")
+			p.expectStatementEnd("expected ';' after assignment")
 
 			node := &ast.AssignmentActionNode{
 				Target: target,
@@ -825,6 +825,16 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 	return node
 }
 
+// expectStatementEnd terminates a behavioral statement. A statement written as
+// the `do` effect of a transition is ended by the transition's next clause
+// rather than by ';', so `do assign x := 1 then alerting;` needs no semicolon.
+func (p *Parser) expectStatementEnd(msg string) {
+	if p.atKeyword("then") || p.atKeyword("if") || p.atKeyword("do") {
+		return
+	}
+	p.expect(lexer.Semicolon, msg)
+}
+
 // parseAssignmentAction parses: assign target := value;
 func (p *Parser) parseAssignmentAction(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
@@ -845,7 +855,7 @@ func (p *Parser) parseAssignmentAction(tok lexer.Token) ast.Node {
 	// Parse value expression
 	value := p.ParseExpression()
 
-	p.expect(lexer.Semicolon, "expected ';' after assignment")
+	p.expectStatementEnd("expected ';' after assignment")
 
 	node := &ast.AssignmentActionNode{
 		Target: target,
@@ -862,7 +872,7 @@ func (p *Parser) parsePerformAction(tok lexer.Token) ast.Node {
 	// Parse action reference (qualified name or invocation)
 	actionRef := p.ParseExpression()
 
-	p.expect(lexer.Semicolon, "expected ';' after perform statement")
+	p.expectStatementEnd("expected ';' after perform statement")
 
 	node := &ast.PerformActionNode{
 		ActionRef: actionRef,
@@ -2957,10 +2967,7 @@ func (p *Parser) parseSendStatement(tok lexer.Token) ast.Node {
 	// Parse target expression
 	target := p.ParseExpression()
 
-	// Semicolon is optional if followed by transition keyword (then/if/do)
-	if !p.atKeyword("then") && !p.atKeyword("if") && !p.atKeyword("do") {
-		p.expect(lexer.Semicolon, "expected ';' after send statement")
-	}
+	p.expectStatementEnd("expected ';' after send statement")
 
 	node := &ast.SendStatement{
 		Message: message,
@@ -2983,10 +2990,7 @@ func (p *Parser) parseTerminateStatement(tok lexer.Token) ast.Node {
 		target = p.ParseExpression()
 	}
 
-	// Semicolon is optional if followed by transition keyword (then/if/do)
-	if !p.atKeyword("then") && !p.atKeyword("if") && !p.atKeyword("do") {
-		p.expect(lexer.Semicolon, "expected ';' after terminate statement")
-	}
+	p.expectStatementEnd("expected ';' after terminate statement")
 
 	node := &ast.TerminateStatement{
 		Target: target,

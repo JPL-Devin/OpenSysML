@@ -165,3 +165,47 @@ package Test {
 		t.Errorf("expected 1 entry point pseudostate, got %d", points)
 	}
 }
+
+// A statement written as a transition's `do` effect is terminated by the
+// transition's own `then` clause, so no semicolon is expected before it.
+func TestTransitionEffectStatementNeedsNoSemicolonBeforeThen(t *testing.T) {
+	members := stateDefMembers(t, `
+package Test {
+	attribute def Warning;
+	state def Controller {
+		attribute level : Integer;
+		state idle;
+		state alerting;
+		transition first idle accept w : Warning do assign level := 1 then alerting;
+		transition first alerting accept w : Warning do perform notify then idle;
+	}
+}`)
+
+	var transitions []*ast.TransitionMember
+	for _, member := range members {
+		if trans, ok := member.(*ast.TransitionMember); ok {
+			transitions = append(transitions, trans)
+		}
+	}
+	if len(transitions) != 2 {
+		t.Fatalf("expected 2 transitions, got %d", len(transitions))
+	}
+	for i, want := range []string{"alerting", "idle"} {
+		if len(transitions[i].Effect) != 1 {
+			t.Errorf("transition %d: expected 1 effect, got %d", i, len(transitions[i].Effect))
+		}
+		if got := ast.SimpleName(transitions[i].Target); got != want {
+			t.Errorf("transition %d: expected target %q, got %q", i, want, got)
+		}
+	}
+	if _, ok := transitions[0].Effect[0].(*ast.AssignmentActionNode); !ok {
+		t.Errorf("expected an assignment effect, got %T", transitions[0].Effect[0])
+	}
+	effect := transitions[1].Effect[0]
+	if membership, ok := effect.(*ast.Membership); ok {
+		effect = membership.Member
+	}
+	if usage, ok := effect.(*ast.Usage); !ok || usage.Keyword != "perform" {
+		t.Errorf("expected a performed action effect, got %T", effect)
+	}
+}

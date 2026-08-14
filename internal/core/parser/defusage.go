@@ -2618,6 +2618,10 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 		p.advance()
 		u.Members = parseBody()
 		u.HasBody = true
+	case allowValue && (p.atKeyword("then") || p.atKeyword("if") || p.atKeyword("do")):
+		// A performed action written as a transition's effect is terminated by
+		// the transition's next clause: `do perform notify then idle;`.
+		u.HasBody = false
 	case target != nil:
 		p.error(p.peek().Span, fmt.Sprintf("expected ';' or '{' after '%s' %s reference", kw, noun))
 	}
