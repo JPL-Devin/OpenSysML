@@ -1,0 +1,9 @@
+exit: init
+enter: active
+transition: init -> active
+exit: active
+  eval feature counter -> 0
+  eval literal 1 -> 1
+eval operator + -> 1
+enter: done
+transition: active -> done

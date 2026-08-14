@@ -35,6 +35,6 @@ package test {
 		transition falling to fast;
 
 		transition slow to done accept after pkgDelay;
-		transition fast to done accept after pkgDelay do { assign logged := touchdown - 0.25 [m/s]; }
+		transition fast to done accept after pkgDelay do { assign logged := touchdown - 0.25 [m/s]; };
 	}
 }

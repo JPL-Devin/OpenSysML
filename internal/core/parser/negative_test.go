@@ -179,6 +179,13 @@ func TestNegative(t *testing.T) {
 		// a statement in an action body still needs its ';'.
 		{"body_assignment_no_semicolon", "action def A { attribute x; action b; assign x := 1 then b; }"},
 		{"body_send_no_semicolon", "action def A { action b; part self; send Data() to self then b; }"},
+		// A transition takes exactly one ';', which its effect statement shares
+		// (SysML.xtext TransitionUsage ends with ActionBody); a second one is not
+		// an empty member.
+		{"transition_effect_perform_two_semicolons", "state def S { state a; state b; transition a to b do perform Bump ;; }"},
+		{"transition_effect_assign_two_semicolons", "state def S { attribute x; state a; state b; transition a to b do assign x := 1 ;; }"},
+		{"transition_effect_no_semicolon", "state def S { attribute x; state a; state b; transition a to b do assign x := 1 }"},
+		{"transition_braced_effect_no_semicolon", "state def S { attribute x; state a; state b; transition a to b do { assign x := 1; } }"},
 	}
 
 	for _, tt := range tests {

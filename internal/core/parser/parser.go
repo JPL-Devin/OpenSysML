@@ -38,6 +38,13 @@ type Parser struct {
 	// closed by the transition's next clause rather than by ';'.
 	effectDepth int
 
+	// effectStmtStart is the source offset of the statement written as the
+	// innermost transition effect, which the transition's own ';' terminates
+	// (SysML.xtext EffectBehaviorUsage carries no ';'). It is only meaningful
+	// while effectDepth > 0, and distinguishes that statement from the ones
+	// nested inside its body, which end with their own ';'.
+	effectStmtStart int
+
 	// bodyCtx is the stack of enclosing body notations; only the innermost
 	// matters (see bodyContext).
 	bodyCtx []bodyContext
