@@ -67,42 +67,86 @@ func parseArgs(line string) []string {
 	return args
 }
 
-var helpText = []string{
-	"%help               show this help",
-	"%list               list current session declarations",
-	"%clear              reset the session",
-	"%load <file>        read a file and submit its contents",
-	"%save <file>        write the session model to a file (.sysml notation or .ttl RDF)",
-	"%verbosity [level]  show or set output level: quiet, normal or debug",
-	"%trace [on|off]     show or set execution tracing (evaluation, calc, action and state steps)",
-	"%budget             show the bounds one run may spend, and the variable raising each",
-	"%quit               exit the REPL",
-	"",
-	"Runtime commands:",
-	"%instantiate <name> create an instance of a part def",
-	"%eval <expr>        evaluate an expression",
-	"%slots <name>       show instance slots and values",
-	"%instances          list all instantiated objects",
-	"",
-	"Behavioral commands:",
-	"%calc <name> <args> invoke a calculation with arguments",
-	"%constraint <name>  evaluate a constraint definition",
-	"%requirement <name> evaluate a requirement definition",
-	"%satisfy [name]     evaluate the satisfaction assertions of the model, or of one element",
-	"",
-	"Action debugging:",
-	"%action <name> [<object>]  start action executor debugging session, performed by an object",
-	"%step               advance one token step",
-	"%continue           run action to completion",
-	"%tokens             show active tokens",
-	"%break <node>       set breakpoint at node",
-	"%stop               stop current debugging session",
-	"",
-	"State machine debugging:",
-	"%state <name> [<object>]   start state machine debugging session, performed by an object",
-	"%events             show event queue",
-	"%current            show current state and configuration",
-	"%advance <time>     advance simulation time by <time> units, processing every event due",
+// metaCommand is one prompt command. The table below is what the help text,
+// tab completion and the unknown-command suggestion all read.
+type metaCommand struct {
+	name  string
+	args  string // the arguments help shows after the name
+	desc  string
+	group string // help heading this command is listed under
+	alias bool   // an alternative spelling, dispatched but not listed
+}
+
+var metaCommandTable = []metaCommand{
+	{name: "%help", desc: "show this help"},
+	{name: "%list", desc: "list current session declarations"},
+	{name: "%clear", desc: "reset the session"},
+	{name: "%load", args: "<file>", desc: "read a file and submit its contents"},
+	{name: "%save", args: "<file>", desc: "write the session model to a file (.sysml notation or .ttl RDF)"},
+	{name: "%verbosity", args: "[level]", desc: "show or set output level: quiet, normal or debug"},
+	{name: "%trace", args: "[on|off]", desc: "show or set execution tracing (evaluation, calc, action and state steps)"},
+	{name: "%budget", desc: "show the bounds one run may spend, and the variable raising each"},
+	{name: "%quit", desc: "exit the REPL"},
+	{name: "%exit", desc: "exit the REPL", alias: true},
+
+	{group: "Library discovery:", name: "%search", args: "<substring>", desc: "list the declared and library symbols whose qualified name contains <substring>"},
+	{group: "Library discovery:", name: "%builtins", desc: "list the library functions this build implements directly"},
+
+	{group: "Runtime commands:", name: "%instantiate", args: "<name>", desc: "create an instance of a part def"},
+	{group: "Runtime commands:", name: "%eval", args: "<expr>", desc: "evaluate an expression"},
+	{group: "Runtime commands:", name: "%slots", args: "<name>", desc: "show instance slots and values"},
+	{group: "Runtime commands:", name: "%instances", desc: "list all instantiated objects"},
+
+	{group: "Behavioral commands:", name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
+	{group: "Behavioral commands:", name: "%constraint", args: "<name>", desc: "evaluate a constraint definition"},
+	{group: "Behavioral commands:", name: "%requirement", args: "<name>", desc: "evaluate a requirement definition"},
+	{group: "Behavioral commands:", name: "%satisfy", args: "[name]", desc: "evaluate the satisfaction assertions of the model, or of one element"},
+
+	{group: "Action debugging:", name: "%action", args: "<name> [<object>]", desc: "start action executor debugging session, performed by an object"},
+	{group: "Action debugging:", name: "%step", desc: "advance one token step"},
+	{group: "Action debugging:", name: "%continue", desc: "run action to completion"},
+	{group: "Action debugging:", name: "%tokens", desc: "show active tokens"},
+	{group: "Action debugging:", name: "%break", args: "<node>", desc: "set breakpoint at node"},
+	{group: "Action debugging:", name: "%stop", desc: "stop current debugging session"},
+
+	{group: "State machine debugging:", name: "%state", args: "<name> [<object>]", desc: "start state machine debugging session, performed by an object"},
+	{group: "State machine debugging:", name: "%events", desc: "show event queue"},
+	{group: "State machine debugging:", name: "%current", desc: "show current state and configuration"},
+	{group: "State machine debugging:", name: "%advance", args: "<time>", desc: "advance simulation time by <time> units, processing every event due"},
+}
+
+// helpText renders the command table, one line per command under its heading.
+func helpText() []string {
+	const width = 20
+	var out []string
+	group := ""
+	for _, c := range metaCommandTable {
+		if c.alias {
+			continue
+		}
+		if c.group != group && c.group != "" {
+			group = c.group
+			out = append(out, "", group)
+		}
+		usage := strings.TrimSpace(c.name + " " + c.args)
+		if pad := width - len(usage); pad > 0 {
+			usage += strings.Repeat(" ", pad)
+		} else {
+			usage += "  "
+		}
+		out = append(out, usage+c.desc)
+	}
+	return out
+}
+
+// metaCommands returns every command name the prompt dispatches, aliases
+// included, in table order.
+func metaCommands() []string {
+	out := make([]string, 0, len(metaCommandTable))
+	for _, c := range metaCommandTable {
+		out = append(out, c.name)
+	}
+	return out
 }
 
 // runMeta executes a meta command line. Returns lines to print, whether to quit,
@@ -121,7 +165,7 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	}
 	switch fields[0] {
 	case "%help":
-		return helpText, false, nil
+		return helpText(), false, nil
 	case "%list":
 		decls := s.List()
 		if len(decls) == 0 {
@@ -169,6 +213,13 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		return []string{fmt.Sprintf("trace: %s", onOff(s.Tracing()))}, false, nil
 	case "%budget":
 		return s.doBudget(), false, nil
+	case "%search":
+		if len(fields) < 2 {
+			return []string{"usage: %search <substring>"}, false, nil
+		}
+		return s.doSearch(fields[1])
+	case "%builtins":
+		return s.doBuiltins()
 	case "%quit", "%exit":
 		return []string{"goodbye"}, true, nil
 	case "%instantiate":
@@ -242,20 +293,22 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		}
 		return s.doAdvance(fields[1])
 	default:
-		return []string{fmt.Sprintf("unknown command %q (try %%help)", fields[0])}, false, nil
+		return []string{unknownCommandLine(fields[0])}, false, nil
 	}
 }
 
 // doInstantiate creates an instance of a part def.
 func (s *Session) doInstantiate(name string) ([]string, bool, error) {
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
-		return nil, false, fmt.Errorf("runtime init: %w", err)
-	}
-
+	// The name is resolved before the runtime is built, so a misspelling is
+	// reported as one even when the session has nothing to instantiate from.
 	sym, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
 		return []string{"error: " + lerr.Error()}, false, nil
+	}
+
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
 	inst, err := ctx.Instantiate(sym)
@@ -284,6 +337,15 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	// For feature references/complex expressions, need session context
 	doc := s.ws.Document(docName)
 	if doc == nil || doc.Scope == nil {
+		// The library is indexed with or without session declarations, so a
+		// name it knows is answered about rather than reported as unloaded.
+		if isSymbolReference(expr) {
+			if sym, _, lerr := s.lookupSymbol(expr); lerr == nil {
+				if usage, ok := sym.Decl.(*ast.Usage); !ok || usage.Value == nil {
+					return []string{fmt.Sprintf("error: %q has no value to evaluate", expr)}, false, nil
+				}
+			}
+		}
 		return []string{"error: no declarations loaded (literals work, but feature references need declarations)"}, false, nil
 	}
 

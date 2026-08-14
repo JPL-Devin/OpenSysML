@@ -222,7 +222,7 @@ func (s *Session) Submit(src string) Result {
 	s.rtCtx = nil
 	s.instances = make(map[string]*runtime.Instance)
 	notices := s.dropStaleDebugSessions(declared)
-	diags := s.ws.Diagnostics(docName)
+	diags := s.annotateDiagnostics(s.ws.Diagnostics(docName))
 	var members []ast.Node
 	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
 		members = doc.AST.Members
@@ -301,7 +301,9 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 		return s.rtCtx, nil
 	}
 
-	idx := s.symbolIndex()
+	// Falls back to the library index so a library symbol can be evaluated or
+	// instantiated before the session declares anything.
+	idx := s.browseIndex()
 	if idx == nil {
 		return nil, fmt.Errorf("no document loaded")
 	}

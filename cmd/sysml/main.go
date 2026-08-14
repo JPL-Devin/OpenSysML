@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/chzyer/readline"
 
@@ -35,6 +36,62 @@ func (r *rlReader) ReadLine(prompt string) (string, error) {
 		return "", io.EOF
 	}
 	return line, err
+}
+
+// sessionCompleter completes prompt input from the session: meta commands,
+// declared and library names, and file paths after %load and %save.
+type sessionCompleter struct{ sess *repl.Session }
+
+// Do answers a tab press with the remainder of each candidate, as readline's
+// AutoCompleter expects, and how many runes of the word were already typed.
+func (c *sessionCompleter) Do(line []rune, pos int) ([][]rune, int) {
+	if pos < 0 || pos > len(line) {
+		pos = len(line)
+	}
+	comp := c.sess.Complete(string(line), len(string(line[:pos])))
+	out := make([][]rune, 0, len(comp.Candidates))
+	for _, cand := range comp.Candidates {
+		out = append(out, []rune(strings.TrimPrefix(cand, comp.Prefix)))
+	}
+	return out, utf8.RuneCountInString(comp.Prefix)
+}
+
+// historyPath returns the file the prompt keeps its history in:
+// $XDG_STATE_HOME/sysml/history when that is set, and ~/.sysml_history
+// otherwise. It returns "" when neither can be written, which leaves the
+// history in memory for the session rather than failing the prompt.
+func historyPath() string {
+	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
+		if path, ok := writableFile(filepath.Join(dir, "sysml"), "history"); ok {
+			return path
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	path, ok := writableFile(home, ".sysml_history")
+	if !ok {
+		return ""
+	}
+	return path
+}
+
+// writableFile returns the path of name in dir, creating dir and confirming the
+// file can be appended to.
+func writableFile(dir, name string) (string, bool) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", false
+	}
+	path := filepath.Join(dir, name)
+	f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return "", false
+	}
+	if cerr := f.Close(); cerr != nil {
+		return "", false
+	}
+	return path, true
 }
 
 // CLI flags
@@ -198,10 +255,11 @@ func newSession() *repl.Session {
 }
 
 func runInteractiveWithFiles(files []string) error {
-	histPath := filepath.Join(os.TempDir(), "sysml-repl.history")
+	sess := newSession()
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          "sysml> ",
-		HistoryFile:     histPath,
+		HistoryFile:     historyPath(),
+		AutoComplete:    &sessionCompleter{sess: sess},
 		InterruptPrompt: "^C",
 		EOFPrompt:       "bye",
 	})
@@ -209,8 +267,6 @@ func runInteractiveWithFiles(files []string) error {
 		return err
 	}
 	defer rl.Close()
-
-	sess := newSession()
 
 	// Load files before starting interactive loop
 	for _, file := range files {
