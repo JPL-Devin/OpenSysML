@@ -78,14 +78,18 @@ func (r Result) mine(span source.Span) bool {
 	return false
 }
 
-// holdsMine reports whether a span covers part of this submission, which is what
-// credits a merged addition to the declaration it was added to.
+// holdsMine reports whether a span overlaps this submission, which is what
+// credits a merged addition to the declaration it was added to, and a whole
+// snippet's span to every declaration inside it.
 func (r Result) holdsMine(span source.Span) bool {
 	if len(r.own) == 0 {
 		return span.Offset >= r.Offset
 	}
 	for _, o := range r.own {
 		if o.Offset >= span.Offset && o.Offset < span.End() {
+			return true
+		}
+		if span.Offset >= o.Offset && span.Offset < o.End() {
 			return true
 		}
 	}

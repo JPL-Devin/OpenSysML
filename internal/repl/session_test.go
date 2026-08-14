@@ -455,3 +455,24 @@ func TestLoadingAFileReportsTheTypedDeclarationsItReplaces(t *testing.T) {
 		t.Errorf("notices = %v, want the typed declarations the load replaced", res.Notices)
 	}
 }
+
+func TestOneLineBodyKeepsItsBraceWhenTheAdditionIsCommented(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { part def A; }")
+	s.Submit("package P {\n\tpart def B; // add B\n}")
+
+	res := s.Submit("part def Z;")
+	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
+	if strings.Contains(out, "error") {
+		t.Errorf("buffer stopped parsing:\n%s\n---\n%s", out, s.joined())
+	}
+}
+
+func TestEverySiblingDeclarationIsConfirmedWhenOneSourceMerges(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { part def A; }")
+
+	res := s.SubmitAll([]string{"package P { part def B; }", "part def X; part def Y;"})
+	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
+	wants(t, out, "part def X", "part def Y")
+}

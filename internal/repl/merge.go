@@ -311,7 +311,22 @@ func insertion(src string, brace int, members []string) edit {
 	lineStart := strings.LastIndexByte(src[:brace], '\n') + 1
 	prefix := src[lineStart:brace]
 	if strings.TrimSpace(prefix) != "" {
-		return edit{start: brace, end: brace, text: strings.Join(members, " ") + " "}
+		// Text carrying a comment or its own lines cannot go inline: the
+		// comment would swallow the rest of the line, brace included.
+		if !multiline(members) {
+			return edit{start: brace, end: brace, text: strings.Join(members, " ") + " "}
+		}
+		indent := prefix[:len(prefix)-len(strings.TrimLeft(prefix, " \t"))]
+		var b strings.Builder
+		for _, m := range members {
+			b.WriteString("\n")
+			b.WriteString(indent)
+			b.WriteString("\t")
+			b.WriteString(m)
+		}
+		b.WriteString("\n")
+		b.WriteString(indent)
+		return edit{start: brace, end: brace, text: b.String()}
 	}
 	var b strings.Builder
 	for _, m := range members {
@@ -321,6 +336,17 @@ func insertion(src string, brace int, members []string) edit {
 		b.WriteString("\n")
 	}
 	return edit{start: lineStart, end: lineStart, text: b.String()}
+}
+
+// multiline reports whether any member's text has to be written on lines of its
+// own: one spanning several lines, or one a line comment runs to the end of.
+func multiline(members []string) bool {
+	for _, m := range members {
+		if strings.ContainsRune(m, '\n') || strings.Contains(m, "//") {
+			return true
+		}
+	}
+	return false
 }
 
 // applyEdits rewrites src with the given edits applied, and returns where each
