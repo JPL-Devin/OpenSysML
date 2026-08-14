@@ -808,6 +808,52 @@ unauthenticated GitHub API, so repeated runs flip from a truthful `HTTP Error 40
 misleading `HTTP Error 403: rate limit exceeded` — rehearse sparingly and report the 404 wording,
 not whichever one the recording happened to catch.
 
+### Verification RPCs, typed errors and strict loading (`pysysml` Tier 3, PR #149)
+
+The verification questions the REPL answers with `%constraint`, `%requirement`, `%satisfy` and
+`%calc` are also RPCs (`internal/grpc/verify.go`), wrapped as `Model.verify_constraint /
+verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from Python:
+
+- Use a **clean venv** — the box's default `python3` may carry an incompatible `protobuf`, which
+  fails at `import pysysml`. A venv with `pip install -e python/` (e.g. `~/pv`) is the reliable
+  interpreter; rebuild with `make build-grpc` and **re-copy** `bin/sysml-grpc` to
+  `~/.pysysml/bin/` after every rebuild or the client silently auto-starts the old binary.
+- Argument order bites: `Connection.eval(expression, model_hash)`,
+  `Connection.instantiate(symbol_id, model_hash)`, `Connection.verify_constraint(symbol_id,
+  model_hash, subject_symbol_id=…)`, `Connection.calc(symbol_id, model_hash, arguments=[…])` —
+  hash **second**. On `Model` the hash is implicit and the kwarg is `subject=`. There is no
+  `Connection.evaluate`. Getting the order wrong yields a confusing
+  `ModelNotFoundError: model not found: Demo::sedan`.
+- `Instance.slots` is a **property** (a dict), not a method; unmaterialized slots (constraint and
+  requirement usages) appear as `SlotError` values inside it, which is expected.
+- The three-way semantics worth asserting separately: a condition evaluating **false** is a
+  verdict (`holds False`, `.condition` set, `.error == ''`, `raise_for_error()` silent); a
+  **failure to evaluate** is `.error` non-empty with `.evaluated False` and
+  `raise_for_error()` raising `ExecutionError`; an **unanswerable request** (unknown symbol)
+  raises `ExecutionError` from the call. Force the middle case with a requirement whose
+  attribute is never bound (`requirement loose : SpeedRequirement;` with `maxSpeed` unbound) —
+  the error reads `no value for feature maxSpeed`.
+- A subject of an unrelated type is *not* rejected: `verify_constraint(c, subject=<an attribute
+  or a calc>)` instantiates it and answers from declared defaults. If you need a raising subject,
+  use a name that does not exist (`symbol not found: …`).
+- `verify_satisfaction(fqn)` narrowed to an element that states no assertion returns an **empty
+  list**, so `satisfied()` is vacuously `True`; the `"<x> states no satisfaction assertion"`
+  error branch in `verify.go` only fires for a scope-less symbol and is hard to reach.
+- Each verdict from `verify_satisfaction()` carries the **whole response's** instance graph, so
+  `verdict.instances` includes other assertions' subjects — filter on `verdict.instance_id`.
+- Model-cache eviction is testable for real (the service caches 100 models, `-cache-size`):
+  load a model, then `load_from_content` 120 throwaway packages, then call any RPC with the old
+  hash → `ModelNotFoundError`. Takes ~1 minute; run it in the background.
+- Capability negotiation against an "old" service can be simulated without an old binary:
+  `conn._server_info = ServerInfo(version='old', capabilities=frozenset({'convert'}),
+  answered=True, origin='simulated')` → the verify calls raise `MissingCapabilityError` before
+  any RPC. Label it as simulated in the report.
+- gRPC status translation lives in `pysysml/errors.py`: assert both the pysysml class and the
+  builtin it also is (`ModelFileNotFoundError`/`FileNotFoundError`,
+  `InvalidRequestError`/`ValueError`, `ConnectionError`/`ConnectionError`,
+  `ExecutionError`/`RuntimeError`) and that `__cause__` is the original `grpc.RpcError`. A dead
+  service is reproducible with `pysysml.connect(port=50123, auto_start=False)`.
+
 ## Typed codegen (`python -m pysysml.generate`, Tier 2)
 
 `python -m pysysml.generate <model.sysml> [-o out.py] [--host --port]` loads the model through
