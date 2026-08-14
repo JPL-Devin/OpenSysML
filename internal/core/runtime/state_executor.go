@@ -559,8 +559,21 @@ func (e *StateExecutor) bindAcceptPayload(acceptEvent *ast.AcceptEvent, event *E
 		return unbind, fmt.Errorf("accept %s: event carries %T, not a message",
 			name.Text, event.Payload)
 	}
-	e.stateData[name.Text] = msg.Payload["value"]
+	value, ok := msg.Payload["value"]
+	if !ok {
+		return unbind, fmt.Errorf("%w: accept %s: %s carries no single value to bind",
+			ErrNoValue, name.Text, orAnonymousSignal(msg.SignalType))
+	}
+	e.stateData[name.Text] = value
 	return unbind, nil
+}
+
+// orAnonymousSignal names the signal a message carries for a diagnostic.
+func orAnonymousSignal(signalType string) string {
+	if signalType == "" {
+		return "the accepted message"
+	}
+	return "the accepted " + signalType
 }
 
 // restoreData snapshots the named entries of the machine's data and returns the

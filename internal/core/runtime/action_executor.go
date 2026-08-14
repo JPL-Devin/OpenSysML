@@ -862,7 +862,12 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		}
 		token.Wait = nil
 		if accept.ParamName != "" {
-			token.Data[accept.ParamName] = msg.Payload["value"]
+			value, held := msg.Payload["value"]
+			if !held {
+				return fmt.Errorf("%w: accept %s: %s carries no single value to bind",
+					ErrNoValue, accept.ParamName, orAnonymousSignal(msg.SignalType))
+			}
+			token.Data[accept.ParamName] = value
 		}
 	}
 

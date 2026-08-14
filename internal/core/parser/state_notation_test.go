@@ -209,3 +209,83 @@ package Test {
 		t.Errorf("expected a performed action effect, got %T", effect)
 	}
 }
+
+// A transition stating its ends with `to` is recognized wherever a transition
+// can be written, not only directly inside a state body, and whether the source
+// is a simple or a qualified name.
+func TestTransitionToSpellingOutsideAStateBody(t *testing.T) {
+	for _, src := range []string{
+		`package Test { action def A { state s1; state s2; transition s1 to s2; } }`,
+		`package Test { state def S { state a; state b; } action def A { transition S::a to S::b; } }`,
+	} {
+		p := New(source.New("test.sysml", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) > 0 {
+			t.Errorf("%s: expected no diagnostics, got %v", src, p.Diagnostics)
+			continue
+		}
+		var found bool
+		var walk func([]ast.Node)
+		walk = func(nodes []ast.Node) {
+			for _, node := range nodes {
+				if membership, ok := node.(*ast.Membership); ok {
+					node = membership.Member
+				}
+				switch n := node.(type) {
+				case *ast.Package:
+					walk(n.Members)
+				case *ast.Definition:
+					walk(n.Members)
+				case *ast.TransitionMember:
+					found = true
+					if ast.SimpleName(n.Source) == "" || ast.SimpleName(n.Target) == "" {
+						t.Errorf("%s: transition ends were not read: %+v", src, n)
+					}
+				}
+			}
+		}
+		walk(root.Members)
+		if !found {
+			t.Errorf("%s: no transition member was produced", src)
+		}
+	}
+}
+
+// A transition whose target the parser could not read names no edge, so it is an
+// error node: a TransitionMember with no target would be dereferenced when the
+// machine is lowered.
+func TestTargetlessTransitionIsAnErrorNode(t *testing.T) {
+	members := stateDefMembersWithErrors(t, `state def S { state a; transition first a accept Ping; }`)
+	for _, member := range members {
+		if trans, ok := member.(*ast.TransitionMember); ok {
+			t.Fatalf("expected no transition member, got one with target %v", trans.Target)
+		}
+	}
+	var errors int
+	for _, member := range members {
+		if _, ok := member.(*ast.ErrorNode); ok {
+			errors++
+		}
+	}
+	if errors != 1 {
+		t.Errorf("expected one error node among %v", members)
+	}
+}
+
+// stateDefMembersWithErrors parses src, which is expected to be malformed, and
+// returns the members of its first state definition.
+func stateDefMembersWithErrors(t *testing.T, src string) []ast.Node {
+	t.Helper()
+	p := New(source.New("test.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) == 0 {
+		t.Fatal("expected a diagnostic for the malformed transition")
+	}
+	for _, node := range unwrapAll(root.Members) {
+		if def, ok := node.(*ast.Definition); ok && def.Kind == ast.DefState {
+			return unwrapAll(def.Members)
+		}
+	}
+	t.Fatal("no state definition found")
+	return nil
+}

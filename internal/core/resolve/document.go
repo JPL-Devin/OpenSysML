@@ -95,7 +95,13 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.resolveExpr(scope, d.Multiplicity.Lower)
 			r.resolveExpr(scope, d.Multiplicity.Upper)
 		}
-		r.resolveExpr(scope, d.Value)
+		// An accept node keeps its trigger in the usage's value, and a trigger's
+		// names are not all references (see resolveTrigger).
+		if d.IsAccept {
+			r.resolveTrigger(scope, d.Value)
+		} else {
+			r.resolveExpr(scope, d.Value)
+		}
 		for _, end := range d.ConnectorEnds {
 			// ConnectorEnd has both Target and Reference fields
 			// Target: primary connector target (part being connected)

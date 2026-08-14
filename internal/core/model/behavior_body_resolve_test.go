@@ -87,6 +87,15 @@ func TestBehaviorBodyReferencesAreResolved(t *testing.T) {
 				transition a to b do { assign v := zzz; };
 			}
 		}`},
+		{"action accept change trigger", `package P {
+			action A { first start; action wait accept when zzz > 1; done end; then start wait; then wait end; }
+		}`},
+		{"action accept absolute time trigger", `package P {
+			action A { first start; action wait accept at zzz; done end; then start wait; then wait end; }
+		}`},
+		{"action accept relative time trigger", `package P {
+			action A { first start; action wait accept after zzz; done end; then start wait; then wait end; }
+		}`},
 		// A call trigger's parameters belong to its own transition: another
 		// transition's guard must not see them.
 		{"call trigger parameter outside its transition", `package P {
@@ -170,6 +179,18 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 				transition first a accept w : Warning if w != null do assign level := 1 then b;
 			}
 		}`},
+		{"action accept trigger names", `package P {
+			import ScalarValues::*;
+			action A {
+				attribute maxTemp : Integer = 100;
+				attribute temp : Integer = 0;
+				first start;
+				action wait accept when temp > maxTemp;
+				done end;
+				then start wait;
+				then wait end;
+			}
+		}`},
 		{"named transition trigger parameters", `package P {
 			import ScalarValues::*;
 			item def Warning;
@@ -198,6 +219,30 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 				t.Fatalf("expected no findings in a well-formed model, got %d: %v", len(found), found)
 			}
 		})
+	}
+}
+
+// TestTriggerParametersDoNotEscapeTheirTransition covers where a trigger's
+// parameters are visible: to the transition's own guard and effect, and nowhere
+// else, so a recursive import of the state does not bring them into scope.
+func TestTriggerParametersDoNotEscapeTheirTransition(t *testing.T) {
+	src := `package P {
+		import ScalarValues::*;
+		item def Warning;
+		state S {
+			attribute level : Integer = 0;
+			initial i; state a; state b; state c; i then a;
+			transition alert first a accept w : Warning if w != null do assign level := 1 then b;
+			transition brake first b accept setSpeed(value) if value > 0 then c;
+		}
+	}
+	package Q {
+		import P::S::**;
+		attribute payload = w;
+		attribute speed = value;
+	}`
+	if got := diagnose(t, "trigparams", src); len(got) != 2 {
+		t.Errorf("references to imported trigger parameters reported %v, want two findings", got)
 	}
 }
 

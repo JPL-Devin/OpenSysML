@@ -3048,7 +3048,10 @@ func (p *Parser) parseFlowTo(fe *ast.FlowEnds) {
 // ends.
 func (p *Parser) atTransitionEnds() bool {
 	i := 1
-	if p.peekN(i).Kind == lexer.Identifier || p.peekN(i).Kind == lexer.UnrestrictedName {
+	// Only the `first` spelling can carry a name of the transition's own; in the
+	// `to` spelling the first name is the source itself.
+	if (p.peekN(i).Kind == lexer.Identifier || p.peekN(i).Kind == lexer.UnrestrictedName) &&
+		p.peekIsKeyword(i+1, "first") {
 		i++
 	}
 	if p.peekIsKeyword(i, "first") {

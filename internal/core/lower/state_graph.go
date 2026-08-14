@@ -554,6 +554,11 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 		}
 	}
 
+	// A transition the parser could not read a target from names no edge.
+	if member.Target == nil {
+		return nil, fmt.Errorf("transition %s names no target", orAnonymous(member.Name))
+	}
+
 	// Try to find target as state or pseudostate
 	var target ast.Node
 	targetState := findStateByName(graph.States, member.Target)

@@ -758,6 +758,15 @@ func lowerFlow(nodes []ast.Node, flow *ast.Usage) (ast.Node, ObjectFlow, error) 
 		}
 	}
 
+	// A flow carries the value of a feature, so an end naming a node alone with
+	// no payload to name its pin identifies nothing to move.
+	if sourcePin == "" || targetPin == "" {
+		return nil, ObjectFlow{}, fmt.Errorf(
+			"flow %s: names no feature to carry; write `flow of <payload> from %s to %s` or name a pin at each end",
+			orAnonymous(name), flowEndText(flow.FlowEnds.From), flowEndText(flow.FlowEnds.To),
+		)
+	}
+
 	return sourceNode, ObjectFlow{
 		Name:      name,
 		SourcePin: sourcePin,

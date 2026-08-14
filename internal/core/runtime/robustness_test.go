@@ -22,6 +22,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
 	t.Run("decision_no_satisfied_guard", testDecisionNoSatisfiedGuard)
 	t.Run("state_dangling_transition", testStateDanglingTransition)
+	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
@@ -63,6 +64,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("loop_body_of_unexecutable_statement", testLoopBodyOfUnexecutableStatement)
 	t.Run("statement_directly_in_an_action_body", testStatementDirectlyInAnActionBody)
 	t.Run("flow_end_naming_no_node", testFlowEndNamingNoNode)
+	t.Run("flow_naming_no_pin", testFlowNamingNoPin)
+	t.Run("accept_payload_without_a_value", testAcceptPayloadWithoutAValue)
 	t.Run("flow_from_a_node_that_produced_nothing", testFlowFromANodeThatProducedNothing)
 	t.Run("action_accept_time_trigger", testActionAcceptTimeTrigger)
 	t.Run("action_accept_non_boolean_change_trigger", testActionAcceptNonBooleanChangeTrigger)
@@ -670,6 +673,39 @@ func testDeferOfNonDeferrableTrigger(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "only signal and call triggers can be deferred") {
 		t.Errorf("expected a deferrability error, got: %v", err)
+	}
+}
+
+// testStateTransitionWithoutATarget: the parser reports a transition missing its
+// target as an error node, so only a hand-built machine can carry one; lowering
+// it reports rather than dereferencing the absent target.
+func testStateTransitionWithoutATarget(t *testing.T) {
+	idx := symbols.NewIndex()
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 1000)
+
+	dangling := transitionMember("init", "busy")
+	dangling.Target = nil
+	machine := &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{
+			&ast.StateNode{Name: "init", IsInitial: true},
+			&ast.StateNode{Name: "busy"},
+			dangling,
+		},
+	}
+
+	_, err := newStateExecutor(ctx, &symbols.Symbol{
+		Kind: symbols.SymbolStateUsage,
+		Name: machine.Ident.Name,
+		Decl: machine,
+	})
+	if err == nil {
+		t.Fatal("expected an error for a transition without a target")
+	}
+	if !strings.Contains(err.Error(), "names no target") {
+		t.Errorf("expected a missing-target error, got: %v", err)
 	}
 }
 
@@ -1812,6 +1848,58 @@ func testFlowEndNamingNoNode(t *testing.T) {
 				t.Errorf("error does not name the flow and the end at fault: %v", err)
 			}
 		})
+	}
+}
+
+// testFlowNamingNoPin: a flow carries the value of a feature, so a flow whose
+// ends name nodes alone and which declares no payload identifies nothing to
+// move, and is reported when the graph is built rather than mid-run.
+func testFlowNamingNoPin(t *testing.T) {
+	_, err := executeActionSource(t, "driveTrain", `package test {
+		action driveTrain {
+			first start;
+			action generate { out engineTorque : Integer; assign engineTorque := 1; }
+			action amplify { in engineTorque : Integer; }
+			done end;
+			then start generate;
+			then generate amplify;
+			then amplify end;
+			flow generateToAmplify from generate to amplify;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected the flow naming no feature to be reported")
+	}
+	if !strings.Contains(err.Error(), "generateToAmplify") ||
+		!strings.Contains(err.Error(), "names no feature to carry") {
+		t.Errorf("error does not say the flow names no feature: %v", err)
+	}
+}
+
+// testAcceptPayloadWithoutAValue: an accept that names a payload binds the
+// single value the accepted message carries, so a message carrying none is
+// reported rather than binding an empty value the guard and effect would read.
+func testAcceptPayloadWithoutAValue(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		item def Ping;
+		action pipeline {
+			first start;
+			action sender { send Ping() to reader; }
+			action reader accept p : Ping;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected the payload-less message to be reported")
+	}
+	if !errors.Is(err, ErrNoValue) {
+		t.Errorf("expected ErrNoValue, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Ping") {
+		t.Errorf("error does not name the accepted signal: %v", err)
 	}
 }
 

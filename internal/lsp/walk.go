@@ -120,7 +120,12 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.prefixes(scope, d.Prefixes)
 		c.relationships(scope, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
-		c.expr(scope, d.Value)
+		// An accept node keeps its trigger in the usage's value.
+		if d.IsAccept {
+			c.trigger(scope, d.Value)
+		} else {
+			c.expr(scope, d.Value)
+		}
 		child := c.childScope(scope, d)
 		for _, end := range d.ConnectorEnds {
 			if end == nil {

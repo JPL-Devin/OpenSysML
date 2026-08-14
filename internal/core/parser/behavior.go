@@ -2919,7 +2919,14 @@ func (p *Parser) parseTransitionTail(start int, name string, source, target *ast
 	}
 
 	if node.Target == nil {
-		p.error(p.peek().Span, "expected the target of the transition after 'then'")
+		// A transition without a target names no edge, so it is an error node
+		// rather than a member the later tiers would read a missing target from.
+		msg := "expected the target of the transition after 'then'"
+		p.error(p.peek().Span, msg)
+		p.accept(lexer.Semicolon)
+		en := &ast.ErrorNode{Message: msg}
+		en.NodeSpan = p.spanFrom(start)
+		return en
 	}
 
 	p.expect(lexer.Semicolon, "expected ';' after transition")
