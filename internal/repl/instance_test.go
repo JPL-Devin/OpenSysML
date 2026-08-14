@@ -182,7 +182,13 @@ func TestSubmissionReportsTheInstancesItDropped(t *testing.T) {
 	if !hasNotice(res, "2 instances were dropped") {
 		t.Fatalf("notices = %v, want the dropped instances counted", res.Notices)
 	}
-	wants(t, strings.Join(renderResult(res, VerbosityNormal), "\n"), "2 instances were dropped")
+	// A note reads as a consequence of the declaration it follows, so it comes
+	// after the accepted line rather than before it.
+	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
+	wants(t, out, "2 instances were dropped")
+	if strings.Index(out, "✓ part def Widget") > strings.Index(out, "note:") {
+		t.Errorf("note printed before the declaration it followed from:\n%s", out)
+	}
 }
 
 // A command that would drive an ended action session says which submission

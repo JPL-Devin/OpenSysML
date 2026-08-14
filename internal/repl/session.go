@@ -141,16 +141,16 @@ func (s *Session) accept(src string) (joined string, offset int, drops []dropRep
 		for _, n := range names {
 			set[n] = true
 		}
+		comments = s.takeLeadingComments()
 		// Re-typing a namespace adds to the one already in the buffer. The
-		// merged text stands for both, and is appended like any other
-		// submission so a report still scopes to the tail of the buffer. The
-		// comments above the addition document its members, which the merged
-		// text already carries, so they are left where they are.
-		if merged, drop, ok := s.mergeSubmission(src, root); ok {
-			text = merged
+		// merged text stands for both — including any other declaration of the
+		// snippet it absorbed, so the names it replaces are its own, not just
+		// the submitted ones — and is appended like any other submission so a
+		// report still scopes to the tail of the buffer.
+		if merged, drop, ok := s.mergeSubmission(src, root, comments); ok {
+			text, comments = merged, ""
+			names = declaredNames(parser.New(source.New(docName, []byte(merged))).ParseFile())
 			drops = append(drops, drop)
-		} else {
-			comments = s.takeLeadingComments()
 		}
 		top := topLevelMembers(root)
 		kept := s.snippets[:0]

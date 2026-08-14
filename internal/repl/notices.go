@@ -88,21 +88,20 @@ func lostMembers(oldSrc string, om ast.Node, newSrc string, nm ast.Node) []strin
 	if nm == nil {
 		return nil
 	}
-	oldDecl, ok := namespaceDeclOf(oldSrc, om)
+	oldMembers, ok := bodyMembers(om)
 	if !ok {
 		return nil
 	}
-	newDecl, ok := namespaceDeclOf(newSrc, nm)
-	if !ok {
-		return nil
-	}
+	// A new declaration with no body of its own declares none of the members,
+	// so all of them are lost.
+	newMembers, _ := bodyMembers(nm)
 	var lost []string
-	for _, m := range oldDecl.members {
+	for _, m := range oldMembers {
 		name := memberName(m)
 		if name == "" {
 			continue
 		}
-		_, kept := findNamed(newDecl.members, name)
+		_, kept := findNamed(newMembers, name)
 		if kept == nil {
 			desc := renderMember(m)
 			if desc == "" {

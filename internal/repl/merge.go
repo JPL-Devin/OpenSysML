@@ -10,12 +10,12 @@ import (
 )
 
 // nsDecl is a namespace declaration with a body, located in the text it was
-// parsed from: the members it holds and the offset of the brace that closes it,
-// which is where an added member goes.
+// parsed from: where it starts, its members, and the brace an addition goes at.
 type nsDecl struct {
 	name    string
 	desc    string // "package P", as the summary renders it
 	members []ast.Node
+	start   int
 	brace   int
 }
 
@@ -27,16 +27,11 @@ type edit struct {
 }
 
 // mergeSubmission folds a resubmitted namespace declaration into the same-named
-// one already in the buffer, so re-typing `package P { ... }` to add a member
-// adds to it rather than replacing its body. On success it removes the snippet it
-// merged with (the returned text supersedes both that snippet and src) and
-// reports what the merge itself replaced, which is only the members the new body
-// redeclares.
-//
-// Merging applies to the plain case a REPL user types: a submission that is one
-// namespace declaration with at least one member. An empty body still replaces,
-// which is how a namespace is emptied.
-func (s *Session) mergeSubmission(src string, root *ast.RootNamespace) (string, dropReport, bool) {
+// one in the buffer, so re-typing `package P { ... }` adds to it instead of
+// replacing its body. It removes the snippet it merged with, since the returned
+// text supersedes it, and reports the members the new body redeclares. An empty
+// body is not merged: that is how a namespace is emptied.
+func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments string) (string, dropReport, bool) {
 	newDecl, ok := soleNamespace(src, root)
 	if !ok || len(newDecl.members) == 0 {
 		return "", dropReport{}, false
@@ -47,6 +42,11 @@ func (s *Session) mergeSubmission(src string, root *ast.RootNamespace) (string, 
 			continue
 		}
 		edits, replaced := mergeEdits(sn.src, oldDecl, src, newDecl)
+		// Comments typed above the addition document the declaration, so they go
+		// above it rather than at the tail of the buffer.
+		if comments != "" {
+			edits = append(edits, edit{start: oldDecl.start, end: oldDecl.start, text: comments})
+		}
 		merged := applyEdits(sn.src, edits)
 		s.snippets = append(s.snippets[:i:i], s.snippets[i+1:]...)
 		return merged, dropReport{merged: true, decl: newDecl.desc, lost: replaced}, true
@@ -54,10 +54,9 @@ func (s *Session) mergeSubmission(src string, root *ast.RootNamespace) (string, 
 	return "", dropReport{}, false
 }
 
-// soleNamespace returns the namespace declaration a submission consists of,
-// reporting false for anything else — a submission that declares more than one
-// thing is replaced wholesale rather than merged, since its text cannot be split
-// between the buffer's snippets without losing what sits between declarations.
+// soleNamespace returns the namespace declaration a submission consists of. A
+// submission declaring more than one thing is replaced wholesale, since its text
+// cannot be split between snippets without losing what sits between them.
 func soleNamespace(src string, root *ast.RootNamespace) (nsDecl, bool) {
 	if root == nil || len(root.Members) != 1 {
 		return nsDecl{}, false
@@ -119,9 +118,26 @@ func namespaceDeclOf(src string, member ast.Node) (nsDecl, bool) {
 	if !ok {
 		return d, false
 	}
-	d.brace = brace
+	d.start, d.brace = member.Span().Offset, brace
 	d.desc = renderMember(member)
 	return d, true
+}
+
+// bodyMembers returns the members of a namespace member's body. Unlike
+// namespaceDeclOf it does not need the body to be terminated, so it can also
+// report what an unparseable re-declaration dropped.
+func bodyMembers(member ast.Node) ([]ast.Node, bool) {
+	node := member
+	if mem, ok := member.(*ast.Membership); ok {
+		node = mem.Member
+	}
+	switch n := node.(type) {
+	case *ast.Package:
+		return n.Members, n.HasBody
+	case *ast.Namespace:
+		return n.Members, n.HasBody
+	}
+	return nil, false
 }
 
 // closingBrace returns the offset of the brace that closes a declaration's body.
@@ -180,18 +196,31 @@ func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl) ([
 		if folded[i] {
 			continue
 		}
-		if text := trimmedText(newSrc, nm); text != "" {
-			added = append(added, text)
+		text := trimmedText(newSrc, nm)
+		if text == "" {
+			continue
 		}
+		// A member declaring no name (an import, a comment) matches only on its
+		// text, so an identical one in the body is it re-typed, not a second copy.
+		if memberName(nm) == "" && hasText(oldSrc, oldDecl.members, text) {
+			continue
+		}
+		added = append(added, text)
 	}
 	if len(added) > 0 {
-		edits = append(edits, edit{
-			start: oldDecl.brace,
-			end:   oldDecl.brace,
-			text:  insertion(oldSrc, oldDecl.brace, added),
-		})
+		edits = append(edits, insertion(oldSrc, oldDecl.brace, added))
 	}
 	return edits, replaced
+}
+
+// hasText reports whether one of the members is the given source text.
+func hasText(src string, members []ast.Node, text string) bool {
+	for _, m := range members {
+		if trimmedText(src, m) == text {
+			return true
+		}
+	}
+	return false
 }
 
 // findNamed returns the first member declaring name, and its index. Only the
@@ -206,14 +235,14 @@ func findNamed(members []ast.Node, name string) (int, ast.Node) {
 	return -1, nil
 }
 
-// insertion renders members to add just before a body's closing brace, matching
-// the layout of the body they join: one indented line each in a multi-line body,
-// space-separated in a one-line body.
-func insertion(src string, brace int, members []string) string {
+// insertion is the edit adding members to a body, laid out like it: one indented
+// line each in a multi-line body, space-separated in a one-line body. Lines go
+// above a closing brace that owns its line, so that brace keeps its indentation.
+func insertion(src string, brace int, members []string) edit {
 	lineStart := strings.LastIndexByte(src[:brace], '\n') + 1
 	prefix := src[lineStart:brace]
 	if strings.TrimSpace(prefix) != "" {
-		return strings.Join(members, " ") + " "
+		return edit{start: brace, end: brace, text: strings.Join(members, " ") + " "}
 	}
 	var b strings.Builder
 	for _, m := range members {
@@ -222,8 +251,7 @@ func insertion(src string, brace int, members []string) string {
 		b.WriteString(m)
 		b.WriteString("\n")
 	}
-	b.WriteString(prefix)
-	return b.String()
+	return edit{start: lineStart, end: lineStart, text: b.String()}
 }
 
 // applyEdits rewrites src with the given edits applied.

@@ -101,6 +101,70 @@ func TestEmptyBodyReplacesNamespaceWithANotice(t *testing.T) {
 	}
 }
 
+// A merge absorbs the whole snippet the namespace sat in, so the declarations
+// that shared it stay replaceable by name instead of being duplicated.
+func TestMergeKeepsTrackingTheAbsorbedSnippetsNames(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Z; package P { part def A; }")
+	s.Submit("package P { part def B; }")
+	s.Submit("part def Z { attribute q = 1; }")
+
+	if got := strings.Count(strings.Join(s.List(), "\n"), "part def Z"); got != 1 {
+		t.Errorf("Z declared %d times after being absorbed by a merge: %v", got, s.List())
+	}
+}
+
+// A member declaring no name is matched by its text, so re-typing a body does
+// not stack another copy of its imports and comments.
+func TestMergeDoesNotDuplicateUnnamedMembers(t *testing.T) {
+	s := NewSession()
+	const src = "package P { public import ScalarValues::*; part def A; }"
+	s.Submit(src)
+	s.Submit(src)
+	s.Submit(src)
+
+	if got := strings.Count(strings.Join(s.List(), "\n"), "import ScalarValues"); got != 1 {
+		t.Errorf("import present %d times after re-typing the body: %v", got, s.List())
+	}
+}
+
+// A member added to a nested body lines up with the members already in it.
+func TestNestedMergeIndentsTheAddedMember(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P {\n\tpackage Q {\n\t\tpart def A;\n\t}\n}")
+	s.Submit("package P { package Q { part def B; } }")
+
+	wants(t, strings.Join(s.List(), "\n"), "\t\tpart def A;\n\t\tpart def B;\n")
+}
+
+// Comments typed above an addition document the declaration it merges into, so
+// they join the ones already above it rather than the end of the buffer.
+func TestMergeKeepsCommentsAboveTheDeclaration(t *testing.T) {
+	s := NewSession()
+	s.Submit("// doc for P")
+	s.Submit("package P { part def A; }")
+	s.Submit("// more about P")
+	s.Submit("package P { part def B; }")
+
+	buf := strings.Join(s.List(), "\n")
+	docAt, moreAt := strings.Index(buf, "// doc for P"), strings.Index(buf, "// more about P")
+	if docAt < 0 || moreAt < 0 || docAt > moreAt || moreAt > strings.Index(buf, "package P") {
+		t.Errorf("comments are not in order above the declaration:\n%s", buf)
+	}
+}
+
+// Even a re-declaration that does not parse says what it dropped: it is the
+// silent-loss case in miniature.
+func TestUnparseableRedeclarationStillNamesWhatItLost(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { part def A; }")
+	res := s.Submit("package P { part def B;")
+
+	if !hasNotice(res, "part def A no longer declared") {
+		t.Errorf("notices = %v, want the lost member named", res.Notices)
+	}
+}
+
 func TestSubmitResolvesAcrossSubmissions(t *testing.T) {
 	s := NewSession()
 	r1 := s.Submit("package P { }")

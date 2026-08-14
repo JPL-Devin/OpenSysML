@@ -179,18 +179,18 @@ func caretLine(col, spanLen, lineLen int) string {
 }
 
 // renderResult produces the printable lines for a submission at the given
-// verbosity: the notices it caused, the diagnostics that verbosity admits, and
-// the summary of what it declared. A submission that failed to analyse gets
-// diagnostics instead of a summary, since it declared nothing usable.
+// verbosity: the diagnostics that verbosity admits, the summary of what it
+// declared, and last the notices it caused, which read as consequences of the
+// summary above them. A submission that failed to analyse gets diagnostics
+// instead of a summary, since it declared nothing usable.
 func renderResult(r Result, v Verbosity) []string {
 	if v >= VerbosityDebug {
 		return renderDebug(r)
 	}
 	diags := scopedDiagnostics(r, v)
-	out := append([]string(nil), r.Notices...)
-	out = append(out, renderDiagnostics(diags, r.Source, r.baseLine(), false)...)
+	out := renderDiagnostics(diags, r.Source, r.baseLine(), false)
 	if hasError(diags) {
-		return out
+		return append(out, r.Notices...)
 	}
 	// A validation tier is skipped once a lower tier errors anywhere in the
 	// buffer, so a clean report on this submission would otherwise read as a
@@ -198,17 +198,18 @@ func renderResult(r Result, v Verbosity) []string {
 	if r.analysisBlocked() {
 		out = append(out, blockedNote)
 	}
-	return append(out, renderSummary(r.ownMembers())...)
+	out = append(out, renderSummary(r.ownMembers())...)
+	return append(out, r.Notices...)
 }
 
 // renderDebug reports everything the analysis produced over the whole buffer,
 // at buffer-absolute positions, plus where this submission landed in it.
 func renderDebug(r Result) []string {
-	out := append([]string(nil), r.Notices...)
-	out = append(out, fmt.Sprintf("[debug] submission at buffer line %d; %d diagnostic(s) over the whole buffer",
-		r.baseLine(), len(r.Diagnostics)))
+	out := []string{fmt.Sprintf("[debug] submission at buffer line %d; %d diagnostic(s) over the whole buffer",
+		r.baseLine(), len(r.Diagnostics))}
 	out = append(out, renderDiagnostics(r.Diagnostics, r.Source, 1, true)...)
-	return append(out, renderSummary(r.Members)...)
+	out = append(out, renderSummary(r.Members)...)
+	return append(out, r.Notices...)
 }
 
 // scopedDiagnostics keeps the diagnostics of this submission that the verbosity
