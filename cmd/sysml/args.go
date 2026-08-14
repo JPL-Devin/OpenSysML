@@ -9,7 +9,8 @@ import "flag"
 //
 // A flag that takes a value carries the argument after it, so that value is not
 // mistaken for a file. An unrecognized flag is left where it is, for flag.Parse
-// to report.
+// to report. The reordered arguments end with an end-of-options marker, so that
+// a file named like a flag is still read as a file wherever it was written.
 func permuteArgs(fs *flag.FlagSet, args []string) []string {
 	flags := make([]string, 0, len(args))
 	positional := make([]string, 0, len(args))
@@ -17,7 +18,7 @@ func permuteArgs(fs *flag.FlagSet, args []string) []string {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if arg == "--" {
-			// Everything after it is positional by definition.
+			// Everything after the marker is positional by definition.
 			positional = append(positional, args[i+1:]...)
 			break
 		}
@@ -31,7 +32,10 @@ func permuteArgs(fs *flag.FlagSet, args []string) []string {
 			flags = append(flags, args[i])
 		}
 	}
-	return append(flags, positional...)
+	if len(positional) == 0 {
+		return flags
+	}
+	return append(append(flags, "--"), positional...)
 }
 
 // isFlag reports whether arg is written as a flag rather than as a file name. A
