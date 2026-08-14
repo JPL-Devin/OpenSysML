@@ -606,6 +606,12 @@ model.query({"@type": "Query", "where": {
 Each answered element is `@id` (its qualified name), `@type` and the selected
 properties it has. A property an element does not have is **absent**, not empty.
 
+An element with no qualified identity — an unnamed `doc`, an anonymous usage, an
+anonymous `connect` — is **not** answered: its qualified name has an empty
+segment (`Demo::`), so it is neither unique nor a name a `scope` could use. The
+standard identifies an element by `@id`, and such an element has none
+(`TestQueryOmitsElementsWithNoQualifiedIdentity`).
+
 ### Queryable properties
 
 The set is closed and is the single source of truth in
@@ -621,7 +627,7 @@ answer.
 | `name` | The element's own name, the last segment of its qualified name | |
 | `declaredName` | `name`, absent when the name is an effective name borrowed from a referenced feature | |
 | `owner` | Qualified name of the owning element; absent for a top-level element, whose owner is the document root | |
-| `isAbstract` | `true`/`false` for a definition or usage; absent for anything else | |
+| `isAbstract` | `true`/`false` for a definition or usage; absent for anything else, and for a standard-library element restored from cache, which carries no declaration | |
 | `type` | Qualified name of the resolved type of a typed feature; absent when untyped or unresolved | |
 | `multiplicityLower` | Declared lower bound | ✅ |
 | `multiplicityUpper` | Declared upper bound, `*` when unbounded | ✅ |
@@ -631,8 +637,10 @@ answer.
 Mapping Systemica's symbol kinds onto the standard's metamodel type names is the
 substantive design decision here; `metamodelTypeNames`
 (`internal/grpc/query.go`) is the single source of truth, and
-`TestMetamodelTypeNameCoversEveryKind` keeps it total, so no element is reported
-without a `@type`.
+`TestMetamodelTypeNameCoversEveryKind` keeps it total over every kind a parsed
+declaration can have. A standard-library element restored from cache may carry no
+kind at all, and then reports **no** `@type`: it is answered, but never matches a
+`@type =` comparison (and is kept by the inverse of one).
 
 | Systemica kind | `@type` |
 |---|---|

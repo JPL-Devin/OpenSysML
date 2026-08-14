@@ -204,8 +204,8 @@ class Model:
         Raises:
             QueryError: If the query is not one the standard's model describes
             MissingCapabilityError: If the service cannot query
-            grpc.RpcError: If a property or scope is unknown to the service, or
-                the service no longer holds this model
+            InvalidRequestError: If a property or scope is unknown to the service
+            ModelNotFoundError: If the service no longer holds this model
 
         Example:
             >>> model.query({"@type": "Query", "where": {

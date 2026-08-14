@@ -356,8 +356,8 @@ class Connection:
         Raises:
             QueryError: If the query is not one the standard's model describes
             MissingCapabilityError: If the service cannot query
-            grpc.RpcError: If a property or scope is unknown to the service, or
-                the model is no longer cached
+            InvalidRequestError: If a property or scope is unknown to the service
+            ModelNotFoundError: If the model is no longer cached
         """
         require(
             self.server_info(),
@@ -369,7 +369,9 @@ class Connection:
             model_hash=model_hash,
             query=build_query(payload, scope=scope, select=select, where=where),
         )
-        return elements_of(self._stub.Query(request))
+        with translate_rpc_errors():
+            response = self._stub.Query(request)
+        return elements_of(response)
 
     def get_symbol(self, model_hash, symbol_id):
         """Fetch symbol by ID from cached model.

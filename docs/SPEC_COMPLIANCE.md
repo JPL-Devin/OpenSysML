@@ -1016,7 +1016,7 @@ the `@type` mapping and the comparison choices.
 | `PrimitiveConstraint.inverse` | query.go:`queryEval.matchesPrimitive` | `TestQueryInverseNegatesTheVerdict` | ✅ Faithful — negates its own constraint's verdict, so a constraint and its inverse partition the scope |
 | `CompositeConstraint` with `and` / `or`, nested | query.go:`queryEval.matchesComposite` | `TestQueryCompositeNesting` | ✅ Faithful — nests arbitrarily and short-circuits, so a malformed constraint after a decisive one is not reported |
 | Property names — `@id`, `@type`, `name`, `declaredName`, `qualifiedName`, `owner`, `isAbstract`, `type`, `multiplicityLower`, `multiplicityUpper` | query.go:`queryProperties` (single source of truth), `QueryPropertyNames` | `TestQuerySelectReportsEveryPropertyByDefault`, `TestQueryUnknownPropertyFailsRatherThanMatchingNothing`, `TestQuerySelectUnknownPropertyFails` | ✅ Faithful for the set implemented — the set is closed and an unknown property is a typed `QueryError` (`INVALID_ARGUMENT`) listing the ones that exist, never an empty answer. Other metamodel properties (`documentation`, `isComposite`, …) are not queryable: known limitation |
-| `@type` — symbol kind → metamodel type name | query.go:`metamodelTypeNames`, `MetamodelTypeName` | `TestMetamodelTypeNameCoversEveryKind`, `TestQueryByTypeSelectsThatMetamodelType` | ⚠️ Approximate for three kinds — total over every symbol kind, but an individual definition/usage reports `OccurrenceDefinition`/`OccurrenceUsage` (an individual is an occurrence with `isIndividual` set), a connector end reports `Feature` (a `Feature` with `isEnd` set), and an alias reports `Membership`. Everything else is the metamodel's own name |
+| `@type` — symbol kind → metamodel type name | query.go:`metamodelTypeNames`, `MetamodelTypeName` | `TestMetamodelTypeNameCoversEveryKind`, `TestQueryByTypeSelectsThatMetamodelType` | ⚠️ Approximate for three kinds — total over every kind a parsed declaration can have, but an individual definition/usage reports `OccurrenceDefinition`/`OccurrenceUsage` (an individual is an occurrence with `isIndividual` set), a connector end reports `Feature` (a `Feature` with `isEnd` set), and an alias reports `Membership`. Everything else is the metamodel's own name |
 | Malformed query — no constraint form, no operator, no operand, empty composite | query.go:`QueryError`, `Service.Query` | `TestQueryMalformedConstraintsFail`, `TestQueryUnsetQueryFails`, `TestQueryUnknownScopeFails` | ✅ Faithful — every malformed shape fails with `INVALID_ARGUMENT` naming what is wrong; an unknown scope is an error, not an empty answer |
 | Empty result | query.go:`Service.Query` | `TestQueryMatchingNothingIsEmptyNotAnError`, python/tests/test_query.py | ✅ Faithful — a well-formed query selecting nothing answers with no elements |
 | Capability negotiation | service.go:`CapabilityQuery`, python/pysysml/capabilities.py:`CAPABILITY_QUERY` | `TestQueryCapabilityIsReported`, python/tests/test_query.py:`test_query_requires_the_capability` | ✅ Faithful — reported from `GetServerInfo` as `query`; the Python client refuses to send to a service that does not report it |
@@ -1037,6 +1037,12 @@ the `@type` mapping and the comparison choices.
   derived metamodel properties are not.
 - An element carries the value of a property it declares; an inherited value is not reported
   (`type` reports the resolved type of the feature itself).
+- An element with no qualified identity — an unnamed `doc`, an anonymous usage or `connect` —
+  is not answered at all: its qualified name has an empty segment, so it is neither a unique
+  `@id` nor a name a `scope` could use (`TestQueryOmitsElementsWithNoQualifiedIdentity`).
+- A standard-library element restored from cache carries no declaration and may carry no symbol
+  kind, so it reports no `isAbstract` and, for such a kind, no `@type` — it is answered, but
+  never matches a `@type =` comparison.
 
 ### Test Coverage (AGENTS.md §5.2 Four-Layer Contract)
 

@@ -371,15 +371,19 @@ model.query(
 
 Each answer is a `QueryElement`: `id` (the element's qualified name), `type` (its
 metamodel type, e.g. `PartUsage`) and `properties`, the selected properties it
-has — a property an element does not have is absent rather than empty.
+has — a property an element does not have is absent rather than empty. An unnamed
+element (a `doc` note, an anonymous usage) is not answered at all: it has no
+qualified name to be identified or scoped by.
 `as_dict()` gives it back in the standard's JSON names. `scope` takes qualified
 names or the standard's `{"@id": …}` references, and considers each named element
 and everything nested inside it; an empty scope is the whole loaded model.
 
 A payload the standard does not describe — an unknown operator, a constraint with
 no property — raises `QueryError` before anything is sent. A property the service
-does not have raises `grpc.RpcError` (`INVALID_ARGUMENT`) naming the properties
-that exist, rather than answering with nothing. Like conversion, the query is
+does not have raises `InvalidRequestError` naming the properties that exist,
+rather than answering with nothing, and an evicted model raises
+`ModelNotFoundError`: like every other call, gRPC status codes stop at the client
+boundary. Like conversion, the query is
 negotiated: a service too old to report the `query` capability raises
 `MissingCapabilityError`.
 

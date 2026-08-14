@@ -17,6 +17,7 @@ import pytest
 
 from pysysml.capabilities import CAPABILITY_QUERY, MissingCapabilityError
 from pysysml.connection import Connection
+from pysysml.errors import InvalidRequestError, ModelNotFoundError
 from pysysml.query import QueryElement, QueryError, build_query
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 
@@ -308,12 +309,24 @@ class TestQueryAgainstRealService:
 
     def test_an_unknown_property_is_an_error_not_an_empty_answer(self, real_service):
         with Connection(port=real_service, auto_start=False) as conn:
-            with pytest.raises(grpc.RpcError) as excinfo:
+            with pytest.raises(InvalidRequestError) as excinfo:
                 conn.load_from_content(MODEL).query(
                     where={"operator": "=", "property": "colour", "value": "red"},
                 )
-        assert excinfo.value.code() == grpc.StatusCode.INVALID_ARGUMENT
-        assert "unknown query property" in excinfo.value.details()
+        assert "unknown query property" in str(excinfo.value)
+
+    def test_an_evicted_model_raises_this_library_s_error(self, real_service):
+        with Connection(port=real_service, auto_start=False) as conn:
+            with pytest.raises(ModelNotFoundError):
+                conn.query("deadbeef", COOKBOOK_QUERY)
+
+    def test_an_unnamed_element_is_not_answered(self, real_service):
+        with Connection(port=real_service, auto_start=False) as conn:
+            elements = conn.load_from_content(
+                "package Anon { doc /* unnamed */ part def Rig; part : Rig; }"
+            ).query()
+        ids = [e.id for e in elements]
+        assert ids == ["Anon", "Anon::Rig"]
 
     def test_a_query_matching_nothing_answers_with_nothing(self, real_service):
         with Connection(port=real_service, auto_start=False) as conn:

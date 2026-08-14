@@ -365,13 +365,33 @@ func (w *elementWalk) scope(s *symbols.Scope) {
 	}
 }
 
+// visit reports an element and walks what it declares. An element with no
+// qualified identity is walked through but not reported: the standard identifies
+// an element by `@id`, and it has none to be told apart or named by.
 func (w *elementWalk) visit(sym *symbols.Symbol) {
 	if w.seen[sym] {
 		return
 	}
 	w.seen[sym] = true
-	w.out = append(w.out, sym)
+	if hasQualifiedIdentity(w.eval.sc.Index.GetFQN(sym)) {
+		w.out = append(w.out, sym)
+	}
 	w.members(sym)
+}
+
+// hasQualifiedIdentity reports whether a qualified name identifies an element.
+// An unnamed one — a doc note, an anonymous usage — has an empty segment, so its
+// name is neither unique nor a name a scope could use.
+func hasQualifiedIdentity(fqn string) bool {
+	if fqn == "" {
+		return false
+	}
+	for _, segment := range strings.Split(fqn, "::") {
+		if segment == "" {
+			return false
+		}
+	}
+	return true
 }
 
 // members walks what an element declares. A library element restored from cache

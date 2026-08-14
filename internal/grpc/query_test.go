@@ -448,8 +448,55 @@ func TestQueryScopeMayNameALibraryElement(t *testing.T) {
 	}
 }
 
+// TestQueryOmitsElementsWithNoQualifiedIdentity verifies an unnamed element — a
+// doc note, an anonymous usage — is not reported: its qualified name has an
+// empty segment, so it is neither unique nor a name a scope could use.
+func TestQueryOmitsElementsWithNoQualifiedIdentity(t *testing.T) {
+	const model = `
+package Anon {
+	doc /* the package's documentation, which is unnamed */
+	part def Rig;
+	part def Motor;
+	part rig : Rig {
+		part : Motor;
+	}
+	connect rig to rig;
+}
+`
+	srv := mustNewService(t, 10)
+	parsed, err := srv.ParseFile(context.Background(), &pb.ParseFileRequest{
+		Source: &pb.ParseFileRequest_Content{Content: model},
+	})
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+	resp, err := srv.Query(context.Background(), &pb.QueryRequest{
+		ModelHash: parsed.ModelHash,
+		Query:     &pb.Query{},
+	})
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+
+	seen := make(map[string]bool, len(resp.Elements))
+	for _, element := range resp.Elements {
+		if !hasQualifiedIdentity(element.Id) {
+			t.Errorf("element id = %q, want every reported element to have a qualified name", element.Id)
+		}
+		if seen[element.Id] {
+			t.Errorf("element id %q was reported twice, so it identifies no element", element.Id)
+		}
+		seen[element.Id] = true
+	}
+	for _, want := range []string{"Anon", "Anon::Rig", "Anon::rig"} {
+		if !seen[want] {
+			t.Errorf("elements = %v, want it to contain %s", resp.Elements, want)
+		}
+	}
+}
+
 // TestMetamodelTypeNameCoversEveryKind verifies the mapping is total over the
-// kinds a declaration can have, so no element is reported without a `@type`.
+// kinds a parsed declaration can have.
 func TestMetamodelTypeNameCoversEveryKind(t *testing.T) {
 	for kind := symbols.SymbolPackage; kind <= symbols.SymbolConnectorEnd; kind++ {
 		if MetamodelTypeName(kind) == "" {
