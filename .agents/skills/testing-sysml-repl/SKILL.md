@@ -881,6 +881,30 @@ formats the magnitude like a bare Real (`%action test::propagate` +`%continue` o
 `h = -0.42 [m]`, `v = -42.86 [m/s]`; raw floats such as `17.19999999999997 [s]` are the pre-fix
 signature). Note the action in that file is named **`propagate`**, not `descent`.
 
+## Multiplicity, subsetting and collection slots in `%slots`
+
+`%slots` is the cheapest window on instantiation semantics, and the interesting values are all in
+its output rather than in an exit code — so assert on the exact rendered text:
+
+- `part xs : C[*]` should print `xs = []` (an empty collection). `<error: multiplicity violation:
+  lower bound too large or infinite for slot "xs">` is the signature of `[*]` being read as `*..*`;
+  that error is the *correct* answer only for an explicit `[*..*]` or an absurd bound like
+  `[100000]`, both of which must return instantly rather than allocating.
+- A nested `part a : Sub :> xs` makes `a` one of `xs`'s values, and a redefinition
+  `part ys : C[*] :>> Xs` makes `ys` and `Xs` render the *same* list — check both names, not one.
+- Feature chains over a collection (`sum(xs.m)`) flatten one level per step. Useful negatives:
+  an empty collection gives `total = 0` (not an error); a chain reaching an unset slot gives
+  `<error: … uninitialized slot: m>`; two features subsetting each other give
+  `<error: … cyclic slot dependency: … subsets itself>`; mixing a bare number with a `[kg]` value
+  gives `<error: … incommensurable units …>`. None of these may panic — follow each with
+  `%eval 1 + 1` → `= 2` to prove the session survived.
+- `sum`/`product` over quantities must keep the unit (`totalmass = 7.00 [kg]`); a bare `7.00` is a
+  regression.
+- Unset attributes print `<unknown>`, and an attribute typed by a plain `Real`/`String` with no
+  value may instead materialize as a nested `Instance(ID: n)` with `(no features)` — that is
+  pre-existing rendering, not evidence of a new bug, so do not report it as one without an A/B
+  against `main`.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
@@ -896,6 +920,14 @@ types literal `+` characters into the shell instead of zooming). Konsole starts 
 lacks the Python that `pip install -e python/` installed into, so `import pysysml` fails there while
 it works from a tool shell; run `source ~/pysysml-venv/bin/activate` (or
 whichever interpreter `python -c 'import sys; print(sys.executable)'` reports in the tool shell)
-as a setup step before recording. Discover expected values with the
+as a setup step before recording. `~/pysysml-venv` may not exist at all, and the default `python3`
+on PATH can be another project's venv (e.g. `~/repos/fprime/fprime-venv`) whose older
+`google.protobuf` makes `import pysysml` die with
+`cannot import name 'runtime_version' from 'google.protobuf'`. The reliable fallback is a throwaway
+venv off the system interpreter:
+`/usr/bin/python3 -m venv /tmp/pv && /tmp/pv/bin/pip install -e python/` (~1 min), then
+`source /tmp/pv/bin/activate` in Konsole. Also re-copy the freshly built service
+(`make build-grpc && cp bin/sysml-grpc ~/.pysysml/bin/`) or the auto-start path serves a stale
+revision. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
 over a pipe is not visible in the video and should be reported as weaker evidence.
