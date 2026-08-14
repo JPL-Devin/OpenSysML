@@ -38,8 +38,10 @@ class Verdict:
         instance_type_id (str): FQN of that instance's type
         error (str): Set when evaluation failed rather than the model answering
             false; ``holds`` is then False but is no verdict
-        instances (list[Instance]): The instance the verdict is about and those
-            reachable from it, so the values behind a failure are readable
+        instances (list[Instance]): The objects the call reported: the one this
+            verdict is about (``instance_id``) and those reachable from it. A
+            call answering several assertions reports one graph for them all, so
+            filter on ``instance_id`` to single out this verdict's own object
         diagnostics (list[Diagnostic]): Diagnostics the service reported
     """
 
@@ -115,11 +117,11 @@ class Verdict:
     def _named(self):
         """How a line about this verdict names what it is about.
 
-        An assertion's text already begins with the kind it is ("satisfy r by
-        p"), so the kind is not repeated in front of it.
+        An assertion's text already says the kind it is ("satisfy r by p", "not
+        satisfy r by p"), so the kind is not repeated in front of it.
         """
         element = self.element
-        if element.startswith(self.kind):
+        if self.kind in element.split():
             return element
         return f"{self.kind} {element}"
 

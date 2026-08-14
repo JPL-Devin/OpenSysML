@@ -175,8 +175,8 @@ model = pysysml.load("lander.sysml", strict=True)
 
 for verdict in model.verify_satisfaction():        # every assert satisfy … by …
     print(verdict)
-# ✓ satisfy touchdown by slowLander holds (on Landing::Lander ID: 1)
-# ✗ satisfy touchdown by fastLander fails (on Landing::Lander ID: 2): condition
+# ✓ satisfy touchdown by slowLander holds (on Landing::slowLander ID: 1)
+# ✗ satisfy touchdown by fastLander fails (on Landing::fastLander ID: 2): condition
 #   evaluated to false: lander.verticalSpeed <= maxVerticalSpeed
 
 model.satisfied()                                  # False — one assertion fails
@@ -203,7 +203,7 @@ verdict.condition      # 'mass < 2000.0' — the condition that evaluated to fal
 verdict.element        # 'Demo::Vehicle::lightEnough', or the assertion as written
 verdict.kind           # 'constraint', 'requirement' or 'satisfy'
 verdict.instance_id    # the object the verdict is about, 0 for declared defaults
-verdict.instances      # that object and those reachable from it, as Instances
+verdict.instances      # the objects the call built, as Instances
 verdict.diagnostics    # diagnostics the service reported for the run
 print(verdict.explain())
 ```
@@ -224,7 +224,17 @@ for verdict in model.verify_satisfaction():
 
 A request that cannot be answered at all — an unknown symbol, a subject that
 cannot be instantiated — raises `ExecutionError` from the call itself rather than
-returning a verdict.
+returning a verdict. Narrowing to an element that states no satisfaction
+assertion is not such a request: it answers with no verdicts, and `satisfied()`
+is then vacuously `True`.
+
+`verify_satisfaction` answers many assertions in one call and reports one object
+graph for them all, so `verdict.instances` holds every object that call built;
+select the one a verdict is about with its `instance_id`:
+
+```python
+subject = next(i for i in verdict.instances if i.id == verdict.instance_id)
+```
 
 Calculations are invoked with positional arguments, and a calc *usage* named with
 no arguments is evaluated from its own members, reporting every output feature it

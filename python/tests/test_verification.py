@@ -373,3 +373,15 @@ class TestVerdictLines:
             )
         )
         assert str(verdict) == "\u2713 constraint Demo::Vehicle::massOK holds"
+
+    def test_a_negated_assertions_line_does_not_repeat_the_kind_either(self):
+        verdict = Verdict(
+            sysml_pb2.Verdict(
+                kind="satisfy",
+                element="not satisfy touchdown by fastLander",
+                holds=True,
+            )
+        )
+        assert str(verdict) == (
+            "\u2713 not satisfy touchdown by fastLander holds"
+        )

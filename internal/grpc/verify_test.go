@@ -359,6 +359,52 @@ func TestVerifySatisfactionNarrowedToASymbol(t *testing.T) {
 	}
 }
 
+// TestVerifySatisfactionNarrowedToANamedAssertion verifies a `satisfy
+// requirement <name> : <def> by <part>` usage is itself one assertion, so naming
+// it evaluates that assertion rather than the assertions of its scope.
+func TestVerifySatisfactionNarrowedToANamedAssertion(t *testing.T) {
+	srv := mustNewService(t, 10)
+	source := `package Demo {
+	part def Vehicle {
+		attribute mass = 1500.0;
+	}
+	requirement def MassLimit {
+		subject vehicle : Vehicle;
+		attribute maxMass;
+		require constraint { vehicle.mass <= maxMass }
+	}
+	requirement massLimit : MassLimit {
+		attribute :>> maxMass = 2000.0;
+	}
+	part sedan : Vehicle {
+		attribute :>> mass = 1200.0;
+	}
+	part group {
+		satisfy requirement limitMet : MassLimit by sedan;
+		assert satisfy massLimit by sedan;
+	}
+}
+`
+	hash := mustVerifyModel(t, srv, source, "verify-satisfy-named")
+
+	resp, err := srv.VerifySatisfaction(context.Background(), &pb.VerifySatisfactionRequest{
+		ModelHash: hash,
+		SymbolId:  "Demo::group::limitMet",
+	})
+	if err != nil {
+		t.Fatalf("VerifySatisfaction: %v", err)
+	}
+	if resp.Error != "" {
+		t.Fatalf("VerifySatisfaction reported %q", resp.Error)
+	}
+	if len(resp.Verdicts) != 1 {
+		t.Fatalf("got %d verdicts, want the named assertion alone: %v", len(resp.Verdicts), resp.Verdicts)
+	}
+	if resp.Verdicts[0].Kind != "satisfy" {
+		t.Errorf("kind = %q, want %q", resp.Verdicts[0].Kind, "satisfy")
+	}
+}
+
 // TestVerifySatisfactionOfAnElementStatingNone verifies the answer for an element
 // that asserts nothing says so rather than reporting a passing model.
 func TestVerifySatisfactionOfAnElementStatingNone(t *testing.T) {
