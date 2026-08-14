@@ -335,7 +335,7 @@ type SubjectMember struct {
 	Multiplicity  *Multiplicity   // optional multiplicity
 	Relationships []*Relationship // specializations written after the type (`:>> RequirementCheck::subj`)
 	Body          []Node          // optional nested members
-	BindingExpr   Node            // binding expression (for binding form: subject = <expr>;)
+	BindingExpr   Node            // value part: `subject = <expr>;` or a declaration's `= expr` / `default expr`
 }
 
 // AssumeMember represents an assumption in a requirement body.
