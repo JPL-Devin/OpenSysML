@@ -1382,20 +1382,41 @@ func (e *StateExecutor) enqueueSignal(msg Message) {
 // A message no active transition accepts stays on the bus for another consumer:
 // this machine must not swallow a message addressed to a different behavior.
 func (e *StateExecutor) deliverPendingSignal() bool {
-	msg, ok := e.ctx.TakeMessage(func(m Message) bool {
-		// A message routed to a port is for this machine only if a transition out
-		// of the active configuration accepts it `via` that port; one routed to no
-		// port must also be addressed to the machine.
-		if m.Port != "" {
-			return e.acceptsSignal(m)
-		}
-		return m.addressedTo(e.stateMachine.Name) && e.acceptsSignal(m)
-	})
+	msg, ok := e.ctx.TakeMessage(e.acceptableMessage)
 	if !ok {
 		return false
 	}
 	e.enqueueSignal(msg)
 	return true
+}
+
+// acceptableMessage reports whether a message in flight is one this machine can
+// react to now. A message routed to a port is for this machine only if a
+// transition out of the active configuration accepts it `via` that port; one
+// routed to no port must also be addressed to the machine.
+func (e *StateExecutor) acceptableMessage(m Message) bool {
+	if m.Port != "" {
+		return e.acceptsSignal(m)
+	}
+	return m.addressedTo(e.stateMachine.Name) && e.acceptsSignal(m)
+}
+
+// HasPendingSignal reports whether a signal this machine accepts is in flight.
+// Such a signal is due now, unlike a queued event's timestamp: the next step
+// delivers and dispatches it.
+func (e *StateExecutor) HasPendingSignal() bool {
+	return e.hasPendingSignal()
+}
+
+// hasPendingSignal reports whether a message in flight would be delivered by
+// the next step, without consuming it.
+func (e *StateExecutor) hasPendingSignal() bool {
+	for _, msg := range e.ctx.PendingMessages() {
+		if e.acceptableMessage(msg) {
+			return true
+		}
+	}
+	return false
 }
 
 // acceptsSignal reports whether any transition out of the active configuration
@@ -1922,16 +1943,19 @@ func (e *StateExecutor) ProcessNextEvent() error {
 	if err != nil {
 		return err
 	}
-	if e.eventQueue.Len() == 0 && ran > 0 {
+	// A signal sent by a behavior sharing this context is dispatched by the same
+	// step RunToCompletion takes, so stepping and running agree.
+	if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() && ran > 0 {
 		return nil
 	}
 	return e.processNextEvent()
 }
 
 // HasPendingWork reports whether stepping the machine can still make progress:
-// an event is queued, or a state's do behavior has actions left to run.
+// an event is queued, a signal this machine accepts is in flight, or a state's
+// do behavior has actions left to run.
 func (e *StateExecutor) HasPendingWork() bool {
-	return e.eventQueue.Len() > 0 || len(e.doActivities) > 0
+	return e.eventQueue.Len() > 0 || len(e.doActivities) > 0 || e.hasPendingSignal()
 }
 
 // RunDoRound advances every active state's do behavior by one action, without

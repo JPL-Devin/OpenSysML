@@ -224,7 +224,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		// The guard and effect resolve against the parameters the transition's
 		// call trigger declares, which live in a scope of their own.
 		r.resolveTrigger(scope, d.Trigger)
-		body := symbols.CallTriggerScope(scope, d)
+		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
 		r.walkMembers(body, d.Effect)
 	case *ast.SendStatement:

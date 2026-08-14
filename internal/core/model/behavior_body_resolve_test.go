@@ -161,6 +161,15 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 				state a { accept setSpeed(value) do { assign v := value; } then b; }
 			}
 		}`},
+		{"accept payload in effect and guard", `package P {
+			import ScalarValues::*;
+			item def Warning;
+			state S {
+				attribute level : Integer = 0;
+				initial i; state a; state b; i then a;
+				transition first a accept w : Warning if w != null do assign level := 1 then b;
+			}
+		}`},
 		{"requirement actor binding", `package P {
 			import ScalarValues::*;
 			attribute userId : Integer = 42;

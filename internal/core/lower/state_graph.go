@@ -485,7 +485,7 @@ func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge, scope *sym
 		Target:    targetState,
 		Trigger:   edge.Trigger,
 		Guard:     edge.Guard,
-		Effect:    edge.Effect,
+		Effect:    lowerEffect(edge.Effect),
 		Scope:     scope,
 		BodyScope: scope,
 	}, nil
@@ -585,13 +585,34 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 		Target:  target,
 		Trigger: classifyTrigger(member.Trigger),
 		Guard:   member.Guard,
-		Effect:  member.Effect,
+		Effect:  lowerEffect(member.Effect),
 		Via:     ast.SimpleName(member.Via),
 		Scope:   scope,
-		// A call trigger's parameters are members of a scope of the transition's
+		// A trigger's parameters are members of a scope of the transition's
 		// own, which its guard and effect resolve in (symbols/bodyscopes.go).
-		BodyScope: symbols.CallTriggerScope(scope, member),
+		BodyScope: symbols.TriggerScope(scope, member),
 	}, nil
+}
+
+// isEntrySubaction reports whether member is the entry subaction of the body a
+// succession was written in.
+func isEntrySubaction(member ast.Node) bool {
+	_, ok := unwrapMembership(member).(*ast.EntryMember)
+	return ok
+}
+
+// lowerEffect unwraps the memberships a transition's effect actions are
+// declared through, so the executor is given the action itself: a performed
+// action (`do perform notify`) is a usage contributed by a membership.
+func lowerEffect(effect []ast.Node) []ast.Node {
+	if len(effect) == 0 {
+		return nil
+	}
+	actions := make([]ast.Node, 0, len(effect))
+	for _, action := range effect {
+		actions = append(actions, unwrapMembership(action))
+	}
+	return actions
 }
 
 // classifyTrigger converts a raw trigger expression into a typed TriggerEvent.
@@ -765,6 +786,14 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 
 			sourceState := findStateByName(searchScope, n.Source)
 			targetState := findStateByName(searchScope, n.Target)
+
+			// `entry; then off;` — a succession out of the body's own entry
+			// subaction names the state it starts in (SysML 7.19.3), the same as
+			// `initial start; start then off;`.
+			if sourceState == nil && targetState != nil && isEntrySubaction(n.SourceMember) {
+				targetState.IsInitial = true
+				continue
+			}
 
 			if sourceState != nil && targetState != nil {
 				trans := &Transition{
