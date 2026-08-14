@@ -139,3 +139,77 @@ func TestMetaLoadWithoutArgumentsShowsUsage(t *testing.T) {
 		t.Fatalf("unexpected output: %v", out)
 	}
 }
+
+// Two files of one load are both part of the model: name-based replacement is
+// for redeclaring at the prompt, so it must not drop a file of the same load.
+func TestFilesOfOneLoadDoNotReplaceEachOther(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "a.sysml"), "package Defs { part def Wheel; }\n")
+	writeFile(t, filepath.Join(dir, "b.sysml"), "package Defs { part def Axle; }\n")
+
+	s := NewSession()
+	if _, err := s.LoadPaths([]string{dir}); err != nil {
+		t.Fatalf("LoadPaths: %v", err)
+	}
+	got := s.List()
+	if len(got) != 2 {
+		t.Fatalf("a file of the load was dropped, want 2 snippets, got %v", got)
+	}
+	joined := strings.Join(got, "\n")
+	if !strings.Contains(joined, "Wheel") || !strings.Contains(joined, "Axle") {
+		t.Fatalf("both declarations should survive the load: %q", joined)
+	}
+}
+
+// Retyping a declaration still supersedes what an earlier submission loaded.
+func TestASubmissionStillReplacesAnEarlierLoad(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "a.sysml"), "package P { part def Wheel; }\n")
+
+	s := NewSession()
+	if _, err := s.LoadPaths([]string{dir}); err != nil {
+		t.Fatalf("LoadPaths: %v", err)
+	}
+	s.Submit("package P { part def Axle; }")
+	got := s.List()
+	if len(got) != 1 {
+		t.Fatalf("want the loaded package replaced, got %v", got)
+	}
+	if strings.Contains(got[0], "Wheel") {
+		t.Fatalf("stale declaration survived: %q", got[0])
+	}
+}
+
+// A diagnostic in the second file of a load is reported against that file, at
+// the line it has in it — not at its line in the accumulated buffer.
+func TestDiagnosticsOfALoadNameTheirFileAndItsLines(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "a.sysml"), "package A { }\n\n\n\npackage A2 { }\n")
+	bad := writeFile(t, filepath.Join(dir, "b.sysml"), "package B {\n  import Missing::X;\n}\n")
+
+	s := NewSession()
+	out, err := s.LoadPaths([]string{dir})
+	if err != nil {
+		t.Fatalf("LoadPaths: %v", err)
+	}
+	joined := strings.Join(out, "\n")
+	if !strings.Contains(joined, bad+":2:") {
+		t.Fatalf("want a diagnostic reported at %s:2, got:\n%s", bad, joined)
+	}
+}
+
+// A submission typed at the prompt comes from no file, and is still numbered
+// from the line the user typed.
+func TestPromptDiagnosticsAreNotAttributedToAFile(t *testing.T) {
+	s := NewSession()
+	s.Submit("package First { }")
+	r := s.Submit("namespace N { import Missing::X; }")
+	out := renderResult(r, VerbosityNormal)
+	joined := strings.Join(out, "\n")
+	if !strings.Contains(joined, "1:") {
+		t.Fatalf("want the diagnostic on line 1 of the submission, got:\n%s", joined)
+	}
+	if strings.Contains(joined, ".sysml:") {
+		t.Fatalf("prompt diagnostic should name no file:\n%s", joined)
+	}
+}

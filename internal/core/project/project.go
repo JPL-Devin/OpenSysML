@@ -103,26 +103,13 @@ func expandPattern(pattern string) ([]string, error) {
 }
 
 // ModelFiles walks dir and returns every .sysml/.kerml file under it, sorted by
-// path. Hidden directories are skipped, so a repository's .git or a dependency
-// cache under a dot-directory contributes nothing.
+// path. Hidden directories are skipped, so a repository's .git or a build cache
+// under a dot-directory contributes nothing. Symlinked directories are walked —
+// a project may keep a shared library as a link — each at most once, so a cycle
+// terminates.
 func ModelFiles(dir string) ([]string, error) {
 	var out []string
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if path != dir && strings.HasPrefix(d.Name(), ".") {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		if IsModelFile(path) {
-			out = append(out, path)
-		}
-		return nil
-	})
-	if err != nil {
+	if err := walk(dir, map[string]bool{}, &out); err != nil {
 		return nil, err
 	}
 	if len(out) == 0 {
@@ -130,6 +117,47 @@ func ModelFiles(dir string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// walk appends the model files under dir to out, descending into
+// subdirectories, symlinked ones included. visited holds the resolved
+// directories already walked, which is what keeps a link cycle finite.
+func walk(dir string, visited map[string]bool, out *[]string) error {
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return err
+	}
+	if visited[real] {
+		return nil
+	}
+	visited[real] = true
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		path := filepath.Join(dir, e.Name())
+		info, err := os.Stat(path) // resolves a link to what it points at
+		if err != nil {
+			// A dangling link names no model file; the walk is not about it.
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			return err
+		}
+		switch {
+		case info.IsDir():
+			if strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			if err := walk(path, visited, out); err != nil {
+				return err
+			}
+		case IsModelFile(path):
+			*out = append(*out, path)
+		}
+	}
+	return nil
 }
 
 // absKey is the identity a path is deduplicated under: its absolute form when

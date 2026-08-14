@@ -24,6 +24,9 @@ const docName = "<repl>"
 type snippet struct {
 	src   string
 	names []string
+	// origin is the file this snippet was read from, empty for a submission
+	// typed at the prompt.
+	origin string
 	// gen is the submission that appended this snippet, which is what scopes a
 	// report to the files just loaded rather than the whole buffer.
 	gen int
@@ -119,15 +122,27 @@ func (s *Session) List() []string {
 	return out
 }
 
-// accept parses src to compute its declared names, drops any earlier snippet
-// whose names intersect, and appends the new snippet under the current
-// submission generation. It does NOT touch the workspace (Submit does).
+// accept accepts src as a submission of its own, from no file.
+func (s *Session) accept(src string) {
+	s.version++
+	s.acceptFrom(src, "")
+}
+
+// acceptFrom parses src to compute its declared names, drops any snippet from
+// an earlier submission whose names intersect, and appends the new snippet under
+// the current submission generation. It does NOT touch the workspace (Submit
+// does).
+//
+// Only earlier submissions are replaced: redeclaring a name supersedes what was
+// submitted before it, but two files of one load are both part of the model, so
+// a name they share is a conflict for the analysis to report rather than a
+// reason to drop one of them.
 //
 // A submission that declares names takes over the comment lines typed just
 // before it. They document what follows, so folding them into the same snippet
 // makes a later redeclaration replace the comments along with the declaration
 // instead of leaving stale documentation above whatever is current.
-func (s *Session) accept(src string) {
+func (s *Session) acceptFrom(src, origin string) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
 	var comments string
@@ -139,7 +154,7 @@ func (s *Session) accept(src string) {
 		}
 		kept := s.snippets[:0]
 		for _, sn := range s.snippets {
-			if !intersects(sn.names, set) {
+			if sn.gen == s.version || !intersects(sn.names, set) {
 				kept = append(kept, sn)
 			}
 		}
@@ -148,9 +163,24 @@ func (s *Session) accept(src string) {
 	s.snippets = append(s.snippets, snippet{
 		src:    comments + src,
 		names:  names,
+		origin: origin,
 		gen:    s.version,
 		prefix: len(comments),
 	})
+}
+
+// origins locates every file of the current submission in the joined buffer, in
+// buffer order, so a diagnostic can be reported against the file it came from.
+func (s *Session) origins() []Origin {
+	var out []Origin
+	acc := 0
+	for _, sn := range s.snippets {
+		if sn.gen == s.version && sn.origin != "" {
+			out = append(out, Origin{Name: sn.origin, Offset: acc + sn.prefix})
+		}
+		acc += len(sn.src) + 1 // the newline joined() writes between snippets
+	}
+	return out
 }
 
 // genOffset returns the byte offset in the joined buffer where the current
@@ -233,22 +263,38 @@ func (s *Session) Submit(src string) Result {
 	return s.SubmitAll([]string{src})
 }
 
-// SubmitAll accumulates every src as one submission: all of them are accepted
+// SourceFile is one source of a submission together with the file it was read
+// from, which is what diagnostics over a multi-file load are reported against.
+type SourceFile struct {
+	Name string
+	Text string
+}
+
+// SubmitAll accumulates every src as one submission, from no file in particular.
+func (s *Session) SubmitAll(srcs []string) Result {
+	files := make([]SourceFile, 0, len(srcs))
+	for _, src := range srcs {
+		files = append(files, SourceFile{Text: src})
+	}
+	return s.SubmitFiles(files)
+}
+
+// SubmitFiles accumulates every file as one submission: all of them are accepted
 // before the buffer is reindexed and analyzed, so a declaration in one resolves
 // against the others no matter which order they arrive in. This is what makes
 // loading a multi-file project order-independent.
-func (s *Session) SubmitAll(srcs []string) Result {
+func (s *Session) SubmitFiles(files []SourceFile) Result {
 	var declared []string
 	seen := map[string]bool{}
 	s.version++
-	for _, src := range srcs {
-		for _, name := range declaredNames(parser.New(source.New(docName, []byte(src))).ParseFile()) {
+	for _, f := range files {
+		for _, name := range declaredNames(parser.New(source.New(docName, []byte(f.Text))).ParseFile()) {
 			if !seen[name] {
 				seen[name] = true
 				declared = append(declared, name)
 			}
 		}
-		s.accept(src)
+		s.acceptFrom(f.Text, f.Name)
 	}
 	joined := s.joined()
 	offset := s.genOffset(joined)
@@ -271,6 +317,7 @@ func (s *Session) SubmitAll(srcs []string) Result {
 		Diagnostics: diags,
 		Source:      joined,
 		Offset:      offset,
+		Origins:     s.origins(),
 		Notices:     notices,
 	}
 }

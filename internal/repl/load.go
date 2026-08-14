@@ -12,7 +12,8 @@ import (
 // directory to walk for .sysml/.kerml files, or a glob pattern. Every file is
 // accepted before the buffer is analyzed, so the order files are loaded in does
 // not affect name resolution: a file may reference a declaration another file
-// loaded after it makes.
+// loaded after it makes. Diagnostics name the file they belong to and count
+// lines from its start.
 func (s *Session) LoadPaths(paths []string) ([]string, error) {
 	files, err := project.Expand(expandHomes(paths))
 	if err != nil {
@@ -21,7 +22,7 @@ func (s *Session) LoadPaths(paths []string) ([]string, error) {
 	if len(files) == 0 {
 		return nil, errors.New("no model files to load")
 	}
-	srcs := make([]string, 0, len(files))
+	srcs := make([]SourceFile, 0, len(files))
 	for _, file := range files {
 		// #nosec G304 -- the file is one the user named, or one found under a
 		// directory or pattern they named.
@@ -29,7 +30,7 @@ func (s *Session) LoadPaths(paths []string) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("load %s: %w", file, err)
 		}
-		srcs = append(srcs, string(data))
+		srcs = append(srcs, SourceFile{Name: file, Text: string(data)})
 	}
 	var out []string
 	if len(files) > 1 {
@@ -38,7 +39,7 @@ func (s *Session) LoadPaths(paths []string) ([]string, error) {
 			out = append(out, "  "+file)
 		}
 	}
-	return append(out, renderResult(s.SubmitAll(srcs), s.verbosity)...), nil
+	return append(out, renderResult(s.SubmitFiles(srcs), s.verbosity)...), nil
 }
 
 // expandHomes expands a leading ~ in every path.

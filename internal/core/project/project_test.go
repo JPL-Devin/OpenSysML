@@ -3,6 +3,7 @@ package project
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -131,5 +132,74 @@ func TestIsModelFile(t *testing.T) {
 		if got := IsModelFile(path); got != want {
 			t.Errorf("IsModelFile(%q) = %v, want %v", path, got, want)
 		}
+	}
+}
+
+// A project may keep a shared directory as a symlink; loading it should load the
+// files it points at.
+func TestExpandFollowsASymlinkedDirectory(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real")
+	if err := os.Mkdir(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(real, "a.sysml"), "package X { }\n")
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Expand([]string{link})
+	if err != nil {
+		t.Fatalf("Expand: %v", err)
+	}
+	want := []string{filepath.Join(link, "a.sysml")}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Expand = %v, want %v", got, want)
+	}
+}
+
+// A symlinked subdirectory contributes its files too, and a link back up the
+// tree does not make the walk run forever.
+func TestExpandFollowsASymlinkedSubdirectoryOnlyOnce(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, "a.sysml"), "package X { }\n")
+	write(t, filepath.Join(sub, "b.sysml"), "package X { }\n")
+	if err := os.Symlink(dir, filepath.Join(sub, "up")); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Expand([]string{dir})
+	if err != nil {
+		t.Fatalf("Expand: %v", err)
+	}
+	want := []string{
+		filepath.Join(dir, "a.sysml"),
+		filepath.Join(sub, "b.sysml"),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Expand = %v, want %v", got, want)
+	}
+}
+
+// A link pointing nowhere is skipped rather than failing the walk.
+func TestExpandSkipsADanglingSymlink(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.sysml"), "package X { }\n")
+	if err := os.Symlink(filepath.Join(dir, "gone.sysml"), filepath.Join(dir, "b.sysml")); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Expand([]string{dir})
+	if err != nil {
+		t.Fatalf("Expand: %v", err)
+	}
+	want := []string{filepath.Join(dir, "a.sysml")}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Expand = %v, want %v", got, want)
 	}
 }
