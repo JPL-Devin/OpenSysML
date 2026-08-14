@@ -164,6 +164,46 @@ is the cheapest source of the values `%slots` should print.
   so the next `%slots` says `no instance of …`. Use `%clear` to reset the session, and clear the
   screen before entering the REPL.
 
+### `variant` used outside a variation, and per-variation-point variant objects
+
+This section describes behavior added by PR #128, so it applies only once that PR is on `main`; the
+"old" shapes below are what current `main` prints, so they double as A/B canaries. Three easy
+discriminators for changes in the variant/variation layer:
+
+- **A `variant` member whose owner is not a `variation` must stay an ordinary feature.** Model:
+  `part def P { attribute k : Real = 2.0; variant attribute x : Real = 1.0; }` +
+  `part p : P { attribute total : Real = k + x; }`. Correct behavior: loading prints a *warning*
+  (code `variant-outside-variation`) —
+  ``variant x is declared in P, which is not a variation, so it offers no choice; declare its owner `variation` or drop `variant` `` —
+  and `%slots M::p` still shows `k = 2.00`, `x = 1.00`, `total = 3.00`, with `%eval M::p.x` → `1.00`.
+  A build that skips every `DeclaresVariant` member instead prints no warning, omits `x`, reports
+  `total: <error: slot p.total: type mismatch>` and `error: evaluation failed: member x not found in
+  instance`. The same must hold for a package-level `variant` (warns, still readable through a
+  computed attribute such as `h = loose + 1.0` → `6.00`) and for a `variant` with no value (warns,
+  renders as an instance of its type). Genuine variants *inside* a `variation` must NOT warn —
+  loading the `variation_*` conformance fixtures should stay diagnostic-free.
+- **Two variation points selecting the same variant must not share one object.** Model: an
+  `attribute def Shade { attribute lum : Real = 3.0; }`, a
+  `variation attribute def ShadeChoice :> Shade { variant attribute bright :> Shade; variant attribute dark :> Shade; }`
+  and a part with `attribute front : ShadeChoice = front::bright;` plus
+  `attribute rear : ShadeChoice = rear::bright;`. Correct behavior prints two *different* instance
+  IDs (`front = bright (Instance ID: 2)` / `rear = bright (Instance ID: 3)`); a build whose variant
+  object cache is keyed only by `{owner, variant}` prints `Instance ID: 2` for both. The instance ID
+  is the only visible signal here, so read it carefully.
+- **A variation point may inherit its variation-ness, and its variants are still choices.** Model:
+  `variation part def EngineChoice :> Engine;` with
+  `part def Car { part engine : EngineChoice { variant part electric : Engine { attribute :>> power = 150.0; } } }`
+  and `part ev : Car { part :>> engine = engine::electric; }`. Correct behavior: no warning and
+  `engine = electric (Instance ID: 2)` with `power = 150.00`. A build testing the owner by keyword
+  only either reports `not a variant of the variation: electric is not a variant of engine (variants:
+  electric, …)` (self-contradictory) or `usage engine::electric has no value` plus a spurious
+  `variant-outside-variation` warning. The same applies when the owner redefines a variation usage
+  (`part :>> engine { variant part … }`) without restating `variation`. Drop the variants' own
+  `: Engine` to test the second half: a variant specializes its variation point, so untyped
+  `variant part petrol;` must still print `power = 100.00` (Engine's default) rather than
+  `(no features)` — that shape is the sharper canary, since it needs the supertype edge, not just
+  the selection.
+
 ## Testing lexical scope of behavior bodies (declaring-scope changes)
 
 When a change claims "expressions in an action/state body now see their declaring scope", the same
