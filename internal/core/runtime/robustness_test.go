@@ -2615,6 +2615,7 @@ func testVariationBoundToWhatIsNotAVariant(t *testing.T) {
 		{"unknown_name", `part chosen :> family { attribute :>> cut = cut::nope; }`},
 		{"variant_of_another_variation", `part chosen :> family { attribute :>> cut = color::colorWhite; }`},
 		{"ordinary_value", `part chosen :> family { attribute :>> cut = 250.0; }`},
+		{"collection_of_ordinary_values", `part chosen :> family { attribute :>> cut = (250.0, 200.0); }`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := variationSlotInSource(t, fmt.Sprintf(variationFamily, tt.selection), "test::chosen", "cut")

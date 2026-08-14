@@ -94,7 +94,8 @@ func (ctx *Context) bindOneVariant(feat *EffectiveFeature, elements []Value) (Va
 	case len(selected) == 1:
 		return ctx.bindVariation(feat, selected[0])
 	default:
-		return Value{}, nil
+		return Value{}, fmt.Errorf("%w: variation %s is bound to a collection naming no variant (%s)",
+			ErrNotAVariant, feat.Name, ctx.variantSummary(feat.Symbol))
 	}
 }
 
