@@ -18,6 +18,7 @@ type nsDecl struct {
 	header  string // everything before the body, whitespace-normalized
 	members []ast.Node
 	start   int
+	open    int
 	brace   int
 }
 
@@ -141,6 +142,7 @@ func namespaceDeclOf(src string, member ast.Node) (nsDecl, bool) {
 	if open < 0 {
 		return d, false
 	}
+	d.open = d.start + open
 	d.header = strings.Join(strings.Fields(src[d.start:d.start+open]), " ")
 	d.desc = renderMember(member)
 	return d, true
@@ -239,12 +241,30 @@ func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl, pa
 		}
 		added = append(added, text)
 	}
+	// Trivia before the body's first member sits in no member's span, so it is
+	// carried over explicitly or the comments typed there would be dropped.
+	if lead := leadingTrivia(newSrc, newDecl); lead != "" && !strings.Contains(oldSrc, lead) {
+		added = append([]string{lead}, added...)
+	}
 	if len(added) > 0 {
 		e := insertion(oldSrc, oldDecl.brace, added)
 		e.own = true
 		edits = append(edits, e)
 	}
 	return edits, replaced, gone
+}
+
+// leadingTrivia returns the text between a body's opening brace and its first
+// member: what the submission typed above everything else in the body.
+func leadingTrivia(src string, decl nsDecl) string {
+	if len(decl.members) == 0 {
+		return ""
+	}
+	end := decl.members[0].Span().Offset
+	if end <= decl.open+1 || end > decl.brace {
+		return ""
+	}
+	return strings.TrimSpace(src[decl.open+1 : end])
 }
 
 // memberCut is the range to delete to remove a member: its own text plus the

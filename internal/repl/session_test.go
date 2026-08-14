@@ -476,3 +476,19 @@ func TestEverySiblingDeclarationIsConfirmedWhenOneSourceMerges(t *testing.T) {
 	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
 	wants(t, out, "part def X", "part def Y")
 }
+
+// A comment typed above a body's first member documents the addition, so it
+// comes along instead of disappearing into the merge.
+func TestMergeKeepsACommentTypedAtTheTopOfTheBody(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { part def A; }")
+	s.Submit("package P {\n\t// the engine of the car\n\tpart def Engine;\n}")
+
+	if !strings.Contains(s.joined(), "// the engine of the car") {
+		t.Errorf("buffer = %q, want the comment typed in the body", s.joined())
+	}
+	s.Submit("package P {\n\t// the engine of the car\n\tpart def Engine;\n}")
+	if n := strings.Count(s.joined(), "// the engine of the car"); n != 1 {
+		t.Errorf("comment present %d times in %q, want once", n, s.joined())
+	}
+}
