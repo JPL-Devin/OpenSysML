@@ -71,7 +71,7 @@ func (ctx *Context) bindVariation(feat *EffectiveFeature, selection Value, owner
 		return Value{}, fmt.Errorf("%w: %s is not a variant of %s (%s)",
 			ErrNotAVariant, variant.Name, name, ctx.variantSummary(feat.Symbol))
 	}
-	ctx.selectedVariants[name] = variant.Name
+	ctx.selectedVariants[variantSelection{owner: owner, variation: name}] = variant.Name
 	return ctx.variantValue(feat.Symbol, variant, owner)
 }
 

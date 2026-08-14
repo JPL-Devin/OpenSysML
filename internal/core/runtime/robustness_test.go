@@ -126,6 +126,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("mutually_subsetting_features", testMutuallySubsettingFeatures)
 	t.Run("unattachable_connector_end", testUnattachableConnectorEnd)
 	t.Run("multiplicity_on_a_connector", testMultiplicityOnAConnector)
+	t.Run("connector_attached_to_itself", testConnectorAttachedToItself)
+	t.Run("mutually_attached_connectors", testMutuallyAttachedConnectors)
 }
 
 // testMultiplicityInfiniteLowerBound: `[*..*]` requires unboundedly many objects,

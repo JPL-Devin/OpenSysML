@@ -54,10 +54,14 @@ type Context struct {
 	// selected it, so repeated reads of one selection read the same object.
 	variantObjects map[variantObject]int64
 
-	// selectedVariants records, by variation name, the variant bound to it in
-	// this run. Routing consults it: a connection a `variant interface` declares
-	// joins its ends only where that variant is the one selected.
-	selectedVariants map[string]string
+	// selectedVariants records, per owner and variation name, the variant bound
+	// to it in this run. Routing consults it: a connection a `variant interface`
+	// declares joins its ends only where that variant is the one selected.
+	selectedVariants map[variantSelection]string
+
+	// materializingConnectors holds the connectors whose ends are being attached,
+	// so a connector reached from its own end is reported as a cycle.
+	materializingConnectors map[connectorRef]bool
 
 	// trace records evaluation, nil when not tracing.
 	trace *TraceRecorder
@@ -98,6 +102,20 @@ type slotRef struct {
 	feature  string
 }
 
+// variantSelection identifies a variation point of one object: two objects of a
+// type each select their own variant of the same variation.
+type variantSelection struct {
+	owner     int64
+	variation string
+}
+
+// connectorRef identifies one connector being materialized in the context of
+// the object whose features its ends name.
+type connectorRef struct {
+	owner     int64
+	connector *symbols.Symbol
+}
+
 // NewContext creates a runtime context backed by the given semantic model.
 // maxSteps sets the runaway guard (step counter limit); the executor bounds take
 // their defaults, which SetBudgets replaces.
@@ -124,12 +142,14 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxDoSteps:     DefaultMaxDoSteps,
 		maxElements:    DefaultMaxElements,
 
-		occurrences:       make(map[*symbols.Symbol]int64),
-		variantObjects:    make(map[variantObject]int64),
-		selectedVariants:  make(map[string]string),
-		derivingSlots:     make(map[slotRef]bool),
-		collectingSubsets: make(map[slotRef]bool),
-		sources:           make(map[string]*source.SourceFile),
+		occurrences:      make(map[*symbols.Symbol]int64),
+		variantObjects:   make(map[variantObject]int64),
+		selectedVariants: make(map[variantSelection]string),
+
+		materializingConnectors: make(map[connectorRef]bool),
+		derivingSlots:           make(map[slotRef]bool),
+		collectingSubsets:       make(map[slotRef]bool),
+		sources:                 make(map[string]*source.SourceFile),
 	}
 }
 
@@ -159,6 +179,14 @@ func (ctx *Context) sourceLocation(file string, span source.Span) string {
 	}
 	pos := sf.Lines().PosAt(span.Offset)
 	return fmt.Sprintf("%s:%d:%d", file, pos.Line, pos.Col)
+}
+
+// symbolLocation renders where a symbol was declared, empty for none.
+func (ctx *Context) symbolLocation(sym *symbols.Symbol) string {
+	if sym == nil {
+		return ""
+	}
+	return ctx.sourceLocation(sym.DocName, sym.DeclSpan)
 }
 
 // SetTrace attaches a trace recorder to this context, so that every expression

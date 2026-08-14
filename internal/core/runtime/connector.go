@@ -33,8 +33,12 @@ const participantEndName = "participant"
 // resolved against the instance that owns the connector.
 func (ctx *Context) materializeConnectorSlot(owner *Instance, slot *Slot, name string) error {
 	if !isScalarFeature(slot.Feature) {
-		return fmt.Errorf("%w: connector %s.%s holds more than one connector, which no set of ends attaches",
-			ErrConnectorEnd, owner.Type.Name, name)
+		return &ConnectorEndError{
+			Connector: fmt.Sprintf("%s.%s", owner.Type.Name, name),
+			End:       name,
+			Location:  ctx.symbolLocation(slot.Feature.Symbol),
+			Err:       errors.New("a connector of more than one object has no set of ends to attach"),
+		}
 	}
 	conn, err := ctx.materializeConnector(owner, slot.Feature.Symbol, ctx.connectorBaseOf(slot.Feature))
 	if err != nil {
@@ -96,6 +100,19 @@ func (ctx *Context) materializeConnector(owner *Instance, connSym, base *symbols
 	if len(ends) == 0 {
 		return nil, fmt.Errorf("%w: %s declares no end to attach", ErrConnectorEnd, connectorName(connSym))
 	}
+
+	// An end may name the connector itself, or another connector that names this
+	// one back, which would attach ends forever.
+	ownerID := int64(0)
+	if owner != nil {
+		ownerID = owner.ID
+	}
+	key := connectorRef{owner: ownerID, connector: connSym}
+	if ctx.materializingConnectors[key] {
+		return nil, fmt.Errorf("%w: connector %s attaches to itself", ErrCyclicSlot, connectorName(connSym))
+	}
+	ctx.materializingConnectors[key] = true
+	defer delete(ctx.materializingConnectors, key)
 
 	inst, err := ctx.Instantiate(base)
 	if err != nil {
@@ -258,7 +275,13 @@ func (ctx *Context) anonymousConnectors(typeSym *symbols.Symbol) []*symbols.Symb
 			if len(usage.ConnectorEnds) < 2 {
 				continue
 			}
-			out = append(out, anonymousConnectorSymbol(decl, usage))
+			// A succession or transition carries ends too, and relates its ends in
+			// time rather than joining them, so it is no connector to materialize.
+			sym := anonymousConnectorSymbol(decl, usage)
+			if !ctx.model.IsConnectorUsage(sym) {
+				continue
+			}
+			out = append(out, sym)
 		}
 	}
 	return out

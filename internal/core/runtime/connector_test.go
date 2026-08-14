@@ -366,8 +366,129 @@ func testMultiplicityOnAConnector(t *testing.T) {
 			}
 		}
 	`)
-	if _, err := inst.GetSlot(ctx, "links"); !errors.Is(err, ErrConnectorEnd) {
+	_, err := inst.GetSlot(ctx, "links")
+	if !errors.Is(err, ErrConnectorEnd) {
 		t.Fatalf("expected ErrConnectorEnd, got: %v", err)
+	}
+	var endErr *ConnectorEndError
+	if !errors.As(err, &endErr) {
+		t.Fatalf("expected a *ConnectorEndError, got %T", err)
+	}
+	if !strings.Contains(endErr.Location, "<test>") {
+		t.Errorf("error is located at %q, want the file the connector was written in", endErr.Location)
+	}
+}
+
+// testConnectorAttachedToItself: an end naming the connector it belongs to would
+// attach ends forever, so the cycle is reported rather than recursed into.
+func testConnectorAttachedToItself(t *testing.T) {
+	inst, ctx := instantiatePart(t, "Sys", `
+		package test {
+			port def P;
+			part def A { port p : P; }
+			part def Sys {
+				part a : A;
+				connection link connect link to a.p;
+			}
+		}
+	`)
+	if _, err := inst.GetSlot(ctx, "link"); !errors.Is(err, ErrCyclicSlot) {
+		t.Fatalf("expected ErrCyclicSlot, got: %v", err)
+	}
+}
+
+// testMutuallyAttachedConnectors: two connectors each naming the other as an end
+// are a cycle across slots, reported the same way as a self-attached one.
+func testMutuallyAttachedConnectors(t *testing.T) {
+	inst, ctx := instantiatePart(t, "Sys", `
+		package test {
+			port def P;
+			part def A { port p : P; }
+			part def Sys {
+				part a : A;
+				connection here connect there to a.p;
+				connection there connect here to a.p;
+			}
+		}
+	`)
+	if _, err := inst.GetSlot(ctx, "here"); !errors.Is(err, ErrCyclicSlot) {
+		t.Fatalf("expected ErrCyclicSlot, got: %v", err)
+	}
+}
+
+// An anonymous succession or transition carries ends too, but relates them in
+// time rather than joining them, so it is no connector to materialize and must
+// not be reported as one when the connectors of an object are read.
+func TestAnonymousSuccessionIsNoConnector(t *testing.T) {
+	inst, ctx := instantiatePart(t, "Sys", `
+		package test {
+			port def P;
+			part def A { port p : P; }
+			part def B { port q : P; }
+			action def Step;
+			part def Sys {
+				part a : A;
+				part b : B;
+				action one : Step;
+				action two : Step;
+				succession one then two;
+				connect a.p to b.q;
+			}
+		}
+	`)
+	conns, err := inst.OwnedConnectors(ctx)
+	if err != nil {
+		t.Fatalf("OwnedConnectors: %v", err)
+	}
+	if len(conns) != 1 {
+		t.Fatalf("the object owns %d anonymous connectors, want only the `connect`", len(conns))
+	}
+	if len(conns[0].Ends) != 2 {
+		t.Errorf("the connector has %d ends, want 2", len(conns[0].Ends))
+	}
+}
+
+// A variation point belongs to the object that selected it: two objects of one
+// type each selecting a variant must record their own selection, so neither
+// overwrites the other's.
+func TestVariantSelectionIsPerOwner(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+	package test {
+		port def P;
+		part def Engine { port p : P; }
+		abstract part family {
+			variation part engine : Engine {
+				variant part electric : Engine;
+				variant part petrol : Engine;
+			}
+		}
+		part sedan :> family { part :>> engine = engine::electric; }
+		part coupe :> family { part :>> engine = engine::petrol; }
+	}`))
+	for _, usage := range []string{"test::sedan", "test::coupe"} {
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, usage))
+		if err != nil {
+			t.Fatalf("%s: %v", usage, err)
+		}
+		if _, err := inst.GetSlot(ctx, "engine"); err != nil {
+			t.Fatalf("%s.engine: %v", usage, err)
+		}
+	}
+	selections := map[string]bool{}
+	for key, variant := range ctx.selectedVariants {
+		if key.variation == "engine" {
+			selections[variant] = true
+		}
+	}
+	for _, want := range []string{"electric", "petrol"} {
+		if !selections[want] {
+			t.Errorf("selection of %s was lost, recorded: %v", want, selections)
+		}
+	}
+	// Routing has no owning object, so two objects disagreeing over one variation
+	// realize neither variant's connection rather than the wrong one.
+	if got := ctx.selectedVariant("engine"); got != "" {
+		t.Errorf("routing resolved the variation to %q while owners disagree", got)
 	}
 }
 

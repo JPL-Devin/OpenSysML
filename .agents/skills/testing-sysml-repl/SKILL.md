@@ -1063,3 +1063,68 @@ venv off the system interpreter:
 revision. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
 over a pipe is not visible in the video and should be reported as weaker evidence.
+
+## Connector usages and their ends (PR #132)
+
+This section describes runtime materialization of connector usages, so it applies once that PR is
+on `main`; the "old" shapes double as A/B canaries against the parent commit.
+
+- **A connector's end IS the connected feature, not a copy.** The only visible signal is the
+  instance ID, so read it carefully: for
+  `part def Sys { part a : A; part b : B; connection link : Link connect a.p to b.q; }` the fixed
+  build prints `a.p = Instance(ID: 4)` / `b.q = Instance(ID: 6)` and then `link = Instance(ID: 7)`
+  with `source = Instance(ID: 4)` / `target = Instance(ID: 6)`. A pre-fix build prints *fresh* IDs
+  at the ends (`source = Instance(ID: 7)`, `target = Instance(ID: 8)`). Pair the ID check with a
+  **value** check by connecting a port that redefines an attribute
+  (`port spare : P { :>> rate = 7.0; }`): the end must read `rate = 7.00`, which a default-typed
+  copy would show as `3.00`.
+- **Untyped/anonymous connectors used to read `<unknown>`.** `interface iface connect a.p to b.q;`
+  (and `connection untyped connect …`, `allocation alloc allocate a to b`, KerML `connector`)
+  materialize on the stdlib base. A bare `connect a.p to b.q;` has no slot name, so `%slots` renders
+  it as a synthetic `(anonymous <keyword>) = Instance(ID: n)` line with its ends indented under it —
+  those lines are printed *after* all the real features, and their ends are shown without nested
+  values. Pre-fix, the named untyped usage printed `iface = <unknown>` and the bare one printed
+  nothing at all.
+- **End labels tell arity apart.** A binary connector's ends are `source`/`target`; an n-ary
+  `connect (a.p, b.q, c.r)` prints three ends all labelled `end` (they occupy the library's unnamed
+  `participant` feature). A `connection def Derived :> Base { end :>> source; end :>> target; }`
+  redefines inherited ends **by position** and must still attach.
+- **Unattachable ends are a typed `<error:` on the slot, never `<unknown>` or a default.** An end
+  naming a missing feature gives
+  `<error: connector end cannot be attached: anonymous connector end "a.nope" at <repl>:8:17: member nope not found in instance>`
+  — assert the `<repl>:line:col` is present, since that is exactly what the pre-fix path lacked.
+  A connector with multiplicity (`connection multi : Link[2] connect a.p to b.q;`) gives
+  `sys.multi end "multi" at <repl>:8:9: a connector of more than one object has no set of ends to
+  attach` — located too, so assert the `<repl>:line:col` on both. Follow either with `%eval 1 + 1` →
+  `= 2` to show the session survived.
+- **A connector naming itself at an end is `ErrCyclicSlot`, not a hang.** `connection link connect
+  link to a.p;` and a mutual pair (`connection here connect there to a.p;` /
+  `connection there connect here to a.p;`) both report a cycle.
+- **`flow f from a.p to b.p` and `binding bnd bind a.p = b.p` now parse as named declarations**
+  (pre-fix: `expected 'to' between flow ends` / `expected '{' or ';' after declaration`). They are
+  *not* connector usages for materialization purposes, so a named `flow` still renders
+  `f = <unknown>` and a named `binding` gets no `%slots` line at all. Don't plan an end-identity
+  assertion on them.
+- **Variant-interface routing is only partly reachable from the REPL.** `%slots` proves the
+  *materialization* side: in
+  `internal/core/runtime/testdata/conformance/ballandchain_variant_configuration.sysml` the selected
+  `engagementRingToBand = engagementRingToBandConnected (Instance ID: 24)` holds
+  `engagementRing.ringPort` / `band.ringPort`, not the disconnected variant's ports. But the
+  send/accept *routing* side cannot be driven: an action usage does not inherit its `action def`'s
+  nodes (`initialize action: no initial node found`), `%action` cannot resolve a nested action of a
+  selecting part usage (`symbol "Route::sysDirect::comm" not found`), and a sibling
+  `ref :>> link = link::direct;` in the same body does not bind the selection — the run still ends in
+  `accept deadlock in action comm: nothing can post the awaited message`. What *is* testable, and
+  worth doing, is the negative plus a positive control: a plain (non-variation)
+  `interface link connect outPort to inGood;` in an action body routes `send 100 via outPort` and
+  completes with `atGood = 100`, while the same model with an unrealized `variation interface`
+  returns the typed accept-deadlock instead of delivering to the wrong port or hanging. Treat
+  selected-variant routing as unit-test-only coverage.
+- **Cheap end-to-end fixture for the whole family:** `internal/core/runtime/testdata/conformance/`
+  `connector_end_identity.sysml`, `ballandchain_interface_connected.sysml` and
+  `…_disconnected.sysml`; each `.expected.json` has an `identical` / `distinct` array that names
+  exactly which end must be which port — the cheapest source of the IDs `%slots` should tie together.
+- Ball-and-chain reference numbers, for asserting the cost roll-up did not shift:
+  `totalCost = 1450.00`, `band` `bandCost`/`ringCost` `= 400.00`, `engagementRing`
+  `engagementRingCost`/`ringCost` `= 500.00`, `diamondCost = 550.00`, and
+  `engagementRingToBandConstraint: <constraint: satisfied>`.

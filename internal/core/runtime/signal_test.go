@@ -555,7 +555,7 @@ func TestRoutingHonorsTheSelectedVariantConnection(t *testing.T) {
 	} {
 		_, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test { }`))
 		if tt.selected != "" {
-			ctx.selectedVariants["link"] = tt.selected
+			ctx.selectedVariants[variantSelection{variation: "link"}] = tt.selected
 		}
 		ctx.postVia(conns, Message{SignalType: "Ping"}, "outPort")
 		var got []string

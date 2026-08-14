@@ -99,12 +99,28 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, sendingPort s
 func (ctx *Context) realizedConnections(conns []lower.Connection) []lower.Connection {
 	out := make([]lower.Connection, 0, len(conns))
 	for _, conn := range conns {
-		if conn.Variation != "" && ctx.selectedVariants[conn.Variation] != conn.Variant {
+		if conn.Variation != "" && ctx.selectedVariant(conn.Variation) != conn.Variant {
 			continue
 		}
 		out = append(out, conn)
 	}
 	return out
+}
+
+// selectedVariant answers what a variation is bound to. Routing has no owning
+// object, so owners disagreeing realizes no connection rather than the wrong one.
+func (ctx *Context) selectedVariant(variation string) string {
+	selected := ""
+	for key, variant := range ctx.selectedVariants {
+		if key.variation != variation {
+			continue
+		}
+		if selected != "" && selected != variant {
+			return ""
+		}
+		selected = variant
+	}
+	return selected
 }
 
 // post delivers a built message the way the send addressed it: routed through
