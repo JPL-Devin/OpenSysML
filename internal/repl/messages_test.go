@@ -29,6 +29,16 @@ func TestMessageQuality(t *testing.T) {
 		line: "%eval missing",
 		want: []string{"error: no declarations loaded (literals work, but feature references need declarations)"},
 	}, {
+		// A unit or a qualified name declarations would answer keeps the
+		// no-declarations message too.
+		name: "unresolved_unit_without_declarations",
+		line: "%eval 1.0 [m]",
+		want: []string{"error: no declarations loaded (literals work, but feature references need declarations)"},
+	}, {
+		name: "unresolved_qualified_name_without_declarations",
+		line: "%eval Demo::Vehicle::mass",
+		want: []string{"error: no declarations loaded (literals work, but feature references need declarations)"},
+	}, {
 		// One parser diagnostic, about the expression, with the caret treatment
 		// declarations get — not the recovery fallout of a namespace member.
 		name: "incomplete_expression",

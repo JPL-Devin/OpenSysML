@@ -341,7 +341,7 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 	// Resolve first part using resolver's qualified-name logic (handles global index)
 	currentSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, firstQN)
 	if !ok {
-		return Value{}, fmt.Errorf("unresolved first part of qualified name: %s", firstName.Text)
+		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedReference, firstName.Text)
 	}
 
 	// Walk remaining parts using model.LookupMember (spec requirement)

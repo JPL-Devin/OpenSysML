@@ -441,12 +441,21 @@ func (s *Session) evalWithoutDeclarations(expr string) []string {
 	if value != nil {
 		if ctx, err := emptyRuntime(s.budgets); err == nil {
 			_, evalErr := ctx.Eval(value)
-			if evalErr != nil && !errors.Is(evalErr, runtime.ErrUnresolvedReference) {
+			if evalErr != nil && !declarationsWouldAnswer(evalErr) {
 				return renderEvalError(expr, evalErr, len(exprPrefix))
 			}
 		}
 	}
 	return []string{"error: no declarations loaded (literals work, but feature references need declarations)"}
+}
+
+// declarationsWouldAnswer reports whether err is a failure declarations would
+// answer — a name, a unit or a value nothing declares — rather than the answer
+// of the expression itself.
+func declarationsWouldAnswer(err error) bool {
+	return errors.Is(err, runtime.ErrUnresolvedReference) ||
+		errors.Is(err, semantics.ErrNotAUnit) ||
+		errors.Is(err, runtime.ErrNoValue)
 }
 
 // renderEvalError reports an evaluation failure, giving one that carries the
