@@ -7,8 +7,9 @@ description: How to build, install, drive and record end-to-end GUI tests of the
 
 ## Build & install (always rebuild; a stale vsix looks identical)
 
+Run everything from the repo root (`AGENTS.md` §2: never `cd`):
+
 ```bash
-cd /home/ubuntu/repos/Systemica
 make build                # produces bin/sysml-lsp (the server the client discovers)
 make vscode-package       # npm ci + typecheck + esbuild + vsce -> editors/vscode/systemica-sysml.vsix
 DISPLAY=:0 code --no-sandbox --disable-gpu --install-extension editors/vscode/systemica-sysml.vsix --force
@@ -19,7 +20,7 @@ Restart VS Code after installing, otherwise the old extension host keeps running
 
 ```bash
 pkill -f "no-sandbox --disable-gpu /home"      # plain `pkill -f /usr/share/code` may miss it
-cd /home/ubuntu/repos/Systemica && DISPLAY=:0 nohup code --no-sandbox --disable-gpu . &
+DISPLAY=:0 nohup code --no-sandbox --disable-gpu "$PWD" &   # $PWD = repo root, the workspace to open
 DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz
 ```
 
