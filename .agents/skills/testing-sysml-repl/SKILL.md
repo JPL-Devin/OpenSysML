@@ -115,6 +115,55 @@ must be byte-identical, and stderr must stay empty for well-formed input.
   package's `pkgBonus`; `%state monitor` + `%advance 1` reaches `done` with `result = 5.00`. The
   scope-regression canary for states declared directly in a machine body.
 
+## Variations, variants and redefinition-inherited members
+
+This section describes the fixtures and rendering added by PR #122, so it applies only once
+that PR is on `main`.
+
+Fixtures live in `internal/core/runtime/testdata/conformance/`: `variation_attribute_selection.sysml`
+(`test::idealDiamond`), `variation_part_selection.sysml` (`test::electricVehicle`),
+`variation_interface_selection.sysml` (`test::nestedAssembly`), `variation_unselected.sysml`
+(`test::unconfiguredDiamond`) and `ballandchain_variant_configuration.sysml`. Each `.expected.json`
+is the cheapest source of the values `%slots` should print.
+
+- **Variant rendering.** A bound variation slot prints `name = variantName (Instance ID: n)` with the
+  variant's nested values indented under it (`engine = electric (Instance ID: 2)` / `power = 150.00`).
+  A plain `name = Instance(ID: n)` for a variation feature means nothing was bound.
+- **Assert a computed attribute, not just the variant name.** `curbMass = 1200.00` (= `900 + mass`)
+  distinguishes the `electric` variant (mass 300) from `petrol` (mass 200 → 1100); the variant label
+  alone would look the same if the wrong nested values were materialized.
+- **Always include a constraint that must be *violated*.** `variation_attribute_selection` asserts
+  both `isIdeal` (satisfied) and `notShallow` (violated). An implementation where
+  `x == x::variantName` returned true for any variant would still show `isIdeal: satisfied`, so the
+  violated one is the only real discriminator. `%slots` renders these inline as
+  `name: <constraint: satisfied|violated>` — note `%satisfy` answers
+  `no satisfaction assertion in the session` for `assert constraint` members, so use `%slots`.
+- **Error paths** (all are per-slot `<error: …>` lines, and the dependent computed slot repeats the
+  cause): unselected → `variation has no variant selected: <usage>.<feature>`; a name that is not a
+  variant → `not a variant of the variation: X is not a variant of Y (variants: a, b)`; two
+  selections (`= (cut::cutIdeal, cut::cutShallow)`) → `more than one variant selected: variation cut
+  selects 2 variants (cutIdeal, cutShallow)`. Assert the *variant list* is present — a message that
+  stops at the offending name is the weaker pre-fix shape. Follow each with `%eval 1 + 1` → `= 2` to
+  show the session survived, and wrap piped runs in `timeout` so a hang shows as non-zero exit.
+- **Redefinition merge canary.** A three-line model is enough:
+  `part base : Outer { part :>> inner { attribute :>> b = 7.0; } }` plus
+  `part derived :> base { part :>> inner { attribute :>> a = 1.0; } }` where `Outer` computes
+  `t = inner.b`. Fixed builds print `inner = {a = 1.00, b = 7.00}` and `t = 7.00`; a build that drops
+  inherited nested members prints only `a = 1.00` and
+  `t: <error: slot derived.t: member b not found in instance>` — a perfect A/B against the parent
+  commit. Name the part something other than `derived` if you want to avoid the (harmless)
+  `"derived" is a reserved keyword` warning.
+- **Unset scalar attributes render as `= Instance(ID: n)` / `(no features)`** (also `ringCost`,
+  `ringPort`). Pre-existing on main, unrelated to variation work — don't report it as a regression.
+- **Known limits, so don't plan around them:** `%slots` takes only the instantiated usage's own name
+  — `%slots test::electricVehicle::engine` answers `no instance of …`, and
+  `%eval test::electricVehicle.engine.power` answers `usage test::electricVehicle has no value`.
+  Nested traversal is only observable through the indented nested rendering of the top-level `%slots`.
+- **Careful with `clear` while recording:** typed at the `sysml>` prompt it is parsed as a
+  declaration (`1:1: error: expected a namespace member`) *and* drops previously created instances,
+  so the next `%slots` says `no instance of …`. Use `%clear` to reset the session, and clear the
+  screen before entering the REPL.
+
 ## Testing lexical scope of behavior bodies (declaring-scope changes)
 
 When a change claims "expressions in an action/state body now see their declaring scope", the same
