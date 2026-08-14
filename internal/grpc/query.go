@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -365,18 +366,29 @@ func (w *elementWalk) scope(s *symbols.Scope) {
 	}
 }
 
-// visit reports an element and walks what it declares. An element with no
-// qualified identity is walked through but not reported: the standard identifies
-// an element by `@id`, and it has none to be told apart or named by.
+// visit reports an element and walks what it declares. One with no queryable
+// identity is walked through but not reported: the standard identifies an
+// element by `@id`, and it has none to be told apart or named by.
 func (w *elementWalk) visit(sym *symbols.Symbol) {
 	if w.seen[sym] {
 		return
 	}
 	w.seen[sym] = true
-	if hasQualifiedIdentity(w.eval.sc.Index.GetFQN(sym)) {
+	if w.eval.identifies(sym) {
 		w.out = append(w.out, sym)
 	}
 	w.members(sym)
+}
+
+// identifies reports whether an element's qualified name is the `@id` the
+// standard's clients expect: a real qualified name that names this element back,
+// so a later query may use it as a scope.
+func (e *queryEval) identifies(sym *symbols.Symbol) bool {
+	fqn := e.sc.Index.GetFQN(sym)
+	if !hasQualifiedIdentity(fqn) {
+		return false
+	}
+	return slices.Contains(e.sc.Index.LookupQualified(fqn), sym)
 }
 
 // hasQualifiedIdentity reports whether a qualified name identifies an element.

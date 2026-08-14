@@ -612,6 +612,12 @@ segment (`Demo::`), so it is neither unique nor a name a `scope` could use. The
 standard identifies an element by `@id`, and such an element has none
 (`TestQueryOmitsElementsWithNoQualifiedIdentity`).
 
+Neither is one declared inside an action body — a branch of an `if`, a loop body —
+since the body is owned by no element and so names its declarations only locally
+(`step`, not `Demo::Drive::step`): that name identifies no element and could not
+be used as a `scope` (`TestQueryOmitsBodyLocalDeclarations`). An answered `@id` is
+always a qualified name that the model resolves back to that element.
+
 ### Queryable properties
 
 The set is closed and is the single source of truth in

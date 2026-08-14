@@ -1039,7 +1039,9 @@ the `@type` mapping and the comparison choices.
   (`type` reports the resolved type of the feature itself).
 - An element with no qualified identity — an unnamed `doc`, an anonymous usage or `connect` —
   is not answered at all: its qualified name has an empty segment, so it is neither a unique
-  `@id` nor a name a `scope` could use (`TestQueryOmitsElementsWithNoQualifiedIdentity`).
+  `@id` nor a name a `scope` could use (`TestQueryOmitsElementsWithNoQualifiedIdentity`). Nor is
+  one declared inside an action body — an `if` branch, a loop body — whose owner-less scope names
+  it only locally, so the name resolves to no element (`TestQueryOmitsBodyLocalDeclarations`).
 - A standard-library element restored from cache carries no declaration and may carry no symbol
   kind, so it reports no `isAbstract` and, for such a kind, no `@type` — it is answered, but
   never matches a `@type =` comparison.

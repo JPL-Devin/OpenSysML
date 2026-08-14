@@ -495,6 +495,43 @@ package Anon {
 	}
 }
 
+// TestQueryOmitsBodyLocalDeclarations verifies an element declared inside an
+// action body is not reported: the scope that declares it is owned by no symbol,
+// so its qualified name is a bare local one that names no element back.
+func TestQueryOmitsBodyLocalDeclarations(t *testing.T) {
+	const model = `
+package Demo {
+	action def Drive {
+		if true { action step; } else { action step; }
+	}
+	action step;
+}
+`
+	srv := mustNewService(t, 10)
+	parsed, err := srv.ParseFile(context.Background(), &pb.ParseFileRequest{
+		Source: &pb.ParseFileRequest_Content{Content: model},
+	})
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+	resp, err := srv.Query(context.Background(), &pb.QueryRequest{
+		ModelHash: parsed.ModelHash,
+		Query:     &pb.Query{},
+	})
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+
+	var ids []string
+	for _, element := range resp.Elements {
+		ids = append(ids, element.Id)
+	}
+	want := []string{"Demo", "Demo::Drive", "Demo::step"}
+	if !slices.Equal(ids, want) {
+		t.Errorf("element ids = %v, want %v", ids, want)
+	}
+}
+
 // TestMetamodelTypeNameCoversEveryKind verifies the mapping is total over the
 // kinds a parsed declaration can have.
 func TestMetamodelTypeNameCoversEveryKind(t *testing.T) {
