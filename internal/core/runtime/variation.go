@@ -71,7 +71,7 @@ func (ctx *Context) bindVariation(feat *EffectiveFeature, selection Value, owner
 		return Value{}, fmt.Errorf("%w: %s is not a variant of %s (%s)",
 			ErrNotAVariant, variant.Name, name, ctx.variantSummary(feat.Symbol))
 	}
-	return ctx.variantValue(variant, owner)
+	return ctx.variantValue(feat.Symbol, variant, owner)
 }
 
 // bindVariationOf binds a value read from a feature's declaration when that
@@ -119,7 +119,7 @@ func (ctx *Context) bindOneVariant(feat *EffectiveFeature, elements []Value, own
 // variantValue materializes a selected variant: the value it declares, or an
 // object of it carrying its nested values and connections. The object belongs to
 // the owner that selected it, materialized once for that owner.
-func (ctx *Context) variantValue(variant *symbols.Symbol, owner int64) (Value, error) {
+func (ctx *Context) variantValue(variation, variant *symbols.Symbol, owner int64) (Value, error) {
 	if value := semantics.VariantValue(variant); value != nil {
 		ec := NewEvalContext(ctx, declScope(variant))
 		val, err := ec.Eval(value)
@@ -128,7 +128,7 @@ func (ctx *Context) variantValue(variant *symbols.Symbol, owner int64) (Value, e
 		}
 		return val, nil
 	}
-	key := variantObject{owner: owner, variant: variant}
+	key := variantObject{owner: owner, variation: variation, variant: variant}
 	if id, ok := ctx.variantObjects[key]; ok {
 		if _, live := ctx.instances[id]; live {
 			return Value{Kind: ValVariant, Variant: variant, Instance: id}, nil
@@ -153,12 +153,14 @@ func (ctx *Context) variantAsValue(v Value) (Value, error) {
 		return v, nil
 	}
 	// A variant reached this way declares a value, so no object of it is needed.
-	return ctx.variantValue(v.Variant, 0)
+	return ctx.variantValue(nil, v.Variant, 0)
 }
 
-// variantObject keys the object a variant stands for by the owner that selected
-// it: two owners selecting one variant each have their own object.
+// variantObject keys the object a variant stands for by the selection that made
+// it: two owners, or two variation points read without an owner, each have their
+// own object.
 type variantObject struct {
-	owner   int64
-	variant *symbols.Symbol
+	owner     int64
+	variation *symbols.Symbol
+	variant   *symbols.Symbol
 }

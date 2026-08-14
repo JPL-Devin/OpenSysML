@@ -112,6 +112,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("chain_through_an_unselected_variation_part", testChainThroughAnUnselectedVariationPart)
 	t.Run("repeated_reads_of_a_variant_object", testRepeatedReadsOfAVariantObject)
 	t.Run("two_owners_selecting_one_variant", testTwoOwnersSelectingOneVariant)
+	t.Run("two_ownerless_selections_of_one_variant", testTwoOwnerlessSelectionsOfOneVariant)
+	t.Run("variant_outside_a_variation", testVariantOutsideAVariation)
 	t.Run("deep_specialization_chain_of_redefinitions", testDeepSpecializationChainOfRedefinitions)
 	t.Run("conflicting_redefinitions_at_several_levels", testConflictingRedefinitionsAtSeveralLevels)
 	t.Run("one_feature_valued_under_two_names", testOneFeatureValuedUnderTwoNames)
@@ -2887,13 +2889,14 @@ func testRepeatedReadsOfAVariantObject(t *testing.T) {
 	}`
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 	variant := oneSymbol(t, idx, "test::family::engine::electric")
-	first, err := ctx.variantValue(variant, 1)
+	variation := oneSymbol(t, idx, "test::family::engine")
+	first, err := ctx.variantValue(variation, variant, 1)
 	if err != nil {
 		t.Fatalf("variantValue: %v", err)
 	}
 	count := len(ctx.instances)
 	for i := 0; i < 10; i++ {
-		again, err := ctx.variantValue(variant, 1)
+		again, err := ctx.variantValue(variation, variant, 1)
 		if err != nil {
 			t.Fatalf("variantValue (read %d): %v", i+2, err)
 		}
@@ -2941,6 +2944,59 @@ func testTwoOwnersSelectingOneVariant(t *testing.T) {
 	}
 	if ids[0] == ids[1] {
 		t.Errorf("sedan and coupe share engine object %d", ids[0])
+	}
+}
+
+// testTwoOwnerlessSelectionsOfOneVariant: a variation read through its
+// declaration has no owning object, so two variation points selecting one
+// variant must still stand for an object each rather than share one.
+func testTwoOwnerlessSelectionsOfOneVariant(t *testing.T) {
+	src := `
+	package test {
+		part def Engine { attribute power; }
+		abstract part family {
+			variation part engine : Engine {
+				variant part electric : Engine { attribute :>> power = 150.0; }
+			}
+		}
+		part sedan :> family { part :>> engine = engine::electric; }
+		part coupe :> family { part :>> engine = engine::electric; }
+	}`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	variant := oneSymbol(t, idx, "test::family::engine::electric")
+	ids := make([]int64, 0, 2)
+	for _, variation := range []string{"test::sedan::engine", "test::coupe::engine"} {
+		val, err := ctx.variantValue(oneSymbol(t, idx, variation), variant, 0)
+		if err != nil {
+			t.Fatalf("%s: %v", variation, err)
+		}
+		ids = append(ids, val.Instance)
+	}
+	if ids[0] == ids[1] {
+		t.Errorf("sedan.engine and coupe.engine share object %d", ids[0])
+	}
+}
+
+// testVariantOutsideAVariation: `variant` on a member whose owner is not a
+// variation offers no choice, so the member stays an ordinary feature instead of
+// silently holding no value.
+func testVariantOutsideAVariation(t *testing.T) {
+	src := `
+	package test {
+		part def Widget { variant attribute misplaced = 1.0; }
+		part widget : Widget;
+	}`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "test::widget"))
+	if err != nil {
+		t.Fatalf("Instantiate(test::widget): %v", err)
+	}
+	slot, err := inst.GetSlot(ctx, "misplaced")
+	if err != nil {
+		t.Fatalf("widget.misplaced: %v", err)
+	}
+	if slot.Value.Kind != ValConst || slot.Value.Const.Real != 1.0 {
+		t.Errorf("widget.misplaced = %v, want 1", slot.Value)
 	}
 }
 
