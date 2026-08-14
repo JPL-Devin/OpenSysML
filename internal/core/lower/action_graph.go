@@ -452,6 +452,15 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 			Scope:   scope,
 		}
 	case *ast.AssignmentActionNode:
+		// A target naming more than one segment reaches outside the body, which no
+		// host binds; truncating it to the last segment would write another feature.
+		if qname := ast.AsQualifiedName(m.Target); qname != nil && len(qname.Parts) > 1 {
+			return Unsupported{
+				Description: "assignment to a qualified target",
+				Node:        m,
+				Scope:       scope,
+			}
+		}
 		return Assign{
 			Target: ast.SimpleName(m.Target),
 			Value:  m.Value,

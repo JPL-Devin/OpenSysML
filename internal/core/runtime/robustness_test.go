@@ -94,6 +94,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("empty_anonymous_action_body", testEmptyAnonymousActionBody)
 	t.Run("non_terminating_anonymous_do_body", testNonTerminatingAnonymousDoBody)
 	t.Run("behavior_performing_an_action_and_stating_a_body", testBehaviorPerformingAnActionAndStatingABody)
+	t.Run("qualified_assignment_target_in_a_state_effect", testQualifiedAssignmentTargetInAStateEffect)
 	t.Run("call_of_unhandled_operation", testCallOfUnhandledOperation)
 	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 	t.Run("perform_of_missing_action", testPerformOfMissingAction)
@@ -851,6 +852,28 @@ func testBehaviorPerformingAnActionAndStatingABody(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "stating a body of its own") {
 		t.Errorf("expected the report to name the conflict, got: %v", err)
+	}
+}
+
+// testQualifiedAssignmentTargetInAStateEffect: an assignment naming more than
+// one segment is reported rather than writing the last segment.
+func testQualifiedAssignmentTargetInAStateEffect(t *testing.T) {
+	err := stateRunErrorForSource(t, "Machine", `package test {
+		package other { attribute c : Integer = 0; }
+		state Machine {
+			attribute c : Integer = 0;
+			initial init;
+			state active;
+			final done;
+			init then active;
+			transition active to done do assign other::c := 1;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected a qualified assignment target to be reported")
+	}
+	if !strings.Contains(err.Error(), "assignment to a qualified target") {
+		t.Errorf("expected the report to name the unsupported target, got: %v", err)
 	}
 }
 

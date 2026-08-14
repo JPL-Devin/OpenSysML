@@ -305,6 +305,23 @@ package mine {
 	}
 }
 
+// A calc computing its result by assigning its output states a body too, so the
+// built-in of the same name does not answer in its place.
+func TestLibraryFunctionDoesNotHijackAnOutputAssignedInABody(t *testing.T) {
+	ctx, idx := contextForSource(t, `package RealFunctions {
+	calc sqrt { in x : Real; out r : Real; r = 42.0; }
+}`)
+
+	sym := lookupOne(t, idx, "RealFunctions::sqrt")
+	if _, ok := ctx.libraryFunctionFor(sym); ok {
+		t.Fatalf("a declaration assigning its output dispatched to the built-in implementation")
+	}
+	got, err := ctx.InvokeCalc(sym, []Value{constReal(25)}, nil)
+	if err != nil || got.Const.Real != 42 {
+		t.Fatalf("InvokeCalc(RealFunctions::sqrt, 25.0) = %+v, %v; want the declared body", got, err)
+	}
+}
+
 // A library symbol loaded from the library index carries a kind and no
 // declaration, and dispatches on that kind.
 func TestLibraryFunctionDispatchByCachedSymbol(t *testing.T) {
