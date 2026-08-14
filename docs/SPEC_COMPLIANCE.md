@@ -950,6 +950,14 @@ guaranteed to be interpreted identically by an unrelated SysML RDF tool.
   positional end is reported as unsupported by the RDF export rather than written back
 - a time trigger carrying a unit (`accept after 5 [s]`) reports `time duration must be
   constant, got quantity` when the transitions are scheduled; the unitless form waits
+- the message bus identifies a send's addressee and a `via` send's port by simple name, so
+  two unconnected parts owning ports of the same name see each other's port-routed traffic;
+  an accept still takes only what reached its own port, never a broadcast
+- a flow whose ends name no feature to carry (`flow a to b;` between two action nodes) and
+  a flow whose end names something that is not a node of the action are reported when the
+  graph is built: the notation needs a payload or a pin at each end
+- a nested action node written inside a loop or branch body is lowered as unsupported and
+  reported when reached; only statements execute in those bodies
 - the Open-MBEE corpus models still report structural diagnostics outside this scope —
   conjugated connection ends (`end spacePort : ~CommunicationPort`), `timeslice item item1`,
   `end ;`, and unresolved library references (`Scalarattributes::String`, `start`,

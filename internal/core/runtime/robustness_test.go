@@ -676,9 +676,8 @@ func testDeferOfNonDeferrableTrigger(t *testing.T) {
 	}
 }
 
-// testStateTransitionWithoutATarget: the parser reports a transition missing its
-// target as an error node, so only a hand-built machine can carry one; lowering
-// it reports rather than dereferencing the absent target.
+// testStateTransitionWithoutATarget: a transition with no target names no edge,
+// so lowering reports it rather than dereferencing the absent target.
 func testStateTransitionWithoutATarget(t *testing.T) {
 	idx := symbols.NewIndex()
 	resolver := resolve.New(idx)
