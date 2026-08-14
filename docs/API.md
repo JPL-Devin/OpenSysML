@@ -484,14 +484,6 @@ Standard library is embedded in the binary using Go `embed.FS`.
 
 ---
 
-### `internal/core/deps`
-
-Dependency resolution (local and git sources).
-
-**Status:** 🚧 In progress
-
----
-
 ## Frontend Packages
 
 ### `internal/lsp`

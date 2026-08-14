@@ -28,7 +28,7 @@ Statement coverage, measured today with `go test -cover ./...`:
 | Package | Coverage | Package | Coverage |
 |---|---|---|---|
 | `internal/core/format` | 96.6% | `internal/core/model` | 79.5% |
-| `internal/core/source` | 90.9% | `internal/core/deps` | 76.4% |
+| `internal/core/source` | 90.9% | | |
 | `internal/core/lexer` | 87.7% | `internal/lsp` | 72.4% |
 | `internal/core/libs` | 87.8% | `internal/core/lower` | 62.1% |
 | `internal/repl` | 86.9% | `internal/core/symbols` | 62.0% |
