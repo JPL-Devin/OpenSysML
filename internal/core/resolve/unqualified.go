@@ -160,10 +160,8 @@ func (r *Resolver) lookupImports(scope *symbols.Scope, name string) (*symbols.Sy
 	return nil, false
 }
 
-// importsOf is importsOf memoized. The tree is immutable once parsed, so the
-// imports a node declares are found once and kept: an unqualified name is looked
-// up against them for every reference in the namespace, and a namespace holds as
-// many references as it has declarations.
+// importsOf is importsOf memoized: the tree is immutable once parsed, and every
+// reference in a namespace looks its name up against that namespace's imports.
 func (r *Resolver) importsOf(node ast.Node) []*ast.Import {
 	if node == nil {
 		return nil

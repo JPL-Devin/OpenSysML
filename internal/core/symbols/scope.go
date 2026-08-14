@@ -63,9 +63,8 @@ func (s *Scope) AddChild(c *Scope) {
 	}
 }
 
-// ChildFor returns the child scope the given declaration owns, or nil when the
-// declaration owns no scope here. It is the first such child, as two children of
-// one node are the same body scoped twice.
+// ChildFor returns the child scope the given declaration owns, or nil. It is the
+// first such child, as two children of one node are one body scoped twice.
 func (s *Scope) ChildFor(node ast.Node) *Scope {
 	if node == nil {
 		return nil

@@ -355,10 +355,8 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 		return // No relationships
 	}
 
-	// The definition or usage that declares sym owns the scope sym is declared
-	// in. A scope with no owning symbol is the document root or an internal
-	// scope, whose members redefine nothing: skip rather than report a finding
-	// about an owner that cannot be named.
+	// sym is declared in the scope its owning definition or usage owns; a scope
+	// with no owner is the root or internal, and redefines nothing.
 	var owner *symbols.Symbol
 	if sym.OwnerScope != nil {
 		owner = sym.OwnerScope.Owner()
@@ -392,9 +390,8 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			continue
 		}
 
-		// A member is declared by the scope it names as its owner, so where the
-		// redefined member was declared says whether owner declares it itself or
-		// inherits it from something it specializes.
+		// A member's OwnerScope is where it was declared: owner's own scope if
+		// owner declares it, a supertype's if owner inherits it.
 		inherited := false
 		locallyDeclared := owner.Scope != nil && redefined.OwnerScope == owner.Scope
 		if !locallyDeclared {

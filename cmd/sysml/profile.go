@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// Profiling flags. A profile is about a whole run, so it is started once the
-// command line is understood and written when the run ends, whatever it decided.
+// Profiling flags. A profile covers a whole run, so it starts once the command
+// line is understood and is written when the run ends.
 var (
 	cpuProfilePath string
 	memProfilePath string
@@ -18,9 +18,8 @@ var (
 )
 
 // startProfiling begins the profiles the command line asked for and returns the
-// function that ends them, which writes what they recorded. Nothing was asked
-// for is not an error: the returned function is then a no-op, so a run that
-// profiles nothing takes the same path as one that does.
+// function that ends them, writing what they recorded. Asking for none is not an
+// error: the returned function is then a no-op.
 func startProfiling() (func(), error) {
 	started := time.Now()
 	var ends []func()
@@ -78,13 +77,10 @@ func startProfiling() (func(), error) {
 	return stop, nil
 }
 
-// reportMemStats reports what the run cost: the time it took, the memory it
-// allocated over its whole course, and the memory it took from the operating
-// system. Total allocation is the pressure the run put on the collector; what
-// the run took from the OS is a floor on its peak resident size, which is what
-// bounds the model a machine can load. Neither is the live size of the loaded
-// model: by the time a run ends the model is unreachable, so what a model costs
-// while held is measured by the benchmarks, which keep it alive.
+// reportMemStats reports the time the run took, what it allocated in total (the
+// pressure it put on the collector) and what it took from the OS (a floor on its
+// peak resident size). Neither is the live size of the model, which is
+// unreachable by the time a run ends; the benchmarks measure that.
 func reportMemStats(w io.Writer, elapsed time.Duration) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -93,8 +89,7 @@ func reportMemStats(w io.Writer, elapsed time.Duration) {
 		m.NumGC, humanBytes(m.Sys))
 }
 
-// humanBytes writes a byte count the way a reader compares two of them: in the
-// largest unit that leaves a number with a whole part.
+// humanBytes writes a byte count in the largest unit that leaves a whole part.
 func humanBytes(n uint64) string {
 	const unit = 1024
 	if n < unit {

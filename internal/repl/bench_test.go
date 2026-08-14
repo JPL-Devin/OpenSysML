@@ -7,36 +7,26 @@ import (
 	"testing"
 )
 
-// Benchmarks over synthetic models of a stated size, so that what loading and
-// running a large model costs can be read as a rate rather than as one number:
-// a cost that grows with the square of the model is visible only across sizes.
+// Benchmarks over synthetic models of a stated size: a super-linear cost is
+// visible only across sizes. See docs/PERFORMANCE.md.
 //
 //	go test ./internal/repl -run '^$' -bench . -benchmem
-//	go test ./internal/repl -run '^$' -bench BenchmarkLoadModel -memprofile heap.out
 //
-// Each benchmark reports two figures beyond the standard ones:
-//
-//	B/element   memory allocated per model element, which should not grow with
-//	            the size of the model
-//	live-B/op   memory the loaded model holds once loading is done, measured with
-//	            the session still reachable, which is what bounds the model a
-//	            machine can hold at once
+// Beyond the standard figures, B/element is memory allocated per model element,
+// and live-B/op is memory the loaded model holds with the session reachable.
 const benchElementsPerPart = 5 // part def, calc def, action def, state machine, part usage
 
 // modelSizes are the element counts the load benchmarks run at. They double, so
 // a super-linear cost shows as a per-element figure that grows with size.
 var modelSizes = []int{50, 200, 800}
 
-// emptyModel is a model with no elements, whose load cost is what a session
-// costs before it holds anything: the standard library it indexes to resolve
-// names against. Reading the figures for a model of n elements against this one
-// separates what the model costs from what the session costs.
+// emptyModel has no elements, so its load cost is what a session costs before it
+// holds anything: the standard library it indexes names against.
 const emptyModel = "package BenchModel {\n    import ScalarValues::*;\n}\n"
 
-// syntheticModel returns a model of parts times the repeating group of a part
-// definition, a calculation, an action, a state machine and a part usage of it.
-// Each part refers to the next, so name resolution has work to do that grows
-// with the model rather than a model of unrelated declarations.
+// syntheticModel returns parts repetitions of a part definition, a calculation,
+// an action, a state machine and a part usage. Each part refers to the next, so
+// name resolution has work that grows with the model.
 func syntheticModel(parts int) string {
 	var b strings.Builder
 	b.WriteString("package BenchModel {\n    import ScalarValues::*;\n")
@@ -80,9 +70,8 @@ func syntheticModel(parts int) string {
 	return b.String()
 }
 
-// loadModel loads src into a fresh session, failing the benchmark if the model
-// does not analyse cleanly: a model that errors out skips the later passes, so
-// its cost is not the cost of loading a model.
+// loadModel loads src into a fresh session, failing if it does not analyse
+// cleanly, since an erroring model skips the later passes.
 func loadModel(tb testing.TB, src string) *Session {
 	tb.Helper()
 	sess := NewSession()
@@ -94,7 +83,7 @@ func loadModel(tb testing.TB, src string) *Session {
 }
 
 // liveHeap returns the reachable heap, collecting first so that what it reports
-// is what is held rather than what has not yet been collected.
+// is what is held.
 func liveHeap() uint64 {
 	runtime.GC()
 	var m runtime.MemStats
@@ -136,18 +125,15 @@ func BenchmarkLoadModel(b *testing.B) {
 	}
 }
 
-// benchmarkRun measures one run over an already-loaded model, at each model
-// size: what a single run costs should be about the behavior it runs, so a
-// figure that grows with the size of the surrounding model is a cost the run
-// pays for the model rather than for itself.
+// benchmarkRun measures one run over an already-loaded model, at each model size:
+// a figure that grows with model size is a cost the run pays for the model.
 func benchmarkRun(b *testing.B, run func(b *testing.B, sess *Session)) {
 	for _, parts := range modelSizes {
 		src := syntheticModel(parts)
 		b.Run(fmt.Sprintf("elements=%d", parts*benchElementsPerPart), func(b *testing.B) {
 			sess := loadModel(b, src)
-			// The session builds its runtime, and loads the standard library into
-			// its index, when it is first run: that is a cost of the session, not
-			// of a run, so it is paid before the measurement starts.
+			// The first run builds the session's runtime and indexes the standard
+			// library, a cost of the session rather than of a run.
 			run(b, sess)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
