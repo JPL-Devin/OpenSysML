@@ -1019,6 +1019,22 @@ func (idx *Index) LookupDirectChildren(prefix string) []*Symbol {
 	return out
 }
 
+// TopLevelSymbols returns every symbol registered at the root of the index:
+// the library's top-level packages and each document's top-level declarations.
+func (idx *Index) TopLevelSymbols() []*Symbol {
+	var out []*Symbol
+	seen := make(map[*Symbol]bool)
+	for _, fqn := range idx.childKeys("") {
+		for _, sym := range idx.fqn[fqn] {
+			if !seen[sym] {
+				seen[sym] = true
+				out = append(out, sym)
+			}
+		}
+	}
+	return out
+}
+
 // LookupDirectChildrenFrom is LookupDirectChildren as seen from the namespace
 // named by fromFQN ("" meaning from outside): children that only prefix's own
 // private imports brought in are dropped (KerML 8.2.3.3).
