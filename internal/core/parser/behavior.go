@@ -107,8 +107,10 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 			// - action <id>; = behavioral node (reference)
 			// Check for typing colon OR declaration-like body content
 			tok1 := p.peekN(1)
-			// `action accept …`: an accept node naming no node of its own.
-			if tok1.Kind == lexer.Keyword && tok1.KeywordID == "accept" {
+			// An accept node, however it is identified: `action accept …`
+			// naming no node of its own, `action nm accept …`, and the short
+			// name and name both.
+			if p.atAcceptNode() {
 				body.add(p.parseBodyMember())
 				continue
 			}
@@ -2243,8 +2245,9 @@ func (p *Parser) atAcceptNode() bool {
 	default:
 		return false
 	}
-	// `action <name> accept …`, and `action <shortName> name accept …`.
-	for i := 1; i < 5; i++ {
+	// `action <name> accept …`, and `action <shortName> name accept …`, whose
+	// identification spends four tokens before the keyword.
+	for i := 1; i <= 5; i++ {
 		tok := p.peekN(i)
 		if tok.Kind == lexer.Keyword {
 			return tok.KeywordID == "accept"

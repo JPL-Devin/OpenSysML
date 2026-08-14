@@ -100,3 +100,32 @@ func TestAcceptActionAST(t *testing.T) {
 		}
 	}
 }
+
+// An accept node may be identified by a short name and a name both
+// (SysML.xtext Identification), which the accept lookahead must see past.
+func TestAcceptNodeWithShortNameAndName(t *testing.T) {
+	p := New(source.New("test", []byte(`package test {
+		item def Scene;
+		action takePicture {
+			action <s> shutter accept scene : Scene;
+		}
+	}`)))
+	file := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %v", p.Diagnostics)
+	}
+
+	pkg := file.Members[0].(*ast.Membership).Member.(*ast.Package)
+	action := pkg.Members[1].(*ast.Membership).Member.(*ast.Usage)
+	node := action.Members[0].(*ast.Membership).Member.(*ast.Usage)
+	if node.Ident.ShortName != "s" || node.Ident.Name != "shutter" {
+		t.Fatalf("accept node identified as <%s> %q", node.Ident.ShortName, node.Ident.Name)
+	}
+	payload, ok := node.Members[0].(*ast.Membership).Member.(*ast.Usage)
+	if !ok {
+		t.Fatalf("expected a payload parameter, got %T", node.Members[0].(*ast.Membership).Member)
+	}
+	if !payload.IsAccept || payload.Ident.Name != "scene" {
+		t.Errorf("expected the accept payload `scene`, got %q (IsAccept=%v)", payload.Ident.Name, payload.IsAccept)
+	}
+}
