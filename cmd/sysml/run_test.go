@@ -247,6 +247,51 @@ func TestJSONReport(t *testing.T) {
 	}
 }
 
+// warningModel analyses cleanly but states an expose where the spec constrains
+// one, which analysis reports as a warning rather than an error.
+const warningModel = `package Rover {
+    constraint MassBudget { assert 180.0 <= 200.0; }
+    part p;
+    view def V { expose Rover::**; }
+}
+`
+
+// TestJSONReportsWarningsOfACleanModel checks that what analysis found is
+// reported as data whatever was checked, so a caller parsing the report reads
+// the warnings the printed run shows.
+func TestJSONReportsWarningsOfACleanModel(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, warningModel, "-constraint", "Rover::MassBudget", "-json")
+	if got.status != 0 {
+		t.Fatalf("exit status = %d, want 0 for a model whose findings are warnings\n%s", got.status, got.output())
+	}
+	var report struct {
+		Diagnostics []struct {
+			Severity string `json:"severity"`
+			Message  string `json:"message"`
+		} `json:"diagnostics"`
+	}
+	if err := json.Unmarshal([]byte(got.stdout), &report); err != nil {
+		t.Fatalf("stdout is not the reported JSON: %v\n%s", err, got.stdout)
+	}
+	if len(report.Diagnostics) == 0 {
+		t.Fatalf("report carries no warning of a model analysis warned about:\n%s", got.stdout)
+	}
+	if report.Diagnostics[0].Severity != "warning" {
+		t.Errorf("diagnostic severity = %q, want warning", report.Diagnostics[0].Severity)
+	}
+}
+
+// TestAdvanceWithoutStateMachine checks that -advance with nothing to run it for
+// is a misuse reported as such, rather than silently having no effect.
+func TestAdvanceWithoutStateMachine(t *testing.T) {
+	binary := buildCLI(t)
+
+	wantReport(t, check(t, binary, behaviorModel, "-advance", "10"), 2, "-advance is the time a state machine runs for")
+	wantReport(t, check(t, binary, behaviorModel, "-advance", "10", "-constraint", "Mission::Fall"), 2, "name one, as -state")
+}
+
 // TestJSONWithoutCheck checks that -json alone is a misuse reported as such,
 // rather than starting a prompt a build step cannot answer.
 func TestJSONWithoutCheck(t *testing.T) {

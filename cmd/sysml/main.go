@@ -136,6 +136,7 @@ func main() {
 			os.Exit(2)
 		}
 		modelChecks.advance = duration
+		modelChecks.advanceGiven = true
 	}
 
 	if debugMode && quietMode {

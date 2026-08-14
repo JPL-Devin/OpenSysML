@@ -461,8 +461,9 @@ $ sysml -state MyModel::Monitor -advance 15 checks.sysml
 ```
 
 A state machine only takes its initial transition unless `-advance` says how much
-simulated time to run it for. An action that stopped short of completing — a
-deadlock, or the step budget reached — is reported as a check that was never
+simulated time to run it for, and `-advance` with no `-state` to run is reported as
+a misuse rather than silently dropped. An action that stopped short of completing
+— a deadlock, or the step budget reached — is reported as a check that was never
 decided, i.e. status 2, since it produced no outputs to judge.
 
 ### Machine-Readable Results
@@ -506,9 +507,10 @@ exit=1
 
 `status` is the worst verdict reached and `exit` the status the process exits
 with. A calculation's or a machine's values are reported as `values` entries, the
-findings of analysis as `diagnostics`, and whatever stopped a check from being
-made as `errors` — so the whole document goes to stdout and nothing needs to be
-read off stderr.
+findings of analysis as `diagnostics` — the warnings of a model that analyses
+cleanly as well as the errors of one that does not — and whatever stopped a check
+from being made as `errors`, so the whole document goes to stdout and nothing
+needs to be read off stderr.
 
 ---
 

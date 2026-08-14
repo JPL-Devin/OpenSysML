@@ -31,13 +31,15 @@ type checks struct {
 	actions      stringSlice
 	states       stringSlice
 	advance      float64
+	advanceGiven bool
 	jsonOut      bool
 }
 
 // requested reports whether checking mode was asked for rather than a prompt.
-// -json checks nothing itself, but is included so its misuse is reported.
+// -json and -advance check nothing themselves, but are included so their misuse
+// is reported rather than leaving a script at a prompt it cannot answer.
 func (c *checks) requested() bool {
-	return c.validate || c.jsonOut || len(c.instantiate) > 0 || len(c.constraints) > 0 ||
+	return c.validate || c.jsonOut || c.advanceGiven || len(c.instantiate) > 0 || len(c.constraints) > 0 ||
 		len(c.requirements) > 0 || len(c.satisfy) > 0 || len(c.calcs) > 0 ||
 		len(c.actions) > 0 || len(c.states) > 0
 }
@@ -91,6 +93,10 @@ func (t *satisfyTargets) tookNoValue() bool {
 func runChecks(files []string, exprs []string, c checks) int {
 	rep := newReporter(c.jsonOut)
 
+	if c.advanceGiven && len(c.states) == 0 {
+		rep.failed("-advance is the time a state machine runs for; name one, as -state <name>")
+		return rep.finish()
+	}
 	if !c.checksOnly() {
 		rep.failed("-json reports a check; name one, as -validate or -constraint <name>")
 		return rep.finish()
@@ -121,8 +127,11 @@ func runChecks(files []string, exprs []string, c checks) int {
 		}
 		rep.info(output)
 	}
+
+	// What analysis found is reported as data whatever was checked, so a caller
+	// parsing the report reads the warnings the printed load output carries.
+	rep.diags(sess.LocatedDiagnostics())
 	if c.validate {
-		rep.diags(sess.LocatedDiagnostics())
 		rep.info([]string{fmt.Sprintf("✓ %s: no errors", strings.Join(files, ", "))})
 	}
 
