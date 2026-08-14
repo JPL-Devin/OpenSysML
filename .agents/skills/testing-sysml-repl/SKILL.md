@@ -1117,6 +1117,57 @@ revision. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
 over a pipe is not visible in the video and should be reported as weaker evidence.
 
+**Never type `clear` at the `sysml>` prompt while recording.** It is submitted as SysML, not run by
+the shell, so it leaves an unresolved session error and every later submission gains a
+`note: an earlier session error is unresolved, so deeper checks may not have run here` line that
+looks like a defect in the frame. Clear the screen *before* starting the REPL (`clear; ./bin/sysml`),
+scroll instead with `shift+PageUp`/`shift+PageDown` when long output (`%builtins`, `%help`) runs off
+the top, or quit and restart the REPL for a clean screen.
+
+## Tab completion and anything else readline-driven
+
+`cmd/sysml` installs an `AutoComplete` on the readline config, and **readline disables completion
+when the terminal reports a width of 0** — which is what a plain pipe reports. So
+`printf '%%bui\t\n' | ./bin/sysml` proves nothing about completion: the TAB is just swallowed.
+Two ways to drive it:
+
+1. **Konsole** (what belongs in a recording): send TAB with the computer tool's
+   `key: "Tab"`, and discard a line with `ctrl+u` between cases — note `ctrl+u` kills only to the
+   left of the cursor, so add `ctrl+k` first if the cursor is mid-line.
+2. **A pty harness** (for discovering expected values quickly, off camera): fork a pty, set the
+   window size, then write keystrokes. The essential part is the ioctl:
+
+   ```python
+   pid, fd = pty.fork()                     # child: os.execv("./bin/sysml", [...])
+   fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+   os.write(fd, b"%eval sqr\t")             # then read fd after a short settle
+   ```
+
+   The captured stream is full of `ESC[2K` redraws; grep the last redraw of the prompt line rather
+   than trying to read it as plain text.
+
+Completion cases worth covering, and their shapes: a unique meta-command prefix completes in place
+(`%bui`+TAB → `%builtins`), an ambiguous one lists on the second TAB
+(`%s`+TAB TAB → `%satisfy %save %search %slots %state %step %stop`), names after `%eval` come from
+session declarations, builtin function names and the library (`sqr`→`sqrt`), a qualified prefix
+offers **one segment at a time** (`ScalarValues::`+TAB lists only that package's members, never the
+whole library), and `%load`/`%save` complete filesystem paths with a trailing `/` on directories.
+Adversarial cases that all behaved correctly and are cheap to re-check: TAB with the cursor mid-line
+must keep the text to its right, TAB on an empty line lists (capped) names without hanging,
+completion into a nonexistent directory inserts nothing, and completion still works on a line long
+enough to wrap several terminal rows.
+
+## Where the prompt keeps its history
+
+History is `$XDG_STATE_HOME/sysml/history` when that variable is set (directory created 0700, file
+0600), else `~/.sysml_history`; older builds used `$TMPDIR/sysml-repl.history`, so a stale
+`/tmp/sysml-repl.history` may be left over from a contrast binary — delete it before asserting "the
+new build writes nothing to /tmp". Reuse across runs is testable without a second human: run the
+REPL, `%quit`, start it again and press `Up`. An unwritable location must degrade quietly (prompt
+starts, no warning, history in memory only) — exercise it with `XDG_STATE_HOME` pointing at a
+`chmod 500` directory *and* at a regular file, since those fail in different places
+(`MkdirAll` vs `OpenFile`).
+
 ## Connector usages and their ends (PR #132)
 
 This section describes runtime materialization of connector usages, so it applies once that PR is
