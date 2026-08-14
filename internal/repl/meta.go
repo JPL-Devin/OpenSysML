@@ -605,6 +605,11 @@ func (w *slotWalk) emit(lines []string, line string) []string {
 func (w *slotWalk) elided(feat *runtime.EffectiveFeature, depth int) (string, bool) {
 	held := w.ctx.CompositeTypeOf(feat)
 	if held == nil {
+		// A variation is materialized from the variant it selects, so the depth
+		// bound applies to it too.
+		if w.ctx.IsVariationFeature(feat) && depth >= maxSlotDepth {
+			return feat.Name, true
+		}
 		return "", false
 	}
 	if depth >= maxSlotDepth || w.onPath[held] {
@@ -633,10 +638,11 @@ func nestedInstances(ctx *runtime.Context, slot *runtime.Slot) []*runtime.Instan
 
 	var out []*runtime.Instance
 	for _, val := range values {
-		if val.Kind != runtime.ValInstance {
+		id, ok := val.Object()
+		if !ok {
 			continue
 		}
-		if nested, ok := ctx.Instance(val.Instance); ok {
+		if nested, ok := ctx.Instance(id); ok {
 			out = append(out, nested)
 		}
 	}
@@ -711,6 +717,16 @@ func formatValue(val runtime.Value) string {
 		return formatElements(val.Sequence.Elements())
 	case runtime.ValSet:
 		return fmt.Sprintf("Set{%d}", val.Set.Size())
+	case runtime.ValVariant:
+		// A selected variation shows the variant chosen, and the object it
+		// materialized when it has one.
+		if val.Variant == nil {
+			return "<unknown variant>"
+		}
+		if val.Instance != 0 {
+			return fmt.Sprintf("%s (Instance ID: %d)", val.Variant.Name, val.Instance)
+		}
+		return val.Variant.Name
 	case runtime.ValQuantity:
 		// A magnitude is a number like any other in a result table, so it is
 		// rendered as a bare one; the value itself keeps its full precision.

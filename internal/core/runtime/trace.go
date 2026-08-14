@@ -268,6 +268,11 @@ func FormatTraceValue(v Value) string {
 		// A unit-carrying value is rendered as the REPL renders it, with the
 		// magnitude in the trace's own convention for numbers.
 		return v.Quantity.TextWithMagnitude(formatConst(v.Quantity.Num))
+	case ValVariant:
+		if v.Variant == nil {
+			return v.Kind.String()
+		}
+		return v.Variant.Name
 	case ValExpr:
 		return fmt.Sprintf("expr(%s)", TraceLabel(v.Expr))
 	default:

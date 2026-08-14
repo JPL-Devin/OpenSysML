@@ -273,6 +273,13 @@ func ValueToProto(val runtime.Value) *pb.Value {
 			}
 		}
 		return &pb.Value{Kind: &pb.Value_Sequence{Sequence: &pb.ValueSequence{Elements: pbElements}}}
+	case runtime.ValVariant:
+		// The wire Value has no variant form: the object a selected variant
+		// materialized is reported by identity, a valueless selection as unsupported.
+		if id, ok := val.Object(); ok {
+			return &pb.Value{Kind: &pb.Value_InstanceId{InstanceId: id}}
+		}
+		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: variant selection"}}
 	case runtime.ValQuantity:
 		// The wire Value has no magnitude-and-unit form, and sending the bare
 		// magnitude would drop the unit, so the value is reported unsupported.

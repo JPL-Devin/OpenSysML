@@ -786,6 +786,8 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 		t.Fatalf("invalid String value type: %T", ev.Value)
 	case "Null":
 		return Value{Kind: ValNull}
+	case "Variant":
+		t.Fatalf("a variant is named by the model, so it cannot be built from a case value")
 	case "Quantity":
 		v, ok := ev.Value.(float64)
 		if !ok {
@@ -839,6 +841,15 @@ func validateValue(t *testing.T, name string, expected ExpectedValue, actual Val
 		want := expected.Value.(string)
 		if actual.Str != want {
 			t.Errorf("%s: value = %q, want %q", name, actual.Str, want)
+		}
+	case "Variant":
+		if actual.Kind != ValVariant || actual.Variant == nil {
+			t.Errorf("%s: type = %v, want Variant", name, actual.Kind)
+			return
+		}
+		want := expected.Value.(string)
+		if actual.Variant.Name != want {
+			t.Errorf("%s: variant = %q, want %q", name, actual.Variant.Name, want)
 		}
 	case "Quantity":
 		if actual.Kind != ValQuantity || actual.Quantity == nil {

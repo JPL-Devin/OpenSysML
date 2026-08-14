@@ -56,7 +56,7 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 		// Fold constant defaults eagerly. A default that is not constant may read
 		// sibling slots of this very instance, so it is left to GetSlot, which
 		// evaluates it against the finished instance.
-		if feat.DefaultValue != nil && isScalarFeature(feat) {
+		if feat.DefaultValue != nil && isScalarFeature(feat) && !ctx.model.IsVariationFeature(feat.Symbol) {
 			if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 				slot.Value = Value{Kind: ValConst, Const: semVal}
 				slot.Materialized = true
@@ -91,6 +91,25 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 
 	// If already materialized, return
 	if slot.Materialized {
+		return slot, nil
+	}
+
+	// A variation holds the variant it was bound to, and nothing until it is
+	// bound: it classifies its variants abstractly, so it is no object of itself.
+	if ctx.model.IsVariationFeature(slot.Feature.Symbol) {
+		if slot.Feature.DefaultValue == nil {
+			return nil, fmt.Errorf("%w: %s.%s", ErrVariationUnselected, inst.Type.Name, name)
+		}
+		val, err := ctx.evalSlotDefault(inst, slot, name)
+		if err != nil {
+			return nil, err
+		}
+		bound, err := ctx.bindVariation(slot.Feature, val)
+		if err != nil {
+			return nil, fmt.Errorf("slot %s.%s: %w", inst.Type.Name, name, err)
+		}
+		slot.Value = bound
+		slot.Materialized = true
 		return slot, nil
 	}
 
@@ -176,6 +195,11 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 // object graph can decide whether to descend before descending.
 func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
 	if feat.DefaultValue != nil && (isScalarFeature(feat) || feat.Type == nil) {
+		return nil
+	}
+	// A variation is materialized from the variant it is bound to, never from
+	// itself: it is an abstract classifier of its variants.
+	if ctx.model.IsVariationFeature(feat.Symbol) {
 		return nil
 	}
 	if feat.Symbol != nil && isCompositeUsage(feat.Symbol) && len(declMembers(feat.Symbol.Decl)) > 0 {

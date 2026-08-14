@@ -182,6 +182,8 @@ Supported types:
 - `String`: JSON string
 - `Null`: JSON null
 - `Quantity`: JSON number, with the `unit` the magnitude is written in
+- `Variant`: the name of the variant a variation feature is bound to, as a JSON
+  string (`{"type": "Variant", "value": "cutIdeal"}`)
 
 In place of a value, `error` states the text producing that value must fail with,
 for a slot or result whose contract is a diagnostic (`{"error": "not a

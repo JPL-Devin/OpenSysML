@@ -248,6 +248,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		}
 		e.flags(subject, []boolProperty{
 			{"isAbstract", n.IsAbstract},
+			{"isVariation", n.IsVariation},
+			{"isVariant", n.IsVariant},
 			{"isReference", n.IsReference},
 			{"isAll", n.IsAll},
 			{"isEnd", n.IsEnd},

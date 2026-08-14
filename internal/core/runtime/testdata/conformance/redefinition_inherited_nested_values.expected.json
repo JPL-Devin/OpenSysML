@@ -1,0 +1,14 @@
+{
+  "type": "instance",
+  "instantiate": "test::leaf",
+  "libraries": true,
+  "slots": {
+    "t": {"type": "Real", "value": 7.0}
+  },
+  "constraints": {
+    "keepsBaseValue": true,
+    "innermostWins": true,
+    "keepsMiddleValue": true,
+    "sumsInheritedValues": true
+  }
+}

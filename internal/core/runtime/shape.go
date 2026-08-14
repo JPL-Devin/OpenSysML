@@ -81,6 +81,11 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 		if !isFeature(memberSym) {
 			continue
 		}
+		// A variant is a choice offered for its variation, not a feature of the
+		// object declaring it: it materializes no slot of its own.
+		if semantics.DeclaresVariant(memberSym) {
+			continue
+		}
 
 		name := memberSym.Name
 		typ := ctx.extractType(memberSym)

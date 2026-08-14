@@ -261,6 +261,10 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		// — rather than the ones in force here — answer the names it uses.
 		if ec.scope != nil && !ec.resolving[name] {
 			if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
+				// A variant names a choice, not the value it declares.
+				if semantics.DeclaresVariant(sym) {
+					return variantReference(sym), nil
+				}
 				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
 					if ec.resolving == nil {
 						ec.resolving = map[string]bool{}
@@ -314,6 +318,13 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		memberName := n.Name.Parts[i].Text
 		nextSym, found := ec.ctx.model.LookupMember(currentSym, memberName)
 		if !found {
+			// A name qualified by a variation designates one of its variants, so
+			// one that is not a variant is reported as such.
+			if ec.ctx.model.IsVariationFeature(currentSym) {
+				return Value{}, fmt.Errorf("%w: %s is not a variant of %s (%s)",
+					ErrNotAVariant, memberName, currentSym.Name,
+					ec.ctx.variantSummary(currentSym))
+			}
 			return Value{}, fmt.Errorf("member %s not found in %s", memberName, currentSym.Name)
 		}
 		currentSym = nextSym
@@ -322,6 +333,11 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 	// Evaluate the final symbol's declaration
 	switch decl := currentSym.Decl.(type) {
 	case *ast.Usage:
+		// A variant names a choice its variation can be bound to, and compares
+		// equal to the variation that selected it.
+		if decl.IsVariant {
+			return variantReference(currentSym), nil
+		}
 		if decl.Value != nil {
 			return ec.Eval(decl.Value)
 		}
@@ -382,10 +398,13 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 		return Value{}, err
 	}
 
-	// Feature chains only work on instances
-	if operand.Kind != ValInstance {
+	// Feature chains only work on objects: an instance, or the object a selected
+	// variant materialized.
+	id, ok := operand.Object()
+	if !ok {
 		return Value{}, fmt.Errorf("feature chain requires instance, got %v", operand.Kind)
 	}
+	operand = Value{Kind: ValInstance, Instance: id}
 
 	// Get the instance
 	if _, ok := ec.ctx.instances[operand.Instance]; !ok {
@@ -400,17 +419,33 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 // member value came from, for a diagnostic about chaining through it.
 func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, from string) (Value, error) {
 	current, name := value, from
-	for _, part := range parts {
-		if current.Kind != ValInstance {
+	for i, part := range parts {
+		id, isObject := current.Object()
+		if !isObject {
 			return Value{}, fmt.Errorf("cannot chain through non-instance member %s", name)
 		}
+		current = Value{Kind: ValInstance, Instance: id}
 		inst, ok := ec.ctx.instances[current.Instance]
 		if !ok {
 			return Value{}, fmt.Errorf("instance ID %d not found for member %s", current.Instance, name)
 		}
 		name = part.Text
-		if _, ok := inst.Slots[name]; !ok {
+		slotDecl, ok := inst.Slots[name]
+		if !ok {
 			return Value{}, fmt.Errorf("member %s not found in instance", name)
+		}
+		// A variant named through the variation feature it belongs to is the
+		// choice itself, not a member of the variation's value.
+		if variant, rest, ok := ec.variantSegment(slotDecl.Feature, parts[i+1:]); ok {
+			if len(rest) == 0 {
+				return variantReference(variant), nil
+			}
+			// Members are read from the object the variant stands for.
+			val, err := ec.ctx.variantValue(variant)
+			if err != nil {
+				return Value{}, err
+			}
+			return ec.chainMemberValue(val, rest, variant.Name)
 		}
 		// Read through GetSlot so a derived or composite member is materialized
 		// on demand rather than read as an empty slot.
@@ -661,6 +696,17 @@ func (ec *EvalContext) evalEquality(n *ast.OperatorExpr) (Value, error) {
 	right, err := ec.Eval(n.Operands[1])
 	if err != nil {
 		return Value{}, err
+	}
+
+	// Comparing a value with a variant compares it with the value that variant
+	// declares; comparing two variants compares the choice itself.
+	if (left.Kind == ValVariant) != (right.Kind == ValVariant) {
+		if left, err = ec.ctx.variantAsValue(left); err != nil {
+			return Value{}, err
+		}
+		if right, err = ec.ctx.variantAsValue(right); err != nil {
+			return Value{}, err
+		}
 	}
 
 	// Quantities compare in a common unit; incommensurable ones are an error,
@@ -1030,6 +1076,9 @@ func valueEqual(a, b Value) bool {
 		return sequenceEqual(a.Sequence, b.Sequence)
 	case ValSet:
 		return setEqual(a.Set, b.Set)
+	case ValVariant:
+		// A variation compares equal to the variant it selected.
+		return a.Variant == b.Variant
 	case ValQuantity:
 		// Incommensurable units are not equal here: an equality that has to hold
 		// or fail (a set member, a sequence element) has no error to report.

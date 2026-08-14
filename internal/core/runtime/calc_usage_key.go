@@ -80,6 +80,9 @@ func valueKeyString(v Value) string {
 		}
 		return "u" + constKeyString(v.Quantity.Num) +
 			"[" + v.Quantity.Unit.String() + "|" + v.Quantity.Unit.Term.DimensionKey() + "]"
+	case ValVariant:
+		// A selection is the variant it names, whatever object it materialized.
+		return fmt.Sprintf("v%p", v.Variant)
 	case ValExpr:
 		// Two delayed expressions are the same only as the same node: an
 		// unevaluated body has no value to compare.

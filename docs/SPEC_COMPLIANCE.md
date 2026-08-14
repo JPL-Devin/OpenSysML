@@ -118,12 +118,12 @@
 - Control flow node scope registration
 
 **Test Coverage:**
-- 139 conformance cases (all passing: calc×26, calcUsage×6, constraint×7, requirement×12, satisfy×5, unit×7, action×35, state×31, accept×1, instance×9)
-- 75 robustness subtests (deadlock, a non-terminating loop, a calc usage leaving an input unbound, reading an output it does not declare or one with no value, a usage nested in a calc leaving an input unbound, reading an output it does not declare, an input default naming only itself, a nested usage chain reaching the recursion limit or spending the step budget, outputs valued from each other, a usage typed by something that is not a calc, a usage body spending the step budget, an invocation of a calc that computes several outputs and designates no result, a non-terminating calc loop, a calc body that never returns, a send or a `terminate` inside a calc, an assignment outside a calc body, a non-Boolean calc condition, a body-local declaration that must not leak, a body member that is not executable, a statement written directly among an action's members, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references, a library function outside its domain or with the wrong arity, an extension library function outside its domain, exponentiation beyond the Integer range)
-- 255 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
-- 53 golden AST fixtures (including the three loop forms, pseudostate, timed-trigger, call-trigger, calc default/invocation, calc statement bodies and n-ary connector-end parsing tests)
+- 164 conformance cases (all passing: calc×45, calcUsage×6, constraint×11, requirement×12, satisfy×5, action×36, state×32, instance×17)
+- 85 robustness subtests (deadlock, a non-terminating loop, a calc usage leaving an input unbound, reading an output it does not declare or one with no value, a usage nested in a calc leaving an input unbound, reading an output it does not declare, an input default naming only itself, a nested usage chain reaching the recursion limit or spending the step budget, outputs valued from each other, a usage typed by something that is not a calc, a usage body spending the step budget, an invocation of a calc that computes several outputs and designates no result, a non-terminating calc loop, a calc body that never returns, a send or a `terminate` inside a calc, an assignment outside a calc body, a non-Boolean calc condition, a body-local declaration that must not leak, a body member that is not executable, a statement written directly among an action's members, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references, a library function outside its domain or with the wrong arity, an extension library function outside its domain, exponentiation beyond the Integer range, a variation with no variant selected, a selection that is not one of a variation's variants, two variants selected at once, a deep chain of redefinitions, conflicting redefinitions at several levels)
+- 265 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
+- 56 golden AST fixtures (including the three loop forms, pseudostate, timed-trigger, call-trigger, calc default/invocation, calc statement bodies and n-ary connector-end parsing tests)
 - 52 golden execution traces (loop and conditional bodies, one calc usage body run feeding several output reads, a usage nested in a calc read for two of its outputs, calc statement bodies and their loop iterations, fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, calc and constraint evaluation, library function invocation)
-- 64 negative parser subtests
+- 88 negative parser subtests
 - 2,465 tests and subtests, of which 2,460 pass and 5 skip (`go test -race -count=1 -v ./...`; 1,384 top-level `Test` functions). The skips are unimplemented-expression and requirement-subject cases that skip themselves.
 
 ---
@@ -240,6 +240,27 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 | A nested part usage with a body of its own is instantiated as that usage, so what its body declares wins over what its type declares, and an untyped nested part (`part engine { ... }`) still materializes | `instance.go` `compositeType`, `GetSlot` | `instance_nested_usage_body.sysml`, `instance_unnamed_redefinition.sysml`, `runtime/instance_test.go:TestNestedUsageBodyOverridesItsType`, `TestUntypedNestedPartMaterializes` | ✅ Faithful (both the named form and an unnamed `:>> power = 250.0;`, which takes the name of what it redefines — see the KerML 7.3.4.5 row above) |
 
 ⚠️ A multi-valued feature that is both typed and given a default takes the typed instantiation; the default is not merged into it.
+
+### Redefinition in a Specialization (KerML §7.4.7 Redefinition, SysML v2 §7.6)
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| A usage that redefines an inherited usage (`part derived :> base { part :>> inner { … } }`) specializes what it redefines, so it keeps every nested member the redefined usage declared and overrides only what it restates | `semantics/model.go` `NewModel` (attaches the model to `resolve.Resolver`, so a redefinition target reachable only through inheritance resolves and the redefining usage gains it as a supertype), consumed by `runtime/shape.go` `FeaturesOf` over `Model.MembersOf` | `redefinition_inherited_nested_values.sysml`, `ballandchain_variant_configuration.sysml`, `robustness_test.go:deep_specialization_chain_of_redefinitions`, `conflicting_redefinitions_at_several_levels` | ✅ Faithful (multi-level chains, a redefinition of a redefinition, and conflicting restatements where the innermost wins; the merge is the inherited-member view, not a slot-level merge in the instantiator) |
+
+### Variation and Variant (SysML v2 §7.20 Variant Modelling)
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| `variation` and `variant` are recorded on the declaration they modify, in every position they may appear (`variation attribute`/`part`/`interface`, nested or top-level) | `parser/defusage.go` `applyFeatureMods`, `atKindPrefix`, `ast/defusage.go` `Usage.IsVariation`/`IsVariant`, round-tripped by `export/rdf_out.go`/`rdf_in.go` | `parser/testdata/parse/variation_and_variant.golden`, `parser/negative_test.go` (`variation_no_declaration`, `variation_attribute_no_name`, `variant_unclosed_body`, `variant_selection_no_variant_name`) | ✅ Faithful |
+| A variation is an abstract classifier of its variants: a variant specializes its variation and so carries the variation's type and features | `semantics/model.go` `DirectSupertypes` via `semantics/variation.go` `VariationOwning` | `semantics/variation_test.go:TestVariationAndVariantModifiers`, `TestVariantsOfInheritedThroughRedefinition` | ✅ Faithful |
+| A variant is reachable through the variation feature's name (`cut::cutIdeal`), including through a feature chain (`engagementRing.nesting::nestingTrue`) and through a feature that redefines or specializes the variation | `semantics/variation.go` `Model.IsVariationFeature`, `Model.VariantsOf`, `Model.VariantOf`, `runtime/variation.go` `EvalContext.variantSegment`, `runtime/eval.go` `evalFeatureChain` | `variation_attribute_selection.sysml`, `variation_part_selection.sysml`, `semantics/variation_test.go:TestIsVariationFeatureThroughSpecialization` | ✅ Faithful |
+| Binding a variation usage to one of its variants selects that variant, with its nested values and its own nested features | `runtime/variation.go` `Context.bindVariation`, `variantValue`, `runtime/instance.go` `GetSlot` (variation slots resolve before ordinary defaults), `runtime/value.go` `ValVariant` | `variation_attribute_selection.sysml`, `variation_part_selection.sysml`, `variation_interface_selection.sysml` | ✅ Faithful |
+| A variation feature compares equal to the variant it is bound to (`x == x::variantName`), and unequal to any other variant — the form an asserted configuration constraint uses | `runtime/eval.go` equality over `ValVariant`, `runtime/value_equality.go` | `variation_attribute_selection.sysml`, `variation_interface_selection.sysml`, `variation_interface_mismatch.sysml`, `ballandchain_variant_configuration.sysml` | ✅ Faithful |
+| A variation with no variant selected is a typed error, never a silently wrong value | `runtime/errors.go` `ErrVariationUnselected`, `runtime/instance.go` `GetSlot` | `variation_unselected.sysml`, `robustness_test.go:variation_without_a_selected_variant` | ✅ Faithful |
+| Selecting what is not a variant of the variation, or selecting two variants at once, are typed errors naming the variants available | `runtime/errors.go` `ErrNotAVariant`/`ErrMultipleVariants`, `runtime/variation.go` `bindOneVariant`, `variantSummary`, `runtime/eval.go` (a missing member under a variation feature) | `robustness_test.go:variation_bound_to_what_is_not_a_variant`, `variation_bound_to_two_variants`, `semantics/variation_test.go:TestSelectsVariantOfRejectsForeignVariant` | ✅ Faithful |
+| `variation interface` and its `variant interface … connect …` members | `parser/defusage.go` (interface usages take the same modifiers), selection as above | `variation_interface_selection.sysml`, `variation_interface_mismatch.sysml` | ⚠️ Approximate (the variant is selected and compares equal, so a configuration constraint over interface variants evaluates; the connection a variant interface declares is not itself realized as a runtime connection, so port communication does not follow the selected variant) |
+
+⚠️ Variant selection is not ordering-sensitive — a variation slot resolves to one variant per instance — so no golden execution trace accompanies these rows.
 
 ### Requirement
 
@@ -706,13 +727,13 @@ are tracked here):
 - Use case execution
 - View/viewpoint rendering
 - Allocation execution semantics
-- Variability/variation runtime selection
+- Connections declared by a `variant interface` (the variant is selected and comparable, but its connection is not realized at runtime — see the Variation and Variant map)
 
 ### What Can't Be Claimed for Spec Compliance
 
 **Intentionally Unspecified (No Normative Semantics):**
 - Verification verdict evaluation (VerdictKind/PassIf) - SysML v2 §9.3.2: "evaluation... intentionally not specified normatively"
-- Variability/variation selection - SysML v2 §9.4: "Selection of variants is not specified normatively"
+- Variability/variation selection - SysML v2 §9.4: "Selection of variants is not specified normatively" — Systemica selects the variant a variation usage is bound to (`attribute :>> cut = cut::cutIdeal;`) and errors on an unselected, unknown, or multiply-selected variation; see the Variation and Variant map
 - Streaming pin behavior - UML 2.5.1 §16.2.4: "Specific streaming behavior is tool-dependent"
 - View/viewpoint rendering - SysML v2 §10.2: "rendering semantics intentionally left to tools"
 - Allocation execution - SysML v2 §9.2.4: syntax defined, execution semantics not normative
