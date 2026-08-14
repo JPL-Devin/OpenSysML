@@ -189,6 +189,7 @@ func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl) ([
 		edits    []edit
 		replaced []string
 		folded   = make(map[int]bool, len(newDecl.members))
+		count    = nameCounts(oldDecl.members)
 	)
 	for _, om := range oldDecl.members {
 		name := memberName(om)
@@ -199,7 +200,9 @@ func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl) ([
 		if nm == nil {
 			continue
 		}
-		if oldSub, ok := namespaceDeclOf(oldSrc, om); ok {
+		// A name the body declares twice is ambiguous: merging would add the new
+		// members to each of them, so it is replaced instead.
+		if oldSub, ok := namespaceDeclOf(oldSrc, om); ok && count[name] == 1 {
 			// An empty body clears a nested namespace just as it clears a
 			// top-level one, so it replaces the old member instead of merging.
 			if newSub, ok := namespaceDeclOf(newSrc, nm); ok && len(newSub.members) > 0 && oldSub.header == newSub.header {
@@ -272,6 +275,17 @@ func hasText(src string, members []ast.Node, text string) bool {
 		}
 	}
 	return false
+}
+
+// nameCounts counts how many of the members declare each name.
+func nameCounts(members []ast.Node) map[string]int {
+	out := make(map[string]int, len(members))
+	for _, m := range members {
+		if name := memberName(m); name != "" {
+			out[name]++
+		}
+	}
+	return out
 }
 
 // findNamed returns the first member declaring name, and its index. Only the

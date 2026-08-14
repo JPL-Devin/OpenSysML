@@ -204,7 +204,7 @@ func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
 				kept = append(kept, sn)
 				continue
 			}
-			drops = append(drops, replacedReport(sn, set, src, top))
+			drops = append(drops, replacedReport(sn, set, top))
 		}
 		s.snippets = kept
 	}

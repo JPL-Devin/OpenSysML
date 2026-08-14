@@ -381,3 +381,15 @@ func TestLoadedFileIsIdentifiedByTheFileNotTheSpelling(t *testing.T) {
 		t.Errorf("want one copy of the file, got %d snippets: %v", got, s.List())
 	}
 }
+
+// A body declaring one name twice is ambiguous, so an addition to that name is
+// not folded into each of them.
+func TestNestedMergeInsertsOnceWhenTheNameIsDeclaredTwice(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P {\n\tpackage Q { part def A; }\n\tpackage Q { part def B; }\n}")
+	s.Submit("package P {\n\tpackage Q { part def C; }\n}")
+
+	if got := strings.Count(strings.Join(s.List(), "\n"), "part def C"); got != 1 {
+		t.Errorf("added member present %d times: %v", got, s.List())
+	}
+}

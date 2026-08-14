@@ -54,7 +54,7 @@ func dropNotices(drops []dropReport) []string {
 // re-declared, and what went with it because the whole snippet was replaced —
 // both the snippet's other top-level declarations and, for a re-declared
 // namespace, the members its new body does not declare again.
-func replacedReport(sn snippet, redeclared map[string]bool, newSrc string, newTop map[string]ast.Node) dropReport {
+func replacedReport(sn snippet, redeclared map[string]bool, newTop map[string]ast.Node) dropReport {
 	root := parser.New(source.New(docName, []byte(sn.src))).ParseFile()
 	rep := dropReport{}
 	if root == nil {
@@ -73,7 +73,7 @@ func replacedReport(sn snippet, redeclared map[string]bool, newSrc string, newTo
 			if rep.decl == "" {
 				rep.decl = desc
 			}
-			rep.lost = append(rep.lost, lostMembers(sn.src, m, newSrc, newTop[name])...)
+			rep.lost = append(rep.lost, lostMembers(m, newTop[name])...)
 			continue
 		}
 		rep.lost = append(rep.lost, desc)
@@ -85,7 +85,7 @@ func replacedReport(sn snippet, redeclared map[string]bool, newSrc string, newTo
 // leaves undeclared, so replacing a body names what it took with it. A member
 // re-declared as a namespace on both sides is descended into: only what neither
 // body declares is lost.
-func lostMembers(oldSrc string, om ast.Node, newSrc string, nm ast.Node) []string {
+func lostMembers(om, nm ast.Node) []string {
 	if nm == nil {
 		return nil
 	}
@@ -111,7 +111,7 @@ func lostMembers(oldSrc string, om ast.Node, newSrc string, nm ast.Node) []strin
 			lost = append(lost, desc)
 			continue
 		}
-		lost = append(lost, lostMembers(oldSrc, m, newSrc, kept)...)
+		lost = append(lost, lostMembers(m, kept)...)
 	}
 	return lost
 }
