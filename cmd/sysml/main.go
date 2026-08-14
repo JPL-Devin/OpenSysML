@@ -248,38 +248,39 @@ func runInteractiveWithFiles(files []string) error {
 	sess := newSession()
 
 	// Load files before starting interactive loop
-	for _, file := range files {
-		output, _, err := sess.RunMeta("%load " + file)
-		if err != nil {
-			// Returned unwrapped: the caller reports it, so the operation and
-			// the path are named once.
-			return err
-		}
-		// Print load results
-		for _, line := range output {
-			fmt.Println(line)
-		}
+	if err := loadFiles(sess, files); err != nil {
+		return err
 	}
 
 	fmt.Println("SysML v2 REPL — %help for commands, Ctrl-D to exit")
 	return repl.Loop(&rlReader{rl: rl}, os.Stdout, sess)
 }
 
+// loadFiles submits every positional path — a file, a directory to walk or a
+// glob — as a single load, so a declaration in one file resolves against the
+// others whichever order they were named in.
+func loadFiles(sess *repl.Session, files []string) error {
+	if len(files) == 0 {
+		return nil
+	}
+	output, err := sess.LoadPaths(files)
+	if err != nil {
+		// Returned unwrapped: the caller reports it, so the operation and the
+		// path are named once.
+		return err
+	}
+	for _, line := range output {
+		fmt.Println(line)
+	}
+	return nil
+}
+
 func runNonInteractive(files []string, exprs []string) error {
 	sess := newSession()
 
 	// Load files first
-	for _, file := range files {
-		output, _, err := sess.RunMeta("%load " + file)
-		if err != nil {
-			// Returned unwrapped: the caller reports it, so the operation and
-			// the path are named once.
-			return err
-		}
-		// Print load results
-		for _, line := range output {
-			fmt.Println(line)
-		}
+	if err := loadFiles(sess, files); err != nil {
+		return err
 	}
 
 	// Then evaluate expressions

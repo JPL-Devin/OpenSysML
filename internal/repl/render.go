@@ -18,7 +18,45 @@ type Result struct {
 	Diagnostics []passes.Diagnostic // eager analysis over the whole buffer
 	Source      string              // the full joined <repl> content (Task 6 caret rendering)
 	Offset      int                 // byte offset in Source where THIS submission begins
+	Origins     []Origin            // the files of THIS submission, in buffer order
 	Notices     []string            // side effects of the submission, e.g. a debugging session it ended
+}
+
+// Origin locates one file of a submission in the buffer, so a diagnostic is
+// reported against that file and its own line numbering.
+type Origin struct {
+	Name   string
+	Offset int
+}
+
+// locate returns the file a buffer offset belongs to and the offset that file
+// starts at. An offset outside the files of this submission belongs to the
+// submission as a whole, which is reported without a file name.
+func (r Result) locate(offset int) (string, int) {
+	for i, o := range r.Origins {
+		if offset < o.Offset {
+			continue
+		}
+		if i+1 == len(r.Origins) || offset < r.Origins[i+1].Offset {
+			return o.Name, o.Offset
+		}
+	}
+	return "", r.Offset
+}
+
+// lineOf is the 1-based buffer line a byte offset falls on.
+func (r Result) lineOf(offset int) int {
+	if offset > len(r.Source) {
+		offset = len(r.Source)
+	}
+	return strings.Count(r.Source[:offset], "\n") + 1
+}
+
+// diagLocation names the file a diagnostic came from and the buffer line that
+// file — or, for a prompt submission, the submission — starts on.
+func (r Result) diagLocation(offset int) (string, int) {
+	name, start := r.locate(offset)
+	return name, r.lineOf(start)
 }
 
 // mine reports whether a span belongs to the submission just made rather than
@@ -107,30 +145,30 @@ func qnString(qn *ast.QualifiedName) string {
 //	    <source line>
 //	    <caret span>
 //
-// baseLine is the buffer line the reported submission starts on, so reported
-// line numbers count from what the user typed rather than from the top of the
-// accumulated buffer. Pass 1 to number against the whole buffer. When origin is
+// locate maps a diagnostic's buffer offset to the file it came from and the
+// buffer line that file starts on, so a block names its file and counts lines
+// from what the user submitted rather than from the top of the accumulated
+// buffer; pass wholeBuffer to number against the buffer instead. When origin is
 // set each block also carries the pass that produced the diagnostic.
 //
 // Note: byte-column carets assume ASCII/monospace alignment; multi-byte runes
 // before the caret will misalign by display width. Acceptable for v1 — the LSP
 // server owns UTF-16 correctness; the REPL caret is only a terminal aid.
-//
-// file names the source the findings are in, when they are in a loaded file that
-// a reader would go to rather than in what was typed at the prompt.
-func renderDiagnostics(diags []passes.Diagnostic, src string, baseLine int, origin bool, file string) []string {
+func renderDiagnostics(diags []passes.Diagnostic, src string, locate func(offset int) (string, int), origin bool) []string {
 	if len(diags) == 0 {
 		return nil
-	}
-	if file != "" {
-		file += ":"
 	}
 	sf := source.New(docName, []byte(src))
 	lines := strings.Split(src, "\n")
 	var out []string
 	for _, d := range diags {
 		p := sf.Lines().PosAt(d.Span.Offset)
-		head := fmt.Sprintf("%s%d:%d: %s: %s", file, p.Line-baseLine+1, p.Col, d.Severity.String(), d.Message)
+		file, baseLine := locate(d.Span.Offset)
+		where := ""
+		if file != "" {
+			where = file + ":"
+		}
+		head := fmt.Sprintf("%s%d:%d: %s: %s", where, p.Line-baseLine+1, p.Col, d.Severity.String(), d.Message)
 		if origin {
 			head += fmt.Sprintf(" [%s]", diagOrigin(d))
 		}
@@ -208,7 +246,7 @@ func renderResult(r Result, v Verbosity) []string {
 	}
 	diags := scopedDiagnostics(r, v)
 	out := append([]string(nil), r.Notices...)
-	out = append(out, renderDiagnostics(diags, r.Source, r.baseLine(), false, "")...)
+	out = append(out, renderDiagnostics(diags, r.Source, r.diagLocation, false)...)
 	if hasError(diags) {
 		return out
 	}
@@ -227,7 +265,7 @@ func renderDebug(r Result) []string {
 	out := append([]string(nil), r.Notices...)
 	out = append(out, fmt.Sprintf("[debug] submission at buffer line %d; %d diagnostic(s) over the whole buffer",
 		r.baseLine(), len(r.Diagnostics)))
-	out = append(out, renderDiagnostics(r.Diagnostics, r.Source, 1, true, "")...)
+	out = append(out, renderDiagnostics(r.Diagnostics, r.Source, wholeBuffer, true)...)
 	return append(out, renderSummary(r.Members)...)
 }
 
@@ -284,5 +322,14 @@ func (r Result) ownMembers() []ast.Node {
 
 // baseLine is the 1-based buffer line this submission starts on.
 func (r Result) baseLine() int {
-	return strings.Count(r.Source[:r.Offset], "\n") + 1
+	return r.lineOf(r.Offset)
+}
+
+// wholeBuffer numbers diagnostics against the accumulated buffer, naming no file.
+func wholeBuffer(int) (string, int) { return "", 1 }
+
+// inFile reports every diagnostic against file, numbering from its first line,
+// for a caller that already knows which source it is rendering.
+func inFile(file string) func(int) (string, int) {
+	return func(int) (string, int) { return file, 1 }
 }
