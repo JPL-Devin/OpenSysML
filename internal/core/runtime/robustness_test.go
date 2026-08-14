@@ -114,6 +114,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("two_owners_selecting_one_variant", testTwoOwnersSelectingOneVariant)
 	t.Run("deep_specialization_chain_of_redefinitions", testDeepSpecializationChainOfRedefinitions)
 	t.Run("conflicting_redefinitions_at_several_levels", testConflictingRedefinitionsAtSeveralLevels)
+	t.Run("one_feature_valued_under_two_names", testOneFeatureValuedUnderTwoNames)
 	t.Run("multiplicity_infinite_lower_bound", testMultiplicityInfiniteLowerBound)
 	t.Run("multiplicity_lower_bound_too_large", testMultiplicityLowerBoundTooLarge)
 	t.Run("feature_chain_through_an_unset_slot", testFeatureChainThroughAnUnsetSlot)
@@ -3006,6 +3007,24 @@ func testConflictingRedefinitionsAtSeveralLevels(t *testing.T) {
 	}
 	if got.Kind != ValConst || got.Const.Real != 321.0 {
 		t.Errorf("t = %+v, want 321.0 (innermost c, middle b, base a)", got)
+	}
+}
+
+// testOneFeatureValuedUnderTwoNames: a redefinition renames one feature, so a
+// declaration valuing both names has to be reported instead of picking one.
+func testOneFeatureValuedUnderTwoNames(t *testing.T) {
+	src := `
+		package test {
+			part def Ring { attribute ringCost; }
+			part def Band :> Ring { attribute bandCost :>> ringCost; }
+			part conflicted : Band {
+				attribute :>> bandCost = 400.0;
+				attribute :>> ringCost = 500.0;
+			}
+		}`
+	got, err := variationSlotInSource(t, src, "test::conflicted", "ringCost")
+	if !errors.Is(err, ErrConflictingRedefinition) {
+		t.Fatalf("ringCost = %+v, err = %v, want ErrConflictingRedefinition", got, err)
 	}
 }
 

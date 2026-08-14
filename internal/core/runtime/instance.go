@@ -83,7 +83,9 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 
 	// A redefining feature declares the feature it redefines again, so the two
 	// names read one slot.
-	ctx.aliasRedefinedSlots(inst)
+	if err := ctx.aliasRedefinedSlots(inst); err != nil {
+		return nil, err
+	}
 
 	// Register instance
 	ctx.registerInstance(inst)
