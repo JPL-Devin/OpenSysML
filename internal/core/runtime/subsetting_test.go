@@ -57,3 +57,67 @@ func TestRedefinedCollectionReadsSubsetsUnderEitherName(t *testing.T) {
 		})
 	}
 }
+
+// TestRedefiningFeatureHoldsTheRedefinedDefault pins that redeclaring an
+// inherited attribute under a new name keeps the value the redefined
+// declaration wrote: the two names are one feature, so both read it.
+func TestRedefiningFeatureHoldsTheRedefinedDefault(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def Vehicle { attribute mass : Real = 1000.0; }
+			part def Truck :> Vehicle { attribute grossMass :>> mass; }
+			part truck : Truck;
+		}
+	`))
+	matches := idx.LookupQualified("test::truck")
+	if len(matches) != 1 {
+		t.Fatalf("test::truck: %d matching symbols, want 1", len(matches))
+	}
+	inst, err := ctx.Instantiate(matches[0])
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	for _, name := range []string{"grossMass", "mass"} {
+		slot, err := inst.GetSlot(ctx, name)
+		if err != nil {
+			t.Fatalf("GetSlot(%s): %v", name, err)
+		}
+		if got := FormatTraceValue(slot.HeldValue()); got != "1000.0" {
+			t.Errorf("%s = %s, want 1000.0", name, got)
+		}
+	}
+}
+
+// TestSubsettingIgnoresALibraryFeatureOfTheSameName pins that a feature
+// subsetting an element outside the object contributes nothing to a feature of
+// the object that merely shares the target's simple name: `:> ISQ::mass`
+// specializes the library feature, it does not join the object's own `mass`.
+func TestSubsettingIgnoresALibraryFeatureOfTheSameName(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			private import SI::*;
+			part def Component { attribute v : Real; }
+			part def System {
+				part mass : Component[*];
+				attribute totalmass :> ISQ::mass = 4 [kg];
+			}
+			part sat : System;
+		}
+	`))
+	matches := idx.LookupQualified("test::sat")
+	if len(matches) != 1 {
+		t.Fatalf("test::sat: %d matching symbols, want 1", len(matches))
+	}
+	inst, err := ctx.Instantiate(matches[0])
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	slot, err := inst.GetSlot(ctx, "mass")
+	if err != nil {
+		t.Fatalf("GetSlot(mass): %v", err)
+	}
+	if got := len(elementsOf(slot.HeldValue())); got != 0 {
+		t.Errorf("mass holds %d elements, want 0", got)
+	}
+}

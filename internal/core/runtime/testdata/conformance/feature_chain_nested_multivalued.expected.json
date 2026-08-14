@@ -1,5 +1,6 @@
 {
   "type": "instance",
+  "libraries": true,
   "instantiate": "test::top",
   "slots": {
     "mids": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},

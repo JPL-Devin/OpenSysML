@@ -170,7 +170,7 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 
 	// A multi-valued feature given a default holds that default's contents; a
 	// single value written there is the collection's one element.
-	if slot.Feature.DefaultValue != nil && slot.Feature.Type == nil {
+	if slot.Feature.DefaultValue != nil {
 		val, err := ctx.evalSlotDefault(inst, slot, name)
 		if err != nil {
 			return nil, err
@@ -246,13 +246,14 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 }
 
 // CompositeTypeOf returns what a feature is materialized from, or nil for one
-// that holds a value rather than an object — a written default takes precedence
-// over instantiation, as in GetSlot above. A usage with members of its own is
-// instantiated as itself, so its body governs and an untyped nested part
-// materializes at all. Answering costs no allocation, so a caller walking an
-// object graph can decide whether to descend before descending.
+// that holds a value rather than an object — a default takes precedence over
+// instantiation, as in GetSlot above, whether or not the feature is also typed.
+// A usage with members of its own is instantiated as itself, so its body governs
+// and an untyped nested part materializes at all. Answering costs no allocation,
+// so a caller walking an object graph can decide whether to descend before
+// descending.
 func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
-	if feat.DefaultValue != nil && (isScalarFeature(feat) || feat.Type == nil) {
+	if feat.DefaultValue != nil {
 		return nil
 	}
 	if feat.Symbol != nil && isCompositeUsage(feat.Symbol) && len(declMembers(feat.Symbol.Decl)) > 0 {
@@ -283,7 +284,7 @@ func (ctx *Context) evalSlotDefault(inst *Instance, slot *Slot, name string) (Va
 	ctx.derivingSlots[key] = true
 	defer delete(ctx.derivingSlots, key)
 
-	scope := slot.Feature.DeclScope()
+	scope := slot.Feature.DefaultScope()
 	if scope == nil {
 		scope = inst.Type.OwnerScope
 	}

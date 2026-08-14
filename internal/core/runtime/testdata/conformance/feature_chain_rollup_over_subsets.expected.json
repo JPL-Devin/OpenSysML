@@ -1,5 +1,6 @@
 {
   "type": "instance",
+  "libraries": true,
   "instantiate": "test::ctx",
   "slots": {
     "subsystem": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},

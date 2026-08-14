@@ -21,14 +21,16 @@ import (
 // the two names read one slot rather than two — `part subsystems :>> Subsystems`
 // makes `Subsystems.mass` read the values held under `subsystems`.
 
-// relatedFeatureNames returns the names of the features of owner that sym's
-// relationships of the given kind name. A relationship written inside a usage
-// names a feature of the object being materialized, which the scope the usage
-// was written in need not see — `part a : Sub :> subsystem` subsets a feature
-// inherited by a's owner — so the name is looked up among owner's members when
-// the scope it was written in resolves nothing.
-func (ctx *Context) relatedFeatureNames(sym, owner *symbols.Symbol, kind ast.RelationshipKind) []string {
-	var names []string
+// relatedFeatures returns the features of owner that sym's relationships of the
+// given kind name. A relationship written inside a usage names a feature of the
+// object being materialized, which the scope the usage was written in need not
+// see — `part a : Sub :> subsystem` subsets a feature inherited by a's owner —
+// so an unqualified name that resolves to nothing there is looked up among
+// owner's members. A target resolving to an element outside owner names no
+// feature of it: `attribute mass :> ISQ::mass` specializes the library feature
+// and must not feed a same-named feature of owner.
+func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.RelationshipKind) []*symbols.Symbol {
+	var features []*symbols.Symbol
 	for _, rel := range semantics.RelationshipsOf(sym) {
 		if rel == nil || rel.Kind != kind || rel.Target == nil {
 			continue
@@ -41,14 +43,35 @@ func (ctx *Context) relatedFeatureNames(sym, owner *symbols.Symbol, kind ast.Rel
 		if !ok || len(qn.Parts) == 0 {
 			continue
 		}
-		if resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn); ok && resolved != nil && resolved != sym {
-			names = append(names, resolved.Name)
+		if resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn); ok && resolved != nil {
+			if resolved != sym && ctx.isFeatureOf(owner, resolved) {
+				features = append(features, resolved)
+			}
 			continue
 		}
-		last := qn.Parts[len(qn.Parts)-1].Text
-		if member, found := ctx.model.LookupMember(owner, last); found && member != nil && member != sym {
-			names = append(names, member.Name)
+		if len(qn.Parts) != 1 {
+			continue
 		}
+		if member, found := ctx.model.LookupMember(owner, qn.Parts[0].Text); found && member != nil && member != sym {
+			features = append(features, member)
+		}
+	}
+	return features
+}
+
+// isFeatureOf reports whether feature is the feature owner carries under that
+// name, declared by owner or inherited.
+func (ctx *Context) isFeatureOf(owner, feature *symbols.Symbol) bool {
+	member, ok := ctx.model.LookupMember(owner, feature.Name)
+	return ok && member == feature
+}
+
+// relatedFeatureNames is relatedFeatures by name.
+func (ctx *Context) relatedFeatureNames(sym, owner *symbols.Symbol, kind ast.RelationshipKind) []string {
+	features := ctx.relatedFeatures(sym, owner, kind)
+	names := make([]string, 0, len(features))
+	for _, feat := range features {
+		names = append(names, feat.Name)
 	}
 	return names
 }
