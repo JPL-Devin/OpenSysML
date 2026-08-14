@@ -1,0 +1,73 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Filters" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="Safety"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="isMandatory" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Boolean
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="vehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="part" name="seatBelt" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (PrefixMetadata type="Safety"))))
+          (Membership visibility="default"
+            (Usage kind="part" name="keylessEntry" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Package name="Safety Features" library=false standard=false
+          (Import visibility="public" all=false kind=membership recursive=true imported="vehicle" filtered=false)
+          (Membership visibility="default"
+            (FilterMember
+              (OperatorExpr operator="@"
+                (FeatureReference name="Safety"))))))
+      (Membership visibility="default"
+        (Package name="Mandatory Safety Features" library=false standard=false
+          (Import visibility="public" all=false kind=membership recursive=true imported="vehicle" filtered=false)
+          (Membership visibility="default"
+            (FilterMember
+              (OperatorExpr operator="and"
+                (OperatorExpr operator="@"
+                  (FeatureReference name="Safety"))
+                (FeatureChainExpr member="isMandatory"
+                  (*ast.CastExpr)))))))
+      (Membership visibility="default"
+        (Package name="Metaclassified" library=false standard=false
+          (Import visibility="public" all=false kind=membership recursive=true imported="vehicle" filtered=false)
+          (Membership visibility="default"
+            (FilterMember
+              (OperatorExpr operator="@@"
+                (FeatureReference name="SysML::PartUsage"))))
+          (Membership visibility="default"
+            (FilterMember
+              (OperatorExpr operator="implies"
+                (OperatorExpr operator="or"
+                  (OperatorExpr operator="not"
+                    (OperatorExpr operator="@"
+                      (FeatureReference name="Safety")))
+                  (OperatorExpr operator="xor"
+                    (OperatorExpr operator="@"
+                      (FeatureReference name="Safety"))
+                    (LiteralBool value=false)))
+                (LiteralBool value=true))))))
+      (Membership visibility="default"
+        (Package name="Filtered Imports" library=false standard=false
+          (Import visibility="public" all=false kind=namespace recursive=false imported="vehicle" filtered=true
+            (OperatorExpr operator="@"
+              (FeatureReference name="Safety")))
+          (Import visibility="public" all=false kind=membership recursive=true imported="vehicle" filtered=true
+            (OperatorExpr operator="and"
+              (OperatorExpr operator="@"
+                (FeatureReference name="Safety"))
+              (FeatureChainExpr member="isMandatory"
+                (*ast.CastExpr))))))
+      (Membership visibility="default"
+        (Usage kind="view" name="safety view" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Expose visibility="protected" all=true kind=membership recursive=true imported="vehicle" filtered=true
+            (OperatorExpr operator="@"
+              (FeatureReference name="Safety")))
+          (Expose visibility="protected" all=true kind=membership recursive=true imported="vehicle" filtered=true
+            (OperatorExpr operator="not"
+              (OperatorExpr operator="@"
+                (FeatureReference name="Safety")))))))))

@@ -36,6 +36,16 @@ type Model struct {
 	unitTerms    map[*symbols.Symbol]UnitTerm // measurement units reduced to base units
 	reducingUnit map[*symbols.Symbol]bool     // units being reduced, to detect a cycle
 	libSymbols   map[string]*symbols.Symbol   // library elements resolved by qualified name
+
+	// Element-filter evaluation: conditions compiled once per expression, their
+	// verdicts memoized per candidate, and the metadata annotating each candidate
+	// collected once. A filter is evaluated on every import enumeration, so none
+	// of this may be recomputed per candidate (KerML 8.2.4; see filter.go).
+	filterPreds    map[ast.Node]*symbols.FilterPredicate
+	filterVerdicts map[filterKey]filterVerdict
+	filterTypes    map[string]*symbols.Symbol
+	annotations    map[*symbols.Symbol][]annotation
+	aboutAnnots    map[*symbols.Symbol][]annotation
 }
 
 // NewModel creates a semantic model backed by the given name resolver. The
@@ -59,6 +69,11 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		unitTerms:      make(map[*symbols.Symbol]UnitTerm),
 		reducingUnit:   make(map[*symbols.Symbol]bool),
 		libSymbols:     make(map[string]*symbols.Symbol),
+
+		filterPreds:    make(map[ast.Node]*symbols.FilterPredicate),
+		filterVerdicts: make(map[filterKey]filterVerdict),
+		filterTypes:    make(map[string]*symbols.Symbol),
+		annotations:    make(map[*symbols.Symbol][]annotation),
 	}
 	if resolver != nil {
 		resolver.SetModel(m)
