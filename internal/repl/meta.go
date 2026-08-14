@@ -463,10 +463,21 @@ func evalError(expr string, err error, base int) error {
 	// A span is a position in the typed expression only when the operator was
 	// written there; one in a declaration the expression reached keeps the
 	// wrapped message, which names the calc or feature it is in.
-	if errors.As(err, &operand) && operand.Span.Offset >= base && operand.Span.Offset <= base+len(expr) {
+	if errors.As(err, &operand) && mismatchInExpr(expr, operand, base) {
 		return exprError(expr, operand.Error(), operand.Span, base)
 	}
 	return fmt.Errorf("evaluation failed: %w", err)
+}
+
+// mismatchInExpr reports whether the mismatch was written in expr: its span has
+// to land inside expr and the text there has to be the operator it names, since
+// a span alone is an offset a declaration in another file could also occupy.
+func mismatchInExpr(expr string, operand *runtime.OperandTypeError, base int) bool {
+	start, end := operand.Span.Offset-base, operand.Span.End()-base
+	if start < 0 || end > len(expr) || start >= end {
+		return false
+	}
+	return strings.Contains(expr[start:end], operand.Op)
 }
 
 // emptyRuntime is a context over an empty model, which answers an expression of

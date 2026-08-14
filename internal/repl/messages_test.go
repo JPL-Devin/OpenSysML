@@ -3,6 +3,9 @@ package repl
 import (
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 // TestMessageQuality pins the exact text of the diagnostics the prompt reports,
@@ -147,5 +150,33 @@ func TestLoadMissingFileReportsPathOnce(t *testing.T) {
 	}
 	if strings.Count(err.Error(), "/nonexistent/model.sysml") != 1 {
 		t.Errorf("path named more than once: %q", err.Error())
+	}
+}
+
+// TestMismatchCaretOnlyForTypedOperator pins that a caret is drawn only for a
+// mismatch written at the prompt: a span landing on prompt text by coincidence,
+// from a declaration in another source, keeps the wrapped message.
+func TestMismatchCaretOnlyForTypedOperator(t *testing.T) {
+	const expr = `1 + "a"`
+	cases := []struct {
+		name string
+		op   string
+		span source.Span
+		want string
+	}{
+		{"typed operator", "+", source.Span{Offset: 10, Len: len(expr)}, "1:1: type mismatch"},
+		{"offset before the expression", "+", source.Span{Offset: 4, Len: 3}, "evaluation failed:"},
+		{"offset past the expression", "+", source.Span{Offset: 40, Len: 3}, "evaluation failed:"},
+		{"in range but not the operator written there", "<", source.Span{Offset: 10, Len: len(expr)}, "evaluation failed:"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := evalError(expr, &runtime.OperandTypeError{
+				Op: tc.op, Left: "an Integer", Right: "a string", Span: tc.span,
+			}, 10)
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %q; want it to contain %q", err.Error(), tc.want)
+			}
+		})
 	}
 }
