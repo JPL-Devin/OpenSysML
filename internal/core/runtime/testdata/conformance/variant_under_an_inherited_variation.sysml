@@ -1,6 +1,6 @@
-// A usage typed by a variation definition is a variation point without
-// restating the modifier, so the variants declared under it are choices it can
-// be bound to rather than features of the object.
+// A usage typed by a variation definition is a variation point without restating
+// the modifier: its variants are choices rather than features, and each
+// specializes it, so the untyped ones below get `power` from the variation's type.
 package test {
     private import ScalarValues::Real;
 
@@ -9,8 +9,8 @@ package test {
 
     part def Car {
         part engine : EngineChoice {
-            variant part electric : Engine { attribute :>> power = 150.0; }
-            variant part petrol : Engine { attribute :>> power = 90.0; }
+            variant part electric { attribute :>> power = 150.0; }
+            variant part petrol;
         }
         attribute curbMass : Real = 900.0 + engine.power;
     }

@@ -3002,8 +3002,8 @@ func testVariantOutsideAVariation(t *testing.T) {
 }
 
 // testVariantUnderARedefinedVariation: a usage redefining a variation usage is a
-// variation point without restating the modifier, so the variants declared under
-// it stay choices instead of materializing slots.
+// variation point without restating the modifier, so the variants under it stay
+// choices that specialize it instead of materializing slots.
 func testVariantUnderARedefinedVariation(t *testing.T) {
 	src := `
 	package test {
@@ -3015,7 +3015,7 @@ func testVariantUnderARedefinedVariation(t *testing.T) {
 		}
 		abstract part refined :> family {
 			part :>> engine {
-				variant part electric : Engine { attribute :>> power = 150.0; }
+				variant part electric { attribute :>> power = 150.0; }
 			}
 		}
 		part sedan :> refined { part :>> engine = engine::electric; }
