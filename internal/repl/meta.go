@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -71,7 +70,7 @@ var helpText = []string{
 	"%help               show this help",
 	"%list               list current session declarations",
 	"%clear              reset the session",
-	"%load <file>        read a file and submit its contents",
+	"%load <path>...     submit the contents of files, directories or globs",
 	"%save <file>        write the session model to a file (.sysml notation or .ttl RDF)",
 	"%verbosity [level]  show or set output level: quiet, normal or debug",
 	"%trace [on|off]     show or set execution tracing (evaluation, calc, action and state steps)",
@@ -133,13 +132,13 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		return []string{"session cleared"}, false, nil
 	case "%load":
 		if len(fields) < 2 {
-			return []string{"usage: %load <file>"}, false, nil
+			return []string{"usage: %load <file|dir|glob>..."}, false, nil
 		}
-		data, rerr := os.ReadFile(expandHome(fields[1]))
-		if rerr != nil {
-			return nil, false, fmt.Errorf("load %s: %w", fields[1], rerr)
+		out, lerr := s.LoadPaths(fields[1:])
+		if lerr != nil {
+			return nil, false, lerr
 		}
-		return renderResult(s.Submit(string(data)), s.verbosity), false, nil
+		return out, false, nil
 	case "%save":
 		if len(fields) < 2 {
 			return []string{"usage: %save <file.sysml|file.ttl>"}, false, nil

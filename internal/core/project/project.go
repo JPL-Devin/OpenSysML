@@ -1,0 +1,148 @@
+// Package project turns the paths a user names — files, directories and glob
+// patterns — into the model files to load, in a deterministic order.
+package project
+
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+// modelExts are the file extensions a directory walk collects.
+var modelExts = []string{".sysml", ".kerml"}
+
+// IsModelFile reports whether path names a SysML or KerML model file.
+func IsModelFile(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	for _, want := range modelExts {
+		if ext == want {
+			return true
+		}
+	}
+	return false
+}
+
+// Expand turns the paths named on a command line (or at a %load prompt) into
+// the model files to load: a directory contributes every model file under it,
+// a pattern contributes its matches, and any other path is taken as named.
+// Files come back in a deterministic order — the inputs in the order given,
+// each directory walk and each pattern match sorted by path — and duplicates
+// are dropped, so naming a file twice loads it once.
+func Expand(inputs []string) ([]string, error) {
+	var out []string
+	seen := map[string]bool{}
+	add := func(paths ...string) {
+		for _, p := range paths {
+			key := absKey(p)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, p)
+		}
+	}
+	for _, in := range inputs {
+		files, err := expandOne(in)
+		if err != nil {
+			return nil, err
+		}
+		add(files...)
+	}
+	return out, nil
+}
+
+// expandOne expands a single input path.
+func expandOne(input string) ([]string, error) {
+	info, err := os.Stat(input)
+	switch {
+	case err == nil && info.IsDir():
+		return ModelFiles(input)
+	case err == nil:
+		return []string{input}, nil
+	case hasMeta(input):
+		return expandPattern(input)
+	case errors.Is(err, fs.ErrNotExist):
+		// Reported by the loader, which names the file it could not read.
+		return []string{input}, nil
+	default:
+		return nil, err
+	}
+}
+
+// expandPattern expands a glob pattern, walking any directory it matches.
+func expandPattern(pattern string) ([]string, error) {
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("bad pattern %q: %w", pattern, err)
+	}
+	sort.Strings(matches)
+	var out []string
+	for _, m := range matches {
+		info, err := os.Stat(m)
+		if err != nil {
+			return nil, err
+		}
+		if info.IsDir() {
+			files, err := ModelFiles(m)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, files...)
+			continue
+		}
+		out = append(out, m)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no model files match %q", pattern)
+	}
+	return out, nil
+}
+
+// ModelFiles walks dir and returns every .sysml/.kerml file under it, sorted by
+// path. Hidden directories are skipped, so a repository's .git or a dependency
+// cache under a dot-directory contributes nothing.
+func ModelFiles(dir string) ([]string, error) {
+	var out []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if path != dir && strings.HasPrefix(d.Name(), ".") {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if IsModelFile(path) {
+			out = append(out, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no .sysml or .kerml files in %s", dir)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// absKey is the identity a path is deduplicated under: its absolute form when
+// that can be computed, the path itself otherwise.
+func absKey(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	return abs
+}
+
+// hasMeta reports whether path is written as a glob pattern.
+func hasMeta(path string) bool {
+	return strings.ContainsAny(path, "*?[")
+}

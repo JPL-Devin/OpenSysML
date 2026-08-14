@@ -24,6 +24,12 @@ const docName = "<repl>"
 type snippet struct {
 	src   string
 	names []string
+	// gen is the submission that appended this snippet, which is what scopes a
+	// report to the files just loaded rather than the whole buffer.
+	gen int
+	// prefix is the bytes of earlier comment lines folded into src, which are
+	// not part of what was submitted.
+	prefix int
 }
 
 // Session accumulates submissions into a single implicit <repl> document.
@@ -114,16 +120,14 @@ func (s *Session) List() []string {
 }
 
 // accept parses src to compute its declared names, drops any earlier snippet
-// whose names intersect, appends the new snippet, and returns the joined
-// <repl> content plus the byte offset where src begins in it. That offset is
-// what scopes a report to the submission just made. It does NOT touch the
-// workspace (Task 4 does).
+// whose names intersect, and appends the new snippet under the current
+// submission generation. It does NOT touch the workspace (Submit does).
 //
 // A submission that declares names takes over the comment lines typed just
 // before it. They document what follows, so folding them into the same snippet
 // makes a later redeclaration replace the comments along with the declaration
 // instead of leaving stale documentation above whatever is current.
-func (s *Session) accept(src string) (joined string, offset int) {
+func (s *Session) accept(src string) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
 	var comments string
@@ -141,11 +145,26 @@ func (s *Session) accept(src string) (joined string, offset int) {
 		}
 		s.snippets = kept
 	}
-	s.snippets = append(s.snippets, snippet{src: comments + src, names: names})
-	joined = s.joined()
-	// The offset marks what the user typed, not the comments folded in front of
-	// it, so diagnostics keep the line numbers of the submission.
-	return joined, len(joined) - len(src)
+	s.snippets = append(s.snippets, snippet{
+		src:    comments + src,
+		names:  names,
+		gen:    s.version,
+		prefix: len(comments),
+	})
+}
+
+// genOffset returns the byte offset in the joined buffer where the current
+// submission begins: the start of its first surviving snippet, past any comment
+// lines folded in front of it, so diagnostics keep the line numbers submitted.
+func (s *Session) genOffset(joined string) int {
+	acc := 0
+	for _, sn := range s.snippets {
+		if sn.gen == s.version {
+			return acc + sn.prefix
+		}
+		acc += len(sn.src) + 1 // the newline joined() writes between snippets
+	}
+	return len(joined)
 }
 
 // takeLeadingComments removes the trailing run of comment-only snippets and
@@ -211,9 +230,28 @@ func intersects(names []string, set map[string]bool) bool {
 // live session context; a later redeclaration of the same name replaces the
 // prior snippet (see accept).
 func (s *Session) Submit(src string) Result {
-	declared := declaredNames(parser.New(source.New(docName, []byte(src))).ParseFile())
-	joined, offset := s.accept(src)
+	return s.SubmitAll([]string{src})
+}
+
+// SubmitAll accumulates every src as one submission: all of them are accepted
+// before the buffer is reindexed and analyzed, so a declaration in one resolves
+// against the others no matter which order they arrive in. This is what makes
+// loading a multi-file project order-independent.
+func (s *Session) SubmitAll(srcs []string) Result {
+	var declared []string
+	seen := map[string]bool{}
 	s.version++
+	for _, src := range srcs {
+		for _, name := range declaredNames(parser.New(source.New(docName, []byte(src))).ParseFile()) {
+			if !seen[name] {
+				seen[name] = true
+				declared = append(declared, name)
+			}
+		}
+		s.accept(src)
+	}
+	joined := s.joined()
+	offset := s.genOffset(joined)
 	s.ws.Open(docName, []byte(joined), s.version)
 	// The document is a new AST and scope tree, so anything derived from the
 	// previous one is stale — including instances, whose IDs restart with the
