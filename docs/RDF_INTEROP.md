@@ -173,6 +173,36 @@ notes and spacing survive. Only the `.ttl` direction goes through the mapping.
 The syntax is still checked: every direction rejects notation the parser cannot
 read, so a save never quietly reformats a model that will not parse.
 
+## A worked example
+
+[`examples/rdf-interop-demo.sysml`](../examples/rdf-interop-demo.sysml) is the
+reference model for this document: a rover and its ground link, declared with
+packages, definitions, usages, ports, a connection, multiplicity, values and
+documentation — all inside the mapping — so it converts and comes back:
+
+```bash
+$ sysml examples/rdf-interop-demo.sysml -convert ttl -o /tmp/rover.ttl
+wrote /tmp/rover.ttl (ttl, 7937 bytes)
+$ sysml /tmp/rover.ttl -convert sysml -o /tmp/rover-back.sysml
+wrote /tmp/rover-back.sysml (sysml, 877 bytes)
+```
+
+Converting the returned notation again yields a byte-identical graph — the
+round-trip property described above. The `//` header comment is the one thing
+lost, as *Limitations* describes; the package's `doc` and `comment` are
+declarations and survive.
+
+[`examples/semantic-layer/demo.sysml`](../examples/semantic-layer/demo.sysml)
+also converts. **None of the other demos in `examples/` do**: each of them shows a
+behavior, so the conversion stops at a state, a region, an assignment, a
+value-computing `return` or a name two members of one body share. A reader
+looking for a convertible model starts from the two above:
+
+```bash
+$ sysml examples/state-machine-demo.sysml -convert ttl
+sysml: cannot convert the *ast.SubstateMember at examples/state-machine-demo.sysml:7:13
+```
+
 ## Limitations
 
 These are the constructs the mapping does not fully represent. Each is a
