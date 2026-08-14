@@ -345,7 +345,7 @@ func runActionConformance(t *testing.T, ctx *Context, idx *symbols.Index, path s
 // against the outcome that object expects.
 func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
 	rootScope := idx.DocumentRoot(path)
-	stateSym := findBehavioralSymbol(t, rootScope, ast.DefState, ast.UsageState)
+	stateSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefState, ast.UsageState)
 	if len(expected.Performers) == 0 {
 		runOneStatePerformance(t, ctx, stateSym, nil, expected)
 		return

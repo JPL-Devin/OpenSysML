@@ -1,5 +1,6 @@
 {
   "type": "state",
+  "evaluate": "VariantRouting::Router::Route",
   "performers": [
     {
       "object": "VariantRouting::alpha",

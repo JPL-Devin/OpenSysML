@@ -660,3 +660,26 @@ func TestAdvanceDeliversPendingPortSignal(t *testing.T) {
 	wants(t, run(t, s, "%advance 1"), "Current state: done", "State machine completed")
 	wants(t, run(t, s, "%current"), "received = 1")
 }
+
+// A machine performed by an object routes over that object's connections, so
+// naming the object is how the debugger reaches a variant selection: two objects
+// of one type each drive the machine to the state their own variant connects to.
+func TestStateDebuggerRoutesForThePerformingObject(t *testing.T) {
+	s := loadFixture(t, "../core/runtime/testdata/conformance/variant_connection_per_owner.sysml")
+
+	run(t, s, "%instantiate VariantRouting::alpha")
+	run(t, s, "%instantiate VariantRouting::beta")
+
+	wants(t, run(t, s, "%state VariantRouting::Router::Route VariantRouting::alpha"), "✓ Started state machine executor")
+	wants(t, run(t, s, "%advance 1"), "Current state: arrived")
+
+	wants(t, run(t, s, "%state VariantRouting::Router::Route VariantRouting::beta"), "✓ Started state machine executor")
+	wants(t, run(t, s, "%advance 1"), "Current state: diverted")
+}
+
+// A behavior performed by nothing routes over its own connections only, and an
+// object named for a behavior that was never instantiated is reported.
+func TestStateDebuggerReportsAnUninstantiatedPerformer(t *testing.T) {
+	s := loadFixture(t, "../core/runtime/testdata/conformance/variant_connection_per_owner.sysml")
+	wants(t, run(t, s, "%state VariantRouting::Router::Route VariantRouting::alpha"), "no instance of")
+}

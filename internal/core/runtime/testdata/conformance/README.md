@@ -53,6 +53,13 @@ This directory contains behavioral execution conformance tests. Each test consis
 - `finalState`: qualified name of final reached state
 - `stateVisits`: ordered list of states visited (optional, for golden trace verification)
 - `outputs`: map of state machine outputs
+- `performers`: objects that each perform the machine, for a case whose contract
+  depends on which object performs it (two objects selecting different variants
+  of one variation route over their own connections). Each entry names the
+  object's usage plus the `events` / `finalState` / `stateVisits` / `outputs`
+  expected of that object's performance:
+  `{"object": "P::alpha", "finalState": "arrived", "stateVisits": ["start", "sending", "arrived"]}`.
+  Omit for a machine performed by no object.
 
 ### For Calculations (`InvokeCalc`)
 

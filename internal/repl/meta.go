@@ -582,10 +582,16 @@ func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []str
 		return w.emit(nil, indent+"(no features)")
 	}
 
+	// Connector lines already spent their share of the budget, so a truncated
+	// listing still shows them rather than dropping what it charged for.
+	truncated := func(lines []string, pad string) []string {
+		return append(append(lines, connectors...), indent+pad+"… (listing truncated)")
+	}
+
 	var lines []string
 	for i := range features {
 		if w.budget <= 0 {
-			return append(lines, indent+"… (listing truncated)")
+			return truncated(lines, "")
 		}
 		feat := &features[i]
 		// A constraint or requirement the part carries has no value; what it has
@@ -606,7 +612,7 @@ func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []str
 		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatSlot(slot)))
 		for _, nested := range nestedInstances(w.ctx, slot) {
 			if w.budget <= 0 {
-				return append(lines, indent+"  … (listing truncated)")
+				return truncated(lines, "  ")
 			}
 			w.onPath[nested.Type] = true
 			lines = append(lines, w.lines(nested, indent+"  ", depth+1)...)

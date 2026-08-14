@@ -18,6 +18,26 @@ package VariantRouting {
 			variant interface direct connect outPort to inPort;
 			variant interface indirect connect outPort to bypass;
 		}
+
+		state Route {
+			initial start;
+
+			state sending {
+				entry send Ping() via outPort;
+			}
+			state arrived;
+			state diverted;
+
+			start then sending;
+
+			transition first sending
+				accept Ping via inPort
+				then arrived;
+
+			transition first sending
+				accept Ping via bypass
+				then diverted;
+		}
 	}
 
 	part alpha : Router {
@@ -26,25 +46,5 @@ package VariantRouting {
 
 	part beta : Router {
 		interface :>> link = link::indirect;
-	}
-
-	state Route {
-		initial start;
-
-		state sending {
-			entry send Ping() via outPort;
-		}
-		state arrived;
-		state diverted;
-
-		start then sending;
-
-		transition first sending
-			accept Ping via inPort
-			then arrived;
-
-		transition first sending
-			accept Ping via bypass
-			then diverted;
 	}
 }

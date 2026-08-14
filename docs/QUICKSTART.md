@@ -539,7 +539,7 @@ sysml> %advance 30
 ```
 
 **Action debugging commands:**
-- `%action <name>` — Start action debugging session
+- `%action <name> [<object>]` — Start action debugging session, optionally performed by an instantiated object
 - `%step` — Advance all tokens one step
 - `%continue` — Run to completion, or to the first breakpoint hit
 - `%tokens` — Show active tokens with data
@@ -547,7 +547,7 @@ sysml> %advance 30
 - `%stop` — Stop debugging
 
 **State machine debugging commands:**
-- `%state <name>` — Start state machine debugging
+- `%state <name> [<object>]` — Start state machine debugging; naming an instantiated object performs the machine for it, so what it sends routes over that object's connections
 - `%events` — Show event queue
 - `%current` — Show current state, stack, data
 - `%advance <time>` — Advance simulation time by `<time>` units, processing every event due
