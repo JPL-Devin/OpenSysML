@@ -279,7 +279,7 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		if ec.scope != nil && !ec.resolving[name] {
 			if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
 				// A variant names a choice, not the value it declares.
-				if semantics.VariationOwning(sym) != nil {
+				if ec.ctx.model.VariationPointOwning(sym) != nil {
 					return variantReference(sym), nil
 				}
 				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
@@ -360,7 +360,7 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 	case *ast.Usage:
 		// A variant names a choice its variation can be bound to, and compares
 		// equal to the variation that selected it.
-		if semantics.VariationOwning(currentSym) != nil {
+		if ec.ctx.model.VariationPointOwning(currentSym) != nil {
 			return variantReference(currentSym), nil
 		}
 		if decl.Value != nil {

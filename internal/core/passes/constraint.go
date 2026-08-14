@@ -91,7 +91,7 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 // variation: it offers no choice to anything (SysML v2 §7.20 VariantMembership),
 // so it is an ordinary member spelled as if it were selectable.
 func (cc *constraintChecker) checkVariantOutsideVariation(sym *symbols.Symbol) {
-	if !semantics.DeclaresVariant(sym) || semantics.VariationOwning(sym) != nil {
+	if !semantics.DeclaresVariant(sym) || cc.model.VariationPointOwning(sym) != nil {
 		return
 	}
 	owner := "a namespace"

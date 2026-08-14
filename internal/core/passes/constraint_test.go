@@ -585,3 +585,25 @@ func TestConstraintVariantInsideVariationOK(t *testing.T) {
 		t.Fatalf("unexpected variant-outside-variation, got %v", diags)
 	}
 }
+
+// A usage typed by a variation definition, and one redefining a variation usage,
+// are variation points without restating the modifier.
+func TestConstraintVariantUnderInheritedVariationOK(t *testing.T) {
+	src := `
+		part def Engine;
+		variation part def EngineChoice :> Engine;
+		part def Car {
+			part engine : EngineChoice {
+				variant part electric : Engine;
+			}
+		}
+		abstract part refined : Car {
+			part :>> engine {
+				variant part petrol : Engine;
+			}
+		}
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "variant-outside-variation") {
+		t.Fatalf("unexpected variant-outside-variation, got %v", diags)
+	}
+}

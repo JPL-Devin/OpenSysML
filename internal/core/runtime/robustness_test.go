@@ -114,6 +114,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("two_owners_selecting_one_variant", testTwoOwnersSelectingOneVariant)
 	t.Run("two_ownerless_selections_of_one_variant", testTwoOwnerlessSelectionsOfOneVariant)
 	t.Run("variant_outside_a_variation", testVariantOutsideAVariation)
+	t.Run("variant_under_a_redefined_variation", testVariantUnderARedefinedVariation)
 	t.Run("deep_specialization_chain_of_redefinitions", testDeepSpecializationChainOfRedefinitions)
 	t.Run("conflicting_redefinitions_at_several_levels", testConflictingRedefinitionsAtSeveralLevels)
 	t.Run("one_feature_valued_under_two_names", testOneFeatureValuedUnderTwoNames)
@@ -2997,6 +2998,49 @@ func testVariantOutsideAVariation(t *testing.T) {
 	}
 	if slot.Value.Kind != ValConst || slot.Value.Const.Real != 1.0 {
 		t.Errorf("widget.misplaced = %v, want 1", slot.Value)
+	}
+}
+
+// testVariantUnderARedefinedVariation: a usage redefining a variation usage is a
+// variation point without restating the modifier, so the variants declared under
+// it stay choices instead of materializing slots.
+func testVariantUnderARedefinedVariation(t *testing.T) {
+	src := `
+	package test {
+		part def Engine { attribute power; }
+		abstract part family {
+			variation part engine : Engine {
+				variant part petrol : Engine { attribute :>> power = 90.0; }
+			}
+		}
+		abstract part refined :> family {
+			part :>> engine {
+				variant part electric : Engine { attribute :>> power = 150.0; }
+			}
+		}
+		part sedan :> refined { part :>> engine = engine::electric; }
+	}`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "test::sedan"))
+	if err != nil {
+		t.Fatalf("Instantiate(test::sedan): %v", err)
+	}
+	if slot, err := inst.GetSlot(ctx, "electric"); err == nil {
+		t.Errorf("sedan.electric materialized a slot: %v", slot.Value)
+	}
+	slot, err := inst.GetSlot(ctx, "engine")
+	if err != nil {
+		t.Fatalf("sedan.engine: %v", err)
+	}
+	if slot.Value.Kind != ValVariant || slot.Value.Instance == 0 {
+		t.Fatalf("sedan.engine = %v, want the selected variant's object", slot.Value)
+	}
+	power, err := ctx.instances[slot.Value.Instance].GetSlot(ctx, "power")
+	if err != nil {
+		t.Fatalf("sedan.engine.power: %v", err)
+	}
+	if power.Value.Kind != ValConst || power.Value.Const.Real != 150.0 {
+		t.Errorf("sedan.engine.power = %v, want 150", power.Value)
 	}
 }
 

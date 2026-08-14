@@ -1,0 +1,12 @@
+{
+  "type": "instance",
+  "instantiate": "test::electricCar",
+  "libraries": true,
+  "slots": {
+    "engine": {"type": "Variant", "value": "electric"},
+    "curbMass": {"type": "Real", "value": 1050.0}
+  },
+  "constraints": {
+    "isElectric": true
+  }
+}

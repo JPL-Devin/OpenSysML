@@ -54,6 +54,20 @@ func VariationOwning(sym *symbols.Symbol) *symbols.Symbol {
 	return owner
 }
 
+// VariationPointOwning returns the variation point sym is a variant of, or nil
+// when sym is not a variant of one: unlike VariationOwning it accepts an owner
+// that is a variation by specialization without restating the modifier.
+func (m *Model) VariationPointOwning(sym *symbols.Symbol) *symbols.Symbol {
+	if !DeclaresVariant(sym) || sym.OwnerScope == nil {
+		return nil
+	}
+	owner := sym.OwnerScope.Owner()
+	if !m.IsVariationFeature(owner) {
+		return nil
+	}
+	return owner
+}
+
 // IsVariationFeature reports whether sym is a variation point: declared
 // `variation` itself, or specializing one — a usage typed by a variation
 // definition and a usage redefining a variation usage are both variation
@@ -102,7 +116,7 @@ func (m *Model) VariantOf(sym *symbols.Symbol, name string) (*symbols.Symbol, bo
 // one declared for sym itself, or for a variation sym specializes — a usage
 // redefining a variation selects among the variants of what it redefines.
 func (m *Model) SelectsVariantOf(sym, variant *symbols.Symbol) bool {
-	owning := VariationOwning(variant)
+	owning := m.VariationPointOwning(variant)
 	if owning == nil || sym == nil {
 		return false
 	}
