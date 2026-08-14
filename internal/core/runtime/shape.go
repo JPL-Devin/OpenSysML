@@ -92,8 +92,9 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 			continue
 		}
 		// A variant is a choice offered for its variation, not a feature of the
-		// object declaring it: it materializes no slot of its own.
-		if semantics.DeclaresVariant(memberSym) {
+		// object declaring it: it materializes no slot of its own. A `variant`
+		// outside a variation offers no choice, so it stays an ordinary feature.
+		if ctx.model.VariationPointOwning(memberSym) != nil {
 			continue
 		}
 
