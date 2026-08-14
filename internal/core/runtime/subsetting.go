@@ -40,7 +40,7 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 			continue
 		}
 		if resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn); ok && resolved != nil && resolved != sym {
-			if ctx.isFeatureOf(owner, resolved) {
+			if ctx.isFeatureOf(owner, resolved, sym) {
 				features = append(features, resolved)
 			}
 			continue
@@ -56,15 +56,17 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 }
 
 // isFeatureOf reports whether owner carries feature under its name, as its own
-// declaration or through what it inherits: a declaration restating a feature
-// (`attribute :>> own`) masks the feature it redefines under that name, which is
-// still a feature of the owner.
-func (ctx *Context) isFeatureOf(owner, feature *symbols.Symbol) bool {
-	if member, ok := ctx.model.LookupMember(owner, feature.Name); ok && member == feature {
+// declaration or through what it inherits. A declaration restating a feature
+// (`attribute :>> own`) masks the feature it restates under that name, so the
+// masked feature is still a feature of the owner and masking names it.
+func (ctx *Context) isFeatureOf(owner, feature, masking *symbols.Symbol) bool {
+	carries := func(member *symbols.Symbol, ok bool) bool {
+		return ok && (member == feature || member == masking)
+	}
+	if carries(ctx.model.LookupMember(owner, feature.Name)) {
 		return true
 	}
-	member, ok := ctx.model.LookupContributedMember(owner, feature.Name)
-	return ok && member == feature
+	return carries(ctx.model.LookupContributedMember(owner, feature.Name))
 }
 
 // relatedFeatureNames is relatedFeatures by name.
@@ -77,24 +79,108 @@ func (ctx *Context) relatedFeatureNames(sym, owner *symbols.Symbol, kind ast.Rel
 	return names
 }
 
-// aliasRedefinedSlots makes every feature that redefines another feature of this
-// instance under a different name share that feature's slot: a redefinition
-// declares the same feature again, so both names name one set of values.
-func (ctx *Context) aliasRedefinedSlots(inst *Instance) {
-	for _, feat := range ctx.FeaturesOf(inst.Type) {
-		slot, ok := inst.Slots[feat.Name]
-		if !ok || feat.Symbol == nil {
+// aliasRedefinedSlots makes every name of one feature of this instance read one
+// slot: a redefinition declares the redefined feature again under a new name, so
+// however many names a chain of redefinitions gives it, they name one set of
+// values. The slot they share is the one the most specific declaration writing a
+// value created, whichever of the names that declaration used; one declaration
+// valuing two names of the feature is reported rather than silently picked from.
+func (ctx *Context) aliasRedefinedSlots(inst *Instance) error {
+	features := ctx.FeaturesOf(inst.Type)
+	byName := make(map[string]*EffectiveFeature, len(features))
+	for i := range features {
+		byName[features[i].Name] = &features[i]
+	}
+
+	for _, names := range ctx.redefinitionGroups(inst, features) {
+		chosen, err := ctx.sharedRedefinitionName(inst, byName, names)
+		if err != nil {
+			return err
+		}
+		slot := inst.Slots[chosen]
+		for _, name := range names {
+			inst.Slots[name] = slot
+		}
+	}
+	return nil
+}
+
+// redefinitionGroups groups the instance's slot names by the feature they name,
+// in feature order, keeping only names that share a feature with another. Each
+// group's names are ordered from the most specific declaration to the least,
+// which is the order the features are computed in.
+func (ctx *Context) redefinitionGroups(inst *Instance, features []EffectiveFeature) [][]string {
+	leader := map[string]string{}
+	var find func(string) string
+	find = func(name string) string {
+		next, ok := leader[name]
+		if !ok || next == name {
+			leader[name] = name
+			return name
+		}
+		root := find(next)
+		leader[name] = root
+		return root
+	}
+	for _, feat := range features {
+		if _, ok := inst.Slots[feat.Name]; !ok || feat.Symbol == nil {
 			continue
 		}
 		for _, redefined := range ctx.redefinedNames(feat.Symbol, inst.Type) {
 			if redefined == feat.Name {
 				continue
 			}
-			if _, ok := inst.Slots[redefined]; ok {
-				inst.Slots[redefined] = slot
+			if _, ok := inst.Slots[redefined]; !ok {
+				continue
+			}
+			if a, b := find(feat.Name), find(redefined); a != b {
+				leader[b] = a
 			}
 		}
 	}
+
+	var groups [][]string
+	index := map[string]int{}
+	for _, feat := range features {
+		if _, ok := leader[feat.Name]; !ok {
+			continue
+		}
+		root := find(feat.Name)
+		if at, ok := index[root]; ok {
+			groups[at] = append(groups[at], feat.Name)
+			continue
+		}
+		index[root] = len(groups)
+		groups = append(groups, []string{feat.Name})
+	}
+	return groups
+}
+
+// sharedRedefinitionName returns the name in a group of names of one feature
+// whose slot the group shares: the first name, in most-specific-first order,
+// whose own declaration writes a value, and otherwise the most specific name.
+// Two names valued by one declaration are ErrConflictingRedefinition.
+func (ctx *Context) sharedRedefinitionName(inst *Instance, byName map[string]*EffectiveFeature, names []string) (string, error) {
+	valued := ""
+	var valuedBy *symbols.Scope
+	for _, name := range names {
+		feat, ok := byName[name]
+		if !ok || feat.Symbol == nil || ctx.extractDefaultValue(feat.Symbol) == nil {
+			continue
+		}
+		if valued == "" {
+			valued, valuedBy = name, feat.Symbol.OwnerScope
+			continue
+		}
+		if feat.Symbol.OwnerScope == valuedBy {
+			return "", fmt.Errorf("%w: %s values %s and %s, which redefinition makes one feature",
+				ErrConflictingRedefinition, inst.Type.Name, valued, name)
+		}
+	}
+	if valued != "" {
+		return valued, nil
+	}
+	return names[0], nil
 }
 
 // redefinedNames returns the names of every feature of owner sym redefines,

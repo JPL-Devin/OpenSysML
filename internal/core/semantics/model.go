@@ -207,7 +207,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// A variant specializes the variation it is a variant of, so it carries the
 	// variation's type and features and restates only what it chooses
 	// (SysML v2 §7.20).
-	if variation := VariationOwning(sym); variation != nil && variation != sym && !seen[variation] {
+	if variation := m.VariationPointOwning(sym); variation != nil && variation != sym && !seen[variation] {
 		seen[variation] = true
 		out = append(out, variation)
 	}
