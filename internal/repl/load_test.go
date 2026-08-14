@@ -213,3 +213,29 @@ func TestPromptDiagnosticsAreNotAttributedToAFile(t *testing.T) {
 		t.Fatalf("prompt diagnostic should name no file:\n%s", joined)
 	}
 }
+
+// A comment-only file is a file of the load, not documentation for the next one:
+// it keeps its own snippet, and a diagnostic in a later file is still that
+// file's.
+func TestACommentOnlyFileKeepsItsIdentity(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "a-notes.sysml"), "// notes about this project\n")
+	decl := writeFile(t, filepath.Join(dir, "b-defs.sysml"), "package P {\n  import Missing::X;\n}\n")
+
+	s := NewSession()
+	out, err := s.LoadPaths([]string{dir})
+	if err != nil {
+		t.Fatalf("LoadPaths: %v", err)
+	}
+	if got := s.List(); len(got) != 2 {
+		t.Fatalf("the comment file was folded away, want 2 snippets, got %v", got)
+	}
+	if joined := strings.Join(out, "\n"); !strings.Contains(joined, decl+":2:") {
+		t.Fatalf("want a diagnostic reported at %s:2, got:\n%s", decl, joined)
+	}
+	// Retyping the declaration must not take the comment file with it.
+	s.Submit("package P { }")
+	if got := s.List(); len(got) != 2 || !strings.Contains(got[0], "notes about this project") {
+		t.Fatalf("the comment file was deleted with the redeclaration: %v", got)
+	}
+}

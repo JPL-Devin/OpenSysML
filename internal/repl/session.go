@@ -197,11 +197,13 @@ func (s *Session) genOffset(joined string) int {
 	return len(joined)
 }
 
-// takeLeadingComments removes the trailing run of comment-only snippets and
-// returns their text, ready to prefix the declaration they document.
+// takeLeadingComments removes the trailing run of comment-only snippets from
+// earlier submissions and returns their text, ready to prefix the declaration
+// they document. A comment-only file of this submission is a file in its own
+// right, so it stays.
 func (s *Session) takeLeadingComments() string {
 	cut := len(s.snippets)
-	for cut > 0 && isCommentOnly(s.snippets[cut-1].src) {
+	for cut > 0 && s.snippets[cut-1].gen != s.version && isCommentOnly(s.snippets[cut-1].src) {
 		cut--
 	}
 	if cut == len(s.snippets) {
