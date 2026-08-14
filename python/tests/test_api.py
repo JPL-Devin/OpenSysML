@@ -26,8 +26,8 @@ class TestModuleLevelAPI:
             # Should create default connection with auto_start=True
             MockConnection.assert_called_once_with('localhost', 50051, auto_start=True)
             
-            # Should delegate to Connection.load()
-            mock_conn.load.assert_called_once_with("test.sysml")
+            # Should delegate to Connection.load(), not asking for strict loading
+            mock_conn.load.assert_called_once_with("test.sysml", strict=False)
             
             assert result == mock_model
     
@@ -49,7 +49,7 @@ class TestModuleLevelAPI:
             # Should create connection with custom params
             MockConnection.assert_called_once_with('example.com', 9999, auto_start=True)
             
-            mock_conn.load.assert_called_once_with("test.sysml")
+            mock_conn.load.assert_called_once_with("test.sysml", strict=False)
             assert result == mock_model
     
     def test_pysysml_load_reuses_default_connection(self):
@@ -102,8 +102,8 @@ class TestModuleLevelAPI:
             MockConnection.assert_any_call('h2', 2222, auto_start=True)
             
             # Each load uses its own connection
-            mock_conn1.load.assert_called_once_with("test1.sysml")
-            mock_conn2.load.assert_called_once_with("test2.sysml")
+            mock_conn1.load.assert_called_once_with("test1.sysml", strict=False)
+            mock_conn2.load.assert_called_once_with("test2.sysml", strict=False)
             assert result1 == mock_model1
             assert result2 == mock_model2
     

@@ -18,7 +18,7 @@ import pytest
 from pysysml.capabilities import CAPABILITY_CONVERT, MissingCapabilityError
 from pysysml.connection import Connection
 from pysysml.conversion import FORMAT_SYSML, FORMAT_TURTLE, format_of_path
-from pysysml.errors import ConversionError
+from pysysml.errors import ConversionError, InvalidRequestError, ModelNotFoundError
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 
 MODEL = """package Demo {
@@ -315,15 +315,23 @@ class TestRoundTripAgainstRealService:
             current = conn.convert("sysml", file_path=str(source))
             assert "Other" in str(current)
 
-    def test_a_model_the_service_no_longer_holds_is_an_rpc_error(self, real_service):
+    def test_a_model_the_service_no_longer_holds_names_the_eviction(self, real_service):
+        # Translated at the client boundary now: the status the service failed
+        # the call with stays reachable through the class and through __cause__.
         with Connection(port=real_service, auto_start=False) as conn:
-            with pytest.raises(grpc.RpcError) as excinfo:
+            with pytest.raises(ModelNotFoundError) as excinfo:
                 conn.convert("sysml", model_hash="nosuchmodel")
-        assert excinfo.value.code() == grpc.StatusCode.NOT_FOUND
-        assert "no longer cached" in excinfo.value.details()
+        assert "no longer cached" in str(excinfo.value)
+        assert excinfo.value.code == grpc.StatusCode.NOT_FOUND
+        cause = excinfo.value.__cause__
+        assert isinstance(cause, grpc.RpcError)
+        assert cause.code() == grpc.StatusCode.NOT_FOUND
 
-    def test_an_unknown_format_is_an_rpc_error(self, real_service):
+    def test_an_unknown_format_is_an_invalid_request(self, real_service):
         with Connection(port=real_service, auto_start=False) as conn:
-            with pytest.raises(grpc.RpcError) as excinfo:
+            with pytest.raises(InvalidRequestError) as excinfo:
                 conn.convert("xmi", content=MODEL, from_format="sysml")
-        assert excinfo.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+        assert excinfo.value.code == grpc.StatusCode.INVALID_ARGUMENT
+        # Also a ValueError, so a caller checking arguments catches it.
+        assert isinstance(excinfo.value, ValueError)
+        assert excinfo.value.__cause__.code() == grpc.StatusCode.INVALID_ARGUMENT

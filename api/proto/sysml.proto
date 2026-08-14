@@ -30,6 +30,134 @@ service SysMLService {
   // textual notation and RDF Turtle — so a client can write a model back out
   // rather than only read it. Reported as the "convert" capability.
   rpc Convert(ConvertRequest) returns (ConvertResponse);
+
+  // Verification: the answers the REPL's %constraint, %requirement, %satisfy
+  // and %calc give, so "does this model satisfy its requirements?" can be asked
+  // by a script. Each evaluates the same runtime paths the prompt does and
+  // returns a verdict rather than formatted lines. Reported as the
+  // "verification" capability.
+  rpc VerifyConstraint(VerifyConstraintRequest) returns (VerifyConstraintResponse);
+  rpc VerifyRequirement(VerifyRequirementRequest) returns (VerifyRequirementResponse);
+  rpc VerifySatisfaction(VerifySatisfactionRequest) returns (VerifySatisfactionResponse);
+  rpc EvaluateCalc(EvaluateCalcRequest) returns (EvaluateCalcResponse);
+}
+
+// Verdict is one verification's answer: whether the condition held, and, when
+// it did not, which condition the model answered false about.
+message Verdict {
+  // What was verified: "constraint", "requirement" or "satisfy".
+  string kind = 1;
+  // FQN of the element verified; empty for an anonymous satisfy assertion.
+  string element_id = 2;
+  // The element as a reader names it: its FQN, or, for an anonymous satisfy
+  // assertion, the assertion as written ("satisfy Range by cruise").
+  string element = 3;
+  // Whether the condition holds. False with an empty `error` is the model's own
+  // answer; false with an `error` is no answer at all.
+  bool holds = 4;
+  // The condition that evaluated to false, as written, when the runtime names
+  // one. Empty when the verdict holds or the condition is not named.
+  string condition = 5;
+  // Instance the verdict is about, 0 when it is about declared values alone.
+  // Its slots are in `instances`, so a client can read what made it fail.
+  int64 instance_id = 6;
+  // Type of `instance_id`, as an FQN, for naming the object in a report.
+  string instance_type_id = 7;
+  // Set when evaluation failed rather than the model answering false: unbound
+  // features, incommensurable units, an exhausted step budget. `holds` is then
+  // false but is not a verdict.
+  string error = 8;
+}
+
+// VerifyConstraintRequest asks whether a constraint holds, as %constraint does.
+message VerifyConstraintRequest {
+  string model_hash = 1;
+  // FQN of the constraint definition or usage to evaluate.
+  string symbol_id = 2;
+  // Optional FQN of a part/usage to instantiate and evaluate the constraint
+  // against, so the verdict is about concrete values rather than declared
+  // defaults. The prompt evaluates against the object a %instantiate created;
+  // a call carries no session, so it names the subject instead.
+  string subject_symbol_id = 3;
+}
+
+// VerifyConstraintResponse carries the verdict.
+message VerifyConstraintResponse {
+  Verdict verdict = 1;
+  // Instances reachable from the verdict's subject, including it, so its slot
+  // values need no follow-up RPC. Empty when the verdict names no instance.
+  repeated Instance instances = 2;
+  // Set when the request could not be answered at all — an unknown symbol, a
+  // subject that could not be built. `verdict` is then unset.
+  string error = 3;
+  repeated Diagnostic diagnostics = 4;
+}
+
+// VerifyRequirementRequest asks whether a requirement is satisfied, as
+// %requirement does.
+message VerifyRequirementRequest {
+  string model_hash = 1;
+  // FQN of the requirement definition or usage to evaluate.
+  string symbol_id = 2;
+  // Optional FQN of a part/usage to instantiate and evaluate against.
+  string subject_symbol_id = 3;
+}
+
+// VerifyRequirementResponse carries the verdict.
+message VerifyRequirementResponse {
+  Verdict verdict = 1;
+  repeated Instance instances = 2;
+  string error = 3;
+  repeated Diagnostic diagnostics = 4;
+}
+
+// VerifySatisfactionRequest asks whether the satisfaction assertions a model
+// states hold, as %satisfy does. Each is evaluated against an object of its
+// subject, built for the call.
+message VerifySatisfactionRequest {
+  string model_hash = 1;
+  // Optional FQN limiting evaluation: the assertions stated within that
+  // element, or that element itself when it is a named satisfy assertion. Empty
+  // evaluates every assertion the model states.
+  string symbol_id = 2;
+}
+
+// VerifySatisfactionResponse carries one verdict per assertion evaluated, in
+// declaration order. No assertion at all is an empty list, not an error.
+message VerifySatisfactionResponse {
+  repeated Verdict verdicts = 1;
+  repeated Instance instances = 2;
+  string error = 3;
+  repeated Diagnostic diagnostics = 4;
+}
+
+// EvaluateCalcRequest invokes a calculation, as %calc does. Arguments are bound
+// positionally; a calc usage named with no arguments binds its inputs from its
+// own members and reports every output feature it computes (SysML 7.17).
+message EvaluateCalcRequest {
+  string model_hash = 1;
+  // FQN of the calc definition or usage.
+  string symbol_id = 2;
+  // Positional arguments. The notation writes named arguments inside an
+  // invocation's parentheses, which this request does not carry.
+  repeated Value arguments = 3;
+}
+
+// EvaluateCalcResponse carries what the calculation computed.
+message EvaluateCalcResponse {
+  // The value an invocation returned; unset when `outputs` carries the answer.
+  Value result = 1;
+  // Output features of a calc usage evaluated from its own members, in
+  // declaration order. Empty for an invocation with arguments.
+  repeated CalcOutput outputs = 2;
+  string error = 3;
+  repeated Diagnostic diagnostics = 4;
+}
+
+// CalcOutput is one output feature a calc usage computed.
+message CalcOutput {
+  string name = 1;
+  Value value = 2;
 }
 
 // ParseFileRequest specifies the source to parse
@@ -301,5 +429,9 @@ message ServerInfoResponse {
   //                  specializations, which typed code generation needs.
   //   "convert"    - the Convert RPC writes a model back out as SysML notation
   //                  or RDF Turtle.
+  //   "verification" - the VerifyConstraint, VerifyRequirement,
+  //                  VerifySatisfaction and EvaluateCalc RPCs answer the
+  //                  questions the REPL's %constraint, %requirement, %satisfy
+  //                  and %calc answer.
   repeated string capabilities = 2;
 }
