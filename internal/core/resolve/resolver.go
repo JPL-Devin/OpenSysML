@@ -46,7 +46,7 @@ type Resolver struct {
 	// constraintRefs are the requirements referenced by the require/assume
 	// members whose bodies are being walked, innermost last: such a body may
 	// redefine a feature of the requirement it references by plain name.
-	constraintRefs []*symbols.Symbol
+	constraintRefs []constraintRef
 }
 
 // New creates a resolver over the given index.

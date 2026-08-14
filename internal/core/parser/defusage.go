@@ -493,11 +493,10 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			}
 			m.isIndividual = true
 		case "snapshot":
-			// Check if standalone usage: snapshot <name> ...
-			// If followed by identifier/qualified name, could be usage keyword
+			// The portion loop in parseDefUsage reads a portion prefix the same way
+			// for either keyword; only another modifier after it is handled here.
 			nextTok := p.peekN(1)
-			if nextTok.Kind == lexer.Identifier || (nextTok.Kind == lexer.Keyword && !isModifierOrKindKeyword(nextTok.KeywordID)) {
-				// Treat as usage keyword, stop consuming modifiers
+			if nextTok.Kind != lexer.Keyword || !featureModifierKeywords[nextTok.KeywordID] {
 				return m
 			}
 			m.portion = ast.PortionSnapshot

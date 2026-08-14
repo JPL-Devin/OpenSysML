@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -171,6 +172,23 @@ func TestParseAnonymousPortionOfTypedKind(t *testing.T) {
 		}
 		if u.Portion != tt.want {
 			t.Errorf("%s: portion = %q, want %q", tt.input, u.Portion.Keyword(), tt.want.Keyword())
+		}
+	}
+}
+
+// Either portion keyword prefixes an occurrence usage identically, whatever
+// spelling of the declaration follows it.
+func TestParsePortionKeywordsAgree(t *testing.T) {
+	for _, form := range []string{"%s 'launch event';", "%s 'launch event' : Flight;", "%s : Flight;", "%s;"} {
+		for kw, want := range map[string]ast.PortionKind{"snapshot": ast.PortionSnapshot, "timeslice": ast.PortionTimeslice} {
+			input := fmt.Sprintf(form, kw)
+			u := parseSingleUsage(t, input)
+			if u.Kind != ast.UsageOccurrence {
+				t.Errorf("%s: kind = %v, want occurrence", input, u.Kind)
+			}
+			if u.Portion != want {
+				t.Errorf("%s: portion = %q, want %q", input, u.Portion.Keyword(), want.Keyword())
+			}
 		}
 	}
 }

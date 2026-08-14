@@ -468,19 +468,32 @@ func (r *Resolver) resolveConstraintReference(scope *symbols.Scope, ref *ast.Qua
 // requirement's features by plain name (SysML.xtext RequirementConstraintUsage).
 func (r *Resolver) walkConstraintBody(scope *symbols.Scope, ref *symbols.Symbol, body []ast.Node) {
 	if ref != nil {
-		r.constraintRefs = append(r.constraintRefs, ref)
+		members := make(map[ast.Node]bool, len(body))
+		for _, m := range body {
+			decl, _ := unwrapForResolve(m)
+			members[decl] = true
+		}
+		r.constraintRefs = append(r.constraintRefs, constraintRef{ref: ref, members: members})
 		defer func() { r.constraintRefs = r.constraintRefs[:len(r.constraintRefs)-1] }()
 	}
 	r.walkMembers(scope, body)
 }
 
-// lookupConstraintRefFeature finds name among the features of the requirements
-// referenced by the enclosing require/assume members, innermost first.
-func (r *Resolver) lookupConstraintRefFeature(name string) (*symbols.Symbol, bool) {
+// constraintRef is a requirement referenced by a require/assume member, with
+// the direct members of that member's body, which redefine its features.
+type constraintRef struct {
+	ref     *symbols.Symbol
+	members map[ast.Node]bool
+}
+
+// lookupConstraintRefFeature finds name among the features of the requirement
+// referenced by the require/assume member whose body declares decl.
+func (r *Resolver) lookupConstraintRefFeature(name string, decl ast.Node) (*symbols.Symbol, bool) {
 	for i := len(r.constraintRefs) - 1; i >= 0; i-- {
-		if sym, ok := r.featureOf(r.constraintRefs[i], name, map[*symbols.Symbol]bool{}); ok {
-			return sym, true
+		if !r.constraintRefs[i].members[decl] {
+			continue // a nested declaration inherits from its own type, not the reference
 		}
+		return r.featureOf(r.constraintRefs[i].ref, name, map[*symbols.Symbol]bool{})
 	}
 	return nil, false
 }
@@ -540,7 +553,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 
 		// A require/assume body redefines the features of the requirement its
 		// member references, which the owner's own generals do not hold.
-		if sym, ok := r.lookupConstraintRefFeature(featureName); ok {
+		if sym, ok := r.lookupConstraintRefFeature(featureName, decl); ok {
 			r.recordRedefined(qn, sym)
 			return
 		}
