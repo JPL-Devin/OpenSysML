@@ -115,16 +115,22 @@ func qnString(qn *ast.QualifiedName) string {
 // Note: byte-column carets assume ASCII/monospace alignment; multi-byte runes
 // before the caret will misalign by display width. Acceptable for v1 — the LSP
 // server owns UTF-16 correctness; the REPL caret is only a terminal aid.
-func renderDiagnostics(diags []passes.Diagnostic, src string, baseLine int, origin bool) []string {
+//
+// file names the source the findings are in, when they are in a loaded file that
+// a reader would go to rather than in what was typed at the prompt.
+func renderDiagnostics(diags []passes.Diagnostic, src string, baseLine int, origin bool, file string) []string {
 	if len(diags) == 0 {
 		return nil
+	}
+	if file != "" {
+		file += ":"
 	}
 	sf := source.New(docName, []byte(src))
 	lines := strings.Split(src, "\n")
 	var out []string
 	for _, d := range diags {
 		p := sf.Lines().PosAt(d.Span.Offset)
-		head := fmt.Sprintf("%d:%d: %s: %s", p.Line-baseLine+1, p.Col, d.Severity.String(), d.Message)
+		head := fmt.Sprintf("%s%d:%d: %s: %s", file, p.Line-baseLine+1, p.Col, d.Severity.String(), d.Message)
 		if origin {
 			head += fmt.Sprintf(" [%s]", diagOrigin(d))
 		}
@@ -152,10 +158,10 @@ func diagOrigin(d passes.Diagnostic) string {
 	return strings.Join(parts, "/")
 }
 
-// renderExprMessage reports msg against a one-line expression the way a
-// declaration diagnostic is reported: position, source echo and caret. base is
-// the offset the expression starts at in the text span was measured in.
-func renderExprMessage(expr, msg string, span source.Span, base int) []string {
+// exprError reports msg against a one-line expression the way a declaration
+// diagnostic is reported: position, source echo and caret. base is the offset
+// the expression starts at in the text span was measured in.
+func exprError(expr, msg string, span source.Span, base int) error {
 	col := span.Offset - base + 1
 	if col < 1 {
 		col = 1
@@ -163,11 +169,7 @@ func renderExprMessage(expr, msg string, span source.Span, base int) []string {
 	if col > len(expr)+1 {
 		col = len(expr) + 1
 	}
-	return []string{
-		fmt.Sprintf("error: 1:%d: %s", col, msg),
-		expr,
-		caretLine(col, span.Len, len(expr)),
-	}
+	return fmt.Errorf("1:%d: %s\n%s\n%s", col, msg, expr, caretLine(col, span.Len, len(expr)))
 }
 
 // caretLine builds "   ^~~~" with (col-1) leading spaces and a caret span of
@@ -206,7 +208,7 @@ func renderResult(r Result, v Verbosity) []string {
 	}
 	diags := scopedDiagnostics(r, v)
 	out := append([]string(nil), r.Notices...)
-	out = append(out, renderDiagnostics(diags, r.Source, r.baseLine(), false)...)
+	out = append(out, renderDiagnostics(diags, r.Source, r.baseLine(), false, "")...)
 	if hasError(diags) {
 		return out
 	}
@@ -225,7 +227,7 @@ func renderDebug(r Result) []string {
 	out := append([]string(nil), r.Notices...)
 	out = append(out, fmt.Sprintf("[debug] submission at buffer line %d; %d diagnostic(s) over the whole buffer",
 		r.baseLine(), len(r.Diagnostics)))
-	out = append(out, renderDiagnostics(r.Diagnostics, r.Source, 1, true)...)
+	out = append(out, renderDiagnostics(r.Diagnostics, r.Source, 1, true, "")...)
 	return append(out, renderSummary(r.Members)...)
 }
 

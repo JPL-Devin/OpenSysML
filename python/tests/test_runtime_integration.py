@@ -1,7 +1,7 @@
 """Integration tests for runtime operations against real service."""
 import pytest
 from pysysml import Connection
-from pysysml.errors import RuntimeError
+from pysysml.errors import ExecutionError
 
 @pytest.mark.integration
 class TestRuntimeIntegration:
@@ -154,19 +154,19 @@ class TestRuntimeIntegration:
         assert vehicle.get_attr("mass").name == "mass"
 
     def test_eval_invalid_expression_raises(self):
-        """Test that invalid expression raises RuntimeError."""
+        """Test that invalid expression raises ExecutionError."""
         src = 'package Test { }'
         model = self.conn.load_from_content(src)
         
-        with pytest.raises(RuntimeError):
+        with pytest.raises(ExecutionError):
             self.conn.eval("invalid syntax (((", model.hash)
     
     def test_instantiate_nonexistent_symbol_raises(self):
-        """Test that instantiating missing symbol raises RuntimeError."""
+        """Test that instantiating missing symbol raises ExecutionError."""
         src = 'package Test { }'
         model = self.conn.load_from_content(src)
         
-        with pytest.raises(RuntimeError, match="not found"):
+        with pytest.raises(ExecutionError, match="not found"):
             self.conn.instantiate("Test::DoesNotExist", model.hash)
     
     def test_load_from_content_with_syntax_error(self):
