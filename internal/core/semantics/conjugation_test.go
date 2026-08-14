@@ -225,3 +225,29 @@ func TestInterfaceEndConjugation(t *testing.T) {
 		}
 	}
 }
+
+// TestConjugationOnRedefiningPort covers a port that both refines an inherited
+// feature and states a conjugated type: the type states the conjugation, so the
+// redefinition declared before it must not hide it (§7.12.3).
+func TestConjugationOnRedefiningPort(t *testing.T) {
+	m, root := buildModel(t, `package P {
+	item def Command;
+	item def Telemetry;
+	port def CommunicationPort {
+		in item cmd : Command;
+		out item tlm : Telemetry;
+	}
+	part def Ground { port link : CommunicationPort; }
+	part def Space :> Ground { port :>> link : ~CommunicationPort; }
+}`)
+	pkg := sym(t, root, "P")
+	space := member(t, m, pkg, "Space")
+	port := member(t, m, space, "link")
+
+	if !m.IsConjugated(port) {
+		t.Errorf("Space::link not reported conjugated")
+	}
+	if got := directions(m, port); got["cmd"] != ast.DirOut || got["tlm"] != ast.DirIn {
+		t.Errorf("Space::link directions = %v, want cmd out / tlm in", got)
+	}
+}

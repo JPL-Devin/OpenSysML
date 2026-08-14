@@ -23,10 +23,12 @@ type conjugatedType struct {
 	conjugated bool
 }
 
-// superEdge is one generalization edge, with whether it conjugates its target.
+// superEdge is one generalization edge, with whether it conjugates its target
+// and whether it is the feature typing that states the declaration's type.
 type superEdge struct {
 	sym        *symbols.Symbol
 	conjugated bool
+	typing     bool
 }
 
 // ConjugateDirection returns the conjugate of a feature direction (§7.12.2):
@@ -49,14 +51,48 @@ func (m *Model) IsConjugated(sym *symbols.Symbol) bool {
 	visited := make(map[*symbols.Symbol]bool)
 	for cur := sym; cur != nil && !visited[cur]; {
 		visited[cur] = true
-		edges := m.superEdges(cur)
-		if len(edges) == 0 {
+		edge, ok := m.typeEdge(cur)
+		if !ok {
 			break
 		}
-		parity = parity != edges[0].conjugated
-		cur = edges[0].sym
+		parity = parity != edge.conjugated
+		cur = edge.sym
 	}
 	return parity
+}
+
+// typeEdge returns the edge that gives sym its port type: the feature typing
+// (`~` types a port, so a redefinition declared before it must not hide it),
+// else the first generalization.
+func (m *Model) typeEdge(sym *symbols.Symbol) (superEdge, bool) {
+	edges := m.superEdges(sym)
+	for _, edge := range edges {
+		if edge.typing {
+			return edge, true
+		}
+	}
+	if len(edges) == 0 {
+		return superEdge{}, false
+	}
+	return edges[0], true
+}
+
+// featureEdges returns sym's generalization edges with the one giving it its
+// type first, so a feature of that type masks a same-named inherited one.
+func (m *Model) featureEdges(sym *symbols.Symbol) []superEdge {
+	edges := m.superEdges(sym)
+	typed, ok := m.typeEdge(sym)
+	if !ok || !typed.typing {
+		return edges
+	}
+	out := make([]superEdge, 0, len(edges))
+	out = append(out, typed)
+	for _, edge := range edges {
+		if edge.sym != typed.sym {
+			out = append(out, edge)
+		}
+	}
+	return out
 }
 
 // superEdges returns sym's generalization edges in declaration order, each with
@@ -89,7 +125,7 @@ func (m *Model) superEdges(sym *symbols.Symbol) []superEdge {
 			continue
 		}
 		seen[resolved] = true
-		out = append(out, superEdge{sym: resolved, conjugated: rel.Conjugated})
+		out = append(out, superEdge{sym: resolved, conjugated: rel.Conjugated, typing: rel.Kind == ast.RelTyping})
 	}
 	// Supertypes known beyond declared relationships never conjugate.
 	for _, sup := range m.DirectSupertypes(sym) {
@@ -117,7 +153,7 @@ func (m *Model) conjugatedSupertypes(sym *symbols.Symbol) []conjugatedType {
 	visited := map[*symbols.Symbol]bool{sym: true}
 	for i := 0; i < len(out); i++ {
 		cur := out[i]
-		for _, edge := range m.superEdges(cur.sym) {
+		for _, edge := range m.featureEdges(cur.sym) {
 			if visited[edge.sym] {
 				continue
 			}
