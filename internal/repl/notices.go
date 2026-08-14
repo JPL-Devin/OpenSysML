@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -166,7 +167,13 @@ func (e *endedSession) reason() string {
 // the session it would have used is gone, when that is known, and how to start
 // one either way.
 func noSessionMsg(what string, ended *endedSession, start string) string {
-	msg := "error: no active " + what
+	return "error: " + noSessionText(what, ended, start)
+}
+
+// noSessionText is the same message as an error's text, for a command that
+// reports its failure as an error rather than as a line.
+func noSessionText(what string, ended *endedSession, start string) string {
+	msg := "no active " + what
 	if reason := ended.reason(); reason != "" {
 		msg += ": " + reason
 	}
@@ -180,6 +187,16 @@ func noSessionMsg(what string, ended *endedSession, start string) string {
 // drive, naming the submission that ended the last one.
 func (s *Session) noActionSessionMsg() string {
 	return noSessionMsg("action session", s.endedAction, "%action")
+}
+
+// noActionSessionErr is noActionSessionMsg as an error.
+func (s *Session) noActionSessionErr() error {
+	return errors.New(noSessionText("action session", s.endedAction, "%action"))
+}
+
+// noStateSessionErr is noStateSessionMsg as an error.
+func (s *Session) noStateSessionErr() error {
+	return errors.New(noSessionText("state machine session", s.endedState, "%state"))
 }
 
 // noStateSessionMsg is the same for the state machine debugger.

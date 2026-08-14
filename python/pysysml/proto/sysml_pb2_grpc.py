@@ -80,6 +80,26 @@ class SysMLServiceStub:
                 request_serializer=sysml__pb2.ConvertRequest.SerializeToString,
                 response_deserializer=sysml__pb2.ConvertResponse.FromString,
                 _registered_method=True)
+        self.VerifyConstraint = channel.unary_unary(
+                '/sysml.SysMLService/VerifyConstraint',
+                request_serializer=sysml__pb2.VerifyConstraintRequest.SerializeToString,
+                response_deserializer=sysml__pb2.VerifyConstraintResponse.FromString,
+                _registered_method=True)
+        self.VerifyRequirement = channel.unary_unary(
+                '/sysml.SysMLService/VerifyRequirement',
+                request_serializer=sysml__pb2.VerifyRequirementRequest.SerializeToString,
+                response_deserializer=sysml__pb2.VerifyRequirementResponse.FromString,
+                _registered_method=True)
+        self.VerifySatisfaction = channel.unary_unary(
+                '/sysml.SysMLService/VerifySatisfaction',
+                request_serializer=sysml__pb2.VerifySatisfactionRequest.SerializeToString,
+                response_deserializer=sysml__pb2.VerifySatisfactionResponse.FromString,
+                _registered_method=True)
+        self.EvaluateCalc = channel.unary_unary(
+                '/sysml.SysMLService/EvaluateCalc',
+                request_serializer=sysml__pb2.EvaluateCalcRequest.SerializeToString,
+                response_deserializer=sysml__pb2.EvaluateCalcResponse.FromString,
+                _registered_method=True)
 
 
 class SysMLServiceServicer:
@@ -150,6 +170,35 @@ class SysMLServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def VerifyConstraint(self, request, context):
+        """Verification: the answers the REPL's %constraint, %requirement, %satisfy
+        and %calc give, so "does this model satisfy its requirements?" can be asked
+        by a script. Each evaluates the same runtime paths the prompt does and
+        returns a verdict rather than formatted lines. Reported as the
+        "verification" capability.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def VerifyRequirement(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def VerifySatisfaction(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def EvaluateCalc(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SysMLServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -197,6 +246,26 @@ def add_SysMLServiceServicer_to_server(servicer, server):
                     servicer.Convert,
                     request_deserializer=sysml__pb2.ConvertRequest.FromString,
                     response_serializer=sysml__pb2.ConvertResponse.SerializeToString,
+            ),
+            'VerifyConstraint': grpc.unary_unary_rpc_method_handler(
+                    servicer.VerifyConstraint,
+                    request_deserializer=sysml__pb2.VerifyConstraintRequest.FromString,
+                    response_serializer=sysml__pb2.VerifyConstraintResponse.SerializeToString,
+            ),
+            'VerifyRequirement': grpc.unary_unary_rpc_method_handler(
+                    servicer.VerifyRequirement,
+                    request_deserializer=sysml__pb2.VerifyRequirementRequest.FromString,
+                    response_serializer=sysml__pb2.VerifyRequirementResponse.SerializeToString,
+            ),
+            'VerifySatisfaction': grpc.unary_unary_rpc_method_handler(
+                    servicer.VerifySatisfaction,
+                    request_deserializer=sysml__pb2.VerifySatisfactionRequest.FromString,
+                    response_serializer=sysml__pb2.VerifySatisfactionResponse.SerializeToString,
+            ),
+            'EvaluateCalc': grpc.unary_unary_rpc_method_handler(
+                    servicer.EvaluateCalc,
+                    request_deserializer=sysml__pb2.EvaluateCalcRequest.FromString,
+                    response_serializer=sysml__pb2.EvaluateCalcResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -443,6 +512,114 @@ class SysMLService:
             '/sysml.SysMLService/Convert',
             sysml__pb2.ConvertRequest.SerializeToString,
             sysml__pb2.ConvertResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def VerifyConstraint(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/VerifyConstraint',
+            sysml__pb2.VerifyConstraintRequest.SerializeToString,
+            sysml__pb2.VerifyConstraintResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def VerifyRequirement(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/VerifyRequirement',
+            sysml__pb2.VerifyRequirementRequest.SerializeToString,
+            sysml__pb2.VerifyRequirementResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def VerifySatisfaction(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/VerifySatisfaction',
+            sysml__pb2.VerifySatisfactionRequest.SerializeToString,
+            sysml__pb2.VerifySatisfactionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def EvaluateCalc(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/EvaluateCalc',
+            sysml__pb2.EvaluateCalcRequest.SerializeToString,
+            sysml__pb2.EvaluateCalcResponse.FromString,
             options,
             channel_credentials,
             insecure,

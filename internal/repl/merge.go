@@ -221,7 +221,7 @@ func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl) ([
 		}
 		// A member declaring no name (an import, a comment) matches only on its
 		// text, so an identical one in the body is it re-typed, not a second copy.
-		if memberName(nm) == "" && hasText(oldSrc, oldDecl.members, text) {
+		if memberName(nm) == "" && hasText(oldSrc, oldDecl.members, memberText(newSrc, nm)) {
 			continue
 		}
 		added = append(added, text)

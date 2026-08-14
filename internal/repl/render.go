@@ -144,16 +144,22 @@ func qnString(qn *ast.QualifiedName) string {
 // Note: byte-column carets assume ASCII/monospace alignment; multi-byte runes
 // before the caret will misalign by display width. Acceptable for v1 — the LSP
 // server owns UTF-16 correctness; the REPL caret is only a terminal aid.
-func renderDiagnostics(diags []passes.Diagnostic, src string, baseLine int, origin bool) []string {
+//
+// file names the source the findings are in, when they are in a loaded file that
+// a reader would go to rather than in what was typed at the prompt.
+func renderDiagnostics(diags []passes.Diagnostic, src string, baseLine int, origin bool, file string) []string {
 	if len(diags) == 0 {
 		return nil
+	}
+	if file != "" {
+		file += ":"
 	}
 	sf := source.New(docName, []byte(src))
 	lines := strings.Split(src, "\n")
 	var out []string
 	for _, d := range diags {
 		p := sf.Lines().PosAt(d.Span.Offset)
-		head := fmt.Sprintf("%d:%d: %s: %s", p.Line-baseLine+1, p.Col, d.Severity.String(), d.Message)
+		head := fmt.Sprintf("%s%d:%d: %s: %s", file, p.Line-baseLine+1, p.Col, d.Severity.String(), d.Message)
 		if origin {
 			head += fmt.Sprintf(" [%s]", diagOrigin(d))
 		}
@@ -217,7 +223,7 @@ func renderResult(r Result, v Verbosity) []string {
 		return renderDebug(r)
 	}
 	diags := scopedDiagnostics(r, v)
-	out := renderDiagnostics(diags, r.Source, r.baseLine(), false)
+	out := renderDiagnostics(diags, r.Source, r.baseLine(), false, "")
 	if hasError(diags) {
 		return append(out, r.Notices...)
 	}
@@ -236,7 +242,7 @@ func renderResult(r Result, v Verbosity) []string {
 func renderDebug(r Result) []string {
 	out := []string{fmt.Sprintf("[debug] submission at buffer line %d; %d diagnostic(s) over the whole buffer",
 		r.baseLine(), len(r.Diagnostics))}
-	out = append(out, renderDiagnostics(r.Diagnostics, r.Source, 1, true)...)
+	out = append(out, renderDiagnostics(r.Diagnostics, r.Source, 1, true, "")...)
 	out = append(out, renderSummary(r.Members)...)
 	return append(out, r.Notices...)
 }

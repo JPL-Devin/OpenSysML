@@ -1,9 +1,11 @@
 package repl
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 func TestNewSessionEmpty(t *testing.T) {
@@ -18,9 +20,9 @@ func TestNewSessionEmpty(t *testing.T) {
 
 func TestAcceptReplacesByName(t *testing.T) {
 	s := NewSession()
-	s.accept("package P { }")
-	s.accept("namespace N;")
-	joined, _, _, _ := s.accept("package P { } // redefined")
+	s.accept("", "package P { }")
+	s.accept("", "namespace N;")
+	joined, _, _, _ := s.accept("", "package P { } // redefined")
 	// P should appear once (the new one); N preserved; order = N then new P.
 	if got := s.List(); len(got) != 2 {
 		t.Fatalf("want 2 snippets, got %d: %v", len(got), got)
@@ -120,6 +122,19 @@ func TestMergeDoesNotDuplicateUnnamedMembers(t *testing.T) {
 	s := NewSession()
 	const src = "package P { public import ScalarValues::*; part def A; }"
 	s.Submit(src)
+	s.Submit(src)
+	s.Submit(src)
+
+	if got := strings.Count(strings.Join(s.List(), "\n"), "import ScalarValues"); got != 1 {
+		t.Errorf("import present %d times after re-typing the body: %v", got, s.List())
+	}
+}
+
+// The text a member is matched by ends at the member, so a comment written
+// after an import does not make re-typing the body stack another copy of it.
+func TestMergeDoesNotDuplicateAnImportFollowedByAComment(t *testing.T) {
+	s := NewSession()
+	const src = "package P {\n\tpublic import ScalarValues::*; // std\n\tpart def A;\n}"
 	s.Submit(src)
 	s.Submit(src)
 
@@ -276,9 +291,9 @@ func TestSubmitResolvesAcrossSubmissions(t *testing.T) {
 // stale documentation above whatever is current.
 func TestLeadingCommentIsReplacedWithItsDeclaration(t *testing.T) {
 	s := NewSession()
-	s.accept("// doc for A")
-	s.accept("part def A;")
-	joined, _, _, _ := s.accept("part def A { part y; }")
+	s.accept("", "// doc for A")
+	s.accept("", "part def A;")
+	joined, _, _, _ := s.accept("", "part def A { part y; }")
 
 	if strings.Contains(joined, "doc for A") {
 		t.Errorf("stale comment survived the redeclaration: %q", joined)
@@ -291,8 +306,8 @@ func TestLeadingCommentIsReplacedWithItsDeclaration(t *testing.T) {
 // A comment with nothing after it is still part of the session and still saved.
 func TestTrailingCommentIsKept(t *testing.T) {
 	s := NewSession()
-	s.accept("part def A;")
-	joined, _, _, _ := s.accept("// thinking out loud")
+	s.accept("", "part def A;")
+	joined, _, _, _ := s.accept("", "// thinking out loud")
 	if !strings.Contains(joined, "thinking out loud") {
 		t.Errorf("comment dropped: %q", joined)
 	}
@@ -310,5 +325,54 @@ func TestSubmitReportsTheSubmittedLine(t *testing.T) {
 		if line != 1 {
 			t.Errorf("diagnostic reported on line %d of a one-line submission: %s", line, d.Message)
 		}
+	}
+}
+
+// Several files of one model commonly open the same package, so a loaded file
+// supersedes only what that same file contributed before.
+func TestLoadedFilesAccumulateByFile(t *testing.T) {
+	s := NewSession()
+	s.accept("a.sysml", "package M { part def A; }")
+	s.accept("b.sysml", "package M { part def B; }")
+	if got := len(s.List()); got != 2 {
+		t.Errorf("want both files kept, got %d: %v", got, s.List())
+	}
+
+	joined, _, _, _ := s.accept("a.sysml", "package M { part def C; }")
+	if strings.Contains(joined, "part def A") {
+		t.Errorf("reloading a file kept its previous contents: %q", joined)
+	}
+	if !strings.Contains(joined, "part def B") {
+		t.Errorf("reloading a file dropped another file: %q", joined)
+	}
+}
+
+// A loaded file supersedes what was typed at the prompt about the same names,
+// so the name it declares stays unambiguous.
+func TestLoadedFileSupersedesPromptDeclarations(t *testing.T) {
+	s := NewSession()
+	s.accept("", "part def A;")
+	joined, _, _, _ := s.accept("a.sysml", "part def A { part y; }")
+
+	if got := len(s.List()); got != 1 {
+		t.Errorf("want the typed declaration replaced, got %d snippets: %v", got, s.List())
+	}
+	if !strings.Contains(joined, "part y") {
+		t.Errorf("the loaded declaration is missing: %q", joined)
+	}
+}
+
+// The same file loaded under another spelling of its path is the same file, so
+// it replaces its earlier contents rather than declaring everything twice.
+func TestLoadedFileIsIdentifiedByTheFileNotTheSpelling(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "m.sysml")
+
+	s := NewSession()
+	s.accept(path, "package M { part def A; }")
+	s.accept(filepath.Join(dir, ".", "..", filepath.Base(dir), "m.sysml"), "package M { part def A; }")
+
+	if got := len(s.List()); got != 1 {
+		t.Errorf("want one copy of the file, got %d snippets: %v", got, s.List())
 	}
 }

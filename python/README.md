@@ -50,18 +50,57 @@ for d in model.diagnostics:
 print(pysysml.eval("1 + 2 * 3", file_path="model.sysml"))
 ```
 
-### Inspecting symbols
+### Loading a model that has to be usable
 
-`Model.find` takes a **short** name and searches the symbol tree:
+A model with syntax errors still parses to a `Model` — the service reports what
+it could read plus diagnostics — so a script that does not look at them queries a
+model that is missing declarations. Ask for a valid one instead:
 
 ```python
-vehicle = model.find("Vehicle")   # not model.root.find(...), and not an FQN
+model = pysysml.load("model.sysml")
+model.ok                       # False when any diagnostic is an error
+model.errors                   # just the error-severity diagnostics
+model.raise_for_errors()       # raises ModelError, or returns the model
+
+model = pysysml.load("model.sysml", strict=True)   # raises instead of returning
+```
+
+`strict=True` is available on `pysysml.load`, `Connection.load` and
+`Connection.load_from_content`. The `ModelError` it raises carries the errors as
+`.diagnostics` and the model itself as `.model`, so a caller that wants to report
+them does not have to load twice:
+
+```python
+try:
+    model = pysysml.load("model.sysml", strict=True)
+except pysysml.ModelError as exc:
+    for d in exc.diagnostics:
+        print(d)
+    partial = exc.model            # what the service did parse
+```
+
+### Inspecting symbols
+
+`Model.find` takes a **short** name and searches the symbol tree, returning
+`None` when there is no such symbol. `model["Vehicle"]` is the raising
+counterpart: it names the symbol that is missing, where chaining off `find`'s
+`None` would fail one call later as `AttributeError: 'NoneType' object has no
+attribute 'attributes'`.
+
+```python
+vehicle = model["Vehicle"]        # SymbolNotFoundError if absent; also a KeyError
 vehicle.attributes()              # [Symbol(id='Demo::Vehicle::mass', kind='attributeUsage')]
 vehicle.parts()                   # [Symbol(id='Demo::Vehicle::engine', kind='partUsage')]
 vehicle.get_attr("mass")          # Symbol, or None if there is no such attribute
+
+model.find("Nope")                # None — for asking whether a symbol exists
+"Vehicle" in model                # True
+model["Vehcile"]                  # SymbolNotFoundError: ... did you mean 'Vehicle'?
 ```
 
-`model.get("Demo::Vehicle")` looks a symbol up by fully-qualified name instead.
+The subscript takes a short name or an FQN. `model.get("Demo::Vehicle")` looks a
+symbol up by fully-qualified name only, and returns `None` for a name it does not
+find.
 
 A symbol also carries its static type facts, resolved by the service:
 
@@ -124,6 +163,140 @@ returning `False`; use `slots` to inspect an instance whose slots may have faile
 a value the wire format cannot represent is reported as an
 `UnsupportedValueError` in that entry, leaving the other entries intact.
 
+### Verification: constraints, requirements, satisfaction, calc
+
+The questions the REPL answers with `%constraint`, `%requirement`, `%satisfy` and
+`%calc` are RPCs too, so "does this model satisfy its requirements?" is
+scriptable. They run the same runtime evaluation the REPL drives, not a second
+implementation of it.
+
+```python
+model = pysysml.load("lander.sysml", strict=True)
+
+for verdict in model.verify_satisfaction():        # every assert satisfy … by …
+    print(verdict)
+# ✓ satisfy touchdown by slowLander holds (on Landing::slowLander ID: 1)
+# ✗ satisfy touchdown by fastLander fails (on Landing::fastLander ID: 2): condition
+#   evaluated to false: lander.verticalSpeed <= maxVerticalSpeed
+
+model.satisfied()                                  # False — one assertion fails
+model.verify_satisfaction("Landing::analysisContext")   # only what that element asserts
+```
+
+Constraints and requirements are asked about by name, optionally against a
+subject to instantiate, so the verdict is about that object's values rather than
+declared defaults:
+
+```python
+model.verify_constraint("Demo::Vehicle::massOK", subject="Demo::sedan")
+model.verify_requirement("Demo::Vehicle::lightEnough", subject="Demo::sedan")
+```
+
+A `Verdict` is truthy when the condition holds, and carries why when it does not:
+
+```python
+verdict = model.verify_requirement("Demo::Vehicle::lightEnough", subject="Demo::truck")
+
+bool(verdict)          # False
+verdict.holds          # False
+verdict.condition      # 'mass < 2000.0' — the condition that evaluated to false
+verdict.element        # 'Demo::Vehicle::lightEnough', or the assertion as written
+verdict.kind           # 'constraint', 'requirement' or 'satisfy'
+verdict.instance_id    # the object the verdict is about, 0 for declared defaults
+verdict.instances      # the objects the call built, as Instances
+verdict.diagnostics    # diagnostics the service reported for the run
+print(verdict.explain())
+```
+
+**A false verdict is an answer, not an exception.** A condition that evaluated to
+false is what was asked, so it is returned; only a failure to evaluate at all (an
+unbound feature, an exhausted step budget) is a malfunction. That failure does
+not masquerade as a failing verdict either — it is `verdict.error`, with
+`verdict.evaluated` False, and `verdict.raise_for_error()` turns it into an
+`ExecutionError` where a script must not read it as "the requirement fails":
+
+```python
+for verdict in model.verify_satisfaction():
+    verdict.raise_for_error()      # nothing raised for a verdict of false
+    if not verdict:
+        print(verdict.explain())
+```
+
+A request that cannot be answered at all — an unknown symbol, a subject that
+cannot be instantiated — raises `ExecutionError` from the call itself rather than
+returning a verdict. Narrowing to an element that states no satisfaction
+assertion is not such a request: it answers with no verdicts, and `satisfied()`
+is then vacuously `True`.
+
+`verify_satisfaction` answers many assertions in one call and reports one object
+graph for them all, so `verdict.instances` holds every object that call built;
+select the one a verdict is about with its `instance_id`:
+
+```python
+subject = next(i for i in verdict.instances if i.id == verdict.instance_id)
+```
+
+Calculations are invoked with positional arguments, and a calc *usage* named with
+no arguments is evaluated from its own members, reporting every output feature it
+computes (SysML 7.17):
+
+```python
+model.calc("Demo::add", arguments=[2.5, 4.0]).value    # 6.5
+model.calc("Demo::c").outputs                          # {'a': 6, 'b': 10}
+```
+
+Verification is negotiated like conversion: against a service too old to report
+the `verification` capability these calls raise `MissingCapabilityError` naming
+the upgrade, rather than failing on an unimplemented method.
+
+### Errors
+
+Every failure a caller can act on is a `PySysMLError`. The service's gRPC status
+codes are translated at the client boundary, so a script never has to `import
+grpc` and switch on status codes; the original `grpc.RpcError` stays reachable as
+`__cause__` for the debug string.
+
+```
+PySysMLError
+├── ConnectionError            service unreachable or would not start (UNAVAILABLE)
+├── ServiceError               any other status the service failed a call with
+│   ├── ModelNotFoundError     the model hash is no longer in the service cache
+│   ├── ModelFileNotFoundError the service could not read the path (also FileNotFoundError)
+│   ├── InvalidRequestError    request rejected as malformed (also ValueError)
+│   ├── ServiceTimeoutError    deadline exceeded or cancelled (also TimeoutError)
+│   └── UnsupportedOperationError  the service does not implement the call
+├── ExecutionError             eval/instantiate/execute/verify failed (also RuntimeError)
+├── ModelError                 strict load of a model with error diagnostics
+├── SymbolNotFoundError        model["Nope"] (also KeyError)
+├── SlotError                  a slot could not be evaluated
+├── ConversionError            the model could not be written in that format
+├── UnsupportedValueError      a value the wire format cannot represent
+├── TypeMismatchError          a slot's value contradicts its generated view
+├── InstanceTypeError          a typed view was given an instance of another type
+└── MissingCapabilityError     the connected service does not report the capability
+```
+
+`ServiceError.code` is the `grpc.StatusCode` behind it. A status this client has
+never seen still arrives as a `ServiceError`, so nothing escapes the hierarchy.
+
+The two most common failures are both `NOT_FOUND` on the wire but have different
+fixes, and are told apart from what the service reports:
+
+```python
+pysysml.load("/tmp/nope.sysml")     # ModelFileNotFoundError: file not found: …
+model.to_turtle()                   # ModelNotFoundError if the model was evicted
+```
+
+`ExecutionError` inherits from the built-in `RuntimeError`, so `except
+RuntimeError:` catches it — which is what a traceback reading
+`pysysml.errors.RuntimeError` used to promise and not deliver. That old name
+remains as a deprecated alias of `ExecutionError` (same class, so existing
+`except pysysml.errors.RuntimeError` keeps working) and emits a
+`DeprecationWarning` on attribute access. Inheriting from the built-in was chosen
+over renaming alone because it fixes existing code that never caught the old
+class, and the alias is excluded from `__all__` so a star-import no longer
+shadows the built-in.
+
 ### Writing a model back out
 
 A loaded model can be written back to SysML notation or RDF Turtle. The service
@@ -152,7 +325,7 @@ file edited between `load` and `save` does not change what is written — the mo
 saved is the model that was inspected. `convert(file_path=…)` is the other
 choice, reading the file as it stands now. The parsed source lives in the
 service's bounded cache, so a model evicted since it was loaded raises
-`grpc.RpcError` (`NOT_FOUND`) instead of writing something else; load it again.
+`ModelNotFoundError` instead of writing something else; load it again.
 
 What each direction preserves:
 
@@ -376,6 +549,9 @@ make python-proto
 - `symbol.py` — lazy symbol proxy, fetches children on demand
 - `instance.py` — instantiated object and its slots
 - `conversion.py` — a written model, its formats and extension inference
+- `verdict.py` — a verification's answer and what a calculation computed
+- `errors.py` — the exception hierarchy and the gRPC status translation
+- `capabilities.py` — what the connected service reports it supports
 - `typefacts.py` — a symbol's static type, multiplicity and supertypes
 - `typed.py` — base class and slot decoders the generated classes are built on
 - `generate.py` — emits typed classes from a parsed model
