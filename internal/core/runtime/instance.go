@@ -71,7 +71,8 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 		// Fold constant defaults eagerly. A default that is not constant may read
 		// sibling slots of this very instance, so it is left to GetSlot, which
 		// evaluates it against the finished instance.
-		if feat.DefaultValue != nil && isScalarFeature(feat) && !ctx.model.IsVariationFeature(feat.Symbol) {
+		if feat.DefaultValue != nil && isScalarFeature(feat) && !ctx.model.IsVariationFeature(feat.Symbol) &&
+			ctx.restatedInValuedBody(feat) == "" {
 			if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 				slot.Value = Value{Kind: ValConst, Const: semVal}
 				slot.Materialized = true
@@ -177,6 +178,12 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 		return slot, nil
 	}
 
+	// A bound value supplies the feature's own features, so a body restating one
+	// of them states two values for it.
+	if restated := ctx.restatedInValuedBody(slot.Feature); restated != "" {
+		return nil, fmt.Errorf("slot %s.%s: %w: %s", inst.Type.Name, name, ErrValuedFeatureRestated, restated)
+	}
+
 	// A default that did not constant-fold is a derived value: evaluate it
 	// against this instance, so that it sees the sibling slots it refers to.
 	if slot.Feature.DefaultValue != nil && isScalarFeature(slot.Feature) {
@@ -268,7 +275,7 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 
 // CompositeTypeOf returns what a feature is materialized from, or nil for one
 // that holds a value rather than an object — any default takes precedence
-// over instantiation, as in GetSlot above. A usage with members of its own is
+// over instantiation, as in GetSlot above. A usage with features of its own is
 // instantiated as itself, so its body governs and an untyped nested part
 // materializes at all. Answering costs no allocation, so a caller walking an
 // object graph can decide whether to descend before descending.
@@ -281,21 +288,75 @@ func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
 	if ctx.model.IsVariationFeature(feat.Symbol) {
 		return nil
 	}
-	if feat.Symbol != nil && isCompositeUsage(feat.Symbol) && len(declMembers(feat.Symbol.Decl)) > 0 {
+	if feat.Symbol != nil && declaresFeatures(feat.Symbol) {
 		return feat.Symbol
 	}
 	return feat.Type
 }
 
-// isCompositeUsage reports whether a feature symbol holds objects (a part or
-// item) rather than a value.
-func isCompositeUsage(sym *symbols.Symbol) bool {
-	switch sym.Kind {
-	case symbols.SymbolPartUsage, symbols.SymbolItemUsage:
-		return true
-	default:
-		return false
+// declaresFeatures reports whether a usage's own body restates or adds features,
+// which the object it materializes has to carry.
+func declaresFeatures(sym *symbols.Symbol) bool {
+	for _, member := range declMembers(sym.Decl) {
+		usage, ok := member.(*ast.Usage)
+		if !ok {
+			continue
+		}
+		if usage.Ident.Name != "" || usage.Ident.ShortName != "" || len(usage.Relationships) > 0 {
+			return true
+		}
 	}
+	return false
+}
+
+// restatedInValuedBody returns the name of a feature valued again in the body of
+// the declaration that binds a value to it, or "" when there is none: the bound
+// value supplies the features, so a second value for one could only be dropped.
+// A declaration whose body only re-declares features states no second value,
+// and neither does a body over a value the redefined declaration wrote.
+func (ctx *Context) restatedInValuedBody(feat *EffectiveFeature) string {
+	if feat.Symbol == nil {
+		return ""
+	}
+	decl, ok := feat.Symbol.Decl.(*ast.Usage)
+	if !ok || decl.Value == nil {
+		return ""
+	}
+	inherited := make(map[string]bool)
+	for _, f := range ctx.FeaturesOf(feat.Type) {
+		inherited[f.Name] = true
+	}
+	for _, member := range declMembers(feat.Symbol.Decl) {
+		usage, ok := member.(*ast.Usage)
+		if !ok || (usage.Value == nil && len(declMembers(usage)) == 0) {
+			continue
+		}
+		if name := restatedFeatureName(usage); name != "" {
+			return name
+		}
+		if inherited[usage.Ident.Name] {
+			return usage.Ident.Name
+		}
+	}
+	return ""
+}
+
+// restatedFeatureName returns the name a usage restates with `:>>` or `:>`, or
+// "" when it restates nothing.
+func restatedFeatureName(usage *ast.Usage) string {
+	for _, rel := range usage.Relationships {
+		if rel == nil || (rel.Kind != ast.RelRedefines && rel.Kind != ast.RelSubsets) {
+			continue
+		}
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		if qn, ok := target.(*ast.QualifiedName); ok && len(qn.Parts) > 0 {
+			return qn.Parts[len(qn.Parts)-1].Text
+		}
+	}
+	return ""
 }
 
 // evalSlotDefault evaluates a slot's default-value expression bound to the

@@ -125,6 +125,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deep_specialization_chain_of_redefinitions", testDeepSpecializationChainOfRedefinitions)
 	t.Run("conflicting_redefinitions_at_several_levels", testConflictingRedefinitionsAtSeveralLevels)
 	t.Run("one_feature_valued_under_two_names", testOneFeatureValuedUnderTwoNames)
+	t.Run("valued_feature_restated_in_a_body", testValuedFeatureRestatedInABody)
 	t.Run("multiplicity_infinite_lower_bound", testMultiplicityInfiniteLowerBound)
 	t.Run("multiplicity_lower_bound_too_large", testMultiplicityLowerBoundTooLarge)
 	t.Run("feature_chain_through_an_unset_slot", testFeatureChainThroughAnUnsetSlot)
@@ -3362,6 +3363,24 @@ func testOneFeatureValuedUnderTwoNames(t *testing.T) {
 	got, err := variationSlotInSource(t, src, "test::conflicted", "ringCost")
 	if !errors.Is(err, ErrConflictingRedefinition) {
 		t.Fatalf("ringCost = %+v, err = %v, want ErrConflictingRedefinition", got, err)
+	}
+}
+
+// testValuedFeatureRestatedInABody: a feature bound to a value takes its own
+// features from that value, so a body restating one of them is reported instead
+// of being dropped.
+func testValuedFeatureRestatedInABody(t *testing.T) {
+	src := `
+		package test {
+			attribute def Cost { attribute v = 1.0; }
+			part def Ring { attribute ringCost : Cost; }
+			part conflicted : Ring {
+				attribute :>> ringCost = 400.0 { attribute :>> v = 9.0; }
+			}
+		}`
+	got, err := variationSlotInSource(t, src, "test::conflicted", "ringCost")
+	if !errors.Is(err, ErrValuedFeatureRestated) {
+		t.Fatalf("ringCost = %+v, err = %v, want ErrValuedFeatureRestated", got, err)
 	}
 }
 

@@ -180,6 +180,11 @@ var (
 	// so which of the two values it holds would be a silent pick.
 	ErrConflictingRedefinition = errors.New("one feature valued under two names")
 
+	// ErrValuedFeatureRestated is returned when a feature is both bound to a
+	// value and given a body restating features of it: the bound value supplies
+	// those features, so the restatement could only be silently dropped.
+	ErrValuedFeatureRestated = errors.New("feature both valued and restated in a body")
+
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
 	// it can be created.
