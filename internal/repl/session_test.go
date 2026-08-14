@@ -18,9 +18,9 @@ func TestNewSessionEmpty(t *testing.T) {
 
 func TestAcceptReplacesByName(t *testing.T) {
 	s := NewSession()
-	s.accept("package P { }")
-	s.accept("namespace N;")
-	joined, _ := s.accept("package P { } // redefined")
+	s.accept("", "package P { }")
+	s.accept("", "namespace N;")
+	joined, _ := s.accept("", "package P { } // redefined")
 	// P should appear once (the new one); N preserved; order = N then new P.
 	if got := s.List(); len(got) != 2 {
 		t.Fatalf("want 2 snippets, got %d: %v", len(got), got)
@@ -54,9 +54,9 @@ func TestSubmitResolvesAcrossSubmissions(t *testing.T) {
 // stale documentation above whatever is current.
 func TestLeadingCommentIsReplacedWithItsDeclaration(t *testing.T) {
 	s := NewSession()
-	s.accept("// doc for A")
-	s.accept("part def A;")
-	joined, _ := s.accept("part def A { part y; }")
+	s.accept("", "// doc for A")
+	s.accept("", "part def A;")
+	joined, _ := s.accept("", "part def A { part y; }")
 
 	if strings.Contains(joined, "doc for A") {
 		t.Errorf("stale comment survived the redeclaration: %q", joined)
@@ -69,8 +69,8 @@ func TestLeadingCommentIsReplacedWithItsDeclaration(t *testing.T) {
 // A comment with nothing after it is still part of the session and still saved.
 func TestTrailingCommentIsKept(t *testing.T) {
 	s := NewSession()
-	s.accept("part def A;")
-	joined, _ := s.accept("// thinking out loud")
+	s.accept("", "part def A;")
+	joined, _ := s.accept("", "// thinking out loud")
 	if !strings.Contains(joined, "thinking out loud") {
 		t.Errorf("comment dropped: %q", joined)
 	}

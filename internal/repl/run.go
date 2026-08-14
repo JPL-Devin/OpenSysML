@@ -57,7 +57,7 @@ func (s *Session) LoadFile(path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load %s: %w", path, err)
 	}
-	return renderResult(s.Submit(string(data)), s.verbosity), nil
+	return renderResult(s.submit(path, string(data)), s.verbosity), nil
 }
 
 // Diagnostics reports the analysis of everything submitted so far.
@@ -81,27 +81,32 @@ func (s *Session) HasErrors() bool {
 type Diagnostic struct {
 	Severity string
 	Message  string
-	Line     int
-	Column   int
+	// File is the loaded file the finding is in, empty for typed input, and Line
+	// and Column place it within that file rather than within the session buffer.
+	File   string
+	Line   int
+	Column int
 	// Pass names what produced the finding, and Code what it found.
 	Pass string
 	Code string
 }
 
 // LocatedDiagnostics reports the analysis of everything submitted so far, each
-// finding placed at the line and column of the session's buffer it is about.
+// finding placed in the submission it is about: the file it was loaded from, at
+// the line and column that file has it on.
 func (s *Session) LocatedDiagnostics() []Diagnostic {
 	diags := s.Diagnostics()
 	if len(diags) == 0 {
 		return nil
 	}
-	sf := source.New(docName, []byte(s.joined()))
 	out := make([]Diagnostic, 0, len(diags))
 	for _, d := range diags {
-		p := sf.Lines().PosAt(d.Span.Offset)
+		sn, start := s.snippetAt(d.Span.Offset)
+		p := source.New(docName, []byte(sn.src)).Lines().PosAt(d.Span.Offset - start)
 		out = append(out, Diagnostic{
 			Severity: d.Severity.String(),
 			Message:  d.Message,
+			File:     sn.origin,
 			Line:     p.Line,
 			Column:   p.Col,
 			Pass:     d.Source,
@@ -109,6 +114,21 @@ func (s *Session) LocatedDiagnostics() []Diagnostic {
 		})
 	}
 	return out
+}
+
+// snippetAt returns the submission a session-buffer offset falls in and the
+// offset that submission starts at, joined() being the snippets with a newline
+// between them.
+func (s *Session) snippetAt(offset int) (snippet, int) {
+	start := 0
+	for i, sn := range s.snippets {
+		end := start + len(sn.src)
+		if offset <= end || i == len(s.snippets)-1 {
+			return sn, start
+		}
+		start = end + 1 // the newline joined() writes between snippets
+	}
+	return snippet{}, 0
 }
 
 // EvalExpr evaluates an expression and returns the lines `%eval` prints, with an
@@ -153,17 +173,28 @@ func (s *Session) RunAction(name string, performer ...string) Verdict {
 	return s.withTrace(Verdict{Subject: name, Status: VerdictHolds, Lines: lines, Values: values})
 }
 
-// RunStateMachine starts a state machine outside the prompt and advances it by
-// duration time units, which is `%state` followed by `%advance`. The values are
-// the configuration the machine settled in.
-func (s *Session) RunStateMachine(name string, duration float64, performer ...string) Verdict {
+// RunStateMachine starts a state machine outside the prompt, taking only its
+// initial transition, which is `%state` alone. The values are the configuration
+// the machine settled in.
+func (s *Session) RunStateMachine(name string, performer ...string) Verdict {
+	return s.runStateMachine(name, nil, performer)
+}
+
+// RunStateMachineFor starts a state machine and advances it by duration time
+// units, which is `%state` followed by `%advance`. A duration of 0 is a run to
+// the current time, dispatching the events already due, as `%advance 0` is.
+func (s *Session) RunStateMachineFor(name string, duration float64, performer ...string) Verdict {
+	return s.runStateMachine(name, &duration, performer)
+}
+
+func (s *Session) runStateMachine(name string, duration *float64, performer []string) Verdict {
 	started, err := s.startStateMachine(name, performer)
 	if err != nil {
 		return s.withTrace(unresolvedVerdict(name, err.Error()))
 	}
 	lines := started
-	if duration > 0 {
-		advanced, err := s.advanceBy(duration)
+	if duration != nil {
+		advanced, err := s.advanceBy(*duration)
 		if err != nil {
 			return s.withTrace(unresolvedVerdict(name, err.Error()))
 		}

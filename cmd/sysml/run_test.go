@@ -2,6 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -165,6 +169,14 @@ func TestRunStateMachine(t *testing.T) {
 		t.Errorf("a machine ran without being advanced:\n%s", started.output())
 	}
 
+	// -advance 0 is a run to the current time, as %advance 0 is: what is due at
+	// the start is dispatched, which the initial transition alone does not do.
+	zero := check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", "0")
+	wantReport(t, zero, 0, "✓ Advanced to 0.00")
+	if zero.stdout == started.stdout {
+		t.Errorf("-advance 0 reported the same run as no -advance at all:\n%s", zero.output())
+	}
+
 	wantReport(t, check(t, binary, behaviorModel, "-state", "Mission::tally", "-advance", "5"),
 		2, "is not a state machine")
 	wantReport(t, check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", "soon"),
@@ -280,6 +292,48 @@ func TestJSONReportsWarningsOfACleanModel(t *testing.T) {
 	}
 	if report.Diagnostics[0].Severity != "warning" {
 		t.Errorf("diagnostic severity = %q, want warning", report.Diagnostics[0].Severity)
+	}
+}
+
+// TestJSONLocatesADiagnosticInItsOwnFile checks that a finding is reported where
+// its file has it, rather than at its line in the accumulated session buffer.
+func TestJSONLocatesADiagnosticInItsOwnFile(t *testing.T) {
+	binary := buildCLI(t)
+
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first.sysml")
+	second := filepath.Join(dir, "second.sysml")
+	if err := os.WriteFile(first, []byte(checkModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte(uncleanModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command(binary, "-validate", "-json", first, second)
+	out, err := cmd.Output()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 2 {
+		t.Fatalf("exit = %v, want status 2\n%s", err, out)
+	}
+	var report struct {
+		Diagnostics []struct {
+			File string `json:"file"`
+			Line int    `json:"line"`
+		} `json:"diagnostics"`
+	}
+	if err := json.Unmarshal(out, &report); err != nil {
+		t.Fatalf("stdout is not the reported JSON: %v\n%s", err, out)
+	}
+	if len(report.Diagnostics) == 0 {
+		t.Fatalf("report carries no diagnostic:\n%s", out)
+	}
+	got := report.Diagnostics[0]
+	if got.File != second {
+		t.Errorf("diagnostic reported in %q, want the file it is in, %q", got.File, second)
+	}
+	if got.Line != 3 {
+		t.Errorf("diagnostic reported at line %d, want line 3 of its own file", got.Line)
 	}
 }
 

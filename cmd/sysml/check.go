@@ -175,7 +175,11 @@ func runChecks(files []string, exprs []string, c checks) int {
 	}
 	for _, value := range c.states {
 		name, performer := splitPerformer(value)
-		rep.verdict(sess.RunStateMachine(name, c.advance, performer...))
+		if c.advanceGiven {
+			rep.verdict(sess.RunStateMachineFor(name, c.advance, performer...))
+			continue
+		}
+		rep.verdict(sess.RunStateMachine(name, performer...))
 	}
 
 	return rep.finish()

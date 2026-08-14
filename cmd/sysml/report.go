@@ -44,10 +44,12 @@ type checkReport struct {
 type diagnostic struct {
 	Severity string `json:"severity"`
 	Message  string `json:"message"`
-	Line     int    `json:"line"`
-	Column   int    `json:"column"`
-	Pass     string `json:"pass"`
-	Code     string `json:"code"`
+	// File is the model file the finding is in, which Line and Column locate it in.
+	File   string `json:"file"`
+	Line   int    `json:"line"`
+	Column int    `json:"column"`
+	Pass   string `json:"pass"`
+	Code   string `json:"code"`
 }
 
 // namedValue is one value a check or run produced, as the JSON report spells it.
@@ -124,6 +126,7 @@ func (r *reporter) diags(diags []repl.Diagnostic) {
 		r.report.Diagnostics = append(r.report.Diagnostics, diagnostic{
 			Severity: d.Severity,
 			Message:  d.Message,
+			File:     d.File,
 			Line:     d.Line,
 			Column:   d.Column,
 			Pass:     d.Pass,
