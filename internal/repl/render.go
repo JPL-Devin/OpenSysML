@@ -20,6 +20,11 @@ type Result struct {
 	Offset      int                 // byte offset in Source where THIS submission begins
 	Origins     []Origin            // the files of THIS submission, in buffer order
 	Notices     []string            // side effects of the submission, e.g. a debugging session it ended
+
+	// own locates this submission inside Source when it was merged into text
+	// already in the buffer, which is not one tail region. Empty for a
+	// submission appended whole, where everything from Offset on is its own.
+	own []source.Span
 }
 
 // Origin locates one file of a submission in the buffer, so a diagnostic is
@@ -61,7 +66,35 @@ func (r Result) diagLocation(offset int) (string, int) {
 
 // mine reports whether a span belongs to the submission just made rather than
 // to an earlier one still sitting in the buffer.
-func (r Result) mine(span source.Span) bool { return span.Offset >= r.Offset }
+func (r Result) mine(span source.Span) bool {
+	if len(r.own) == 0 {
+		return span.Offset >= r.Offset
+	}
+	for _, o := range r.own {
+		if span.Offset >= o.Offset && span.Offset < o.End() {
+			return true
+		}
+	}
+	return false
+}
+
+// holdsMine reports whether a span overlaps this submission, which is what
+// credits a merged addition to the declaration it was added to, and a whole
+// snippet's span to every declaration inside it.
+func (r Result) holdsMine(span source.Span) bool {
+	if len(r.own) == 0 {
+		return span.Offset >= r.Offset
+	}
+	for _, o := range r.own {
+		if o.Offset >= span.Offset && o.Offset < span.End() {
+			return true
+		}
+		if span.Offset >= o.Offset && span.Offset < o.End() {
+			return true
+		}
+	}
+	return false
+}
 
 // renderSummary returns one accepted line per top-level member: "✓ <kind> <name>".
 func renderSummary(members []ast.Node) []string {
@@ -223,18 +256,18 @@ func caretLine(col, spanLen, lineLen int) string {
 }
 
 // renderResult produces the printable lines for a submission at the given
-// verbosity: the notices it caused, the diagnostics that verbosity admits, and
-// the summary of what it declared. A submission that failed to analyse gets
-// diagnostics instead of a summary, since it declared nothing usable.
+// verbosity: the diagnostics that verbosity admits, the summary of what it
+// declared, and last the notices it caused, which read as consequences of the
+// summary above them. A submission that failed to analyse gets diagnostics
+// instead of a summary, since it declared nothing usable.
 func renderResult(r Result, v Verbosity) []string {
 	if v >= VerbosityDebug {
 		return renderDebug(r)
 	}
 	diags := scopedDiagnostics(r, v)
-	out := append([]string(nil), r.Notices...)
-	out = append(out, renderDiagnostics(diags, r.Source, r.diagLocation, false)...)
+	out := renderDiagnostics(diags, r.Source, r.diagLocation, false)
 	if hasError(diags) {
-		return out
+		return append(out, r.Notices...)
 	}
 	// A validation tier is skipped once a lower tier errors anywhere in the
 	// buffer, so a clean report on this submission would otherwise read as a
@@ -242,17 +275,18 @@ func renderResult(r Result, v Verbosity) []string {
 	if r.analysisBlocked() {
 		out = append(out, blockedNote)
 	}
-	return append(out, renderSummary(r.ownMembers())...)
+	out = append(out, renderSummary(r.ownMembers())...)
+	return append(out, r.Notices...)
 }
 
 // renderDebug reports everything the analysis produced over the whole buffer,
 // at buffer-absolute positions, plus where this submission landed in it.
 func renderDebug(r Result) []string {
-	out := append([]string(nil), r.Notices...)
-	out = append(out, fmt.Sprintf("[debug] submission at buffer line %d; %d diagnostic(s) over the whole buffer",
-		r.baseLine(), len(r.Diagnostics)))
+	out := []string{fmt.Sprintf("[debug] submission at buffer line %d; %d diagnostic(s) over the whole buffer",
+		r.baseLine(), len(r.Diagnostics))}
 	out = append(out, renderDiagnostics(r.Diagnostics, r.Source, wholeBuffer, true)...)
-	return append(out, renderSummary(r.Members)...)
+	out = append(out, renderSummary(r.Members)...)
+	return append(out, r.Notices...)
 }
 
 // scopedDiagnostics keeps the diagnostics of this submission that the verbosity
@@ -299,7 +333,7 @@ func hasError(diags []passes.Diagnostic) bool {
 func (r Result) ownMembers() []ast.Node {
 	out := make([]ast.Node, 0, len(r.Members))
 	for _, m := range r.Members {
-		if r.mine(m.Span()) {
+		if r.holdsMine(m.Span()) {
 			out = append(out, m)
 		}
 	}

@@ -155,6 +155,14 @@ Each accepted declaration is echoed back as `✓ <kind> <name>`. A brace opens a
 continuation (`...>`) that runs to the matching one — but a **blank line ends the
 submission**, so leave none inside a declaration you are typing.
 
+Re-typing a namespace **adds to** the one already in the session, so
+`package P { part def B; }` after `package P { part def A; }` leaves both
+declared; an empty body (`package P { }`) is how you clear one. Anything a
+submission does drop is reported as a `note:` line — the members it no longer
+declares, the instances it invalidated (their IDs restart with the new model),
+and any `%action`/`%state` debugging session it ended. A debugging session over a
+declaration the submission did not touch keeps running.
+
 #### 2. Define a Vehicle
 
 ```sysml

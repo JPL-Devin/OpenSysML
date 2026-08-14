@@ -5,6 +5,7 @@ package repl
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -40,6 +41,9 @@ type snippet struct {
 	// prefix is the bytes of earlier comment lines folded into src, which are
 	// not part of what was submitted.
 	prefix int
+	// own locates, within src, the text a merge added to a namespace already in
+	// the buffer. It is empty for a snippet that is wholly its submission's.
+	own []source.Span
 }
 
 // Session accumulates submissions into a single implicit <repl> document.
@@ -63,6 +67,14 @@ type Session struct {
 	actionExec *actionSession
 	stateExec  *stateSession
 
+	// Why the debugging sessions and the instances are gone, when a submission
+	// ended them. A command that finds nothing active reports this rather than
+	// leaving the user to guess.
+	endedAction   *endedSession
+	endedState    *endedSession
+	lostInstances int // how many instances the last submission that dropped any took
+	lostAt        int // the submission that dropped them
+
 	// trace records execution steps while tracing is on, nil otherwise.
 	trace *runtime.TraceRecorder
 
@@ -75,25 +87,40 @@ type Session struct {
 // actionSession holds an active action executor debugging session.
 type actionSession struct {
 	name string
-	// rootName is the top-level declaration the debugged action lives under.
-	// Resubmitting that declaration rewrites the graph the executor is running,
-	// which is what ends the session; an unrelated submission does not.
-	rootName string
+	// fqn is the debugged action's qualified name. Superseding it, or a namespace
+	// it lives in, rewrites the graph being run and ends the session.
+	fqn      string
 	symbol   *symbols.Symbol
 	executor *runtime.ActionExecutor
+}
+
+// fqnOf returns the debugged action's qualified name, or "" when no session runs.
+func (a *actionSession) fqnOf() string {
+	if a == nil {
+		return ""
+	}
+	return a.fqn
 }
 
 // stateSession holds an active state machine executor debugging session.
 type stateSession struct {
 	name string
-	// rootName is the top-level declaration the debugged state machine lives
-	// under; see actionSession.rootName.
-	rootName string
+	// fqn is the debugged state machine's qualified name; see actionSession.fqn.
+	fqn      string
 	symbol   *symbols.Symbol
 	executor *runtime.StateExecutor
 	// now is the debugger's clock. The executor's own clock only moves when an
 	// event is processed, so successive %advance calls accumulate here.
 	now float64
+}
+
+// fqnOf returns the debugged state machine's qualified name, or "" when no
+// session runs.
+func (s *stateSession) fqnOf() string {
+	if s == nil {
+		return ""
+	}
+	return s.fqn
 }
 
 // NewSession returns a session over a fresh workspace.
@@ -164,42 +191,72 @@ func (s *Session) accept(origin, src string) {
 //
 // A loaded file supersedes only itself and what the prompt said about the same
 // names, since several files of one model commonly open the same package.
-func (s *Session) acceptFrom(origin, src string) {
+func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
+	text := src
+	var (
+		comments  string
+		mergedOwn []source.Span
+	)
 	if origin != "" {
 		set := nameSet(names)
 		key := fileKey(origin)
+		top := topLevelMembers(root)
 		kept := s.snippets[:0]
 		for _, sn := range s.snippets {
-			if sn.key == key || (sn.origin == "" && intersects(sn.names, set)) {
-				continue
+			switch {
+			case sn.key == key:
+				// Re-reading the same file is a refresh the load reports
+				// itself, so only what it rewrote is recorded.
+				drops = append(drops, dropReport{gone: sn.names})
+			case sn.origin == "" && intersects(sn.names, set):
+				// The file supersedes what was typed about the same names,
+				// which is a loss to report like any other.
+				drops = append(drops, replacedReport(sn, set, top))
+			default:
+				kept = append(kept, sn)
 			}
-			kept = append(kept, sn)
 		}
 		s.snippets = append(kept, snippet{src: src, names: names, origin: origin, key: key, gen: s.version})
-		return
+		return drops
 	}
-	var comments string
 	if len(names) > 0 {
-		comments = s.takeLeadingComments()
 		set := nameSet(names)
+		comments = s.takeLeadingComments()
+		// Re-typing a namespace adds to the one already in the buffer. The
+		// merged text stands for both — including any other declaration of the
+		// snippet it absorbed, so the names it replaces are its own, not just
+		// the submitted ones — and is appended like any other submission so a
+		// report still scopes to the tail of the buffer.
+		if merged, added, drop, ok := s.mergeSubmission(src, root, comments); ok {
+			text, comments, mergedOwn = merged, "", added
+			names = declaredNames(parser.New(source.New(docName, []byte(merged))).ParseFile())
+			drops = append(drops, drop)
+		}
+		top := topLevelMembers(root)
 		kept := s.snippets[:0]
 		for _, sn := range s.snippets {
 			if sn.gen == s.version || !intersects(sn.names, set) {
 				kept = append(kept, sn)
+				continue
 			}
+			drops = append(drops, replacedReport(sn, set, top))
 		}
 		s.snippets = kept
 	}
 	// The prefix marks the comments folded in front of what was submitted, so
-	// diagnostics keep the line numbers of the submission.
+	// diagnostics keep the line numbers of the submission. A merge folded the
+	// comments into the text it rewrote, where own marks what was added.
 	s.snippets = append(s.snippets, snippet{
-		src:    comments + src,
+		src:    comments + text,
 		names:  names,
+		origin: origin,
 		gen:    s.version,
 		prefix: len(comments),
+		own:    mergedOwn,
 	})
+	return drops
 }
 
 // origins locates every file of the current submission in the joined buffer, in
@@ -214,6 +271,51 @@ func (s *Session) origins() []Origin {
 		acc += len(sn.src) + 1 // the newline joined() writes between snippets
 	}
 	return out
+}
+
+// ownSpans locates, in the joined buffer, the text this submission added to a
+// namespace a merge folded it into, so its report covers what was typed rather
+// than the whole snippet the merge absorbed.
+func (s *Session) ownSpans() []source.Span {
+	var (
+		out    []source.Span
+		merged bool
+		acc    int
+	)
+	for _, sn := range s.snippets {
+		if sn.gen == s.version {
+			if len(sn.own) == 0 {
+				// Appended whole, so all of it past the folded comments is this
+				// submission's.
+				out = append(out, source.Span{Offset: acc + sn.prefix, Len: len(sn.src) - sn.prefix})
+			} else {
+				merged = true
+			}
+			for _, sp := range sn.own {
+				out = append(out, source.Span{Offset: acc + sp.Offset, Len: sp.Len})
+			}
+		}
+		acc += len(sn.src) + 1 // the newline joined() writes between snippets
+	}
+	if !merged {
+		// Nothing was merged, so the tail-of-buffer rule already describes the
+		// submission and needs no spans.
+		return nil
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Offset < out[j].Offset })
+	return out
+}
+
+// firstText returns the offset of the first span with text in it, which is where
+// a submission's own text begins; the zero-length spans only mark a declaration
+// a merge folded into.
+func firstText(spans []source.Span) (int, bool) {
+	for _, sp := range spans {
+		if sp.Len > 0 {
+			return sp.Offset, true
+		}
+	}
+	return 0, false
 }
 
 // genOffset returns the byte offset in the joined buffer where the current
@@ -359,7 +461,10 @@ func (s *Session) SubmitFiles(files []SourceFile) Result {
 }
 
 func (s *Session) submitFiles(files []SourceFile) Result {
-	var declared []string
+	var (
+		declared []string
+		drops    []dropReport
+	)
 	seen := map[string]bool{}
 	s.version++
 	for _, f := range files {
@@ -369,18 +474,29 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 				declared = append(declared, name)
 			}
 		}
-		s.acceptFrom(f.Name, f.Text)
+		drops = append(drops, s.acceptFrom(f.Name, f.Text)...)
 	}
 	joined := s.joined()
 	offset := s.genOffset(joined)
+	// A merge rewrote a snippet that was already accepted, so only the text the
+	// merge added belongs to this submission; anything else is the buffer.
+	own := s.ownSpans()
+	if at, ok := firstText(own); ok {
+		offset = at
+	}
 	s.ws.Open(docName, []byte(joined), s.version)
 	// The document is a new AST and scope tree, so anything derived from the
 	// previous one is stale — including instances, whose IDs restart with the
 	// new runtime context. The index is re-used and brought up to date on the
 	// next lookup instead, which is why it records the version it holds.
 	s.rtCtx = nil
-	s.instances = make(map[string]*runtime.Instance)
-	notices := s.dropStaleDebugSessions(declared)
+	notices := dropNotices(drops)
+	if n := len(s.instances); n > 0 {
+		s.instances = make(map[string]*runtime.Instance)
+		s.lostInstances, s.lostAt = n, s.version
+		notices = append(notices, instancesDroppedNotice(n))
+	}
+	notices = append(notices, s.dropStaleDebugSessions(drops)...)
 	diags := s.annotateDiagnostics(s.ws.Diagnostics(docName))
 	var members []ast.Node
 	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
@@ -393,50 +509,65 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 		Source:      joined,
 		Offset:      offset,
 		Origins:     s.origins(),
+		own:         own,
 		Notices:     notices,
 	}
 }
 
 // dropStaleDebugSessions ends the debugging sessions whose declaration this
-// submission rewrote, and reports each one it ended. A session over an
-// untouched declaration survives: it keeps running against the graph and
-// runtime context it started with, so stepping through a behavior does not
-// require avoiding the prompt.
-func (s *Session) dropStaleDebugSessions(declared []string) []string {
-	if len(declared) == 0 {
+// submission superseded, and reports each one it ended. A session over a
+// declaration the submission left alone survives — including one merged into a
+// namespace that only gained an unrelated member: it keeps running against the
+// graph and runtime context it started with, so stepping through a behavior does
+// not require avoiding the prompt.
+func (s *Session) dropStaleDebugSessions(drops []dropReport) []string {
+	var gone []string
+	for _, d := range drops {
+		gone = append(gone, d.gone...)
+	}
+	if len(gone) == 0 {
 		return nil
 	}
-	redeclared := make(map[string]bool, len(declared))
-	for _, n := range declared {
-		redeclared[n] = true
-	}
 	var notices []string
-	if s.actionExec != nil && redeclared[s.actionExec.rootName] {
-		notices = append(notices, debugSessionEnded("action", s.actionExec.name, s.actionExec.rootName))
+	if by, ok := supersededBy(gone, s.actionExec.fqnOf()); ok {
+		notices = append(notices, debugSessionEnded("action", s.actionExec.name, by))
+		s.endedAction = &endedSession{
+			kind:     "action",
+			name:     s.actionExec.name,
+			rootName: by,
+			version:  s.version,
+		}
 		s.actionExec = nil
 	}
-	if s.stateExec != nil && redeclared[s.stateExec.rootName] {
-		notices = append(notices, debugSessionEnded("state", s.stateExec.name, s.stateExec.rootName))
+	if by, ok := supersededBy(gone, s.stateExec.fqnOf()); ok {
+		notices = append(notices, debugSessionEnded("state", s.stateExec.name, by))
+		s.endedState = &endedSession{
+			kind:     "state machine",
+			name:     s.stateExec.name,
+			rootName: by,
+			version:  s.version,
+		}
 		s.stateExec = nil
 	}
 	return notices
 }
 
-func debugSessionEnded(kind, name, rootName string) string {
-	return fmt.Sprintf("note: %s debugging session for %q ended (%s was redeclared)", kind, name, rootName)
+func debugSessionEnded(kind, name, superseded string) string {
+	return fmt.Sprintf("note: %s debugging session for %q ended (%s was redeclared)", kind, name, superseded)
 }
 
-// rootNameOf returns the top-level declaration name a fully-qualified name
-// lives under, which is the granularity at which a submission replaces
-// declarations.
-func rootNameOf(fqn, fallback string) string {
+// supersededBy reports which superseded name rewrote the declaration fqn names,
+// counting the namespaces it lives in: replacing a package replaces its members.
+func supersededBy(gone []string, fqn string) (string, bool) {
 	if fqn == "" {
-		fqn = fallback
+		return "", false
 	}
-	if cut := strings.Index(fqn, "::"); cut >= 0 {
-		return fqn[:cut]
+	for _, g := range gone {
+		if fqn == g || strings.HasPrefix(fqn, g+"::") {
+			return g, true
+		}
 	}
-	return fqn
+	return "", false
 }
 
 // Clear resets the session, dropping all accumulated declarations.
@@ -459,6 +590,9 @@ func (s *Session) clear() {
 	s.instances = make(map[string]*runtime.Instance)
 	s.actionExec = nil
 	s.stateExec = nil
+	s.endedAction = nil
+	s.endedState = nil
+	s.lostInstances, s.lostAt = 0, 0
 }
 
 // getOrCreateRuntime lazily creates runtime context when first needed.
@@ -514,4 +648,13 @@ func (s *Session) symbolIndex() *symbols.Index {
 	s.idx.ExpandWildcardImports()
 	s.idxVersion = doc.Version
 	return s.idx
+}
+
+// qualifiedOr returns the looked-up qualified name, falling back to the name as
+// typed when the lookup reported none.
+func qualifiedOr(fqn, typed string) string {
+	if fqn != "" {
+		return fqn
+	}
+	return typed
 }
