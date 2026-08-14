@@ -543,3 +543,67 @@ func TestConstraintUnnamedRedefinitionNoValueOK(t *testing.T) {
 		t.Fatalf("unexpected redefinition-no-derived-name, got %v", diags)
 	}
 }
+
+// A `variant` whose owner is not a variation offers no choice, so it is reported
+// as a warning: the member is well-formed, only its `variant` keyword is idle.
+func TestConstraintVariantOutsideVariation(t *testing.T) {
+	src := `
+		part def Widget {
+			variant attribute misplaced = 1.0;
+		}
+	`
+	diags := constraintDiags(t, src)
+	var got *Diagnostic
+	for i, d := range diags {
+		if d.Code == "variant-outside-variation" {
+			got = &diags[i]
+		}
+	}
+	if got == nil {
+		t.Fatalf("expected variant-outside-variation diagnostic, got %v", diags)
+	}
+	if got.Severity != SeverityWarning {
+		t.Errorf("severity = %v, want warning", got.Severity)
+	}
+	if !strings.Contains(got.Message, "variant misplaced is declared in Widget") {
+		t.Errorf("message %q does not name the variant and its owner", got.Message)
+	}
+}
+
+// A variant of a variation is exactly what `variant` is for, so nothing is
+// reported for it.
+func TestConstraintVariantInsideVariationOK(t *testing.T) {
+	src := `
+		part def Widget {
+			variation attribute pick {
+				variant attribute cheap = 1.0;
+				variant attribute rich = 2.0;
+			}
+		}
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "variant-outside-variation") {
+		t.Fatalf("unexpected variant-outside-variation, got %v", diags)
+	}
+}
+
+// A usage typed by a variation definition, and one redefining a variation usage,
+// are variation points without restating the modifier.
+func TestConstraintVariantUnderInheritedVariationOK(t *testing.T) {
+	src := `
+		part def Engine;
+		variation part def EngineChoice :> Engine;
+		part def Car {
+			part engine : EngineChoice {
+				variant part electric : Engine;
+			}
+		}
+		abstract part refined : Car {
+			part :>> engine {
+				variant part petrol : Engine;
+			}
+		}
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "variant-outside-variation") {
+		t.Fatalf("unexpected variant-outside-variation, got %v", diags)
+	}
+}

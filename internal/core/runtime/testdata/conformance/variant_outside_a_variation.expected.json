@@ -1,0 +1,10 @@
+{
+  "type": "instance",
+  "instantiate": "test::widget",
+  "libraries": true,
+  "slots": {
+    "plain": {"type": "Real", "value": 2.0},
+    "misplaced": {"type": "Real", "value": 1.0},
+    "total": {"type": "Real", "value": 3.0}
+  }
+}
