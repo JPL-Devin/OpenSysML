@@ -149,15 +149,18 @@ message ExecuteStateResponse {
   repeated Diagnostic diagnostics = 4;
 }
 
-// ConvertRequest asks for a model in another representation. The source is read
-// as ParseFile reads it: the service opens a path, content is carried inline.
+// ConvertRequest asks for a model in another representation. A model_hash
+// converts the source that parse read, so a file edited since then does not
+// change the answer; a file_path is read afresh and content is carried inline.
 message ConvertRequest {
   oneof source {
     string file_path = 1;
     string content = 2;
+    string model_hash = 6;
   }
   // "sysml", "kerml", "text", "ttl", "turtle" or "rdf". Empty infers from
-  // file_path's extension, which inline content has none of.
+  // file_path's extension, and is notation for a model_hash, since that is what
+  // parse reads; inline content has neither, so it must say.
   string from_format = 3;
   // Format to write, named as in from_format. Empty is rejected.
   string to_format = 4;

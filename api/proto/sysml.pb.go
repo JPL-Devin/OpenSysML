@@ -1026,17 +1026,20 @@ func (x *ExecuteStateResponse) GetDiagnostics() []*Diagnostic {
 	return nil
 }
 
-// ConvertRequest asks for a model in another representation. The source is read
-// as ParseFile reads it: the service opens a path, content is carried inline.
+// ConvertRequest asks for a model in another representation. A model_hash
+// converts the source that parse read, so a file edited since then does not
+// change the answer; a file_path is read afresh and content is carried inline.
 type ConvertRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Source:
 	//
 	//	*ConvertRequest_FilePath
 	//	*ConvertRequest_Content
+	//	*ConvertRequest_ModelHash
 	Source isConvertRequest_Source `protobuf_oneof:"source"`
 	// "sysml", "kerml", "text", "ttl", "turtle" or "rdf". Empty infers from
-	// file_path's extension, which inline content has none of.
+	// file_path's extension, and is notation for a model_hash, since that is what
+	// parse reads; inline content has neither, so it must say.
 	FromFormat string `protobuf:"bytes,3,opt,name=from_format,json=fromFormat,proto3" json:"from_format,omitempty"`
 	// Format to write, named as in from_format. Empty is rejected.
 	ToFormat string `protobuf:"bytes,4,opt,name=to_format,json=toFormat,proto3" json:"to_format,omitempty"`
@@ -1104,6 +1107,15 @@ func (x *ConvertRequest) GetContent() string {
 	return ""
 }
 
+func (x *ConvertRequest) GetModelHash() string {
+	if x != nil {
+		if x, ok := x.Source.(*ConvertRequest_ModelHash); ok {
+			return x.ModelHash
+		}
+	}
+	return ""
+}
+
 func (x *ConvertRequest) GetFromFormat() string {
 	if x != nil {
 		return x.FromFormat
@@ -1137,9 +1149,15 @@ type ConvertRequest_Content struct {
 	Content string `protobuf:"bytes,2,opt,name=content,proto3,oneof"`
 }
 
+type ConvertRequest_ModelHash struct {
+	ModelHash string `protobuf:"bytes,6,opt,name=model_hash,json=modelHash,proto3,oneof"`
+}
+
 func (*ConvertRequest_FilePath) isConvertRequest_Source() {}
 
 func (*ConvertRequest_Content) isConvertRequest_Source() {}
+
+func (*ConvertRequest_ModelHash) isConvertRequest_Source() {}
 
 // ConvertResponse contains the converted model.
 type ConvertResponse struct {
@@ -2173,10 +2191,12 @@ const file_sysml_proto_rawDesc = "" +
 	"\vdiagnostics\x18\x04 \x03(\v2\x11.sysml.DiagnosticR\vdiagnostics\x1aM\n" +
 	"\x11FinalContextEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\"\n" +
-	"\x05value\x18\x02 \x01(\v2\f.sysml.ValueR\x05value:\x028\x01\"\xc9\x01\n" +
+	"\x05value\x18\x02 \x01(\v2\f.sysml.ValueR\x05value:\x028\x01\"\xea\x01\n" +
 	"\x0eConvertRequest\x12\x1d\n" +
 	"\tfile_path\x18\x01 \x01(\tH\x00R\bfilePath\x12\x1a\n" +
 	"\acontent\x18\x02 \x01(\tH\x00R\acontent\x12\x1f\n" +
+	"\n" +
+	"model_hash\x18\x06 \x01(\tH\x00R\tmodelHash\x12\x1f\n" +
 	"\vfrom_format\x18\x03 \x01(\tR\n" +
 	"fromFormat\x12\x1b\n" +
 	"\tto_format\x18\x04 \x01(\tR\btoFormat\x124\n" +
@@ -2387,6 +2407,7 @@ func file_sysml_proto_init() {
 	file_sysml_proto_msgTypes[16].OneofWrappers = []any{
 		(*ConvertRequest_FilePath)(nil),
 		(*ConvertRequest_Content)(nil),
+		(*ConvertRequest_ModelHash)(nil),
 	}
 	file_sysml_proto_msgTypes[23].OneofWrappers = []any{
 		(*Value_IntValue)(nil),

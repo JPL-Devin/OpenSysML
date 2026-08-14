@@ -14,21 +14,17 @@ class Model:
         diagnostics (list[Diagnostic]): Parse diagnostics (errors/warnings)
     """
     
-    def __init__(self, pb_response, client, source_path=None, source_content=None):
+    def __init__(self, pb_response, client, source_path=None):
         """Initialize Model from protobuf ParseFileResponse.
         
         Args:
             pb_response: sysml_pb2.ParseFileResponse protobuf message
             client: Client instance for symbol navigation
             source_path (str, optional): Path the model was loaded from
-            source_content (str, optional): Inline source the model was loaded from
         """
         self._pb = pb_response
         self._client = client
-        # What the model was loaded from, so it can be written back out: a parse
-        # response carries no source, and the cache is keyed by content.
         self._source_path = source_path
-        self._source_content = source_content
         self._hash = pb_response.model_hash
         self._root = Symbol(pb_response.root, client, self._hash)
         self._diagnostics = [
@@ -63,9 +59,14 @@ class Model:
     def convert(self, to_format, tolerate_syntax_errors=False):
         """Write this model out in one of the formats Systemica writes.
 
-        Converts the source the model was loaded from, which is what a save
-        writes back: notation keeps its comments and lexemes, re-indented, while
-        Turtle carries what the model declares. See ``docs/RDF_INTEROP.md``.
+        Converts the source this model was parsed from, not the file as it
+        stands now, so what is written is the model that was inspected: notation
+        keeps its comments and lexemes, re-indented, while Turtle carries what
+        the model declares. See ``docs/RDF_INTEROP.md``.
+
+        The service holds that source in its model cache, which is bounded, so a
+        model loaded long ago and many models back may have been evicted; load it
+        again, or convert its path through :meth:`Connection.convert`.
 
         Args:
             to_format (str): 'sysml', 'kerml', 'text', 'ttl', 'turtle' or 'rdf'
@@ -78,16 +79,11 @@ class Model:
         Raises:
             ConversionError: If the model could not be written in that format
             MissingCapabilityError: If the service cannot convert
+            grpc.RpcError: If the service no longer holds this model
         """
-        if self._source_path is None and self._source_content is None:
-            raise ValueError(
-                "this model does not know what it was loaded from; convert it "
-                "through Connection.convert with a file_path or content"
-            )
         return self.connection.convert(
             to_format,
-            file_path=self._source_path,
-            content=self._source_content,
+            model_hash=self._hash,
             # A model came from ParseFile, which reads notation and nothing else.
             from_format=FORMAT_SYSML,
             tolerate_syntax_errors=tolerate_syntax_errors,

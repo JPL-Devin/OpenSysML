@@ -147,6 +147,13 @@ A `Conversion` is the output text plus the formats it went between; `str()` and
 `kerml`, `text`, `ttl`, `turtle` or `rdf`. A file path's format is inferred from
 its extension; inline `content` has no extension, so it needs `from_format`.
 
+A `Model` writes out the source the service parsed, named by `model.hash`, so a
+file edited between `load` and `save` does not change what is written — the model
+saved is the model that was inspected. `convert(file_path=…)` is the other
+choice, reading the file as it stands now. The parsed source lives in the
+service's bounded cache, so a model evicted since it was loaded raises
+`grpc.RpcError` (`NOT_FOUND`) instead of writing something else; load it again.
+
 What each direction preserves:
 
 - **Notation → notation** re-emits the model from its source, so comments and

@@ -15,7 +15,7 @@ import (
 // it read rather than only inspect it. Argument faults fail the call; a model
 // the converter refuses is reported in the response's error and diagnostics.
 func (s *Service) Convert(ctx context.Context, req *pb.ConvertRequest) (*pb.ConvertResponse, error) {
-	name, data, err := convertSource(req)
+	name, data, err := s.convertSource(req)
 	if err != nil {
 		return nil, err
 	}
@@ -57,10 +57,20 @@ func convertModel(name string, data []byte, from, to export.Format, tolerant boo
 }
 
 // convertSource reads the model the request names, and the name to report it by.
-func convertSource(req *pb.ConvertRequest) (string, []byte, error) {
+// A model_hash converts the source that parse read rather than the file as it
+// stands now, so a model is written back out as the client inspected it.
+func (s *Service) convertSource(req *pb.ConvertRequest) (string, []byte, error) {
 	switch src := req.Source.(type) {
 	case *pb.ConvertRequest_Content:
 		return "<content>", []byte(src.Content), nil
+	case *pb.ConvertRequest_ModelHash:
+		cached, ok := s.cache.Get(src.ModelHash)
+		if !ok {
+			return "", nil, status.Errorf(codes.NotFound,
+				"model %s is no longer cached: parse it again, or convert its file_path or content",
+				src.ModelHash)
+		}
+		return cached.Source.Name(), cached.Source.Bytes(), nil
 	case *pb.ConvertRequest_FilePath:
 		// #nosec G304 -- reading the model file the client names is the point,
 		// and the service runs with the caller's own privileges.
@@ -70,7 +80,7 @@ func convertSource(req *pb.ConvertRequest) (string, []byte, error) {
 		}
 		return src.FilePath, data, nil
 	default:
-		return "", nil, status.Error(codes.InvalidArgument, "source must be file_path or content")
+		return "", nil, status.Error(codes.InvalidArgument, "source must be model_hash, file_path or content")
 	}
 }
 
@@ -83,6 +93,11 @@ func convertFrom(req *pb.ConvertRequest, name string) (export.Format, error) {
 			return 0, status.Error(codes.InvalidArgument, err.Error())
 		}
 		return from, nil
+	}
+	if req.GetModelHash() != "" {
+		// Parse reads notation, so a cached model is notation whatever it was
+		// named — including one parsed from inline content, which has no name.
+		return export.FormatSysML, nil
 	}
 	if req.GetFilePath() == "" {
 		return 0, status.Error(codes.InvalidArgument, "from_format is required for inline content: expected sysml, kerml, ttl, turtle or rdf")

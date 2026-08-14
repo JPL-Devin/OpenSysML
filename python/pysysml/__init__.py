@@ -107,16 +107,20 @@ def connect(host='localhost', port=50051, auto_start=True):
     return Connection(host, port, auto_start=auto_start)
 
 
-def convert(to_format, file_path=None, content=None, from_format='',
-            tolerate_syntax_errors=False, host='localhost', port=50051):
+def convert(to_format, file_path=None, content=None, model_hash=None,
+            from_format='', tolerate_syntax_errors=False, host='localhost',
+            port=50051):
     """Write a model out in another format (module-level convenience).
 
     Args:
         to_format (str): 'sysml', 'kerml', 'text', 'ttl', 'turtle' or 'rdf'
         file_path (str, optional): Path the service reads the source from
         content (str, optional): Source carried inline
+        model_hash (str, optional): Hash of a loaded model, whose parsed source
+            is converted
         from_format (str, optional): Format to read the source as; inferred from
-            file_path's extension when omitted, required for inline content
+            file_path's extension when omitted, notation for a model_hash, and
+            required for inline content
         tolerate_syntax_errors (bool): Write notation back out even when the
             parser could not read all of it
         host (str): Service hostname (default: 'localhost')
@@ -136,6 +140,7 @@ def convert(to_format, file_path=None, content=None, from_format='',
         to_format,
         file_path=file_path,
         content=content,
+        model_hash=model_hash,
         from_format=from_format,
         tolerate_syntax_errors=tolerate_syntax_errors,
     )

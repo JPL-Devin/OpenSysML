@@ -19,7 +19,6 @@ from pysysml.capabilities import CAPABILITY_CONVERT, MissingCapabilityError
 from pysysml.connection import Connection
 from pysysml.conversion import FORMAT_SYSML, FORMAT_TURTLE, format_of_path
 from pysysml.errors import ConversionError
-from pysysml.model import Model
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 
 MODEL = """package Demo {
@@ -144,6 +143,8 @@ def test_convert_needs_exactly_one_source(fake_service):
             conn.convert("ttl", from_format="sysml")
         with pytest.raises(ValueError):
             conn.convert("ttl", file_path="m.sysml", content=MODEL)
+        with pytest.raises(ValueError):
+            conn.convert("ttl", content=MODEL, model_hash="abc", from_format="sysml")
     assert service.requests == []
 
 
@@ -170,31 +171,23 @@ def test_tolerated_syntax_errors_are_reported_on_the_result(fake_service):
     assert [d.message for d in result.diagnostics] == ["syntax error 0"]
 
 
-def test_model_written_out_knows_what_it_was_loaded_from(fake_service, tmp_path):
-    """A model converts its own source, whether that was a path or inline text."""
+def test_model_is_written_out_by_its_hash(fake_service, tmp_path):
+    """A model converts what the service parsed, not the file as it stands now."""
     port, service = fake_service()
     path = tmp_path / "model.sysml"
     path.write_text(MODEL)
 
     with Connection(port=port, auto_start=False) as conn:
-        conn.load(str(path)).to_turtle()
-        conn.load_from_content(MODEL).to_sysml()
+        model = conn.load(str(path))
+        path.write_text("package Replaced { part def Other; }\n")
+        model.to_turtle()
 
-    from_path, from_content = service.requests
-    assert from_path.file_path == str(path)
-    assert from_path.to_format == "ttl"
-    assert from_content.content == MODEL
-    assert from_content.to_format == "sysml"
-
-
-def test_model_without_a_source_says_so():
-    """A model built from a bare response cannot be written out silently wrong."""
-    response = sysml_pb2.ParseFileResponse(
-        model_hash="abc", root=sysml_pb2.SymbolInfo(id="P", name="P", kind="Package")
-    )
-    model = Model(response, client=None)
-    with pytest.raises(ValueError, match="does not know what it was loaded from"):
-        model.to_sysml()
+    (request,) = service.requests
+    assert request.WhichOneof("source") == "model_hash"
+    assert request.model_hash == model.hash
+    assert request.to_format == "ttl"
+    # The path is still remembered, for a caller who does want the file as it is.
+    assert model.source_path == str(path)
 
 
 def test_conversion_writes_a_file(fake_service, tmp_path):
@@ -307,6 +300,27 @@ class TestRoundTripAgainstRealService:
             )
         assert str(result), "tolerant conversion wrote nothing"
         assert result.diagnostics, "tolerant conversion hid the errors it tolerated"
+
+    def test_a_loaded_model_writes_the_source_it_was_parsed_from(
+        self, real_service, tmp_path
+    ):
+        source = tmp_path / "model.sysml"
+        source.write_text(MODEL)
+        with Connection(port=real_service, auto_start=False) as conn:
+            model = conn.load(str(source))
+            source.write_text("package Replaced { part def Other; }\n")
+
+            assert "part def Engine" in str(model.to_sysml())
+            # The path, asked for explicitly, is the file as it stands now.
+            current = conn.convert("sysml", file_path=str(source))
+            assert "Other" in str(current)
+
+    def test_a_model_the_service_no_longer_holds_is_an_rpc_error(self, real_service):
+        with Connection(port=real_service, auto_start=False) as conn:
+            with pytest.raises(grpc.RpcError) as excinfo:
+                conn.convert("sysml", model_hash="nosuchmodel")
+        assert excinfo.value.code() == grpc.StatusCode.NOT_FOUND
+        assert "no longer cached" in excinfo.value.details()
 
     def test_an_unknown_format_is_an_rpc_error(self, real_service):
         with Connection(port=real_service, auto_start=False) as conn:

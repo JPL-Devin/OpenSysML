@@ -214,25 +214,27 @@ class Connection:
         """
         request = sysml_pb2.ParseFileRequest(content=content)
         response = self._stub.ParseFile(request)
-        return Model(response, self, source_content=content)
+        return Model(response, self)
     
-    def convert(self, to_format, file_path=None, content=None, from_format='',
-                tolerate_syntax_errors=False):
+    def convert(self, to_format, file_path=None, content=None, model_hash=None,
+                from_format='', tolerate_syntax_errors=False):
         """Write a model out in another of the formats Systemica writes.
 
-        The source is named the way :meth:`load` names it: a path the service
-        opens, or content carried inline. The conversion is stateless, so it
-        takes a source rather than a model hash — the cache holds a parse, and
-        writing a model out needs the text it was parsed from.
+        The source is a loaded model, named by its hash, or one named the way
+        :meth:`load` names it: a path the service opens, or content carried
+        inline. A hash converts the source the service parsed, so a file edited
+        since the load does not change the answer; a path is read afresh.
 
         Args:
             to_format (str): Format to write: 'sysml', 'kerml', 'text', 'ttl',
                 'turtle' or 'rdf'
             file_path (str, optional): Path the service reads the source from
             content (str, optional): Source carried inline
+            model_hash (str, optional): Hash of a loaded model, whose parsed
+                source is converted
             from_format (str, optional): Format to read the source as; inferred
-                from file_path's extension when omitted, and required for
-                inline content, which has no extension
+                from file_path's extension when omitted, notation for a
+                model_hash, and required for inline content
             tolerate_syntax_errors (bool): Write notation back out even when the
                 parser could not read all of it, reporting its syntax errors as
                 the result's diagnostics. Notation to notation only: every other
@@ -244,13 +246,27 @@ class Connection:
                 syntax errors
 
         Raises:
-            ValueError: If neither or both of file_path and content are given
+            ValueError: If other than one of file_path, content and model_hash
+                is given
             MissingCapabilityError: If the service cannot convert
             ConversionError: If the model could not be written in that format
-            grpc.RpcError: If a format is unknown or the file cannot be read
+            grpc.RpcError: If a format is unknown, the file cannot be read, or
+                the model is no longer cached
         """
-        if (file_path is None) == (content is None):
-            raise ValueError("Provide either file_path or content, not both")
+        given = [
+            name
+            for name, value in (
+                ('file_path', file_path),
+                ('content', content),
+                ('model_hash', model_hash),
+            )
+            if value is not None
+        ]
+        if len(given) != 1:
+            raise ValueError(
+                "Provide exactly one of file_path, content or model_hash; got "
+                + (", ".join(given) if given else "none")
+            )
         require(
             self.server_info(),
             CAPABILITY_CONVERT,
@@ -265,8 +281,10 @@ class Connection:
         )
         if file_path is not None:
             request.file_path = file_path
-        else:
+        elif content is not None:
             request.content = content
+        else:
+            request.model_hash = model_hash
 
         response = self._stub.Convert(request)
         diagnostics = [Diagnostic(d) for d in response.diagnostics]

@@ -121,6 +121,59 @@ func TestConvertFilePathInfersFormat(t *testing.T) {
 	}
 }
 
+// TestConvertModelHashConvertsWhatWasParsed verifies a hash converts the source
+// the service parsed, so a file edited since the parse does not change it.
+func TestConvertModelHashConvertsWhatWasParsed(t *testing.T) {
+	srv := mustNewService(t, 10)
+	path := filepath.Join(t.TempDir(), "model.sysml")
+	if err := os.WriteFile(path, []byte(convertModelSource), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	parsed, err := srv.ParseFile(context.Background(),
+		&pb.ParseFileRequest{Source: &pb.ParseFileRequest_FilePath{FilePath: path}})
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("package Replaced { part def Other; }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := mustConvert(t, srv, &pb.ConvertRequest{
+		Source:   &pb.ConvertRequest_ModelHash{ModelHash: parsed.ModelHash},
+		ToFormat: "sysml",
+	})
+	if resp.FromFormat != "sysml" {
+		t.Errorf("from_format = %q, want notation without being told", resp.FromFormat)
+	}
+	if !strings.Contains(resp.Content, "part def Engine") || strings.Contains(resp.Content, "Replaced") {
+		t.Errorf("converted the file as it stands, not the model parsed:\n%s", resp.Content)
+	}
+
+	// The path source, by contrast, is read afresh.
+	current := mustConvert(t, srv, &pb.ConvertRequest{
+		Source:   &pb.ConvertRequest_FilePath{FilePath: path},
+		ToFormat: "sysml",
+	})
+	if !strings.Contains(current.Content, "Replaced") {
+		t.Errorf("file_path did not read the file as it stands:\n%s", current.Content)
+	}
+}
+
+// TestConvertUncachedModelHashIsNotFound verifies an evicted or unknown model is
+// named as such rather than converted as empty notation.
+func TestConvertUncachedModelHashIsNotFound(t *testing.T) {
+	srv := mustNewService(t, 10)
+
+	_, err := srv.Convert(context.Background(), &pb.ConvertRequest{
+		Source:   &pb.ConvertRequest_ModelHash{ModelHash: "nosuchmodel"},
+		ToFormat: "sysml",
+	})
+	if status.Code(err) != codes.NotFound {
+		t.Errorf("err = %v, want NotFound", err)
+	}
+}
+
 // TestConvertInlineContentNeedsFromFormat verifies inline content, which has no
 // extension to infer from, is rejected rather than guessed at.
 func TestConvertInlineContentNeedsFromFormat(t *testing.T) {
