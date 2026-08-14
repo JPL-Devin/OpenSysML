@@ -75,13 +75,16 @@ func (ctx *Context) bindVariation(feat *EffectiveFeature, selection Value) (Valu
 }
 
 // bindOneVariant binds a variation bound to a collection: exactly one variant
-// may be selected, so selecting several is reported rather than resolved.
+// may be selected, so selecting several, or anything that is not a variant, is
+// reported rather than resolved.
 func (ctx *Context) bindOneVariant(feat *EffectiveFeature, elements []Value) (Value, error) {
 	var selected []Value
 	for _, el := range elements {
-		if el.Kind == ValVariant {
-			selected = append(selected, el)
+		if el.Kind != ValVariant {
+			return Value{}, fmt.Errorf("%w: variation %s is bound to a collection holding a %s (%s)",
+				ErrNotAVariant, feat.Name, el.Kind, ctx.variantSummary(feat.Symbol))
 		}
+		selected = append(selected, el)
 	}
 	switch {
 	case len(selected) > 1:
@@ -110,7 +113,9 @@ func (ctx *Context) variantValue(variant *symbols.Symbol) (Value, error) {
 		}
 		return val, nil
 	}
-	inst, err := ctx.Instantiate(variant)
+	// One object per variant, so repeated reads of a selection answer with the
+	// same object instead of allocating one per read.
+	inst, err := ctx.occurrenceOf(variant)
 	if err != nil {
 		return Value{}, fmt.Errorf("variant %s: %w", variant.Name, err)
 	}

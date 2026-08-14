@@ -108,6 +108,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("variation_without_a_selected_variant", testVariationWithoutASelectedVariant)
 	t.Run("variation_bound_to_what_is_not_a_variant", testVariationBoundToWhatIsNotAVariant)
 	t.Run("variation_bound_to_two_variants", testVariationBoundToTwoVariants)
+	t.Run("repeated_reads_of_a_variant_object", testRepeatedReadsOfAVariantObject)
 	t.Run("deep_specialization_chain_of_redefinitions", testDeepSpecializationChainOfRedefinitions)
 	t.Run("conflicting_redefinitions_at_several_levels", testConflictingRedefinitionsAtSeveralLevels)
 }
@@ -2616,6 +2617,7 @@ func testVariationBoundToWhatIsNotAVariant(t *testing.T) {
 		{"variant_of_another_variation", `part chosen :> family { attribute :>> cut = color::colorWhite; }`},
 		{"ordinary_value", `part chosen :> family { attribute :>> cut = 250.0; }`},
 		{"collection_of_ordinary_values", `part chosen :> family { attribute :>> cut = (250.0, 200.0); }`},
+		{"variant_mixed_with_an_ordinary_value", `part chosen :> family { attribute :>> cut = (cut::cutIdeal, 250.0); }`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := variationSlotInSource(t, fmt.Sprintf(variationFamily, tt.selection), "test::chosen", "cut")
@@ -2639,6 +2641,45 @@ func testVariationBoundToTwoVariants(t *testing.T) {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("error %q does not name the selection %s", err, name)
 		}
+	}
+}
+
+// testRepeatedReadsOfAVariantObject: the object a selected variant stands for is
+// materialized once, so evaluating a chain through it repeatedly neither piles up
+// objects nor exhausts the step budget.
+func testRepeatedReadsOfAVariantObject(t *testing.T) {
+	src := `
+	package test {
+		part def Engine { attribute power; }
+		abstract part family {
+			variation part engine : Engine {
+				variant part electric : Engine { attribute :>> power = 150.0; }
+				variant part petrol : Engine { attribute :>> power = 120.0; }
+			}
+		}
+		part chosen :> family { part :>> engine = engine::electric; }
+	}`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	matches := idx.LookupQualified("test::family::engine::electric")
+	if len(matches) != 1 {
+		t.Fatalf("electric: %d matching symbols, want 1", len(matches))
+	}
+	first, err := ctx.variantValue(matches[0])
+	if err != nil {
+		t.Fatalf("variantValue: %v", err)
+	}
+	count := len(ctx.instances)
+	for i := 0; i < 10; i++ {
+		again, err := ctx.variantValue(matches[0])
+		if err != nil {
+			t.Fatalf("variantValue (read %d): %v", i+2, err)
+		}
+		if again.Instance != first.Instance {
+			t.Fatalf("read %d gave instance %d, want %d", i+2, again.Instance, first.Instance)
+		}
+	}
+	if len(ctx.instances) != count {
+		t.Errorf("instances grew from %d to %d over repeated reads", count, len(ctx.instances))
 	}
 }
 
