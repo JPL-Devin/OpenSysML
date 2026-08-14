@@ -23,6 +23,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("decision_no_satisfied_guard", testDecisionNoSatisfiedGuard)
 	t.Run("state_dangling_transition", testStateDanglingTransition)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
+	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
@@ -709,6 +710,29 @@ func testStateTransitionWithoutATarget(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "names no target") {
 		t.Errorf("expected a missing-target error, got: %v", err)
+	}
+}
+
+// testStateTransitionEffectReadsAnUnknownFeature: a statement written as a
+// transition's effect executes lowered like any other, so one reading a feature
+// the machine does not declare reports rather than firing on a missing value.
+func testStateTransitionEffectReadsAnUnknownFeature(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			attribute counter : Integer = 0;
+			initial init;
+			state active;
+			final done;
+			init then active;
+			transition active to done do assign counter := missingName + 1;
+		}
+	}`)
+	err := exec.RunToCompletion()
+	if !errors.Is(err, ErrUnresolvedFeature) {
+		t.Fatalf("err = %v; want ErrUnresolvedFeature", err)
+	}
+	if !strings.Contains(err.Error(), "missingName") {
+		t.Errorf("err = %v; want it to name the unresolved feature", err)
 	}
 }
 
