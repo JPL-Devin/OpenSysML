@@ -1,12 +1,41 @@
-"""Exception hierarchy for pysysml."""
+"""Exception hierarchy for pysysml.
+
+Every failure a caller can act on is a :class:`PySysMLError`, including the ones
+the service reports over gRPC: :func:`from_rpc_error` translates a status code
+into the class for it at the client boundary and keeps the original
+``grpc.RpcError`` as ``__cause__``. A script therefore never has to ``import
+grpc`` and switch on status codes to tell a missing file from a dead service.
+"""
+
+import builtins
+import warnings
+from contextlib import contextmanager
+
+import grpc
 
 
 class PySysMLError(Exception):
     """Base class for all pysysml errors."""
 
 
-class ConnectionError(PySysMLError):
-    """Raised when the client cannot connect to or start the sysml-grpc service."""
+class ConnectionError(PySysMLError, builtins.ConnectionError):
+    """Raised when the client cannot connect to or start the sysml-grpc service.
+
+    Also a built-in :class:`ConnectionError`, for the same reason
+    :class:`ExecutionError` is a built-in ``RuntimeError``: the name in a
+    traceback promises the built-in, and a script reaching a service over a
+    socket writes ``except ConnectionError``.
+
+    Attributes:
+        message (str): Error description
+        code (grpc.StatusCode): Status the call failed with, when the failure
+            came from a call rather than from starting the service
+    """
+
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.message = message
+        self.code = code
 
 
 class UnsupportedValueError(PySysMLError):
@@ -77,8 +106,12 @@ class ConversionError(PySysMLError):
         self.diagnostics = diagnostics or []
 
 
-class RuntimeError(PySysMLError):
-    """Raised when a runtime operation (eval/instantiate/execute) fails.
+class ExecutionError(PySysMLError, builtins.RuntimeError):
+    """Raised when a runtime operation (eval/instantiate/execute/verify) fails.
+
+    Also a built-in :class:`RuntimeError`, so ``except RuntimeError`` catches it
+    — which is what the traceback's ``pysysml.errors.RuntimeError`` used to
+    promise and not deliver. That old name is a deprecated alias of this class.
 
     Attributes:
         message (str): Error description
@@ -89,3 +122,232 @@ class RuntimeError(PySysMLError):
         super().__init__(message)
         self.message = message
         self.diagnostics = diagnostics or []
+
+
+class ModelError(PySysMLError):
+    """Raised when a model the service parsed has errors and the caller wanted none.
+
+    Raised by ``load(..., strict=True)``, and by :meth:`Model.raise_for_errors`.
+
+    Attributes:
+        message (str): Error description naming the source and error count
+        diagnostics (list): The error-severity Diagnostic objects
+        model (Model): The model itself, so it stays inspectable after the raise
+    """
+
+    def __init__(self, message, diagnostics=None, model=None):
+        super().__init__(message)
+        self.message = message
+        self.diagnostics = diagnostics or []
+        self.model = model
+
+
+class SymbolNotFoundError(PySysMLError, KeyError):
+    """Raised when a symbol a lookup required is not in the model.
+
+    Also a :class:`KeyError`, since ``model["Vehicle"]`` is a subscript and is
+    expected to raise one.
+
+    Attributes:
+        name (str): Name that was looked up
+        suggestions (list[str]): Names in the model close enough to be typos of it
+    """
+
+    def __init__(self, name, suggestions=None):
+        self.name = name
+        self.suggestions = list(suggestions or [])
+        message = f"no symbol named {name!r} in this model"
+        if self.suggestions:
+            message += "; did you mean " + ", ".join(
+                repr(s) for s in self.suggestions
+            ) + "?"
+        super().__init__(message)
+
+    def __str__(self):
+        # KeyError.__str__ reprs its argument, which would quote the whole
+        # sentence; the message is already written for a reader.
+        return self.args[0]
+
+
+class ServiceError(PySysMLError):
+    """Raised when the service fails a call, translated from its gRPC status.
+
+    The subclasses below name the statuses a caller acts on differently; this
+    class itself is raised for every other status, so no failure escapes the
+    hierarchy as a bare ``grpc.RpcError``. The original is always ``__cause__``.
+
+    Attributes:
+        message (str): Description the service reported
+        code (grpc.StatusCode): Status code it failed the call with
+    """
+
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.message = message
+        self.code = code
+
+
+class ModelNotFoundError(ServiceError):
+    """Raised when the service no longer holds the model a call named.
+
+    Its model cache is bounded, so a model loaded long ago and many models back
+    may have been evicted. Load it again.
+    """
+
+
+class ModelFileNotFoundError(ServiceError, builtins.FileNotFoundError):
+    """Raised when the service could not read the source file a call named.
+
+    Also a built-in :class:`FileNotFoundError`, because that is what the failure
+    is: the path does not name a readable file for the service's own process.
+    """
+
+
+class InvalidRequestError(ServiceError, builtins.ValueError):
+    """Raised when the service rejects a request as malformed or unsupported.
+
+    Also a :class:`ValueError`: an argument the service cannot accept is a bad
+    argument, whether this client or the service caught it.
+    """
+
+
+class ServiceTimeoutError(ServiceError, builtins.TimeoutError):
+    """Raised when a call exceeded its deadline or was cancelled."""
+
+
+class UnsupportedOperationError(ServiceError):
+    """Raised when the connected service does not implement the call at all.
+
+    A service that reports its capabilities fails such a call with
+    :class:`~pysysml.capabilities.MissingCapabilityError` before it is made; this
+    is the fallback for one too old to be asked.
+    """
+
+
+#: Status codes that name a distinct failure, and the class each becomes.
+#: Anything else becomes a plain :class:`ServiceError`, so a status this client
+#: has never seen still arrives inside the hierarchy.
+_CODE_ERRORS = {
+    grpc.StatusCode.INVALID_ARGUMENT: InvalidRequestError,
+    grpc.StatusCode.FAILED_PRECONDITION: InvalidRequestError,
+    grpc.StatusCode.OUT_OF_RANGE: InvalidRequestError,
+    grpc.StatusCode.UNAVAILABLE: ConnectionError,
+    grpc.StatusCode.DEADLINE_EXCEEDED: ServiceTimeoutError,
+    grpc.StatusCode.CANCELLED: ServiceTimeoutError,
+    grpc.StatusCode.UNIMPLEMENTED: UnsupportedOperationError,
+}
+
+
+def _not_found_error(details, default):
+    """Pick the class for a NOT_FOUND status from what the service said.
+
+    The service answers NOT_FOUND both for a source file it could not read and
+    for a model hash it no longer holds — different problems with different
+    fixes. It says which in its details; ``default`` decides for a message this
+    client does not recognize, since the call site knows what it named.
+    """
+    lowered = details.lower()
+    if "file not found" in lowered or "no such file" in lowered:
+        return ModelFileNotFoundError
+    if "model not found" in lowered:
+        return ModelNotFoundError
+    return default
+
+
+def from_rpc_error(exc, not_found=ModelNotFoundError):
+    """Translate a ``grpc.RpcError`` into the :class:`PySysMLError` for it.
+
+    Args:
+        exc (grpc.RpcError): The failure as gRPC reported it.
+        not_found (type): Class for a NOT_FOUND whose details name neither a
+            file nor a model — the call site knows which it asked about.
+
+    Returns:
+        ServiceError: The translated error. Raise it ``from exc`` so the status
+        code and the gRPC debug string stay reachable as ``__cause__``.
+    """
+    # A failed call is a grpc.Call as well as a grpc.RpcError, which is where
+    # the status lives; an RpcError raised for anything else carries none.
+    if isinstance(exc, grpc.Call):
+        code = exc.code()
+        details = exc.details() or ""
+    else:
+        code = None
+        details = ""
+
+    if code == grpc.StatusCode.NOT_FOUND:
+        cls = _not_found_error(details, not_found)
+    else:
+        cls = _CODE_ERRORS.get(code, ServiceError)
+
+    name = code.name if code is not None else "UNKNOWN"
+    message = details or f"the sysml-grpc service failed the call with {name}"
+    if cls is ConnectionError:
+        # ConnectionError is also raised for a service that would not start, so
+        # a translated one says the service was reached for and was not there.
+        return ConnectionError(
+            f"sysml-grpc service unavailable: {message}", code=code
+        )
+    return cls(message, code=code)
+
+
+@contextmanager
+def translate_rpc_errors(not_found=ModelNotFoundError):
+    """Re-raise any ``grpc.RpcError`` raised in the block as a PySysMLError.
+
+    Wraps a stub call at the client boundary, so gRPC's status codes stop at the
+    boundary and callers see this package's hierarchy.
+
+    Args:
+        not_found (type): Class for a NOT_FOUND the details do not identify;
+            pass :class:`ModelFileNotFoundError` where the call named a path.
+    """
+    try:
+        yield
+    except grpc.RpcError as exc:
+        raise from_rpc_error(exc, not_found=not_found) from exc
+
+
+#: Names kept for callers of older versions, and what they are now.
+_DEPRECATED_NAMES = {"RuntimeError": ExecutionError}
+
+
+def __getattr__(name):
+    """Serve the deprecated ``RuntimeError`` alias, warning about its use.
+
+    It is the same class as :class:`ExecutionError`, so ``except
+    pysysml.errors.RuntimeError`` keeps working; it is gone from ``__all__`` so
+    that a star-import no longer shadows the built-in with it.
+    """
+    replacement = _DEPRECATED_NAMES.get(name)
+    if replacement is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    warnings.warn(
+        f"pysysml.errors.{name} is deprecated; use "
+        f"pysysml.errors.{replacement.__name__} instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return replacement
+
+
+__all__ = [
+    "PySysMLError",
+    "ConnectionError",
+    "ConversionError",
+    "ExecutionError",
+    "InstanceTypeError",
+    "InvalidRequestError",
+    "ModelError",
+    "ModelFileNotFoundError",
+    "ModelNotFoundError",
+    "ServiceError",
+    "ServiceTimeoutError",
+    "SlotError",
+    "SymbolNotFoundError",
+    "TypeMismatchError",
+    "UnsupportedOperationError",
+    "UnsupportedValueError",
+    "from_rpc_error",
+    "translate_rpc_errors",
+]

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -179,11 +178,11 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		if len(fields) < 2 {
 			return []string{"usage: %load <file>"}, false, nil
 		}
-		data, rerr := os.ReadFile(expandHome(fields[1]))
+		lines, rerr := s.LoadFile(fields[1])
 		if rerr != nil {
-			return nil, false, fmt.Errorf("load %s: %w", fields[1], rerr)
+			return nil, false, rerr
 		}
-		return renderResult(s.Submit(string(data)), s.verbosity), false, nil
+		return lines, false, nil
 	case "%save":
 		if len(fields) < 2 {
 			return []string{"usage: %save <file.sysml|file.ttl>"}, false, nil
@@ -297,45 +296,41 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	}
 }
 
-// doInstantiate creates an instance of a part def.
+// doInstantiate creates an instance of a part def. A runtime that cannot be
+// created at all is unrecoverable, while a name the session cannot resolve is
+// reported at the prompt.
 func (s *Session) doInstantiate(name string) ([]string, bool, error) {
-	// The name is resolved before the runtime is built, so a misspelling is
-	// reported as one even when the session has nothing to instantiate from.
-	sym, fqn, lerr := s.lookupSymbol(name)
-	if lerr != nil {
-		return []string{"error: " + lerr.Error()}, false, nil
-	}
-
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
+	if _, err := s.getOrCreateRuntime(); err != nil {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
-	inst, err := ctx.Instantiate(sym)
+	lines, err := s.InstantiateNamed(name)
 	if err != nil {
-		return []string{fmt.Sprintf("error: instantiation failed: %v", err)}, false, nil
+		return []string{"error: " + err.Error()}, false, nil
 	}
-
-	// Keyed by the resolved name, so %slots finds the instance whichever
-	// spelling of the name created it.
-	s.instances[fqn] = inst
-	return []string{
-		fmt.Sprintf("✓ Created instance of %s", fqn),
-		fmt.Sprintf("  ID: %d", inst.ID),
-		fmt.Sprintf("  Use %%slots %s to inspect", name),
-	}, false, nil
+	return lines, false, nil
 }
 
 // noDeclarationsMsg answers an expression only session declarations could give
 // a meaning to.
-const noDeclarationsMsg = "error: no declarations loaded (literals work, but feature references need declarations)"
+const noDeclarationsMsg = "no declarations loaded (literals work, but feature references need declarations)"
 
 // doEval evaluates an expression.
 func (s *Session) doEval(expr string) ([]string, bool, error) {
+	lines, err := s.evalExpr(expr)
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	return lines, false, nil
+}
+
+// evalExpr evaluates an expression, reporting a failure as an error rather than
+// as a line of output so a caller outside the prompt can act on it.
+func (s *Session) evalExpr(expr string) ([]string, error) {
 	// Try literal evaluation first (works even with empty session)
-	literalResult, isLiteral := s.tryEvalLiteral(expr)
+	literalResult, isLiteral, litErr := s.tryEvalLiteral(expr)
 	if isLiteral {
-		return literalResult, false, nil
+		return literalResult, litErr
 	}
 
 	doc := s.ws.Document(docName)
@@ -346,9 +341,9 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		if doc == nil || doc.Scope == nil {
-			return []string{noDeclarationsMsg}, false, nil
+			return nil, errors.New(noDeclarationsMsg)
 		}
-		return []string{"error: " + err.Error()}, false, nil
+		return nil, err
 	}
 
 	// Try feature reference lookup, simple ("%eval x") or qualified
@@ -366,7 +361,7 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 		// whichever of them the prompt's scope happens to reach.
 		var ambiguous *AmbiguousNameError
 		if errors.As(lookupErr, &ambiguous) {
-			return []string{"error: " + lookupErr.Error()}, false, nil
+			return nil, lookupErr
 		}
 	}
 	if sym != nil {
@@ -376,33 +371,33 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 			if _, ok := inst.Slots[sym.Name]; ok {
 				slot, err := inst.GetSlot(ctx, sym.Name)
 				if err != nil {
-					return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
+					return nil, fmt.Errorf("evaluation failed: %w", err)
 				}
 				return []string{
 					fmt.Sprintf("✓ %s%s", expr, onInstance(inst, owner)),
 					fmt.Sprintf("  = %s", formatSlot(slot)),
-				}, false, nil
+				}, nil
 			}
 		}
 		usage, ok := sym.Decl.(*ast.Usage)
 		if !ok || usage.Value == nil {
-			return []string{fmt.Sprintf("error: %q has no value to evaluate", expr)}, false, nil
+			return nil, fmt.Errorf("%q has no value to evaluate", expr)
 		}
 		// Evaluate with the symbol's owner scope for proper name resolution
 		val, err := ctx.EvalWithScope(usage.Value, sym.OwnerScope)
 		if err != nil {
-			return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
+			return nil, fmt.Errorf("evaluation failed: %w", err)
 		}
 		return []string{
 			fmt.Sprintf("✓ %s", expr),
 			fmt.Sprintf("  = %s", formatValue(val)),
-		}, false, nil
+		}, nil
 	}
 
 	// A compound expression is evaluated in the session's own namespace, which
 	// an empty session does not have.
 	if doc == nil || doc.Scope == nil {
-		return []string{noDeclarationsMsg}, false, nil
+		return nil, errors.New(noDeclarationsMsg)
 	}
 
 	// Complex expression with feature refs - inject into session context
@@ -412,13 +407,13 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 
 	if len(p.Diagnostics) > 0 {
 		if lookupErr != nil {
-			return []string{"error: " + lookupErr.Error()}, false, nil
+			return nil, lookupErr
 		}
-		lines := []string{"error: parse failed:"}
+		msgs := make([]string, 0, len(p.Diagnostics))
 		for _, d := range p.Diagnostics {
-			lines = append(lines, "  "+d.Message)
+			msgs = append(msgs, "\n  "+d.Message)
 		}
-		return lines, false, nil
+		return nil, fmt.Errorf("parse failed:%s", strings.Join(msgs, ""))
 	}
 
 	// Find __eval__ attribute (should be last member)
@@ -437,7 +432,7 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	}
 
 	if evalUsage == nil || evalUsage.Value == nil {
-		return []string{"error: could not parse expression"}, false, nil
+		return nil, errors.New("could not parse expression")
 	}
 
 	// Evaluated in the namespace the session is working in, so a compound
@@ -446,25 +441,26 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	val, err := ctx.EvalWithScope(evalUsage.Value, s.promptScope(doc))
 	if err != nil {
 		if lookupErr != nil {
-			return []string{"error: " + lookupErr.Error()}, false, nil
+			return nil, lookupErr
 		}
-		return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
+		return nil, fmt.Errorf("evaluation failed: %w", err)
 	}
 
 	return []string{
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(val)),
-	}, false, nil
+	}, nil
 }
 
-// tryEvalLiteral attempts to evaluate standalone literal expressions.
-func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
+// tryEvalLiteral attempts to evaluate standalone literal expressions. It reports
+// whether the expression is one it answered, and what an answered one failed on.
+func (s *Session) tryEvalLiteral(expr string) ([]string, bool, error) {
 	// A name the session declares is answered by that declaration, so the empty
 	// model this pass evaluates in must not answer for it: a library operation
 	// reached by its unqualified name would otherwise stand in for a calc the
 	// session wrote under the same name.
 	if s.declaresANameIn(expr) {
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Parse as standalone attribute
@@ -473,7 +469,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 	root := p.ParseFile()
 
 	if len(p.Diagnostics) > 0 || len(root.Members) == 0 {
-		return nil, false
+		return nil, false, nil
 	}
 
 	member := root.Members[0]
@@ -484,7 +480,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 
 	usage, ok := member.(*ast.Usage)
 	if !ok || usage.Value == nil {
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Use runtime context with empty model (no symbols needed for literals)
@@ -492,7 +488,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
 	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.budgets.MaxSteps)
 	if err := ctx.SetBudgets(s.budgets); err != nil {
-		return nil, false
+		return nil, false, nil
 	}
 
 	val, err := ctx.Eval(usage.Value)
@@ -504,15 +500,15 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 		// no position, is reported here instead of being hidden behind "no
 		// declarations loaded".
 		if isLiteralAnswerError(err) {
-			return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, true
+			return nil, true, fmt.Errorf("evaluation failed: %w", err)
 		}
-		return nil, false
+		return nil, false, nil
 	}
 
 	return []string{
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(val)),
-	}, true
+	}, true, nil
 }
 
 // doBudget lists the bounds one run of this session may spend, each with the
@@ -906,30 +902,37 @@ func formatElements(elements []runtime.Value) string {
 // so it is evaluated as a usage and every output feature it computes is listed
 // from that one run (SysML 7.17).
 func (s *Session) doCalc(calcName, argText string) ([]string, bool, error) {
+	return errorLines(s.evalCalc(calcName, argText))
+}
+
+// evalCalc carries out %calc, reporting what stopped an evaluation as an error
+// rather than as a line of output, so a caller outside the prompt — the command
+// line — can tell an evaluated calculation from one that could not be run.
+func (s *Session) evalCalc(calcName, argText string) ([]string, []NamedValue, error) {
 	doc := s.ws.Document(docName)
 	if doc == nil || doc.Scope == nil {
-		return []string{"error: no declarations loaded"}, false, nil
+		return nil, nil, errors.New("no declarations loaded")
 	}
 
 	sym, _, lerr := s.lookupSymbol(calcName)
 	if lerr != nil {
-		return []string{"error: " + lerr.Error()}, false, nil
+		return nil, nil, lerr
 	}
 
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
+		return nil, nil, err
 	}
 
 	if strings.TrimSpace(argText) == "" {
-		if lines, handled := s.calcUsageOutputs(ctx, sym, calcName); handled {
-			return lines, false, nil
+		if lines, values, handled, err := s.calcUsageOutputs(ctx, sym, calcName); handled {
+			return lines, values, err
 		}
 	}
 
 	exprs, err := parseExprList(argText)
 	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
+		return nil, nil, err
 	}
 
 	// Arguments are evaluated where the prompt evaluates any expression, so a
@@ -940,7 +943,7 @@ func (s *Session) doCalc(calcName, argText string) ([]string, bool, error) {
 	for i, arg := range exprs {
 		val, err := ctx.EvalWithScope(arg.expr, scope)
 		if err != nil {
-			return []string{fmt.Sprintf("error: evaluation of argument %q failed: %v", arg.text, err)}, false, nil
+			return nil, nil, fmt.Errorf("evaluation of argument %q failed: %w", arg.text, err)
 		}
 		argValues[i] = val
 		argTexts[i] = arg.text
@@ -948,37 +951,39 @@ func (s *Session) doCalc(calcName, argText string) ([]string, bool, error) {
 
 	result, err := ctx.InvokeCalc(sym, argValues, scope)
 	if err != nil {
-		return []string{fmt.Sprintf("error: calc invocation failed: %v", err)}, false, nil
+		return nil, nil, fmt.Errorf("calc invocation failed: %w", err)
 	}
 
 	return []string{
 		fmt.Sprintf("✓ %s(%s)", calcName, strings.Join(argTexts, ", ")),
 		fmt.Sprintf("  = %s", formatValue(result)),
-	}, false, nil
+	}, []NamedValue{{Name: "result", Value: formatValue(result)}}, nil
 }
 
 // calcUsageOutputs lists the outputs of a calc usage evaluated from its own
 // member values. It reports handled=false when the name is not a calc usage, or
 // is one that computes no output features, so those keep being invoked as
 // calculations with an empty argument list.
-func (s *Session) calcUsageOutputs(ctx *runtime.Context, sym *symbols.Symbol, calcName string) ([]string, bool) {
+func (s *Session) calcUsageOutputs(ctx *runtime.Context, sym *symbols.Symbol, calcName string) ([]string, []NamedValue, bool, error) {
 	usage, ok := sym.Decl.(*ast.Usage)
 	if !ok || usage.Kind != ast.UsageCalc {
-		return nil, false
+		return nil, nil, false, nil
 	}
 	outputs, err := ctx.CalcUsageOutputs(sym, sym.OwnerScope, nil)
 	if err != nil {
-		return []string{"error: calc usage evaluation failed: " + err.Error()}, true
+		return nil, nil, true, fmt.Errorf("calc usage evaluation failed: %w", err)
 	}
 	if len(outputs) == 0 {
-		return nil, false
+		return nil, nil, false, nil
 	}
 	lines := make([]string, 0, len(outputs)+1)
 	lines = append(lines, fmt.Sprintf("✓ %s", calcName))
+	values := make([]NamedValue, 0, len(outputs))
 	for _, out := range outputs {
 		lines = append(lines, fmt.Sprintf("  %s = %s", out.Name, formatValue(out.Value)))
+		values = append(values, NamedValue{Name: out.Name, Value: formatValue(out.Value)})
 	}
-	return lines, true
+	return lines, values, true, nil
 }
 
 // splitCalcArgs splits `%calc`'s tail into the calc's name and its argument
@@ -1182,35 +1187,7 @@ func parseWholeExpr(text string) (ast.Node, error) {
 
 // doConstraint evaluates a constraint definition.
 func (s *Session) doConstraint(name string) ([]string, bool, error) {
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
-		return []string{"error: no declarations loaded"}, false, nil
-	}
-
-	sym, fqn, lerr := s.lookupSymbol(name)
-	if lerr != nil {
-		return []string{"error: " + lerr.Error()}, false, nil
-	}
-
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
-	}
-
-	// Evaluate against the instance that carries the constraint when one has
-	// been created, so the verdict is about concrete values.
-	inst, owner := s.owningInstance(fqn)
-	passed, err := ctx.EvaluateConstraintOn(sym, declaringScope(sym, doc.Scope), inst)
-	if err != nil || !passed {
-		return []string{
-			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
-			"  " + verdictDetail("Assertion", err),
-		}, false, nil
-	}
-
-	return []string{
-		fmt.Sprintf("✓ Constraint %s passed%s", name, onInstance(inst, owner)),
-	}, false, nil
+	return s.CheckConstraint(name).Lines, false, nil
 }
 
 // promptScope is the namespace a prompt expression is evaluated in: the last
@@ -1283,72 +1260,19 @@ func onInstance(inst *runtime.Instance, owner string) string {
 
 // doRequirement evaluates a requirement definition.
 func (s *Session) doRequirement(name string) ([]string, bool, error) {
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
-		return []string{"error: no declarations loaded"}, false, nil
-	}
-
-	sym, fqn, lerr := s.lookupSymbol(name)
-	if lerr != nil {
-		return []string{"error: " + lerr.Error()}, false, nil
-	}
-
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
-	}
-
-	inst, owner := s.owningInstance(fqn)
-	passed, err := ctx.EvaluateRequirementOn(sym, declaringScope(sym, doc.Scope), inst)
-	if err != nil || !passed {
-		return []string{
-			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),
-			"  " + verdictDetail("Required condition", err),
-		}, false, nil
-	}
-
-	return []string{
-		fmt.Sprintf("✓ Requirement %s satisfied%s", name, onInstance(inst, owner)),
-	}, false, nil
+	return s.CheckRequirement(name).Lines, false, nil
 }
 
 // doSatisfy evaluates satisfaction assertions: every one the model states, or,
-// given a name, the ones the named element states — or that element itself, when
-// it is a named satisfaction assertion. The usual `assert satisfy r by p;` is
-// anonymous, so the element stating it is how a user reaches it.
+// given a name, the ones the named element states.
 func (s *Session) doSatisfy(args []string) ([]string, bool, error) {
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
-		return []string{"error: no declarations loaded"}, false, nil
-	}
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
-	}
-
-	scope := doc.Scope
-	where := "the session"
+	var name string
 	if len(args) > 0 {
-		sym, fqn, lerr := s.lookupSymbol(args[0])
-		if lerr != nil {
-			return []string{"error: " + lerr.Error()}, false, nil
-		}
-		if a, aerr := ctx.SatisfyAssertionOf(sym); aerr == nil {
-			return s.satisfyVerdict(ctx, a), false, nil
-		}
-		if sym.Scope == nil {
-			return []string{fmt.Sprintf("error: %s states no satisfaction assertion", args[0])}, false, nil
-		}
-		scope, where = sym.Scope, fqn
-	}
-
-	assertions := ctx.SatisfyAssertionsIn(scope)
-	if len(assertions) == 0 {
-		return []string{fmt.Sprintf("no satisfaction assertion in %s", where)}, false, nil
+		name = args[0]
 	}
 	var out []string
-	for _, a := range assertions {
-		out = append(out, s.satisfyVerdict(ctx, a)...)
+	for _, v := range s.CheckSatisfy(name) {
+		out = append(out, v.Lines...)
 	}
 	return out, false, nil
 }
@@ -1356,7 +1280,7 @@ func (s *Session) doSatisfy(args []string) ([]string, bool, error) {
 // satisfyVerdict renders the verdict of one satisfaction assertion, evaluated
 // against an object of its subject: the one the session already created for that
 // subject, so a `%instantiate` before it is what the verdict is about.
-func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAssertion) []string {
+func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAssertion) Verdict {
 	subject, owner := s.subjectInstance(a)
 	if subject == nil && a.Subject != nil {
 		// No object of the subject exists yet, so the verdict is about a fresh
@@ -1370,12 +1294,14 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 	}
 	holds, err := ctx.EvaluateSatisfactionOn(a, subject)
 	if err != nil || !holds {
-		return []string{
+		return Verdict{Subject: a.Text(), Status: failedStatus(err), Lines: []string{
 			fmt.Sprintf("✗ %s fails%s", a.Text(), onInstance(subject, owner)),
 			"  " + verdictDetail("Required condition", err),
-		}
+		}}
 	}
-	return []string{fmt.Sprintf("✓ %s holds%s", a.Text(), onInstance(subject, owner))}
+	return Verdict{Subject: a.Text(), Status: VerdictHolds, Lines: []string{
+		fmt.Sprintf("✓ %s holds%s", a.Text(), onInstance(subject, owner)),
+	}}
 }
 
 // subjectInstance returns the object the session has already created for an
@@ -1402,48 +1328,62 @@ func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
 // performingObject resolves the object a debugging session's behavior is
 // performed by: its connections route what the behavior sends. No argument
 // performs the behavior outside any object.
-func (s *Session) performingObject(args []string) (*runtime.Instance, string) {
+func (s *Session) performingObject(args []string) (*runtime.Instance, error) {
 	if len(args) == 0 {
-		return nil, ""
+		return nil, nil
 	}
 	_, fqn, lerr := s.lookupSymbol(args[0])
 	if lerr != nil {
-		return nil, "error: " + lerr.Error()
+		return nil, lerr
 	}
 	inst, ok := s.instances[fqn]
 	if !ok {
-		return nil, fmt.Sprintf("error: no instance of %q (use %%instantiate first)", fqn)
+		return nil, fmt.Errorf("no instance of %q (use %%instantiate first)", fqn)
 	}
-	return inst, ""
+	return inst, nil
 }
 
 // --- Action Debugging Commands ---
 
 // doAction starts an action executor debugging session.
 func (s *Session) doAction(name string, performer []string) ([]string, bool, error) {
+	lines, err := s.startAction(name, performer)
+	if err != nil {
+		if errors.Is(err, errRuntimeInit) {
+			return nil, false, err
+		}
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	lines = append(lines, "", "Use %step to advance, %tokens to inspect, %continue to run to completion")
+	return lines, false, nil
+}
+
+// startAction creates the action executor a debugging session runs, reporting
+// what prevented it as an error so a caller outside the prompt can act on it.
+func (s *Session) startAction(name string, performer []string) ([]string, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
-		return nil, false, fmt.Errorf("runtime init: %w", err)
+		return nil, fmt.Errorf("%w: %w", errRuntimeInit, err)
 	}
 
 	sym, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
-		return []string{"error: " + lerr.Error()}, false, nil
+		return nil, lerr
 	}
 
 	if sym.Kind != symbols.SymbolActionUsage && sym.Kind != symbols.SymbolActionDef {
-		return []string{fmt.Sprintf("error: %q is not an action", name)}, false, nil
+		return nil, fmt.Errorf("%q is not an action", name)
 	}
 
-	self, msg := s.performingObject(performer)
-	if msg != "" {
-		return []string{msg}, false, nil
+	self, perr := s.performingObject(performer)
+	if perr != nil {
+		return nil, perr
 	}
 
 	// Create executor
 	exec, err := ctx.CreateActionExecutorFor(sym, self)
 	if err != nil {
-		return []string{fmt.Sprintf("error: failed to create executor: %v", err)}, false, nil
+		return nil, fmt.Errorf("failed to create executor: %w", err)
 	}
 	exec.SetTrace(s.trace)
 
@@ -1461,9 +1401,7 @@ func (s *Session) doAction(name string, performer []string) ([]string, bool, err
 		fmt.Sprintf("✓ Started action executor for %q", name),
 		fmt.Sprintf("  State: %s", exec.State()),
 		fmt.Sprintf("  Tokens: %d", len(tokens)),
-		"",
-		"Use %step to advance, %tokens to inspect, %continue to run to completion",
-	}, false, nil
+	}, nil
 }
 
 // doStep advances the action executor one step.
@@ -1494,14 +1432,8 @@ func (s *Session) doStep() ([]string, bool, error) {
 	}
 
 	if exec.State() == runtime.StateCompleted {
-		results := exec.Results()
 		out = append(out, "", "✓ Action completed")
-		if len(results) > 0 {
-			out = append(out, "  Results:")
-			for k, v := range results {
-				out = append(out, fmt.Sprintf("    %s = %s", k, formatValue(v)))
-			}
-		}
+		out = append(out, renderResults(exec.Results())...)
 	}
 
 	return out, false, nil
@@ -1509,49 +1441,61 @@ func (s *Session) doStep() ([]string, bool, error) {
 
 // doContinue runs the action to completion.
 func (s *Session) doContinue() ([]string, bool, error) {
+	return errorLines(s.continueAction())
+}
+
+// continueAction runs the active action to completion, or to the first
+// breakpoint hit, reporting a failed run as an error.
+func (s *Session) continueAction() ([]string, []NamedValue, error) {
 	if s.actionExec == nil {
-		return []string{"error: no active action session (use %action <name> first)"}, false, nil
+		return nil, nil, errors.New("no active action session (use %action <name> first)")
 	}
 
 	exec := s.actionExec.executor
 
 	// Check if already completed
 	if exec.State() == runtime.StateCompleted {
-		return []string{"✓ Action already completed"}, false, nil
+		return []string{"✓ Action already completed"}, namedValues(exec.Results()), nil
 	}
 
 	// Run to completion, or to the first breakpoint hit
-	err := exec.RunToCompletion()
-	if err != nil {
-		return []string{fmt.Sprintf("error: execution failed: %v", err)}, false, nil
+	if err := exec.RunToCompletion(); err != nil {
+		return nil, nil, fmt.Errorf("execution failed: %w", err)
 	}
 
 	if node := exec.PausedAt(); node != "" {
-		out := []string{
+		return []string{
 			fmt.Sprintf("⏸ Paused at breakpoint %q", node),
 			fmt.Sprintf("  State: %s", exec.State()),
 			fmt.Sprintf("  Tokens: %d", len(exec.Tokens())),
 			"",
 			"Use %tokens to inspect, %step or %continue to resume",
-		}
-		return out, false, nil
+		}, nil, nil
 	}
 
 	// Display results
-	results := exec.Results()
 	out := []string{
 		"✓ Action completed",
 		fmt.Sprintf("  Final state: %s", exec.State()),
 	}
+	out = append(out, renderResults(exec.Results())...)
 
-	if len(results) > 0 {
-		out = append(out, "  Results:")
-		for k, v := range results {
-			out = append(out, fmt.Sprintf("    %s = %s", k, formatValue(v)))
-		}
+	return out, namedValues(exec.Results()), nil
+}
+
+// renderResults lists an action's output values, in name order so a report of
+// the same run always reads the same way.
+func renderResults(results map[string]runtime.Value) []string {
+	values := namedValues(results)
+	if len(values) == 0 {
+		return nil
 	}
-
-	return out, false, nil
+	out := make([]string, 0, len(values)+1)
+	out = append(out, "  Results:")
+	for _, v := range values {
+		out = append(out, fmt.Sprintf("    %s = %s", v.Name, v.Value))
+	}
+	return out
 }
 
 // doTokens displays active tokens.
@@ -1654,29 +1598,43 @@ func (s *Session) doStop() ([]string, bool, error) {
 
 // doStateMachine starts a state machine executor debugging session.
 func (s *Session) doStateMachine(name string, performer []string) ([]string, bool, error) {
+	lines, err := s.startStateMachine(name, performer)
+	if err != nil {
+		if errors.Is(err, errRuntimeInit) {
+			return nil, false, err
+		}
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	lines = append(lines, "", "Use %events to see queue, %current for state, %advance <time> to step")
+	return lines, false, nil
+}
+
+// startStateMachine creates the state executor a debugging session runs,
+// reporting what prevented it as an error.
+func (s *Session) startStateMachine(name string, performer []string) ([]string, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
-		return nil, false, fmt.Errorf("runtime init: %w", err)
+		return nil, fmt.Errorf("%w: %w", errRuntimeInit, err)
 	}
 
 	sym, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
-		return []string{"error: " + lerr.Error()}, false, nil
+		return nil, lerr
 	}
 
 	if sym.Kind != symbols.SymbolStateDef && sym.Kind != symbols.SymbolStateUsage {
-		return []string{fmt.Sprintf("error: %q is not a state machine", name)}, false, nil
+		return nil, fmt.Errorf("%q is not a state machine", name)
 	}
 
-	self, msg := s.performingObject(performer)
-	if msg != "" {
-		return []string{msg}, false, nil
+	self, perr := s.performingObject(performer)
+	if perr != nil {
+		return nil, perr
 	}
 
 	// Create executor
 	exec, err := ctx.CreateStateExecutorFor(sym, self)
 	if err != nil {
-		return []string{fmt.Sprintf("error: failed to create executor: %v", err)}, false, nil
+		return nil, fmt.Errorf("failed to create executor: %w", err)
 	}
 	exec.SetTrace(s.trace)
 
@@ -1694,9 +1652,7 @@ func (s *Session) doStateMachine(name string, performer []string) ([]string, boo
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
 		fmt.Sprintf("  Time: %.2f", exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
-		"",
-		"Use %events to see queue, %current for state, %advance <time> to step",
-	}, false, nil
+	}, nil
 }
 
 // doEvents displays the event queue.
@@ -1745,10 +1701,10 @@ func (s *Session) doCurrent() ([]string, bool, error) {
 		}
 	}
 
-	if len(stateData) > 0 {
+	if values := namedValues(stateData); len(values) > 0 {
 		out = append(out, "", "State data:")
-		for k, v := range stateData {
-			out = append(out, fmt.Sprintf("  %s = %s", k, formatValue(v)))
+		for _, v := range values {
+			out = append(out, fmt.Sprintf("  %s = %s", v.Name, v.Value))
 		}
 	}
 
@@ -1793,13 +1749,22 @@ func parseDuration(arg string) (float64, error) {
 // doAdvance advances simulation time by the given duration, processing every
 // event scheduled at or before the deadline.
 func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
-	if s.stateExec == nil {
-		return []string{"error: no active state machine session (use %state <name> first)"}, false, nil
-	}
-
 	duration, err := parseDuration(timeStr)
 	if err != nil {
 		return []string{"error: " + err.Error()}, false, nil
+	}
+	lines, err := s.advanceBy(duration)
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	return lines, false, nil
+}
+
+// advanceBy advances simulation time by duration, reporting a failed event or do
+// behavior as an error.
+func (s *Session) advanceBy(duration float64) ([]string, error) {
+	if s.stateExec == nil {
+		return nil, errors.New("no active state machine session (use %state <name> first)")
 	}
 
 	exec := s.stateExec.executor
@@ -1810,7 +1775,7 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 	// the behavior ends.
 	if !exec.HasPendingWork() {
 		s.stateExec.now = deadline
-		return []string{fmt.Sprintf("No pending work - simulation time is now %.2f", deadline)}, false, nil
+		return []string{fmt.Sprintf("No pending work - simulation time is now %.2f", deadline)}, nil
 	}
 
 	// Bound the drain by the session's own budgets, so a machine that keeps
@@ -1824,7 +1789,7 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 		// the step RunToCompletion would take here.
 		if exec.EventQueue().Len() == 0 && exec.HasPendingSignal() {
 			if err := exec.ProcessNextEvent(); err != nil {
-				return []string{fmt.Sprintf("error: event processing failed: %v", err)}, false, nil
+				return nil, fmt.Errorf("event processing failed: %w", err)
 			}
 			processed++
 			continue
@@ -1837,7 +1802,7 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 			}
 			ran, err := exec.RunDoRound()
 			if err != nil {
-				return []string{fmt.Sprintf("error: do behavior failed: %v", err)}, false, nil
+				return nil, fmt.Errorf("do behavior failed: %w", err)
 			}
 			if ran == 0 {
 				break
@@ -1846,7 +1811,7 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 			continue
 		}
 		if err := exec.ProcessNextEvent(); err != nil {
-			return []string{fmt.Sprintf("error: event processing failed: %v", err)}, false, nil
+			return nil, fmt.Errorf("event processing failed: %w", err)
 		}
 		processed++
 	}
@@ -1878,5 +1843,5 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 		out = append(out, "", "✓ State machine completed (final state reached)")
 	}
 
-	return out, false, nil
+	return out, nil
 }

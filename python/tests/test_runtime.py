@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import Mock, patch
 from pysysml.connection import Connection
 from pysysml.proto import sysml_pb2
-from pysysml.errors import RuntimeError
+from pysysml.errors import ExecutionError
 
 
 def test_eval_simple_expression():
@@ -53,7 +53,7 @@ def test_instantiate_returns_instance():
 
 
 def test_eval_raises_on_error():
-    """Test eval() raises RuntimeError on failure."""
+    """Test eval() raises ExecutionError on failure."""
     with patch('grpc.insecure_channel'):
         with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
             mock_stub = Mock()
@@ -67,7 +67,7 @@ def test_eval_raises_on_error():
             
             conn = Connection(auto_start=False)
             
-            with pytest.raises(RuntimeError, match="Parse error"):
+            with pytest.raises(ExecutionError, match="Parse error"):
                 conn.eval("invalid(((", "model-hash")
 
 

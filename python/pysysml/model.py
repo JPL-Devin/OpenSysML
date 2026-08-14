@@ -1,8 +1,14 @@
 """Model class wrapping parsed SysML model."""
 
+import difflib
+
 from pysysml.symbol import Symbol
 from pysysml.conversion import FORMAT_SYSML, FORMAT_TURTLE, format_of_path
 from pysysml.diagnostic import Diagnostic
+from pysysml.errors import ModelError, SymbolNotFoundError
+
+#: Severity the service reports for a diagnostic that makes a model unusable.
+_SEVERITY_ERROR = "error"
 
 
 class Model:
@@ -50,6 +56,55 @@ class Model:
     def diagnostics(self):
         """Get list of diagnostics."""
         return self._diagnostics
+
+    @property
+    def errors(self):
+        """The error-severity diagnostics, which are what makes a model unusable.
+
+        Returns:
+            list[Diagnostic]: Diagnostics of severity 'error', in report order
+        """
+        return [
+            d for d in self._diagnostics
+            if (d.severity or "").lower() == _SEVERITY_ERROR
+        ]
+
+    @property
+    def ok(self):
+        """Whether the service parsed and analysed this model without errors.
+
+        A model with errors is still returned and still navigable — that is how
+        a tool reports every problem at once — but its symbols may be missing or
+        unresolved, so lookups on it fail later. Test this, or load with
+        ``strict=True``, before treating a model as the model that was written.
+
+        Returns:
+            bool: True when no diagnostic has error severity
+        """
+        return not self.errors
+
+    def raise_for_errors(self):
+        """Raise :class:`~pysysml.errors.ModelError` unless :attr:`ok`.
+
+        Returns:
+            Model: self, so a call can be chained onto a load
+
+        Raises:
+            ModelError: If the model has error diagnostics. It carries them as
+                ``diagnostics`` and this model as ``model``.
+        """
+        errors = self.errors
+        if not errors:
+            return self
+        where = self._source_path or "the model"
+        summary = "; ".join(str(d) for d in errors[:3])
+        if len(errors) > 3:
+            summary += f"; ... and {len(errors) - 3} more"
+        raise ModelError(
+            f"{where} has {len(errors)} error(s): {summary}",
+            diagnostics=errors,
+            model=self,
+        )
     
     @property
     def source_path(self):
@@ -138,7 +193,9 @@ class Model:
             name (str): Short name ("Vehicle") or FQN ("Demo::Vehicle")
 
         Returns:
-            Symbol or None: First matching symbol, or None if not found
+            Symbol or None: First matching symbol, or None if not found. Use
+            ``model[name]`` where a missing symbol is a failure, so it is
+            reported as one instead of as an AttributeError on None.
         """
         def matches(symbol):
             return symbol.name == name or symbol.id == name
@@ -181,6 +238,125 @@ class Model:
                 queue.append(child)
 
         return None
+
+    def verify_constraint(self, symbol_id, subject=None):
+        """Ask whether one of this model's constraints holds.
+
+        Args:
+            symbol_id (str): FQN of the constraint definition or usage
+            subject (str, optional): FQN of a part/usage to instantiate and
+                evaluate against, so the verdict is about concrete values
+
+        Returns:
+            Verdict: The answer; false is the model's answer, not an exception
+        """
+        return self._client.verify_constraint(
+            symbol_id, self._hash, subject_symbol_id=subject
+        )
+
+    def verify_requirement(self, symbol_id, subject=None):
+        """Ask whether one of this model's requirements is satisfied.
+
+        Args:
+            symbol_id (str): FQN of the requirement definition or usage
+            subject (str, optional): FQN of a part/usage to instantiate and
+                evaluate against
+
+        Returns:
+            Verdict: The answer
+        """
+        return self._client.verify_requirement(
+            symbol_id, self._hash, subject_symbol_id=subject
+        )
+
+    def verify_satisfaction(self, symbol_id=None):
+        """Ask whether this model's satisfaction assertions hold.
+
+        This is the scriptable form of "does this model satisfy its
+        requirements?": every ``assert satisfy ... by ...`` the model states,
+        each evaluated against an object of its subject.
+
+        Args:
+            symbol_id (str, optional): FQN limiting evaluation to the assertions
+                stated within that element, or to that element itself when it is
+                a named satisfaction assertion
+
+        Returns:
+            list[Verdict]: One verdict per assertion, in declaration order
+        """
+        return self._client.verify_satisfaction(self._hash, symbol_id=symbol_id)
+
+    def satisfied(self, symbol_id=None):
+        """Whether every satisfaction assertion evaluated holds.
+
+        A model stating no assertion is trivially satisfied, so read this
+        together with :meth:`verify_satisfaction` where that matters. An
+        assertion that could not be evaluated is not a holding one.
+
+        Args:
+            symbol_id (str, optional): FQN limiting evaluation, as in
+                :meth:`verify_satisfaction`
+
+        Returns:
+            bool: True when no assertion fails
+        """
+        return all(v.holds for v in self.verify_satisfaction(symbol_id))
+
+    def calc(self, symbol_id, arguments=None):
+        """Invoke one of this model's calculations.
+
+        Args:
+            symbol_id (str): FQN of the calc definition or usage
+            arguments (list, optional): Positional arguments, as Python values
+
+        Returns:
+            CalcResult: The value returned, or the outputs a calc usage computed
+        """
+        return self._client.calc(symbol_id, self._hash, arguments=arguments)
+
+    def __getitem__(self, name):
+        """Look a symbol up by short name or FQN, raising when there is none.
+
+        The raising counterpart of :meth:`find`: ``model["Vehicle"].attributes()``
+        names the symbol that is missing, where ``find`` would return None and
+        fail as an AttributeError on it one call later.
+
+        Args:
+            name (str): Short name ("Vehicle") or FQN ("Demo::Vehicle")
+
+        Returns:
+            Symbol: The matching symbol
+
+        Raises:
+            SymbolNotFoundError: If the model declares no such symbol. Also a
+                KeyError, and it names the closest declared names.
+        """
+        symbol = self.find(name)
+        if symbol is None:
+            raise SymbolNotFoundError(name, self._near_names(name))
+        return symbol
+
+    def __contains__(self, name):
+        """Whether a short name or FQN names a symbol in this model."""
+        return self.find(name) is not None
+
+    def _near_names(self, name):
+        """Declared names close enough to ``name`` to be what was meant.
+
+        Both short names and FQNs are candidates, since either is accepted by a
+        lookup and either may have been mistyped.
+        """
+        candidates = []
+        queue = [self.root]
+        while queue:
+            current = queue.pop(0)
+            for child in current.children():
+                if child.name:
+                    candidates.append(child.name)
+                if child.id and child.id != child.name:
+                    candidates.append(child.id)
+                queue.append(child)
+        return difflib.get_close_matches(name, candidates, n=3)
 
     def __str__(self):
         """String representation: 'Model: name (kind)'."""

@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from pysysml.connection import Connection
+from pysysml.errors import PySysMLError, ServiceError
 from pysysml.proto import sysml_pb2
 
 
@@ -112,18 +113,19 @@ def test_connection_load_with_diagnostics():
 def test_connection_load_grpc_error():
     with patch('grpc.insecure_channel'):
         mock_stub = Mock()
-        
-        # Simulate gRPC error (e.g., file not found)
-        mock_stub.ParseFile.side_effect = grpc.RpcError()
-        
+
+        # A gRPC failure carrying no status still arrives inside the hierarchy,
+        # with the original reachable as __cause__.
+        original = grpc.RpcError()
+        mock_stub.ParseFile.side_effect = original
+
         with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection(auto_start=False)
-            
-            try:
+
+            with pytest.raises(ServiceError) as excinfo:
                 conn.load("missing.sysml")
-                assert False, "Expected exception"
-            except grpc.RpcError:
-                pass  # Expected
+            assert isinstance(excinfo.value, PySysMLError)
+            assert excinfo.value.__cause__ is original
 
 
 def test_connection_get_symbol():

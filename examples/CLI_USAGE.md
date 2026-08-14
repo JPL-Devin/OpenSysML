@@ -37,7 +37,8 @@ Load a model first, then evaluate:
 sysml -e "someAttribute" model.sysml
 ```
 
-**Note:** Options (`-e`) must come BEFORE positional arguments (files).
+**Note:** flags may be written before or after the files — `sysml model.sysml -e "x"`
+and `sysml -e "x" model.sysml` do the same thing.
 
 ### Multiple Evaluations
 
@@ -92,19 +93,33 @@ done
 
 ### 5. CI/CD Integration
 
+A pipeline cannot gate on the exit status of an evaluation: an expression that
+could not be evaluated still exits `0` (see [Exit status](#exit-status)). So the
+check reads the output, and has to notice the `error:` line — a missing result
+otherwise looks exactly like a wrong one:
+
 ```bash
-# Check that calculated value matches expected
+# Check that a calculated value matches what is expected
 expected=42
-output=$(sysml -e "designParameter" design.sysml)
-actual=$(echo "$output" | grep "=" | awk '{print $2}')
+output=$(sysml -e "designParameter" design.sysml) || exit 2   # the file would not load
+if printf '%s\n' "$output" | grep -q '^error:'; then
+    printf '%s\n' "$output" >&2
+    echo "✗ designParameter was not evaluated" >&2
+    exit 2
+fi
+actual=$(printf '%s\n' "$output" | awk '/^ *=/ {print $2}')
 if [ "$actual" = "$expected" ]; then
     echo "✓ Design parameter validated"
-    exit 0
 else
-    echo "✗ Design parameter mismatch: expected $expected, got $actual"
+    echo "✗ Design parameter mismatch: expected $expected, got $actual" >&2
     exit 1
 fi
 ```
+
+Constraint, requirement and satisfy verdicts — `%constraint`, `%requirement`,
+`%satisfy` — have no non-interactive form today: they are reachable only from the
+REPL, so a pipeline that needs them drives it over a pipe as in
+[§ 6](#6-use-repl-meta-commands) and reads the `✓`/`✗` lines.
 
 ### 6. Use REPL Meta Commands
 
@@ -125,6 +140,9 @@ echo "%load model.sysml
 | `--debug` | | Report every diagnostic over the whole session buffer, with the pass that produced it |
 | `--quiet` | | Report errors only, suppressing warnings |
 | `--trace` | | Report each execution step: expression evaluation, calc invocation, action tokens, state transitions |
+| `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf` (see [RDF_INTEROP.md](../docs/RDF_INTEROP.md)) |
+| `--from <format>` | | Input format for `--convert` (default: from the input's extension) |
+| `--output <file>` | `-o` | Write the conversion to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
 
@@ -135,6 +153,9 @@ echo "%load model.sysml
 ```
 sysml [options] [file...]
 ```
+
+Flags may be written before or after the files. A file named like a flag is read
+as a file after `--`, which ends the flags: `sysml -trace -- -m.sysml`.
 
 ## Examples
 
@@ -182,16 +203,81 @@ sysml>
 
 ## Error Handling
 
-Errors are written to stderr with exit code 1:
+**Model diagnostics and failed evaluations go to stdout, and do not change the
+exit status.** Only the command's own failures — a file it could not read, a
+conversion it could not make, a misused flag — are written to stderr, along with
+the `wrote <file> …` note a `-convert -o` prints when it succeeds, which is kept
+off stdout so a conversion can be piped.
+
+A file that cannot be read is reported on stderr and exits `1` (the message
+appears twice, once from the loader and once from the command):
 
 ```bash
-sysml missing.sysml
-# stderr: error loading missing.sysml: open missing.sysml: no such file or directory
-# exit code: 1
-
-sysml -e "nonexistent" model.sysml 2> errors.log
-# stderr written to errors.log
+$ sysml missing.sysml
+error loading missing.sysml: load missing.sysml: open missing.sysml: no such file or directory
+sysml: load missing.sysml: open missing.sysml: no such file or directory
+$ echo $?
+1
 ```
+
+A model that does not analyse cleanly is still loaded, and its diagnostics are
+part of the normal output — redirecting stderr does not capture them:
+
+```bash
+$ sysml -e "1+1" bad.sysml 2>/dev/null
+2:27: error: expected an expression
+  attribute mass : Real = ;
+                          ^
+✓ 1+1
+  = 2
+$ echo $?
+0
+```
+
+An expression that cannot be evaluated reports itself the same way, on stdout
+with status `0`:
+
+```bash
+$ sysml -e "Demo::Vehicle::nope" model.sysml
+✓ package Demo
+error: symbol "Demo::Vehicle::nope" not found
+$ echo $?
+0
+```
+
+So `2> errors.log` collects the command's own failures, plus the `wrote …` note
+of a successful `-convert -o` — a non-empty log is not by itself a failure. A
+script that needs to know whether a model analysed, or whether an expression
+produced a value, has to read stdout for an `error:` line.
+
+## Exit status
+
+The whole contract, as the command behaves today. This is the one place it is
+written down; [docs/QUICKSTART.md](../docs/QUICKSTART.md) links here.
+
+| Status | Means |
+|--------|-------|
+| `0` | The command ran: every file named was loaded and every `-e` expression was submitted. Diagnostics in the model, and an expression that could not be evaluated, are reported on stdout and leave the status `0`. |
+| `1` | A file could not be loaded, or a `-convert` could not be made. Reported on stderr; a refused conversion writes nothing. |
+| `2` | The command line or the environment was wrong: an unknown flag, `-debug` with `-quiet`, the retired `-to`, or an invalid `SYSML_MAX_*` value. Reported on stderr; nothing is loaded. |
+
+```bash
+$ sysml -debug -quiet model.sysml; echo $?
+sysml: -debug and -quiet are mutually exclusive
+2
+
+$ SYSML_MAX_STEPS=abc sysml -e "1+1"; echo $?
+sysml: SYSML_MAX_STEPS="abc" is not an integer: set it to a positive number of evaluation steps (default 10000000)
+2
+
+$ sysml examples/state-machine-demo.sysml -convert ttl; echo $?
+sysml: cannot convert the *ast.SubstateMember at examples/state-machine-demo.sysml:7:13
+1
+```
+
+Note what is **not** in this table: no status means "a constraint answered false"
+or "the model did not analyse". Checking a model from a script therefore means
+reading output, as [§ 5](#5-cicd-integration) does.
 
 ## Use Cases
 
@@ -204,10 +290,11 @@ sysml -e "nonexistent" model.sysml 2> errors.log
 
 ## Tips
 
-- Put options (`-e`, `-v`) **before** file arguments
 - Use `%help` in REPL to see all meta commands
 - Combine multiple `-e` flags to evaluate related expressions
 - Load common definitions before custom models
-- Check exit codes: 0 = success, 1 = error
-- Redirect stderr separately from stdout for error handling
+- Read [Exit status](#exit-status) before gating a pipeline on one: `0` means the
+  command ran, not that the model was sound
+- Model diagnostics and failed evaluations are on **stdout**; only the command's
+  own failures are on stderr, so redirecting stderr does not separate them
 - Use shell pipes for REPL automation: `echo "%load file.sysml" | sysml`
