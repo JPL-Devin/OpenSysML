@@ -180,7 +180,7 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		if len(fields) < 2 {
 			return []string{"usage: %load <file|dir|glob>..."}, false, nil
 		}
-		lines, lerr := s.LoadPaths(fields[1:])
+		lines, lerr := s.loadPaths(fields[1:])
 		if lerr != nil {
 			return nil, false, lerr
 		}

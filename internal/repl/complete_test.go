@@ -192,25 +192,48 @@ func TestNameWord(t *testing.T) {
 	}
 }
 
-// TestCompleteConcurrentWithSubmit covers Tab arriving while the previous line
-// is still being evaluated: readline completes from its own input goroutine.
+// TestCompleteConcurrentWithSubmit covers Tab arriving while the session is
+// busy: readline completes from its own input goroutine, both while the loop
+// evaluates a line and while the files named on the command line are loading.
 func TestCompleteConcurrentWithSubmit(t *testing.T) {
-	s := NewSession()
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 20; i++ {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "startup.sysml")
+	if err := os.WriteFile(path, []byte("part def Startup { attribute a = 1.0; }\n"), 0o600); err != nil {
+		t.Fatalf("write startup file: %v", err)
+	}
+
+	for _, tt := range []struct {
+		name string
+		busy func(s *Session, i int)
+	}{
+		{name: "submitting", busy: func(s *Session, i int) {
 			s.Submit(fmt.Sprintf("part def P%d { attribute a = 1.0; }", i))
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 20; i++ {
-			s.Complete("%eval ScalarValues::In", len("%eval ScalarValues::In"))
-		}
-	}()
-	wg.Wait()
+		}},
+		{name: "loading files", busy: func(s *Session, _ int) {
+			if _, err := s.LoadPaths([]string{dir}); err != nil {
+				t.Errorf("LoadPaths: %v", err)
+			}
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewSession()
+			var wg sync.WaitGroup
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				for i := 0; i < 20; i++ {
+					tt.busy(s, i)
+				}
+			}()
+			go func() {
+				defer wg.Done()
+				for i := 0; i < 20; i++ {
+					s.Complete("%eval ScalarValues::In", len("%eval ScalarValues::In"))
+				}
+			}()
+			wg.Wait()
+		})
+	}
 }
 
 // TestSplitPath checks a typed path is split at the last separator the platform

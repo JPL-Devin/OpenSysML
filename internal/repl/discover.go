@@ -170,8 +170,13 @@ func (s *Session) doBuiltins() ([]string, bool, error) {
 // annotateDiagnostics points an unresolved unqualified reference at the
 // qualified name the index knows it under, copying the workspace's diagnostics.
 func (s *Session) annotateDiagnostics(diags []passes.Diagnostic) []passes.Diagnostic {
+	// Nothing to annotate leaves the index unbuilt: a submission that resolves
+	// cleanly should not pay for indexing the library.
+	if len(diags) == 0 {
+		return diags
+	}
 	idx := s.symbolIndex()
-	if idx == nil || len(diags) == 0 {
+	if idx == nil {
 		return diags
 	}
 	out := make([]passes.Diagnostic, len(diags))

@@ -224,6 +224,29 @@ func TestLibraryReachableFromEmptySession(t *testing.T) {
 	}
 }
 
+// TestAnnotateBuildsIndexOnlyForDiagnostics checks a submission that resolves
+// cleanly does not index the library just to look for names to suggest.
+func TestAnnotateBuildsIndexOnlyForDiagnostics(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool // an index was built
+	}{
+		{name: "clean submission", input: "part def A;", want: false},
+		{name: "unresolved reference", input: "part def B { attribute x : Integer = 1; }", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewSession()
+			s.annotateDiagnostics(s.Submit(tt.input).Diagnostics)
+			if got := s.idx != nil; got != tt.want {
+				t.Fatalf("index built = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestEditDistance locks the distances the suggestions rank on, including the
 // transposition that a swapped pair of letters is one edit away.
 func TestEditDistance(t *testing.T) {

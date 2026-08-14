@@ -15,6 +15,12 @@ import (
 // loaded after it makes. Diagnostics name the file they belong to and count
 // lines from its start.
 func (s *Session) LoadPaths(paths []string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.loadPaths(paths)
+}
+
+func (s *Session) loadPaths(paths []string) ([]string, error) {
 	files, err := ExpandPaths(paths)
 	if err != nil {
 		return nil, err
