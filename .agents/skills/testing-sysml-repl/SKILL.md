@@ -34,6 +34,64 @@ Then `/tmp/old-sysml` vs `./bin/sysml` on identical input is the strongest evide
 it rules out "the test would have passed anyway". Especially valuable for diagnostic wording and
 line/column numbers, where a screenshot of the new behavior alone proves nothing.
 
+## Profiling flags: `-memstats`, `-cpuprofile`, `-memprofile` (PR #156)
+
+`main()` is a one-liner over `runCLI()` returning an exit status, so every profile is flushed by a
+`defer` before the process exits. That makes **exit codes the main regression risk** of any change
+in `cmd/sysml/main.go`: walk every mode and assert the status, since a `return` mistranslated from
+`os.Exit` is invisible in the output text. Values observed at bb0cfdc:
+
+| command | exit |
+|---|---|
+| `-version`, `-eval '1+2'`, `-validate <clean>`, `<m> -convert sysml -o f`, `<m> -eval '1+1'` | 0 |
+| `-validate <model with errors>` (reported as `did not analyse cleanly; no check was made`) | 2 |
+| `<m> -convert sysml -validate` (refuses: "check it in its own run"; writes no file) | 2 |
+| `-debug -quiet`, `SYSML_MAX_STEPS=abc …`, `-cpuprofile`/`-memprofile` on an unwritable path | 2 |
+
+- `-memstats` writes exactly one line to **stderr** (`sysml: 637ms wall, 242.6 MiB allocated in
+  … allocations over … collections, … MiB taken from the OS`). Prove the split with
+  `>out 2>err` and `cat` both — a memstats line on stdout would break `-convert -o /dev/stdout`
+  and JSON reporting.
+- It fires for the interactive REPL too, after `goodbye`, because it runs in the deferred stop.
+  This is the cheapest check that the profile flush survives the REPL path.
+- Heap profiles are written at end of run, when the model is already unreachable, so read them as
+  `go tool pprof -top -sample_index=alloc_space <file>` (plain `-top` shows inuse_space and looks
+  almost empty). Expect `parser.(*Parser).fill` / `parseUsage` and `symbols.*` at the top.
+- A 0-byte profile, or `unrecognized profile format` from pprof, is the signature of the flush not
+  happening — treat it as a failure of the runCLI change rather than a pprof problem.
+- Unwritable-path errors must abort before any model work: assert no `✓` line is printed.
+- Generate a load big enough for the numbers to be meaningful (a ~28k-line model with several
+  hundred `part def`s allocates ~240 MiB, ~600 ms); `/tmp/m*.sysml` generators from earlier
+  sessions may still be around.
+
+## Diagnostics-unchanged checks for core refactors
+
+For perf refactors in `internal/core` (scope indexes, resolve memoization, redefinition-owner
+lookup) the only convincing evidence is a **byte-for-byte diff against a binary built from the
+parent commit** (see the contrast-binary recipe above):
+
+```bash
+for f in inherit_ok noinherit imports_ok imports_bad; do
+  diff <(./bin/sysml -validate /tmp/pt/$f.sysml 2>&1; echo $?) \
+       <(/tmp/old-sysml -validate /tmp/pt/$f.sysml 2>&1; echo $?) >/dev/null \
+    && echo "$f: IDENTICAL" || echo "$f: DIFFERS"
+done
+```
+
+Fixtures that actually exercise the redefinition-owner path:
+
+- **clean:** `part def Base { attribute speed : SpeedType; }`, `part def Car :> Base;`,
+  `part def RaceCar :> Car { attribute speed : SpeedType :>> Base::speed; }` — inheritance through
+  a chain must stay clean.
+- **still an error:** the same `:>> Base::speed` inside a `part def Other` that does *not*
+  specialize `Base` → `error: speed redefines speed, but speed is not an inherited member of Other`
+  (code `redefinition-no-inherited`).
+- Note an unqualified `attribute :>> weight : Real;` naming a member nothing declares reports
+  `unresolved reference: weight` from name resolution instead, never `redefinition-no-inherited` —
+  use the **qualified** `:>> Base::speed` form to reach the constraint pass.
+- Imports: a wildcard `import Lib::*` plus a nested `import Lib::Inner::Wheel` for the positive
+  case, and a usage of an undeclared type for the negative (`unresolved reference: Gearbox`).
+
 ## Two ways to drive it
 
 1. **Non-interactive (fast, for exploration and expected-value discovery).** The REPL reads a
