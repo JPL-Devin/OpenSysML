@@ -640,6 +640,10 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 	typeSym := matches[0]
 
 	inst, err := ctx.Instantiate(typeSym)
+	if expected.Error != "" {
+		requireError(t, "Instantiate("+expected.Instantiate+")", err, expected.Error)
+		return
+	}
 	if err != nil {
 		t.Fatalf("Instantiate(%s) failed: %v", expected.Instantiate, err)
 	}

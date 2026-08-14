@@ -169,6 +169,11 @@ var (
 	// variant, which selects no single configuration.
 	ErrMultipleVariants = errors.New("more than one variant selected")
 
+	// ErrConflictingRedefinition is returned when one declaration values the
+	// same feature under two of its names: a redefinition renames one feature,
+	// so which of the two values it holds would be a silent pick.
+	ErrConflictingRedefinition = errors.New("one feature valued under two names")
+
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
 	// it can be created.

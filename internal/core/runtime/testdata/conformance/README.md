@@ -155,6 +155,9 @@ This directory contains behavioral execution conformance tests. Each test consis
 - `constraints`: expected verdict per constraint feature the instance carries,
   evaluated bound to the instance. `false` means the assertion evaluated to
   false (`ErrViolated`), not that evaluation failed.
+- `error`: text the instantiation must fail with, for a case whose contract is a
+  diagnostic — a declaration valuing one feature under two of its names. Set it
+  instead of `slots`.
 
 ## Standard Library
 
