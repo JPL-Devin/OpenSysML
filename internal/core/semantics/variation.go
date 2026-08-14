@@ -88,14 +88,16 @@ func (m *Model) IsVariationFeature(sym *symbols.Symbol) bool {
 }
 
 // VariantsOf returns the variants sym offers, in declaration order: those
-// declared for it and those it inherits from the variation it specializes.
+// declared for it and those it inherits from the variation it specializes. A
+// `variant` inherited from a type that is not a variation point offers no choice,
+// so it is an ordinary member here too.
 func (m *Model) VariantsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil {
 		return nil
 	}
 	var out []*symbols.Symbol
 	for _, member := range m.MembersOf(sym) {
-		if DeclaresVariant(member) {
+		if m.VariationPointOwning(member) != nil {
 			out = append(out, member)
 		}
 	}

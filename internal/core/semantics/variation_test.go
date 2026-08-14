@@ -99,6 +99,30 @@ func TestVariantsOfInheritedThroughRedefinition(t *testing.T) {
 	}
 }
 
+// A `variant` inherited from a type that is not a variation point offers no
+// choice, so the offered list agrees with what a selection accepts.
+func TestVariantsOfExcludesAMisplacedInheritedVariant(t *testing.T) {
+	m, root := buildModel(t, `
+		attribute def Base { variant attribute misplaced = 1.0; }
+		part def Widget {
+			variation attribute pick : Base { variant attribute cheap = 2.0; }
+		}
+	`)
+	pick := member(t, m, sym(t, root, "Widget"), "pick")
+	misplaced := member(t, m, pick, "misplaced")
+
+	variants := m.VariantsOf(pick)
+	if len(variants) != 1 || variants[0].Name != "cheap" {
+		t.Fatalf("VariantsOf(pick) = %v, want cheap alone", variants)
+	}
+	if _, ok := m.VariantOf(pick, "misplaced"); ok {
+		t.Error("VariantOf(pick, misplaced) offered a variant of Base")
+	}
+	if m.SelectsVariantOf(pick, misplaced) {
+		t.Error("pick may not be bound to a variant of Base")
+	}
+}
+
 // A variant of another variation is not a choice a feature may be bound to.
 func TestSelectsVariantOfRejectsForeignVariant(t *testing.T) {
 	m, root := buildModel(t, `
