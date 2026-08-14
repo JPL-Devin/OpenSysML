@@ -23,9 +23,13 @@ import (
 // .multiplicity and .specializations, which typed code generation requires.
 const CapabilityTypeFacts = "type_facts"
 
+// CapabilityConvert names the capability of the Convert RPC, which writes a
+// model back out as SysML notation or RDF Turtle.
+const CapabilityConvert = "convert"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
-var capabilities = []string{CapabilityTypeFacts}
+var capabilities = []string{CapabilityTypeFacts, CapabilityConvert}
 
 // Capabilities returns the capability names this build of the service reports.
 func Capabilities() []string {
@@ -102,12 +106,12 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 		return nil, status.Error(codes.InvalidArgument, "source must be file_path or content")
 	}
 
-	// Check cache using content hash
-	if req.ContentHash != "" {
-		if cached, ok := s.cache.Get(req.ContentHash); ok {
-			// Cache hit - return cached model
-			return s.buildParseResponse(req.ContentHash, cached), nil
-		}
+	// Keyed by what was read, not by the hash the request carried: a hash
+	// disagreeing with its content would serve another model. The file name is
+	// part of the key, since a record's diagnostics name the file it came from.
+	modelHash := computeHash(filePath + "\x00" + content)
+	if cached, ok := s.cache.Get(modelHash); ok {
+		return s.buildParseResponse(modelHash, cached), nil
 	}
 
 	// Parse the file
@@ -161,12 +165,6 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 		Source:      srcFile,
 		ParseDiags:  parseDiags,
 		PassesDiags: passesDiags,
-	}
-
-	// Compute model hash
-	modelHash := req.ContentHash
-	if modelHash == "" {
-		modelHash = computeHash(content)
 	}
 
 	// Cache the model

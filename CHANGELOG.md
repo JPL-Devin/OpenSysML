@@ -86,6 +86,29 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   class describes is accepted too, because instantiating a usage reports the
   usage's own FQN, which the client cannot relate to a definition.
   `unchecked(instance)` is the explicit escape hatch.
+- `Convert` writes a model back out — SysML/KerML notation or RDF Turtle, from a
+  loaded model named by its `model_hash`, a path the service opens, or content
+  carried inline — using the same exporter
+  `sysml -convert` uses, so a Python caller round-trips a model instead of only
+  reading one: `model.to_sysml()`, `model.to_turtle()`, `model.save("m.ttl")` and
+  `pysysml.convert(...)`. Reported as the `convert` capability, so an older
+  service fails naming the upgrade. A conversion that cannot be written faithfully
+  returns the diagnostics that explain it as a `ConversionError` rather than
+  partial output; `tolerate_syntax_errors` writes notation anyway and is rejected
+  for the graph directions, where an unparsed declaration would vanish silently.
+  A `Model` converts by hash, so a file edited between `load` and `save` does not
+  change what is written; a model since evicted from the service cache is
+  `NOT_FOUND` rather than something else, and `convert(file_path=...)` is how a
+  caller asks for the file as it stands now.
+- `ParseFile` hits its cache on the source it read — file name and content —
+  rather than on the `content_hash` the request carried, which is now ignored:
+  `pysysml` never sent one, so re-loading unchanged content re-parsed it and
+  reloaded the standard library every time — ~35 ms where the cache costs
+  ~0.5 ms — and a hash disagreeing with its content would have served an
+  unrelated model.
+- `python/scripts/bench_latency.py` reports p50/p95/p99 per client call, and
+  `python/README.md` documents the measurements and what they mean for a real-time
+  analytics loop.
 
 ## 0.0.5 — 2026-08-12
 

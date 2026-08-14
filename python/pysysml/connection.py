@@ -10,8 +10,10 @@ from filelock import FileLock, Timeout
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
 from pysysml.binary import ensure_binary
-from pysysml.capabilities import ServerInfo
-from pysysml.errors import ConnectionError, UnsupportedValueError
+from pysysml.capabilities import CAPABILITY_CONVERT, ServerInfo, require
+from pysysml.conversion import Conversion
+from pysysml.diagnostic import Diagnostic
+from pysysml.errors import ConnectionError, ConversionError, UnsupportedValueError
 from pysysml.values import value_to_python
 
 
@@ -199,7 +201,7 @@ class Connection:
         """
         request = sysml_pb2.ParseFileRequest(file_path=file_path)
         response = self._stub.ParseFile(request)
-        return Model(response, self)
+        return Model(response, self, source_path=file_path)
     
     def load_from_content(self, content):
         """Load a model from inline SysML content.
@@ -214,6 +216,87 @@ class Connection:
         response = self._stub.ParseFile(request)
         return Model(response, self)
     
+    def convert(self, to_format, file_path=None, content=None, model_hash=None,
+                from_format='', tolerate_syntax_errors=False):
+        """Write a model out in another of the formats Systemica writes.
+
+        The source is a loaded model, named by its hash, or one named the way
+        :meth:`load` names it: a path the service opens, or content carried
+        inline. A hash converts the source the service parsed, so a file edited
+        since the load does not change the answer; a path is read afresh.
+
+        Args:
+            to_format (str): Format to write: 'sysml', 'kerml', 'text', 'ttl',
+                'turtle' or 'rdf'
+            file_path (str, optional): Path the service reads the source from
+            content (str, optional): Source carried inline
+            model_hash (str, optional): Hash of a loaded model, whose parsed
+                source is converted
+            from_format (str, optional): Format to read the source as; inferred
+                from file_path's extension when omitted, notation for a
+                model_hash, and required for inline content
+            tolerate_syntax_errors (bool): Write notation back out even when the
+                parser could not read all of it, reporting its syntax errors as
+                the result's diagnostics. Notation to notation only: every other
+                direction builds a graph, where unreadable declarations would go
+                missing silently.
+
+        Returns:
+            Conversion: The converted model, the formats used and any tolerated
+                syntax errors
+
+        Raises:
+            ValueError: If other than one of file_path, content and model_hash
+                is given
+            MissingCapabilityError: If the service cannot convert
+            ConversionError: If the model could not be written in that format
+            grpc.RpcError: If a format is unknown, the file cannot be read, or
+                the model is no longer cached
+        """
+        given = [
+            name
+            for name, value in (
+                ('file_path', file_path),
+                ('content', content),
+                ('model_hash', model_hash),
+            )
+            if value is not None
+        ]
+        if len(given) != 1:
+            raise ValueError(
+                "Provide exactly one of file_path, content or model_hash; got "
+                + (", ".join(given) if given else "none")
+            )
+        require(
+            self.server_info(),
+            CAPABILITY_CONVERT,
+            "upgrade the sysml-grpc service to a build whose GetServerInfo "
+            "reports 'convert'",
+        )
+
+        request = sysml_pb2.ConvertRequest(
+            to_format=to_format,
+            from_format=from_format,
+            tolerate_syntax_errors=tolerate_syntax_errors,
+        )
+        if file_path is not None:
+            request.file_path = file_path
+        elif content is not None:
+            request.content = content
+        else:
+            request.model_hash = model_hash
+
+        response = self._stub.Convert(request)
+        diagnostics = [Diagnostic(d) for d in response.diagnostics]
+        if response.error:
+            raise ConversionError(response.error, diagnostics=diagnostics)
+        return Conversion(
+            content=response.content,
+            from_format=response.from_format,
+            to_format=response.to_format,
+            diagnostics=diagnostics,
+        )
+
     def get_symbol(self, model_hash, symbol_id):
         """Fetch symbol by ID from cached model.
         

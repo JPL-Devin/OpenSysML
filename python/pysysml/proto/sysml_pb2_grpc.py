@@ -75,6 +75,11 @@ class SysMLServiceStub:
                 request_serializer=sysml__pb2.ExecuteStateRequest.SerializeToString,
                 response_deserializer=sysml__pb2.ExecuteStateResponse.FromString,
                 _registered_method=True)
+        self.Convert = channel.unary_unary(
+                '/sysml.SysMLService/Convert',
+                request_serializer=sysml__pb2.ConvertRequest.SerializeToString,
+                response_deserializer=sysml__pb2.ConvertResponse.FromString,
+                _registered_method=True)
 
 
 class SysMLServiceServicer:
@@ -136,6 +141,15 @@ class SysMLServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Convert(self, request, context):
+        """Convert a model between the representations Systemica writes — SysML
+        textual notation and RDF Turtle — so a client can write a model back out
+        rather than only read it. Reported as the "convert" capability.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SysMLServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -178,6 +192,11 @@ def add_SysMLServiceServicer_to_server(servicer, server):
                     servicer.ExecuteState,
                     request_deserializer=sysml__pb2.ExecuteStateRequest.FromString,
                     response_serializer=sysml__pb2.ExecuteStateResponse.SerializeToString,
+            ),
+            'Convert': grpc.unary_unary_rpc_method_handler(
+                    servicer.Convert,
+                    request_deserializer=sysml__pb2.ConvertRequest.FromString,
+                    response_serializer=sysml__pb2.ConvertResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -397,6 +416,33 @@ class SysMLService:
             '/sysml.SysMLService/ExecuteState',
             sysml__pb2.ExecuteStateRequest.SerializeToString,
             sysml__pb2.ExecuteStateResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Convert(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/Convert',
+            sysml__pb2.ConvertRequest.SerializeToString,
+            sysml__pb2.ConvertResponse.FromString,
             options,
             channel_credentials,
             insecure,

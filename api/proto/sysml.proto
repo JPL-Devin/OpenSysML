@@ -25,6 +25,11 @@ service SysMLService {
   rpc Instantiate(InstantiateRequest) returns (InstantiateResponse);
   rpc ExecuteAction(ExecuteActionRequest) returns (ExecuteActionResponse);
   rpc ExecuteState(ExecuteStateRequest) returns (ExecuteStateResponse);
+
+  // Convert a model between the representations Systemica writes — SysML
+  // textual notation and RDF Turtle — so a client can write a model back out
+  // rather than only read it. Reported as the "convert" capability.
+  rpc Convert(ConvertRequest) returns (ConvertResponse);
 }
 
 // ParseFileRequest specifies the source to parse
@@ -33,7 +38,9 @@ message ParseFileRequest {
     string file_path = 1;
     string content = 2;
   }
-  string content_hash = 3;  // sha256 for cache lookup
+  // Ignored: the service keys its cache by the source it read, so a repeated
+  // parse hits the cache whether or not a client sends this.
+  string content_hash = 3 [deprecated = true];
 }
 
 // ParseFileResponse contains parsed model info
@@ -140,6 +147,41 @@ message ExecuteStateResponse {
   map<string, Value> final_context = 2;
   string error = 3;
   repeated Diagnostic diagnostics = 4;
+}
+
+// ConvertRequest asks for a model in another representation. A model_hash
+// converts the source that parse read, so a file edited since then does not
+// change the answer; a file_path is read afresh and content is carried inline.
+message ConvertRequest {
+  oneof source {
+    string file_path = 1;
+    string content = 2;
+    string model_hash = 6;
+  }
+  // "sysml", "kerml", "text", "ttl", "turtle" or "rdf". Empty infers from
+  // file_path's extension, and is notation for a model_hash, since that is what
+  // parse reads; inline content has neither, so it must say.
+  string from_format = 3;
+  // Format to write, named as in from_format. Empty is rejected.
+  string to_format = 4;
+  // Write notation back out even when the parser could not read all of it,
+  // reporting its syntax errors as diagnostics. Notation to notation only:
+  // every other direction builds a graph, where unreadable declarations would
+  // go missing silently.
+  bool tolerate_syntax_errors = 5;
+}
+
+// ConvertResponse contains the converted model.
+message ConvertResponse {
+  string content = 1;
+  // Formats used, so a caller that let from_format be inferred learns what it
+  // was inferred as.
+  string from_format = 2;
+  string to_format = 3;
+  string error = 4;  // non-empty if the conversion failed; content is unset
+  // Syntax errors tolerated under tolerate_syntax_errors, or those that failed
+  // the conversion.
+  repeated Diagnostic diagnostics = 5;
 }
 
 // SymbolInfo represents any SysML element
@@ -257,5 +299,7 @@ message ServerInfoResponse {
   // Currently defined:
   //   "type_facts" - SymbolInfo carries type_info, multiplicity and
   //                  specializations, which typed code generation needs.
+  //   "convert"    - the Convert RPC writes a model back out as SysML notation
+  //                  or RDF Turtle.
   repeated string capabilities = 2;
 }

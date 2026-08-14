@@ -53,6 +53,27 @@ The command exits non-zero and writes nothing on any input it cannot convert
 faithfully — a syntax error in the notation, malformed Turtle, or an RDF
 construct outside the mapping below. It never writes a partial model.
 
+## Converting over gRPC and from Python
+
+The same conversion is a service method, `Convert`, reported as the `convert`
+capability by `GetServerInfo`. It reads a `file_path` the service opens or
+`content` carried inline, takes the format names `-from`/`-to` take, and returns
+the written text with its formats, or an `error` plus the diagnostics explaining
+it. `tolerate_syntax_errors` writes notation despite syntax errors, and is
+rejected for any direction that builds a graph, where an unparsed declaration
+would go missing without saying so.
+
+From Python:
+
+```python
+model = pysysml.load("model.sysml")
+model.save("model.ttl")                          # SysML notation to RDF
+pysysml.convert("sysml", file_path="model.ttl")  # and back
+```
+
+See [python/README.md](../python/README.md) for the full client API and its
+measured latency.
+
 ## The RDF mapping
 
 ### Namespaces
