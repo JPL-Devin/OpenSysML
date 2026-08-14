@@ -153,8 +153,23 @@ func isFeature(sym *symbols.Symbol) bool {
 	}
 }
 
-// extractType resolves the type of a feature from its typing relationships.
+// extractType resolves the type of a feature: the one it declares, or the one
+// it inherits from what it redefines or subsets when it restates none
+// (KerML 1.0 §7.4.7).
 func (ctx *Context) extractType(featureSym *symbols.Symbol) *symbols.Symbol {
+	if typ := ctx.declaredType(featureSym); typ != nil {
+		return typ
+	}
+	for _, sup := range ctx.model.AllSupertypes(featureSym) {
+		if typ := ctx.declaredType(sup); typ != nil {
+			return typ
+		}
+	}
+	return nil
+}
+
+// declaredType resolves the type a feature states itself, ignoring inheritance.
+func (ctx *Context) declaredType(featureSym *symbols.Symbol) *symbols.Symbol {
 	// Check usage relationships for typing
 	rels := semantics.RelationshipsOf(featureSym)
 	for _, rel := range rels {

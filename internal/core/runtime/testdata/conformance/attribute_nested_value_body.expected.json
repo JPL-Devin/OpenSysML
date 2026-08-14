@@ -1,0 +1,20 @@
+{
+  "type": "instance",
+  "instantiate": "test::b",
+  "libraries": true,
+  "slots": {
+    "material": {"type": "Instance"},
+    "bandCost": {"type": "Instance"},
+    "ringCost": {"type": "Instance"},
+    "assembly": {"type": "Instance"},
+    "declared": {"type": "Instance"}
+  },
+  "constraints": {
+    "plainRedefinition": true,
+    "renamingRedefinition": true,
+    "baseNameReadsTheSame": true,
+    "twoLevelsDeep": true,
+    "declarationWithBody": true,
+    "keepsInheritedDefault": true
+  }
+}
