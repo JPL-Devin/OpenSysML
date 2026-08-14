@@ -109,6 +109,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("variation_bound_to_what_is_not_a_variant", testVariationBoundToWhatIsNotAVariant)
 	t.Run("variation_bound_to_two_variants", testVariationBoundToTwoVariants)
 	t.Run("variation_read_through_its_declaration", testVariationReadThroughItsDeclaration)
+	t.Run("chain_through_an_unselected_variation_part", testChainThroughAnUnselectedVariationPart)
 	t.Run("repeated_reads_of_a_variant_object", testRepeatedReadsOfAVariantObject)
 	t.Run("two_owners_selecting_one_variant", testTwoOwnersSelectingOneVariant)
 	t.Run("deep_specialization_chain_of_redefinitions", testDeepSpecializationChainOfRedefinitions)
@@ -2809,6 +2810,26 @@ func testVariationReadThroughItsDeclaration(t *testing.T) {
 				t.Errorf("%s = (%v, %v), want %v", tt.probe, got, err, tt.want)
 			}
 		})
+	}
+}
+
+// testChainThroughAnUnselectedVariationPart: a variation part is no occurrence
+// of itself, so a chain through one nothing selected a variant for reports that
+// rather than reading an object of the variation.
+func testChainThroughAnUnselectedVariationPart(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::Real;
+		part def Engine { attribute power : Real; }
+		variation part engine : Engine {
+			variant part electric : Engine { attribute :>> power = 100.0; }
+			variant part diesel : Engine { attribute :>> power = 200.0; }
+		}
+		part probe { attribute p : Real = engine.power; }
+	}`
+	got, err := variationSlotInSource(t, src, "test::probe", "p")
+	if !errors.Is(err, ErrVariationUnselected) {
+		t.Errorf("p = (%v, %v), want ErrVariationUnselected", got, err)
 	}
 }
 
