@@ -80,7 +80,7 @@ var metaCommandTable = []metaCommand{
 	{name: "%help", desc: "show this help"},
 	{name: "%list", desc: "list current session declarations"},
 	{name: "%clear", desc: "reset the session"},
-	{name: "%load", args: "<file>", desc: "read a file and submit its contents"},
+	{name: "%load", args: "<path>...", desc: "submit the contents of files, directories or globs"},
 	{name: "%save", args: "<file>", desc: "write the session model to a file (.sysml notation or .ttl RDF)"},
 	{name: "%verbosity", args: "[level]", desc: "show or set output level: quiet, normal or debug"},
 	{name: "%trace", args: "[on|off]", desc: "show or set execution tracing (evaluation, calc, action and state steps)"},
@@ -176,11 +176,11 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		return []string{"session cleared"}, false, nil
 	case "%load":
 		if len(fields) < 2 {
-			return []string{"usage: %load <file>"}, false, nil
+			return []string{"usage: %load <file|dir|glob>..."}, false, nil
 		}
-		lines, rerr := s.LoadFile(fields[1])
-		if rerr != nil {
-			return nil, false, rerr
+		lines, lerr := s.LoadPaths(fields[1:])
+		if lerr != nil {
+			return nil, false, lerr
 		}
 		return lines, false, nil
 	case "%save":

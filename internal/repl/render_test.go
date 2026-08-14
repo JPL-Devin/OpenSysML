@@ -56,7 +56,7 @@ func TestRenderDiagnostics(t *testing.T) {
 	if len(r.Diagnostics) == 0 {
 		t.Fatal("importing a missing namespace produced no diagnostic to render")
 	}
-	out := renderDiagnostics(r.Diagnostics, r.Source, r.baseLine(), false, "")
+	out := renderDiagnostics(r.Diagnostics, r.Source, r.diagLocation, false)
 	joined := strings.Join(out, "\n")
 	// Expect: a "line:col: severity: message" header and a caret line.
 	if !strings.Contains(joined, "error:") && !strings.Contains(joined, "warning:") {

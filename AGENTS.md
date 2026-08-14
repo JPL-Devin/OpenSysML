@@ -74,7 +74,6 @@ internal/core/
   runtime/               execution engine (eval, instances, action/state executors)
   model/                 workspace / document management
   libs/                  stdlib bundling + conformance gate
-  deps/                  dependency resolution
 internal/lsp/            LSP protocol implementation
 internal/repl/           REPL loop
 testdata/                shared fixtures (.sysml, .kerml, .golden)

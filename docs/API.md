@@ -22,8 +22,7 @@ github.com/Open-MBEE/Systemica
 │   ├── lower/              # AST → execution IR (ActionGraph/StateGraph)
 │   ├── runtime/            # Execution runtime
 │   ├── model/              # Workspace and document management
-│   ├── libs/               # Standard library handling
-│   └── deps/               # Dependency resolution
+│   └── libs/               # Standard library handling
 ├── internal/lsp/           # Language Server Protocol
 ├── internal/grpc/          # gRPC service implementation
 └── internal/repl/          # Interactive REPL
@@ -481,14 +480,6 @@ Standard library bundling and caching.
 - `ListFiles() []string` — All stdlib files
 
 Standard library is embedded in the binary using Go `embed.FS`.
-
----
-
-### `internal/core/deps`
-
-Dependency resolution (local and git sources).
-
-**Status:** 🚧 In progress
 
 ---
 

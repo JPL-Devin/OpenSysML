@@ -96,7 +96,7 @@ func (s *Session) DiagnosticLines() []string {
 			d.Span.Offset -= start
 			own = append(own, d)
 		}
-		out = append(out, renderDiagnostics(own, sn.src, 1, s.verbosity >= VerbosityDebug, sn.origin)...)
+		out = append(out, renderDiagnostics(own, sn.src, inFile(sn.origin), s.verbosity >= VerbosityDebug)...)
 		start = end + 1 // the newline joined() writes between snippets
 	}
 	return out
