@@ -28,8 +28,12 @@ type ParseFileRequest struct {
 	//
 	//	*ParseFileRequest_FilePath
 	//	*ParseFileRequest_Content
-	Source        isParseFileRequest_Source `protobuf_oneof:"source"`
-	ContentHash   string                    `protobuf:"bytes,3,opt,name=content_hash,json=contentHash,proto3" json:"content_hash,omitempty"` // sha256 for cache lookup
+	Source isParseFileRequest_Source `protobuf_oneof:"source"`
+	// Ignored: the service keys its cache by the source it read, so a repeated
+	// parse hits the cache whether or not a client sends this.
+	//
+	// Deprecated: Marked as deprecated in sysml.proto.
+	ContentHash   string `protobuf:"bytes,3,opt,name=content_hash,json=contentHash,proto3" json:"content_hash,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89,6 +93,7 @@ func (x *ParseFileRequest) GetContent() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in sysml.proto.
 func (x *ParseFileRequest) GetContentHash() string {
 	if x != nil {
 		return x.ContentHash
@@ -2082,11 +2087,11 @@ var File_sysml_proto protoreflect.FileDescriptor
 
 const file_sysml_proto_rawDesc = "" +
 	"\n" +
-	"\vsysml.proto\x12\x05sysml\"z\n" +
+	"\vsysml.proto\x12\x05sysml\"~\n" +
 	"\x10ParseFileRequest\x12\x1d\n" +
 	"\tfile_path\x18\x01 \x01(\tH\x00R\bfilePath\x12\x1a\n" +
-	"\acontent\x18\x02 \x01(\tH\x00R\acontent\x12!\n" +
-	"\fcontent_hash\x18\x03 \x01(\tR\vcontentHashB\b\n" +
+	"\acontent\x18\x02 \x01(\tH\x00R\acontent\x12%\n" +
+	"\fcontent_hash\x18\x03 \x01(\tB\x02\x18\x01R\vcontentHashB\b\n" +
 	"\x06source\"\xa4\x01\n" +
 	"\x11ParseFileResponse\x12\x1d\n" +
 	"\n" +

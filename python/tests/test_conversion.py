@@ -99,6 +99,7 @@ def test_format_of_path_infers_and_refuses():
     assert format_of_path("model.sysml") == FORMAT_SYSML
     assert format_of_path("model.KerML") == FORMAT_SYSML
     assert format_of_path("model.ttl") == FORMAT_TURTLE
+    assert format_of_path("model.turtle") == FORMAT_TURTLE
     with pytest.raises(ValueError, match="cannot tell the format"):
         format_of_path("model.json")
 

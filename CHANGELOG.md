@@ -84,11 +84,12 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   returns the diagnostics that explain it as a `ConversionError` rather than
   partial output; `tolerate_syntax_errors` writes notation anyway and is rejected
   for the graph directions, where an unparsed declaration would vanish silently.
-- `ParseFile` hits its cache on the content it read rather than on the
-  `content_hash` the request carried, which is now ignored: `pysysml` never sent
-  one, so re-loading unchanged content re-parsed it and reloaded the standard
-  library every time — ~35 ms where the cache costs ~0.5 ms — and a hash
-  disagreeing with its content would have served an unrelated model.
+- `ParseFile` hits its cache on the source it read — file name and content —
+  rather than on the `content_hash` the request carried, which is now ignored:
+  `pysysml` never sent one, so re-loading unchanged content re-parsed it and
+  reloaded the standard library every time — ~35 ms where the cache costs
+  ~0.5 ms — and a hash disagreeing with its content would have served an
+  unrelated model.
 - `python/scripts/bench_latency.py` reports p50/p95/p99 per client call, and
   `python/README.md` documents the measurements and what they mean for a real-time
   analytics loop.

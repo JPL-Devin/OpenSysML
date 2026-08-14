@@ -106,11 +106,11 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 		return nil, status.Error(codes.InvalidArgument, "source must be file_path or content")
 	}
 
-	// Keyed by the hash of the content read, not the one the request carried: a
-	// hash disagreeing with its content would serve another model. A record from
-	// a different file name is not reused, since its diagnostics name that file.
-	modelHash := computeHash(content)
-	if cached, ok := s.cache.Get(modelHash); ok && cached.Source.Name() == filePath {
+	// Keyed by what was read, not by the hash the request carried: a hash
+	// disagreeing with its content would serve another model. The file name is
+	// part of the key, since a record's diagnostics name the file it came from.
+	modelHash := computeHash(filePath + "\x00" + content)
+	if cached, ok := s.cache.Get(modelHash); ok {
 		return s.buildParseResponse(modelHash, cached), nil
 	}
 

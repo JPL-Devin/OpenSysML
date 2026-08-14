@@ -190,9 +190,9 @@ func TestParseFile_CacheHit(t *testing.T) {
 	}
 }
 
-// TestParseFileCachesByContentRead verifies the cache is keyed by the content the
-// service read: an unchanged parse is reused, and a mismatched hash cannot serve
-// another model.
+// TestParseFileCachesByContentRead verifies the cache is keyed by what the service
+// read: an unchanged parse is reused, and a mismatched hash cannot serve another
+// model.
 func TestParseFileCachesByContentRead(t *testing.T) {
 	srv := mustNewService(t, 10)
 
@@ -203,9 +203,6 @@ func TestParseFileCachesByContentRead(t *testing.T) {
 		&pb.ParseFileRequest{Source: &pb.ParseFileRequest_Content{Content: a}})
 	if err != nil {
 		t.Fatalf("ParseFile(a) failed: %v", err)
-	}
-	if want := computeHash(a); first.ModelHash != want {
-		t.Errorf("model_hash = %q, want the content's hash %q", first.ModelHash, want)
 	}
 
 	cached, ok := srv.cache.Get(first.ModelHash)
@@ -238,6 +235,56 @@ func TestParseFileCachesByContentRead(t *testing.T) {
 		&pb.GetSymbolRequest{ModelHash: again.ModelHash, SymbolId: "A::PartA"})
 	if err != nil || sym.Error != "" {
 		t.Fatalf("GetSymbol(A::PartA) = %v, %q", err, sym.GetError())
+	}
+}
+
+// TestParseFileCachesPerFileName verifies the same content read from two paths
+// keeps a record each, so both hit the cache and each names its own file.
+func TestParseFileCachesPerFileName(t *testing.T) {
+	srv := mustNewService(t, 10)
+
+	dir := t.TempDir()
+	const content = `package Dup { part def Thing; }`
+	paths := []string{filepath.Join(dir, "one.sysml"), filepath.Join(dir, "two.sysml")}
+	for _, path := range paths {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("WriteFile(%s) failed: %v", path, err)
+		}
+	}
+
+	hashes := map[string]string{}
+	for _, path := range paths {
+		req := &pb.ParseFileRequest{Source: &pb.ParseFileRequest_FilePath{FilePath: path}}
+		resp, err := srv.ParseFile(context.Background(), req)
+		if err != nil {
+			t.Fatalf("ParseFile(%s) failed: %v", path, err)
+		}
+		hashes[path] = resp.ModelHash
+
+		record, ok := srv.cache.Get(resp.ModelHash)
+		if !ok {
+			t.Fatalf("model for %s was not cached", path)
+		}
+		if got := record.Source.Name(); got != path {
+			t.Errorf("cached source name = %q, want %q", got, path)
+		}
+
+		// The same path parses to that record rather than replacing it.
+		second, err := srv.ParseFile(context.Background(), req)
+		if err != nil {
+			t.Fatalf("second ParseFile(%s) failed: %v", path, err)
+		}
+		if reused, _ := srv.cache.Get(second.ModelHash); reused != record {
+			t.Errorf("expected %s to hit the cache, not re-parse", path)
+		}
+	}
+
+	if hashes[paths[0]] == hashes[paths[1]] {
+		t.Error("expected a model hash per file name, got one for both")
+	}
+	// The first file's record survived the second file's parse.
+	if record, ok := srv.cache.Get(hashes[paths[0]]); !ok || record.Source.Name() != paths[0] {
+		t.Errorf("first file's record = %v, want one naming %q", record, paths[0])
 	}
 }
 

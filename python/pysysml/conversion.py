@@ -19,11 +19,13 @@ FORMAT_SYSML = "sysml"
 #: RDF in Turtle syntax. ``turtle`` and ``rdf`` name it too.
 FORMAT_TURTLE = "ttl"
 
-#: Formats this client will ask for, and the file extensions they are written as.
+#: Extensions the exporter's FormatOfPath knows, so a path names the same format
+#: here as it does to `sysml -convert` and `%save`.
 _EXTENSIONS = {
     ".sysml": FORMAT_SYSML,
     ".kerml": FORMAT_SYSML,
     ".ttl": FORMAT_TURTLE,
+    ".turtle": FORMAT_TURTLE,
 }
 
 

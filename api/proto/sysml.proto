@@ -38,8 +38,8 @@ message ParseFileRequest {
     string file_path = 1;
     string content = 2;
   }
-  // Ignored: the service hashes the content it read and looks the cache up by
-  // that, so a repeated parse hits the cache whether or not a client sends this.
+  // Ignored: the service keys its cache by the source it read, so a repeated
+  // parse hits the cache whether or not a client sends this.
   string content_hash = 3 [deprecated = true];
 }
 
