@@ -58,9 +58,8 @@ func TestRedefinedCollectionReadsSubsetsUnderEitherName(t *testing.T) {
 	}
 }
 
-// TestRedefiningFeatureHoldsTheRedefinedDefault pins that redeclaring an
-// inherited attribute under a new name keeps the value the redefined
-// declaration wrote: the two names are one feature, so both read it.
+// Redeclaring an inherited attribute under a new name keeps the value the
+// redefined declaration wrote, and both names read it.
 func TestRedefiningFeatureHoldsTheRedefinedDefault(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
 		package test {
@@ -89,10 +88,8 @@ func TestRedefiningFeatureHoldsTheRedefinedDefault(t *testing.T) {
 	}
 }
 
-// TestSubsettingIgnoresALibraryFeatureOfTheSameName pins that a feature
-// subsetting an element outside the object contributes nothing to a feature of
-// the object that merely shares the target's simple name: `:> ISQ::mass`
-// specializes the library feature, it does not join the object's own `mass`.
+// `:> ISQ::mass` specializes the library feature, so it contributes nothing to
+// the object's own same-named `mass` collection.
 func TestSubsettingIgnoresALibraryFeatureOfTheSameName(t *testing.T) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
 		package test {

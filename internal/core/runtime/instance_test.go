@@ -166,9 +166,7 @@ func TestMultiValuedDefaultMaterializes(t *testing.T) {
 }
 
 // A multi-valued feature that is typed as well as given a default holds the
-// default's contents rather than being instantiated from its type: the roll-up
-// pattern writes `attribute volumes : Real[0..*] = subsystem.volume`, and its
-// type only resolves once the library is loaded.
+// default's contents rather than an instantiation of its type.
 func TestTypedMultiValuedDefaultHoldsItsContents(t *testing.T) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
 		package test {

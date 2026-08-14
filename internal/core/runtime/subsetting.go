@@ -22,13 +22,9 @@ import (
 // makes `Subsystems.mass` read the values held under `subsystems`.
 
 // relatedFeatures returns the features of owner that sym's relationships of the
-// given kind name. A relationship written inside a usage names a feature of the
-// object being materialized, which the scope the usage was written in need not
-// see — `part a : Sub :> subsystem` subsets a feature inherited by a's owner —
-// so an unqualified name that resolves to nothing there is looked up among
-// owner's members. A target resolving to an element outside owner names no
-// feature of it: `attribute mass :> ISQ::mass` specializes the library feature
-// and must not feed a same-named feature of owner.
+// given kind name. An unqualified name the declaring scope cannot see is looked
+// up among owner's members (`part a : Sub :> subsystem`); a target resolving
+// outside owner names no feature of it (`:> ISQ::mass`).
 func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.RelationshipKind) []*symbols.Symbol {
 	var features []*symbols.Symbol
 	for _, rel := range semantics.RelationshipsOf(sym) {
@@ -59,8 +55,7 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 	return features
 }
 
-// isFeatureOf reports whether feature is the feature owner carries under that
-// name, declared by owner or inherited.
+// isFeatureOf reports whether feature is the one owner carries under that name.
 func (ctx *Context) isFeatureOf(owner, feature *symbols.Symbol) bool {
 	member, ok := ctx.model.LookupMember(owner, feature.Name)
 	return ok && member == feature

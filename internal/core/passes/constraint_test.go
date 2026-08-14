@@ -351,9 +351,8 @@ func TestConstraint_RedefinitionMultiplicityInvalid(t *testing.T) {
 	}
 }
 
-// TestConstraint_RedefinitionUnboundedMultiplicity pins `[*]` as `0..*` in a
-// redefinition: it keeps an inherited `0..*` but loosens an inherited `1..*`,
-// whose lower bound it drops to 0.
+// `[*]` is `0..*` in a redefinition: it keeps an inherited `0..*` but loosens an
+// inherited `1..*`, dropping its lower bound to 0.
 func TestConstraint_RedefinitionUnboundedMultiplicity(t *testing.T) {
 	tests := []struct {
 		name      string

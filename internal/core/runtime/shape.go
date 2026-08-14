@@ -18,9 +18,8 @@ type EffectiveFeature struct {
 	DefaultDecl  *symbols.Symbol // feature the DefaultValue was written on (nil if none)
 }
 
-// DefaultScope returns the scope DefaultValue resolves its names in: a default
-// inherited from a redefined declaration was written where that declaration is,
-// not where the redefining one is.
+// DefaultScope returns the scope DefaultValue resolves its names in, which for
+// an inherited default is where the redefined declaration wrote it.
 func (f *EffectiveFeature) DefaultScope() *symbols.Scope {
 	if f.DefaultDecl != nil {
 		return f.DefaultDecl.OwnerScope
@@ -191,9 +190,7 @@ func (ctx *Context) extractDefaultValue(featureSym *symbols.Symbol) ast.Node {
 
 // redefinedDefault returns the value a feature takes from the feature it
 // redefines, and the declaration that wrote it: a redefining feature is the
-// redefined feature declared again (KerML 1.0 §7.3.4.5), so it holds that
-// feature's value when it declares none. Both are nil when nothing in the
-// redefinition chain writes a value.
+// redefined feature declared again (KerML 1.0 §7.3.4.5).
 func (ctx *Context) redefinedDefault(sym, owner *symbols.Symbol) (ast.Node, *symbols.Symbol) {
 	seen := map[*symbols.Symbol]bool{sym: true}
 	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
