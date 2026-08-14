@@ -101,6 +101,43 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
+// baseUsageFQN is the most general base usage every usage element subsets,
+// directly or indirectly (SysML v2 §7.6, [KerML, 8.4.2]). Its only member is
+// `that`, the featuring instance of a usage's value, so subsetting it is what
+// makes an unqualified `that` resolve inside a usage body.
+const baseUsageFQN = "Base::things"
+
+// implicitBaseUsage returns Base::things for a usage element, or nil when sym is
+// not a usage, is that base usage, or is owned by it.
+func (m *Model) implicitBaseUsage(sym *symbols.Symbol) *symbols.Symbol {
+	if _, ok := sym.Decl.(*ast.Usage); !ok {
+		return nil
+	}
+	if m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	for _, base := range m.resolver.Index().LookupQualified(baseUsageFQN) {
+		if base == nil || base == sym || enclosedBy(sym, base) {
+			continue
+		}
+		return base
+	}
+	return nil
+}
+
+// enclosedBy reports whether owner's own scope encloses sym.
+func enclosedBy(sym, owner *symbols.Symbol) bool {
+	if owner.Scope == nil {
+		return false
+	}
+	for s := sym.OwnerScope; s != nil; s = s.Parent() {
+		if s == owner.Scope {
+			return true
+		}
+	}
+	return false
+}
+
 // declaresGeneralization reports whether rels contain a conformance edge, which
 // makes a declaration take its supertypes from the declaration itself.
 func declaresGeneralization(rels []*ast.Relationship) bool {

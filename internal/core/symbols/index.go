@@ -2,6 +2,7 @@ package symbols
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 )
@@ -932,6 +933,27 @@ func (idx *Index) FQNs() []string {
 		out = append(out, fqn)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// FQNsEndingIn returns up to limit registered fully-qualified names whose last
+// segment is name, in name order. Used to suggest a candidate for a reference
+// whose qualifying namespace is not loaded.
+func (idx *Index) FQNsEndingIn(name string, limit int) []string {
+	if name == "" || limit <= 0 {
+		return nil
+	}
+	suffix := "::" + name
+	var out []string
+	for fqn := range idx.fqn {
+		if strings.HasSuffix(fqn, suffix) {
+			out = append(out, fqn)
+		}
+	}
+	sort.Strings(out)
+	if len(out) > limit {
+		out = out[:limit]
+	}
 	return out
 }
 

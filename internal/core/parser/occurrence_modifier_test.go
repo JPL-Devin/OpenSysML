@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -55,29 +56,33 @@ func parseSingleBodyUsage(t *testing.T, input string) *ast.Usage {
 	return u
 }
 
-// The `individual` and `snapshot` usage modifiers are syntax, so the parser
-// stores them on the usage node: SysML v2 §8.3.9.11 gives OccurrenceUsage an
-// `isIndividual` attribute and a `portionKind`, of which `snapshot` is one.
+// The `individual` modifier and the `snapshot`/`timeslice` portion prefixes are
+// syntax, so the parser stores them on the usage node: SysML v2 §8.3.9.11 gives
+// OccurrenceUsage an `isIndividual` attribute and a `portionKind`.
 func TestParseUsageOccurrenceModifiers(t *testing.T) {
 	tests := []struct {
 		name           string
 		input          string
 		wantKind       ast.UsageKind
 		wantIndividual bool
-		wantSnapshot   bool
+		wantPortion    ast.PortionKind
 	}{
-		{"individual", "individual testSystem : TestSystem;", ast.UsageAttribute, true, false},
+		{"individual", "individual testSystem : TestSystem;", ast.UsageAttribute, true, ast.PortionNone},
 		// The modifier is orthogonal to the kind keyword, which still declares the kind.
-		{"individual_part", "individual part testVehicle : TestSystem;", ast.UsagePart, true, false},
-		{"individual_occurrence", "individual occurrence testFlight : Flight;", ast.UsageOccurrence, true, false},
-		{"individual_item", "individual item testCargo : Cargo;", ast.UsageItem, true, false},
-		{"individual_anonymous", "individual : TestSystem;", ast.UsageIndividual, true, false},
-		{"snapshot", "snapshot atLiftoff : Flight;", ast.UsageOccurrence, false, true},
-		{"snapshot_occurrence", "snapshot occurrence takeoff : Flight;", ast.UsageOccurrence, false, true},
-		{"snapshot_part", "snapshot part vehicleAtTakeoff : Vehicle;", ast.UsagePart, false, true},
-		{"individual_snapshot", "individual snapshot testAtLiftoff : Flight;", ast.UsageOccurrence, true, true},
-		{"plain_usage", "occurrence takeoff : Flight;", ast.UsageOccurrence, false, false},
-		{"plain_part", "part vehicle : Vehicle;", ast.UsagePart, false, false},
+		{"individual_part", "individual part testVehicle : TestSystem;", ast.UsagePart, true, ast.PortionNone},
+		{"individual_occurrence", "individual occurrence testFlight : Flight;", ast.UsageOccurrence, true, ast.PortionNone},
+		{"individual_item", "individual item testCargo : Cargo;", ast.UsageItem, true, ast.PortionNone},
+		{"individual_anonymous", "individual : TestSystem;", ast.UsageIndividual, true, ast.PortionNone},
+		{"snapshot", "snapshot atLiftoff : Flight;", ast.UsageOccurrence, false, ast.PortionSnapshot},
+		{"snapshot_occurrence", "snapshot occurrence takeoff : Flight;", ast.UsageOccurrence, false, ast.PortionSnapshot},
+		{"snapshot_part", "snapshot part vehicleAtTakeoff : Vehicle;", ast.UsagePart, false, ast.PortionSnapshot},
+		{"individual_snapshot", "individual snapshot testAtLiftoff : Flight;", ast.UsageOccurrence, true, ast.PortionSnapshot},
+		{"timeslice", "timeslice ascent : Flight;", ast.UsageOccurrence, false, ast.PortionTimeslice},
+		{"timeslice_item", "timeslice item cargoInFlight : Cargo;", ast.UsageItem, false, ast.PortionTimeslice},
+		{"timeslice_part", "timeslice part vehicleInFlight : Vehicle;", ast.UsagePart, false, ast.PortionTimeslice},
+		{"individual_timeslice", "individual timeslice testAscent : Flight;", ast.UsageOccurrence, true, ast.PortionTimeslice},
+		{"plain_usage", "occurrence takeoff : Flight;", ast.UsageOccurrence, false, ast.PortionNone},
+		{"plain_part", "part vehicle : Vehicle;", ast.UsagePart, false, ast.PortionNone},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -88,8 +93,8 @@ func TestParseUsageOccurrenceModifiers(t *testing.T) {
 			if u.IsIndividual != tt.wantIndividual {
 				t.Errorf("IsIndividual = %t, want %t", u.IsIndividual, tt.wantIndividual)
 			}
-			if u.IsSnapshot != tt.wantSnapshot {
-				t.Errorf("IsSnapshot = %t, want %t", u.IsSnapshot, tt.wantSnapshot)
+			if u.Portion != tt.wantPortion {
+				t.Errorf("Portion = %q, want %q", u.Portion.Keyword(), tt.wantPortion.Keyword())
 			}
 		})
 	}
@@ -104,14 +109,16 @@ func TestParseUsageOccurrenceModifiersInBody(t *testing.T) {
 		member         string
 		wantKind       ast.UsageKind
 		wantIndividual bool
-		wantSnapshot   bool
+		wantPortion    ast.PortionKind
 	}{
-		{"individual", "individual testSystem : TestSystem;", ast.UsageAttribute, true, false},
-		{"individual_part", "individual part p;", ast.UsagePart, true, false},
-		{"individual_occurrence", "individual occurrence o;", ast.UsageOccurrence, true, false},
-		{"individual_snapshot", "individual snapshot s;", ast.UsageOccurrence, true, true},
-		{"snapshot_part", "snapshot part sp;", ast.UsagePart, false, true},
-		{"plain_part", "part p;", ast.UsagePart, false, false},
+		{"individual", "individual testSystem : TestSystem;", ast.UsageAttribute, true, ast.PortionNone},
+		{"individual_part", "individual part p;", ast.UsagePart, true, ast.PortionNone},
+		{"individual_occurrence", "individual occurrence o;", ast.UsageOccurrence, true, ast.PortionNone},
+		{"individual_snapshot", "individual snapshot s;", ast.UsageOccurrence, true, ast.PortionSnapshot},
+		{"snapshot_part", "snapshot part sp;", ast.UsagePart, false, ast.PortionSnapshot},
+		{"timeslice", "timeslice ts;", ast.UsageOccurrence, false, ast.PortionTimeslice},
+		{"timeslice_item", "timeslice item ti;", ast.UsageItem, false, ast.PortionTimeslice},
+		{"plain_part", "part p;", ast.UsagePart, false, ast.PortionNone},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -122,10 +129,67 @@ func TestParseUsageOccurrenceModifiersInBody(t *testing.T) {
 			if u.IsIndividual != tt.wantIndividual {
 				t.Errorf("IsIndividual = %t, want %t", u.IsIndividual, tt.wantIndividual)
 			}
-			if u.IsSnapshot != tt.wantSnapshot {
-				t.Errorf("IsSnapshot = %t, want %t", u.IsSnapshot, tt.wantSnapshot)
+			if u.Portion != tt.wantPortion {
+				t.Errorf("Portion = %q, want %q", u.Portion.Keyword(), tt.wantPortion.Keyword())
 			}
 		})
+	}
+}
+
+// `all` follows the portion keyword of a bare portion usage, as it follows any
+// other kind keyword.
+func TestParseBarePortionAll(t *testing.T) {
+	for _, input := range []string{"snapshot all s : Flight;", "timeslice all t : Flight;"} {
+		u := parseSingleUsage(t, input)
+		if !u.IsAll {
+			t.Errorf("%s: IsAll = false", input)
+		}
+		if u.Ident.Name != "s" && u.Ident.Name != "t" {
+			t.Errorf("%s: name = %q, want the declared name", input, u.Ident.Name)
+		}
+	}
+}
+
+// A kind keyword after a portion prefix is the portioned usage's kind, whatever
+// follows it: `timeslice item : Cargo;` is an unnamed item usage, not an
+// occurrence named `item`. Both portion keywords must read it the same way.
+func TestParseAnonymousPortionOfTypedKind(t *testing.T) {
+	for _, tt := range []struct {
+		input string
+		want  ast.PortionKind
+	}{
+		{"snapshot item : Cargo;", ast.PortionSnapshot},
+		{"timeslice item : Cargo;", ast.PortionTimeslice},
+		{"snapshot item;", ast.PortionSnapshot},
+		{"timeslice item;", ast.PortionTimeslice},
+	} {
+		u := parseSingleUsage(t, tt.input)
+		if u.Kind != ast.UsageItem {
+			t.Errorf("%s: kind = %v, want item", tt.input, u.Kind)
+		}
+		if u.Ident.Name != "" {
+			t.Errorf("%s: name = %q, want no name", tt.input, u.Ident.Name)
+		}
+		if u.Portion != tt.want {
+			t.Errorf("%s: portion = %q, want %q", tt.input, u.Portion.Keyword(), tt.want.Keyword())
+		}
+	}
+}
+
+// Either portion keyword prefixes an occurrence usage identically, whatever
+// spelling of the declaration follows it.
+func TestParsePortionKeywordsAgree(t *testing.T) {
+	for _, form := range []string{"%s 'launch event';", "%s 'launch event' : Flight;", "%s : Flight;", "%s;"} {
+		for kw, want := range map[string]ast.PortionKind{"snapshot": ast.PortionSnapshot, "timeslice": ast.PortionTimeslice} {
+			input := fmt.Sprintf(form, kw)
+			u := parseSingleUsage(t, input)
+			if u.Kind != ast.UsageOccurrence {
+				t.Errorf("%s: kind = %v, want occurrence", input, u.Kind)
+			}
+			if u.Portion != want {
+				t.Errorf("%s: portion = %q, want %q", input, u.Portion.Keyword(), want.Keyword())
+			}
+		}
 	}
 }
 
@@ -135,6 +199,7 @@ func TestParseDirectionParameterOccurrenceModifiers(t *testing.T) {
 	input := `action def Collect {
 		in individual subjectVehicle : TestVehicle;
 		in snapshot vehicleState : Flight;
+		in timeslice vehicleAscent : Flight;
 		out item payload : Cargo;
 	}`
 	sf := source.New("occurrence_modifier_params.sysml", []byte(input))
@@ -147,11 +212,12 @@ func TestParseDirectionParameterOccurrenceModifiers(t *testing.T) {
 	want := []struct {
 		name           string
 		wantIndividual bool
-		wantSnapshot   bool
+		wantPortion    ast.PortionKind
 	}{
-		{"subjectVehicle", true, false},
-		{"vehicleState", false, true},
-		{"payload", false, false},
+		{"subjectVehicle", true, ast.PortionNone},
+		{"vehicleState", false, ast.PortionSnapshot},
+		{"vehicleAscent", false, ast.PortionTimeslice},
+		{"payload", false, ast.PortionNone},
 	}
 	if len(def.Members) != len(want) {
 		t.Fatalf("expected %d parameters, got %d", len(want), len(def.Members))
@@ -164,8 +230,8 @@ func TestParseDirectionParameterOccurrenceModifiers(t *testing.T) {
 		if u.IsIndividual != w.wantIndividual {
 			t.Errorf("%s: IsIndividual = %t, want %t", w.name, u.IsIndividual, w.wantIndividual)
 		}
-		if u.IsSnapshot != w.wantSnapshot {
-			t.Errorf("%s: IsSnapshot = %t, want %t", w.name, u.IsSnapshot, w.wantSnapshot)
+		if u.Portion != w.wantPortion {
+			t.Errorf("%s: Portion = %q, want %q", w.name, u.Portion.Keyword(), w.wantPortion.Keyword())
 		}
 	}
 }

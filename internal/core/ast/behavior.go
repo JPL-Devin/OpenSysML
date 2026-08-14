@@ -372,24 +372,25 @@ type SubjectMember struct {
 	Multiplicity  *Multiplicity   // optional multiplicity
 	Relationships []*Relationship // specializations written after the type (`:>> RequirementCheck::subj`)
 	Body          []Node          // optional nested members
-	BindingExpr   Node            // binding expression (for binding form: subject = <expr>;)
+	BindingExpr   Node            // value part: `subject = <expr>;` or a declaration's `= expr` / `default expr`
 }
 
 // AssumeMember represents an assumption in a requirement body.
-// Syntax: assume <expression>; OR assume constraint { <expression>... }
+// Syntax: assume <expression>; OR assume constraint { <expression>... } OR assume <Q::r> { body }
 type AssumeMember struct {
 	NodeBase
-	Expression Node   // assumption condition (for expression form)
-	Body       []Node // ConstraintMembers of the nested constraint (for the braced form)
+	Expression Node           // assumption condition (for expression form)
+	Reference  *QualifiedName // referenced constraint/requirement (reference-subsetting form)
+	Body       []Node         // ConstraintMembers of the nested constraint (for the braced form)
 }
 
 // RequireMember represents a requirement constraint.
-// Syntax: require <expression>; OR require constraint { <expression>... } OR require <name> { body }
+// Syntax: require <expression>; OR require constraint { <expression>... } OR require <Q::r> { body }
 type RequireMember struct {
 	NodeBase
-	Expression Node   // requirement condition (for expression form)
-	Name       string // optional name (for body form)
-	Body       []Node // nested members: ConstraintMembers for the braced form, requirement members for the named form
+	Expression Node           // requirement condition (for expression form)
+	Reference  *QualifiedName // referenced requirement (reference-subsetting form, SysML v2 §7.20)
+	Body       []Node         // nested members: ConstraintMembers for the braced form, requirement members for the reference form
 }
 
 // Phase C4: State Body Members

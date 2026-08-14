@@ -43,6 +43,10 @@ type Resolver struct {
 	// inheritedImports are the declarations whose supertypes' imports are being
 	// searched, so a specialization cycle ends the walk.
 	inheritedImports map[*symbols.Symbol]bool
+	// constraintRefs are the requirements referenced by the require/assume
+	// members whose bodies are being walked, innermost last: such a body may
+	// redefine a feature of the requirement it references by plain name.
+	constraintRefs []constraintRef
 }
 
 // New creates a resolver over the given index.

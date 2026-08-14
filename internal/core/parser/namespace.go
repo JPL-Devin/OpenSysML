@@ -218,19 +218,15 @@ func (p *Parser) parseMember() ast.Node {
 		return al
 	}
 
-	// `first a::b then c;` is a SuccessionAsUsage written with no succession
-	// keyword: among namespace members the two ends are qualified names, not
-	// members of an action's token flow (SysML.xtext SuccessionAsUsage, whose
-	// keyword is optional; SysML v2 §8.3.11).
+	// A namespace member may be a succession stated without its keyword
+	// (SysML v2 8.2.2.13.3): `first a::b then c;`, whose ends are qualified
+	// names rather than members of an action's token flow.
+	var inner ast.Node
 	if p.atKeyword("first") {
-		u := p.parseUsage(start, ast.UsageSuccession, "", featureMods{visibility: vis}, false)
-		m := &ast.Membership{Visibility: vis, Member: u}
-		m.NodeSpan = p.spanFrom(start)
-		m.SetLeadingTrivia(trivia)
-		return m
+		inner = p.parseSuccessionAsUsage(start)
+	} else {
+		inner = p.parseDeclaration(start)
 	}
-
-	inner := p.parseDeclaration(start)
 	if inner == nil {
 		// No declaration recognized. Emit an error node spanning the skip.
 		en := p.errorNodeSkip(start, "expected a namespace member")
@@ -324,6 +320,9 @@ func (p *Parser) parseNamespaceBody() ([]ast.Node, bool) {
 	if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); !ok {
 		return nil, false
 	}
+	// A package/namespace body has its own notation; it never inherits the
+	// enclosing body's (e.g. an interface's default-end allowance).
+	defer p.pushBodyContext(bodyOther)()
 	var members []ast.Node
 	for !p.atEOF() && !p.at(lexer.RBrace) {
 		before := p.peek().Span.Offset
