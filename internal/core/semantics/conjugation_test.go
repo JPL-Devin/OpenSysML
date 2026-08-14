@@ -33,16 +33,6 @@ func directions(m *Model, port *symbols.Symbol) map[string]ast.FeatureDirection 
 	return out
 }
 
-// member looks up a member of sym by name, through inheritance.
-func member(t *testing.T, m *Model, sym *symbols.Symbol, name string) *symbols.Symbol {
-	t.Helper()
-	found, ok := m.LookupMember(sym, name)
-	if !ok {
-		t.Fatalf("member %q of %s not found", name, sym.Name)
-	}
-	return found
-}
-
 // TestConjugationReversesDirections covers SysML v2 §7.12.3: the features of a
 // conjugated port definition have conjugate directions — in and out reversed,
 // inout unchanged.

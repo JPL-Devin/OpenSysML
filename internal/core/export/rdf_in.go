@@ -338,6 +338,8 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 		property string
 		keyword  string
 	}{
+		{"isVariation", "variation"},
+		{"isVariant", "variant"},
 		{"isComposite", "composite"},
 		{"isDerived", "derived"},
 		{"isConstant", "constant"},

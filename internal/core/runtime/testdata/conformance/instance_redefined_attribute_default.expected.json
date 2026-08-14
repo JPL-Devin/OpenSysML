@@ -1,0 +1,9 @@
+{
+  "type": "instance",
+  "instantiate": "test::truck",
+  "slots": {
+    "grossMass": {"type": "Real", "value": 1000.0},
+    "mass": {"type": "Real", "value": 1000.0},
+    "payload": {"type": "Real", "value": 400.0}
+  }
+}

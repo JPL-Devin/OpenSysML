@@ -739,12 +739,20 @@ func aggregate(op string, args []Value, operator ast.OperatorKind) (Value, error
 	if err := checkArity(op, args, 1); err != nil {
 		return Value{}, err
 	}
+	elements := elementsOf(args[0])
+	// A quantity carries its unit through an aggregation as through the folded
+	// operator, so a collection of measured values aggregates to one.
+	for _, elem := range elements {
+		if elem.Kind == ValQuantity {
+			return aggregateQuantities(op, elements, operator)
+		}
+	}
 	identity := int64(0)
 	if operator == ast.OpMul {
 		identity = 1
 	}
 	acc := semantics.Value{Kind: semantics.ValInt, Int: identity}
-	for _, elem := range elementsOf(args[0]) {
+	for _, elem := range elements {
 		if elem.Kind != ValConst || !elem.Const.IsNumeric() {
 			return Value{}, fmt.Errorf("%w: %s requires numeric elements, got %s", ErrTypeMismatch, op, describeValue(elem))
 		}
@@ -755,6 +763,38 @@ func aggregate(op string, args []Value, operator ast.OperatorKind) (Value, error
 		acc = next
 	}
 	return Value{Kind: ValConst, Const: acc}, nil
+}
+
+// aggregateQuantities folds a collection holding a quantity in the unit of its
+// first element, as the binary operator does. A bare number is a magnitude of
+// dimension one, so mixing one in reports incommensurable units.
+func aggregateQuantities(op string, elements []Value, operator ast.OperatorKind) (Value, error) {
+	var acc Value
+	for i, elem := range elements {
+		q, ok := asQuantity(elem)
+		if !ok {
+			return Value{}, fmt.Errorf("%w: %s requires numeric elements, got %s", ErrTypeMismatch, op, describeValue(elem))
+		}
+		if i == 0 {
+			acc = Value{Kind: ValQuantity, Quantity: q}
+			continue
+		}
+		accQ, _ := asQuantity(acc)
+		var (
+			next Value
+			err  error
+		)
+		if operator == ast.OpAdd {
+			next, err = addQuantities(operator, accQ, q)
+		} else {
+			next, err = scaleQuantities(operator, accQ, q)
+		}
+		if err != nil {
+			return Value{}, fmt.Errorf("%s: %w", op, err)
+		}
+		acc = next
+	}
+	return acc, nil
 }
 
 // foldNumeric applies one step of an aggregation, keeping Integer arithmetic

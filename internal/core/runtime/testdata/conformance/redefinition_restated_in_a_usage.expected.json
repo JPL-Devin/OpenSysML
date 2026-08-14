@@ -1,0 +1,12 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::sat",
+  "slots": {
+    "own": {"type": "Real", "value": 10.0},
+    "mass": {"type": "Real", "value": 10.0},
+    "total": {"type": "Real", "value": 12.0},
+    "payload": {"type": "Instance"},
+    "subs": {"type": "Sequence", "elements": [{"type": "Instance"}]}
+  }
+}

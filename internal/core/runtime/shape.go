@@ -15,6 +15,16 @@ type EffectiveFeature struct {
 	Type         *symbols.Symbol // resolved type (nil if untyped)
 	Multiplicity semantics.Range // from MultiplicityOf (default 1..1)
 	DefaultValue ast.Node        // value-binding expression (nil if none)
+	DefaultDecl  *symbols.Symbol // feature the DefaultValue was written on (nil if none)
+}
+
+// DefaultScope returns the scope DefaultValue resolves its names in, which for
+// an inherited default is where the redefined declaration wrote it.
+func (f *EffectiveFeature) DefaultScope() *symbols.Scope {
+	if f.DefaultDecl != nil {
+		return f.DefaultDecl.OwnerScope
+	}
+	return f.DeclScope()
 }
 
 // DeclScope returns the scope the feature was declared in, which is the scope a
@@ -81,11 +91,20 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 		if !isFeature(memberSym) {
 			continue
 		}
+		// A variant is a choice offered for its variation, not a feature of the
+		// object declaring it: it materializes no slot of its own.
+		if semantics.DeclaresVariant(memberSym) {
+			continue
+		}
 
 		name := memberSym.Name
 		typ := ctx.extractType(memberSym)
 		mult := ctx.extractMultiplicity(memberSym)
 		defaultVal := ctx.extractDefaultValue(memberSym)
+		defaultDecl := memberSym
+		if defaultVal == nil {
+			defaultVal, defaultDecl = ctx.redefinedDefault(memberSym, typeSym)
+		}
 
 		// Determine owner type (walk up to find the declaration scope's owner)
 		ownerType := ctx.findOwnerType(memberSym)
@@ -98,6 +117,7 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 			Type:         typ,
 			Multiplicity: mult,
 			DefaultValue: defaultVal,
+			DefaultDecl:  defaultDecl,
 		}
 	}
 
@@ -171,6 +191,28 @@ func (ctx *Context) extractDefaultValue(featureSym *symbols.Symbol) ast.Node {
 		return usage.Value // nil if no default
 	}
 	return nil
+}
+
+// redefinedDefault returns the value a feature takes from the feature it
+// redefines, and the declaration that wrote it: a redefining feature is the
+// redefined feature declared again (KerML 1.0 §7.3.4.5).
+func (ctx *Context) redefinedDefault(sym, owner *symbols.Symbol) (ast.Node, *symbols.Symbol) {
+	seen := map[*symbols.Symbol]bool{sym: true}
+	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, redefined := range ctx.relatedFeatures(cur, owner, ast.RelRedefines) {
+			if seen[redefined] {
+				continue
+			}
+			seen[redefined] = true
+			if val := ctx.extractDefaultValue(redefined); val != nil {
+				return val, redefined
+			}
+			queue = append(queue, redefined)
+		}
+	}
+	return nil, nil
 }
 
 // findOwnerType walks up the scope chain to find the type symbol that owns the feature's declaration.

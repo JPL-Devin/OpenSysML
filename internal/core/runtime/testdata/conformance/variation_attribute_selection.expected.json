@@ -1,0 +1,13 @@
+{
+  "type": "instance",
+  "instantiate": "test::idealDiamond",
+  "libraries": true,
+  "slots": {
+    "cut": {"type": "Variant", "value": "cutIdeal"},
+    "diamondCost": {"type": "Real", "value": 250.0}
+  },
+  "constraints": {
+    "isIdeal": true,
+    "notShallow": false
+  }
+}

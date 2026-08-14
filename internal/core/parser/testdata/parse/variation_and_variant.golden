@@ -1,0 +1,83 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="variability" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Engine"))
+      (Membership visibility="default"
+        (Usage kind="part" name="vehicleFamily" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="cut" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variation=true
+              (Membership visibility="default"
+                (Usage kind="attribute" name="cutShallow" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+                  (Membership visibility="default"
+                    (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                      (Relationship kind="redefines" target=cost
+                        (*ast.QualifiedName))
+                      (LiteralReal value="200.0")))))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="cutIdeal" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+                  (Membership visibility="default"
+                    (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                      (Relationship kind="redefines" target=cost
+                        (*ast.QualifiedName))
+                      (LiteralReal value="250.0")))))))
+          (Membership visibility="default"
+            (Usage kind="part" name="engine" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variation=true
+              (Relationship kind="typing" target=Engine
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="part" name="electric" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+                  (Relationship kind="typing" target=Engine
+                    (*ast.QualifiedName))
+                  (Membership visibility="default"
+                    (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                      (Relationship kind="redefines" target=mass
+                        (*ast.QualifiedName))
+                      (LiteralReal value="300.0")))))
+              (Membership visibility="default"
+                (Usage kind="part" name="petrol" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+                  (Relationship kind="typing" target=Engine
+                    (*ast.QualifiedName))))))
+          (Membership visibility="default"
+            (Usage kind="interface" name="engagementRingToBand" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variation=true
+              (Membership visibility="default"
+                (Usage kind="interface" name="connected" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+                  (ConnectorEnd target="*ast.FeatureChainExpr"
+                    (FeatureChainExpr member="ringPort"
+                      (FeatureReference name="engagementRing")))
+                  (ConnectorEnd target="*ast.FeatureChainExpr"
+                    (FeatureChainExpr member="ringPort"
+                      (FeatureReference name="band")))))
+              (Membership visibility="default"
+                (Usage kind="interface" name="disconnected" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+                  (ConnectorEnd target="*ast.FeatureChainExpr"
+                    (FeatureChainExpr member="bandPort"
+                      (FeatureReference name="diamond")))
+                  (ConnectorEnd target="*ast.FeatureChainExpr"
+                    (FeatureChainExpr member="diamondPort"
+                      (FeatureReference name="band")))))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="chosenVehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="subsets" target=vehicleFamily
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=cut
+                (*ast.QualifiedName))
+              (FeatureReference name="cut::cutIdeal")))
+          (Membership visibility="default"
+            (Usage kind="part" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=engine
+                (*ast.QualifiedName))
+              (FeatureReference name="engine::electric")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=engagementRingToBand
+                (*ast.QualifiedName))
+              (FeatureReference name="engagementRingToBand::connected")))
+          (Membership visibility="default"
+            (Usage kind="constraint" name="isIdeal" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConstraintMember assert=true negated=false
+                (OperatorExpr operator="=="
+                  (FeatureReference name="cut")
+                  (FeatureReference name="cut::cutIdeal"))))))))))

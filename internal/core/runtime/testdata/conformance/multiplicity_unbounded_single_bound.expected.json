@@ -1,0 +1,10 @@
+{
+  "type": "instance",
+  "instantiate": "test::Bounds",
+  "slots": {
+    "starred": {"type": "Sequence", "elements": []},
+    "explicit": {"type": "Sequence", "elements": []},
+    "required": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "single": {"type": "Instance"}
+  }
+}

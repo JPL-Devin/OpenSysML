@@ -142,6 +142,13 @@ func TestNegative(t *testing.T) {
 		{"timeslice_no_subject", "package p { timeslice :>> ; }"},
 		{"timeslice_usage_no_type", "package p { timeslice item i : ; }"},
 		{"timeslice_unterminated", "package p { timeslice item i"},
+
+		// `variation` and `variant` qualify a declaration, so each is rejected
+		// where the declaration it qualifies is absent or malformed.
+		{"variation_no_declaration", "variation ;"},
+		{"variation_attribute_no_name", "part p { variation attribute : ; }"},
+		{"variant_unclosed_body", "part p { variation attribute cut { variant attribute cutIdeal { :>> cost = 1.0; } }"},
+		{"variant_selection_no_variant_name", "part p { attribute :>> cut = cut::; }"},
 	}
 
 	for _, tt := range tests {

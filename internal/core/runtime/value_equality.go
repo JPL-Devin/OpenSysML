@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"hash/fnv"
+
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // valueKey is a comparable projection of Value for use as map key.
@@ -14,6 +16,7 @@ type valueKey struct {
 	strVal  string
 	instID  int64
 	colHash uint64
+	variant *symbols.Symbol
 }
 
 // valueKeyFunc extracts a comparable key from a Value.
@@ -39,6 +42,9 @@ func valueKeyFunc(v Value) valueKey {
 		key.colHash = hashSequence(v.Sequence)
 	case ValSet:
 		key.colHash = hashSet(v.Set)
+	case ValVariant:
+		// A selection is the variant it names, whatever object it materialized.
+		key.variant = v.Variant
 	case ValQuantity:
 		// Keyed on the base-unit form, so `1 [km]` and `1000 [m]` are one element.
 		if v.Quantity != nil {

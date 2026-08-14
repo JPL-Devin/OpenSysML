@@ -202,6 +202,7 @@ var relationshipKeywords = map[string]ast.RelationshipKind{
 type featureMods struct {
 	isAbstract        bool
 	isVariation       bool
+	isVariant         bool
 	isReference       bool
 	isEnd             bool
 	isChain           bool
@@ -229,6 +230,12 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 	case *ast.Usage:
 		if mods.isAbstract {
 			d.IsAbstract = true
+		}
+		if mods.isVariation {
+			d.IsVariation = true
+		}
+		if mods.isVariant {
+			d.IsVariant = true
 		}
 		if mods.isReference {
 			d.IsReference = true
@@ -300,6 +307,11 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 // (`action flow { ... }` is an action named `flow`).
 func (p *Parser) atKindPrefix() bool {
 	if !p.at(lexer.Keyword) || notKindPrefixKeywords[p.peek().KeywordID] {
+		return false
+	}
+	// A feature modifier qualifies the declaration itself (`variation part v`),
+	// so it is parsed as a modifier rather than dropped as a kind prefix.
+	if featureModifierKeywords[p.peek().KeywordID] {
 		return false
 	}
 	if !isKindKeyword(p.peekN(1)) {
@@ -652,6 +664,11 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 
 		p.advance() // consume the kind keyword
+		// `variant x` declares a variant of the variation that owns it
+		// (VariantMembership, SysML v2 §7.20).
+		if kw == "variant" {
+			mods.isVariant = true
+		}
 		isAll := p.acceptKeyword("all")
 
 		// `render` names the rendering a view uses (ViewRenderingMember) and
@@ -1201,6 +1218,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		Keyword:      keyword,
 		IsNegated:    mods.isNegated,
 		IsAbstract:   mods.isAbstract,
+		IsVariation:  mods.isVariation,
+		IsVariant:    mods.isVariant,
 		IsReference:  mods.isReference,
 		IsAll:        isAll,
 		IsEnd:        mods.isEnd,

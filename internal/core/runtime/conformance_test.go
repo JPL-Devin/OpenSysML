@@ -3,6 +3,7 @@ package runtime
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -27,6 +28,9 @@ type ExpectedValue struct {
 	// ("m/s"). A quantity carries it, so a case asserting one pins that the unit
 	// survived the computation rather than only the magnitude.
 	Unit string `json:"unit,omitempty"`
+	// Elements are the members a Sequence holds, in order, for a case asserting a
+	// multi-valued feature. Set it instead of value.
+	Elements []ExpectedValue `json:"elements,omitempty"`
 	// Error is the text producing this value must fail with, for a slot whose
 	// contract is a diagnostic. Set it instead of type and value.
 	Error string `json:"error,omitempty"`
@@ -650,7 +654,7 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 			t.Errorf("slot %q: %v", name, err)
 			continue
 		}
-		validateValue(t, name, expectedVal, slot.Value)
+		validateValue(t, name, expectedVal, slot.HeldValue())
 	}
 
 	for name, wantSatisfied := range expected.Constraints {
@@ -786,6 +790,8 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 		t.Fatalf("invalid String value type: %T", ev.Value)
 	case "Null":
 		return Value{Kind: ValNull}
+	case "Variant":
+		t.Fatalf("a variant is named by the model, so it cannot be built from a case value")
 	case "Quantity":
 		v, ok := ev.Value.(float64)
 		if !ok {
@@ -804,6 +810,23 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 // validateValue checks if runtime Value matches ExpectedValue
 func validateValue(t *testing.T, name string, expected ExpectedValue, actual Value) {
 	switch expected.Type {
+	case "Sequence":
+		if actual.Kind != ValSequence {
+			t.Errorf("%s: type = %v, want Sequence", name, actual.Kind)
+			return
+		}
+		elements := elementsOf(actual)
+		if len(elements) != len(expected.Elements) {
+			t.Errorf("%s: %d elements, want %d", name, len(elements), len(expected.Elements))
+			return
+		}
+		for i, want := range expected.Elements {
+			validateValue(t, fmt.Sprintf("%s#(%d)", name, i+1), want, elements[i])
+		}
+	case "Instance":
+		if actual.Kind != ValInstance {
+			t.Errorf("%s: type = %v, want Instance", name, actual.Kind)
+		}
 	case "Integer":
 		if actual.Kind != ValConst || actual.Const.Kind != semantics.ValInt {
 			t.Errorf("%s: type = %v (Const.Kind=%v), want Integer", name, actual.Kind, actual.Const.Kind)
@@ -839,6 +862,15 @@ func validateValue(t *testing.T, name string, expected ExpectedValue, actual Val
 		want := expected.Value.(string)
 		if actual.Str != want {
 			t.Errorf("%s: value = %q, want %q", name, actual.Str, want)
+		}
+	case "Variant":
+		if actual.Kind != ValVariant || actual.Variant == nil {
+			t.Errorf("%s: type = %v, want Variant", name, actual.Kind)
+			return
+		}
+		want := expected.Value.(string)
+		if actual.Variant.Name != want {
+			t.Errorf("%s: variant = %q, want %q", name, actual.Variant.Name, want)
 		}
 	case "Quantity":
 		if actual.Kind != ValQuantity || actual.Quantity == nil {

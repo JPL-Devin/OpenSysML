@@ -156,6 +156,19 @@ var (
 	// to is unstated; it is reported rather than dropped.
 	ErrReceiverWithNamedArgs = errors.New("receiver combined with named arguments")
 
+	// ErrVariationUnselected is returned when a variation is read without having
+	// been bound to one of its variants: it classifies its variants abstractly,
+	// so it stands for no one value until a variant is selected.
+	ErrVariationUnselected = errors.New("variation has no variant selected")
+
+	// ErrNotAVariant is returned when a variation is bound to something that is
+	// not one of the variants it offers.
+	ErrNotAVariant = errors.New("not a variant of the variation")
+
+	// ErrMultipleVariants is returned when a variation is bound to more than one
+	// variant, which selects no single configuration.
+	ErrMultipleVariants = errors.New("more than one variant selected")
+
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
 	// it can be created.

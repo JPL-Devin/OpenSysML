@@ -40,9 +40,10 @@ type Model struct {
 
 // NewModel creates a semantic model backed by the given name resolver. The
 // resolver must already be associated with the index whose symbols will be
-// queried.
+// queried. The model attaches itself to the resolver so name resolution sees
+// inherited members, which a redefinition target may only be reachable through.
 func NewModel(resolver *resolve.Resolver) *Model {
-	return &Model{
+	m := &Model{
 		resolver:      resolver,
 		directSupers:  make(map[*symbols.Symbol][]*symbols.Symbol),
 		allSupers:     make(map[*symbols.Symbol][]*symbols.Symbol),
@@ -59,6 +60,10 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		reducingUnit:   make(map[*symbols.Symbol]bool),
 		libSymbols:     make(map[string]*symbols.Symbol),
 	}
+	if resolver != nil {
+		resolver.SetModel(m)
+	}
+	return m
 }
 
 // GeneralizationKind reports whether a relationship kind forms a conformance
@@ -197,6 +202,14 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 				}
 			}
 		}
+	}
+
+	// A variant specializes the variation it is a variant of, so it carries the
+	// variation's type and features and restates only what it chooses
+	// (SysML v2 §7.20).
+	if variation := VariationOwning(sym); variation != nil && variation != sym && !seen[variation] {
+		seen[variation] = true
+		out = append(out, variation)
 	}
 
 	// Semantic metadata annotating this element — a `#keyword` prefix — adds the

@@ -351,6 +351,36 @@ func TestConstraint_RedefinitionMultiplicityInvalid(t *testing.T) {
 	}
 }
 
+// `[*]` is `0..*` in a redefinition: it keeps an inherited `0..*` but loosens an
+// inherited `1..*`, dropping its lower bound to 0.
+func TestConstraint_RedefinitionUnboundedMultiplicity(t *testing.T) {
+	tests := []struct {
+		name      string
+		inherited string
+		wantDiag  bool
+	}{
+		{"redefines optional collection", "0..*", false},
+		{"redefines required collection", "1..*", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := `
+				attribute def SpeedType;
+				part def Vehicle {
+					attribute speed : SpeedType[` + tt.inherited + `];
+				}
+				part def Car specializes Vehicle {
+					attribute speed : SpeedType[*] :>> Vehicle::speed;
+				}
+			`
+			diags := constraintDiags(t, src)
+			if got := hasCode(diags, "redefinition-multiplicity"); got != tt.wantDiag {
+				t.Fatalf("redefinition-multiplicity = %v, want %v (diags %v)", got, tt.wantDiag, diags)
+			}
+		})
+	}
+}
+
 // --- V-C4 Track 4 Integration: typing conformance + redefinition ---
 
 func TestConstraint_Track4Integration(t *testing.T) {

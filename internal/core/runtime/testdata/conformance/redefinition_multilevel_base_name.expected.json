@@ -1,0 +1,12 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::reader",
+  "slots": {
+    "busDry": {"type": "Real", "value": 7.0},
+    "busOwn": {"type": "Real", "value": 7.0},
+    "busMass": {"type": "Real", "value": 7.0},
+    "inheritedMass": {"type": "Real", "value": 4.0},
+    "rollUp": {"type": "Real", "value": 11.0}
+  }
+}
