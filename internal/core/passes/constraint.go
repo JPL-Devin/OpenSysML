@@ -355,35 +355,13 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 		return // No relationships
 	}
 
-	// Find owner symbol (the definition/usage that declares sym).
-	// This traverses OwnerScope.Parent() to find the symbol whose Decl matches
-	// sym's declaring scope node. If scope hierarchy is complex (nested blocks,
-	// synthetic scopes), owner lookup may fail - we skip validation gracefully.
+	// sym is declared in the scope its owning definition or usage owns; a scope
+	// with no owner is the root or internal, and redefines nothing.
 	var owner *symbols.Symbol
 	if sym.OwnerScope != nil {
-		ownerNode := sym.OwnerScope.Node()
-		if ownerNode != nil {
-			// Search parent scope for symbol with matching Decl
-			parentScope := sym.OwnerScope.Parent()
-			if parentScope != nil {
-				for _, name := range parentScope.MemberNames() {
-					for _, candidate := range parentScope.LookupLocalAll(name) {
-						if candidate != nil && candidate.Decl == ownerNode {
-							owner = candidate
-							break
-						}
-					}
-					if owner != nil {
-						break
-					}
-				}
-			}
-		}
+		owner = sym.OwnerScope.Owner()
 	}
-
 	if owner == nil {
-		// Cannot determine owner (complex scope hierarchy or internal structure).
-		// Skip validation gracefully rather than reporting false positives.
 		return
 	}
 
@@ -412,42 +390,14 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			continue
 		}
 
-		// Check that redefined member is inherited (not locally declared in owner)
+		// A member's OwnerScope is where it was declared: owner's own scope if
+		// owner declares it, a supertype's if owner inherits it.
 		inherited := false
-		locallyDeclared := false
-
-		// Check if redefined is locally declared in owner's scope
-		if owner.Scope != nil {
-			for _, memberName := range owner.Scope.MemberNames() {
-				for _, localMember := range owner.Scope.LookupLocalAll(memberName) {
-					if localMember == redefined {
-						locallyDeclared = true
-						break
-					}
-				}
-				if locallyDeclared {
-					break
-				}
-			}
-		}
-
-		// If not locally declared, check if it's inherited from supertypes
+		locallyDeclared := owner.Scope != nil && redefined.OwnerScope == owner.Scope
 		if !locallyDeclared {
 			for _, supertype := range cc.model.AllSupertypes(owner) {
-				if supertype.Scope != nil {
-					for _, memberName := range supertype.Scope.MemberNames() {
-						for _, inheritedMember := range supertype.Scope.LookupLocalAll(memberName) {
-							if inheritedMember == redefined {
-								inherited = true
-								break
-							}
-						}
-						if inherited {
-							break
-						}
-					}
-				}
-				if inherited {
+				if supertype.Scope != nil && redefined.OwnerScope == supertype.Scope {
+					inherited = true
 					break
 				}
 			}

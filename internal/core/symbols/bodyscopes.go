@@ -62,12 +62,7 @@ func newBodyExprScope(parent *Scope, body *ast.BodyExpr) *Scope {
 
 // bodyScopeChild returns the child scope declared by decl, or nil.
 func bodyScopeChild(scope *Scope, decl ast.Node) *Scope {
-	for _, c := range scope.Children() {
-		if c.Node() == decl {
-			return c
-		}
-	}
-	return nil
+	return scope.ChildFor(decl)
 }
 
 // bodyScopesInDecl walks the expressions a declaration carries, descending into

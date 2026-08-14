@@ -318,6 +318,45 @@ func TestConstraint_RedefinitionNoInheritedMember(t *testing.T) {
 	}
 }
 
+// A member inherited through a chain of specializations is inherited, so
+// redefining it is valid however far up it was declared.
+func TestConstraint_RedefinitionInheritedTransitively(t *testing.T) {
+	src := `
+		attribute def SpeedType;
+		attribute def Vehicle {
+			attribute speed : SpeedType;
+		}
+		attribute def Car specializes Vehicle;
+		attribute def RaceCar specializes Car {
+			attribute speed : SpeedType :>> Vehicle::speed;
+		}
+	`
+	diags := constraintDiags(t, src)
+	if hasCode(diags, "redefinition-no-inherited") {
+		t.Fatalf("a member inherited through Car is inherited, got %v", diags)
+	}
+}
+
+// A member of a nested definition redefines what the definition it is nested in
+// inherits, not what the outer definition does.
+func TestConstraint_RedefinitionInNestedDefinition(t *testing.T) {
+	src := `
+		attribute def SpeedType;
+		part def Base {
+			attribute speed : SpeedType;
+		}
+		part def Outer {
+			part def Inner specializes Base {
+				attribute speed : SpeedType :>> Base::speed;
+			}
+		}
+	`
+	diags := constraintDiags(t, src)
+	if hasCode(diags, "redefinition-no-inherited") {
+		t.Fatalf("Inner inherits speed from Base, got %v", diags)
+	}
+}
+
 func TestConstraint_RedefinitionTypeMismatch(t *testing.T) {
 	src := `
 		attribute def SpeedType;

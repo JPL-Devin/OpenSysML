@@ -152,12 +152,26 @@ func simpleName(sym *symbols.Symbol) string {
 // matching name.
 func (r *Resolver) lookupImports(scope *symbols.Scope, name string) (*symbols.Symbol, bool) {
 	node := scope.Node()
-	for _, imp := range importsOf(node) {
+	for _, imp := range r.importsOf(node) {
 		if sym, ok := r.matchImport(scope, imp, name); ok {
 			return sym, true
 		}
 	}
 	return nil, false
+}
+
+// importsOf is importsOf memoized: the tree is immutable once parsed, and every
+// reference in a namespace looks its name up against that namespace's imports.
+func (r *Resolver) importsOf(node ast.Node) []*ast.Import {
+	if node == nil {
+		return nil
+	}
+	if imports, ok := r.imports[node]; ok {
+		return imports
+	}
+	imports := importsOf(node)
+	r.imports[node] = imports
+	return imports
 }
 
 // importsOf returns the *ast.Import declarations directly in a namespace-bearing
