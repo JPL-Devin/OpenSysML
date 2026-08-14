@@ -49,9 +49,14 @@ type Resolver struct {
 	Diagnostics []Diagnostic
 	// quiet is nonzero while a lookup is made on behalf of a semantic query
 	// rather than a reference in the document being resolved.
-	quiet  int
-	model  MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
-	naming map[*symbols.Symbol]bool // effective names being computed, for cycle detection
+	quiet int
+	// inCondition is nonzero while a filter condition's own names are resolved,
+	// which the condition does not filter.
+	inCondition int
+	// nsFilters are the `filter` members of a namespace, extracted once per scope.
+	nsFilters map[*symbols.Scope][]symbols.ElementFilter
+	model     MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
+	naming    map[*symbols.Symbol]bool // effective names being computed, for cycle detection
 	// inheritedImports are the declarations whose supertypes' imports are being
 	// searched, so a specialization cycle ends the walk.
 	inheritedImports map[*symbols.Symbol]bool
@@ -69,6 +74,7 @@ func New(idx *symbols.Index) *Resolver {
 		resolving: map[ast.Node]bool{},
 		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
 		naming:    map[*symbols.Symbol]bool{},
+		nsFilters: map[*symbols.Scope][]symbols.ElementFilter{},
 
 		inheritedImports: map[*symbols.Symbol]bool{},
 	}
@@ -198,6 +204,15 @@ func (r *Resolver) report(d Diagnostic) {
 func (r *Resolver) aside(f func()) {
 	r.quiet++
 	defer func() { r.quiet-- }()
+	f()
+}
+
+// InCondition runs the resolution of a filter condition's own names, which its
+// namespace's filters do not restrict: a condition naming a metadata type the
+// namespace imports would otherwise be filtered by itself (KerML 8.2.4).
+func (r *Resolver) InCondition(f func()) {
+	r.inCondition++
+	defer func() { r.inCondition-- }()
 	f()
 }
 

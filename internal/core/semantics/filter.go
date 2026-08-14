@@ -123,7 +123,10 @@ func (m *Model) CompileElementFilter(f symbols.ElementFilter) *symbols.FilterPre
 	if pred, ok := m.filterPreds[f.Expr]; ok {
 		return pred
 	}
-	pred := m.compileCondition(f.Scope, f.Expr)
+	// The names a condition uses are not subject to the condition itself, so
+	// they resolve through the namespace's imports unfiltered.
+	var pred *symbols.FilterPredicate
+	m.resolver.InCondition(func() { pred = m.compileCondition(f.Scope, f.Expr) })
 	m.filterPreds[f.Expr] = pred
 	return pred
 }

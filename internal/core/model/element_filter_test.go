@@ -325,6 +325,63 @@ func TestFilteredExposeSurfacesSubset(t *testing.T) {
 	}
 }
 
+// A `filter` member of a definition or usage body restricts what the imports
+// declared beside it bring into that body — the form the corpus writes in a view
+// definition to narrow what its views expose (SysML v2 7.4.4).
+func TestFilterMemberOfADefinitionBodyRestrictsItsImports(t *testing.T) {
+	src := `package Meta { metadata def Safety; }
+	package Vehicles {
+		part vehicle {
+			#Meta::Safety part seatBelt;
+			part keylessEntry;
+		}
+	}
+	package Views {
+		view safetyView {
+			expose Vehicles::vehicle::*;
+			filter @Meta::Safety;
+			part a :> seatBelt;
+		}
+		view rejectingView {
+			expose Vehicles::vehicle::*;
+			filter @Meta::Safety;
+			part b :> keylessEntry;
+		}
+	}`
+	ws := NewWorkspace()
+	ws.Open("file:///v.sysml", []byte(src), 1)
+	var msgs []string
+	for _, d := range ws.Diagnostics("file:///v.sysml") {
+		msgs = append(msgs, d.Message)
+	}
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "keylessEntry") {
+		t.Fatalf("a view's filter should surface only the annotated element, got %v", msgs)
+	}
+}
+
+// The metadata type a condition names resolves through the namespace's own
+// imports, which the condition does not filter.
+func TestFilterConditionResolvesThroughTheImportsItFilters(t *testing.T) {
+	src := `package Meta { metadata def Safety; }
+	package Vehicles {
+		part vehicle {
+			#Meta::Safety part seatBelt;
+			part keylessEntry;
+		}
+	}
+	package Facade {
+		private import Meta::*;
+		public import Vehicles::vehicle::*;
+		filter @Safety;
+		part a :> seatBelt;
+	}`
+	ws := NewWorkspace()
+	ws.Open("file:///f.sysml", []byte(src), 1)
+	for _, d := range ws.Diagnostics("file:///f.sysml") {
+		t.Fatalf("a condition naming an imported metadata type should hold: %s", d.Message)
+	}
+}
+
 // Evaluating a filter reaches library declarations, whose own unresolved
 // references belong to the library, not to the document whose filter reached
 // them — so a cold stdlib cache reports exactly what a warm one does.

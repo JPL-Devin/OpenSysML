@@ -11,17 +11,41 @@ import (
 // semantic model can judge a condition (docs/SPEC_COMPLIANCE.md).
 
 // importAdmits returns the test an element an import surfaces has to pass: the
-// import's own filter clause (`import P::*[@Safety]`).
+// import's own filter clause (`import P::*[@Safety]`) and the `filter` members
+// of the namespace declaring the import, which restrict every membership it
+// imports — including a `filter` beside the `expose` lines of a view.
 func (r *Resolver) importAdmits(scope *symbols.Scope, imp *ast.Import) func(*symbols.Symbol) bool {
-	if imp.FilterExpr == nil {
+	var filters []symbols.ElementFilter
+	// A condition's own names are resolved unfiltered, or the condition would
+	// filter itself.
+	if r.inCondition == 0 {
+		filters = r.namespaceFilters(scope)
+	}
+	if imp.FilterExpr != nil {
+		filters = append(append([]symbols.ElementFilter{}, filters...), symbols.ElementFilter{
+			Expr:  imp.FilterExpr,
+			Scope: scope,
+			Span:  imp.FilterExpr.Span(),
+		})
+	}
+	if len(filters) == 0 {
 		return func(*symbols.Symbol) bool { return true }
 	}
-	filters := []symbols.ElementFilter{{
-		Expr:  imp.FilterExpr,
-		Scope: scope,
-		Span:  imp.FilterExpr.Span(),
-	}}
 	return func(sym *symbols.Symbol) bool { return r.admits(filters, sym) }
+}
+
+// namespaceFilters are the conditions the namespace owning scope declares,
+// extracted once per scope because every import lookup consults them.
+func (r *Resolver) namespaceFilters(scope *symbols.Scope) []symbols.ElementFilter {
+	if scope == nil {
+		return nil
+	}
+	if filters, ok := r.nsFilters[scope]; ok {
+		return filters
+	}
+	filters := symbols.NamespaceFiltersIn(scope)
+	r.nsFilters[scope] = filters
+	return filters
 }
 
 // admitsUnderName reports whether cand is reachable under the name fqn, given

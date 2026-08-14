@@ -80,7 +80,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.ResolveQualified(scope, a)
 		}
 	case *ast.FilterMember:
-		r.resolveExpr(scope, d.Condition)
+		r.InCondition(func() { r.resolveExpr(scope, d.Condition) })
 	case *ast.Definition:
 		r.resolvePrefixes(scope, d.Prefixes)
 		r.resolveRelationships(scope, d, d.Relationships)
