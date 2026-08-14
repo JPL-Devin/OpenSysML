@@ -148,6 +148,50 @@ func TestCheckSatisfyThroughCLI(t *testing.T) {
 		"no satisfaction assertion in Rover::touchdown")
 }
 
+// TestCheckModelSplitAcrossFiles checks that a reference from one file to a
+// declaration in another resolves, whatever order the files are named in: the
+// analysis gate is about the model, not about each file as it is read.
+func TestCheckModelSplitAcrossFiles(t *testing.T) {
+	binary := buildCLI(t)
+
+	dir := t.TempDir()
+	user := filepath.Join(dir, "user.sysml")
+	defined := filepath.Join(dir, "defined.sysml")
+	if err := os.WriteFile(user, []byte("package A {\n    part rover : B::Rover;\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(defined, []byte("package B {\n    part def Rover;\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, order := range [][]string{{user, defined}, {defined, user}} {
+		cmd := exec.Command(binary, append([]string{"-validate"}, order...)...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Errorf("-validate %v = %v, want the model to analyse cleanly\n%s", order, err, out)
+		}
+		if strings.Contains(string(out), "error:") {
+			t.Errorf("-validate %v reported an error it went on to accept:\n%s", order, out)
+		}
+	}
+
+	// A reference no file declares is still a finding, named in the file that
+	// makes it so the reader knows which of them to go to.
+	broken := filepath.Join(dir, "broken.sysml")
+	if err := os.WriteFile(broken, []byte("package C {\n    part probe : D::Probe;\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(binary, "-validate", defined, broken).CombinedOutput()
+	if err == nil {
+		t.Errorf("-validate accepted an unresolved reference:\n%s", out)
+	}
+	for _, want := range []string{"broken.sysml:2:18: error: unresolved reference: D::Probe", "did not analyse cleanly"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("report is missing %q:\n%s", want, out)
+		}
+	}
+}
+
 // TestConvertAndCheckAreSeparateRuns checks that a check asked for alongside a
 // conversion is reported as a misuse, rather than the conversion silently
 // answering nothing about the model.
@@ -172,6 +216,10 @@ func TestSatisfyCanBeTurnedOff(t *testing.T) {
 	if strings.Contains(got.output(), "satisfy touchdown") {
 		t.Errorf("-satisfy=false checked satisfaction anyway:\n%s", got.output())
 	}
+
+	// With nothing else asked for, that leaves no check to make, which is reported
+	// rather than leaving the script at a prompt it cannot answer.
+	wantReport(t, check(t, binary, checkModel, "-satisfy=false"), 2, "no check was named")
 }
 
 // TestCheckAgainstInstantiatedObject checks that -instantiate makes a following

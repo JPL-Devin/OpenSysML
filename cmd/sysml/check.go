@@ -53,8 +53,8 @@ func (a *advanceTime) Set(value string) error {
 // -json and -advance check nothing themselves, but are included so their misuse
 // is reported rather than leaving a script at a prompt it cannot answer.
 func (c *checks) requested() bool {
-	return c.validate || c.jsonOut || c.advance.given || len(c.instantiate) > 0 || len(c.constraints) > 0 ||
-		len(c.requirements) > 0 || len(c.satisfy) > 0 || len(c.calcs) > 0 ||
+	return c.validate || c.jsonOut || c.advance.given || c.satisfy.given || len(c.instantiate) > 0 ||
+		len(c.constraints) > 0 || len(c.requirements) > 0 || len(c.calcs) > 0 ||
 		len(c.actions) > 0 || len(c.states) > 0
 }
 
@@ -62,7 +62,7 @@ func (c *checks) requested() bool {
 // against how to report the answer.
 func (c *checks) checksOnly() bool {
 	return c.validate || len(c.instantiate) > 0 || len(c.constraints) > 0 ||
-		len(c.requirements) > 0 || len(c.satisfy) > 0 || len(c.calcs) > 0 ||
+		len(c.requirements) > 0 || len(c.satisfy.targets) > 0 || len(c.calcs) > 0 ||
 		len(c.actions) > 0 || len(c.states) > 0
 }
 
@@ -71,24 +71,27 @@ func (c *checks) checksOnly() bool {
 // -satisfy=<name> evaluates the ones the named element states. Go's flag package
 // passes "true" for the valueless spelling, which no name can be mistaken for
 // because `true` is a literal keyword rather than a declarable name.
-type satisfyTargets []string
+type satisfyTargets struct {
+	targets []string
+	given   bool
+}
 
-func (t *satisfyTargets) String() string { return fmt.Sprint([]string(*t)) }
+func (t *satisfyTargets) String() string { return fmt.Sprint(t.targets) }
 
 // IsBoolFlag makes the value optional, so -satisfy alone is accepted.
 func (t *satisfyTargets) IsBoolFlag() bool { return true }
 
 func (t *satisfyTargets) Set(value string) error {
-	if value == "true" {
+	t.given = true
+	switch value {
+	case "true":
 		// Every assertion in the model, which CheckSatisfy names with "".
-		*t = append(*t, "")
-		return nil
-	}
-	if value == "false" {
+		t.targets = append(t.targets, "")
+	case "false":
 		// The off spelling of a flag declared boolean, so -satisfy=$on works.
-		return nil
+	default:
+		t.targets = append(t.targets, value)
 	}
-	*t = append(*t, value)
 	return nil
 }
 
@@ -96,7 +99,7 @@ func (t *satisfyTargets) Set(value string) error {
 // after it (`-satisfy Landing::touchdown`) is then a positional argument, i.e. a
 // file to load, which is worth explaining when no such file exists.
 func (t *satisfyTargets) tookNoValue() bool {
-	for _, target := range *t {
+	for _, target := range t.targets {
 		if target == "" {
 			return true
 		}
@@ -133,7 +136,11 @@ func runChecks(files []string, exprs []string, c checks) int {
 		advance = duration
 	}
 	if !c.checksOnly() {
-		rep.failed("-json reports a check; name one, as -validate or -constraint <name>")
+		if c.jsonOut {
+			rep.failed("-json reports a check; name one, as -validate or -constraint <name>")
+		} else {
+			rep.failed("no check was named; name one, as -validate or -constraint <name>")
+		}
 		return rep.finish()
 	}
 	if len(files) == 0 {
@@ -143,10 +150,9 @@ func runChecks(files []string, exprs []string, c checks) int {
 
 	sess := newSession()
 
-	// A model that did not analyse cleanly answers nothing, so its diagnostics end
-	// the run rather than a verdict being reported about a model nobody could read.
+	loaded := make([][]string, 0, len(files))
 	for _, file := range files {
-		output, err := sess.LoadFile(file)
+		output, err := sess.LoadFileSummary(file)
 		if err != nil {
 			rep.failed(err.Error())
 			if c.satisfy.tookNoValue() && !fileExists(file) {
@@ -154,14 +160,23 @@ func runChecks(files []string, exprs []string, c checks) int {
 			}
 			return rep.finish()
 		}
-		if sess.HasErrors() {
-			rep.diags(sess.LocatedDiagnostics())
-			rep.problem(output)
-			rep.failed(fmt.Sprintf("%s did not analyse cleanly; no check was made", file))
-			return rep.finish()
-		}
+		loaded = append(loaded, output)
+	}
+
+	// A model that did not analyse cleanly answers nothing, so its diagnostics end
+	// the run rather than a verdict being reported about a model nobody could read.
+	// One file's reference to another only resolves once every file is loaded, so
+	// the gate is about the whole model rather than about each file in turn.
+	if sess.HasErrors() {
+		rep.diags(sess.LocatedDiagnostics())
+		rep.problem(sess.DiagnosticLines())
+		rep.failed(fmt.Sprintf("%s did not analyse cleanly; no check was made", strings.Join(files, ", ")))
+		return rep.finish()
+	}
+	for _, output := range loaded {
 		rep.info(output)
 	}
+	rep.info(sess.DiagnosticLines())
 
 	// What analysis found is reported as data whatever was checked, so a caller
 	// parsing the report reads the warnings the printed load output carries.
@@ -196,7 +211,7 @@ func runChecks(files []string, exprs []string, c checks) int {
 	for _, name := range c.requirements {
 		rep.verdict(sess.CheckRequirement(name))
 	}
-	for _, target := range c.satisfy {
+	for _, target := range c.satisfy.targets {
 		for _, v := range sess.CheckSatisfy(target) {
 			rep.verdict(v)
 		}

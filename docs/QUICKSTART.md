@@ -415,7 +415,7 @@ $ sysml -validate checks.sysml; echo "exit=$?"
 exit=0
 
 $ sysml -validate bad.sysml; echo "exit=$?"   # a file with a syntax error in it
-2:45: error: expected an expression
+bad.sysml:2:45: error: expected an expression
     part def Battery { attribute capacity = ; }
                                             ^
 sysml: bad.sysml did not analyse cleanly; no check was made
@@ -424,7 +424,9 @@ exit=2
 
 Every check mode is gated the same way, so a model with an error never reports a
 verdict about itself — a condition read out of a model the tool could not fully
-read would be an answer about a different model than the one you wrote.
+read would be an answer about a different model than the one you wrote. Name as
+many files as the model spans, in any order: the gate is about the model as a
+whole, so a reference from one file to a declaration in another resolves.
 
 ### Running Behavior
 

@@ -60,6 +60,45 @@ func (s *Session) LoadFile(path string) ([]string, error) {
 	return renderResult(s.submit(path, string(data)), s.verbosity), nil
 }
 
+// LoadFileSummary submits the contents of path and returns only what it
+// declared, without what analysis has found so far. A caller loading a model
+// that spans several files reports the analysis once every file is in, a
+// reference from one file to another resolving only then.
+func (s *Session) LoadFileSummary(path string) ([]string, error) {
+	data, err := os.ReadFile(expandHome(path))
+	if err != nil {
+		return nil, fmt.Errorf("load %s: %w", path, err)
+	}
+	res := s.submit(path, string(data))
+	return append(append([]string(nil), res.Notices...), renderSummary(res.ownMembers())...), nil
+}
+
+// DiagnosticLines reports the analysis of everything submitted so far as the
+// prompt prints it: the source line each finding is on, under a position naming
+// the file the finding is in.
+func (s *Session) DiagnosticLines() []string {
+	diags := s.Diagnostics()
+	if len(diags) == 0 {
+		return nil
+	}
+	var out []string
+	start := 0
+	for i, sn := range s.snippets {
+		end := start + len(sn.src)
+		var own []passes.Diagnostic
+		for _, d := range diags {
+			if d.Span.Offset < start || (d.Span.Offset > end && i != len(s.snippets)-1) {
+				continue
+			}
+			d.Span.Offset -= start
+			own = append(own, d)
+		}
+		out = append(out, renderDiagnostics(own, sn.src, 1, false, sn.origin)...)
+		start = end + 1 // the newline joined() writes between snippets
+	}
+	return out
+}
+
 // Diagnostics reports the analysis of everything submitted so far.
 func (s *Session) Diagnostics() []passes.Diagnostic {
 	return s.ws.Diagnostics(docName)
