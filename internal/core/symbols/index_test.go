@@ -478,3 +478,76 @@ func TestLookupDirectChildrenFromDropsPrivatelyImportedNames(t *testing.T) {
 		t.Errorf("LookupDirectChildren(Mid) = %d symbols, want 2", got)
 	}
 }
+
+// The index records the conditions a re-export is subject to instead of judging
+// them: an import's filter clause and the `filter` members of the namespace it
+// imports into gate the name it surfaced, while a name the namespace declares
+// itself is never gated (KerML 8.2.4).
+func TestExpandWildcardImportsGatesAFilteredReexport(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; part def Bolt; }")
+	addDoc(t, idx, "safe.sysml", `package Safe {
+		public import Base::*[@Safety];
+		filter @Safety;
+		part def Own;
+	}`)
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	routes := idx.ReexportGates("Safe::Belt", belt)
+	if len(routes) != 1 {
+		t.Fatalf("Safe::Belt is gated by %d routes, want 1", len(routes))
+	}
+	// The import's clause and the namespace's filter member, composed.
+	if len(routes[0]) != 2 {
+		t.Errorf("the route to Safe::Belt carries %d conditions, want 2", len(routes[0]))
+	}
+	own := lookupOne(t, idx, "Safe::Own")
+	if routes := idx.ReexportGates("Safe::Own", own); len(routes) != 0 {
+		t.Errorf("the declared member Safe::Own is gated by %d routes, want none", len(routes))
+	}
+}
+
+// A name two imports surface is reached through either of them, so the index
+// records a route each: an unfiltered import re-exports the name whatever a
+// filtered import of the same namespace would reject.
+func TestExpandWildcardImportsKeepsAnUnfilteredRoute(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "both.sysml", `package Both {
+		public import Base::*[@Safety];
+		public import Base::*;
+	}`)
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	routes := idx.ReexportGates("Both::Belt", belt)
+	if len(routes) != 1 || len(routes[0]) != 0 {
+		t.Fatalf("Both::Belt is gated by %v, want a single unconditional route", routes)
+	}
+}
+
+// Expansion repeats over an importer whenever its imports may have changed, so
+// the conditions of one import must be recorded once however often it is read.
+func TestExpandWildcardImportsRecordsAGateOnce(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "safe.sysml", "package Safe { public import Base::*[@Safety]; }")
+	idx.ExpandWildcardImports()
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	if routes := idx.ReexportGates("Safe::Belt", belt); len(routes) != 1 {
+		t.Errorf("Safe::Belt is gated by %d routes after two expansions, want 1", len(routes))
+	}
+}
+
+// lookupOne returns the single symbol registered under fqn.
+func lookupOne(t *testing.T, idx *Index, fqn string) *Symbol {
+	t.Helper()
+	syms := idx.LookupQualified(fqn)
+	if len(syms) != 1 {
+		t.Fatalf("%s names %d symbols, want 1", fqn, len(syms))
+	}
+	return syms[0]
+}

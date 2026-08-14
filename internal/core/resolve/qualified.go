@@ -79,7 +79,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 			if i == 0 && cur != nil {
 				// First segment after the initial lookup: cur::seg
 				fqn := cur.Name + "::" + seg.Text
-				candidates := r.idx.LookupQualifiedFrom(fqn, from)
+				candidates := r.admittedUnder(fqn, r.idx.LookupQualifiedFrom(fqn, from))
 				if len(candidates) == 1 {
 					all = candidates
 				} else if len(candidates) > 1 {

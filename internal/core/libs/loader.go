@@ -131,6 +131,9 @@ func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
 			WildcardImports: wildcardImportEntries(s.WildcardImports),
 			AliasTarget:     s.AliasTarget,
 			Unit:            unitFactsEntry(s.Unit),
+
+			Annotations:      s.Annotations,
+			NamespaceFilters: s.NamespaceFilters,
 		}
 	}
 	return out
@@ -156,6 +159,9 @@ func wildcardImportEntries(imports []wildcardImport) []symbols.WildcardImport {
 	out := make([]symbols.WildcardImport, len(imports))
 	for i, imp := range imports {
 		out[i] = symbols.WildcardImport{Target: imp.Target, Private: imp.Private}
+		if imp.Filter != nil {
+			out[i].Filter = symbols.ElementFilter{Pred: imp.Filter, Span: imp.Filter.Span}
+		}
 	}
 	return out
 }

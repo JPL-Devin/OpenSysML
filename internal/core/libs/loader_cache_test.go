@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -142,6 +143,9 @@ func TestLoaderRequireResolvedSkipsUnresolvedRecord(t *testing.T) {
 // equivalenceLibrary is a library exercising every piece of index state a
 // record round-trip has to preserve: a chain of wildcard imports across sibling
 // packages, a short name, an alias, and a specialization across files.
+// It also carries both element-filter forms over an annotated element, whose
+// verdict a restored record has to be able to reach without the declaration the
+// condition was written in.
 const equivalenceLibrary = `package Lib {
 	public import Core::*;
 	package Root {
@@ -153,6 +157,23 @@ const equivalenceLibrary = `package Lib {
 		part def Type :> Element;
 	}
 	alias Elem for Root::Element;
+
+	package Meta {
+		metadata def Safety {
+			attribute level;
+		}
+	}
+	package Annotated {
+		#Meta::Safety part def Belt;
+		part def Bolt;
+	}
+	package SafeImport {
+		public import Annotated::*[@Meta::Safety];
+	}
+	package SafeReexport {
+		public import Annotated::*;
+		filter @Meta::Safety;
+	}
 }`
 
 // A persistent cache is a performance optimisation, so indexing a library by
@@ -189,6 +210,78 @@ func TestParsedAndRestoredIndexesAreEquivalent(t *testing.T) {
 			t.Errorf("%s is registered only after a cache restore: %s", fqn, got.entries[fqn])
 		}
 	}
+}
+
+// A filter's verdict has to follow from the index alone: a restored library has
+// no declaration left to read the condition, or the metadata it classifies by,
+// from. So the elements a filtered import and a filtered re-export admit must be
+// the same whether the library was parsed or restored from its record.
+func TestFilteredImportsSurviveCacheRestore(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "lib.sysml"), []byte(equivalenceLibrary), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	cacheDir := t.TempDir()
+
+	parsed := admittedNames(t, loadWholeLibrary(t, dir, cacheDir))   // cache miss: parses
+	restored := admittedNames(t, loadWholeLibrary(t, dir, cacheDir)) // cache hit: restores
+
+	want := map[string]bool{
+		// The annotated element passes both filter forms; the unannotated one
+		// passes neither, and an unfiltered route admits both.
+		"Lib::SafeImport::Belt":   true,
+		"Lib::SafeImport::Bolt":   false,
+		"Lib::SafeReexport::Belt": true,
+		"Lib::SafeReexport::Bolt": false,
+		"Lib::Annotated::Belt":    true,
+		"Lib::Annotated::Bolt":    true,
+	}
+	for name, admit := range want {
+		if parsed[name] != admit {
+			t.Errorf("%s admitted=%v in the parsed library, want %v", name, parsed[name], admit)
+		}
+		if restored[name] != parsed[name] {
+			t.Errorf("%s admitted=%v after a cache restore, but %v when parsed", name, restored[name], parsed[name])
+		}
+	}
+}
+
+// admittedNames reports, for each name the library registers the annotated
+// elements under, whether the filters gating that name admit the element there.
+// It is the question resolution asks of a filter, asked directly of the index and
+// the semantic model, since a library index holds no document to resolve from.
+func admittedNames(t *testing.T, idx *symbols.Index) map[string]bool {
+	t.Helper()
+	r := resolve.New(idx)
+	m := semantics.NewModel(r)
+	r.SetModel(m)
+
+	out := map[string]bool{}
+	for _, prefix := range []string{"Lib::Annotated", "Lib::SafeImport", "Lib::SafeReexport"} {
+		for _, leaf := range []string{"Belt", "Bolt"} {
+			fqn := prefix + "::" + leaf
+			syms := idx.LookupQualified(fqn)
+			if len(syms) != 1 {
+				t.Fatalf("%s names %d symbols, want 1", fqn, len(syms))
+			}
+			routes := idx.ReexportGates(fqn, syms[0])
+			admitted := len(routes) == 0 // declared here, or surfaced unconditionally
+			for _, route := range routes {
+				passes := true
+				for _, gate := range route {
+					if !m.SatisfiesElementFilter(gate, syms[0]) {
+						passes = false
+						break
+					}
+				}
+				if passes {
+					admitted = true
+				}
+			}
+			out[fqn] = admitted
+		}
+	}
+	return out
 }
 
 // loadWholeLibrary indexes every file of the library in dir through a loader

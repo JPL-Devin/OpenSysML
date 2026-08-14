@@ -24,6 +24,15 @@ type supertypeLookup interface {
 	DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol
 }
 
+// elementFilterJudge is the part of the semantic model that decides an element
+// filter: whether the element an import would surface is selected by the
+// condition restricting it (KerML 8.2.4). A condition classifies a candidate by
+// the metadata annotating it, which only the model knows.
+// *semantics.Model implements it.
+type elementFilterJudge interface {
+	SatisfiesElementFilter(f symbols.ElementFilter, cand *symbols.Symbol) bool
+}
+
 // resolution is a memoized lookup outcome.
 type resolution struct {
 	sym *symbols.Symbol
@@ -47,6 +56,9 @@ type Resolver struct {
 	// members whose bodies are being walked, innermost last: such a body may
 	// redefine a feature of the requirement it references by plain name.
 	constraintRefs []constraintRef
+	// nsFilters are the element-filter conditions each namespace declares, read
+	// once per scope: every name looked up through an import consults them.
+	nsFilters map[*symbols.Scope][]symbols.ElementFilter
 }
 
 // New creates a resolver over the given index.
@@ -59,6 +71,7 @@ func New(idx *symbols.Index) *Resolver {
 		naming:    map[*symbols.Symbol]bool{},
 
 		inheritedImports: map[*symbols.Symbol]bool{},
+		nsFilters:        map[*symbols.Scope][]symbols.ElementFilter{},
 	}
 }
 

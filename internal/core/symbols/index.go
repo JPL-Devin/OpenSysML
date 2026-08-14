@@ -72,6 +72,25 @@ type Index struct {
 	// expansion to the importers a change can reach instead of the whole workspace.
 	dirtyNS     map[string]nsChange
 	lastTargets map[string][]resolvedImport
+
+	// nsFilters holds the element-filter conditions a namespace declares per
+	// document that declares it, alongside wildcardMeta and for the same reason:
+	// they restrict the memberships that namespace's imports bring in, so they are
+	// read on every expansion of it.
+	nsFilters map[string]map[string][]ElementFilter
+
+	// gates holds the element-filter conditions a re-export is subject to: the
+	// filter clause of the import that surfaced it, and the `filter` members of
+	// the namespace it was surfaced into. They are recorded rather than applied
+	// here — judging a candidate needs the semantic model, which the index has no
+	// access to — and are read back by the resolver, which evaluates them (see
+	// ReexportGates).
+	//
+	// A name can be surfaced by more than one import, so the conditions are held
+	// per route: the element is a member if *any* route admits it, which is what
+	// makes an unfiltered import of the same namespace re-export it regardless of
+	// another route's filter.
+	gates map[reexportKey][][]ElementFilter
 }
 
 // nsChange is what happened to a namespace's direct members since the last
@@ -83,10 +102,13 @@ type nsChange struct {
 }
 
 // WildcardImport is one `import X::*` declaration: the target's raw qualified
-// name text and whether the import was declared private.
+// name text, whether the import was declared private, and the filter condition
+// restricting what it brings in (`import X::*[@Safety]`), which is zero for an
+// unfiltered import.
 type WildcardImport struct {
 	Target  string
 	Private bool
+	Filter  ElementFilter
 }
 
 // NewIndex creates an empty index.
@@ -104,6 +126,8 @@ func NewIndex() *Index {
 		children:      make(map[string]map[string]bool),
 		dirtyNS:       make(map[string]nsChange),
 		lastTargets:   make(map[string][]resolvedImport),
+		nsFilters:     make(map[string]map[string][]ElementFilter),
+		gates:         make(map[reexportKey][][]ElementFilter),
 	}
 }
 
@@ -122,11 +146,12 @@ func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 	idx.docRoots[name] = rs
 	idx.indexScope(name, rs, "")
 
-	// Extract wildcard imports from root namespace itself
-	// (root is not a symbol, so indexScope won't process its imports)
-	if wildcards := extractWildcardImports(root); len(wildcards) > 0 {
+	// Extract wildcard imports and filters from the root namespace itself
+	// (root is not a symbol, so indexScope won't process its members)
+	if wildcards := extractWildcardImports(root, rs); len(wildcards) > 0 {
 		idx.setWildcardImports("", name, wildcards)
 	}
+	idx.SetNamespaceFilters("", name, extractNamespaceFilters(root, rs))
 }
 
 // setWildcardImports records the wildcard imports doc states through the
@@ -251,6 +276,7 @@ type statedImport struct {
 	doc     string
 	target  string
 	private bool
+	filter  ElementFilter
 }
 
 // resolvedImport is one wildcard import paired with the FQN its target resolves
@@ -274,7 +300,7 @@ func (idx *Index) imports(pkgFQN string) []statedImport {
 	var out []statedImport
 	for _, doc := range docs {
 		for _, imp := range byDoc[doc] {
-			out = append(out, statedImport{doc: doc, target: imp.Target, private: imp.Private})
+			out = append(out, statedImport{doc: doc, target: imp.Target, private: imp.Private, filter: imp.Filter})
 		}
 	}
 	return out
@@ -332,17 +358,23 @@ func (idx *Index) expandImporter(pkgFQN string) {
 		if targetFQN == "" {
 			continue // target not found or ambiguous
 		}
+		// The conditions restricting what this import surfaces here: its own
+		// filter clause, and the `filter` members of the namespace it imports into,
+		// which restrict that namespace's imported memberships (KerML 8.2.4). They
+		// gate the re-export rather than suppressing it, because whether a
+		// candidate satisfies them is a question only the semantic model can answer.
+		gate := nonZeroFilters(append([]ElementFilter{imp.filter}, idx.NamespaceFiltersOf(pkgFQN)...))
 		for _, child := range idx.exportedChildren(targetFQN) {
 			// Extract child's primary name
 			childName := child.Name
 			if i := lastIndex(childName, "::"); i >= 0 {
 				childName = childName[i+2:]
 			}
-			idx.reexport(joinFQN(pkgFQN, childName), child, imp.doc, imp.private)
+			idx.reexportGated(joinFQN(pkgFQN, childName), child, imp.doc, imp.private, gate)
 
 			// Also re-export under short name if different from primary name
 			if child.ShortName != "" && child.ShortName != childName {
-				idx.reexport(joinFQN(pkgFQN, child.ShortName), child, imp.doc, imp.private)
+				idx.reexportGated(joinFQN(pkgFQN, child.ShortName), child, imp.doc, imp.private, gate)
 			}
 		}
 	}
@@ -547,6 +579,7 @@ func (idx *Index) RemoveDocument(name string) {
 		idx.dropClaim(key, name)
 	}
 	delete(idx.docReexports, name)
+	idx.dropNamespaceFilters(name)
 
 	idx.ExpandWildcardImports()
 }
@@ -607,6 +640,78 @@ func (idx *Index) reexportedAt(fqn string) []*Symbol {
 // recording the claim so that removing doc can take it back. An entry the
 // importing namespace declares itself is left alone: a cycle of wildcard imports
 // brings a package its own members back, and they are not borrowed.
+// reexportGated is reexport, additionally recording the element-filter
+// conditions the route that surfaced the name imposes on it. Routes accumulate:
+// a name is a member of the importing namespace when any one of them admits it,
+// so an unfiltered import re-exports it whatever another route filters out.
+func (idx *Index) reexportGated(fqn string, sym *Symbol, doc string, private bool, gate []ElementFilter) {
+	idx.reexport(fqn, sym, doc, private)
+	key := reexportKey{fqn: fqn, sym: sym}
+	if !idx.reexported[fqn][sym] {
+		return // the namespace declares it; nothing was borrowed
+	}
+	routes := idx.gates[key]
+	for _, route := range routes {
+		if len(route) == 0 {
+			return // an unconditional route already admits everything
+		}
+	}
+	if len(gate) == 0 {
+		idx.gates[key] = [][]ElementFilter{nil}
+		return
+	}
+	if sameRouteRecorded(routes, gate) {
+		return // this import's conditions are already recorded
+	}
+	idx.gates[key] = append(routes, gate)
+}
+
+// sameRouteRecorded reports whether routes already holds the conditions of this
+// one, so that re-expanding an importer does not record it twice.
+func sameRouteRecorded(routes [][]ElementFilter, gate []ElementFilter) bool {
+	for _, route := range routes {
+		if len(route) != len(gate) {
+			continue
+		}
+		same := true
+		for i := range route {
+			if !route[i].Same(gate[i]) {
+				same = false
+				break
+			}
+		}
+		if same {
+			return true
+		}
+	}
+	return false
+}
+
+// ReexportGates returns the element-filter conditions the name fqn is subject to
+// when it reaches a lookup as sym, one entry per route that surfaced it: the
+// conditions of the import that surfaced it along that route plus the importing
+// namespace's own `filter` members. A name a namespace declares itself has no
+// route and so no conditions.
+//
+// The resolver reads them and evaluates them against its semantic model, and
+// admits the element when any route's conditions all hold: a candidate every
+// route rejects is not a member of the namespace it appears under, so no route
+// to it resolves (KerML 8.2.4).
+func (idx *Index) ReexportGates(fqn string, sym *Symbol) [][]ElementFilter {
+	return idx.gates[reexportKey{fqn: fqn, sym: sym}]
+}
+
+// nonZeroFilters drops the absent conditions of an unfiltered import.
+func nonZeroFilters(filters []ElementFilter) []ElementFilter {
+	var out []ElementFilter
+	for _, f := range filters {
+		if !f.IsZero() {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 func (idx *Index) reexport(fqn string, sym *Symbol, doc string, private bool) {
 	registered := idx.hasFQN(fqn, sym)
 	if registered && !idx.reexported[fqn][sym] {
@@ -652,6 +757,7 @@ func (idx *Index) dropClaim(key reexportKey, doc string) {
 	delete(docs, doc)
 	if len(docs) == 0 {
 		delete(idx.reexportDocs, key)
+		delete(idx.gates, key)
 		idx.deregister(key.fqn, key.sym)
 		return
 	}
@@ -670,6 +776,7 @@ func (idx *Index) purgeReexport(key reexportKey) {
 		}
 	}
 	delete(idx.reexportDocs, key)
+	delete(idx.gates, key)
 	idx.deregister(key.fqn, key.sym)
 }
 
@@ -738,11 +845,12 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 				idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: shortFQN, sym: sym})
 			}
 
-			// Extract wildcard imports from packages/namespaces
+			// Extract wildcard imports and filters from packages/namespaces
 			if sym.Kind == SymbolPackage || sym.Kind == SymbolNamespace {
-				if wildcards := extractWildcardImports(sym.Decl); len(wildcards) > 0 {
+				if wildcards := extractWildcardImports(sym.Decl, sym.Scope); len(wildcards) > 0 {
 					idx.setWildcardImports(fqn, doc, wildcards)
 				}
+				idx.SetNamespaceFilters(fqn, doc, extractNamespaceFilters(sym.Decl, sym.Scope))
 			}
 
 			if sym.Scope != nil {
@@ -763,29 +871,21 @@ func joinFQN(prefix, name string) string {
 // extractWildcardImports extracts the wildcard imports of a Package, Namespace,
 // or RootNamespace AST node: the raw qualified name text (e.g. "ISQBase") and
 // declared visibility of each `import <name>::*` statement.
-func extractWildcardImports(decl ast.Node) []WildcardImport {
-	var members []ast.Node
-	switch d := decl.(type) {
-	case *ast.Package:
-		members = d.Members
-	case *ast.Namespace:
-		members = d.Members
-	case *ast.RootNamespace:
-		members = d.Members
-	default:
-		return nil
-	}
-
+func extractWildcardImports(decl ast.Node, scope *Scope) []WildcardImport {
 	var out []WildcardImport
-	for _, m := range members {
+	for _, m := range namespaceMembers(decl) {
 		imp, ok := m.(*ast.Import)
 		if !ok || imp.Kind != ast.ImportNamespace || imp.Imported == nil {
 			continue
 		}
-		out = append(out, WildcardImport{
+		wi := WildcardImport{
 			Target:  qualifiedNameText(imp.Imported),
 			Private: imp.Visibility == ast.VisibilityPrivate,
-		})
+		}
+		if imp.FilterExpr != nil {
+			wi.Filter = ElementFilter{Expr: imp.FilterExpr, Scope: scope, Span: imp.FilterExpr.Span()}
+		}
+		out = append(out, wi)
 	}
 	return out
 }
