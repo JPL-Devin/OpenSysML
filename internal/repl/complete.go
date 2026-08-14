@@ -135,7 +135,9 @@ func (s *Session) nameCompletions(word string) []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(name string) {
-		if name == "" || seen[name] || !strings.HasPrefix(name, word) {
+		// A candidate equal to the typed word inserts nothing and empties the
+		// prefix readline shares between the real candidates.
+		if name == "" || name == word || seen[name] || !strings.HasPrefix(name, word) {
 			return
 		}
 		seen[name] = true
@@ -154,8 +156,8 @@ func (s *Session) nameCompletions(word string) []string {
 				continue
 			}
 			// One segment at a time: completing "ISQ" to every name under it
-			// would answer with the whole library. A word that already spells a
-			// namespace is answered with that namespace's members, not itself.
+			// would answer with the whole library. A word already spelling a
+			// namespace is answered with that namespace's members.
 			rest := fqn[len(word):]
 			skip := 0
 			if strings.HasPrefix(rest, "::") {

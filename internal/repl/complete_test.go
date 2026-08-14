@@ -80,7 +80,7 @@ func TestCompleteNames(t *testing.T) {
 			name:    "a whole namespace offers its members",
 			line:    "%eval ScalarValues",
 			wants:   []string{"ScalarValues::Integer"},
-			rejects: []string{"ScalarValues::Integer::"},
+			rejects: []string{"ScalarValues", "ScalarValues::Integer::"},
 		},
 		{name: "inside an expression", line: "%eval 1 + Whe", wants: []string{"Wheel"}},
 		{name: "no match", line: "%eval zzzznotaname", rejects: []string{"Wheel", "sqrt"}},
