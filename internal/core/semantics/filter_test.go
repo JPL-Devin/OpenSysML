@@ -208,16 +208,16 @@ func TestFilterCompiledPredicateDecidesAlone(t *testing.T) {
 	}
 }
 
-// FilterPredicateOf compiles the condition of a declared `filter` member, which
+// A declared `filter` member compiles to a predicate over its candidate, which
 // is the route the validation pass and the record writer take.
-func TestFilterPredicateOfDeclaredFilterMember(t *testing.T) {
+func TestCompilingADeclaredFilterMember(t *testing.T) {
 	m, root := buildModel(t, metadataModel+"\npackage P { filter @Safety; }")
 	pkg := sym(t, root, "P")
 	filters := symbols.NamespaceFiltersIn(pkg.Scope)
 	if len(filters) != 1 {
 		t.Fatalf("NamespaceFiltersIn(P) = %d filters, want 1", len(filters))
 	}
-	pred := m.FilterPredicateOf(filters[0].Scope, filters[0].Expr)
+	pred := m.CompileElementFilter(filters[0])
 	if pred == nil || pred.Op != symbols.FilterClassify {
 		t.Fatalf("compiled `filter @Safety;` = %+v, want a classification", pred)
 	}

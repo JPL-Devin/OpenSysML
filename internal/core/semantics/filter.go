@@ -131,14 +131,6 @@ func (m *Model) CompileElementFilter(f symbols.ElementFilter) *symbols.FilterPre
 	return pred
 }
 
-// FilterPredicateOf compiles the condition of a `filter` member or an import's
-// filter clause written in scope, for a caller that has the declaration rather
-// than an index entry — the validation passes, and the record writer persisting
-// a library's filters.
-func (m *Model) FilterPredicateOf(scope *symbols.Scope, cond ast.Node) *symbols.FilterPredicate {
-	return m.CompileElementFilter(symbols.ElementFilter{Expr: cond, Scope: scope, Span: spanOf(cond)})
-}
-
 // compileCondition compiles one filter expression, resolving every element it
 // names. A part of the condition it does not implement compiles to a
 // FilterUnsupported node carrying the reason, so that the whole condition is
