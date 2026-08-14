@@ -159,6 +159,10 @@ func TestNegative(t *testing.T) {
 		{"transition_do_without_action", "state def S { state a; state b; transition first a do then b; }"},
 		{"exhibit_state_unclosed_body", "part def P { exhibit state modes { state off; }"},
 		{"namespace_succession_no_target", "package Q { part p; first p then; }"},
+		// Only a transition effect is closed by the transition's next clause, so
+		// a statement in an action body still needs its ';'.
+		{"body_assignment_no_semicolon", "action def A { attribute x; action b; assign x := 1 then b; }"},
+		{"body_send_no_semicolon", "action def A { action b; part self; send Data() to self then b; }"},
 	}
 
 	for _, tt := range tests {

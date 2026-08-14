@@ -33,6 +33,10 @@ type Parser struct {
 	// reached in a statement position inside one is read as an early return
 	// rather than as a result parameter declaration.
 	calcBodyDepth int
+
+	// effectDepth counts the transition effects being parsed, whose statement is
+	// closed by the transition's next clause rather than by ';'.
+	effectDepth int
 }
 
 // parseCheckpoint captures parser state for backtracking.

@@ -832,11 +832,12 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 	return node
 }
 
-// expectStatementEnd terminates a behavioral statement. A statement written as
-// the `do` effect of a transition is ended by the transition's next clause
-// rather than by ';', so `do assign x := 1 then alerting;` needs no semicolon.
+// expectStatementEnd terminates a behavioral statement. Only a statement
+// written as the `do` effect of a transition is ended by the transition's next
+// clause rather than by ';' (`do assign x := 1 then alerting;`); elsewhere a
+// missing ';' stays a syntax error.
 func (p *Parser) expectStatementEnd(msg string) {
-	if p.atKeyword("then") || p.atKeyword("if") || p.atKeyword("do") {
+	if p.effectDepth > 0 && (p.atKeyword("then") || p.atKeyword("if") || p.atKeyword("do")) {
 		return
 	}
 	p.expect(lexer.Semicolon, msg)
@@ -2967,9 +2968,13 @@ func (p *Parser) parseTransitionEffect(start int) ([]ast.Node, ast.Node) {
 		return effect, nil
 	}
 	if p.atKeyword("action") || p.atKeyword("perform") {
+		p.effectDepth++
+		defer func() { p.effectDepth-- }()
 		return []ast.Node{p.parseBodyMember()}, nil
 	}
 	if p.isBehavioralKeyword() {
+		p.effectDepth++
+		defer func() { p.effectDepth-- }()
 		return []ast.Node{p.parseActionMember()}, nil
 	}
 	msg := "expected an action after 'do': an action declaration (`do action alarm send Alert() to operator`), a behavioral statement or '{'"
