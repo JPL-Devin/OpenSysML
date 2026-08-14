@@ -94,6 +94,7 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 	case *ast.Import:
 		c.add(scope, d.Imported)
+		c.expr(scope, d.FilterExpr)
 	case *ast.Alias:
 		c.add(scope, d.For)
 	case *ast.Dependency:

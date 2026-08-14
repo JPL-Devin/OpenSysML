@@ -494,7 +494,7 @@ func TestExpandWildcardImportsGatesAFilteredReexport(t *testing.T) {
 	idx.ExpandWildcardImports()
 
 	belt := lookupOne(t, idx, "Base::Belt")
-	routes := idx.ReexportGates("Safe::Belt", belt)
+	routes := idx.ReexportGates("", "Safe::Belt", belt)
 	if len(routes) != 1 {
 		t.Fatalf("Safe::Belt is gated by %d routes, want 1", len(routes))
 	}
@@ -503,7 +503,7 @@ func TestExpandWildcardImportsGatesAFilteredReexport(t *testing.T) {
 		t.Errorf("the route to Safe::Belt carries %d conditions, want 2", len(routes[0]))
 	}
 	own := lookupOne(t, idx, "Safe::Own")
-	if routes := idx.ReexportGates("Safe::Own", own); len(routes) != 0 {
+	if routes := idx.ReexportGates("", "Safe::Own", own); len(routes) != 0 {
 		t.Errorf("the declared member Safe::Own is gated by %d routes, want none", len(routes))
 	}
 }
@@ -521,7 +521,7 @@ func TestExpandWildcardImportsKeepsAnUnfilteredRoute(t *testing.T) {
 	idx.ExpandWildcardImports()
 
 	belt := lookupOne(t, idx, "Base::Belt")
-	routes := idx.ReexportGates("Both::Belt", belt)
+	routes := idx.ReexportGates("", "Both::Belt", belt)
 	if len(routes) != 1 || len(routes[0]) != 0 {
 		t.Fatalf("Both::Belt is gated by %v, want a single unconditional route", routes)
 	}
@@ -537,7 +537,7 @@ func TestExpandWildcardImportsRecordsAGateOnce(t *testing.T) {
 	idx.ExpandWildcardImports()
 
 	belt := lookupOne(t, idx, "Base::Belt")
-	if routes := idx.ReexportGates("Safe::Belt", belt); len(routes) != 1 {
+	if routes := idx.ReexportGates("", "Safe::Belt", belt); len(routes) != 1 {
 		t.Errorf("Safe::Belt is gated by %d routes after two expansions, want 1", len(routes))
 	}
 }
@@ -564,7 +564,7 @@ func TestExpandWildcardImportsCarriesGatesOnward(t *testing.T) {
 		"Onward::Belt":  1, // inherited from Safe, which added nothing of its own
 		"Further::Belt": 2, // Safe's filter member and this import's clause
 	} {
-		routes := idx.ReexportGates(fqn, belt)
+		routes := idx.ReexportGates("", fqn, belt)
 		if len(routes) != 1 {
 			t.Fatalf("%s is gated by %d routes, want 1", fqn, len(routes))
 		}
@@ -588,7 +588,7 @@ func TestExpandWildcardImportsCarriesEachRouteOnward(t *testing.T) {
 	idx.ExpandWildcardImports()
 
 	belt := lookupOne(t, idx, "Base::Belt")
-	routes := idx.ReexportGates("Onward::Belt", belt)
+	routes := idx.ReexportGates("", "Onward::Belt", belt)
 	if len(routes) != 1 || len(routes[0]) != 0 {
 		t.Fatalf("Onward::Belt is gated by %v, want a single unconditional route", routes)
 	}
@@ -604,19 +604,19 @@ func TestNamespaceFilterFromAnotherDocumentRegatesReexports(t *testing.T) {
 	idx.ExpandWildcardImports()
 
 	belt := lookupOne(t, idx, "Base::Belt")
-	if routes := idx.ReexportGates("Safe::Belt", belt); len(routes) != 1 || len(routes[0]) != 0 {
+	if routes := idx.ReexportGates("", "Safe::Belt", belt); len(routes) != 1 || len(routes[0]) != 0 {
 		t.Fatalf("Safe::Belt is gated by %v before any filter, want a single unconditional route", routes)
 	}
 
 	addDoc(t, idx, "filter.sysml", "package Safe { filter @Safety; }")
 	idx.ExpandWildcardImports()
-	routes := idx.ReexportGates("Safe::Belt", belt)
+	routes := idx.ReexportGates("", "Safe::Belt", belt)
 	if len(routes) != 1 || len(routes[0]) != 1 {
 		t.Fatalf("Safe::Belt is gated by %v once a filter is declared, want one route of one condition", routes)
 	}
 
 	idx.RemoveDocument("filter.sysml")
-	if routes := idx.ReexportGates("Safe::Belt", belt); len(routes) != 1 || len(routes[0]) != 0 {
+	if routes := idx.ReexportGates("", "Safe::Belt", belt); len(routes) != 1 || len(routes[0]) != 0 {
 		t.Fatalf("Safe::Belt is gated by %v once the filter is gone, want a single unconditional route", routes)
 	}
 }
@@ -629,4 +629,24 @@ func lookupOne(t *testing.T, idx *Index, fqn string) *Symbol {
 		t.Fatalf("%s names %d symbols, want 1", fqn, len(syms))
 	}
 	return syms[0]
+}
+
+// Each document owns its root namespace, so a `filter` one document states
+// there gates its own root-level imports and no other document's.
+func TestRootNamespaceFiltersGateOnlyTheirOwnDocument(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "filtered.sysml", "import Base::*;\nfilter @Safety;")
+	addDoc(t, idx, "plain.sysml", "import Base::*;")
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	routes := idx.ReexportGates("filtered.sysml", "Belt", belt)
+	if len(routes) != 1 || len(routes[0]) != 1 {
+		t.Fatalf("the filtering document's route to Belt carries %v, want one condition", routes)
+	}
+	routes = idx.ReexportGates("plain.sysml", "Belt", belt)
+	if len(routes) != 1 || len(routes[0]) != 0 {
+		t.Errorf("the other document's route to Belt carries %v, want no condition", routes)
+	}
 }

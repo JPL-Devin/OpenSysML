@@ -28,6 +28,7 @@ type reexportKey struct {
 // alike.
 type Index struct {
 	docRoots      map[string]*Scope     // document name -> root scope
+	docOfRoot     map[*Scope]string     // root scope -> document name
 	fqn           map[string][]*Symbol  // fully-qualified name -> symbols
 	contributions map[string][]fqnEntry // document name -> entries it added
 
@@ -90,7 +91,14 @@ type Index struct {
 	// per route: the element is a member if *any* route admits it, which is what
 	// makes an unfiltered import of the same namespace re-export it regardless of
 	// another route's filter.
-	gates map[reexportKey][][]ElementFilter
+	gates map[gateKey][][]ElementFilter
+}
+
+// gateKey identifies the recorded routes to a re-exported name. doc is set only
+// for a root-level name, since each document owns its root namespace alone.
+type gateKey struct {
+	reexportKey
+	doc string
 }
 
 // nsChange is what happened to a namespace's direct members since the last
@@ -115,6 +123,7 @@ type WildcardImport struct {
 func NewIndex() *Index {
 	return &Index{
 		docRoots:      make(map[string]*Scope),
+		docOfRoot:     make(map[*Scope]string),
 		fqn:           make(map[string][]*Symbol),
 		contributions: make(map[string][]fqnEntry),
 		wildcardMeta:  make(map[string]map[string][]WildcardImport),
@@ -127,7 +136,7 @@ func NewIndex() *Index {
 		dirtyNS:       make(map[string]nsChange),
 		lastTargets:   make(map[string][]resolvedImport),
 		nsFilters:     make(map[string]map[string][]ElementFilter),
-		gates:         make(map[reexportKey][][]ElementFilter),
+		gates:         make(map[gateKey][][]ElementFilter),
 	}
 }
 
@@ -144,6 +153,7 @@ func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 	rs := Build(root)
 	SetDocName(rs, name)
 	idx.docRoots[name] = rs
+	idx.docOfRoot[rs] = name
 	idx.indexScope(name, rs, "")
 
 	// Extract wildcard imports and filters from the root namespace itself
@@ -363,7 +373,7 @@ func (idx *Index) expandImporter(pkgFQN string) {
 		// imported memberships (KerML 8.2.4). They gate the re-export rather than
 		// suppressing it, because whether a candidate satisfies them is a question
 		// only the semantic model can answer.
-		gate := nonZeroFilters(append([]ElementFilter{imp.filter}, idx.NamespaceFiltersOf(pkgFQN)...))
+		gate := nonZeroFilters(append([]ElementFilter{imp.filter}, idx.namespaceFiltersGating(pkgFQN, imp.doc)...))
 		for _, child := range idx.exportedChildren(targetFQN) {
 			// Extract child's primary name
 			childName := child.Name
@@ -371,12 +381,12 @@ func (idx *Index) expandImporter(pkgFQN string) {
 				childName = childName[i+2:]
 			}
 			idx.reexportGated(joinFQN(pkgFQN, childName), child, imp.doc, imp.private,
-				idx.routesOnward(joinFQN(targetFQN, childName), child, gate))
+				idx.routesOnward(imp.doc, joinFQN(targetFQN, childName), child, gate))
 
 			// Also re-export under short name if different from primary name
 			if child.ShortName != "" && child.ShortName != childName {
 				idx.reexportGated(joinFQN(pkgFQN, child.ShortName), child, imp.doc, imp.private,
-					idx.routesOnward(joinFQN(targetFQN, child.ShortName), child, gate))
+					idx.routesOnward(imp.doc, joinFQN(targetFQN, child.ShortName), child, gate))
 			}
 		}
 	}
@@ -564,6 +574,7 @@ func (idx *Index) RemoveDocument(name string) {
 		idx.deregister(e.fqn, e.sym)
 	}
 	delete(idx.contributions, name)
+	delete(idx.docOfRoot, idx.docRoots[name])
 	delete(idx.docRoots, name)
 
 	for pkgFQN, byDoc := range idx.wildcardMeta {
@@ -647,8 +658,8 @@ func (idx *Index) reexportedAt(fqn string) []*Symbol {
 // — with the ones this import adds. A filter therefore keeps holding when a
 // further namespace imports the filtering one onward, and the target's several
 // routes each stay a route of their own.
-func (idx *Index) routesOnward(sourceFQN string, sym *Symbol, gate []ElementFilter) [][]ElementFilter {
-	inherited := idx.ReexportGates(sourceFQN, sym)
+func (idx *Index) routesOnward(doc, sourceFQN string, sym *Symbol, gate []ElementFilter) [][]ElementFilter {
+	inherited := idx.ReexportGates(doc, sourceFQN, sym)
 	if len(inherited) == 0 {
 		return [][]ElementFilter{gate}
 	}
@@ -665,7 +676,7 @@ func (idx *Index) routesOnward(sourceFQN string, sym *Symbol, gate []ElementFilt
 // so an unfiltered import re-exports it whatever another route filters out.
 func (idx *Index) reexportGated(fqn string, sym *Symbol, doc string, private bool, gates [][]ElementFilter) {
 	idx.reexport(fqn, sym, doc, private)
-	key := reexportKey{fqn: fqn, sym: sym}
+	key := idx.gateKeyOf(fqn, sym, doc)
 	if !idx.reexported[fqn][sym] {
 		return // the namespace declares it; nothing was borrowed
 	}
@@ -719,8 +730,17 @@ func sameRouteRecorded(routes [][]ElementFilter, gate []ElementFilter) bool {
 // admits the element when any route's conditions all hold: a candidate every
 // route rejects is not a member of the namespace it appears under, so no route
 // to it resolves (KerML 8.2.4).
-func (idx *Index) ReexportGates(fqn string, sym *Symbol) [][]ElementFilter {
-	return idx.gates[reexportKey{fqn: fqn, sym: sym}]
+func (idx *Index) ReexportGates(doc, fqn string, sym *Symbol) [][]ElementFilter {
+	return idx.gates[idx.gateKeyOf(fqn, sym, doc)]
+}
+
+// gateKeyOf keys the routes to fqn, per document for a root-level name.
+func (idx *Index) gateKeyOf(fqn string, sym *Symbol, doc string) gateKey {
+	key := gateKey{reexportKey: reexportKey{fqn: fqn, sym: sym}}
+	if parent, _ := splitFQN(fqn); parent == "" {
+		key.doc = doc
+	}
+	return key
 }
 
 // nonZeroFilters drops the absent conditions of an unfiltered import.
@@ -779,7 +799,7 @@ func (idx *Index) dropClaim(key reexportKey, doc string) {
 	delete(docs, doc)
 	if len(docs) == 0 {
 		delete(idx.reexportDocs, key)
-		delete(idx.gates, key)
+		idx.forgetGates(key)
 		idx.deregister(key.fqn, key.sym)
 		return
 	}
@@ -798,8 +818,18 @@ func (idx *Index) purgeReexport(key reexportKey) {
 		}
 	}
 	delete(idx.reexportDocs, key)
-	delete(idx.gates, key)
+	idx.forgetGates(key)
 	idx.deregister(key.fqn, key.sym)
+}
+
+// forgetGates drops the routes recorded for a re-exported name, of whichever
+// document recorded them.
+func (idx *Index) forgetGates(key reexportKey) {
+	for gk := range idx.gates {
+		if gk.reexportKey == key {
+			delete(idx.gates, gk)
+		}
+	}
 }
 
 // applyReexportMarks brings the reexported and hidden marks in line with the
@@ -1199,6 +1229,12 @@ func (idx *Index) GetFQN(sym *Symbol) string {
 		result += "::" + parts[i]
 	}
 	return result
+}
+
+// DocumentOfRoot returns the name of the document whose root scope this is, or
+// "" for any other scope.
+func (idx *Index) DocumentOfRoot(scope *Scope) string {
+	return idx.docOfRoot[scope]
 }
 
 // DocumentRoot returns the root scope for the named document, or nil.

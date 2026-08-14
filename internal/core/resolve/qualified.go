@@ -48,7 +48,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		cur = res.sym
 	}
 	if cur == nil {
-		sym, n := r.lookupGlobalTop(first)
+		sym, n := r.lookupGlobalTop(scope, first)
 		if n > 1 {
 			r.ambiguous(qn, n)
 			return resolution{nil, false}
@@ -79,7 +79,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		memberFQN := curFQN + "::" + seg.Text
 		if len(all) == 0 && r.idx != nil {
 			found := r.idx.LookupQualifiedFrom(memberFQN, from)
-			candidates := r.admittedUnder(memberFQN, found)
+			candidates := r.admittedUnder(r.documentOf(scope), memberFQN, found)
 			switch {
 			case len(candidates) == 1:
 				all = candidates
@@ -178,11 +178,13 @@ func (r *Resolver) lookupInRoot(scope *symbols.Scope, name string) *symbols.Symb
 // index. Returns the unique match and the total number of matches, so the
 // caller can report ambiguity (n > 1) rather than silently degrading to
 // "unresolved". A unique symbol is returned only when n == 1.
-func (r *Resolver) lookupGlobalTop(name string) (*symbols.Symbol, int) {
+func (r *Resolver) lookupGlobalTop(scope *symbols.Scope, name string) (*symbols.Symbol, int) {
 	if r.idx == nil {
 		return nil, 0
 	}
-	syms := r.idx.LookupQualified(name)
+	// A name reached here may be one a filtered import surfaced at a document's
+	// root, so the conditions of the routes registering it decide it here too.
+	syms := r.admittedUnder(r.documentOf(scope), name, r.idx.LookupQualified(name))
 	if len(syms) == 1 {
 		return syms[0], 1
 	}

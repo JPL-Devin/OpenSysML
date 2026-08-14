@@ -166,6 +166,16 @@ func (idx *Index) NamespaceFiltersOf(fqn string) []ElementFilter {
 	return out
 }
 
+// namespaceFiltersGating returns the conditions gating an import doc states into
+// the namespace under fqn: every document's for a named namespace, only doc's
+// for a root namespace, which each document owns separately.
+func (idx *Index) namespaceFiltersGating(fqn, doc string) []ElementFilter {
+	if fqn != "" {
+		return idx.NamespaceFiltersOf(fqn)
+	}
+	return idx.nsFilters[fqn][doc]
+}
+
 // SetNamespaceFilters records the filter conditions doc declares for the
 // namespace registered under fqn. A library restored from an index cache states
 // them this way, having no declaration left to read them from.

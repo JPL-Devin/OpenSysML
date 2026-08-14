@@ -65,6 +65,9 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 	case *ast.Import:
 		r.ResolveQualified(scope, d.Imported)
+		if d.FilterExpr != nil {
+			r.InCondition(func() { r.resolveExpr(scope, d.FilterExpr) })
+		}
 	case *ast.Alias:
 		r.ResolveQualified(scope, d.For)
 	case *ast.Dependency:

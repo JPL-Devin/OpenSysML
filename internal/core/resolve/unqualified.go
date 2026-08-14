@@ -57,7 +57,7 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 		}
 	}
 	// Final fallback: check global index (cross-document top-level names)
-	if sym, n := r.lookupGlobalTop(name); n == 1 && !hide.hides(sym) {
+	if sym, n := r.lookupGlobalTop(scope, name); n == 1 && !hide.hides(sym) {
 		return resolution{sym: sym, ok: true}
 	}
 	return resolution{}
@@ -255,7 +255,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 			// The target may itself have surfaced the name through an import of
 			// its own, filtered by its `filter` members: what it re-exports
 			// onward is what those select.
-			if !r.admitsUnderName(target.Name+"::"+name, sym) {
+			if !r.admitsUnderName("", target.Name+"::"+name, sym) {
 				continue
 			}
 			if visibleThroughImport(imp, sym) && admit(sym) {

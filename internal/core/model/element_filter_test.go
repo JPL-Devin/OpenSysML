@@ -493,3 +493,64 @@ package Nested {
 		}
 	}
 }
+
+func TestAFileLevelFilteredImportHidesWhatItRejects(t *testing.T) {
+	lib := `package Lib { metadata def Safety; part def Radio; #Safety part def Belt; }`
+	src := `import Lib::*[@Lib::Safety];
+part x :> Radio;
+part y :> Belt;`
+	ws := NewWorkspace()
+	ws.Open("file:///lib.sysml", []byte(lib), 1)
+	ws.Open("file:///a.sysml", []byte(src), 1)
+	var msgs []string
+	for _, d := range ws.Diagnostics("file:///a.sysml") {
+		msgs = append(msgs, d.Message)
+	}
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "Radio") {
+		t.Fatalf("an import filter at a document's root should hide only Radio, got %v", msgs)
+	}
+}
+
+func TestARootFilterRestrictsOnlyItsOwnDocument(t *testing.T) {
+	lib := `package Lib { metadata def Safety; part def Radio; #Safety part def Belt; }`
+	filtered := `import Lib::*;
+filter @Lib::Safety;
+part inA :> Belt;`
+	other := `import Lib::*;
+part inB :> Radio;`
+	ws := NewWorkspace()
+	ws.Open("file:///lib.sysml", []byte(lib), 1)
+	ws.Open("file:///a.sysml", []byte(filtered), 1)
+	ws.Open("file:///b.sysml", []byte(other), 1)
+	for _, doc := range []string{"file:///a.sysml", "file:///b.sysml"} {
+		for _, d := range ws.Diagnostics(doc) {
+			t.Fatalf("%s: one document's root filter should not restrict another's imports: %s", doc, d.Message)
+		}
+	}
+	unresolvable := `import Lib::*;
+filter @Lib::Safety;
+part inA :> Radio;`
+	ws.Open("file:///a.sysml", []byte(unresolvable), 2)
+	var msgs []string
+	for _, d := range ws.Diagnostics("file:///a.sysml") {
+		msgs = append(msgs, d.Message)
+	}
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "Radio") {
+		t.Fatalf("a root filter should still restrict its own document's imports, got %v", msgs)
+	}
+}
+
+func TestAnUnresolvedNameInAnImportFilterIsReported(t *testing.T) {
+	lib := `package Lib { metadata def Safety; part def Radio; }`
+	src := `package P { private import Lib::*[@NoSuchMeta]; part x :> Radio; }`
+	ws := NewWorkspace()
+	ws.Open("file:///lib.sysml", []byte(lib), 1)
+	ws.Open("file:///a.sysml", []byte(src), 1)
+	var msgs []string
+	for _, d := range ws.Diagnostics("file:///a.sysml") {
+		msgs = append(msgs, d.Message)
+	}
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "unresolved reference: NoSuchMeta") {
+		t.Fatalf("a typo in an import's filter clause should be an unresolved reference, got %v", msgs)
+	}
+}
