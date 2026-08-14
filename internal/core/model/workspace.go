@@ -209,14 +209,14 @@ func (w *Workspace) LookupQualified(fqn string) []*symbols.Symbol {
 	return out
 }
 
-// TopLevelSymbols returns the symbols declared at the root of the index: the
-// standard library's top-level packages and every document's top-level
-// declarations. This is the read path for completion, which offers library
-// names that no open document declares.
-func (w *Workspace) TopLevelSymbols() []*symbols.Symbol {
+// TopLevelSymbols returns the symbols declared at the root of the index as seen
+// from the document named doc: the standard library's top-level packages and
+// every document's top-level declarations. This is the read path for completion,
+// which offers library names that no open document declares.
+func (w *Workspace) TopLevelSymbols(doc string) []*symbols.Symbol {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	return w.index.TopLevelSymbols()
+	return w.index.TopLevelSymbols(doc)
 }
 
 // MembersOnPath returns the members visible on the element that path names from

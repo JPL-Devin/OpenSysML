@@ -36,7 +36,7 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 		}
 	}
 
-	for _, sym := range s.ws.TopLevelSymbols() {
+	for _, sym := range s.ws.TopLevelSymbols(name) {
 		c.addSymbol(s, sym)
 	}
 	for _, kw := range lexer.Keywords() {

@@ -246,6 +246,32 @@ func TestCompletionHidesAnotherDocumentsPrivateImport(t *testing.T) {
 	}
 }
 
+// A private import is visible inside the document that wrote it, so completion
+// there must offer the names it brought in.
+func TestCompletionOffersTheDocumentsOwnPrivateImport(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/importer.sysml").Filename()
+	src := "private import ScalarValues::*;\npackage Importer {\n\t\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	list, err := s.Completion(context.Background(), &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition([]byte(src), strings.Index(src, "\t")+1),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Completion err = %v", err)
+	}
+	for _, it := range list.Items {
+		if it.Label == "Real" {
+			return
+		}
+	}
+	t.Error("completion missing 'Real', which this document's own private import surfaced")
+}
+
 // A name a package's own private import brought in is a member of it only from
 // within (KerML 8.2.3.3), so `Mid::` offers it inside Mid and nowhere else.
 func TestCompletionOnQualifiedNameHidesPrivateImports(t *testing.T) {
