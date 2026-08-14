@@ -343,14 +343,14 @@ func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Sco
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind != ast.DefConstraint {
-			return false, fmt.Errorf("not a constraint definition: %s", sym.Name)
+			return false, notOfKind(ErrNotAConstraint, sym, "constraint")
 		}
 	case *ast.Usage:
 		if decl.Kind != ast.UsageConstraint {
-			return false, fmt.Errorf("not a constraint usage: %s", sym.Name)
+			return false, notOfKind(ErrNotAConstraint, sym, "constraint")
 		}
 	default:
-		return false, fmt.Errorf("invalid constraint symbol: %s (%T)", sym.Name, sym.Decl)
+		return false, notOfKind(ErrNotAConstraint, sym, "constraint")
 	}
 
 	// Evaluate every condition the constraint states, inherited ones included.
@@ -489,14 +489,14 @@ func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Sc
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind != ast.DefRequirement {
-			return false, fmt.Errorf("not a requirement definition: %s", sym.Name)
+			return false, notOfKind(ErrNotARequirement, sym, "requirement")
 		}
 	case *ast.Usage:
 		if decl.Kind != ast.UsageRequirement {
-			return false, fmt.Errorf("not a requirement usage: %s", sym.Name)
+			return false, notOfKind(ErrNotARequirement, sym, "requirement")
 		}
 	default:
-		return false, fmt.Errorf("invalid requirement symbol: %s (%T)", sym.Name, sym.Decl)
+		return false, notOfKind(ErrNotARequirement, sym, "requirement")
 	}
 
 	// Requirement-local bindings are shared by every member, whichever scope it

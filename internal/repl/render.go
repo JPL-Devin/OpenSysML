@@ -152,6 +152,24 @@ func diagOrigin(d passes.Diagnostic) string {
 	return strings.Join(parts, "/")
 }
 
+// renderExprMessage reports msg against a one-line expression the way a
+// declaration diagnostic is reported: position, source echo and caret. base is
+// the offset the expression starts at in the text span was measured in.
+func renderExprMessage(expr, msg string, span source.Span, base int) []string {
+	col := span.Offset - base + 1
+	if col < 1 {
+		col = 1
+	}
+	if col > len(expr)+1 {
+		col = len(expr) + 1
+	}
+	return []string{
+		fmt.Sprintf("error: 1:%d: %s", col, msg),
+		expr,
+		caretLine(col, span.Len, len(expr)),
+	}
+}
+
 // caretLine builds "   ^~~~" with (col-1) leading spaces and a caret span of
 // width max(1, spanLen), clamped so it never runs past the source line.
 func caretLine(col, spanLen, lineLen int) string {

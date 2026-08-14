@@ -740,8 +740,8 @@ func testStateTransitionEffectReadsAnUnknownFeature(t *testing.T) {
 		}
 	}`)
 	err := exec.RunToCompletion()
-	if !errors.Is(err, ErrUnresolvedFeature) {
-		t.Fatalf("err = %v; want ErrUnresolvedFeature", err)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("err = %v; want ErrUnresolvedReference", err)
 	}
 	if !strings.Contains(err.Error(), "missingName") {
 		t.Errorf("err = %v; want it to name the unresolved feature", err)
@@ -2224,8 +2224,8 @@ func testActionBodyUnresolvedFeature(t *testing.T) {
 	}
 
 	out, err := ctx.ExecuteAction(sym)
-	if !errors.Is(err, ErrUnresolvedFeature) {
-		t.Fatalf("outputs = %v, err = %v; want ErrUnresolvedFeature", out, err)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("outputs = %v, err = %v; want ErrUnresolvedReference", out, err)
 	}
 	if !strings.Contains(err.Error(), "missingName") {
 		t.Errorf("err = %v; want it to name the unresolved feature", err)

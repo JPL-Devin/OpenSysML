@@ -3,6 +3,7 @@ package repl
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	"os"
 	"slices"
@@ -137,7 +138,13 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		}
 		data, rerr := os.ReadFile(expandHome(fields[1]))
 		if rerr != nil {
-			return nil, false, fmt.Errorf("load %s: %w", fields[1], rerr)
+			// Named once: the path is reported here, not by the read error and
+			// each caller too.
+			var pathErr *fs.PathError
+			if errors.As(rerr, &pathErr) {
+				rerr = pathErr.Err
+			}
+			return nil, false, fmt.Errorf("cannot read %s: %w", fields[1], rerr)
 		}
 		return renderResult(s.Submit(string(data)), s.verbosity), false, nil
 	case "%save":
@@ -284,7 +291,7 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	// For feature references/complex expressions, need session context
 	doc := s.ws.Document(docName)
 	if doc == nil || doc.Scope == nil {
-		return []string{"error: no declarations loaded (literals work, but feature references need declarations)"}, false, nil
+		return s.evalWithoutDeclarations(expr), false, nil
 	}
 
 	// Create runtime context
@@ -350,11 +357,13 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 		if lookupErr != nil {
 			return []string{"error: " + lookupErr.Error()}, false, nil
 		}
-		lines := []string{"error: parse failed:"}
-		for _, d := range p.Diagnostics {
-			lines = append(lines, "  "+d.Message)
+		// These diagnostics describe the session fragment the expression was
+		// appended to, so the expression is parsed on its own to report the
+		// first error that is about what was typed.
+		if _, diags := parseExprAlone(expr); len(diags) > 0 {
+			return renderExprMessage(expr, diags[0].Message, diags[0].Span, len(exprPrefix)), false, nil
 		}
-		return lines, false, nil
+		return []string{"error: parse failed: " + p.Diagnostics[0].Message}, false, nil
 	}
 
 	// Find __eval__ attribute (should be last member)
@@ -384,13 +393,83 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 		if lookupErr != nil {
 			return []string{"error: " + lookupErr.Error()}, false, nil
 		}
-		return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, false, nil
+		return renderEvalError(expr, err, len(tempSrc)-len(expr)-1), false, nil
 	}
 
 	return []string{
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(val)),
 	}, false, nil
+}
+
+// exprPrefix wraps an expression as a declaration of its own, so parsing it
+// alone reports positions the typed expression explains.
+const exprPrefix = "attribute __lit__ = "
+
+// parseExprAlone parses expr as the value of a declaration of its own, so its
+// diagnostics are about the expression rather than about a session fragment it
+// was appended to. Spans are offsets into exprPrefix + expr.
+func parseExprAlone(expr string) (ast.Node, []parser.Diagnostic) {
+	p := parser.New(source.New("literal", []byte(exprPrefix+expr+";")))
+	root := p.ParseFile()
+	if len(p.Diagnostics) > 0 {
+		return nil, p.Diagnostics
+	}
+	if len(root.Members) == 0 {
+		return nil, nil
+	}
+	member := root.Members[0]
+	if mem, ok := member.(*ast.Membership); ok {
+		member = mem.Member
+	}
+	usage, ok := member.(*ast.Usage)
+	if !ok {
+		return nil, nil
+	}
+	return usage.Value, nil
+}
+
+// evalWithoutDeclarations reports why an expression an empty session could not
+// answer failed. Only a failure declarations would answer — a name nothing
+// declares — is met with the no-declarations message; a syntax error or a real
+// evaluation failure, such as a division by zero, is the answer itself.
+func (s *Session) evalWithoutDeclarations(expr string) []string {
+	value, diags := parseExprAlone(expr)
+	if len(diags) > 0 {
+		return renderExprMessage(expr, diags[0].Message, diags[0].Span, len(exprPrefix))
+	}
+	if value != nil {
+		if ctx, err := emptyRuntime(s.budgets); err == nil {
+			_, evalErr := ctx.Eval(value)
+			if evalErr != nil && !errors.Is(evalErr, runtime.ErrUnresolvedReference) {
+				return renderEvalError(expr, evalErr, len(exprPrefix))
+			}
+		}
+	}
+	return []string{"error: no declarations loaded (literals work, but feature references need declarations)"}
+}
+
+// renderEvalError reports an evaluation failure, giving one that carries the
+// span of the expression it failed in the caret treatment declarations get.
+// base is the offset expr starts at in the text the span was measured in.
+func renderEvalError(expr string, err error, base int) []string {
+	var operand *runtime.OperandTypeError
+	if errors.As(err, &operand) {
+		return renderExprMessage(expr, operand.Error(), operand.Span, base)
+	}
+	return []string{fmt.Sprintf("error: evaluation failed: %v", err)}
+}
+
+// emptyRuntime is a context over an empty model, which answers an expression of
+// literals alone and nothing a session declares.
+func emptyRuntime(budgets runtime.Budgets) (*runtime.Context, error) {
+	emptyIdx := symbols.NewIndex()
+	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
+	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), budgets.MaxSteps)
+	if err := ctx.SetBudgets(budgets); err != nil {
+		return nil, err
+	}
+	return ctx, nil
 }
 
 // tryEvalLiteral attempts to evaluate standalone literal expressions.
@@ -404,34 +483,18 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 	}
 
 	// Parse as standalone attribute
-	src := fmt.Sprintf("attribute __lit__ = %s;", expr)
-	p := parser.New(source.New("literal", []byte(src)))
-	root := p.ParseFile()
-
-	if len(p.Diagnostics) > 0 || len(root.Members) == 0 {
-		return nil, false
-	}
-
-	member := root.Members[0]
-	// Unwrap Membership if present
-	if mem, ok := member.(*ast.Membership); ok {
-		member = mem.Member
-	}
-
-	usage, ok := member.(*ast.Usage)
-	if !ok || usage.Value == nil {
+	value, diags := parseExprAlone(expr)
+	if len(diags) > 0 || value == nil {
 		return nil, false
 	}
 
 	// Use runtime context with empty model (no symbols needed for literals)
-	emptyIdx := symbols.NewIndex()
-	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
-	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.budgets.MaxSteps)
-	if err := ctx.SetBudgets(s.budgets); err != nil {
+	ctx, err := emptyRuntime(s.budgets)
+	if err != nil {
 		return nil, false
 	}
 
-	val, err := ctx.Eval(usage.Value)
+	val, err := ctx.Eval(value)
 	if err != nil {
 		// A failure the session's declarations could answer — a name or a unit
 		// this empty model knows nothing of — is not the answer, so the
@@ -440,7 +503,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 		// no position, is reported here instead of being hidden behind "no
 		// declarations loaded".
 		if isLiteralAnswerError(err) {
-			return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, true
+			return renderEvalError(expr, err, len(exprPrefix)), true
 		}
 		return nil, false
 	}
@@ -502,6 +565,7 @@ func isLiteralAnswerError(err error) bool {
 		runtime.ErrIndexOutOfRange,
 		runtime.ErrBodyArity,
 		runtime.ErrTypeMismatch,
+		runtime.ErrDivisionByZero,
 		runtime.ErrMultiplicityViolation,
 		runtime.ErrStepLimitExceeded,
 		runtime.ErrElementLimitExceeded,
@@ -884,6 +948,11 @@ func (s *Session) doCalc(calcName, argText string) ([]string, bool, error) {
 
 	result, err := ctx.InvokeCalc(sym, argValues, scope)
 	if err != nil {
+		// A name of another kind is a wrong argument, so it is reported as
+		// itself rather than as a calculation that failed.
+		if errors.Is(err, runtime.ErrNotACalc) {
+			return []string{"error: " + err.Error()}, false, nil
+		}
 		return []string{fmt.Sprintf("error: calc invocation failed: %v", err)}, false, nil
 	}
 
@@ -1137,6 +1206,11 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 	// been created, so the verdict is about concrete values.
 	inst, owner := s.owningInstance(fqn)
 	passed, err := ctx.EvaluateConstraintOn(sym, declaringScope(sym, doc.Scope), inst)
+	// A name that declares something else is a wrong argument, not a verdict:
+	// reporting it as a failed constraint would read as a fault in the model.
+	if errors.Is(err, runtime.ErrNotAConstraint) {
+		return []string{"error: " + err.Error()}, false, nil
+	}
 	if err != nil || !passed {
 		return []string{
 			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
@@ -1236,6 +1310,11 @@ func (s *Session) doRequirement(name string) ([]string, bool, error) {
 
 	inst, owner := s.owningInstance(fqn)
 	passed, err := ctx.EvaluateRequirementOn(sym, declaringScope(sym, doc.Scope), inst)
+	// As for %constraint: a name of another kind is a wrong argument rather
+	// than an unsatisfied requirement.
+	if errors.Is(err, runtime.ErrNotARequirement) {
+		return []string{"error: " + err.Error()}, false, nil
+	}
 	if err != nil || !passed {
 		return []string{
 			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),

@@ -216,7 +216,8 @@ func runInteractiveWithFiles(files []string) error {
 	for _, file := range files {
 		output, _, err := sess.RunMeta("%load " + file)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error loading %s: %v\n", file, err)
+			// Returned unwrapped: the caller reports it, so the operation and
+			// the path are named once.
 			return err
 		}
 		// Print load results
@@ -236,7 +237,8 @@ func runNonInteractive(files []string, exprs []string) error {
 	for _, file := range files {
 		output, _, err := sess.RunMeta("%load " + file)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error loading %s: %v\n", file, err)
+			// Returned unwrapped: the caller reports it, so the operation and
+			// the path are named once.
 			return err
 		}
 		// Print load results

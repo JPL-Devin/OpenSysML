@@ -120,6 +120,10 @@ func (e *UnknownFormatError) Error() string {
 	return msg
 }
 
+// ExtensionAdvice is the remedy every surface shares: the file name says which
+// format to write. A surface with a format flag names it alongside this.
+const ExtensionAdvice = "name the file with a .sysml, .kerml or .ttl extension"
+
 // Advise returns err with the surface's remedy attached when it is an
 // *UnknownFormatError, and unchanged otherwise.
 func Advise(err error, advice string) error {
