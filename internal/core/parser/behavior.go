@@ -891,10 +891,20 @@ func (p *Parser) parsePerformAction(tok lexer.Token) ast.Node {
 // The parameter stays an action usage member so a name it declares keeps
 // scoping the body: `loop action charging { … } until charging.done`.
 func (p *Parser) parseActionBodyParameter() []ast.Node {
-	if m := p.parseBodyMember(); m != nil {
-		return []ast.Node{m}
+	m := p.parseBodyMember()
+	if m == nil {
+		return nil
 	}
-	return nil
+	// The usage is marked as the body itself, so lowering makes its members the
+	// block's statements whether or not it was given a name.
+	member := m
+	if membership, ok := member.(*ast.Membership); ok {
+		member = membership.Member
+	}
+	if usage, ok := member.(*ast.Usage); ok && usage.Kind == ast.UsageAction {
+		usage.IsBodyParameter = true
+	}
+	return []ast.Node{m}
 }
 
 // parseWhileLoopAction parses `while <condition> <action-body> ['until' <c>;']`
@@ -953,6 +963,11 @@ func (p *Parser) parseLoopAction(tok lexer.Token) ast.Node {
 	// Parse body as mixed content (declarations + behavioral statements)
 	_, braced := p.accept(lexer.LBrace)
 	var body []ast.Node
+
+	// The unbraced body is an ActionBodyParameter: `loop action [<name>] { … }`.
+	if !braced && p.atKeyword("action") {
+		body = p.parseActionBodyParameter()
+	}
 
 	// Parse loop body members until 'until' keyword or closing brace
 	for !p.atKeyword("until") && !p.at(lexer.RBrace) && !p.atEOF() {

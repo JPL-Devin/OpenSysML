@@ -489,9 +489,10 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 		if stmt, ok := usageStatement(m, scope); ok {
 			return stmt
 		}
-		// An anonymous action usage owning a body is the ActionBodyParameter a loop
-		// or branch body is written as (SysML.xtext ActionBodyParameter).
-		if m.Kind == ast.UsageAction && m.Ident.Name == "" && len(m.Members) > 0 {
+		// The ActionBodyParameter a loop or branch body is written as is the block
+		// itself, so its members are the statements: a name it declares only scopes
+		// them (`loop action charging { … } until charging.done`).
+		if m.Kind == ast.UsageAction && m.IsBodyParameter {
 			return lowerBlock(m, m.Members, childScope(scope, m))
 		}
 		return Unsupported{Description: usageDescription(m), Node: m, Scope: scope}
