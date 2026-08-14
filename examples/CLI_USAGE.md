@@ -205,7 +205,9 @@ sysml>
 
 **Model diagnostics and failed evaluations go to stdout, and do not change the
 exit status.** Only the command's own failures — a file it could not read, a
-conversion it could not make, a misused flag — are written to stderr.
+conversion it could not make, a misused flag — are written to stderr, along with
+the `wrote <file> …` note a `-convert -o` prints when it succeeds, which is kept
+off stdout so a conversion can be piped.
 
 A file that cannot be read is reported on stderr and exits `1` (the message
 appears twice, once from the loader and once from the command):
@@ -243,9 +245,10 @@ $ echo $?
 0
 ```
 
-So `2> errors.log` collects the command's own failures only. A script that needs
-to know whether a model analysed, or whether an expression produced a value, has
-to read stdout for an `error:` line.
+So `2> errors.log` collects the command's own failures, plus the `wrote …` note
+of a successful `-convert -o` — a non-empty log is not by itself a failure. A
+script that needs to know whether a model analysed, or whether an expression
+produced a value, has to read stdout for an `error:` line.
 
 ## Exit status
 

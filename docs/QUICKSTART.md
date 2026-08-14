@@ -333,7 +333,8 @@ Two things matter before a pipeline depends on it:
 - **A model's diagnostics and a failed evaluation are printed on stdout, and
   leave the exit status `0`.** Only the command's own failures — a file it could
   not read, a conversion it refused, a misused flag — go to stderr and exit
-  non-zero.
+  non-zero. A successful `-convert -o` also reports its `wrote <file> …` note on
+  stderr, so that stdout carries the conversion alone.
 - **The exit status therefore says whether the command ran, not whether the model
   was sound.** The status codes are documented once, in
   [examples/CLI_USAGE.md § Exit status](../examples/CLI_USAGE.md#exit-status),
