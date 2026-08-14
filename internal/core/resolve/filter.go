@@ -5,22 +5,10 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// Element filters (KerML 8.2.4, SysML v2 7.4.4) restrict which elements a
-// namespace's imports bring in: the `filter` members of the importing namespace,
-// and the `[...]` clause of one import. Both are conditions over one candidate
-// element, and both are applied here, where a lookup enumerates the candidates
-// an import surfaced — rather than in the index, which records the conditions a
-// re-export is subject to but cannot judge them: a condition classifies a
-// candidate by the metadata annotating it, which only the semantic model knows.
-//
-// A namespace's own declared members are never filtered: a filter restricts
-// imported memberships, not declared ones.
-//
-// A namespace's `filter` members restrict what it re-exports, which is what an
-// outside lookup reaches (admitsUnderName), not what resolves inside its own
-// body. Gating the body too would make a filter unable to name a metadata type
-// the namespace itself imports — the condition's own names would be filtered by
-// the condition.
+// Element filters (KerML 8.2.4, SysML v2 7.4.4) restrict which imported
+// elements a namespace surfaces, never its declared ones. They are applied
+// where a lookup enumerates the candidates an import surfaced, since only the
+// semantic model can judge a condition (docs/SPEC_COMPLIANCE.md).
 
 // importAdmits returns the test an element an import surfaces has to pass: the
 // import's own filter clause (`import P::*[@Safety]`).
@@ -36,19 +24,10 @@ func (r *Resolver) importAdmits(scope *symbols.Scope, imp *ast.Import) func(*sym
 	return func(sym *symbols.Symbol) bool { return r.admits(filters, sym) }
 }
 
-// admitsUnderName reports whether cand is reachable under the name fqn: a name a
-// wildcard import surfaced is subject to the conditions restricting that import
-// and the namespace it imported into, which the index recorded when it
-// re-exported the name (symbols.Index.ReexportGates).
-//
-// This is the route an outside lookup takes into a filtered namespace: what
-// `import 'Safety Features'::*` re-exports onward, and what
-// `'Safety Features'::seatBelt` names, are both what that namespace's filters
-// select.
-//
-// A name several imports surfaced is admitted when any one of those routes
-// admits it: an unfiltered import re-exports an element whatever a filtered
-// import of the same namespace rejects.
+// admitsUnderName reports whether cand is reachable under the name fqn, given
+// the conditions the index recorded for each route re-exporting it
+// (symbols.Index.ReexportGates). One route's conditions all have to hold; any
+// admitting route admits the name.
 func (r *Resolver) admitsUnderName(fqn string, cand *symbols.Symbol) bool {
 	if r.idx == nil {
 		return true
@@ -87,10 +66,8 @@ func (r *Resolver) admittedUnder(fqn string, cands []*symbols.Symbol) []*symbols
 }
 
 // admits reports whether cand satisfies every one of filters. A condition the
-// model cannot judge — because no model is attached, or because the condition is
-// outside the subset the evaluator implements — keeps the candidate, so that an
-// unevaluable filter never silently hides model content; the corresponding
-// diagnostic is reported by the filter pass.
+// model cannot judge keeps the candidate, so an unevaluable filter never
+// silently hides model content; the filter pass reports it.
 func (r *Resolver) admits(filters []symbols.ElementFilter, cand *symbols.Symbol) bool {
 	if len(filters) == 0 || cand == nil {
 		return true
@@ -99,13 +76,19 @@ func (r *Resolver) admits(filters []symbols.ElementFilter, cand *symbols.Symbol)
 	if !ok {
 		return true
 	}
-	for _, f := range filters {
-		if f.IsZero() {
-			continue
+	admitted := true
+	// Evaluating a condition reaches declarations of other documents, which this
+	// document does not report on.
+	r.aside(func() {
+		for _, f := range filters {
+			if f.IsZero() {
+				continue
+			}
+			if !judge.SatisfiesElementFilter(f, cand) {
+				admitted = false
+				return
+			}
 		}
-		if !judge.SatisfiesElementFilter(f, cand) {
-			return false
-		}
-	}
-	return true
+	})
+	return admitted
 }

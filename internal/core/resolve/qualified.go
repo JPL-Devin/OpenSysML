@@ -202,7 +202,7 @@ func rootOf(scope *symbols.Scope) *symbols.Scope {
 
 // unresolved records an unresolved-reference diagnostic.
 func (r *Resolver) unresolved(qn *ast.QualifiedName) {
-	r.Diagnostics = append(r.Diagnostics, Diagnostic{
+	r.report(Diagnostic{
 		Span:    qn.Span(),
 		Message: "unresolved reference: " + qnText(qn),
 	})
@@ -221,12 +221,12 @@ func (r *Resolver) unresolvedNamespace(qn *ast.QualifiedName, ns string) {
 				ns, last, strings.Join(cands, ", "))
 		}
 	}
-	r.Diagnostics = append(r.Diagnostics, Diagnostic{Span: qn.Span(), Message: msg})
+	r.report(Diagnostic{Span: qn.Span(), Message: msg})
 }
 
 // ambiguous records an ambiguity diagnostic reporting the number of matches.
 func (r *Resolver) ambiguous(qn *ast.QualifiedName, n int) {
-	r.Diagnostics = append(r.Diagnostics, Diagnostic{
+	r.report(Diagnostic{
 		Span:    qn.Span(),
 		Message: fmt.Sprintf("ambiguous reference: %s (%d candidates)", qnText(qn), n),
 	})

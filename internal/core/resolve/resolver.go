@@ -47,8 +47,11 @@ type Resolver struct {
 	resolving   map[ast.Node]bool // cycle detection
 	parts       map[*ast.QualifiedName][]*symbols.Symbol
 	Diagnostics []Diagnostic
-	model       MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
-	naming      map[*symbols.Symbol]bool // effective names being computed, for cycle detection
+	// quiet is nonzero while a lookup is made on behalf of a semantic query
+	// rather than a reference in the document being resolved.
+	quiet  int
+	model  MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
+	naming map[*symbols.Symbol]bool // effective names being computed, for cycle detection
 	// inheritedImports are the declarations whose supertypes' imports are being
 	// searched, so a specialization cycle ends the walk.
 	inheritedImports map[*symbols.Symbol]bool
@@ -152,7 +155,11 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	// A feature that took its name from qn is never what qn names.
 	res := r.walkQualified(scope, qn, hide.hiding(qn))
 	delete(r.resolving, qn)
-	r.memo[qn] = res
+	// A failure met during a semantic query is not memoized: the reference it
+	// belongs to must still report when its own document is resolved.
+	if res.ok || r.quiet == 0 {
+		r.memo[qn] = res
+	}
 	return res.sym, res.ok
 }
 
@@ -165,16 +172,33 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 		}
 	}
 	res := r.walkUnqualified(scope, name)
-	if at != nil {
+	if at != nil && (res.ok || r.quiet == 0) {
 		r.memo[at] = res
 	}
 	if !res.ok {
-		r.Diagnostics = append(r.Diagnostics, Diagnostic{
+		r.report(Diagnostic{
 			Span:    spanOf(at),
 			Message: "unresolved reference: " + name,
 		})
 	}
 	return res.sym, res.ok
+}
+
+// report records a diagnostic, unless the lookup that produced it was made for
+// a semantic query rather than for a reference in this document (see aside).
+func (r *Resolver) report(d Diagnostic) {
+	if r.quiet > 0 {
+		return
+	}
+	r.Diagnostics = append(r.Diagnostics, d)
+}
+
+// aside runs a lookup made for a semantic query, whose diagnostics belong to
+// the document declaring what it reached, not to the one being resolved.
+func (r *Resolver) aside(f func()) {
+	r.quiet++
+	defer func() { r.quiet-- }()
+	f()
 }
 
 func spanOf(n ast.Node) source.Span {

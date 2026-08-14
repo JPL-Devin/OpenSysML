@@ -325,6 +325,50 @@ func TestFilteredExposeSurfacesSubset(t *testing.T) {
 	}
 }
 
+// Evaluating a filter reaches library declarations, whose own unresolved
+// references belong to the library, not to the document whose filter reached
+// them — so a cold stdlib cache reports exactly what a warm one does.
+func TestFilterEvaluationReportsOnlyThisDocument(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	src := `package Meta {
+		private import ScalarValues::Boolean;
+		metadata def Safety { attribute isMandatory : Boolean; }
+	}
+
+	package Vehicles {
+		part vehicle {
+			#Meta::Safety part seatBelt;
+			part keylessEntry;
+		}
+	}
+
+	package Views {
+		view safetyView {
+			expose Vehicles::vehicle::**[@Meta::Safety];
+			part c :> keylessEntry;
+		}
+	}`
+	var first []string
+	for run := 1; run <= 2; run++ { // run 1 parses the stdlib, run 2 restores it
+		ws := NewWorkspace()
+		ws.Open("file:///a.sysml", []byte(src), 1)
+		var msgs []string
+		for _, d := range ws.Diagnostics("file:///a.sysml") {
+			if int(d.Span.Offset) > len(src) {
+				t.Fatalf("run %d: diagnostic %q spans offset %d, past the end of the document", run, d.Message, d.Span.Offset)
+			}
+			msgs = append(msgs, d.Message)
+		}
+		if run == 1 {
+			first = msgs
+			continue
+		}
+		if !slices.Equal(msgs, first) {
+			t.Fatalf("a warm stdlib cache reports %v, a cold one %v", msgs, first)
+		}
+	}
+}
+
 // A library's filters decide the same way whether its records were parsed or
 // restored from the symbol cache, so a workspace's second run over an unchanged
 // library resolves exactly the names its first one did.
