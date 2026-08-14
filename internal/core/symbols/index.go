@@ -46,15 +46,16 @@ type Index struct {
 	hidden     map[string]map[*Symbol]bool
 
 	// reexportDocs attributes each re-export to every document whose wildcard
-	// imports surface it, recording whether that document surfaces it publicly;
-	// docReexports is the per-document inverse. Two documents importing the same
-	// namespace surface the same names, so removal drops one document's claim and
-	// keeps the registration while another document still makes it.
+	// imports surface it, recording whether that document surfaces it publicly and
+	// the element-filter conditions its imports impose; docReexports is the
+	// per-document inverse. Two documents importing the same namespace surface the
+	// same names, so removal drops one document's claim and keeps the registration
+	// while another document still makes it.
 	//
 	// This is deliberately not folded into contributions: that is an append-only
 	// slice per document, and a re-export has to be found by (FQN, symbol) to
 	// drop one document's claim, or purged across all documents at once.
-	reexportDocs map[reexportKey]map[string]bool
+	reexportDocs map[reexportKey]map[string]*reexportClaim
 	docReexports map[string]map[reexportKey]bool
 
 	// declaredAt maps a symbol to the FQN its declaration gives it, which is the
@@ -79,26 +80,25 @@ type Index struct {
 	// they restrict the memberships that namespace's imports bring in, so they are
 	// read on every expansion of it.
 	nsFilters map[string]map[string][]ElementFilter
-
-	// gates holds the element-filter conditions a re-export is subject to: the
-	// filter clause of the import that surfaced it, and the `filter` members of
-	// the namespace it was surfaced into. They are recorded rather than applied
-	// here — judging a candidate needs the semantic model, which the index has no
-	// access to — and are read back by the resolver, which evaluates them (see
-	// ReexportGates).
-	//
-	// A name can be surfaced by more than one import, so the conditions are held
-	// per route: the element is a member if *any* route admits it, which is what
-	// makes an unfiltered import of the same namespace re-export it regardless of
-	// another route's filter.
-	gates map[gateKey][][]ElementFilter
 }
 
-// gateKey identifies the recorded routes to a re-exported name. doc is set only
-// for a root-level name, since each document owns its root namespace alone.
-type gateKey struct {
-	reexportKey
-	doc string
+// reexportClaim is one document's claim on a re-export: whether its imports
+// surface the name publicly, and the element-filter conditions they impose on
+// it. Conditions are recorded rather than applied here — judging a candidate
+// needs the semantic model, which the index has no access to — and are read back
+// by the resolver, which evaluates them (see ReexportGates).
+//
+// A name can be surfaced by more than one import, so the conditions are held per
+// route: the element is a member if *any* route admits it, which is what makes an
+// unfiltered import of the same namespace re-export it regardless of another
+// route's filter. A zero-length route is one no filter restricts.
+//
+// Holding the routes with the claim that produced them is what keeps them exact:
+// dropping a document's claim drops its routes, so a surviving document's filter
+// is not defeated by a route that no longer exists.
+type reexportClaim struct {
+	public bool
+	routes [][]ElementFilter
 }
 
 // nsChange is what happened to a namespace's direct members since the last
@@ -129,14 +129,13 @@ func NewIndex() *Index {
 		wildcardMeta:  make(map[string]map[string][]WildcardImport),
 		reexported:    make(map[string]map[*Symbol]bool),
 		hidden:        make(map[string]map[*Symbol]bool),
-		reexportDocs:  make(map[reexportKey]map[string]bool),
+		reexportDocs:  make(map[reexportKey]map[string]*reexportClaim),
 		docReexports:  make(map[string]map[reexportKey]bool),
 		declaredAt:    make(map[*Symbol]string),
 		children:      make(map[string]map[string]bool),
 		dirtyNS:       make(map[string]nsChange),
 		lastTargets:   make(map[string][]resolvedImport),
 		nsFilters:     make(map[string]map[string][]ElementFilter),
-		gates:         make(map[gateKey][][]ElementFilter),
 	}
 }
 
@@ -676,27 +675,28 @@ func (idx *Index) routesOnward(doc, sourceFQN string, sym *Symbol, gate []Elemen
 // so an unfiltered import re-exports it whatever another route filters out.
 func (idx *Index) reexportGated(fqn string, sym *Symbol, doc string, private bool, gates [][]ElementFilter) {
 	idx.reexport(fqn, sym, doc, private)
-	key := idx.gateKeyOf(fqn, sym, doc)
 	if !idx.reexported[fqn][sym] {
 		return // the namespace declares it; nothing was borrowed
 	}
-	routes := idx.gates[key]
-	for _, route := range routes {
+	claim := idx.reexportDocs[reexportKey{fqn: fqn, sym: sym}][doc]
+	if claim == nil {
+		return
+	}
+	for _, route := range claim.routes {
 		if len(route) == 0 {
 			return // an unconditional route already admits everything
 		}
 	}
 	for _, gate := range gates {
 		if len(gate) == 0 {
-			idx.gates[key] = [][]ElementFilter{nil}
+			claim.routes = [][]ElementFilter{nil}
 			return
 		}
-		if sameRouteRecorded(routes, gate) {
+		if sameRouteRecorded(claim.routes, gate) {
 			continue // this route's conditions are already recorded
 		}
-		routes = append(routes, gate)
+		claim.routes = append(claim.routes, gate)
 	}
-	idx.gates[key] = routes
 }
 
 // sameRouteRecorded reports whether routes already holds the conditions of this
@@ -731,16 +731,25 @@ func sameRouteRecorded(routes [][]ElementFilter, gate []ElementFilter) bool {
 // route rejects is not a member of the namespace it appears under, so no route
 // to it resolves (KerML 8.2.4).
 func (idx *Index) ReexportGates(doc, fqn string, sym *Symbol) [][]ElementFilter {
-	return idx.gates[idx.gateKeyOf(fqn, sym, doc)]
+	claims := idx.reexportDocs[reexportKey{fqn: fqn, sym: sym}]
+	if parent, _ := splitFQN(fqn); parent == "" {
+		// Each document owns its root namespace alone, so only the routes of the
+		// document looking the name up gate it.
+		return claims[doc].gateRoutes()
+	}
+	var out [][]ElementFilter
+	for _, claim := range claims {
+		out = append(out, claim.routes...)
+	}
+	return out
 }
 
-// gateKeyOf keys the routes to fqn, per document for a root-level name.
-func (idx *Index) gateKeyOf(fqn string, sym *Symbol, doc string) gateKey {
-	key := gateKey{reexportKey: reexportKey{fqn: fqn, sym: sym}}
-	if parent, _ := splitFQN(fqn); parent == "" {
-		key.doc = doc
+// gateRoutes returns the routes a claim recorded, and none for an absent claim.
+func (c *reexportClaim) gateRoutes() [][]ElementFilter {
+	if c == nil {
+		return nil
 	}
-	return key
+	return c.routes
 }
 
 // nonZeroFilters drops the absent conditions of an unfiltered import.
@@ -772,13 +781,18 @@ func (idx *Index) reexport(fqn string, sym *Symbol, doc string, private bool) {
 func (idx *Index) claimReexport(key reexportKey, doc string, public bool) {
 	docs := idx.reexportDocs[key]
 	if docs == nil {
-		docs = make(map[string]bool)
+		docs = make(map[string]*reexportClaim)
 		idx.reexportDocs[key] = docs
 	}
-	if wasPublic, claimed := docs[doc]; claimed && (wasPublic || !public) {
+	claim, claimed := docs[doc]
+	if claimed && (claim.public || !public) {
 		return // nothing new
 	}
-	docs[doc] = docs[doc] || public
+	if !claimed {
+		claim = &reexportClaim{}
+		docs[doc] = claim
+	}
+	claim.public = claim.public || public
 	if idx.docReexports[doc] == nil {
 		idx.docReexports[doc] = make(map[reexportKey]bool)
 	}
@@ -796,10 +810,9 @@ func (idx *Index) dropClaim(key reexportKey, doc string) {
 	if _, claimed := docs[doc]; !claimed {
 		return
 	}
-	delete(docs, doc)
+	delete(docs, doc) // the routes this document recorded go with its claim
 	if len(docs) == 0 {
 		delete(idx.reexportDocs, key)
-		idx.forgetGates(key)
 		idx.deregister(key.fqn, key.sym)
 		return
 	}
@@ -818,18 +831,7 @@ func (idx *Index) purgeReexport(key reexportKey) {
 		}
 	}
 	delete(idx.reexportDocs, key)
-	idx.forgetGates(key)
 	idx.deregister(key.fqn, key.sym)
-}
-
-// forgetGates drops the routes recorded for a re-exported name, of whichever
-// document recorded them.
-func (idx *Index) forgetGates(key reexportKey) {
-	for gk := range idx.gates {
-		if gk.reexportKey == key {
-			delete(idx.gates, gk)
-		}
-	}
 }
 
 // applyReexportMarks brings the reexported and hidden marks in line with the
@@ -843,8 +845,8 @@ func (idx *Index) applyReexportMarks(key reexportKey) {
 		return
 	}
 	setMark(idx.reexported, key.fqn, key.sym)
-	for _, public := range docs {
-		if public {
+	for _, claim := range docs {
+		if claim.public {
 			clearMark(idx.hidden, key.fqn, key.sym)
 			return
 		}

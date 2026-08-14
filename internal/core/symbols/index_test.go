@@ -621,6 +621,29 @@ func TestNamespaceFilterFromAnotherDocumentRegatesReexports(t *testing.T) {
 	}
 }
 
+// Two documents can import the same namespace into one package, so dropping the
+// document whose import is unfiltered has to take its unconditional route with
+// it — otherwise the surviving document's filter would keep admitting everything.
+func TestDroppingAnUnfilteredImportLeavesTheSurvivingFilterInForce(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "plain.sysml", "package Safe { public import Base::*; }")
+	addDoc(t, idx, "filtered.sysml", "package Safe { public import Base::*[@Safety]; }")
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	routes := idx.ReexportGates("", "Safe::Belt", belt)
+	if len(routes) != 2 {
+		t.Fatalf("Safe::Belt is gated by %v, want a route per importing document", routes)
+	}
+
+	idx.RemoveDocument("plain.sysml")
+	routes = idx.ReexportGates("", "Safe::Belt", belt)
+	if len(routes) != 1 || len(routes[0]) != 1 {
+		t.Fatalf("Safe::Belt is gated by %v once the unfiltered import is gone, want one route of one condition", routes)
+	}
+}
+
 // lookupOne returns the single symbol registered under fqn.
 func lookupOne(t *testing.T, idx *Index, fqn string) *Symbol {
 	t.Helper()
