@@ -39,7 +39,7 @@ func TestConvertRoundTripThroughCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	run(t, binary, "-convert", model, "-o", turtle)
+	run(t, binary, model, "-convert", "ttl", "-o", turtle)
 	data, err := os.ReadFile(turtle)
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +50,7 @@ func TestConvertRoundTripThroughCLI(t *testing.T) {
 		}
 	}
 
-	run(t, binary, "-convert", turtle, "-o", back)
+	run(t, binary, turtle, "-convert", "sysml", "-o", back)
 	got, err := os.ReadFile(back)
 	if err != nil {
 		t.Fatal(err)
@@ -67,10 +67,35 @@ func TestConvertToStdout(t *testing.T) {
 	if err := os.WriteFile(model, []byte(sampleModel), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// With no -o and no -to, a notation input converts to Turtle.
-	out := run(t, binary, "-convert", model)
+	// With no -o, the conversion is written to stdout.
+	out := run(t, binary, model, "-convert", "ttl")
 	if !strings.Contains(out, "@prefix sysml:") {
 		t.Errorf("expected Turtle on stdout, got:\n%s", out)
+	}
+}
+
+// TestConvertFlagOrder checks that the model may be named before or after the
+// flags that apply to it, since Go's flag package stops at the first file name
+// unless the arguments are reordered.
+func TestConvertFlagOrder(t *testing.T) {
+	binary := buildCLI(t)
+	dir := t.TempDir()
+	model := filepath.Join(dir, "model.sysml")
+	if err := os.WriteFile(model, []byte(sampleModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	orders := map[string][]string{
+		"model first":  {model, "-convert", "ttl"},
+		"flags first":  {"-convert", "ttl", model},
+		"model middle": {"-from", "sysml", model, "-convert", "ttl"},
+	}
+	for name, args := range orders {
+		t.Run(name, func(t *testing.T) {
+			if out := run(t, binary, args...); !strings.Contains(out, "@prefix sysml:") {
+				t.Errorf("expected Turtle on stdout, got:\n%s", out)
+			}
+		})
 	}
 }
 
@@ -82,7 +107,7 @@ func TestConvertExplicitFormats(t *testing.T) {
 	if err := os.WriteFile(model, []byte(sampleModel), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out := run(t, binary, "-convert", model, "-from", "sysml", "-to", "turtle")
+	out := run(t, binary, model, "-convert", "turtle", "-from", "sysml")
 	if !strings.Contains(out, "@prefix sysml:") {
 		t.Errorf("expected Turtle on stdout, got:\n%s", out)
 	}
@@ -96,7 +121,7 @@ func TestConvertSameFormatReformats(t *testing.T) {
 	if err := os.WriteFile(model, []byte("package P {\n// keep me\npart def Q;\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out := run(t, binary, "-convert", model, "-to", "sysml")
+	out := run(t, binary, model, "-convert", "sysml")
 	if !strings.Contains(out, "// keep me") {
 		t.Errorf("the comment was dropped:\n%s", out)
 	}
@@ -130,12 +155,16 @@ func TestConvertErrors(t *testing.T) {
 		args []string
 		want string
 	}{
-		"missing input":     {[]string{"-convert", filepath.Join(dir, "absent.sysml")}, "absent.sysml"},
-		"unknown extension": {[]string{"-convert", unknownExt}, "cannot tell the format"},
-		"unknown format":    {[]string{"-convert", model, "-to", "xml"}, "unknown format"},
-		"extra argument":    {[]string{"-convert", model, filepath.Join(dir, "other.sysml")}, "unexpected extra argument"},
-		"syntax error":      {[]string{"-convert", broken, "-to", "ttl"}, "syntax error"},
-		"unsupported rdf":   {[]string{"-convert", badTurtle, "-to", "sysml"}, "blank node"},
+		"missing input":     {[]string{filepath.Join(dir, "absent.sysml"), "-convert", "ttl"}, "absent.sysml"},
+		"no input":          {[]string{"-convert", "ttl"}, "no model to convert"},
+		"unknown extension": {[]string{unknownExt, "-convert", "ttl"}, "cannot tell the format"},
+		"unknown format":    {[]string{model, "-convert", "xml"}, "unknown format"},
+		"file as format":    {[]string{"-convert", model}, "-convert names the format"},
+		"extra argument":    {[]string{model, filepath.Join(dir, "other.sysml"), "-convert", "ttl"}, "unexpected extra argument"},
+		"replaced -to flag": {[]string{model, "-convert", "ttl", "-to", "sysml"}, "-to has been replaced by -convert"},
+		"forgotten value":   {[]string{model, "-convert", "ttl", "-o"}, "flag needs an argument: -o"},
+		"syntax error":      {[]string{broken, "-convert", "ttl"}, "syntax error"},
+		"unsupported rdf":   {[]string{badTurtle, "-convert", "sysml"}, "blank node"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
