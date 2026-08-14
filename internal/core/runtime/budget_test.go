@@ -473,7 +473,7 @@ func TestStepBudgetHoldsAcrossExecutorDrivenRun(t *testing.T) {
 		if sym == nil {
 			t.Fatal("action outer not found")
 		}
-		exec, err := newActionExecutor(ctx, sym)
+		exec, err := newActionExecutor(ctx, sym, nil)
 		if err != nil {
 			t.Fatalf("newActionExecutor: %v", err)
 		}

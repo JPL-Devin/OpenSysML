@@ -36,7 +36,7 @@ func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
 	if err != nil {
 		return err
 	}
-	h.exec.ctx.post(h.exec.graph.Connections, msg, s)
+	h.exec.ctx.post(h.exec.graph.Connections, msg, s, h.exec.self)
 	return nil
 }
 

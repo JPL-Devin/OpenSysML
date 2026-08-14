@@ -13,8 +13,11 @@ import (
 
 // ActionExecutor executes action bodies using token-flow semantics.
 type ActionExecutor struct {
-	ctx         *Context
-	action      *symbols.Symbol
+	ctx    *Context
+	action *symbols.Symbol
+	// self is the object performing the action: its connections route what the
+	// action sends, and its selections decide which variant's connection does.
+	self        *Instance
 	graph       *lower.ActionGraph // Execution IR
 	tokens      []Token
 	state       ExecutionState
@@ -46,8 +49,9 @@ func (e *ActionExecutor) SetInputs(inputs map[string]Value) {
 	e.inputs = inputs
 }
 
-// newActionExecutor creates an action executor.
-func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, error) {
+// newActionExecutor creates an action executor. self is the object performing
+// the action, nil for an action no object performs.
+func newActionExecutor(ctx *Context, action *symbols.Symbol, self *Instance) (*ActionExecutor, error) {
 	if action.Kind != symbols.SymbolActionUsage && action.Kind != symbols.SymbolActionDef {
 		return nil, fmt.Errorf("symbol %s is not an action", action.Name)
 	}
@@ -62,6 +66,7 @@ func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, e
 	exec := &ActionExecutor{
 		ctx:         ctx,
 		action:      action,
+		self:        self,
 		graph:       graph,
 		tokens:      make([]Token, 0),
 		state:       StateReady,
@@ -839,7 +844,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			want = accept.SubsetsEvent
 		}
 		msg, taken := e.ctx.TakeMessage(func(m Message) bool {
-			if !m.arrivedAt(accept.ViaPort) || !m.carriesSignal(want) {
+			if !m.arrivedAt(accept.ViaPort) || !m.reachedObject(objectID(e.self)) || !m.carriesSignal(want) {
 				return false
 			}
 			// A message routed to this accept's port is already addressed by the

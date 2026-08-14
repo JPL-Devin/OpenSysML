@@ -44,6 +44,16 @@ type ExpectedEvent struct {
 	Args   map[string]ExpectedValue `json:"args,omitempty"`   // Signal payload or call arguments
 }
 
+// Performer is one object performing the case's behavior, and the outcome
+// expected of that object's performance.
+type Performer struct {
+	Object      string                   `json:"object"` // qualified name of the object's usage
+	Events      []ExpectedEvent          `json:"events,omitempty"`
+	FinalState  string                   `json:"finalState,omitempty"`
+	StateVisits []string                 `json:"stateVisits,omitempty"`
+	Outputs     map[string]ExpectedValue `json:"outputs,omitempty"`
+}
+
 // ExpectedOutcome represents expected execution result
 type ExpectedOutcome struct {
 	Type string `json:"type"` // "action", "state", "calc", "constraint", "requirement", "instance"
@@ -91,10 +101,24 @@ type ExpectedOutcome struct {
 	// such an assertion is anonymous.
 	Assertions map[string]bool `json:"assertions,omitempty"`
 
+	// Performers are the objects that each perform the case's behavior, for a
+	// case whose contract depends on which object performs it — two objects
+	// selecting different variants of one variation route over their own.
+	Performers []Performer `json:"performers,omitempty"`
+
 	// Instance fields
 	Instantiate string                   `json:"instantiate,omitempty"` // qualified name of the type to instantiate
 	Slots       map[string]ExpectedValue `json:"slots,omitempty"`       // expected slot values, derived ones included
 	Constraints map[string]bool          `json:"constraints,omitempty"` // constraint feature name -> satisfied on this instance
+	// Identical states pairs of paths through the instance that must reach the
+	// very same object, for a case whose contract is identity rather than a
+	// value — a connector end is the feature it attaches to, so
+	// ["link.source", "a.p"] holds only while they are one object.
+	Identical [][]string `json:"identical,omitempty"`
+	// Distinct states pairs of paths that must reach different objects, for a
+	// case pinning that two connectors attached to different features are
+	// told apart.
+	Distinct [][]string `json:"distinct,omitempty"`
 }
 
 // TestExecutionConformance runs all behavioral execution conformance tests.
@@ -316,14 +340,37 @@ func runActionConformance(t *testing.T, ctx *Context, idx *symbols.Index, path s
 	}
 }
 
-// runStateConformance executes state machine and validates final state
+// runStateConformance executes a state machine and validates the final state. A
+// case naming performers runs the machine once per object performing it, each
+// against the outcome that object expects.
 func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
-	// Find state definition/usage
 	rootScope := idx.DocumentRoot(path)
-	stateSym := findBehavioralSymbol(t, rootScope, ast.DefState, ast.UsageState)
+	stateSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefState, ast.UsageState)
+	if len(expected.Performers) == 0 {
+		runOneStatePerformance(t, ctx, stateSym, nil, expected)
+		return
+	}
+	for _, performer := range expected.Performers {
+		self, err := ctx.Instantiate(oneSymbol(t, idx, performer.Object))
+		if err != nil {
+			t.Fatalf("instantiate %s: %v", performer.Object, err)
+		}
+		t.Run(performer.Object, func(t *testing.T) {
+			runOneStatePerformance(t, ctx, stateSym, self, ExpectedOutcome{
+				Events:      performer.Events,
+				FinalState:  performer.FinalState,
+				StateVisits: performer.StateVisits,
+				Outputs:     performer.Outputs,
+			})
+		})
+	}
+}
 
+// runOneStatePerformance runs one performance of a state machine, by self or by no
+// object, and validates it against the outcome expected of that performance.
+func runOneStatePerformance(t *testing.T, ctx *Context, stateSym *symbols.Symbol, self *Instance, expected ExpectedOutcome) {
 	// Create executor manually to inject events
-	exec, err := newStateExecutor(ctx, stateSym)
+	exec, err := newStateExecutor(ctx, stateSym, self)
 	if err != nil {
 		t.Fatalf("create state executor: %v", err)
 	}
@@ -702,6 +749,8 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 		validateValue(t, name, expectedVal, slot.HeldValue())
 	}
 
+	validateIdentity(t, ctx, inst, expected)
+
 	for name, wantSatisfied := range expected.Constraints {
 		feat := featureNamed(ctx, typeSym, name)
 		if feat == nil || feat.Symbol == nil {
@@ -717,6 +766,65 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 			t.Errorf("constraint %q: satisfied = %v, want %v", name, satisfied, wantSatisfied)
 		}
 	}
+}
+
+// validateIdentity checks the identity a case states between the objects two
+// paths through the instance reach, which is what a connector end asserts: it
+// is the connected feature, not a copy of it.
+func validateIdentity(t *testing.T, ctx *Context, inst *Instance, expected ExpectedOutcome) {
+	t.Helper()
+	for _, pair := range expected.Identical {
+		left, right := identityPair(t, ctx, inst, pair)
+		if left != right {
+			t.Errorf("%s is object %d and %s is object %d, want one object",
+				pair[0], left, pair[1], right)
+		}
+	}
+	for _, pair := range expected.Distinct {
+		left, right := identityPair(t, ctx, inst, pair)
+		if left == right {
+			t.Errorf("%s and %s are both object %d, want different objects",
+				pair[0], pair[1], left)
+		}
+	}
+}
+
+// identityPair resolves the two paths of an identity assertion to the objects
+// they reach.
+func identityPair(t *testing.T, ctx *Context, inst *Instance, pair []string) (int64, int64) {
+	t.Helper()
+	if len(pair) != 2 {
+		t.Fatalf("identity assertion %v names %d paths, want two", pair, len(pair))
+	}
+	return objectAtPath(t, ctx, inst, pair[0]), objectAtPath(t, ctx, inst, pair[1])
+}
+
+// objectAtPath walks a dotted path of slot names from inst and returns the
+// object it reaches.
+func objectAtPath(t *testing.T, ctx *Context, inst *Instance, path string) int64 {
+	t.Helper()
+	cur := inst
+	segments := strings.Split(path, ".")
+	for i, name := range segments {
+		slot, err := cur.GetSlot(ctx, name)
+		if err != nil {
+			t.Fatalf("%s: slot %q: %v", path, name, err)
+		}
+		id, isObject := slot.HeldValue().Object()
+		if !isObject {
+			t.Fatalf("%s: %q holds %s, want an object", path, name, slot.HeldValue().Kind)
+		}
+		if i == len(segments)-1 {
+			return id
+		}
+		next, held := ctx.Instance(id)
+		if !held {
+			t.Fatalf("%s: %q names object %d, which the context does not hold", path, name, id)
+		}
+		cur = next
+	}
+	t.Fatalf("identity path is empty")
+	return 0
 }
 
 // requireError checks that what a case states as a diagnostic contract failed

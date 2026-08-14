@@ -91,7 +91,7 @@ var helpText = []string{
 	"%satisfy [name]     evaluate the satisfaction assertions of the model, or of one element",
 	"",
 	"Action debugging:",
-	"%action <name>      start action executor debugging session",
+	"%action <name> [<object>]  start action executor debugging session, performed by an object",
 	"%step               advance one token step",
 	"%continue           run action to completion",
 	"%tokens             show active tokens",
@@ -99,7 +99,7 @@ var helpText = []string{
 	"%stop               stop current debugging session",
 	"",
 	"State machine debugging:",
-	"%state <name>       start state machine debugging session",
+	"%state <name> [<object>]   start state machine debugging session, performed by an object",
 	"%events             show event queue",
 	"%current            show current state and configuration",
 	"%advance <time>     advance simulation time by <time> units, processing every event due",
@@ -210,9 +210,9 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	// Action debugging
 	case "%action":
 		if len(fields) < 2 {
-			return []string{"usage: %action <name>"}, false, nil
+			return []string{"usage: %action <name> [<object>]"}, false, nil
 		}
-		return s.doAction(fields[1])
+		return s.doAction(fields[1], fields[2:])
 	case "%step":
 		return s.doStep()
 	case "%continue":
@@ -229,9 +229,9 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	// State machine debugging
 	case "%state":
 		if len(fields) < 2 {
-			return []string{"usage: %state <name>"}, false, nil
+			return []string{"usage: %state <name> [<object>]"}, false, nil
 		}
-		return s.doStateMachine(fields[1])
+		return s.doStateMachine(fields[1], fields[2:])
 	case "%events":
 		return s.doEvents()
 	case "%current":
@@ -577,14 +577,21 @@ type slotWalk struct {
 
 func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []string {
 	features := w.ctx.FeaturesOf(inst.Type)
-	if len(features) == 0 {
+	connectors := w.connectors(inst, indent)
+	if len(features) == 0 && len(connectors) == 0 {
 		return w.emit(nil, indent+"(no features)")
+	}
+
+	// Connector lines already spent their share of the budget, so a truncated
+	// listing still shows them rather than dropping what it charged for.
+	truncated := func(lines []string, pad string) []string {
+		return append(append(lines, connectors...), indent+pad+"… (listing truncated)")
 	}
 
 	var lines []string
 	for i := range features {
 		if w.budget <= 0 {
-			return append(lines, indent+"… (listing truncated)")
+			return truncated(lines, "")
 		}
 		feat := &features[i]
 		// A constraint or requirement the part carries has no value; what it has
@@ -605,14 +612,54 @@ func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []str
 		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatSlot(slot)))
 		for _, nested := range nestedInstances(w.ctx, slot) {
 			if w.budget <= 0 {
-				return append(lines, indent+"  … (listing truncated)")
+				return truncated(lines, "  ")
 			}
 			w.onPath[nested.Type] = true
 			lines = append(lines, w.lines(nested, indent+"  ", depth+1)...)
 			delete(w.onPath, nested.Type)
 		}
 	}
+	return append(lines, connectors...)
+}
+
+// connectors lists the connectors the object owns that no feature names: an
+// anonymous `connect a.p to b.q` relates the features at its ends whether or not
+// it is named, and its ends are the only way to see what it relates.
+func (w *slotWalk) connectors(inst *runtime.Instance, indent string) []string {
+	conns, err := inst.OwnedConnectors(w.ctx)
+	if err != nil {
+		return w.emit(nil, fmt.Sprintf("%s(anonymous connector): <error: %v>", indent, err))
+	}
+	var lines []string
+	for _, conn := range conns {
+		lines = w.emit(lines, fmt.Sprintf("%s(anonymous %s) = %s", indent, connectorKeyword(conn),
+			formatValue(runtime.Value{Kind: runtime.ValInstance, Instance: conn.ID})))
+		for _, end := range conn.Ends {
+			if w.budget <= 0 {
+				return append(lines, indent+"  … (listing truncated)")
+			}
+			lines = w.emit(lines, fmt.Sprintf("%s  %s = %s", indent, endLabel(end), formatValue(end.Value)))
+		}
+	}
 	return lines
+}
+
+// connectorKeyword names the kind of connector an object materializes, for a
+// connector that has no name to show.
+func connectorKeyword(conn *runtime.Instance) string {
+	if usage, ok := conn.Type.Decl.(*ast.Usage); ok && usage.Keyword != "" {
+		return usage.Keyword
+	}
+	return "connector"
+}
+
+// endLabel names one end of a connector, by position when the model gives the
+// end no name of its own.
+func endLabel(end runtime.ConnectorEnd) string {
+	if end.Name != "" {
+		return end.Name
+	}
+	return "end"
 }
 
 func (w *slotWalk) emit(lines []string, line string) []string {
@@ -1288,10 +1335,28 @@ func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
 	return a.SubjectRef
 }
 
+// performingObject resolves the object a debugging session's behavior is
+// performed by: its connections route what the behavior sends. No argument
+// performs the behavior outside any object.
+func (s *Session) performingObject(args []string) (*runtime.Instance, string) {
+	if len(args) == 0 {
+		return nil, ""
+	}
+	_, fqn, lerr := s.lookupSymbol(args[0])
+	if lerr != nil {
+		return nil, "error: " + lerr.Error()
+	}
+	inst, ok := s.instances[fqn]
+	if !ok {
+		return nil, fmt.Sprintf("error: no instance of %q (use %%instantiate first)", fqn)
+	}
+	return inst, ""
+}
+
 // --- Action Debugging Commands ---
 
 // doAction starts an action executor debugging session.
-func (s *Session) doAction(name string) ([]string, bool, error) {
+func (s *Session) doAction(name string, performer []string) ([]string, bool, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
@@ -1306,8 +1371,13 @@ func (s *Session) doAction(name string) ([]string, bool, error) {
 		return []string{fmt.Sprintf("error: %q is not an action", name)}, false, nil
 	}
 
+	self, msg := s.performingObject(performer)
+	if msg != "" {
+		return []string{msg}, false, nil
+	}
+
 	// Create executor
-	exec, err := ctx.CreateActionExecutor(sym)
+	exec, err := ctx.CreateActionExecutorFor(sym, self)
 	if err != nil {
 		return []string{fmt.Sprintf("error: failed to create executor: %v", err)}, false, nil
 	}
@@ -1519,7 +1589,7 @@ func (s *Session) doStop() ([]string, bool, error) {
 // --- State Machine Debugging Commands ---
 
 // doStateMachine starts a state machine executor debugging session.
-func (s *Session) doStateMachine(name string) ([]string, bool, error) {
+func (s *Session) doStateMachine(name string, performer []string) ([]string, bool, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
@@ -1534,8 +1604,13 @@ func (s *Session) doStateMachine(name string) ([]string, bool, error) {
 		return []string{fmt.Sprintf("error: %q is not a state machine", name)}, false, nil
 	}
 
+	self, msg := s.performingObject(performer)
+	if msg != "" {
+		return []string{msg}, false, nil
+	}
+
 	// Create executor
-	exec, err := ctx.CreateStateExecutor(sym)
+	exec, err := ctx.CreateStateExecutorFor(sym, self)
 	if err != nil {
 		return []string{fmt.Sprintf("error: failed to create executor: %v", err)}, false, nil
 	}

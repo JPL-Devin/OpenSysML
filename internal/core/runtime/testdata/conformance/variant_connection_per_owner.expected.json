@@ -1,0 +1,16 @@
+{
+  "type": "state",
+  "evaluate": "VariantRouting::Router::Route",
+  "performers": [
+    {
+      "object": "VariantRouting::alpha",
+      "finalState": "arrived",
+      "stateVisits": ["start", "sending", "arrived"]
+    },
+    {
+      "object": "VariantRouting::beta",
+      "finalState": "diverted",
+      "stateVisits": ["start", "sending", "diverted"]
+    }
+  ]
+}

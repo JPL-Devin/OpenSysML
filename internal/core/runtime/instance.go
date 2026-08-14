@@ -17,6 +17,16 @@ type Instance struct {
 	ID    int64            // unique identity
 	Type  *symbols.Symbol  // the def/usage symbol this instantiates
 	Slots map[string]*Slot // feature name → slot
+	// Ends are the ends of the connector this object materializes, in declaration
+	// order, and nil for an object that is no connector. A named end also reads
+	// through the slot of that name; the order is what an end with no name of its
+	// own is identified by.
+	Ends []ConnectorEnd
+
+	// anonymous holds the objects the instance's anonymous connectors
+	// materialized to, nil until they are asked for. An empty slice means there
+	// are none.
+	anonymous []int64
 }
 
 // Slot holds the runtime value(s) for one feature.
@@ -213,6 +223,15 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 		}
 		slot.Values = val
 		slot.Materialized = true
+		return slot, nil
+	}
+
+	// A connector holds the features it connects at its ends rather than objects
+	// of its own, so it is materialized from what the `connect` clause names.
+	if ctx.model.IsConnectorUsage(slot.Feature.Symbol) {
+		if err := ctx.materializeConnectorSlot(inst, slot, name); err != nil {
+			return nil, err
+		}
 		return slot, nil
 	}
 

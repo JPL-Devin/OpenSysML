@@ -1355,6 +1355,21 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			u.Multiplicity = p.parseMultiplicity()
 		}
 
+		// `binding name bind src = tgt` both names the connector and states its
+		// ends, so the keyword follows the name instead of replacing it.
+		if u.Ident.Name != "" && p.atKeyword("bind") {
+			p.advance()
+			if p.at(lexer.LBracket) {
+				p.parseMultiplicity() // end multiplicity, not the connector's
+			}
+			if source := p.parseRelationshipTarget(); source != nil {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelRedefines, // Use redefines to mark binding source
+					Target: source,
+				})
+			}
+		}
+
 		// Check for source expression: binding [mult] name[mult2] source = target
 		// If we have name[mult] and next token is NOT "of" or "=", parse source expression
 		if u.Ident.Name != "" && !p.atKeyword("of") && !p.at(lexer.Eq) && (p.atName() || p.atNameOrKeyword()) {
@@ -1935,6 +1950,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 		isInlineFlow := false
 		if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.Keyword {
 			// Could be flow name or flow source
+			// `flow f from x to y` names the flow, so only `to` or a feature
+			// chain after the first name marks the shorthand.
 			tok2 := p.peekN(2)
 			if tok2.Kind == lexer.Keyword && tok2.KeywordID == "to" {
 				isInlineFlow = true

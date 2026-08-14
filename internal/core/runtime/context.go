@@ -4,8 +4,10 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -53,6 +55,19 @@ type Context struct {
 	// selected it, so repeated reads of one selection read the same object.
 	variantObjects map[variantObject]int64
 
+	// selectedVariants records, per owner and variation name, the variant bound
+	// to it in this run. Routing consults it: a connection a `variant interface`
+	// declares joins its ends only where that variant is the one selected.
+	selectedVariants map[variantSelection]string
+
+	// materializingConnectors holds the connectors whose ends are being attached,
+	// so a connector reached from its own end is reported as a cycle.
+	materializingConnectors map[connectorRef]bool
+
+	// objectConns memoizes the connections declared by each type an object is
+	// of, which a behavior that object performs routes over.
+	objectConns map[*symbols.Symbol][]lower.Connection
+
 	// trace records evaluation, nil when not tracing.
 	trace *TraceRecorder
 
@@ -79,12 +94,31 @@ type Context struct {
 	// collectingSubsets holds the slots whose subsetting features are being read,
 	// so features that subset each other are reported as a cycle.
 	collectingSubsets map[slotRef]bool
+
+	// sources holds the text of the files the model was read from, by name, so an
+	// error about a declaration can say where it was written. A file no caller
+	// registered is reported by name and byte offset instead.
+	sources map[string]*source.SourceFile
 }
 
 // slotRef identifies one slot of one instance.
 type slotRef struct {
 	instance int64
 	feature  string
+}
+
+// variantSelection identifies a variation point of one object: two objects of a
+// type each select their own variant of the same variation.
+type variantSelection struct {
+	owner     int64
+	variation string
+}
+
+// connectorRef identifies one connector being materialized in the context of
+// the object whose features its ends name.
+type connectorRef struct {
+	owner     int64
+	connector *symbols.Symbol
 }
 
 // NewContext creates a runtime context backed by the given semantic model.
@@ -113,11 +147,52 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxDoSteps:     DefaultMaxDoSteps,
 		maxElements:    DefaultMaxElements,
 
-		occurrences:       make(map[*symbols.Symbol]int64),
-		variantObjects:    make(map[variantObject]int64),
-		derivingSlots:     make(map[slotRef]bool),
-		collectingSubsets: make(map[slotRef]bool),
+		occurrences:      make(map[*symbols.Symbol]int64),
+		variantObjects:   make(map[variantObject]int64),
+		selectedVariants: make(map[variantSelection]string),
+
+		materializingConnectors: make(map[connectorRef]bool),
+		objectConns:             make(map[*symbols.Symbol][]lower.Connection),
+		derivingSlots:           make(map[slotRef]bool),
+		collectingSubsets:       make(map[slotRef]bool),
+		sources:                 make(map[string]*source.SourceFile),
 	}
+}
+
+// RegisterSource gives the context the text of a file the model was read from,
+// so an error about a declaration in it reports a line and column.
+func (ctx *Context) RegisterSource(sf *source.SourceFile) {
+	if sf == nil {
+		return
+	}
+	ctx.sources[sf.Name()] = sf
+}
+
+// sourceLocation renders where a span in a file was written, as
+// `file:line:col`. It falls back to a byte offset for a file whose text was not
+// registered, and to the file name alone when there is no span, so a diagnostic
+// always says as much as the context knows.
+func (ctx *Context) sourceLocation(file string, span source.Span) string {
+	if file == "" {
+		return ""
+	}
+	sf, ok := ctx.sources[file]
+	if !ok || span.End() > sf.Len() {
+		if span.Len == 0 && span.Offset == 0 {
+			return file
+		}
+		return fmt.Sprintf("%s:#%d", file, span.Offset)
+	}
+	pos := sf.Lines().PosAt(span.Offset)
+	return fmt.Sprintf("%s:%d:%d", file, pos.Line, pos.Col)
+}
+
+// symbolLocation renders where a symbol was declared, empty for none.
+func (ctx *Context) symbolLocation(sym *symbols.Symbol) string {
+	if sym == nil {
+		return ""
+	}
+	return ctx.sourceLocation(sym.DocName, sym.DeclSpan)
 }
 
 // SetTrace attaches a trace recorder to this context, so that every expression
@@ -457,10 +532,17 @@ func (ctx *Context) ExecuteAction(action *symbols.Symbol) (map[string]Value, err
 // provided input parameter bindings (keyed by parameter name). Inputs override
 // action attribute defaults of the same name. Returns final token data.
 func (ctx *Context) ExecuteActionWithInputs(action *symbols.Symbol, inputs map[string]Value) (map[string]Value, error) {
+	return ctx.ExecuteActionPerformedBy(action, nil, inputs)
+}
+
+// ExecuteActionPerformedBy executes an action performed by self, whose
+// connections route what the action sends and whose variant selections decide
+// which of them are realized. A nil self performs the action outside any object.
+func (ctx *Context) ExecuteActionPerformedBy(action *symbols.Symbol, self *Instance, inputs map[string]Value) (map[string]Value, error) {
 	defer ctx.beginRun()()
 
 	// Create executor
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, self)
 	if err != nil {
 		return nil, fmt.Errorf("create action executor: %w", err)
 	}
@@ -500,10 +582,17 @@ func (ctx *Context) ExecuteState(stateMachine *symbols.Symbol) (map[string]Value
 // events until completion or suspension. Returns the final state data and the
 // ordered list of visited state names.
 func (ctx *Context) ExecuteStateWithEvents(stateMachine *symbols.Symbol, events []string) (map[string]Value, []string, error) {
+	return ctx.ExecuteStatePerformedBy(stateMachine, nil, events)
+}
+
+// ExecuteStatePerformedBy executes a state machine performed by self, whose
+// connections route what the machine sends and whose variant selections decide
+// which of them are realized. A nil self performs it outside any object.
+func (ctx *Context) ExecuteStatePerformedBy(stateMachine *symbols.Symbol, self *Instance, events []string) (map[string]Value, []string, error) {
 	defer ctx.beginRun()()
 
 	// Create executor
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, self)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create state executor: %w", err)
 	}
@@ -530,7 +619,13 @@ func (ctx *Context) ExecuteStateWithEvents(stateMachine *symbols.Symbol, events 
 // CreateActionExecutor creates an action executor without starting execution.
 // For REPL debugging - allows step-by-step execution control.
 func (ctx *Context) CreateActionExecutor(action *symbols.Symbol) (*ActionExecutor, error) {
-	exec, err := newActionExecutor(ctx, action)
+	return ctx.CreateActionExecutorFor(action, nil)
+}
+
+// CreateActionExecutorFor creates an action executor for an action performed by
+// self, without starting execution.
+func (ctx *Context) CreateActionExecutorFor(action *symbols.Symbol, self *Instance) (*ActionExecutor, error) {
+	exec, err := newActionExecutor(ctx, action, self)
 	if err != nil {
 		return nil, fmt.Errorf("create action executor: %w", err)
 	}
@@ -546,7 +641,13 @@ func (ctx *Context) CreateActionExecutor(action *symbols.Symbol) (*ActionExecuto
 // CreateStateExecutor creates a state executor without starting execution.
 // For REPL debugging - allows step-by-step execution control.
 func (ctx *Context) CreateStateExecutor(stateMachine *symbols.Symbol) (*StateExecutor, error) {
-	exec, err := newStateExecutor(ctx, stateMachine)
+	return ctx.CreateStateExecutorFor(stateMachine, nil)
+}
+
+// CreateStateExecutorFor creates a state executor for a machine performed by
+// self, without starting execution.
+func (ctx *Context) CreateStateExecutorFor(stateMachine *symbols.Symbol, self *Instance) (*StateExecutor, error) {
+	exec, err := newStateExecutor(ctx, stateMachine, self)
 	if err != nil {
 		return nil, fmt.Errorf("create state executor: %w", err)
 	}

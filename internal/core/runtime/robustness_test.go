@@ -132,6 +132,10 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("feature_chain_through_an_unset_slot", testFeatureChainThroughAnUnsetSlot)
 	t.Run("feature_chain_spends_the_element_budget", testFeatureChainSpendsTheElementBudget)
 	t.Run("mutually_subsetting_features", testMutuallySubsettingFeatures)
+	t.Run("unattachable_connector_end", testUnattachableConnectorEnd)
+	t.Run("multiplicity_on_a_connector", testMultiplicityOnAConnector)
+	t.Run("connector_attached_to_itself", testConnectorAttachedToItself)
+	t.Run("mutually_attached_connectors", testMutuallyAttachedConnectors)
 }
 
 // testMultiplicityInfiniteLowerBound: `[*..*]` requires unboundedly many objects,
@@ -672,7 +676,7 @@ func testDeferOfNonDeferrableTrigger(t *testing.T) {
 		Kind: symbols.SymbolStateUsage,
 		Name: machine.Ident.Name,
 		Decl: machine,
-	})
+	}, nil)
 	if err == nil {
 		t.Fatal("expected an error for a state deferring a time trigger")
 	}
@@ -704,7 +708,7 @@ func testStateTransitionWithoutATarget(t *testing.T) {
 		Kind: symbols.SymbolStateUsage,
 		Name: machine.Ident.Name,
 		Decl: machine,
-	})
+	}, nil)
 	if err == nil {
 		t.Fatal("expected an error for a transition without a target")
 	}
@@ -778,7 +782,7 @@ func stateExecutorForSource(t *testing.T, name, src string) *StateExecutor {
 	if sym == nil {
 		t.Fatalf("state machine %s not found", name)
 	}
-	exec, err := newStateExecutor(ctx, sym)
+	exec, err := newStateExecutor(ctx, sym, nil)
 	if err != nil {
 		t.Fatalf("newStateExecutor: %v", err)
 	}

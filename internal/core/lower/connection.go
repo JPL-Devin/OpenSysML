@@ -2,34 +2,107 @@ package lower
 
 import "github.com/Open-MBEE/Systemica/internal/core/ast"
 
+// ConnectionOwner is what a lowered connection belongs to, which decides whose
+// selection governs it when it is a variant's: a behavior activation, or the
+// object performing the behavior.
+type ConnectionOwner int
+
+const (
+	// OwnerBehavior marks a connection declared in the behavior's own body.
+	OwnerBehavior ConnectionOwner = iota
+	// OwnerObject marks a connection declared in the body of a type an object
+	// performing the behavior is of.
+	OwnerObject
+)
+
 // Connection is a lowered connector: the ends it joins, by the name each end
 // resolves to. A `connect a to b` has two ends; a multi-end `connect` has more,
 // and every end is reachable from every other.
+//
+// A connection a `variant interface` declares joins its ends only where that
+// variant is the one selected, so it carries the variation it belongs to, its
+// own name, and what owns it: routing must ask what that owner bound the
+// variation to before delivering through it (SysML v2 §7.20).
 type Connection struct {
-	Ends []string
+	Ends      []string
+	Variation string          // variation point the connection is a variant of, empty when it is not
+	Variant   string          // name of the variant declaring it, empty when it is not one
+	Owner     ConnectionOwner // what declares it, whose selection governs a variant's connection
+}
+
+// ToObjectConnections lowers the connectors declared in the body of a type an
+// object is of. A `send … via p` of a behavior an object performs routes through
+// the object's connections as well as through the behavior's own, and it is that
+// object's selection that realizes a variant's connection among them.
+func ToObjectConnections(decl ast.Node) []Connection {
+	var members []ast.Node
+	switch n := decl.(type) {
+	case *ast.Usage:
+		members = n.Members
+	case *ast.Definition:
+		members = n.Members
+	default:
+		return nil
+	}
+	return lowerConnections(members, OwnerObject)
 }
 
 // lowerConnections extracts the connectors declared among members, in
 // declaration order. Usages that are connector-shaped but declare fewer than
 // two ends join nothing and are dropped: the constraint pass reports them, and
 // carrying them would only make routing check the same thing again.
-func lowerConnections(members []ast.Node) []Connection {
+func lowerConnections(members []ast.Node, owner ConnectionOwner) []Connection {
 	var out []Connection
 	for _, member := range members {
 		u, isUsage := unwrapMembership(member).(*ast.Usage)
 		if !isUsage || !connectorKind(u.Kind) {
 			continue
 		}
-		ends := make([]string, 0, len(u.ConnectorEnds))
-		for _, end := range u.ConnectorEnds {
-			if name := endName(end); name != "" {
-				ends = append(ends, name)
-			}
-		}
-		if len(ends) < 2 {
+		// A variation point declares no ends of its own: the connections are the
+		// ones its variants declare, of which a selection realizes one.
+		if u.IsVariation {
+			out = append(out, lowerVariantConnections(u, owner)...)
 			continue
 		}
-		out = append(out, Connection{Ends: ends})
+		if conn, ok := lowerConnection(u, owner); ok {
+			out = append(out, conn)
+		}
+	}
+	return out
+}
+
+// lowerConnection extracts the ends of one connector usage. A usage joining
+// fewer than two ends joins nothing and is dropped.
+func lowerConnection(u *ast.Usage, owner ConnectionOwner) (Connection, bool) {
+	ends := make([]string, 0, len(u.ConnectorEnds))
+	for _, end := range u.ConnectorEnds {
+		if name := endName(end); name != "" {
+			ends = append(ends, name)
+		}
+	}
+	if len(ends) < 2 {
+		return Connection{}, false
+	}
+	return Connection{Ends: ends, Owner: owner}, true
+}
+
+// lowerVariantConnections extracts the connections the variants of a variation
+// connector declare, each tagged with the variation and variant it came from so
+// routing can honor the selection.
+func lowerVariantConnections(variation *ast.Usage, owner ConnectionOwner) []Connection {
+	name := variation.Ident.Name
+	var out []Connection
+	for _, member := range variation.Members {
+		u, isUsage := unwrapMembership(member).(*ast.Usage)
+		if !isUsage || !u.IsVariant || !connectorKind(u.Kind) {
+			continue
+		}
+		conn, ok := lowerConnection(u, owner)
+		if !ok {
+			continue
+		}
+		conn.Variation, conn.Variant = name, u.Ident.Name
+		out = append(out, conn)
 	}
 	return out
 }
@@ -52,13 +125,7 @@ func endName(end *ast.ConnectorEnd) string {
 	if end == nil {
 		return ""
 	}
-	target := end.Target
-	if _, declaresName := end.DeclaredName(); declaresName {
-		target = end.ReferencedTarget()
-	}
-	if target == nil {
-		target = end.Reference
-	}
+	target := end.AttachedTarget()
 	if chain, isChain := target.(*ast.FeatureChainExpr); isChain {
 		return ast.SimpleName(chain.Member)
 	}

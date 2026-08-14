@@ -387,14 +387,14 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 - `%satisfy [name]` — Evaluate satisfaction assertions, with the requirement's subject bound to the object `by` names
 
 **Action debugging:**
-- `%action <name>` — Start debugging action execution
+- `%action <name> [<object>]` — Start debugging action execution, optionally performed by an instantiated object
 - `%step` — Advance all tokens one step
 - `%continue` — Run action to completion, or to the first breakpoint hit
 - `%tokens` — Show active tokens with location + data
 - `%break <nodeName>` — Set breakpoint on node; `%continue` stops when a token reaches it
 
 **State machine debugging:**
-- `%state <name>` — Start debugging state machine
+- `%state <name> [<object>]` — Start debugging state machine, optionally performed by an instantiated object
 - `%events` — Show event queue length
 - `%current` — Show current state, stack, stateData, time
 - `%advance <time>` — Advance simulation time by `<time>` units, processing every event due

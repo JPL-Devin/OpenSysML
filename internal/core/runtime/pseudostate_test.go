@@ -206,7 +206,7 @@ func stateExecutorFor(t *testing.T, machine *ast.Usage) *StateExecutor {
 		Kind: symbols.SymbolStateUsage,
 		Name: machine.Ident.Name,
 		Decl: machine,
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("newStateExecutor: %v", err)
 	}

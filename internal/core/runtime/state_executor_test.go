@@ -22,7 +22,7 @@ func TestStateExecutor_Creation(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -64,7 +64,7 @@ func TestStateExecutor_Initialize(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestStateExecutor_Initialize_NoInitialState(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestStateExecutor_EntryBehavior(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestStateExecutor_ExitBehavior(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestStateExecutor_TimeEvent(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestStateExecutor_AbsoluteTimeEvent(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestStateExecutor_ChangeEvent(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -451,7 +451,7 @@ func TestStateExecutor_GuardCondition(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -527,7 +527,7 @@ func TestStateExecutor_Integration_SimpleTransitions(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -602,7 +602,7 @@ func TestStateExecutor_Integration_TransitionEffects(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -667,7 +667,7 @@ func TestStateExecutor_HierarchicalStates(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -785,7 +785,7 @@ func TestStateExecutor_HierarchicalEntryExit(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -876,7 +876,7 @@ func TestStateExecutor_StateStackTracking(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -1027,7 +1027,7 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -1191,7 +1191,7 @@ func TestStateExecutor_Integration_TrafficLight(t *testing.T) {
 		},
 	}
 
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
