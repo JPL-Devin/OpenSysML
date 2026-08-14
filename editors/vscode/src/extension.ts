@@ -12,6 +12,7 @@ const EXECUTABLE = process.platform === "win32" ? "sysml-lsp.exe" : "sysml-lsp";
 
 let client: LanguageClient | undefined;
 let output: vscode.OutputChannel;
+let watcher: vscode.FileSystemWatcher;
 // Start/stop run one at a time: overlapping restarts would otherwise leave an
 // unreferenced client, and its server process, running forever.
 let queue: Promise<void> = Promise.resolve();
@@ -19,6 +20,11 @@ let queue: Promise<void> = Promise.resolve();
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   output = vscode.window.createOutputChannel("SysML v2");
   context.subscriptions.push(output);
+
+  // One watcher for the whole session: a per-start watcher would outlive the
+  // client that used it and pile up over restarts.
+  watcher = vscode.workspace.createFileSystemWatcher("**/*.{sysml,kerml}");
+  context.subscriptions.push(watcher);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("systemica.restartServer", () => restart()),
@@ -82,9 +88,7 @@ async function startClient(): Promise<void> {
       { scheme: "file", language: "kerml" },
     ],
     outputChannel: output,
-    synchronize: {
-      fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{sysml,kerml}"),
-    },
+    synchronize: { fileEvents: watcher },
   };
 
   client = new LanguageClient("systemica", "SysML v2 Language Server", serverOptions, clientOptions);
