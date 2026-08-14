@@ -1,0 +1,11 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::sat",
+  "slots": {
+    "individualmass": {"type": "Quantity", "value": 4, "unit": "kg"},
+    "subsystems": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "Subsystems": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+    "totalmass": {"type": "Quantity", "value": 7, "unit": "kg"}
+  }
+}

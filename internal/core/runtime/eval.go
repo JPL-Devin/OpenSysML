@@ -371,13 +371,11 @@ func (ec *EvalContext) selfSlotValue(name string) (Value, bool, error) {
 	if err != nil {
 		return Value{}, true, err
 	}
-	if slot.Values.Kind != ValInvalid {
-		return slot.Values, true, nil
-	}
-	if slot.Value.Kind == ValInvalid {
+	value := slot.HeldValue()
+	if value.Kind == ValInvalid {
 		return Value{}, true, fmt.Errorf("%w: %s", ErrUninitializedSlot, name)
 	}
-	return slot.Value, true, nil
+	return value, true, nil
 }
 
 // evalFeatureChain evaluates a feature chain expression (e.g., obj.member.submember).
@@ -410,14 +408,10 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 		return Value{}, err
 	}
 
-	// Feature chains only work on instances
-	if operand.Kind != ValInstance {
-		return Value{}, fmt.Errorf("feature chain requires instance, got %v", operand.Kind)
-	}
-
-	// Get the instance
-	if _, ok := ec.ctx.instances[operand.Instance]; !ok {
-		return Value{}, fmt.Errorf("instance ID %d not found", operand.Instance)
+	if operand.Kind == ValInstance {
+		if _, ok := ec.ctx.instances[operand.Instance]; !ok {
+			return Value{}, fmt.Errorf("instance ID %d not found", operand.Instance)
+		}
 	}
 
 	return ec.chainMemberValue(operand, n.Member.Parts, "")
@@ -440,34 +434,66 @@ func chainBase(n *ast.FeatureChainExpr) (ast.Node, []ast.NameSegment) {
 // chainMemberValue reads the members named by parts from the object value names,
 // navigating through the objects the intermediate members name. from names the
 // member value came from, for a diagnostic about chaining through it.
+//
+// A chain's values are its last feature's values over every object the features
+// before it name (KerML 1.0 §7.3.4.6), so a multi-valued member is navigated
+// through each of its objects, concatenated in order and flattened one level.
 func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, from string) (Value, error) {
-	current, name := value, from
-	for i, part := range parts {
-		if current.Kind != ValInstance {
-			return Value{}, fmt.Errorf("cannot chain through non-instance member %s", name)
+	if len(parts) == 0 {
+		return value, nil
+	}
+
+	switch value.Kind {
+	case ValSequence, ValSet:
+		return ec.chainOverElements(value, parts, from)
+	case ValInstance:
+		// handled below
+	default:
+		return Value{}, fmt.Errorf("cannot chain through non-instance member %s (%v)", from, value.Kind)
+	}
+
+	inst, ok := ec.ctx.instances[value.Instance]
+	if !ok {
+		return Value{}, fmt.Errorf("instance ID %d not found for member %s", value.Instance, from)
+	}
+	name := parts[0].Text
+	if _, ok := inst.Slots[name]; !ok {
+		// A calc usage is an evaluation rather than a slot, so its outputs are
+		// read from a run of it against this object.
+		if sym, found := ec.ctx.model.LookupMember(inst.Type, name); found && isCalcUsageSymbol(sym) {
+			return ec.calcUsageMemberValue(sym, inst, parts[1:])
 		}
-		inst, ok := ec.ctx.instances[current.Instance]
-		if !ok {
-			return Value{}, fmt.Errorf("instance ID %d not found for member %s", current.Instance, name)
-		}
-		name = part.Text
-		if _, ok := inst.Slots[name]; !ok {
-			// A calc usage is an evaluation rather than a slot, so its outputs are
-			// read from a run of it against this object.
-			if sym, found := ec.ctx.model.LookupMember(inst.Type, name); found && isCalcUsageSymbol(sym) {
-				return ec.calcUsageMemberValue(sym, inst, parts[i+1:])
-			}
-			return Value{}, fmt.Errorf("member %s not found in instance", name)
-		}
-		// Read through GetSlot so a derived or composite member is materialized
-		// on demand rather than read as an empty slot.
-		slot, err := inst.GetSlot(ec.ctx, name)
+		return Value{}, fmt.Errorf("member %s not found in instance", name)
+	}
+	// Read through GetSlot so a derived or composite member is materialized
+	// on demand rather than read as an empty slot.
+	slot, err := inst.GetSlot(ec.ctx, name)
+	if err != nil {
+		return Value{}, err
+	}
+	member := slot.HeldValue()
+	if member.Kind == ValInvalid {
+		return Value{}, fmt.Errorf("%w: %s", ErrUninitializedSlot, name)
+	}
+	return ec.chainMemberValue(member, parts[1:], name)
+}
+
+// chainOverElements reads the rest of a chain from every element of a
+// multi-valued member, concatenating the values each contributes.
+func (ec *EvalContext) chainOverElements(value Value, parts []ast.NameSegment, from string) (Value, error) {
+	var collected []Value
+	for _, elem := range elementsOf(value) {
+		val, err := ec.chainMemberValue(elem, parts, from)
 		if err != nil {
 			return Value{}, err
 		}
-		current = slot.Value
+		contributed := elementsOf(val)
+		if err := ec.ctx.chargeElements(int64(len(contributed))); err != nil {
+			return Value{}, err
+		}
+		collected = append(collected, contributed...)
 	}
-	return current, nil
+	return sequenceOf(collected), nil
 }
 
 // unimplementedOperators names the operators the runtime does not evaluate and

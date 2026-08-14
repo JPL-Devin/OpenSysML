@@ -105,6 +105,153 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
 	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
 	t.Run("collection_operation_step_budget", testCollectionOperationStepBudget)
+	t.Run("multiplicity_infinite_lower_bound", testMultiplicityInfiniteLowerBound)
+	t.Run("multiplicity_lower_bound_too_large", testMultiplicityLowerBoundTooLarge)
+	t.Run("feature_chain_through_an_unset_slot", testFeatureChainThroughAnUnsetSlot)
+	t.Run("feature_chain_spends_the_element_budget", testFeatureChainSpendsTheElementBudget)
+	t.Run("mutually_subsetting_features", testMutuallySubsettingFeatures)
+}
+
+// testMultiplicityInfiniteLowerBound: `[*..*]` requires unboundedly many objects,
+// which cannot be materialized, so the slot reports a multiplicity violation
+// rather than allocating until memory runs out.
+func testMultiplicityInfiniteLowerBound(t *testing.T) {
+	inst, ctx := instantiateHolder(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def C { attribute m : Real = 1.0; }
+			part def Holder { part p : C[*..*]; }
+		}
+	`)
+	_, err := inst.GetSlot(ctx, "p")
+	if err == nil {
+		t.Fatal("want a multiplicity violation, got a materialized slot")
+	}
+	if !errors.Is(err, ErrMultiplicityViolation) {
+		t.Errorf("expected ErrMultiplicityViolation, got: %v", err)
+	}
+}
+
+// testMultiplicityLowerBoundTooLarge: a lower bound past the materialization
+// bound is reported instead of eagerly allocating that many objects.
+func testMultiplicityLowerBoundTooLarge(t *testing.T) {
+	inst, ctx := instantiateHolder(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def C { attribute m : Real = 1.0; }
+			part def Holder { part p : C[5000]; }
+		}
+	`)
+	_, err := inst.GetSlot(ctx, "p")
+	if err == nil {
+		t.Fatal("want a multiplicity violation, got a materialized slot")
+	}
+	if !errors.Is(err, ErrMultiplicityViolation) {
+		t.Errorf("expected ErrMultiplicityViolation, got: %v", err)
+	}
+	if len(ctx.instances) > 100 {
+		t.Errorf("materialized %d instances before reporting the bound", len(ctx.instances))
+	}
+}
+
+// testFeatureChainThroughAnUnsetSlot: a chain over a collection whose objects
+// hold no value for the last feature names that feature, rather than reading it
+// as an empty collection.
+func testFeatureChainThroughAnUnsetSlot(t *testing.T) {
+	inst, ctx := instantiateHolder(t, `
+		package test {
+			private import ScalarValues::Real;
+			private import RealFunctions::*;
+			part def Sub { attribute volume : Real; }
+			part def Holder {
+				part subs : Sub[2];
+				attribute total : Real = sum(subs.volume);
+			}
+		}
+	`)
+	_, err := inst.GetSlot(ctx, "total")
+	if err == nil {
+		t.Fatal("want the unset slot's error, got a value")
+	}
+	if !errors.Is(err, ErrUninitializedSlot) {
+		t.Errorf("expected ErrUninitializedSlot, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "volume") {
+		t.Errorf("error %q does not name the unset feature", err)
+	}
+}
+
+// testFeatureChainSpendsTheElementBudget: navigating a chain through a collection
+// counts what it collects, so a chain over a large collection ends within the
+// element budget rather than growing unbounded.
+func testFeatureChainSpendsTheElementBudget(t *testing.T) {
+	inst, ctx := instantiateHolder(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def Sub { attribute volume : Real = 1.0; }
+			part def Holder {
+				part subs : Sub[10];
+				attribute volumes : Real[*] = subs.volume;
+			}
+		}
+	`)
+	ctx.maxElements = 15
+	_, err := inst.GetSlot(ctx, "volumes")
+	if err == nil {
+		t.Fatal("want the element budget's error, got a value")
+	}
+	if !errors.Is(err, ErrElementLimitExceeded) {
+		t.Errorf("expected ErrElementLimitExceeded, got: %v", err)
+	}
+}
+
+// testMutuallySubsettingFeatures: two features that subset each other have no
+// well-founded set of values, so materializing one reports the cycle instead of
+// recursing until the step budget runs out.
+func testMutuallySubsettingFeatures(t *testing.T) {
+	inst, ctx := instantiateHolder(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def C { attribute m : Real = 1.0; }
+			part def Holder {
+				part a : C[*] :> b;
+				part b : C[*] :> a;
+			}
+		}
+	`)
+	done := make(chan struct{})
+	var slotErr error
+	go func() {
+		defer close(done)
+		_, slotErr = inst.GetSlot(ctx, "a")
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetSlot hung on mutually subsetting features")
+	}
+	if slotErr == nil {
+		t.Fatal("want the cyclic slot's error, got a materialized slot")
+	}
+	if !errors.Is(slotErr, ErrCyclicSlot) {
+		t.Errorf("expected ErrCyclicSlot, got: %v", slotErr)
+	}
+}
+
+// instantiateHolder instantiates the `Holder` part def the source declares, for
+// a case whose failure surfaces when one of its slots is read.
+func instantiateHolder(t *testing.T, src string) (*Instance, *Context) {
+	t.Helper()
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Holder", ast.DefPart)
+	if sym == nil {
+		t.Fatal("Holder part def not found")
+	}
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	return inst, ctx
 }
 
 // testSequenceIndexNamesNoPosition: an index outside the sequence, or one that
