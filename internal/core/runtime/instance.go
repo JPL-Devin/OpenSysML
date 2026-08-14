@@ -7,6 +7,11 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
+// maxMaterializedLowerBound bounds the anonymous objects a collection slot is
+// filled with: a lower bound past it is a model that cannot be materialized
+// rather than a run that is merely slow.
+const maxMaterializedLowerBound int64 = 1000
+
 // Instance is a runtime-materialized object (Tier 2).
 type Instance struct {
 	ID    int64            // unique identity
@@ -20,6 +25,15 @@ type Slot struct {
 	Value        Value // scalar slot (multiplicity [1])
 	Values       Value // collection slot (Sequence or Set)
 	Materialized bool  // lazy flag: has this slot been instantiated?
+}
+
+// HeldValue is the value the slot reads as: its collection when the feature is
+// multi-valued, otherwise its scalar.
+func (s *Slot) HeldValue() Value {
+	if s.Values.Kind != ValInvalid {
+		return s.Values
+	}
+	return s.Value
 }
 
 // Instantiate materializes an instance of the given usage/definition symbol.
@@ -66,6 +80,10 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 
 		inst.Slots[feat.Name] = slot
 	}
+
+	// A redefining feature declares the feature it redefines again, so the two
+	// names read one slot.
+	ctx.aliasRedefinedSlots(inst)
 
 	// Register instance
 	ctx.registerInstance(inst)
@@ -152,7 +170,7 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 
 	// A multi-valued feature given a default holds that default's contents; a
 	// single value written there is the collection's one element.
-	if slot.Feature.DefaultValue != nil && slot.Feature.Type == nil {
+	if slot.Feature.DefaultValue != nil {
 		val, err := ctx.evalSlotDefault(inst, slot, name)
 		if err != nil {
 			return nil, err
@@ -186,14 +204,20 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 			}
 			slot.Value = Value{Kind: ValInstance, Instance: childInst.ID}
 		} else {
-			// Collection: instantiate up to lower bound (or 0 if unbounded)
-			count := int(mult.Lower.Value)
-
 			// Guard against infinite/huge lower bound (C3)
-			if mult.Lower.Infinite || mult.Lower.Value > 1000 {
-				return nil, fmt.Errorf("lower bound too large or infinite for slot %q", name)
+			if mult.Lower.Infinite || mult.Lower.Value > maxMaterializedLowerBound {
+				return nil, fmt.Errorf("%w: lower bound too large or infinite for slot %q", ErrMultiplicityViolation, name)
 			}
 
+			// A feature subsetting this one holds values this one holds, so the
+			// objects those features name are members of this collection;
+			// anonymous objects make up the rest of the lower bound.
+			contributed, err := ctx.subsettingContributions(inst, name)
+			if err != nil {
+				return nil, err
+			}
+
+			count := int(mult.Lower.Value) - len(contributed)
 			if count < 0 {
 				count = 0
 			}
@@ -203,6 +227,9 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 				return nil, err
 			}
 			seq := NewSequence()
+			for _, val := range contributed {
+				seq.Append(val)
+			}
 			for i := 0; i < count; i++ {
 				childInst, err := ctx.Instantiate(composite)
 				if err != nil {
@@ -219,13 +246,13 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 }
 
 // CompositeTypeOf returns what a feature is materialized from, or nil for one
-// that holds a value rather than an object — a written default takes precedence
+// that holds a value rather than an object — any default takes precedence
 // over instantiation, as in GetSlot above. A usage with members of its own is
 // instantiated as itself, so its body governs and an untyped nested part
 // materializes at all. Answering costs no allocation, so a caller walking an
 // object graph can decide whether to descend before descending.
 func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
-	if feat.DefaultValue != nil && (isScalarFeature(feat) || feat.Type == nil) {
+	if feat.DefaultValue != nil {
 		return nil
 	}
 	if feat.Symbol != nil && isCompositeUsage(feat.Symbol) && len(declMembers(feat.Symbol.Decl)) > 0 {
@@ -256,7 +283,7 @@ func (ctx *Context) evalSlotDefault(inst *Instance, slot *Slot, name string) (Va
 	ctx.derivingSlots[key] = true
 	defer delete(ctx.derivingSlots, key)
 
-	scope := slot.Feature.DeclScope()
+	scope := slot.Feature.DefaultScope()
 	if scope == nil {
 		scope = inst.Type.OwnerScope
 	}

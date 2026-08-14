@@ -1,0 +1,9 @@
+{
+  "type": "instance",
+  "instantiate": "test::Ctx",
+  "slots": {
+    "subsystem": {"type": "Sequence", "elements": []},
+    "totalVolume": {"type": "Integer", "value": 0},
+    "count": {"type": "Integer", "value": 0}
+  }
+}

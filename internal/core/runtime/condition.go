@@ -225,7 +225,7 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 		if feat.Name == "" {
 			continue
 		}
-		out[feat.Name] = scopedExpr{expr: feat.DefaultValue, scope: feat.DeclScope()}
+		out[feat.Name] = scopedExpr{expr: feat.DefaultValue, scope: feat.DefaultScope()}
 	}
 	return out
 }

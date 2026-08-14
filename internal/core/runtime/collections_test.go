@@ -466,3 +466,30 @@ func TestSequenceIndexKeepsQuantityForm(t *testing.T) {
 		t.Errorf("xs#(2) = (%v, %v), want the Integer 2", got, err)
 	}
 }
+
+// TestAggregateQuantities: a roll-up over measured values answers a measured
+// value, in the unit of the first element, and refuses a bare number mixed in.
+func TestAggregateQuantities(t *testing.T) {
+	ctx, scope := quantityContext(t)
+
+	got, err := evalIn(t, ctx, scope, "sum((1 [m], 2 [m], 3 [m]))")
+	if err != nil {
+		t.Fatalf("sum of metres: %v", err)
+	}
+	if got.Kind != ValQuantity || got.Quantity.String() != "6 [m]" {
+		t.Errorf("sum of metres = %v (%s), want 6 [m]", got, got.Kind)
+	}
+
+	// A commensurable element converts into the first element's unit.
+	got, err = evalIn(t, ctx, scope, "sum((1 [m], 50 [cm]))")
+	if err != nil {
+		t.Fatalf("sum of mixed length units: %v", err)
+	}
+	if got.Kind != ValQuantity || got.Quantity.String() != "1.5 [m]" {
+		t.Errorf("sum of mixed length units = %v, want 1.5 [m]", got)
+	}
+
+	if _, err := evalIn(t, ctx, scope, "sum((1 [m], 2))"); err == nil {
+		t.Error("a bare number mixed with a length aggregated without an error")
+	}
+}
