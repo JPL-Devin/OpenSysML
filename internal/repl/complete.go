@@ -56,9 +56,33 @@ func completion(word string, candidates []string) Completion {
 	out := append([]string(nil), candidates...)
 	sort.Strings(out)
 	if len(out) > completionLimit {
+		// The prompt inserts what the candidates share, so dropping matches
+		// must not lengthen it: where it would, only what every match shares
+		// is offered, and nothing where that is what is already typed.
+		shared := sharedPrefix(out)
 		out = out[:completionLimit]
+		if len(sharedPrefix(out)) > len(shared) {
+			if shared == word {
+				return Completion{Prefix: word}
+			}
+			out = []string{shared}
+		}
 	}
 	return Completion{Candidates: out, Prefix: word}
+}
+
+// sharedPrefix returns the longest prefix every candidate begins with.
+func sharedPrefix(candidates []string) string {
+	if len(candidates) == 0 {
+		return ""
+	}
+	prefix := candidates[0]
+	for _, c := range candidates[1:] {
+		for !strings.HasPrefix(c, prefix) {
+			prefix = prefix[:len(prefix)-1]
+		}
+	}
+	return prefix
 }
 
 // firstToken returns the first whitespace-separated token of a line.

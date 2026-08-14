@@ -236,6 +236,59 @@ func TestCompleteConcurrentWithSubmit(t *testing.T) {
 	}
 }
 
+// TestCompletionBoundKeepsInsertion checks bounding a large answer never offers
+// a longer shared prefix than the whole match set has: the prompt inserts what
+// the candidates share, so dropping matches must not insert letters they lack.
+func TestCompletionBoundKeepsInsertion(t *testing.T) {
+	// Alphabetically first past the bound, so truncation alone would share "Ax".
+	crowded := make([]string, 0, completionLimit+2)
+	for i := 0; i < completionLimit+1; i++ {
+		crowded = append(crowded, fmt.Sprintf("Ax%04d", i))
+	}
+
+	tests := []struct {
+		name       string
+		word       string
+		candidates []string
+		wantShared string
+		wantCount  int
+	}{
+		{name: "under the bound", word: "A", candidates: []string{"Ab", "Ac"}, wantShared: "A", wantCount: 2},
+		{
+			name:       "bound offers nothing rather than the wrong text",
+			word:       "A",
+			candidates: append(append([]string(nil), crowded...), "Azz"),
+			wantCount:  0, // every match shares only the typed word
+		},
+		{
+			name:       "shared prefix extends the typed word",
+			word:       "A",
+			candidates: append(append([]string(nil), crowded...), "Ax1"),
+			wantShared: "Ax",
+			wantCount:  1,
+		},
+		{
+			name:       "bounding is safe when the prefix is unchanged",
+			word:       "Ax",
+			candidates: crowded,
+			wantShared: "Ax0",
+			wantCount:  completionLimit,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := completion(tt.word, tt.candidates)
+			if len(got.Candidates) != tt.wantCount {
+				t.Fatalf("offered %d candidates, want %d", len(got.Candidates), tt.wantCount)
+			}
+			if shared := sharedPrefix(got.Candidates); len(got.Candidates) > 0 && shared != tt.wantShared {
+				t.Fatalf("shared prefix = %q, want %q", shared, tt.wantShared)
+			}
+		})
+	}
+}
+
 // TestSplitPath checks a typed path is split at the last separator the platform
 // reads as one, so a path written with backslashes completes on Windows.
 func TestSplitPath(t *testing.T) {
