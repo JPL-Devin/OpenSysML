@@ -45,12 +45,18 @@ func ConjugateDirection(d ast.FeatureDirection) ast.FeatureDirection {
 // IsConjugated reports whether sym's inherited features have reversed
 // directions. Conjugation composes, so `~` of a conjugate is the original.
 func (m *Model) IsConjugated(sym *symbols.Symbol) bool {
-	edges := m.superEdges(sym)
-	if len(edges) == 0 {
-		return false
+	parity := false
+	visited := make(map[*symbols.Symbol]bool)
+	for cur := sym; cur != nil && !visited[cur]; {
+		visited[cur] = true
+		edges := m.superEdges(cur)
+		if len(edges) == 0 {
+			break
+		}
+		parity = parity != edges[0].conjugated
+		cur = edges[0].sym
 	}
-	first := edges[0]
-	return first.conjugated != m.IsConjugated(first.sym)
+	return parity
 }
 
 // superEdges returns sym's generalization edges in declaration order, each with
@@ -164,17 +170,6 @@ func (m *Model) PortFeatures(sym *symbols.Symbol) []PortFeature {
 		}
 	}
 	return out
-}
-
-// PortFeatureDirection returns the direction the feature named name has as seen
-// through the port sym, and whether the port has such a feature.
-func (m *Model) PortFeatureDirection(sym *symbols.Symbol, name string) (ast.FeatureDirection, bool) {
-	for _, feature := range m.PortFeatures(sym) {
-		if feature.Name == name {
-			return feature.Direction, true
-		}
-	}
-	return ast.DirNone, false
 }
 
 // PortsConform reports whether every feature of port a matches one on port b

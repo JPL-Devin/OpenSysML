@@ -116,6 +116,26 @@ func TestDoubleConjugationRestoresDirections(t *testing.T) {
 	}
 }
 
+// TestConjugationTerminatesOnSpecializationCycle: a cyclic specialization is
+// diagnosable input, so the parity walk must terminate rather than recurse.
+func TestConjugationTerminatesOnSpecializationCycle(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		port def A :> B;
+		port def B :> A;
+		part def X { port a : ~A; }
+	}`)
+	pkg := sym(t, root, "P")
+	for _, name := range []string{"A", "B"} {
+		if m.IsConjugated(member(t, m, pkg, name)) {
+			t.Errorf("%s reported conjugated", name)
+		}
+	}
+	x := member(t, m, pkg, "X")
+	if !m.IsConjugated(member(t, m, x, "a")) {
+		t.Errorf("X::a not reported conjugated")
+	}
+}
+
 // TestConjugatedPortConformance covers §7.12.2: a conjugated port usage
 // conforms to a usage of the original port definition, and two ports conform
 // when each feature of one matches a feature of the other — conforming types
