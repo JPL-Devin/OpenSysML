@@ -4,8 +4,10 @@ A single page of runnable material for showing Systemica to someone who has neve
 section is a model you can paste, a command you can run, and the output it produces. Sections are
 independent, so drop any of them to fit the time you have.
 
-> **Every command and every output block below was run against `bin/sysml` at commit `f002988`.**
-> Outputs are pasted verbatim, so what you see on stage should match this page character for character.
+> **Every command and every output block below was run against `bin/sysml` and pasted verbatim**, so
+> what you see on stage should match this page character for character — with two known exceptions:
+> the `--version` banner in §0 carries your own build, and the attribute order inside a `%tokens` /
+> `Results:` block in §7 varies between runs (see the note there).
 
 ## 0. Setup (one minute)
 
@@ -21,9 +23,9 @@ Show the audience what is running — the version line carries the commit:
 
 ```console
 $ sysml --version
-sysml f002988
-  Commit:     f002988
-  Build time: 2026-08-14_15:25:34
+sysml <commit>
+  Commit:     <commit>
+  Build time: <build time>
   Go version: go1.25.0
 ```
 
@@ -398,6 +400,9 @@ sysml> %continue
 Point out the token position (`@ rollForward`, then `@ takeSample`) and the data travelling with it:
 `metersDriven` is `0` before the assignment ran and `10` at the breakpoint.
 
+The two attributes inside a `%tokens` or `Results:` block may print in either order from run to run —
+read the values, not the line order. (`%slots` in §3 is stable.)
+
 ---
 
 ## 8. State machines run on simulated time
@@ -574,9 +579,11 @@ echoes it, `%clear` resets it, and `%verbosity quiet|normal|debug` sets how much
 - **Flags before files**: `sysml -e "x" model.sysml`, never `sysml model.sysml -e "x"`.
 - **A blank line submits.** While typing a multi-line declaration in a brace continuation (`...>`),
   do not leave an empty line in the middle of it.
-- **Do not type a declaration while a debugger session is open.** Any new declaration resets the
-  session's derived state, which drops instances and ends an in-progress `%action`/`%state` session.
-  Load the model first, then debug.
+- **A new declaration drops the instances.** Anything you declare resets the session's derived state,
+  so `%instances` goes back to `(no instances created)` and `%slots` has nothing to show until you
+  `%instantiate` again. An in-progress `%action`/`%state` debugging session does keep running.
+- **`clear` is not a REPL command.** At the `sysml> ` prompt it is parsed as SysML and leaves an
+  unresolved session error that is then reported under later commands. `%clear` is the command.
 - **`-convert … -to ttl` covers structure.** A model with `calc` result members or state substates is
   rejected (`cannot convert the *ast.ResultMember at …`) rather than silently exported, so use a
   structural model for the RDF demo, as in §10.
