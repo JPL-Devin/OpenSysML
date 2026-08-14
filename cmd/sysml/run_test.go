@@ -115,6 +115,20 @@ func TestAdvanceTakesADuration(t *testing.T) {
 			t.Errorf("-advance %s ran the machine anyway:\n%s", value, got.output())
 		}
 	}
+
+	// The misuse is reported in the form the caller asked for, so a build step
+	// reading the JSON document has something to parse.
+	got := check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", "soon", "-json")
+	var report struct {
+		Status string   `json:"status"`
+		Errors []string `json:"errors"`
+	}
+	if err := json.Unmarshal([]byte(got.stdout), &report); err != nil {
+		t.Fatalf("stdout is not the reported JSON: %v\n%s", err, got.output())
+	}
+	if report.Status != "unresolved" || len(report.Errors) == 0 {
+		t.Errorf("report does not say why the check was never made:\n%s", got.stdout)
+	}
 }
 
 // TestValidate checks the diagnostics gate on its own: a model that analyses

@@ -30,16 +30,17 @@ type checks struct {
 	calcs        stringSlice
 	actions      stringSlice
 	states       stringSlice
-	advance      float64
-	advanceGiven bool
-	jsonOut      bool
+	// advanceTime is -advance as written, parsed where a bad value is reported in
+	// whichever form the caller asked for.
+	advanceTime string
+	jsonOut     bool
 }
 
 // requested reports whether checking mode was asked for rather than a prompt.
 // -json and -advance check nothing themselves, but are included so their misuse
 // is reported rather than leaving a script at a prompt it cannot answer.
 func (c *checks) requested() bool {
-	return c.validate || c.jsonOut || c.advanceGiven || len(c.instantiate) > 0 || len(c.constraints) > 0 ||
+	return c.validate || c.jsonOut || c.advanceTime != "" || len(c.instantiate) > 0 || len(c.constraints) > 0 ||
 		len(c.requirements) > 0 || len(c.satisfy) > 0 || len(c.calcs) > 0 ||
 		len(c.actions) > 0 || len(c.states) > 0
 }
@@ -70,6 +71,10 @@ func (t *satisfyTargets) Set(value string) error {
 		*t = append(*t, "")
 		return nil
 	}
+	if value == "false" {
+		// The off spelling of a flag declared boolean, so -satisfy=$on works.
+		return nil
+	}
 	*t = append(*t, value)
 	return nil
 }
@@ -93,9 +98,18 @@ func (t *satisfyTargets) tookNoValue() bool {
 func runChecks(files []string, exprs []string, c checks) int {
 	rep := newReporter(c.jsonOut)
 
-	if c.advanceGiven && len(c.states) == 0 {
-		rep.failed("-advance is the time a state machine runs for; name one, as -state <name>")
-		return rep.finish()
+	var advance float64
+	if c.advanceTime != "" {
+		if len(c.states) == 0 {
+			rep.failed("-advance is the time a state machine runs for; name one, as -state <name>")
+			return rep.finish()
+		}
+		duration, err := parseAdvance(c.advanceTime)
+		if err != nil {
+			rep.failed(err.Error())
+			return rep.finish()
+		}
+		advance = duration
 	}
 	if !c.checksOnly() {
 		rep.failed("-json reports a check; name one, as -validate or -constraint <name>")
@@ -175,8 +189,8 @@ func runChecks(files []string, exprs []string, c checks) int {
 	}
 	for _, value := range c.states {
 		name, performer := splitPerformer(value)
-		if c.advanceGiven {
-			rep.verdict(sess.RunStateMachineFor(name, c.advance, performer...))
+		if c.advanceTime != "" {
+			rep.verdict(sess.RunStateMachineFor(name, advance, performer...))
 			continue
 		}
 		rep.verdict(sess.RunStateMachine(name, performer...))

@@ -48,7 +48,6 @@ var (
 	outputPath    string
 	fromFormat    string
 	modelChecks   checks
-	advanceTime   string
 )
 
 // budgets holds the run bounds the environment resolves to, read once at startup.
@@ -125,21 +124,11 @@ func main() {
 	flag.Var(&modelChecks.calcs, "calc", "Invoke this calculation and report what it computed, as -calc \"Fall(3, 4)\" (repeatable)")
 	flag.Var(&modelChecks.actions, "action", "Run this action to completion, as -action \"Drive rover1\" to run it on an object (repeatable)")
 	flag.Var(&modelChecks.states, "state", "Run this state machine, as -state \"Mission rover1\" to run it on an object (repeatable)")
-	flag.StringVar(&advanceTime, "advance", "", "Simulated time units to run each -state machine for (default: only its initial transition)")
+	flag.StringVar(&modelChecks.advanceTime, "advance", "", "Simulated time units to run each -state machine for (default: only its initial transition)")
 	flag.BoolVar(&modelChecks.jsonOut, "json", false, "Report checks as one JSON document rather than as lines")
 	if err := flag.CommandLine.Parse(permuteArgs(flag.CommandLine, os.Args[1:])); err != nil {
 		// flag.CommandLine exits on error; unreachable unless that changes.
 		os.Exit(2)
-	}
-
-	if advanceTime != "" {
-		duration, err := parseAdvance(advanceTime)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "sysml:", err)
-			os.Exit(2)
-		}
-		modelChecks.advance = duration
-		modelChecks.advanceGiven = true
 	}
 
 	if debugMode && quietMode {

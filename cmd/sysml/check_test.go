@@ -148,6 +148,19 @@ func TestCheckSatisfyThroughCLI(t *testing.T) {
 		"no satisfaction assertion in Rover::touchdown")
 }
 
+// TestSatisfyCanBeTurnedOff checks that the off spelling of a flag declared
+// boolean asks for no satisfaction check, rather than for an element named
+// "false", so -satisfy=$on works in a script.
+func TestSatisfyCanBeTurnedOff(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, checkModel, "-satisfy=false", "-constraint", "Rover::MassBudget")
+	wantReport(t, got, 0, "✓ Constraint Rover::MassBudget passed")
+	if strings.Contains(got.output(), "satisfy touchdown") {
+		t.Errorf("-satisfy=false checked satisfaction anyway:\n%s", got.output())
+	}
+}
+
 // TestCheckAgainstInstantiatedObject checks that -instantiate makes a following
 // verdict be about that object, which is the only way a part's own constraint
 // reaches concrete slot values.

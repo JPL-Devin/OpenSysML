@@ -350,7 +350,7 @@ $ sysml -satisfy checks.sysml
 | `-constraint <name>` | One constraint, as `%constraint` does |
 | `-requirement <name>` | One requirement, as `%requirement` does |
 | `-satisfy` | Every satisfaction assertion the model states |
-| `-satisfy=<name>` | Only the assertions the named element states |
+| `-satisfy=<name>` | Only the assertions the named element states (`-satisfy=false` asks for none) |
 | `-instantiate <name>` | Creates an object first, so the verdicts are about it |
 | `-calc "<name>(<args>)"` | Invokes a calculation and reports what it computed |
 | `-action "<name> [object]"` | Runs an action to completion and reports its outputs |
