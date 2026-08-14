@@ -63,6 +63,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 
 	// Walk remaining segments as local members of the current symbol's scope.
 	from := r.referringNamespaceFQN(scope)
+	curFQN := cur.Name
 	for i, seg := range qn.Parts[1:] {
 		var all []*symbols.Symbol
 
@@ -71,29 +72,33 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 			all = symbols.PreferDeclared(cur.Scope.LookupLocalAll(seg.Text))
 		}
 
-		// If local lookup fails (or no scope), try building the FQN and looking in the global index.
-		// This handles cases like ScalarValues::Real where ScalarValues is a package
-		// from stdlib that was indexed with full FQNs but doesn't have a populated Scope.
+		// If local lookup fails (or no scope), look the segment up under the FQN
+		// walked so far. This handles cases like ScalarValues::Real where
+		// ScalarValues is a package from stdlib that was indexed with full FQNs
+		// but doesn't have a populated Scope, at any nesting depth.
+		memberFQN := curFQN + "::" + seg.Text
 		if len(all) == 0 && r.idx != nil {
-			// For the simple 2-part case (most common), build FQN from current symbol + segment
-			if i == 0 && cur != nil {
-				// First segment after the initial lookup: cur::seg
-				fqn := cur.Name + "::" + seg.Text
-				candidates := r.admittedUnder(fqn, r.idx.LookupQualifiedFrom(fqn, from))
-				if len(candidates) == 1 {
-					all = candidates
-				} else if len(candidates) > 1 {
-					r.ambiguous(qn, len(candidates))
-					return resolution{nil, false}
-				}
+			found := r.idx.LookupQualifiedFrom(memberFQN, from)
+			candidates := r.admittedUnder(memberFQN, found)
+			switch {
+			case len(candidates) == 1:
+				all = candidates
+			case len(candidates) > 1:
+				r.ambiguous(qn, len(candidates))
+				return resolution{nil, false}
+			case len(found) > 0:
+				// Every candidate the name reaches is filtered out, so it is not a
+				// member of the namespace it appears under (KerML 8.2.4) and no
+				// other route may recover it.
+				r.unresolved(qn)
+				return resolution{nil, false}
 			}
-			// TODO: Handle deeper nesting if needed
 		}
 
 		// The name exists under cur but only because a private import surfaced it
 		// there: it is invisible from here (KerML 8.2.3.3), and the member search
 		// below reaches cached symbols by a route that does not know that.
-		if len(all) == 0 && r.idx != nil && r.idx.HiddenFrom(cur.Name+"::"+seg.Text, from) {
+		if len(all) == 0 && r.idx != nil && r.idx.HiddenFrom(memberFQN, from) {
 			r.unresolved(qn)
 			return resolution{nil, false}
 		}
@@ -116,6 +121,13 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 			return resolution{nil, false}
 		}
 		cur = all[0]
+		// A symbol restored from a cache record carries its fully-qualified name,
+		// which is where its own members are registered.
+		if strings.Contains(cur.Name, "::") {
+			curFQN = cur.Name
+		} else {
+			curFQN = memberFQN
+		}
 		r.recordPart(qn, i+1, cur)
 	}
 	return resolution{cur, true}

@@ -15,23 +15,24 @@ import (
 //
 // A namespace's own declared members are never filtered: a filter restricts
 // imported memberships, not declared ones.
+//
+// A namespace's `filter` members restrict what it re-exports, which is what an
+// outside lookup reaches (admitsUnderName), not what resolves inside its own
+// body. Gating the body too would make a filter unable to name a metadata type
+// the namespace itself imports — the condition's own names would be filtered by
+// the condition.
 
 // importAdmits returns the test an element an import surfaces has to pass: the
-// import's own filter clause (`import P::*[@Safety]`), and the `filter` members
-// of the namespace the import is declared in, which restrict its imported
-// memberships. The two compose as an intersection.
+// import's own filter clause (`import P::*[@Safety]`).
 func (r *Resolver) importAdmits(scope *symbols.Scope, imp *ast.Import) func(*symbols.Symbol) bool {
-	filters := r.namespaceFilters(scope)
-	if imp.FilterExpr != nil {
-		filters = append([]symbols.ElementFilter{{
-			Expr:  imp.FilterExpr,
-			Scope: scope,
-			Span:  imp.FilterExpr.Span(),
-		}}, filters...)
-	}
-	if len(filters) == 0 {
+	if imp.FilterExpr == nil {
 		return func(*symbols.Symbol) bool { return true }
 	}
+	filters := []symbols.ElementFilter{{
+		Expr:  imp.FilterExpr,
+		Scope: scope,
+		Span:  imp.FilterExpr.Span(),
+	}}
 	return func(sym *symbols.Symbol) bool { return r.admits(filters, sym) }
 }
 
@@ -107,19 +108,4 @@ func (r *Resolver) admits(filters []symbols.ElementFilter, cand *symbols.Symbol)
 		}
 	}
 	return true
-}
-
-// namespaceFilters returns the filter conditions declared by the namespace whose
-// body scope is given, memoized: an import enumeration asks for them for every
-// name it looks up.
-func (r *Resolver) namespaceFilters(scope *symbols.Scope) []symbols.ElementFilter {
-	if scope == nil {
-		return nil
-	}
-	if filters, ok := r.nsFilters[scope]; ok {
-		return filters
-	}
-	filters := symbols.NamespaceFiltersIn(scope)
-	r.nsFilters[scope] = filters
-	return filters
 }

@@ -542,6 +542,85 @@ func TestExpandWildcardImportsRecordsAGateOnce(t *testing.T) {
 	}
 }
 
+// A namespace importing a filtering one onward carries that namespace's
+// conditions along with its own, so the onward route is no wider than the one it
+// imports through.
+func TestExpandWildcardImportsCarriesGatesOnward(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "safe.sysml", `package Safe {
+		public import Base::*;
+		filter @Safety;
+	}`)
+	addDoc(t, idx, "onward.sysml", "package Onward { public import Safe::*; }")
+	addDoc(t, idx, "further.sysml", `package Further {
+		public import Onward::*[@Mandatory];
+	}`)
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	for fqn, want := range map[string]int{
+		"Safe::Belt":    1, // the namespace's own filter member
+		"Onward::Belt":  1, // inherited from Safe, which added nothing of its own
+		"Further::Belt": 2, // Safe's filter member and this import's clause
+	} {
+		routes := idx.ReexportGates(fqn, belt)
+		if len(routes) != 1 {
+			t.Fatalf("%s is gated by %d routes, want 1", fqn, len(routes))
+		}
+		if len(routes[0]) != want {
+			t.Errorf("the route to %s carries %d conditions, want %d", fqn, len(routes[0]), want)
+		}
+	}
+}
+
+// An unconditional route into a filtering namespace stays a route of its own
+// when a further namespace imports it onward, so a name reachable unfiltered
+// through one import is not narrowed by another.
+func TestExpandWildcardImportsCarriesEachRouteOnward(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "mid.sysml", `package Mid {
+		public import Base::*[@Safety];
+		public import Base::*;
+	}`)
+	addDoc(t, idx, "onward.sysml", "package Onward { public import Mid::*; }")
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	routes := idx.ReexportGates("Onward::Belt", belt)
+	if len(routes) != 1 || len(routes[0]) != 0 {
+		t.Fatalf("Onward::Belt is gated by %v, want a single unconditional route", routes)
+	}
+}
+
+// A namespace's filters may be declared by another document than its imports,
+// so adding or removing that document has to re-derive the routes into it: a
+// gate recorded before a filter arrived would keep admitting everything.
+func TestNamespaceFilterFromAnotherDocumentRegatesReexports(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "imports.sysml", "package Safe { public import Base::*; }")
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	if routes := idx.ReexportGates("Safe::Belt", belt); len(routes) != 1 || len(routes[0]) != 0 {
+		t.Fatalf("Safe::Belt is gated by %v before any filter, want a single unconditional route", routes)
+	}
+
+	addDoc(t, idx, "filter.sysml", "package Safe { filter @Safety; }")
+	idx.ExpandWildcardImports()
+	routes := idx.ReexportGates("Safe::Belt", belt)
+	if len(routes) != 1 || len(routes[0]) != 1 {
+		t.Fatalf("Safe::Belt is gated by %v once a filter is declared, want one route of one condition", routes)
+	}
+
+	idx.RemoveDocument("filter.sysml")
+	if routes := idx.ReexportGates("Safe::Belt", belt); len(routes) != 1 || len(routes[0]) != 0 {
+		t.Fatalf("Safe::Belt is gated by %v once the filter is gone, want a single unconditional route", routes)
+	}
+}
+
 // lookupOne returns the single symbol registered under fqn.
 func lookupOne(t *testing.T, idx *Index, fqn string) *Symbol {
 	t.Helper()

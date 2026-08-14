@@ -56,9 +56,6 @@ type Resolver struct {
 	// members whose bodies are being walked, innermost last: such a body may
 	// redefine a feature of the requirement it references by plain name.
 	constraintRefs []constraintRef
-	// nsFilters are the element-filter conditions each namespace declares, read
-	// once per scope: every name looked up through an import consults them.
-	nsFilters map[*symbols.Scope][]symbols.ElementFilter
 }
 
 // New creates a resolver over the given index.
@@ -71,7 +68,6 @@ func New(idx *symbols.Index) *Resolver {
 		naming:    map[*symbols.Symbol]bool{},
 
 		inheritedImports: map[*symbols.Symbol]bool{},
-		nsFilters:        map[*symbols.Scope][]symbols.ElementFilter{},
 	}
 }
 

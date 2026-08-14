@@ -171,22 +171,44 @@ func (idx *Index) NamespaceFiltersOf(fqn string) []ElementFilter {
 // them this way, having no declaration left to read them from.
 func (idx *Index) SetNamespaceFilters(fqn, doc string, filters []ElementFilter) {
 	if len(filters) == 0 {
+		idx.forgetNamespaceFilters(fqn, doc)
 		return
 	}
 	if idx.nsFilters[fqn] == nil {
 		idx.nsFilters[fqn] = make(map[string][]ElementFilter)
 	}
 	idx.nsFilters[fqn][doc] = filters
+	idx.refilter(fqn)
 }
 
 // dropNamespaceFilters forgets the filters doc declared, for every namespace.
 func (idx *Index) dropNamespaceFilters(doc string) {
-	for fqn, byDoc := range idx.nsFilters {
-		delete(byDoc, doc)
-		if len(byDoc) == 0 {
-			delete(idx.nsFilters, fqn)
-		}
+	for fqn := range idx.nsFilters {
+		idx.forgetNamespaceFilters(fqn, doc)
 	}
+}
+
+// forgetNamespaceFilters drops the filters doc declared for the namespace
+// registered under fqn, if it declared any.
+func (idx *Index) forgetNamespaceFilters(fqn, doc string) {
+	byDoc := idx.nsFilters[fqn]
+	if _, had := byDoc[doc]; !had {
+		return
+	}
+	delete(byDoc, doc)
+	if len(byDoc) == 0 {
+		delete(idx.nsFilters, fqn)
+	}
+	idx.refilter(fqn)
+}
+
+// refilter drops what the namespace registered under fqn re-exports, because the
+// conditions gating those routes have changed: the next expansion records them
+// under the filters the namespace now declares, and the members it takes back
+// meanwhile mark the namespaces importing it onward for expansion too.
+func (idx *Index) refilter(fqn string) {
+	delete(idx.lastTargets, fqn)
+	idx.purgeReexportsUnder(fqn)
 }
 
 // NamespaceFiltersIn returns the filter conditions the namespace owning scope

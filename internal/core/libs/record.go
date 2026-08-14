@@ -78,13 +78,16 @@ type IndexRecord struct {
 // target it declares resolved. Returns nil if the document is unknown.
 // Targets are resolved through r, so the record holds the fully-qualified name
 // of each supertype rather than text that only means something in its own file.
-func recordFromIndex(name string, idx *symbols.Index, r *resolve.Resolver) (*IndexRecord, bool) {
+// The model is shared across the records of one library, so the whole-index
+// work it memoizes — the metadata `about` relationships an annotation lookup
+// reads — is done once rather than once per file.
+func recordFromIndex(name string, idx *symbols.Index, r *resolve.Resolver, model *semantics.Model) (*IndexRecord, bool) {
 	root := idx.DocumentRoot(name)
 	if root == nil {
 		return nil, false
 	}
 	rec := &IndexRecord{Name: name}
-	complete := collectScope(root, "", rec, semantics.NewModel(r), idx, r)
+	complete := collectScope(root, "", rec, model, idx, r)
 	return rec, complete
 }
 

@@ -1,6 +1,9 @@
 package model
 
 import (
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -36,6 +39,27 @@ package FilteredImport {
 
 package MandatorySafety {
 	public import Vehicles::vehicle::*[@Vehicles::Safety and Vehicles::Safety::isMandatory == true];
+}
+
+package OnwardSafety {
+	public import SafetyFeatures::*;
+}
+
+package FurtherOnward {
+	public import OnwardSafety::*;
+}
+
+package Nested {
+	package SafetyInner {
+		public import Vehicles::vehicle::*;
+		filter @Vehicles::Safety;
+	}
+}
+
+package UnqualifiedFilter {
+	public import Vehicles::*;
+	public import Vehicles::vehicle::*;
+	filter @Safety;
 }`
 
 const filterClientSource = `package Client {
@@ -187,6 +211,82 @@ func TestFilteredElementIsUnresolvableQualified(t *testing.T) {
 	}
 }
 
+// A filter keeps holding when a further namespace imports the filtering one
+// onward: what the filtered namespace re-exports is what any chain of imports of
+// it carries, however many hops long.
+func TestNamespaceFilterHoldsThroughChainedImports(t *testing.T) {
+	for _, route := range []string{"OnwardSafety", "FurtherOnward"} {
+		client := `package Client {
+			private import ` + route + `::*;
+			part c :> keylessEntry;
+			part d :> ` + route + `::keylessEntry;
+		}`
+		got := openFilterWorkspace(t, client)
+		if len(got) != 2 {
+			t.Fatalf("%s: a filtered element must stay hidden through an onward import, got %v", route, got)
+		}
+
+		client = `package Client {
+			private import ` + route + `::*;
+			part a :> seatBelt;
+			part b :> ` + route + `::seatBelt;
+		}`
+		if got := openFilterWorkspace(t, client); len(got) != 0 {
+			t.Fatalf("%s: an admitted element should still resolve onward, got %v", route, got)
+		}
+	}
+}
+
+// A qualified name reaches a filtering namespace at any depth, not only as the
+// second segment of the name.
+func TestFilterAppliesToDeeplyQualifiedRoute(t *testing.T) {
+	client := `package Client {
+		part c :> Nested::SafetyInner::keylessEntry;
+	}`
+	got := openFilterWorkspace(t, client)
+	if len(got) != 1 || !strings.Contains(got[0], "keylessEntry") {
+		t.Fatalf("a filtered element must not resolve through a nested qualified route, got %v", got)
+	}
+
+	client = `package Client {
+		part a :> Nested::SafetyInner::seatBelt;
+	}`
+	if got := openFilterWorkspace(t, client); len(got) != 0 {
+		t.Fatalf("an admitted element should resolve through a nested qualified route, got %v", got)
+	}
+}
+
+// The metadata type a condition names is resolved from the namespace the filter
+// is written in, so an imported type may be named unqualified.
+func TestFilterNamesMetadataTypeThroughAnImport(t *testing.T) {
+	client := `package Client {
+		private import UnqualifiedFilter::*;
+		part c :> keylessEntry;
+	}`
+	got := openFilterWorkspace(t, client)
+	if len(got) != 1 || !strings.Contains(got[0], "keylessEntry") {
+		t.Fatalf("a filter naming an imported metadata type must apply, got %v", got)
+	}
+
+	client = `package Client {
+		private import UnqualifiedFilter::*;
+		part a :> seatBelt;
+	}`
+	if got := openFilterWorkspace(t, client); len(got) != 0 {
+		t.Fatalf("the annotated element should pass a filter naming an imported type, got %v", got)
+	}
+
+	// The condition's own names are not subject to the condition: a namespace's
+	// filter restricts what it re-exports, not what resolves in its body.
+	ws := NewWorkspace()
+	ws.Open("file:///vehicles.sysml", []byte(filterModelSource), 1)
+	for _, d := range ws.Diagnostics("file:///vehicles.sysml") {
+		if strings.Contains(d.Message, "filter condition") {
+			t.Fatalf("a filter naming an imported type should be evaluable, got %q", d.Message)
+		}
+	}
+}
+
 // A view's `expose` is an import, and its filter restricts what the view
 // surfaces: the recursive form walks the subtree and keeps the matching subset.
 func TestFilteredExposeSurfacesSubset(t *testing.T) {
@@ -222,5 +322,73 @@ func TestFilteredExposeSurfacesSubset(t *testing.T) {
 	}`
 	if got := openFilterWorkspace(t, client); len(got) != 0 {
 		t.Fatalf("an unfiltered expose should surface the whole subtree, got %v", got)
+	}
+}
+
+// A library's filters decide the same way whether its records were parsed or
+// restored from the symbol cache, so a workspace's second run over an unchanged
+// library resolves exactly the names its first one did.
+func TestFilteredLibraryIsCacheStateIndependent(t *testing.T) {
+	libDir := t.TempDir()
+	lib := `package Meta {
+	metadata def Safety;
+}
+
+package Vehicles {
+	part vehicle {
+		part seatBelt { @Meta::Safety; }
+		part keylessEntry;
+	}
+}
+
+package SafeReexport {
+	public import Vehicles::vehicle::*;
+	filter @Meta::Safety;
+}
+
+package Nested {
+	package SafeInner {
+		public import Vehicles::vehicle::*;
+		filter @Meta::Safety;
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(libDir, "lib.sysml"), []byte(lib), 0o600); err != nil {
+		t.Fatalf("write library: %v", err)
+	}
+	t.Setenv("SYSML_LIBRARY_PATH", libDir)
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	client := `package C {
+		private import SafeReexport::*;
+		part a :> keylessEntry;
+		part b :> SafeReexport::keylessEntry;
+		part c :> SafeReexport::seatBelt;
+		part d :> Nested::SafeInner::keylessEntry;
+		part e :> Nested::SafeInner::seatBelt;
+	}`
+	var first []string
+	for run := 1; run <= 3; run++ { // run 1 parses the library, later runs restore it
+		ws := NewWorkspace()
+		ws.Open("file:///c.sysml", []byte(client), 1)
+		var msgs []string
+		for _, d := range ws.Diagnostics("file:///c.sysml") {
+			msgs = append(msgs, d.Message)
+		}
+		if run == 1 {
+			if len(msgs) != 3 {
+				t.Fatalf("run 1: want the three routes to keylessEntry filtered out, got %v", msgs)
+			}
+			for _, msg := range msgs {
+				if !strings.Contains(msg, "keylessEntry") {
+					t.Fatalf("run 1: diagnostics %v should all be about keylessEntry", msgs)
+				}
+			}
+			first = msgs
+			continue
+		}
+		if !slices.Equal(msgs, first) {
+			t.Fatalf("run %d over a cache-restored library reports %v, but %v when parsed", run, msgs, first)
+		}
 	}
 }

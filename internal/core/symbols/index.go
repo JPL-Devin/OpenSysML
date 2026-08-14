@@ -358,11 +358,11 @@ func (idx *Index) expandImporter(pkgFQN string) {
 		if targetFQN == "" {
 			continue // target not found or ambiguous
 		}
-		// The conditions restricting what this import surfaces here: its own
-		// filter clause, and the `filter` members of the namespace it imports into,
-		// which restrict that namespace's imported memberships (KerML 8.2.4). They
-		// gate the re-export rather than suppressing it, because whether a
-		// candidate satisfies them is a question only the semantic model can answer.
+		// The conditions this import adds: its own filter clause, and the `filter`
+		// members of the namespace it imports into, which restrict that namespace's
+		// imported memberships (KerML 8.2.4). They gate the re-export rather than
+		// suppressing it, because whether a candidate satisfies them is a question
+		// only the semantic model can answer.
 		gate := nonZeroFilters(append([]ElementFilter{imp.filter}, idx.NamespaceFiltersOf(pkgFQN)...))
 		for _, child := range idx.exportedChildren(targetFQN) {
 			// Extract child's primary name
@@ -370,11 +370,13 @@ func (idx *Index) expandImporter(pkgFQN string) {
 			if i := lastIndex(childName, "::"); i >= 0 {
 				childName = childName[i+2:]
 			}
-			idx.reexportGated(joinFQN(pkgFQN, childName), child, imp.doc, imp.private, gate)
+			idx.reexportGated(joinFQN(pkgFQN, childName), child, imp.doc, imp.private,
+				idx.routesOnward(joinFQN(targetFQN, childName), child, gate))
 
 			// Also re-export under short name if different from primary name
 			if child.ShortName != "" && child.ShortName != childName {
-				idx.reexportGated(joinFQN(pkgFQN, child.ShortName), child, imp.doc, imp.private, gate)
+				idx.reexportGated(joinFQN(pkgFQN, child.ShortName), child, imp.doc, imp.private,
+					idx.routesOnward(joinFQN(targetFQN, child.ShortName), child, gate))
 			}
 		}
 	}
@@ -640,11 +642,28 @@ func (idx *Index) reexportedAt(fqn string) []*Symbol {
 // recording the claim so that removing doc can take it back. An entry the
 // importing namespace declares itself is left alone: a cycle of wildcard imports
 // brings a package its own members back, and they are not borrowed.
+// routesOnward composes the conditions already gating a name inside the
+// namespace it is imported from — sourceFQN, where an earlier import surfaced it
+// — with the ones this import adds. A filter therefore keeps holding when a
+// further namespace imports the filtering one onward, and the target's several
+// routes each stay a route of their own.
+func (idx *Index) routesOnward(sourceFQN string, sym *Symbol, gate []ElementFilter) [][]ElementFilter {
+	inherited := idx.ReexportGates(sourceFQN, sym)
+	if len(inherited) == 0 {
+		return [][]ElementFilter{gate}
+	}
+	out := make([][]ElementFilter, 0, len(inherited))
+	for _, route := range inherited {
+		out = append(out, append(append([]ElementFilter{}, route...), gate...))
+	}
+	return out
+}
+
 // reexportGated is reexport, additionally recording the element-filter
-// conditions the route that surfaced the name imposes on it. Routes accumulate:
+// conditions the routes that surfaced the name impose on it. Routes accumulate:
 // a name is a member of the importing namespace when any one of them admits it,
 // so an unfiltered import re-exports it whatever another route filters out.
-func (idx *Index) reexportGated(fqn string, sym *Symbol, doc string, private bool, gate []ElementFilter) {
+func (idx *Index) reexportGated(fqn string, sym *Symbol, doc string, private bool, gates [][]ElementFilter) {
 	idx.reexport(fqn, sym, doc, private)
 	key := reexportKey{fqn: fqn, sym: sym}
 	if !idx.reexported[fqn][sym] {
@@ -656,14 +675,17 @@ func (idx *Index) reexportGated(fqn string, sym *Symbol, doc string, private boo
 			return // an unconditional route already admits everything
 		}
 	}
-	if len(gate) == 0 {
-		idx.gates[key] = [][]ElementFilter{nil}
-		return
+	for _, gate := range gates {
+		if len(gate) == 0 {
+			idx.gates[key] = [][]ElementFilter{nil}
+			return
+		}
+		if sameRouteRecorded(routes, gate) {
+			continue // this route's conditions are already recorded
+		}
+		routes = append(routes, gate)
 	}
-	if sameRouteRecorded(routes, gate) {
-		return // this import's conditions are already recorded
-	}
-	idx.gates[key] = append(routes, gate)
+	idx.gates[key] = routes
 }
 
 // sameRouteRecorded reports whether routes already holds the conditions of this

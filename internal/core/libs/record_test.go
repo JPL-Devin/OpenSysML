@@ -8,6 +8,7 @@ import (
 
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -26,7 +27,8 @@ func indexOf(t *testing.T, name, src string) *symbols.Index {
 
 // recordOf is recordFromIndex with a resolver over idx, as the loader builds it.
 func recordOf(name string, idx *symbols.Index) *IndexRecord {
-	rec, _ := recordFromIndex(name, idx, resolve.New(idx))
+	r := resolve.New(idx)
+	rec, _ := recordFromIndex(name, idx, r, semantics.NewModel(r))
 	return rec
 }
 
