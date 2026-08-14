@@ -410,17 +410,17 @@ func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext) (*EvalC
 	return ec, nested, env, nil
 }
 
-// enclosedByBehaviorBody reports whether sym is declared in the body of a
-// behavior that runs statements — a calc or an action, among its members or in a
-// body-local block of it, which declares no owner of its own — rather than in a
-// part or a package, whose members hold no running values.
+// enclosedByBehaviorBody reports whether sym is declared in the body of a behavior
+// that holds running values — a calc, an action or a state machine, among its
+// members or in a body-local block of it, which declares no owner of its own —
+// rather than in a part or a package, whose members hold no running values.
 func enclosedByBehaviorBody(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
 	}
 	for scope := sym.OwnerScope; scope != nil; scope = scope.Parent() {
 		if owner := scope.Owner(); owner != nil {
-			return isCalcSymbol(owner) || isActionSymbol(owner)
+			return isCalcSymbol(owner) || isActionSymbol(owner) || isStateSymbol(owner)
 		}
 		if !scope.BodyLocal() {
 			return false
@@ -692,7 +692,11 @@ func (ec *EvalContext) calcUsageMemberValue(sym *symbols.Symbol, self *Instance,
 	if scope == nil {
 		scope = ec.scope
 	}
-	return NewEvalContextIn(ec.ctx, scope, self).evalCalcUsageMembers(sym, parts)
+	// The chained read belongs to the evaluation making it, so it shares its
+	// activation: what it reads lives no longer than that evaluation.
+	chained := NewEvalContextIn(ec.ctx, scope, self)
+	chained.activation = ec.activation
+	return chained.evalCalcUsageMembers(sym, parts)
 }
 
 // calcUsageOutputSummary describes what a calc usage computes, for a diagnostic

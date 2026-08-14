@@ -160,6 +160,7 @@ func bindArguments(
 
 	ec := NewEvalContext(ctx, scope)
 	ec.Push(data)
+	defer ec.beginStep()()
 
 	if len(inv.args) > len(in) {
 		return nil, fmt.Errorf(

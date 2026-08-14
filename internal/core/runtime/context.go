@@ -277,8 +277,13 @@ func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Sco
 func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members []scopedMember, self *Instance, subject *Instance) (map[string]Value, error) {
 	bindings := make(map[string]Value)
 	features := ctx.conditionFeatures(sym)
+	// The bindings are evaluated as one, so a calc usage two of them read answers
+	// from one evaluation, and the next check reads it again.
+	activation := ctx.newActivation()
+	defer ctx.endActivation(activation)
 	evalIn := func(memberScope *symbols.Scope) *EvalContext {
 		ec := NewEvalContextIn(ctx, memberScope, self)
+		ec.activation = activation
 		ec.features = features
 		ec.Push(bindings)
 		return ec

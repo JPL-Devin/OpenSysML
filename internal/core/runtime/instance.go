@@ -260,7 +260,9 @@ func (ctx *Context) evalSlotDefault(inst *Instance, slot *Slot, name string) (Va
 	if scope == nil {
 		scope = inst.Type.OwnerScope
 	}
-	val, err := NewEvalContextIn(ctx, scope, inst).Eval(slot.Feature.DefaultValue)
+	ec := NewEvalContextIn(ctx, scope, inst)
+	defer ec.beginStep()()
+	val, err := ec.Eval(slot.Feature.DefaultValue)
 	if err != nil {
 		return Value{}, fmt.Errorf("slot %s.%s: %w", inst.Type.Name, name, err)
 	}

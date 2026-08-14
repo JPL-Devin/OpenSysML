@@ -61,6 +61,14 @@ func NewEvalContextIn(ctx *Context, scope *symbols.Scope, self *Instance) *EvalC
 	return ec
 }
 
+// beginStep gives an evaluation outside a body an activation of its own, so a calc
+// usage it reads is not memoized past the step. The returned function ends it.
+func (ec *EvalContext) beginStep() func() {
+	activation := ec.ctx.newActivation()
+	ec.activation = activation
+	return func() { ec.ctx.endActivation(activation) }
+}
+
 // evalIn returns a context that resolves names in scope while sharing this
 // one's bindings and trace, for a body member written in another declaration's
 // scope (an inherited calc result or parameter default).

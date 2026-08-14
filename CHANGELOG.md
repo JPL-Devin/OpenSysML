@@ -20,9 +20,17 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   bounded by what it holds rather than by what it has produced in total.
 - An action node's body ends the activation it ran in, so a run stepping the same
   body many times no longer holds what every execution's calc usages computed.
-- A calc usage declared in an action's body binds its inputs from the values that
-  body has reached, as one in a calc's body does: `calc t : Twice { in k = v; }`
-  after `assign v := 2.0` reads 2.0 rather than the value `v` was declared with.
+- A calc usage declared in an action's body or among a state machine's members
+  binds its inputs from the values the behavior has reached, as one in a calc's
+  body does: `calc t : Twice { in k = v; }` after `assign v := 2.0` reads 2.0
+  rather than the value `v` was declared with.
+- An evaluation outside a body — a decision or transition guard, a change
+  condition or duration, an inline node expression, an attribute or slot default,
+  an action argument, a constraint check — runs in an activation of its own, so a
+  calc usage it reads answers over the values that step sees: a decision revisited
+  after its body assigned reads the usage again instead of the first evaluation's
+  result. Reads within one step still share it, and a read through a part's
+  feature chain belongs to the evaluation making it.
 - `%budget` prints the five bounds a session runs on with the variable that
   raises each, and a literal expression that spends one is answered with that
   failure instead of "no declarations loaded".

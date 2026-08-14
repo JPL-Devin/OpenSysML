@@ -461,6 +461,24 @@ func isActionSymbol(sym *symbols.Symbol) bool {
 	return sym.Kind == symbols.SymbolActionDef || sym.Kind == symbols.SymbolActionUsage
 }
 
+// isStateSymbol reports whether sym declares a state, reading its declaration when
+// it has one and its symbol kind otherwise.
+func isStateSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefState
+	case *ast.Usage:
+		return d.Kind == ast.UsageState
+	}
+	if sym.Decl != nil {
+		return false
+	}
+	return sym.Kind == symbols.SymbolStateDef || sym.Kind == symbols.SymbolStateUsage
+}
+
 // declMembers returns the body members of a definition or usage, unwrapping the
 // Membership wrappers the parser produces.
 func declMembers(decl ast.Node) []ast.Node {
