@@ -517,9 +517,11 @@ func (ctx *Context) runCalcUsage(
 	run.activation = activation
 	// A computation that returned has produced the calc's designated output, so
 	// reading that output by name answers from the run rather than evaluating
-	// the same expression again.
+	// the same expression again. An output the body assigned is its own
+	// computation, though, and keeps the value the body gave it.
 	if returned {
-		if out, err := shape.designatedOutput(); err == nil && out.Name != "" {
+		if out, err := shape.designatedOutput(); err == nil && out.Name != "" &&
+			(out.IsResult || !shape.BodyOutputs[out.Name]) {
 			run.outputs[out.Name] = result
 		}
 	}

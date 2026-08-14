@@ -11,6 +11,8 @@
 		"size": {"type": "String", "value": "big"},
 		"pv": {"type": "Integer", "value": 6},
 		"qv": {"type": "Integer", "value": 60},
-		"acc": {"type": "Integer", "value": 15}
+		"acc": {"type": "Integer", "value": 15},
+		"ra": {"type": "Integer", "value": 6},
+		"rv": {"type": "Integer", "value": 500}
 	}
 }

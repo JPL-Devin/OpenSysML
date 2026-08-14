@@ -60,12 +60,22 @@ package test {
 		q = p * 10;
 	}
 
+	// A body that returns a value of its own leaves an output it assigned alone: the
+	// return is the invocation's value, the assignment the output's.
+	calc def AssignAndReturn {
+		in n : Integer;
+		out a : Integer;
+		a = n + 1;
+		return n * 100;
+	}
+
 	part h {
 		calc cs : TwoStmt { in n = 5; }
 		calc ca : TwoAssign { in n = 5; }
 		calc cl : LoopBranch { in n = 5; }
 		calc cb : Bump { in p = 5; }
 		calc cn : Accum { in n = 5; }
+		calc cr : AssignAndReturn { in n = 5; }
 
 		attribute sa : Integer = cs.a;
 		attribute sb : Integer = cs.b;
@@ -76,5 +86,7 @@ package test {
 		attribute pv : Integer = cb.p;
 		attribute qv : Integer = cb.q;
 		attribute acc : Integer = cn.total;
+		attribute ra : Integer = cr.a;
+		attribute rv : Integer = AssignAndReturn(5);
 	}
 }
