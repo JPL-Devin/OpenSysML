@@ -31,7 +31,12 @@ MODEL = """package Demo {
 """
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-GRPC_BINARY = os.path.join(REPO_ROOT, "bin", "sysml-grpc")
+# A local build, or the copy pysysml installs; CI publishes the binary as an
+# artifact, which does not carry the executable bit into the repo's bin.
+GRPC_BINARIES = (
+    os.path.join(REPO_ROOT, "bin", "sysml-grpc"),
+    os.path.join(os.path.expanduser("~"), ".pysysml", "bin", "sysml-grpc"),
+)
 
 
 class FakeService(sysml_pb2_grpc.SysMLServiceServicer):
@@ -215,12 +220,13 @@ def test_saving_an_unknown_extension_is_refused(fake_service, tmp_path):
 @pytest.fixture(scope="module")
 def real_service():
     """Run the built sysml-grpc on an ephemeral port, or skip."""
-    if not os.path.exists(GRPC_BINARY):
-        pytest.skip(f"{GRPC_BINARY} not built; run: make build-grpc")
+    binary = next((b for b in GRPC_BINARIES if os.access(b, os.X_OK)), None)
+    if binary is None:
+        pytest.skip(f"no executable sysml-grpc in {GRPC_BINARIES}; run: make build-grpc")
 
     port = 51151
     process = subprocess.Popen(
-        [GRPC_BINARY, "-port", str(port)],
+        [binary, "-port", str(port)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
