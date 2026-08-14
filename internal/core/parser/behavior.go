@@ -107,6 +107,11 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 			// - action <id>; = behavioral node (reference)
 			// Check for typing colon OR declaration-like body content
 			tok1 := p.peekN(1)
+			// `action accept …`: an accept node naming no node of its own.
+			if tok1.Kind == lexer.Keyword && tok1.KeywordID == "accept" {
+				body.add(p.parseBodyMember())
+				continue
+			}
 			if tok1.Kind == lexer.Identifier || tok1.Kind == lexer.Keyword {
 				tok2 := p.peekN(2)
 				// If colon after name → definitely declaration (typing)
@@ -2246,7 +2251,9 @@ func (p *Parser) atAcceptNode() bool {
 //	('action' <name>?)? accept <payload> ('via' <port>)? (';' | '{' … '}')
 func (p *Parser) parseAcceptNode(start int, vis ast.Visibility, trivia []ast.Trivia) ast.Node {
 	var ident ast.Identification
-	if p.acceptKeyword("action") {
+	// `action accept …` names no node of its own, so the keyword must not be read
+	// as the declaration's name.
+	if p.acceptKeyword("action") && !p.atKeyword("accept") {
 		ident = p.parseIdentification()
 	}
 	p.advance() // consume 'accept'

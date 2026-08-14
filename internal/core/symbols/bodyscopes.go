@@ -220,7 +220,11 @@ func newTriggerScope(parent *Scope, trans *ast.TransitionMember) *Scope {
 	if define == nil {
 		return parent
 	}
+	// A named transition already owns a scope holding its effect members
+	// (builder.buildDecl); its parameters belong there, since a second scope keyed
+	// by the same declaration would be found in its place and left undefined.
 	if existing := bodyScopeChild(parent, trans); existing != nil {
+		define(existing)
 		return existing
 	}
 	scope := NewScope(parent, trans)

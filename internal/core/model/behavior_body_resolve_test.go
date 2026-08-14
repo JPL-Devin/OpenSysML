@@ -170,6 +170,16 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 				transition first a accept w : Warning if w != null do assign level := 1 then b;
 			}
 		}`},
+		{"named transition trigger parameters", `package P {
+			import ScalarValues::*;
+			item def Warning;
+			state S {
+				attribute level : Integer = 0;
+				initial i; state a; state b; state c; i then a;
+				transition alert first a accept w : Warning if w != null do assign level := 1 then b;
+				transition brake first b accept setSpeed(value) if value > 0 then c;
+			}
+		}`},
 		{"requirement actor binding", `package P {
 			import ScalarValues::*;
 			attribute userId : Integer = 42;
