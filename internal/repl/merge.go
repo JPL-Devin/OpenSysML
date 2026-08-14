@@ -31,10 +31,13 @@ type edit struct {
 // replacing its body. It removes the snippet it merged with, since the returned
 // text supersedes it, and reports the members the new body redeclares. An empty
 // body is not merged: that is how a namespace is emptied.
-func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments string) (string, dropReport, bool) {
+//
+// The returned spans locate the submitted text inside the merged result, so a
+// report still covers what was typed rather than the whole absorbed snippet.
+func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments string) (string, []source.Span, dropReport, bool) {
 	newDecl, ok := soleNamespace(src, root)
 	if !ok || len(newDecl.members) == 0 {
-		return "", dropReport{}, false
+		return "", nil, dropReport{}, false
 	}
 	for i, sn := range s.snippets {
 		oldDecl, ok := namedNamespace(sn.src, newDecl.name)
@@ -47,11 +50,11 @@ func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments 
 		if comments != "" {
 			edits = append(edits, edit{start: oldDecl.start, end: oldDecl.start, text: comments})
 		}
-		merged := applyEdits(sn.src, edits)
+		merged, own := applyEdits(sn.src, edits)
 		s.snippets = append(s.snippets[:i:i], s.snippets[i+1:]...)
-		return merged, dropReport{merged: true, decl: newDecl.desc, lost: replaced}, true
+		return merged, own, dropReport{merged: true, decl: newDecl.desc, lost: replaced}, true
 	}
-	return "", dropReport{}, false
+	return "", nil, dropReport{}, false
 }
 
 // soleNamespace returns the namespace declaration a submission consists of. A
@@ -187,8 +190,8 @@ func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl) ([
 		}
 		// The new member is not a body to add to, so it supersedes the old one:
 		// drop the old text and let the new member be added below.
-		span := om.Span()
-		edits = append(edits, edit{start: span.Offset, end: span.Offset + span.Len})
+		start, end := memberCut(oldSrc, om)
+		edits = append(edits, edit{start: start, end: end})
 		replaced = append(replaced, renderMember(om))
 	}
 	var added []string
@@ -211,6 +214,24 @@ func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl) ([
 		edits = append(edits, insertion(oldSrc, oldDecl.brace, added))
 	}
 	return edits, replaced
+}
+
+// memberCut is the range to delete to remove a member: its text (its span runs
+// on to the next token, so the trimmed text bounds it) plus the line it owns, so
+// no blank line is left behind and the closing brace keeps its indentation.
+func memberCut(src string, member ast.Node) (start, end int) {
+	start = member.Span().Offset
+	end = start + len(trimmedText(src, member))
+	lineStart := strings.LastIndexByte(src[:start], '\n') + 1
+	if strings.TrimSpace(src[lineStart:start]) != "" {
+		return start, end
+	}
+	rest := src[end:]
+	nl := strings.IndexByte(rest, '\n')
+	if nl < 0 || strings.TrimSpace(rest[:nl]) != "" {
+		return start, end
+	}
+	return lineStart, end + nl + 1
 }
 
 // hasText reports whether one of the members is the given source text.
@@ -254,21 +275,35 @@ func insertion(src string, brace int, members []string) edit {
 	return edit{start: lineStart, end: lineStart, text: b.String()}
 }
 
-// applyEdits rewrites src with the given edits applied.
-func applyEdits(src string, edits []edit) string {
+// applyEdits rewrites src with the given edits applied, and returns where each
+// edit's text landed in the result. An insertion inside an already-rewritten
+// range is written at the point reached rather than dropped, so no added text is
+// ever silently lost.
+func applyEdits(src string, edits []edit) (string, []source.Span) {
 	sort.SliceStable(edits, func(i, j int) bool { return edits[i].start < edits[j].start })
-	var b strings.Builder
-	pos := 0
+	var (
+		b     strings.Builder
+		added []source.Span
+		pos   int
+	)
 	for _, e := range edits {
-		if e.start < pos || e.end > len(src) {
+		if e.end > len(src) || (e.start < pos && e.start != e.end) {
 			continue
 		}
-		b.WriteString(src[pos:e.start])
-		b.WriteString(e.text)
-		pos = e.end
+		if e.start > pos {
+			b.WriteString(src[pos:e.start])
+			pos = e.start
+		}
+		if e.text != "" {
+			added = append(added, source.Span{Offset: b.Len(), Len: len(e.text)})
+			b.WriteString(e.text)
+		}
+		if e.end > pos {
+			pos = e.end
+		}
 	}
 	b.WriteString(src[pos:])
-	return b.String()
+	return b.String(), added
 }
 
 // trimmedText returns a node's source text without the whitespace its span runs

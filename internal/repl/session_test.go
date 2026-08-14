@@ -20,7 +20,7 @@ func TestAcceptReplacesByName(t *testing.T) {
 	s := NewSession()
 	s.accept("package P { }")
 	s.accept("namespace N;")
-	joined, _, _ := s.accept("package P { } // redefined")
+	joined, _, _, _ := s.accept("package P { } // redefined")
 	// P should appear once (the new one); N preserved; order = N then new P.
 	if got := s.List(); len(got) != 2 {
 		t.Fatalf("want 2 snippets, got %d: %v", len(got), got)
@@ -137,6 +137,41 @@ func TestNestedMergeIndentsTheAddedMember(t *testing.T) {
 	wants(t, strings.Join(s.List(), "\n"), "\t\tpart def A;\n\t\tpart def B;\n")
 }
 
+// Redeclaring the last member of an indented nested body keeps the new text: the
+// deletion of the old member must not swallow the point the new one goes at.
+func TestNestedMergeReplacesTheLastMemberOfABody(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P {\n\tpackage Q {\n\t\tpart def A;\n\t}\n}")
+	s.Submit("package P { package Q { part def A { attribute x = 1; } } }")
+
+	got := strings.Join(s.List(), "\n")
+	wants(t, got, "part def A { attribute x = 1; }")
+	if strings.Contains(got, "\n\n") || strings.Contains(got, "\t\n") {
+		t.Errorf("replaced member left a blank line behind:\n%s", got)
+	}
+}
+
+// A merge only announces the declaration it added to, and only reports the
+// diagnostics of the added text: the rest of the merged snippet was typed
+// earlier and has already been reported.
+func TestMergeReportsOnlyWhatWasTyped(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Z; package P { part def A; }")
+	s.Submit("part def Bad : Missing;")
+	res := s.Submit("package P { part def B; }")
+
+	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
+	if strings.Contains(out, "part def Z") {
+		t.Errorf("re-announced a declaration from the absorbed snippet:\n%s", out)
+	}
+	wants(t, out, "✓ package P")
+	for _, d := range res.Diagnostics {
+		if res.mine(d.Span) {
+			t.Errorf("diagnostic outside the added text claimed as this submission's: %v", d)
+		}
+	}
+}
+
 // Comments typed above an addition document the declaration it merges into, so
 // they join the ones already above it rather than the end of the buffer.
 func TestMergeKeepsCommentsAboveTheDeclaration(t *testing.T) {
@@ -188,7 +223,7 @@ func TestLeadingCommentIsReplacedWithItsDeclaration(t *testing.T) {
 	s := NewSession()
 	s.accept("// doc for A")
 	s.accept("part def A;")
-	joined, _, _ := s.accept("part def A { part y; }")
+	joined, _, _, _ := s.accept("part def A { part y; }")
 
 	if strings.Contains(joined, "doc for A") {
 		t.Errorf("stale comment survived the redeclaration: %q", joined)
@@ -202,7 +237,7 @@ func TestLeadingCommentIsReplacedWithItsDeclaration(t *testing.T) {
 func TestTrailingCommentIsKept(t *testing.T) {
 	s := NewSession()
 	s.accept("part def A;")
-	joined, _, _ := s.accept("// thinking out loud")
+	joined, _, _, _ := s.accept("// thinking out loud")
 	if !strings.Contains(joined, "thinking out loud") {
 		t.Errorf("comment dropped: %q", joined)
 	}

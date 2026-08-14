@@ -19,11 +19,40 @@ type Result struct {
 	Source      string              // the full joined <repl> content (Task 6 caret rendering)
 	Offset      int                 // byte offset in Source where THIS submission begins
 	Notices     []string            // side effects of the submission, e.g. a debugging session it ended
+
+	// own locates this submission inside Source when it was merged into text
+	// already in the buffer, which is not one tail region. Empty for a
+	// submission appended whole, where everything from Offset on is its own.
+	own []source.Span
 }
 
 // mine reports whether a span belongs to the submission just made rather than
 // to an earlier one still sitting in the buffer.
-func (r Result) mine(span source.Span) bool { return span.Offset >= r.Offset }
+func (r Result) mine(span source.Span) bool {
+	if len(r.own) == 0 {
+		return span.Offset >= r.Offset
+	}
+	for _, o := range r.own {
+		if span.Offset >= o.Offset && span.Offset < o.End() {
+			return true
+		}
+	}
+	return false
+}
+
+// holdsMine reports whether a span covers part of this submission, which is what
+// credits a merged addition to the declaration it was added to.
+func (r Result) holdsMine(span source.Span) bool {
+	if len(r.own) == 0 {
+		return span.Offset >= r.Offset
+	}
+	for _, o := range r.own {
+		if o.Offset >= span.Offset && o.Offset < span.End() {
+			return true
+		}
+	}
+	return false
+}
 
 // renderSummary returns one accepted line per top-level member: "✓ <kind> <name>".
 func renderSummary(members []ast.Node) []string {
@@ -256,7 +285,7 @@ func hasError(diags []passes.Diagnostic) bool {
 func (r Result) ownMembers() []ast.Node {
 	out := make([]ast.Node, 0, len(r.Members))
 	for _, m := range r.Members {
-		if r.mine(m.Span()) {
+		if r.holdsMine(m.Span()) {
 			out = append(out, m)
 		}
 	}

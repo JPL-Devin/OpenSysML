@@ -131,11 +131,14 @@ func (s *Session) List() []string {
 // before it. They document what follows, so folding them into the same snippet
 // makes a later redeclaration replace the comments along with the declaration
 // instead of leaving stale documentation above whatever is current.
-func (s *Session) accept(src string) (joined string, offset int, drops []dropReport) {
+func (s *Session) accept(src string) (joined string, offset int, own []source.Span, drops []dropReport) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
 	text := src
-	var comments string
+	var (
+		comments  string
+		mergedOwn []source.Span
+	)
 	if len(names) > 0 {
 		set := make(map[string]bool, len(names))
 		for _, n := range names {
@@ -147,8 +150,8 @@ func (s *Session) accept(src string) (joined string, offset int, drops []dropRep
 		// snippet it absorbed, so the names it replaces are its own, not just
 		// the submitted ones — and is appended like any other submission so a
 		// report still scopes to the tail of the buffer.
-		if merged, drop, ok := s.mergeSubmission(src, root, comments); ok {
-			text, comments = merged, ""
+		if merged, added, drop, ok := s.mergeSubmission(src, root, comments); ok {
+			text, comments, mergedOwn = merged, "", added
 			names = declaredNames(parser.New(source.New(docName, []byte(merged))).ParseFile())
 			drops = append(drops, drop)
 		}
@@ -167,7 +170,18 @@ func (s *Session) accept(src string) (joined string, offset int, drops []dropRep
 	joined = s.joined()
 	// The offset marks what the user typed, not the comments folded in front of
 	// it, so diagnostics keep the line numbers of the submission.
-	return joined, len(joined) - len(text), drops
+	offset = len(joined) - len(text)
+	// A merge rewrote a snippet that was already accepted, so only the text the
+	// merge added belongs to this submission; anything else is the buffer.
+	if mergedOwn != nil {
+		for _, sp := range mergedOwn {
+			own = append(own, source.Span{Offset: offset + sp.Offset, Len: sp.Len})
+		}
+		if len(own) > 0 {
+			offset = own[0].Offset
+		}
+	}
+	return joined, offset, own, drops
 }
 
 // takeLeadingComments removes the trailing run of comment-only snippets and
@@ -234,7 +248,7 @@ func intersects(names []string, set map[string]bool) bool {
 // prior snippet (see accept).
 func (s *Session) Submit(src string) Result {
 	declared := declaredNames(parser.New(source.New(docName, []byte(src))).ParseFile())
-	joined, offset, drops := s.accept(src)
+	joined, offset, own, drops := s.accept(src)
 	s.version++
 	s.ws.Open(docName, []byte(joined), s.version)
 	// The document is a new AST and scope tree, so anything derived from the
@@ -260,6 +274,7 @@ func (s *Session) Submit(src string) Result {
 		Diagnostics: diags,
 		Source:      joined,
 		Offset:      offset,
+		own:         own,
 		Notices:     notices,
 	}
 }
