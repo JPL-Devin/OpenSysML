@@ -256,6 +256,10 @@ type CalcFrameError struct {
 	Calc   string // the calc the error surfaced from
 	Frames int    // calc frames the error propagated through
 	Err    error
+
+	// calcs names every calc the chain already passed through, so a cycle is
+	// counted rather than wrapped again.
+	calcs map[string]bool
 }
 
 func (e *CalcFrameError) Error() string {
@@ -267,14 +271,28 @@ func (e *CalcFrameError) Error() string {
 
 func (e *CalcFrameError) Unwrap() error { return e.Err }
 
-// calcFrame counts one more calc frame onto err, collapsing the chain a
-// recursive calc would otherwise build into a single frame count.
+// calcFrame adds one calc frame to err. A calc the chain already passed through
+// is counted rather than wrapped again, so a recursion reports a depth instead
+// of one line per frame, while a calc calling another still names both.
 func calcFrame(calc string, err error) error {
 	var framed *CalcFrameError
 	if errors.As(err, &framed) {
-		return &CalcFrameError{Calc: calc, Frames: framed.Frames + 1, Err: framed.Err}
+		if framed.calcs[calc] {
+			return &CalcFrameError{
+				Calc:   framed.Calc,
+				Frames: framed.Frames + 1,
+				Err:    framed.Err,
+				calcs:  framed.calcs,
+			}
+		}
+		calcs := make(map[string]bool, len(framed.calcs)+1)
+		for name := range framed.calcs {
+			calcs[name] = true
+		}
+		calcs[calc] = true
+		return &CalcFrameError{Calc: calc, Frames: 1, Err: err, calcs: calcs}
 	}
-	return &CalcFrameError{Calc: calc, Frames: 1, Err: err}
+	return &CalcFrameError{Calc: calc, Frames: 1, Err: err, calcs: map[string]bool{calc: true}}
 }
 
 // EvalError wraps an evaluation error with source context.

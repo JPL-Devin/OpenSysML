@@ -57,6 +57,13 @@ func TestMessageQuality(t *testing.T) {
 			"^~~~~~~",
 		},
 	}, {
+		// A mismatch written in a calc keeps the wrapped message that names the
+		// calc, rather than a position in the line the user typed.
+		name:  "operand_type_mismatch_inside_a_calc",
+		decls: "calc def f { in n; return n + \"a\"; }",
+		line:  "%eval f(1)",
+		want:  []string{`error: evaluation failed: calc f: `, `operator '+' is not defined for`},
+	}, {
 		// A name of another kind names its kind in SysML terms, never a Go type.
 		name:  "calc_argument_of_wrong_kind",
 		decls: "part def Wheel;",

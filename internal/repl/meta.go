@@ -454,7 +454,10 @@ func (s *Session) evalWithoutDeclarations(expr string) []string {
 // base is the offset expr starts at in the text the span was measured in.
 func renderEvalError(expr string, err error, base int) []string {
 	var operand *runtime.OperandTypeError
-	if errors.As(err, &operand) {
+	// A span is a position in the typed expression only when the operator was
+	// written there; one in a declaration the expression reached keeps the
+	// wrapped message, which names the calc or feature it is in.
+	if errors.As(err, &operand) && operand.Span.Offset >= base && operand.Span.Offset <= base+len(expr) {
 		return renderExprMessage(expr, operand.Error(), operand.Span, base)
 	}
 	return []string{fmt.Sprintf("error: evaluation failed: %v", err)}

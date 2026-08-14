@@ -20,6 +20,14 @@ func TestErrorMessages(t *testing.T) {
 				in n: Integer;
 				return countdown(n - 1);
 			}
+			calc inner {
+				in n: Integer;
+				return n / 0;
+			}
+			calc outer {
+				in n: Integer;
+				return inner(n);
+			}
 			constraint def Bounded {
 				1 < 2
 			}
@@ -29,7 +37,8 @@ func TestErrorMessages(t *testing.T) {
 	rootScope := idx.DocumentRoot("<test>")
 	wheel := findSymbolByName(rootScope, "Wheel", ast.DefPart)
 	countdown := findSymbolByName(rootScope, "countdown", ast.DefCalc)
-	if wheel == nil || countdown == nil {
+	outer := findSymbolByName(rootScope, "outer", ast.DefCalc)
+	if wheel == nil || countdown == nil || outer == nil {
 		t.Fatal("fixture symbols not found")
 	}
 
@@ -65,6 +74,43 @@ func TestErrorMessages(t *testing.T) {
 			t.Errorf("err names the calc frame %d times, want once: %q", n, got)
 		}
 	})
+}
+
+// TestNestedCalcNamesTheFailingCalc keeps a distinct nested calc named: only a
+// calc the chain repeats is collapsed into the frame count.
+func TestNestedCalcNamesTheFailingCalc(t *testing.T) {
+	src := `
+		package test {
+			calc inner {
+				in n: Integer;
+				return n / 0;
+			}
+			calc outer {
+				in n: Integer;
+				return inner(n);
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	outer := findSymbolByName(rootScope, "outer", ast.DefCalc)
+	if outer == nil {
+		t.Fatal("fixture symbols not found")
+	}
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}}
+	_, err := ctx.InvokeCalc(outer, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatal("expected the division by zero to fail")
+	}
+	got := err.Error()
+	for _, want := range []string{"calc test::outer", "calc test::inner", "division by zero"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("err = %q; want it to contain %q", got, want)
+		}
+	}
+	if strings.Contains(got, "frames") {
+		t.Errorf("err = %q; want no frame count for distinct calcs", got)
+	}
 }
 
 // TestOperandTypeErrorMessage pins the type-mismatch text: the operator and both
