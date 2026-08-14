@@ -237,7 +237,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		if importAllowsPrivate(imp) {
 			children = r.idx.LookupDirectChildren(target.Name)
 		} else {
-			children = r.idx.LookupDirectChildrenFrom(target.Name, r.referringNamespaceFQN(scope))
+			children = r.idx.LookupDirectChildrenFrom(target.Name, r.ReferringNamespaceFQN(scope))
 		}
 		for _, sym := range children {
 			// Extract short name from FQN for comparison

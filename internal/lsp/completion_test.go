@@ -246,6 +246,25 @@ func TestCompletionHidesAnotherDocumentsPrivateImport(t *testing.T) {
 	}
 }
 
+// A name a package's own private import brought in is a member of it only from
+// within (KerML 8.2.3.3), so `Mid::` offers it inside Mid and nowhere else.
+func TestCompletionOnQualifiedNameHidesPrivateImports(t *testing.T) {
+	src := "package Mid {\n\tprivate import ScalarValues::*;\n\tpart def Own;\n\tpackage Inner {\n\t\tpart p : Mid::\n\t}\n}\npackage Out {\n\tpart q : Mid::\n}\n"
+
+	inside := completionAt(t, src, "part p : Mid::")
+	if _, ok := inside["Real"]; !ok {
+		t.Errorf("completion inside Mid missing privately imported 'Real'; got %v", labelsOf(inside))
+	}
+
+	outside := completionAt(t, src, "part q : Mid::")
+	if _, ok := outside["Real"]; ok {
+		t.Error("completion outside Mid offered 'Real', which only Mid's private import surfaced")
+	}
+	if _, ok := outside["Own"]; !ok {
+		t.Errorf("completion outside Mid missing 'Own'; got %v", labelsOf(outside))
+	}
+}
+
 // The dot in a numeric literal is not a member access, so completion there must
 // still offer the ordinary scope and keyword list.
 func TestCompletionAfterNumericLiteralOffersTheScopeList(t *testing.T) {

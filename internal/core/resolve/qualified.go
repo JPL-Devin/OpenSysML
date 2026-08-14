@@ -62,7 +62,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 	r.recordPart(qn, 0, cur)
 
 	// Walk remaining segments as local members of the current symbol's scope.
-	from := r.referringNamespaceFQN(scope)
+	from := r.ReferringNamespaceFQN(scope)
 	for i, seg := range qn.Parts[1:] {
 		var all []*symbols.Symbol
 
@@ -121,12 +121,12 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 	return resolution{cur, true}
 }
 
-// referringNamespaceFQN returns the fully-qualified name of the namespace a
+// ReferringNamespaceFQN returns the fully-qualified name of the namespace a
 // reference made in scope belongs to, or "" for one made outside any namespace.
 // It is the context a qualified lookup is answered in: a name a private wildcard
 // import brought into a namespace is a member of it but visible only from
 // within (KerML 8.2.3.3), so `Mid::Hidden` resolves inside Mid and nowhere else.
-func (r *Resolver) referringNamespaceFQN(scope *symbols.Scope) string {
+func (r *Resolver) ReferringNamespaceFQN(scope *symbols.Scope) string {
 	if r.idx == nil {
 		return ""
 	}
