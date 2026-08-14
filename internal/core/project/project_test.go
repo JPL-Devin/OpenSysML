@@ -203,3 +203,47 @@ func TestExpandSkipsADanglingSymlink(t *testing.T) {
 		t.Fatalf("Expand = %v, want %v", got, want)
 	}
 }
+
+// A pattern names its matches collectively: a model-free directory among them
+// contributes nothing instead of failing the load.
+func TestExpandGlobMatchingAModelFreeDirectory(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "models", "a.sysml"), "package A { }\n")
+	write(t, filepath.Join(dir, "docs", "notes.md"), "ignored\n")
+
+	got, err := Expand([]string{filepath.Join(dir, "*")})
+	if err != nil {
+		t.Fatalf("Expand: %v", err)
+	}
+	want := []string{filepath.Join(dir, "models", "a.sysml")}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Expand = %v, want %v", got, want)
+	}
+}
+
+// Nor does a pattern submit a non-model file it happens to catch.
+func TestExpandGlobSkipsNonModelMatches(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.sysml"), "package A { }\n")
+	write(t, filepath.Join(dir, "README.md"), "ignored\n")
+
+	got, err := Expand([]string{filepath.Join(dir, "*")})
+	if err != nil {
+		t.Fatalf("Expand: %v", err)
+	}
+	want := []string{filepath.Join(dir, "a.sysml")}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Expand = %v, want %v", got, want)
+	}
+}
+
+// A directory the user named is another matter: it names exactly that path, so
+// finding no model in it is worth reporting.
+func TestExpandNamedEmptyDirectoryStillErrors(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "notes.md"), "ignored\n")
+
+	if _, err := Expand([]string{dir}); err == nil {
+		t.Fatal("want an error naming the model-free directory")
+	}
+}

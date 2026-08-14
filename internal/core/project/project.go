@@ -28,7 +28,8 @@ func IsModelFile(path string) bool {
 
 // Expand turns the paths named on a command line (or at a %load prompt) into
 // the model files to load: a directory contributes every model file under it,
-// a pattern contributes its matches, and any other path is taken as named.
+// a pattern contributes the model files among its matches, and any other path
+// is taken as named.
 // Files come back in a deterministic order — the inputs in the order given,
 // each directory walk and each pattern match sorted by path — and duplicates
 // are dropped, so naming a file twice loads it once.
@@ -86,15 +87,20 @@ func expandPattern(pattern string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		// A pattern names its matches only collectively, so one that catches a
+		// doc directory or a README contributes nothing rather than failing.
 		if info.IsDir() {
-			files, err := ModelFiles(m)
-			if err != nil {
+			var files []string
+			if err := walk(m, map[string]bool{}, &files); err != nil {
 				return nil, err
 			}
+			sort.Strings(files)
 			out = append(out, files...)
 			continue
 		}
-		out = append(out, m)
+		if IsModelFile(m) {
+			out = append(out, m)
+		}
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("no model files match %q", pattern)
