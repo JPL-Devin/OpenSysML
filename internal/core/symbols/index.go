@@ -959,22 +959,7 @@ func (idx *Index) WildcardImportsOf(fqn string) []WildcardImport {
 // of prefix surfaces: everything but what prefix's own private imports brought
 // in, which stays visible only inside prefix (KerML 8.2.3.3).
 func (idx *Index) exportedChildren(prefix string) []*Symbol {
-	if prefix == "" {
-		return nil // the global namespace is not a wildcard import target
-	}
-	var out []*Symbol
-	seen := make(map[*Symbol]bool)
-	for _, fqn := range idx.childKeys(prefix) {
-		hidden := idx.hidden[fqn]
-		for _, sym := range idx.fqn[fqn] {
-			if seen[sym] || hidden[sym] {
-				continue
-			}
-			seen[sym] = true
-			out = append(out, sym)
-		}
-	}
-	return out
+	return idx.LookupDirectChildrenFrom(prefix, "")
 }
 
 // childKeys returns the keys registered directly under prefix, in name order so
@@ -1007,6 +992,31 @@ func (idx *Index) LookupDirectChildren(prefix string) []*Symbol {
 				seen[sym] = true
 				out = append(out, sym)
 			}
+		}
+	}
+	return out
+}
+
+// LookupDirectChildrenFrom is LookupDirectChildren as seen from the namespace
+// named by fromFQN ("" meaning from outside): children that only prefix's own
+// private imports brought in are dropped (KerML 8.2.3.3).
+func (idx *Index) LookupDirectChildrenFrom(prefix, fromFQN string) []*Symbol {
+	if prefix == "" {
+		return nil // a document root's members are reached through its scope
+	}
+	if withinNamespace(fromFQN, prefix) {
+		return idx.LookupDirectChildren(prefix)
+	}
+	var out []*Symbol
+	seen := make(map[*Symbol]bool)
+	for _, fqn := range idx.childKeys(prefix) {
+		hidden := idx.hidden[fqn]
+		for _, sym := range idx.fqn[fqn] {
+			if seen[sym] || hidden[sym] {
+				continue
+			}
+			seen[sym] = true
+			out = append(out, sym)
 		}
 	}
 	return out

@@ -313,15 +313,26 @@ Both residual items are closed by the unit-resolution work; see `docs/SPEC_COMPL
 
 ## A5 — visibility rules
 
-- **Protected imports are treated as private.** SysML v2 §7.5.3 makes a protected import
-  visible in specializations of the importing definition or usage; today its members resolve in
-  the owning body only. This is the general rule, not an `expose` quirk — do it first.
-- **`validateExposeOwningNamespace`.** An `expose` outside a view body is parsed and resolved
-  rather than diagnosed.
-- **A privately wildcard-imported name is still reachable unqualified.** The qualified route was
-  closed; `resolve/unqualified.go` `matchImport` enumerates a wildcard import's target through
-  `symbols/index.go` `LookupDirectChildren`, which does not consult the hidden marks, so
-  `package App { import Mid::*; }` still sees what `Mid` imported privately.
+- ~~**Protected imports are treated as private.**~~ **Done.** A protected or public import now
+  reaches the bodies that specialize the definition or usage declaring it (SysML v2 §7.5.3):
+  `resolve/visibility.go` `lookupInheritedImports` walks `semantics.Model.DirectSupertypes`
+  upward from the referring scope's owner, and `resolve/unqualified.go` `walkUnqualifiedHiding`
+  consults it after the imports declared in the scope itself. An `expose` is protected, so it
+  reaches a specializing view the same way. A feature typing is a generalization edge
+  (KerML 8.3.4.6), so an import declared in a definition is also reached from a usage typed by
+  it — `part p : Base` sees what `Base` protectedly imports.
+- ~~**`validateExposeOwningNamespace`**~~ **Done**, on the maintainer's usage-only reading:
+  `passes/expose.go` `checkExposeOwners` reports every `expose` whose owning namespace is not a
+  view usage (SysML v2 8.3.26.2, and the normative Xtext grammar admits an Expose in
+  `ViewBodyItem` only). A `view def` body is a **warning**, not an error, because Systemica
+  resolves an `expose` there (`resolve/expose_test.go` `TestExposeInViewDefinitionBody`,
+  `parse/view_expose.sysml`) and the OMG corpus (`42. Views`) never writes one; any other owner
+  is an error. A package or namespace body rejects `expose` in the parser already.
+- ~~**A privately wildcard-imported name is still reachable unqualified.**~~ **Done.**
+  `resolve/unqualified.go` `matchImport` enumerates a wildcard import's target through
+  `symbols/index.go` `LookupDirectChildrenFrom`, which drops what the target imported privately
+  unless the referring namespace is the target itself (or nested in it) or the import is
+  `import all`.
 
 ## A6 — implicit library import (do this LAST)
 

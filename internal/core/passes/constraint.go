@@ -33,7 +33,7 @@ func (ConstraintPass) Run(ctx *Context, name string, root *ast.RootNamespace) []
 		seen:     make(map[*symbols.Symbol]bool),
 	}
 	cc.walk(rootScope)
-	return cc.diags
+	return append(cc.diags, checkExposeOwners(root, root.Members)...)
 }
 
 type constraintChecker struct {
