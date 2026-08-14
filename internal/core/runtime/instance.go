@@ -148,7 +148,7 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 		if err != nil {
 			return nil, err
 		}
-		bound, err := ctx.bindVariation(slot.Feature, val)
+		bound, err := ctx.bindVariation(slot.Feature, val, inst.ID)
 		if err != nil {
 			return nil, fmt.Errorf("slot %s.%s: %w", inst.Type.Name, name, err)
 		}

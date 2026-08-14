@@ -51,13 +51,13 @@ func (ctx *Context) variantSummary(variation *symbols.Symbol) string {
 // bindVariation resolves what a variation feature is bound to into the value its
 // slot holds: the selected variant's value, or an object of it (SysML v2 §7.20).
 // Anything that is not one of the feature's variants is reported.
-func (ctx *Context) bindVariation(feat *EffectiveFeature, selection Value) (Value, error) {
+func (ctx *Context) bindVariation(feat *EffectiveFeature, selection Value, owner int64) (Value, error) {
 	name := feat.Name
 	switch selection.Kind {
 	case ValSequence:
-		return ctx.bindOneVariant(feat, selection.Sequence.Elements())
+		return ctx.bindOneVariant(feat, selection.Sequence.Elements(), owner)
 	case ValSet:
-		return ctx.bindOneVariant(feat, selection.Set.Elements())
+		return ctx.bindOneVariant(feat, selection.Set.Elements(), owner)
 	case ValVariant:
 	default:
 		if ctx.model.IsVariationFeature(feat.Symbol) {
@@ -71,13 +71,13 @@ func (ctx *Context) bindVariation(feat *EffectiveFeature, selection Value) (Valu
 		return Value{}, fmt.Errorf("%w: %s is not a variant of %s (%s)",
 			ErrNotAVariant, variant.Name, name, ctx.variantSummary(feat.Symbol))
 	}
-	return ctx.variantValue(variant)
+	return ctx.variantValue(variant, owner)
 }
 
 // bindOneVariant binds a variation bound to a collection: exactly one variant
 // may be selected, so selecting several, or anything that is not a variant, is
 // reported rather than resolved.
-func (ctx *Context) bindOneVariant(feat *EffectiveFeature, elements []Value) (Value, error) {
+func (ctx *Context) bindOneVariant(feat *EffectiveFeature, elements []Value, owner int64) (Value, error) {
 	var selected []Value
 	for _, el := range elements {
 		if el.Kind != ValVariant {
@@ -95,7 +95,7 @@ func (ctx *Context) bindOneVariant(feat *EffectiveFeature, elements []Value) (Va
 		return Value{}, fmt.Errorf("%w: variation %s selects %d variants (%s)",
 			ErrMultipleVariants, feat.Name, len(selected), strings.Join(names, ", "))
 	case len(selected) == 1:
-		return ctx.bindVariation(feat, selected[0])
+		return ctx.bindVariation(feat, selected[0], owner)
 	default:
 		return Value{}, fmt.Errorf("%w: variation %s is bound to a collection naming no variant (%s)",
 			ErrNotAVariant, feat.Name, ctx.variantSummary(feat.Symbol))
@@ -103,8 +103,9 @@ func (ctx *Context) bindOneVariant(feat *EffectiveFeature, elements []Value) (Va
 }
 
 // variantValue materializes a selected variant: the value it declares, or an
-// object of it carrying its nested values and connections.
-func (ctx *Context) variantValue(variant *symbols.Symbol) (Value, error) {
+// object of it carrying its nested values and connections. The object belongs to
+// the owner that selected it, materialized once for that owner.
+func (ctx *Context) variantValue(variant *symbols.Symbol, owner int64) (Value, error) {
 	if value := semantics.VariantValue(variant); value != nil {
 		ec := NewEvalContext(ctx, declScope(variant))
 		val, err := ec.Eval(value)
@@ -113,12 +114,17 @@ func (ctx *Context) variantValue(variant *symbols.Symbol) (Value, error) {
 		}
 		return val, nil
 	}
-	// One object per variant, so repeated reads of a selection answer with the
-	// same object instead of allocating one per read.
-	inst, err := ctx.occurrenceOf(variant)
+	key := variantObject{owner: owner, variant: variant}
+	if id, ok := ctx.variantObjects[key]; ok {
+		if _, live := ctx.instances[id]; live {
+			return Value{Kind: ValVariant, Variant: variant, Instance: id}, nil
+		}
+	}
+	inst, err := ctx.Instantiate(variant)
 	if err != nil {
 		return Value{}, fmt.Errorf("variant %s: %w", variant.Name, err)
 	}
+	ctx.variantObjects[key] = inst.ID
 	return Value{Kind: ValVariant, Variant: variant, Instance: inst.ID}, nil
 }
 
@@ -132,5 +138,13 @@ func (ctx *Context) variantAsValue(v Value) (Value, error) {
 	if semantics.VariantValue(v.Variant) == nil {
 		return v, nil
 	}
-	return ctx.variantValue(v.Variant)
+	// A variant reached this way declares a value, so no object of it is needed.
+	return ctx.variantValue(v.Variant, 0)
+}
+
+// variantObject keys the object a variant stands for by the owner that selected
+// it: two owners selecting one variant each have their own object.
+type variantObject struct {
+	owner   int64
+	variant *symbols.Symbol
 }

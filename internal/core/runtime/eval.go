@@ -488,7 +488,7 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 				return variantReference(variant), nil
 			}
 			// Members are read from the object the variant stands for.
-			val, err := ec.ctx.variantValue(variant)
+			val, err := ec.ctx.variantValue(variant, inst.ID)
 			if err != nil {
 				return Value{}, err
 			}

@@ -49,6 +49,10 @@ type Context struct {
 	// denotes, so a feature chain through a part reads one occurrence of it.
 	occurrences map[*symbols.Symbol]int64
 
+	// variantObjects holds the object a variant stands for per owner that
+	// selected it, so repeated reads of one selection read the same object.
+	variantObjects map[variantObject]int64
+
 	// trace records evaluation, nil when not tracing.
 	trace *TraceRecorder
 
@@ -105,8 +109,9 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxDoSteps:     DefaultMaxDoSteps,
 		maxElements:    DefaultMaxElements,
 
-		occurrences:   make(map[*symbols.Symbol]int64),
-		derivingSlots: make(map[slotRef]bool),
+		occurrences:    make(map[*symbols.Symbol]int64),
+		variantObjects: make(map[variantObject]int64),
+		derivingSlots:  make(map[slotRef]bool),
 	}
 }
 

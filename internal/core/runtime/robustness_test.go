@@ -109,6 +109,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("variation_bound_to_what_is_not_a_variant", testVariationBoundToWhatIsNotAVariant)
 	t.Run("variation_bound_to_two_variants", testVariationBoundToTwoVariants)
 	t.Run("repeated_reads_of_a_variant_object", testRepeatedReadsOfAVariantObject)
+	t.Run("two_owners_selecting_one_variant", testTwoOwnersSelectingOneVariant)
 	t.Run("deep_specialization_chain_of_redefinitions", testDeepSpecializationChainOfRedefinitions)
 	t.Run("conflicting_redefinitions_at_several_levels", testConflictingRedefinitionsAtSeveralLevels)
 }
@@ -2660,17 +2661,14 @@ func testRepeatedReadsOfAVariantObject(t *testing.T) {
 		part chosen :> family { part :>> engine = engine::electric; }
 	}`
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
-	matches := idx.LookupQualified("test::family::engine::electric")
-	if len(matches) != 1 {
-		t.Fatalf("electric: %d matching symbols, want 1", len(matches))
-	}
-	first, err := ctx.variantValue(matches[0])
+	variant := oneSymbol(t, idx, "test::family::engine::electric")
+	first, err := ctx.variantValue(variant, 1)
 	if err != nil {
 		t.Fatalf("variantValue: %v", err)
 	}
 	count := len(ctx.instances)
 	for i := 0; i < 10; i++ {
-		again, err := ctx.variantValue(matches[0])
+		again, err := ctx.variantValue(variant, 1)
 		if err != nil {
 			t.Fatalf("variantValue (read %d): %v", i+2, err)
 		}
@@ -2681,6 +2679,54 @@ func testRepeatedReadsOfAVariantObject(t *testing.T) {
 	if len(ctx.instances) != count {
 		t.Errorf("instances grew from %d to %d over repeated reads", count, len(ctx.instances))
 	}
+}
+
+// testTwoOwnersSelectingOneVariant: a variant is selected per owning object, so
+// two owners of one variation each hold their own object of the variant rather
+// than sharing one whose materialized slots the other reads.
+func testTwoOwnersSelectingOneVariant(t *testing.T) {
+	src := `
+	package test {
+		part def Engine { attribute power; }
+		abstract part family {
+			variation part engine : Engine {
+				variant part electric : Engine { attribute :>> power = 150.0; }
+				variant part petrol : Engine { attribute :>> power = 120.0; }
+			}
+		}
+		part sedan :> family { part :>> engine = engine::electric; }
+		part coupe :> family { part :>> engine = engine::electric; }
+	}`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	ids := make([]int64, 0, 2)
+	for _, usage := range []string{"test::sedan", "test::coupe"} {
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, usage))
+		if err != nil {
+			t.Fatalf("%s: %v", usage, err)
+		}
+		slot, err := inst.GetSlot(ctx, "engine")
+		if err != nil {
+			t.Fatalf("%s.engine: %v", usage, err)
+		}
+		id, ok := slot.Value.Object()
+		if !ok {
+			t.Fatalf("%s.engine = %v, want an object of the selected variant", usage, slot.Value)
+		}
+		ids = append(ids, id)
+	}
+	if ids[0] == ids[1] {
+		t.Errorf("sedan and coupe share engine object %d", ids[0])
+	}
+}
+
+// oneSymbol returns the single symbol a qualified name denotes.
+func oneSymbol(t *testing.T, idx *symbols.Index, fqn string) *symbols.Symbol {
+	t.Helper()
+	matches := idx.LookupQualified(fqn)
+	if len(matches) != 1 {
+		t.Fatalf("%s: %d matching symbols, want 1", fqn, len(matches))
+	}
+	return matches[0]
 }
 
 // testDeepSpecializationChainOfRedefinitions: a redefinition specializes the
