@@ -64,6 +64,10 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   members of `v`'s type — inherited ones included — and nothing else, `Pkg::`
   offers that namespace's members, and the standard library's top-level names
   are offered alongside the ones in scope. Prefix filtering stays on the client.
+- `sysml-lsp` serves a session over one reader: it used to start a second read
+  loop over its own stdio, so an editor's traffic raced two decoders and the
+  server died with corrupted framing ("missing Content-Length header") within
+  seconds of typing.
 
 ### Python bindings and `sysml-grpc`
 

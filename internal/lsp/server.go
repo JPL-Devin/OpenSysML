@@ -28,9 +28,14 @@ func NewServer(ws *model.Workspace) *Server {
 
 // Run wires the server to a stdio-style stream and blocks until the connection
 // is done.
+//
+// The connection is built here rather than with protocol.NewServer because that
+// helper already starts a read loop; a second conn.Go would run two concurrent
+// readers over the same stream and corrupt the framing.
 func (s *Server) Run(ctx context.Context, rwc io.ReadWriteCloser) error {
-	stream := jsonrpc2.NewStream(rwc)
-	ctx, conn, client := protocol.NewServer(ctx, s, stream, zap.NewNop())
+	conn := jsonrpc2.NewConn(jsonrpc2.NewStream(rwc))
+	client := protocol.ClientDispatcher(conn, zap.NewNop())
+	ctx = protocol.WithClient(ctx, client)
 	s.client = client
 	s.conn = conn
 	conn.Go(ctx, s.changeHandler(protocol.ServerHandler(s, jsonrpc2.MethodNotFoundHandler)))

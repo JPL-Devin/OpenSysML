@@ -23,7 +23,7 @@ package VehicleDemo {
         attribute mass : Real = 1200.0;
 
         constraint healthy {
-            wheels->forAll(w => w.pressure > 28.0 and not w.worn)
+            mass > 0.0 and engine.power >= 0.0
         }
 
         state machine {
