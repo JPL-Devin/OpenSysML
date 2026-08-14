@@ -208,20 +208,22 @@ func qnText(qn *ast.QualifiedName) string {
 	return strings.Join(parts, "::")
 }
 
-// A succession edge names its ends, so a `then` beside a member with no name
-// declares an order this representation cannot carry. The notation is legal, so
-// it is a warning naming the end at fault rather than a syntax error.
-func TestSuccessionUnnamedEndWarns(t *testing.T) {
+// A member beside a `then` need not declare a name: the notation binds such an
+// end by position (SysML.xtext EmptySuccessionMember), which the edge carries as
+// the member itself. The dump reads a positional end as `@<kind>`.
+func TestSuccessionBindsUnnamedEndsByPosition(t *testing.T) {
 	tests := []struct {
 		name string
 		src  string
-		want string
+		want []string
 	}{
-		{"unnamed source", "action def A { action; then action b; }", "sequences from a member with no name"},
-		{"unnamed source after a named member", "action def A { action a; action; then action b; }", "sequences from a member with no name"},
-		{"unnamed target", "action def A { action b; then send msg to port; }", "sequences to a member with no name"},
-		{"anonymous member after the keyword", "action def A { action b; then action { } }", "sequences to a member with no name"},
-		{"anonymous typed member after the keyword", "part def P { part a; then part : T; }", "sequences to a member with no name"},
+		{"unnamed source", "action def A { action; then action b; }", []string{"@action->b"}},
+		{"unnamed source after a named member", "action def A { action a; action; then action b; }", []string{"@action->b"}},
+		{"a send is a node of the flow", "action def A { action b; then send msg to port; }", []string{"b->@send"}},
+		{"anonymous member after the keyword", "action def A { action b; then action { } }", []string{"b->@action"}},
+		{"anonymous typed member after the keyword", "part def P { part a; then part : T; }", []string{"a->@part"}},
+		{"a loop node reached by a succession", "action def A { action b; then loop action { } until x; }", []string{"b->@loop"}},
+		{"the final node a `then done` reaches", "action def A { action b; then done; }", []string{"b->@done"}},
 	}
 
 	for _, tt := range tests {
@@ -230,21 +232,55 @@ func TestSuccessionUnnamedEndWarns(t *testing.T) {
 			if len(p.Diagnostics) != 0 {
 				t.Fatalf("unexpected syntax errors: %v", p.Diagnostics)
 			}
-			if len(edges) != 0 {
-				t.Errorf("synthesised %v for a succession with an unnamed end", edges)
+			if len(p.Warnings) != 0 {
+				t.Errorf("warnings %v for a succession the notation binds by position", p.Warnings)
 			}
-			var found bool
-			for _, w := range p.Warnings {
-				if strings.Contains(w.Message, tt.want) {
-					found = true
-					if w.Code != codeUnnamedSuccessionEnd {
-						t.Errorf("warning code %q, want %q", w.Code, codeUnnamedSuccessionEnd)
-					}
-				}
-			}
-			if !found {
-				t.Errorf("warnings %v, want one containing %q", p.Warnings, tt.want)
+			if strings.Join(edges, " ") != strings.Join(tt.want, " ") {
+				t.Errorf("succession edges %v, want %v", edges, tt.want)
 			}
 		})
+	}
+}
+
+// The member a positional end binds to is that member itself, not another of the
+// same kind: a consumer resolves the end by identity, so the edge has to point at
+// the node the author wrote it beside.
+func TestPositionalSuccessionEndIsTheMemberItself(t *testing.T) {
+	p := New(source.New("positional.sysml", []byte(
+		"action def A { action a; then send first() to p; then send second() to p; }")))
+	file := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+	}
+
+	var sends []ast.Node
+	var edges []*ast.SuccessionEdge
+	for _, member := range file.Members {
+		m, ok := member.(*ast.Membership)
+		if !ok {
+			continue
+		}
+		def, ok := m.Member.(*ast.Definition)
+		if !ok {
+			continue
+		}
+		for _, defMember := range def.Members {
+			switch n := defMember.(type) {
+			case *ast.SendStatement:
+				sends = append(sends, n)
+			case *ast.SuccessionEdge:
+				edges = append(edges, n)
+			}
+		}
+	}
+	if len(sends) != 2 || len(edges) != 2 {
+		t.Fatalf("parsed %d sends and %d successions, want 2 and 2", len(sends), len(edges))
+	}
+	if edges[0].TargetMember != sends[0] {
+		t.Errorf("the first succession targets %p, want the first send %p", edges[0].TargetMember, sends[0])
+	}
+	if edges[1].SourceMember != sends[0] || edges[1].TargetMember != sends[1] {
+		t.Errorf("the second succession runs %p->%p, want %p->%p",
+			edges[1].SourceMember, edges[1].TargetMember, sends[0], sends[1])
 	}
 }

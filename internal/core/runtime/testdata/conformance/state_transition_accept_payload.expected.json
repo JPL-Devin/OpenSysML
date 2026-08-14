@@ -1,0 +1,27 @@
+{
+  "type": "state",
+  "events": [
+    {
+      "signal": "Warning",
+      "args": {
+        "value": {
+          "type": "Integer",
+          "value": 3
+        }
+      }
+    }
+  ],
+  "finalState": "done",
+  "stateVisits": [
+    "start",
+    "idle",
+    "alerting",
+    "done"
+  ],
+  "outputs": {
+    "level": {
+      "type": "Integer",
+      "value": 3
+    }
+  }
+}

@@ -80,8 +80,8 @@ func TestNegative(t *testing.T) {
 		// a body with nothing on one side, or a member the notation does not
 		// allow one before, declares no order and is rejected rather than
 		// parsed with the keyword dropped. A `then` beside a member with no
-		// name is legal notation this representation cannot carry and warns
-		// instead (TestSuccessionUnnamedEndWarns).
+		// name is legal notation, bound by position
+		// (TestSuccessionBindsUnnamedEndsByPosition).
 		{"leading_then_has_no_source", "action a { then action b; }"},
 		{"trailing_then_has_no_target", "action a { action b; then }"},
 		{"then_then", "action a { action b; then then action c; }"},
@@ -152,6 +152,33 @@ func TestNegative(t *testing.T) {
 		{"variation_attribute_no_name", "part p { variation attribute : ; }"},
 		{"variant_unclosed_body", "part p { variation attribute cut { variant attribute cutIdeal { :>> cost = 1.0; } }"},
 		{"variant_selection_no_variant_name", "part p { attribute :>> cut = cut::; }"},
+
+		// Behavioral notation: a flow states both of its ends, an accept its
+		// payload, a loop the condition its `until` promises and a succession a
+		// target, so each is reported where one is missing rather than read as
+		// the shorter form it is not.
+		{"flow_from_without_to", "action def A { action a; flow x from a; }"},
+		{"flow_named_from_no_source", "action def A { flow x from to b; }"},
+		{"accept_when_no_condition", "action def A { accept when; }"},
+		{"accept_at_no_instant", "action def A { accept at; }"},
+		{"accept_no_payload", "action def A { accept; }"},
+		{"accept_subsets_no_event", "action def A { action i accept :>; }"},
+		{"loop_until_no_condition", "action def A { loop action { } until; }"},
+		{"loop_until_no_semicolon", "action def A { action b; then loop action { } until x }"},
+		{"then_done_no_semicolon", "action def A { action b; then done }"},
+		{"send_via_no_port", "action def A { send Data() via; }"},
+		{"send_no_target", "action def A { send Data() to; }"},
+		{"decision_else_no_target", "action def A { action m; first m; then decide; else; }"},
+		{"transition_trigger_no_target", "state def S { state a; transition first a accept Ping; }"},
+		{"transition_two_triggers", "state def S { state a; state b; transition first a accept Ping accept Pong then b; }"},
+		{"transition_two_targets", "state def S { state a; state b; transition a to b then b; }"},
+		{"transition_do_without_action", "state def S { state a; state b; transition first a do then b; }"},
+		{"exhibit_state_unclosed_body", "part def P { exhibit state modes { state off; }"},
+		{"namespace_succession_no_target", "package Q { part p; first p then; }"},
+		// Only a transition effect is closed by the transition's next clause, so
+		// a statement in an action body still needs its ';'.
+		{"body_assignment_no_semicolon", "action def A { attribute x; action b; assign x := 1 then b; }"},
+		{"body_send_no_semicolon", "action def A { action b; part self; send Data() to self then b; }"},
 	}
 
 	for _, tt := range tests {

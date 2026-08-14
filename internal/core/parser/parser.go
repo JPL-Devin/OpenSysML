@@ -34,6 +34,10 @@ type Parser struct {
 	// rather than as a result parameter declaration.
 	calcBodyDepth int
 
+	// effectDepth counts the transition effects being parsed, whose statement is
+	// closed by the transition's next clause rather than by ';'.
+	effectDepth int
+
 	// bodyCtx is the stack of enclosing body notations; only the innermost
 	// matters (see bodyContext).
 	bodyCtx []bodyContext
@@ -160,6 +164,13 @@ func (p *Parser) at(k lexer.Kind) bool { return p.peek().Kind == k }
 // atKeyword reports whether the current token is the given keyword literal.
 func (p *Parser) atKeyword(kw string) bool {
 	t := p.peek()
+	return t.Kind == lexer.Keyword && t.KeywordID == kw
+}
+
+// peekIsKeyword reports whether the token n ahead of the cursor is the given
+// keyword literal.
+func (p *Parser) peekIsKeyword(n int, kw string) bool {
+	t := p.peekN(n)
 	return t.Kind == lexer.Keyword && t.KeywordID == kw
 }
 

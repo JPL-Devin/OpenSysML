@@ -458,7 +458,10 @@ type Usage struct {
 	// (OccurrenceUsage::portionKind, SysML v2 8.3.9.11).
 	Portion  PortionKind
 	IsAccept bool // 'accept' action for message consumption
-	IsResult bool // declared with 'return': the result parameter of a calculation/expression
+	// IsBodyParameter marks the `action [<name>] { … }` a loop or branch body is
+	// written as (SysML.xtext ActionBodyParameter), not a nested action node.
+	IsBodyParameter bool
+	IsResult        bool // declared with 'return': the result parameter of a calculation/expression
 	// IsNegated is the `not` of `assert not constraint { … }` and
 	// `assert not satisfy … by …`: the conditions are asserted to be false
 	// (Invariant::isNegated, SysML v2 §8.3.21.10).

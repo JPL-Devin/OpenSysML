@@ -1681,6 +1681,15 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 	var processed, doActions int64
 	for exec.HasPendingWork() && exec.State() == runtime.StateRunning &&
 		processed < maxEvents && doActions < maxDoActions {
+		// A signal in flight is due now, whatever the deadline: dispatching it is
+		// the step RunToCompletion would take here.
+		if exec.EventQueue().Len() == 0 && exec.HasPendingSignal() {
+			if err := exec.ProcessNextEvent(); err != nil {
+				return []string{fmt.Sprintf("error: event processing failed: %v", err)}, false, nil
+			}
+			processed++
+			continue
+		}
 		if queue := exec.EventQueue(); queue.Len() == 0 || queue.Peek().Timestamp > deadline {
 			// Nothing to dispatch within the deadline, but a do behavior with
 			// actions left is due now, so run it and count it as do work.

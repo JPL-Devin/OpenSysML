@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lower"
@@ -125,6 +126,17 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 		return Message{SignalType: typeName, Target: target, Payload: map[string]Value{}}, nil
 	}
 
+	// `send Data(data) via p`, `send shutDown() to self`: the invoked name is
+	// what the message is, whether it names a signal definition or an event
+	// feature, and its arguments are the payload it carries. An accept matches
+	// on that name, so building the message never evaluates the invocation as a
+	// call — there is no function of that name to call.
+	// A calculation of that name is called, though: what is sent is the value it
+	// returns, not a message named after it.
+	if invocation, ok := send.Message.(*ast.InvocationExpr); ok && !e.invokesCalc(scope, invocation) {
+		return e.buildInvokedMessage(invocation, target)
+	}
+
 	value, err := e.Eval(send.Message)
 	if err != nil {
 		return Message{}, fmt.Errorf("eval send message: %w", err)
@@ -138,6 +150,65 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 		Target:     target,
 		Payload:    map[string]Value{"value": value},
 	}, nil
+}
+
+// invokesCalc reports whether an invocation calls a calculation — a calc
+// declaration or a library function — rather than naming a signal to send.
+func (e *EvalContext) invokesCalc(scope *symbols.Scope, invocation *ast.InvocationExpr) bool {
+	if invocation.Type == nil {
+		return false
+	}
+	if _, isBuiltin := builtins[qualifiedNameToString(invocation.Type)]; isBuiltin {
+		return true
+	}
+	if e.ctx == nil || e.ctx.resolver == nil || scope == nil {
+		return false
+	}
+	sym, ok := e.ctx.resolver.ResolveQualified(scope, invocation.Type)
+	if !ok || sym == nil {
+		return false
+	}
+	return isCalcDecl(sym.Decl)
+}
+
+// buildInvokedMessage builds the message of a send written as an invocation.
+// The invoked name types the message; each argument is a value it carries,
+// named where the send named it and by position where it did not. A single
+// positional argument is also carried as `value`, which is what an accept binds
+// its payload parameter to.
+func (e *EvalContext) buildInvokedMessage(invocation *ast.InvocationExpr, target string) (Message, error) {
+	signalType := ast.SimpleName(invocation.Type)
+	if signalType == "" {
+		return Message{}, fmt.Errorf("send: the message names no signal")
+	}
+	if invocation.Operand != nil {
+		return Message{}, fmt.Errorf("send %s: a message is not sent through a receiver", signalType)
+	}
+
+	payload := make(map[string]Value, len(invocation.Args)+len(invocation.NamedArgs))
+	for i, arg := range invocation.Args {
+		value, err := e.Eval(arg)
+		if err != nil {
+			return Message{}, fmt.Errorf("eval argument %d of send %s: %w", i+1, signalType, err)
+		}
+		payload[fmt.Sprintf("arg%d", i+1)] = value
+		if len(invocation.Args) == 1 && len(invocation.NamedArgs) == 0 {
+			payload["value"] = value
+		}
+	}
+	for _, arg := range invocation.NamedArgs {
+		name := ast.SimpleName(arg.Name)
+		if name == "" {
+			return Message{}, fmt.Errorf("send %s: an argument is named by nothing", signalType)
+		}
+		value, err := e.Eval(arg.Value)
+		if err != nil {
+			return Message{}, fmt.Errorf("eval argument %s of send %s: %w", name, signalType, err)
+		}
+		payload[name] = value
+	}
+
+	return Message{SignalType: signalType, Target: target, Payload: payload}, nil
 }
 
 // triggerName describes a transition's trigger for traces. Traces are compared
@@ -158,6 +229,36 @@ func triggerName(trigger ast.Node) string {
 	default:
 		return fmt.Sprintf("%T", trigger)
 	}
+}
+
+// triggerDescription describes the event an accept waits for in the notation it
+// was written in, which is what an error about it, or a view of a suspended run,
+// has to name. The expression a trigger waits on is named when it is a name;
+// there is no printer for an arbitrary one, so the keyword alone stands for it.
+func triggerDescription(trigger ast.Node) string {
+	switch t := trigger.(type) {
+	case *ast.TimeEvent:
+		keyword := "after"
+		if t.Absolute {
+			keyword = "at"
+		}
+		return joinWords("accept", keyword, ast.SimpleName(t.Duration))
+	case *ast.ChangeEvent:
+		return joinWords("accept", "when", ast.SimpleName(t.Condition))
+	default:
+		return triggerName(trigger)
+	}
+}
+
+// joinWords joins the words of a description, dropping the ones that are empty.
+func joinWords(words ...string) string {
+	kept := make([]string, 0, len(words))
+	for _, w := range words {
+		if w != "" {
+			kept = append(kept, w)
+		}
+	}
+	return strings.Join(kept, " ")
 }
 
 // viaSuffix describes the port an accept waits on, for an error message, or

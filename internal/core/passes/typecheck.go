@@ -113,6 +113,7 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		}
 		tc.expr.infer(scope, m.Collection)
 		tc.expr.checkBoolean(body, m.Condition, "condition of '"+m.Kind.String()+"'")
+		tc.expr.checkBoolean(body, m.Until, "condition of 'until'")
 		tc.walk(body, m.Body)
 	case *ast.TransitionMember:
 		tc.expr.checkBoolean(scope, m.Guard, "transition guard")

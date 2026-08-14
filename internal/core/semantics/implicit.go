@@ -47,11 +47,17 @@ var implicitUsageBases = map[ast.UsageKind]string{
 
 // implicitDefinitionBases maps a definition kind to the qualified name of the
 // standard library definition every definition of that kind implicitly
-// specializes: the base metadata definition is MetadataItem, which supplies
-// `annotatedElement` from Metaobjects::Metaobject (SysML v2 §7.27.2, [KerML,
-// 9.2.17]).
+// specializes, so the members that base supplies resolve inside the
+// definition's body: MetadataItem supplies `annotatedElement` from
+// Metaobjects::Metaobject (SysML v2 §7.27.2, [KerML, 9.2.17]).
 var implicitDefinitionBases = map[ast.DefinitionKind]string{
 	ast.DefMetadata: "Metadata::MetadataItem",
+	// A behavior definition specializes the base behavior of its kind, which is
+	// what makes an occurrence's own features — `self`, `start`, `done` — visible
+	// inside the definition's body the same way they are inside a usage's
+	// (SysML v2 §7.16.2, §7.17.2).
+	ast.DefAction: "Actions::Action",
+	ast.DefState:  "States::StateAction",
 }
 
 // implicitBase returns the stdlib definition sym is implicitly typed by, or nil

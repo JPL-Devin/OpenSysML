@@ -219,7 +219,8 @@ func (p *Parser) parseMember() ast.Node {
 	}
 
 	// A namespace member may be a succession stated without its keyword
-	// (SysML v2 8.2.2.13.3): `first a then b;`.
+	// (SysML v2 8.2.2.13.3): `first a::b then c;`, whose ends are qualified
+	// names rather than members of an action's token flow.
 	var inner ast.Node
 	if p.atKeyword("first") {
 		inner = p.parseSuccessionAsUsage(start)

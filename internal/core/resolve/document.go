@@ -95,7 +95,13 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.resolveExpr(scope, d.Multiplicity.Lower)
 			r.resolveExpr(scope, d.Multiplicity.Upper)
 		}
-		r.resolveExpr(scope, d.Value)
+		// An accept node keeps its trigger in the usage's value, and a trigger's
+		// names are not all references (see resolveTrigger).
+		if d.IsAccept {
+			r.resolveTrigger(scope, d.Value)
+		} else {
+			r.resolveExpr(scope, d.Value)
+		}
 		for _, end := range d.ConnectorEnds {
 			// ConnectorEnd has both Target and Reference fields
 			// Target: primary connector target (part being connected)
@@ -224,7 +230,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		// The guard and effect resolve against the parameters the transition's
 		// call trigger declares, which live in a scope of their own.
 		r.resolveTrigger(scope, d.Trigger)
-		body := symbols.CallTriggerScope(scope, d)
+		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
 		r.walkMembers(body, d.Effect)
 	case *ast.SendStatement:
@@ -253,6 +259,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 		r.resolveExpr(scope, d.Collection)
 		r.resolveExpr(body, d.Condition)
+		r.resolveExpr(body, d.Until)
 		r.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
 		// The condition is evaluated before either branch is entered, so it sees

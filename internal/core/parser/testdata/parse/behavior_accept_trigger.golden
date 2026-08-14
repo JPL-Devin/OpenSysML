@@ -1,0 +1,41 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="action" abstract=false variation=false name="Monitor"
+      (Membership visibility="default"
+        (Usage kind="action" name="senseTemperature" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="part" name="temp" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="action" name="atMaintenance" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
+              (TimeEvent absolute=true
+                (FeatureReference name="maintenanceTime"))))))
+      (Membership visibility="default"
+        (Usage kind="action" name="afterDelay" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
+              (TimeEvent absolute=false
+                (IndexExpr bracket=true
+                  (LiteralInteger value="10")
+                  (FeatureReference name="s")))))))
+      (Membership visibility="default"
+        (Usage kind="action" name="whenHot" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
+              (ChangeEvent
+                (OperatorExpr operator=">"
+                  (FeatureChainExpr member="temp"
+                    (FeatureReference name="senseTemperature"))
+                  (FeatureReference name="maxTemp")))))))
+      (Membership visibility="default"
+        (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
+              (ChangeEvent
+                (OperatorExpr operator=">"
+                  (FeatureChainExpr member="temp"
+                    (FeatureReference name="senseTemperature"))
+                  (FeatureReference name="maxTemp"))))))))))

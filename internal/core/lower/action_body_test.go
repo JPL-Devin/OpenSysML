@@ -209,6 +209,84 @@ func TestActionBodyUnexecutableMemberIsLowered(t *testing.T) {
 	}
 }
 
+// A loop body written as an action body parameter is the body itself, whether or
+// not it was named and whether or not it declares members, so it lowers to the
+// block whose owner scopes the members — not to an unexecutable nested node.
+func TestActionBodyParameterLowersToItsBlock(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action test {
+			attribute total : Integer = 0;
+			first start;
+			action driver {
+				loop action charging {
+					assign total := total + 1;
+				} until total > 2;
+				loop action { } until true;
+				for s in (1, 2) action stepping {
+					assign total := total + s;
+				}
+			}
+			done end;
+			then start driver;
+			then driver end;
+		}
+	`)
+
+	body := graph.Bodies[nodeNamed(t, graph, "driver")]
+	if len(body) != 3 {
+		t.Fatalf("driver lowered to %d statements, want 3: %#v", len(body), body)
+	}
+
+	named, ok := body[0].(Loop)
+	if !ok {
+		t.Fatalf("statement 0 = %T, want Loop", body[0])
+	}
+	charging := blockOwnedBy(t, named.Body, "charging")
+	if len(charging.Statements) != 1 {
+		t.Fatalf("named body lowered to %d statements, want 1: %#v", len(charging.Statements), charging.Statements)
+	}
+	if _, ok := charging.Statements[0].(Assign); !ok {
+		t.Errorf("named body statement = %T, want Assign", charging.Statements[0])
+	}
+
+	empty, ok := body[1].(Loop)
+	if !ok {
+		t.Fatalf("statement 1 = %T, want Loop", body[1])
+	}
+	if statements := blockOwnedBy(t, empty.Body, "").Statements; len(statements) != 0 {
+		t.Errorf("empty body lowered to %d statements, want 0: %#v", len(statements), statements)
+	}
+
+	forLoop, ok := body[2].(Loop)
+	if !ok {
+		t.Fatalf("statement 2 = %T, want Loop", body[2])
+	}
+	if statements := blockOwnedBy(t, forLoop.Body, "stepping").Statements; len(statements) != 1 {
+		t.Errorf("for body lowered to %d statements, want 1: %#v", len(statements), statements)
+	}
+}
+
+// blockOwnedBy returns the block a loop's single body-parameter statement lowered
+// to, checking the usage that owns it is the one named.
+func blockOwnedBy(t *testing.T, body Block, name string) Block {
+	t.Helper()
+	if len(body.Statements) != 1 {
+		t.Fatalf("loop body lowered to %d statements, want 1: %#v", len(body.Statements), body.Statements)
+	}
+	block, ok := body.Statements[0].(Block)
+	if !ok {
+		t.Fatalf("loop body statement = %T, want Block", body.Statements[0])
+	}
+	usage, ok := block.Node.(*ast.Usage)
+	if !ok {
+		t.Fatalf("block owner = %T, want *ast.Usage", block.Node)
+	}
+	if usage.Ident.Name != name {
+		t.Errorf("block owner = %q, want %q", usage.Ident.Name, name)
+	}
+	return block
+}
+
 func actionGraphFor(t *testing.T, src string) *ActionGraph {
 	t.Helper()
 	p := parser.New(source.New("test.sysml", []byte(src)))
