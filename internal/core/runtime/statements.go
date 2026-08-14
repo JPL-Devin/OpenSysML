@@ -173,9 +173,8 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 		if err != nil {
 			return flowNext, fmt.Errorf("eval assignment RHS: %w", err)
 		}
-		// An output feature is bound by the host even when the body's data already
-		// holds it, so binding it twice is reported rather than overwritten; a
-		// block-local of the same name shadows it and is written as a local.
+		// An output is bound by the host even when the body's data holds it, so a
+		// second binding is reported; a block-local of the name shadows it.
 		if e.env.assignLocal(s.Target, value) {
 			return flowNext, nil
 		}
