@@ -70,6 +70,24 @@ func TestEveryKeywordIsHighlighted(t *testing.T) {
 	}
 }
 
+// Grouping every keyword leaves no leftovers, so generation must still work
+// without the "keywords-other" rule; a misspelled rule name must still fail.
+func TestRenderToleratesAnEmptyLeftoverRule(t *testing.T) {
+	repo, err := repository()
+	if err != nil {
+		t.Fatalf("repository err = %v", err)
+	}
+	delete(repo, "keywords-other")
+	if _, err := render(Grammars()[0], repo); err != nil {
+		t.Errorf("render without keywords-other err = %v, want a grammar", err)
+	}
+
+	repo["keywords-nosuch"] = pattern{Name: "keyword.other", Match: "x"}
+	if _, err := render(Grammars()[0], repo); err == nil {
+		t.Error("render with a rule the order does not name succeeded, want an error")
+	}
+}
+
 func TestScopesAreQualifiedPerLanguage(t *testing.T) {
 	for _, g := range Grammars() {
 		data, err := Render(g)

@@ -124,13 +124,18 @@ func Render(g Grammar) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return render(g, repo)
+}
 
+func render(g Grammar, repo map[string]pattern) ([]byte, error) {
+	// A rule the repository leaves out is skipped — "keywords-other" is empty
+	// once every keyword is grouped. The count check still catches a rule the
+	// order forgets or misspells.
 	includes := make([]pattern, 0, len(ruleOrder))
 	for _, name := range ruleOrder {
-		if _, ok := repo[name]; !ok {
-			return nil, fmt.Errorf("rule order names %q, which the repository does not define", name)
+		if _, ok := repo[name]; ok {
+			includes = append(includes, pattern{Include: "#" + name})
 		}
-		includes = append(includes, pattern{Include: "#" + name})
 	}
 	if len(includes) != len(repo) {
 		return nil, fmt.Errorf("rule order covers %d of %d repository rules", len(includes), len(repo))
