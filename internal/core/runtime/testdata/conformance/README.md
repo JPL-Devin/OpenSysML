@@ -159,6 +159,17 @@ This directory contains behavioral execution conformance tests. Each test consis
   diagnostic — a declaration valuing one feature under two of its names. Set it
   instead of `slots`.
 
+## Diagnostics
+
+```json
+{"diagnostics": ["expected ';' after transition"]}
+```
+
+A case fails on any diagnostic its model reports that it does not declare here,
+matched as a substring, and on a declaration nothing reported. Omit the field for
+a model that parses clean, which is what a case asserting a result should be:
+declare a diagnostic only when reporting it is part of the case's contract.
+
 ## Standard Library
 
 ```json

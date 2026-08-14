@@ -65,7 +65,9 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 	expected := loadExpectedOutcome(t, conformanceDir, testName)
 
 	// Parse and build model
-	file := parser.New(source.New(sysmlPath, sysmlData)).ParseFile()
+	p := parser.New(source.New(sysmlPath, sysmlData))
+	file := p.ParseFile()
+	checkDiagnostics(t, p.Diagnostics, expected.Diagnostics)
 
 	idx := symbols.NewIndex()
 	// A case whose model names library elements — the measurement unit of a

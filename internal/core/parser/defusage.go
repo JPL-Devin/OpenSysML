@@ -1496,7 +1496,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		// 1. action name; (no body)
 		// 2. action name { in item x; action nested {...}; first ...; } (braced mixed body)
 		// 3. action name \n statements (inline behavioral body without braces)
-		if p.accept2(lexer.Semicolon) {
+		if p.atTransitionEffectStatement(start) && p.atEffectEnd() {
+			// 4. action written as a transition's effect: no body of its own, and
+			// the transition owns the ';' (`do action alarm : Alarm;`).
+			hasBody = false
+		} else if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if p.at(lexer.LBrace) {
 			// Braced body - use mixed parser (handles declarations + behavioral)
@@ -1511,7 +1515,15 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			// a following statement that is not chained belongs to the enclosing body.
 			// EXCEPT: a 'then' chaining to a declaration is namespace-level
 			// succession, not behavioral succession - stop parsing body
+			//
+			// An unbraced body written as a transition's effect ends where the
+			// transition does, so the transition owns its statement's ';'.
+			inEffect := p.atTransitionEffectStatement(start)
+			savedEffectStmtStart := p.effectStmtStart
 			for !p.atEOF() && !p.atNamespaceSuccession() {
+				if inEffect {
+					p.effectStmtStart = p.peek().Span.Offset
+				}
 				members = append(members, p.parseActionMember())
 				// Only an inline statement continues the body; `then a b;` names
 				// members of the enclosing body.
@@ -1519,6 +1531,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 					break
 				}
 			}
+			p.effectStmtStart = savedEffectStmtStart
 			hasBody = true
 		} else {
 			// Expected ';' or '{' or behavioral keyword
@@ -2687,6 +2700,10 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 	}
 
 	switch {
+	case p.atTransitionEffectStatement(start) && p.atEffectEnd():
+		// A performed action written as a transition's effect is ended by the
+		// transition's next clause or by the ';' the transition itself consumes.
+		u.HasBody = false
 	case p.accept2(lexer.Semicolon):
 		u.HasBody = false
 	case p.at(lexer.LBrace):

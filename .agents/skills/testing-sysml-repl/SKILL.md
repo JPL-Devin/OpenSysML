@@ -1125,3 +1125,38 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
   `totalCost = 1450.00`, `band` `bandCost`/`ringCost` `= 400.00`, `engagementRing`
   `engagementRingCost`/`ringCost` `= 500.00`, `diamondCost = 550.00`, and
   `engagementRingToBandConstraint: <constraint: satisfied>`.
+
+## Driving a state machine and its transition effects on camera
+
+- **`-e` is not a file flag.** `sysml -e <expr> [file]` evaluates an expression; to load a model
+  non-interactively use `sysml file.sysml` (it loads, then starts the REPL, so pipe `%quit` in) or
+  `%load` from the prompt. Passing a path to `-e` yields the misleading
+  `error: no declarations loaded (literals work, but feature references need declarations)`.
+- **`sysml -trace <file>` plus `%state <name>` then `%advance <n>` is the strongest available
+  evidence that a transition effect ran and in what order.** The trace prints
+  `exit: <src>` → the effect's `eval …` lines → `enter: <tgt>` → `transition: src -> tgt`, so an
+  effect that was parsed but dropped is visible as a missing `eval operator …` line. Note the
+  trace of a state machine's own attribute is *not* readable with `%eval <attr>` afterwards —
+  that reports the declared default (e.g. `= 0`), not the executed value, so assert on the trace
+  line (`eval operator + -> 1`) instead of on `%eval`.
+- **`%state` works on a `state def` as well as a state usage** (`%state P::S`); the executor starts
+  in whatever state the `entry; then <s>;` chain reaches.
+- **Conformance fixtures under `internal/core/runtime/testdata/conformance/` often write bare
+  `Integer`**, which the conformance harness resolves but the REPL does not: loading them prints
+  `error: unresolved reference: Integer`. That is REPL-only noise, not a regression — when a test
+  asserts "loads with no diagnostics", copy the fixture through
+  `sed 's/\bInteger\b/ScalarValues::Integer/g'` first.
+- **A `do perform <Action>` effect needs the action to have a body.** `action def Bump;` with no
+  body parses fine but fails at run time with
+  `event processing failed: transition effect: invoke action Bump: initialize action: no initial
+  node found in action Bump` (the constructor-succeeds/`initialize()`-errors contract). For an
+  executing `perform` effect use a fixture whose action has `first`/`then` nodes, e.g.
+  `conformance/state_transition_effect_perform.sysml` (counter 1 → 11).
+- For transition-terminator/`;` work specifically, the discriminating inputs are:
+  `transition a to b do assign x := x + 1;` (compact), `transition first a do … then b;`,
+  `do { … ; };` (braced), `do perform A;`, plus the negatives `;;`
+  (`error: expected a body member`), no `;` (both `expected ';' after assignment` *and*
+  `expected ';' after transition`), braced with no trailing `;`
+  (`expected ';' after transition`), and a nested statement inside a braced effect missing its own
+  `;`. An A/B against a binary built from the parent commit is what separates "fixed" from
+  "never broken" here.

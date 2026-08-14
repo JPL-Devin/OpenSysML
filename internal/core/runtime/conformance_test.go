@@ -69,6 +69,11 @@ type ExpectedOutcome struct {
 	// contract is a diagnostic rather than a result (a loop that never
 	// terminates). Empty means the execution must succeed.
 	Error string `json:"error,omitempty"`
+	// Diagnostics are the parse diagnostics the case's model is expected to
+	// report, one text per diagnostic, matched as a substring. Any diagnostic the
+	// case does not declare fails it: a model that parses with an error executes
+	// recovered input, which is not what the case states.
+	Diagnostics []string `json:"diagnostics,omitempty"`
 
 	// State fields
 	Events      []ExpectedEvent `json:"events,omitempty"` // Events to inject
@@ -202,9 +207,9 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 	}
 
 	// Parse and build model
-	file := parser.New(source.New(sysmlPath, sysmlData)).ParseFile()
-	// Note: Parser diagnostics not directly accessible from file
-	// Syntax errors will manifest as nil symbols or malformed AST
+	p := parser.New(source.New(sysmlPath, sysmlData))
+	file := p.ParseFile()
+	checkDiagnostics(t, p.Diagnostics, expected.Diagnostics)
 
 	idx := symbols.NewIndex()
 	if expected.Libraries {
@@ -239,6 +244,42 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 	default:
 		t.Fatalf("unknown test type: %s", expected.Type)
 	}
+}
+
+// checkDiagnostics fails the case unless the diagnostics its model reported are
+// exactly the ones it declares: an undeclared diagnostic means the case executes
+// recovered input, and a declared one that no diagnostic matches is stale.
+func checkDiagnostics(t *testing.T, got []parser.Diagnostic, want []string) {
+	t.Helper()
+	for _, problem := range diagnosticProblems(got, want) {
+		t.Error(problem)
+	}
+}
+
+// diagnosticProblems reports how the diagnostics a model produced differ from
+// the ones a case declares, pairing each declaration with one diagnostic.
+func diagnosticProblems(got []parser.Diagnostic, want []string) []string {
+	var problems []string
+	matched := make([]bool, len(want))
+	for _, d := range got {
+		found := false
+		for i, w := range want {
+			if !matched[i] && strings.Contains(d.Message, w) {
+				matched[i] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			problems = append(problems, fmt.Sprintf("undeclared diagnostic at offset %d: %s", d.Span.Offset, d.Message))
+		}
+	}
+	for i, w := range want {
+		if !matched[i] {
+			problems = append(problems, fmt.Sprintf("declared diagnostic %q was not reported", w))
+		}
+	}
+	return problems
 }
 
 // loadLibraries loads the standard library into idx, for a case that names its
@@ -1010,5 +1051,33 @@ func validateValue(t *testing.T, name string, expected ExpectedValue, actual Val
 		}
 	default:
 		t.Errorf("%s: unknown expected type %s", name, expected.Type)
+	}
+}
+
+// TestConformanceDiagnosticsGate pins that a conformance case fails on a
+// diagnostic it does not declare, and on a declaration nothing reported: a model
+// that parses with an error would otherwise execute recovered input unnoticed.
+func TestConformanceDiagnosticsGate(t *testing.T) {
+	diag := func(msg string) parser.Diagnostic {
+		return parser.Diagnostic{Message: msg, Span: source.Span{Offset: 7}}
+	}
+	tests := []struct {
+		name     string
+		got      []parser.Diagnostic
+		want     []string
+		problems int
+	}{
+		{"clean model, nothing declared", nil, nil, 0},
+		{"undeclared diagnostic", []parser.Diagnostic{diag("expected ';' after transition")}, nil, 1},
+		{"declared diagnostic", []parser.Diagnostic{diag("expected ';' after transition")}, []string{"after transition"}, 0},
+		{"stale declaration", nil, []string{"after transition"}, 1},
+		{"one declaration covers one diagnostic", []parser.Diagnostic{diag("bad"), diag("bad")}, []string{"bad"}, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if problems := diagnosticProblems(tt.got, tt.want); len(problems) != tt.problems {
+				t.Errorf("problems = %v, want %d", problems, tt.problems)
+			}
+		})
 	}
 }
