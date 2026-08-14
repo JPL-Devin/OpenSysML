@@ -326,6 +326,10 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 	}, false, nil
 }
 
+// noDeclarationsMsg answers an expression only session declarations could give
+// a meaning to.
+const noDeclarationsMsg = "error: no declarations loaded (literals work, but feature references need declarations)"
+
 // doEval evaluates an expression.
 func (s *Session) doEval(expr string) ([]string, bool, error) {
 	// Try literal evaluation first (works even with empty session)
@@ -334,24 +338,16 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 		return literalResult, false, nil
 	}
 
-	// For feature references/complex expressions, need session context
 	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
-		// The library is indexed with or without session declarations, so a
-		// name it knows is answered about rather than reported as unloaded.
-		if isSymbolReference(expr) {
-			if sym, _, lerr := s.lookupSymbol(expr); lerr == nil {
-				if usage, ok := sym.Decl.(*ast.Usage); !ok || usage.Value == nil {
-					return []string{fmt.Sprintf("error: %q has no value to evaluate", expr)}, false, nil
-				}
-			}
-		}
-		return []string{"error: no declarations loaded (literals work, but feature references need declarations)"}, false, nil
-	}
 
-	// Create runtime context
+	// The library is indexed with or without session declarations, so a name it
+	// declares is answered from it; only compound expressions, handled below,
+	// need the session's own document.
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
+		if doc == nil || doc.Scope == nil {
+			return []string{noDeclarationsMsg}, false, nil
+		}
 		return []string{"error: " + err.Error()}, false, nil
 	}
 
@@ -401,6 +397,12 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 			fmt.Sprintf("✓ %s", expr),
 			fmt.Sprintf("  = %s", formatValue(val)),
 		}, false, nil
+	}
+
+	// A compound expression is evaluated in the session's own namespace, which
+	// an empty session does not have.
+	if doc == nil || doc.Scope == nil {
+		return []string{noDeclarationsMsg}, false, nil
 	}
 
 	// Complex expression with feature refs - inject into session context
