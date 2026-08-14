@@ -91,7 +91,7 @@ var helpText = []string{
 	"%satisfy [name]     evaluate the satisfaction assertions of the model, or of one element",
 	"",
 	"Action debugging:",
-	"%action <name>      start action executor debugging session",
+	"%action <name> [<object>]  start action executor debugging session, performed by an object",
 	"%step               advance one token step",
 	"%continue           run action to completion",
 	"%tokens             show active tokens",
@@ -99,7 +99,7 @@ var helpText = []string{
 	"%stop               stop current debugging session",
 	"",
 	"State machine debugging:",
-	"%state <name>       start state machine debugging session",
+	"%state <name> [<object>]   start state machine debugging session, performed by an object",
 	"%events             show event queue",
 	"%current            show current state and configuration",
 	"%advance <time>     advance simulation time by <time> units, processing every event due",
@@ -210,9 +210,9 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	// Action debugging
 	case "%action":
 		if len(fields) < 2 {
-			return []string{"usage: %action <name>"}, false, nil
+			return []string{"usage: %action <name> [<object>]"}, false, nil
 		}
-		return s.doAction(fields[1])
+		return s.doAction(fields[1], fields[2:])
 	case "%step":
 		return s.doStep()
 	case "%continue":
@@ -229,9 +229,9 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	// State machine debugging
 	case "%state":
 		if len(fields) < 2 {
-			return []string{"usage: %state <name>"}, false, nil
+			return []string{"usage: %state <name> [<object>]"}, false, nil
 		}
-		return s.doStateMachine(fields[1])
+		return s.doStateMachine(fields[1], fields[2:])
 	case "%events":
 		return s.doEvents()
 	case "%current":
@@ -1329,10 +1329,28 @@ func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
 	return a.SubjectRef
 }
 
+// performingObject resolves the object a debugging session's behavior is
+// performed by: its connections route what the behavior sends. No argument
+// performs the behavior outside any object.
+func (s *Session) performingObject(args []string) (*runtime.Instance, string) {
+	if len(args) == 0 {
+		return nil, ""
+	}
+	_, fqn, lerr := s.lookupSymbol(args[0])
+	if lerr != nil {
+		return nil, "error: " + lerr.Error()
+	}
+	inst, ok := s.instances[fqn]
+	if !ok {
+		return nil, fmt.Sprintf("error: no instance of %q (use %%instantiate first)", fqn)
+	}
+	return inst, ""
+}
+
 // --- Action Debugging Commands ---
 
 // doAction starts an action executor debugging session.
-func (s *Session) doAction(name string) ([]string, bool, error) {
+func (s *Session) doAction(name string, performer []string) ([]string, bool, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
@@ -1347,8 +1365,13 @@ func (s *Session) doAction(name string) ([]string, bool, error) {
 		return []string{fmt.Sprintf("error: %q is not an action", name)}, false, nil
 	}
 
+	self, msg := s.performingObject(performer)
+	if msg != "" {
+		return []string{msg}, false, nil
+	}
+
 	// Create executor
-	exec, err := ctx.CreateActionExecutor(sym)
+	exec, err := ctx.CreateActionExecutorFor(sym, self)
 	if err != nil {
 		return []string{fmt.Sprintf("error: failed to create executor: %v", err)}, false, nil
 	}
@@ -1560,7 +1583,7 @@ func (s *Session) doStop() ([]string, bool, error) {
 // --- State Machine Debugging Commands ---
 
 // doStateMachine starts a state machine executor debugging session.
-func (s *Session) doStateMachine(name string) ([]string, bool, error) {
+func (s *Session) doStateMachine(name string, performer []string) ([]string, bool, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
@@ -1575,8 +1598,13 @@ func (s *Session) doStateMachine(name string) ([]string, bool, error) {
 		return []string{fmt.Sprintf("error: %q is not a state machine", name)}, false, nil
 	}
 
+	self, msg := s.performingObject(performer)
+	if msg != "" {
+		return []string{msg}, false, nil
+	}
+
 	// Create executor
-	exec, err := ctx.CreateStateExecutor(sym)
+	exec, err := ctx.CreateStateExecutorFor(sym, self)
 	if err != nil {
 		return []string{fmt.Sprintf("error: failed to create executor: %v", err)}, false, nil
 	}

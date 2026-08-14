@@ -126,7 +126,7 @@ func TestElementBudgetIsReleasedByEveryStep(t *testing.T) {
 	ctx.maxElements = 6
 	sym := findBehavioralSymbol(t, idx.DocumentRoot("<test>"), ast.DefState, ast.UsageState)
 
-	exec, err := newStateExecutor(ctx, sym)
+	exec, err := newStateExecutor(ctx, sym, nil)
 	if err != nil {
 		t.Fatalf("create state executor: %v", err)
 	}

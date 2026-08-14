@@ -44,6 +44,16 @@ type ExpectedEvent struct {
 	Args   map[string]ExpectedValue `json:"args,omitempty"`   // Signal payload or call arguments
 }
 
+// Performer is one object performing the case's behavior, and the outcome
+// expected of that object's performance.
+type Performer struct {
+	Object      string                   `json:"object"` // qualified name of the object's usage
+	Events      []ExpectedEvent          `json:"events,omitempty"`
+	FinalState  string                   `json:"finalState,omitempty"`
+	StateVisits []string                 `json:"stateVisits,omitempty"`
+	Outputs     map[string]ExpectedValue `json:"outputs,omitempty"`
+}
+
 // ExpectedOutcome represents expected execution result
 type ExpectedOutcome struct {
 	Type string `json:"type"` // "action", "state", "calc", "constraint", "requirement", "instance"
@@ -85,6 +95,11 @@ type ExpectedOutcome struct {
 	// case states, keyed by the assertion as written ("satisfy r by p"), since
 	// such an assertion is anonymous.
 	Assertions map[string]bool `json:"assertions,omitempty"`
+
+	// Performers are the objects that each perform the case's behavior, for a
+	// case whose contract depends on which object performs it — two objects
+	// selecting different variants of one variation route over their own.
+	Performers []Performer `json:"performers,omitempty"`
 
 	// Instance fields
 	Instantiate string                   `json:"instantiate,omitempty"` // qualified name of the type to instantiate
@@ -284,14 +299,37 @@ func runActionConformance(t *testing.T, ctx *Context, idx *symbols.Index, path s
 	}
 }
 
-// runStateConformance executes state machine and validates final state
+// runStateConformance executes a state machine and validates the final state. A
+// case naming performers runs the machine once per object performing it, each
+// against the outcome that object expects.
 func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
-	// Find state definition/usage
 	rootScope := idx.DocumentRoot(path)
 	stateSym := findBehavioralSymbol(t, rootScope, ast.DefState, ast.UsageState)
+	if len(expected.Performers) == 0 {
+		runOneStatePerformance(t, ctx, stateSym, nil, expected)
+		return
+	}
+	for _, performer := range expected.Performers {
+		self, err := ctx.Instantiate(oneSymbol(t, idx, performer.Object))
+		if err != nil {
+			t.Fatalf("instantiate %s: %v", performer.Object, err)
+		}
+		t.Run(performer.Object, func(t *testing.T) {
+			runOneStatePerformance(t, ctx, stateSym, self, ExpectedOutcome{
+				Events:      performer.Events,
+				FinalState:  performer.FinalState,
+				StateVisits: performer.StateVisits,
+				Outputs:     performer.Outputs,
+			})
+		})
+	}
+}
 
+// runOneStatePerformance runs one performance of a state machine, by self or by no
+// object, and validates it against the outcome expected of that performance.
+func runOneStatePerformance(t *testing.T, ctx *Context, stateSym *symbols.Symbol, self *Instance, expected ExpectedOutcome) {
 	// Create executor manually to inject events
-	exec, err := newStateExecutor(ctx, stateSym)
+	exec, err := newStateExecutor(ctx, stateSym, self)
 	if err != nil {
 		t.Fatalf("create state executor: %v", err)
 	}

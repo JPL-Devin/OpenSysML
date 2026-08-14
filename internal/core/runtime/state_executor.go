@@ -23,7 +23,10 @@ type StateConfiguration struct {
 type StateExecutor struct {
 	ctx          *Context
 	stateMachine *symbols.Symbol
-	state        ExecutionState
+	// self is the object performing the machine: its connections route what the
+	// machine sends, and its selections decide which variant's connection does.
+	self  *Instance
+	state ExecutionState
 
 	// Lowered graph (source of truth)
 	graph *lower.StateGraph
@@ -74,8 +77,9 @@ type historyRecord struct {
 	regions map[*ast.StateRegion]*ast.StateNode
 }
 
-// newStateExecutor creates a state executor.
-func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecutor, error) {
+// newStateExecutor creates a state executor. self is the object performing the
+// machine, nil for a machine no object performs.
+func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance) (*StateExecutor, error) {
 	if stateMachine.Kind != symbols.SymbolStateUsage && stateMachine.Kind != symbols.SymbolStateDef {
 		return nil, fmt.Errorf("symbol %s is not a state machine", stateMachine.Name)
 	}
@@ -90,6 +94,7 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 	exec := &StateExecutor{
 		ctx:          ctx,
 		stateMachine: stateMachine,
+		self:         self,
 		state:        StateReady,
 		graph:        graph,
 		currentTime:  0.0,
@@ -614,7 +619,7 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 			return true
 		}
 		msg, ok := event.Payload.(Message)
-		return ok && msg.arrivedAt(trans.Via)
+		return ok && msg.arrivedAt(trans.Via) && msg.reachedObject(objectID(e.self))
 
 	case EventTime:
 		// Time events carry the specific transition in Payload
@@ -1441,7 +1446,7 @@ func (e *StateExecutor) acceptsSignal(msg Message) bool {
 			if !ok {
 				continue
 			}
-			if !msg.arrivedAt(trans.Via) {
+			if !msg.arrivedAt(trans.Via) || !msg.reachedObject(objectID(e.self)) {
 				continue
 			}
 			signal := ast.SimpleName(accept.SignalType)
@@ -1796,7 +1801,7 @@ func (e *StateExecutor) executeAction(action ast.Node, scope *symbols.Scope) err
 		if err != nil {
 			return err
 		}
-		e.ctx.post(e.graph.Connections, msg, send)
+		e.ctx.post(e.graph.Connections, msg, send, e.self)
 		return nil
 
 	default:

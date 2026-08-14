@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -62,6 +63,10 @@ type Context struct {
 	// materializingConnectors holds the connectors whose ends are being attached,
 	// so a connector reached from its own end is reported as a cycle.
 	materializingConnectors map[connectorRef]bool
+
+	// objectConns memoizes the connections declared by each type an object is
+	// of, which a behavior that object performs routes over.
+	objectConns map[*symbols.Symbol][]lower.Connection
 
 	// trace records evaluation, nil when not tracing.
 	trace *TraceRecorder
@@ -147,6 +152,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		selectedVariants: make(map[variantSelection]string),
 
 		materializingConnectors: make(map[connectorRef]bool),
+		objectConns:             make(map[*symbols.Symbol][]lower.Connection),
 		derivingSlots:           make(map[slotRef]bool),
 		collectingSubsets:       make(map[slotRef]bool),
 		sources:                 make(map[string]*source.SourceFile),
@@ -526,10 +532,17 @@ func (ctx *Context) ExecuteAction(action *symbols.Symbol) (map[string]Value, err
 // provided input parameter bindings (keyed by parameter name). Inputs override
 // action attribute defaults of the same name. Returns final token data.
 func (ctx *Context) ExecuteActionWithInputs(action *symbols.Symbol, inputs map[string]Value) (map[string]Value, error) {
+	return ctx.ExecuteActionPerformedBy(action, nil, inputs)
+}
+
+// ExecuteActionPerformedBy executes an action performed by self, whose
+// connections route what the action sends and whose variant selections decide
+// which of them are realized. A nil self performs the action outside any object.
+func (ctx *Context) ExecuteActionPerformedBy(action *symbols.Symbol, self *Instance, inputs map[string]Value) (map[string]Value, error) {
 	defer ctx.beginRun()()
 
 	// Create executor
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, self)
 	if err != nil {
 		return nil, fmt.Errorf("create action executor: %w", err)
 	}
@@ -569,10 +582,17 @@ func (ctx *Context) ExecuteState(stateMachine *symbols.Symbol) (map[string]Value
 // events until completion or suspension. Returns the final state data and the
 // ordered list of visited state names.
 func (ctx *Context) ExecuteStateWithEvents(stateMachine *symbols.Symbol, events []string) (map[string]Value, []string, error) {
+	return ctx.ExecuteStatePerformedBy(stateMachine, nil, events)
+}
+
+// ExecuteStatePerformedBy executes a state machine performed by self, whose
+// connections route what the machine sends and whose variant selections decide
+// which of them are realized. A nil self performs it outside any object.
+func (ctx *Context) ExecuteStatePerformedBy(stateMachine *symbols.Symbol, self *Instance, events []string) (map[string]Value, []string, error) {
 	defer ctx.beginRun()()
 
 	// Create executor
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, self)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create state executor: %w", err)
 	}
@@ -599,7 +619,13 @@ func (ctx *Context) ExecuteStateWithEvents(stateMachine *symbols.Symbol, events 
 // CreateActionExecutor creates an action executor without starting execution.
 // For REPL debugging - allows step-by-step execution control.
 func (ctx *Context) CreateActionExecutor(action *symbols.Symbol) (*ActionExecutor, error) {
-	exec, err := newActionExecutor(ctx, action)
+	return ctx.CreateActionExecutorFor(action, nil)
+}
+
+// CreateActionExecutorFor creates an action executor for an action performed by
+// self, without starting execution.
+func (ctx *Context) CreateActionExecutorFor(action *symbols.Symbol, self *Instance) (*ActionExecutor, error) {
+	exec, err := newActionExecutor(ctx, action, self)
 	if err != nil {
 		return nil, fmt.Errorf("create action executor: %w", err)
 	}
@@ -615,7 +641,13 @@ func (ctx *Context) CreateActionExecutor(action *symbols.Symbol) (*ActionExecuto
 // CreateStateExecutor creates a state executor without starting execution.
 // For REPL debugging - allows step-by-step execution control.
 func (ctx *Context) CreateStateExecutor(stateMachine *symbols.Symbol) (*StateExecutor, error) {
-	exec, err := newStateExecutor(ctx, stateMachine)
+	return ctx.CreateStateExecutorFor(stateMachine, nil)
+}
+
+// CreateStateExecutorFor creates a state executor for a machine performed by
+// self, without starting execution.
+func (ctx *Context) CreateStateExecutorFor(stateMachine *symbols.Symbol, self *Instance) (*StateExecutor, error) {
+	exec, err := newStateExecutor(ctx, stateMachine, self)
 	if err != nil {
 		return nil, fmt.Errorf("create state executor: %w", err)
 	}

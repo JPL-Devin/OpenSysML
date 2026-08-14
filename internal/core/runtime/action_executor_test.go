@@ -22,7 +22,7 @@ func TestActionExecutor_Creation(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -60,7 +60,7 @@ func TestActionExecutor_GraphExtraction(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestActionExecutor_InitialNode(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestActionExecutor_FinalNode(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestActionExecutor_ActionExecutionNode(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, actionSym)
+	exec, err := newActionExecutor(ctx, actionSym, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -279,7 +279,7 @@ func TestActionExecutor_ForkNode(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, actionSym)
+	exec, err := newActionExecutor(ctx, actionSym, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestActionExecutor_ForkNode_DataIsolation(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, actionSym)
+	exec, err := newActionExecutor(ctx, actionSym, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -395,7 +395,7 @@ func TestActionExecutor_ForkNode_NoSuccessors(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, actionSym)
+	exec, err := newActionExecutor(ctx, actionSym, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -460,7 +460,7 @@ func TestActionExecutor_JoinNode(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, actionSym)
+	exec, err := newActionExecutor(ctx, actionSym, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -560,7 +560,7 @@ func TestActionExecutor_JoinNode_PartialArrival(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, actionSym)
+	exec, err := newActionExecutor(ctx, actionSym, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -665,7 +665,7 @@ func TestActionExecutor_MergeNode(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -777,7 +777,7 @@ func TestActionExecutor_MergeNode_DataDiscard(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -887,7 +887,7 @@ func TestActionExecutor_MergeNode_SingleParent(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -977,7 +977,7 @@ func TestActionExecutor_DecisionNode(t *testing.T) {
 
 	// Test 1: x=15 → should take pathA
 	t.Run("x=15_takes_pathA", func(t *testing.T) {
-		exec, err := newActionExecutor(ctx, action)
+		exec, err := newActionExecutor(ctx, action, nil)
 		if err != nil {
 			t.Fatalf("create executor: %v", err)
 		}
@@ -1009,7 +1009,7 @@ func TestActionExecutor_DecisionNode(t *testing.T) {
 
 	// Test 2: x=5 → should take pathB
 	t.Run("x=5_takes_pathB", func(t *testing.T) {
-		exec, err := newActionExecutor(ctx, action)
+		exec, err := newActionExecutor(ctx, action, nil)
 		if err != nil {
 			t.Fatalf("create executor: %v", err)
 		}
@@ -1083,7 +1083,7 @@ func TestActionExecutor_DecisionNode(t *testing.T) {
 			},
 		}
 
-		exec, err := newActionExecutor(ctx, strictAction)
+		exec, err := newActionExecutor(ctx, strictAction, nil)
 		if err != nil {
 			t.Fatalf("create executor: %v", err)
 		}
@@ -1172,7 +1172,7 @@ func TestActionExecutor_DecisionNode_ElseBranch(t *testing.T) {
 
 	// Test 1: x=15 → should take pathA (guard matches)
 	t.Run("guard_matches_takes_pathA", func(t *testing.T) {
-		exec, err := newActionExecutor(ctx, action)
+		exec, err := newActionExecutor(ctx, action, nil)
 		if err != nil {
 			t.Fatalf("create executor: %v", err)
 		}
@@ -1200,7 +1200,7 @@ func TestActionExecutor_DecisionNode_ElseBranch(t *testing.T) {
 
 	// Test 2: x=5 → should take pathElse (guard doesn't match, fallback to unguarded)
 	t.Run("guard_doesnt_match_takes_else", func(t *testing.T) {
-		exec, err := newActionExecutor(ctx, action)
+		exec, err := newActionExecutor(ctx, action, nil)
 		if err != nil {
 			t.Fatalf("create executor: %v", err)
 		}
@@ -1262,7 +1262,7 @@ func TestActionExecutor_DecisionNode_NonBooleanGuard(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -1339,7 +1339,7 @@ func TestActionExecutor_ObjectFlow(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -1423,7 +1423,7 @@ func TestActionExecutor_Step(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, actionSym)
+	exec, err := newActionExecutor(ctx, actionSym, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -1514,7 +1514,7 @@ func TestActionExecutor_RunToCompletion(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, actionSym)
+	exec, err := newActionExecutor(ctx, actionSym, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -1595,7 +1595,7 @@ func TestActionExecutor_Deadlock_JoinStarvation(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, actionSym)
+	exec, err := newActionExecutor(ctx, actionSym, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -1688,7 +1688,7 @@ func TestActionExecutor_Integration_Sequential(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -1777,7 +1777,7 @@ func TestActionExecutor_Integration_ForkJoin(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -1863,7 +1863,7 @@ func TestActionExecutor_Integration_DecisionMerge(t *testing.T) {
 
 	// Test 1: x=10 (takes true path)
 	t.Run("true_path", func(t *testing.T) {
-		exec, err := newActionExecutor(ctx, action)
+		exec, err := newActionExecutor(ctx, action, nil)
 		if err != nil {
 			t.Fatalf("create executor: %v", err)
 		}
@@ -1886,7 +1886,7 @@ func TestActionExecutor_Integration_DecisionMerge(t *testing.T) {
 
 	// Test 2: x=3 (takes false path)
 	t.Run("false_path", func(t *testing.T) {
-		exec, err := newActionExecutor(ctx, action)
+		exec, err := newActionExecutor(ctx, action, nil)
 		if err != nil {
 			t.Fatalf("create executor: %v", err)
 		}
@@ -1952,7 +1952,7 @@ func TestActionExecutor_Integration_ObjectFlow(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}
@@ -1985,7 +1985,7 @@ func TestActionExecutor_Integration_ErrorCases(t *testing.T) {
 			},
 		}
 
-		exec, err := newActionExecutor(ctx, action)
+		exec, err := newActionExecutor(ctx, action, nil)
 		if err != nil {
 			t.Fatalf("create executor: %v", err)
 		}
@@ -2020,7 +2020,7 @@ func TestActionExecutor_Integration_ErrorCases(t *testing.T) {
 			},
 		}
 
-		_, err := newActionExecutor(ctx, action)
+		_, err := newActionExecutor(ctx, action, nil)
 		if err == nil {
 			t.Fatal("expected error for undefined edge reference")
 		}
@@ -2044,7 +2044,7 @@ func TestActionExecutor_Integration_ErrorCases(t *testing.T) {
 			},
 		}
 
-		exec, err := newActionExecutor(ctx, action)
+		exec, err := newActionExecutor(ctx, action, nil)
 		if err != nil {
 			t.Fatalf("create executor: %v", err)
 		}
@@ -2190,7 +2190,7 @@ func TestActionExecutor_Integration_ParallelProcessing(t *testing.T) {
 		},
 	}
 
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, nil)
 	if err != nil {
 		t.Fatalf("create executor: %v", err)
 	}

@@ -23,10 +23,15 @@ import (
 // Port names the port a `send m via p` was routed to — the peer end of p, not p
 // itself, since that is where the message arrived. Only an accept on that port
 // consumes it, so port-routed traffic and addressed traffic stay separate.
+// Object identifies the object whose connection routed the message, 0 when no
+// object performed the sending behavior. Two objects of a type route over their
+// own connections, so a port-routed message is only for an accept of the object
+// it was routed within.
 type Message struct {
 	SignalType string
 	Target     string
 	Port       string
+	Object     int64
 	Payload    map[string]Value
 }
 
@@ -78,57 +83,45 @@ func (m Message) arrivedAt(port string) bool {
 	return m.Port == port
 }
 
+// reachedObject reports whether a message routed within one object reached the
+// object now accepting: a connection of one object never delivers into another.
+func (m Message) reachedObject(object int64) bool {
+	return m.Port == "" || m.Object == object
+}
+
+// objectID is the identity of an object, 0 for none.
+func objectID(inst *Instance) int64 {
+	if inst == nil {
+		return 0
+	}
+	return inst.ID
+}
+
 // postVia routes a message out of a sending port: every port connected to it
 // receives a copy, since a connection joins ends without a direction. A port
 // with no connections reaches no one, which is not an error — the message is
 // simply never delivered, and an accept waiting for it stays suspended until
 // the run gives up with ErrAcceptDeadlock.
-func (ctx *Context) postVia(conns []lower.Connection, msg Message, sendingPort string) {
-	for _, peer := range lower.PeerPorts(ctx.realizedConnections(conns), sendingPort) {
+func (ctx *Context) postVia(conns []lower.Connection, msg Message, sendingPort string, self *Instance) {
+	routable := ctx.realizedConnections(ctx.routableConnections(conns, self), self)
+	for _, peer := range lower.PeerPorts(routable, sendingPort) {
 		routed := msg
 		routed.Target = ""
 		routed.Port = peer
+		if self != nil {
+			routed.Object = self.ID
+		}
 		ctx.PostMessage(routed)
 	}
 }
 
-// realizedConnections drops the connections a variation offers but the run did
-// not select: a `variant interface`'s connection joins its ends only where that
-// variant is the one a variation point is bound to, so a variant that was never
-// selected routes nothing (SysML v2 §7.20). Connections belonging to no
-// variation are always realized.
-func (ctx *Context) realizedConnections(conns []lower.Connection) []lower.Connection {
-	out := make([]lower.Connection, 0, len(conns))
-	for _, conn := range conns {
-		if conn.Variation != "" && ctx.selectedVariant(conn.Variation) != conn.Variant {
-			continue
-		}
-		out = append(out, conn)
-	}
-	return out
-}
-
-// selectedVariant answers what a variation is bound to. Routing has no owning
-// object, so owners disagreeing realizes no connection rather than the wrong one.
-func (ctx *Context) selectedVariant(variation string) string {
-	selected := ""
-	for key, variant := range ctx.selectedVariants {
-		if key.variation != variation {
-			continue
-		}
-		if selected != "" && selected != variant {
-			return ""
-		}
-		selected = variant
-	}
-	return selected
-}
-
 // post delivers a built message the way the send addressed it: routed through
-// the connections of the sending port, or straight onto the bus.
-func (ctx *Context) post(conns []lower.Connection, msg Message, send lower.Send) {
+// the connections of the sending port, or straight onto the bus. self is the
+// object performing the behavior that sent it, nil for a behavior no object
+// performs.
+func (ctx *Context) post(conns []lower.Connection, msg Message, send lower.Send, self *Instance) {
 	if send.IsVia {
-		ctx.postVia(conns, msg, send.Target)
+		ctx.postVia(conns, msg, send.Target, self)
 		return
 	}
 	ctx.PostMessage(msg)

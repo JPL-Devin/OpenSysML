@@ -329,7 +329,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 		}
 	}
 
-	graph.Connections = lowerConnections(members)
+	graph.Connections = lowerConnections(members, OwnerBehavior)
 	graph.Attributes = lowerAttributes(members)
 
 	// Note: Initial node is optional at graph construction time.

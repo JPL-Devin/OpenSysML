@@ -1,0 +1,43 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="variantRouting" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Router"
+          (Membership visibility="default"
+            (Usage kind="port" name="outPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="port" name="inPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="port" name="bypass" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="interface" name="link" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variation=true
+              (Membership visibility="default"
+                (Usage kind="interface" name="direct" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+                  (ConnectorEnd target="outPort"
+                    (*ast.QualifiedName))
+                  (ConnectorEnd target="inPort"
+                    (*ast.QualifiedName))))
+              (Membership visibility="default"
+                (Usage kind="interface" name="indirect" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+                  (ConnectorEnd target="outPort"
+                    (*ast.QualifiedName))
+                  (ConnectorEnd target="bypass"
+                    (*ast.QualifiedName))))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="alpha" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Router
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="interface" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=link
+                (*ast.QualifiedName))
+              (FeatureReference name="link::direct")))))
+      (Membership visibility="default"
+        (Usage kind="part" name="beta" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Router
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="interface" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=link
+                (*ast.QualifiedName))
+              (FeatureReference name="link::indirect"))))))))

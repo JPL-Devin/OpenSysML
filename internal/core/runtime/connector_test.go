@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -465,7 +466,8 @@ func TestVariantSelectionIsPerOwner(t *testing.T) {
 		part sedan :> family { part :>> engine = engine::electric; }
 		part coupe :> family { part :>> engine = engine::petrol; }
 	}`))
-	for _, usage := range []string{"test::sedan", "test::coupe"} {
+	owners := map[string]*Instance{}
+	for usage, want := range map[string]string{"test::sedan": "electric", "test::coupe": "petrol"} {
 		inst, err := ctx.Instantiate(oneSymbol(t, idx, usage))
 		if err != nil {
 			t.Fatalf("%s: %v", usage, err)
@@ -473,22 +475,18 @@ func TestVariantSelectionIsPerOwner(t *testing.T) {
 		if _, err := inst.GetSlot(ctx, "engine"); err != nil {
 			t.Fatalf("%s.engine: %v", usage, err)
 		}
-	}
-	selections := map[string]bool{}
-	for key, variant := range ctx.selectedVariants {
-		if key.variation == "engine" {
-			selections[variant] = true
+		owners[want] = inst
+		if got := ctx.selectedVariants[variantSelection{owner: inst.ID, variation: "engine"}]; got != want {
+			t.Errorf("%s selected %q, want %q", usage, got, want)
 		}
 	}
-	for _, want := range []string{"electric", "petrol"} {
-		if !selections[want] {
-			t.Errorf("selection of %s was lost, recorded: %v", want, selections)
+	// A connection of an object is governed by that object's own selection, so
+	// each object resolves the variation to the variant it selected.
+	conn := lower.Connection{Variation: "engine", Owner: lower.OwnerObject}
+	for want, inst := range owners {
+		if got := ctx.selectedVariant(conn, inst); got != want {
+			t.Errorf("routing resolved engine to %q for the object selecting %q", got, want)
 		}
-	}
-	// Routing has no owning object, so two objects disagreeing over one variation
-	// realize neither variant's connection rather than the wrong one.
-	if got := ctx.selectedVariant("engine"); got != "" {
-		t.Errorf("routing resolved the variation to %q while owners disagree", got)
 	}
 }
 

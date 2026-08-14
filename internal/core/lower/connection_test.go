@@ -1,6 +1,12 @@
 package lower
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
+)
 
 func TestLowerConnectionsFromActionBody(t *testing.T) {
 	graph := actionGraphFor(t, `
@@ -272,4 +278,83 @@ func TestLowerConnectionEndFollowsAFeatureChain(t *testing.T) {
 	if got := PeerPorts(graph.Connections, "out"); len(got) != 1 || got[0] != "inPort" {
 		t.Errorf("PeerPorts(out) = %v, want [inPort]", got)
 	}
+}
+
+// A connection lowered from a behavior's own body is owned by that behavior, so
+// routing it needs no object.
+func TestLowerBehaviorConnectionIsOwnedByTheBehavior(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action a {
+			port outPort;
+			port inPort;
+			connect outPort to inPort;
+			first start;
+			done end;
+			then start end;
+		}
+	`)
+	if len(graph.Connections) != 1 {
+		t.Fatalf("Connections = %v, want one connection", graph.Connections)
+	}
+	if got := graph.Connections[0].Owner; got != OwnerBehavior {
+		t.Errorf("Owner = %v, want OwnerBehavior", got)
+	}
+}
+
+// The connections of the type of an object performing a behavior are lowered
+// tagged as the object's own, so a variant of a variation the object binds is
+// realized for the object that bound it rather than for the behavior.
+func TestLowerObjectConnectionsAreOwnedByTheObject(t *testing.T) {
+	def := usageOrDefFor(t, `
+		part def Router {
+			port outPort;
+			port inPort;
+			port bypass;
+			connect outPort to inPort;
+			variation interface link {
+				variant interface direct connect outPort to inPort;
+				variant interface indirect connect outPort to bypass;
+			}
+		}
+	`)
+	conns := ToObjectConnections(def)
+	if len(conns) != 3 {
+		t.Fatalf("ToObjectConnections = %+v, want the plain connection and both variants", conns)
+	}
+	for _, conn := range conns {
+		if conn.Owner != OwnerObject {
+			t.Errorf("connection %+v: Owner = %v, want OwnerObject", conn, conn.Owner)
+		}
+	}
+	if conns[1].Variation != "link" || conns[1].Variant != "direct" {
+		t.Errorf("connection = %+v, want variation link variant direct", conns[1])
+	}
+	if got := PeerPorts(conns[2:], "outPort"); len(got) != 1 || got[0] != "bypass" {
+		t.Errorf("PeerPorts(outPort) over the indirect variant = %v, want [bypass]", got)
+	}
+}
+
+// usageOrDefFor parses one declaration and returns its node, for lowering that
+// starts from a type rather than from a behavior graph.
+func usageOrDefFor(t *testing.T, src string) ast.Node {
+	t.Helper()
+	p := parser.New(source.New("test.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) > 0 {
+		t.Fatalf("parse errors: %v", p.Diagnostics)
+	}
+	for _, member := range root.Members {
+		membership, ok := member.(*ast.Membership)
+		if !ok {
+			continue
+		}
+		switch decl := membership.Member.(type) {
+		case *ast.Definition:
+			return decl
+		case *ast.Usage:
+			return decl
+		}
+	}
+	t.Fatalf("no definition or usage in %q", src)
+	return nil
 }

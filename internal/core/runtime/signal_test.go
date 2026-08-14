@@ -557,7 +557,7 @@ func TestRoutingHonorsTheSelectedVariantConnection(t *testing.T) {
 		if tt.selected != "" {
 			ctx.selectedVariants[variantSelection{variation: "link"}] = tt.selected
 		}
-		ctx.postVia(conns, Message{SignalType: "Ping"}, "outPort")
+		ctx.postVia(conns, Message{SignalType: "Ping"}, "outPort", nil)
 		var got []string
 		for _, msg := range ctx.PendingMessages() {
 			got = append(got, msg.Port)
@@ -570,5 +570,45 @@ func TestRoutingHonorsTheSelectedVariantConnection(t *testing.T) {
 				t.Fatalf("selection %q routed to %v, want %v", tt.selected, got, tt.want)
 			}
 		}
+	}
+}
+
+// Two objects of one type each selecting a different variant of one variation
+// route over their own selection: a message a behavior of one object sends
+// reaches the ports that object's selected connection joins, and no port of the
+// other object's (SysML v2 §7.20).
+func TestRoutingIsPerOwnerVariantSelection(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+	package test {
+		port def P;
+		part def Sys {
+			port outPort : P;
+			port inPort : P;
+			port bypass : P;
+			variation interface link {
+				variant interface direct connect outPort to inPort;
+				variant interface indirect connect outPort to bypass;
+			}
+		}
+		part alpha : Sys { interface :>> link = link::direct; }
+		part beta : Sys { interface :>> link = link::indirect; }
+	}`))
+	for usage, want := range map[string]string{"test::alpha": "inPort", "test::beta": "bypass"} {
+		self, err := ctx.Instantiate(oneSymbol(t, idx, usage))
+		if err != nil {
+			t.Fatalf("%s: %v", usage, err)
+		}
+		ctx.postVia(nil, Message{SignalType: "Ping"}, "outPort", self)
+		var got []string
+		for _, msg := range ctx.PendingMessages() {
+			if msg.Object != self.ID {
+				t.Errorf("%s routed a message into object %d", usage, msg.Object)
+			}
+			got = append(got, msg.Port)
+		}
+		if len(got) != 1 || got[0] != want {
+			t.Errorf("%s routed to %v, want [%s]", usage, got, want)
+		}
+		ctx.messages = nil
 	}
 }
