@@ -2,7 +2,6 @@ package repl
 
 import (
 	"os"
-	"path"
 	"sort"
 	"strings"
 
@@ -98,11 +97,22 @@ func matchingPrefix(candidates []string, prefix string) []string {
 	return out
 }
 
+// splitPath splits a typed path after its last separator, accepting either
+// separator so a path is split the way the platform reads it.
+func splitPath(word string) (dir, base string) {
+	for i := len(word) - 1; i >= 0; i-- {
+		if os.IsPathSeparator(word[i]) {
+			return word[:i+1], word[i+1:]
+		}
+	}
+	return "", word
+}
+
 // pathCompletions returns the files and directories the typed path can name.
-// Candidates extend what was typed, so a directory keeps its trailing slash and
-// a "~" is left as written.
+// Candidates extend what was typed, so a directory keeps its trailing separator
+// and a "~" is left as written.
 func pathCompletions(word string) []string {
-	dir, base := path.Split(word)
+	dir, base := splitPath(word)
 	read := dir
 	if read == "" {
 		read = "."
@@ -121,7 +131,13 @@ func pathCompletions(word string) []string {
 			continue
 		}
 		if e.IsDir() {
-			name += "/"
+			// The separator already typed, so a candidate reads back the way
+			// the path was written.
+			sep := byte(os.PathSeparator)
+			if dir != "" {
+				sep = dir[len(dir)-1]
+			}
+			name += string(sep)
 		}
 		out = append(out, dir+name)
 	}

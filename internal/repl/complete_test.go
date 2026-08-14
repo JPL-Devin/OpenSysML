@@ -169,6 +169,35 @@ func TestCompletePaths(t *testing.T) {
 	}
 }
 
+// TestSplitPath checks a typed path is split at the last separator the platform
+// reads as one, so a path written with backslashes completes on Windows.
+func TestSplitPath(t *testing.T) {
+	tests := []struct {
+		word, dir, base string
+	}{
+		{"", "", ""},
+		{"model.sysml", "", "model.sysml"},
+		{"/tmp/models/mod", "/tmp/models/", "mod"},
+		{"/tmp/models/", "/tmp/models/", ""},
+	}
+	for _, tt := range tests {
+		if dir, base := splitPath(tt.word); dir != tt.dir || base != tt.base {
+			t.Errorf("splitPath(%q) = %q, %q; want %q, %q", tt.word, dir, base, tt.dir, tt.base)
+		}
+	}
+
+	// A backslash separates only where the platform says it does: elsewhere it
+	// is an ordinary character in a file name.
+	const win = `C:\models\ro`
+	wantDir, wantBase := "", win
+	if os.IsPathSeparator('\\') {
+		wantDir, wantBase = `C:\models\`, "ro"
+	}
+	if dir, base := splitPath(win); dir != wantDir || base != wantBase {
+		t.Errorf("splitPath(%q) = %q, %q; want %q, %q", win, dir, base, wantDir, wantBase)
+	}
+}
+
 // TestCompletePosition checks completion answers about the word at the cursor,
 // not the end of the line.
 func TestCompletePosition(t *testing.T) {
