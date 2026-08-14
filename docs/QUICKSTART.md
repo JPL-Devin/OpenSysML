@@ -303,10 +303,13 @@ partly recovered would be quietly missing declarations. So does
 The same conversion is available without starting the REPL:
 
 ```bash
-$ sysml -convert my_model.sysml -o my_model.ttl   # notation to RDF
-$ sysml -convert my_model.ttl -o back.sysml       # RDF to notation
-$ sysml -convert my_model.sysml                   # to stdout, in the other format
+$ sysml my_model.sysml -convert ttl -o my_model.ttl   # notation to RDF
+$ sysml my_model.ttl -convert sysml -o back.sysml      # RDF to notation
+$ sysml my_model.sysml -convert ttl                    # to stdout
 ```
+
+The model is named the way it is everywhere else on this command line, and
+`-convert` names the format to convert it to.
 
 See [RDF_INTEROP.md](RDF_INTEROP.md) for the vocabulary, the round-trip
 guarantees, and what the mapping does not cover.
