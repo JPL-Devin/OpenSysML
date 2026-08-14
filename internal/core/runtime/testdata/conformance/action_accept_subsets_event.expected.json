@@ -1,0 +1,6 @@
+{
+	"type": "action",
+	"outputs": {
+		"stopped": {"type": "Integer", "value": 1}
+	}
+}

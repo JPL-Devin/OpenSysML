@@ -9,8 +9,8 @@
         (Usage kind="part" name="y" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="typing" target=Real
             (*ast.QualifiedName))))
-      (*ast.InitialNode)
-      (*ast.FinalNode)
+      (InitialNode name="start" successor="")
+      (FinalNode name="end")
       (SuccessionEdge source="start" target="end")
       (Membership visibility="default"
         (Usage kind="attribute" name="counter" ref=false direction="none" composite=false derived=false ordered=false nonunique=false

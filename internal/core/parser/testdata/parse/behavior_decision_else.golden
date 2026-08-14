@@ -1,0 +1,14 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="action" abstract=false variation=false name="Watchdog"
+      (Usage kind="action" name="monitor" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+      (Usage kind="action" name="sendBatteryLow" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+      (Usage kind="action" name="idle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+      (InitialNode name="monitor" successor="")
+      (DecisionNode name="")
+      (SuccessionEdge source="monitor" target="@decide")
+      (ControlFlowEdge source="@decide" target="sendBatteryLow" else=false
+        (OperatorExpr operator="<"
+          (FeatureReference name="battery")
+          (LiteralInteger value="20")))
+      (ControlFlowEdge source="@decide" target="idle" else=true))))

@@ -12,14 +12,14 @@
           (Membership visibility="default"
             (Usage kind="part" name="receiver" ref=true direction="none" composite=false derived=false ordered=false nonunique=false))
           (Membership visibility="default"
-            (Usage kind="flow" name="fuelCommandMessage" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="fuelCommand" declared=true)
+            (Usage kind="flow" name="fuelCommandMessage" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="message"
+              (FlowEnds from="sender.sent" to="receiver.received" payload="fuelCommand" declared=true)
               (Usage kind="attribute" name="fuelCommand" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
                 (Relationship kind="typing" target=FuelCommand
                   (*ast.QualifiedName)))))
           (Membership visibility="default"
-            (Usage kind="flow" name="forwardMessage" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="fuelCommand" declared=true)
+            (Usage kind="flow" name="forwardMessage" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="message"
+              (FlowEnds from="sender.forwarded" to="receiver.received" payload="fuelCommand" declared=true)
               (Usage kind="attribute" name="fuelCommand" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
                 (Relationship kind="typing" target=FuelCommand
                   (*ast.QualifiedName))
@@ -27,4 +27,4 @@
                   (FeatureReference name="fuelCommandMessage")))))
           (Membership visibility="default"
             (Usage kind="flow" name="plainPayload" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="FuelCommand" declared=false))))))))
+              (FlowEnds from="sender.sent" to="receiver.received" payload="FuelCommand" declared=false))))))))

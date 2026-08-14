@@ -1,0 +1,22 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="action" abstract=false variation=false name="Transmitter"
+      (Membership visibility="default"
+        (Usage kind="port" name="commPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=CommPort
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="data" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Data
+            (*ast.QualifiedName))))
+      (Usage kind="action" name="begin" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+      (InitialNode name="begin" successor="")
+      (SendStatement via=true
+        (InvocationExpr type="Data"
+          (FeatureReference name="data"))
+        (FeatureReference name="commPort"))
+      (SuccessionEdge source="begin" target="@send")
+      (SendStatement via=false
+        (InvocationExpr type="fullyCharged")
+        (FeatureReference name="self"))
+      (SuccessionEdge source="@send" target="@send"))))

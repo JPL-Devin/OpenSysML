@@ -1,0 +1,10 @@
+exit: start
+enter: waitingGSPing (entry action)
+transition: start -> waitingGSPing
+exit: waitingGSPing
+eval literal 1 -> 1
+enter: transmitting
+transition: waitingGSPing -> transmitting (event: accept Ping)
+exit: transmitting
+enter: done
+transition: transmitting -> done

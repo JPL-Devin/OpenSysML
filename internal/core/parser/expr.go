@@ -591,7 +591,7 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 			// A parameter may specialize a feature instead of naming a type
 			// (`in p :> ISQ::mass`), which is how a filter names the feature its
 			// elements redefine.
-			paramRels, _ := p.parseRelationships(true)
+			paramRels := p.parseRelationships(true)
 			if p.at(lexer.Eq) {
 				p.advance() // =
 				paramValue = p.ParseExpression()

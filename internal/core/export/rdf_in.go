@@ -345,6 +345,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 		{"isConstant", "constant"},
 		{"isIndividual", "individual"},
 		{"isSnapshot", "snapshot"},
+		{"isTimeslice", "timeslice"},
 		{"isEvent", "event"},
 		{"isEnd", "end"},
 		{"isReference", "ref"},
@@ -357,9 +358,6 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 		if d.boolOf(el, rdf.SysML+flag.property) {
 			words = append(words, flag.keyword)
 		}
-	}
-	if d.boolOf(el, rdf.SysML+"isConjugated") {
-		keyword = "~" + keyword
 	}
 	words = append(words, keyword)
 	// `chain` qualifies the kind keyword it follows, unlike the modifiers above.
@@ -596,6 +594,13 @@ func (d *decoder) relationshipWords(el *element, skip ...ast.RelationshipKind) [
 		targets := d.referenceList(el, rdf.SysML+relationshipProperty[kind])
 		if len(targets) == 0 {
 			continue
+		}
+		// Conjugation qualifies the type a feature is typed by, not the feature
+		// itself: the notation is `port p : ~P` (SysML v2 ConjugatedPortTyping).
+		if kind == ast.RelTyping && d.boolOf(el, rdf.SysML+"isConjugated") {
+			for i, target := range targets {
+				targets[i] = "~" + target
+			}
 		}
 		words = append(words, relationshipSyntax[kind], strings.Join(targets, ", "))
 	}

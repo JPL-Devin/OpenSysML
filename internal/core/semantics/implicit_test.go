@@ -48,3 +48,31 @@ func TestUsageKindsWithoutImplicitBase(t *testing.T) {
 		}
 	}
 }
+
+// TestImplicitBaseUsageContributesThat covers SysML v2 §7.6: every usage element
+// subsets the most general base usage, which is what makes `that` visible in a
+// usage body. The base usage contributes members only — it is not a supertype.
+func TestImplicitBaseUsageContributesThat(t *testing.T) {
+	m, root := buildModel(t, `package Base { abstract feature things { feature that; } }
+		package Parts { part def Part; }
+		part p : Parts::Part;`)
+	p := sym(t, root, "p")
+
+	if _, ok := m.LookupMember(p, "that"); !ok {
+		t.Errorf("`that` is not a member of a usage")
+	}
+	parts := sym(t, root, "Parts")
+	part, _ := parts.Scope.LookupLocal("Part")
+	if supers := m.DirectSupertypes(p); len(supers) != 1 || supers[0] != part {
+		t.Errorf("DirectSupertypes(p) = %v, want the declared [Parts::Part] only", supers)
+	}
+	base := sym(t, root, "Base")
+	things, _ := base.Scope.LookupLocal("things")
+	if m.Conforms(p, things) {
+		t.Errorf("a usage reported conforming to the base usage")
+	}
+	// A definition is not a usage element and takes nothing from the base usage.
+	if _, ok := m.LookupMember(part, "that"); ok {
+		t.Errorf("`that` reported as a member of a definition")
+	}
+}

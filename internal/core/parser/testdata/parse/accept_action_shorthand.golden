@@ -10,7 +10,7 @@
           (Membership visibility="default"
             (Usage kind="action" name="trigger" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Membership visibility="default"
-                (Usage kind="attribute" name="scene" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                (Usage kind="attribute" name="scene" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
                   (Relationship kind="typing" target=Scene
                     (*ast.QualifiedName))))))))
       (Membership visibility="default"
@@ -24,6 +24,6 @@
               (Relationship kind="via" target=lens
                 (*ast.QualifiedName))
               (Membership visibility="default"
-                (Usage kind="attribute" name="scene" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                (Usage kind="attribute" name="scene" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
                   (Relationship kind="typing" target=Scene
                     (*ast.QualifiedName)))))))))))

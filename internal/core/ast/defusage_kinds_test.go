@@ -46,12 +46,21 @@ func TestDumpFlowEnds(t *testing.T) {
 
 func TestDumpConjugated(t *testing.T) {
 	u := &Usage{
-		Kind:         UsagePort,
-		Ident:        Identification{Name: "p"},
-		IsConjugated: true,
+		Kind:  UsagePort,
+		Ident: Identification{Name: "p"},
+		Relationships: []*Relationship{{
+			Kind:       RelTyping,
+			Target:     qn("P"),
+			Conjugated: true,
+		}},
+	}
+	if _, ok := u.ConjugatedTyping(); !ok {
+		t.Fatal("ConjugatedTyping() did not report the `~` typing")
 	}
 	got := Dump(u)
-	want := `(Usage kind="port" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false conjugated=true)`
+	want := "(Usage kind=\"port\" name=\"p\" ref=false direction=\"none\" composite=false derived=false ordered=false nonunique=false\n" +
+		"  (Relationship kind=\"typing\" target=P conjugated=true\n" +
+		"    (*ast.QualifiedName)))"
 	if got != want {
 		t.Fatalf("Dump mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}

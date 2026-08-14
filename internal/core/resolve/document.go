@@ -95,7 +95,13 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.resolveExpr(scope, d.Multiplicity.Lower)
 			r.resolveExpr(scope, d.Multiplicity.Upper)
 		}
-		r.resolveExpr(scope, d.Value)
+		// An accept node keeps its trigger in the usage's value, and a trigger's
+		// names are not all references (see resolveTrigger).
+		if d.IsAccept {
+			r.resolveTrigger(scope, d.Value)
+		} else {
+			r.resolveExpr(scope, d.Value)
+		}
 		for _, end := range d.ConnectorEnds {
 			// ConnectorEnd has both Target and Reference fields
 			// Target: primary connector target (part being connected)
@@ -180,10 +186,10 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.walkMembers(scope, d.Body)
 	case *ast.AssumeMember:
 		r.resolveExpr(scope, d.Expression)
-		r.walkMembers(scope, d.Body)
+		r.walkConstraintBody(scope, r.resolveConstraintReference(scope, d.Reference), d.Body)
 	case *ast.RequireMember:
 		r.resolveExpr(scope, d.Expression)
-		r.walkMembers(scope, d.Body)
+		r.walkConstraintBody(scope, r.resolveConstraintReference(scope, d.Reference), d.Body)
 	case *ast.EntryMember:
 		r.walkMembers(scope, d.Actions)
 	case *ast.DoMember:
@@ -224,7 +230,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		// The guard and effect resolve against the parameters the transition's
 		// call trigger declares, which live in a scope of their own.
 		r.resolveTrigger(scope, d.Trigger)
-		body := symbols.CallTriggerScope(scope, d)
+		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
 		r.walkMembers(body, d.Effect)
 	case *ast.SendStatement:
@@ -253,6 +259,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 		r.resolveExpr(scope, d.Collection)
 		r.resolveExpr(body, d.Condition)
+		r.resolveExpr(body, d.Until)
 		r.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
 		// The condition is evaluated before either branch is entered, so it sees
@@ -450,6 +457,89 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 	}
 }
 
+// resolveConstraintReference resolves the requirement a require/assume member
+// subsets by reference (SysML.xtext RequirementConstraintUsage).
+func (r *Resolver) resolveConstraintReference(scope *symbols.Scope, ref *ast.QualifiedName) *symbols.Symbol {
+	if ref == nil || len(ref.Parts) == 0 {
+		return nil
+	}
+	sym, ok := r.ResolveQualified(scope, ref)
+	if !ok {
+		return nil
+	}
+	return sym
+}
+
+// walkConstraintBody walks the body of a require/assume member. The member
+// reference-subsets the requirement ref, so the body may redefine that
+// requirement's features by plain name (SysML.xtext RequirementConstraintUsage).
+func (r *Resolver) walkConstraintBody(scope *symbols.Scope, ref *symbols.Symbol, body []ast.Node) {
+	if ref != nil {
+		members := make(map[ast.Node]bool, len(body))
+		for _, m := range body {
+			decl, _ := unwrapForResolve(m)
+			members[decl] = true
+		}
+		r.constraintRefs = append(r.constraintRefs, constraintRef{ref: ref, members: members})
+		defer func() { r.constraintRefs = r.constraintRefs[:len(r.constraintRefs)-1] }()
+	}
+	r.walkMembers(scope, body)
+}
+
+// constraintRef is a requirement referenced by a require/assume member, with
+// the direct members of that member's body, which redefine its features.
+type constraintRef struct {
+	ref     *symbols.Symbol
+	members map[ast.Node]bool
+}
+
+// lookupConstraintRefFeature finds name among the features of the requirement
+// referenced by the require/assume member whose body declares decl.
+func (r *Resolver) lookupConstraintRefFeature(name string, decl ast.Node) (*symbols.Symbol, bool) {
+	for i := len(r.constraintRefs) - 1; i >= 0; i-- {
+		if !r.constraintRefs[i].members[decl] {
+			continue // a nested declaration inherits from its own type, not the reference
+		}
+		return r.featureOf(r.constraintRefs[i].ref, name, map[*symbols.Symbol]bool{})
+	}
+	return nil, false
+}
+
+// featureOf finds the feature named name declared by sym or inherited through
+// its typings and specializations.
+func (r *Resolver) featureOf(sym *symbols.Symbol, name string, seen map[*symbols.Symbol]bool) (*symbols.Symbol, bool) {
+	if sym == nil || seen[sym] {
+		return nil, false
+	}
+	seen[sym] = true
+	if sym.Scope != nil {
+		if found, ok := sym.Scope.LookupLocal(name); ok {
+			return found, true
+		}
+	}
+	var rels []*ast.Relationship
+	switch decl := sym.Decl.(type) {
+	case *ast.Definition:
+		rels = decl.Relationships
+	case *ast.Usage:
+		rels = decl.Relationships
+	default:
+		return nil, false
+	}
+	scope := sym.OwnerScope
+	if scope == nil {
+		return nil, false
+	}
+	generals := r.findSpecializationTargets(scope, rels)
+	generals = append(generals, r.findTypingTargets(scope, rels)...)
+	for _, general := range generals {
+		if found, ok := r.featureOf(general, name, seen); ok {
+			return found, true
+		}
+	}
+	return nil, false
+}
+
 // resolveRedefinition resolves a redefinition target by looking up the inheritance chain.
 // Searches for the feature in parent definitions (following specialization relationships).
 //
@@ -467,6 +557,13 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 	// For single-name redefinitions (most common: :>> payload), look in inherited scope
 	if len(qn.Parts) == 1 {
 		featureName := qn.Parts[0].Text
+
+		// A require/assume body redefines the features of the requirement its
+		// member references, which the owner's own generals do not hold.
+		if sym, ok := r.lookupConstraintRefFeature(featureName, decl); ok {
+			r.recordRedefined(qn, sym)
+			return
+		}
 
 		// The scope passed here is the OWNER's scope (where the member with :>> lives)
 		// We need to find the owner's specialization relationships

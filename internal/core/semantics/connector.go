@@ -197,6 +197,9 @@ func (m *Model) implicitEndRedefinitions(sym *symbols.Symbol) []*symbols.Symbol 
 // declaresEnd reports whether sym declares an end feature: an end of a
 // `connect` clause, or a body feature declared with the `end` modifier.
 func declaresEnd(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
 	switch d := sym.Decl.(type) {
 	case *ast.ConnectorEnd:
 		_, declares := d.DeclaredName()

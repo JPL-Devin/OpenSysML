@@ -156,3 +156,28 @@ func TestToStateGraph_HistoryAndPointNotation(t *testing.T) {
 		}
 	}
 }
+
+// A succession out of the machine's own entry subaction is how standard
+// notation names the state a machine starts in, so the target is the graph's
+// initial state without an `initial` pseudostate being declared.
+func TestToStateGraph_EntrySuccessionNamesInitialState(t *testing.T) {
+	graph, err := ToStateGraph(stateUsageIn(t, `
+		package test {
+			state Machine {
+				entry; then off;
+				state off;
+				state on;
+				off then on;
+			}
+		}
+	`), nil)
+	if err != nil {
+		t.Fatalf("ToStateGraph: %v", err)
+	}
+	if graph.Initial == nil {
+		t.Fatal("expected the entry succession to name an initial state")
+	}
+	if graph.Initial.Name != "off" {
+		t.Errorf("expected off to be the initial state, got %q", graph.Initial.Name)
+	}
+}

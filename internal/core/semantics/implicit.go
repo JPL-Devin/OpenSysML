@@ -47,11 +47,17 @@ var implicitUsageBases = map[ast.UsageKind]string{
 
 // implicitDefinitionBases maps a definition kind to the qualified name of the
 // standard library definition every definition of that kind implicitly
-// specializes: the base metadata definition is MetadataItem, which supplies
-// `annotatedElement` from Metaobjects::Metaobject (SysML v2 §7.27.2, [KerML,
-// 9.2.17]).
+// specializes, so the members that base supplies resolve inside the
+// definition's body: MetadataItem supplies `annotatedElement` from
+// Metaobjects::Metaobject (SysML v2 §7.27.2, [KerML, 9.2.17]).
 var implicitDefinitionBases = map[ast.DefinitionKind]string{
 	ast.DefMetadata: "Metadata::MetadataItem",
+	// A behavior definition specializes the base behavior of its kind, which is
+	// what makes an occurrence's own features — `self`, `start`, `done` — visible
+	// inside the definition's body the same way they are inside a usage's
+	// (SysML v2 §7.16.2, §7.17.2).
+	ast.DefAction: "Actions::Action",
+	ast.DefState:  "States::StateAction",
 }
 
 // implicitBase returns the stdlib definition sym is implicitly typed by, or nil
@@ -93,6 +99,43 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 		}
 	}
 	return nil
+}
+
+// baseUsageFQN is the most general base usage every usage element subsets,
+// directly or indirectly (SysML v2 §7.6, [KerML, 8.4.2]). Its only member is
+// `that`, the featuring instance of a usage's value, so subsetting it is what
+// makes an unqualified `that` resolve inside a usage body.
+const baseUsageFQN = "Base::things"
+
+// implicitBaseUsage returns Base::things for a usage element, or nil when sym is
+// not a usage, is that base usage, or is owned by it.
+func (m *Model) implicitBaseUsage(sym *symbols.Symbol) *symbols.Symbol {
+	if _, ok := sym.Decl.(*ast.Usage); !ok {
+		return nil
+	}
+	if m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	for _, base := range m.resolver.Index().LookupQualified(baseUsageFQN) {
+		if base == nil || base == sym || enclosedBy(sym, base) {
+			continue
+		}
+		return base
+	}
+	return nil
+}
+
+// enclosedBy reports whether owner's own scope encloses sym.
+func enclosedBy(sym, owner *symbols.Symbol) bool {
+	if owner.Scope == nil {
+		return false
+	}
+	for s := sym.OwnerScope; s != nil; s = s.Parent() {
+		if s == owner.Scope {
+			return true
+		}
+	}
+	return false
 }
 
 // declaresGeneralization reports whether rels contain a conformance edge, which

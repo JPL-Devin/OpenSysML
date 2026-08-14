@@ -1,0 +1,31 @@
+step 1: token 1@*ast.WhileLoopActionNode
+stmt loop until
+  iteration 1
+    stmt action body
+      stmt assign battery
+          eval feature battery -> 97
+          eval literal 1 -> 1
+        eval operator + -> 98
+      eval feature battery -> 98
+      eval literal 100 -> 100
+    eval operator >= -> false
+  iteration 2
+    stmt action body
+      stmt assign battery
+          eval feature battery -> 98
+          eval literal 1 -> 1
+        eval operator + -> 99
+      eval feature battery -> 99
+      eval literal 100 -> 100
+    eval operator >= -> false
+  iteration 3
+    stmt action body
+      stmt assign battery
+          eval feature battery -> 99
+          eval literal 1 -> 1
+        eval operator + -> 100
+      eval feature battery -> 100
+      eval literal 100 -> 100
+    eval operator >= -> true
+step 2: token 1@final
+step 3: no active tokens

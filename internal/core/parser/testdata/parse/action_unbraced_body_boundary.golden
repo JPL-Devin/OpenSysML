@@ -6,11 +6,11 @@
           (Membership visibility="default"
             (Usage kind="attribute" name="total" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (LiteralReal value="0.0")))
-          (*ast.InitialNode)
+          (InitialNode name="start" successor="")
           (Membership visibility="default"
             (Usage kind="action" name="bump" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (*ast.AssignmentActionNode)))
-          (*ast.FinalNode)
+          (FinalNode name="end")
           (SuccessionEdge source="start" target="bump")
           (SuccessionEdge source="bump" target="end")))
       (Membership visibility="default"
@@ -18,13 +18,13 @@
           (Membership visibility="default"
             (Usage kind="attribute" name="total" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (LiteralReal value="0.0")))
-          (*ast.InitialNode)
+          (InitialNode name="start" successor="")
           (Membership visibility="default"
             (Usage kind="action" name="bump" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (*ast.AssignmentActionNode)))
           (SuccessionEdge source="start" target="bump")
           (SuccessionEdge source="bump" target="end")
-          (*ast.FinalNode)))
+          (FinalNode name="end")))
       (Membership visibility="default"
         (Usage kind="action" name="chained" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"

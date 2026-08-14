@@ -34,9 +34,9 @@
           (ExitMember
             (Membership visibility="default"
               (Usage kind="action" name="stopEngine" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
-          (*ast.SubstateMember)
-          (*ast.SubstateMember)
-          (*ast.SubstateMember)
+          (SubstateMember name="Accelerating")
+          (SubstateMember name="Cruising")
+          (SubstateMember name="Braking")
           (TransitionMember source="Accelerating" target="Cruising"
             (FeatureReference name="stable"))))
       (TransitionMember source="Off" target="Idle"

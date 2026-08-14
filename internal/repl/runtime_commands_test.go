@@ -649,3 +649,14 @@ func TestCalcWithSeveralOutputsIsNotInvocable(t *testing.T) {
 	wants(t, run(t, s, "%calc M::Two 5"), "has no single result", "a, b")
 	wants(t, run(t, s, "%eval M::Two(5)"), "has no single result")
 }
+
+// A signal a state's entry action sent through a port is in flight and due now:
+// %advance must dispatch it, so stepping the debugger reaches the same state
+// running the machine to completion does.
+func TestAdvanceDeliversPendingPortSignal(t *testing.T) {
+	s := loadFixture(t, "../core/runtime/testdata/conformance/state_transition_accept_via_port.sysml")
+	run(t, s, "%state Radio")
+
+	wants(t, run(t, s, "%advance 1"), "Current state: done", "State machine completed")
+	wants(t, run(t, s, "%current"), "received = 1")
+}

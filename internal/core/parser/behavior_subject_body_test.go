@@ -3,6 +3,7 @@ package parser
 import (
 	"testing"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
@@ -30,5 +31,23 @@ func TestSubjectWithBody(t *testing.T) {
 		for _, d := range p.Diagnostics {
 			t.Logf("  %s", d.Message)
 		}
+	}
+}
+
+// A subject declared with an unrestricted (quoted) name stores the unquoted
+// text, as every other declaration does, so references to it resolve.
+func TestSubjectUnrestrictedName(t *testing.T) {
+	input := `package Test { requirement def R { subject 'my subject' : Thing; } }`
+	sf := source.New("subject_unrestricted.sysml", []byte(input))
+	p := New(sf)
+	root := p.ParseFile()
+	for _, d := range p.Diagnostics {
+		t.Errorf("parse error: %s", d.Message)
+	}
+	pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
+	def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
+	subj := def.Members[0].(*ast.SubjectMember)
+	if subj.Name != "my subject" {
+		t.Errorf("Name = %q, want %q", subj.Name, "my subject")
 	}
 }

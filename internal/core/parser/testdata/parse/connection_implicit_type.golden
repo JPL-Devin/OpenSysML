@@ -53,13 +53,13 @@
             (FeatureReference name="b"))))
       (Membership visibility="default"
         (Usage kind="flow" name="f" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="nil" declared=false)))
+          (FlowEnds from="a.p" to="b.p" payload="nil" declared=false)))
       (Membership visibility="default"
         (Usage kind="flow" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="nil" declared=false)))
+          (FlowEnds from="a.p" to="b.p" payload="nil" declared=false)))
       (Membership visibility="default"
         (Usage kind="flow" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="nil" declared=false)))
+          (FlowEnds from="a.p" to="b.p" payload="nil" declared=false)))
       (Membership visibility="default"
         (Usage kind="interface" name="link" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variation=true
           (Membership visibility="default"
