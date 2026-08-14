@@ -343,6 +343,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 		{"isConstant", "constant"},
 		{"isIndividual", "individual"},
 		{"isSnapshot", "snapshot"},
+		{"isTimeslice", "timeslice"},
 		{"isEvent", "event"},
 		{"isEnd", "end"},
 		{"isReference", "ref"},

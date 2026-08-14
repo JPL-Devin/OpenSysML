@@ -1,0 +1,31 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="OccurrencePortions" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="item" abstract=false variation=false name="Vehicle"))
+      (Membership visibility="default"
+        (Usage kind="item" name="vehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Vehicle
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="mass" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="item" name="cruise" ref=false direction="none" composite=false derived=false ordered=false nonunique=false timeslice=true))
+          (Membership visibility="default"
+            (Usage kind="item" name="takeoff" ref=false direction="none" composite=false derived=false ordered=false nonunique=false snapshot=true))))
+      (Membership visibility="default"
+        (Definition kind="individual" abstract=false variation=false name="Serial"))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="serial" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+          (Relationship kind="typing" target=Serial
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="occurrence" name="assembled" ref=false direction="none" composite=false derived=false ordered=false nonunique=false timeslice=true))
+          (Membership visibility="default"
+            (Usage kind="occurrence" name="delivered" ref=false direction="none" composite=false derived=false ordered=false nonunique=false snapshot=true))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Mission"
+          (Membership visibility="default"
+            (Usage kind="part" name="crew" ref=false direction="in" composite=false derived=false ordered=false nonunique=false individual=true
+              (Relationship kind="typing" target=Serial
+                (*ast.QualifiedName)))))))))

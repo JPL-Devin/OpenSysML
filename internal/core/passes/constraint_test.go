@@ -513,3 +513,36 @@ func TestConstraintUnnamedRedefinitionNoValueOK(t *testing.T) {
 		t.Fatalf("unexpected redefinition-no-derived-name, got %v", diags)
 	}
 }
+
+// TestConstraintInterfaceEndConjugation covers SysML v2 §7.12.2: the ports at
+// the two ends of an interface must have conjugate directed features, which one
+// conjugated end (~P) supplies and two like-typed ends do not.
+func TestConstraintInterfaceEndConjugation(t *testing.T) {
+	const ports = `port def P { in item cmd; out item tlm; }
+`
+	conjugated := constraintDiags(t, ports+`interface def I {
+		end a : P;
+		end b : ~P;
+	}`)
+	if hasCode(conjugated, "port-conjugation") {
+		t.Errorf("unexpected port-conjugation diagnostic for conjugate ends: %v", conjugated)
+	}
+
+	mismatched := constraintDiags(t, ports+`interface def I {
+		end a : P;
+		end b : P;
+	}`)
+	if !hasCode(mismatched, "port-conjugation") {
+		t.Errorf("expected port-conjugation diagnostic for like-typed ends, got %v", mismatched)
+	}
+
+	// A port with no directed features imposes nothing.
+	undirected := constraintDiags(t, `port def U { attribute x; }
+	interface def I {
+		end a : U;
+		end b : U;
+	}`)
+	if hasCode(undirected, "port-conjugation") {
+		t.Errorf("unexpected port-conjugation diagnostic for undirected ports: %v", undirected)
+	}
+}

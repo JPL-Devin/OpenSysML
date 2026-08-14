@@ -171,11 +171,14 @@ func TestParseFlowShorthand(t *testing.T) {
 
 func TestParsePortConjugation(t *testing.T) {
 	u := parseOneMember(t, "port p : ~ PortDef;").(*ast.Usage)
-	if u.Kind != ast.UsagePort || !u.IsConjugated {
-		t.Fatalf("expected conjugated port, got kind=%v conjugated=%v", u.Kind, u.IsConjugated)
+	if u.Kind != ast.UsagePort {
+		t.Fatalf("expected port usage, got kind=%v", u.Kind)
 	}
 	if len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping {
 		t.Fatalf("expected typing relationship, got %+v", u.Relationships)
+	}
+	if !u.Relationships[0].Conjugated {
+		t.Fatal("expected the typing relationship to be conjugated")
 	}
 }
 

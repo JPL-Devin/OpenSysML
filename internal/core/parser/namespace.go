@@ -218,7 +218,14 @@ func (p *Parser) parseMember() ast.Node {
 		return al
 	}
 
-	inner := p.parseDeclaration(start)
+	// A namespace member may be a succession stated without its keyword
+	// (SysML v2 8.2.2.13.3): `first a then b;`.
+	var inner ast.Node
+	if p.atKeyword("first") {
+		inner = p.parseSuccessionAsUsage(start)
+	} else {
+		inner = p.parseDeclaration(start)
+	}
 	if inner == nil {
 		// No declaration recognized. Emit an error node spanning the skip.
 		en := p.errorNodeSkip(start, "expected a namespace member")

@@ -1,0 +1,41 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ConjugatedPorts" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="port" abstract=false variation=false name="CommunicationPort"
+          (Membership visibility="default"
+            (Usage kind="item" name="command" ref=false direction="in" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="item" name="telemetry" ref=false direction="out" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="item" name="clock" ref=false direction="inout" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Definition kind="interface" abstract=false variation=false name="CommunicationInterface"
+          (Membership visibility="default"
+            (Usage kind="port" name="groundPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+              (Relationship kind="typing" target=CommunicationPort
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="port" name="spacePort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+              (Relationship kind="typing" target=CommunicationPort conjugated=true
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="port" abstract=false variation=false name="RelayPort"
+          (Membership visibility="default"
+            (Usage kind="port" name="inner" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=CommunicationPort conjugated=true
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Radio"
+          (Membership visibility="default"
+            (Usage kind="port" name="rx" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=CommunicationPort conjugated=true
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="port" name="relay" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=RelayPort conjugated=true
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="port" name="explicit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=CommunicationPort::~CommunicationPort
+                (*ast.QualifiedName)))))))))

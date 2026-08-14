@@ -180,9 +180,11 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.walkMembers(scope, d.Body)
 	case *ast.AssumeMember:
 		r.resolveExpr(scope, d.Expression)
+		r.resolveConstraintReference(scope, d.Reference)
 		r.walkMembers(scope, d.Body)
 	case *ast.RequireMember:
 		r.resolveExpr(scope, d.Expression)
+		r.resolveConstraintReference(scope, d.Reference)
 		r.walkMembers(scope, d.Body)
 	case *ast.EntryMember:
 		r.walkMembers(scope, d.Actions)
@@ -448,6 +450,15 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 			}
 		}
 	}
+}
+
+// resolveConstraintReference resolves the requirement a require/assume member
+// subsets by reference (SysML.xtext RequirementConstraintUsage).
+func (r *Resolver) resolveConstraintReference(scope *symbols.Scope, ref *ast.QualifiedName) {
+	if ref == nil || len(ref.Parts) == 0 {
+		return
+	}
+	r.ResolveQualified(scope, ref)
 }
 
 // resolveRedefinition resolves a redefinition target by looking up the inheritance chain.

@@ -64,6 +64,7 @@ elmt:Synonyms::during
     sysx:memberIndex "5"^^xsd:integer ;
     sysml:declaredName "during" ;
     sysx:declaredKeyword "timeslice" ;
+    sysml:isTimeslice "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Synonyms::note

@@ -129,6 +129,19 @@ func TestNegative(t *testing.T) {
 		{"body_param_no_type", "attribute x = xs.{in y : ; 1};"},
 		{"receiver_no_operation", "attribute x = xs->;"},
 		{"receiver_unclosed_args", "attribute x = xs->union((1, 2);"},
+
+		// A conjugation names the definition it conjugates, only an interface end
+		// may omit its declaration, a required requirement binds a feature in its
+		// body, and a portion usage declares what it portions.
+		{"conjugated_no_type", "part def P { port p : ~; }"},
+		{"conjugated_no_type_after_name", "port def P; port p ~;"},
+		{"end_outside_connector", "part def P { end ; }"},
+		{"end_outside_connector_package", "package p { end ; }"},
+		{"require_qualified_malformed_body", "analysis def A { objective o { require Q::r { :>> ; } } }"},
+		{"require_qualified_trailing_colons", "analysis def A { objective o { require Q::; } }"},
+		{"timeslice_no_subject", "package p { timeslice :>> ; }"},
+		{"timeslice_usage_no_type", "package p { timeslice item i : ; }"},
+		{"timeslice_unterminated", "package p { timeslice item i"},
 	}
 
 	for _, tt := range tests {

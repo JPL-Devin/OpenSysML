@@ -56,7 +56,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		cur = sym
 	}
 	if cur == nil {
-		r.unresolved(qn)
+		r.unresolvedNamespace(qn, first)
 		return resolution{nil, false}
 	}
 	r.recordPart(qn, 0, cur)
@@ -194,6 +194,22 @@ func (r *Resolver) unresolved(qn *ast.QualifiedName) {
 		Span:    qn.Span(),
 		Message: "unresolved reference: " + qnText(qn),
 	})
+}
+
+// unresolvedNamespace records an unresolved-reference diagnostic for a
+// qualified name whose qualifying namespace ns is not loaded at all, naming
+// elements of the same simple name found elsewhere — which is what a reference
+// into a library the workspace does not have looks like.
+func (r *Resolver) unresolvedNamespace(qn *ast.QualifiedName, ns string) {
+	msg := "unresolved reference: " + qnText(qn)
+	if r.idx != nil && len(qn.Parts) > 1 {
+		last := qn.Parts[len(qn.Parts)-1].Text
+		if cands := r.idx.FQNsEndingIn(last, 3); len(cands) > 0 {
+			msg += fmt.Sprintf(" (no namespace %q is loaded; %q is declared as %s)",
+				ns, last, strings.Join(cands, ", "))
+		}
+	}
+	r.Diagnostics = append(r.Diagnostics, Diagnostic{Span: qn.Span(), Message: msg})
 }
 
 // ambiguous records an ambiguity diagnostic reporting the number of matches.
