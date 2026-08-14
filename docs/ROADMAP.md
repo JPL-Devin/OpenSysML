@@ -76,7 +76,7 @@ See `docs/RELEASING.md`.
 
 What remains is account-gated and cannot be done from a session: create the PyPI project's
 first release with an account-scoped token, then replace it with a project-scoped one; create
-the restricted CircleCI context `pypi` holding `PYPI_API_TOKEN` (and optionally
+the restricted CircleCI context `PyPI` holding `PYPI_API_TOKEN` (and optionally
 `TEST_PYPI_API_TOKEN` for pre-release tags).
 
 Also decide the default download repository. `python/pysysml/binary.py` defaults to
