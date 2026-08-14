@@ -1,0 +1,372 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// uncleanModel states a condition that holds and, after it, a declaration that
+// does not analyse, so a check made on it would report success about a model the
+// tool could not read.
+const uncleanModel = `package Rover {
+    constraint MassBudget { assert 180.0 <= 200.0; }
+    part def Battery { attribute capacity = ; }
+}
+`
+
+// behaviorModel states the behavior the run flags carry out: a calculation, an
+// action that assigns, and a machine whose transitions are timed.
+const behaviorModel = `package Mission {
+    calc def Fall {
+        in t;
+        in g;
+        return g * t * t;
+    }
+
+    action tally {
+        attribute total = 0;
+        first start;
+        action accumulate {
+            assign total := total + 5;
+        }
+        done end;
+        then start accumulate;
+        then accumulate end;
+    }
+
+    state Cycle {
+        initial init;
+        state waiting {
+            accept after 10 then working;
+        }
+        state working {
+            accept after 5 then done;
+        }
+        final done;
+        init then waiting;
+    }
+}
+`
+
+// TestCheckGatesOnModelDiagnostics checks the contract a build step depends on:
+// a model that did not analyse cleanly answers nothing, so a check made on it
+// reports the diagnostics and exits 2 however the named condition came out.
+func TestCheckGatesOnModelDiagnostics(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, uncleanModel, "-constraint", "Rover::MassBudget")
+	wantReport(t, got, 2, "expected an expression", "did not analyse cleanly")
+
+	// Redirecting the verdicts must not hide why there are none: the diagnostics
+	// belong with the other reports of a run that could not be made.
+	if strings.Contains(got.stdout, "expected an expression") {
+		t.Errorf("diagnostics were reported on stdout:\n%s", got.stdout)
+	}
+	if got.stdout != "" {
+		t.Errorf("stdout carries output for a check that was never made:\n%s", got.stdout)
+	}
+	if strings.Contains(got.output(), "Constraint Rover::MassBudget passed") {
+		t.Errorf("an unclean model reported a verdict:\n%s", got.output())
+	}
+}
+
+// TestCheckGatesOnEvaluationFailure checks that an expression the model could not
+// evaluate stops the run, rather than being printed and passed over.
+func TestCheckGatesOnEvaluationFailure(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, checkModel, "-constraint", "Rover::MassBudget", "-e", "nosuchfeature + 1")
+	wantReport(t, got, 2, "unresolved feature: nosuchfeature")
+	if !strings.Contains(got.stderr, "unresolved feature") {
+		t.Errorf("a failed evaluation was not reported on stderr:\n%s", got.output())
+	}
+	if strings.Contains(got.stdout, "unresolved feature") {
+		t.Errorf("a failed evaluation was reported on stdout:\n%s", got.stdout)
+	}
+}
+
+// TestCheckGatesOnLiteralEvaluationFailure checks that an expression of literals
+// alone that the prompt answers with its failure — an index naming no position —
+// stops a check too, rather than being printed as though it evaluated.
+func TestCheckGatesOnLiteralEvaluationFailure(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, checkModel, "-constraint", "Rover::MassBudget", "-e", "(1, 2, 3)#(7)")
+	wantReport(t, got, 2, "evaluation failed")
+	if strings.Contains(got.stdout, "Constraint Rover::MassBudget passed") {
+		t.Errorf("a verdict was reported after an expression failed:\n%s", got.output())
+	}
+}
+
+// TestAdvanceTakesADuration checks that a value that is not a duration to run
+// for is reported, rather than running the machine for no time and holding.
+func TestAdvanceTakesADuration(t *testing.T) {
+	binary := buildCLI(t)
+
+	// A flag written with no value at all is a misuse too, not no advance.
+	wantReport(t, check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", ""), 2,
+		"-advance takes a number of time units")
+
+	for _, value := range []string{"NaN", "Inf", "-1"} {
+		got := check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", value)
+		wantReport(t, got, 2, "-advance takes a duration")
+		if strings.Contains(got.stdout, "Started state machine executor") {
+			t.Errorf("-advance %s ran the machine anyway:\n%s", value, got.output())
+		}
+	}
+
+	// The misuse is reported in the form the caller asked for, so a build step
+	// reading the JSON document has something to parse.
+	got := check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", "soon", "-json")
+	var report struct {
+		Status string   `json:"status"`
+		Errors []string `json:"errors"`
+	}
+	if err := json.Unmarshal([]byte(got.stdout), &report); err != nil {
+		t.Fatalf("stdout is not the reported JSON: %v\n%s", err, got.output())
+	}
+	if report.Status != "unresolved" || len(report.Errors) == 0 {
+		t.Errorf("report does not say why the check was never made:\n%s", got.stdout)
+	}
+}
+
+// TestValidate checks the diagnostics gate on its own: a model that analyses
+// cleanly succeeds, and one that does not exits 2 with what analysis found.
+func TestValidate(t *testing.T) {
+	binary := buildCLI(t)
+
+	wantReport(t, check(t, binary, checkModel, "-validate"), 0, "no errors")
+	wantReport(t, check(t, binary, uncleanModel, "-validate"), 2, "expected an expression")
+}
+
+// TestRunCalc checks that a calculation is invoked with the arguments given and
+// reports what it computed, and that one that could not be invoked exits 2.
+func TestRunCalc(t *testing.T) {
+	binary := buildCLI(t)
+
+	wantReport(t, check(t, binary, behaviorModel, "-calc", "Mission::Fall(3, 2)"), 0, "= 18")
+	// The prompt's spelling, arguments separated by spaces, is accepted too.
+	wantReport(t, check(t, binary, behaviorModel, "-calc", "Mission::Fall 3 2"), 0, "= 18")
+	wantReport(t, check(t, binary, behaviorModel, "-calc", "Mission::nosuch(1)"), 2, `symbol "Mission::nosuch" not found`)
+	wantReport(t, check(t, binary, behaviorModel, "-calc", "Mission::Fall(3)"), 2, `parameter "g" has no argument`)
+}
+
+// TestRunAction checks that an action runs to completion outside the prompt and
+// reports the values it produced, and that a name that is not an action exits 2.
+func TestRunAction(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, behaviorModel, "-action", "Mission::tally")
+	wantReport(t, got, 0, "✓ Action completed", "total = 5")
+	if strings.Contains(got.output(), "%step") {
+		t.Errorf("a non-interactive run advertised prompt commands:\n%s", got.output())
+	}
+
+	wantReport(t, check(t, binary, behaviorModel, "-action", "Mission::Cycle"), 2, "is not an action")
+	wantReport(t, check(t, binary, behaviorModel, "-action", "Mission::nosuch"), 2, `symbol "Mission::nosuch" not found`)
+}
+
+// TestRunStateMachine checks that a machine runs for the simulated time asked
+// for, reporting the configuration it settled in.
+func TestRunStateMachine(t *testing.T) {
+	binary := buildCLI(t)
+
+	wantReport(t, check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", "20"),
+		0, "✓ State machine completed", "Current state: done")
+
+	// Without -advance the machine only takes its initial transition, so it is
+	// reported where it starts rather than run to completion.
+	started := check(t, binary, behaviorModel, "-state", "Mission::Cycle")
+	wantReport(t, started, 0, "Current state: init")
+	if strings.Contains(started.output(), "State machine completed") {
+		t.Errorf("a machine ran without being advanced:\n%s", started.output())
+	}
+
+	// -advance 0 is a run to the current time, as %advance 0 is: what is due at
+	// the start is dispatched, which the initial transition alone does not do.
+	zero := check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", "0")
+	wantReport(t, zero, 0, "✓ Advanced to 0.00")
+	if zero.stdout == started.stdout {
+		t.Errorf("-advance 0 reported the same run as no -advance at all:\n%s", zero.output())
+	}
+
+	wantReport(t, check(t, binary, behaviorModel, "-state", "Mission::tally", "-advance", "5"),
+		2, "is not a state machine")
+	wantReport(t, check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", "soon"),
+		2, "-advance takes a number of time units")
+}
+
+// TestJSONReport checks the document a build step parses: the status it exits
+// with, every verdict decided, and the values a run produced.
+func TestJSONReport(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, checkModel, "-satisfy", "-json")
+	if got.status != 1 {
+		t.Fatalf("exit status = %d, want 1\n%s", got.status, got.output())
+	}
+	var report struct {
+		Status string `json:"status"`
+		Exit   int    `json:"exit"`
+		Checks []struct {
+			Subject string `json:"subject"`
+			Status  string `json:"status"`
+			Values  []struct {
+				Name  string `json:"name"`
+				Value string `json:"value"`
+			} `json:"values"`
+			Lines []string `json:"lines"`
+		} `json:"checks"`
+		Diagnostics []struct {
+			Severity string `json:"severity"`
+			Message  string `json:"message"`
+			Line     int    `json:"line"`
+		} `json:"diagnostics"`
+		Errors []string `json:"errors"`
+	}
+	if err := json.Unmarshal([]byte(got.stdout), &report); err != nil {
+		t.Fatalf("stdout is not the reported JSON: %v\n%s", err, got.stdout)
+	}
+	if report.Status != "fails" || report.Exit != 1 {
+		t.Errorf("report status = %q exit = %d, want fails and 1", report.Status, report.Exit)
+	}
+	if len(report.Checks) != 2 {
+		t.Fatalf("report carries %d checks, want the model's 2:\n%s", len(report.Checks), got.stdout)
+	}
+	if report.Checks[0].Status != "holds" || report.Checks[1].Status != "fails" {
+		t.Errorf("verdicts = %q and %q, want holds then fails", report.Checks[0].Status, report.Checks[1].Status)
+	}
+	if len(report.Checks[0].Lines) == 0 {
+		t.Error("a verdict carries no report of itself")
+	}
+
+	// A run's values are what a caller reads instead of the printed lines.
+	got = check(t, binary, behaviorModel, "-calc", "Mission::Fall(3, 2)", "-json")
+	if err := json.Unmarshal([]byte(got.stdout), &report); err != nil {
+		t.Fatalf("stdout is not the reported JSON: %v\n%s", err, got.stdout)
+	}
+	if len(report.Checks) != 1 || len(report.Checks[0].Values) == 0 {
+		t.Fatalf("the calculation reported no value:\n%s", got.stdout)
+	}
+	if value := report.Checks[0].Values[0]; value.Name != "result" || value.Value != "18" {
+		t.Errorf("value = %s = %s, want result = 18", value.Name, value.Value)
+	}
+
+	// An unclean model is reported as data too, so a build step need not read the
+	// printed diagnostics to know what stopped the check.
+	got = check(t, binary, uncleanModel, "-constraint", "Rover::MassBudget", "-json")
+	if got.status != 2 {
+		t.Fatalf("exit status = %d, want 2\n%s", got.status, got.output())
+	}
+	if err := json.Unmarshal([]byte(got.stdout), &report); err != nil {
+		t.Fatalf("stdout is not the reported JSON: %v\n%s", err, got.stdout)
+	}
+	if report.Status != "unresolved" || len(report.Errors) == 0 {
+		t.Errorf("report does not say the check was never made:\n%s", got.stdout)
+	}
+	if len(report.Diagnostics) == 0 || report.Diagnostics[0].Severity != "error" {
+		t.Fatalf("report carries no error diagnostic:\n%s", got.stdout)
+	}
+	if report.Diagnostics[0].Line != 3 {
+		t.Errorf("diagnostic reported at line %d, want the declaration's line 3", report.Diagnostics[0].Line)
+	}
+}
+
+// warningModel analyses cleanly but states an expose where the spec constrains
+// one, which analysis reports as a warning rather than an error.
+const warningModel = `package Rover {
+    constraint MassBudget { assert 180.0 <= 200.0; }
+    part p;
+    view def V { expose Rover::**; }
+}
+`
+
+// TestJSONReportsWarningsOfACleanModel checks that what analysis found is
+// reported as data whatever was checked, so a caller parsing the report reads
+// the warnings the printed run shows.
+func TestJSONReportsWarningsOfACleanModel(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, warningModel, "-constraint", "Rover::MassBudget", "-json")
+	if got.status != 0 {
+		t.Fatalf("exit status = %d, want 0 for a model whose findings are warnings\n%s", got.status, got.output())
+	}
+	var report struct {
+		Diagnostics []struct {
+			Severity string `json:"severity"`
+			Message  string `json:"message"`
+		} `json:"diagnostics"`
+	}
+	if err := json.Unmarshal([]byte(got.stdout), &report); err != nil {
+		t.Fatalf("stdout is not the reported JSON: %v\n%s", err, got.stdout)
+	}
+	if len(report.Diagnostics) == 0 {
+		t.Fatalf("report carries no warning of a model analysis warned about:\n%s", got.stdout)
+	}
+	if report.Diagnostics[0].Severity != "warning" {
+		t.Errorf("diagnostic severity = %q, want warning", report.Diagnostics[0].Severity)
+	}
+}
+
+// TestJSONLocatesADiagnosticInItsOwnFile checks that a finding is reported where
+// its file has it, rather than at its line in the accumulated session buffer.
+func TestJSONLocatesADiagnosticInItsOwnFile(t *testing.T) {
+	binary := buildCLI(t)
+
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first.sysml")
+	second := filepath.Join(dir, "second.sysml")
+	if err := os.WriteFile(first, []byte(checkModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte(uncleanModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command(binary, "-validate", "-json", first, second)
+	out, err := cmd.Output()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 2 {
+		t.Fatalf("exit = %v, want status 2\n%s", err, out)
+	}
+	var report struct {
+		Diagnostics []struct {
+			File string `json:"file"`
+			Line int    `json:"line"`
+		} `json:"diagnostics"`
+	}
+	if err := json.Unmarshal(out, &report); err != nil {
+		t.Fatalf("stdout is not the reported JSON: %v\n%s", err, out)
+	}
+	if len(report.Diagnostics) == 0 {
+		t.Fatalf("report carries no diagnostic:\n%s", out)
+	}
+	got := report.Diagnostics[0]
+	if got.File != second {
+		t.Errorf("diagnostic reported in %q, want the file it is in, %q", got.File, second)
+	}
+	if got.Line != 3 {
+		t.Errorf("diagnostic reported at line %d, want line 3 of its own file", got.Line)
+	}
+}
+
+// TestAdvanceWithoutStateMachine checks that -advance with nothing to run it for
+// is a misuse reported as such, rather than silently having no effect.
+func TestAdvanceWithoutStateMachine(t *testing.T) {
+	binary := buildCLI(t)
+
+	wantReport(t, check(t, binary, behaviorModel, "-advance", "10"), 2, "-advance is the time a state machine runs for")
+	wantReport(t, check(t, binary, behaviorModel, "-advance", "10", "-constraint", "Mission::Fall"), 2, "name one, as -state")
+}
+
+// TestJSONWithoutCheck checks that -json alone is a misuse reported as such,
+// rather than starting a prompt a build step cannot answer.
+func TestJSONWithoutCheck(t *testing.T) {
+	binary := buildCLI(t)
+	wantReport(t, check(t, binary, checkModel, "-json"), 2, "-json reports a check")
+}

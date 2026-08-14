@@ -4,6 +4,7 @@ package repl
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -20,10 +21,15 @@ import (
 // docName is the in-memory workspace key for the accumulated REPL buffer.
 const docName = "<repl>"
 
-// snippet is one accepted submission source plus the top-level names it declares.
+// snippet is one accepted submission source, the top-level names it declares,
+// and the file it was loaded from, so a finding about it can be reported where
+// its reader would look for it. The key is that file itself, identifying it
+// across the ways one path can be written.
 type snippet struct {
-	src   string
-	names []string
+	src    string
+	names  []string
+	origin string
+	key    string
 }
 
 // Session accumulates submissions into a single implicit <repl> document.
@@ -123,16 +129,30 @@ func (s *Session) List() []string {
 // before it. They document what follows, so folding them into the same snippet
 // makes a later redeclaration replace the comments along with the declaration
 // instead of leaving stale documentation above whatever is current.
-func (s *Session) accept(src string) (joined string, offset int) {
+//
+// A loaded file supersedes only itself and what the prompt said about the same
+// names, since several files of one model commonly open the same package.
+func (s *Session) accept(origin, src string) (joined string, offset int) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
+	if origin != "" {
+		set := nameSet(names)
+		key := fileKey(origin)
+		kept := s.snippets[:0]
+		for _, sn := range s.snippets {
+			if sn.key == key || (sn.origin == "" && intersects(sn.names, set)) {
+				continue
+			}
+			kept = append(kept, sn)
+		}
+		s.snippets = append(kept, snippet{src: src, names: names, origin: origin, key: key})
+		joined = s.joined()
+		return joined, len(joined) - len(src)
+	}
 	var comments string
 	if len(names) > 0 {
 		comments = s.takeLeadingComments()
-		set := make(map[string]bool, len(names))
-		for _, n := range names {
-			set[n] = true
-		}
+		set := nameSet(names)
 		kept := s.snippets[:0]
 		for _, sn := range s.snippets {
 			if !intersects(sn.names, set) {
@@ -141,7 +161,7 @@ func (s *Session) accept(src string) (joined string, offset int) {
 		}
 		s.snippets = kept
 	}
-	s.snippets = append(s.snippets, snippet{src: comments + src, names: names})
+	s.snippets = append(s.snippets, snippet{src: comments + src, names: names, origin: origin})
 	joined = s.joined()
 	// The offset marks what the user typed, not the comments folded in front of
 	// it, so diagnostics keep the line numbers of the submission.
@@ -196,6 +216,27 @@ func (s *Session) joined() string {
 	return strings.Join(parts, "\n")
 }
 
+// fileKey identifies the file a path is written for, so the same file loaded
+// under another spelling supersedes itself instead of accumulating a copy.
+func fileKey(path string) string {
+	full := expandHome(path)
+	if abs, err := filepath.Abs(full); err == nil {
+		full = abs
+	}
+	if resolved, err := filepath.EvalSymlinks(full); err == nil {
+		return resolved
+	}
+	return filepath.Clean(full)
+}
+
+func nameSet(names []string) map[string]bool {
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set
+}
+
 func intersects(names []string, set map[string]bool) bool {
 	for _, n := range names {
 		if set[n] {
@@ -211,8 +252,14 @@ func intersects(names []string, set map[string]bool) bool {
 // live session context; a later redeclaration of the same name replaces the
 // prior snippet (see accept).
 func (s *Session) Submit(src string) Result {
+	return s.submit("", src)
+}
+
+// submit accumulates src as Submit does, recording the file it came from when it
+// came from one.
+func (s *Session) submit(origin, src string) Result {
 	declared := declaredNames(parser.New(source.New(docName, []byte(src))).ParseFile())
-	joined, offset := s.accept(src)
+	joined, offset := s.accept(origin, src)
 	s.version++
 	s.ws.Open(docName, []byte(joined), s.version)
 	// The document is a new AST and scope tree, so anything derived from the

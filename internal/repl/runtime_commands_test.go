@@ -302,6 +302,26 @@ func TestActionDebuggerRunsToResult(t *testing.T) {
 	wants(t, run(t, s, "%stop"), `✓ Stopped debugging session for "tally"`)
 }
 
+// An action reports the values it produced the same way however it was driven,
+// so a run stepped to its end reads like one run to completion.
+func TestSteppedActionReportsResultsLikeContinue(t *testing.T) {
+	s := loadFixture(t, "testdata/action_debug.sysml")
+
+	run(t, s, "%action tally")
+	var stepped string
+	for i := 0; i < 10; i++ {
+		stepped = run(t, s, "%step")
+		if strings.Contains(stepped, "✓ Action completed") {
+			break
+		}
+	}
+	wants(t, stepped, "\n  Results:\n    total = 5")
+
+	run(t, s, "%stop")
+	run(t, s, "%action tally")
+	wants(t, run(t, s, "%continue"), "\n  Results:\n    total = 5")
+}
+
 // %tokens names the node a token sits on, not its Go type.
 func TestTokensShowNodeNames(t *testing.T) {
 	s := loadFixture(t, "testdata/action_debug.sysml")
