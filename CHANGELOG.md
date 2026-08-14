@@ -26,11 +26,14 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   rather than the value `v` was declared with.
 - An evaluation outside a body — a decision or transition guard, a change
   condition or duration, an inline node expression, an attribute or slot default,
-  an action argument, a constraint check — runs in an activation of its own, so a
-  calc usage it reads answers over the values that step sees: a decision revisited
-  after its body assigned reads the usage again instead of the first evaluation's
-  result. Reads within one step still share it, and a read through a part's
-  feature chain belongs to the evaluation making it.
+  an action argument, a constraint check — runs in a scope of its own, so what a
+  calc usage answers it and the elements a collection it evaluates materializes
+  live no longer than the step. A decision revisited after its body assigned
+  reads the usage again over those values instead of the first evaluation's
+  result, and a long run whose guard builds a small list is bounded by what it
+  holds rather than stopped as a runaway. Reads within one step still share the
+  scope, and a read through a part's feature chain belongs to the evaluation
+  making it.
 - `%budget` prints the five bounds a session runs on with the variable that
   raises each, and a literal expression that spends one is answered with that
   failure instead of "no declarations loaded".

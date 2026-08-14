@@ -131,8 +131,8 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 	features := ctx.conditionFeatures(check.sym)
 	// One check is one evaluation: its conditions share what a calc usage they
 	// read answers, and the next check reads it again.
-	activation := ctx.newActivation()
-	defer ctx.endActivation(activation)
+	activation, endStep := ctx.beginStep()
+	defer endStep()
 	required := false
 	for _, cond := range conds {
 		required = required || cond.required

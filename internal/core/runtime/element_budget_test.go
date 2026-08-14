@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 )
 
 // evalUnderElementBudget evaluates expr with room for maxElements materialized
@@ -88,6 +90,54 @@ func TestElementBudgetCountsElementsHeldNotProduced(t *testing.T) {
 	}
 	if result.Const.Int != 2750 {
 		t.Errorf("acc = %d, want 2750", result.Const.Int)
+	}
+}
+
+// TestElementBudgetIsReleasedByEveryStep requires a machine whose guard
+// materializes a collection on every event to run: a step's collection is gone by
+// the next step, so a long run is bounded by what a step holds, not by its length.
+func TestElementBudgetIsReleasedByEveryStep(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+
+			state machine {
+				attribute i : Integer = 0;
+
+				initial start;
+				state step {
+					entry { assign i := i + 1; }
+				}
+				state again {
+					entry { assign i := i + 1; }
+				}
+				final done;
+
+				start then step;
+
+				transition step to again if (1, 2, 3)->NumericalFunctions::sum() > i;
+				transition step to done if (1, 2, 3)->NumericalFunctions::sum() <= i;
+				transition again to step;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	// Room for two guard evaluations' worth of elements, spent on every step.
+	ctx.maxElements = 6
+	sym := findBehavioralSymbol(t, idx.DocumentRoot("<test>"), ast.DefState, ast.UsageState)
+
+	exec, err := newStateExecutor(ctx, sym)
+	if err != nil {
+		t.Fatalf("create state executor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("RunToCompletion: %v", err)
+	}
+	if got := exec.stateData["i"].Const.Int; got != 7 {
+		t.Errorf("i = %d, want 7", got)
 	}
 }
 

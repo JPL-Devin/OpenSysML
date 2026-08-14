@@ -195,6 +195,17 @@ func (ctx *Context) elementScope() func() {
 	return func() { ctx.elements = held }
 }
 
+// beginStep brackets one evaluation outside a body: it answers the activation the
+// evaluation runs in and the function ending it, releasing what it materialized.
+func (ctx *Context) beginStep() (int64, func()) {
+	activation := ctx.newActivation()
+	release := ctx.elementScope()
+	return activation, func() {
+		ctx.endActivation(activation)
+		release()
+	}
+}
+
 // chargeElements counts elements an evaluation materializes, which unlike a step
 // is memory the collection holding it keeps, against the element budget.
 func (ctx *Context) chargeElements(n int64) error {
@@ -279,8 +290,8 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 	features := ctx.conditionFeatures(sym)
 	// The bindings are evaluated as one, so a calc usage two of them read answers
 	// from one evaluation, and the next check reads it again.
-	activation := ctx.newActivation()
-	defer ctx.endActivation(activation)
+	activation, endStep := ctx.beginStep()
+	defer endStep()
 	evalIn := func(memberScope *symbols.Scope) *EvalContext {
 		ec := NewEvalContextIn(ctx, memberScope, self)
 		ec.activation = activation

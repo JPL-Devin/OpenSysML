@@ -22,8 +22,8 @@ import (
 // as memory: a materialized element is a 104-byte Value living as long as the
 // collection holding it, and `1..10000000` conjures one per step. It counts the
 // elements one evaluation holds, not the elements a run produced in total, so a
-// loop building a small collection each iteration is not stopped by the ones
-// before it.
+// loop or a state machine building a small collection each step is not stopped by
+// the steps before it.
 const (
 	// DefaultMaxSteps bounds expression evaluations.
 	DefaultMaxSteps int64 = 10000000
