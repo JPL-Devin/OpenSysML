@@ -218,6 +218,34 @@ func TestCompletionUnresolvedPathOffersNothing(t *testing.T) {
 	}
 }
 
+// A private import surfaces names at the root of the index; KerML 8.2.3.3 keeps
+// them out of every other document, so completion must not offer them there.
+func TestCompletionHidesAnotherDocumentsPrivateImport(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	importer := uri.File("/tmp/importer.sysml").Filename()
+	ws.Open(importer, []byte("private import ScalarValues::*;\npackage Importer;\n"), 1)
+
+	other := uri.File("/tmp/other.sysml").Filename()
+	src := "package Other {\n\t\n}\n"
+	ws.Open(other, []byte(src), 1)
+
+	list, err := s.Completion(context.Background(), &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(other)},
+			Position:     offsetToPosition([]byte(src), strings.Index(src, "\t")+1),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Completion err = %v", err)
+	}
+	for _, it := range list.Items {
+		if it.Label == "Real" {
+			t.Error("completion offered 'Real', which only another document's private import surfaced")
+		}
+	}
+}
+
 func TestMemberPathBefore(t *testing.T) {
 	cases := []struct {
 		text string

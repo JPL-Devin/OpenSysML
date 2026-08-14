@@ -1019,14 +1019,17 @@ func (idx *Index) LookupDirectChildren(prefix string) []*Symbol {
 	return out
 }
 
-// TopLevelSymbols returns every symbol registered at the root of the index:
-// the library's top-level packages and each document's top-level declarations.
+// TopLevelSymbols returns the symbols registered at the root of the index that
+// are visible from outside: the library's top-level packages and each document's
+// top-level declarations, less the names only a document's own private import
+// surfaced (KerML 8.2.3.3).
 func (idx *Index) TopLevelSymbols() []*Symbol {
 	var out []*Symbol
 	seen := make(map[*Symbol]bool)
 	for _, fqn := range idx.childKeys("") {
+		hidden := idx.hidden[fqn]
 		for _, sym := range idx.fqn[fqn] {
-			if !seen[sym] {
+			if !seen[sym] && !hidden[sym] {
 				seen[sym] = true
 				out = append(out, sym)
 			}
