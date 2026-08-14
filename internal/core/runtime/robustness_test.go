@@ -105,6 +105,15 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
 	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
 	t.Run("collection_operation_step_budget", testCollectionOperationStepBudget)
+	t.Run("variation_without_a_selected_variant", testVariationWithoutASelectedVariant)
+	t.Run("variation_bound_to_what_is_not_a_variant", testVariationBoundToWhatIsNotAVariant)
+	t.Run("variation_bound_to_two_variants", testVariationBoundToTwoVariants)
+	t.Run("variation_read_through_its_declaration", testVariationReadThroughItsDeclaration)
+	t.Run("chain_through_an_unselected_variation_part", testChainThroughAnUnselectedVariationPart)
+	t.Run("repeated_reads_of_a_variant_object", testRepeatedReadsOfAVariantObject)
+	t.Run("two_owners_selecting_one_variant", testTwoOwnersSelectingOneVariant)
+	t.Run("deep_specialization_chain_of_redefinitions", testDeepSpecializationChainOfRedefinitions)
+	t.Run("conflicting_redefinitions_at_several_levels", testConflictingRedefinitionsAtSeveralLevels)
 	t.Run("multiplicity_infinite_lower_bound", testMultiplicityInfiniteLowerBound)
 	t.Run("multiplicity_lower_bound_too_large", testMultiplicityLowerBoundTooLarge)
 	t.Run("feature_chain_through_an_unset_slot", testFeatureChainThroughAnUnsetSlot)
@@ -2693,6 +2702,310 @@ func testNestedCalcUsageStepBudget(t *testing.T) {
 	err := calcUsageOutputInSource(t, src, "c", "d", 20)
 	if !errors.Is(err, ErrStepLimitExceeded) {
 		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// variationSlotInSource instantiates a usage and returns the value its named
+// slot holds, so a variation's failure modes are read where a model reads them.
+func variationSlotInSource(t *testing.T, src, usage, slot string) (Value, error) {
+	t.Helper()
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	matches := idx.LookupQualified(usage)
+	if len(matches) != 1 {
+		t.Fatalf("%s: %d matching symbols, want 1", usage, len(matches))
+	}
+	inst, err := ctx.Instantiate(matches[0])
+	if err != nil {
+		return Value{}, err
+	}
+	got, err := inst.GetSlot(ctx, slot)
+	if err != nil {
+		return Value{}, err
+	}
+	return got.Value, nil
+}
+
+// variationFamily is a variation point with three variants, over which the
+// selection a specialization makes is varied per case.
+const variationFamily = `
+	package test {
+		part def Diamond { attribute cut; attribute color; }
+		abstract part family : Diamond {
+			variation attribute :>> cut {
+				variant attribute cutShallow { attribute cost = 200.0; }
+				variant attribute cutIdeal { attribute cost = 250.0; }
+			}
+			variation attribute :>> color {
+				variant attribute colorWhite { attribute cost = 100.0; }
+			}
+		}
+		%s
+	}`
+
+// testVariationWithoutASelectedVariant: a variation nothing selects a variant
+// for has no value, so reading it says so rather than answering the variation's
+// own empty object or one of the variants arbitrarily.
+func testVariationWithoutASelectedVariant(t *testing.T) {
+	src := fmt.Sprintf(variationFamily, `part unconfigured :> family;`)
+	got, err := variationSlotInSource(t, src, "test::unconfigured", "cut")
+	if !errors.Is(err, ErrVariationUnselected) {
+		t.Errorf("cut = (%v, %v), want ErrVariationUnselected", got, err)
+	}
+	// The failure names the feature, so a model with many variation points says
+	// which one is unconfigured.
+	if err != nil && !strings.Contains(err.Error(), "cut") {
+		t.Errorf("error %q does not name the variation", err)
+	}
+}
+
+// variationReadFromDeclaration evaluates a usage's value with no bound object,
+// so a variation is read through its declaration rather than through a slot.
+func variationReadFromDeclaration(t *testing.T, src, probe string) (Value, error) {
+	t.Helper()
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	matches := idx.LookupQualified(probe)
+	if len(matches) != 1 {
+		t.Fatalf("%s: %d matching symbols, want 1", probe, len(matches))
+	}
+	usage, ok := matches[0].Decl.(*ast.Usage)
+	if !ok || usage.Value == nil {
+		t.Fatalf("%s: no value expression", probe)
+	}
+	return ctx.EvalWithScope(usage.Value, matches[0].OwnerScope)
+}
+
+// testVariationReadThroughItsDeclaration: a variation read without a bound
+// object is bound the same way as one read from a slot, so what a legal
+// selection is does not depend on how the model is inspected.
+func testVariationReadThroughItsDeclaration(t *testing.T) {
+	for _, tt := range []struct {
+		name, decl, probe string
+		want              error
+	}{
+		{
+			"not_a_variant",
+			`part chosen :> family { attribute :>> cut = 250.0; attribute probe = cut; }`,
+			"test::chosen::probe", ErrNotAVariant,
+		},
+		{
+			"two_variants",
+			`part chosen :> family { attribute :>> cut = (cut::cutIdeal, cut::cutShallow); attribute probe = cut; }`,
+			"test::chosen::probe", ErrMultipleVariants,
+		},
+		{
+			"unselected",
+			`part chosen :> family { attribute probe = cut; }`,
+			"test::chosen::probe", ErrVariationUnselected,
+		},
+		{
+			"qualified_not_a_variant",
+			`part chosen :> family { attribute :>> cut = 250.0; }
+			 attribute probe = chosen::cut;`,
+			"test::probe", ErrNotAVariant,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := variationReadFromDeclaration(t, fmt.Sprintf(variationFamily, tt.decl), tt.probe)
+			if !errors.Is(err, tt.want) {
+				t.Errorf("%s = (%v, %v), want %v", tt.probe, got, err, tt.want)
+			}
+		})
+	}
+}
+
+// testChainThroughAnUnselectedVariationPart: a variation part is no occurrence
+// of itself, so a chain through one nothing selected a variant for reports that
+// rather than reading an object of the variation.
+func testChainThroughAnUnselectedVariationPart(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::Real;
+		part def Engine { attribute power : Real; }
+		variation part engine : Engine {
+			variant part electric : Engine { attribute :>> power = 100.0; }
+			variant part diesel : Engine { attribute :>> power = 200.0; }
+		}
+		part probe { attribute p : Real = engine.power; }
+	}`
+	got, err := variationSlotInSource(t, src, "test::probe", "p")
+	if !errors.Is(err, ErrVariationUnselected) {
+		t.Errorf("p = (%v, %v), want ErrVariationUnselected", got, err)
+	}
+}
+
+// testVariationBoundToWhatIsNotAVariant: a selection naming something that is
+// not a variant of the variation is reported, whether the name is unknown, a
+// variant of another variation, or an ordinary value.
+func testVariationBoundToWhatIsNotAVariant(t *testing.T) {
+	for _, tt := range []struct{ name, selection string }{
+		{"unknown_name", `part chosen :> family { attribute :>> cut = cut::nope; }`},
+		{"variant_of_another_variation", `part chosen :> family { attribute :>> cut = color::colorWhite; }`},
+		{"ordinary_value", `part chosen :> family { attribute :>> cut = 250.0; }`},
+		{"collection_of_ordinary_values", `part chosen :> family { attribute :>> cut = (250.0, 200.0); }`},
+		{"variant_mixed_with_an_ordinary_value", `part chosen :> family { attribute :>> cut = (cut::cutIdeal, 250.0); }`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := variationSlotInSource(t, fmt.Sprintf(variationFamily, tt.selection), "test::chosen", "cut")
+			if !errors.Is(err, ErrNotAVariant) {
+				t.Errorf("cut = (%v, %v), want ErrNotAVariant", got, err)
+			}
+		})
+	}
+}
+
+// testVariationBoundToTwoVariants: a variation stands for one variant, so a
+// selection of several is reported rather than silently taking the first.
+func testVariationBoundToTwoVariants(t *testing.T) {
+	src := fmt.Sprintf(variationFamily,
+		`part chosen :> family { attribute :>> cut = (cut::cutIdeal, cut::cutShallow); }`)
+	got, err := variationSlotInSource(t, src, "test::chosen", "cut")
+	if !errors.Is(err, ErrMultipleVariants) {
+		t.Fatalf("cut = (%v, %v), want ErrMultipleVariants", got, err)
+	}
+	for _, name := range []string{"cutIdeal", "cutShallow"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("error %q does not name the selection %s", err, name)
+		}
+	}
+}
+
+// testRepeatedReadsOfAVariantObject: the object a selected variant stands for is
+// materialized once, so evaluating a chain through it repeatedly neither piles up
+// objects nor exhausts the step budget.
+func testRepeatedReadsOfAVariantObject(t *testing.T) {
+	src := `
+	package test {
+		part def Engine { attribute power; }
+		abstract part family {
+			variation part engine : Engine {
+				variant part electric : Engine { attribute :>> power = 150.0; }
+				variant part petrol : Engine { attribute :>> power = 120.0; }
+			}
+		}
+		part chosen :> family { part :>> engine = engine::electric; }
+	}`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	variant := oneSymbol(t, idx, "test::family::engine::electric")
+	first, err := ctx.variantValue(variant, 1)
+	if err != nil {
+		t.Fatalf("variantValue: %v", err)
+	}
+	count := len(ctx.instances)
+	for i := 0; i < 10; i++ {
+		again, err := ctx.variantValue(variant, 1)
+		if err != nil {
+			t.Fatalf("variantValue (read %d): %v", i+2, err)
+		}
+		if again.Instance != first.Instance {
+			t.Fatalf("read %d gave instance %d, want %d", i+2, again.Instance, first.Instance)
+		}
+	}
+	if len(ctx.instances) != count {
+		t.Errorf("instances grew from %d to %d over repeated reads", count, len(ctx.instances))
+	}
+}
+
+// testTwoOwnersSelectingOneVariant: a variant is selected per owning object, so
+// two owners of one variation each hold their own object of the variant rather
+// than sharing one whose materialized slots the other reads.
+func testTwoOwnersSelectingOneVariant(t *testing.T) {
+	src := `
+	package test {
+		part def Engine { attribute power; }
+		abstract part family {
+			variation part engine : Engine {
+				variant part electric : Engine { attribute :>> power = 150.0; }
+				variant part petrol : Engine { attribute :>> power = 120.0; }
+			}
+		}
+		part sedan :> family { part :>> engine = engine::electric; }
+		part coupe :> family { part :>> engine = engine::electric; }
+	}`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	ids := make([]int64, 0, 2)
+	for _, usage := range []string{"test::sedan", "test::coupe"} {
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, usage))
+		if err != nil {
+			t.Fatalf("%s: %v", usage, err)
+		}
+		slot, err := inst.GetSlot(ctx, "engine")
+		if err != nil {
+			t.Fatalf("%s.engine: %v", usage, err)
+		}
+		id, ok := slot.Value.Object()
+		if !ok {
+			t.Fatalf("%s.engine = %v, want an object of the selected variant", usage, slot.Value)
+		}
+		ids = append(ids, id)
+	}
+	if ids[0] == ids[1] {
+		t.Errorf("sedan and coupe share engine object %d", ids[0])
+	}
+}
+
+// oneSymbol returns the single symbol a qualified name denotes.
+func oneSymbol(t *testing.T, idx *symbols.Index, fqn string) *symbols.Symbol {
+	t.Helper()
+	matches := idx.LookupQualified(fqn)
+	if len(matches) != 1 {
+		t.Fatalf("%s: %d matching symbols, want 1", fqn, len(matches))
+	}
+	return matches[0]
+}
+
+// testDeepSpecializationChainOfRedefinitions: a redefinition specializes the
+// usage it redefines, so a long chain of them keeps every level's values and
+// terminates instead of recursing while looking for the base's members.
+func testDeepSpecializationChainOfRedefinitions(t *testing.T) {
+	const depth = 60
+	var b strings.Builder
+	b.WriteString("package test {\n")
+	b.WriteString("\tpart def Inner { attribute a; attribute b; }\n")
+	b.WriteString("\tpart def Outer { part inner : Inner; attribute t = inner.b; }\n")
+	b.WriteString("\tpart level0 : Outer { part :>> inner { attribute :>> b = 7.0; } }\n")
+	for i := 1; i <= depth; i++ {
+		fmt.Fprintf(&b, "\tpart level%d :> level%d { part :>> inner { attribute :>> a = %d.0; } }\n", i, i-1, i)
+	}
+	b.WriteString("}\n")
+
+	done := make(chan struct{})
+	var got Value
+	var err error
+	go func() {
+		defer close(done)
+		got, err = variationSlotInSource(t, b.String(), fmt.Sprintf("test::level%d", depth), "t")
+	}()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("reading an inherited value through a deep specialization chain hung")
+	}
+	if err != nil {
+		t.Fatalf("t = %v", err)
+	}
+	if got.Kind != ValConst || got.Const.Real != 7.0 {
+		t.Errorf("t = %+v, want the base's 7.0", got)
+	}
+}
+
+// testConflictingRedefinitionsAtSeveralLevels: when several levels restate the
+// same nested feature, the innermost restatement is the value read, and the
+// levels above still supply what they alone declare.
+func testConflictingRedefinitionsAtSeveralLevels(t *testing.T) {
+	src := `
+		package test {
+			part def Inner { attribute a; attribute b; attribute c; }
+			part def Outer { part inner : Inner; attribute t = inner.c + inner.b + inner.a; }
+			part base : Outer { part :>> inner { attribute :>> a = 1.0; attribute :>> c = 100.0; } }
+			part middle :> base { part :>> inner { attribute :>> b = 20.0; attribute :>> c = 200.0; } }
+			part leaf :> middle { part :>> inner { attribute :>> c = 300.0; } }
+		}`
+	got, err := variationSlotInSource(t, src, "test::leaf", "t")
+	if err != nil {
+		t.Fatalf("t = %v", err)
+	}
+	if got.Kind != ValConst || got.Const.Real != 321.0 {
+		t.Errorf("t = %+v, want 321.0 (innermost c, middle b, base a)", got)
 	}
 }
 

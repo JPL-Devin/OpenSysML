@@ -675,6 +675,11 @@ func (ec *EvalContext) occurrenceOperand(operand ast.Node) (*symbols.Symbol, boo
 	if !ok || !isOccurrenceUsage(sym) || !ec.ctx.occursOnce(sym) {
 		return nil, false
 	}
+	// A variation classifies its variants abstractly, so it is no occurrence of
+	// itself: a chain through it is read from the variant it is bound to.
+	if ec.ctx.model.IsVariationFeature(sym) {
+		return nil, false
+	}
 	return sym, true
 }
 

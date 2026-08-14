@@ -278,6 +278,10 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		// — rather than the ones in force here — answer the names it uses.
 		if ec.scope != nil && !ec.resolving[name] {
 			if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
+				// A variant names a choice, not the value it declares.
+				if semantics.DeclaresVariant(sym) {
+					return variantReference(sym), nil
+				}
 				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
 					if ec.resolving == nil {
 						ec.resolving = map[string]bool{}
@@ -285,7 +289,15 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 					ec.resolving[name] = true
 					val, err := ec.evalIn(sym.OwnerScope).Eval(usage.Value)
 					delete(ec.resolving, name)
-					return val, err
+					if err != nil {
+						return Value{}, err
+					}
+					return ec.bindVariationOf(sym, val)
+				}
+				// A variation holds nothing until it is bound, whether it is read
+				// through an object or through its declaration.
+				if ec.ctx.model.IsVariationFeature(sym) {
+					return Value{}, fmt.Errorf("%w: %s", ErrVariationUnselected, name)
 				}
 			}
 		}
@@ -331,6 +343,13 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		memberName := n.Name.Parts[i].Text
 		nextSym, found := ec.ctx.model.LookupMember(currentSym, memberName)
 		if !found {
+			// A name qualified by a variation designates one of its variants, so
+			// one that is not a variant is reported as such.
+			if ec.ctx.model.IsVariationFeature(currentSym) {
+				return Value{}, fmt.Errorf("%w: %s is not a variant of %s (%s)",
+					ErrNotAVariant, memberName, currentSym.Name,
+					ec.ctx.variantSummary(currentSym))
+			}
 			return Value{}, fmt.Errorf("member %s not found in %s", memberName, currentSym.Name)
 		}
 		currentSym = nextSym
@@ -339,8 +358,20 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 	// Evaluate the final symbol's declaration
 	switch decl := currentSym.Decl.(type) {
 	case *ast.Usage:
+		// A variant names a choice its variation can be bound to, and compares
+		// equal to the variation that selected it.
+		if decl.IsVariant {
+			return variantReference(currentSym), nil
+		}
 		if decl.Value != nil {
-			return ec.Eval(decl.Value)
+			val, err := ec.Eval(decl.Value)
+			if err != nil {
+				return Value{}, err
+			}
+			return ec.bindVariationOf(currentSym, val)
+		}
+		if ec.ctx.model.IsVariationFeature(currentSym) {
+			return Value{}, fmt.Errorf("%w: %s", ErrVariationUnselected, qualifiedNameToString(n.Name))
 		}
 		// A calc usage is an evaluation, not a value: it is read through the output
 		// features it computes, since a name it does not designate a result for has
@@ -446,24 +477,43 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	switch value.Kind {
 	case ValSequence, ValSet:
 		return ec.chainOverElements(value, parts, from)
-	case ValInstance:
+	case ValInstance, ValVariant:
 		// handled below
 	default:
 		return Value{}, fmt.Errorf("cannot chain through non-instance member %s (%v)", from, value.Kind)
 	}
 
-	inst, ok := ec.ctx.instances[value.Instance]
+	// A selected variant is chained through the object it materialized.
+	id, isObject := value.Object()
+	if !isObject {
+		return Value{}, fmt.Errorf("cannot chain through non-instance member %s (%v)", from, value.Kind)
+	}
+	inst, ok := ec.ctx.instances[id]
 	if !ok {
-		return Value{}, fmt.Errorf("instance ID %d not found for member %s", value.Instance, from)
+		return Value{}, fmt.Errorf("instance ID %d not found for member %s", id, from)
 	}
 	name := parts[0].Text
-	if _, ok := inst.Slots[name]; !ok {
+	slotDecl, ok := inst.Slots[name]
+	if !ok {
 		// A calc usage is an evaluation rather than a slot, so its outputs are
 		// read from a run of it against this object.
 		if sym, found := ec.ctx.model.LookupMember(inst.Type, name); found && isCalcUsageSymbol(sym) {
 			return ec.calcUsageMemberValue(sym, inst, parts[1:])
 		}
 		return Value{}, fmt.Errorf("member %s not found in instance", name)
+	}
+	// A variant named through the variation feature it belongs to is the choice
+	// itself, not a member of the variation's value.
+	if variant, rest, ok := ec.variantSegment(slotDecl.Feature, parts[1:]); ok {
+		if len(rest) == 0 {
+			return variantReference(variant), nil
+		}
+		// Members are read from the object the variant stands for.
+		val, err := ec.ctx.variantValue(variant, inst.ID)
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.chainMemberValue(val, rest, variant.Name)
 	}
 	// Read through GetSlot so a derived or composite member is materialized
 	// on demand rather than read as an empty slot.
@@ -735,6 +785,17 @@ func (ec *EvalContext) evalEquality(n *ast.OperatorExpr) (Value, error) {
 	right, err := ec.Eval(n.Operands[1])
 	if err != nil {
 		return Value{}, err
+	}
+
+	// Comparing a value with a variant compares it with the value that variant
+	// declares; comparing two variants compares the choice itself.
+	if (left.Kind == ValVariant) != (right.Kind == ValVariant) {
+		if left, err = ec.ctx.variantAsValue(left); err != nil {
+			return Value{}, err
+		}
+		if right, err = ec.ctx.variantAsValue(right); err != nil {
+			return Value{}, err
+		}
 	}
 
 	// Quantities compare in a common unit; incommensurable ones are an error,
@@ -1102,6 +1163,9 @@ func valueEqual(a, b Value) bool {
 		return sequenceEqual(a.Sequence, b.Sequence)
 	case ValSet:
 		return setEqual(a.Set, b.Set)
+	case ValVariant:
+		// A variation compares equal to the variant it selected.
+		return a.Variant == b.Variant
 	case ValQuantity:
 		// Incommensurable units are not equal here: an equality that has to hold
 		// or fail (a set member, a sequence element) has no error to report.

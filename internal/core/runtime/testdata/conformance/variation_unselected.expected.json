@@ -1,0 +1,9 @@
+{
+  "type": "instance",
+  "instantiate": "test::unconfiguredDiamond",
+  "libraries": true,
+  "slots": {
+    "cut": {"error": "variation has no variant selected: unconfiguredDiamond.cut"},
+    "diamondCost": {"error": "variation has no variant selected"}
+  }
+}

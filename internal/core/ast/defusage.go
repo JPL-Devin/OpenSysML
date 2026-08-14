@@ -420,6 +420,8 @@ type Usage struct {
 	// kept to tell those spellings apart.
 	Keyword      string
 	IsAbstract   bool
+	IsVariation  bool // 'variation' modifier: the usage is a variation point
+	IsVariant    bool // declared with 'variant': a variant of the enclosing variation
 	IsReference  bool
 	IsAll        bool // 'all' multiplicity propagation modifier
 	IsEnd        bool // 'end' feature modifier

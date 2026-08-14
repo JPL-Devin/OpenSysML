@@ -104,10 +104,15 @@ func (s *Session) walkSlots(inst *runtime.Instance, name string, segments []stri
 	}
 	for _, seg := range segments {
 		slot, serr := inst.GetSlot(ctx, seg)
-		if serr != nil || slot == nil || slot.Value.Kind != runtime.ValInstance {
+		if serr != nil || slot == nil {
 			return nil, ""
 		}
-		child, ok := ctx.Instance(slot.Value.Instance)
+		// A variation slot holds the object of the variant it selected.
+		id, isObject := slot.Value.Object()
+		if !isObject {
+			return nil, ""
+		}
+		child, ok := ctx.Instance(id)
 		if !ok {
 			return nil, ""
 		}

@@ -185,6 +185,8 @@ Supported types:
 - `Sequence`: the `elements` it holds, in order, instead of `value` — for a
   multi-valued feature, whose order is part of its contract
 - `Instance`: an object, whose identity a case does not pin (no `value`)
+- `Variant`: the name of the variant a variation feature is bound to, as a JSON
+  string (`{"type": "Variant", "value": "cutIdeal"}`)
 
 In place of a value, `error` states the text producing that value must fail with,
 for a slot or result whose contract is a diagnostic (`{"error": "not a

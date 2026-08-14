@@ -1,0 +1,11 @@
+{
+  "type": "instance",
+  "instantiate": "test::inconsistentAssembly",
+  "libraries": true,
+  "slots": {
+    "engagementRingToBand": {"type": "Variant", "value": "connected"}
+  },
+  "constraints": {
+    "nestingMatchesConnection": false
+  }
+}

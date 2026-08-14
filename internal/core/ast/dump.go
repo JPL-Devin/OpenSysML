@@ -182,6 +182,12 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		fmt.Fprintf(b, `(Usage kind=%q name=%q ref=%t direction=%q composite=%t derived=%t ordered=%t nonunique=%t`,
 			v.Kind.String(), identName(v.Ident), v.IsReference, v.Direction.String(),
 			v.IsComposite, v.IsDerived, v.IsOrdered, v.IsNonunique)
+		if v.IsVariation {
+			b.WriteString(` variation=true`)
+		}
+		if v.IsVariant {
+			b.WriteString(` variant=true`)
+		}
 		if v.IsConjugated {
 			b.WriteString(` conjugated=true`)
 		}

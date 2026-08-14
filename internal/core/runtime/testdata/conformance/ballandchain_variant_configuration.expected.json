@@ -1,0 +1,12 @@
+{
+  "type": "instance",
+  "instantiate": "productAssetInstance::newBallAndChain",
+  "libraries": true,
+  "slots": {
+    "totalCost": {"type": "Real", "value": 1450.0},
+    "engagementRingToBand": {"type": "Variant", "value": "engagementRingToBandConnected"}
+  },
+  "constraints": {
+    "engagementRingToBandConstraint": true
+  }
+}

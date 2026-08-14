@@ -5,6 +5,7 @@ import (
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // ValueKind distinguishes runtime value types.
@@ -20,6 +21,7 @@ const (
 	ValSet
 	ValExpr     // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
 	ValQuantity // a magnitude and the measurement unit it is expressed in
+	ValVariant  // the variant selected for a variation, and the object it materializes
 )
 
 // String names the kind, so diagnostics quoting it read as more than an index.
@@ -41,6 +43,8 @@ func (k ValueKind) String() string {
 		return "expression"
 	case ValQuantity:
 		return "quantity"
+	case ValVariant:
+		return "variant"
 	default:
 		return "invalid"
 	}
@@ -56,6 +60,22 @@ type Value struct {
 	Set      *Set            // ValSet
 	Expr     ast.Node        // ValExpr: unevaluated AST for delayed evaluation
 	Quantity *Quantity       // ValQuantity: magnitude and measurement unit
+	// Variant is the variant a variation was bound to (ValVariant). Instance
+	// holds the object materialized for it, 0 when it materializes none.
+	Variant *symbols.Symbol
+}
+
+// Object returns the object a value denotes: an instance, or the object a
+// selected variant materialized.
+func (v Value) Object() (int64, bool) {
+	switch v.Kind {
+	case ValInstance:
+		return v.Instance, true
+	case ValVariant:
+		return v.Instance, v.Instance != 0
+	default:
+		return 0, false
+	}
 }
 
 // Sequence is an ordered collection (slice-backed).
