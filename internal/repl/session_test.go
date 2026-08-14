@@ -151,6 +151,61 @@ func TestNestedMergeReplacesTheLastMemberOfABody(t *testing.T) {
 	}
 }
 
+// Comments inside a body document the member below them, so replacing the
+// member above must not take them with it.
+func TestMergeKeepsCommentsInsideTheBody(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P {\n\tpart def A;\n\t// doc for B\n\tpart def B;\n}")
+	s.Submit("package P { part def A { attribute x = 1; } }")
+
+	wants(t, strings.Join(s.List(), "\n"), "// doc for B")
+}
+
+// A re-typed declaration only merges into one written the same way: a different
+// header is a different declaration and replaces the old one.
+func TestDifferentHeaderReplacesRatherThanMerges(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { part def A; }")
+	res := s.Submit("namespace P { part def B; }")
+
+	got := strings.Join(s.List(), "\n")
+	wants(t, got, "namespace P")
+	if strings.Contains(got, "package P") {
+		t.Errorf("kept the package header the user replaced with a namespace:\n%s", got)
+	}
+	if !hasNotice(res, "replaced package P") {
+		t.Errorf("did not report replacing the package: %v", res.Notices)
+	}
+}
+
+// An empty body clears a nested namespace as it clears a top-level one.
+func TestEmptyNestedBodyClearsTheNestedNamespace(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { package Q { part def A; } }")
+	res := s.Submit("package P { package Q { } }")
+
+	if got := strings.Join(s.List(), "\n"); strings.Contains(got, "part def A") {
+		t.Errorf("emptying package Q kept its members:\n%s", got)
+	}
+	if !hasNotice(res, "package Q") {
+		t.Errorf("did not report what emptying package Q dropped: %v", res.Notices)
+	}
+}
+
+// Re-typing a body that adds nothing still confirms the declaration it merged
+// into, and nothing else that is already in the buffer.
+func TestMergeAddingNothingConfirmsOnlyItsDeclaration(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Z; package P { public import ScalarValues::*; }")
+	res := s.Submit("package P { public import ScalarValues::*; }")
+
+	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
+	wants(t, out, "✓ package P")
+	if strings.Contains(out, "part def Z") {
+		t.Errorf("re-announced a declaration from the absorbed snippet:\n%s", out)
+	}
+}
+
 // A merge only announces the declaration it added to, and only reports the
 // diagnostics of the added text: the rest of the merged snippet was typed
 // earlier and has already been reported.

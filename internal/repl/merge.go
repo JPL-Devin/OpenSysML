@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
@@ -14,16 +15,19 @@ import (
 type nsDecl struct {
 	name    string
 	desc    string // "package P", as the summary renders it
+	header  string // everything before the body, whitespace-normalized
 	members []ast.Node
 	start   int
 	brace   int
 }
 
 // edit replaces src[start:end] with text. Edits never overlap: each one covers a
-// distinct member, or is an insertion at a body's closing brace.
+// distinct member, or is an insertion at a body's closing brace. An own edit
+// marks where the submission lands, so its report scopes to what was typed.
 type edit struct {
 	start, end int
 	text       string
+	own        bool
 }
 
 // mergeSubmission folds a resubmitted namespace declaration into the same-named
@@ -41,7 +45,9 @@ func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments 
 	}
 	for i, sn := range s.snippets {
 		oldDecl, ok := namedNamespace(sn.src, newDecl.name)
-		if !ok {
+		// A different header is a different declaration, whatever it names: it
+		// replaces the old one rather than adding to a body it did not write.
+		if !ok || oldDecl.header != newDecl.header {
 			continue
 		}
 		edits, replaced := mergeEdits(sn.src, oldDecl, src, newDecl)
@@ -50,6 +56,9 @@ func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments 
 		if comments != "" {
 			edits = append(edits, edit{start: oldDecl.start, end: oldDecl.start, text: comments})
 		}
+		// The declaration merged into is this submission's own, so it is echoed
+		// even when the body it re-typed added nothing new.
+		edits = append(edits, edit{start: oldDecl.start, end: oldDecl.start, own: true})
 		merged, own := applyEdits(sn.src, edits)
 		s.snippets = append(s.snippets[:i:i], s.snippets[i+1:]...)
 		return merged, own, dropReport{merged: true, decl: newDecl.desc, lost: replaced}, true
@@ -122,6 +131,11 @@ func namespaceDeclOf(src string, member ast.Node) (nsDecl, bool) {
 		return d, false
 	}
 	d.start, d.brace = member.Span().Offset, brace
+	open := strings.IndexByte(src[d.start:brace], '{')
+	if open < 0 {
+		return d, false
+	}
+	d.header = strings.Join(strings.Fields(src[d.start:d.start+open]), " ")
 	d.desc = renderMember(member)
 	return d, true
 }
@@ -180,7 +194,9 @@ func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl) ([
 			continue
 		}
 		if oldSub, ok := namespaceDeclOf(oldSrc, om); ok {
-			if newSub, ok := namespaceDeclOf(newSrc, nm); ok {
+			// An empty body clears a nested namespace just as it clears a
+			// top-level one, so it replaces the old member instead of merging.
+			if newSub, ok := namespaceDeclOf(newSrc, nm); ok && len(newSub.members) > 0 && oldSub.header == newSub.header {
 				subEdits, subReplaced := mergeEdits(oldSrc, oldSub, newSrc, newSub)
 				edits = append(edits, subEdits...)
 				replaced = append(replaced, subReplaced...)
@@ -211,19 +227,26 @@ func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl) ([
 		added = append(added, text)
 	}
 	if len(added) > 0 {
-		edits = append(edits, insertion(oldSrc, oldDecl.brace, added))
+		e := insertion(oldSrc, oldDecl.brace, added)
+		e.own = true
+		edits = append(edits, e)
 	}
 	return edits, replaced
 }
 
-// memberCut is the range to delete to remove a member: its text (its span runs
-// on to the next token, so the trimmed text bounds it) plus the line it owns, so
-// no blank line is left behind and the closing brace keeps its indentation.
+// memberCut is the range to delete to remove a member: its own text plus the
+// line it owns, so no blank line is left behind, the closing brace keeps its
+// indentation, and comments documenting the next member survive.
 func memberCut(src string, member ast.Node) (start, end int) {
 	start = member.Span().Offset
-	end = start + len(trimmedText(src, member))
+	end = start + len(memberText(src, member))
 	lineStart := strings.LastIndexByte(src[:start], '\n') + 1
 	if strings.TrimSpace(src[lineStart:start]) != "" {
+		// Mid-line: take the spaces after it too, so the body does not end up
+		// with a gap where the member was.
+		for end < len(src) && (src[end] == ' ' || src[end] == '\t') {
+			end++
+		}
 		return start, end
 	}
 	rest := src[end:]
@@ -234,10 +257,11 @@ func memberCut(src string, member ast.Node) (start, end int) {
 	return lineStart, end + nl + 1
 }
 
-// hasText reports whether one of the members is the given source text.
+// hasText reports whether one of the members is the given source text, comparing
+// each member's own text so trailing comments do not hide a match.
 func hasText(src string, members []ast.Node, text string) bool {
 	for _, m := range members {
-		if trimmedText(src, m) == text {
+		if memberText(src, m) == text {
 			return true
 		}
 	}
@@ -294,16 +318,38 @@ func applyEdits(src string, edits []edit) (string, []source.Span) {
 			b.WriteString(src[pos:e.start])
 			pos = e.start
 		}
-		if e.text != "" {
+		if e.own {
 			added = append(added, source.Span{Offset: b.Len(), Len: len(e.text)})
-			b.WriteString(e.text)
 		}
+		b.WriteString(e.text)
 		if e.end > pos {
 			pos = e.end
 		}
 	}
 	b.WriteString(src[pos:])
 	return b.String(), added
+}
+
+// memberText returns a member's own source text: its span less the trailing
+// comment trivia the span runs on to the next member, which documents that
+// member rather than this one.
+func memberText(src string, node ast.Node) string {
+	text := trimmedText(src, node)
+	lx := lexer.New(source.New(docName, []byte(text)))
+	end, trailing := 0, false
+	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		if tok.IsTrivia() {
+			trailing = end > 0
+			continue
+		}
+		end, trailing = tok.Span.Offset+tok.Span.Len, false
+	}
+	// Trivia only documents what follows once the member itself is terminated;
+	// anything else (a `doc /* ... */`) is the member's own text.
+	if !trailing || end > len(text) || (text[end-1] != ';' && text[end-1] != '}') {
+		return text
+	}
+	return text[:end]
 }
 
 // trimmedText returns a node's source text without the whitespace its span runs
