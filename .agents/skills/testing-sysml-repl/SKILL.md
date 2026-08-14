@@ -1124,7 +1124,10 @@ looks like a defect in the frame. Clear the screen *before* starting the REPL (`
 scroll instead with `shift+PageUp`/`shift+PageDown` when long output (`%builtins`, `%help`) runs off
 the top, or quit and restart the REPL for a clean screen.
 
-## Tab completion and anything else readline-driven
+## Tab completion and anything else readline-driven (PR #148)
+
+This section and the next describe behavior added by PR #148 (which also adds `%search` and
+`%builtins`), so they apply only once that PR is on `main`.
 
 `cmd/sysml` installs an `AutoComplete` on the readline config, and **readline disables completion
 when the terminal reports a width of 0** — which is what a plain pipe reports. So
@@ -1151,13 +1154,14 @@ Completion cases worth covering, and their shapes: a unique meta-command prefix 
 (`%s`+TAB TAB → `%satisfy %save %search %slots %state %step %stop`), names after `%eval` come from
 session declarations, builtin function names and the library (`sqr`→`sqrt`), a qualified prefix
 offers **one segment at a time** (`ScalarValues::`+TAB lists only that package's members, never the
-whole library), and `%load`/`%save` complete filesystem paths with a trailing `/` on directories.
+whole library; `ScalarValues`+TAB inserts the `::` and lists the same members), and `%load`/`%save`
+complete filesystem paths with a trailing `/` on directories.
 Adversarial cases that all behaved correctly and are cheap to re-check: TAB with the cursor mid-line
 must keep the text to its right, TAB on an empty line lists (capped) names without hanging,
 completion into a nonexistent directory inserts nothing, and completion still works on a line long
 enough to wrap several terminal rows.
 
-## Where the prompt keeps its history
+## Where the prompt keeps its history (PR #148)
 
 History is `$XDG_STATE_HOME/sysml/history` when that variable is set (directory created 0700, file
 0600), else `~/.sysml_history`; older builds used `$TMPDIR/sysml-repl.history`, so a stale
