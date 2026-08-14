@@ -108,6 +108,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("variation_without_a_selected_variant", testVariationWithoutASelectedVariant)
 	t.Run("variation_bound_to_what_is_not_a_variant", testVariationBoundToWhatIsNotAVariant)
 	t.Run("variation_bound_to_two_variants", testVariationBoundToTwoVariants)
+	t.Run("variation_read_through_its_declaration", testVariationReadThroughItsDeclaration)
 	t.Run("repeated_reads_of_a_variant_object", testRepeatedReadsOfAVariantObject)
 	t.Run("two_owners_selecting_one_variant", testTwoOwnersSelectingOneVariant)
 	t.Run("deep_specialization_chain_of_redefinitions", testDeepSpecializationChainOfRedefinitions)
@@ -2753,6 +2754,61 @@ func testVariationWithoutASelectedVariant(t *testing.T) {
 	// which one is unconfigured.
 	if err != nil && !strings.Contains(err.Error(), "cut") {
 		t.Errorf("error %q does not name the variation", err)
+	}
+}
+
+// variationReadFromDeclaration evaluates a usage's value with no bound object,
+// so a variation is read through its declaration rather than through a slot.
+func variationReadFromDeclaration(t *testing.T, src, probe string) (Value, error) {
+	t.Helper()
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	matches := idx.LookupQualified(probe)
+	if len(matches) != 1 {
+		t.Fatalf("%s: %d matching symbols, want 1", probe, len(matches))
+	}
+	usage, ok := matches[0].Decl.(*ast.Usage)
+	if !ok || usage.Value == nil {
+		t.Fatalf("%s: no value expression", probe)
+	}
+	return ctx.EvalWithScope(usage.Value, matches[0].OwnerScope)
+}
+
+// testVariationReadThroughItsDeclaration: a variation read without a bound
+// object is bound the same way as one read from a slot, so what a legal
+// selection is does not depend on how the model is inspected.
+func testVariationReadThroughItsDeclaration(t *testing.T) {
+	for _, tt := range []struct {
+		name, decl, probe string
+		want              error
+	}{
+		{
+			"not_a_variant",
+			`part chosen :> family { attribute :>> cut = 250.0; attribute probe = cut; }`,
+			"test::chosen::probe", ErrNotAVariant,
+		},
+		{
+			"two_variants",
+			`part chosen :> family { attribute :>> cut = (cut::cutIdeal, cut::cutShallow); attribute probe = cut; }`,
+			"test::chosen::probe", ErrMultipleVariants,
+		},
+		{
+			"unselected",
+			`part chosen :> family { attribute probe = cut; }`,
+			"test::chosen::probe", ErrVariationUnselected,
+		},
+		{
+			"qualified_not_a_variant",
+			`part chosen :> family { attribute :>> cut = 250.0; }
+			 attribute probe = chosen::cut;`,
+			"test::probe", ErrNotAVariant,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := variationReadFromDeclaration(t, fmt.Sprintf(variationFamily, tt.decl), tt.probe)
+			if !errors.Is(err, tt.want) {
+				t.Errorf("%s = (%v, %v), want %v", tt.probe, got, err, tt.want)
+			}
+		})
 	}
 }
 

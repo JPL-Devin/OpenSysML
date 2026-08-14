@@ -39,8 +39,8 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 		if !ok || len(qn.Parts) == 0 {
 			continue
 		}
-		if resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn); ok && resolved != nil {
-			if resolved != sym && ctx.isFeatureOf(owner, resolved) {
+		if resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn); ok && resolved != nil && resolved != sym {
+			if ctx.isFeatureOf(owner, resolved) {
 				features = append(features, resolved)
 			}
 			continue
@@ -55,9 +55,15 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 	return features
 }
 
-// isFeatureOf reports whether feature is the one owner carries under that name.
+// isFeatureOf reports whether owner carries feature under its name, as its own
+// declaration or through what it inherits: a declaration restating a feature
+// (`attribute :>> own`) masks the feature it redefines under that name, which is
+// still a feature of the owner.
 func (ctx *Context) isFeatureOf(owner, feature *symbols.Symbol) bool {
-	member, ok := ctx.model.LookupMember(owner, feature.Name)
+	if member, ok := ctx.model.LookupMember(owner, feature.Name); ok && member == feature {
+		return true
+	}
+	member, ok := ctx.model.LookupContributedMember(owner, feature.Name)
 	return ok && member == feature
 }
 
@@ -80,7 +86,7 @@ func (ctx *Context) aliasRedefinedSlots(inst *Instance) {
 		if !ok || feat.Symbol == nil {
 			continue
 		}
-		for _, redefined := range ctx.relatedFeatureNames(feat.Symbol, inst.Type, ast.RelRedefines) {
+		for _, redefined := range ctx.redefinedNames(feat.Symbol, inst.Type) {
 			if redefined == feat.Name {
 				continue
 			}
@@ -89,6 +95,27 @@ func (ctx *Context) aliasRedefinedSlots(inst *Instance) {
 			}
 		}
 	}
+}
+
+// redefinedNames returns the names of every feature of owner sym redefines,
+// directly or through a redefinition of a redefinition: a restated redefinition
+// still declares the feature at the end of the chain (KerML 1.0 §7.3.4.5).
+func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
+	var names []string
+	seen := map[*symbols.Symbol]bool{sym: true}
+	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, redefined := range ctx.relatedFeatures(cur, owner, ast.RelRedefines) {
+			if seen[redefined] {
+				continue
+			}
+			seen[redefined] = true
+			names = append(names, redefined.Name)
+			queue = append(queue, redefined)
+		}
+	}
+	return names
 }
 
 // subsettingContributions returns the values the features subsetting the named

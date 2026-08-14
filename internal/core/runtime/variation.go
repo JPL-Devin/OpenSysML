@@ -74,6 +74,20 @@ func (ctx *Context) bindVariation(feat *EffectiveFeature, selection Value, owner
 	return ctx.variantValue(variant, owner)
 }
 
+// bindVariationOf binds a value read from a feature's declaration when that
+// feature is a variation, so what a legal selection is does not depend on
+// whether the variation is read through an object or through its declaration.
+func (ec *EvalContext) bindVariationOf(sym *symbols.Symbol, val Value) (Value, error) {
+	if !ec.ctx.model.IsVariationFeature(sym) {
+		return val, nil
+	}
+	owner := int64(0)
+	if ec.self != nil {
+		owner = ec.self.ID
+	}
+	return ec.ctx.bindVariation(&EffectiveFeature{Name: sym.Name, Symbol: sym}, val, owner)
+}
+
 // bindOneVariant binds a variation bound to a collection: exactly one variant
 // may be selected, so selecting several, or anything that is not a variant, is
 // reported rather than resolved.

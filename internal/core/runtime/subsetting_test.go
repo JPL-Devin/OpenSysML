@@ -88,6 +88,39 @@ func TestRedefiningFeatureHoldsTheRedefinedDefault(t *testing.T) {
 	}
 }
 
+// A usage restating a redefinition writes the one feature it names, so the
+// redefined name is not left holding the definition's default.
+func TestRestatedRedefinitionWritesOneSlot(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def Comp { attribute mass : Real = 0.0; }
+			part def Sys :> Comp { attribute own :>> mass = 1.5; }
+			part sat : Sys { attribute :>> own = 10.0; }
+		}
+	`))
+	matches := idx.LookupQualified("test::sat")
+	if len(matches) != 1 {
+		t.Fatalf("test::sat: %d matching symbols, want 1", len(matches))
+	}
+	inst, err := ctx.Instantiate(matches[0])
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	for _, name := range []string{"own", "mass"} {
+		slot, err := inst.GetSlot(ctx, name)
+		if err != nil {
+			t.Fatalf("GetSlot(%s): %v", name, err)
+		}
+		if got := FormatTraceValue(slot.HeldValue()); got != "10.0" {
+			t.Errorf("%s = %s, want 10.0", name, got)
+		}
+	}
+	if inst.Slots["own"] != inst.Slots["mass"] {
+		t.Error("own and mass are separate slots, want one shared slot")
+	}
+}
+
 // `:> ISQ::mass` specializes the library feature, so it contributes nothing to
 // the object's own same-named `mass` collection.
 func TestSubsettingIgnoresALibraryFeatureOfTheSameName(t *testing.T) {

@@ -289,7 +289,15 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 					ec.resolving[name] = true
 					val, err := ec.evalIn(sym.OwnerScope).Eval(usage.Value)
 					delete(ec.resolving, name)
-					return val, err
+					if err != nil {
+						return Value{}, err
+					}
+					return ec.bindVariationOf(sym, val)
+				}
+				// A variation holds nothing until it is bound, whether it is read
+				// through an object or through its declaration.
+				if ec.ctx.model.IsVariationFeature(sym) {
+					return Value{}, fmt.Errorf("%w: %s", ErrVariationUnselected, name)
 				}
 			}
 		}
@@ -356,7 +364,14 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 			return variantReference(currentSym), nil
 		}
 		if decl.Value != nil {
-			return ec.Eval(decl.Value)
+			val, err := ec.Eval(decl.Value)
+			if err != nil {
+				return Value{}, err
+			}
+			return ec.bindVariationOf(currentSym, val)
+		}
+		if ec.ctx.model.IsVariationFeature(currentSym) {
+			return Value{}, fmt.Errorf("%w: %s", ErrVariationUnselected, qualifiedNameToString(n.Name))
 		}
 		// A calc usage is an evaluation, not a value: it is read through the output
 		// features it computes, since a name it does not designate a result for has
