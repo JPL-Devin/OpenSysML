@@ -153,6 +153,8 @@ func metaCommands() []string {
 // RunMeta executes a meta-command (e.g., %eval, %load) and returns the output lines,
 // a quit flag, and any error encountered.
 func (s *Session) RunMeta(line string) (out []string, quit bool, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	out, quit, err = s.runMeta(line)
 	return append(s.drainTrace(), out...), quit, err
 }
@@ -166,13 +168,13 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	case "%help":
 		return helpText(), false, nil
 	case "%list":
-		decls := s.List()
+		decls := s.list()
 		if len(decls) == 0 {
 			return []string{"(empty session)"}, false, nil
 		}
 		return decls, false, nil
 	case "%clear":
-		s.Clear()
+		s.clear()
 		return []string{"session cleared"}, false, nil
 	case "%load":
 		if len(fields) < 2 {

@@ -1,9 +1,11 @@
 package repl
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -167,6 +169,48 @@ func TestCompletePaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestNameWord checks the word under the cursor is taken whole, including one
+// written with letters outside ASCII, so what is inserted extends what is typed.
+func TestNameWord(t *testing.T) {
+	tests := []struct {
+		head, want string
+	}{
+		{"", ""},
+		{"%eval sqr", "sqr"},
+		{"%eval ISQ::ma", "ISQ::ma"},
+		{"attribute x : Sca", "Sca"},
+		{"%eval 1 + señ", "señ"},
+		{"%eval señor::mas", "señor::mas"},
+		{"%eval (Δv", "Δv"},
+	}
+	for _, tt := range tests {
+		if got := nameWord(tt.head); got != tt.want {
+			t.Errorf("nameWord(%q) = %q, want %q", tt.head, got, tt.want)
+		}
+	}
+}
+
+// TestCompleteConcurrentWithSubmit covers Tab arriving while the previous line
+// is still being evaluated: readline completes from its own input goroutine.
+func TestCompleteConcurrentWithSubmit(t *testing.T) {
+	s := NewSession()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 20; i++ {
+			s.Submit(fmt.Sprintf("part def P%d { attribute a = 1.0; }", i))
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 20; i++ {
+			s.Complete("%eval ScalarValues::In", len("%eval ScalarValues::In"))
+		}
+	}()
+	wg.Wait()
 }
 
 // TestSplitPath checks a typed path is split at the last separator the platform

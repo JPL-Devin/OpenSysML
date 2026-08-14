@@ -4,6 +4,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 )
@@ -24,6 +26,11 @@ type Completion struct {
 // commands where a command is being typed, file paths where %load and %save
 // take one, and otherwise the names the session and the library declare.
 func (s *Session) Complete(line string, pos int) Completion {
+	// Held because completing builds the library index, and readline asks from
+	// its input goroutine while the loop may be evaluating the previous line.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if pos < 0 || pos > len(line) {
 		pos = len(line)
 	}
@@ -72,13 +79,17 @@ func lastField(head string) string {
 }
 
 // nameWord returns the name being typed at the end of head: the trailing run of
-// characters a qualified SysML name is written with.
+// characters a qualified SysML name is written with. Scanned by rune, so a name
+// holding a letter outside ASCII is not cut in the middle of it.
 func nameWord(head string) string {
 	i := len(head)
 	for i > 0 {
-		r := head[i-1]
-		if r == '_' || r == ':' || r == '\'' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-			i--
+		r, size := utf8.DecodeLastRuneInString(head[:i])
+		if r == utf8.RuneError && size <= 1 {
+			break
+		}
+		if r == '_' || r == ':' || r == '\'' || unicode.IsLetter(r) || unicode.IsDigit(r) {
+			i -= size
 			continue
 		}
 		break

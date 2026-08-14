@@ -36,7 +36,7 @@ func (s *Session) LoadPaths(paths []string) ([]string, error) {
 			out = append(out, "  "+file)
 		}
 	}
-	return append(out, renderResult(s.SubmitFiles(srcs), s.verbosity)...), nil
+	return append(out, renderResult(s.submitFiles(srcs), s.verbosity)...), nil
 }
 
 // ExpandPaths turns the paths a caller was given — files, directories to walk
