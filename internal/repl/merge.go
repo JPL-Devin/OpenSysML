@@ -44,6 +44,12 @@ func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments 
 		return "", nil, dropReport{}, false
 	}
 	for i, sn := range s.snippets {
+		// Only what the prompt typed in an earlier submission merges: a loaded
+		// file keeps its identity, so re-typing its package supersedes it, and
+		// two snippets of one submission are both part of that submission.
+		if sn.origin != "" || sn.gen == s.version {
+			continue
+		}
 		oldDecl, ok := namedNamespace(sn.src, newDecl.name)
 		// A different header is a different declaration, whatever it names: it
 		// replaces the old one rather than adding to a body it did not write.

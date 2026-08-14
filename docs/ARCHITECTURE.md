@@ -64,8 +64,7 @@ github.com/Open-MBEE/Systemica
 │   ├── lower/              # AST → execution IR (ActionGraph/StateGraph)
 │   ├── runtime/            # Execution engine (eval, instances, builtins)
 │   ├── model/              # Workspace, document management
-│   ├── libs/               # Standard library bundling & caching
-│   └── deps/               # Dependency resolution
+│   └── libs/               # Standard library bundling & caching
 ├── internal/lsp/           # LSP protocol implementation
 ├── internal/repl/          # REPL loop implementation
 ├── internal/grpc/          # gRPC service implementation

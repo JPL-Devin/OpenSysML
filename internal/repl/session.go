@@ -26,10 +26,22 @@ const docName = "<repl>"
 // its reader would look for it. The key is that file itself, identifying it
 // across the ways one path can be written.
 type snippet struct {
-	src    string
-	names  []string
+	src   string
+	names []string
+	// origin is the file this snippet was read from, empty for a submission
+	// typed at the prompt, and key identifies that file across the ways its path
+	// can be written.
 	origin string
 	key    string
+	// gen is the submission that appended this snippet, which is what scopes a
+	// report to the files just loaded rather than the whole buffer.
+	gen int
+	// prefix is the bytes of earlier comment lines folded into src, which are
+	// not part of what was submitted.
+	prefix int
+	// own locates, within src, the text a merge added to a namespace already in
+	// the buffer. It is empty for a snippet that is wholly its submission's.
+	own []source.Span
 }
 
 // Session accumulates submissions into a single implicit <repl> document.
@@ -127,11 +139,22 @@ func (s *Session) List() []string {
 	return out
 }
 
-// accept parses src to compute its declared names, drops any earlier snippet
-// whose names intersect, appends the new snippet, and returns the joined
-// <repl> content plus the byte offset where src begins in it. That offset is
-// what scopes a report to the submission just made. It does NOT touch the
-// workspace (Task 4 does).
+// accept accepts src as a submission of its own, from origin when it came from a
+// file.
+func (s *Session) accept(origin, src string) {
+	s.version++
+	s.acceptFrom(origin, src)
+}
+
+// acceptFrom parses src to compute its declared names, drops any snippet from
+// an earlier submission whose names intersect, and appends the new snippet under
+// the current submission generation. It does NOT touch the workspace (Submit
+// does).
+//
+// Only earlier submissions are replaced: redeclaring a name supersedes what was
+// submitted before it, but two files of one load are both part of the model, so
+// a name they share is a conflict for the analysis to report rather than a
+// reason to drop one of them.
 //
 // A submission that declares names takes over the comment lines typed just
 // before it. They document what follows, so folding them into the same snippet
@@ -140,7 +163,7 @@ func (s *Session) List() []string {
 //
 // A loaded file supersedes only itself and what the prompt said about the same
 // names, since several files of one model commonly open the same package.
-func (s *Session) accept(origin, src string) (joined string, offset int, own []source.Span, drops []dropReport) {
+func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
 	text := src
@@ -158,9 +181,8 @@ func (s *Session) accept(origin, src string) (joined string, offset int, own []s
 			}
 			kept = append(kept, sn)
 		}
-		s.snippets = append(kept, snippet{src: src, names: names, origin: origin, key: key})
-		joined = s.joined()
-		return joined, len(joined) - len(src), nil, nil
+		s.snippets = append(kept, snippet{src: src, names: names, origin: origin, key: key, gen: s.version})
+		return nil
 	}
 	if len(names) > 0 {
 		set := nameSet(names)
@@ -178,7 +200,7 @@ func (s *Session) accept(origin, src string) (joined string, offset int, own []s
 		top := topLevelMembers(root)
 		kept := s.snippets[:0]
 		for _, sn := range s.snippets {
-			if !intersects(sn.names, set) {
+			if sn.gen == s.version || !intersects(sn.names, set) {
 				kept = append(kept, sn)
 				continue
 			}
@@ -186,29 +208,71 @@ func (s *Session) accept(origin, src string) (joined string, offset int, own []s
 		}
 		s.snippets = kept
 	}
-	s.snippets = append(s.snippets, snippet{src: comments + text, names: names, origin: origin})
-	joined = s.joined()
-	// The offset marks what the user typed, not the comments folded in front of
-	// it, so diagnostics keep the line numbers of the submission.
-	offset = len(joined) - len(text)
-	// A merge rewrote a snippet that was already accepted, so only the text the
-	// merge added belongs to this submission; anything else is the buffer.
-	if mergedOwn != nil {
-		for _, sp := range mergedOwn {
-			own = append(own, source.Span{Offset: offset + sp.Offset, Len: sp.Len})
-		}
-		if len(own) > 0 {
-			offset = own[0].Offset
-		}
-	}
-	return joined, offset, own, drops
+	// The prefix marks the comments folded in front of what was submitted, so
+	// diagnostics keep the line numbers of the submission. A merge folded the
+	// comments into the text it rewrote, where own marks what was added.
+	s.snippets = append(s.snippets, snippet{
+		src:    comments + text,
+		names:  names,
+		origin: origin,
+		gen:    s.version,
+		prefix: len(comments),
+		own:    mergedOwn,
+	})
+	return drops
 }
 
-// takeLeadingComments removes the trailing run of comment-only snippets and
-// returns their text, ready to prefix the declaration they document.
+// origins locates every file of the current submission in the joined buffer, in
+// buffer order, so a diagnostic can be reported against the file it came from.
+func (s *Session) origins() []Origin {
+	var out []Origin
+	acc := 0
+	for _, sn := range s.snippets {
+		if sn.gen == s.version && sn.origin != "" {
+			out = append(out, Origin{Name: sn.origin, Offset: acc + sn.prefix})
+		}
+		acc += len(sn.src) + 1 // the newline joined() writes between snippets
+	}
+	return out
+}
+
+// ownSpans locates, in the joined buffer, the text this submission added to a
+// namespace a merge folded it into, so its report covers what was typed rather
+// than the whole snippet the merge absorbed.
+func (s *Session) ownSpans() []source.Span {
+	var out []source.Span
+	acc := 0
+	for _, sn := range s.snippets {
+		if sn.gen == s.version {
+			for _, sp := range sn.own {
+				out = append(out, source.Span{Offset: acc + sp.Offset, Len: sp.Len})
+			}
+		}
+		acc += len(sn.src) + 1 // the newline joined() writes between snippets
+	}
+	return out
+}
+
+// genOffset returns the byte offset in the joined buffer where the current
+// submission begins: the start of its first surviving snippet, past any comment
+// lines folded in front of it, so diagnostics keep the line numbers submitted.
+func (s *Session) genOffset(joined string) int {
+	acc := 0
+	for _, sn := range s.snippets {
+		if sn.gen == s.version {
+			return acc + sn.prefix
+		}
+		acc += len(sn.src) + 1 // the newline joined() writes between snippets
+	}
+	return len(joined)
+}
+
+// takeLeadingComments removes the trailing run of comment-only snippets typed at
+// the prompt and returns their text, ready to prefix the declaration they
+// document. A comment-only file is a file in its own right, so it stays.
 func (s *Session) takeLeadingComments() string {
 	cut := len(s.snippets)
-	for cut > 0 && isCommentOnly(s.snippets[cut-1].src) {
+	for cut > 0 && s.snippets[cut-1].origin == "" && isCommentOnly(s.snippets[cut-1].src) {
 		cut--
 	}
 	if cut == len(s.snippets) {
@@ -288,15 +352,59 @@ func intersects(names []string, set map[string]bool) bool {
 // live session context; a later redeclaration of the same name replaces the
 // prior snippet (see accept).
 func (s *Session) Submit(src string) Result {
-	return s.submit("", src)
+	return s.SubmitAll([]string{src})
+}
+
+// SourceFile is one source of a submission together with the file it was read
+// from, which is what diagnostics over a multi-file load are reported against.
+type SourceFile struct {
+	Name string
+	Text string
+}
+
+// SubmitAll accumulates every src as one submission, from no file in particular.
+func (s *Session) SubmitAll(srcs []string) Result {
+	files := make([]SourceFile, 0, len(srcs))
+	for _, src := range srcs {
+		files = append(files, SourceFile{Text: src})
+	}
+	return s.SubmitFiles(files)
 }
 
 // submit accumulates src as Submit does, recording the file it came from when it
 // came from one.
 func (s *Session) submit(origin, src string) Result {
-	declared := declaredNames(parser.New(source.New(docName, []byte(src))).ParseFile())
-	joined, offset, own, drops := s.accept(origin, src)
+	return s.SubmitFiles([]SourceFile{{Name: origin, Text: src}})
+}
+
+// SubmitFiles accumulates every file as one submission: all of them are accepted
+// before the buffer is reindexed and analyzed, so a declaration in one resolves
+// against the others no matter which order they arrive in. This is what makes
+// loading a multi-file project order-independent.
+func (s *Session) SubmitFiles(files []SourceFile) Result {
+	var (
+		declared []string
+		drops    []dropReport
+	)
+	seen := map[string]bool{}
 	s.version++
+	for _, f := range files {
+		for _, name := range declaredNames(parser.New(source.New(docName, []byte(f.Text))).ParseFile()) {
+			if !seen[name] {
+				seen[name] = true
+				declared = append(declared, name)
+			}
+		}
+		drops = append(drops, s.acceptFrom(f.Name, f.Text)...)
+	}
+	joined := s.joined()
+	offset := s.genOffset(joined)
+	// A merge rewrote a snippet that was already accepted, so only the text the
+	// merge added belongs to this submission; anything else is the buffer.
+	own := s.ownSpans()
+	if len(own) > 0 {
+		offset = own[0].Offset
+	}
 	s.ws.Open(docName, []byte(joined), s.version)
 	// The document is a new AST and scope tree, so anything derived from the
 	// previous one is stale — including instances, whose IDs restart with the
@@ -321,6 +429,7 @@ func (s *Session) submit(origin, src string) Result {
 		Diagnostics: diags,
 		Source:      joined,
 		Offset:      offset,
+		Origins:     s.origins(),
 		own:         own,
 		Notices:     notices,
 	}

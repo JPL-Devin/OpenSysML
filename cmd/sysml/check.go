@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/Open-MBEE/Systemica/internal/repl"
 )
 
 // Exit statuses of a model check. A verdict the model decided is reported by
@@ -150,8 +152,19 @@ func runChecks(files []string, exprs []string, c checks) int {
 
 	sess := newSession()
 
-	loaded := make([][]string, 0, len(files))
-	for _, file := range files {
+	// A checked model may be named as a directory or a glob as well as by file, so
+	// the paths are expanded to the files they stand for before loading.
+	paths, err := repl.ExpandPaths(files)
+	if err != nil {
+		rep.failed(err.Error())
+		if c.satisfy.tookNoValue() && len(files) == 1 && !fileExists(files[0]) {
+			rep.failed(fmt.Sprintf("%s is read as a file to load; -satisfy takes a name as -satisfy=%s", files[0], files[0]))
+		}
+		return rep.finish()
+	}
+
+	loaded := make([][]string, 0, len(paths))
+	for _, file := range paths {
 		output, err := sess.LoadFileSummary(file)
 		if err != nil {
 			rep.failed(err.Error())

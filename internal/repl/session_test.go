@@ -22,7 +22,8 @@ func TestAcceptReplacesByName(t *testing.T) {
 	s := NewSession()
 	s.accept("", "package P { }")
 	s.accept("", "namespace N;")
-	joined, _, _, _ := s.accept("", "package P { } // redefined")
+	s.accept("", "package P { } // redefined")
+	joined := s.joined()
 	// P should appear once (the new one); N preserved; order = N then new P.
 	if got := s.List(); len(got) != 2 {
 		t.Fatalf("want 2 snippets, got %d: %v", len(got), got)
@@ -293,7 +294,8 @@ func TestLeadingCommentIsReplacedWithItsDeclaration(t *testing.T) {
 	s := NewSession()
 	s.accept("", "// doc for A")
 	s.accept("", "part def A;")
-	joined, _, _, _ := s.accept("", "part def A { part y; }")
+	s.accept("", "part def A { part y; }")
+	joined := s.joined()
 
 	if strings.Contains(joined, "doc for A") {
 		t.Errorf("stale comment survived the redeclaration: %q", joined)
@@ -307,7 +309,8 @@ func TestLeadingCommentIsReplacedWithItsDeclaration(t *testing.T) {
 func TestTrailingCommentIsKept(t *testing.T) {
 	s := NewSession()
 	s.accept("", "part def A;")
-	joined, _, _, _ := s.accept("", "// thinking out loud")
+	s.accept("", "// thinking out loud")
+	joined := s.joined()
 	if !strings.Contains(joined, "thinking out loud") {
 		t.Errorf("comment dropped: %q", joined)
 	}
@@ -338,7 +341,8 @@ func TestLoadedFilesAccumulateByFile(t *testing.T) {
 		t.Errorf("want both files kept, got %d: %v", got, s.List())
 	}
 
-	joined, _, _, _ := s.accept("a.sysml", "package M { part def C; }")
+	s.accept("a.sysml", "package M { part def C; }")
+	joined := s.joined()
 	if strings.Contains(joined, "part def A") {
 		t.Errorf("reloading a file kept its previous contents: %q", joined)
 	}
@@ -352,7 +356,8 @@ func TestLoadedFilesAccumulateByFile(t *testing.T) {
 func TestLoadedFileSupersedesPromptDeclarations(t *testing.T) {
 	s := NewSession()
 	s.accept("", "part def A;")
-	joined, _, _, _ := s.accept("a.sysml", "part def A { part y; }")
+	s.accept("a.sysml", "part def A { part y; }")
+	joined := s.joined()
 
 	if got := len(s.List()); got != 1 {
 		t.Errorf("want the typed declaration replaced, got %d snippets: %v", got, s.List())
