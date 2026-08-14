@@ -22,6 +22,11 @@ from pysysml.errors import PySysMLError
 #: genuinely untyped.
 CAPABILITY_TYPE_FACTS = "type_facts"
 
+#: The ``Convert`` RPC, which writes a model back out as SysML notation or RDF
+#: Turtle. Without it a conversion request fails as an unimplemented method,
+#: which is indistinguishable from a broken channel.
+CAPABILITY_CONVERT = "convert"
+
 
 @dataclass(frozen=True)
 class ServerInfo:

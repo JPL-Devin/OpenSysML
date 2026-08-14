@@ -62,6 +62,21 @@ class InstanceTypeError(PySysMLError):
         self.actual = actual
 
 
+class ConversionError(PySysMLError):
+    """Raised when the service could not write a model in the requested format.
+
+    Attributes:
+        message (str): Error description reported by the service
+        diagnostics (list): Diagnostic objects behind the failure, when the
+            source was notation the parser could not read
+    """
+
+    def __init__(self, message, diagnostics=None):
+        super().__init__(message)
+        self.message = message
+        self.diagnostics = diagnostics or []
+
+
 class RuntimeError(PySysMLError):
     """Raised when a runtime operation (eval/instantiate/execute) fails.
 

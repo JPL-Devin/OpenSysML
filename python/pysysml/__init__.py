@@ -11,19 +11,23 @@ from pysysml.instance import Instance
 from pysysml.typed import TypedObject
 from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
 from pysysml.capabilities import MissingCapabilityError, ServerInfo
+from pysysml.conversion import (
+    FORMAT_SYSML, FORMAT_TURTLE, Conversion, format_of_path,
+)
 from pysysml.errors import (
-    PySysMLError, ConnectionError, InstanceTypeError, RuntimeError, SlotError,
-    TypeMismatchError, UnsupportedValueError,
+    PySysMLError, ConnectionError, ConversionError, InstanceTypeError,
+    RuntimeError, SlotError, TypeMismatchError, UnsupportedValueError,
 )
 
 __all__ = [
     "Connection", "Model", "Symbol", "Diagnostic", "Instance",
     "TypedObject", "TypeFacts", "Multiplicity", "Specialization", "SymbolFacts",
     "ServerInfo",
-    "PySysMLError", "ConnectionError", "InstanceTypeError",
+    "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
+    "PySysMLError", "ConnectionError", "ConversionError", "InstanceTypeError",
     "MissingCapabilityError", "RuntimeError", "SlotError",
     "TypeMismatchError", "UnsupportedValueError",
-    "load", "connect",
+    "load", "connect", "convert",
     "eval", "instantiate",
     "__version__"
 ]
@@ -101,6 +105,40 @@ def connect(host='localhost', port=50051, auto_start=True):
         Connection: New connection instance
     """
     return Connection(host, port, auto_start=auto_start)
+
+
+def convert(to_format, file_path=None, content=None, from_format='',
+            tolerate_syntax_errors=False, host='localhost', port=50051):
+    """Write a model out in another format (module-level convenience).
+
+    Args:
+        to_format (str): 'sysml', 'kerml', 'text', 'ttl', 'turtle' or 'rdf'
+        file_path (str, optional): Path the service reads the source from
+        content (str, optional): Source carried inline
+        from_format (str, optional): Format to read the source as; inferred from
+            file_path's extension when omitted, required for inline content
+        tolerate_syntax_errors (bool): Write notation back out even when the
+            parser could not read all of it
+        host (str): Service hostname (default: 'localhost')
+        port (int): Service port (default: 50051)
+
+    Returns:
+        Conversion: The converted model; ``str()`` of it is the text
+
+    Example:
+        >>> import pysysml
+        >>> turtle = pysysml.convert("ttl", file_path="model.sysml")
+        >>> turtle.write("model.ttl")
+        'model.ttl'
+    """
+    conn = _get_default_connection(host, port)
+    return conn.convert(
+        to_format,
+        file_path=file_path,
+        content=content,
+        from_format=from_format,
+        tolerate_syntax_errors=tolerate_syntax_errors,
+    )
 
 
 def eval(expression, file_path=None, model_hash=None, context_symbol_id=None):

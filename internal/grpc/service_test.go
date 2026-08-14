@@ -190,6 +190,57 @@ func TestParseFile_CacheHit(t *testing.T) {
 	}
 }
 
+// TestParseFileCachesByContentRead verifies the cache is keyed by the content the
+// service read: an unchanged parse is reused, and a mismatched hash cannot serve
+// another model.
+func TestParseFileCachesByContentRead(t *testing.T) {
+	srv := mustNewService(t, 10)
+
+	const a = `package A { part def PartA; }`
+	const b = `package B { part def PartB; }`
+
+	first, err := srv.ParseFile(context.Background(),
+		&pb.ParseFileRequest{Source: &pb.ParseFileRequest_Content{Content: a}})
+	if err != nil {
+		t.Fatalf("ParseFile(a) failed: %v", err)
+	}
+	if want := computeHash(a); first.ModelHash != want {
+		t.Errorf("model_hash = %q, want the content's hash %q", first.ModelHash, want)
+	}
+
+	cached, ok := srv.cache.Get(first.ModelHash)
+	if !ok {
+		t.Fatal("parsed model was not cached")
+	}
+
+	other, err := srv.ParseFile(context.Background(),
+		&pb.ParseFileRequest{Source: &pb.ParseFileRequest_Content{Content: b}})
+	if err != nil {
+		t.Fatalf("ParseFile(b) failed: %v", err)
+	}
+
+	// The same content parses to the cached record, even carrying b's hash.
+	again, err := srv.ParseFile(context.Background(), &pb.ParseFileRequest{
+		Source:      &pb.ParseFileRequest_Content{Content: a},
+		ContentHash: other.ModelHash,
+	})
+	if err != nil {
+		t.Fatalf("second ParseFile(a) failed: %v", err)
+	}
+	if again.ModelHash != first.ModelHash {
+		t.Errorf("model_hash = %q, want %q", again.ModelHash, first.ModelHash)
+	}
+	if reused, _ := srv.cache.Get(again.ModelHash); reused != cached {
+		t.Error("expected the cached model to be reused, not re-parsed")
+	}
+
+	sym, err := srv.GetSymbol(context.Background(),
+		&pb.GetSymbolRequest{ModelHash: again.ModelHash, SymbolId: "A::PartA"})
+	if err != nil || sym.Error != "" {
+		t.Fatalf("GetSymbol(A::PartA) = %v, %q", err, sym.GetError())
+	}
+}
+
 // TestGetSymbol_Found verifies GetSymbol retrieves known symbols
 func TestGetSymbol_Found(t *testing.T) {
 	srv := mustNewService(t, 10)

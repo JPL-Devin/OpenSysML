@@ -124,6 +124,101 @@ returning `False`; use `slots` to inspect an instance whose slots may have faile
 a value the wire format cannot represent is reported as an
 `UnsupportedValueError` in that entry, leaving the other entries intact.
 
+### Writing a model back out
+
+A loaded model can be written back to SysML notation or RDF Turtle. The service
+does the conversion with the same code `sysml -convert` uses, so the client adds
+no second implementation of the mapping.
+
+```python
+model = pysysml.load("model.sysml")
+
+model.to_sysml()                 # Conversion: SysML notation
+model.to_turtle()                # Conversion: RDF Turtle
+model.save("model.ttl")          # writes Turtle; format taken from the extension
+model.save("out.sysml")
+
+pysysml.convert("ttl", file_path="model.sysml")            # without loading first
+pysysml.convert("sysml", content=turtle, from_format="ttl")  # Turtle back to notation
+```
+
+A `Conversion` is the output text plus the formats it went between; `str()` and
+`len()` give the text, and `write(path)` saves it. Formats are named `sysml`,
+`kerml`, `text`, `ttl`, `turtle` or `rdf`. A file path's format is inferred from
+its extension; inline `content` has no extension, so it needs `from_format`.
+
+What each direction preserves:
+
+- **Notation → notation** re-emits the model from its source, so comments and
+  layout survive. It is source-preserving, not a general AST printer: a model
+  the client built element by element cannot be printed this way.
+- **Notation → Turtle → notation** returns an equivalent model, not identical
+  bytes. Comments do not survive the graph, since RDF has nowhere to keep them.
+  See [docs/RDF_INTEROP.md](../docs/RDF_INTEROP.md) for what a graph must carry
+  for the round trip back.
+- Syntax errors normally fail the conversion and come back as a
+  `ConversionError` carrying `diagnostics`. `tolerate_syntax_errors=True` writes
+  notation anyway and reports the errors as `Conversion.diagnostics`; it applies
+  to notation → notation only, because every other direction builds a graph
+  where an unparsed declaration would silently go missing.
+
+Conversion is negotiated: against a service too old to report the `convert`
+capability, these calls raise `MissingCapabilityError` naming the upgrade rather
+than failing on an unimplemented method.
+
+### Latency
+
+Measured on this repo's benchmark (`python/scripts/bench_latency.py`, 8-core
+x86-64 Linux, loopback, 20 part definitions / 808 bytes, 200 iterations, warm
+`Connection`):
+
+| operation | p50 | p95 | p99 |
+| --- | --- | --- | --- |
+| `load` / `load_from_content`, cache miss | 35 ms | 56 ms | 60 ms |
+| `load` / `load_from_content`, cache hit | 0.5 ms | 1.0 ms | 1.0 ms |
+| `eval("2 + 2")` on a cached model | 0.4 ms | 1.0 ms | 1.2 ms |
+| `convert` sysml → sysml | 0.7 ms | 1.2 ms | 2.0 ms |
+| `convert` sysml → ttl | 1.1 ms | 1.4 ms | 1.5 ms |
+| `convert` ttl → sysml | 1.2 ms | 1.5 ms | 2.7 ms |
+
+Reproduce with `make build-grpc && bin/sysml-grpc` and
+`python python/scripts/bench_latency.py --iterations 200`.
+
+The shape matters more than the absolute numbers: a parse costs two orders of
+magnitude more than a query on the parsed result, because it loads the standard
+library into a fresh symbol index and runs the semantic passes. Everything else
+here is around a millisecond, of which the RPC itself — protobuf encode/decode
+plus loopback — is a few hundred microseconds.
+
+#### Real-time analytics
+
+This is a request/response service over gRPC, not a hard real-time engine. It
+gives no deadline guarantee, and nothing in it is scheduled: the runtime's step
+and time budgets bound how long an execution may run, which caps a worst case
+rather than promising one. Tails come from the Go garbage collector, the
+scheduler, TCP, and — for a cache miss — a parse whose cost scales with the
+document. Treat the p99 above as a soft budget, and measure your own p99 on your
+model sizes, cache state and concurrency before trusting one.
+
+What that means in practice:
+
+- **Reuse one `Connection`.** Channel setup plus the first parse is tens of
+  milliseconds; the module-level functions already share a singleton.
+- **Parse once, then query by hash.** Repeated `load` of unchanged content hits
+  the service cache and costs ~0.5 ms, but passing `model.hash` to `eval`,
+  `instantiate` and `execute_*` skips even that. The cache holds 100 models
+  (`-cache-size`) and evicts least-recently-used, so a stream of distinct
+  sources will evict a model you still hold a hash for.
+- **Batch.** One RPC carrying many samples beats one RPC per sample; at ~0.5 ms
+  of overhead per call, a per-sample loop tops out in the low thousands of calls
+  per second per connection.
+- **Keep the hot loop local.** Filtering, thresholding and windowing over a
+  telemetry stream belong in NumPy in your own process. Use the service for the
+  coarse-grained step — resolving a model question, instantiating, running an
+  action or state machine, converting a model — not for every sample.
+- **Convert off the hot path.** Conversion re-parses its input on every call; it
+  is not cached by content the way `load` is.
+
 ### Generated typed classes
 
 `Instance` is dynamic, so an editor cannot complete `inst.mass` and a type checker
@@ -273,6 +368,7 @@ make python-proto
 - `model.py` — a parsed model: root symbol and diagnostics
 - `symbol.py` — lazy symbol proxy, fetches children on demand
 - `instance.py` — instantiated object and its slots
+- `conversion.py` — a written model, its formats and extension inference
 - `typefacts.py` — a symbol's static type, multiplicity and supertypes
 - `typed.py` — base class and slot decoders the generated classes are built on
 - `generate.py` — emits typed classes from a parsed model

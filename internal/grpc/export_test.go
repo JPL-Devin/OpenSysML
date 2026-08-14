@@ -1,0 +1,223 @@
+package grpc
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	pb "github.com/Open-MBEE/Systemica/api/proto"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+const convertModelSource = `package Demo {
+    // a comment, which notation keeps and RDF does not
+part def Engine { attribute power : Real = 300.0; }
+}
+`
+
+// mustConvert converts and fails the test on a transport error or a reported
+// conversion error.
+func mustConvert(t *testing.T, srv *Service, req *pb.ConvertRequest) *pb.ConvertResponse {
+	t.Helper()
+	resp, err := srv.Convert(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	if resp.Error != "" {
+		t.Fatalf("Convert reported %q, diagnostics %v", resp.Error, resp.Diagnostics)
+	}
+	return resp
+}
+
+// TestConvertCapabilityReported verifies a client can require conversion before
+// asking for it.
+func TestConvertCapabilityReported(t *testing.T) {
+	srv := mustNewService(t, 10)
+	info, err := srv.GetServerInfo(context.Background(), &pb.ServerInfoRequest{})
+	if err != nil {
+		t.Fatalf("GetServerInfo: %v", err)
+	}
+	if !slices.Contains(info.Capabilities, CapabilityConvert) {
+		t.Errorf("capabilities = %v, want it to contain %q", info.Capabilities, CapabilityConvert)
+	}
+}
+
+// TestConvertNotationRoundTrip verifies notation written back out parses to the
+// same model and keeps its comments.
+func TestConvertNotationRoundTrip(t *testing.T) {
+	srv := mustNewService(t, 10)
+
+	resp := mustConvert(t, srv, &pb.ConvertRequest{
+		Source:     &pb.ConvertRequest_Content{Content: convertModelSource},
+		FromFormat: "sysml",
+		ToFormat:   "sysml",
+	})
+	if !strings.Contains(resp.Content, "part def Engine") {
+		t.Errorf("output lost the model:\n%s", resp.Content)
+	}
+	if !strings.Contains(resp.Content, "// a comment") {
+		t.Errorf("notation output dropped a lexical comment:\n%s", resp.Content)
+	}
+	if len(resp.Diagnostics) != 0 {
+		t.Errorf("diagnostics = %v, want none for a clean model", resp.Diagnostics)
+	}
+
+	// Converting the output again is stable: the formatter has a fixpoint.
+	again := mustConvert(t, srv, &pb.ConvertRequest{
+		Source:     &pb.ConvertRequest_Content{Content: resp.Content},
+		FromFormat: "sysml",
+		ToFormat:   "sysml",
+	})
+	if again.Content != resp.Content {
+		t.Errorf("second conversion differs:\n%s\nvs\n%s", again.Content, resp.Content)
+	}
+}
+
+// TestConvertToTurtleAndBack verifies a model survives a trip through RDF.
+func TestConvertToTurtleAndBack(t *testing.T) {
+	srv := mustNewService(t, 10)
+
+	turtle := mustConvert(t, srv, &pb.ConvertRequest{
+		Source:     &pb.ConvertRequest_Content{Content: convertModelSource},
+		FromFormat: "sysml",
+		ToFormat:   "turtle",
+	})
+	if turtle.ToFormat != "ttl" {
+		t.Errorf("to_format = %q, want the canonical %q", turtle.ToFormat, "ttl")
+	}
+	if !strings.Contains(turtle.Content, "Demo::Engine") {
+		t.Errorf("graph does not name the model's element:\n%s", turtle.Content)
+	}
+
+	back := mustConvert(t, srv, &pb.ConvertRequest{
+		Source:     &pb.ConvertRequest_Content{Content: turtle.Content},
+		FromFormat: "ttl",
+		ToFormat:   "sysml",
+	})
+	if !strings.Contains(back.Content, "part def Engine") {
+		t.Errorf("notation from the graph lost the model:\n%s", back.Content)
+	}
+}
+
+// TestConvertFilePathInfersFormat verifies a path source is read by the service
+// and its extension names the input format.
+func TestConvertFilePathInfersFormat(t *testing.T) {
+	srv := mustNewService(t, 10)
+	path := filepath.Join(t.TempDir(), "model.sysml")
+	if err := os.WriteFile(path, []byte(convertModelSource), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := mustConvert(t, srv, &pb.ConvertRequest{
+		Source:   &pb.ConvertRequest_FilePath{FilePath: path},
+		ToFormat: "ttl",
+	})
+	if resp.FromFormat != "sysml" {
+		t.Errorf("from_format = %q, want it inferred as %q", resp.FromFormat, "sysml")
+	}
+}
+
+// TestConvertInlineContentNeedsFromFormat verifies inline content, which has no
+// extension to infer from, is rejected rather than guessed at.
+func TestConvertInlineContentNeedsFromFormat(t *testing.T) {
+	srv := mustNewService(t, 10)
+
+	_, err := srv.Convert(context.Background(), &pb.ConvertRequest{
+		Source:   &pb.ConvertRequest_Content{Content: convertModelSource},
+		ToFormat: "ttl",
+	})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Errorf("err = %v, want InvalidArgument", err)
+	}
+}
+
+// TestConvertRejectsBadArguments verifies argument faults fail the call instead
+// of being reported as a conversion that did not work.
+func TestConvertRejectsBadArguments(t *testing.T) {
+	srv := mustNewService(t, 10)
+	content := &pb.ConvertRequest_Content{Content: convertModelSource}
+
+	cases := map[string]*pb.ConvertRequest{
+		"no source":        {ToFormat: "sysml", FromFormat: "sysml"},
+		"no to_format":     {Source: content, FromFormat: "sysml"},
+		"unknown to":       {Source: content, FromFormat: "sysml", ToFormat: "xmi"},
+		"unknown from":     {Source: content, FromFormat: "xmi", ToFormat: "sysml"},
+		"missing file":     {Source: &pb.ConvertRequest_FilePath{FilePath: "/nonexistent/model.sysml"}, ToFormat: "ttl"},
+		"unknown ext":      {Source: &pb.ConvertRequest_FilePath{FilePath: "model.json"}, ToFormat: "ttl"},
+		"no format at all": {Source: content},
+	}
+	for name, req := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := srv.Convert(context.Background(), req); err == nil {
+				t.Fatal("Convert accepted a request it cannot serve")
+			} else if code := status.Code(err); code != codes.InvalidArgument && code != codes.NotFound {
+				t.Errorf("code = %v, want InvalidArgument or NotFound", code)
+			}
+		})
+	}
+}
+
+// TestConvertReportsSyntaxErrors verifies a model the parser cannot read fails
+// the conversion with its diagnostics, spans and all.
+func TestConvertReportsSyntaxErrors(t *testing.T) {
+	srv := mustNewService(t, 10)
+
+	resp, err := srv.Convert(context.Background(), &pb.ConvertRequest{
+		Source:     &pb.ConvertRequest_Content{Content: "package P { part def "},
+		FromFormat: "sysml",
+		ToFormat:   "ttl",
+	})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	if resp.Error == "" {
+		t.Fatal("unreadable notation converted to a graph without complaint")
+	}
+	if len(resp.Diagnostics) == 0 {
+		t.Fatal("no diagnostics for a syntax error")
+	}
+	for _, diag := range resp.Diagnostics {
+		if diag.Message == "" || diag.Span == nil {
+			t.Errorf("diagnostic %v carries no message or span", diag)
+		}
+	}
+}
+
+// TestConvertTolerantWritesNotationAnyway verifies tolerated syntax errors are
+// reported as diagnostics alongside the output, and only for notation output.
+func TestConvertTolerantWritesNotationAnyway(t *testing.T) {
+	srv := mustNewService(t, 10)
+	broken := &pb.ConvertRequest_Content{Content: "package P { part def }"}
+
+	resp := mustConvert(t, srv, &pb.ConvertRequest{
+		Source:               broken,
+		FromFormat:           "sysml",
+		ToFormat:             "sysml",
+		TolerateSyntaxErrors: true,
+	})
+	if resp.Content == "" {
+		t.Error("tolerant notation conversion wrote nothing")
+	}
+	if len(resp.Diagnostics) == 0 {
+		t.Error("tolerant conversion hid the syntax errors it tolerated")
+	}
+
+	// Tolerance does not extend to a graph, where a declaration the parser
+	// could not read would simply be absent.
+	graph, err := srv.Convert(context.Background(), &pb.ConvertRequest{
+		Source:               broken,
+		FromFormat:           "sysml",
+		ToFormat:             "ttl",
+		TolerateSyntaxErrors: true,
+	})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	if graph.Error == "" {
+		t.Error("tolerated syntax errors into RDF, which would drop declarations")
+	}
+}

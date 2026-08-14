@@ -1,6 +1,7 @@
 """Model class wrapping parsed SysML model."""
 
 from pysysml.symbol import Symbol
+from pysysml.conversion import FORMAT_SYSML, FORMAT_TURTLE, format_of_path
 from pysysml.diagnostic import Diagnostic
 
 
@@ -13,15 +14,21 @@ class Model:
         diagnostics (list[Diagnostic]): Parse diagnostics (errors/warnings)
     """
     
-    def __init__(self, pb_response, client):
+    def __init__(self, pb_response, client, source_path=None, source_content=None):
         """Initialize Model from protobuf ParseFileResponse.
         
         Args:
             pb_response: sysml_pb2.ParseFileResponse protobuf message
             client: Client instance for symbol navigation
+            source_path (str, optional): Path the model was loaded from
+            source_content (str, optional): Inline source the model was loaded from
         """
         self._pb = pb_response
         self._client = client
+        # What the model was loaded from, so it can be written back out: a parse
+        # response carries no source, and the cache is keyed by content.
+        self._source_path = source_path
+        self._source_content = source_content
         self._hash = pb_response.model_hash
         self._root = Symbol(pb_response.root, client, self._hash)
         self._diagnostics = [
@@ -48,6 +55,83 @@ class Model:
         """Get list of diagnostics."""
         return self._diagnostics
     
+    @property
+    def source_path(self):
+        """Path this model was loaded from, or None if it was loaded inline."""
+        return self._source_path
+
+    def convert(self, to_format, tolerate_syntax_errors=False):
+        """Write this model out in one of the formats Systemica writes.
+
+        Converts the source the model was loaded from, which is what a save
+        writes back: notation keeps its comments and lexemes, re-indented, while
+        Turtle carries what the model declares. See ``docs/RDF_INTEROP.md``.
+
+        Args:
+            to_format (str): 'sysml', 'kerml', 'text', 'ttl', 'turtle' or 'rdf'
+            tolerate_syntax_errors (bool): Write notation back out even when the
+                parser could not read all of it
+
+        Returns:
+            Conversion: The converted model; ``str()`` of it is the text
+
+        Raises:
+            ConversionError: If the model could not be written in that format
+            MissingCapabilityError: If the service cannot convert
+        """
+        if self._source_path is None and self._source_content is None:
+            raise ValueError(
+                "this model does not know what it was loaded from; convert it "
+                "through Connection.convert with a file_path or content"
+            )
+        return self.connection.convert(
+            to_format,
+            file_path=self._source_path,
+            content=self._source_content,
+            # A model came from ParseFile, which reads notation and nothing else.
+            from_format=FORMAT_SYSML,
+            tolerate_syntax_errors=tolerate_syntax_errors,
+        )
+
+    def to_sysml(self, tolerate_syntax_errors=False):
+        """Write this model out as SysML textual notation.
+
+        Returns:
+            Conversion: The notation; ``str()`` of it is the text
+        """
+        return self.convert(FORMAT_SYSML, tolerate_syntax_errors=tolerate_syntax_errors)
+
+    def to_turtle(self):
+        """Write this model out as an RDF graph in Turtle syntax.
+
+        Returns:
+            Conversion: The Turtle; ``str()`` of it is the text
+        """
+        return self.convert(FORMAT_TURTLE)
+
+    def save(self, path, to_format=None, tolerate_syntax_errors=False):
+        """Write this model to ``path``, in the format its extension names.
+
+        Args:
+            path (str): File to write, created or truncated
+            to_format (str, optional): Format to write, overriding the extension
+            tolerate_syntax_errors (bool): Write notation back out even when the
+                parser could not read all of it
+
+        Returns:
+            Conversion: What was written
+
+        Raises:
+            ValueError: If no to_format was given and the extension names none
+            ConversionError: If the model could not be written in that format
+        """
+        conversion = self.convert(
+            to_format or format_of_path(path),
+            tolerate_syntax_errors=tolerate_syntax_errors,
+        )
+        conversion.write(path)
+        return conversion
+
     def find(self, name):
         """Find symbol by short name or fully-qualified name (breadth-first).
 

@@ -1,0 +1,308 @@
+"""Tests for writing a model back out through the service.
+
+Two layers. Against a fake service, the client's own behavior: the capability
+gate, how a request is shaped, and how a reported failure becomes an exception.
+Against the real ``sysml-grpc`` binary, the round trip itself — notation back to
+notation, and a trip through RDF Turtle — which is the part a mock cannot tell
+you anything about.
+"""
+
+import os
+import subprocess
+import time
+from concurrent import futures
+
+import grpc
+import pytest
+
+from pysysml.capabilities import CAPABILITY_CONVERT, MissingCapabilityError
+from pysysml.connection import Connection
+from pysysml.conversion import FORMAT_SYSML, FORMAT_TURTLE, format_of_path
+from pysysml.errors import ConversionError
+from pysysml.model import Model
+from pysysml.proto import sysml_pb2, sysml_pb2_grpc
+
+MODEL = """package Demo {
+    // a comment, which notation keeps and RDF does not
+    part def Engine {
+        attribute power : Real = 300.0;
+    }
+}
+"""
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+GRPC_BINARY = os.path.join(REPO_ROOT, "bin", "sysml-grpc")
+
+
+class FakeService(sysml_pb2_grpc.SysMLServiceServicer):
+    """A sysml-grpc whose Convert records the request and answers as told."""
+
+    def __init__(self, capabilities=(CAPABILITY_CONVERT,), error="", diagnostics=0):
+        self._capabilities = list(capabilities)
+        self._error = error
+        self._diagnostics = diagnostics
+        self.requests = []
+
+    def GetServerInfo(self, request, context):
+        return sysml_pb2.ServerInfoResponse(
+            version="fake", capabilities=self._capabilities
+        )
+
+    def GetDiagnostics(self, request, context):
+        # The client's health probe reads NOT_FOUND for an unknown hash as "up".
+        context.abort(grpc.StatusCode.NOT_FOUND, "model not found")
+
+    def ParseFile(self, request, context):
+        root = sysml_pb2.SymbolInfo(id="Demo", name="Demo", kind="Package")
+        return sysml_pb2.ParseFileResponse(model_hash="fake-hash", root=root)
+
+    def Convert(self, request, context):
+        self.requests.append(request)
+        diagnostics = [
+            sysml_pb2.Diagnostic(
+                severity="error",
+                message=f"syntax error {i}",
+                span=sysml_pb2.Span(file="<content>", start_line=1),
+            )
+            for i in range(self._diagnostics)
+        ]
+        return sysml_pb2.ConvertResponse(
+            content="" if self._error else "converted",
+            from_format=request.from_format or "sysml",
+            to_format=request.to_format,
+            error=self._error,
+            diagnostics=diagnostics,
+        )
+
+
+@pytest.fixture
+def fake_service():
+    """Start a FakeService on an ephemeral port; yields (port, service) factory."""
+    servers = []
+
+    def start(**kwargs):
+        service = FakeService(**kwargs)
+        server = grpc.server(futures.ThreadPoolExecutor(max_workers=2))
+        sysml_pb2_grpc.add_SysMLServiceServicer_to_server(service, server)
+        port = server.add_insecure_port("localhost:0")
+        server.start()
+        servers.append(server)
+        return port, service
+
+    yield start
+    for server in servers:
+        server.stop(None)
+
+
+def test_format_of_path_infers_and_refuses():
+    """A file name names the format, or the caller is told to say it."""
+    assert format_of_path("model.sysml") == FORMAT_SYSML
+    assert format_of_path("model.KerML") == FORMAT_SYSML
+    assert format_of_path("model.ttl") == FORMAT_TURTLE
+    with pytest.raises(ValueError, match="cannot tell the format"):
+        format_of_path("model.json")
+
+
+def test_convert_requires_the_capability(fake_service):
+    """A service that cannot convert is named, not asked."""
+    port, service = fake_service(capabilities=())
+    with Connection(port=port, auto_start=False) as conn:
+        with pytest.raises(MissingCapabilityError) as excinfo:
+            conn.convert("ttl", content=MODEL, from_format="sysml")
+    assert excinfo.value.capability == CAPABILITY_CONVERT
+    assert service.requests == [], "the request was sent to a service that cannot serve it"
+
+
+def test_convert_sends_the_source_and_formats(fake_service):
+    """The request carries what the caller asked for, unchanged."""
+    port, service = fake_service()
+    with Connection(port=port, auto_start=False) as conn:
+        result = conn.convert(
+            "ttl", content=MODEL, from_format="sysml", tolerate_syntax_errors=True
+        )
+
+    (request,) = service.requests
+    assert request.content == MODEL
+    assert request.WhichOneof("source") == "content"
+    assert (request.from_format, request.to_format) == ("sysml", "ttl")
+    assert request.tolerate_syntax_errors is True
+    assert str(result) == "converted"
+    assert (result.from_format, result.to_format) == ("sysml", "ttl")
+
+
+def test_convert_needs_exactly_one_source(fake_service):
+    """A source that is both or neither is a caller error, not a request."""
+    port, service = fake_service()
+    with Connection(port=port, auto_start=False) as conn:
+        with pytest.raises(ValueError):
+            conn.convert("ttl", from_format="sysml")
+        with pytest.raises(ValueError):
+            conn.convert("ttl", file_path="m.sysml", content=MODEL)
+    assert service.requests == []
+
+
+def test_convert_raises_with_the_diagnostics_behind_a_failure(fake_service):
+    """A reported failure becomes an exception carrying its diagnostics."""
+    port, _ = fake_service(error="line 1: unexpected end of input", diagnostics=2)
+    with Connection(port=port, auto_start=False) as conn:
+        with pytest.raises(ConversionError) as excinfo:
+            conn.convert("ttl", content="package P { part def ", from_format="sysml")
+    assert "unexpected end of input" in str(excinfo.value)
+    assert [d.message for d in excinfo.value.diagnostics] == [
+        "syntax error 0",
+        "syntax error 1",
+    ]
+
+
+def test_tolerated_syntax_errors_are_reported_on_the_result(fake_service):
+    """Output the service tolerated arrives with the errors it tolerated."""
+    port, _ = fake_service(diagnostics=1)
+    with Connection(port=port, auto_start=False) as conn:
+        result = conn.convert(
+            "sysml", content=MODEL, from_format="sysml", tolerate_syntax_errors=True
+        )
+    assert [d.message for d in result.diagnostics] == ["syntax error 0"]
+
+
+def test_model_written_out_knows_what_it_was_loaded_from(fake_service, tmp_path):
+    """A model converts its own source, whether that was a path or inline text."""
+    port, service = fake_service()
+    path = tmp_path / "model.sysml"
+    path.write_text(MODEL)
+
+    with Connection(port=port, auto_start=False) as conn:
+        conn.load(str(path)).to_turtle()
+        conn.load_from_content(MODEL).to_sysml()
+
+    from_path, from_content = service.requests
+    assert from_path.file_path == str(path)
+    assert from_path.to_format == "ttl"
+    assert from_content.content == MODEL
+    assert from_content.to_format == "sysml"
+
+
+def test_model_without_a_source_says_so():
+    """A model built from a bare response cannot be written out silently wrong."""
+    response = sysml_pb2.ParseFileResponse(
+        model_hash="abc", root=sysml_pb2.SymbolInfo(id="P", name="P", kind="Package")
+    )
+    model = Model(response, client=None)
+    with pytest.raises(ValueError, match="does not know what it was loaded from"):
+        model.to_sysml()
+
+
+def test_conversion_writes_a_file(fake_service, tmp_path):
+    """Saving picks the format from the extension and writes the text."""
+    port, service = fake_service()
+    out = tmp_path / "out.ttl"
+    with Connection(port=port, auto_start=False) as conn:
+        conn.load_from_content(MODEL).save(str(out))
+    assert out.read_text() == "converted"
+    assert service.requests[-1].to_format == "ttl"
+
+
+def test_saving_an_unknown_extension_is_refused(fake_service, tmp_path):
+    """An extension naming no format is refused before anything is written."""
+    port, _ = fake_service()
+    out = tmp_path / "out.json"
+    with Connection(port=port, auto_start=False) as conn:
+        with pytest.raises(ValueError, match="cannot tell the format"):
+            conn.load_from_content(MODEL).save(str(out))
+    assert not out.exists()
+
+
+@pytest.fixture(scope="module")
+def real_service():
+    """Run the built sysml-grpc on an ephemeral port, or skip."""
+    if not os.path.exists(GRPC_BINARY):
+        pytest.skip(f"{GRPC_BINARY} not built; run: make build-grpc")
+
+    port = 51151
+    process = subprocess.Popen(
+        [GRPC_BINARY, "-port", str(port)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            with grpc.insecure_channel(f"localhost:{port}") as channel:
+                try:
+                    grpc.channel_ready_future(channel).result(timeout=0.5)
+                    break
+                except grpc.FutureTimeoutError:
+                    continue
+        else:
+            pytest.fail("sysml-grpc did not start")
+        yield port
+    finally:
+        process.terminate()
+        process.wait(timeout=10)
+
+
+@pytest.mark.integration
+class TestRoundTripAgainstRealService:
+    """The round trip itself, through the real converter."""
+
+    def test_notation_round_trip_keeps_the_model_and_its_comments(self, real_service):
+        with Connection(port=real_service, auto_start=False) as conn:
+            model = conn.load_from_content(MODEL)
+            notation = str(model.to_sysml())
+
+            assert "part def Engine" in notation
+            assert "// a comment" in notation
+            # The written notation is the same model: it parses to the same
+            # symbols and reports the same diagnostics, and formatting is stable.
+            again = conn.load_from_content(notation)
+            assert again.find("Engine") is not None
+            assert [(d.severity, d.message) for d in again.diagnostics] == [
+                (d.severity, d.message) for d in model.diagnostics
+            ]
+            assert str(again.to_sysml()) == notation
+
+    def test_turtle_round_trip_returns_an_equivalent_model(self, real_service):
+        with Connection(port=real_service, auto_start=False) as conn:
+            turtle = str(conn.load_from_content(MODEL).to_turtle())
+            assert "Demo::Engine" in turtle
+
+            back = conn.convert("sysml", content=turtle, from_format="ttl")
+            assert "part def Engine" in str(back)
+            assert back.from_format == "ttl"
+            # A model, not just text: it parses and resolves the same element.
+            assert conn.load_from_content(str(back)).find("Engine") is not None
+
+    def test_saving_a_loaded_file_writes_both_formats(self, real_service, tmp_path):
+        source = tmp_path / "model.sysml"
+        source.write_text(MODEL)
+        with Connection(port=real_service, auto_start=False) as conn:
+            model = conn.load(str(source))
+            assert model.source_path == str(source)
+            model.save(str(tmp_path / "out.sysml"))
+            model.save(str(tmp_path / "out.ttl"))
+
+        assert "part def Engine" in (tmp_path / "out.sysml").read_text()
+        assert "Demo::Engine" in (tmp_path / "out.ttl").read_text()
+
+    def test_unreadable_notation_fails_with_spans(self, real_service):
+        with Connection(port=real_service, auto_start=False) as conn:
+            with pytest.raises(ConversionError) as excinfo:
+                conn.convert("ttl", content="package P { part def ", from_format="sysml")
+        assert excinfo.value.diagnostics, "a syntax error was reported without diagnostics"
+        assert excinfo.value.diagnostics[0].span.start_line >= 1
+
+    def test_tolerating_syntax_errors_writes_notation_anyway(self, real_service):
+        with Connection(port=real_service, auto_start=False) as conn:
+            result = conn.convert(
+                "sysml",
+                content="package P { part def }",
+                from_format="sysml",
+                tolerate_syntax_errors=True,
+            )
+        assert str(result), "tolerant conversion wrote nothing"
+        assert result.diagnostics, "tolerant conversion hid the errors it tolerated"
+
+    def test_an_unknown_format_is_an_rpc_error(self, real_service):
+        with Connection(port=real_service, auto_start=False) as conn:
+            with pytest.raises(grpc.RpcError) as excinfo:
+                conn.convert("xmi", content=MODEL, from_format="sysml")
+        assert excinfo.value.code() == grpc.StatusCode.INVALID_ARGUMENT
