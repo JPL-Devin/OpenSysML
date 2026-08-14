@@ -266,6 +266,113 @@ A composite slot lists the features of each of its objects under it, in order.
 
 ---
 
+## Checking a Model from the Command Line
+
+The same checks the REPL runs are available as flags, so a model can be checked
+from a script or a build step without a prompt. Take `checks.sysml`:
+
+```sysml
+package MyModel {
+    part def Sensor {
+        attribute reading = 0.0;
+        attribute threshold = 100.0;
+    }
+
+    requirement def ReadingRequirement {
+        subject sensor : Sensor;
+        require sensor.reading <= sensor.threshold;
+    }
+    requirement healthy : ReadingRequirement;
+
+    part hot : Sensor {
+        attribute :>> reading = 140.0;
+        constraint inRange { reading <= threshold }
+    }
+    part cold : Sensor {
+        attribute :>> reading = 20.0;
+        constraint inRange { reading <= threshold }
+    }
+
+    part checks {
+        assert satisfy healthy by cold;
+        assert satisfy healthy by hot;
+    }
+}
+```
+
+Each flag may be repeated, and `-instantiate` runs first — whatever order the
+flags are written in — so the verdicts after it are about that object:
+
+```bash
+$ sysml -instantiate MyModel::cold -constraint MyModel::cold::inRange checks.sysml
+✓ package MyModel
+✓ Created instance of MyModel::cold
+  ID: 1
+  Use %slots MyModel::cold to inspect
+✓ Constraint MyModel::cold::inRange passed (on MyModel::cold ID: 1)
+
+$ sysml -satisfy checks.sysml
+✓ package MyModel
+✓ satisfy healthy by cold holds (on MyModel::cold ID: 1)
+✗ satisfy healthy by hot fails (on MyModel::hot ID: 2)
+  Required condition evaluated to false: sensor.reading <= sensor.threshold
+```
+
+| Flag | Checks |
+|------|--------|
+| `-constraint <name>` | One constraint, as `%constraint` does |
+| `-requirement <name>` | One requirement, as `%requirement` does |
+| `-satisfy` | Every satisfaction assertion the model states |
+| `-satisfy=<name>` | Only the assertions the named element states |
+| `-instantiate <name>` | Creates an object first, so the verdicts are about it |
+
+The exit status is what a build step gates on:
+
+| Status | Meaning |
+|--------|---------|
+| `0` | Every check held |
+| `1` | The model answered false for at least one check |
+| `2` | A check was never decided: an unknown name, a subject with no object to evaluate against, a model that would not load, or a misused flag |
+
+Status 2 is kept apart from 1 because an undecided check is not evidence against
+the model — treat it as a broken check, not a failing one. A condition that
+evaluated to false is the model's own answer; a name that does not resolve, or a
+condition over a feature with no value, is not:
+
+```bash
+$ sysml -constraint MyModel::hot::inRange -instantiate MyModel::hot checks.sysml; echo "exit=$?"
+✓ package MyModel
+✓ Created instance of MyModel::hot
+  ID: 1
+  Use %slots MyModel::hot to inspect
+✗ Constraint MyModel::hot::inRange failed (on MyModel::hot ID: 1)
+  Assertion evaluated to false: reading <= threshold
+exit=1
+
+$ sysml -constraint MyModel::nosuch checks.sysml; echo "exit=$?"
+✓ package MyModel
+error: symbol "MyModel::nosuch" not found
+exit=2
+
+$ sysml -requirement MyModel::healthy checks.sysml; echo "exit=$?"
+✓ package MyModel
+✗ Requirement MyModel::healthy failed
+  Error: requirement healthy: require condition evaluation failed: no value for feature sensor
+exit=2
+```
+
+That last case is the shape of a requirement with a `subject`: nothing binds the
+subject, so it has no object to be about. Write the intended pair into the model
+as `assert satisfy healthy by hot;` and check it with `-satisfy`, which creates
+the subject itself — `-requirement` decides a requirement whose conditions stand
+on their own, or one carried by a part an `-instantiate` created.
+
+A verdict is written to stdout and an undecided check to stderr, so
+`sysml -satisfy checks.sysml > verdicts.txt` keeps the results and leaves what
+went wrong on the terminal.
+
+---
+
 ## Saving and Converting
 
 `%save` writes the session out. The format follows the extension — `.sysml` for

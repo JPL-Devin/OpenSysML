@@ -49,6 +49,7 @@ var (
 	outputPath  string
 	fromFormat  string
 	toFormat    string
+	modelChecks checks
 )
 
 // budgets holds the run bounds the environment resolves to, read once at startup.
@@ -78,6 +79,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  sysml file.sysml          # Load file and start REPL\n")
 		fmt.Fprintf(os.Stderr, "  sysml -debug file.sysml   # Load file, reporting every diagnostic\n")
 		fmt.Fprintf(os.Stderr, "  sysml -trace file.sysml   # Load file, reporting each execution step\n")
+		fmt.Fprintf(os.Stderr, "\nChecking a model:\n")
+		fmt.Fprintf(os.Stderr, "  sysml -constraint MassBudget model.sysml       # Evaluate one constraint and exit\n")
+		fmt.Fprintf(os.Stderr, "  sysml -requirement PowerMargin model.sysml     # Evaluate one requirement and exit\n")
+		fmt.Fprintf(os.Stderr, "  sysml -satisfy model.sysml                     # Evaluate every satisfaction assertion\n")
+		fmt.Fprintf(os.Stderr, "  sysml -satisfy=Ctx model.sysml                 # ...only the ones Ctx states\n")
+		fmt.Fprintf(os.Stderr, "  sysml -instantiate p -constraint C model.sysml  # Check C against an object of p\n")
+		fmt.Fprintf(os.Stderr, "\nA check reports its verdict and exits 0 when every verdict holds, 1 when one\n")
+		fmt.Fprintf(os.Stderr, "fails, and 2 when a check could not be made at all, so a model check can gate\n")
+		fmt.Fprintf(os.Stderr, "a build. Each flag may be repeated.\n")
 		fmt.Fprintf(os.Stderr, "\nConversion:\n")
 		fmt.Fprintf(os.Stderr, "  sysml -convert model.sysml -o model.ttl    # SysML notation to RDF Turtle\n")
 		fmt.Fprintf(os.Stderr, "  sysml -convert model.ttl -o model.sysml    # RDF Turtle to SysML notation\n")
@@ -100,6 +110,10 @@ func main() {
 	flag.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
 	flag.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
 	flag.StringVar(&toFormat, "to", "", "Output format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the output's extension)")
+	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
+	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
+	flag.Var(&modelChecks.requirements, "requirement", "Evaluate this requirement and exit (repeatable)")
+	flag.Var(&modelChecks.satisfy, "satisfy", "Evaluate every satisfaction assertion, or with -satisfy=<name> those the named element states (repeatable)")
 	flag.Parse()
 
 	if debugMode && quietMode {
@@ -135,6 +149,11 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "sysml:", err)
 		os.Exit(2)
+	}
+
+	// Checking mode: load, check what was named, and exit on the verdict.
+	if modelChecks.requested() {
+		os.Exit(runChecks(args, evalExprs, modelChecks))
 	}
 
 	// Non-interactive mode: files + eval expressions, execute and exit

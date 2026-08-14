@@ -246,31 +246,19 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	}
 }
 
-// doInstantiate creates an instance of a part def.
+// doInstantiate creates an instance of a part def. A runtime that cannot be
+// created at all is unrecoverable, while a name the session cannot resolve is
+// reported at the prompt.
 func (s *Session) doInstantiate(name string) ([]string, bool, error) {
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
+	if _, err := s.getOrCreateRuntime(); err != nil {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
-	sym, fqn, lerr := s.lookupSymbol(name)
-	if lerr != nil {
-		return []string{"error: " + lerr.Error()}, false, nil
-	}
-
-	inst, err := ctx.Instantiate(sym)
+	lines, err := s.InstantiateNamed(name)
 	if err != nil {
-		return []string{fmt.Sprintf("error: instantiation failed: %v", err)}, false, nil
+		return []string{"error: " + err.Error()}, false, nil
 	}
-
-	// Keyed by the resolved name, so %slots finds the instance whichever
-	// spelling of the name created it.
-	s.instances[fqn] = inst
-	return []string{
-		fmt.Sprintf("✓ Created instance of %s", fqn),
-		fmt.Sprintf("  ID: %d", inst.ID),
-		fmt.Sprintf("  Use %%slots %s to inspect", name),
-	}, false, nil
+	return lines, false, nil
 }
 
 // doEval evaluates an expression.
@@ -1118,35 +1106,7 @@ func parseWholeExpr(text string) (ast.Node, error) {
 
 // doConstraint evaluates a constraint definition.
 func (s *Session) doConstraint(name string) ([]string, bool, error) {
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
-		return []string{"error: no declarations loaded"}, false, nil
-	}
-
-	sym, fqn, lerr := s.lookupSymbol(name)
-	if lerr != nil {
-		return []string{"error: " + lerr.Error()}, false, nil
-	}
-
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
-	}
-
-	// Evaluate against the instance that carries the constraint when one has
-	// been created, so the verdict is about concrete values.
-	inst, owner := s.owningInstance(fqn)
-	passed, err := ctx.EvaluateConstraintOn(sym, declaringScope(sym, doc.Scope), inst)
-	if err != nil || !passed {
-		return []string{
-			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
-			"  " + verdictDetail("Assertion", err),
-		}, false, nil
-	}
-
-	return []string{
-		fmt.Sprintf("✓ Constraint %s passed%s", name, onInstance(inst, owner)),
-	}, false, nil
+	return s.CheckConstraint(name).Lines, false, nil
 }
 
 // promptScope is the namespace a prompt expression is evaluated in: the last
@@ -1219,72 +1179,19 @@ func onInstance(inst *runtime.Instance, owner string) string {
 
 // doRequirement evaluates a requirement definition.
 func (s *Session) doRequirement(name string) ([]string, bool, error) {
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
-		return []string{"error: no declarations loaded"}, false, nil
-	}
-
-	sym, fqn, lerr := s.lookupSymbol(name)
-	if lerr != nil {
-		return []string{"error: " + lerr.Error()}, false, nil
-	}
-
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
-	}
-
-	inst, owner := s.owningInstance(fqn)
-	passed, err := ctx.EvaluateRequirementOn(sym, declaringScope(sym, doc.Scope), inst)
-	if err != nil || !passed {
-		return []string{
-			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),
-			"  " + verdictDetail("Required condition", err),
-		}, false, nil
-	}
-
-	return []string{
-		fmt.Sprintf("✓ Requirement %s satisfied%s", name, onInstance(inst, owner)),
-	}, false, nil
+	return s.CheckRequirement(name).Lines, false, nil
 }
 
 // doSatisfy evaluates satisfaction assertions: every one the model states, or,
-// given a name, the ones the named element states — or that element itself, when
-// it is a named satisfaction assertion. The usual `assert satisfy r by p;` is
-// anonymous, so the element stating it is how a user reaches it.
+// given a name, the ones the named element states.
 func (s *Session) doSatisfy(args []string) ([]string, bool, error) {
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
-		return []string{"error: no declarations loaded"}, false, nil
-	}
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
-	}
-
-	scope := doc.Scope
-	where := "the session"
+	var name string
 	if len(args) > 0 {
-		sym, fqn, lerr := s.lookupSymbol(args[0])
-		if lerr != nil {
-			return []string{"error: " + lerr.Error()}, false, nil
-		}
-		if a, aerr := ctx.SatisfyAssertionOf(sym); aerr == nil {
-			return s.satisfyVerdict(ctx, a), false, nil
-		}
-		if sym.Scope == nil {
-			return []string{fmt.Sprintf("error: %s states no satisfaction assertion", args[0])}, false, nil
-		}
-		scope, where = sym.Scope, fqn
-	}
-
-	assertions := ctx.SatisfyAssertionsIn(scope)
-	if len(assertions) == 0 {
-		return []string{fmt.Sprintf("no satisfaction assertion in %s", where)}, false, nil
+		name = args[0]
 	}
 	var out []string
-	for _, a := range assertions {
-		out = append(out, s.satisfyVerdict(ctx, a)...)
+	for _, v := range s.CheckSatisfy(name) {
+		out = append(out, v.Lines...)
 	}
 	return out, false, nil
 }
@@ -1292,7 +1199,7 @@ func (s *Session) doSatisfy(args []string) ([]string, bool, error) {
 // satisfyVerdict renders the verdict of one satisfaction assertion, evaluated
 // against an object of its subject: the one the session already created for that
 // subject, so a `%instantiate` before it is what the verdict is about.
-func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAssertion) []string {
+func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAssertion) Verdict {
 	subject, owner := s.subjectInstance(a)
 	if subject == nil && a.Subject != nil {
 		// No object of the subject exists yet, so the verdict is about a fresh
@@ -1306,12 +1213,14 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 	}
 	holds, err := ctx.EvaluateSatisfactionOn(a, subject)
 	if err != nil || !holds {
-		return []string{
+		return Verdict{Subject: a.Text(), Status: failedStatus(err), Lines: []string{
 			fmt.Sprintf("✗ %s fails%s", a.Text(), onInstance(subject, owner)),
 			"  " + verdictDetail("Required condition", err),
-		}
+		}}
 	}
-	return []string{fmt.Sprintf("✓ %s holds%s", a.Text(), onInstance(subject, owner))}
+	return Verdict{Subject: a.Text(), Status: VerdictHolds, Lines: []string{
+		fmt.Sprintf("✓ %s holds%s", a.Text(), onInstance(subject, owner)),
+	}}
 }
 
 // subjectInstance returns the object the session has already created for an
