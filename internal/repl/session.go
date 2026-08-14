@@ -4,6 +4,7 @@ package repl
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -22,11 +23,13 @@ const docName = "<repl>"
 
 // snippet is one accepted submission source, the top-level names it declares,
 // and the file it was loaded from, so a finding about it can be reported where
-// its reader would look for it.
+// its reader would look for it. The key is that file itself, identifying it
+// across the ways one path can be written.
 type snippet struct {
 	src    string
 	names  []string
 	origin string
+	key    string
 }
 
 // Session accumulates submissions into a single implicit <repl> document.
@@ -134,14 +137,15 @@ func (s *Session) accept(origin, src string) (joined string, offset int) {
 	names := declaredNames(root)
 	if origin != "" {
 		set := nameSet(names)
+		key := fileKey(origin)
 		kept := s.snippets[:0]
 		for _, sn := range s.snippets {
-			if sn.origin == origin || (sn.origin == "" && intersects(sn.names, set)) {
+			if sn.key == key || (sn.origin == "" && intersects(sn.names, set)) {
 				continue
 			}
 			kept = append(kept, sn)
 		}
-		s.snippets = append(kept, snippet{src: src, names: names, origin: origin})
+		s.snippets = append(kept, snippet{src: src, names: names, origin: origin, key: key})
 		joined = s.joined()
 		return joined, len(joined) - len(src)
 	}
@@ -210,6 +214,19 @@ func (s *Session) joined() string {
 		parts[i] = sn.src
 	}
 	return strings.Join(parts, "\n")
+}
+
+// fileKey identifies the file a path is written for, so the same file loaded
+// under another spelling supersedes itself instead of accumulating a copy.
+func fileKey(path string) string {
+	full := expandHome(path)
+	if abs, err := filepath.Abs(full); err == nil {
+		full = abs
+	}
+	if resolved, err := filepath.EvalSymlinks(full); err == nil {
+		return resolved
+	}
+	return filepath.Clean(full)
 }
 
 func nameSet(names []string) map[string]bool {

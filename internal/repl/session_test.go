@@ -1,9 +1,11 @@
 package repl
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 func TestNewSessionEmpty(t *testing.T) {
@@ -122,5 +124,20 @@ func TestLoadedFileSupersedesPromptDeclarations(t *testing.T) {
 	}
 	if !strings.Contains(joined, "part y") {
 		t.Errorf("the loaded declaration is missing: %q", joined)
+	}
+}
+
+// The same file loaded under another spelling of its path is the same file, so
+// it replaces its earlier contents rather than declaring everything twice.
+func TestLoadedFileIsIdentifiedByTheFileNotTheSpelling(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "m.sysml")
+
+	s := NewSession()
+	s.accept(path, "package M { part def A; }")
+	s.accept(filepath.Join(dir, ".", "..", filepath.Base(dir), "m.sysml"), "package M { part def A; }")
+
+	if got := len(s.List()); got != 1 {
+		t.Errorf("want one copy of the file, got %d snippets: %v", got, s.List())
 	}
 }
