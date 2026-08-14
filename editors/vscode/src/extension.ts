@@ -12,34 +12,47 @@ const EXECUTABLE = process.platform === "win32" ? "sysml-lsp.exe" : "sysml-lsp";
 
 let client: LanguageClient | undefined;
 let output: vscode.OutputChannel;
+// Start/stop run one at a time: overlapping restarts would otherwise leave an
+// unreferenced client, and its server process, running forever.
+let queue: Promise<void> = Promise.resolve();
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   output = vscode.window.createOutputChannel("SysML v2");
   context.subscriptions.push(output);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("systemica.restartServer", async () => {
-      await stopClient();
-      await startClient();
-    }),
+    vscode.commands.registerCommand("systemica.restartServer", () => restart()),
   );
 
   // The server binary is resolved at start, so pointing the setting at a fresh
   // build takes effect on the next restart rather than on reload.
   context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration(async (event) => {
+    vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("systemica.server")) {
-        await stopClient();
-        await startClient();
+        void restart();
       }
     }),
   );
 
-  await startClient();
+  await enqueue(startClient);
 }
 
 export async function deactivate(): Promise<void> {
-  await stopClient();
+  await enqueue(stopClient);
+}
+
+function restart(): Promise<void> {
+  return enqueue(async () => {
+    await stopClient();
+    await startClient();
+  });
+}
+
+// enqueue chains work onto the queue, so each step observes the previous one's
+// result rather than a half-applied state.
+function enqueue(work: () => Promise<void>): Promise<void> {
+  queue = queue.then(work, work);
+  return queue;
 }
 
 async function startClient(): Promise<void> {

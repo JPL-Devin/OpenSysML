@@ -295,6 +295,27 @@ func TestMemberPathBefore(t *testing.T) {
 	}
 }
 
+// A short name is a name the element is referable by, so completion must offer
+// it alongside the long name, both in scope and as a member.
+func TestCompletionOffersShortNames(t *testing.T) {
+	src := strings.Replace(completionSrc, "part def Vehicle {", "part def <veh> Vehicle {", 1)
+	src = strings.Replace(src, "part wheel : Wheel;", "part <w> wheel : Wheel;", 1)
+
+	items := completionAt(t, src, "part v : Vehicle;")
+	short, ok := items["veh"]
+	if !ok {
+		t.Fatalf("completion missing short name 'veh'; got %v", labelsOf(items))
+	}
+	if short.Kind != protocol.CompletionItemKindClass || short.Detail != "partDef" {
+		t.Errorf("'veh' = kind %v detail %q, want the same as 'Vehicle'", short.Kind, short.Detail)
+	}
+
+	members := completionAt(t, src, "v.")
+	if _, ok := members["w"]; !ok {
+		t.Errorf("member completion missing short name 'w'; got %v", labelsOf(members))
+	}
+}
+
 func labelsOf(items map[string]protocol.CompletionItem) []string {
 	out := make([]string, 0, len(items))
 	for label := range items {

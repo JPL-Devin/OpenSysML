@@ -65,7 +65,8 @@ func (c *completionItems) add(item protocol.CompletionItem) {
 	c.items = append(c.items, item)
 }
 
-// addSymbol offers a declared element with its real kind, detail and docs.
+// addSymbol offers a declared element with its real kind, detail and docs, under
+// both names a short-named declaration is referable by (`part def <v> Vehicle`).
 func (c *completionItems) addSymbol(s *Server, sym *symbols.Symbol) {
 	if sym == nil {
 		return
@@ -79,6 +80,10 @@ func (c *completionItems) addSymbol(s *Server, sym *symbols.Symbol) {
 		item.Documentation = protocol.MarkupContent{Kind: protocol.PlainText, Value: docText}
 	}
 	c.add(item)
+	if short := sym.ShortName; short != "" && short != item.Label {
+		item.Label = short
+		c.add(item)
+	}
 }
 
 func (c *completionItems) list() *protocol.CompletionList {
