@@ -852,7 +852,13 @@ func statementKeyword(node ast.Node) string {
 		return "a 'send'"
 	case *ast.TerminateStatement:
 		return "a 'terminate'"
+	case *ast.PerformActionNode:
+		return "a 'perform'"
+	case *ast.Usage:
+		// A member bound to an edge by position may be a declaration rather than a
+		// statement (`then part { … }`), named by its kind.
+		return usageDescription(n)
 	default:
-		return fmt.Sprintf("a %T statement", n)
+		return "a member the body declares"
 	}
 }
