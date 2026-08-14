@@ -48,11 +48,13 @@ line/column numbers, where a screenshot of the new behavior alone proves nothing
 
 ## Saving and converting models (`%save`, `sysml -convert`)
 
-Format comes from the **file extension**, so a destination without one is rejected before any
-writing happens. That bites on devices and pipes: `-o /dev/null`, `-o /dev/stdout`,
-`-o /dev/fd/63` and a FIFO named without a suffix all need an explicit `-to sysml` / `-to ttl`,
-otherwise you get `cannot tell the format of "/dev/null": it has no extension, so pass -from/-to`
-and no write is attempted. The REPL has no such flags, so `%save` says
+The CLI is `sysml <model> -convert <format>`: the model is a positional argument and `-convert`
+names the format to write, so the output path never decides it — `-o /dev/null`, `-o /dev/stdout`,
+`-o /dev/fd/63` and a FIFO named without a suffix all work as they are. An *input* whose
+extension names no format needs `-from`, otherwise you get
+`cannot tell the format of "input.txt": expected .sysml, .kerml or .ttl, so pass -from`
+and no write is attempted. The REPL takes the format from the file extension and has no such
+flags, so `%save` says
 `name the file with a .sysml, .kerml or .ttl extension` instead — check the two surfaces word
 their advice differently and neither mentions the other's remedy.
 
@@ -72,10 +74,10 @@ branch of `internal/core/export/write.go`:
 - assert the negative too: no leftover `.name.sysml.<digits>` temp files, and failure messages
   must name the path the user typed rather than the temp file.
 
-**`-convert x.sysml -to sysml` is a source-preserving formatter, not an AST printer.** It keeps the
+**`x.sysml -convert sysml` is a source-preserving formatter, not an AST printer.** It keeps the
 original inline/multi-line layout and reproduces surface notation verbatim (a member-attached
 `then part b;` comes back as `then part b;`, not as the desugared `then a b;`), so its output is
-**not** evidence about what the parser built. To assert on AST/desugaring, use `-to ttl` (generated
+**not** evidence about what the parser built. To assert on AST/desugaring, use `-convert ttl` (generated
 from the tree — e.g. `grep -c SuccessionAsUsage`) or a parser golden fixture. The `.ttl -> .sysml`
 direction *is* a real AST print, so a round-trip through Turtle is the way to see canonical notation.
 A useful corollary: to prove "no relationship was recorded", count the triples in the `.ttl`, never
@@ -87,7 +89,7 @@ plain `package Demo { part def Engine { attribute power = 300.0; } }` for `.ttl`
 than a file from `examples/`.
 
 For formatter changes, the cheap adversarial check is idempotency over real models:
-convert every `examples/*.sysml` with `-to sysml` twice and `diff` the two outputs — all eight
+convert every `examples/*.sysml` with `-convert sysml` twice and `diff` the two outputs — all eight
 must be byte-identical, and stderr must stay empty for well-formed input.
 
 ## Fixtures worth knowing

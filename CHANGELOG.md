@@ -38,6 +38,17 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   raises each, and a literal expression that spends one is answered with that
   failure instead of "no declarations loaded".
 
+### `sysml` command line
+
+- **Breaking:** conversion is spelled `sysml model.sysml -convert ttl`: the model
+  is a positional argument as it is in every other mode, and `-convert` names the
+  format to convert it to. `-convert <file>` and `-to <format>` are gone — `-to`
+  reports the replacement rather than "flag provided but not defined" — and the
+  output path no longer chooses the format, so `-o /dev/null` or a FIFO needs
+  nothing extra. `-from` still names an input format the extension does not.
+- A flag may be written after the model it applies to (`sysml model.sysml -trace`),
+  which Go's flag package would otherwise read as two files to load.
+
 ### Python bindings and `sysml-grpc`
 
 - `Instantiate` returns every instance reachable from the root, so a Python caller

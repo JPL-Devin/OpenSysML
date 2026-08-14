@@ -24,19 +24,25 @@ rather than a guess, and an empty session writes no file.
 ## Converting from the command line
 
 ```bash
-sysml -convert model.sysml -o model.ttl     # notation to RDF
-sysml -convert model.ttl   -o model.sysml   # RDF to notation
-sysml -convert model.sysml                  # to stdout, in the other format
+sysml model.sysml -convert ttl -o model.ttl     # notation to RDF
+sysml model.ttl -convert sysml -o model.sysml   # RDF to notation
+sysml model.sysml -convert ttl                  # to stdout
 ```
 
-The format of each side is taken from its file extension. When an extension is
-missing or unrecognized, name the formats explicitly:
+The model is a positional argument, as it is for every other mode of the
+command, and `-convert` names the format to convert it to. Flags may be written
+before or after the model.
+
+The input format is taken from the file extension. When that extension is
+missing or unrecognized, `-from` names it:
 
 ```bash
-sysml -convert input.txt -from sysml -to ttl
+sysml input.txt -convert ttl -from sysml
 ```
 
-`-from`/`-to` accept `sysml`, `kerml`, `text`, `ttl`, `turtle` and `rdf`.
+`-convert`/`-from` accept `sysml`, `kerml`, `text`, `ttl`, `turtle` and `rdf`.
+The output path plays no part in choosing the format, so a destination with no
+extension — `-o /dev/null`, a FIFO — needs nothing extra.
 
 Converting to the same format rewrites the input: notation is reformatted, and
 Turtle is normalized (prefixes sorted, predicates grouped by subject).
@@ -273,7 +279,7 @@ element it cannot place, rather than emitting a model with elements missing.
 | `internal/core/rdf` | Triple/graph model, Turtle writer, Turtle parser |
 | `internal/core/export` | `ToRDF` (AST → graph), `ToSysML` (graph → notation), and the `Convert` entry point |
 | `internal/repl` | `%save` |
-| `cmd/sysml` | `-convert`, `-from`, `-to`, `-o` |
+| `cmd/sysml` | `-convert`, `-from`, `-o` |
 
 The RDF layer is hand-written against the Turtle grammar rather than pulled in
 as a dependency: the subset needed here is small, and the parser rejects what it
