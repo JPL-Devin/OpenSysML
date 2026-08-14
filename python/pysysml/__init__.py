@@ -11,12 +11,16 @@ from pysysml.instance import Instance
 from pysysml.typed import TypedObject
 from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
 from pysysml.capabilities import MissingCapabilityError, ServerInfo
+from pysysml.verdict import CalcResult, Verdict
 from pysysml.conversion import (
     FORMAT_SYSML, FORMAT_TURTLE, Conversion, format_of_path,
 )
 from pysysml.errors import (
-    PySysMLError, ConnectionError, ConversionError, InstanceTypeError,
-    RuntimeError, SlotError, TypeMismatchError, UnsupportedValueError,
+    PySysMLError, ConnectionError, ConversionError, ExecutionError,
+    InstanceTypeError, InvalidRequestError, ModelError,
+    ModelFileNotFoundError, ModelNotFoundError, ServiceError,
+    ServiceTimeoutError, SlotError, SymbolNotFoundError, TypeMismatchError,
+    UnsupportedOperationError, UnsupportedValueError,
 )
 
 __all__ = [
@@ -24,9 +28,12 @@ __all__ = [
     "TypedObject", "TypeFacts", "Multiplicity", "Specialization", "SymbolFacts",
     "ServerInfo",
     "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
-    "PySysMLError", "ConnectionError", "ConversionError", "InstanceTypeError",
-    "MissingCapabilityError", "RuntimeError", "SlotError",
-    "TypeMismatchError", "UnsupportedValueError",
+    "Verdict", "CalcResult",
+    "PySysMLError", "ConnectionError", "ConversionError", "ExecutionError",
+    "InstanceTypeError", "InvalidRequestError", "MissingCapabilityError",
+    "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",
+    "ServiceError", "ServiceTimeoutError", "SlotError", "SymbolNotFoundError",
+    "TypeMismatchError", "UnsupportedOperationError", "UnsupportedValueError",
     "load", "connect", "convert",
     "eval", "instantiate",
     "__version__"
@@ -71,7 +78,7 @@ def _get_default_connection(host='localhost', port=50051):
     return _default_connection
 
 
-def load(file_path, host='localhost', port=50051):
+def load(file_path, host='localhost', port=50051, strict=False):
     """Load a SysML model from file using the default connection.
     
     Convenience function that uses a module-level singleton connection.
@@ -80,15 +87,19 @@ def load(file_path, host='localhost', port=50051):
         file_path (str): Path to .sysml file
         host (str): Service hostname (default: 'localhost')
         port (int): Service port (default: 50051)
+        strict (bool): Refuse a model the service reported errors for, rather
+            than returning one whose lookups fail later
     
     Returns:
         Model: Parsed model object
     
     Raises:
-        grpc.RpcError: If file not found or gRPC error occurs
+        ModelFileNotFoundError: If the service cannot read file_path
+        ModelError: If strict and the model has error diagnostics
+        ConnectionError: If the service is unreachable
     """
     conn = _get_default_connection(host, port)
-    return conn.load(file_path)
+    return conn.load(file_path, strict=strict)
 
 
 def connect(host='localhost', port=50051, auto_start=True):
@@ -160,7 +171,7 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None):
         
     Raises:
         ValueError: If neither file_path nor model_hash provided, or if both provided
-        RuntimeError: If evaluation fails
+        ExecutionError: If evaluation fails
         
     Example:
         >>> import pysysml
@@ -196,7 +207,7 @@ def instantiate(symbol_id, file_path=None, model_hash=None):
         
     Raises:
         ValueError: If neither file_path nor model_hash provided, or if both provided
-        RuntimeError: If instantiation fails
+        ExecutionError: If instantiation fails
         
     Example:
         >>> import pysysml
