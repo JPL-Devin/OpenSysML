@@ -115,6 +115,92 @@ must be byte-identical, and stderr must stay empty for well-formed input.
   package's `pkgBonus`; `%state monitor` + `%advance 1` reaches `done` with `result = 5.00`. The
   scope-regression canary for states declared directly in a machine body.
 
+## Variations, variants and redefinition-inherited members
+
+Fixtures live in `internal/core/runtime/testdata/conformance/`: `variation_attribute_selection.sysml`
+(`test::idealDiamond`), `variation_part_selection.sysml` (`test::electricVehicle`),
+`variation_interface_selection.sysml` (`test::nestedAssembly`), `variation_unselected.sysml`
+(`test::unconfiguredDiamond`) and `ballandchain_variant_configuration.sysml`. Each `.expected.json`
+is the cheapest source of the values `%slots` should print.
+
+- **Variant rendering.** A bound variation slot prints `name = variantName (Instance ID: n)` with the
+  variant's nested values indented under it (`engine = electric (Instance ID: 2)` / `power = 150.00`).
+  A plain `name = Instance(ID: n)` for a variation feature means nothing was bound.
+- **Assert a computed attribute, not just the variant name.** `curbMass = 1200.00` (= `900 + mass`)
+  distinguishes the `electric` variant (mass 300) from `petrol` (mass 200 → 1100); the variant label
+  alone would look the same if the wrong nested values were materialized.
+- **Always include a constraint that must be *violated*.** `variation_attribute_selection` asserts
+  both `isIdeal` (satisfied) and `notShallow` (violated). An implementation where
+  `x == x::variantName` returned true for any variant would still show `isIdeal: satisfied`, so the
+  violated one is the only real discriminator. `%slots` renders these inline as
+  `name: <constraint: satisfied|violated>` — note `%satisfy` answers
+  `no satisfaction assertion in the session` for `assert constraint` members, so use `%slots`.
+- **Error paths** (all are per-slot `<error: …>` lines, and the dependent computed slot repeats the
+  cause): unselected → `variation has no variant selected: <usage>.<feature>`; a name that is not a
+  variant → `not a variant of the variation: X is not a variant of Y (variants: a, b)`; two
+  selections (`= (cut::cutIdeal, cut::cutShallow)`) → `more than one variant selected: variation cut
+  selects 2 variants (cutIdeal, cutShallow)`. Assert the *variant list* is present — a message that
+  stops at the offending name is the weaker pre-fix shape. Follow each with `%eval 1 + 1` → `= 2` to
+  show the session survived, and wrap piped runs in `timeout` so a hang shows as non-zero exit.
+- **Redefinition merge canary.** A three-line model is enough:
+  `part base : Outer { part :>> inner { attribute :>> b = 7.0; } }` plus
+  `part derived :> base { part :>> inner { attribute :>> a = 1.0; } }` where `Outer` computes
+  `t = inner.b`. Fixed builds print `inner = {a = 1.00, b = 7.00}` and `t = 7.00`; a build that drops
+  inherited nested members prints only `a = 1.00` and
+  `t: <error: slot derived.t: member b not found in instance>` — a perfect A/B against the parent
+  commit. Name the part something other than `derived` if you want to avoid the (harmless)
+  `"derived" is a reserved keyword` warning.
+- **Unset scalar attributes render as `= Instance(ID: n)` / `(no features)`** (also `ringCost`,
+  `ringPort`). Pre-existing on main, unrelated to variation work — don't report it as a regression.
+- **Known limits, so don't plan around them:** `%slots` takes only the instantiated usage's own name
+  — `%slots test::electricVehicle::engine` answers `no instance of …`, and
+  `%eval test::electricVehicle.engine.power` answers `usage test::electricVehicle has no value`.
+  Nested traversal is only observable through the indented nested rendering of the top-level `%slots`.
+- **Careful with `clear` while recording:** typed at the `sysml>` prompt it is parsed as a
+  declaration (`1:1: error: expected a namespace member`) *and* drops previously created instances,
+  so the next `%slots` says `no instance of …`. Use `%clear` to reset the session, and clear the
+  screen before entering the REPL.
+
+### `variant` used outside a variation, and per-variation-point variant objects
+
+This section describes behavior added by PR #128, so it applies only once that PR is on `main`; the
+"old" shapes below are what current `main` prints, so they double as A/B canaries. Three easy
+discriminators for changes in the variant/variation layer:
+
+- **A `variant` member whose owner is not a `variation` must stay an ordinary feature.** Model:
+  `part def P { attribute k : Real = 2.0; variant attribute x : Real = 1.0; }` +
+  `part p : P { attribute total : Real = k + x; }`. Correct behavior: loading prints a *warning*
+  (code `variant-outside-variation`) —
+  ``variant x is declared in P, which is not a variation, so it offers no choice; declare its owner `variation` or drop `variant` `` —
+  and `%slots M::p` still shows `k = 2.00`, `x = 1.00`, `total = 3.00`, with `%eval M::p.x` → `1.00`.
+  A build that skips every `DeclaresVariant` member instead prints no warning, omits `x`, reports
+  `total: <error: slot p.total: type mismatch>` and `error: evaluation failed: member x not found in
+  instance`. The same must hold for a package-level `variant` (warns, still readable through a
+  computed attribute such as `h = loose + 1.0` → `6.00`) and for a `variant` with no value (warns,
+  renders as an instance of its type). Genuine variants *inside* a `variation` must NOT warn —
+  loading the `variation_*` conformance fixtures should stay diagnostic-free.
+- **Two variation points selecting the same variant must not share one object.** Model: an
+  `attribute def Shade { attribute lum : Real = 3.0; }`, a
+  `variation attribute def ShadeChoice :> Shade { variant attribute bright :> Shade; variant attribute dark :> Shade; }`
+  and a part with `attribute front : ShadeChoice = front::bright;` plus
+  `attribute rear : ShadeChoice = rear::bright;`. Correct behavior prints two *different* instance
+  IDs (`front = bright (Instance ID: 2)` / `rear = bright (Instance ID: 3)`); a build whose variant
+  object cache is keyed only by `{owner, variant}` prints `Instance ID: 2` for both. The instance ID
+  is the only visible signal here, so read it carefully.
+- **A variation point may inherit its variation-ness, and its variants are still choices.** Model:
+  `variation part def EngineChoice :> Engine;` with
+  `part def Car { part engine : EngineChoice { variant part electric : Engine { attribute :>> power = 150.0; } } }`
+  and `part ev : Car { part :>> engine = engine::electric; }`. Correct behavior: no warning and
+  `engine = electric (Instance ID: 2)` with `power = 150.00`. A build testing the owner by keyword
+  only either reports `not a variant of the variation: electric is not a variant of engine (variants:
+  electric, …)` (self-contradictory) or `usage engine::electric has no value` plus a spurious
+  `variant-outside-variation` warning. The same applies when the owner redefines a variation usage
+  (`part :>> engine { variant part … }`) without restating `variation`. Drop the variants' own
+  `: Engine` to test the second half: a variant specializes its variation point, so untyped
+  `variant part petrol;` must still print `power = 100.00` (Engine's default) rather than
+  `(no features)` — that shape is the sharper canary, since it needs the supertype edge, not just
+  the selection.
+
 ## Testing lexical scope of behavior bodies (declaring-scope changes)
 
 When a change claims "expressions in an action/state body now see their declaring scope", the same
@@ -227,6 +313,49 @@ An action token that reaches an `accept` with no matching message **parks** inst
   `no active action session`.
 
 Always run these under `timeout` when driving over a pipe; a hang is the failure mode to catch.
+
+## Standard SysML v2 behavioral notation (flows, triggers, sends, transition effects)
+
+Testing this family end-to-end has a few traps that cost a whole run if hit late:
+
+- **A state machine cannot be handed a signal from the REPL** — there is no `%send`. To exercise
+  `accept <p> : <Item> [via <port>]` interactively, the model must post the message itself:
+  give the machine `port out : P; port in : P; connect out to in;` and a state whose
+  `entry send Item(9) via out;` feeds the transition (the shape of
+  `internal/core/runtime/testdata/conformance/state_transition_accept_via_port.sysml`). The shipped
+  `state_transition_accept_payload.sysml` has **no** sender — its event comes from the
+  `.expected.json` `events` array, so in the REPL it just sits in `idle` forever. That is the
+  harness, not a bug.
+- **Always run a signal-driven state model on both the REPL and the gRPC/conformance path and
+  diff them.** They disagreed until `ProcessNextEvent`/`%advance` learned to dispatch a pending
+  context-bus signal: a port send produced by an entry action was delivered by `RunToCompletion`
+  (gRPC `execute_state`, conformance) but not while stepping, so the machine parked with the
+  attribute at its initial value. `TestAdvanceDeliversPendingPortSignal` locks the parity; a
+  REPL-only result understates the feature and a gRPC-only result hides a debugger gap.
+- **A transition effect is worth testing per effect form**, because they lower differently:
+  `do assign x := <expr>` and a performed-action reference (`do perform Bump then s;`) reach the
+  executor through different lowering paths, and the performed form used to abort with
+  `transition effect: unsupported action type: *ast.Membership`. A parse-only check on such a form
+  proves nothing — always drive the transition and assert the attribute changed.
+- After any change to statement-termination in `parser/behavior.go`, re-run a **negative** case in
+  the same breath: a genuinely missing `;` in an action body (`assign n := n + 1` followed by
+  another statement) must still report `expected ';' after assignment`, and one in a state body
+  must still report `expected '{' or ';' after declaration`.
+- `accept at <t>` / `accept after <d>` in an **action** body are supposed to fail fast with
+  `no clock to wait on: … a time event is only waited on by a state machine's transitions` — check
+  they do not park forever. In a **state** transition, plain `accept after 5` works while
+  `accept after 5 [s]` fails with `schedule events: time duration must be constant, got quantity`;
+  prefer the unitless form unless quantities are the thing under test.
+- Both spellings of a machine's start state work: an explicit `initial <s>;` and the standard
+  `entry; then off;` succession out of the body's own entry subaction. If a bodied
+  `exhibit state s { … }` reports `initialize state machine: no initial state found in state
+  machine <name>`, neither reached lowering — check the state body actually parsed.
+- Corpus regression sweep for parser work: `./bin/sysml <file>` over
+  `/home/ubuntu/corpus/apps/*.sysml` and `/home/ubuntu/corpus/dragon/Dragon.sysml`, counting
+  `error:` lines, is a cheap high-signal gate — read each remaining message and classify it as
+  structural/unresolved-library vs behavioral rather than trusting the count alone.
+- Don't name a pysysml probe script `grpc.py`: `sys.path[0]` shadows the real `grpc` package and
+  pysysml dies with `partially initialized module 'pysysml'`, which looks like a client bug.
 
 ## Control flow inside an action node body
 
