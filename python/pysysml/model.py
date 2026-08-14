@@ -183,6 +183,40 @@ class Model:
         conversion.write(path)
         return conversion
 
+    def query(self, payload=None, scope=None, select=None, where=None):
+        """Run a SysML v2 API & Services Query over this model.
+
+        Takes the standard's ``Query`` JSON, so a payload written for the
+        standard's API works verbatim, or the same thing as keywords. The query
+        model has no graph traversal: "everything under this element" is a
+        ``scope``, not a constraint. See ``docs/API.md``.
+
+        Args:
+            payload (dict, optional): The standard's ``Query`` object
+            scope (list, optional): Elements to consider, by qualified name;
+                empty considers the whole loaded model
+            select (list, optional): Properties to report; empty reports every one
+            where (dict, optional): Constraint to filter by
+
+        Returns:
+            list[QueryElement]: The elements selected, in declaration order
+
+        Raises:
+            QueryError: If the query is not one the standard's model describes
+            MissingCapabilityError: If the service cannot query
+            grpc.RpcError: If a property or scope is unknown to the service, or
+                the service no longer holds this model
+
+        Example:
+            >>> model.query({"@type": "Query", "where": {
+            ...     "@type": "PrimitiveConstraint",
+            ...     "operator": "=", "property": "@type", "value": ["PartUsage"]}})
+            [Demo::vehicle (PartUsage)]
+        """
+        return self.connection.query(
+            self._hash, payload, scope=scope, select=select, where=where,
+        )
+
     def find(self, name):
         """Find symbol by short name or fully-qualified name (breadth-first).
 

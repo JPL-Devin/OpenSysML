@@ -32,9 +32,15 @@ const CapabilityConvert = "convert"
 // answer.
 const CapabilityVerification = "verification"
 
+// CapabilityQuery names the capability of the Query RPC, which evaluates a
+// SysML v2 API & Services Query over a parsed model.
+const CapabilityQuery = "query"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
-var capabilities = []string{CapabilityTypeFacts, CapabilityConvert, CapabilityVerification}
+var capabilities = []string{
+	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
+}
 
 // Capabilities returns the capability names this build of the service reports.
 func Capabilities() []string {

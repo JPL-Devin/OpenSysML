@@ -12,6 +12,7 @@ from pysysml.typed import TypedObject
 from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
 from pysysml.capabilities import MissingCapabilityError, ServerInfo
 from pysysml.verdict import CalcResult, Verdict
+from pysysml.query import QueryElement, QueryError
 from pysysml.conversion import (
     FORMAT_SYSML, FORMAT_TURTLE, Conversion, format_of_path,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "ServerInfo",
     "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
     "Verdict", "CalcResult",
+    "QueryElement", "QueryError",
     "PySysMLError", "ConnectionError", "ConversionError", "ExecutionError",
     "InstanceTypeError", "InvalidRequestError", "MissingCapabilityError",
     "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",

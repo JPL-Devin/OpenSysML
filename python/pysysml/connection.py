@@ -12,6 +12,7 @@ from pysysml.model import Model
 from pysysml.binary import ensure_binary
 from pysysml.capabilities import (
     CAPABILITY_CONVERT,
+    CAPABILITY_QUERY,
     CAPABILITY_VERIFICATION,
     ServerInfo,
     require,
@@ -28,6 +29,7 @@ from pysysml.errors import (
     from_rpc_error,
     translate_rpc_errors,
 )
+from pysysml.query import build_query, elements_of
 from pysysml.values import value_to_python
 from pysysml.verdict import CalcResult, Verdict
 
@@ -334,6 +336,40 @@ class Connection:
             to_format=response.to_format,
             diagnostics=diagnostics,
         )
+
+    def query(self, model_hash, payload=None, scope=None, select=None, where=None):
+        """Run a SysML v2 API & Services Query over a loaded model.
+
+        The query is the standard's JSON object, so a cookbook payload works
+        verbatim, or the same thing as keywords. See :mod:`pysysml.query`.
+
+        Args:
+            model_hash (str): Hash of the model to query
+            payload (dict, optional): The standard's ``Query`` object
+            scope (list, optional): Elements to consider; empty is the whole model
+            select (list, optional): Properties to report; empty reports every one
+            where (dict, optional): Constraint to filter by
+
+        Returns:
+            list[QueryElement]: The elements selected, in declaration order
+
+        Raises:
+            QueryError: If the query is not one the standard's model describes
+            MissingCapabilityError: If the service cannot query
+            grpc.RpcError: If a property or scope is unknown to the service, or
+                the model is no longer cached
+        """
+        require(
+            self.server_info(),
+            CAPABILITY_QUERY,
+            "upgrade the sysml-grpc service to a build whose GetServerInfo "
+            "reports 'query'",
+        )
+        request = sysml_pb2.QueryRequest(
+            model_hash=model_hash,
+            query=build_query(payload, scope=scope, select=select, where=where),
+        )
+        return elements_of(self._stub.Query(request))
 
     def get_symbol(self, model_hash, symbol_id):
         """Fetch symbol by ID from cached model.

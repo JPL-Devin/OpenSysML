@@ -346,6 +346,49 @@ Conversion is negotiated: against a service too old to report the `convert`
 capability, these calls raise `MissingCapabilityError` naming the upgrade rather
 than failing on an unimplemented method.
 
+### Querying a model the standard's way
+
+`model.query(...)` runs the query the **SysML v2 API & Services** standard
+defines — `scope` / `select` / `where` — so a payload written for that API works
+verbatim, which is what the API Cookbook notebooks and MATLAB System Composer's
+`executeQuery` send:
+
+```python
+model = pysysml.load("model.sysml")
+
+model.query({"@type": "Query", "where": {
+    "@type": "PrimitiveConstraint",
+    "operator": "=", "property": "@type", "value": ["PartUsage"]}})
+# [Demo::vehicle (PartUsage), Demo::vehicle::wheels (PartUsage)]
+
+# The same query in keyword form, narrowed and projected
+model.query(
+    scope=["Demo::vehicle"],
+    select=["name", "qualifiedName"],
+    where={"operator": "=", "property": "@type", "value": ["PartUsage"]},
+)
+```
+
+Each answer is a `QueryElement`: `id` (the element's qualified name), `type` (its
+metamodel type, e.g. `PartUsage`) and `properties`, the selected properties it
+has — a property an element does not have is absent rather than empty.
+`as_dict()` gives it back in the standard's JSON names. `scope` takes qualified
+names or the standard's `{"@id": …}` references, and considers each named element
+and everything nested inside it; an empty scope is the whole loaded model.
+
+A payload the standard does not describe — an unknown operator, a constraint with
+no property — raises `QueryError` before anything is sent. A property the service
+does not have raises `grpc.RpcError` (`INVALID_ARGUMENT`) naming the properties
+that exist, rather than answering with nothing. Like conversion, the query is
+negotiated: a service too old to report the `query` capability raises
+`MissingCapabilityError`.
+
+The standard's query model has **no graph traversal and no transitive closure**:
+"everything under this part" is a `scope`, and "everything specializing this
+definition" is not expressible at all. It is an interop surface, not Systemica's
+expressive query story — [docs/API.md](../docs/API.md) states exactly what is
+supported.
+
 ### Latency
 
 Measured on this repo's benchmark (`python/scripts/bench_latency.py`, 8-core
@@ -549,6 +592,7 @@ make python-proto
 - `symbol.py` — lazy symbol proxy, fetches children on demand
 - `instance.py` — instantiated object and its slots
 - `conversion.py` — a written model, its formats and extension inference
+- `query.py` — the standard's Query payload, translated and its answers
 - `verdict.py` — a verification's answer and what a calculation computed
 - `errors.py` — the exception hierarchy and the gRPC status translation
 - `capabilities.py` — what the connected service reports it supports

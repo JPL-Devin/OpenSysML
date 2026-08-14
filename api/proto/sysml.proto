@@ -40,6 +40,11 @@ service SysMLService {
   rpc VerifyRequirement(VerifyRequirementRequest) returns (VerifyRequirementResponse);
   rpc VerifySatisfaction(VerifySatisfactionRequest) returns (VerifySatisfactionResponse);
   rpc EvaluateCalc(EvaluateCalcRequest) returns (EvaluateCalcResponse);
+
+  // Run a SysML v2 API & Services Query over a parsed model: scope/select/where
+  // as the standard defines them, so a client that speaks that API can filter a
+  // model here. Reported as the "query" capability.
+  rpc Query(QueryRequest) returns (QueryResponse);
 }
 
 // Verdict is one verification's answer: whether the condition held, and, when
@@ -433,5 +438,90 @@ message ServerInfoResponse {
   //                  VerifySatisfaction and EvaluateCalc RPCs answer the
   //                  questions the REPL's %constraint, %requirement, %satisfy
   //                  and %calc answer.
+  //   "query"      - the Query RPC evaluates a SysML v2 API & Services Query.
   repeated string capabilities = 2;
+}
+
+// QueryRequest runs a Query against a model the service already parsed.
+message QueryRequest {
+  string model_hash = 1;  // from ParseFile response
+  Query query = 2;
+}
+
+// QueryResponse contains the elements the query selected, in the order they are
+// declared in the model. A query that matches nothing answers with no elements;
+// a query the service cannot evaluate fails the call with INVALID_ARGUMENT
+// rather than answering empty.
+message QueryResponse {
+  repeated QueryResultElement elements = 1;
+}
+
+// Query is the standard's Query resource (SysML v2 API & Services). Its `@type`
+// is fixed and carries no information on the wire, and its identity fields
+// (`@id`, `owningProject`) belong to a repository that stores queries, which
+// this service is not: it evaluates a query against a parsed model.
+message Query {
+  // Elements the query considers, each named by qualified name, together with
+  // every element nested inside them. Empty considers the whole loaded model.
+  // Corresponds to the standard's `scope` of DataIdentity references.
+  repeated string scope = 1;
+  // Properties to report for each matched element. Empty reports all of them.
+  repeated string select = 2;
+  // Filter every considered element must satisfy. Unset matches all of them.
+  Constraint where = 3;
+}
+
+// Constraint is the standard's Constraint, whose `@type` discriminates between
+// its two forms. On the wire the form is the oneof arm, not a type tag.
+message Constraint {
+  oneof constraint {
+    PrimitiveConstraint primitive = 1;
+    CompositeConstraint composite = 2;
+  }
+}
+
+// PrimitiveConstraint compares one property of an element against a value.
+message PrimitiveConstraint {
+  // Negates the comparison's verdict.
+  bool inverse = 1;
+  // Property to compare, as named in docs/API.md's query property table
+  // ("@type", "name", "qualifiedName", ...). An unknown one fails the call.
+  string property = 2;
+  PrimitiveOperator operator = 3;
+  // Values to compare against. The standard writes one value, and its clients
+  // also write a list for `@type`; with `=` the element matches any of them,
+  // while `>` and `<` require exactly one.
+  repeated string value = 4;
+}
+
+// PrimitiveOperator is the standard's PrimitiveConstraint.operator.
+enum PrimitiveOperator {
+  PRIMITIVE_OPERATOR_UNSPECIFIED = 0;  // unset; fails the call
+  PRIMITIVE_OPERATOR_EQUAL = 1;        // "="
+  PRIMITIVE_OPERATOR_GREATER = 2;      // ">"
+  PRIMITIVE_OPERATOR_LESS = 3;         // "<"
+}
+
+// CompositeConstraint combines constraints. An empty constraint list fails the
+// call: it has no defensible verdict.
+message CompositeConstraint {
+  CompositeOperator operator = 1;
+  repeated Constraint constraint = 2;
+}
+
+// CompositeOperator is the standard's CompositeConstraint.operator.
+enum CompositeOperator {
+  COMPOSITE_OPERATOR_UNSPECIFIED = 0;  // unset; fails the call
+  COMPOSITE_OPERATOR_AND = 1;          // "and"
+  COMPOSITE_OPERATOR_OR = 2;           // "or"
+}
+
+// QueryResultElement is one matched element. `id` and `type` are always
+// reported, since an element record is not usable without them; `properties`
+// carries what `select` asked for, omitting a property the element does not
+// have.
+message QueryResultElement {
+  string id = 1;    // qualified name, the identity this service reports
+  string type = 2;  // metamodel type name ("PartUsage", "PartDefinition", ...)
+  map<string, string> properties = 3;
 }
