@@ -166,8 +166,9 @@ is the cheapest source of the values `%slots` should print.
 
 ### `variant` used outside a variation, and per-variation-point variant objects
 
-Two easy discriminators for changes in the variant/variation layer (both landed in PR #128; the
-"old" shapes below are what a build lacking that work prints, so they double as A/B canaries):
+This section describes behavior added by PR #128, so it applies only once that PR is on `main`; the
+"old" shapes below are what current `main` prints, so they double as A/B canaries. Three easy
+discriminators for changes in the variant/variation layer:
 
 - **A `variant` member whose owner is not a `variation` must stay an ordinary feature.** Model:
   `part def P { attribute k : Real = 2.0; variant attribute x : Real = 1.0; }` +
@@ -197,7 +198,11 @@ Two easy discriminators for changes in the variant/variation layer (both landed 
   only either reports `not a variant of the variation: electric is not a variant of engine (variants:
   electric, …)` (self-contradictory) or `usage engine::electric has no value` plus a spurious
   `variant-outside-variation` warning. The same applies when the owner redefines a variation usage
-  (`part :>> engine { variant part … }`) without restating `variation`.
+  (`part :>> engine { variant part … }`) without restating `variation`. Drop the variants' own
+  `: Engine` to test the second half: a variant specializes its variation point, so untyped
+  `variant part petrol;` must still print `power = 100.00` (Engine's default) rather than
+  `(no features)` — that shape is the sharper canary, since it needs the supertype edge, not just
+  the selection.
 
 ## Testing lexical scope of behavior bodies (declaring-scope changes)
 
