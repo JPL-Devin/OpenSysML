@@ -116,6 +116,27 @@ func (k DefinitionKind) String() string {
 	}
 }
 
+// PortionKind is the portion an occurrence usage declares of its type
+// (OccurrenceUsage::portionKind, SysML v2 8.3.9.11).
+type PortionKind int
+
+const (
+	PortionNone PortionKind = iota
+	PortionSnapshot
+	PortionTimeslice
+)
+
+// Keyword returns the notation for the portion kind, empty for PortionNone.
+func (k PortionKind) Keyword() string {
+	switch k {
+	case PortionSnapshot:
+		return "snapshot"
+	case PortionTimeslice:
+		return "timeslice"
+	}
+	return ""
+}
+
 // UsageKind discriminates the concrete usage taxonomy element.
 type UsageKind int
 
@@ -378,6 +399,10 @@ type Relationship struct {
 	NodeBase
 	Kind   RelationshipKind
 	Target Node // QualifiedName or Expression (e.g., FeatureChainExpr for interfacingPorts.incomingTransfers)
+	// Conjugated records the `~` of a ConjugatedPortTyping (SysML v2
+	// 8.3.12.3): the type is the conjugate of Target, which reverses the
+	// directions of the target port definition's features.
+	Conjugated bool
 }
 
 // Multiplicity is a `[n]` / `[lo..hi]` / `[*]` bound on a usage. Bounds are
@@ -429,9 +454,11 @@ type Usage struct {
 	IsConstant   bool // 'constant' feature modifier
 	IsEvent      bool // 'event' modifier for event-driven occurrences
 	IsIndividual bool // 'individual' modifier: OccurrenceUsage::isIndividual
-	IsSnapshot   bool // 'snapshot' modifier: OccurrenceUsage::portionKind = snapshot
-	IsAccept     bool // 'accept' action for message consumption
-	IsResult     bool // declared with 'return': the result parameter of a calculation/expression
+	// Portion is the `snapshot` or `timeslice` prefix of an occurrence usage
+	// (OccurrenceUsage::portionKind, SysML v2 8.3.9.11).
+	Portion  PortionKind
+	IsAccept bool // 'accept' action for message consumption
+	IsResult bool // declared with 'return': the result parameter of a calculation/expression
 	// IsNegated is the `not` of `assert not constraint { … }` and
 	// `assert not satisfy … by …`: the conditions are asserted to be false
 	// (Invariant::isNegated, SysML v2 §8.3.21.10).
@@ -453,7 +480,22 @@ type Usage struct {
 	// that do not use them.
 	ConnectorEnds []*ConnectorEnd // connection / interface / allocation usage ends
 	FlowEnds      *FlowEnds       // flow usage ends
-	IsConjugated  bool            // `~` conjugation on port / interface
+}
+
+// HasConjugatedTyping reports whether the usage declares a `: ~P` typing.
+func (u *Usage) HasConjugatedTyping() bool {
+	_, ok := u.ConjugatedTyping()
+	return ok
+}
+
+// ConjugatedTyping returns the usage's conjugated port typing (`: ~P`), if any.
+func (u *Usage) ConjugatedTyping() (*Relationship, bool) {
+	for _, r := range u.Relationships {
+		if r != nil && r.Kind == RelTyping && r.Conjugated {
+			return r, true
+		}
+	}
+	return nil, false
 }
 
 // FlowEnds holds the ends of a flow usage: the `from`/`to` targets and an

@@ -188,17 +188,14 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.IsVariant {
 			b.WriteString(` variant=true`)
 		}
-		if v.IsConjugated {
-			b.WriteString(` conjugated=true`)
-		}
 		if v.IsEnd {
 			b.WriteString(` end=true`)
 		}
 		if v.IsIndividual {
 			b.WriteString(` individual=true`)
 		}
-		if v.IsSnapshot {
-			b.WriteString(` snapshot=true`)
+		if kw := v.Portion.Keyword(); kw != "" {
+			fmt.Fprintf(b, ` %s=true`, kw)
 		}
 		if v.IsNegated {
 			b.WriteString(` negated=true`)
@@ -278,6 +275,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			}
 		}
 		fmt.Fprintf(b, `(Relationship kind=%q target=%s`, v.Kind.String(), targetStr)
+		if v.Conjugated {
+			b.WriteString(` conjugated=true`)
+		}
 		var kids []Node
 		if v.Target != nil {
 			kids = append(kids, v.Target)
@@ -308,9 +308,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		writeChildren(b, depth, kids)
 		return
 	case *RequireMember:
-		if v.Name != "" {
-			// Body form: require name { body }
-			fmt.Fprintf(b, `(RequireMember name=%q`, v.Name)
+		if v.Reference != nil {
+			// Reference form: require Q::r { body }
+			fmt.Fprintf(b, `(RequireMember name=%q`, qnString(v.Reference))
 			writeChildren(b, depth, v.Body)
 		} else if v.Expression == nil {
 			// Nested-constraint form: require constraint { expr }
@@ -323,6 +323,11 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		return
 	case *AssumeMember:
+		if v.Reference != nil {
+			fmt.Fprintf(b, `(AssumeMember name=%q`, qnString(v.Reference))
+			writeChildren(b, depth, v.Body)
+			return
+		}
 		b.WriteString(`(AssumeMember`)
 		if v.Expression == nil {
 			writeChildren(b, depth, v.Body)

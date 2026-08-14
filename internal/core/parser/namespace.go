@@ -218,7 +218,14 @@ func (p *Parser) parseMember() ast.Node {
 		return al
 	}
 
-	inner := p.parseDeclaration(start)
+	// A namespace member may be a succession stated without its keyword
+	// (SysML v2 8.2.2.13.3): `first a then b;`.
+	var inner ast.Node
+	if p.atKeyword("first") {
+		inner = p.parseSuccessionAsUsage(start)
+	} else {
+		inner = p.parseDeclaration(start)
+	}
 	if inner == nil {
 		// No declaration recognized. Emit an error node spanning the skip.
 		en := p.errorNodeSkip(start, "expected a namespace member")
@@ -312,6 +319,9 @@ func (p *Parser) parseNamespaceBody() ([]ast.Node, bool) {
 	if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); !ok {
 		return nil, false
 	}
+	// A package/namespace body has its own notation; it never inherits the
+	// enclosing body's (e.g. an interface's default-end allowance).
+	defer p.pushBodyContext(bodyOther)()
 	var members []ast.Node
 	for !p.atEOF() && !p.at(lexer.RBrace) {
 		before := p.peek().Span.Offset

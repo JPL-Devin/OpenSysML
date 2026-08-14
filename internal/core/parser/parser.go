@@ -33,6 +33,36 @@ type Parser struct {
 	// reached in a statement position inside one is read as an early return
 	// rather than as a result parameter declaration.
 	calcBodyDepth int
+
+	// bodyCtx is the stack of enclosing body notations; only the innermost
+	// matters (see bodyContext).
+	bodyCtx []bodyContext
+}
+
+// bodyContext is the notation of the body being parsed, for members whose
+// grammar depends on it: an interface body's default end is a port usage and
+// may be anonymous (SysML v2 8.2.2.14, DefaultInterfaceEnd).
+type bodyContext int
+
+const (
+	bodyOther bodyContext = iota
+	bodyInterface
+)
+
+// pushBodyContext enters a body of the given notation and returns the function
+// that leaves it.
+func (p *Parser) pushBodyContext(c bodyContext) func() {
+	depth := len(p.bodyCtx)
+	p.bodyCtx = append(p.bodyCtx, c)
+	return func() { p.bodyCtx = p.bodyCtx[:depth] }
+}
+
+// bodyContext returns the notation of the innermost body being parsed.
+func (p *Parser) bodyContext() bodyContext {
+	if len(p.bodyCtx) == 0 {
+		return bodyOther
+	}
+	return p.bodyCtx[len(p.bodyCtx)-1]
 }
 
 // parseCheckpoint captures parser state for backtracking.

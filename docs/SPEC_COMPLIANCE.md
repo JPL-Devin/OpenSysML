@@ -622,6 +622,67 @@ reference to an inherited element is not a name conflict.
 | `frame` and `render` are also legal names (KerML has neither keyword; the Kernel Semantic Library writes `in frame : SpatialFrame[1]`). Only a name or the member's own kind keyword can follow the member keyword, so anything else — a multiplicity, a specialization, a type, a value, a body, `;` — declares a feature named after the keyword | `parser/defusage.go` `atMemberKeywordUsedAsKeyword` | `parse/view_members.golden` (`frame[0..1] : Engineer;`, `render :> frame;`), `libs/reserved_keyword_name_test.go`, `TestStdlibConformance` | ⚠️ Approximate (the parser does not track the enclosing body kind, so the reading is decided by the following token alone: `frame;` inside a viewpoint declares a feature named `frame` instead of being diagnosed as a framing with no concern) |
 | `expose` in a view body is an Import | see the Name Resolution section's `expose` rows | `parser/expose_test.go`, `resolve/expose_test.go`, `parse/view_expose.golden` | ✅ Faithful (`validateExposeOwningNamespace` reports an `expose` outside a view usage — see the Name Resolution section's `expose` rows) |
 
+### Structural, Interface and Analysis Notation (SysML v2 §7.12 Ports, §8.2.2.14 Interfaces, §8.2.2.19 Analysis Cases, §8.3.9.11 Occurrences)
+
+Notation exercised by the Open-MBEE corpus models (`starkit`, `Dragon`,
+`DesertKite/OOSEM`, the spacecraft example notebooks). Conjugation is a semantic
+relationship, not parser sugar: the `~` is kept on the typing relationship
+(`ast.Relationship.Conjugated`) and the reversal of `in`/`out` is computed in the
+semantics layer over the conjugation parity of the typing/specialization chain.
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| `port p : ~P` types a port by the conjugated port definition `P::'~P'` (§7.12.3); its features are P's with `in`/`out` reversed and `inout` unchanged, and conjugation composes, so a conjugate of a conjugate has P's directions | `ast/defusage.go` `Relationship.Conjugated`; `parser/defusage.go` `parseRelationshipClauseTarget`; `semantics/conjugation.go` `ConjugateDirection`, `superEdges`, `typeEdge`, `featureEdges`, `conjugatedSupertypes`, `PortFeatures`, `IsConjugated` (a declaration's feature typing carries the conjugation, so it is read ahead of a redefinition clause written before it) | `parse/conjugated_port_type.golden`, `semantics/conjugation_test.go` `TestConjugationReversesDirections`, `TestDoubleConjugationRestoresDirections`, `TestConjugationOnRedefiningPort`, `parser/negative_test.go` (`conjugated_no_type`, `conjugated_no_type_after_name`) | ✅ Faithful |
+| A port usage conforms to the definition it conjugates, and two ports match when each named feature of one has a feature of the other with a conforming type and the conjugate direction (§7.12.2) | `semantics/conjugation.go` `PortsConform`, `featuresMatchConjugate`, `featureTypesConform` | `semantics/conjugation_test.go` `TestConjugatedPortConformance` | ✅ Faithful |
+| The ports at the two ends of an interface must have conjugate directed features: what one end sends the other receives | `semantics/conjugation.go` `InterfaceEndPortMismatch`, `endPortFeatures`; `passes/constraint.go` `checkInterfaceEndConjugation` (code `port-conjugation`) | `passes/constraint_test.go` `TestConstraintInterfaceEndConjugation`, `semantics/conjugation_test.go` `TestInterfaceEndConjugation` | ⚠️ Approximate (reported as a warning, and only for an interface whose two ends both declare a resolvable port type; undirected features carry no flow, so they are not required to match; the ends of a `connect`/`flow` clause take their types by implicit redefinition of the interface's ends, which is checked as end *identity*, not as direction) |
+| Only a port usage or a connector end may be typed by a conjugated port definition, and `~` must name a port definition | `passes/typecheck.go` `checkConjugatedTyping` | `passes/typecheck_test.go` `TestTypeCheckConjugatedTyping` | ✅ Faithful |
+| An interface body may declare a default end with no declaration at all: `end;` is an anonymous port usage (§8.2.2.14.1 `DefaultInterfaceEnd: isEnd ?= 'end' Usage`) | `parser/parser.go` `bodyContext`/`pushBodyContext`; `parser/defusage.go` `parseAnonymousEnd`, `parseAnonymousEndUsage`, `anonymousUsageKind` | `parse/end_usages.golden`, `resolve/analysis_test.go` `TestResolveDragonStructures` | ✅ Faithful |
+| Anywhere else a bare `end;` is not standard notation: only `DefaultInterfaceEnd` makes the usage declaration optional, and every other `end` form (`ReferenceUsage`, `EndUsagePrefix` + a kind keyword) requires an `Identification` or a specialization part | `parser/defusage.go` `parseAnonymousEndUsage` (typed diagnostic naming the fix, `end ref;`) | `parser/negative_test.go` (`end_outside_connector`, `end_outside_connector_package`) | ✅ Faithful (see the known limitation on `Dragon.sysml` below) |
+| `require Q::r { … }` / `assume Q::r { … }` subset a requirement by a *qualified* reference, and the body may redefine a feature of it by its qualified (`:>> R::f = expr`) or its plain name (`:>> f = expr`), which the member inherits through the reference subsetting | `ast/behavior.go` `RequireMember.Reference`, `AssumeMember.Reference` (a full `*ast.QualifiedName`, not a final segment); `parser/behavior.go` `parseRequireMember`, `parseAssumeMember`; `resolve/document.go` `resolveConstraintReference`, `walkConstraintBody`, `lookupConstraintRefFeature` | `parse/require_qualified_requirement.golden`, `resolve/analysis_test.go` `TestResolveQualifiedRequirement`, `TestResolveRequiredRequirementFeatureByPlainName`, `TestResolveRequiredRequirementUnknownPlainName`, `TestResolveQualifiedRequirementUnresolved`, `TestResolveQualifiedRedefinitionUnresolved`, `parser/negative_test.go` (`require_qualified_malformed_body`, `require_qualified_trailing_colons`) | ⚠️ Approximate (only the braced spelling is read as a reference — see the known limitation below) |
+| `snapshot` and `timeslice` are the two portion kinds of an occurrence usage (`PortionKind`, §8.3.9.11 `OccurrenceUsage::portionKind`); either prefix makes the declaration an occurrence usage whatever kind keyword follows. `PortionUsage` ends in `Usage`, whose declaration is optional, so an anonymous portion (`timeslice;`) is standard notation and is accepted without a diagnostic. Both keywords are read by the same prefix, so they agree on every declaration spelling, including a quoted name (`snapshot 'launch event';`) | `ast/defusage.go` `PortionKind`, `Usage.Portion`; `parser/defusage.go` (portion prefix), `parser/behavior.go` (portion-prefixed behavior parameters); `ast/dump.go`; `passes/typecheck.go` `declKind.portion`, `isOccurrenceUsage`; `export/rdf_out.go`/`rdf_in.go` | `parse/occurrence_portions.golden`, `parser/occurrence_modifier_test.go`, `resolve/analysis_test.go` `TestResolveDragonStructures`, `parser/negative_test.go` (`timeslice_no_subject`, `timeslice_usage_no_type`, `timeslice_unterminated`) | ✅ Faithful (parse, naming and resolution; a portion is not related to its whole occurrence at runtime — see below) |
+| The standard view/diagram library is part of the vendored stdlib, so `view v : StandardViewDefinitions::gv;` resolves | `libs/stdlib/Systems Library/StandardViewDefinitions.sysml` (already vendored: the eight standard view definitions with their short names) | `model/standard_views_test.go` `TestStandardViewDefinitionsBundled`, `TestStdlibConformance` | ✅ Faithful |
+| A qualified reference whose *first* segment names no loaded namespace is reported as such, naming the declarations that do carry the trailing name | `resolve/qualified.go` (unresolved-namespace diagnostic), `symbols/index.go` `FQNsEndingIn` | `model/standard_views_test.go` `TestVendorViewNamespaceDiagnostic`, `resolve/analysis_test.go` `TestResolveMissingStandardViewNamespace` | ✅ Faithful |
+| Every usage element subsets the most general base usage `Base::things`, whose `that` feature is therefore visible in a usage body (§7.6, [KerML 8.4.2]) | `semantics/implicit.go` `implicitBaseUsage`, `semantics/reference.go` `contributors` | `semantics/implicit_test.go` `TestImplicitBaseUsageContributesThat`, `model/that_constraint_test.go` `TestThatResolvesInAssertedConstraint` | ✅ Faithful (a member-contribution edge only: it is deliberately not a direct supertype, so conformance and `DirectSupertypes` are unchanged) |
+| A succession may be written with no keyword at the start of a namespace member: `first a::b then c;` (`SuccessionAsUsage`) | `parser/namespace.go` `parseMember`, `parseSuccessionAsUsage` | `parse/succession_as_usage.golden` | ✅ Faithful |
+
+**Known limitations of this notation**
+
+- `Dragon.sysml` declares bare `end;` members inside `connection def`, `flow def`
+  and nested `connection def` bodies (6 sites). This is not standard notation: a
+  `connection def`/`flow def` body is an ordinary `DefinitionBody`, whose members
+  are `NonOccurrenceUsageElement`/`OccurrenceUsageElement` — neither includes
+  `DefaultInterfaceEnd` (only `InterfaceBodyItem` does), and the only other
+  keyword-less end, `DefaultReferenceUsage`, requires a `UsageDeclaration`.
+  Systemica reports these with a typed diagnostic naming the conforming form
+  (`end ref;`, which `ReferenceUsage` does allow) rather than inventing grammar.
+- `Dragon.sysml` and `OOSEM.sysml` type their views by `'SysML Standard
+  Diagrams'::gv` (7 sites). No such namespace exists in the OMG release library
+  or the pilot implementation — it is a tool-specific package, not part of the
+  standard library — so it is not vendored under that name and no alias to
+  `StandardViewDefinitions` is fabricated. The diagnostic says the namespace is
+  not loaded and points at `StandardViewDefinitions::gv`.
+- Only the braced spelling of a requirement-constraint reference sets
+  `RequireMember.Reference`/`AssumeMember.Reference`. `CalculationBody` also
+  allows `;`, so standard `require Q::r;` is a reference too, but Systemica reads
+  a body-less `require`/`assume` member as a condition expression, which the
+  runtime evaluates as Boolean. Distinguishing the two spellings needs the name's
+  resolution, not its syntax, and no spelling requires the *referenced*
+  requirement's own conditions at runtime yet (`runtime/condition.go`
+  `appendConditions` walks only the member's own body), so the body-less form is
+  left on the expression path rather than made a silent no-op.
+- Only the *direct* members of a `require`/`assume` body resolve: a declaration
+  nested inside one of them (`require Q::r { part p : P { :>> f; } }`) has its
+  own body left unwalked, so a name there is neither resolved nor reported.
+  Consequently the referenced requirement's features are offered to direct
+  members only (`lookupConstraintRefFeature`), which is what the reference
+  subsetting inherits them to.
+- Conjugation is not a runtime concept here: nothing is executed differently for
+  a conjugated port, because ports carry no transfer semantics in the runtime
+  yet (see "Major UML/SysML Features Not Implemented").
+- A `snapshot`/`timeslice` portion is recorded on the usage and resolves like any
+  occurrence usage, but the runtime does not relate a portion to the occurrence
+  it is a portion of, and no time ordering between portions is derived.
+
 ### Name Resolution
 
 | Semantic Rule | Implementation | Test Case | Status |

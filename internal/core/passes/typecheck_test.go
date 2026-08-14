@@ -285,3 +285,26 @@ func TestTypeCheckBooleanControlFlowConditionsOK(t *testing.T) {
 		t.Fatalf("expected no type diagnostics for the loop forms, got %v", diags)
 	}
 }
+
+// TestTypeCheckConjugatedTyping covers SysML v2 §7.12.3: `~` names the
+// conjugated definition of a port definition, so its target must be a port and
+// only a port usage or a connector end may be typed by it.
+func TestTypeCheckConjugatedTyping(t *testing.T) {
+	if diags := typeDiags(t, `port def P { in item i; }
+		part def Craft { port p : ~P; }
+		interface def I { end a : P; end b : ~P; }`); len(diags) != 0 {
+		t.Errorf("expected no type diagnostics, got %v", diags)
+	}
+
+	notAPort := typeDiags(t, "part def Q; part def Craft { port p : ~Q; }")
+	if len(notAPort) == 0 {
+		t.Errorf("expected a diagnostic for conjugating a part definition")
+	} else if !strings.Contains(notAPort[0].Message, "conjugated port definition") {
+		t.Errorf("diagnostic = %q, want it to name conjugation", notAPort[0].Message)
+	}
+
+	notAPortUsage := typeDiags(t, "port def P; part def Craft { part p : ~P; }")
+	if len(notAPortUsage) == 0 {
+		t.Errorf("expected a diagnostic for a part usage typed by a conjugated port")
+	}
+}

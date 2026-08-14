@@ -130,6 +130,22 @@ func TestNegative(t *testing.T) {
 		{"receiver_no_operation", "attribute x = xs->;"},
 		{"receiver_unclosed_args", "attribute x = xs->union((1, 2);"},
 
+		// A conjugation names the definition it conjugates, only an interface end
+		// may omit its declaration, a required requirement binds a feature in its
+		// body, and a portion usage declares what it portions.
+		{"conjugated_no_type", "part def P { port p : ~; }"},
+		{"conjugated_no_type_after_name", "port def P; port p ~;"},
+		{"end_outside_connector", "part def P { end ; }"},
+		{"end_outside_connector_package", "package p { end ; }"},
+		{"end_in_package_nested_in_interface", "interface def I { package P { end ; } }"},
+		{"end_in_satisfy_nested_in_interface", "interface def I { satisfy requirement r { end ; } }"},
+		{"end_in_binding_nested_in_interface", "interface def I { binding b { end ; } }"},
+		{"require_qualified_malformed_body", "analysis def A { objective o { require Q::r { :>> ; } } }"},
+		{"require_qualified_trailing_colons", "analysis def A { objective o { require Q::; } }"},
+		{"timeslice_no_subject", "package p { timeslice :>> ; }"},
+		{"timeslice_usage_no_type", "package p { timeslice item i : ; }"},
+		{"timeslice_unterminated", "package p { timeslice item i"},
+
 		// `variation` and `variant` qualify a declaration, so each is rejected
 		// where the declaration it qualifies is absent or malformed.
 		{"variation_no_declaration", "variation ;"},

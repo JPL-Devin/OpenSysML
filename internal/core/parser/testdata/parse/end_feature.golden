@@ -30,7 +30,7 @@
   (Membership visibility="default"
     (Definition kind="interface" abstract=false variation=false name="FuelInterface"
       (Membership visibility="default"
-        (Usage kind="attribute" name="supplierPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+        (Usage kind="port" name="supplierPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
           (Relationship kind="typing" target=FuelOutPort
             (*ast.QualifiedName))))
       (Membership visibility="default"

@@ -544,6 +544,51 @@ func TestConstraintUnnamedRedefinitionNoValueOK(t *testing.T) {
 	}
 }
 
+// TestConstraintInterfaceEndConjugation covers SysML v2 §7.12.2: the ports at
+// the two ends of an interface must have conjugate directed features, which one
+// conjugated end (~P) supplies and two like-typed ends do not.
+func TestConstraintInterfaceEndConjugation(t *testing.T) {
+	const ports = `port def P { in item cmd; out item tlm; }
+`
+	conjugated := constraintDiags(t, ports+`interface def I {
+		end a : P;
+		end b : ~P;
+	}`)
+	if hasCode(conjugated, "port-conjugation") {
+		t.Errorf("unexpected port-conjugation diagnostic for conjugate ends: %v", conjugated)
+	}
+
+	mismatched := constraintDiags(t, ports+`interface def I {
+		end a : P;
+		end b : P;
+	}`)
+	if !hasCode(mismatched, "port-conjugation") {
+		t.Errorf("expected port-conjugation diagnostic for like-typed ends, got %v", mismatched)
+	}
+
+	// A port with no directed features imposes nothing.
+	undirected := constraintDiags(t, `port def U { attribute x; }
+	interface def I {
+		end a : U;
+		end b : U;
+	}`)
+	if hasCode(undirected, "port-conjugation") {
+		t.Errorf("unexpected port-conjugation diagnostic for undirected ports: %v", undirected)
+	}
+
+	// Conjugation constrains directed features only, so ports holding different
+	// undirected features still line up.
+	extra := constraintDiags(t, `port def A { attribute pressure; out item flow; }
+	port def B { in item flow; }
+	interface def I {
+		end a : A;
+		end b : B;
+	}`)
+	if hasCode(extra, "port-conjugation") {
+		t.Errorf("unexpected port-conjugation diagnostic for conjugate directed features: %v", extra)
+	}
+}
+
 // A `variant` whose owner is not a variation offers no choice, so it is reported
 // as a warning: the member is well-formed, only its `variant` keyword is idle.
 func TestConstraintVariantOutsideVariation(t *testing.T) {

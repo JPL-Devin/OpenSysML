@@ -55,7 +55,7 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 				direction:    d.Direction,
 				isEnd:        d.IsEnd,
 				isIndividual: d.IsIndividual,
-				isSnapshot:   d.IsSnapshot,
+				portion:      d.Portion,
 			})
 			tc.expr.checkUsageValue(scope, d)
 			if child := childScopeOf(scope, d); child != nil {
@@ -174,17 +174,20 @@ type declKind struct {
 	// isEnd marks a feature declared with the `end` modifier, whose type is that
 	// of the feature it connects and so escapes the usage-kind taxonomy.
 	isEnd bool
-	// isIndividual and isSnapshot carry the `individual` and `snapshot` usage
-	// modifiers (SysML v2 §8.3.9.11: `OccurrenceUsage::isIndividual` and
-	// `OccurrenceUsage::portionKind`). Either makes the declaration an
-	// occurrence usage, whatever kind keyword declares it.
+	// isIndividual and portion carry the `individual` modifier and the
+	// `snapshot`/`timeslice` portion prefix (SysML v2 §8.3.9.11:
+	// `OccurrenceUsage::isIndividual` and `OccurrenceUsage::portionKind`).
+	// Either makes the declaration an occurrence usage, whatever kind keyword
+	// declares it.
 	isIndividual bool
-	isSnapshot   bool
+	portion      ast.PortionKind
 }
 
-// isOccurrenceUsage reports whether the `individual` or `snapshot` modifier
-// makes the declaration an occurrence usage.
-func (d declKind) isOccurrenceUsage() bool { return d.isIndividual || d.isSnapshot }
+// isOccurrenceUsage reports whether the `individual` modifier or a portion
+// prefix makes the declaration an occurrence usage.
+func (d declKind) isOccurrenceUsage() bool {
+	return d.isIndividual || d.portion != ast.PortionNone
+}
 
 // occurrenceModifier names the occurrence modifier the declaration carries, for
 // diagnostics.
@@ -192,7 +195,7 @@ func (d declKind) occurrenceModifier() string {
 	if d.isIndividual {
 		return "individual"
 	}
-	return "snapshot"
+	return d.portion.Keyword()
 }
 
 func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Relationship, decl declKind) {
@@ -201,6 +204,9 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 			continue
 		}
 		tc.checkTypeTarget(scope, rel.Target, rel.Kind, decl)
+		if rel.Conjugated {
+			tc.checkConjugatedTyping(scope, rel, decl)
+		}
 	}
 }
 
@@ -235,6 +241,50 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 			Severity: SeverityError,
 			Span:     target.Span(),
 			Message:  msg,
+			Code:     "type",
+			Source:   "type",
+		})
+	}
+}
+
+// checkConjugatedTyping checks a `~T` typing: conjugation names the conjugated
+// port definition of a port definition, so T must be one (SysML v2 §7.12.3).
+func (tc *typeChecker) checkConjugatedTyping(scope *symbols.Scope, rel *ast.Relationship, decl declKind) {
+	target := rel.Target
+	if fr, ok := target.(*ast.FeatureReference); ok {
+		target = fr.Name
+	}
+	qn, isQN := target.(*ast.QualifiedName)
+	if !isQN {
+		return
+	}
+	sym, ok := tc.resolver.ResolveQualified(scope, qn)
+	if !ok || sym == nil {
+		return // unresolved: name-resolution tier owns this
+	}
+	if sym.Kind == symbols.SymbolAlias {
+		if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
+			sym = resolved
+		}
+	}
+	switch sym.Kind {
+	case symbols.SymbolPortDef, symbols.SymbolPortUsage:
+	default:
+		tc.diags = append(tc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     target.Span(),
+			Message: fmt.Sprintf(
+				"'~' names the conjugated port definition of a port definition, found %s", sym.Kind),
+			Code:   "type",
+			Source: "type",
+		})
+		return
+	}
+	if decl.isDef || (decl.useKind != ast.UsagePort && !decl.isEnd) {
+		tc.diags = append(tc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     target.Span(),
+			Message:  "only a port usage or a connector end may be typed by a conjugated port definition",
 			Code:     "type",
 			Source:   "type",
 		})
