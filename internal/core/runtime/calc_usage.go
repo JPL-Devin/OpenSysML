@@ -515,13 +515,12 @@ func (ctx *Context) runCalcUsage(
 	run := newCalcRun(shape, reader.scope, reader.self, env)
 	run.outer, run.result, run.returned = nested, result, returned
 	run.activation = activation
-	// A computation that returned has produced the calc's designated output, so
-	// reading that output by name answers from the run rather than evaluating
-	// the same expression again. An output the body assigned is its own
-	// computation, though, and keeps the value the body gave it.
+	// A `return` produces the value of the result parameter, so reading that
+	// parameter answers from the run rather than evaluating its binding again.
+	// Any other output states its own value — a declaration binding or a body
+	// assignment — which the returned one never stands in for.
 	if returned {
-		if out, err := shape.designatedOutput(); err == nil && out.Name != "" &&
-			(out.IsResult || !shape.BodyOutputs[out.Name]) {
+		if out, err := shape.designatedOutput(); err == nil && out.Name != "" && out.IsResult {
 			run.outputs[out.Name] = result
 		}
 	}
