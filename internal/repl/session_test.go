@@ -393,3 +393,51 @@ func TestNestedMergeInsertsOnceWhenTheNameIsDeclaredTwice(t *testing.T) {
 		t.Errorf("added member present %d times: %v", got, s.List())
 	}
 }
+
+// A comment after a body's closing brace documents the submission, not the
+// declaration, so it does not stop the body being added to.
+func TestTrailingCommentStillMerges(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { part def A; }")
+	s.Submit("package P { part def B; } // add B")
+
+	joined := strings.Join(s.List(), "\n")
+	for _, want := range []string{"part def A", "part def B"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("%s is missing after the merge: %q", want, joined)
+		}
+	}
+}
+
+// A submission of several sources of which one merges still reports the others:
+// scoping the report to what a merge added must not hide its siblings.
+func TestMultiSourceSubmissionReportsEverySource(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P {\n\tpart def A;\n}")
+	res := s.SubmitAll([]string{"package P { part def B; }", "part def Standalone;"})
+
+	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
+	wants(t, out, "✓ package P", "✓ part def Standalone")
+}
+
+// The same for a diagnostic: an error in the source that did not merge is this
+// submission's error, not part of the buffer it was accepted into.
+func TestMultiSourceSubmissionReportsASiblingsError(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P {\n\tpart def A;\n}")
+	res := s.SubmitAll([]string{"package P { part def B; }", "part def Standalone : Missing;"})
+
+	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
+	wants(t, out, "unresolved reference: Missing")
+}
+
+// A diagnostic in text merged into an earlier declaration is reported at the
+// line it was typed on, not at the line of the declaration it was added to.
+func TestMergedDiagnosticKeepsTheSubmittedLine(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P {\n\tpart def A;\n}")
+	res := s.Submit("package P { part def Bad : Missing; }")
+
+	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
+	wants(t, out, "1:17: error: unresolved reference: Missing")
+}

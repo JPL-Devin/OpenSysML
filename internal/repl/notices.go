@@ -18,6 +18,10 @@ type dropReport struct {
 	merged bool
 	decl   string   // the declaration this submission re-declared, e.g. "package P"
 	lost   []string // members no longer declared, e.g. "part def A"
+	// gone names the declarations this submission superseded, qualified, e.g.
+	// "P::A". Anything running against one of them (or something under it) is
+	// stale; what the submission left alone is not.
+	gone []string
 }
 
 // notice renders the report as the line the user is told about it, so no
@@ -69,6 +73,9 @@ func replacedReport(sn snippet, redeclared map[string]bool, newTop map[string]as
 		if desc == "" {
 			desc = name
 		}
+		// The whole snippet goes, so every name it declared is superseded — the
+		// re-declared ones by the new text, the rest by being dropped with it.
+		rep.gone = append(rep.gone, name)
 		if redeclared[name] {
 			if rep.decl == "" {
 				rep.decl = desc

@@ -56,7 +56,7 @@ func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments 
 		if !ok || oldDecl.header != newDecl.header {
 			continue
 		}
-		edits, replaced := mergeEdits(sn.src, oldDecl, src, newDecl)
+		edits, replaced, gone := mergeEdits(sn.src, oldDecl, src, newDecl, newDecl.name)
 		// Comments typed above the addition document the declaration, so they go
 		// above it rather than at the tail of the buffer.
 		if comments != "" {
@@ -67,7 +67,7 @@ func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments 
 		edits = append(edits, edit{start: oldDecl.start, end: oldDecl.start, own: true})
 		merged, own := applyEdits(sn.src, edits)
 		s.snippets = append(s.snippets[:i:i], s.snippets[i+1:]...)
-		return merged, own, dropReport{merged: true, decl: newDecl.desc, lost: replaced}, true
+		return merged, own, dropReport{merged: true, decl: newDecl.desc, lost: replaced, gone: gone}, true
 	}
 	return "", nil, dropReport{}, false
 }
@@ -164,10 +164,11 @@ func bodyMembers(member ast.Node) ([]ast.Node, bool) {
 }
 
 // closingBrace returns the offset of the brace that closes a declaration's body.
-// A span that does not end in one belongs to an unterminated body, which is not
-// safe to edit.
+// Text that does not end in one belongs to an unterminated body, which is not
+// safe to edit. A trailing comment is not part of the declaration, so it does
+// not hide the brace.
 func closingBrace(src string, node ast.Node) (int, bool) {
-	end := node.Span().Offset + node.Span().Len
+	end := node.Span().Offset + len(memberText(src, node))
 	if end > len(src) {
 		end = len(src)
 	}
@@ -181,13 +182,14 @@ func closingBrace(src string, node ast.Node) (int, bool) {
 }
 
 // mergeEdits computes the edits on oldSrc that fold newDecl's members into
-// oldDecl, plus a description of each member the new body replaces. A member
-// redeclared as a namespace on both sides is merged in turn, so adding to a
-// nested package keeps the nested members too.
-func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl) ([]edit, []string) {
+// oldDecl, plus a description of each member the new body replaces and its
+// qualified name under path. A member redeclared as a namespace on both sides is
+// merged in turn, so adding to a nested package keeps the nested members too.
+func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl, path string) ([]edit, []string, []string) {
 	var (
 		edits    []edit
 		replaced []string
+		gone     []string
 		folded   = make(map[int]bool, len(newDecl.members))
 		count    = nameCounts(oldDecl.members)
 	)
@@ -206,9 +208,10 @@ func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl) ([
 			// An empty body clears a nested namespace just as it clears a
 			// top-level one, so it replaces the old member instead of merging.
 			if newSub, ok := namespaceDeclOf(newSrc, nm); ok && len(newSub.members) > 0 && oldSub.header == newSub.header {
-				subEdits, subReplaced := mergeEdits(oldSrc, oldSub, newSrc, newSub)
+				subEdits, subReplaced, subGone := mergeEdits(oldSrc, oldSub, newSrc, newSub, path+"::"+name)
 				edits = append(edits, subEdits...)
 				replaced = append(replaced, subReplaced...)
+				gone = append(gone, subGone...)
 				folded[i] = true
 				continue
 			}
@@ -218,6 +221,7 @@ func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl) ([
 		start, end := memberCut(oldSrc, om)
 		edits = append(edits, edit{start: start, end: end})
 		replaced = append(replaced, renderMember(om))
+		gone = append(gone, path+"::"+name)
 	}
 	var added []string
 	for i, nm := range newDecl.members {
@@ -240,7 +244,7 @@ func mergeEdits(oldSrc string, oldDecl nsDecl, newSrc string, newDecl nsDecl) ([
 		e.own = true
 		edits = append(edits, e)
 	}
-	return edits, replaced
+	return edits, replaced, gone
 }
 
 // memberCut is the range to delete to remove a member: its own text plus the

@@ -1331,7 +1331,7 @@ func (s *Session) startAction(name string, performer []string) ([]string, error)
 	// Store session
 	s.actionExec = &actionSession{
 		name:     name,
-		rootName: rootNameOf(fqn, name),
+		fqn:      qualifiedOr(fqn, name),
 		symbol:   sym,
 		executor: exec,
 	}
@@ -1583,7 +1583,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	// Store session
 	s.stateExec = &stateSession{
 		name:     name,
-		rootName: rootNameOf(fqn, name),
+		fqn:      qualifiedOr(fqn, name),
 		symbol:   sym,
 		executor: exec,
 		now:      exec.CurrentTime(),

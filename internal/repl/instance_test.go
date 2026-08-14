@@ -198,11 +198,11 @@ func TestEndedActionSessionExplainsItselfToEveryCommand(t *testing.T) {
 	run(t, s, "%action tally")
 	s.Submit("package Debug {\n\taction tally {\n\t\tfirst start;\n\t\tdone end;\n\t\tthen start end;\n\t}\n}")
 
-	const why = `the action session for "tally" ended when Debug was redeclared at submission 2`
+	const why = `the action session for "tally" ended when Debug::tally was redeclared at submission 2`
 	wants(t, run(t, s, "%step"), why)
 	wants(t, run(t, s, "%tokens"), why)
 	wants(t, run(t, s, "%continue"), why)
-	wants(t, run(t, s, "%stop"), "ended when Debug was redeclared at submission 2")
+	wants(t, run(t, s, "%stop"), "ended when Debug::tally was redeclared at submission 2")
 
 	// Starting a new session clears the explanation with it.
 	run(t, s, "%action tally")
@@ -216,7 +216,7 @@ func TestEndedStateSessionExplainsItselfToEveryCommand(t *testing.T) {
 	run(t, s, "%state Cycle")
 	s.Submit("package Debug {\n\tstate Cycle {\n\t\tinitial init;\n\t\tfinal done;\n\t\tinit then done;\n\t}\n}")
 
-	const why = `the state machine session for "Cycle" ended when Debug was redeclared at submission 2`
+	const why = `the state machine session for "Cycle" ended when Debug::Cycle was redeclared at submission 2`
 	wants(t, run(t, s, "%current"), why)
 	wants(t, run(t, s, "%advance 1"), why)
 	wants(t, run(t, s, "%events"), why)
@@ -298,4 +298,17 @@ func TestSlotsTruncateWideNesting(t *testing.T) {
 	if n := strings.Count(got, "\n"); n > maxSlotLines+10 {
 		t.Errorf("listing ran to %d lines, want it bounded near %d:\n%.400s", n, maxSlotLines, got)
 	}
+}
+
+// Adding a member to a package leaves the rest of its body as it was, so a
+// debugging session over another member of it keeps running.
+func TestDebugSessionSurvivesAnAdditionToItsPackage(t *testing.T) {
+	s := loadFixture(t, "testdata/action_debug.sysml")
+	run(t, s, "%action tally")
+	res := s.Submit("package Debug { part def Widget; }")
+
+	if hasNotice(res, "debugging session") {
+		t.Errorf("notices = %v, want the untouched session kept", res.Notices)
+	}
+	wants(t, run(t, s, "%tokens"), "Active tokens")
 }
