@@ -181,6 +181,7 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		}
 		bodyScopesInExpr(scope, d.Collection)
 		bodyScopesInExpr(body, d.Condition)
+		bodyScopesInExpr(body, d.Until)
 		buildBodyScopes(body, d.Body)
 	case *ast.IfActionNode:
 		bodyScopesInExpr(scope, d.Condition)

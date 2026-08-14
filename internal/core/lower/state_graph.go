@@ -75,11 +75,18 @@ type StateGraph struct {
 
 // Transition represents a state transition (lowered from TransitionEdge or TransitionMember).
 type Transition struct {
+	// Name is the transition's own name, when it was written with one
+	// (`transition maintain first idle then busy`), and "" when it was not.
+	Name    string
 	Source  ast.Node   // *ast.StateNode or *ast.PseudostateNode
 	Target  ast.Node   // *ast.StateNode or *ast.PseudostateNode
 	Trigger ast.Node   // TimeEvent, ChangeEvent, SignalEvent, CallEvent, nil = completion
 	Guard   ast.Node   // guard expression, nil = no guard
 	Effect  []ast.Node // effect actions
+	// Via is the port the accepted occurrence must arrive at
+	// (`accept Ping via commPort`), and "" when the trigger names no port, in
+	// which case an occurrence reaching the machine by any route fires it.
+	Via string
 
 	// Scope is the scope the transition was declared in, in which the expressions
 	// its trigger carries — a time event's duration, a change event's condition —
@@ -573,11 +580,13 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 	}
 
 	return &Transition{
+		Name:    member.Name,
 		Source:  source,
 		Target:  target,
 		Trigger: classifyTrigger(member.Trigger),
 		Guard:   member.Guard,
 		Effect:  member.Effect,
+		Via:     ast.SimpleName(member.Via),
 		Scope:   scope,
 		// A call trigger's parameters are members of a scope of the transition's
 		// own, which its guard and effect resolve in (symbols/bodyscopes.go).
@@ -608,6 +617,21 @@ func classifyTrigger(trigger ast.Node) ast.Node {
 		return trigger
 	}
 
+	// A payload parameter: the accept states the occurrence it takes as a
+	// parameter declaration — by its type (`accept msg : Warning`), by the event
+	// it subsets (`accept :> shutDown`) — or carries a time or change event the
+	// parameter was parsed with (`accept when x > 1`).
+	if payload, ok := trigger.(*ast.Usage); ok {
+		if payload.Value != nil {
+			return classifyTrigger(payload.Value)
+		}
+		return &ast.AcceptEvent{
+			SignalType: relationshipTarget(payload, ast.RelTyping),
+			Subsets:    relationshipTarget(payload, ast.RelSubsets, ast.RelRedefines, ast.RelSpecializes, ast.RelReferences),
+			Payload:    payload,
+		}
+	}
+
 	// FeatureReference (bare name) → extract QualifiedName and treat as signal trigger
 	if featureRef, ok := trigger.(*ast.FeatureReference); ok {
 		return &ast.AcceptEvent{
@@ -626,6 +650,25 @@ func classifyTrigger(trigger ast.Node) ast.Node {
 	return &ast.ChangeEvent{
 		Condition: trigger,
 	}
+}
+
+// relationshipTarget returns the qualified name a usage's first relationship of
+// one of the given kinds names, or nil when it declares none.
+func relationshipTarget(usage *ast.Usage, kinds ...ast.RelationshipKind) *ast.QualifiedName {
+	for _, rel := range usage.Relationships {
+		if rel == nil {
+			continue
+		}
+		for _, kind := range kinds {
+			if rel.Kind != kind {
+				continue
+			}
+			if qn, ok := rel.Target.(*ast.QualifiedName); ok {
+				return qn
+			}
+		}
+	}
+	return nil
 }
 
 // collectTransitions recursively processes member lists to collect transitions.

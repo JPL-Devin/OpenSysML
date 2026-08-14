@@ -253,6 +253,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 		r.resolveExpr(scope, d.Collection)
 		r.resolveExpr(body, d.Condition)
+		r.resolveExpr(body, d.Until)
 		r.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
 		// The condition is evaluated before either branch is entered, so it sees

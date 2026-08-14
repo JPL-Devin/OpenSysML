@@ -18,14 +18,14 @@
           (Membership visibility="default"
             (Usage kind="part" name="focuser" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Membership visibility="default"
-                (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="perform"
                   (Relationship kind="references" target=(expr)
                     (FeatureChainExpr member="focus"
                       (FeatureReference name="takePhoto")))))))))
       (Membership visibility="default"
         (Usage kind="part" name="torqueGenerator" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
       (Membership visibility="default"
-        (Usage kind="allocation" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Usage kind="allocation" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="allocate"
           (ConnectorEnd target="takePicture"
             (*ast.QualifiedName))
           (ConnectorEnd target="camera"

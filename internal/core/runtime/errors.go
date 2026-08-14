@@ -79,6 +79,12 @@ var (
 	// reported instead of hanging.
 	ErrAcceptDeadlock = errors.New("accept deadlock")
 
+	// ErrNoClock is returned when a behavior waits for a time event where no
+	// clock advances: an action body has no time base of its own, so
+	// `accept at t` / `accept after d` written among an action's nodes is
+	// reported rather than passed through as if the instant had arrived.
+	ErrNoClock = errors.New("no clock to wait on")
+
 	// ErrCalcRecursionLimit is returned when calc invocation nests deeper than
 	// maxCalcNestingDepth, which a recursive calc would otherwise do until the
 	// process ran out of stack.

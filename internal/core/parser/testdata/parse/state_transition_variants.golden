@@ -1,9 +1,9 @@
 (RootNamespace
   (Membership visibility="default"
     (Definition kind="state" abstract=false variation=false name="TransitionVariants"
-      (*ast.SubstateMember)
-      (*ast.SubstateMember)
-      (*ast.SubstateMember)
+      (SubstateMember name="s1")
+      (SubstateMember name="s2")
+      (SubstateMember name="s3")
       (TransitionMember source="s1" target="s2"
         (FeatureReference name="event1"))
       (Membership visibility="default"

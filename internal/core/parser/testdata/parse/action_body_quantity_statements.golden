@@ -40,16 +40,17 @@
                   (OperatorExpr operator="**"
                     (FeatureReference name="s")
                     (LiteralInteger value="2"))))))
-          (*ast.InitialNode)
-          (Usage kind="action" name="integrate" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-            (WhileLoopActionNode kind="while" variable=""
-              (OperatorExpr operator=">"
-                (FeatureReference name="h")
-                (IndexExpr bracket=true
-                  (LiteralReal value="0.0")
-                  (FeatureReference name="m")))
-              (*ast.AssignmentActionNode)
-              (*ast.AssignmentActionNode)))
-          (*ast.FinalNode)
+          (InitialNode name="start" successor="")
+          (Membership visibility="default"
+            (Usage kind="action" name="integrate" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (WhileLoopActionNode kind="while" variable=""
+                (OperatorExpr operator=">"
+                  (FeatureReference name="h")
+                  (IndexExpr bracket=true
+                    (LiteralReal value="0.0")
+                    (FeatureReference name="m")))
+                (*ast.AssignmentActionNode)
+                (*ast.AssignmentActionNode))))
+          (FinalNode name="end")
           (SuccessionEdge source="start" target="integrate")
           (SuccessionEdge source="integrate" target="end"))))))

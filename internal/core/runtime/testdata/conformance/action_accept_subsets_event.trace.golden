@@ -1,0 +1,8 @@
+step 1: token 1@finish
+stmt send
+step 2: token 1@interrupt
+step 3: token 1@record
+stmt assign stopped
+  eval literal 1 -> 1
+step 4: token 1@end
+step 5: no active tokens

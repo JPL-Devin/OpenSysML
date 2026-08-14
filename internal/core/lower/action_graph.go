@@ -122,6 +122,11 @@ type Block struct {
 	Scope *symbols.Scope
 }
 
+// A block is a statement in its own right: the anonymous action usage a loop or
+// branch body is written as (`loop action { … } until c;`) runs its statements
+// in its own namespace.
+func (Block) statement() {}
+
 // Loop is a lowered loop statement. Kind says when the condition is tested:
 // before each iteration (`while`), after each iteration (`loop … until`), or
 // not at all, iteration being driven by a collection (`for`).
@@ -130,8 +135,11 @@ type Block struct {
 // at execution time. The iteration count is bounded by the executor's step
 // budget, so a loop that never terminates fails the run rather than hanging it.
 type Loop struct {
-	Kind       ast.LoopKind
-	Condition  ast.Node // nil for `for`, and for a `loop` written without `until`
+	Kind      ast.LoopKind
+	Condition ast.Node // nil for `for`, and for a `loop` written without `until`
+	// Until is the condition a `while` loop's `until` clause tests after each
+	// iteration (`while c { … } until d;`), nil when it carries none.
+	Until      ast.Node
 	Variable   string   // `for` only: the name each element is bound to
 	Collection ast.Node // `for` only: the collection iterated over
 	Body       Block
@@ -217,10 +225,19 @@ func (Unsupported) statement() {}
 // ViaPort is the port named by `accept msg : Warning via p`, empty when the
 // accept named none. A port-routed message is only offered to an accept on the
 // port it arrived at, so the two forms do not consume each other's messages.
+//
+// SubsetsEvent is the event feature the payload subsets (`accept :> shutDown`),
+// empty when it subsets none. Such an accept waits for an occurrence of that
+// one event rather than for any occurrence of a type.
+//
+// Trigger is the time or change event of `accept at t` / `accept after d` /
+// `accept when c`, nil when the accept waits for a message instead.
 type Accept struct {
-	ParamName  string
-	SignalType string
-	ViaPort    string
+	ParamName    string
+	SignalType   string
+	ViaPort      string
+	SubsetsEvent string
+	Trigger      ast.Node
 }
 
 // Attribute is a lowered attribute default written among a behavior's members
@@ -234,6 +251,10 @@ type Attribute struct {
 
 // ObjectFlow represents a data flow edge between pins.
 type ObjectFlow struct {
+	// Name is the flow's own name, when it was declared with one
+	// (`flow generateToAmplify from a.out to b.in;`), and "" for the anonymous
+	// form and for a flow the notation writes as an edge.
+	Name      string
 	SourcePin string
 	TargetPin string
 	Target    ast.Node
@@ -266,6 +287,11 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 		return nil, fmt.Errorf("action must be Usage or Definition, got %T", actionDecl)
 	}
 
+	// A succession can bind a member with no name of its own by position, which
+	// is what puts an action node member written as a statement (`then send …;`,
+	// `then loop action { … } until c;`) in the token flow.
+	sequenced := sequencedMembers(members)
+
 	// First pass: collect nodes
 	for _, member := range members {
 		actualMember := unwrapMembership(member)
@@ -288,11 +314,18 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				graph.Nodes = append(graph.Nodes, n)
 				lowerBody(graph, n, childScope(scope, n))
 			}
-		case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode, *ast.SendStatement:
-			// A statement is executed as part of an action node's body; written
-			// directly among the action's own members it has no name a
-			// succession could reach, hence no position in the token flow.
-			return nil, fmt.Errorf("%s written directly in an action body has no position in the token flow: declare it inside an action node", statementKeyword(n))
+		case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode,
+			*ast.SendStatement, *ast.TerminateStatement:
+			if !sequenced[actualMember] {
+				// A statement is executed as part of an action node's body; written
+				// directly among the action's own members, with no succession
+				// binding it, it has no position in the token flow.
+				return nil, fmt.Errorf("%s written directly in an action body has no position in the token flow: declare it inside an action node", statementKeyword(n))
+			}
+			// An action node member of its own: a node whose body is the one
+			// statement it was written as, run when a token reaches it.
+			graph.Nodes = append(graph.Nodes, n)
+			graph.Bodies[n] = []Statement{lowerStatement(n, scope)}
 		}
 	}
 
@@ -323,25 +356,25 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				}
 			}
 		case *ast.SuccessionEdge:
-			sourceNode := findNodeByName(graph.Nodes, n.Source)
-			targetNode := findNodeByName(graph.Nodes, n.Target)
+			sourceNode := resolveEnd(graph.Nodes, n.Source, n.SourceMember)
+			targetNode := resolveEnd(graph.Nodes, n.Target, n.TargetMember)
 
 			if sourceNode == nil {
-				return nil, fmt.Errorf("succession edge references undefined source node %s", edgeEndName(n.Source))
+				return nil, fmt.Errorf("succession edge references undefined source node %s", edgeEnd(n.Source, n.SourceMember))
 			}
 			if targetNode == nil {
-				return nil, fmt.Errorf("succession edge references undefined target node %s", edgeEndName(n.Target))
+				return nil, fmt.Errorf("succession edge references undefined target node %s", edgeEnd(n.Target, n.TargetMember))
 			}
 			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
 		case *ast.ControlFlowEdge:
-			sourceNode := findNodeByName(graph.Nodes, n.Source)
-			targetNode := findNodeByName(graph.Nodes, n.Target)
+			sourceNode := resolveEnd(graph.Nodes, n.Source, n.SourceMember)
+			targetNode := resolveEnd(graph.Nodes, n.Target, n.TargetMember)
 
 			if sourceNode == nil {
-				return nil, fmt.Errorf("control flow edge references undefined source %s", edgeEndName(n.Source))
+				return nil, fmt.Errorf("control flow edge references undefined source %s", edgeEnd(n.Source, n.SourceMember))
 			}
 			if targetNode == nil {
-				return nil, fmt.Errorf("control flow edge references undefined target %s", edgeEndName(n.Target))
+				return nil, fmt.Errorf("control flow edge references undefined target %s", edgeEnd(n.Target, n.TargetMember))
 			}
 			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
 
@@ -368,6 +401,15 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				TargetPin: targetPin,
 				Target:    targetNode,
 			})
+		case *ast.Usage:
+			if n.Kind != ast.UsageFlow || n.FlowEnds == nil {
+				continue
+			}
+			source, flow, err := lowerFlow(graph.Nodes, n)
+			if err != nil {
+				return nil, err
+			}
+			graph.DataFlows[source] = append(graph.DataFlows[source], flow)
 		}
 	}
 
@@ -387,9 +429,11 @@ func lowerBody(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 				continue
 			}
 			graph.Accepts[node] = Accept{
-				ParamName:  m.Ident.Name,
-				SignalType: typingTarget(m),
-				ViaPort:    acceptPort(node),
+				ParamName:    m.Ident.Name,
+				SignalType:   typingTarget(m),
+				ViaPort:      acceptPort(node),
+				SubsetsEvent: subsettingTarget(m),
+				Trigger:      m.Value,
 			}
 		}
 	}
@@ -418,6 +462,7 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 		return Loop{
 			Kind:       m.Kind,
 			Condition:  m.Condition,
+			Until:      m.Until,
 			Variable:   m.Variable.Name,
 			Collection: m.Collection,
 			Body:       lowerBlock(m, m.Body, childScope(scope, m)),
@@ -443,6 +488,11 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 	case *ast.Usage:
 		if stmt, ok := usageStatement(m, scope); ok {
 			return stmt
+		}
+		// An anonymous action usage owning a body is the ActionBodyParameter a loop
+		// or branch body is written as (SysML.xtext ActionBodyParameter).
+		if m.Kind == ast.UsageAction && m.Ident.Name == "" && len(m.Members) > 0 {
+			return lowerBlock(m, m.Members, childScope(scope, m))
 		}
 		return Unsupported{Description: usageDescription(m), Node: m, Scope: scope}
 	default:
@@ -509,6 +559,26 @@ func acceptPort(node *ast.Usage) string {
 	return ""
 }
 
+// subsettingTarget returns the name a usage subsets (`:> e`, `:>> e`), or ""
+// when it subsets nothing. For an accept payload that name is the event it
+// waits for.
+func subsettingTarget(usage *ast.Usage) string {
+	for _, rel := range usage.Relationships {
+		if rel == nil {
+			continue
+		}
+		switch rel.Kind {
+		case ast.RelSubsets, ast.RelRedefines, ast.RelSpecializes, ast.RelReferences:
+		default:
+			continue
+		}
+		if name := ast.SimpleName(rel.Target); name != "" {
+			return name
+		}
+	}
+	return ""
+}
+
 // typingTarget returns the name a usage was typed with (`: T`), or "" when it
 // was declared without a type.
 func typingTarget(usage *ast.Usage) string {
@@ -543,6 +613,53 @@ func edgeEndName(qname *ast.QualifiedName) string {
 		parts = append(parts, part.Text)
 	}
 	return strconv.Quote(strings.Join(parts, "::"))
+}
+
+// edgeEnd names one end of an edge for a message about a node the body does not
+// declare: the name the end references, or the kind of the member the notation
+// bound to it by position, which has no name to report.
+func edgeEnd(qname *ast.QualifiedName, member ast.Node) string {
+	if member != nil {
+		return "written as " + statementKeyword(member)
+	}
+	return edgeEndName(qname)
+}
+
+// resolveEnd resolves one end of an edge: the node the end names, or the member
+// the notation bound to that end by position (SuccessionEdge.SourceMember), which
+// is how an action node member with no name of its own is sequenced.
+func resolveEnd(nodes []ast.Node, qname *ast.QualifiedName, member ast.Node) ast.Node {
+	if member != nil {
+		for _, node := range nodes {
+			if node == member {
+				return node
+			}
+		}
+		return nil
+	}
+	return findNodeByName(nodes, qname)
+}
+
+// sequencedMembers collects the members of a body that an edge binds to one of
+// its ends by position, the members a `then` sequences without a name.
+func sequencedMembers(members []ast.Node) map[ast.Node]bool {
+	sequenced := make(map[ast.Node]bool)
+	mark := func(ends ...ast.Node) {
+		for _, end := range ends {
+			if end != nil {
+				sequenced[end] = true
+			}
+		}
+	}
+	for _, member := range members {
+		switch n := unwrapMembership(member).(type) {
+		case *ast.SuccessionEdge:
+			mark(n.SourceMember, n.TargetMember)
+		case *ast.ControlFlowEdge:
+			mark(n.SourceMember, n.TargetMember)
+		}
+	}
+	return sequenced
 }
 
 func findNodeByName(nodes []ast.Node, qname *ast.QualifiedName) ast.Node {
@@ -602,6 +719,94 @@ func getNodeName(node ast.Node) string {
 	return ""
 }
 
+// lowerFlow lowers a flow declared among an action's members
+// (`flow generateToAmplify from generateTorque.engineTorque to
+// amplifyTorque.engineTorque;`) to the data flow the executor applies when a
+// token leaves the source node: the value at the source's pin becomes the value
+// at the target's pin. The flow's own name is carried so a diagnostic and the
+// REPL can name it.
+//
+// Both ends must name action nodes of this graph, since a data flow moves a
+// value from one node's output to another's input; an end naming anything else
+// is reported rather than dropped.
+func lowerFlow(nodes []ast.Node, flow *ast.Usage) (ast.Node, ObjectFlow, error) {
+	name, _ := ast.EffectiveName(flow)
+	sourceNode, sourcePin := flowEnd(nodes, flow.FlowEnds.From)
+	targetNode, targetPin := flowEnd(nodes, flow.FlowEnds.To)
+
+	if sourceNode == nil {
+		return nil, ObjectFlow{}, fmt.Errorf(
+			"flow %s: source %s does not name an action node of this action",
+			orAnonymous(name), flowEndText(flow.FlowEnds.From),
+		)
+	}
+	if targetNode == nil {
+		return nil, ObjectFlow{}, fmt.Errorf(
+			"flow %s: target %s does not name an action node of this action",
+			orAnonymous(name), flowEndText(flow.FlowEnds.To),
+		)
+	}
+
+	// `flow of engineTorque from a to b` names the feature that flows rather
+	// than a pin of each end, so it names the pin at both ends.
+	if payload := ast.SimpleName(flow.FlowEnds.Payload); payload != "" {
+		if sourcePin == "" {
+			sourcePin = payload
+		}
+		if targetPin == "" {
+			targetPin = payload
+		}
+	}
+
+	return sourceNode, ObjectFlow{
+		Name:      name,
+		SourcePin: sourcePin,
+		TargetPin: targetPin,
+		Target:    targetNode,
+	}, nil
+}
+
+// flowEnd resolves one end of a flow to the node it belongs to and the pin it
+// names. A chain (`generateTorque.engineTorque`) names a node and its pin; a
+// bare name (`generateTorque`) names the node alone, and the pin is whatever
+// the flow's payload names.
+func flowEnd(nodes []ast.Node, end ast.Node) (ast.Node, string) {
+	switch e := end.(type) {
+	case *ast.QualifiedName:
+		return parsePinReference(nodes, e)
+	case *ast.FeatureChainExpr:
+		node, _ := flowEnd(nodes, e.Operand)
+		return node, ast.SimpleName(e.Member)
+	case *ast.FeatureReference:
+		return flowEnd(nodes, e.Name)
+	}
+	return nil, ""
+}
+
+// orAnonymous names a declaration that may have been written without a name.
+func orAnonymous(name string) string {
+	if name == "" {
+		return "(anonymous)"
+	}
+	return name
+}
+
+// flowEndText renders one end of a flow for a diagnostic: the chain `a.out` for
+// a feature chain, the qualified name for a reference, and a placeholder for an
+// end the notation left out, so the message never reads as an empty position.
+func flowEndText(end ast.Node) string {
+	switch e := end.(type) {
+	case *ast.QualifiedName:
+		return edgeEndName(e)
+	case *ast.FeatureChainExpr:
+		base := strings.Trim(flowEndText(e.Operand), `"`)
+		return strconv.Quote(base + "." + ast.SimpleName(e.Member))
+	case *ast.FeatureReference:
+		return edgeEndName(e.Name)
+	}
+	return "(nothing)"
+}
+
 // parsePinReference extracts node and pin name from a qualified reference.
 // Format: "nodeName.pinName" or just "nodeName" (pin = "")
 func parsePinReference(nodes []ast.Node, qname *ast.QualifiedName) (ast.Node, string) {
@@ -635,6 +840,8 @@ func statementKeyword(node ast.Node) string {
 		return "an assignment"
 	case *ast.SendStatement:
 		return "a 'send'"
+	case *ast.TerminateStatement:
+		return "a 'terminate'"
 	default:
 		return fmt.Sprintf("a %T statement", n)
 	}

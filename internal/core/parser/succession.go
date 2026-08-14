@@ -6,8 +6,9 @@ package parser
 // builds — the node lowering and RDF already honour.
 //
 // The grammar admits it only before an occurrence usage, so anything else after
-// it is an error; an edge names its ends, so a `then` beside a member with no
-// name warns instead.
+// it is an error. A member with no name has no name for an end to reference, so
+// the edge binds that end to the member itself — which is how the notation binds
+// it: by position beside the keyword.
 
 import (
 	"fmt"
@@ -56,7 +57,8 @@ type bodyBuilder struct {
 	// taken next sequences from. An edge or an unnamed member is not one.
 	last      string
 	lastSpan  source.Span
-	hasMember bool // whether any member precedes, named or not
+	lastNode  ast.Node // that member itself, the end a `then` beside an unnamed member binds
+	hasMember bool     // whether any member precedes, named or not
 
 	// pending is set between taking a `then` and adding the member it prefixes;
 	// valid is false once it has been diagnosed, so a bad succession is reported
@@ -66,6 +68,7 @@ type bodyBuilder struct {
 	valid      bool
 	source     string
 	sourceSpan source.Span
+	sourceNode ast.Node
 }
 
 func (p *Parser) newBodyBuilder() *bodyBuilder {
@@ -101,9 +104,11 @@ func (b *bodyBuilder) atSuccession() bool {
 		// whileLoop …` can only be a prefixed declaration.
 		return true
 	}
-	if kw == "send" {
-		// A send statement has no name of its own: taken here so the `then` is
-		// accounted for rather than read as an edge naming the keyword.
+	if actionNodeKeywords[kw] {
+		// An action node member (SysML.xtext ActionNodeMember): `then fork f;`,
+		// `then merge;`, `then send x via p;`, `then loop action { … } until c;`,
+		// `then done;`. Taken here so the `then` sequences the node the keyword
+		// declares, rather than being read as an edge naming the keyword itself.
 		return true
 	}
 	if kw == "use" {
@@ -115,8 +120,7 @@ func (b *bodyBuilder) atSuccession() bool {
 		_, isUsage := usageKindKeywords[kw]
 		_, isDef := definitionKindKeywords[kw]
 		if !isUsage && !isDef {
-			// `then done;`, `then first x;`, `then accept …`: node and edge
-			// forms with their own parsers.
+			// `then first x;` and the guarded forms: edges with their own parsers.
 			return false
 		}
 		// A `perform` declares an occurrence usage, so a `then` between it and a
@@ -135,6 +139,28 @@ func (b *bodyBuilder) atSuccession() bool {
 	// Anything else after the keyword declares a member the `then` prefixes,
 	// anonymous (`then part;`, `then action { … }`) or named (`then action b;`).
 	return true
+}
+
+// actionNodeKeywords are the keywords that begin an action node member
+// (SysML.xtext ActionNodeMember, plus the final node `done` reaches): a node in
+// the token flow that declares no name unless the author writes one, so a `then`
+// before it sequences to the node itself. `if` and `else` are not among them:
+// after a decision they begin a guarded or default target succession, not a node.
+var actionNodeKeywords = map[string]bool{
+	"send":      true,
+	"accept":    true,
+	"assign":    true,
+	"terminate": true,
+	"while":     true,
+	"loop":      true,
+	"for":       true,
+	"fork":      true,
+	"join":      true,
+	"merge":     true,
+	"decide":    true,
+	"decision":  true,
+	"done":      true,
+	"final":     true,
 }
 
 // namesEdgeEnd reports whether a keyword after `then` names an edge end rather
@@ -174,7 +200,7 @@ func (b *bodyBuilder) takeSuccession() {
 		return
 	}
 	b.pending, b.pendingAt, b.valid = true, tok.Span, true
-	b.source, b.sourceSpan = b.last, b.lastSpan
+	b.source, b.sourceSpan, b.sourceNode = b.last, b.lastSpan, b.lastNode
 
 	// One diagnostic per keyword: the first thing wrong with it is enough to
 	// say why no succession was built.
@@ -183,8 +209,6 @@ func (b *bodyBuilder) takeSuccession() {
 		p.error(tok.Span, fmt.Sprintf("`then` cannot sequence %s: it sequences the members either side of it, which the notation allows only before an occurrence usage such as a part, item, action or state", what))
 	case !b.hasMember:
 		p.error(tok.Span, "`then` has no member before it to sequence from: it sequences the member after it with the member before it, so a body cannot begin with one")
-	case b.source == "":
-		p.warn(tok.Span, unnamedEndWarning("from"), codeUnnamedSuccessionEnd)
 	default:
 		return
 	}
@@ -248,35 +272,60 @@ func (b *bodyBuilder) add(m ast.Node) {
 
 	// `then <target>;` leaves its source to the member before it, the same member
 	// a member-attached `then` sequences from, rather than to a consumer's guess.
+	// An unnamed member before it is bound by position, as it is on the other end.
 	if b.last != "" {
 		if source := unnamedEdgeSource(m); source != nil {
 			*source = memberReference(b.last, b.lastSpan)
 		}
+	} else if b.lastNode != nil {
+		bindPositionalSource(memberNode(m), b.lastNode)
 	}
 
 	target := memberDeclaredName(m)
 	b.members = append(b.members, m)
 	if !isEdgeMember(m) {
-		// An unnamed member clears the source too: keeping an older name would
+		// An unnamed member clears the source name too: keeping an older name would
 		// sequence from a member other than the one before the keyword.
 		b.hasMember = true
-		b.last, b.lastSpan = target, m.Span()
+		b.last, b.lastSpan, b.lastNode = target, m.Span(), memberNode(m)
 	}
 
 	if !pending || !valid {
 		return
 	}
-	if target == "" {
-		b.p.warn(at, unnamedEndWarning("to"), codeUnnamedSuccessionEnd)
-		return
+	edge := synthesizeSuccession(b.source, b.sourceSpan, target, m.Span(), at)
+	if b.source == "" {
+		edge.Source, edge.SourceMember = nil, b.sourceNode
 	}
-	b.members = append(b.members, synthesizeSuccession(b.source, b.sourceSpan, target, m.Span(), at))
+	if target == "" {
+		edge.Target, edge.TargetMember = nil, memberNode(m)
+	}
+	b.members = append(b.members, edge)
 }
 
-// unnamedEndWarning reports a succession this representation cannot carry: a
-// succession edge names its ends, and the member on this end declares no name.
-func unnamedEndWarning(end string) string {
-	return fmt.Sprintf("`then` sequences %s a member with no name, so no succession is recorded for it: name that member, or write the succession as its own member", end)
+// bindPositionalSource binds the source of a one-name edge (`then b;`, `if x
+// then b;`, `else b;`) to the member before it when that member declares no name
+// of its own, which the notation leaves the edge to reach by position.
+func bindPositionalSource(m ast.Node, source ast.Node) {
+	switch edge := m.(type) {
+	case *ast.SuccessionEdge:
+		if unnamedEdgeSource(edge) != nil {
+			edge.Source, edge.SourceMember = nil, source
+		}
+	case *ast.ControlFlowEdge:
+		if unnamedEdgeSource(edge) != nil {
+			edge.Source, edge.SourceMember = nil, source
+		}
+	}
+}
+
+// memberNode addresses the member a membership wraps, the node a succession end
+// bound by position refers to.
+func memberNode(m ast.Node) ast.Node {
+	if ms, ok := m.(*ast.Membership); ok && ms.Member != nil {
+		return ms.Member
+	}
+	return m
 }
 
 // unnamedEdgeSource addresses the source end of an edge member, guarded or not,

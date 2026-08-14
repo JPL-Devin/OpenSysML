@@ -133,6 +133,13 @@ func (p *Parser) atKeyword(kw string) bool {
 	return t.Kind == lexer.Keyword && t.KeywordID == kw
 }
 
+// peekIsKeyword reports whether the token n ahead of the cursor is the given
+// keyword literal.
+func (p *Parser) peekIsKeyword(n int, kw string) bool {
+	t := p.peekN(n)
+	return t.Kind == lexer.Keyword && t.KeywordID == kw
+}
+
 // accept consumes the current token if it matches kind, reporting success.
 func (p *Parser) accept(k lexer.Kind) (lexer.Token, bool) {
 	if p.at(k) {

@@ -154,6 +154,19 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		for _, region := range d.Regions {
 			buildDecl(child, region, ast.VisibilityDefault, nil)
 		}
+	case *ast.TransitionMember:
+		// A named transition is a feature of the state that declares it (SysML v2
+		// §7.19.2: TransitionUsage specializes ActionUsage), and its effect
+		// behaviors are features of the transition, so `t.effectAction` resolves.
+		if d.Name == "" {
+			return
+		}
+		id := ast.Identification{Name: d.Name}
+		child := NewScope(scope, d)
+		sym := newSymbol(id, SymbolActionUsage, d, vis, child, scope, trivia)
+		defineIdent(scope, id, sym)
+		scope.AddChild(child)
+		buildMembers(child, d.Effect)
 	case *ast.StateRegion:
 		// A region is a namespace of its own: sibling regions routinely reuse
 		// state names (each region declaring its own `initial start`), so their

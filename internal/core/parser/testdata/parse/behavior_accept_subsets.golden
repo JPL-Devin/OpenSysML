@@ -1,0 +1,28 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="action" abstract=false variation=false name="Controller"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="shutDown" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=ShutDown
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="action" name="interrupt" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=shutDown
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="action" name="typedPayload" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="via" target=alarmPort
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="warning" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Warning
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="action" name="bodied" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=shutDown
+                (*ast.QualifiedName))))
+          (*ast.AssignmentActionNode))))))

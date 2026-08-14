@@ -1,0 +1,12 @@
+step 1: token 1@heat
+stmt assign temp
+  eval literal 40 -> 40
+step 2: token 1@awaitWarm
+  eval feature temp -> 40
+  eval literal 20 -> 20
+eval operator > -> true
+step 3: token 1@alert
+stmt assign alerted
+  eval literal 1 -> 1
+step 4: token 1@end
+step 5: no active tokens

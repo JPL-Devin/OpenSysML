@@ -1,0 +1,15 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="action" abstract=false variation=false name="Charger"
+      (Usage kind="action" name="begin" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+      (InitialNode name="begin" successor="")
+      (WhileLoopActionNode kind="loop" variable=""
+        (OperatorExpr operator=">="
+          (FeatureReference name="battery")
+          (LiteralInteger value="100"))
+        (Membership visibility="default"
+          (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="action" name="tick" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (SuccessionEdge source="begin" target="@loop")
+      (FinalNode name="")
+      (SuccessionEdge source="@loop" target="@done"))))

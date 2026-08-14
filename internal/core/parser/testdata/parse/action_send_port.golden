@@ -19,7 +19,7 @@
                 (*ast.QualifiedName))
               (ConnectorEnd target="inPort"
                 (*ast.QualifiedName))))
-          (*ast.InitialNode)
+          (InitialNode name="start" successor="")
           (Membership visibility="default"
             (Usage kind="action" name="sender" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (SendStatement via=true
@@ -35,10 +35,10 @@
               (Relationship kind="via" target=inPort
                 (*ast.QualifiedName))
               (Membership visibility="default"
-                (Usage kind="attribute" name="msg" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                (Usage kind="attribute" name="msg" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
                   (Relationship kind="typing" target=Integer
                     (*ast.QualifiedName))))))
-          (*ast.FinalNode)
+          (FinalNode name="end")
           (SuccessionEdge source="start" target="sender")
           (SuccessionEdge source="sender" target="notifier")
           (SuccessionEdge source="notifier" target="reader")

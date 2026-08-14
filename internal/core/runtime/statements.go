@@ -192,6 +192,8 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 		return e.ifStatement(s)
 	case lower.Loop:
 		return e.loop(s)
+	case lower.Block:
+		return e.block(s)
 	case lower.Effect:
 		return flowNext, e.host.effect(s)
 	case lower.Unsupported:
@@ -304,8 +306,14 @@ func (e *stmtEngine) iteration(
 		return flow, true, err
 	}
 
-	if stmt.Kind == ast.LoopUntil && stmt.Condition != nil {
-		holds, err := e.condition(stmt.Condition, stmt.Body.Scope, "condition of 'until'")
+	// An `until` condition is tested after the iteration: the `loop` form keeps
+	// it in Condition, a `while` loop carrying one keeps it in Until.
+	until := stmt.Until
+	if stmt.Kind == ast.LoopUntil {
+		until = stmt.Condition
+	}
+	if until != nil {
+		holds, err := e.condition(until, stmt.Body.Scope, "condition of 'until'")
 		if err != nil {
 			return flowNext, true, err
 		}
@@ -378,6 +386,8 @@ func stmtLabel(stmt lower.Statement) string {
 		return "declare calc " + s.Name
 	case lower.Return:
 		return "return"
+	case lower.Block:
+		return "action body"
 	case lower.If:
 		return "if"
 	case lower.Loop:

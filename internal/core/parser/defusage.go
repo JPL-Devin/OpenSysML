@@ -663,6 +663,16 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parseReferenceMemberUsage(start, usageKindKeywords[kw], kw, noun, mods, body, false))
 		}
 
+		// `exhibit state modes { … }` and `exhibit state modes : Modes;` state
+		// the exhibited state after the state keyword, where the reference form
+		// `exhibit modes;` names an existing one (SysML.xtext ExhibitStateUsage:
+		// `'exhibit' ( OwnedReferenceSubsetting … | StateUsageKeyword
+		// UsageDeclaration? ) ValuePart? StateUsageBody`; SysML v2 §8.3.17).
+		if kw == "exhibit" && p.atKeyword("state") {
+			p.advance() // consume 'state'
+			return applyPrefixes(p.parseUsage(start, ast.UsageState, "exhibit state", mods, isAll))
+		}
+
 		// Special case: include use case <name> (full form)
 		// If include is followed by "use case", consume them and parse as use case with includes relationship
 		if kw == "include" && p.atUseCase() {
@@ -992,8 +1002,10 @@ func (p *Parser) isBehavioralKeyword() bool {
 	}
 	kw := p.peek().KeywordID
 	switch kw {
-	case "first", "done", "fork", "join", "merge", "decision", "action", "then",
-		"assign", "perform", "while", "loop", "if", "send", "terminate", "for":
+	case "first", "done", "fork", "join", "merge", "decision", "decide", "action", "then",
+		"assign", "perform", "while", "loop", "if", "send", "terminate", "for",
+		// `else <target>;` is a DefaultTargetSuccession member (SysML.xtext).
+		"else":
 		return true
 	}
 	return false
@@ -1829,24 +1841,24 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return m
 	}
 
-	// Check for inline flow statement: flow [from] X to Y;
-	// This is anonymous flow usage
-	// Distinguish from flow declarations: flow : Type ... or flow name : Type ...
-	// If next token after 'flow' is identifier (not colon), it's inline flow
+	// Check for the shorthand flow statement `flow X to Y;`, whose first name is
+	// an end rather than the flow's own name (SysML.xtext `FlowDeclaration`
+	// second alternative). Every other form — `flow : Type …`, `flow name …`,
+	// `flow [name] from X to Y` — declares the flow itself and is parsed as a
+	// usage declaration below.
 	if p.atKeyword("flow") {
-		// Lookahead: flow <id/featureChain> to ... = inline flow
+		// Lookahead: flow <id/featureChain> to ... = shorthand ends
 		//            flow : Type ... = flow usage declaration
-		//            flow <name> : Type ... = flow usage declaration
+		//            flow <name> [from X] to Y ... = flow usage declaration
 		nextTok := p.peekN(1)
 		isInlineFlow := false
 		if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.Keyword {
 			// Could be flow name or flow source
-			// Check if followed by 'to' or 'from' (inline) vs colon/relationship (declaration)
 			tok2 := p.peekN(2)
-			if tok2.Kind == lexer.Keyword && (tok2.KeywordID == "to" || tok2.KeywordID == "from") {
+			if tok2.Kind == lexer.Keyword && tok2.KeywordID == "to" {
 				isInlineFlow = true
 			} else if tok2.Kind == lexer.Dot || tok2.Kind == lexer.ColonColon {
-				// Feature chain - likely inline flow
+				// Feature chain - the name is an end, not the flow's own name
 				isInlineFlow = true
 			}
 		}
@@ -1924,92 +1936,37 @@ func (p *Parser) parseBodyMember() ast.Node {
 		}
 	}
 
-	// Check for accept action syntax: action <name> accept <param> : Type [via <port>];
-	// Pattern: action trigger accept scene : Scene;
-	// Pattern: action trigger accept scene : Scene via viewPort;
-	if p.atKeyword("action") {
-		// Lookahead for accept pattern: action <id> accept <id> : Type
-		if p.peekN(1).Kind == lexer.Identifier {
-			tok2 := p.peekN(2)
-			if tok2.Kind == lexer.Keyword && tok2.KeywordID == "accept" {
-				// Accept action syntax - create simple action with output feature
-				p.advance() // consume 'action'
-				actionName := p.src.Text(p.peek().Span)
-				p.advance() // consume name
-				p.advance() // consume 'accept'
+	// An accept node (SysML.xtext `AcceptNode`):
+	//
+	//	action <name>? accept <payload> ('via' <port>)? (';' | '{' … '}')
+	//
+	// The payload says what the action waits for — a type (`accept scene :
+	// Scene`), an event feature (`accept :> shutDown`) or a trigger expression
+	// (`accept when x > 1`) — and is parsed by the one payload parser triggers
+	// also use, so every spelling reaches lowering the same way.
+	if p.atAcceptNode() {
+		return p.parseAcceptNode(start, vis, trivia)
+	}
 
-				// Parse param: name : Type
-				paramStart := p.peek().Span.Offset
-				paramName := ""
-				var paramType *ast.QualifiedName
-				if p.at(lexer.Identifier) {
-					paramName = p.src.Text(p.peek().Span)
-					p.advance()
-				}
-				if p.accept2(lexer.Colon) {
-					paramType = p.parseQualifiedName()
-				}
-				paramSpan := p.spanFrom(paramStart)
-
-				// Optional 'via' port
-				var viaPort *ast.QualifiedName
-				if p.acceptKeyword("via") {
-					viaPort = p.parseQualifiedName()
-				}
-
-				// Create action usage with output attribute member
-				actionUsage := &ast.Usage{
-					Kind: ast.UsageAction,
-					Ident: ast.Identification{
-						Name:     actionName,
-						NameSpan: source.Span{}, // fill from token if needed
-					},
-				}
-
-				// Add output parameter as attribute member
-				if paramName != "" && paramType != nil {
-					paramUsage := &ast.Usage{
-						Kind: ast.UsageAttribute,
-						Ident: ast.Identification{
-							Name:     paramName,
-							NameSpan: source.Span{},
-						},
-						Relationships: []*ast.Relationship{
-							{Kind: ast.RelTyping, Target: paramType},
-						},
-						Direction: ast.DirOut,
-						IsAccept:  true, // Mark as accept parameter
-					}
-					// The span covers only the parameter, not the enclosing
-					// declaration it is a synthetic member of.
-					paramUsage.NodeSpan = paramSpan
-					actionUsage.Members = append(actionUsage.Members, &ast.Membership{
-						Member: paramUsage,
-					})
-				}
-
-				// Add via port as the receiving port relationship
-				if viaPort != nil {
-					actionUsage.Relationships = append(actionUsage.Relationships, &ast.Relationship{
-						Kind:   ast.RelVia,
-						Target: viaPort,
-					})
-				}
-
-				p.expect(lexer.Semicolon, "expected ';' after accept action")
-
-				actionUsage.NodeSpan = p.spanFrom(start)
-				actionUsage.SetLeadingTrivia(trivia)
-
-				m := &ast.Membership{
-					Visibility: vis,
-					Member:     actionUsage,
-				}
-				m.NodeSpan = actionUsage.Span()
-				m.SetLeadingTrivia(trivia)
-				return m
-			}
+	// A transition usage stating its ends (SysML.xtext `TransitionUsage`):
+	//
+	//	transition <name>? first <source> … then <target>;
+	//	transition <name>? <source> to <target> …;
+	//
+	// One parser reads every transition, wherever it is written, so a named
+	// transition carries the same trigger, guard and effect a nameless one does
+	// and lowering sees one representation. A `transition` declaring no ends
+	// (`transition t : Signalling;`) is an ordinary usage and parsed below.
+	if p.atKeyword("transition") && p.atTransitionEnds() {
+		p.advance() // consume 'transition'
+		node := p.parseTransitionMember(start)
+		if tr, ok := node.(interface{ SetLeadingTrivia([]ast.Trivia) }); ok {
+			tr.SetLeadingTrivia(trivia)
 		}
+		m := &ast.Membership{Visibility: vis, Member: node}
+		m.NodeSpan = node.Span()
+		m.SetLeadingTrivia(trivia)
+		return m
 	}
 
 	// Check for anonymous feature pattern: [modifiers] [name] : Type OR [modifiers] :>> relationships
@@ -2459,7 +2416,11 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// A relationship keyword is not a literal's name either: `redefines;` and
 	// `redefines = 5;` are specializations missing their target, diagnosed as
 	// such, exactly as `:>>;` and `:>> = 5;` are.
-	if !isUsageOnlyKwForEnum && !p.atFeatureSpecialization() && p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
+	// A kind keyword before a body declares an anonymous usage of that kind
+	// (`action { … }`), not a literal named by it: a name spelling a reserved
+	// keyword must be written as an unrestricted name (KerML §7.2.4).
+	anonKindDecl := nextKind == lexer.LBrace && isKindKeyword(p.peek())
+	if !isUsageOnlyKwForEnum && !anonKindDecl && !p.atFeatureSpecialization() && p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
 		seg, _ := p.parseNameSegmentRelaxed()
 		id := ast.Identification{Name: seg.Text, NameSpan: seg.Span}
 
@@ -2767,10 +2728,6 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 		} else {
 			p.parseConnectorFromTo(u)
 		}
-	case ast.UsageTransition:
-		// Transition usage syntax: first <end> accept <param> via <end> then <end>
-		// Pattern: transition name first start accept payload: Type via receiver then done;
-		p.parseTransitionUsageEnds(u)
 	case ast.UsageSuccession:
 		p.parseConnectorEnds(u, "") // succession has no intermediate keyword
 	case ast.UsageAllocation:
@@ -3080,53 +3037,32 @@ func (p *Parser) parseFlowTo(fe *ast.FlowEnds) {
 	p.error(p.peek().Span, "expected 'to' between flow ends")
 }
 
-// parseTransitionUsageEnds parses transition usage connector-like ends with special keywords.
-// Pattern: first <end> accept <param> via <end> then <end>
-// Example: transition t first start accept payload: Type via receiver then done;
-func (p *Parser) parseTransitionUsageEnds(u *ast.Usage) {
-	// Parse "first <end>" if present
-	if p.acceptKeyword("first") {
-		end := p.parseConnectorEnd()
-		if end != nil {
-			u.ConnectorEnds = append(u.ConnectorEnds, end)
-		}
+// atTransitionEnds reports whether the `transition` at the cursor states its
+// ends — `first <source>` or `<source> to <target>` — as opposed to declaring a
+// transition feature without them (`transition t : Signalling;`). The
+// transition's own name, when it has one, stands between the keyword and the
+// ends.
+func (p *Parser) atTransitionEnds() bool {
+	i := 1
+	if p.peekN(i).Kind == lexer.Identifier || p.peekN(i).Kind == lexer.UnrestrictedName {
+		i++
 	}
-
-	// Parse "accept <param>" - this is body parameter, not connector end
-	if p.acceptKeyword("accept") {
-		// Parse parameter with optional name and type
-		var paramName string
-		var paramType *ast.QualifiedName
-
-		if seg, ok := p.parseNameSegment(); ok {
-			paramName = seg.Text
-			if p.at(lexer.Colon) {
-				p.advance() // :
-				paramType = p.parseQualifiedName()
-			}
-		}
-
-		// Store as body parameter in Members (similar to calc/function params)
-		// For now, create simple documentation node as placeholder
-		// Full implementation would need BodyParam support in Usage.Members
-		_ = paramName // use later when we extend AST
-		_ = paramType
+	if p.peekIsKeyword(i, "first") {
+		return true
 	}
-
-	// Parse "via <end>" if present
-	if p.acceptKeyword("via") {
-		end := p.parseConnectorEnd()
-		if end != nil {
-			u.ConnectorEnds = append(u.ConnectorEnds, end)
+	// `<source> to <target>`, where the source may be a qualified name and, as a
+	// state name, may be spelled with a keyword.
+	for {
+		switch p.peekN(i).Kind {
+		case lexer.Identifier, lexer.UnrestrictedName, lexer.Keyword:
+		default:
+			return false
 		}
-	}
-
-	// Parse "then <end>"
-	if p.acceptKeyword("then") {
-		end := p.parseConnectorEnd()
-		if end != nil {
-			u.ConnectorEnds = append(u.ConnectorEnds, end)
+		if p.peekN(i+1).Kind == lexer.ColonColon {
+			i += 2
+			continue
 		}
+		return p.peekIsKeyword(i+1, "to")
 	}
 }
 

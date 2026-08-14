@@ -1,0 +1,21 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="action" abstract=false variation=false name="Powertrain"
+      (Membership visibility="default"
+        (Usage kind="action" name="generateTorque" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="part" name="engineTorque" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="action" name="amplifyTorque" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="part" name="engineTorque" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="flow" name="generateToAmplify" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (FlowEnds from="generateTorque.engineTorque" to="amplifyTorque.engineTorque" payload="nil" declared=false)))
+      (Membership visibility="default"
+        (Usage kind="flow" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (FlowEnds from="generateTorque.engineTorque" to="amplifyTorque.engineTorque" payload="nil" declared=false))))))

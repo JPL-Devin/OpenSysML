@@ -15,6 +15,5 @@ type Diagnostic struct {
 
 // Warning codes.
 const (
-	codeReservedKeywordName  = "reserved-keyword-name"
-	codeUnnamedSuccessionEnd = "unnamed-succession-end"
+	codeReservedKeywordName = "reserved-keyword-name"
 )

@@ -235,6 +235,7 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 		c.expr(scope, d.Collection)
 		c.expr(body, d.Condition)
+		c.expr(body, d.Until)
 		c.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
 		c.expr(scope, d.Condition)

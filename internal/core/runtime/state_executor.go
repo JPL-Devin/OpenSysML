@@ -520,6 +520,10 @@ func (e *StateExecutor) enabledTransition(state *ast.StateNode, event *Event) (*
 // them. It returns the function restoring the machine's data to what it held
 // before, for the caller to run when the transition does not fire.
 func (e *StateExecutor) bindTriggerArguments(trans *lower.Transition, event *Event) (func(), error) {
+	if acceptEvent, ok := trans.Trigger.(*ast.AcceptEvent); ok {
+		return e.bindAcceptPayload(acceptEvent, event)
+	}
+
 	callEvent, ok := trans.Trigger.(*ast.CallEvent)
 	if !ok || len(callEvent.Parameters) == 0 {
 		return func() {}, nil
@@ -538,6 +542,24 @@ func (e *StateExecutor) bindTriggerArguments(trans *lower.Transition, event *Eve
 		}
 		e.stateData[param.Text] = value
 	}
+	return unbind, nil
+}
+
+// bindAcceptPayload binds the name an accept gave its payload
+// (`accept msg : Warning`) to the value the accepted occurrence carries, for the
+// transition's guard and effect to read, and returns the function unbinding it.
+func (e *StateExecutor) bindAcceptPayload(acceptEvent *ast.AcceptEvent, event *Event) (func(), error) {
+	if acceptEvent.Payload == nil || acceptEvent.Payload.Ident.Name == "" {
+		return func() {}, nil
+	}
+	name := ast.NameSegment{Text: acceptEvent.Payload.Ident.Name}
+	unbind := e.restoreData([]ast.NameSegment{name})
+	msg, ok := event.Payload.(Message)
+	if !ok {
+		return unbind, fmt.Errorf("accept %s: event carries %T, not a message",
+			name.Text, event.Payload)
+	}
+	e.stateData[name.Text] = msg.Payload["value"]
 	return unbind, nil
 }
 
@@ -570,7 +592,16 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 
 	switch event.Type {
 	case EventAccept, EventCall, EventChange:
-		return triggerMatches(trans.Trigger, event)
+		if !triggerMatches(trans.Trigger, event) {
+			return false
+		}
+		// `accept … via <port>` takes only an occurrence that arrived at that
+		// port; a trigger naming none takes it whatever route it came by.
+		if trans.Via == "" {
+			return true
+		}
+		msg, ok := event.Payload.(Message)
+		return ok && msg.arrivedAt(trans.Via)
 
 	case EventTime:
 		// Time events carry the specific transition in Payload
@@ -599,8 +630,12 @@ func triggerMatches(trigger ast.Node, event *Event) bool {
 		if !ok {
 			return false
 		}
-		// Match signal type (last segment of QualifiedName against Message.SignalType)
+		// The accept names the occurrence it takes either by its type
+		// (`accept Ping`) or by the event it subsets (`accept :> shutDown`).
 		expectedSignal := ast.SimpleName(acceptEvent.SignalType)
+		if expectedSignal == "" {
+			expectedSignal = ast.SimpleName(acceptEvent.Subsets)
+		}
 		if expectedSignal == "" {
 			return false
 		}
@@ -812,12 +847,23 @@ func (e *StateExecutor) passesGuard(trans *lower.Transition) (bool, error) {
 	}
 	val, err := e.evalStep(trans.Guard, trans.BodyScope)
 	if err != nil {
-		return false, fmt.Errorf("eval guard: %w", err)
+		return false, fmt.Errorf("eval guard of %s: %w", transitionDescription(trans), err)
 	}
 	if val.Kind != ValConst || val.Const.Kind != semantics.ValBool {
-		return false, fmt.Errorf("guard must be boolean, got %v", val.Kind)
+		return false, fmt.Errorf("guard of %s must be boolean, got %v",
+			transitionDescription(trans), val.Kind)
 	}
 	return val.Const.Bool, nil
+}
+
+// transitionDescription names a transition for a diagnostic: by the name it was
+// declared with, when it has one, and by the states it runs between otherwise.
+func transitionDescription(trans *lower.Transition) string {
+	if trans.Name != "" {
+		return fmt.Sprintf("transition %s", trans.Name)
+	}
+	return fmt.Sprintf("transition %s -> %s",
+		orAny(getNodeName(trans.Source)), orAny(getNodeName(trans.Target)))
 }
 
 // recordHistory returns state's history record, creating it on first use.
@@ -1337,9 +1383,13 @@ func (e *StateExecutor) enqueueSignal(msg Message) {
 // this machine must not swallow a message addressed to a different behavior.
 func (e *StateExecutor) deliverPendingSignal() bool {
 	msg, ok := e.ctx.TakeMessage(func(m Message) bool {
-		// A transition trigger names a signal, never a port (`accept <type>` has
-		// no `via` form), so a message routed to a port is not for this machine.
-		return m.arrivedAt("") && m.addressedTo(e.stateMachine.Name) && e.acceptsSignal(m)
+		// A message routed to a port is for this machine only if a transition out
+		// of the active configuration accepts it `via` that port; one routed to no
+		// port must also be addressed to the machine.
+		if m.Port != "" {
+			return e.acceptsSignal(m)
+		}
+		return m.addressedTo(e.stateMachine.Name) && e.acceptsSignal(m)
 	})
 	if !ok {
 		return false
@@ -1357,7 +1407,13 @@ func (e *StateExecutor) acceptsSignal(msg Message) bool {
 			if !ok {
 				continue
 			}
+			if !msg.arrivedAt(trans.Via) {
+				continue
+			}
 			signal := ast.SimpleName(accept.SignalType)
+			if signal == "" {
+				signal = ast.SimpleName(accept.Subsets)
+			}
 			if signal != "" && msg.carriesSignal(signal) {
 				return true
 			}

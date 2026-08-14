@@ -96,6 +96,10 @@ func Returns(stmts []Statement) bool {
 			if Returns(s.Body.Statements) {
 				return true
 			}
+		case Block:
+			if Returns(s.Statements) {
+				return true
+			}
 		}
 	}
 	return false

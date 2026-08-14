@@ -30,7 +30,7 @@
           (Relationship kind="typing" target=Vehicle
             (*ast.QualifiedName))))
       (Membership visibility="default"
-        (Usage kind="occurrence" name="atLiftoff" ref=false direction="none" composite=false derived=false ordered=false nonunique=false snapshot=true
+        (Usage kind="occurrence" name="atLiftoff" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="snapshot" snapshot=true
           (Relationship kind="typing" target=Flight
             (*ast.QualifiedName))))
       (Membership visibility="default"
@@ -44,7 +44,7 @@
               (Relationship kind="typing" target=TestSystem
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="occurrence" name="spareAtTakeoff" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true snapshot=true
+            (Usage kind="occurrence" name="spareAtTakeoff" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="snapshot" individual=true snapshot=true
               (Relationship kind="typing" target=Flight
                 (*ast.QualifiedName))))
           (Membership visibility="default"

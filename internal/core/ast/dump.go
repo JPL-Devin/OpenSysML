@@ -18,6 +18,26 @@ func indent(b *strings.Builder, depth int) {
 	}
 }
 
+// endString renders the end of a flow — the feature the payload leaves or
+// reaches — as the notation names it. An end is a feature chain as often as it
+// is a single name (`generateTorque.engineTorque`), so both are spelled out: a
+// dump that showed only the node type would not lock which feature the flow
+// connects.
+func endString(end Node) string {
+	switch n := end.(type) {
+	case nil:
+		return "nil"
+	case *QualifiedName:
+		return qnString(n)
+	case *FeatureReference:
+		return qnString(n.Name)
+	case *FeatureChainExpr:
+		return endString(n.Operand) + "." + qnString(n.Member)
+	default:
+		return fmt.Sprintf("%T", end)
+	}
+}
+
 // qnString renders a QualifiedName as `A::B::C` (with `$::` prefix if global).
 func qnString(qn *QualifiedName) string {
 	if qn == nil {
@@ -32,6 +52,68 @@ func qnString(qn *QualifiedName) string {
 		return "$::" + s
 	}
 	return s
+}
+
+// successionEnd renders one end of a succession: the name it references, or
+// `@<kind>` for an end the notation binds by position, where the member beside
+// the `then` declares no name (see SuccessionEdge.SourceMember).
+func successionEnd(qn *QualifiedName, member Node) string {
+	if qn != nil && len(qn.Parts) > 0 {
+		return qnString(qn)
+	}
+	if member == nil {
+		return ""
+	}
+	return "@" + positionalEndKind(member)
+}
+
+// positionalEndKind names the kind of node a positional succession end refers
+// to, which is what identifies it in the absence of a name.
+func positionalEndKind(member Node) string {
+	switch m := member.(type) {
+	case *WhileLoopActionNode:
+		return m.Kind.String()
+	case *IfActionNode:
+		return "if"
+	case *SendStatement:
+		return "send"
+	case *AssignmentActionNode:
+		return "assign"
+	case *TerminateStatement:
+		return "terminate"
+	case *FinalNode:
+		return "done"
+	case *ForkNode:
+		return "fork"
+	case *JoinNode:
+		return "join"
+	case *MergeNode:
+		return "merge"
+	case *DecisionNode:
+		return "decide"
+	case *ActionExecutionNode:
+		return "action"
+	case *InitialNode:
+		return "start"
+	case *EntryMember:
+		return "entry"
+	case *DoMember:
+		return "do"
+	case *ExitMember:
+		return "exit"
+	case *SubstateMember:
+		return "state"
+	case *TransitionMember:
+		return "transition"
+	case *PseudostateNode:
+		return m.Kind.String()
+	case *Usage:
+		return m.Kind.String()
+	case *Definition:
+		return m.Kind.String()
+	default:
+		return fmt.Sprintf("%T", member)
+	}
 }
 
 // dumpNode writes `(Type attrs children...)`. It writes the open line with
@@ -188,6 +270,13 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.IsVariant {
 			b.WriteString(` variant=true`)
 		}
+		// The keyword a usage was written with, when it says more than the kind
+		// does: `exhibit state modes` is a state usage the enclosing part
+		// exhibits, `perform action a` an action it performs, and a dump that
+		// showed only the kind would read the same as a plain declaration.
+		if kw := v.Keyword; kw != "" && kw != v.Kind.String() {
+			fmt.Fprintf(b, ` keyword=%q`, kw)
+		}
 		if v.IsConjugated {
 			b.WriteString(` conjugated=true`)
 		}
@@ -206,32 +295,8 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		writeChildren(b, depth, usageChildren(v))
 		return
 	case *FlowEnds:
-		fromStr := "nil"
-		toStr := "nil"
-		payloadStr := "nil"
-		if v.From != nil {
-			if qn, ok := v.From.(*QualifiedName); ok {
-				fromStr = qnString(qn)
-			} else {
-				fromStr = fmt.Sprintf("%T", v.From)
-			}
-		}
-		if v.To != nil {
-			if qn, ok := v.To.(*QualifiedName); ok {
-				toStr = qnString(qn)
-			} else {
-				toStr = fmt.Sprintf("%T", v.To)
-			}
-		}
-		if v.Payload != nil {
-			if qn, ok := v.Payload.(*QualifiedName); ok {
-				payloadStr = qnString(qn)
-			} else {
-				payloadStr = fmt.Sprintf("%T", v.Payload)
-			}
-		}
 		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q declared=%t)`,
-			fromStr, toStr, payloadStr, v.PayloadDecl != nil)
+			endString(v.From), endString(v.To), endString(v.Payload), v.PayloadDecl != nil)
 	case *SendStatement:
 		// The `to`/`via` distinction decides how the message is routed, so a
 		// golden that did not show it would not lock the parse.
@@ -344,8 +409,19 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		return
 	case *TransitionMember:
 		fmt.Fprintf(b, `(TransitionMember source=%q target=%q`, qnString(v.Source), qnString(v.Target))
+		if v.Name != "" {
+			fmt.Fprintf(b, ` name=%q`, v.Name)
+		}
+		if v.Via != nil {
+			fmt.Fprintf(b, ` via=%q`, qnString(v.Via))
+		}
 		kids := make([]Node, 0, len(v.Effect)+2)
-		if v.Trigger != nil {
+		// A trigger written as a bare name — `accept 'Ground Station Ping'` —
+		// is the signal it names, which reads better beside the ends than as a
+		// nameless child.
+		if qn, ok := v.Trigger.(*QualifiedName); ok {
+			fmt.Fprintf(b, ` trigger=%q`, qnString(qn))
+		} else if v.Trigger != nil {
 			kids = append(kids, v.Trigger)
 		}
 		if v.Guard != nil {
@@ -378,6 +454,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		kids := []Node{}
 		if v.Condition != nil {
 			kids = append(kids, v.Condition)
+		}
+		if v.Until != nil {
+			kids = append(kids, v.Until)
 		}
 		if v.Collection != nil {
 			kids = append(kids, v.Collection)
@@ -419,10 +498,47 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		b.WriteString(`(ExitMember`)
 		writeChildren(b, depth, v.Actions)
 		return
+	case *SubstateMember:
+		fmt.Fprintf(b, `(SubstateMember name=%q)`, v.Name)
 	case *SuccessionEdge:
 		// The ends are what a `then` says, whether the author wrote the edge
 		// form or the parser desugared a member-attached keyword into it.
-		fmt.Fprintf(b, `(SuccessionEdge source=%q target=%q)`, qnString(v.Source), qnString(v.Target))
+		fmt.Fprintf(b, `(SuccessionEdge source=%q target=%q)`,
+			successionEnd(v.Source, v.SourceMember), successionEnd(v.Target, v.TargetMember))
+	case *ControlFlowEdge:
+		// The branches of one decision differ only in their guard and in which
+		// one is the default, so print both alongside the ends.
+		fmt.Fprintf(b, `(ControlFlowEdge source=%q target=%q else=%t`,
+			successionEnd(v.Source, v.SourceMember), successionEnd(v.Target, v.TargetMember), v.IsElse)
+		if v.Guard != nil {
+			writeChildren(b, depth, []Node{v.Guard})
+			return
+		}
+		b.WriteString(`)`)
+	case *InitialNode:
+		fmt.Fprintf(b, `(InitialNode name=%q successor=%q`, v.Name, qnString(v.Successor))
+		if v.Guard != nil {
+			writeChildren(b, depth, []Node{v.Guard})
+			return
+		}
+		b.WriteString(`)`)
+	case *FinalNode:
+		fmt.Fprintf(b, `(FinalNode name=%q)`, v.Name)
+	case *ForkNode:
+		fmt.Fprintf(b, `(ForkNode name=%q)`, v.Name)
+	case *JoinNode:
+		fmt.Fprintf(b, `(JoinNode name=%q)`, v.Name)
+	case *MergeNode:
+		fmt.Fprintf(b, `(MergeNode name=%q)`, v.Name)
+	case *DecisionNode:
+		fmt.Fprintf(b, `(DecisionNode name=%q)`, v.Name)
+	case *TerminateStatement:
+		b.WriteString(`(TerminateStatement`)
+		if v.Target != nil {
+			writeChildren(b, depth, []Node{v.Target})
+			return
+		}
+		b.WriteString(`)`)
 	default:
 		fmt.Fprintf(b, `(%T)`, n)
 	}

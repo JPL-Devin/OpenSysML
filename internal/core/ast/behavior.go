@@ -99,6 +99,10 @@ type WhileLoopActionNode struct {
 	Kind      LoopKind
 	Condition Node   // boolean expression; nil for `for` and for `loop` without `until`
 	Body      []Node // statements in loop body
+	// Until is the condition an `until` clause of a `while` loop tests after each
+	// iteration (`while c { … } until d;`), nil otherwise. A `loop` form records
+	// its own `until` condition in Condition.
+	Until Node
 	// Variable is the iteration variable a `for` loop declares. It is a member of
 	// the loop's own body scope, never of the enclosing behavior. Zero for the
 	// other loop forms.
@@ -233,6 +237,14 @@ type SuccessionEdge struct {
 	NodeBase
 	Source *QualifiedName // source action node
 	Target *QualifiedName // target action node
+	// SourceMember and TargetMember are the members a member-attached `then`
+	// (SysML.xtext EmptySuccessionMember) sequences when the member declares no
+	// name a reference could use — `then send fullyCharged() to self;`, `then
+	// loop action { … } until c;`. The notation binds such an end by position, so
+	// the end is that member itself rather than a name; they are the members
+	// beside the keyword as written, set once when the body is parsed.
+	SourceMember Node
+	TargetMember Node
 }
 
 // ControlFlowEdge is guarded control flow from decision nodes.
@@ -240,7 +252,16 @@ type ControlFlowEdge struct {
 	NodeBase
 	Source *QualifiedName // source node (typically DecisionNode)
 	Target *QualifiedName // target node
-	Guard  Node           // boolean guard expression
+	Guard  Node           // boolean guard expression, nil for the default branch
+	// IsElse records that the edge was written as the `else <target>;` branch of
+	// a decision (SysML.xtext DefaultTargetSuccession), the branch taken when no
+	// guarded branch of the same decision is.
+	IsElse bool
+	// SourceMember and TargetMember bind an end by position rather than by name,
+	// as on SuccessionEdge: the branches of a decision node the body declares
+	// without a name (`then decide; if x then a; else b;`) reach it this way.
+	SourceMember Node
+	TargetMember Node
 }
 
 // ObjectFlowEdge is data flow between action parameters/pins (Tier 5).
@@ -285,10 +306,26 @@ type ChangeEvent struct {
 
 func (*ChangeEvent) triggerEvent() {}
 
-// AcceptEvent fires when a signal is received.
+// AcceptEvent fires when a signal is received. It is the lowered form of the
+// payload parameter of an accept (SysML.xtext `PayloadParameter`), whose three
+// spellings this node keeps apart:
+//
+//	accept Warning              — SignalType, an unnamed payload typed by Warning
+//	accept msg : Warning        — SignalType with Payload naming the parameter
+//	accept :> shutDown          — Subsets, the event feature accepted
+//
+// Subsetting an event accepts occurrences of *that feature* rather than of a
+// type, so the two are matched differently and are recorded separately.
 type AcceptEvent struct {
 	NodeBase
 	SignalType *QualifiedName // signal type to accept
+	// Subsets is the event feature the payload parameter subsets
+	// (`accept :> shutDown`), nil when it subsets none.
+	Subsets *QualifiedName
+	// Payload is the payload parameter as it was declared, when the accept named
+	// one (`accept msg : Warning`), so the name the received value binds to
+	// survives lowering.
+	Payload *Usage
 }
 
 func (*AcceptEvent) triggerEvent() {}
@@ -392,15 +429,24 @@ type SubstateMember struct {
 	Name string // substate name
 }
 
-// TransitionMember represents a state transition in textual form.
-// Syntax: transition <source> to <target> [when <trigger>] [if <guard>] [do { <effect> }];
+// TransitionMember represents a state transition in textual form, in either the
+// standard spelling (SysML.xtext `TransitionUsage`)
+//
+//	transition [<name>] first <source> [accept <trigger>] [if <guard>]
+//	    [do <effect>] then <target>;
+//
+// or the `transition <source> to <target> …` spelling Systemica also accepts.
 type TransitionMember struct {
 	NodeBase
+	Name    string         // the transition's own name, empty when anonymous
 	Source  *QualifiedName // source state
 	Target  *QualifiedName // target state
 	Trigger Node           // optional trigger event (TimeEvent/ChangeEvent/etc)
 	Guard   Node           // optional guard expression
 	Effect  []Node         // optional effect actions
+	// Via is the port the trigger's message must arrive at
+	// (`accept :> ping via commPort`), nil when the trigger named none.
+	Via *QualifiedName
 }
 
 // SendStatement sends a message to a target.
@@ -418,10 +464,10 @@ type SendStatement struct {
 }
 
 // TerminateStatement terminates an action or lifecycle.
-// Syntax: terminate <target>;
+// Syntax: terminate [<target>];
 type TerminateStatement struct {
 	NodeBase
-	Target Node // target to terminate (action/part reference)
+	Target Node // occurrence to terminate; nil terminates the performing occurrence
 }
 
 // AcceptActionUsage represents an action that waits for a signal.

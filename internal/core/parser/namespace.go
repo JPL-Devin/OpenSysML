@@ -218,6 +218,18 @@ func (p *Parser) parseMember() ast.Node {
 		return al
 	}
 
+	// `first a::b then c;` is a SuccessionAsUsage written with no succession
+	// keyword: among namespace members the two ends are qualified names, not
+	// members of an action's token flow (SysML.xtext SuccessionAsUsage, whose
+	// keyword is optional; SysML v2 §8.3.11).
+	if p.atKeyword("first") {
+		u := p.parseUsage(start, ast.UsageSuccession, "", featureMods{visibility: vis}, false)
+		m := &ast.Membership{Visibility: vis, Member: u}
+		m.NodeSpan = p.spanFrom(start)
+		m.SetLeadingTrivia(trivia)
+		return m
+	}
+
 	inner := p.parseDeclaration(start)
 	if inner == nil {
 		// No declaration recognized. Emit an error node spanning the skip.

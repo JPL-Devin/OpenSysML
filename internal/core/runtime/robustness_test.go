@@ -62,6 +62,10 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("loop_body_declaration_does_not_leak", testLoopBodyDeclarationDoesNotLeak)
 	t.Run("loop_body_of_unexecutable_statement", testLoopBodyOfUnexecutableStatement)
 	t.Run("statement_directly_in_an_action_body", testStatementDirectlyInAnActionBody)
+	t.Run("flow_end_naming_no_node", testFlowEndNamingNoNode)
+	t.Run("flow_from_a_node_that_produced_nothing", testFlowFromANodeThatProducedNothing)
+	t.Run("action_accept_time_trigger", testActionAcceptTimeTrigger)
+	t.Run("action_accept_non_boolean_change_trigger", testActionAcceptNonBooleanChangeTrigger)
 	t.Run("action_body_unresolved_unit", testActionBodyUnresolvedUnit)
 	t.Run("action_body_unresolved_feature", testActionBodyUnresolvedFeature)
 	t.Run("state_body_unresolved_unit", testStateBodyUnresolvedUnit)
@@ -1763,6 +1767,152 @@ func testStatementDirectlyInAnActionBody(t *testing.T) {
 				t.Errorf("error does not explain why the statement cannot run: %v", err)
 			}
 		})
+	}
+}
+
+// testFlowEndNamingNoNode: a flow moves a value from one action node's output
+// to another's input, so an end naming something that is not a node of the
+// action is reported rather than dropped, which would leave the flow declared
+// and carrying nothing.
+func testFlowEndNamingNoNode(t *testing.T) {
+	cases := map[string]string{
+		"source": "flow bad from missing.engineTorque to amplify.torqueIn;",
+		"target": "flow bad from generate.engineTorque to missing.torqueIn;",
+	}
+
+	for name, flow := range cases {
+		t.Run(name, func(t *testing.T) {
+			src := `
+				package test {
+					action driveTrain {
+						first start;
+						action generate { out engineTorque : Integer; assign engineTorque := 1; }
+						action amplify { in torqueIn : Integer; }
+						done end;
+						then start generate;
+						then generate amplify;
+						then amplify end;
+						` + flow + `
+					}
+				}
+			`
+			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "driveTrain", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action driveTrain not found")
+			}
+
+			_, err := ctx.ExecuteAction(sym)
+			if err == nil {
+				t.Fatalf("expected the flow's %s end to be reported", name)
+			}
+			if !strings.Contains(err.Error(), "flow bad") ||
+				!strings.Contains(err.Error(), name) {
+				t.Errorf("error does not name the flow and the end at fault: %v", err)
+			}
+		})
+	}
+}
+
+// testFlowFromANodeThatProducedNothing: a flow out of a node that left its
+// source pin empty carries nothing, which is reported rather than silently
+// leaving the target pin unwritten.
+func testFlowFromANodeThatProducedNothing(t *testing.T) {
+	src := `
+		package test {
+			action driveTrain {
+				first start;
+				action generate { out engineTorque : Integer; }
+				action amplify { in torqueIn : Integer; }
+				done end;
+				then start generate;
+				then generate amplify;
+				then amplify end;
+				flow generateToAmplify from generate.engineTorque to amplify.torqueIn;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "driveTrain", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action driveTrain not found")
+	}
+
+	_, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatal("expected the empty source pin to be reported")
+	}
+	if !strings.Contains(err.Error(), "generateToAmplify") ||
+		!strings.Contains(err.Error(), "engineTorque") {
+		t.Errorf("error does not name the flow and the pin that stayed empty: %v", err)
+	}
+}
+
+// testActionAcceptTimeTrigger: an action body has no clock, so an accept that
+// waits for an instant is reported rather than passed through as though the
+// instant had already arrived.
+func testActionAcceptTimeTrigger(t *testing.T) {
+	for name, trigger := range map[string]string{
+		"at":    "accept at maintenanceTime",
+		"after": "accept after 5",
+	} {
+		t.Run(name, func(t *testing.T) {
+			src := `
+				package test {
+					action maintain {
+						attribute maintenanceTime : Integer = 3;
+						attribute done : Integer = 0;
+						first start;
+						action waitForIt ` + trigger + `;
+						action work { assign done := 1; }
+						done end;
+						then start waitForIt;
+						then waitForIt work;
+						then work end;
+					}
+				}
+			`
+			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "maintain", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action maintain not found")
+			}
+
+			_, err := ctx.ExecuteAction(sym)
+			if !errors.Is(err, ErrNoClock) {
+				t.Fatalf("ExecuteAction error = %v, want ErrNoClock", err)
+			}
+			if !strings.Contains(err.Error(), "state machine") {
+				t.Errorf("error does not say where a time event is waited on: %v", err)
+			}
+		})
+	}
+}
+
+// testActionAcceptNonBooleanChangeTrigger: a change trigger states a condition,
+// so one that evaluates to something else is reported rather than read as true.
+func testActionAcceptNonBooleanChangeTrigger(t *testing.T) {
+	src := `
+		package test {
+			action monitor {
+				attribute temp : Integer = 10;
+				first start;
+				action awaitWarm accept when temp;
+				done end;
+				then start awaitWarm;
+				then awaitWarm end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "monitor", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action monitor not found")
+	}
+
+	_, err := ctx.ExecuteAction(sym)
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("ExecuteAction error = %v, want ErrTypeMismatch", err)
 	}
 }
 
