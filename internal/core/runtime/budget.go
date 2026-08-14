@@ -11,12 +11,19 @@ import (
 // Default bounds on one run. Each one stops a different kind of runaway, so each
 // counts a different thing and has its own variable.
 //
-// The sizes are set by how long a runaway takes to report, not by memory:
-// execution allocates nothing per step (peak RSS is ~34MB whether a run spends
-// 10 thousand steps or 50 million), and the only thing a budget makes grow is a
-// %trace, at 34-83 bytes an entry. Measured rates are ~13.6M evaluation steps/s
-// and ~1.9M events/s, so these defaults report a runaway within about a second
-// each, and a fully traced run at all four ceilings holds ~320MB.
+// The step and event bounds are sized by how long a runaway takes to report
+// rather than by memory: those steps allocate nothing that outlives them, and
+// the only thing they make grow is a %trace, at 34-83 bytes an entry. Measured
+// rates are ~13.6M evaluation steps/s and ~1.9M events/s, so each default
+// reports a runaway within about a second, and a fully traced run at those four
+// ceilings holds ~320MB.
+//
+// Collection elements are the exception, and MaxElements is the bound that reads
+// as memory: a materialized element is a 104-byte Value living as long as the
+// collection holding it, and `1..10000000` conjures one per step. It counts the
+// elements one evaluation holds, not the elements a run produced in total, so a
+// loop or a state machine building a small collection each step is not stopped by
+// the steps before it.
 const (
 	// DefaultMaxSteps bounds expression evaluations.
 	DefaultMaxSteps int64 = 10000000
@@ -27,6 +34,9 @@ const (
 	// DefaultMaxDoSteps bounds the do activity actions one state machine run
 	// performs.
 	DefaultMaxDoSteps int64 = 5000000
+	// DefaultMaxElements bounds the collection elements one evaluation holds,
+	// ~104MB of Values.
+	DefaultMaxElements int64 = 1000000
 )
 
 // Environment variables overriding the defaults above, following the
@@ -36,16 +46,19 @@ const (
 	MaxActionStepsEnvVar = "SYSML_MAX_ACTION_STEPS"
 	MaxStateEventsEnvVar = "SYSML_MAX_EVENTS"
 	MaxDoStepsEnvVar     = "SYSML_MAX_DO_STEPS"
+	MaxElementsEnvVar    = "SYSML_MAX_ELEMENTS"
 )
 
-// Budgets bounds one run of the runtime. The four bounds count incommensurable
-// things — expression evaluations, action token-flow steps, state machine events
-// and do activity actions — so raising one says nothing about the others.
+// Budgets bounds one run of the runtime. The five bounds count incommensurable
+// things — expression evaluations, action token-flow steps, state machine
+// events, do activity actions and materialized collection elements — so raising
+// one says nothing about the others.
 type Budgets struct {
 	MaxSteps       int64
 	MaxActionSteps int64
 	MaxStateEvents int64
 	MaxDoSteps     int64
+	MaxElements    int64
 }
 
 // DefaultBudgets returns the bounds a run uses when the environment names no
@@ -56,6 +69,7 @@ func DefaultBudgets() Budgets {
 		MaxActionSteps: DefaultMaxActionSteps,
 		MaxStateEvents: DefaultMaxStateEvents,
 		MaxDoSteps:     DefaultMaxDoSteps,
+		MaxElements:    DefaultMaxElements,
 	}
 }
 
@@ -74,6 +88,7 @@ var budgetVars = []budgetVar{
 	{MaxActionStepsEnvVar, DefaultMaxActionSteps, "action token-flow steps", func(b *Budgets) *int64 { return &b.MaxActionSteps }},
 	{MaxStateEventsEnvVar, DefaultMaxStateEvents, "state machine events", func(b *Budgets) *int64 { return &b.MaxStateEvents }},
 	{MaxDoStepsEnvVar, DefaultMaxDoSteps, "do activity steps", func(b *Budgets) *int64 { return &b.MaxDoSteps }},
+	{MaxElementsEnvVar, DefaultMaxElements, "collection elements", func(b *Budgets) *int64 { return &b.MaxElements }},
 }
 
 // Validate reports every bound that is not positive. A run under a non-positive
@@ -138,6 +153,7 @@ func (ctx *Context) Budgets() Budgets {
 		MaxActionSteps: ctx.maxActionSteps,
 		MaxStateEvents: ctx.maxStateEvents,
 		MaxDoSteps:     ctx.maxDoSteps,
+		MaxElements:    ctx.maxElements,
 	}
 }
 
@@ -152,5 +168,6 @@ func (ctx *Context) SetBudgets(b Budgets) error {
 	ctx.maxActionSteps = b.MaxActionSteps
 	ctx.maxStateEvents = b.MaxStateEvents
 	ctx.maxDoSteps = b.MaxDoSteps
+	ctx.maxElements = b.MaxElements
 	return nil
 }

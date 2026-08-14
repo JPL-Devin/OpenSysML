@@ -98,6 +98,19 @@ type Declare struct {
 
 func (Declare) statement() {}
 
+// DeclareUsage is a calc usage declared in a body-local block: `calc p : Pair {
+// in k = h; }` written inside a loop or an `if` branch. It states no step of the
+// computation; it declares the usage and marks where it becomes reachable, so
+// the statements after it read its outputs from one evaluation of its body per
+// execution of the block.
+type DeclareUsage struct {
+	Name  string
+	Node  *ast.Usage     // the declaration itself, for diagnostics
+	Scope *symbols.Scope // the scope the usage was declared in
+}
+
+func (DeclareUsage) statement() {}
+
 // Block is a lowered body-local statement list: the body of a loop or of one
 // branch of a conditional. It is a namespace of its own (symbols/builder.go), so
 // the names its Declare statements introduce do not leak out of it.

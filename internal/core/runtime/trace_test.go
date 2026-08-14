@@ -101,7 +101,7 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 	switch expected.Type {
 	case "calc":
 		ctx.SetTrace(trace)
-		calcSym := findBehavioralSymbol(t, rootScope, ast.DefCalc, ast.UsageCalc)
+		calcSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefCalc, ast.UsageCalc)
 		args := make([]Value, len(expected.Inputs))
 		for i, input := range expected.Inputs {
 			args[i] = expectedToRuntimeValue(t, input)

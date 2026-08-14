@@ -49,32 +49,35 @@ class Model:
         return self._diagnostics
     
     def find(self, name):
-        """Find symbol by short name (breadth-first search).
-        
-        Searches the symbol tree starting from root, returning the first
-        symbol whose name matches. Returns None if not found.
-        
+        """Find symbol by short name or fully-qualified name (breadth-first).
+
+        A symbol's own ``id`` is accepted as well as its short name, so the
+        identifier a symbol reports can be round-tripped back into ``find``.
+
         Args:
-            name (str): Short name to search for (e.g., "Vehicle")
-        
+            name (str): Short name ("Vehicle") or FQN ("Demo::Vehicle")
+
         Returns:
             Symbol or None: First matching symbol, or None if not found
         """
+        def matches(symbol):
+            return symbol.name == name or symbol.id == name
+
         # Check root first
-        if self.root.name == name:
+        if matches(self.root):
             return self.root
-        
+
         # Breadth-first search
         queue = [self.root]
         while queue:
             current = queue.pop(0)
-            
+
             # Check each child
             for child in current.children():
-                if child.name == name:
+                if matches(child):
                     return child
                 queue.append(child)
-        
+
         return None
     
     def get(self, fqn):

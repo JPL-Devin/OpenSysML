@@ -6,6 +6,38 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Unreleased
 
+### Runtime
+
+- A fifth runaway bound, `SYSML_MAX_ELEMENTS` (default 1 000 000), bounds the
+  collection elements one evaluation holds rather than the work a run does: an
+  element is a 104-byte `Value` living as long as the collection holding it, so
+  the default holds ~104 MB of them, in the band the other defaults were sized
+  against. Every materializing path is charged — a range, a sequence literal,
+  `->collect` and the other collection operations — and exceeding it is
+  `ErrElementLimitExceeded` naming the variable, not the step limit: `1..10000000`
+  used to conjure ~1 GB before the step budget reported it. A statement releases
+  what it materialized, so a loop building a small collection each iteration is
+  bounded by what it holds rather than by what it has produced in total.
+- An action node's body ends the activation it ran in, so a run stepping the same
+  body many times no longer holds what every execution's calc usages computed.
+- A calc usage declared in an action's body or among a state machine's members
+  binds its inputs from the values the behavior has reached, as one in a calc's
+  body does: `calc t : Twice { in k = v; }` after `assign v := 2.0` reads 2.0
+  rather than the value `v` was declared with.
+- An evaluation outside a body — a decision or transition guard, a change
+  condition or duration, an inline node expression, an attribute or slot default,
+  an action argument, a constraint check — runs in a scope of its own, so what a
+  calc usage answers it and the elements a collection it evaluates materializes
+  live no longer than the step. A decision revisited after its body assigned
+  reads the usage again over those values instead of the first evaluation's
+  result, and a long run whose guard builds a small list is bounded by what it
+  holds rather than stopped as a runaway. Reads within one step still share the
+  scope, and a read through a part's feature chain belongs to the evaluation
+  making it.
+- `%budget` prints the five bounds a session runs on with the variable that
+  raises each, and a literal expression that spends one is answered with that
+  failure instead of "no declarations loaded".
+
 ### Python bindings and `sysml-grpc`
 
 - `Instantiate` returns every instance reachable from the root, so a Python caller

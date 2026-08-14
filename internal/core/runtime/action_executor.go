@@ -401,8 +401,9 @@ func (e *ActionExecutor) NodeNames() []string {
 // initializeAttributes populates tokenData with the attribute defaults lowering
 // recorded, evaluated in the scope the action's body was declared in.
 func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error {
+	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
-		ec := NewEvalContext(e.ctx, e.graph.Scope)
 		value, err := ec.Eval(attr.Value)
 		if err != nil {
 			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
@@ -676,6 +677,7 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 	// is pushed over it, so a token value shadows a same-named declaration.
 	ec := NewEvalContext(e.ctx, e.graph.Scope)
 	ec.Push(token.Data) // Make token data available to guard expressions
+	defer ec.beginStep()()
 
 	// Two-pass evaluation:
 	// 1. Evaluate all guarded edges first
@@ -748,6 +750,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 		// shadowing it.
 		ec := NewEvalContext(e.ctx, e.graph.Scope)
 		ec.Push(token.Data) // Make token data available
+		defer ec.beginStep()()
 		result, err := ec.Eval(node.Expression)
 		if err != nil {
 			return fmt.Errorf("eval expression: %w", err)

@@ -68,8 +68,12 @@ func usageStatement(u *ast.Usage, scope *symbols.Scope) (Statement, bool) {
 		}
 		return Return{Value: u.Value, Node: u, Scope: scope}, true
 	}
-	if name, _ := ast.EffectiveName(u); u.Kind == ast.UsageAttribute && name != "" {
+	name, _ := ast.EffectiveName(u)
+	if u.Kind == ast.UsageAttribute && name != "" {
 		return Declare{Name: name, Value: u.Value, Node: u, Scope: scope}, true
+	}
+	if u.Kind == ast.UsageCalc && name != "" {
+		return DeclareUsage{Name: name, Node: u, Scope: scope}, true
 	}
 	return nil, false
 }

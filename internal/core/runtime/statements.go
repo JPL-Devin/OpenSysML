@@ -91,12 +91,21 @@ type stmtEngine struct {
 	ctx  *Context
 	host stmtHost
 	env  *stmtEnv
+	// activation is the execution the statements now running belong to: the
+	// behavior's own, and a fresh one per block entry and per loop iteration.
+	activation int64
 }
 
 // newStmtEngine returns an engine running statements against data — the
 // behavior's own values, which its statements read and write.
 func newStmtEngine(ctx *Context, host stmtHost, data map[string]Value) *stmtEngine {
-	return &stmtEngine{ctx: ctx, host: host, env: &stmtEnv{data: data}}
+	return &stmtEngine{ctx: ctx, host: host, env: &stmtEnv{data: data}, activation: ctx.newActivation()}
+}
+
+// finish ends the activation the engine's statements ran in, discarding what the
+// calc usages read in them computed.
+func (e *stmtEngine) finish() {
+	e.ctx.endActivation(e.activation)
 }
 
 // evalIn returns an evaluation context resolving names in the scope the
@@ -104,6 +113,7 @@ func newStmtEngine(ctx *Context, host stmtHost, data map[string]Value) *stmtEngi
 // innermost last so a block-local name shadows an outer one.
 func (e *stmtEngine) evalIn(scope *symbols.Scope) *EvalContext {
 	ec := NewEvalContext(e.ctx, scope)
+	ec.activation = e.activation
 	ec.Push(e.env.data)
 	for _, frame := range e.env.frames {
 		ec.Push(frame)
@@ -129,6 +139,9 @@ func (e *stmtEngine) statement(stmt lower.Statement) (stmtFlow, error) {
 		tr.RecordStatement(stmtLabel(stmt))
 		defer tr.EndStatement()
 	}
+	// A statement's collections live no longer than the statement, so the one after
+	// it starts from the elements held before it.
+	defer e.ctx.elementScope()()
 	return e.execute(stmt)
 }
 
@@ -160,6 +173,8 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 		}
 		e.env.declare(s.Name, value)
 		return flowNext, nil
+	case lower.DeclareUsage:
+		return flowNext, e.declareUsage(s)
 	case lower.Return:
 		value := Value{Kind: ValNull}
 		if s.Value != nil {
@@ -186,6 +201,18 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 	}
 }
 
+// declareUsage brings a body-local calc usage into force: the evaluation of it
+// this execution of the body reads starts here, so an evaluation of the same
+// usage from before the declaration was reached is discarded.
+func (e *stmtEngine) declareUsage(stmt lower.DeclareUsage) error {
+	sym, err := e.ctx.bodyUsageSymbol(stmt)
+	if err != nil {
+		return fmt.Errorf("%s: %w", e.host.describe(), err)
+	}
+	e.ctx.forgetCalcUsage(e.activation, sym)
+	return nil
+}
+
 // ifStatement runs the branch its condition selects, or nothing when the
 // condition is false and the conditional declared no else branch.
 func (e *stmtEngine) ifStatement(stmt lower.If) (stmtFlow, error) {
@@ -204,11 +231,24 @@ func (e *stmtEngine) ifStatement(stmt lower.If) (stmtFlow, error) {
 	return flowNext, nil
 }
 
-// block runs a body-local block in a frame of its own.
+// block runs a body-local block in a frame and an activation of its own, so a
+// calc usage declared in it is evaluated once per execution of the block.
 func (e *stmtEngine) block(block lower.Block) (stmtFlow, error) {
 	e.env.enter()
 	defer e.env.leave()
+	defer e.enterActivation()()
 	return e.run(block.Statements)
+}
+
+// enterActivation runs what follows in a new activation and returns the
+// function restoring the enclosing one.
+func (e *stmtEngine) enterActivation() func() {
+	outer, entered := e.activation, e.ctx.newActivation()
+	e.activation = entered
+	return func() {
+		e.ctx.endActivation(entered)
+		e.activation = outer
+	}
 }
 
 // loop runs a loop to termination or to the `return` its body reaches. Every
@@ -244,6 +284,9 @@ func (e *stmtEngine) iteration(
 		tr.RecordLoopIteration(iteration)
 		defer tr.EndStatement()
 	}
+	// Each iteration is its own activation, so a usage read in it binds its
+	// inputs from this iteration's values.
+	defer e.enterActivation()()
 
 	if stmt.Kind == ast.LoopWhile {
 		holds, err := e.condition(stmt.Condition, stmt.Body.Scope, "condition of 'while'")
@@ -315,6 +358,7 @@ func (e *stmtEngine) forIteration(
 		tr.RecordLoopIteration(iteration)
 		defer tr.EndStatement()
 	}
+	defer e.enterActivation()()
 	clear(frame)
 	frame[stmt.Variable] = element
 	return e.run(stmt.Body.Statements)
@@ -330,6 +374,8 @@ func stmtLabel(stmt lower.Statement) string {
 		return "assign " + s.Target
 	case lower.Declare:
 		return "declare " + s.Name
+	case lower.DeclareUsage:
+		return "declare calc " + s.Name
 	case lower.Return:
 		return "return"
 	case lower.If:

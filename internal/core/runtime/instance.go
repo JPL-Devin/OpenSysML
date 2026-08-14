@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -72,6 +73,49 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 	return inst, nil
 }
 
+// occurrenceOf returns the object a usage denotes, materializing it once: a part
+// declared in a package names one occurrence, so reading its features twice
+// reads the same object.
+func (ctx *Context) occurrenceOf(sym *symbols.Symbol) (*Instance, error) {
+	if id, ok := ctx.occurrences[sym]; ok {
+		if inst, ok := ctx.instances[id]; ok {
+			return inst, nil
+		}
+	}
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		return nil, err
+	}
+	ctx.occurrences[sym] = inst.ID
+	return inst, nil
+}
+
+// isOccurrenceUsage reports whether sym declares a usage that is an occurrence:
+// a part, item or individual, which is a thing with features rather than a
+// value, so a chain through it reads the features of that thing.
+func isOccurrenceUsage(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Value != nil {
+		return false
+	}
+	switch usage.Kind {
+	case ast.UsagePart, ast.UsageItem, ast.UsageOccurrence, ast.UsageIndividual:
+		return true
+	default:
+		return false
+	}
+}
+
+// occursOnce reports whether a usage names at most one occurrence; several
+// occurrences are a collection rather than one object to read features from.
+func (ctx *Context) occursOnce(sym *symbols.Symbol) bool {
+	mult := ctx.extractMultiplicity(sym)
+	return !mult.Upper.Infinite && mult.Upper.Value <= 1
+}
+
 // isScalarFeature reports whether a feature holds at most one value. An
 // unbounded upper bound carries Value 0, so the infinite flag has to be tested
 // separately.
@@ -114,6 +158,9 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 			return nil, err
 		}
 		if val.Kind != ValSequence && val.Kind != ValSet {
+			if err := ctx.chargeElements(1); err != nil {
+				return nil, err
+			}
 			seq := NewSequence()
 			seq.Append(val)
 			val = Value{Kind: ValSequence, Sequence: seq}
@@ -152,6 +199,9 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 			}
 
 			// Determine collection type (Sequence vs Set)
+			if err := ctx.chargeElements(int64(count)); err != nil {
+				return nil, err
+			}
 			seq := NewSequence()
 			for i := 0; i < count; i++ {
 				childInst, err := ctx.Instantiate(composite)
@@ -210,7 +260,9 @@ func (ctx *Context) evalSlotDefault(inst *Instance, slot *Slot, name string) (Va
 	if scope == nil {
 		scope = inst.Type.OwnerScope
 	}
-	val, err := NewEvalContextIn(ctx, scope, inst).Eval(slot.Feature.DefaultValue)
+	ec := NewEvalContextIn(ctx, scope, inst)
+	defer ec.beginStep()()
+	val, err := ec.Eval(slot.Feature.DefaultValue)
 	if err != nil {
 		return Value{}, fmt.Errorf("slot %s.%s: %w", inst.Type.Name, name, err)
 	}

@@ -116,8 +116,9 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 // initializeAttributes populates stateData with the attribute defaults lowering
 // recorded, evaluated in the scope the machine's body was declared in.
 func (e *StateExecutor) initializeAttributes() error {
+	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
-		ec := NewEvalContext(e.ctx, e.graph.Scope)
 		value, err := ec.Eval(attr.Value)
 		if err != nil {
 			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
@@ -126,6 +127,16 @@ func (e *StateExecutor) initializeAttributes() error {
 	}
 
 	return nil
+}
+
+// evalStep evaluates one expression of a step - a guard, a change condition, a
+// duration, an inline expression - in scope with the machine's data shadowing it,
+// in an activation of its own (see beginStep).
+func (e *StateExecutor) evalStep(node ast.Node, scope *symbols.Scope) (Value, error) {
+	ec := NewEvalContext(e.ctx, scope)
+	ec.Push(e.stateData)
+	defer ec.beginStep()()
+	return ec.Eval(node)
 }
 
 // stateScope returns the scope a state's body was declared in, which is what
@@ -256,9 +267,7 @@ func (e *StateExecutor) scheduleTransitionsForState(state *ast.StateNode) error 
 		} else if timeEvent, ok := trans.Trigger.(*ast.TimeEvent); ok {
 			// Evaluate duration expression in the scope the transition was written
 			// in, the machine's data shadowing it.
-			ec := NewEvalContext(e.ctx, trans.Scope)
-			ec.Push(e.stateData)
-			durationVal, err := ec.Eval(timeEvent.Duration)
+			durationVal, err := e.evalStep(timeEvent.Duration, trans.Scope)
 			if err != nil {
 				return fmt.Errorf("eval time duration: %w", err)
 			}
@@ -801,9 +810,7 @@ func (e *StateExecutor) passesGuard(trans *lower.Transition) (bool, error) {
 	if trans == nil || trans.Guard == nil {
 		return true, nil
 	}
-	ec := NewEvalContext(e.ctx, trans.BodyScope)
-	ec.Push(e.stateData)
-	val, err := ec.Eval(trans.Guard)
+	val, err := e.evalStep(trans.Guard, trans.BodyScope)
 	if err != nil {
 		return false, fmt.Errorf("eval guard: %w", err)
 	}
@@ -1633,9 +1640,7 @@ func (e *StateExecutor) executeAction(action ast.Node, scope *symbols.Scope) err
 	case *ast.ActionExecutionNode:
 		if node.Expression != nil {
 			// Evaluate inline expression
-			ec := NewEvalContext(e.ctx, scope)
-			ec.Push(e.stateData) // Make state data available
-			result, err := ec.Eval(node.Expression)
+			result, err := e.evalStep(node.Expression, scope)
 			if err != nil {
 				return fmt.Errorf("eval expression: %w", err)
 			}
@@ -1658,9 +1663,7 @@ func (e *StateExecutor) executeAction(action ast.Node, scope *symbols.Scope) err
 	case *ast.AssignmentActionNode:
 		// Handle assignment (e.g., counter = counter + 1)
 		// Evaluate RHS
-		ec := NewEvalContext(e.ctx, scope)
-		ec.Push(e.stateData)
-		rhsVal, err := ec.Eval(node.Value)
+		rhsVal, err := e.evalStep(node.Value, scope)
 		if err != nil {
 			return fmt.Errorf("eval assignment RHS: %w", err)
 		}
@@ -1693,6 +1696,7 @@ func (e *StateExecutor) executeAction(action ast.Node, scope *symbols.Scope) err
 		// where this machine's own transitions and other behaviors can accept it.
 		ec := NewEvalContext(e.ctx, scope)
 		ec.Push(e.stateData)
+		defer ec.beginStep()()
 		send := lower.Send{
 			Message: node.Message,
 			Target:  ast.SimpleName(node.Target),
@@ -1745,9 +1749,7 @@ func (e *StateExecutor) pollChangeEvents() error {
 		if changeEvent, ok := trans.Trigger.(*ast.ChangeEvent); ok {
 			// Evaluate the condition in the scope the transition was written in, the
 			// machine's data shadowing it.
-			ec := NewEvalContext(e.ctx, trans.Scope)
-			ec.Push(e.stateData)
-			condVal, err := ec.Eval(changeEvent.Condition)
+			condVal, err := e.evalStep(changeEvent.Condition, trans.Scope)
 			if err != nil {
 				return fmt.Errorf("eval change condition: %w", err)
 			}
