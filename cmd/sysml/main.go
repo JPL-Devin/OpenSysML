@@ -47,6 +47,7 @@ var (
 	convertFormat string
 	outputPath    string
 	fromFormat    string
+	modelChecks   checks
 )
 
 // budgets holds the run bounds the environment resolves to, read once at startup.
@@ -76,6 +77,21 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  sysml file.sysml          # Load file and start REPL\n")
 		fmt.Fprintf(os.Stderr, "  sysml -debug file.sysml   # Load file, reporting every diagnostic\n")
 		fmt.Fprintf(os.Stderr, "  sysml -trace file.sysml   # Load file, reporting each execution step\n")
+		fmt.Fprintf(os.Stderr, "\nChecking a model:\n")
+		fmt.Fprintf(os.Stderr, "  sysml -constraint MassBudget model.sysml       # Evaluate one constraint and exit\n")
+		fmt.Fprintf(os.Stderr, "  sysml -requirement PowerMargin model.sysml     # Evaluate one requirement and exit\n")
+		fmt.Fprintf(os.Stderr, "  sysml -satisfy model.sysml                     # Evaluate every satisfaction assertion\n")
+		fmt.Fprintf(os.Stderr, "  sysml -satisfy=Ctx model.sysml                 # ...only the ones Ctx states\n")
+		fmt.Fprintf(os.Stderr, "  sysml -instantiate p -constraint C model.sysml  # Check C against an object of p\n")
+		fmt.Fprintf(os.Stderr, "  sysml -validate model.sysml                    # Report diagnostics only\n")
+		fmt.Fprintf(os.Stderr, "  sysml -calc \"Fall(3, 4)\" model.sysml           # Invoke a calculation\n")
+		fmt.Fprintf(os.Stderr, "  sysml -action Drive model.sysml                # Run an action to completion\n")
+		fmt.Fprintf(os.Stderr, "  sysml -state Mission -advance 10 model.sysml   # Run a state machine for 10 time units\n")
+		fmt.Fprintf(os.Stderr, "  sysml -satisfy -json model.sysml               # Report the verdicts as JSON\n")
+		fmt.Fprintf(os.Stderr, "\nA check reports its verdict and exits 0 when every verdict holds, 1 when one\n")
+		fmt.Fprintf(os.Stderr, "fails, and 2 when a check could not be made at all — an unresolved name, a\n")
+		fmt.Fprintf(os.Stderr, "model that did not analyse cleanly — so a model check can gate a build. Each\n")
+		fmt.Fprintf(os.Stderr, "flag may be repeated.\n")
 		fmt.Fprintf(os.Stderr, "\nConversion:\n")
 		fmt.Fprintf(os.Stderr, "  sysml model.sysml -convert ttl              # SysML notation to RDF Turtle, on stdout\n")
 		fmt.Fprintf(os.Stderr, "  sysml model.ttl -convert sysml              # RDF Turtle to SysML notation\n")
@@ -100,6 +116,16 @@ func main() {
 	flag.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
 	flag.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
 	flag.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
+	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
+	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
+	flag.Var(&modelChecks.requirements, "requirement", "Evaluate this requirement and exit (repeatable)")
+	flag.Var(&modelChecks.satisfy, "satisfy", "Evaluate every satisfaction assertion, or with -satisfy=<name> those the named element states (repeatable)")
+	flag.BoolVar(&modelChecks.validate, "validate", false, "Analyse the model and report its diagnostics, exiting nonzero on an error")
+	flag.Var(&modelChecks.calcs, "calc", "Invoke this calculation and report what it computed, as -calc \"Fall(3, 4)\" (repeatable)")
+	flag.Var(&modelChecks.actions, "action", "Run this action to completion, as -action \"Drive rover1\" to run it on an object (repeatable)")
+	flag.Var(&modelChecks.states, "state", "Run this state machine, as -state \"Mission rover1\" to run it on an object (repeatable)")
+	flag.Var(&modelChecks.advance, "advance", "Simulated time units to run each -state machine for (default: only its initial transition)")
+	flag.BoolVar(&modelChecks.jsonOut, "json", false, "Report checks as one JSON document rather than as lines")
 	if err := flag.CommandLine.Parse(permuteArgs(flag.CommandLine, os.Args[1:])); err != nil {
 		// flag.CommandLine exits on error; unreachable unless that changes.
 		os.Exit(2)
@@ -123,6 +149,10 @@ func main() {
 	args := flag.Args()
 
 	if convertFormat != "" {
+		if modelChecks.requested() {
+			os.Exit(refuse(modelChecks,
+				"-convert writes the model out and decides nothing about it; check it in its own run"))
+		}
 		if err := runConvert(args); err != nil {
 			fmt.Fprintln(os.Stderr, "sysml:", err)
 			os.Exit(1)
@@ -138,6 +168,11 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "sysml:", err)
 		os.Exit(2)
+	}
+
+	// Checking mode: load, check what was named, and exit on the verdict.
+	if modelChecks.requested() {
+		os.Exit(runChecks(args, evalExprs, modelChecks))
 	}
 
 	// Non-interactive mode: files + eval expressions, execute and exit

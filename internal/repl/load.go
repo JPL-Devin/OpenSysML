@@ -15,12 +15,9 @@ import (
 // loaded after it makes. Diagnostics name the file they belong to and count
 // lines from its start.
 func (s *Session) LoadPaths(paths []string) ([]string, error) {
-	files, err := project.Expand(expandHomes(paths))
+	files, err := ExpandPaths(paths)
 	if err != nil {
 		return nil, err
-	}
-	if len(files) == 0 {
-		return nil, errors.New("no model files to load")
 	}
 	srcs := make([]SourceFile, 0, len(files))
 	for _, file := range files {
@@ -40,6 +37,20 @@ func (s *Session) LoadPaths(paths []string) ([]string, error) {
 		}
 	}
 	return append(out, renderResult(s.SubmitFiles(srcs), s.verbosity)...), nil
+}
+
+// ExpandPaths turns the paths a caller was given — files, directories to walk
+// for .sysml/.kerml files, or glob patterns — into the model files to load, in a
+// deterministic order and without duplicates.
+func ExpandPaths(paths []string) ([]string, error) {
+	files, err := project.Expand(expandHomes(paths))
+	if err != nil {
+		return nil, err
+	}
+	if len(files) == 0 {
+		return nil, errors.New("no model files to load")
+	}
+	return files, nil
 }
 
 // expandHomes expands a leading ~ in every path.

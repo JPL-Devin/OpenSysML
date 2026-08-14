@@ -19,15 +19,19 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	SysMLService_GetServerInfo_FullMethodName  = "/sysml.SysMLService/GetServerInfo"
-	SysMLService_ParseFile_FullMethodName      = "/sysml.SysMLService/ParseFile"
-	SysMLService_GetSymbol_FullMethodName      = "/sysml.SysMLService/GetSymbol"
-	SysMLService_GetDiagnostics_FullMethodName = "/sysml.SysMLService/GetDiagnostics"
-	SysMLService_Evaluate_FullMethodName       = "/sysml.SysMLService/Evaluate"
-	SysMLService_Instantiate_FullMethodName    = "/sysml.SysMLService/Instantiate"
-	SysMLService_ExecuteAction_FullMethodName  = "/sysml.SysMLService/ExecuteAction"
-	SysMLService_ExecuteState_FullMethodName   = "/sysml.SysMLService/ExecuteState"
-	SysMLService_Convert_FullMethodName        = "/sysml.SysMLService/Convert"
+	SysMLService_GetServerInfo_FullMethodName      = "/sysml.SysMLService/GetServerInfo"
+	SysMLService_ParseFile_FullMethodName          = "/sysml.SysMLService/ParseFile"
+	SysMLService_GetSymbol_FullMethodName          = "/sysml.SysMLService/GetSymbol"
+	SysMLService_GetDiagnostics_FullMethodName     = "/sysml.SysMLService/GetDiagnostics"
+	SysMLService_Evaluate_FullMethodName           = "/sysml.SysMLService/Evaluate"
+	SysMLService_Instantiate_FullMethodName        = "/sysml.SysMLService/Instantiate"
+	SysMLService_ExecuteAction_FullMethodName      = "/sysml.SysMLService/ExecuteAction"
+	SysMLService_ExecuteState_FullMethodName       = "/sysml.SysMLService/ExecuteState"
+	SysMLService_Convert_FullMethodName            = "/sysml.SysMLService/Convert"
+	SysMLService_VerifyConstraint_FullMethodName   = "/sysml.SysMLService/VerifyConstraint"
+	SysMLService_VerifyRequirement_FullMethodName  = "/sysml.SysMLService/VerifyRequirement"
+	SysMLService_VerifySatisfaction_FullMethodName = "/sysml.SysMLService/VerifySatisfaction"
+	SysMLService_EvaluateCalc_FullMethodName       = "/sysml.SysMLService/EvaluateCalc"
 )
 
 // SysMLServiceClient is the client API for SysMLService service.
@@ -53,6 +57,15 @@ type SysMLServiceClient interface {
 	// textual notation and RDF Turtle — so a client can write a model back out
 	// rather than only read it. Reported as the "convert" capability.
 	Convert(ctx context.Context, in *ConvertRequest, opts ...grpc.CallOption) (*ConvertResponse, error)
+	// Verification: the answers the REPL's %constraint, %requirement, %satisfy
+	// and %calc give, so "does this model satisfy its requirements?" can be asked
+	// by a script. Each evaluates the same runtime paths the prompt does and
+	// returns a verdict rather than formatted lines. Reported as the
+	// "verification" capability.
+	VerifyConstraint(ctx context.Context, in *VerifyConstraintRequest, opts ...grpc.CallOption) (*VerifyConstraintResponse, error)
+	VerifyRequirement(ctx context.Context, in *VerifyRequirementRequest, opts ...grpc.CallOption) (*VerifyRequirementResponse, error)
+	VerifySatisfaction(ctx context.Context, in *VerifySatisfactionRequest, opts ...grpc.CallOption) (*VerifySatisfactionResponse, error)
+	EvaluateCalc(ctx context.Context, in *EvaluateCalcRequest, opts ...grpc.CallOption) (*EvaluateCalcResponse, error)
 }
 
 type sysMLServiceClient struct {
@@ -144,6 +157,42 @@ func (c *sysMLServiceClient) Convert(ctx context.Context, in *ConvertRequest, op
 	return out, nil
 }
 
+func (c *sysMLServiceClient) VerifyConstraint(ctx context.Context, in *VerifyConstraintRequest, opts ...grpc.CallOption) (*VerifyConstraintResponse, error) {
+	out := new(VerifyConstraintResponse)
+	err := c.cc.Invoke(ctx, SysMLService_VerifyConstraint_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sysMLServiceClient) VerifyRequirement(ctx context.Context, in *VerifyRequirementRequest, opts ...grpc.CallOption) (*VerifyRequirementResponse, error) {
+	out := new(VerifyRequirementResponse)
+	err := c.cc.Invoke(ctx, SysMLService_VerifyRequirement_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sysMLServiceClient) VerifySatisfaction(ctx context.Context, in *VerifySatisfactionRequest, opts ...grpc.CallOption) (*VerifySatisfactionResponse, error) {
+	out := new(VerifySatisfactionResponse)
+	err := c.cc.Invoke(ctx, SysMLService_VerifySatisfaction_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sysMLServiceClient) EvaluateCalc(ctx context.Context, in *EvaluateCalcRequest, opts ...grpc.CallOption) (*EvaluateCalcResponse, error) {
+	out := new(EvaluateCalcResponse)
+	err := c.cc.Invoke(ctx, SysMLService_EvaluateCalc_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SysMLServiceServer is the server API for SysMLService service.
 // All implementations must embed UnimplementedSysMLServiceServer
 // for forward compatibility
@@ -167,6 +216,15 @@ type SysMLServiceServer interface {
 	// textual notation and RDF Turtle — so a client can write a model back out
 	// rather than only read it. Reported as the "convert" capability.
 	Convert(context.Context, *ConvertRequest) (*ConvertResponse, error)
+	// Verification: the answers the REPL's %constraint, %requirement, %satisfy
+	// and %calc give, so "does this model satisfy its requirements?" can be asked
+	// by a script. Each evaluates the same runtime paths the prompt does and
+	// returns a verdict rather than formatted lines. Reported as the
+	// "verification" capability.
+	VerifyConstraint(context.Context, *VerifyConstraintRequest) (*VerifyConstraintResponse, error)
+	VerifyRequirement(context.Context, *VerifyRequirementRequest) (*VerifyRequirementResponse, error)
+	VerifySatisfaction(context.Context, *VerifySatisfactionRequest) (*VerifySatisfactionResponse, error)
+	EvaluateCalc(context.Context, *EvaluateCalcRequest) (*EvaluateCalcResponse, error)
 	mustEmbedUnimplementedSysMLServiceServer()
 }
 
@@ -200,6 +258,18 @@ func (UnimplementedSysMLServiceServer) ExecuteState(context.Context, *ExecuteSta
 }
 func (UnimplementedSysMLServiceServer) Convert(context.Context, *ConvertRequest) (*ConvertResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Convert not implemented")
+}
+func (UnimplementedSysMLServiceServer) VerifyConstraint(context.Context, *VerifyConstraintRequest) (*VerifyConstraintResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VerifyConstraint not implemented")
+}
+func (UnimplementedSysMLServiceServer) VerifyRequirement(context.Context, *VerifyRequirementRequest) (*VerifyRequirementResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VerifyRequirement not implemented")
+}
+func (UnimplementedSysMLServiceServer) VerifySatisfaction(context.Context, *VerifySatisfactionRequest) (*VerifySatisfactionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VerifySatisfaction not implemented")
+}
+func (UnimplementedSysMLServiceServer) EvaluateCalc(context.Context, *EvaluateCalcRequest) (*EvaluateCalcResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EvaluateCalc not implemented")
 }
 func (UnimplementedSysMLServiceServer) mustEmbedUnimplementedSysMLServiceServer() {}
 
@@ -376,6 +446,78 @@ func _SysMLService_Convert_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SysMLService_VerifyConstraint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyConstraintRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).VerifyConstraint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_VerifyConstraint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).VerifyConstraint(ctx, req.(*VerifyConstraintRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SysMLService_VerifyRequirement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyRequirementRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).VerifyRequirement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_VerifyRequirement_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).VerifyRequirement(ctx, req.(*VerifyRequirementRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SysMLService_VerifySatisfaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifySatisfactionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).VerifySatisfaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_VerifySatisfaction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).VerifySatisfaction(ctx, req.(*VerifySatisfactionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SysMLService_EvaluateCalc_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EvaluateCalcRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).EvaluateCalc(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_EvaluateCalc_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).EvaluateCalc(ctx, req.(*EvaluateCalcRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SysMLService_ServiceDesc is the grpc.ServiceDesc for SysMLService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -418,6 +560,22 @@ var SysMLService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Convert",
 			Handler:    _SysMLService_Convert_Handler,
+		},
+		{
+			MethodName: "VerifyConstraint",
+			Handler:    _SysMLService_VerifyConstraint_Handler,
+		},
+		{
+			MethodName: "VerifyRequirement",
+			Handler:    _SysMLService_VerifyRequirement_Handler,
+		},
+		{
+			MethodName: "VerifySatisfaction",
+			Handler:    _SysMLService_VerifySatisfaction_Handler,
+		},
+		{
+			MethodName: "EvaluateCalc",
+			Handler:    _SysMLService_EvaluateCalc_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

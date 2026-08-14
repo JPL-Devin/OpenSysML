@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -64,4 +67,64 @@ func TestLoadFilesWithoutPathsDoesNothing(t *testing.T) {
 	if got := sess.List(); len(got) != 0 {
 		t.Fatalf("want an empty session, got %v", got)
 	}
+}
+
+// TestCheckDirectoryExitStatus checks that a model named as a directory keeps
+// the exit-status contract of a model named by file: every verdict held, one of
+// them failed, or no check could be made at all.
+func TestCheckDirectoryExitStatus(t *testing.T) {
+	binary := buildCLI(t)
+
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "defs.sysml"), "package Defs { part def Wheel; }\n")
+	write(t, filepath.Join(dir, "checks.sysml"),
+		"package Checks {\n    import Defs::*;\n    part w : Wheel;\n    constraint Held { assert 1.0 <= 2.0; }\n    constraint Fails { assert 3.0 <= 2.0; }\n}\n")
+
+	wantReport(t, checkPaths(t, binary, "-constraint", "Checks::Held", dir), 0, "✓ Constraint Checks::Held passed")
+	wantReport(t, checkPaths(t, binary, "-constraint", "Checks::Fails", dir), 1, "✗ Constraint Checks::Fails failed")
+	wantReport(t, checkPaths(t, binary, "-constraint", "Checks::nosuch", dir), 2, `symbol "Checks::nosuch" not found`)
+
+	// A file of the directory that does not analyse cleanly decides nothing, so
+	// the run exits 2 and names the file the error is in.
+	write(t, filepath.Join(dir, "broken.sysml"), "package Broken {\n    part probe : Nope::Missing;\n}\n")
+	wantReport(t, checkPaths(t, binary, "-constraint", "Checks::Held", dir), 2,
+		"broken.sysml:2:18: error: unresolved reference: Nope::Missing", "did not analyse cleanly")
+	wantReport(t, checkPaths(t, binary, "-validate", dir), 2, "did not analyse cleanly")
+
+	// A glob over the same files answers the same way.
+	wantReport(t, checkPaths(t, binary, "-validate", filepath.Join(dir, "*.sysml")), 2, "did not analyse cleanly")
+}
+
+// TestCheckGlobExitStatus checks a glob entry point over a model that holds, and
+// that a pattern matching no model file is a misuse rather than a verdict.
+func TestCheckGlobExitStatus(t *testing.T) {
+	binary := buildCLI(t)
+
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.sysml"), "package A { constraint Held { assert 1.0 <= 2.0; } }\n")
+	write(t, filepath.Join(dir, "b.sysml"), "package B { part def Wheel; }\n")
+	write(t, filepath.Join(dir, "README.md"), "not a model\n")
+
+	wantReport(t, checkPaths(t, binary, "-constraint", "A::Held", filepath.Join(dir, "*")), 0, "✓ Constraint A::Held passed")
+	wantReport(t, checkPaths(t, binary, "-validate", filepath.Join(dir, "*.kerml")), 2, "no model files match")
+}
+
+// checkPaths runs the binary on paths the caller names, rather than on a model
+// written to a file for it as check does.
+func checkPaths(t *testing.T, binary string, args ...string) runOutcome {
+	t.Helper()
+	cmd := exec.Command(binary, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	result := runOutcome{stdout: stdout.String(), stderr: stderr.String()}
+	var exit *exec.ExitError
+	switch {
+	case err == nil:
+	case errors.As(err, &exit):
+		result.status = exit.ExitCode()
+	default:
+		t.Fatalf("%v: %v\n%s", args, err, result.output())
+	}
+	return result
 }

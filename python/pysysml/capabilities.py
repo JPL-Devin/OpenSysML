@@ -27,6 +27,13 @@ CAPABILITY_TYPE_FACTS = "type_facts"
 #: which is indistinguishable from a broken channel.
 CAPABILITY_CONVERT = "convert"
 
+#: The verification RPCs — ``VerifyConstraint``, ``VerifyRequirement``,
+#: ``VerifySatisfaction`` and ``EvaluateCalc`` — which answer the questions the
+#: REPL's ``%constraint``, ``%requirement``, ``%satisfy`` and ``%calc`` answer.
+#: Without it those calls fail as unimplemented methods, which is
+#: indistinguishable from a broken channel.
+CAPABILITY_VERIFICATION = "verification"
+
 
 @dataclass(frozen=True)
 class ServerInfo:

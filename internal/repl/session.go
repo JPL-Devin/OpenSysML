@@ -4,6 +4,7 @@ package repl
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -20,13 +21,18 @@ import (
 // docName is the in-memory workspace key for the accumulated REPL buffer.
 const docName = "<repl>"
 
-// snippet is one accepted submission source plus the top-level names it declares.
+// snippet is one accepted submission source, the top-level names it declares,
+// and the file it was loaded from, so a finding about it can be reported where
+// its reader would look for it. The key is that file itself, identifying it
+// across the ways one path can be written.
 type snippet struct {
 	src   string
 	names []string
 	// origin is the file this snippet was read from, empty for a submission
-	// typed at the prompt.
+	// typed at the prompt, and key identifies that file across the ways its path
+	// can be written.
 	origin string
+	key    string
 	// gen is the submission that appended this snippet, which is what scopes a
 	// report to the files just loaded rather than the whole buffer.
 	gen int
@@ -122,10 +128,11 @@ func (s *Session) List() []string {
 	return out
 }
 
-// accept accepts src as a submission of its own, from no file.
-func (s *Session) accept(src string) {
+// accept accepts src as a submission of its own, from origin when it came from a
+// file.
+func (s *Session) accept(origin, src string) {
 	s.version++
-	s.acceptFrom(src, "")
+	s.acceptFrom(origin, src)
 }
 
 // acceptFrom parses src to compute its declared names, drops any snippet from
@@ -142,16 +149,29 @@ func (s *Session) accept(src string) {
 // before it. They document what follows, so folding them into the same snippet
 // makes a later redeclaration replace the comments along with the declaration
 // instead of leaving stale documentation above whatever is current.
-func (s *Session) acceptFrom(src, origin string) {
+//
+// A loaded file supersedes only itself and what the prompt said about the same
+// names, since several files of one model commonly open the same package.
+func (s *Session) acceptFrom(origin, src string) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
+	if origin != "" {
+		set := nameSet(names)
+		key := fileKey(origin)
+		kept := s.snippets[:0]
+		for _, sn := range s.snippets {
+			if sn.key == key || (sn.origin == "" && intersects(sn.names, set)) {
+				continue
+			}
+			kept = append(kept, sn)
+		}
+		s.snippets = append(kept, snippet{src: src, names: names, origin: origin, key: key, gen: s.version})
+		return
+	}
 	var comments string
 	if len(names) > 0 {
 		comments = s.takeLeadingComments()
-		set := make(map[string]bool, len(names))
-		for _, n := range names {
-			set[n] = true
-		}
+		set := nameSet(names)
 		kept := s.snippets[:0]
 		for _, sn := range s.snippets {
 			if sn.gen == s.version || !intersects(sn.names, set) {
@@ -160,10 +180,11 @@ func (s *Session) acceptFrom(src, origin string) {
 		}
 		s.snippets = kept
 	}
+	// The prefix marks the comments folded in front of what was submitted, so
+	// diagnostics keep the line numbers of the submission.
 	s.snippets = append(s.snippets, snippet{
 		src:    comments + src,
 		names:  names,
-		origin: origin,
 		gen:    s.version,
 		prefix: len(comments),
 	})
@@ -197,13 +218,12 @@ func (s *Session) genOffset(joined string) int {
 	return len(joined)
 }
 
-// takeLeadingComments removes the trailing run of comment-only snippets from
-// earlier submissions and returns their text, ready to prefix the declaration
-// they document. A comment-only file of this submission is a file in its own
-// right, so it stays.
+// takeLeadingComments removes the trailing run of comment-only snippets typed at
+// the prompt and returns their text, ready to prefix the declaration they
+// document. A comment-only file is a file in its own right, so it stays.
 func (s *Session) takeLeadingComments() string {
 	cut := len(s.snippets)
-	for cut > 0 && s.snippets[cut-1].gen != s.version && isCommentOnly(s.snippets[cut-1].src) {
+	for cut > 0 && s.snippets[cut-1].origin == "" && isCommentOnly(s.snippets[cut-1].src) {
 		cut--
 	}
 	if cut == len(s.snippets) {
@@ -247,6 +267,27 @@ func (s *Session) joined() string {
 	return strings.Join(parts, "\n")
 }
 
+// fileKey identifies the file a path is written for, so the same file loaded
+// under another spelling supersedes itself instead of accumulating a copy.
+func fileKey(path string) string {
+	full := expandHome(path)
+	if abs, err := filepath.Abs(full); err == nil {
+		full = abs
+	}
+	if resolved, err := filepath.EvalSymlinks(full); err == nil {
+		return resolved
+	}
+	return filepath.Clean(full)
+}
+
+func nameSet(names []string) map[string]bool {
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set
+}
+
 func intersects(names []string, set map[string]bool) bool {
 	for _, n := range names {
 		if set[n] {
@@ -281,6 +322,12 @@ func (s *Session) SubmitAll(srcs []string) Result {
 	return s.SubmitFiles(files)
 }
 
+// submit accumulates src as Submit does, recording the file it came from when it
+// came from one.
+func (s *Session) submit(origin, src string) Result {
+	return s.SubmitFiles([]SourceFile{{Name: origin, Text: src}})
+}
+
 // SubmitFiles accumulates every file as one submission: all of them are accepted
 // before the buffer is reindexed and analyzed, so a declaration in one resolves
 // against the others no matter which order they arrive in. This is what makes
@@ -296,7 +343,7 @@ func (s *Session) SubmitFiles(files []SourceFile) Result {
 				declared = append(declared, name)
 			}
 		}
-		s.acceptFrom(f.Text, f.Name)
+		s.acceptFrom(f.Name, f.Text)
 	}
 	joined := s.joined()
 	offset := s.genOffset(joined)

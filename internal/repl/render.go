@@ -313,3 +313,9 @@ func (r Result) baseLine() int {
 
 // wholeBuffer numbers diagnostics against the accumulated buffer, naming no file.
 func wholeBuffer(int) (string, int) { return "", 1 }
+
+// inFile reports every diagnostic against file, numbering from its first line,
+// for a caller that already knows which source it is rendering.
+func inFile(file string) func(int) (string, int) {
+	return func(int) (string, int) { return file, 1 }
+}

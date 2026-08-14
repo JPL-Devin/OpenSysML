@@ -27,9 +27,14 @@ const CapabilityTypeFacts = "type_facts"
 // model back out as SysML notation or RDF Turtle.
 const CapabilityConvert = "convert"
 
+// CapabilityVerification names the capability of the verification RPCs, which
+// answer the questions the REPL's %constraint, %requirement, %satisfy and %calc
+// answer.
+const CapabilityVerification = "verification"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
-var capabilities = []string{CapabilityTypeFacts, CapabilityConvert}
+var capabilities = []string{CapabilityTypeFacts, CapabilityConvert, CapabilityVerification}
 
 // Capabilities returns the capability names this build of the service reports.
 func Capabilities() []string {
