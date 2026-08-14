@@ -32,6 +32,12 @@ type EvalContext struct {
 	// output binding written in terms of the calc's other outputs reads them from
 	// the same evaluation. It is nil everywhere else.
 	calcRun *calcRun
+
+	// activation identifies the execution of the body this evaluation belongs to,
+	// so every output read of one calc usage within it comes from one evaluation
+	// of that usage. It is zero outside a body, where nothing can change between
+	// two reads.
+	activation int64
 }
 
 // NewEvalContext creates an evaluation context with an empty frame stack. It
@@ -55,6 +61,15 @@ func NewEvalContextIn(ctx *Context, scope *symbols.Scope, self *Instance) *EvalC
 	return ec
 }
 
+// beginStep gives an evaluation outside a body a scope of its own, so what it reads
+// - a calc usage's outputs, a collection's elements - is not held past the step. The
+// returned function ends it.
+func (ec *EvalContext) beginStep() func() {
+	activation, end := ec.ctx.beginStep()
+	ec.activation = activation
+	return end
+}
+
 // evalIn returns a context that resolves names in scope while sharing this
 // one's bindings and trace, for a body member written in another declaration's
 // scope (an inherited calc result or parameter default).
@@ -65,6 +80,7 @@ func (ec *EvalContext) evalIn(scope *symbols.Scope) *EvalContext {
 	return &EvalContext{
 		ctx: ec.ctx, scope: scope, self: ec.self, frames: ec.frames, trace: ec.trace,
 		features: ec.features, resolving: ec.resolving, calcRun: ec.calcRun,
+		activation: ec.activation,
 	}
 }
 
@@ -77,6 +93,7 @@ func (ec *EvalContext) nestedEnv(scope *symbols.Scope) *EvalContext {
 	return &EvalContext{
 		ctx: ec.ctx, scope: scope, self: ec.self, frames: frames, trace: ec.trace,
 		features: ec.features, resolving: ec.resolving, calcRun: ec.calcRun,
+		activation: ec.activation,
 	}
 }
 
@@ -384,12 +401,23 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 	if n.Member == nil || len(n.Member.Parts) == 0 {
 		return Value{}, fmt.Errorf("empty member chain")
 	}
+	base, parts := chainBase(n)
 
 	// A calc usage carries no value of its own: its output features are computed
 	// by evaluating it, so `c.a` runs the usage — once — and reads the output
 	// from that evaluation rather than from a slot.
-	if sym, ok := ec.calcUsageOperand(n.Operand); ok {
-		return ec.evalCalcUsageMembers(sym, n.Member.Parts)
+	if sym, ok := ec.calcUsageOperand(base); ok {
+		return ec.evalCalcUsageMembers(sym, parts)
+	}
+
+	// A part carries no value of its own: it denotes an occurrence, whose features
+	// `lander.mass.mDry` reads, so the chain is read from that object.
+	if sym, ok := ec.occurrenceOperand(base); ok {
+		inst, err := ec.ctx.occurrenceOf(sym)
+		if err != nil {
+			return Value{}, fmt.Errorf("usage %s: %w", sym.Name, err)
+		}
+		return ec.chainMemberValue(Value{Kind: ValInstance, Instance: inst.ID}, parts, sym.Name)
 	}
 
 	// Evaluate the operand (left side of the chain)
@@ -414,6 +442,20 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 	return ec.chainMemberValue(operand, n.Member.Parts, "")
 }
 
+// chainBase flattens a nested feature chain: `lander.mass.mDry` is one chain of
+// members from `lander`, not a chain through the value of `lander.mass`.
+func chainBase(n *ast.FeatureChainExpr) (ast.Node, []ast.NameSegment) {
+	operand, parts := n.Operand, n.Member.Parts
+	for {
+		inner, ok := operand.(*ast.FeatureChainExpr)
+		if !ok || inner.Member == nil || len(inner.Member.Parts) == 0 {
+			return operand, parts
+		}
+		parts = append(append([]ast.NameSegment{}, inner.Member.Parts...), parts...)
+		operand = inner.Operand
+	}
+}
+
 // chainMemberValue reads the members named by parts from the object value names,
 // navigating through the objects the intermediate members name. from names the
 // member value came from, for a diagnostic about chaining through it.
@@ -432,6 +474,11 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 		name = part.Text
 		slotDecl, ok := inst.Slots[name]
 		if !ok {
+			// A calc usage is an evaluation rather than a slot, so its outputs are
+			// read from a run of it against this object.
+			if sym, found := ec.ctx.model.LookupMember(inst.Type, name); found && isCalcUsageSymbol(sym) {
+				return ec.calcUsageMemberValue(sym, inst, parts[i+1:])
+			}
 			return Value{}, fmt.Errorf("member %s not found in instance", name)
 		}
 		// A variant named through the variation feature it belongs to is the
@@ -468,7 +515,6 @@ var unimplementedOperators = map[ast.OperatorKind]string{
 	ast.OpMetaAt:  "metadata classification needs the metadata of a value at runtime",
 	ast.OpAs:      "a cast needs the runtime type of a value, which values do not carry yet",
 	ast.OpMeta:    "metadata access is evaluated from a MetadataAccessExpression, not this operator",
-	ast.OpRange:   "a range is not a value kind the runtime carries",
 	ast.OpAll:     "'all' needs the extent of a type, which the runtime does not enumerate",
 	ast.OpIndex:   "indexing is evaluated from an IndexExpression, not this operator",
 }
@@ -500,6 +546,8 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 		return ec.evalLogical(n)
 	case ast.OpNeg, ast.OpPos, ast.OpNot:
 		return ec.evalUnary(n)
+	case ast.OpRange:
+		return ec.evalRange(n)
 	default:
 		if why, ok := unimplementedOperators[n.Operator]; ok {
 			return Value{}, fmt.Errorf("%w: '%s': %s", ErrUnsupportedOperator, n.Operator, why)
@@ -899,17 +947,15 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 // elements, which is what makes SequenceFunctions::union the sequence
 // expression `(seq1, seq2)` rather than a two-element sequence of sequences.
 func (ec *EvalContext) evalSequenceExpr(n *ast.SequenceExpr) (Value, error) {
-	seq := NewSequence()
+	elements := make([]Value, 0, len(n.Elements))
 	for _, elem := range n.Elements {
 		val, err := ec.Eval(elem)
 		if err != nil {
 			return Value{}, err
 		}
-		for _, e := range elementsOf(val) {
-			seq.Append(e)
-		}
+		elements = append(elements, elementsOf(val)...)
 	}
-	return Value{Kind: ValSequence, Sequence: seq}, nil
+	return ec.newSequence(elements)
 }
 
 // evalCollectExpr evaluates `operand.{in x; ...}`, the collect notation, which

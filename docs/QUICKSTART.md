@@ -324,6 +324,7 @@ guarantees, and what the mapping does not cover.
 | `%save <file>` | Write the session model to a file: `.sysml` notation (comments preserved) or `.ttl` RDF |
 | `%verbosity [level]` | Show or set output level: `quiet` (errors only), `normal`, `debug` (every diagnostic over the whole buffer) |
 | `%trace [on\|off]` | Show or set execution tracing: each evaluation, calc invocation, action step and state transition |
+| `%budget` | Show the five bounds one run may spend, each with the variable that raises it |
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create instance from part definition |
 | `%slots <name>` | Show instance slots and values |
@@ -622,11 +623,12 @@ echo 'part Wheel { attribute diameter = 16.0; }' > test.sysml
 | `SYSML_MAX_ACTION_STEPS` | `1000000` | Token-flow steps one action run may perform |
 | `SYSML_MAX_EVENTS` | `1000000` | Events one state machine run may dispatch, and the events one `%advance` drains |
 | `SYSML_MAX_DO_STEPS` | `5000000` | Do-activity actions one state machine run may perform, and the ones one `%advance` drains |
+| `SYSML_MAX_ELEMENTS` | `1000000` | Collection elements one evaluation may hold — the bound on the memory a run holds rather than on the work it does |
 
 Each budget is what turns a non-terminating run into a reported error instead of
 a hang. They count incommensurable things — expression evaluations, action token
-steps, dispatched events, do-activity actions — so raising one says nothing about
-the others, and each has its own variable.
+steps, dispatched events, do-activity actions, materialized collection elements —
+so raising one says nothing about the others, and each has its own variable.
 
 A budget bounds **one run** — one `%eval`, one `%instantiate`, one `%calc`, one
 action, one state machine — not a whole session, so a long REPL session of small
@@ -634,12 +636,28 @@ operations never runs out. A run started inside another, an action invoked from
 an expression say, shares the outer run's budget rather than getting a fresh
 one, and so does a run stepped through with `%step`/`%advance`.
 
-The defaults are set by how long a runaway takes to report rather than by memory
-— execution allocates nothing per step (peak RSS is ~34 MB whether a run spends
-ten thousand steps or fifty million), and the only thing a budget makes grow is a
-`%trace`, at 34–83 bytes an entry. At the measured ~13.6M evaluation steps/s and
-~1.9M events/s each default reports a runaway within about a second, and a fully
-traced run at all four ceilings holds ~320 MB.
+The step and event defaults are set by how long a runaway takes to report rather
+than by memory — those steps allocate nothing that outlives them (peak RSS is ~34
+MB whether a run spends ten thousand steps or fifty million), and the only thing
+they make grow is a `%trace`, at 34–83 bytes an entry. At the measured ~13.6M
+evaluation steps/s and ~1.9M events/s each default reports a runaway within about
+a second, and a fully traced run at those four ceilings holds ~320 MB.
+
+Collection elements are the exception, and `SYSML_MAX_ELEMENTS` is the budget
+that reads as memory: a materialized element is a 104-byte value living as long as
+the collection holding it, and `1..10000000` conjures one per step. Every way of
+materializing a sequence is charged against it — a range, a sequence literal,
+`->collect` and the other collection operations — so the default bounds the
+elements held at once at ~104 MB, in the same band as the figures above:
+
+```
+error: evaluation failed: collection element limit exceeded
+(1000000 elements; raise SYSML_MAX_ELEMENTS to allow more)
+```
+
+Because it bounds memory and not work, the count is what a statement's evaluation
+holds: a loop building a ten-element collection a million times never approaches
+it, while a single `1..2000000` exceeds it at once.
 
 The evaluation step budget:
 

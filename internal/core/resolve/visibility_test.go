@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // ident is a throwaway AST node used only as a memo key for ResolveName.
@@ -84,6 +85,63 @@ func TestRecursiveImportSkipsHiddenNameTwin(t *testing.T) {
 	}
 	if sym.Visibility == ast.VisibilityPrivate {
 		t.Fatalf("resolved the private X, want the public one")
+	}
+}
+
+// A name a namespace imported privately is not re-exported by it (KerML
+// 8.2.3.3), on the unqualified route as much as the qualified one: importing
+// Mid::* does not surface what Mid imported privately, while a reference inside
+// Mid still reaches it.
+func TestNamespaceImportSkipsAPrivatelyImportedName(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"base.sysml": "package Base { part def Hidden; }",
+		"mid.sysml":  "package Mid { private import Base::*; }",
+		"app.sysml":  "package App { import Mid::*; }",
+		"all.sysml":  "package AllApp { import all Mid::*; }",
+	})
+	idx.ExpandWildcardImports()
+
+	app := scopeOf(t, idx.DocumentRoot("app.sysml"), "App")
+	r := New(idx)
+	if sym, ok := r.ResolveName(app, "Hidden", ident("Hidden")); ok {
+		t.Fatalf("Hidden resolved to %q through Mid::*, but Mid imported Base privately",
+			sym.Name)
+	}
+
+	mid := scopeOf(t, idx.DocumentRoot("mid.sysml"), "Mid")
+	r2 := New(idx)
+	if _, ok := r2.ResolveName(mid, "Hidden", ident("Hidden")); !ok {
+		t.Fatalf("Hidden must stay visible inside Mid; diags=%v", r2.Diagnostics)
+	}
+
+	// `import all` takes the target's private memberships, a privately
+	// re-exported name among them.
+	allApp := scopeOf(t, idx.DocumentRoot("all.sysml"), "AllApp")
+	r3 := New(idx)
+	if _, ok := r3.ResolveName(allApp, "Hidden", ident("Hidden")); !ok {
+		t.Fatalf("`import all Mid::*` must reach Mid's private memberships; diags=%v",
+			r3.Diagnostics)
+	}
+}
+
+// The same, for symbols restored from the library cache: they carry no scope, so
+// a wildcard import enumerates them through the index alone.
+func TestNamespaceImportSkipsAPrivatelyImportedCachedName(t *testing.T) {
+	idx := symbols.NewIndex()
+	idx.AddRecords("lib", []symbols.RecordEntry{
+		{FQN: "Base", Kind: symbols.SymbolPackage},
+		{FQN: "Base::Hidden", Kind: symbols.SymbolPartDef},
+		{FQN: "Mid", Kind: symbols.SymbolPackage, WildcardImports: []symbols.WildcardImport{
+			{Target: "Base", Private: true},
+		}},
+	})
+	idx.AddDocument("app.sysml", parsedRoot(t, "app.sysml", "package App { import Mid::*; }"))
+	idx.ExpandWildcardImports()
+
+	appScope := scopeOf(t, idx.DocumentRoot("app.sysml"), "App")
+	r := New(idx)
+	if sym, ok := r.ResolveName(appScope, "Hidden", ident("Hidden")); ok {
+		t.Fatalf("Hidden resolved to %q through Mid::* from the cached index", sym.Name)
 	}
 }
 

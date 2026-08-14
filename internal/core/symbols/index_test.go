@@ -450,3 +450,31 @@ func TestExpandWildcardImportsReachesRecordedMembers(t *testing.T) {
 		t.Errorf("App::Thing = %d symbols, want 1", got)
 	}
 }
+
+// A privately imported name is a member of the importing namespace, but only
+// from inside it (KerML 8.2.3.3): the enumeration a wildcard import of that
+// namespace reads must drop it, and the one a reference from within it reads
+// must not.
+func TestLookupDirectChildrenFromDropsPrivatelyImportedNames(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { namespace Hidden; }")
+	addDoc(t, idx, "mid.sysml", "package Mid { private import Base::*; namespace Own; }")
+	idx.ExpandWildcardImports()
+
+	names := func(syms []*Symbol) []string {
+		var out []string
+		for _, sym := range syms {
+			out = append(out, sym.Name)
+		}
+		return out
+	}
+	if got := names(idx.LookupDirectChildrenFrom("Mid", "")); len(got) != 1 || got[0] != "Own" {
+		t.Errorf("LookupDirectChildrenFrom(Mid, outside) = %v, want just Own", got)
+	}
+	if got := len(idx.LookupDirectChildrenFrom("Mid", "Mid::Inner")); got != 2 {
+		t.Errorf("LookupDirectChildrenFrom(Mid, Mid::Inner) = %d symbols, want 2", got)
+	}
+	if got := len(idx.LookupDirectChildren("Mid")); got != 2 {
+		t.Errorf("LookupDirectChildren(Mid) = %d symbols, want 2", got)
+	}
+}

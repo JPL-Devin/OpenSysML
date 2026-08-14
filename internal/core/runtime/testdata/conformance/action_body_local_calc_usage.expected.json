@@ -1,0 +1,9 @@
+{
+	"type": "action",
+	"outputs": {
+		"v": {"type": "Real", "value": 2.0},
+		"doubled": {"type": "Real", "value": 4.0},
+		"i": {"type": "Integer", "value": 3},
+		"acc": {"type": "Real", "value": 12.0}
+	}
+}

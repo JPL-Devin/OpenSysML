@@ -46,6 +46,10 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 		if sym, ok := r.lookupImports(s, name); ok && !hide.hides(sym) {
 			return resolution{sym: sym, ok: true}
 		}
+
+		if sym, ok := r.lookupInheritedImports(s, name); ok && !hide.hides(sym) {
+			return resolution{sym: sym, ok: true}
+		}
 	}
 	if root := rootOf(scope); root != nil {
 		if sym, ok := hide.lookupLocal(root, name); ok {
@@ -225,7 +229,16 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 	}
 	// Also check FQN index for re-exported symbols (wildcard imports populate index, not scope)
 	if r.idx != nil {
-		children := r.idx.LookupDirectChildren(target.Name)
+		// A name only a private import surfaced under the target is a member of
+		// it but not a visible one, so a wildcard import does not re-export it
+		// (KerML 8.2.3.3) — unless this is an `import all`, which takes the
+		// target's private memberships too.
+		var children []*symbols.Symbol
+		if importAllowsPrivate(imp) {
+			children = r.idx.LookupDirectChildren(target.Name)
+		} else {
+			children = r.idx.LookupDirectChildrenFrom(target.Name, r.referringNamespaceFQN(scope))
+		}
 		for _, sym := range children {
 			// Extract short name from FQN for comparison
 			symName := sym.Name

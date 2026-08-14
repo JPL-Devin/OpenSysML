@@ -28,12 +28,14 @@ func TestNewServiceResolvesBudgets(t *testing.T) {
 		clearBudgetEnv(t)
 		t.Setenv(runtime.MaxStepsEnvVar, "1234567")
 		t.Setenv(runtime.MaxActionStepsEnvVar, "55555")
+		t.Setenv(runtime.MaxElementsEnvVar, "4321")
 		svc, err := NewService(4, "test")
 		if err != nil {
 			t.Fatalf("NewService: %v", err)
 		}
-		if svc.budgets.MaxSteps != 1234567 || svc.budgets.MaxActionSteps != 55555 {
-			t.Errorf("budgets = %+v, want MaxSteps 1234567 and MaxActionSteps 55555", svc.budgets)
+		if svc.budgets.MaxSteps != 1234567 || svc.budgets.MaxActionSteps != 55555 ||
+			svc.budgets.MaxElements != 4321 {
+			t.Errorf("budgets = %+v, want MaxSteps 1234567, MaxActionSteps 55555 and MaxElements 4321", svc.budgets)
 		}
 	})
 
@@ -61,6 +63,7 @@ func clearBudgetEnv(t *testing.T) {
 		runtime.MaxActionStepsEnvVar,
 		runtime.MaxStateEventsEnvVar,
 		runtime.MaxDoStepsEnvVar,
+		runtime.MaxElementsEnvVar,
 	} {
 		t.Setenv(name, "")
 	}
@@ -75,6 +78,7 @@ func TestNewServiceRejectsUnusableBudget(t *testing.T) {
 		runtime.MaxActionStepsEnvVar,
 		runtime.MaxStateEventsEnvVar,
 		runtime.MaxDoStepsEnvVar,
+		runtime.MaxElementsEnvVar,
 	}
 	for _, name := range vars {
 		for _, value := range []string{"0", "-1", "plenty"} {

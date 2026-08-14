@@ -247,7 +247,7 @@ number.
 
 Things that must fail rather than hang: the REPL builds its runtime context with a step budget that
 defaults to **10000000** (`runtime.DefaultMaxSteps`, `internal/core/runtime/budget.go`; sessions
-carry the four budgets via `Session.SetBudgets(runtime.Budgets)`), and every loop iteration spends
+carry the five budgets via `Session.SetBudgets(runtime.Budgets)`), and every loop iteration spends
 several steps, so a runaway loop (or an empty loop body, whose condition can never change) returns
 `error: execution failed: eval … : evaluation step limit exceeded (10000000 steps; raise SYSML_MAX_STEPS to allow more)`
 in under a second (0.7 s measured). Always follow the failure with another meta-command (`%tokens`, `%instances`)
@@ -257,7 +257,7 @@ to prove the session survived — `%tokens` still shows the token parked at the 
 
 ### Raising the budgets (PRs #83, #87)
 
-Four variables, one per runaway bound, each counting a different unit — raising one says nothing
+Five variables, one per runaway bound, each counting a different unit — raising one says nothing
 about the others:
 
 | Variable | Default | Counts |
@@ -266,6 +266,10 @@ about the others:
 | `SYSML_MAX_ACTION_STEPS` | 1000000 | action token-flow steps |
 | `SYSML_MAX_EVENTS` | 1000000 | state machine events, and the events one `%advance` drains |
 | `SYSML_MAX_DO_STEPS` | 5000000 | do-activity actions, ditto for `%advance` |
+| `SYSML_MAX_ELEMENTS` | 1000000 | collection elements one evaluation holds (~104 MB of `Value`s), the memory bound: `(1..2000000)` reports `collection element limit exceeded`, not the step limit, while a loop building a small collection many times is unaffected |
+
+`%budget` prints the five bounds in force with the variable raising each, so a test can read what a
+session runs on instead of inferring it from the environment.
 
 Each bounds **one run** — one `%eval`, `%instantiate`, `%calc`, action or state machine, a stepped-
 through run included — not a whole session, so a long session of small operations never runs out; a

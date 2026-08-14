@@ -26,7 +26,7 @@ func TestSetBudgets(t *testing.T) {
 
 	s.instances["P::Q"] = &runtime.Instance{ID: 1}
 
-	want := runtime.Budgets{MaxSteps: 4200, MaxActionSteps: 42, MaxStateEvents: 43, MaxDoSteps: 44}
+	want := runtime.Budgets{MaxSteps: 4200, MaxActionSteps: 42, MaxStateEvents: 43, MaxDoSteps: 44, MaxElements: 45}
 	if err := s.SetBudgets(want); err != nil {
 		t.Fatalf("SetBudgets: %v", err)
 	}
@@ -46,8 +46,9 @@ func TestSetBudgets(t *testing.T) {
 	}
 
 	for _, bad := range []runtime.Budgets{
-		{MaxSteps: 0, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1},
-		{MaxSteps: 1, MaxActionSteps: 1, MaxStateEvents: -1, MaxDoSteps: 1},
+		{MaxSteps: 0, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: 1},
+		{MaxSteps: 1, MaxActionSteps: 1, MaxStateEvents: -1, MaxDoSteps: 1, MaxElements: 1},
+		{MaxSteps: 1, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: -1},
 		{},
 	} {
 		if err := s.SetBudgets(bad); err == nil {
@@ -57,6 +58,24 @@ func TestSetBudgets(t *testing.T) {
 	if got := s.Budgets(); got != want {
 		t.Errorf("a refused set changed the bounds to %+v", got)
 	}
+}
+
+// TestBudgetCommandShowsEveryBound: %budget reports the session's own bounds,
+// each named with the variable that raises it.
+func TestBudgetCommandShowsEveryBound(t *testing.T) {
+	s := NewSession()
+	budgets := runtime.DefaultBudgets()
+	budgets.MaxElements = 4242
+	if err := s.SetBudgets(budgets); err != nil {
+		t.Fatalf("SetBudgets: %v", err)
+	}
+	wants(t, run(t, s, "%budget"),
+		runtime.MaxStepsEnvVar,
+		runtime.MaxActionStepsEnvVar,
+		runtime.MaxStateEventsEnvVar,
+		runtime.MaxDoStepsEnvVar,
+		"4242",
+		runtime.MaxElementsEnvVar)
 }
 
 // TestAdvanceIsBoundedBySessionBudgets: %advance drains a machine that never

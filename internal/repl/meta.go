@@ -75,6 +75,7 @@ var helpText = []string{
 	"%save <file>        write the session model to a file (.sysml notation or .ttl RDF)",
 	"%verbosity [level]  show or set output level: quiet, normal or debug",
 	"%trace [on|off]     show or set execution tracing (evaluation, calc, action and state steps)",
+	"%budget             show the bounds one run may spend, and the variable raising each",
 	"%quit               exit the REPL",
 	"",
 	"Runtime commands:",
@@ -166,6 +167,8 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			}
 		}
 		return []string{fmt.Sprintf("trace: %s", onOff(s.Tracing()))}, false, nil
+	case "%budget":
+		return s.doBudget(), false, nil
 	case "%quit", "%exit":
 		return []string{"goodbye"}, true, nil
 	case "%instantiate":
@@ -424,6 +427,9 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 	emptyIdx := symbols.NewIndex()
 	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
 	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.budgets.MaxSteps)
+	if err := ctx.SetBudgets(s.budgets); err != nil {
+		return nil, false
+	}
 
 	val, err := ctx.Eval(usage.Value)
 	if err != nil {
@@ -443,6 +449,20 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(val)),
 	}, true
+}
+
+// doBudget lists the bounds one run of this session may spend, each with the
+// variable that raises it.
+func (s *Session) doBudget() []string {
+	b := s.Budgets()
+	return []string{
+		"budgets (each bounds one run, not the session):",
+		fmt.Sprintf("  evaluation steps     %-10d %s", b.MaxSteps, runtime.MaxStepsEnvVar),
+		fmt.Sprintf("  action steps         %-10d %s", b.MaxActionSteps, runtime.MaxActionStepsEnvVar),
+		fmt.Sprintf("  state events         %-10d %s", b.MaxStateEvents, runtime.MaxStateEventsEnvVar),
+		fmt.Sprintf("  do activity steps    %-10d %s", b.MaxDoSteps, runtime.MaxDoStepsEnvVar),
+		fmt.Sprintf("  collection elements  %-10d %s", b.MaxElements, runtime.MaxElementsEnvVar),
+	}
 }
 
 // declaresANameIn reports whether the session declares any name the expression
@@ -484,6 +504,7 @@ func isLiteralAnswerError(err error) bool {
 		runtime.ErrTypeMismatch,
 		runtime.ErrMultiplicityViolation,
 		runtime.ErrStepLimitExceeded,
+		runtime.ErrElementLimitExceeded,
 	} {
 		if errors.Is(err, answer) {
 			return true

@@ -20,6 +20,9 @@ type actionStmtHost struct {
 // token's data.
 func (e *ActionExecutor) executeBody(node ast.Node, token *Token) error {
 	engine := newStmtEngine(e.ctx, &actionStmtHost{exec: e, node: node}, token.Data)
+	// The body's activation ends with this execution of it, so a run stepping the
+	// node many times does not hold what every execution computed.
+	defer engine.finish()
 	_, err := engine.run(e.graph.Bodies[node])
 	return err
 }

@@ -51,6 +51,16 @@ func sequenceOf(elements []Value) Value {
 	return Value{Kind: ValSequence, Sequence: seq}
 }
 
+// newSequence builds a sequence value from elements, charging them against the
+// run's element budget: elements are the memory a collection keeps, so every
+// operation that materializes one goes through here.
+func (ec *EvalContext) newSequence(elements []Value) (Value, error) {
+	if err := ec.ctx.chargeElements(int64(len(elements))); err != nil {
+		return Value{}, err
+	}
+	return sequenceOf(elements), nil
+}
+
 // integerValue wraps a count as an Integer value, which is what the library's
 // Natural-returning functions (size) and Positive parameters (index) carry.
 func integerValue(n int64) Value {
@@ -170,6 +180,14 @@ func (ec *EvalContext) applyBody(body *ast.BodyExpr, args ...Value) (Value, erro
 	}
 	ec.Push(bindings)
 	defer ec.Pop()
+	// Each application is its own activation, so a calc usage read from the body
+	// is evaluated once per element rather than once for the whole collection.
+	outer, entered := ec.activation, ec.ctx.newActivation()
+	ec.activation = entered
+	defer func() {
+		ec.ctx.endActivation(entered)
+		ec.activation = outer
+	}()
 	// The parameters are declared in a scope of their own, so the result
 	// resolves names there: a parameter is a declaration the body's expression
 	// can name, not only a runtime binding.
@@ -316,7 +334,7 @@ func builtinSequenceUnion(ec *EvalContext, args []Value) (Value, error) {
 	joined := make([]Value, 0, len(seq1)+len(seq2))
 	joined = append(joined, seq1...)
 	joined = append(joined, seq2...)
-	return sequenceOf(joined), nil
+	return ec.newSequence(joined)
 }
 
 // builtinSequenceIntersection is SequenceFunctions::intersection, the elements
@@ -333,7 +351,7 @@ func builtinSequenceIntersection(ec *EvalContext, args []Value) (Value, error) {
 			common = append(common, elem)
 		}
 	}
-	return sequenceOf(common), nil
+	return ec.newSequence(common)
 }
 
 // builtinSequenceIncluding is SequenceFunctions::including, the sequence with
@@ -359,7 +377,7 @@ func builtinSequenceExcluding(ec *EvalContext, args []Value) (Value, error) {
 			kept = append(kept, elem)
 		}
 	}
-	return sequenceOf(kept), nil
+	return ec.newSequence(kept)
 }
 
 // builtinSequenceSubsequence is SequenceFunctions::subsequence, the elements
@@ -389,13 +407,13 @@ func builtinSequenceSubsequence(ec *EvalContext, args []Value) (Value, error) {
 			ErrIndexOutOfRange, start, len(elements))
 	}
 	if start > end {
-		return sequenceOf(nil), nil
+		return ec.newSequence(nil)
 	}
 	if end > int64(len(elements)) {
 		return Value{}, fmt.Errorf("%w: SequenceFunctions::subsequence end index %d is outside 1..%d",
 			ErrIndexOutOfRange, end, len(elements))
 	}
-	return sequenceOf(elements[start-1 : end]), nil
+	return ec.newSequence(elements[start-1 : end])
 }
 
 // builtinSequenceExcludingAt is SequenceFunctions::excludingAt, the sequence
@@ -430,7 +448,7 @@ func builtinSequenceExcludingAt(ec *EvalContext, args []Value) (Value, error) {
 	kept := make([]Value, 0, len(elements)-int(end-start+1))
 	kept = append(kept, elements[:start-1]...)
 	kept = append(kept, elements[end:]...)
-	return sequenceOf(kept), nil
+	return ec.newSequence(kept)
 }
 
 // builtinSequenceHead is SequenceFunctions::head, `seq#(1)`: the first element,
@@ -450,9 +468,9 @@ func builtinSequenceTail(ec *EvalContext, args []Value) (Value, error) {
 	}
 	elements := elementsOf(args[0])
 	if len(elements) == 0 {
-		return sequenceOf(nil), nil
+		return ec.newSequence(nil)
 	}
-	return sequenceOf(elements[1:]), nil
+	return ec.newSequence(elements[1:])
 }
 
 // builtinSequenceLast is SequenceFunctions::last, `seq#(size(seq))`.
@@ -516,7 +534,7 @@ func (ec *EvalContext) filter(op string, args []Value, keep bool) (Value, error)
 			kept = append(kept, elem)
 		}
 	}
-	return sequenceOf(kept), nil
+	return ec.newSequence(kept)
 }
 
 // builtinControlSelectOne is ControlFunctions::selectOne, the first element the
@@ -550,7 +568,13 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 		if err != nil {
 			return Value{}, err
 		}
-		mapped = append(mapped, elementsOf(val)...)
+		// Charged as the result grows, so a run over the ceiling is reported
+		// before the whole mapping is held.
+		contributed := elementsOf(val)
+		if err := ec.ctx.chargeElements(int64(len(contributed))); err != nil {
+			return Value{}, err
+		}
+		mapped = append(mapped, contributed...)
 	}
 	return sequenceOf(mapped), nil
 }

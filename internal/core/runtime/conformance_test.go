@@ -387,7 +387,7 @@ func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path st
 func runCalcConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
 	// Find calc definition/usage
 	rootScope := idx.DocumentRoot(path)
-	calcSym := findBehavioralSymbol(t, rootScope, ast.DefCalc, ast.UsageCalc)
+	calcSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefCalc, ast.UsageCalc)
 
 	// Convert expected inputs to runtime Values
 	args := make([]Value, len(expected.Inputs))
