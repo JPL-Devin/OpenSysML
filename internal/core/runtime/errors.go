@@ -141,6 +141,14 @@ var (
 	// of the output features its calc declares.
 	ErrUnknownOutput = errors.New("unknown output")
 
+	// ErrOutputNotAssigned is returned when a declared output carries no value
+	// because the activation never assigned it. It is a kind of ErrNoValue.
+	ErrOutputNotAssigned = fmt.Errorf("%w: output never assigned", ErrNoValue)
+
+	// ErrConflictingOutput is returned when one activation would bind an output
+	// twice: by its declaration and by an assignment, or by two assignments.
+	ErrConflictingOutput = errors.New("output bound more than once")
+
 	// ErrCyclicOutput is returned when an output feature's binding depends,
 	// directly or through other outputs, on the output being computed.
 	ErrCyclicOutput = errors.New("cyclic output dependency")

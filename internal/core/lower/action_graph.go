@@ -452,6 +452,15 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 			Scope:   scope,
 		}
 	case *ast.AssignmentActionNode:
+		// A target naming more than one segment reaches outside the body, which no
+		// host binds; truncating it to the last segment would write another feature.
+		if qname := ast.AsQualifiedName(m.Target); qname != nil && len(qname.Parts) > 1 {
+			return Unsupported{
+				Description: "assignment to a qualified target",
+				Node:        m,
+				Scope:       scope,
+			}
+		}
 		return Assign{
 			Target: ast.SimpleName(m.Target),
 			Value:  m.Value,
@@ -494,6 +503,11 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 		// them (`loop action charging { … } until charging.done`).
 		if m.Kind == ast.UsageAction && m.IsBodyParameter {
 			return lowerBlock(m, m.Members, childScope(scope, m))
+		}
+		// An action usage naming the action it performs is a performed action, which
+		// the host executes or rejects as its own purity demands.
+		if m.Kind == ast.UsageAction && performsAction(m) {
+			return Effect{Kind: EffectPerform, Node: m, Scope: scope}
 		}
 		return Unsupported{Description: usageDescription(m), Node: m, Scope: scope}
 	default:

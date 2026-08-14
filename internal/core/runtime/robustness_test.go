@@ -44,6 +44,10 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_usage_specializes_a_non_calc", testCalcUsageSpecializesANonCalc)
 	t.Run("calc_usage_step_budget", testCalcUsageStepBudget)
 	t.Run("calc_usage_output_without_a_value", testCalcUsageOutputWithoutAValue)
+	t.Run("calc_output_never_assigned_by_the_body", testCalcOutputNeverAssignedByTheBody)
+	t.Run("calc_output_assigned_in_a_branch_not_taken", testCalcOutputAssignedInABranchNotTaken)
+	t.Run("calc_output_valued_and_assigned", testCalcOutputValuedAndAssigned)
+	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
 	t.Run("nested_calc_usage_unbound_input", testNestedCalcUsageUnboundInput)
 	t.Run("nested_calc_usage_unknown_output", testNestedCalcUsageUnknownOutput)
 	t.Run("nested_calc_usage_self_cycle", testNestedCalcUsageSelfCycle)
@@ -87,6 +91,10 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("history_without_record_or_default", testHistoryWithoutRecordOrDefault)
 	t.Run("defer_of_non_deferrable_trigger", testDeferOfNonDeferrableTrigger)
 	t.Run("non_terminating_do_behavior", testNonTerminatingDoBehavior)
+	t.Run("empty_anonymous_action_body", testEmptyAnonymousActionBody)
+	t.Run("non_terminating_anonymous_do_body", testNonTerminatingAnonymousDoBody)
+	t.Run("behavior_performing_an_action_and_stating_a_body", testBehaviorPerformingAnActionAndStatingABody)
+	t.Run("qualified_assignment_target_in_a_state_effect", testQualifiedAssignmentTargetInAStateEffect)
 	t.Run("call_of_unhandled_operation", testCallOfUnhandledOperation)
 	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 	t.Run("perform_of_missing_action", testPerformOfMissingAction)
@@ -770,6 +778,133 @@ func testNonTerminatingDoBehavior(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "exceeded max") {
 		t.Errorf("expected a budget error, got: %v", err)
+	}
+}
+
+// testEmptyAnonymousActionBody: entry, do and exit bodies stating no statement
+// run the machine to completion rather than reporting an unexecutable behavior.
+func testEmptyAnonymousActionBody(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial start;
+			state quiet {
+				entry action { }
+				do action { }
+				exit action { }
+			}
+			state done;
+			then start quiet;
+			then quiet done;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	current, ok := exec.CurrentState().(*ast.StateNode)
+	if !ok || current.Name != "done" {
+		t.Errorf("expected the empty bodies to leave the machine in done, got %v", exec.CurrentState())
+	}
+}
+
+// testNonTerminatingAnonymousDoBody: a do body that never finishes spends the
+// step budget instead of hanging the machine.
+func testNonTerminatingAnonymousDoBody(t *testing.T) {
+	err := stateRunErrorForSource(t, "Machine", `package test {
+		state Machine {
+			attribute c : Integer = 0;
+			initial start;
+			state spin {
+				do action {
+					while true {
+						assign c := c + 1;
+					}
+				}
+			}
+			state done;
+			then start spin;
+			then spin done;
+		}
+	}`)
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// testBehaviorPerformingAnActionAndStatingABody: a behavior that both performs
+// an action and states a body of its own is reported rather than silently
+// choosing one of the two.
+func testBehaviorPerformingAnActionAndStatingABody(t *testing.T) {
+	err := stateRunErrorForSource(t, "Machine", `package test {
+		action def Bump;
+		state Machine {
+			attribute c : Integer = 0;
+			initial start;
+			state working {
+				entry action mixed : Bump { assign c := c + 1; }
+			}
+			state done;
+			then start working;
+			then working done;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected a behavior stating a body and an action to be reported")
+	}
+	if !strings.Contains(err.Error(), "stating a body of its own") {
+		t.Errorf("expected the report to name the conflict, got: %v", err)
+	}
+}
+
+// testQualifiedAssignmentTargetInAStateEffect: an assignment naming more than
+// one segment is reported rather than writing the last segment.
+func testQualifiedAssignmentTargetInAStateEffect(t *testing.T) {
+	err := stateRunErrorForSource(t, "Machine", `package test {
+		package other { attribute c : Integer = 0; }
+		state Machine {
+			attribute c : Integer = 0;
+			initial init;
+			state active;
+			final done;
+			init then active;
+			transition active to done do assign other::c := 1;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected a qualified assignment target to be reported")
+	}
+	if !strings.Contains(err.Error(), "assignment to a qualified target") {
+		t.Errorf("expected the report to name the unsupported target, got: %v", err)
+	}
+}
+
+// stateRunErrorForSource runs the named machine in src to completion and answers
+// the first error it reports, failing if the machine hangs.
+func stateRunErrorForSource(t *testing.T, name, src string) error {
+	t.Helper()
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), name, ast.DefState)
+	if sym == nil {
+		t.Fatalf("state machine %s not found", name)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		exec, err := newStateExecutor(ctx, sym, nil)
+		if err == nil {
+			err = exec.initialize()
+		}
+		if err == nil {
+			err = exec.RunToCompletion()
+		}
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(10 * time.Second):
+		t.Fatalf("running %s did not terminate", name)
+		return nil
 	}
 }
 
@@ -2818,6 +2953,101 @@ func testCalcUsageOutputWithoutAValue(t *testing.T) {
 	err := calcUsageOutputInSource(t, src, "c", "b", 10000)
 	if !errors.Is(err, ErrNoValue) {
 		t.Errorf("expected ErrNoValue, got: %v", err)
+	}
+}
+
+// testCalcOutputNeverAssignedByTheBody: a body that assigns one of two declared
+// outputs leaves the other unbound, and the read says that rather than blaming a
+// missing result expression.
+func testCalcOutputNeverAssignedByTheBody(t *testing.T) {
+	src := `
+		package test {
+			calc def Two {
+				in n : Integer;
+				out a : Integer;
+				out b : Integer;
+				a = n + 1;
+			}
+			calc c : Two { in n = 5; }
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "b", 10000)
+	if !errors.Is(err, ErrOutputNotAssigned) {
+		t.Errorf("expected ErrOutputNotAssigned, got: %v", err)
+	}
+	if errors.Is(err, ErrNoResultExpression) {
+		t.Errorf("expected no result-expression blame, got: %v", err)
+	}
+}
+
+// testCalcOutputAssignedInABranchNotTaken: an output only a branch that does not
+// run would assign is unbound for that activation.
+func testCalcOutputAssignedInABranchNotTaken(t *testing.T) {
+	src := `
+		package test {
+			calc def Branch {
+				in n : Integer;
+				out a : Integer;
+				if n > 10 {
+					a = n;
+				}
+			}
+			calc c : Branch { in n = 5; }
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "a", 10000)
+	if !errors.Is(err, ErrOutputNotAssigned) {
+		t.Errorf("expected ErrOutputNotAssigned, got: %v", err)
+	}
+}
+
+// testCalcOutputValuedAndAssigned: an output given a value two ways is reported
+// rather than silently picking one (the precedent of #127/#131).
+func testCalcOutputValuedAndAssigned(t *testing.T) {
+	src := `
+		package test {
+			calc def Both {
+				in n : Integer;
+				out a : Integer = n;
+				a = n + 1;
+			}
+			calc c : Both { in n = 5; }
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "a", 10000)
+	if !errors.Is(err, ErrConflictingOutput) {
+		t.Errorf("expected ErrConflictingOutput, got: %v", err)
+	}
+}
+
+// testCalcOutputAssignedTwice: a body assigning an output more than once leaves
+// it bound to the last assignment that ran, the same as a body local, so an
+// output may be initialized and then accumulated into.
+func testCalcOutputAssignedTwice(t *testing.T) {
+	src := `
+		package test {
+			calc def Twice {
+				in n : Integer;
+				out a : Integer;
+				a = n + 1;
+				a = a + 1;
+			}
+			calc c : Twice { in n = 5; }
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	ctx.maxSteps = 10000
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "c", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("calc usage c not found")
+	}
+
+	value, err := ctx.CalcUsageOutput(sym, "a", sym.OwnerScope, nil)
+	if err != nil {
+		t.Fatalf("reading output a of c: %v", err)
+	}
+	if got := FormatTraceValue(value); got != "7" {
+		t.Errorf("output a = %s, want 7", got)
 	}
 }
 

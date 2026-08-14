@@ -56,3 +56,9 @@ func (h *actionStmtHost) acceptReturn(Value, lower.Return) error {
 func (h *actionStmtHost) effect(s lower.Effect) error {
 	return fmt.Errorf("%s: '%s' in a body is not executable", h.describe(), s.Kind)
 }
+
+// declaredOutput reports no output features: an action node's parameters are
+// bound by the token's data, which an assignment writes directly.
+func (h *actionStmtHost) declaredOutput(string) bool {
+	return false
+}

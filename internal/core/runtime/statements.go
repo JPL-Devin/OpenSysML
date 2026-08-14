@@ -42,15 +42,25 @@ func (env *stmtEnv) declare(name string, value Value) {
 	env.data[name] = value
 }
 
-// assign writes to the innermost entered block that declares name, or to the
-// behavior's data when that holds the name, and reports whether it found one.
-// A name neither declares is the host's to decide on.
-func (env *stmtEnv) assign(name string, value Value) bool {
+// assignLocal writes to the innermost entered block that declares name and
+// reports whether one did: a block-local declaration shadows a name of the
+// behavior's own, including one of its output features.
+func (env *stmtEnv) assignLocal(name string, value Value) bool {
 	for i := len(env.frames) - 1; i >= 0; i-- {
 		if _, ok := env.frames[i][name]; ok {
 			env.frames[i][name] = value
 			return true
 		}
+	}
+	return false
+}
+
+// assign writes to the innermost entered block that declares name, or to the
+// behavior's data when that holds the name, and reports whether it found one.
+// A name neither declares is the host's to decide on.
+func (env *stmtEnv) assign(name string, value Value) bool {
+	if env.assignLocal(name, value) {
+		return true
 	}
 	if _, ok := env.data[name]; ok {
 		env.data[name] = value
@@ -76,8 +86,13 @@ type stmtHost interface {
 	describe() string
 	// send states the message a send statement addresses.
 	send(ec *EvalContext, s lower.Send) error
-	// assignOuter writes a name no entered block and no body member declares.
+	// assignOuter writes a name no entered block and no body member declares, and
+	// every name declaredOutput claims.
 	assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error
+	// declaredOutput reports whether name is an output feature of the host, whose
+	// assignment binds that output for this activation rather than writing a value
+	// the body merely holds.
+	declaredOutput(name string) bool
 	// acceptReturn takes the value a `return` yields.
 	acceptReturn(value Value, s lower.Return) error
 	// effect states an effect on the world outside the body.
@@ -158,7 +173,12 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 		if err != nil {
 			return flowNext, fmt.Errorf("eval assignment RHS: %w", err)
 		}
-		if e.env.assign(s.Target, value) {
+		// An output is bound by the host even when the body's data holds it, so a
+		// second binding is reported; a block-local of the name shadows it.
+		if e.env.assignLocal(s.Target, value) {
+			return flowNext, nil
+		}
+		if !e.host.declaredOutput(s.Target) && e.env.assign(s.Target, value) {
 			return flowNext, nil
 		}
 		return flowNext, e.host.assignOuter(e.env, s.Target, value, s)

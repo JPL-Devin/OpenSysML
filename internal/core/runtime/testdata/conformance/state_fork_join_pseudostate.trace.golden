@@ -4,9 +4,11 @@ transition: init -> ready
 exit: ready
 enter: working
 enter: building (entry action)
-eval literal 1 -> 1
+stmt assign leftDone
+  eval literal 1 -> 1
 enter: checking (entry action)
-eval literal 1 -> 1
+stmt assign rightDone
+  eval literal 1 -> 1
 transition: ready -> split
 exit: building
 exit: checking

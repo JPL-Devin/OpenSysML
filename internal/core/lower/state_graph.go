@@ -21,6 +21,11 @@ type StateGraph struct {
 	// what the names in its entry, do and exit behaviors resolve against.
 	StateScopes map[*ast.StateNode]*symbols.Scope
 
+	// Behaviors: state → its lowered entry, do and exit behaviors. The executor
+	// runs these rather than the state's AST members, so an inline action body is
+	// executable statements by the time it is reached.
+	Behaviors map[*ast.StateNode]*StateBehaviors
+
 	// declOf: synthesized state → the declaration it was built from, since the
 	// scope tree is keyed by what the scope builder saw rather than by the state
 	// nodes lowering derives from it.
@@ -78,11 +83,13 @@ type Transition struct {
 	// Name is the transition's own name, when it was written with one
 	// (`transition maintain first idle then busy`), and "" when it was not.
 	Name    string
-	Source  ast.Node   // *ast.StateNode or *ast.PseudostateNode
-	Target  ast.Node   // *ast.StateNode or *ast.PseudostateNode
-	Trigger ast.Node   // TimeEvent, ChangeEvent, SignalEvent, CallEvent, nil = completion
-	Guard   ast.Node   // guard expression, nil = no guard
-	Effect  []ast.Node // effect actions
+	Source  ast.Node // *ast.StateNode or *ast.PseudostateNode
+	Target  ast.Node // *ast.StateNode or *ast.PseudostateNode
+	Trigger ast.Node // TimeEvent, ChangeEvent, SignalEvent, CallEvent, nil = completion
+	Guard   ast.Node // guard expression, nil = no guard
+	// Effect are the transition's effect behaviors, lowered the same way a state's
+	// entry, do and exit behaviors are.
+	Effect []StateBehavior
 	// Via is the port the accepted occurrence must arrive at
 	// (`accept Ping via commPort`), and "" when the trigger names no port, in
 	// which case an occurrence reaching the machine by any route fires it.
@@ -107,6 +114,7 @@ func ToStateGraph(stateMachineDecl ast.Node, scope *symbols.Scope) (*StateGraph,
 	graph := &StateGraph{
 		Scope:            scope,
 		StateScopes:      make(map[*ast.StateNode]*symbols.Scope),
+		Behaviors:        make(map[*ast.StateNode]*StateBehaviors),
 		declOf:           make(map[*ast.StateNode]ast.Node),
 		States:           make([]*ast.StateNode, 0),
 		Pseudostates:     make(map[string]*ast.PseudostateNode),
@@ -341,6 +349,11 @@ func stateNodeFromUsage(graph *StateGraph, usage *ast.Usage) *ast.StateNode {
 func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNode, scope *symbols.Scope) error {
 	graph.States = append(graph.States, state)
 	graph.StateScopes[state] = scope
+	graph.Behaviors[state] = &StateBehaviors{
+		Entry: LowerBehaviors(state.Entry, scope),
+		Do:    LowerBehaviors(state.Do, scope),
+		Exit:  LowerBehaviors(state.Exit, scope),
+	}
 	if parent != nil {
 		graph.ParentState[state] = parent
 	}
@@ -485,7 +498,7 @@ func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge, scope *sym
 		Target:    targetState,
 		Trigger:   edge.Trigger,
 		Guard:     edge.Guard,
-		Effect:    lowerEffect(edge.Effect),
+		Effect:    LowerBehaviors(edge.Effect, scope),
 		Scope:     scope,
 		BodyScope: scope,
 	}, nil
@@ -584,18 +597,19 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 			member.Target.Parts[len(member.Target.Parts)-1].Text, stateNames)
 	}
 
+	// A trigger's parameters are members of a scope of the transition's own, which
+	// its guard and effect resolve in (symbols/bodyscopes.go).
+	bodyScope := symbols.TriggerScope(scope, member)
 	return &Transition{
-		Name:    member.Name,
-		Source:  source,
-		Target:  target,
-		Trigger: classifyTrigger(member.Trigger),
-		Guard:   member.Guard,
-		Effect:  lowerEffect(member.Effect),
-		Via:     ast.SimpleName(member.Via),
-		Scope:   scope,
-		// A trigger's parameters are members of a scope of the transition's
-		// own, which its guard and effect resolve in (symbols/bodyscopes.go).
-		BodyScope: symbols.TriggerScope(scope, member),
+		Name:      member.Name,
+		Source:    source,
+		Target:    target,
+		Trigger:   classifyTrigger(member.Trigger),
+		Guard:     member.Guard,
+		Effect:    LowerBehaviors(member.Effect, bodyScope),
+		Via:       ast.SimpleName(member.Via),
+		Scope:     scope,
+		BodyScope: bodyScope,
 	}, nil
 }
 
@@ -604,20 +618,6 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 func isEntrySubaction(member ast.Node) bool {
 	_, ok := unwrapMembership(member).(*ast.EntryMember)
 	return ok
-}
-
-// lowerEffect unwraps the memberships a transition's effect actions are
-// declared through, so the executor is given the action itself: a performed
-// action (`do perform notify`) is a usage contributed by a membership.
-func lowerEffect(effect []ast.Node) []ast.Node {
-	if len(effect) == 0 {
-		return nil
-	}
-	actions := make([]ast.Node, 0, len(effect))
-	for _, action := range effect {
-		actions = append(actions, unwrapMembership(action))
-	}
-	return actions
 }
 
 // classifyTrigger converts a raw trigger expression into a typed TriggerEvent.

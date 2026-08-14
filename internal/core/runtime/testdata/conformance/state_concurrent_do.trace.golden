@@ -2,47 +2,53 @@ exit: lstart
 enter: lwork
 transition: lstart -> lwork
 do: lwork
-    eval feature seq -> 0
-    eval literal 10 -> 10
-  eval operator * -> 0
-  eval literal 1 -> 1
-eval operator + -> 1
+stmt assign seq
+      eval feature seq -> 0
+      eval literal 10 -> 10
+    eval operator * -> 0
+    eval literal 1 -> 1
+  eval operator + -> 1
 exit: rstart
 enter: rwork
 transition: rstart -> rwork
 do: lwork
-    eval feature seq -> 1
-    eval literal 10 -> 10
-  eval operator * -> 10
-  eval literal 2 -> 2
-eval operator + -> 12
+stmt assign seq
+      eval feature seq -> 1
+      eval literal 10 -> 10
+    eval operator * -> 10
+    eval literal 2 -> 2
+  eval operator + -> 12
 do: rwork
-    eval feature seq -> 12
-    eval literal 10 -> 10
-  eval operator * -> 120
-  eval literal 4 -> 4
-eval operator + -> 124
+stmt assign seq
+      eval feature seq -> 12
+      eval literal 10 -> 10
+    eval operator * -> 120
+    eval literal 4 -> 4
+  eval operator + -> 124
 do: lwork
-    eval feature seq -> 124
-    eval literal 10 -> 10
-  eval operator * -> 1240
-  eval literal 3 -> 3
-eval operator + -> 1243
+stmt assign seq
+      eval feature seq -> 124
+      eval literal 10 -> 10
+    eval operator * -> 1240
+    eval literal 3 -> 3
+  eval operator + -> 1243
 do: rwork
-    eval feature seq -> 1243
-    eval literal 10 -> 10
-  eval operator * -> 12430
-  eval literal 5 -> 5
-eval operator + -> 12435
+stmt assign seq
+      eval feature seq -> 1243
+      eval literal 10 -> 10
+    eval operator * -> 12430
+    eval literal 5 -> 5
+  eval operator + -> 12435
 exit: lwork
 enter: ldone
 transition: lwork -> ldone
 do: rwork
-    eval feature seq -> 12435
-    eval literal 10 -> 10
-  eval operator * -> 124350
-  eval literal 6 -> 6
-eval operator + -> 124356
+stmt assign seq
+      eval feature seq -> 12435
+      eval literal 10 -> 10
+    eval operator * -> 124350
+    eval literal 6 -> 6
+  eval operator + -> 124356
 exit: rwork
 enter: rdone
 transition: rwork -> rdone

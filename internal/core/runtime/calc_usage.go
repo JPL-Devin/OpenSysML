@@ -31,6 +31,9 @@ type calcOutput struct {
 	Value    ast.Node        // value-binding expression, nil when the calc gives the output no value
 	Owner    *symbols.Symbol // the calc declaring the binding, whose scope it is written in
 	IsResult bool            // declared with `return`: the result an invocation of the calc yields
+	// IsInOut marks an `inout` parameter: an output feature (KerML 7.4.9) bound by
+	// the invocation rather than by a declaration or an assignment.
+	IsInOut bool
 }
 
 // calcOutputs flattens the output features declared along chain (most general
@@ -47,12 +50,17 @@ func calcOutputs(chain []*symbols.Symbol) []calcOutput {
 			if !ok {
 				continue
 			}
-			if usage.Direction != ast.DirOut && !usage.IsResult {
+			if usage.Direction != ast.DirOut && usage.Direction != ast.DirInOut && !usage.IsResult {
 				continue
 			}
 			// An output written as a redefinition names the one it overrides.
 			name, _ := ast.EffectiveName(usage)
 			out := calcOutput{Name: name, Value: usage.Value, Owner: link, IsResult: usage.IsResult}
+			if usage.Direction == ast.DirInOut {
+				// The value an `inout` declares is the default of the parameter, not a
+				// binding of the output: the invocation binds it either way.
+				out.IsInOut, out.Value = true, nil
+			}
 
 			var at int
 			var seen bool
@@ -106,6 +114,42 @@ func calcSteps(body []lower.Statement) []lower.Statement {
 	return steps
 }
 
+// assignedOutputs are the outputs the body's statements assign, on any path
+// through it: what the calc computes, whichever way an execution branches.
+func assignedOutputs(stmts []lower.Statement, outputs []calcOutput) map[string]bool {
+	declared := make(map[string]bool, len(outputs))
+	for _, out := range outputs {
+		if out.Name != "" && !out.IsInOut {
+			declared[out.Name] = true
+		}
+	}
+	assigned := make(map[string]bool)
+	collectAssignedOutputs(stmts, declared, assigned)
+	return assigned
+}
+
+// collectAssignedOutputs walks the statements, and the blocks they carry, for
+// assignments to a declared output.
+func collectAssignedOutputs(stmts []lower.Statement, declared, assigned map[string]bool) {
+	for _, stmt := range stmts {
+		switch s := stmt.(type) {
+		case lower.Assign:
+			if declared[s.Target] {
+				assigned[s.Target] = true
+			}
+		case lower.Block:
+			collectAssignedOutputs(s.Statements, declared, assigned)
+		case lower.Loop:
+			collectAssignedOutputs(s.Body.Statements, declared, assigned)
+		case lower.If:
+			collectAssignedOutputs(s.Then.Statements, declared, assigned)
+			if s.Else != nil {
+				collectAssignedOutputs(s.Else.Statements, declared, assigned)
+			}
+		}
+	}
+}
+
 // isOutputBinding reports whether a lowered return states an `out` feature's
 // value rather than a `return`. A result parameter stays a return: it is the
 // one value the calc designates.
@@ -156,7 +200,9 @@ func (shape *calcShape) designatedOutput() (calcOutput, error) {
 			}
 			return out, nil
 		}
-		if out.Value != nil {
+		// An output the body assigns is computed as much as one a declaration binds,
+		// so it is a candidate result of an invocation just the same.
+		if out.Value != nil || shape.BodyOutputs[out.Name] {
 			valued = append(valued, out)
 		}
 	}
@@ -471,8 +517,8 @@ func (ctx *Context) runCalcUsage(
 	run.activation = activation
 	// A `return` produces the value of the result parameter, so reading that
 	// parameter answers from the run rather than evaluating its binding again.
-	// Any other output states its own value, which the returned one never
-	// stands in for even when the invocation hands that output back.
+	// Any other output states its own value — a declaration binding or a body
+	// assignment — which the returned one never stands in for.
 	if returned {
 		if out, err := shape.designatedOutput(); err == nil && out.Name != "" && out.IsResult {
 			run.outputs[out.Name] = result
@@ -513,8 +559,14 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 		return value, nil
 	}
 	if out.Value == nil {
+		// An output the body assigned, and an `inout` the invocation bound, are values
+		// the activation left behind rather than bindings to evaluate.
+		if value, ok := run.env[out.Name]; ok && out.Name != "" {
+			run.outputs[out.Name] = value
+			return value, nil
+		}
 		return Value{}, fmt.Errorf(
-			"%w for output %s of calc %s", ErrNoValue, run.outputDescription(out), run.shape.Name,
+			"%w: output %s of calc %s", ErrOutputNotAssigned, run.outputDescription(out), run.shape.Name,
 		)
 	}
 	if run.computing[out.Name] {
