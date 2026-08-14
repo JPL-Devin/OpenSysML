@@ -40,6 +40,10 @@ type calcShape struct {
 	// Steps is Body without the bindings of its `out` features, which are
 	// evaluated when those features are read rather than run as statements.
 	Steps []lower.Statement
+	// BodyOutputs are the output features some statement of the body assigns,
+	// whatever path the execution takes. A calc that binds its outputs this way
+	// computes them though it returns nothing, so it states a computation.
+	BodyOutputs map[string]bool
 }
 
 // calcShapeOf resolves the invocation interface of a calc symbol: its
@@ -71,7 +75,10 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 		BodyOwner: bodyOwner,
 		Steps:     calcSteps(body),
 	}
-	if !lower.Returns(shape.Body) {
+	shape.BodyOutputs = assignedOutputs(shape.Steps, shape.Outputs)
+	// A calc computes nothing when it neither returns a value nor binds an output
+	// feature — by a declaration or by an assignment in its body.
+	if !lower.Returns(shape.Body) && len(shape.BodyOutputs) == 0 {
 		return nil, fmt.Errorf("%w: calc %s has no return expression", ErrNoResultExpression, name)
 	}
 
@@ -318,7 +325,7 @@ func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, cal
 // returned a value and the activation it ran in. bindings holds the calc's
 // parameters on the way in and its locals on the way out.
 func (ctx *Context) runCalcSteps(shape *calcShape, bindings map[string]Value) (Value, bool, int64, error) {
-	host := &calcStmtHost{}
+	host := &calcStmtHost{shape: shape}
 	engine := newStmtEngine(ctx, host, bindings)
 
 	flow, err := engine.run(shape.Steps)

@@ -1,0 +1,19 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Outputs" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="TwoStmt"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="b" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (*ast.AssignmentActionNode)
+          (*ast.AssignmentActionNode))))))

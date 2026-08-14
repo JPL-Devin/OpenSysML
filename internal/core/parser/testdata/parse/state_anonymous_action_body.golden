@@ -1,0 +1,43 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Bodies" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="state" abstract=false variation=false name="Machine"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="0")))
+          (Membership visibility="default"
+            (Usage kind="state" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (EntryMember
+                (Membership visibility="default"
+                  (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                    (Membership visibility="default"
+                      (Usage kind="attribute" name="k" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                        (Relationship kind="typing" target=Integer
+                          (*ast.QualifiedName))
+                        (LiteralInteger value="2")))
+                    (WhileLoopActionNode kind="while" variable=""
+                      (OperatorExpr operator=">"
+                        (FeatureReference name="k")
+                        (LiteralInteger value="0"))
+                      (*ast.AssignmentActionNode)
+                      (*ast.AssignmentActionNode)))))
+              (DoMember
+                (Membership visibility="default"
+                  (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                    (*ast.AssignmentActionNode))))
+              (ExitMember
+                (Membership visibility="default"
+                  (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+              (DoMember
+                (Membership visibility="default"
+                  (Usage kind="action" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                    (*ast.AssignmentActionNode))))))
+          (SubstateMember name="z")
+          (EntryMember)
+          (SuccessionEdge source="@entry" target="a")
+          (TransitionMember source="a" target="z"
+            (ChangeEvent
+              (LiteralBool value=true))))))))

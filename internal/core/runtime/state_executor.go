@@ -64,7 +64,7 @@ type StateExecutor struct {
 // when the state is exited.
 type doActivity struct {
 	state   *ast.StateNode
-	pending []ast.Node
+	pending []lower.StateBehavior
 }
 
 // historyRecord is the configuration one composite state was last left in.
@@ -387,7 +387,7 @@ func (e *StateExecutor) dispatchEvent(event Event) error {
 				Target:  targetState,
 				Trigger: edge.Trigger,
 				Guard:   edge.Guard,
-				Effect:  edge.Effect,
+				Effect:  lower.LowerBehaviors(edge.Effect, e.stateMachine.Scope),
 			}
 			return e.fireTransition(lowerTrans)
 		}
@@ -786,8 +786,8 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 	}
 
 	// Execute transition effect
-	for _, action := range trans.Effect {
-		if err := e.executeAction(action, trans.BodyScope); err != nil {
+	for _, behavior := range trans.Effect {
+		if err := e.executeBehavior(behavior); err != nil {
 			return fmt.Errorf("transition effect: %w", err)
 		}
 	}
@@ -1025,8 +1025,8 @@ func (e *StateExecutor) fireForkTransition(trans *lower.Transition, fork *ast.Ps
 	if err := e.exitToward(owner); err != nil {
 		return err
 	}
-	for _, action := range trans.Effect {
-		if err := e.executeAction(action, trans.BodyScope); err != nil {
+	for _, behavior := range trans.Effect {
+		if err := e.executeBehavior(behavior); err != nil {
 			return fmt.Errorf("transition effect: %w", err)
 		}
 	}
@@ -1266,14 +1266,24 @@ func (e *StateExecutor) RunToCompletion() error {
 // startDoActivity registers a state's do behavior as running. Re-entering a
 // state restarts its do behavior rather than resuming the abandoned one.
 func (e *StateExecutor) startDoActivity(state *ast.StateNode) {
-	if len(state.Do) == 0 {
+	doBehaviors := e.behaviorsOf(state).Do
+	if len(doBehaviors) == 0 {
 		return
 	}
 	e.stopDoActivity(state)
 	e.doActivities = append(e.doActivities, &doActivity{
 		state:   state,
-		pending: append([]ast.Node(nil), state.Do...),
+		pending: append([]lower.StateBehavior(nil), doBehaviors...),
 	})
+}
+
+// behaviorsOf returns the lowered entry, do and exit behaviors of a state, and
+// an empty set for a state lowering recorded none for.
+func (e *StateExecutor) behaviorsOf(state *ast.StateNode) *lower.StateBehaviors {
+	if behaviors, ok := e.graph.Behaviors[state]; ok && behaviors != nil {
+		return behaviors
+	}
+	return &lower.StateBehaviors{}
 }
 
 // stopDoActivity abandons whatever is left of a state's do behavior, which is
@@ -1307,12 +1317,12 @@ func (e *StateExecutor) runDoRound() (int, error) {
 		if len(activity.pending) == 0 || !e.isRunningDoActivity(activity) {
 			continue
 		}
-		action := activity.pending[0]
+		behavior := activity.pending[0]
 		activity.pending = activity.pending[1:]
 		if e.trace() != nil {
 			e.trace().RecordDoStep(activity.state.Name)
 		}
-		if err := e.executeAction(action, e.stateScope(activity.state)); err != nil {
+		if err := e.executeBehavior(behavior); err != nil {
 			return ran, fmt.Errorf("do action in state %s: %w", activity.state.Name, err)
 		}
 		ran++
@@ -1577,12 +1587,12 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 
 	// Record trace
 	if e.trace() != nil {
-		e.trace().RecordStateEntry(state.Name, len(state.Entry) > 0)
+		e.trace().RecordStateEntry(state.Name, len(e.behaviorsOf(state).Entry) > 0)
 	}
 
 	// Execute entry actions
-	for _, action := range state.Entry {
-		if err := e.executeAction(action, e.stateScope(state)); err != nil {
+	for _, behavior := range e.behaviorsOf(state).Entry {
+		if err := e.executeBehavior(behavior); err != nil {
 			return fmt.Errorf("entry action: %w", err)
 		}
 	}
@@ -1697,12 +1707,12 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 
 	// Record trace
 	if e.trace() != nil {
-		e.trace().RecordStateExit(state.Name, len(state.Exit) > 0)
+		e.trace().RecordStateExit(state.Name, len(e.behaviorsOf(state).Exit) > 0)
 	}
 
 	// Execute exit actions
-	for _, action := range state.Exit {
-		if err := e.executeAction(action, e.stateScope(state)); err != nil {
+	for _, behavior := range e.behaviorsOf(state).Exit {
+		if err := e.executeBehavior(behavior); err != nil {
 			return fmt.Errorf("exit action: %w", err)
 		}
 	}
@@ -1725,88 +1735,6 @@ func (e *StateExecutor) invokeNested(inv actionInvocation) error {
 		e.stateData[name] = value
 	}
 	return nil
-}
-
-// executeAction executes a single action (used for entry/exit/effect actions).
-// scope is the scope the action was declared in: the state's own scope for an
-// entry, do or exit behavior, and the transition's for an effect.
-func (e *StateExecutor) executeAction(action ast.Node, scope *symbols.Scope) error {
-	switch node := action.(type) {
-	case *ast.ActionExecutionNode:
-		if node.Expression != nil {
-			// Evaluate inline expression
-			result, err := e.evalStep(node.Expression, scope)
-			if err != nil {
-				return fmt.Errorf("eval expression: %w", err)
-			}
-			// Store result in state data with action name
-			e.stateData[node.Name] = result
-		} else if node.ActionRef != nil {
-			return e.invokeNested(actionInvocation{target: node.ActionRef})
-		}
-		return nil
-
-	case *ast.Usage:
-		// An entry/exit/effect action that performs another action:
-		// perform X; / action a : X; / action a = X(...);
-		inv, ok := nestedInvocation(node)
-		if !ok {
-			return fmt.Errorf("state action %s performs no action", stateActionName(node))
-		}
-		return e.invokeNested(inv)
-
-	case *ast.AssignmentActionNode:
-		// Handle assignment (e.g., counter = counter + 1)
-		// Evaluate RHS
-		rhsVal, err := e.evalStep(node.Value, scope)
-		if err != nil {
-			return fmt.Errorf("eval assignment RHS: %w", err)
-		}
-
-		// Extract target name
-		var targetName string
-		switch target := node.Target.(type) {
-		case *ast.QualifiedName:
-			if len(target.Parts) == 1 {
-				targetName = target.Parts[0].Text
-			} else {
-				return fmt.Errorf("qualified assignment target not supported: %v", target)
-			}
-		case *ast.FeatureReference:
-			if target.Name != nil && len(target.Name.Parts) == 1 {
-				targetName = target.Name.Parts[0].Text
-			} else {
-				return fmt.Errorf("qualified feature reference not supported: %v", target.Name)
-			}
-		default:
-			return fmt.Errorf("unsupported assignment target type: %T", target)
-		}
-
-		// Store in state data
-		e.stateData[targetName] = rhsVal
-		return nil
-
-	case *ast.SendStatement:
-		// A send in an entry/do/exit/effect action posts to the context bus,
-		// where this machine's own transitions and other behaviors can accept it.
-		ec := NewEvalContext(e.ctx, scope)
-		ec.Push(e.stateData)
-		defer ec.beginStep()()
-		send := lower.Send{
-			Message: node.Message,
-			Target:  ast.SimpleName(node.Target),
-			IsVia:   node.IsVia,
-		}
-		msg, err := ec.buildMessage(e.stateMachine.Scope, send)
-		if err != nil {
-			return err
-		}
-		e.ctx.post(e.graph.Connections, msg, send, e.self)
-		return nil
-
-	default:
-		return fmt.Errorf("unsupported action type: %T", action)
-	}
 }
 
 // stateActionName names a state action in diagnostics, falling back to what it

@@ -8,12 +8,14 @@ transition: rstart -> rwork
   eval literal 0 -> 0
 eval operator == -> true
 exit: lwork (exit action)
-  eval feature exits -> 0
-  eval literal 1 -> 1
-eval operator + -> 1
+stmt assign exits
+    eval feature exits -> 0
+    eval literal 1 -> 1
+  eval operator + -> 1
 exit: rwork (exit action)
-  eval feature exits -> 1
-  eval literal 10 -> 10
-eval operator + -> 11
+stmt assign exits
+    eval feature exits -> 1
+    eval literal 10 -> 10
+  eval operator + -> 11
 enter: stopped
 transition: lwork -> stopped

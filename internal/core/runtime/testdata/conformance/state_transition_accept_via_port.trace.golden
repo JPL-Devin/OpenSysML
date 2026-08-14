@@ -1,8 +1,10 @@
 exit: start
 enter: waitingGSPing (entry action)
+stmt send
 transition: start -> waitingGSPing
 exit: waitingGSPing
-eval literal 1 -> 1
+stmt assign received
+  eval literal 1 -> 1
 enter: transmitting
 transition: waitingGSPing -> transmitting (event: accept Ping)
 exit: transmitting

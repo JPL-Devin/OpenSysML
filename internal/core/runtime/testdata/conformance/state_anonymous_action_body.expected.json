@@ -1,0 +1,7 @@
+{
+    "type": "state",
+    "finalState": "done",
+    "outputs": {
+        "log": { "type": "Integer", "value": 321879 }
+    }
+}

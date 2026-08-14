@@ -1,0 +1,15 @@
+{
+	"type": "instance",
+	"libraries": true,
+	"instantiate": "test::h",
+	"slots": {
+		"sa": {"type": "Integer", "value": 6},
+		"sb": {"type": "Integer", "value": 7},
+		"aa": {"type": "Integer", "value": 6},
+		"ab": {"type": "Integer", "value": 7},
+		"total": {"type": "Integer", "value": 15},
+		"size": {"type": "String", "value": "big"},
+		"pv": {"type": "Integer", "value": 6},
+		"qv": {"type": "Integer", "value": 60}
+	}
+}
