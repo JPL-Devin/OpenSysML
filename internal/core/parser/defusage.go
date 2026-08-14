@@ -1287,7 +1287,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		if p.accept2(lexer.Semicolon) {
 			u.HasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			leave := p.pushBodyContext(usageBodyContext(kind))
 			u.Members = p.parseRequirementBody()
+			leave()
 			u.HasBody = true
 		}
 		u.NodeSpan = p.spanFrom(start)
@@ -1382,7 +1384,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		}
 
 		// Parse body or semicolon
+		leave := p.pushBodyContext(usageBodyContext(kind))
 		members, hasBody := p.parseDefUsageBody()
+		leave()
 		u.Members = members
 		u.HasBody = hasBody
 		u.NodeSpan = p.spanFrom(start)

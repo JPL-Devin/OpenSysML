@@ -1,0 +1,85 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:systemica:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:Conjugation
+    a sysml:Package ;
+    sysml:qualifiedName "Conjugation" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Conjugation" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Conjugation::CommunicationPort
+    a sysml:PortDefinition ;
+    sysml:qualifiedName "Conjugation::CommunicationPort" ;
+    sysml:owningNamespace elmt:Conjugation ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "CommunicationPort" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Conjugation::CommunicationPort::signal
+    a sysml:ItemUsage ;
+    sysml:qualifiedName "Conjugation::CommunicationPort::signal" ;
+    sysml:owningNamespace elmt:Conjugation::CommunicationPort ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "signal" ;
+    sysml:direction "out" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Conjugation::Ground
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Conjugation::Ground" ;
+    sysml:owningNamespace elmt:Conjugation ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "Ground" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Conjugation::Ground::groundPort
+    a sysml:PortUsage ;
+    sysml:qualifiedName "Conjugation::Ground::groundPort" ;
+    sysml:owningNamespace elmt:Conjugation::Ground ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "groundPort" ;
+    sysml:type elmt:Conjugation::CommunicationPort ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Conjugation::Ground::spacePort
+    a sysml:PortUsage ;
+    sysml:qualifiedName "Conjugation::Ground::spacePort" ;
+    sysml:owningNamespace elmt:Conjugation::Ground ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "spacePort" ;
+    sysml:isConjugated "true"^^xsd:boolean ;
+    sysml:type elmt:Conjugation::CommunicationPort ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Conjugation::Link
+    a sysml:InterfaceDefinition ;
+    sysml:qualifiedName "Conjugation::Link" ;
+    sysml:owningNamespace elmt:Conjugation ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:declaredName "Link" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Conjugation::Link::a
+    a sysml:PortUsage ;
+    sysml:qualifiedName "Conjugation::Link::a" ;
+    sysml:owningNamespace elmt:Conjugation::Link ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "a" ;
+    sysml:isEnd "true"^^xsd:boolean ;
+    sysml:type elmt:Conjugation::CommunicationPort ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Conjugation::Link::b
+    a sysml:PortUsage ;
+    sysml:qualifiedName "Conjugation::Link::b" ;
+    sysml:owningNamespace elmt:Conjugation::Link ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "b" ;
+    sysml:isEnd "true"^^xsd:boolean ;
+    sysml:isConjugated "true"^^xsd:boolean ;
+    sysml:type elmt:Conjugation::CommunicationPort ;
+    sysx:hasBody "false"^^xsd:boolean .

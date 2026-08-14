@@ -319,6 +319,9 @@ func (p *Parser) parseNamespaceBody() ([]ast.Node, bool) {
 	if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); !ok {
 		return nil, false
 	}
+	// A package/namespace body has its own notation; it never inherits the
+	// enclosing body's (e.g. an interface's default-end allowance).
+	defer p.pushBodyContext(bodyOther)()
 	var members []ast.Node
 	for !p.atEOF() && !p.at(lexer.RBrace) {
 		before := p.peek().Span.Offset
