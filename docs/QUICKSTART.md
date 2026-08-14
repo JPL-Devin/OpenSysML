@@ -564,36 +564,43 @@ sysml> %advance 30
 
 ### VS Code Setup
 
-1. Build the LSP server:
+This repository ships its own VS Code extension in
+[editors/vscode](../editors/vscode): syntax highlighting for `.sysml` and
+`.kerml` plus an LSP client that launches `sysml-lsp`. It is not published to any
+marketplace, so build and side-load it:
+
 ```bash
-go build -o sysml-lsp ./cmd/sysml-lsp
+make build                                    # builds bin/sysml-lsp
+cd editors/vscode
+npm install
+npm run package                               # -> systemica-sysml.vsix
+code --install-extension systemica-sysml.vsix
 ```
 
-2. Install a generic LSP extension (e.g., "Generic LSP Client")
+Open any `.sysml` file: it is highlighted immediately, and the extension starts
+the server it finds, in order:
 
-3. Configure in `.vscode/settings.json`:
+1. `systemica.server.path`, if set;
+2. `bin/sysml-lsp` inside an open workspace folder (a checkout that ran `make build`);
+3. `sysml-lsp` on `PATH`.
+
+If no server is found, highlighting still works and a warning explains how to
+build one. Point the extension at a specific build with `.vscode/settings.json`:
+
 ```json
 {
-  "genericLanguageServer.servers": [
-    {
-      "name": "SysML v2",
-      "command": "/absolute/path/to/sysml-lsp",
-      "args": [],
-      "filetypes": ["sysml", "kerml"]
-    }
-  ]
+  "systemica.server.path": "/absolute/path/to/bin/sysml-lsp",
+  "systemica.trace.server": "messages"
 }
 ```
 
-4. Associate file extensions in `.vscode/settings.json`:
-```json
-{
-  "files.associations": {
-    "*.sysml": "sysml",
-    "*.kerml": "kerml"
-  }
-}
-```
+Run `SysML: Restart Language Server` from the command palette after rebuilding
+the binary. `editors/vscode/README.md` documents every setting, the grammar
+generator (keywords come from `internal/core/lexer.Keywords()`, so they cannot
+drift) and the F5 development loop.
+
+Other editors can still launch `bin/sysml-lsp` over stdio through their own
+generic LSP client; only the highlighting is VS Code-specific.
 
 **LSP features (all implemented):**
 - ✅ Document synchronization (incremental updates)
@@ -601,7 +608,7 @@ go build -o sysml-lsp ./cmd/sysml-lsp
 - ✅ Hover (symbol info, type, multiplicity)
 - ✅ Go-to-definition (cross-document navigation)
 - ✅ Find references (workspace-wide search)
-- ✅ Completion (trigger on `:`, `.`)
+- ✅ Completion (typed kinds and details; `v.` offers members of `v`'s type, `Pkg::` offers that namespace's members, library names included)
 - ✅ Document symbols (outline view)
 - ✅ Workspace symbols (global search)
 
