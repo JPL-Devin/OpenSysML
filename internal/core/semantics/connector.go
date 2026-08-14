@@ -81,14 +81,7 @@ func (m *Model) endsOf(sym *symbols.Symbol) []*symbols.Symbol {
 
 	out := ownedEnds(sym)
 
-	var generals []*symbols.Symbol
-	for _, sup := range m.DirectSupertypes(sym) {
-		if connectorLike(sup) {
-			generals = append(generals, sup)
-		}
-	}
-	if len(generals) == 1 {
-		general := m.endsOf(generals[0])
+	if general := m.generalConnectorEnds(sym); len(general) > 0 {
 		claimed := claimedEnds(out, general)
 		for _, end := range general {
 			if !claimed[end] {
@@ -144,6 +137,14 @@ func namedEnds(end *symbols.Symbol, general []*symbols.Symbol) []*symbols.Symbol
 		}
 	}
 	return out
+}
+
+// ImplicitEndRedefinitions returns the ends of the connectors its owner
+// specializes that sym redefines by occupying their position, which no clause of
+// its declaration names. The features it redefines are one feature with it, so
+// an object holds one set of values under all their names.
+func (m *Model) ImplicitEndRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
+	return m.implicitEndRedefinitions(sym)
 }
 
 // implicitEndRedefinitions returns the features sym implicitly redefines as an
@@ -245,4 +246,105 @@ func (m *Model) UnmatchedConnectorEnds(sym *symbols.Symbol) (*symbols.Symbol, []
 // ConnectorEndCount returns the number of effective ends of the connector sym.
 func (m *Model) ConnectorEndCount(sym *symbols.Symbol) int {
 	return len(m.endsOf(sym))
+}
+
+// IsConnectorUsage reports whether sym declares a connector usage that joins
+// features it names — a `connection`/`interface`/`allocation`/`connector` usage
+// with a `connect … to …` clause. Such a usage is materialized from the
+// features its ends attach to, unlike a usage that only holds objects of its
+// own.
+func (m *Model) IsConnectorUsage(sym *symbols.Symbol) bool {
+	if sym == nil || !connectorLike(sym) {
+		return false
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		return false
+	}
+	switch usage.Kind {
+	case ast.UsageConnection, ast.UsageInterface, ast.UsageAllocation, ast.UsageConnector:
+		return len(usage.ConnectorEnds) > 0
+	}
+	return false
+}
+
+// ConnectorEndAttachment is one end of a connector usage as an object of that
+// usage carries it: the name of the end feature the position occupies, and the
+// node naming the feature the end attaches to. A connector end
+// reference-subsets what it attaches to (KerML 1.0 §7.4.6, SysML v2 §7.13.2),
+// so an object of the connector holds that very feature at the end rather than
+// an object of the end's declared type.
+type ConnectorEndAttachment struct {
+	// Name is the effective name of the end feature this position occupies: the
+	// name the end declares for itself, else the name of the end it implicitly
+	// redefines in the connector it specializes, else the name a binary
+	// connector's ends have in the library. It is empty when none of those
+	// answers a name — an end of an untyped connector with an arity other than
+	// two, whose ends are the participants of a link and are unnamed.
+	Name string
+	// Attachment is the expression naming the connected feature (`a.p`).
+	Attachment ast.Node
+	// End is the syntax of the end itself, which carries its source location.
+	End *ast.ConnectorEnd
+	// EndFeature is the end feature Name comes from, when a declaration in the
+	// model declares it: the end's own symbol, or the end it redefines. It is nil
+	// for a name taken from the library, whose declarations are indexed without
+	// bodies.
+	EndFeature *symbols.Symbol
+}
+
+// binaryConnectorEndNames are the ends of every binary connector: a connector
+// usage with two ends specializes `Connections::BinaryConnection` (SysML v2
+// §8.3.13), whose `source` and `target` redefine those of `Links::BinaryLink`,
+// and each of the usage's ends implicitly redefines the one at its position. A
+// binary `interface`, `allocation` or `flow` reaches the same pair through
+// `BinaryInterface`, `Allocation` and `Flow`, which redefine them again.
+var binaryConnectorEndNames = [2]string{"source", "target"}
+
+// ConnectorEndAttachments returns the ends of the connector usage sym in
+// declaration order, one entry per end of its `connect` clause. It returns
+// nothing for a symbol that is no connector usage.
+func (m *Model) ConnectorEndAttachments(sym *symbols.Symbol) []ConnectorEndAttachment {
+	if !m.IsConnectorUsage(sym) {
+		return nil
+	}
+	usage := sym.Decl.(*ast.Usage)
+	owned := ownedEnds(sym)
+	general := m.generalConnectorEnds(sym)
+
+	out := make([]ConnectorEndAttachment, 0, len(usage.ConnectorEnds))
+	for i, end := range usage.ConnectorEnds {
+		if end == nil {
+			continue
+		}
+		att := ConnectorEndAttachment{Attachment: end.AttachedTarget(), End: end}
+		switch {
+		case i < len(owned) && owned[i] != nil:
+			att.Name, att.EndFeature = owned[i].Name, owned[i]
+		case i < len(general) && general[i] != nil:
+			att.Name, att.EndFeature = general[i].Name, general[i]
+		case len(usage.ConnectorEnds) == 2:
+			att.Name = binaryConnectorEndNames[i]
+		}
+		out = append(out, att)
+	}
+	return out
+}
+
+// generalConnectorEnds returns the effective ends of the connector sym
+// specializes, which its own ends redefine by position. As with parameters,
+// only a single general connector may supply them, and a general whose ends are
+// not enumerable — a library declaration indexed without its body — supplies
+// none.
+func (m *Model) generalConnectorEnds(sym *symbols.Symbol) []*symbols.Symbol {
+	var generals []*symbols.Symbol
+	for _, sup := range m.DirectSupertypes(sym) {
+		if connectorLike(sup) {
+			generals = append(generals, sup)
+		}
+	}
+	if len(generals) != 1 {
+		return nil
+	}
+	return m.endsOf(generals[0])
 }

@@ -312,6 +312,11 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 	if err := ctx.SetBudgets(s.budgets); err != nil {
 		return nil, err
 	}
+	// Give the runtime the buffer's text, so an error about a declaration reports
+	// the line it was submitted on rather than a byte offset.
+	if doc := s.ws.Document(docName); doc != nil {
+		ctx.RegisterSource(source.New(docName, doc.Content))
+	}
 	s.rtCtx = ctx
 	s.rtCtx.SetTrace(s.trace)
 	return s.rtCtx, nil

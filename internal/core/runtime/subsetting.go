@@ -192,7 +192,12 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
 		cur := queue[0]
 		queue = queue[1:]
-		for _, redefined := range ctx.relatedFeatures(cur, owner, ast.RelRedefines) {
+		// An end of a connector redefines the end at its position of each
+		// connector its owner specializes without naming it, so the two names read
+		// one slot as an explicit redefinition's do.
+		redefines := append(ctx.relatedFeatures(cur, owner, ast.RelRedefines),
+			ctx.model.ImplicitEndRedefinitions(cur)...)
+		for _, redefined := range redefines {
 			if seen[redefined] {
 				continue
 			}

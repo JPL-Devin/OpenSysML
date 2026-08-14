@@ -403,7 +403,9 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 	case ast.UsageConcern, ast.UsageFramedConcern:
 		// A framed concern is a concern usage (SysML v2 §8.3.20).
 		return SymbolConcernUsage
-	case ast.UsageConnection:
+	case ast.UsageConnection, ast.UsageConnector:
+		// A KerML `connector` is the connection usage of the kernel layer
+		// (KerML 1.0 §7.4.6), so it is one kind of symbol.
 		return SymbolConnectionUsage
 	case ast.UsageFlow:
 		return SymbolFlowUsage

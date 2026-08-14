@@ -493,6 +493,22 @@ func (c *ConnectorEnd) ReferencedTarget() Node {
 	return c.Reference
 }
 
+// AttachedTarget returns the node naming the feature this end attaches to: what
+// it reference-subsets when it declares a name of its own (`connect bead
+// references t.bead`), and the target it names otherwise (`connect a.p to b.q`).
+func (c *ConnectorEnd) AttachedTarget() Node {
+	if c == nil {
+		return nil
+	}
+	if _, declaresName := c.DeclaredName(); declaresName {
+		return c.ReferencedTarget()
+	}
+	if c.Target != nil {
+		return c.Target
+	}
+	return c.Reference
+}
+
 // SplitRedefinitions partitions rels into the redefinitions and the rest,
 // which resolve in different scopes when owned by a connector end.
 func SplitRedefinitions(rels []*Relationship) (redefines, others []*Relationship) {

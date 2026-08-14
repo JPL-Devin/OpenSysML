@@ -1,0 +1,42 @@
+{
+  "type": "instance",
+  "instantiate": "test::newBallAndChain",
+  "libraries": true,
+  "slots": {
+    "engagementRingToDiamond": {
+      "type": "Instance"
+    },
+    "engagementRingToBand": {
+      "type": "Variant",
+      "value": "engagementRingToBandDisconnected"
+    }
+  },
+  "identical": [
+    [
+      "engagementRingToDiamond.source",
+      "engagementRing.diamondPort"
+    ],
+    [
+      "engagementRingToDiamond.target",
+      "diamond.engagementRingPort"
+    ],
+    [
+      "engagementRingToBand.source",
+      "diamond.bandPort"
+    ],
+    [
+      "engagementRingToBand.target",
+      "band.diamondPort"
+    ]
+  ],
+  "distinct": [
+    [
+      "engagementRingToBand.source",
+      "engagementRing.ringPort"
+    ],
+    [
+      "engagementRingToBand.target",
+      "band.ringPort"
+    ]
+  ]
+}

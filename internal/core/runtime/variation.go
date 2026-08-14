@@ -71,6 +71,7 @@ func (ctx *Context) bindVariation(feat *EffectiveFeature, selection Value, owner
 		return Value{}, fmt.Errorf("%w: %s is not a variant of %s (%s)",
 			ErrNotAVariant, variant.Name, name, ctx.variantSummary(feat.Symbol))
 	}
+	ctx.selectedVariants[name] = variant.Name
 	return ctx.variantValue(feat.Symbol, variant, owner)
 }
 
@@ -134,12 +135,42 @@ func (ctx *Context) variantValue(variation, variant *symbols.Symbol, owner int64
 			return Value{Kind: ValVariant, Variant: variant, Instance: id}, nil
 		}
 	}
-	inst, err := ctx.Instantiate(variant)
+	inst, err := ctx.variantInstance(variant, owner)
 	if err != nil {
 		return Value{}, fmt.Errorf("variant %s: %w", variant.Name, err)
 	}
 	ctx.variantObjects[key] = inst.ID
 	return Value{Kind: ValVariant, Variant: variant, Instance: inst.ID}, nil
+}
+
+// variantInstance builds the object a selected variant stands for. A variant
+// that is itself a connector — `variant interface engagementRingToBandConnected
+// connect engagementRing.ringPort to band.ringPort` — is the connection the
+// selection realizes, so it is materialized as a connector of the object that
+// selected it, with its ends attached to that object's features. A variant of
+// any other kind is an ordinary object of itself.
+func (ctx *Context) variantInstance(variant *symbols.Symbol, owner int64) (*Instance, error) {
+	if !ctx.model.IsConnectorUsage(variant) {
+		return ctx.Instantiate(variant)
+	}
+	ownerInst, ok := ctx.Instance(owner)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s connects features of the object selecting it, and no object selected it",
+			ErrConnectorEnd, variant.Name)
+	}
+	return ctx.materializeConnector(ownerInst, variant, ctx.variantConnectorBase(variant))
+}
+
+// variantConnectorBase returns the type an object of a variant connector is
+// materialized from: the definition the variant names, else the one its
+// variation names, else the variant itself when neither is typed — a
+// `variant interface … connect …` under an untyped `variation interface` is
+// implicitly typed, exactly as a standalone untyped connector usage is.
+func (ctx *Context) variantConnectorBase(variant *symbols.Symbol) *symbols.Symbol {
+	if base := ctx.CompositeTypeOf(&EffectiveFeature{Name: variant.Name, Symbol: variant}); base != nil {
+		return base
+	}
+	return variant
 }
 
 // variantAsValue resolves a variant to the value it declares, so comparing a

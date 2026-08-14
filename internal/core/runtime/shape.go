@@ -136,7 +136,7 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 		}
 	}
 
-	return result
+	return append(result, ctx.connectorEndFeatures(typeSym, seenNames)...)
 }
 
 // isFeature returns true if the symbol represents a structural feature (attribute, part, etc.).
@@ -146,7 +146,10 @@ func isFeature(sym *symbols.Symbol) bool {
 		symbols.SymbolPortUsage, symbols.SymbolConnectionUsage, symbols.SymbolActionUsage,
 		symbols.SymbolStateUsage, symbols.SymbolConstraintUsage, symbols.SymbolRequirementUsage,
 		symbols.SymbolOccurrenceUsage, symbols.SymbolIndividualUsage,
-		symbols.SymbolInterfaceUsage, symbols.SymbolFlowUsage:
+		symbols.SymbolInterfaceUsage, symbols.SymbolFlowUsage,
+		// An allocation usage is a connection usage of the allocation library
+		// (SysML v2 §8.3.19), so an object carries it as a feature.
+		symbols.SymbolAllocationUsage:
 		return true
 	default:
 		return false

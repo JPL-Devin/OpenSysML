@@ -124,6 +124,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("feature_chain_through_an_unset_slot", testFeatureChainThroughAnUnsetSlot)
 	t.Run("feature_chain_spends_the_element_budget", testFeatureChainSpendsTheElementBudget)
 	t.Run("mutually_subsetting_features", testMutuallySubsettingFeatures)
+	t.Run("unattachable_connector_end", testUnattachableConnectorEnd)
+	t.Run("multiplicity_on_a_connector", testMultiplicityOnAConnector)
 }
 
 // testMultiplicityInfiniteLowerBound: `[*..*]` requires unboundedly many objects,

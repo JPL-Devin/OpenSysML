@@ -6,6 +6,7 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -53,6 +54,11 @@ type Context struct {
 	// selected it, so repeated reads of one selection read the same object.
 	variantObjects map[variantObject]int64
 
+	// selectedVariants records, by variation name, the variant bound to it in
+	// this run. Routing consults it: a connection a `variant interface` declares
+	// joins its ends only where that variant is the one selected.
+	selectedVariants map[string]string
+
 	// trace records evaluation, nil when not tracing.
 	trace *TraceRecorder
 
@@ -79,6 +85,11 @@ type Context struct {
 	// collectingSubsets holds the slots whose subsetting features are being read,
 	// so features that subset each other are reported as a cycle.
 	collectingSubsets map[slotRef]bool
+
+	// sources holds the text of the files the model was read from, by name, so an
+	// error about a declaration can say where it was written. A file no caller
+	// registered is reported by name and byte offset instead.
+	sources map[string]*source.SourceFile
 }
 
 // slotRef identifies one slot of one instance.
@@ -115,9 +126,39 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 
 		occurrences:       make(map[*symbols.Symbol]int64),
 		variantObjects:    make(map[variantObject]int64),
+		selectedVariants:  make(map[string]string),
 		derivingSlots:     make(map[slotRef]bool),
 		collectingSubsets: make(map[slotRef]bool),
+		sources:           make(map[string]*source.SourceFile),
 	}
+}
+
+// RegisterSource gives the context the text of a file the model was read from,
+// so an error about a declaration in it reports a line and column.
+func (ctx *Context) RegisterSource(sf *source.SourceFile) {
+	if sf == nil {
+		return
+	}
+	ctx.sources[sf.Name()] = sf
+}
+
+// sourceLocation renders where a span in a file was written, as
+// `file:line:col`. It falls back to a byte offset for a file whose text was not
+// registered, and to the file name alone when there is no span, so a diagnostic
+// always says as much as the context knows.
+func (ctx *Context) sourceLocation(file string, span source.Span) string {
+	if file == "" {
+		return ""
+	}
+	sf, ok := ctx.sources[file]
+	if !ok || span.End() > sf.Len() {
+		if span.Len == 0 && span.Offset == 0 {
+			return file
+		}
+		return fmt.Sprintf("%s:#%d", file, span.Offset)
+	}
+	pos := sf.Lines().PosAt(span.Offset)
+	return fmt.Sprintf("%s:%d:%d", file, pos.Line, pos.Col)
 }
 
 // SetTrace attaches a trace recorder to this context, so that every expression

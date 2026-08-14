@@ -534,3 +534,41 @@ func assertIntOutput(t *testing.T, outputs map[string]Value, name string, want i
 		t.Errorf("%s = %v, want %d", name, value.Const.Int, want)
 	}
 }
+
+// Routing honors the selection a variation is bound to: a message sent through a
+// port reaches the ports the selected `variant interface`'s connection joins it
+// to, and not the ones an unselected variant would (SysML v2 §7.20). A
+// connection belonging to no variation always routes.
+func TestRoutingHonorsTheSelectedVariantConnection(t *testing.T) {
+	conns := []lower.Connection{
+		{Ends: []string{"outPort", "inPort"}, Variation: "link", Variant: "direct"},
+		{Ends: []string{"outPort", "bypass"}, Variation: "link", Variant: "indirect"},
+		{Ends: []string{"outPort", "always"}},
+	}
+	for _, tt := range []struct {
+		selected string
+		want     []string
+	}{
+		{"", []string{"always"}},
+		{"direct", []string{"inPort", "always"}},
+		{"indirect", []string{"bypass", "always"}},
+	} {
+		_, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test { }`))
+		if tt.selected != "" {
+			ctx.selectedVariants["link"] = tt.selected
+		}
+		ctx.postVia(conns, Message{SignalType: "Ping"}, "outPort")
+		var got []string
+		for _, msg := range ctx.PendingMessages() {
+			got = append(got, msg.Port)
+		}
+		if len(got) != len(tt.want) {
+			t.Fatalf("selection %q routed to %v, want %v", tt.selected, got, tt.want)
+		}
+		for i, port := range tt.want {
+			if got[i] != port {
+				t.Fatalf("selection %q routed to %v, want %v", tt.selected, got, tt.want)
+			}
+		}
+	}
+}

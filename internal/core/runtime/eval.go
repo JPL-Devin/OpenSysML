@@ -154,6 +154,8 @@ func (ec *EvalContext) eval(node ast.Node) (Value, error) {
 		return ec.evalNull(n)
 	case *ast.FeatureReference:
 		return ec.evalFeatureReference(n)
+	case *ast.QualifiedName:
+		return ec.evalName(n)
 	case *ast.FeatureChainExpr:
 		return ec.evalFeatureChain(n)
 	case *ast.OperatorExpr:
@@ -229,13 +231,22 @@ func (ec *EvalContext) evalNull(n *ast.NullExpr) (Value, error) {
 
 // evalFeatureReference evaluates a feature reference (variable lookup).
 func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, error) {
-	if n.Name == nil || len(n.Name.Parts) == 0 {
+	if n == nil {
+		return Value{}, fmt.Errorf("empty feature reference")
+	}
+	return ec.evalName(n.Name)
+}
+
+// evalName evaluates a name as a reference to what it names, which is what an
+// expression written as a bare name is: `rate`, `A::B::x`.
+func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
+	if qn == nil || len(qn.Parts) == 0 {
 		return Value{}, fmt.Errorf("empty feature reference")
 	}
 
 	// Simple case: single-part name lookup in frame stack or scope
-	if len(n.Name.Parts) == 1 {
-		name := n.Name.Parts[0].Text
+	if len(qn.Parts) == 1 {
+		name := qn.Parts[0].Text
 		// Try frame stack first (local bindings from calc/lambda params)
 		if val, ok := ec.Lookup(name); ok {
 			return val, nil
@@ -320,12 +331,12 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 	// then walk remaining parts with model.LookupMember for inherited members.
 
 	// Build single-segment qualified name for first part resolution via resolver
-	firstName := n.Name.Parts[0]
+	firstName := qn.Parts[0]
 	firstQN := &ast.QualifiedName{
-		Global: n.Name.Global,
+		Global: qn.Global,
 		Parts:  []ast.NameSegment{firstName},
 	}
-	firstQN.NodeBase = n.Name.NodeBase
+	firstQN.NodeBase = qn.NodeBase
 
 	// Resolve first part using resolver's qualified-name logic (handles global index)
 	currentSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, firstQN)
@@ -334,13 +345,13 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 	}
 
 	// Walk remaining parts using model.LookupMember (spec requirement)
-	for i := 1; i < len(n.Name.Parts); i++ {
+	for i := 1; i < len(qn.Parts); i++ {
 		// A calc usage's output features are computed rather than declared
 		// values, so the rest of the name is read from an evaluation of the usage.
 		if isCalcUsageSymbol(currentSym) {
-			return ec.evalCalcUsageMembers(currentSym, n.Name.Parts[i:])
+			return ec.evalCalcUsageMembers(currentSym, qn.Parts[i:])
 		}
-		memberName := n.Name.Parts[i].Text
+		memberName := qn.Parts[i].Text
 		nextSym, found := ec.ctx.model.LookupMember(currentSym, memberName)
 		if !found {
 			// A name qualified by a variation designates one of its variants, so
@@ -371,7 +382,7 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 			return ec.bindVariationOf(currentSym, val)
 		}
 		if ec.ctx.model.IsVariationFeature(currentSym) {
-			return Value{}, fmt.Errorf("%w: %s", ErrVariationUnselected, qualifiedNameToString(n.Name))
+			return Value{}, fmt.Errorf("%w: %s", ErrVariationUnselected, qualifiedNameToString(qn))
 		}
 		// A calc usage is an evaluation, not a value: it is read through the output
 		// features it computes, since a name it does not designate a result for has
@@ -379,13 +390,13 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 		if isCalcUsageSymbol(currentSym) {
 			return Value{}, fmt.Errorf(
 				"%w: calc usage %s computes output features (%s); read one of them",
-				ErrNoValue, qualifiedNameToString(n.Name), ec.ctx.calcUsageOutputSummary(currentSym),
+				ErrNoValue, qualifiedNameToString(qn), ec.ctx.calcUsageOutputSummary(currentSym),
 			)
 		}
-		return Value{}, fmt.Errorf("usage %s has no value", qualifiedNameToString(n.Name))
+		return Value{}, fmt.Errorf("usage %s has no value", qualifiedNameToString(qn))
 	case *ast.Definition:
 		// Definitions are types, not values
-		return Value{}, fmt.Errorf("cannot evaluate definition %s", qualifiedNameToString(n.Name))
+		return Value{}, fmt.Errorf("cannot evaluate definition %s", qualifiedNameToString(qn))
 	default:
 		return Value{}, fmt.Errorf("cannot evaluate element type %T", decl)
 	}

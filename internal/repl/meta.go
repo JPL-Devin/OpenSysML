@@ -577,7 +577,8 @@ type slotWalk struct {
 
 func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []string {
 	features := w.ctx.FeaturesOf(inst.Type)
-	if len(features) == 0 {
+	connectors := w.connectors(inst, indent)
+	if len(features) == 0 && len(connectors) == 0 {
 		return w.emit(nil, indent+"(no features)")
 	}
 
@@ -612,7 +613,47 @@ func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []str
 			delete(w.onPath, nested.Type)
 		}
 	}
+	return append(lines, connectors...)
+}
+
+// connectors lists the connectors the object owns that no feature names: an
+// anonymous `connect a.p to b.q` relates the features at its ends whether or not
+// it is named, and its ends are the only way to see what it relates.
+func (w *slotWalk) connectors(inst *runtime.Instance, indent string) []string {
+	conns, err := inst.OwnedConnectors(w.ctx)
+	if err != nil {
+		return w.emit(nil, fmt.Sprintf("%s(anonymous connector): <error: %v>", indent, err))
+	}
+	var lines []string
+	for _, conn := range conns {
+		lines = w.emit(lines, fmt.Sprintf("%s(anonymous %s) = %s", indent, connectorKeyword(conn),
+			formatValue(runtime.Value{Kind: runtime.ValInstance, Instance: conn.ID})))
+		for _, end := range conn.Ends {
+			if w.budget <= 0 {
+				return append(lines, indent+"  … (listing truncated)")
+			}
+			lines = w.emit(lines, fmt.Sprintf("%s  %s = %s", indent, endLabel(end), formatValue(end.Value)))
+		}
+	}
 	return lines
+}
+
+// connectorKeyword names the kind of connector an object materializes, for a
+// connector that has no name to show.
+func connectorKeyword(conn *runtime.Instance) string {
+	if usage, ok := conn.Type.Decl.(*ast.Usage); ok && usage.Keyword != "" {
+		return usage.Keyword
+	}
+	return "connector"
+}
+
+// endLabel names one end of a connector, by position when the model gives the
+// end no name of its own.
+func endLabel(end runtime.ConnectorEnd) string {
+	if end.Name != "" {
+		return end.Name
+	}
+	return "end"
 }
 
 func (w *slotWalk) emit(lines []string, line string) []string {

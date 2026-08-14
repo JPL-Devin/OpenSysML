@@ -1,0 +1,81 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="part" abstract=false variation=false name="Assembly"
+      (Membership visibility="default"
+        (Usage kind="part" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="port" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="part" name="inner" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="port" name="q" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="port" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Usage kind="interface" name="iface" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="a")))
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b")))))
+      (Membership visibility="default"
+        (Usage kind="connection" name="untyped" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="a")))
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b")))))
+      (Membership visibility="default"
+        (Usage kind="connection" name="chained" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="q"
+              (FeatureChainExpr member="inner"
+                (FeatureReference name="a"))))
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b")))))
+      (Membership visibility="default"
+        (Usage kind="allocation" name="alloc" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="a"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="b"
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="binding" name="bnd" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="redefines" target=(expr)
+            (FeatureChainExpr member="p"
+              (FeatureReference name="a")))
+          (FeatureChainExpr member="p"
+            (FeatureReference name="b"))))
+      (Membership visibility="default"
+        (Usage kind="flow" name="f" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="nil" declared=false)))
+      (Membership visibility="default"
+        (Usage kind="flow" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="nil" declared=false)))
+      (Membership visibility="default"
+        (Usage kind="flow" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (FlowEnds from="*ast.FeatureChainExpr" to="*ast.FeatureChainExpr" payload="nil" declared=false)))
+      (Membership visibility="default"
+        (Usage kind="interface" name="link" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variation=true
+          (Membership visibility="default"
+            (Usage kind="interface" name="direct" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="p"
+                  (FeatureReference name="a")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="p"
+                  (FeatureReference name="b")))))
+          (Membership visibility="default"
+            (Usage kind="interface" name="indirect" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="q"
+                  (FeatureChainExpr member="inner"
+                    (FeatureReference name="a"))))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="p"
+                  (FeatureReference name="b"))))))))))

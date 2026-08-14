@@ -5,8 +5,15 @@ import "github.com/Open-MBEE/Systemica/internal/core/ast"
 // Connection is a lowered connector: the ends it joins, by the name each end
 // resolves to. A `connect a to b` has two ends; a multi-end `connect` has more,
 // and every end is reachable from every other.
+//
+// A connection a `variant interface` declares joins its ends only where that
+// variant is the one selected, so it carries the variation it belongs to and
+// its own name: routing must ask which variant was selected before delivering
+// through it (SysML v2 §7.20).
 type Connection struct {
-	Ends []string
+	Ends      []string
+	Variation string // variation point the connection is a variant of, empty when it is not
+	Variant   string // name of the variant declaring it, empty when it is not one
 }
 
 // lowerConnections extracts the connectors declared among members, in
@@ -20,16 +27,51 @@ func lowerConnections(members []ast.Node) []Connection {
 		if !isUsage || !connectorKind(u.Kind) {
 			continue
 		}
-		ends := make([]string, 0, len(u.ConnectorEnds))
-		for _, end := range u.ConnectorEnds {
-			if name := endName(end); name != "" {
-				ends = append(ends, name)
-			}
-		}
-		if len(ends) < 2 {
+		// A variation point declares no ends of its own: the connections are the
+		// ones its variants declare, of which a selection realizes one.
+		if u.IsVariation {
+			out = append(out, lowerVariantConnections(u)...)
 			continue
 		}
-		out = append(out, Connection{Ends: ends})
+		if conn, ok := lowerConnection(u); ok {
+			out = append(out, conn)
+		}
+	}
+	return out
+}
+
+// lowerConnection extracts the ends of one connector usage. A usage joining
+// fewer than two ends joins nothing and is dropped.
+func lowerConnection(u *ast.Usage) (Connection, bool) {
+	ends := make([]string, 0, len(u.ConnectorEnds))
+	for _, end := range u.ConnectorEnds {
+		if name := endName(end); name != "" {
+			ends = append(ends, name)
+		}
+	}
+	if len(ends) < 2 {
+		return Connection{}, false
+	}
+	return Connection{Ends: ends}, true
+}
+
+// lowerVariantConnections extracts the connections the variants of a variation
+// connector declare, each tagged with the variation and variant it came from so
+// routing can honor the selection.
+func lowerVariantConnections(variation *ast.Usage) []Connection {
+	name := variation.Ident.Name
+	var out []Connection
+	for _, member := range variation.Members {
+		u, isUsage := unwrapMembership(member).(*ast.Usage)
+		if !isUsage || !u.IsVariant || !connectorKind(u.Kind) {
+			continue
+		}
+		conn, ok := lowerConnection(u)
+		if !ok {
+			continue
+		}
+		conn.Variation, conn.Variant = name, u.Ident.Name
+		out = append(out, conn)
 	}
 	return out
 }
@@ -52,13 +94,7 @@ func endName(end *ast.ConnectorEnd) string {
 	if end == nil {
 		return ""
 	}
-	target := end.Target
-	if _, declaresName := end.DeclaredName(); declaresName {
-		target = end.ReferencedTarget()
-	}
-	if target == nil {
-		target = end.Reference
-	}
+	target := end.AttachedTarget()
 	if chain, isChain := target.(*ast.FeatureChainExpr); isChain {
 		return ast.SimpleName(chain.Member)
 	}

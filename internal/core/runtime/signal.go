@@ -83,12 +83,28 @@ func (m Message) arrivedAt(port string) bool {
 // simply never delivered, and an accept waiting for it stays suspended until
 // the run gives up with ErrAcceptDeadlock.
 func (ctx *Context) postVia(conns []lower.Connection, msg Message, sendingPort string) {
-	for _, peer := range lower.PeerPorts(conns, sendingPort) {
+	for _, peer := range lower.PeerPorts(ctx.realizedConnections(conns), sendingPort) {
 		routed := msg
 		routed.Target = ""
 		routed.Port = peer
 		ctx.PostMessage(routed)
 	}
+}
+
+// realizedConnections drops the connections a variation offers but the run did
+// not select: a `variant interface`'s connection joins its ends only where that
+// variant is the one a variation point is bound to, so a variant that was never
+// selected routes nothing (SysML v2 §7.20). Connections belonging to no
+// variation are always realized.
+func (ctx *Context) realizedConnections(conns []lower.Connection) []lower.Connection {
+	out := make([]lower.Connection, 0, len(conns))
+	for _, conn := range conns {
+		if conn.Variation != "" && ctx.selectedVariants[conn.Variation] != conn.Variant {
+			continue
+		}
+		out = append(out, conn)
+	}
+	return out
 }
 
 // post delivers a built message the way the send addressed it: routed through

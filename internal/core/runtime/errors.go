@@ -101,6 +101,13 @@ var (
 	// through other slots, on the slot being computed.
 	ErrCyclicSlot = errors.New("cyclic slot dependency")
 
+	// ErrConnectorEnd is returned when a connector cannot be attached to the
+	// features its ends name: an end naming nothing reachable from the object
+	// owning the connector, or one carrying no value. A connector whose ends
+	// cannot be attached relates nothing, so it is an error rather than an object
+	// with defaults at its ends.
+	ErrConnectorEnd = errors.New("connector end cannot be attached")
+
 	// ErrNotAQuantity is returned when `x [y]` is not a quantity expression:
 	// y names no measurement unit, or x is no magnitude.
 	ErrNotAQuantity = errors.New("not a quantity expression")
