@@ -198,8 +198,10 @@ func memberPathBefore(content []byte, offset int) ([]string, bool) {
 		}
 		i -= sep
 		start := identStart(content, i)
-		if start == i {
-			return nil, false // a separator with no name before it
+		if start == i || isDigit(content[start]) {
+			// A separator with no name before it, or a numeric literal such
+			// as `1.` — neither is a member access.
+			return nil, false
 		}
 		path = append([]string{string(content[start:i])}, path...)
 		i = start
@@ -230,7 +232,11 @@ func identStart(content []byte, i int) int {
 }
 
 func isIdentByte(b byte) bool {
-	return b == '_' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
+	return b == '_' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || isDigit(b)
+}
+
+func isDigit(b byte) bool {
+	return b >= '0' && b <= '9'
 }
 
 // enclosingScope returns the deepest scope whose owning declaration span

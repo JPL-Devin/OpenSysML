@@ -246,6 +246,19 @@ func TestCompletionHidesAnotherDocumentsPrivateImport(t *testing.T) {
 	}
 }
 
+// The dot in a numeric literal is not a member access, so completion there must
+// still offer the ordinary scope and keyword list.
+func TestCompletionAfterNumericLiteralOffersTheScopeList(t *testing.T) {
+	src := strings.Replace(completionSrc, "\t\tv.\n", "\t\tattribute mass = 1.\n", 1)
+	items := completionAt(t, src, "= 1.")
+	if _, ok := items["package"]; !ok {
+		t.Errorf("completion after '1.' missing keywords; got %v", labelsOf(items))
+	}
+	if _, ok := items["Vehicle"]; !ok {
+		t.Errorf("completion after '1.' missing in-scope name 'Vehicle'; got %v", labelsOf(items))
+	}
+}
+
 func TestMemberPathBefore(t *testing.T) {
 	cases := []struct {
 		text string
@@ -256,6 +269,9 @@ func TestMemberPathBefore(t *testing.T) {
 		{"a.b.c.", []string{"a", "b", "c"}},
 		{"A::B::", []string{"A", "B"}},
 		{"A::b.", []string{"A", "b"}},
+		{"= 1.", nil},
+		{"= 2.5", nil},
+		{"x1.", []string{"x1"}},
 		{"part x", nil},
 		{"", nil},
 		{".", nil},

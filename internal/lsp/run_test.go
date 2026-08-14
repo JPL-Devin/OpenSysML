@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"go.lsp.dev/jsonrpc2"
+	"go.lsp.dev/protocol"
+
 	"github.com/Open-MBEE/Systemica/internal/core/model"
 )
 
@@ -66,6 +69,35 @@ func readMessage(t *testing.T, r *bufio.Reader) map[string]any {
 	return msg
 }
 
+// A served session must handle $/cancelRequest: an unwrapped handler answers it
+// as an unknown method, and protocol.CancelHandler rejects the numeric ids real
+// clients send as malformed.
+func TestRunHandlerChainHandlesCancelRequest(t *testing.T) {
+	for _, id := range []any{int32(7), "req-7"} {
+		handler := runHandler(NewServer(model.NewWorkspace()))
+		req, err := jsonrpc2.NewNotification(protocol.MethodCancelRequest, protocol.CancelParams{ID: id})
+		if err != nil {
+			t.Fatalf("NewNotification: %v", err)
+		}
+		replied := make(chan error, 1)
+		reply := func(ctx context.Context, result any, err error) error {
+			replied <- err
+			return nil
+		}
+		if err := handler(context.Background(), reply, req); err != nil {
+			t.Fatalf("handler: %v", err)
+		}
+		select {
+		case err := <-replied:
+			if err != nil {
+				t.Errorf("$/cancelRequest with id %v answered with %v, want it handled", id, err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("$/cancelRequest with id %v was never answered", id)
+		}
+	}
+}
+
 // Regression: Run must start exactly one read loop. protocol.NewServer already
 // starts one, so an extra conn.Go raced two readers over the same stream and
 // corrupted framing after a few messages.
@@ -119,8 +151,9 @@ func TestRunServesEveryRequestOverOneStream(t *testing.T) {
 		t.Fatalf("SetReadDeadline: %v", err)
 	}
 	r := bufio.NewReader(client)
+	// Responses may arrive in any order: the handler chain is asynchronous.
 	seen := map[int]bool{}
-	for !seen[100] {
+	for len(seen) < requests+2 {
 		msg := readMessage(t, r)
 		id, ok := msg["id"].(float64)
 		if !ok {
@@ -135,6 +168,9 @@ func TestRunServesEveryRequestOverOneStream(t *testing.T) {
 		if !seen[id] {
 			t.Errorf("no response for request id %d", id)
 		}
+	}
+	if !seen[100] {
+		t.Error("no response for the shutdown request")
 	}
 	if err := <-writeErr; err != nil {
 		t.Fatalf("write: %v", err)
