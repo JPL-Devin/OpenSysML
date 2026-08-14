@@ -11,6 +11,9 @@ import "flag"
 // mistaken for a file. An unrecognized flag is left where it is, for flag.Parse
 // to report. The reordered arguments end with an end-of-options marker, so that
 // a file named like a flag is still read as a file wherever it was written.
+//
+// A trailing flag whose value was forgotten keeps that place, so flag.Parse
+// reports the missing value rather than reading the marker or a file as it.
 func permuteArgs(fs *flag.FlagSet, args []string) []string {
 	flags := make([]string, 0, len(args))
 	positional := make([]string, 0, len(args))
@@ -27,7 +30,10 @@ func permuteArgs(fs *flag.FlagSet, args []string) []string {
 			continue
 		}
 		flags = append(flags, arg)
-		if takesSeparateValue(fs, arg) && i+1 < len(args) {
+		if takesSeparateValue(fs, arg) {
+			if i+1 == len(args) {
+				return flags
+			}
 			i++
 			flags = append(flags, args[i])
 		}

@@ -162,6 +162,7 @@ func TestConvertErrors(t *testing.T) {
 		"file as format":    {[]string{"-convert", model}, "-convert names the format"},
 		"extra argument":    {[]string{model, filepath.Join(dir, "other.sysml"), "-convert", "ttl"}, "unexpected extra argument"},
 		"replaced -to flag": {[]string{model, "-convert", "ttl", "-to", "sysml"}, "-to has been replaced by -convert"},
+		"forgotten value":   {[]string{model, "-convert", "ttl", "-o"}, "flag needs an argument: -o"},
 		"syntax error":      {[]string{broken, "-convert", "ttl"}, "syntax error"},
 		"unsupported rdf":   {[]string{badTurtle, "-convert", "sysml"}, "blank node"},
 	}

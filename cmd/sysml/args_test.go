@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"io"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -42,7 +44,7 @@ func TestPermuteArgs(t *testing.T) {
 		"double dash":        {[]string{"-trace", "--", "-m.sysml", "-o"}, []string{"-trace", "--", "-m.sysml", "-o"}},
 		"unknown flag stays": {[]string{"m.sysml", "-nope", "x"}, []string{"-nope", "--", "m.sysml", "x"}},
 		"dash is a file":     {[]string{"-convert", "ttl", "-"}, []string{"-convert", "ttl", "--", "-"}},
-		"missing value":      {[]string{"m.sysml", "-convert"}, []string{"-convert", "--", "m.sysml"}},
+		"missing value":      {[]string{"m.sysml", "-convert"}, []string{"-convert"}},
 		"no arguments":       {nil, []string{}},
 		"only flags":         {[]string{"-trace"}, []string{"-trace"}},
 	}
@@ -71,6 +73,17 @@ func TestPermuteArgsParses(t *testing.T) {
 	}
 	if got := fs.Args(); !reflect.DeepEqual(got, []string{"a.sysml", "b.sysml"}) {
 		t.Errorf("files = %q, want [a.sysml b.sysml]", got)
+	}
+}
+
+// TestPermuteArgsReportsMissingValue checks that a value forgotten at the end of
+// the command line is reported, rather than read from the rest of the arguments.
+func TestPermuteArgsReportsMissingValue(t *testing.T) {
+	fs := testFlags()
+	fs.SetOutput(io.Discard)
+	err := fs.Parse(permuteArgs(fs, []string{"m.sysml", "-convert", "ttl", "-o"}))
+	if err == nil || !strings.Contains(err.Error(), "flag needs an argument: -o") {
+		t.Fatalf("parse error = %v, want a missing value for -o", err)
 	}
 }
 
