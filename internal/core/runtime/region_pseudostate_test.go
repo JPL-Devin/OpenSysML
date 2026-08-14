@@ -12,7 +12,7 @@ import (
 func runStateMachine(t *testing.T, name, src string) *StateExecutor {
 	t.Helper()
 	ctx, sym := loadState(t, src, name)
-	exec, err := newStateExecutor(ctx, sym)
+	exec, err := newStateExecutor(ctx, sym, nil)
 	if err != nil {
 		t.Fatalf("newStateExecutor: %v", err)
 	}

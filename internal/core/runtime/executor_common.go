@@ -29,11 +29,17 @@ type AcceptWait struct {
 	SignalType string // the type awaited, empty when the accept named none
 	ViaPort    string // the port awaited on, empty when the accept named none
 	Since      int    // the step during which the token parked, numbered as the trace numbers steps
+	// Trigger describes the time or change event awaited instead of a message
+	// (`accept when x > 1`), empty when the accept waits for a message.
+	Trigger string
 }
 
 // String describes what a parked token is waiting for, and since when, for
 // error messages and for the REPL's view of a suspended executor.
 func (w AcceptWait) String() string {
+	if w.Trigger != "" {
+		return fmt.Sprintf("%s waiting since step %d for its event", w.Trigger, w.Since)
+	}
 	return fmt.Sprintf("accept %s waiting since step %d for a message of type %s%s",
 		w.ParamName, w.Since, orAny(w.SignalType), viaSuffix(w.ViaPort))
 }

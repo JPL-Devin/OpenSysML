@@ -24,7 +24,8 @@ exit: running
 enter: running
 enter: lstart
 enter: rtarget (entry action)
-eval literal 1 -> 1
+stmt assign crossed
+  eval literal 1 -> 1
 transition: lidle -> rtarget
 exit: lstart
 enter: lidle

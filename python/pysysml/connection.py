@@ -10,7 +10,9 @@ from filelock import FileLock, Timeout
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
 from pysysml.binary import ensure_binary
-from pysysml.errors import ConnectionError
+from pysysml.capabilities import ServerInfo
+from pysysml.errors import ConnectionError, UnsupportedValueError
+from pysysml.values import value_to_python
 
 
 def _get_lockfile_path():
@@ -122,6 +124,12 @@ class Connection:
         self._address = f"{host}:{port}"
         self._process = None
         self._cleaned_up = False
+        # Provenance of the service, so an error can name the binary at fault.
+        # Refined by _ensure_service, which knows how it was reached.
+        self._origin = f"service at {self._address} (not started by this client)"
+        self._server_info = None
+        # Only connections that took a reference may release one on close.
+        self._holds_refcount = False
         
         # Auto-start service if requested
         if auto_start:
@@ -144,6 +152,39 @@ class Connection:
         """Context manager exit."""
         self.close()
     
+    def server_info(self):
+        """Ask the service what it is and what it supports.
+
+        The answer is cached for the life of the connection: a service does not
+        change build while a channel is open to it.
+
+        Returns:
+            ServerInfo: Reported version and capabilities. ``answered`` is False
+                when the service predates the GetServerInfo RPC, in which case
+                it claims no capabilities.
+        """
+        if self._server_info is None:
+            request = sysml_pb2.ServerInfoRequest()
+            try:
+                response = self._stub.GetServerInfo(request)
+            except grpc.RpcError as e:
+                if e.code() != grpc.StatusCode.UNIMPLEMENTED:
+                    raise
+                self._server_info = ServerInfo(
+                    version='',
+                    capabilities=frozenset(),
+                    answered=False,
+                    origin=self._origin,
+                )
+            else:
+                self._server_info = ServerInfo(
+                    version=response.version,
+                    capabilities=frozenset(response.capabilities),
+                    answered=True,
+                    origin=self._origin,
+                )
+        return self._server_info
+
     def load(self, file_path):
         """Load a SysML model from file.
         
@@ -208,6 +249,7 @@ class Connection:
             
         Raises:
             RuntimeError: If evaluation fails
+            UnsupportedValueError: If the result cannot be represented on the wire
         """
         from pysysml.errors import RuntimeError as PyRuntimeError
         from pysysml.diagnostic import Diagnostic
@@ -255,7 +297,8 @@ class Connection:
             wrapped_diags = [Diagnostic(d) for d in response.diagnostics]
             raise PyRuntimeError(response.error, diagnostics=wrapped_diags)
         
-        return Instance(response.instance)
+        graph = {inst.id: inst for inst in response.instances}
+        return Instance(response.instance, graph)
     
     def execute_action(self, action_symbol_id, model_hash, inputs=None):
         """Execute an action definition.
@@ -266,7 +309,9 @@ class Connection:
             inputs (dict, optional): Input parameter name → value
             
         Returns:
-            dict: Output parameter name → value
+            dict: Output parameter name → value; an output the wire format cannot
+                represent is reported as an UnsupportedValueError in its place,
+                so one such output does not discard the rest
             
         Raises:
             RuntimeError: If execution fails
@@ -289,8 +334,7 @@ class Connection:
             wrapped_diags = [Diagnostic(d) for d in response.diagnostics]
             raise PyRuntimeError(response.error, diagnostics=wrapped_diags)
         
-        # Convert outputs
-        return {name: self._value_to_python(val) for name, val in response.outputs.items()}
+        return self._values_to_python(response.outputs)
     
     def execute_state(self, state_machine_symbol_id, model_hash, events=None):
         """Execute a state machine.
@@ -301,7 +345,9 @@ class Connection:
             events (list, optional): Event names to process
             
         Returns:
-            dict: {'states_visited': [...], 'final_context': {...}}
+            dict: {'states_visited': [...], 'final_context': {...}}; a context value
+                the wire format cannot represent is reported as an
+                UnsupportedValueError in its place
             
         Raises:
             RuntimeError: If execution fails
@@ -323,8 +369,7 @@ class Connection:
         
         return {
             'states_visited': list(response.states_visited),
-            'final_context': {name: self._value_to_python(val) 
-                             for name, val in response.final_context.items()}
+            'final_context': self._values_to_python(response.final_context),
         }
     
     def _python_to_value(self, py_value):
@@ -350,24 +395,26 @@ class Connection:
             raise ValueError(f"Unsupported Python type: {type(py_value)}")
     
     def _value_to_python(self, pb_value):
-        """Convert protobuf Value to Python type."""
-        kind = pb_value.WhichOneof('kind')
-        if kind == 'int_value':
-            return pb_value.int_value
-        elif kind == 'real_value':
-            return pb_value.real_value
-        elif kind == 'bool_value':
-            return pb_value.bool_value
-        elif kind == 'string_value':
-            return pb_value.string_value
-        elif kind == 'instance_id':
-            return pb_value.instance_id  # return ID for now
-        elif kind == 'sequence':
-            return [self._value_to_python(v) for v in pb_value.sequence.elements]
-        elif kind == 'null':
-            return None
-        else:
-            return None
+        """Convert protobuf Value to Python type.
+
+        Instance references outside an Instantiate response are returned as
+        their integer id; there is no instance graph to resolve them against.
+        """
+        return value_to_python(pb_value)
+
+    def _values_to_python(self, pb_values):
+        """Convert a name → Value map, keeping an unsupported value as its error.
+
+        Mirrors Instance.slots: one value the wire format cannot represent must
+        not discard the entries around it.
+        """
+        result = {}
+        for name, pb_value in pb_values.items():
+            try:
+                result[name] = self._value_to_python(pb_value)
+            except UnsupportedValueError as exc:
+                result[name] = exc
+        return result
     
     def _probe_service(self, host, port, timeout=5.0):
         """Check if sysml-grpc service is running and responsive.
@@ -436,7 +483,12 @@ class Connection:
                 # Check if service already running (another process may have started it)
                 if self._probe_service(self.host, self.port):
                     # Service running - increment refcount and return
+                    self._origin = (
+                        f"service already listening on {self._address}, "
+                        f"not started by this client"
+                    )
                     _increment_refcount()
+                    self._holds_refcount = True
                     atexit.register(self._cleanup_service)
                     return
                 
@@ -444,6 +496,7 @@ class Connection:
                 binary_path = ensure_binary()
                 if not os.path.exists(binary_path):
                     raise ConnectionError(f"Binary not found after download: {binary_path}")
+                self._origin = f"{binary_path}, started by this client"
                 
                 # Start service
                 process = subprocess.Popen(
@@ -470,6 +523,7 @@ class Connection:
                         
                         # Increment refcount
                         _increment_refcount()
+                        self._holds_refcount = True
                         
                         # Register cleanup
                         atexit.register(self._cleanup_service)
@@ -495,9 +549,10 @@ class Connection:
     
     def _cleanup_service(self):
         """Clean up service process with reference counting."""
-        if self._cleaned_up:
+        if self._cleaned_up or not self._holds_refcount:
             return
         self._cleaned_up = True
+        self._holds_refcount = False
         
         lockfile_path = _get_lockfile_path()
         lock = FileLock(lockfile_path, timeout=5)

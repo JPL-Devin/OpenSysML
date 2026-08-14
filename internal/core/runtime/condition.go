@@ -129,10 +129,14 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), ErrNoConditions)
 	}
 	features := ctx.conditionFeatures(check.sym)
+	// One check is one evaluation: its conditions share what a calc usage they
+	// read answers, and the next check reads it again.
+	activation, endStep := ctx.beginStep()
+	defer endStep()
 	required := false
 	for _, cond := range conds {
 		required = required || cond.required
-		holds, err := ctx.conditionHolds(cond, features, check.self, check.bindings)
+		holds, err := ctx.conditionHolds(activation, cond, features, check.self, check.bindings)
 		if err != nil {
 			return false, fmt.Errorf("%s %s: %s evaluation failed: %w", check.kind, check.name(), check.what, err)
 		}
@@ -158,11 +162,11 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 
 // conditionHolds evaluates one condition: an expression, or a group that holds
 // when all of its conditions hold. Its negation, if any, is applied last.
-func (ctx *Context) conditionHolds(cond condition, features map[string]scopedExpr, self *Instance, bindings map[string]Value) (bool, error) {
+func (ctx *Context) conditionHolds(activation int64, cond condition, features map[string]scopedExpr, self *Instance, bindings map[string]Value) (bool, error) {
 	holds := true
 	if cond.group != nil {
 		for _, sub := range cond.group {
-			subHolds, err := ctx.conditionHolds(sub, features, self, bindings)
+			subHolds, err := ctx.conditionHolds(activation, sub, features, self, bindings)
 			if err != nil {
 				return false, err
 			}
@@ -170,6 +174,7 @@ func (ctx *Context) conditionHolds(cond condition, features map[string]scopedExp
 		}
 	} else {
 		ec := NewEvalContextIn(ctx, cond.scope, self)
+		ec.activation = activation
 		ec.features = features
 		if bindings != nil {
 			ec.Push(bindings)
@@ -220,7 +225,7 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 		if feat.Name == "" {
 			continue
 		}
-		out[feat.Name] = scopedExpr{expr: feat.DefaultValue, scope: feat.DeclScope()}
+		out[feat.Name] = scopedExpr{expr: feat.DefaultValue, scope: feat.DefaultScope()}
 	}
 	return out
 }
@@ -277,7 +282,7 @@ func conditionText(n ast.Node) string {
 	case *ast.IndexExpr:
 		// The bracket form is a quantity, `1.0 [m]`; `#` indexes a sequence.
 		if e.Bracket {
-			unit := unitText(e.Index)
+			unit := semantics.UnitExprText(e.Index)
 			if unit == "" {
 				unit = conditionText(e.Index)
 			}

@@ -125,9 +125,29 @@ func (tr *TraceRecorder) RecordCalcBind(param string, value Value, source string
 	tr.record(fmt.Sprintf("bind %s = %s [%s]", param, FormatTraceValue(value), source))
 }
 
+// RecordStatement records one body statement about to run and opens a nesting
+// level for the expressions it evaluates and the statements it contains.
+func (tr *TraceRecorder) RecordStatement(label string) {
+	tr.record("stmt " + label)
+	tr.depth++
+}
+
+// RecordLoopIteration records one iteration of a loop and opens a nesting level
+// for what that iteration does, which is how a loop's progress is readable off
+// the trace.
+func (tr *TraceRecorder) RecordLoopIteration(iteration int) {
+	tr.record(fmt.Sprintf("iteration %d", iteration))
+	tr.depth++
+}
+
+// EndStatement closes the level RecordStatement or RecordLoopIteration opened.
+func (tr *TraceRecorder) EndStatement() {
+	tr.closeLevel()
+}
+
 // RecordCalcExit closes a calc invocation's nesting level and records its result.
 func (tr *TraceRecorder) RecordCalcExit(name string, result Value) {
-	tr.closeCalc()
+	tr.closeLevel()
 	tr.record(fmt.Sprintf("exit calc %s -> %s", name, FormatTraceValue(result)))
 }
 
@@ -135,7 +155,7 @@ func (tr *TraceRecorder) RecordCalcExit(name string, result Value) {
 // The failure is part of the ordering contract: it says how far binding and
 // evaluation got before the calc gave up.
 func (tr *TraceRecorder) RecordCalcExitError(name string, err error) {
-	tr.closeCalc()
+	tr.closeLevel()
 	tr.record(fmt.Sprintf("exit calc %s -> error: %v", name, err))
 }
 
@@ -157,8 +177,8 @@ func (tr *TraceRecorder) EndEval(label string, value Value, err error) {
 	tr.record(fmt.Sprintf("eval %s -> %s", label, FormatTraceValue(value)))
 }
 
-// closeCalc closes the nesting level a calc's enter entry opened.
-func (tr *TraceRecorder) closeCalc() {
+// closeLevel closes the innermost nesting level an entry opened.
+func (tr *TraceRecorder) closeLevel() {
 	if tr.depth > 0 {
 		tr.depth--
 	}
@@ -248,6 +268,11 @@ func FormatTraceValue(v Value) string {
 		// A unit-carrying value is rendered as the REPL renders it, with the
 		// magnitude in the trace's own convention for numbers.
 		return v.Quantity.TextWithMagnitude(formatConst(v.Quantity.Num))
+	case ValVariant:
+		if v.Variant == nil {
+			return v.Kind.String()
+		}
+		return v.Variant.Name
 	case ValExpr:
 		return fmt.Sprintf("expr(%s)", TraceLabel(v.Expr))
 	default:
@@ -373,4 +398,26 @@ func controlNodeName(name, kind string) string {
 		return name
 	}
 	return kind
+}
+
+// RecordCalcUsageExit closes the nesting level of a calc usage's evaluation,
+// which computes the usage's output features rather than one result, so there is
+// no single value to record for it.
+func (tr *TraceRecorder) RecordCalcUsageExit(name string) {
+	tr.closeLevel()
+	tr.record(fmt.Sprintf("exit calc %s", name))
+}
+
+// RecordCalcUsageReuse records a calc usage read again with the inputs it
+// already ran over, whose values come from that one run. It opens no nesting
+// level of its own, since nothing runs.
+func (tr *TraceRecorder) RecordCalcUsageReuse(name string) {
+	tr.record(fmt.Sprintf("reuse calc %s", name))
+}
+
+// RecordCalcOutput records the value one output feature of a calc usage took.
+// The outputs appear after the one evaluation of the usage's body they are read
+// from, which is how the trace shows that reading several of them ran it once.
+func (tr *TraceRecorder) RecordCalcOutput(calc, output string, value Value) {
+	tr.record(fmt.Sprintf("output %s.%s = %s", calc, output, FormatTraceValue(value)))
 }

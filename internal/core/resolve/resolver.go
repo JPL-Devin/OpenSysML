@@ -40,6 +40,13 @@ type Resolver struct {
 	Diagnostics []Diagnostic
 	model       MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
 	naming      map[*symbols.Symbol]bool // effective names being computed, for cycle detection
+	// inheritedImports are the declarations whose supertypes' imports are being
+	// searched, so a specialization cycle ends the walk.
+	inheritedImports map[*symbols.Symbol]bool
+	// constraintRefs are the requirements referenced by the require/assume
+	// members whose bodies are being walked, innermost last: such a body may
+	// redefine a feature of the requirement it references by plain name.
+	constraintRefs []constraintRef
 }
 
 // New creates a resolver over the given index.
@@ -50,6 +57,8 @@ func New(idx *symbols.Index) *Resolver {
 		resolving: map[ast.Node]bool{},
 		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
 		naming:    map[*symbols.Symbol]bool{},
+
+		inheritedImports: map[*symbols.Symbol]bool{},
 	}
 }
 

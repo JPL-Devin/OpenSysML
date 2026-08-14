@@ -24,28 +24,28 @@
               (Membership visibility="default"
                 (Usage kind="state" name="idle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
                   (EntryMember
-                    (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                    (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="entry"
                       (Relationship kind="references" target=warmUp
                         (*ast.QualifiedName))))
                   (DoMember
-                    (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                    (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="do"
                       (Relationship kind="references" target=monitor
                         (*ast.QualifiedName))))
                   (ExitMember
-                    (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                    (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="exit"
                       (Relationship kind="references" target=coolDown
                         (*ast.QualifiedName))))))
               (Membership visibility="default"
                 (Usage kind="state" name="running" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
                   (EntryMember
-                    (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                    (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="entry"
                       (Relationship kind="references" target=warmUp
                         (*ast.QualifiedName))
                       (Membership visibility="default"
                         (Usage kind="part" name="level" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
                           (LiteralInteger value="1")))))
                   (ExitMember
-                    (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                    (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="exit"
                       (Relationship kind="references" target=(expr)
                         (FeatureChainExpr member="coolDown"
                           (FeatureReference name="controller"))))))))))))))

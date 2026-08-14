@@ -120,7 +120,12 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.prefixes(scope, d.Prefixes)
 		c.relationships(scope, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
-		c.expr(scope, d.Value)
+		// An accept node keeps its trigger in the usage's value.
+		if d.IsAccept {
+			c.trigger(scope, d.Value)
+		} else {
+			c.expr(scope, d.Value)
+		}
 		child := c.childScope(scope, d)
 		for _, end := range d.ConnectorEnds {
 			if end == nil {
@@ -176,13 +181,12 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.walkMembers(scope, d.Body)
 	case *ast.AssumeMember:
 		c.expr(scope, d.Expression)
+		c.add(scope, d.Reference)
 		c.walkMembers(scope, d.Body)
 	case *ast.RequireMember:
 		c.expr(scope, d.Expression)
+		c.add(scope, d.Reference)
 		c.walkMembers(scope, d.Body)
-	case *ast.ActorMember:
-		c.add(scope, d.TypeRef)
-		c.expr(scope, d.BindingExpr)
 	case *ast.EntryMember:
 		c.walkMembers(scope, d.Actions)
 	case *ast.DoMember:
@@ -238,6 +242,7 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 		c.expr(scope, d.Collection)
 		c.expr(body, d.Condition)
+		c.expr(body, d.Until)
 		c.walkMembers(body, d.Body)
 	case *ast.IfActionNode:
 		c.expr(scope, d.Condition)
@@ -389,6 +394,7 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		for i := range v.Params {
 			p := &v.Params[i]
 			c.add(scope, p.Type)
+			c.relationships(scope, v, p.Relationships)
 			c.expr(scope, p.Value)
 		}
 		// The same scope the resolver uses, so a reference to a parameter and

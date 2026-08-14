@@ -22,7 +22,7 @@ func mustNewCache(t *testing.T, maxSize int) *Cache {
 // mustNewService builds a service, failing the test if construction errors.
 func mustNewService(t *testing.T, cacheSize int) *Service {
 	t.Helper()
-	srv, err := NewService(cacheSize)
+	srv, err := NewService(cacheSize, "test")
 	if err != nil {
 		t.Fatalf("NewService(%d): %v", cacheSize, err)
 	}
@@ -116,7 +116,7 @@ func TestCacheInvalidMaxSize(t *testing.T) {
 	if _, err := NewCache(0); err == nil {
 		t.Error("expected error for maxSize <= 0")
 	}
-	if _, err := NewService(0); err == nil {
+	if _, err := NewService(0, "test"); err == nil {
 		t.Error("expected error for cacheSize <= 0")
 	}
 }

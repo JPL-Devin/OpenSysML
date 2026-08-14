@@ -3,6 +3,7 @@ package runtime
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -27,6 +28,9 @@ type ExpectedValue struct {
 	// ("m/s"). A quantity carries it, so a case asserting one pins that the unit
 	// survived the computation rather than only the magnitude.
 	Unit string `json:"unit,omitempty"`
+	// Elements are the members a Sequence holds, in order, for a case asserting a
+	// multi-valued feature. Set it instead of value.
+	Elements []ExpectedValue `json:"elements,omitempty"`
 	// Error is the text producing this value must fail with, for a slot whose
 	// contract is a diagnostic. Set it instead of type and value.
 	Error string `json:"error,omitempty"`
@@ -38,6 +42,16 @@ type ExpectedEvent struct {
 	Signal string                   `json:"signal,omitempty"` // Signal type name
 	Call   string                   `json:"call,omitempty"`   // Invoked operation name
 	Args   map[string]ExpectedValue `json:"args,omitempty"`   // Signal payload or call arguments
+}
+
+// Performer is one object performing the case's behavior, and the outcome
+// expected of that object's performance.
+type Performer struct {
+	Object      string                   `json:"object"` // qualified name of the object's usage
+	Events      []ExpectedEvent          `json:"events,omitempty"`
+	FinalState  string                   `json:"finalState,omitempty"`
+	StateVisits []string                 `json:"stateVisits,omitempty"`
+	Outputs     map[string]ExpectedValue `json:"outputs,omitempty"`
 }
 
 // ExpectedOutcome represents expected execution result
@@ -55,6 +69,11 @@ type ExpectedOutcome struct {
 	// contract is a diagnostic rather than a result (a loop that never
 	// terminates). Empty means the execution must succeed.
 	Error string `json:"error,omitempty"`
+	// Diagnostics are the parse diagnostics the case's model is expected to
+	// report, one text per diagnostic, matched as a substring. Any diagnostic the
+	// case does not declare fails it: a model that parses with an error executes
+	// recovered input, which is not what the case states.
+	Diagnostics []string `json:"diagnostics,omitempty"`
 
 	// State fields
 	Events      []ExpectedEvent `json:"events,omitempty"` // Events to inject
@@ -64,6 +83,11 @@ type ExpectedOutcome struct {
 	// Calc fields
 	Inputs []ExpectedValue `json:"inputs,omitempty"`
 	Result *ExpectedValue  `json:"result,omitempty"`
+	// Reads are the values expressions of the model take, keyed by the qualified
+	// name of the feature whose value binding is evaluated ("M::z"). A calc
+	// usage's outputs are read through such features, so a case states what a
+	// model reading them computes rather than only what the usage produced.
+	Reads map[string]ExpectedValue `json:"reads,omitempty"`
 
 	// Constraint/Requirement fields
 	Bindings  map[string]ExpectedValue `json:"bindings,omitempty"`
@@ -77,10 +101,24 @@ type ExpectedOutcome struct {
 	// such an assertion is anonymous.
 	Assertions map[string]bool `json:"assertions,omitempty"`
 
+	// Performers are the objects that each perform the case's behavior, for a
+	// case whose contract depends on which object performs it — two objects
+	// selecting different variants of one variation route over their own.
+	Performers []Performer `json:"performers,omitempty"`
+
 	// Instance fields
 	Instantiate string                   `json:"instantiate,omitempty"` // qualified name of the type to instantiate
 	Slots       map[string]ExpectedValue `json:"slots,omitempty"`       // expected slot values, derived ones included
 	Constraints map[string]bool          `json:"constraints,omitempty"` // constraint feature name -> satisfied on this instance
+	// Identical states pairs of paths through the instance that must reach the
+	// very same object, for a case whose contract is identity rather than a
+	// value — a connector end is the feature it attaches to, so
+	// ["link.source", "a.p"] holds only while they are one object.
+	Identical [][]string `json:"identical,omitempty"`
+	// Distinct states pairs of paths that must reach different objects, for a
+	// case pinning that two connectors attached to different features are
+	// told apart.
+	Distinct [][]string `json:"distinct,omitempty"`
 }
 
 // TestExecutionConformance runs all behavioral execution conformance tests.
@@ -169,9 +207,9 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 	}
 
 	// Parse and build model
-	file := parser.New(source.New(sysmlPath, sysmlData)).ParseFile()
-	// Note: Parser diagnostics not directly accessible from file
-	// Syntax errors will manifest as nil symbols or malformed AST
+	p := parser.New(source.New(sysmlPath, sysmlData))
+	file := p.ParseFile()
+	checkDiagnostics(t, p.Diagnostics, expected.Diagnostics)
 
 	idx := symbols.NewIndex()
 	if expected.Libraries {
@@ -193,6 +231,8 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 		runStateConformance(t, ctx, idx, sysmlPath, expected)
 	case "calc":
 		runCalcConformance(t, ctx, idx, sysmlPath, expected)
+	case "calcUsage":
+		runCalcUsageConformance(t, ctx, idx, sysmlPath, expected)
 	case "constraint":
 		runConstraintConformance(t, ctx, idx, sysmlPath, expected)
 	case "requirement":
@@ -204,6 +244,42 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 	default:
 		t.Fatalf("unknown test type: %s", expected.Type)
 	}
+}
+
+// checkDiagnostics fails the case unless the diagnostics its model reported are
+// exactly the ones it declares: an undeclared diagnostic means the case executes
+// recovered input, and a declared one that no diagnostic matches is stale.
+func checkDiagnostics(t *testing.T, got []parser.Diagnostic, want []string) {
+	t.Helper()
+	for _, problem := range diagnosticProblems(got, want) {
+		t.Error(problem)
+	}
+}
+
+// diagnosticProblems reports how the diagnostics a model produced differ from
+// the ones a case declares, pairing each declaration with one diagnostic.
+func diagnosticProblems(got []parser.Diagnostic, want []string) []string {
+	var problems []string
+	matched := make([]bool, len(want))
+	for _, d := range got {
+		found := false
+		for i, w := range want {
+			if !matched[i] && strings.Contains(d.Message, w) {
+				matched[i] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			problems = append(problems, fmt.Sprintf("undeclared diagnostic at offset %d: %s", d.Span.Offset, d.Message))
+		}
+	}
+	for i, w := range want {
+		if !matched[i] {
+			problems = append(problems, fmt.Sprintf("declared diagnostic %q was not reported", w))
+		}
+	}
+	return problems
 }
 
 // loadLibraries loads the standard library into idx, for a case that names its
@@ -264,14 +340,37 @@ func runActionConformance(t *testing.T, ctx *Context, idx *symbols.Index, path s
 	}
 }
 
-// runStateConformance executes state machine and validates final state
+// runStateConformance executes a state machine and validates the final state. A
+// case naming performers runs the machine once per object performing it, each
+// against the outcome that object expects.
 func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
-	// Find state definition/usage
 	rootScope := idx.DocumentRoot(path)
-	stateSym := findBehavioralSymbol(t, rootScope, ast.DefState, ast.UsageState)
+	stateSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefState, ast.UsageState)
+	if len(expected.Performers) == 0 {
+		runOneStatePerformance(t, ctx, stateSym, nil, expected)
+		return
+	}
+	for _, performer := range expected.Performers {
+		self, err := ctx.Instantiate(oneSymbol(t, idx, performer.Object))
+		if err != nil {
+			t.Fatalf("instantiate %s: %v", performer.Object, err)
+		}
+		t.Run(performer.Object, func(t *testing.T) {
+			runOneStatePerformance(t, ctx, stateSym, self, ExpectedOutcome{
+				Events:      performer.Events,
+				FinalState:  performer.FinalState,
+				StateVisits: performer.StateVisits,
+				Outputs:     performer.Outputs,
+			})
+		})
+	}
+}
 
+// runOneStatePerformance runs one performance of a state machine, by self or by no
+// object, and validates it against the outcome expected of that performance.
+func runOneStatePerformance(t *testing.T, ctx *Context, stateSym *symbols.Symbol, self *Instance, expected ExpectedOutcome) {
 	// Create executor manually to inject events
-	exec, err := newStateExecutor(ctx, stateSym)
+	exec, err := newStateExecutor(ctx, stateSym, self)
 	if err != nil {
 		t.Fatalf("create state executor: %v", err)
 	}
@@ -380,7 +479,7 @@ func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path st
 func runCalcConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
 	// Find calc definition/usage
 	rootScope := idx.DocumentRoot(path)
-	calcSym := findBehavioralSymbol(t, rootScope, ast.DefCalc, ast.UsageCalc)
+	calcSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefCalc, ast.UsageCalc)
 
 	// Convert expected inputs to runtime Values
 	args := make([]Value, len(expected.Inputs))
@@ -402,6 +501,91 @@ func runCalcConformance(t *testing.T, ctx *Context, idx *symbols.Index, path str
 	if expected.Result != nil {
 		validateValue(t, "result", *expected.Result, result)
 	}
+}
+
+// runCalcUsageConformance evaluates a calc usage and validates the value of each
+// output feature it computes, plus the value of every model feature the case
+// reads those outputs through.
+func runCalcUsageConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
+	rootScope := idx.DocumentRoot(path)
+	usageSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefCalc, ast.UsageCalc)
+
+	outputs, err := ctx.CalcUsageOutputs(usageSym, usageSym.OwnerScope, nil)
+	if expected.Error != "" {
+		requireError(t, "CalcUsageOutputs", err, expected.Error)
+		return
+	}
+	if err != nil {
+		t.Fatalf("CalcUsageOutputs(%s) failed: %v", ctx.qualifiedSymbolName(usageSym), err)
+	}
+
+	values := make(map[string]Value, len(outputs))
+	for _, out := range outputs {
+		values[out.Name] = out.Value
+	}
+	for name, expectedVal := range expected.Outputs {
+		actual, ok := values[name]
+		if !ok {
+			t.Errorf("missing output %q among %v", name, outputNames(outputs))
+			continue
+		}
+		validateValue(t, name, expectedVal, actual)
+	}
+
+	for name, expectedVal := range expected.Reads {
+		validateRead(t, ctx, idx, name, expectedVal)
+	}
+
+	// A calc that designates a result also answers an invocation with it, so a
+	// case may state both what the usage's outputs are and what invoking it
+	// yields — a statement-bodied calc has to get both right.
+	if expected.Result != nil {
+		args := make([]Value, len(expected.Inputs))
+		for i, input := range expected.Inputs {
+			args[i] = expectedToRuntimeValue(t, input)
+		}
+		result, err := ctx.InvokeCalc(usageSym, args, rootScope)
+		if err != nil {
+			t.Fatalf("InvokeCalc(%s) failed: %v", ctx.qualifiedSymbolName(usageSym), err)
+		}
+		validateValue(t, "result", *expected.Result, result)
+	}
+}
+
+// validateRead evaluates the value binding of the named feature, in the scope it
+// is written in, and validates the value it takes.
+func validateRead(t *testing.T, ctx *Context, idx *symbols.Index, name string, expected ExpectedValue) {
+	t.Helper()
+	matches := idx.LookupQualified(name)
+	if len(matches) != 1 {
+		t.Errorf("read %q: %d matching symbols, want 1", name, len(matches))
+		return
+	}
+	usage, ok := matches[0].Decl.(*ast.Usage)
+	if !ok || usage.Value == nil {
+		t.Errorf("read %q: the feature binds no value to evaluate", name)
+		return
+	}
+	value, err := ctx.EvalWithScope(usage.Value, matches[0].OwnerScope)
+	if expected.Error != "" {
+		requireError(t, "read "+name, err, expected.Error)
+		return
+	}
+	if err != nil {
+		t.Errorf("read %q: %v", name, err)
+		return
+	}
+	validateValue(t, name, expected, value)
+}
+
+// outputNames names the outputs an evaluation produced, for a message about one
+// it did not.
+func outputNames(outputs []CalcOutputValue) []string {
+	names := make([]string, 0, len(outputs))
+	for _, out := range outputs {
+		names = append(names, out.Name)
+	}
+	return names
 }
 
 // runConstraintConformance evaluates constraint and validates satisfaction
@@ -544,6 +728,10 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 	typeSym := matches[0]
 
 	inst, err := ctx.Instantiate(typeSym)
+	if expected.Error != "" {
+		requireError(t, "Instantiate("+expected.Instantiate+")", err, expected.Error)
+		return
+	}
 	if err != nil {
 		t.Fatalf("Instantiate(%s) failed: %v", expected.Instantiate, err)
 	}
@@ -558,8 +746,10 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 			t.Errorf("slot %q: %v", name, err)
 			continue
 		}
-		validateValue(t, name, expectedVal, slot.Value)
+		validateValue(t, name, expectedVal, slot.HeldValue())
 	}
+
+	validateIdentity(t, ctx, inst, expected)
 
 	for name, wantSatisfied := range expected.Constraints {
 		feat := featureNamed(ctx, typeSym, name)
@@ -576,6 +766,65 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 			t.Errorf("constraint %q: satisfied = %v, want %v", name, satisfied, wantSatisfied)
 		}
 	}
+}
+
+// validateIdentity checks the identity a case states between the objects two
+// paths through the instance reach, which is what a connector end asserts: it
+// is the connected feature, not a copy of it.
+func validateIdentity(t *testing.T, ctx *Context, inst *Instance, expected ExpectedOutcome) {
+	t.Helper()
+	for _, pair := range expected.Identical {
+		left, right := identityPair(t, ctx, inst, pair)
+		if left != right {
+			t.Errorf("%s is object %d and %s is object %d, want one object",
+				pair[0], left, pair[1], right)
+		}
+	}
+	for _, pair := range expected.Distinct {
+		left, right := identityPair(t, ctx, inst, pair)
+		if left == right {
+			t.Errorf("%s and %s are both object %d, want different objects",
+				pair[0], pair[1], left)
+		}
+	}
+}
+
+// identityPair resolves the two paths of an identity assertion to the objects
+// they reach.
+func identityPair(t *testing.T, ctx *Context, inst *Instance, pair []string) (int64, int64) {
+	t.Helper()
+	if len(pair) != 2 {
+		t.Fatalf("identity assertion %v names %d paths, want two", pair, len(pair))
+	}
+	return objectAtPath(t, ctx, inst, pair[0]), objectAtPath(t, ctx, inst, pair[1])
+}
+
+// objectAtPath walks a dotted path of slot names from inst and returns the
+// object it reaches.
+func objectAtPath(t *testing.T, ctx *Context, inst *Instance, path string) int64 {
+	t.Helper()
+	cur := inst
+	segments := strings.Split(path, ".")
+	for i, name := range segments {
+		slot, err := cur.GetSlot(ctx, name)
+		if err != nil {
+			t.Fatalf("%s: slot %q: %v", path, name, err)
+		}
+		id, isObject := slot.HeldValue().Object()
+		if !isObject {
+			t.Fatalf("%s: %q holds %s, want an object", path, name, slot.HeldValue().Kind)
+		}
+		if i == len(segments)-1 {
+			return id
+		}
+		next, held := ctx.Instance(id)
+		if !held {
+			t.Fatalf("%s: %q names object %d, which the context does not hold", path, name, id)
+		}
+		cur = next
+	}
+	t.Fatalf("identity path is empty")
+	return 0
 }
 
 // requireError checks that what a case states as a diagnostic contract failed
@@ -694,6 +943,8 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 		t.Fatalf("invalid String value type: %T", ev.Value)
 	case "Null":
 		return Value{Kind: ValNull}
+	case "Variant":
+		t.Fatalf("a variant is named by the model, so it cannot be built from a case value")
 	case "Quantity":
 		v, ok := ev.Value.(float64)
 		if !ok {
@@ -712,6 +963,23 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 // validateValue checks if runtime Value matches ExpectedValue
 func validateValue(t *testing.T, name string, expected ExpectedValue, actual Value) {
 	switch expected.Type {
+	case "Sequence":
+		if actual.Kind != ValSequence {
+			t.Errorf("%s: type = %v, want Sequence", name, actual.Kind)
+			return
+		}
+		elements := elementsOf(actual)
+		if len(elements) != len(expected.Elements) {
+			t.Errorf("%s: %d elements, want %d", name, len(elements), len(expected.Elements))
+			return
+		}
+		for i, want := range expected.Elements {
+			validateValue(t, fmt.Sprintf("%s#(%d)", name, i+1), want, elements[i])
+		}
+	case "Instance":
+		if actual.Kind != ValInstance {
+			t.Errorf("%s: type = %v, want Instance", name, actual.Kind)
+		}
 	case "Integer":
 		if actual.Kind != ValConst || actual.Const.Kind != semantics.ValInt {
 			t.Errorf("%s: type = %v (Const.Kind=%v), want Integer", name, actual.Kind, actual.Const.Kind)
@@ -748,6 +1016,15 @@ func validateValue(t *testing.T, name string, expected ExpectedValue, actual Val
 		if actual.Str != want {
 			t.Errorf("%s: value = %q, want %q", name, actual.Str, want)
 		}
+	case "Variant":
+		if actual.Kind != ValVariant || actual.Variant == nil {
+			t.Errorf("%s: type = %v, want Variant", name, actual.Kind)
+			return
+		}
+		want := expected.Value.(string)
+		if actual.Variant.Name != want {
+			t.Errorf("%s: variant = %q, want %q", name, actual.Variant.Name, want)
+		}
 	case "Quantity":
 		if actual.Kind != ValQuantity || actual.Quantity == nil {
 			t.Errorf("%s: type = %v, want Quantity", name, actual.Kind)
@@ -774,5 +1051,33 @@ func validateValue(t *testing.T, name string, expected ExpectedValue, actual Val
 		}
 	default:
 		t.Errorf("%s: unknown expected type %s", name, expected.Type)
+	}
+}
+
+// TestConformanceDiagnosticsGate pins that a conformance case fails on a
+// diagnostic it does not declare, and on a declaration nothing reported: a model
+// that parses with an error would otherwise execute recovered input unnoticed.
+func TestConformanceDiagnosticsGate(t *testing.T) {
+	diag := func(msg string) parser.Diagnostic {
+		return parser.Diagnostic{Message: msg, Span: source.Span{Offset: 7}}
+	}
+	tests := []struct {
+		name     string
+		got      []parser.Diagnostic
+		want     []string
+		problems int
+	}{
+		{"clean model, nothing declared", nil, nil, 0},
+		{"undeclared diagnostic", []parser.Diagnostic{diag("expected ';' after transition")}, nil, 1},
+		{"declared diagnostic", []parser.Diagnostic{diag("expected ';' after transition")}, []string{"after transition"}, 0},
+		{"stale declaration", nil, []string{"after transition"}, 1},
+		{"one declaration covers one diagnostic", []parser.Diagnostic{diag("bad"), diag("bad")}, []string{"bad"}, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if problems := diagnosticProblems(tt.got, tt.want); len(problems) != tt.problems {
+				t.Errorf("problems = %v, want %d", problems, tt.problems)
+			}
+		})
 	}
 }

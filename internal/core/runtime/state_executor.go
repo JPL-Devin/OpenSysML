@@ -23,7 +23,10 @@ type StateConfiguration struct {
 type StateExecutor struct {
 	ctx          *Context
 	stateMachine *symbols.Symbol
-	state        ExecutionState
+	// self is the object performing the machine: its connections route what the
+	// machine sends, and its selections decide which variant's connection does.
+	self  *Instance
+	state ExecutionState
 
 	// Lowered graph (source of truth)
 	graph *lower.StateGraph
@@ -61,7 +64,7 @@ type StateExecutor struct {
 // when the state is exited.
 type doActivity struct {
 	state   *ast.StateNode
-	pending []ast.Node
+	pending []lower.StateBehavior
 }
 
 // historyRecord is the configuration one composite state was last left in.
@@ -74,8 +77,9 @@ type historyRecord struct {
 	regions map[*ast.StateRegion]*ast.StateNode
 }
 
-// newStateExecutor creates a state executor.
-func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecutor, error) {
+// newStateExecutor creates a state executor. self is the object performing the
+// machine, nil for a machine no object performs.
+func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance) (*StateExecutor, error) {
 	if stateMachine.Kind != symbols.SymbolStateUsage && stateMachine.Kind != symbols.SymbolStateDef {
 		return nil, fmt.Errorf("symbol %s is not a state machine", stateMachine.Name)
 	}
@@ -90,6 +94,7 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 	exec := &StateExecutor{
 		ctx:          ctx,
 		stateMachine: stateMachine,
+		self:         self,
 		state:        StateReady,
 		graph:        graph,
 		currentTime:  0.0,
@@ -116,8 +121,9 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol) (*StateExecuto
 // initializeAttributes populates stateData with the attribute defaults lowering
 // recorded, evaluated in the scope the machine's body was declared in.
 func (e *StateExecutor) initializeAttributes() error {
+	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
-		ec := NewEvalContext(e.ctx, e.graph.Scope)
 		value, err := ec.Eval(attr.Value)
 		if err != nil {
 			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
@@ -128,14 +134,14 @@ func (e *StateExecutor) initializeAttributes() error {
 	return nil
 }
 
-// stateScope returns the scope a state's body was declared in, which is what
-// the names in its entry, do and exit behaviors resolve against. It falls back
-// to the machine's own scope for a state lowering recorded none for.
-func (e *StateExecutor) stateScope(state *ast.StateNode) *symbols.Scope {
-	if scope := e.graph.StateScopes[state]; scope != nil {
-		return scope
-	}
-	return e.graph.Scope
+// evalStep evaluates one expression of a step - a guard, a change condition, a
+// duration, an inline expression - in scope with the machine's data shadowing it,
+// in an activation of its own (see beginStep).
+func (e *StateExecutor) evalStep(node ast.Node, scope *symbols.Scope) (Value, error) {
+	ec := NewEvalContext(e.ctx, scope)
+	ec.Push(e.stateData)
+	defer ec.beginStep()()
+	return ec.Eval(node)
 }
 
 // getNodeName returns the name of a StateNode or PseudostateNode.
@@ -256,9 +262,7 @@ func (e *StateExecutor) scheduleTransitionsForState(state *ast.StateNode) error 
 		} else if timeEvent, ok := trans.Trigger.(*ast.TimeEvent); ok {
 			// Evaluate duration expression in the scope the transition was written
 			// in, the machine's data shadowing it.
-			ec := NewEvalContext(e.ctx, trans.Scope)
-			ec.Push(e.stateData)
-			durationVal, err := ec.Eval(timeEvent.Duration)
+			durationVal, err := e.evalStep(timeEvent.Duration, trans.Scope)
 			if err != nil {
 				return fmt.Errorf("eval time duration: %w", err)
 			}
@@ -373,7 +377,7 @@ func (e *StateExecutor) dispatchEvent(event Event) error {
 				Target:  targetState,
 				Trigger: edge.Trigger,
 				Guard:   edge.Guard,
-				Effect:  edge.Effect,
+				Effect:  lower.LowerBehaviors(edge.Effect, e.stateMachine.Scope),
 			}
 			return e.fireTransition(lowerTrans)
 		}
@@ -511,6 +515,10 @@ func (e *StateExecutor) enabledTransition(state *ast.StateNode, event *Event) (*
 // them. It returns the function restoring the machine's data to what it held
 // before, for the caller to run when the transition does not fire.
 func (e *StateExecutor) bindTriggerArguments(trans *lower.Transition, event *Event) (func(), error) {
+	if acceptEvent, ok := trans.Trigger.(*ast.AcceptEvent); ok {
+		return e.bindAcceptPayload(acceptEvent, event)
+	}
+
 	callEvent, ok := trans.Trigger.(*ast.CallEvent)
 	if !ok || len(callEvent.Parameters) == 0 {
 		return func() {}, nil
@@ -530,6 +538,37 @@ func (e *StateExecutor) bindTriggerArguments(trans *lower.Transition, event *Eve
 		e.stateData[param.Text] = value
 	}
 	return unbind, nil
+}
+
+// bindAcceptPayload binds the name an accept gave its payload
+// (`accept msg : Warning`) to the value the accepted occurrence carries, for the
+// transition's guard and effect to read, and returns the function unbinding it.
+func (e *StateExecutor) bindAcceptPayload(acceptEvent *ast.AcceptEvent, event *Event) (func(), error) {
+	if acceptEvent.Payload == nil || acceptEvent.Payload.Ident.Name == "" {
+		return func() {}, nil
+	}
+	name := ast.NameSegment{Text: acceptEvent.Payload.Ident.Name}
+	unbind := e.restoreData([]ast.NameSegment{name})
+	msg, ok := event.Payload.(Message)
+	if !ok {
+		return unbind, fmt.Errorf("accept %s: event carries %T, not a message",
+			name.Text, event.Payload)
+	}
+	value, ok := msg.Payload["value"]
+	if !ok {
+		return unbind, fmt.Errorf("%w: accept %s: %s carries no single value to bind",
+			ErrNoValue, name.Text, orAnonymousSignal(msg.SignalType))
+	}
+	e.stateData[name.Text] = value
+	return unbind, nil
+}
+
+// orAnonymousSignal names the signal a message carries for a diagnostic.
+func orAnonymousSignal(signalType string) string {
+	if signalType == "" {
+		return "the accepted message"
+	}
+	return "the accepted " + signalType
 }
 
 // restoreData snapshots the named entries of the machine's data and returns the
@@ -561,7 +600,16 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 
 	switch event.Type {
 	case EventAccept, EventCall, EventChange:
-		return triggerMatches(trans.Trigger, event)
+		if !triggerMatches(trans.Trigger, event) {
+			return false
+		}
+		// `accept … via <port>` takes only an occurrence that arrived at that
+		// port; a trigger naming none takes it whatever route it came by.
+		if trans.Via == "" {
+			return true
+		}
+		msg, ok := event.Payload.(Message)
+		return ok && msg.arrivedAt(trans.Via) && msg.reachedObject(objectID(e.self))
 
 	case EventTime:
 		// Time events carry the specific transition in Payload
@@ -590,8 +638,12 @@ func triggerMatches(trigger ast.Node, event *Event) bool {
 		if !ok {
 			return false
 		}
-		// Match signal type (last segment of QualifiedName against Message.SignalType)
+		// The accept names the occurrence it takes either by its type
+		// (`accept Ping`) or by the event it subsets (`accept :> shutDown`).
 		expectedSignal := ast.SimpleName(acceptEvent.SignalType)
+		if expectedSignal == "" {
+			expectedSignal = ast.SimpleName(acceptEvent.Subsets)
+		}
 		if expectedSignal == "" {
 			return false
 		}
@@ -724,8 +776,8 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 	}
 
 	// Execute transition effect
-	for _, action := range trans.Effect {
-		if err := e.executeAction(action, trans.BodyScope); err != nil {
+	for _, behavior := range trans.Effect {
+		if err := e.executeBehavior(behavior); err != nil {
 			return fmt.Errorf("transition effect: %w", err)
 		}
 	}
@@ -801,16 +853,25 @@ func (e *StateExecutor) passesGuard(trans *lower.Transition) (bool, error) {
 	if trans == nil || trans.Guard == nil {
 		return true, nil
 	}
-	ec := NewEvalContext(e.ctx, trans.BodyScope)
-	ec.Push(e.stateData)
-	val, err := ec.Eval(trans.Guard)
+	val, err := e.evalStep(trans.Guard, trans.BodyScope)
 	if err != nil {
-		return false, fmt.Errorf("eval guard: %w", err)
+		return false, fmt.Errorf("eval guard of %s: %w", transitionDescription(trans), err)
 	}
 	if val.Kind != ValConst || val.Const.Kind != semantics.ValBool {
-		return false, fmt.Errorf("guard must be boolean, got %v", val.Kind)
+		return false, fmt.Errorf("guard of %s must be boolean, got %v",
+			transitionDescription(trans), val.Kind)
 	}
 	return val.Const.Bool, nil
+}
+
+// transitionDescription names a transition for a diagnostic: by the name it was
+// declared with, when it has one, and by the states it runs between otherwise.
+func transitionDescription(trans *lower.Transition) string {
+	if trans.Name != "" {
+		return fmt.Sprintf("transition %s", trans.Name)
+	}
+	return fmt.Sprintf("transition %s -> %s",
+		orAny(getNodeName(trans.Source)), orAny(getNodeName(trans.Target)))
 }
 
 // recordHistory returns state's history record, creating it on first use.
@@ -954,8 +1015,8 @@ func (e *StateExecutor) fireForkTransition(trans *lower.Transition, fork *ast.Ps
 	if err := e.exitToward(owner); err != nil {
 		return err
 	}
-	for _, action := range trans.Effect {
-		if err := e.executeAction(action, trans.BodyScope); err != nil {
+	for _, behavior := range trans.Effect {
+		if err := e.executeBehavior(behavior); err != nil {
 			return fmt.Errorf("transition effect: %w", err)
 		}
 	}
@@ -1195,14 +1256,24 @@ func (e *StateExecutor) RunToCompletion() error {
 // startDoActivity registers a state's do behavior as running. Re-entering a
 // state restarts its do behavior rather than resuming the abandoned one.
 func (e *StateExecutor) startDoActivity(state *ast.StateNode) {
-	if len(state.Do) == 0 {
+	doBehaviors := e.behaviorsOf(state).Do
+	if len(doBehaviors) == 0 {
 		return
 	}
 	e.stopDoActivity(state)
 	e.doActivities = append(e.doActivities, &doActivity{
 		state:   state,
-		pending: append([]ast.Node(nil), state.Do...),
+		pending: append([]lower.StateBehavior(nil), doBehaviors...),
 	})
+}
+
+// behaviorsOf returns the lowered entry, do and exit behaviors of a state, and
+// an empty set for a state lowering recorded none for.
+func (e *StateExecutor) behaviorsOf(state *ast.StateNode) *lower.StateBehaviors {
+	if behaviors, ok := e.graph.Behaviors[state]; ok && behaviors != nil {
+		return behaviors
+	}
+	return &lower.StateBehaviors{}
 }
 
 // stopDoActivity abandons whatever is left of a state's do behavior, which is
@@ -1236,12 +1307,12 @@ func (e *StateExecutor) runDoRound() (int, error) {
 		if len(activity.pending) == 0 || !e.isRunningDoActivity(activity) {
 			continue
 		}
-		action := activity.pending[0]
+		behavior := activity.pending[0]
 		activity.pending = activity.pending[1:]
 		if e.trace() != nil {
 			e.trace().RecordDoStep(activity.state.Name)
 		}
-		if err := e.executeAction(action, e.stateScope(activity.state)); err != nil {
+		if err := e.executeBehavior(behavior); err != nil {
 			return ran, fmt.Errorf("do action in state %s: %w", activity.state.Name, err)
 		}
 		ran++
@@ -1329,16 +1400,41 @@ func (e *StateExecutor) enqueueSignal(msg Message) {
 // A message no active transition accepts stays on the bus for another consumer:
 // this machine must not swallow a message addressed to a different behavior.
 func (e *StateExecutor) deliverPendingSignal() bool {
-	msg, ok := e.ctx.TakeMessage(func(m Message) bool {
-		// A transition trigger names a signal, never a port (`accept <type>` has
-		// no `via` form), so a message routed to a port is not for this machine.
-		return m.arrivedAt("") && m.addressedTo(e.stateMachine.Name) && e.acceptsSignal(m)
-	})
+	msg, ok := e.ctx.TakeMessage(e.acceptableMessage)
 	if !ok {
 		return false
 	}
 	e.enqueueSignal(msg)
 	return true
+}
+
+// acceptableMessage reports whether a message in flight is one this machine can
+// react to now. A message routed to a port is for this machine only if a
+// transition out of the active configuration accepts it `via` that port; one
+// routed to no port must also be addressed to the machine.
+func (e *StateExecutor) acceptableMessage(m Message) bool {
+	if m.Port != "" {
+		return e.acceptsSignal(m)
+	}
+	return m.addressedTo(e.stateMachine.Name) && e.acceptsSignal(m)
+}
+
+// HasPendingSignal reports whether a signal this machine accepts is in flight.
+// Such a signal is due now, unlike a queued event's timestamp: the next step
+// delivers and dispatches it.
+func (e *StateExecutor) HasPendingSignal() bool {
+	return e.hasPendingSignal()
+}
+
+// hasPendingSignal reports whether a message in flight would be delivered by
+// the next step, without consuming it.
+func (e *StateExecutor) hasPendingSignal() bool {
+	for _, msg := range e.ctx.PendingMessages() {
+		if e.acceptableMessage(msg) {
+			return true
+		}
+	}
+	return false
 }
 
 // acceptsSignal reports whether any transition out of the active configuration
@@ -1350,7 +1446,13 @@ func (e *StateExecutor) acceptsSignal(msg Message) bool {
 			if !ok {
 				continue
 			}
+			if !msg.arrivedAt(trans.Via) || !msg.reachedObject(objectID(e.self)) {
+				continue
+			}
 			signal := ast.SimpleName(accept.SignalType)
+			if signal == "" {
+				signal = ast.SimpleName(accept.Subsets)
+			}
 			if signal != "" && msg.carriesSignal(signal) {
 				return true
 			}
@@ -1475,12 +1577,12 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 
 	// Record trace
 	if e.trace() != nil {
-		e.trace().RecordStateEntry(state.Name, len(state.Entry) > 0)
+		e.trace().RecordStateEntry(state.Name, len(e.behaviorsOf(state).Entry) > 0)
 	}
 
 	// Execute entry actions
-	for _, action := range state.Entry {
-		if err := e.executeAction(action, e.stateScope(state)); err != nil {
+	for _, behavior := range e.behaviorsOf(state).Entry {
+		if err := e.executeBehavior(behavior); err != nil {
 			return fmt.Errorf("entry action: %w", err)
 		}
 	}
@@ -1595,12 +1697,12 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 
 	// Record trace
 	if e.trace() != nil {
-		e.trace().RecordStateExit(state.Name, len(state.Exit) > 0)
+		e.trace().RecordStateExit(state.Name, len(e.behaviorsOf(state).Exit) > 0)
 	}
 
 	// Execute exit actions
-	for _, action := range state.Exit {
-		if err := e.executeAction(action, e.stateScope(state)); err != nil {
+	for _, behavior := range e.behaviorsOf(state).Exit {
+		if err := e.executeBehavior(behavior); err != nil {
 			return fmt.Errorf("exit action: %w", err)
 		}
 	}
@@ -1625,93 +1727,10 @@ func (e *StateExecutor) invokeNested(inv actionInvocation) error {
 	return nil
 }
 
-// executeAction executes a single action (used for entry/exit/effect actions).
-// scope is the scope the action was declared in: the state's own scope for an
-// entry, do or exit behavior, and the transition's for an effect.
-func (e *StateExecutor) executeAction(action ast.Node, scope *symbols.Scope) error {
-	switch node := action.(type) {
-	case *ast.ActionExecutionNode:
-		if node.Expression != nil {
-			// Evaluate inline expression
-			ec := NewEvalContext(e.ctx, scope)
-			ec.Push(e.stateData) // Make state data available
-			result, err := ec.Eval(node.Expression)
-			if err != nil {
-				return fmt.Errorf("eval expression: %w", err)
-			}
-			// Store result in state data with action name
-			e.stateData[node.Name] = result
-		} else if node.ActionRef != nil {
-			return e.invokeNested(actionInvocation{target: node.ActionRef})
-		}
-		return nil
-
-	case *ast.Usage:
-		// An entry/exit/effect action that performs another action:
-		// perform X; / action a : X; / action a = X(...);
-		inv, ok := nestedInvocation(node)
-		if !ok {
-			return fmt.Errorf("state action %s performs no action", stateActionName(node))
-		}
-		return e.invokeNested(inv)
-
-	case *ast.AssignmentActionNode:
-		// Handle assignment (e.g., counter = counter + 1)
-		// Evaluate RHS
-		ec := NewEvalContext(e.ctx, scope)
-		ec.Push(e.stateData)
-		rhsVal, err := ec.Eval(node.Value)
-		if err != nil {
-			return fmt.Errorf("eval assignment RHS: %w", err)
-		}
-
-		// Extract target name
-		var targetName string
-		switch target := node.Target.(type) {
-		case *ast.QualifiedName:
-			if len(target.Parts) == 1 {
-				targetName = target.Parts[0].Text
-			} else {
-				return fmt.Errorf("qualified assignment target not supported: %v", target)
-			}
-		case *ast.FeatureReference:
-			if target.Name != nil && len(target.Name.Parts) == 1 {
-				targetName = target.Name.Parts[0].Text
-			} else {
-				return fmt.Errorf("qualified feature reference not supported: %v", target.Name)
-			}
-		default:
-			return fmt.Errorf("unsupported assignment target type: %T", target)
-		}
-
-		// Store in state data
-		e.stateData[targetName] = rhsVal
-		return nil
-
-	case *ast.SendStatement:
-		// A send in an entry/do/exit/effect action posts to the context bus,
-		// where this machine's own transitions and other behaviors can accept it.
-		ec := NewEvalContext(e.ctx, scope)
-		ec.Push(e.stateData)
-		send := lower.Send{
-			Message: node.Message,
-			Target:  ast.SimpleName(node.Target),
-			IsVia:   node.IsVia,
-		}
-		msg, err := ec.buildMessage(e.stateMachine.Scope, send)
-		if err != nil {
-			return err
-		}
-		e.ctx.post(e.graph.Connections, msg, send)
-		return nil
-
-	default:
-		return fmt.Errorf("unsupported action type: %T", action)
-	}
-}
-
 // stateActionName names a state action in diagnostics, falling back to what it
-// references when the usage is anonymous (`entry a.b;`).
+// references when the usage is anonymous (`entry a.b;`). This is deliberately
+// not ast.EffectiveName: a diagnostic names the whole path written, `a.b`,
+// where the effective name is just the feature named, `b`.
 func stateActionName(u *ast.Usage) string {
 	if u.Ident.Name != "" {
 		return u.Ident.Name
@@ -1743,9 +1762,7 @@ func (e *StateExecutor) pollChangeEvents() error {
 		if changeEvent, ok := trans.Trigger.(*ast.ChangeEvent); ok {
 			// Evaluate the condition in the scope the transition was written in, the
 			// machine's data shadowing it.
-			ec := NewEvalContext(e.ctx, trans.Scope)
-			ec.Push(e.stateData)
-			condVal, err := ec.Eval(changeEvent.Condition)
+			condVal, err := e.evalStep(changeEvent.Condition, trans.Scope)
 			if err != nil {
 				return fmt.Errorf("eval change condition: %w", err)
 			}
@@ -1862,16 +1879,19 @@ func (e *StateExecutor) ProcessNextEvent() error {
 	if err != nil {
 		return err
 	}
-	if e.eventQueue.Len() == 0 && ran > 0 {
+	// A signal sent by a behavior sharing this context is dispatched by the same
+	// step RunToCompletion takes, so stepping and running agree.
+	if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() && ran > 0 {
 		return nil
 	}
 	return e.processNextEvent()
 }
 
 // HasPendingWork reports whether stepping the machine can still make progress:
-// an event is queued, or a state's do behavior has actions left to run.
+// an event is queued, a signal this machine accepts is in flight, or a state's
+// do behavior has actions left to run.
 func (e *StateExecutor) HasPendingWork() bool {
-	return e.eventQueue.Len() > 0 || len(e.doActivities) > 0
+	return e.eventQueue.Len() > 0 || len(e.doActivities) > 0 || e.hasPendingSignal()
 }
 
 // RunDoRound advances every active state's do behavior by one action, without

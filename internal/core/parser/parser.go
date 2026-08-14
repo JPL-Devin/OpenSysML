@@ -28,6 +28,52 @@ type Parser struct {
 
 	pendingComment    source.Span // span of the most recent /* */ regular comment
 	hasPendingComment bool
+
+	// calcBodyDepth counts the calculation bodies being parsed, so a `return`
+	// reached in a statement position inside one is read as an early return
+	// rather than as a result parameter declaration.
+	calcBodyDepth int
+
+	// effectDepth counts the transition effects being parsed, whose statement is
+	// closed by the transition's next clause rather than by ';'.
+	effectDepth int
+
+	// effectStmtStart is the source offset of the statement written as the
+	// innermost transition effect, which the transition's own ';' terminates
+	// (SysML.xtext EffectBehaviorUsage carries no ';'). It is only meaningful
+	// while effectDepth > 0, and distinguishes that statement from the ones
+	// nested inside its body, which end with their own ';'.
+	effectStmtStart int
+
+	// bodyCtx is the stack of enclosing body notations; only the innermost
+	// matters (see bodyContext).
+	bodyCtx []bodyContext
+}
+
+// bodyContext is the notation of the body being parsed, for members whose
+// grammar depends on it: an interface body's default end is a port usage and
+// may be anonymous (SysML v2 8.2.2.14, DefaultInterfaceEnd).
+type bodyContext int
+
+const (
+	bodyOther bodyContext = iota
+	bodyInterface
+)
+
+// pushBodyContext enters a body of the given notation and returns the function
+// that leaves it.
+func (p *Parser) pushBodyContext(c bodyContext) func() {
+	depth := len(p.bodyCtx)
+	p.bodyCtx = append(p.bodyCtx, c)
+	return func() { p.bodyCtx = p.bodyCtx[:depth] }
+}
+
+// bodyContext returns the notation of the innermost body being parsed.
+func (p *Parser) bodyContext() bodyContext {
+	if len(p.bodyCtx) == 0 {
+		return bodyOther
+	}
+	return p.bodyCtx[len(p.bodyCtx)-1]
 }
 
 // parseCheckpoint captures parser state for backtracking.
@@ -125,6 +171,13 @@ func (p *Parser) at(k lexer.Kind) bool { return p.peek().Kind == k }
 // atKeyword reports whether the current token is the given keyword literal.
 func (p *Parser) atKeyword(kw string) bool {
 	t := p.peek()
+	return t.Kind == lexer.Keyword && t.KeywordID == kw
+}
+
+// peekIsKeyword reports whether the token n ahead of the cursor is the given
+// keyword literal.
+func (p *Parser) peekIsKeyword(n int, kw string) bool {
+	t := p.peekN(n)
 	return t.Kind == lexer.Keyword && t.KeywordID == kw
 }
 

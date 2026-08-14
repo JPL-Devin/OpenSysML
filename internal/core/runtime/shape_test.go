@@ -78,6 +78,26 @@ func TestFeaturesOf_Redefinition(t *testing.T) {
 	}
 }
 
+// A renaming redefinition that restates no type is typed by the feature it
+// redefines, so it materializes the same objects under the new name.
+func TestFeaturesOf_TypeInheritedThroughRedefinition(t *testing.T) {
+	code := `
+		attribute def Cost { attribute v; }
+		part def Ring { attribute ringCost : Cost; }
+		part def Band :> Ring { attribute bandCost :>> ringCost; }
+	`
+	model, resolver, rootScope := parseAndBuildModel(t, code)
+	ctx := NewContext(model, resolver, testMaxSteps)
+
+	features := ctx.FeaturesOf(resolveSymbol(t, rootScope, "Band"))
+	if len(features) == 0 || features[0].Name != "bandCost" {
+		t.Fatalf("FeaturesOf(Band) = %v, want bandCost first", features)
+	}
+	if features[0].Type == nil || features[0].Type.Name != "Cost" {
+		t.Errorf("bandCost.Type = %v, want Cost", features[0].Type)
+	}
+}
+
 func TestFeaturesOf_Multiplicity(t *testing.T) {
 	code := `
 		part def Thing {

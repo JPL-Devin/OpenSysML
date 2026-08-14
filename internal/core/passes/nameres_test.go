@@ -220,6 +220,34 @@ func TestInheritedNameConflictExemptsRedefiningFeatures(t *testing.T) {
 	}
 }
 
+// `render r;` names the rendering the view uses and declares no member of its
+// own (SysML.xtext ViewRenderingUsage), so it does not conflict with the
+// inherited rendering it names, and the name resolves to that rendering.
+func TestRenderReferenceToInheritedRenderingIsNoConflict(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		rendering def AsTree;
+		view def Base { rendering r : AsTree; }
+		view def Derived :> Base { render r; }
+	}`)
+	if len(got) != 0 {
+		t.Fatalf("got %+v, want no diagnostics", got)
+	}
+}
+
+// A rendering the view declares for itself does conflict with an inherited one
+// of the same name, exactly as any other declaration does: only the reference
+// form declares nothing.
+func TestRenderDeclarationOfInheritedNameConflicts(t *testing.T) {
+	got := nameresDiags(t, `package P {
+		rendering def AsTree;
+		view def Base { rendering r : AsTree; }
+		view def Derived :> Base { render rendering r : AsTree; }
+	}`)
+	if len(got) != 1 || got[0].Code != "name-conflict" {
+		t.Fatalf("got %+v, want one name-conflict diagnostic", got)
+	}
+}
+
 // A concern and a viewpoint are requirements, so their bodies are exempt too.
 func TestInheritedNameConflictExemptsConcernsAndViewpoints(t *testing.T) {
 	got := nameresDiags(t, `package P {

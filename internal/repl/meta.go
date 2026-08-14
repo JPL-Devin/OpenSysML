@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/model"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
@@ -74,6 +75,7 @@ var helpText = []string{
 	"%save <file>        write the session model to a file (.sysml notation or .ttl RDF)",
 	"%verbosity [level]  show or set output level: quiet, normal or debug",
 	"%trace [on|off]     show or set execution tracing (evaluation, calc, action and state steps)",
+	"%budget             show the bounds one run may spend, and the variable raising each",
 	"%quit               exit the REPL",
 	"",
 	"Runtime commands:",
@@ -89,7 +91,7 @@ var helpText = []string{
 	"%satisfy [name]     evaluate the satisfaction assertions of the model, or of one element",
 	"",
 	"Action debugging:",
-	"%action <name>      start action executor debugging session",
+	"%action <name> [<object>]  start action executor debugging session, performed by an object",
 	"%step               advance one token step",
 	"%continue           run action to completion",
 	"%tokens             show active tokens",
@@ -97,7 +99,7 @@ var helpText = []string{
 	"%stop               stop current debugging session",
 	"",
 	"State machine debugging:",
-	"%state <name>       start state machine debugging session",
+	"%state <name> [<object>]   start state machine debugging session, performed by an object",
 	"%events             show event queue",
 	"%current            show current state and configuration",
 	"%advance <time>     advance simulation time by <time> units, processing every event due",
@@ -165,6 +167,8 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			}
 		}
 		return []string{fmt.Sprintf("trace: %s", onOff(s.Tracing()))}, false, nil
+	case "%budget":
+		return s.doBudget(), false, nil
 	case "%quit", "%exit":
 		return []string{"goodbye"}, true, nil
 	case "%instantiate":
@@ -206,9 +210,9 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	// Action debugging
 	case "%action":
 		if len(fields) < 2 {
-			return []string{"usage: %action <name>"}, false, nil
+			return []string{"usage: %action <name> [<object>]"}, false, nil
 		}
-		return s.doAction(fields[1])
+		return s.doAction(fields[1], fields[2:])
 	case "%step":
 		return s.doStep()
 	case "%continue":
@@ -225,9 +229,9 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	// State machine debugging
 	case "%state":
 		if len(fields) < 2 {
-			return []string{"usage: %state <name>"}, false, nil
+			return []string{"usage: %state <name> [<object>]"}, false, nil
 		}
-		return s.doStateMachine(fields[1])
+		return s.doStateMachine(fields[1], fields[2:])
 	case "%events":
 		return s.doEvents()
 	case "%current":
@@ -391,6 +395,14 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 
 // tryEvalLiteral attempts to evaluate standalone literal expressions.
 func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
+	// A name the session declares is answered by that declaration, so the empty
+	// model this pass evaluates in must not answer for it: a library operation
+	// reached by its unqualified name would otherwise stand in for a calc the
+	// session wrote under the same name.
+	if s.declaresANameIn(expr) {
+		return nil, false
+	}
+
 	// Parse as standalone attribute
 	src := fmt.Sprintf("attribute __lit__ = %s;", expr)
 	p := parser.New(source.New("literal", []byte(src)))
@@ -415,10 +427,21 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 	emptyIdx := symbols.NewIndex()
 	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
 	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.budgets.MaxSteps)
+	if err := ctx.SetBudgets(s.budgets); err != nil {
+		return nil, false
+	}
 
 	val, err := ctx.Eval(usage.Value)
 	if err != nil {
-		// Not evaluable as literal (needs session symbols)
+		// A failure the session's declarations could answer — a name or a unit
+		// this empty model knows nothing of — is not the answer, so the
+		// expression is evaluated again in the session. A failure that is the
+		// answer to an expression of literals alone, such as an index that names
+		// no position, is reported here instead of being hidden behind "no
+		// declarations loaded".
+		if isLiteralAnswerError(err) {
+			return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, true
+		}
 		return nil, false
 	}
 
@@ -426,6 +449,68 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(val)),
 	}, true
+}
+
+// doBudget lists the bounds one run of this session may spend, each with the
+// variable that raises it.
+func (s *Session) doBudget() []string {
+	b := s.Budgets()
+	return []string{
+		"budgets (each bounds one run, not the session):",
+		fmt.Sprintf("  evaluation steps     %-10d %s", b.MaxSteps, runtime.MaxStepsEnvVar),
+		fmt.Sprintf("  action steps         %-10d %s", b.MaxActionSteps, runtime.MaxActionStepsEnvVar),
+		fmt.Sprintf("  state events         %-10d %s", b.MaxStateEvents, runtime.MaxStateEventsEnvVar),
+		fmt.Sprintf("  do activity steps    %-10d %s", b.MaxDoSteps, runtime.MaxDoStepsEnvVar),
+		fmt.Sprintf("  collection elements  %-10d %s", b.MaxElements, runtime.MaxElementsEnvVar),
+	}
+}
+
+// declaresANameIn reports whether the session declares any name the expression
+// uses, in the document root or in the namespace a prompt expression is
+// evaluated in.
+func (s *Session) declaresANameIn(expr string) bool {
+	doc := s.ws.Document(docName)
+	if doc == nil || doc.Scope == nil {
+		return false
+	}
+	scopes := []*symbols.Scope{doc.Scope}
+	if prompt := s.promptScope(doc); prompt != nil && prompt != doc.Scope {
+		scopes = append(scopes, prompt)
+	}
+	src := source.New("literal", []byte(expr))
+	lx := lexer.New(src)
+	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		if tok.Kind != lexer.Identifier && tok.Kind != lexer.UnrestrictedName {
+			continue
+		}
+		for _, scope := range scopes {
+			if sym, ok := scope.LookupLocal(src.Text(tok.Span)); ok && sym != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isLiteralAnswerError reports whether err is what an expression of literals
+// alone evaluates to, rather than a failure the declarations of a session could
+// answer. An index outside a written sequence, a body called with arguments it
+// declares no parameters for, or an operand of the wrong kind is the answer
+// whatever is declared; an unresolved name or unit is not.
+func isLiteralAnswerError(err error) bool {
+	for _, answer := range []error{
+		runtime.ErrIndexOutOfRange,
+		runtime.ErrBodyArity,
+		runtime.ErrTypeMismatch,
+		runtime.ErrMultiplicityViolation,
+		runtime.ErrStepLimitExceeded,
+		runtime.ErrElementLimitExceeded,
+	} {
+		if errors.Is(err, answer) {
+			return true
+		}
+	}
+	return false
 }
 
 // isSymbolReference reports whether expr names a symbol — a single identifier
@@ -492,14 +577,21 @@ type slotWalk struct {
 
 func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []string {
 	features := w.ctx.FeaturesOf(inst.Type)
-	if len(features) == 0 {
+	connectors := w.connectors(inst, indent)
+	if len(features) == 0 && len(connectors) == 0 {
 		return w.emit(nil, indent+"(no features)")
+	}
+
+	// Connector lines already spent their share of the budget, so a truncated
+	// listing still shows them rather than dropping what it charged for.
+	truncated := func(lines []string, pad string) []string {
+		return append(append(lines, connectors...), indent+pad+"… (listing truncated)")
 	}
 
 	var lines []string
 	for i := range features {
 		if w.budget <= 0 {
-			return append(lines, indent+"… (listing truncated)")
+			return truncated(lines, "")
 		}
 		feat := &features[i]
 		// A constraint or requirement the part carries has no value; what it has
@@ -520,14 +612,54 @@ func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []str
 		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatSlot(slot)))
 		for _, nested := range nestedInstances(w.ctx, slot) {
 			if w.budget <= 0 {
-				return append(lines, indent+"  … (listing truncated)")
+				return truncated(lines, "  ")
 			}
 			w.onPath[nested.Type] = true
 			lines = append(lines, w.lines(nested, indent+"  ", depth+1)...)
 			delete(w.onPath, nested.Type)
 		}
 	}
+	return append(lines, connectors...)
+}
+
+// connectors lists the connectors the object owns that no feature names: an
+// anonymous `connect a.p to b.q` relates the features at its ends whether or not
+// it is named, and its ends are the only way to see what it relates.
+func (w *slotWalk) connectors(inst *runtime.Instance, indent string) []string {
+	conns, err := inst.OwnedConnectors(w.ctx)
+	if err != nil {
+		return w.emit(nil, fmt.Sprintf("%s(anonymous connector): <error: %v>", indent, err))
+	}
+	var lines []string
+	for _, conn := range conns {
+		lines = w.emit(lines, fmt.Sprintf("%s(anonymous %s) = %s", indent, connectorKeyword(conn),
+			formatValue(runtime.Value{Kind: runtime.ValInstance, Instance: conn.ID})))
+		for _, end := range conn.Ends {
+			if w.budget <= 0 {
+				return append(lines, indent+"  … (listing truncated)")
+			}
+			lines = w.emit(lines, fmt.Sprintf("%s  %s = %s", indent, endLabel(end), formatValue(end.Value)))
+		}
+	}
 	return lines
+}
+
+// connectorKeyword names the kind of connector an object materializes, for a
+// connector that has no name to show.
+func connectorKeyword(conn *runtime.Instance) string {
+	if usage, ok := conn.Type.Decl.(*ast.Usage); ok && usage.Keyword != "" {
+		return usage.Keyword
+	}
+	return "connector"
+}
+
+// endLabel names one end of a connector, by position when the model gives the
+// end no name of its own.
+func endLabel(end runtime.ConnectorEnd) string {
+	if end.Name != "" {
+		return end.Name
+	}
+	return "end"
 }
 
 func (w *slotWalk) emit(lines []string, line string) []string {
@@ -541,6 +673,11 @@ func (w *slotWalk) emit(lines []string, line string) []string {
 func (w *slotWalk) elided(feat *runtime.EffectiveFeature, depth int) (string, bool) {
 	held := w.ctx.CompositeTypeOf(feat)
 	if held == nil {
+		// A variation is materialized from the variant it selects, so the depth
+		// bound applies to it too.
+		if w.ctx.IsVariationFeature(feat) && depth >= maxSlotDepth {
+			return feat.Name, true
+		}
 		return "", false
 	}
 	if depth >= maxSlotDepth || w.onPath[held] {
@@ -569,10 +706,11 @@ func nestedInstances(ctx *runtime.Context, slot *runtime.Slot) []*runtime.Instan
 
 	var out []*runtime.Instance
 	for _, val := range values {
-		if val.Kind != runtime.ValInstance {
+		id, ok := val.Object()
+		if !ok {
 			continue
 		}
-		if nested, ok := ctx.Instance(val.Instance); ok {
+		if nested, ok := ctx.Instance(id); ok {
 			out = append(out, nested)
 		}
 	}
@@ -647,6 +785,16 @@ func formatValue(val runtime.Value) string {
 		return formatElements(val.Sequence.Elements())
 	case runtime.ValSet:
 		return fmt.Sprintf("Set{%d}", val.Set.Size())
+	case runtime.ValVariant:
+		// A selected variation shows the variant chosen, and the object it
+		// materialized when it has one.
+		if val.Variant == nil {
+			return "<unknown variant>"
+		}
+		if val.Instance != 0 {
+			return fmt.Sprintf("%s (Instance ID: %d)", val.Variant.Name, val.Instance)
+		}
+		return val.Variant.Name
 	case runtime.ValQuantity:
 		// A magnitude is a number like any other in a result table, so it is
 		// rendered as a bare one; the value itself keeps its full precision.
@@ -689,6 +837,10 @@ func formatElements(elements []runtime.Value) string {
 // whitespace alone. Named arguments (`v0 = ...`) are not supported here — the
 // notation writes them inside an invocation's parentheses, which is a different
 // production than an argument list at a prompt.
+//
+// A calc usage named without arguments binds its inputs from its own members,
+// so it is evaluated as a usage and every output feature it computes is listed
+// from that one run (SysML 7.17).
 func (s *Session) doCalc(calcName, argText string) ([]string, bool, error) {
 	doc := s.ws.Document(docName)
 	if doc == nil || doc.Scope == nil {
@@ -703,6 +855,12 @@ func (s *Session) doCalc(calcName, argText string) ([]string, bool, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return []string{"error: " + err.Error()}, false, nil
+	}
+
+	if strings.TrimSpace(argText) == "" {
+		if lines, handled := s.calcUsageOutputs(ctx, sym, calcName); handled {
+			return lines, false, nil
+		}
 	}
 
 	exprs, err := parseExprList(argText)
@@ -733,6 +891,30 @@ func (s *Session) doCalc(calcName, argText string) ([]string, bool, error) {
 		fmt.Sprintf("✓ %s(%s)", calcName, strings.Join(argTexts, ", ")),
 		fmt.Sprintf("  = %s", formatValue(result)),
 	}, false, nil
+}
+
+// calcUsageOutputs lists the outputs of a calc usage evaluated from its own
+// member values. It reports handled=false when the name is not a calc usage, or
+// is one that computes no output features, so those keep being invoked as
+// calculations with an empty argument list.
+func (s *Session) calcUsageOutputs(ctx *runtime.Context, sym *symbols.Symbol, calcName string) ([]string, bool) {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Kind != ast.UsageCalc {
+		return nil, false
+	}
+	outputs, err := ctx.CalcUsageOutputs(sym, sym.OwnerScope, nil)
+	if err != nil {
+		return []string{"error: calc usage evaluation failed: " + err.Error()}, true
+	}
+	if len(outputs) == 0 {
+		return nil, false
+	}
+	lines := make([]string, 0, len(outputs)+1)
+	lines = append(lines, fmt.Sprintf("✓ %s", calcName))
+	for _, out := range outputs {
+		lines = append(lines, fmt.Sprintf("  %s = %s", out.Name, formatValue(out.Value)))
+	}
+	return lines, true
 }
 
 // splitCalcArgs splits `%calc`'s tail into the calc's name and its argument
@@ -1153,10 +1335,28 @@ func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
 	return a.SubjectRef
 }
 
+// performingObject resolves the object a debugging session's behavior is
+// performed by: its connections route what the behavior sends. No argument
+// performs the behavior outside any object.
+func (s *Session) performingObject(args []string) (*runtime.Instance, string) {
+	if len(args) == 0 {
+		return nil, ""
+	}
+	_, fqn, lerr := s.lookupSymbol(args[0])
+	if lerr != nil {
+		return nil, "error: " + lerr.Error()
+	}
+	inst, ok := s.instances[fqn]
+	if !ok {
+		return nil, fmt.Sprintf("error: no instance of %q (use %%instantiate first)", fqn)
+	}
+	return inst, ""
+}
+
 // --- Action Debugging Commands ---
 
 // doAction starts an action executor debugging session.
-func (s *Session) doAction(name string) ([]string, bool, error) {
+func (s *Session) doAction(name string, performer []string) ([]string, bool, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
@@ -1171,8 +1371,13 @@ func (s *Session) doAction(name string) ([]string, bool, error) {
 		return []string{fmt.Sprintf("error: %q is not an action", name)}, false, nil
 	}
 
+	self, msg := s.performingObject(performer)
+	if msg != "" {
+		return []string{msg}, false, nil
+	}
+
 	// Create executor
-	exec, err := ctx.CreateActionExecutor(sym)
+	exec, err := ctx.CreateActionExecutorFor(sym, self)
 	if err != nil {
 		return []string{fmt.Sprintf("error: failed to create executor: %v", err)}, false, nil
 	}
@@ -1384,7 +1589,7 @@ func (s *Session) doStop() ([]string, bool, error) {
 // --- State Machine Debugging Commands ---
 
 // doStateMachine starts a state machine executor debugging session.
-func (s *Session) doStateMachine(name string) ([]string, bool, error) {
+func (s *Session) doStateMachine(name string, performer []string) ([]string, bool, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
@@ -1399,8 +1604,13 @@ func (s *Session) doStateMachine(name string) ([]string, bool, error) {
 		return []string{fmt.Sprintf("error: %q is not a state machine", name)}, false, nil
 	}
 
+	self, msg := s.performingObject(performer)
+	if msg != "" {
+		return []string{msg}, false, nil
+	}
+
 	// Create executor
-	exec, err := ctx.CreateStateExecutor(sym)
+	exec, err := ctx.CreateStateExecutorFor(sym, self)
 	if err != nil {
 		return []string{fmt.Sprintf("error: failed to create executor: %v", err)}, false, nil
 	}
@@ -1546,6 +1756,15 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 	var processed, doActions int64
 	for exec.HasPendingWork() && exec.State() == runtime.StateRunning &&
 		processed < maxEvents && doActions < maxDoActions {
+		// A signal in flight is due now, whatever the deadline: dispatching it is
+		// the step RunToCompletion would take here.
+		if exec.EventQueue().Len() == 0 && exec.HasPendingSignal() {
+			if err := exec.ProcessNextEvent(); err != nil {
+				return []string{fmt.Sprintf("error: event processing failed: %v", err)}, false, nil
+			}
+			processed++
+			continue
+		}
 		if queue := exec.EventQueue(); queue.Len() == 0 || queue.Peek().Timestamp > deadline {
 			// Nothing to dispatch within the deadline, but a do behavior with
 			// actions left is due now, so run it and count it as do work.

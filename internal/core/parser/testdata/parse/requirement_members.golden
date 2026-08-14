@@ -3,7 +3,9 @@
     (Definition kind="requirement" abstract=false variation=false name="SystemRequirement"
       (Documentation locale="")
       (SubjectMember name="vehicle" type="Vehicle")
-      (*ast.ActorMember)
+      (Usage kind="actor" name="driver" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Relationship kind="typing" target=Person
+          (*ast.QualifiedName)))
       (Usage kind="requirement" name="subreq" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
         (SubjectMember name="subj" type="Engine"))
       (Usage kind="attribute" name="verificationStatus" ref=false direction="none" composite=false derived=false ordered=false nonunique=false

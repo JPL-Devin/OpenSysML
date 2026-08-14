@@ -335,3 +335,78 @@ func TestImplicitEndRedefinitionCountsUnnamedBodyEnds(t *testing.T) {
 		t.Fatalf("DirectSupertypes(later) = %v, want the last to be Base::two", supers)
 	}
 }
+
+// A connector usage is recognized whether it names a definition or not, and
+// whether it names itself or not: what makes it one is the connect clause
+// (SysML v2 §7.13.2, §8.3.13).
+func TestIsConnectorUsage(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		port def Pt;
+		part def A { port p : Pt; }
+		connection def Link { end source : Pt; end target : Pt; }
+		part w {
+			part a : A;
+			part b : A;
+			attribute plain;
+			part nested { port q : Pt; }
+			connection typed : Link connect a.p to b.p;
+			interface untyped connect a.p to b.p;
+			connect a.p to b.p;
+		}
+	}`)
+	w := nested(t, sym(t, root, "P").Scope, "w")
+	for _, name := range []string{"typed", "untyped"} {
+		if !m.IsConnectorUsage(nested(t, w.Scope, name)) {
+			t.Errorf("IsConnectorUsage(%s) = false, want true", name)
+		}
+	}
+	if !m.IsConnectorUsage(connector(t, w.Scope)) {
+		t.Error("IsConnectorUsage(anonymous connect) = false, want true")
+	}
+	for _, name := range []string{"a", "plain", "nested"} {
+		if m.IsConnectorUsage(nested(t, w.Scope, name)) {
+			t.Errorf("IsConnectorUsage(%s) = true, want false: it connects nothing", name)
+		}
+	}
+}
+
+// The attachments of a connector are the features its connect clause names, in
+// the order written, each under the name its end is known by — the end's own
+// name when it declares one, otherwise the definition's end at that position.
+func TestConnectorEndAttachments(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		port def Pt;
+		part def A { port p : Pt; part inner { port q : Pt; } }
+		connection def Link { end source : Pt; end target : Pt; }
+		part w {
+			part a : A;
+			part b : A;
+			connection typed : Link connect a.p to b.inner.q;
+			connection named : Link connect
+				source references a.p to
+				target references b.p;
+			connection tri connect (a, b, a.inner);
+		}
+	}`)
+	w := nested(t, sym(t, root, "P").Scope, "w")
+
+	for _, name := range []string{"typed", "named"} {
+		got := m.ConnectorEndAttachments(nested(t, w.Scope, name))
+		if len(got) != 2 {
+			t.Fatalf("%s: %d attachments, want two", name, len(got))
+		}
+		for i, wantEnd := range []string{"source", "target"} {
+			if got[i].Name != wantEnd {
+				t.Errorf("%s: attachment %d is named %q, want %q", name, i, got[i].Name, wantEnd)
+			}
+			if got[i].Attachment == nil {
+				t.Errorf("%s: attachment %d attaches to nothing", name, i)
+			}
+		}
+	}
+
+	// Every end of an n-ary connector is kept, in declaration order.
+	if got := m.ConnectorEndAttachments(nested(t, w.Scope, "tri")); len(got) != 3 {
+		t.Fatalf("tri: %d attachments, want three", len(got))
+	}
+}

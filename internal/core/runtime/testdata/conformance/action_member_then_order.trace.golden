@@ -1,20 +1,23 @@
 step 1: token 1@second
-    eval feature t -> 0
-    eval literal 10 -> 10
-  eval operator * -> 0
-  eval literal 2 -> 2
-eval operator + -> 2
+stmt assign t
+      eval feature t -> 0
+      eval literal 10 -> 10
+    eval operator * -> 0
+    eval literal 2 -> 2
+  eval operator + -> 2
 step 2: token 1@fourth
-    eval feature t -> 2
-    eval literal 10 -> 10
-  eval operator * -> 20
-  eval literal 4 -> 4
-eval operator + -> 24
+stmt assign t
+      eval feature t -> 2
+      eval literal 10 -> 10
+    eval operator * -> 20
+    eval literal 4 -> 4
+  eval operator + -> 24
 step 3: token 1@third
-    eval feature t -> 24
-    eval literal 10 -> 10
-  eval operator * -> 240
-  eval literal 3 -> 3
-eval operator + -> 243
+stmt assign t
+      eval feature t -> 24
+      eval literal 10 -> 10
+    eval operator * -> 240
+    eval literal 3 -> 3
+  eval operator + -> 243
 step 4: token 1@end
 step 5: no active tokens

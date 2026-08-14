@@ -131,20 +131,44 @@ Starting a service in the `python-test` job is **not** the fix on its own — ve
 running, the 15 tests pass but `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
 fails, because `Connection._ensure_service` returns early when it probes a healthy service and
 writes no pidfile, so the refcount can never shut that service down and the test cannot find a
-pid to watch. Decide the ownership model first — pysysml should probably not kill a service it
-did not spawn, and the test should then not require it to — then start the service in CI. The
+pid to watch. Half of that ownership model is now in place: a connection releases a reference
+only if it took one, so attaching with `auto_start=False` no longer shuts down a service the
+process never started. The rest of the gap remains: the test still stops a service another
+live process owns, leaving a stale pidfile and refcount behind. Decide the rest of the
+ownership model first — pysysml should probably not kill a service it did not spawn, and the
+test should then not require it to — then start the service in CI. The
 job's comment in `.circleci/config.yml` records this.
 
-## P2 — a nested object is unreachable over gRPC
+## P2 — a nested object is unreachable over gRPC — done
 
-`Instantiate` now reads slots through `Instance.GetSlot`, so a derived attribute comes back
+`Instantiate` reads slots through `Instance.GetSlot`, so a derived attribute comes back
 evaluated instead of unmaterialized (conformance `instantiate_derived_slot`). A slot holding an
-*object* still marshals as that child instance's id, and no RPC resolves an id to an
-`Instance`, so `part engine : Engine` is a dead end for a Python caller where `%slots` expands
-it in the REPL. Either return the reachable sub-instances with the response or add a
-`GetInstance` RPC; recorded as ⚠️ in `docs/SPEC_COMPLIANCE.md`.
+*object* still marshals as that child instance's id, but `InstantiateResponse.instances` now
+carries every instance reachable from the root, so `part engine : Engine` expands for a Python
+caller (`inst.engine.power`) as `%slots` expands it in the REPL. Expansion is bounded the way
+`%slots` bounds it — depth 8, and no descent into a type already on the path, since reading a
+composite slot materializes the object it holds and a self-referential part would otherwise
+instantiate forever; an unexpanded child stays a bare id. A `GetInstance` RPC was
+rejected: runtime instances live in the request's `runtime.Context` and do not survive the
+call, so an id is only meaningful against the response that carried it — noted as a limitation
+in `docs/SPEC_COMPLIANCE.md`.
 
-## P3 — smaller Python-side items, all recorded in `docs/SPEC_COMPLIANCE.md`
+## P3 — generated typed classes for a parsed model — done
+
+`python -m pysysml.generate model.sysml -o model_types.py` emits one class per SysML definition,
+each a typed view over the `Instance` P2 made navigable, so `v.mass` completes in an editor and
+`v.mass + "x"` is a mypy error; `pysysml` ships `py.typed`. Codegen reads facts the service now
+resolves rather than scraping them: `SymbolInfo` carries `type_info` (declared and resolved type,
+the library scalar it reduces to, and whether it is a quantity), `multiplicity`, and *every*
+generalization edge in `specializations` — `extractMetadata` exported only the first `specializes`
+of a definition and the first typing of a usage, which cannot express multiple supertypes or tell
+subsetting from redefinition. Known limitations are listed in `python/README.md`; the load-bearing
+ones are that a quantity slot is typed `object` because the wire `Value` has no
+magnitude-and-unit form (the same reason `ValueToProto` reports one as unsupported), that only
+structural usages become properties, and that `subsets`/`redefines` are reported but do not
+become base classes.
+
+## P4 — smaller Python-side items, all recorded in `docs/SPEC_COMPLIANCE.md`
 
 - `connection.py` verifies a pid is the service by substring-matching its cmdline — spoofable.
 - `pysysml.eval` and `pysysml.RuntimeError` shadow builtins.
@@ -289,15 +313,26 @@ Both residual items are closed by the unit-resolution work; see `docs/SPEC_COMPL
 
 ## A5 — visibility rules
 
-- **Protected imports are treated as private.** SysML v2 §7.5.3 makes a protected import
-  visible in specializations of the importing definition or usage; today its members resolve in
-  the owning body only. This is the general rule, not an `expose` quirk — do it first.
-- **`validateExposeOwningNamespace`.** An `expose` outside a view body is parsed and resolved
-  rather than diagnosed.
-- **A privately wildcard-imported name is still reachable unqualified.** The qualified route was
-  closed; `resolve/unqualified.go` `matchImport` enumerates a wildcard import's target through
-  `symbols/index.go` `LookupDirectChildren`, which does not consult the hidden marks, so
-  `package App { import Mid::*; }` still sees what `Mid` imported privately.
+- ~~**Protected imports are treated as private.**~~ **Done.** A protected or public import now
+  reaches the bodies that specialize the definition or usage declaring it (SysML v2 §7.5.3):
+  `resolve/visibility.go` `lookupInheritedImports` walks `semantics.Model.DirectSupertypes`
+  upward from the referring scope's owner, and `resolve/unqualified.go` `walkUnqualifiedHiding`
+  consults it after the imports declared in the scope itself. An `expose` is protected, so it
+  reaches a specializing view the same way. A feature typing is a generalization edge
+  (KerML 8.3.4.6), so an import declared in a definition is also reached from a usage typed by
+  it — `part p : Base` sees what `Base` protectedly imports.
+- ~~**`validateExposeOwningNamespace`**~~ **Done**, on the maintainer's usage-only reading:
+  `passes/expose.go` `checkExposeOwners` reports every `expose` whose owning namespace is not a
+  view usage (SysML v2 8.3.26.2, and the normative Xtext grammar admits an Expose in
+  `ViewBodyItem` only). A `view def` body is a **warning**, not an error, because Systemica
+  resolves an `expose` there (`resolve/expose_test.go` `TestExposeInViewDefinitionBody`,
+  `parse/view_expose.sysml`) and the OMG corpus (`42. Views`) never writes one; any other owner
+  is an error. A package or namespace body rejects `expose` in the parser already.
+- ~~**A privately wildcard-imported name is still reachable unqualified.**~~ **Done.**
+  `resolve/unqualified.go` `matchImport` enumerates a wildcard import's target through
+  `symbols/index.go` `LookupDirectChildrenFrom`, which drops what the target imported privately
+  unless the referring namespace is the target itself (or nested in it) or the import is
+  `import all`.
 
 ## A6 — implicit library import (do this LAST)
 

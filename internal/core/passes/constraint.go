@@ -33,7 +33,7 @@ func (ConstraintPass) Run(ctx *Context, name string, root *ast.RootNamespace) []
 		seen:     make(map[*symbols.Symbol]bool),
 	}
 	cc.walk(rootScope)
-	return cc.diags
+	return append(cc.diags, checkExposeOwners(root, root.Members)...)
 }
 
 type constraintChecker struct {
@@ -82,8 +82,34 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkSubsettingMultiplicity(sym)
 	cc.checkConnectorEnds(sym)
 	cc.checkConnectorEndRedefinition(sym)
+	cc.checkInterfaceEndConjugation(sym)
 	cc.checkRedefinition(sym)
 	cc.checkUnnamedRedefinitionValue(sym)
+	cc.checkVariantOutsideVariation(sym)
+}
+
+// checkVariantOutsideVariation warns about a `variant` whose owner is not a
+// variation: it offers no choice to anything (SysML v2 §7.20 VariantMembership),
+// so it is an ordinary member spelled as if it were selectable.
+func (cc *constraintChecker) checkVariantOutsideVariation(sym *symbols.Symbol) {
+	if !semantics.DeclaresVariant(sym) || cc.model.VariationPointOwning(sym) != nil {
+		return
+	}
+	owner := "a namespace"
+	if sym.OwnerScope != nil {
+		if ownerSym := sym.OwnerScope.Owner(); ownerSym != nil && ownerSym.Name != "" {
+			owner = ownerSym.Name
+		}
+	}
+	cc.diags = append(cc.diags, Diagnostic{
+		Severity: SeverityWarning,
+		Span:     sym.Decl.Span(),
+		Message: fmt.Sprintf(
+			"variant %s is declared in %s, which is not a variation, so it offers no choice; declare its owner `variation` or drop `variant`",
+			sym.Name, owner),
+		Code:   "variant-outside-variation",
+		Source: "constraint",
+	})
 }
 
 // checkSpecializationCycle flags a symbol that participates in a specialization
@@ -240,6 +266,27 @@ func (cc *constraintChecker) checkConnectorEndRedefinition(sym *symbols.Symbol) 
 			Source: "constraint",
 		})
 	}
+}
+
+// checkInterfaceEndConjugation warns when the two ends of an interface are
+// typed by ports whose features do not match with conjugate directions
+// (SysML v2 §7.12.2): what one end sends the other cannot receive. It is a
+// warning because an end may be typed through library ports this pass cannot
+// see in full.
+func (cc *constraintChecker) checkInterfaceEndConjugation(sym *symbols.Symbol) {
+	first, second, mismatch := cc.model.InterfaceEndPortMismatch(sym)
+	if !mismatch {
+		return
+	}
+	cc.diags = append(cc.diags, Diagnostic{
+		Severity: SeverityWarning,
+		Span:     sym.DeclSpan,
+		Message: fmt.Sprintf(
+			"interface %s connects ports %s and %s, whose directed features are not conjugate; one end usually names the conjugate port (~%s)",
+			sym.Name, first.Name, second.Name, first.Name),
+		Code:   "port-conjugation",
+		Source: "constraint",
+	})
 }
 
 // addConnectorEndsDiag records a connector-ends diagnostic anchored at the first

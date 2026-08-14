@@ -162,8 +162,8 @@ func (e *StateExecutor) scheduleFromEntered(state *ast.StateNode) error {
 
 // runEffect performs the actions of a transition's effect, in order.
 func (e *StateExecutor) runEffect(trans *lower.Transition) error {
-	for _, action := range trans.Effect {
-		if err := e.executeAction(action, trans.BodyScope); err != nil {
+	for _, behavior := range trans.Effect {
+		if err := e.executeBehavior(behavior); err != nil {
 			return fmt.Errorf("transition effect: %w", err)
 		}
 	}

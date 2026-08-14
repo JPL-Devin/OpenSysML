@@ -1,0 +1,62 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="M" library=false standard=false
+      (Import visibility="private" all=false kind=membership recursive=false imported="ScalarValues::Real")
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Sub"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="volume" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Ctx"
+          (Membership visibility="default"
+            (Usage kind="part" name="subsystem" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Sub
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Membership visibility="default"
+            (Usage kind="part" name="required" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Sub
+                (*ast.QualifiedName))
+              (Multiplicity range=true
+                (LiteralInteger value="2")
+                (LiteralInfinity))))
+          (Membership visibility="default"
+            (Usage kind="part" name="unbounded" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Sub
+                (*ast.QualifiedName))
+              (Multiplicity range=true
+                (LiteralInfinity)
+                (LiteralInfinity))))
+          (Membership visibility="default"
+            (Usage kind="part" name="renamed" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Sub
+                (*ast.QualifiedName))
+              (Relationship kind="redefines" target=subsystem
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="totalVolume" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))
+              (InvocationExpr type="sum"
+                (FeatureChainExpr member="volume"
+                  (FeatureReference name="subsystem")))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="ctx" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Ctx
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="part" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Sub
+                (*ast.QualifiedName))
+              (Relationship kind="subsets" target=subsystem
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="redefines" target=volume
+                    (*ast.QualifiedName))
+                  (LiteralReal value="2.0"))))))))))

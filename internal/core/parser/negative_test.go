@@ -30,6 +30,11 @@ func TestNegative(t *testing.T) {
 		{"transition_then_only", "transition first then"},
 		{"requirement_empty_require", "requirement r { require }"},
 		{"calc_empty_return", "calc c { return }"},
+		{"calc_while_no_condition", "calc def C { while { i = i + 1; } }"},
+		{"calc_while_unclosed_body", "calc def C { while i < 2 { i = i + 1; }"},
+		{"calc_for_no_variable", "calc def C { for in xs { } }"},
+		{"calc_assignment_no_value", "calc def C { i = ; }"},
+		{"calc_if_no_body", "calc def C { if i < 2 }"},
 		{"constraint_incomplete", "constraint c { assert }"},
 		{"state_fork_no_name", "state s { fork ; }"},
 		{"state_join_no_semicolon", "state s { join sync state t; }"},
@@ -75,8 +80,8 @@ func TestNegative(t *testing.T) {
 		// a body with nothing on one side, or a member the notation does not
 		// allow one before, declares no order and is rejected rather than
 		// parsed with the keyword dropped. A `then` beside a member with no
-		// name is legal notation this representation cannot carry and warns
-		// instead (TestSuccessionUnnamedEndWarns).
+		// name is legal notation, bound by position
+		// (TestSuccessionBindsUnnamedEndsByPosition).
 		{"leading_then_has_no_source", "action a { then action b; }"},
 		{"trailing_then_has_no_target", "action a { action b; then }"},
 		{"then_then", "action a { action b; then then action c; }"},
@@ -90,6 +95,97 @@ func TestNegative(t *testing.T) {
 		{"short_name_redefines_no_target", "part p { attribute <sn> redefines; }"},
 		{"short_name_redefines_symbol_no_target", "part p { attribute <sn> :>>; }"},
 		{"short_name_defined_by_no_type", "part p { attribute <sn> defined by ; }"},
+
+		// The notation has no definition of a rendering a view names, of a
+		// concern a body frames, or of a stakeholder or actor: those keywords own
+		// a usage, not a definition (SysML.xtext ViewRenderingUsage,
+		// FramedConcernUsage, StakeholderUsage, ActorUsage). `render ;` and
+		// `frame ;` are absent deliberately: `frame` and `render` are legal
+		// names, so those declare a feature so named rather than being errors.
+		{"render_definition", "view def V { render def R; }"},
+		{"frame_definition", "viewpoint def V { frame def C; }"},
+		{"stakeholder_definition", "stakeholder def Reviewer;"},
+		{"actor_definition", "actor def Operator;"},
+		{"stakeholder_no_declaration", "viewpoint def V { stakeholder ; }"},
+		{"actor_no_declaration", "requirement def R { actor ; }"},
+		// A rendering reference takes no value: ViewRenderingUsage has no
+		// ValuePart, unlike the performed action reference that shares its shape.
+		{"render_reference_value", "view def V { render r = 3; }"},
+
+		// The sequence index and the collection notations: `#` indexes through a
+		// parenthesized index and `.?` selects through a body, so each is
+		// rejected where the notation it needs is absent rather than parsed as
+		// the operand alone.
+		{"index_no_paren", "attribute x = xs#3;"},
+		{"index_no_index", "attribute x = xs#();"},
+		{"index_unclosed", "attribute x = xs#(1;"},
+		{"index_bracket_unclosed", "attribute x = 5 [m;"},
+		{"index_bracket_empty", "attribute x = 5 [];"},
+		{"select_no_body", "attribute x = xs.?;"},
+		{"select_expression_body", "attribute x = xs.? x > 1;"},
+		{"select_unclosed_body", "attribute x = xs.?{in x; x > 1;"},
+		{"collect_unclosed_body", "attribute x = xs.{in x; x * 2;"},
+		{"body_param_no_name", "attribute x = xs.{in ; 1};"},
+		{"body_param_no_type", "attribute x = xs.{in y : ; 1};"},
+		{"receiver_no_operation", "attribute x = xs->;"},
+		{"receiver_unclosed_args", "attribute x = xs->union((1, 2);"},
+
+		// A conjugation names the definition it conjugates, only an interface end
+		// may omit its declaration, a required requirement binds a feature in its
+		// body, and a portion usage declares what it portions.
+		{"conjugated_no_type", "part def P { port p : ~; }"},
+		{"conjugated_no_type_after_name", "port def P; port p ~;"},
+		{"end_outside_connector", "part def P { end ; }"},
+		{"end_outside_connector_package", "package p { end ; }"},
+		{"end_in_package_nested_in_interface", "interface def I { package P { end ; } }"},
+		{"end_in_satisfy_nested_in_interface", "interface def I { satisfy requirement r { end ; } }"},
+		{"end_in_binding_nested_in_interface", "interface def I { binding b { end ; } }"},
+		{"require_qualified_malformed_body", "analysis def A { objective o { require Q::r { :>> ; } } }"},
+		{"require_qualified_trailing_colons", "analysis def A { objective o { require Q::; } }"},
+		{"timeslice_no_subject", "package p { timeslice :>> ; }"},
+		{"timeslice_usage_no_type", "package p { timeslice item i : ; }"},
+		{"timeslice_unterminated", "package p { timeslice item i"},
+
+		// `variation` and `variant` qualify a declaration, so each is rejected
+		// where the declaration it qualifies is absent or malformed.
+		{"variation_no_declaration", "variation ;"},
+		{"variation_attribute_no_name", "part p { variation attribute : ; }"},
+		{"variant_unclosed_body", "part p { variation attribute cut { variant attribute cutIdeal { :>> cost = 1.0; } }"},
+		{"variant_selection_no_variant_name", "part p { attribute :>> cut = cut::; }"},
+
+		// Behavioral notation: a flow states both of its ends, an accept its
+		// payload, a loop the condition its `until` promises and a succession a
+		// target, so each is reported where one is missing rather than read as
+		// the shorter form it is not.
+		{"flow_from_without_to", "action def A { action a; flow x from a; }"},
+		{"flow_named_from_no_source", "action def A { flow x from to b; }"},
+		{"accept_when_no_condition", "action def A { accept when; }"},
+		{"accept_at_no_instant", "action def A { accept at; }"},
+		{"accept_no_payload", "action def A { accept; }"},
+		{"accept_subsets_no_event", "action def A { action i accept :>; }"},
+		{"loop_until_no_condition", "action def A { loop action { } until; }"},
+		{"loop_until_no_semicolon", "action def A { action b; then loop action { } until x }"},
+		{"then_done_no_semicolon", "action def A { action b; then done }"},
+		{"send_via_no_port", "action def A { send Data() via; }"},
+		{"send_no_target", "action def A { send Data() to; }"},
+		{"decision_else_no_target", "action def A { action m; first m; then decide; else; }"},
+		{"transition_trigger_no_target", "state def S { state a; transition first a accept Ping; }"},
+		{"transition_two_triggers", "state def S { state a; state b; transition first a accept Ping accept Pong then b; }"},
+		{"transition_two_targets", "state def S { state a; state b; transition a to b then b; }"},
+		{"transition_do_without_action", "state def S { state a; state b; transition first a do then b; }"},
+		{"exhibit_state_unclosed_body", "part def P { exhibit state modes { state off; }"},
+		{"namespace_succession_no_target", "package Q { part p; first p then; }"},
+		// Only a transition effect is closed by the transition's next clause, so
+		// a statement in an action body still needs its ';'.
+		{"body_assignment_no_semicolon", "action def A { attribute x; action b; assign x := 1 then b; }"},
+		{"body_send_no_semicolon", "action def A { action b; part self; send Data() to self then b; }"},
+		// A transition takes exactly one ';', which its effect statement shares
+		// (SysML.xtext TransitionUsage ends with ActionBody); a second one is not
+		// an empty member.
+		{"transition_effect_perform_two_semicolons", "state def S { state a; state b; transition a to b do perform Bump ;; }"},
+		{"transition_effect_assign_two_semicolons", "state def S { attribute x; state a; state b; transition a to b do assign x := 1 ;; }"},
+		{"transition_effect_no_semicolon", "state def S { attribute x; state a; state b; transition a to b do assign x := 1 }"},
+		{"transition_braced_effect_no_semicolon", "state def S { attribute x; state a; state b; transition a to b do { assign x := 1; } }"},
 	}
 
 	for _, tt := range tests {

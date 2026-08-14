@@ -1,0 +1,37 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="EndUsages" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="port" abstract=false variation=false name="P"))
+      (Membership visibility="default"
+        (Definition kind="interface" abstract=false variation=false name="Named"
+          (Membership visibility="default"
+            (Usage kind="port" name="source" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+              (Relationship kind="typing" target=P
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="port" name="target" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+              (Relationship kind="typing" target=P
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="interface" abstract=false variation=false name="Anonymous"
+          (Membership visibility="default"
+            (Usage kind="port" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true))
+          (Membership visibility="default"
+            (Usage kind="port" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true))))
+      (Membership visibility="default"
+        (Definition kind="connection" abstract=false variation=false name="Attachment"
+          (Membership visibility="default"
+            (Usage kind="part" name="bracket" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+              (Relationship kind="typing" target=Bracket
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="none" composite=false derived=false ordered=false nonunique=false end=true))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Bracket"))
+      (Membership visibility="default"
+        (Definition kind="flow" abstract=false variation=false name="Transfer"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="source" ref=true direction="none" composite=false derived=false ordered=false nonunique=false end=true))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="target" ref=true direction="none" composite=false derived=false ordered=false nonunique=false end=true)))))))

@@ -1,0 +1,25 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="QualifiedRequire" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="MaxFuelMassRequirement"
+          (Usage kind="attribute" name="actualFuelMass" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+      (Membership visibility="default"
+        (Package name="FuelMassAnalysis" library=false standard=false
+          (Membership visibility="default"
+            (Usage kind="requirement" name="fuelMassRequirement" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=MaxFuelMassRequirement
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="analysis case" abstract=false variation=false name="FuelMassAnalysisCase"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="calculatedFuelMass" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="objective" name="fuelMassAnalysisObjective" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (RequireMember name="FuelMassAnalysis::fuelMassRequirement"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="redefines" target=MaxFuelMassRequirement::actualFuelMass
+                    (*ast.QualifiedName))
+                  (FeatureReference name="calculatedFuelMass")))
+              (AssumeMember
+                (FeatureReference name="FuelMassAnalysis::fuelMassRequirement")))))))))

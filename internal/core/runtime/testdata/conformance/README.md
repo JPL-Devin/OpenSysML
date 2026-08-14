@@ -53,6 +53,13 @@ This directory contains behavioral execution conformance tests. Each test consis
 - `finalState`: qualified name of final reached state
 - `stateVisits`: ordered list of states visited (optional, for golden trace verification)
 - `outputs`: map of state machine outputs
+- `performers`: objects that each perform the machine, for a case whose contract
+  depends on which object performs it (two objects selecting different variants
+  of one variation route over their own connections). Each entry names the
+  object's usage plus the `events` / `finalState` / `stateVisits` / `outputs`
+  expected of that object's performance:
+  `{"object": "P::alpha", "finalState": "arrived", "stateVisits": ["start", "sending", "arrived"]}`.
+  Omit for a machine performed by no object.
 
 ### For Calculations (`InvokeCalc`)
 
@@ -155,6 +162,20 @@ This directory contains behavioral execution conformance tests. Each test consis
 - `constraints`: expected verdict per constraint feature the instance carries,
   evaluated bound to the instance. `false` means the assertion evaluated to
   false (`ErrViolated`), not that evaluation failed.
+- `error`: text the instantiation must fail with, for a case whose contract is a
+  diagnostic — a declaration valuing one feature under two of its names. Set it
+  instead of `slots`.
+
+## Diagnostics
+
+```json
+{"diagnostics": ["expected ';' after transition"]}
+```
+
+A case fails on any diagnostic its model reports that it does not declare here,
+matched as a substring, and on a declaration nothing reported. Omit the field for
+a model that parses clean, which is what a case asserting a result should be:
+declare a diagnostic only when reporting it is part of the case's contract.
 
 ## Standard Library
 
@@ -182,6 +203,11 @@ Supported types:
 - `String`: JSON string
 - `Null`: JSON null
 - `Quantity`: JSON number, with the `unit` the magnitude is written in
+- `Sequence`: the `elements` it holds, in order, instead of `value` — for a
+  multi-valued feature, whose order is part of its contract
+- `Instance`: an object, whose identity a case does not pin (no `value`)
+- `Variant`: the name of the variant a variation feature is bound to, as a JSON
+  string (`{"type": "Variant", "value": "cutIdeal"}`)
 
 In place of a value, `error` states the text producing that value must fail with,
 for a slot or result whose contract is a diagnostic (`{"error": "not a

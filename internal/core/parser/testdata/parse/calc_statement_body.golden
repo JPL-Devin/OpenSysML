@@ -1,0 +1,106 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="CalcStatements" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Factorial"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="acc" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="1")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="i" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="1")))
+          (WhileLoopActionNode kind="while" variable=""
+            (OperatorExpr operator="<="
+              (FeatureReference name="i")
+              (FeatureReference name="n"))
+            (*ast.AssignmentActionNode)
+            (*ast.AssignmentActionNode))
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Integer
+              (*ast.QualifiedName))
+            (FeatureReference name="acc"))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="FirstOver"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="xs" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="limit" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (WhileLoopActionNode kind="for" variable="x"
+            (FeatureReference name="xs")
+            (IfActionNode
+              (OperatorExpr operator=">"
+                (FeatureReference name="x")
+                (FeatureReference name="limit"))
+              (IfBranchNode kind="then"
+                (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Integer
+                    (*ast.QualifiedName))
+                  (FeatureReference name="x")))))
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Integer
+              (*ast.QualifiedName))
+            (OperatorExpr operator="-"
+              (LiteralInteger value="1")))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Classify"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (IfActionNode
+            (OperatorExpr operator="<"
+              (FeatureReference name="n")
+              (LiteralInteger value="0"))
+            (IfBranchNode kind="then"
+              (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                (Relationship kind="typing" target=String
+                  (*ast.QualifiedName))
+                (LiteralString value="\"negative\"")))
+            (IfBranchNode kind="else"
+              (IfActionNode
+                (OperatorExpr operator="=="
+                  (FeatureReference name="n")
+                  (LiteralInteger value="0"))
+                (IfBranchNode kind="then"
+                  (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                    (Relationship kind="typing" target=String
+                      (*ast.QualifiedName))
+                    (LiteralString value="\"zero\""))))
+              (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                (Relationship kind="typing" target=String
+                  (*ast.QualifiedName))
+                (LiteralString value="\"positive\""))))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Countdown"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="i" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (FeatureReference name="n")))
+          (WhileLoopActionNode kind="loop" variable=""
+            (OperatorExpr operator="<="
+              (FeatureReference name="i")
+              (LiteralInteger value="0"))
+            (*ast.AssignmentActionNode))
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Integer
+              (*ast.QualifiedName))
+            (FeatureReference name="i")))))))

@@ -19,6 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
+	SysMLService_GetServerInfo_FullMethodName  = "/sysml.SysMLService/GetServerInfo"
 	SysMLService_ParseFile_FullMethodName      = "/sysml.SysMLService/ParseFile"
 	SysMLService_GetSymbol_FullMethodName      = "/sysml.SysMLService/GetSymbol"
 	SysMLService_GetDiagnostics_FullMethodName = "/sysml.SysMLService/GetDiagnostics"
@@ -32,6 +33,10 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SysMLServiceClient interface {
+	// Report what this build of the service can do, so a client can require a
+	// capability instead of guessing from a version string. A service that
+	// predates this RPC answers UNIMPLEMENTED, which is itself the answer.
+	GetServerInfo(ctx context.Context, in *ServerInfoRequest, opts ...grpc.CallOption) (*ServerInfoResponse, error)
 	// Parse a SysML file and return model hash for subsequent queries
 	ParseFile(ctx context.Context, in *ParseFileRequest, opts ...grpc.CallOption) (*ParseFileResponse, error)
 	// Get symbol information by qualified name
@@ -51,6 +56,15 @@ type sysMLServiceClient struct {
 
 func NewSysMLServiceClient(cc grpc.ClientConnInterface) SysMLServiceClient {
 	return &sysMLServiceClient{cc}
+}
+
+func (c *sysMLServiceClient) GetServerInfo(ctx context.Context, in *ServerInfoRequest, opts ...grpc.CallOption) (*ServerInfoResponse, error) {
+	out := new(ServerInfoResponse)
+	err := c.cc.Invoke(ctx, SysMLService_GetServerInfo_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *sysMLServiceClient) ParseFile(ctx context.Context, in *ParseFileRequest, opts ...grpc.CallOption) (*ParseFileResponse, error) {
@@ -120,6 +134,10 @@ func (c *sysMLServiceClient) ExecuteState(ctx context.Context, in *ExecuteStateR
 // All implementations must embed UnimplementedSysMLServiceServer
 // for forward compatibility
 type SysMLServiceServer interface {
+	// Report what this build of the service can do, so a client can require a
+	// capability instead of guessing from a version string. A service that
+	// predates this RPC answers UNIMPLEMENTED, which is itself the answer.
+	GetServerInfo(context.Context, *ServerInfoRequest) (*ServerInfoResponse, error)
 	// Parse a SysML file and return model hash for subsequent queries
 	ParseFile(context.Context, *ParseFileRequest) (*ParseFileResponse, error)
 	// Get symbol information by qualified name
@@ -138,6 +156,9 @@ type SysMLServiceServer interface {
 type UnimplementedSysMLServiceServer struct {
 }
 
+func (UnimplementedSysMLServiceServer) GetServerInfo(context.Context, *ServerInfoRequest) (*ServerInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetServerInfo not implemented")
+}
 func (UnimplementedSysMLServiceServer) ParseFile(context.Context, *ParseFileRequest) (*ParseFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ParseFile not implemented")
 }
@@ -170,6 +191,24 @@ type UnsafeSysMLServiceServer interface {
 
 func RegisterSysMLServiceServer(s grpc.ServiceRegistrar, srv SysMLServiceServer) {
 	s.RegisterService(&SysMLService_ServiceDesc, srv)
+}
+
+func _SysMLService_GetServerInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ServerInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).GetServerInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_GetServerInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).GetServerInfo(ctx, req.(*ServerInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _SysMLService_ParseFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -305,6 +344,10 @@ var SysMLService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "sysml.SysMLService",
 	HandlerType: (*SysMLServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetServerInfo",
+			Handler:    _SysMLService_GetServerInfo_Handler,
+		},
 		{
 			MethodName: "ParseFile",
 			Handler:    _SysMLService_ParseFile_Handler,

@@ -3,14 +3,30 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
+
+// maxMaterializedLowerBound bounds the anonymous objects a collection slot is
+// filled with: a lower bound past it is a model that cannot be materialized
+// rather than a run that is merely slow.
+const maxMaterializedLowerBound int64 = 1000
 
 // Instance is a runtime-materialized object (Tier 2).
 type Instance struct {
 	ID    int64            // unique identity
 	Type  *symbols.Symbol  // the def/usage symbol this instantiates
 	Slots map[string]*Slot // feature name → slot
+	// Ends are the ends of the connector this object materializes, in declaration
+	// order, and nil for an object that is no connector. A named end also reads
+	// through the slot of that name; the order is what an end with no name of its
+	// own is identified by.
+	Ends []ConnectorEnd
+
+	// anonymous holds the objects the instance's anonymous connectors
+	// materialized to, nil until they are asked for. An empty slice means there
+	// are none.
+	anonymous []int64
 }
 
 // Slot holds the runtime value(s) for one feature.
@@ -19,6 +35,15 @@ type Slot struct {
 	Value        Value // scalar slot (multiplicity [1])
 	Values       Value // collection slot (Sequence or Set)
 	Materialized bool  // lazy flag: has this slot been instantiated?
+}
+
+// HeldValue is the value the slot reads as: its collection when the feature is
+// multi-valued, otherwise its scalar.
+func (s *Slot) HeldValue() Value {
+	if s.Values.Kind != ValInvalid {
+		return s.Values
+	}
+	return s.Value
 }
 
 // Instantiate materializes an instance of the given usage/definition symbol.
@@ -56,7 +81,8 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 		// Fold constant defaults eagerly. A default that is not constant may read
 		// sibling slots of this very instance, so it is left to GetSlot, which
 		// evaluates it against the finished instance.
-		if feat.DefaultValue != nil && isScalarFeature(feat) {
+		if feat.DefaultValue != nil && isScalarFeature(feat) && !ctx.model.IsVariationFeature(feat.Symbol) &&
+			ctx.restatedInValuedBody(feat) == "" {
 			if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 				slot.Value = Value{Kind: ValConst, Const: semVal}
 				slot.Materialized = true
@@ -66,10 +92,59 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 		inst.Slots[feat.Name] = slot
 	}
 
+	// A redefining feature declares the feature it redefines again, so the two
+	// names read one slot.
+	if err := ctx.aliasRedefinedSlots(inst); err != nil {
+		return nil, err
+	}
+
 	// Register instance
 	ctx.registerInstance(inst)
 
 	return inst, nil
+}
+
+// occurrenceOf returns the object a usage denotes, materializing it once: a part
+// declared in a package names one occurrence, so reading its features twice
+// reads the same object.
+func (ctx *Context) occurrenceOf(sym *symbols.Symbol) (*Instance, error) {
+	if id, ok := ctx.occurrences[sym]; ok {
+		if inst, ok := ctx.instances[id]; ok {
+			return inst, nil
+		}
+	}
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		return nil, err
+	}
+	ctx.occurrences[sym] = inst.ID
+	return inst, nil
+}
+
+// isOccurrenceUsage reports whether sym declares a usage that is an occurrence:
+// a part, item or individual, which is a thing with features rather than a
+// value, so a chain through it reads the features of that thing.
+func isOccurrenceUsage(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Value != nil {
+		return false
+	}
+	switch usage.Kind {
+	case ast.UsagePart, ast.UsageItem, ast.UsageOccurrence, ast.UsageIndividual:
+		return true
+	default:
+		return false
+	}
+}
+
+// occursOnce reports whether a usage names at most one occurrence; several
+// occurrences are a collection rather than one object to read features from.
+func (ctx *Context) occursOnce(sym *symbols.Symbol) bool {
+	mult := ctx.extractMultiplicity(sym)
+	return !mult.Upper.Infinite && mult.Upper.Value <= 1
 }
 
 // isScalarFeature reports whether a feature holds at most one value. An
@@ -94,6 +169,31 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 		return slot, nil
 	}
 
+	// A variation holds the variant it was bound to, and nothing until it is
+	// bound: it classifies its variants abstractly, so it is no object of itself.
+	if ctx.model.IsVariationFeature(slot.Feature.Symbol) {
+		if slot.Feature.DefaultValue == nil {
+			return nil, fmt.Errorf("%w: %s.%s", ErrVariationUnselected, inst.Type.Name, name)
+		}
+		val, err := ctx.evalSlotDefault(inst, slot, name)
+		if err != nil {
+			return nil, err
+		}
+		bound, err := ctx.bindVariation(slot.Feature, val, inst.ID)
+		if err != nil {
+			return nil, fmt.Errorf("slot %s.%s: %w", inst.Type.Name, name, err)
+		}
+		slot.Value = bound
+		slot.Materialized = true
+		return slot, nil
+	}
+
+	// A bound value supplies the feature's own features, so a body restating one
+	// of them states two values for it.
+	if restated := ctx.restatedInValuedBody(slot.Feature); restated != "" {
+		return nil, fmt.Errorf("slot %s.%s: %w: %s", inst.Type.Name, name, ErrValuedFeatureRestated, restated)
+	}
+
 	// A default that did not constant-fold is a derived value: evaluate it
 	// against this instance, so that it sees the sibling slots it refers to.
 	if slot.Feature.DefaultValue != nil && isScalarFeature(slot.Feature) {
@@ -108,18 +208,30 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 
 	// A multi-valued feature given a default holds that default's contents; a
 	// single value written there is the collection's one element.
-	if slot.Feature.DefaultValue != nil && slot.Feature.Type == nil {
+	if slot.Feature.DefaultValue != nil {
 		val, err := ctx.evalSlotDefault(inst, slot, name)
 		if err != nil {
 			return nil, err
 		}
 		if val.Kind != ValSequence && val.Kind != ValSet {
+			if err := ctx.chargeElements(1); err != nil {
+				return nil, err
+			}
 			seq := NewSequence()
 			seq.Append(val)
 			val = Value{Kind: ValSequence, Sequence: seq}
 		}
 		slot.Values = val
 		slot.Materialized = true
+		return slot, nil
+	}
+
+	// A connector holds the features it connects at its ends rather than objects
+	// of its own, so it is materialized from what the `connect` clause names.
+	if ctx.model.IsConnectorUsage(slot.Feature.Symbol) {
+		if err := ctx.materializeConnectorSlot(inst, slot, name); err != nil {
+			return nil, err
+		}
 		return slot, nil
 	}
 
@@ -139,20 +251,32 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 			}
 			slot.Value = Value{Kind: ValInstance, Instance: childInst.ID}
 		} else {
-			// Collection: instantiate up to lower bound (or 0 if unbounded)
-			count := int(mult.Lower.Value)
-
 			// Guard against infinite/huge lower bound (C3)
-			if mult.Lower.Infinite || mult.Lower.Value > 1000 {
-				return nil, fmt.Errorf("lower bound too large or infinite for slot %q", name)
+			if mult.Lower.Infinite || mult.Lower.Value > maxMaterializedLowerBound {
+				return nil, fmt.Errorf("%w: lower bound too large or infinite for slot %q", ErrMultiplicityViolation, name)
 			}
 
+			// A feature subsetting this one holds values this one holds, so the
+			// objects those features name are members of this collection;
+			// anonymous objects make up the rest of the lower bound.
+			contributed, err := ctx.subsettingContributions(inst, name)
+			if err != nil {
+				return nil, err
+			}
+
+			count := int(mult.Lower.Value) - len(contributed)
 			if count < 0 {
 				count = 0
 			}
 
 			// Determine collection type (Sequence vs Set)
+			if err := ctx.chargeElements(int64(count)); err != nil {
+				return nil, err
+			}
 			seq := NewSequence()
+			for _, val := range contributed {
+				seq.Append(val)
+			}
 			for i := 0; i < count; i++ {
 				childInst, err := ctx.Instantiate(composite)
 				if err != nil {
@@ -169,30 +293,89 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 }
 
 // CompositeTypeOf returns what a feature is materialized from, or nil for one
-// that holds a value rather than an object — a written default takes precedence
-// over instantiation, as in GetSlot above. A usage with members of its own is
+// that holds a value rather than an object — any default takes precedence
+// over instantiation, as in GetSlot above. A usage with features of its own is
 // instantiated as itself, so its body governs and an untyped nested part
 // materializes at all. Answering costs no allocation, so a caller walking an
 // object graph can decide whether to descend before descending.
 func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
-	if feat.DefaultValue != nil && (isScalarFeature(feat) || feat.Type == nil) {
+	if feat.DefaultValue != nil {
 		return nil
 	}
-	if feat.Symbol != nil && isCompositeUsage(feat.Symbol) && len(declMembers(feat.Symbol.Decl)) > 0 {
+	// A variation is materialized from the variant it is bound to, never from
+	// itself: it is an abstract classifier of its variants.
+	if ctx.model.IsVariationFeature(feat.Symbol) {
+		return nil
+	}
+	if feat.Symbol != nil && declaresFeatures(feat.Symbol) {
 		return feat.Symbol
 	}
 	return feat.Type
 }
 
-// isCompositeUsage reports whether a feature symbol holds objects (a part or
-// item) rather than a value.
-func isCompositeUsage(sym *symbols.Symbol) bool {
-	switch sym.Kind {
-	case symbols.SymbolPartUsage, symbols.SymbolItemUsage:
-		return true
-	default:
-		return false
+// declaresFeatures reports whether a usage's own body restates or adds features,
+// which the object it materializes has to carry.
+func declaresFeatures(sym *symbols.Symbol) bool {
+	for _, member := range declMembers(sym.Decl) {
+		usage, ok := member.(*ast.Usage)
+		if !ok {
+			continue
+		}
+		if usage.Ident.Name != "" || usage.Ident.ShortName != "" || len(usage.Relationships) > 0 {
+			return true
+		}
 	}
+	return false
+}
+
+// restatedInValuedBody returns the name of a feature valued again in the body of
+// the declaration that binds a value to it, or "" when there is none: the bound
+// value supplies the features, so a second value for one could only be dropped.
+// A declaration whose body only re-declares features states no second value,
+// and neither does a body over a value the redefined declaration wrote.
+func (ctx *Context) restatedInValuedBody(feat *EffectiveFeature) string {
+	if feat.Symbol == nil {
+		return ""
+	}
+	decl, ok := feat.Symbol.Decl.(*ast.Usage)
+	if !ok || decl.Value == nil {
+		return ""
+	}
+	inherited := make(map[string]bool)
+	for _, f := range ctx.FeaturesOf(feat.Type) {
+		inherited[f.Name] = true
+	}
+	for _, member := range declMembers(feat.Symbol.Decl) {
+		usage, ok := member.(*ast.Usage)
+		if !ok || (usage.Value == nil && len(declMembers(usage)) == 0) {
+			continue
+		}
+		if name := restatedFeatureName(usage); name != "" {
+			return name
+		}
+		if inherited[usage.Ident.Name] {
+			return usage.Ident.Name
+		}
+	}
+	return ""
+}
+
+// restatedFeatureName returns the name a usage restates with `:>>` or `:>`, or
+// "" when it restates nothing.
+func restatedFeatureName(usage *ast.Usage) string {
+	for _, rel := range usage.Relationships {
+		if rel == nil || (rel.Kind != ast.RelRedefines && rel.Kind != ast.RelSubsets) {
+			continue
+		}
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		if qn, ok := target.(*ast.QualifiedName); ok && len(qn.Parts) > 0 {
+			return qn.Parts[len(qn.Parts)-1].Text
+		}
+	}
+	return ""
 }
 
 // evalSlotDefault evaluates a slot's default-value expression bound to the
@@ -206,11 +389,13 @@ func (ctx *Context) evalSlotDefault(inst *Instance, slot *Slot, name string) (Va
 	ctx.derivingSlots[key] = true
 	defer delete(ctx.derivingSlots, key)
 
-	scope := slot.Feature.DeclScope()
+	scope := slot.Feature.DefaultScope()
 	if scope == nil {
 		scope = inst.Type.OwnerScope
 	}
-	val, err := NewEvalContextIn(ctx, scope, inst).Eval(slot.Feature.DefaultValue)
+	ec := NewEvalContextIn(ctx, scope, inst)
+	defer ec.beginStep()()
+	val, err := ec.Eval(slot.Feature.DefaultValue)
 	if err != nil {
 		return Value{}, fmt.Errorf("slot %s.%s: %w", inst.Type.Name, name, err)
 	}

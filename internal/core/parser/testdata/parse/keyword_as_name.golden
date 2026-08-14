@@ -11,11 +11,11 @@
               (LiteralInteger value="1")))))
       (Membership visibility="default"
         (Usage kind="action" name="outer" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (*ast.InitialNode)
+          (InitialNode name="start" successor="")
           (Membership visibility="default"
             (Usage kind="action" name="flow" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (*ast.AssignmentActionNode)))
-          (*ast.FinalNode)
+          (FinalNode name="end")
           (SuccessionEdge source="start" target="flow")
           (SuccessionEdge source="flow" target="end")))
       (Membership visibility="default"

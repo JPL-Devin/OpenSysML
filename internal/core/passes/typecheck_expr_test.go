@@ -319,6 +319,14 @@ func TestExprInvocationUnknownNamedArgument(t *testing.T) {
 		`add has no parameter named "c"`)
 }
 
+// A receiver binds by position, so a call whose arguments bind by name states
+// no parameter for it (runtime/eval.go reports the same call).
+func TestExprInvocationReceiverWithNamedArguments(t *testing.T) {
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { return 1->add(a = 1, b = 2); } }`,
+		"add cannot be called with a receiver and named arguments")
+}
+
 func TestExprInvocationNamedArgumentsOK(t *testing.T) {
 	wantNoDiags(t, `package P { `+calcAdd+` calc c { return add(a = 1, b = 2); } }`)
 }

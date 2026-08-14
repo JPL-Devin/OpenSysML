@@ -1,0 +1,32 @@
+enter calc test::halve
+  bind n = 9 [argument]
+  stmt declare i
+    eval feature n -> 9
+  stmt loop until
+    iteration 1
+      stmt assign i
+          eval feature i -> 9
+          eval literal 2 -> 2
+        eval operator / -> 4
+        eval feature i -> 4
+        eval literal 1 -> 1
+      eval operator <= -> false
+    iteration 2
+      stmt assign i
+          eval feature i -> 4
+          eval literal 2 -> 2
+        eval operator / -> 2
+        eval feature i -> 2
+        eval literal 1 -> 1
+      eval operator <= -> false
+    iteration 3
+      stmt assign i
+          eval feature i -> 2
+          eval literal 2 -> 2
+        eval operator / -> 1
+        eval feature i -> 1
+        eval literal 1 -> 1
+      eval operator <= -> true
+  stmt return
+    eval feature i -> 1
+exit calc test::halve -> 1

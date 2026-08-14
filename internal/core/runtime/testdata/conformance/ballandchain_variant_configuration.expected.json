@@ -1,0 +1,19 @@
+{
+  "type": "instance",
+  "instantiate": "productAssetInstance::newBallAndChain",
+  "libraries": true,
+  "slots": {
+    "totalCost": {"type": "Real", "value": 1450.0},
+    "engagementRingToDiamond": {"type": "Instance"},
+    "engagementRingToBand": {"type": "Variant", "value": "engagementRingToBandConnected"}
+  },
+  "identical": [
+    ["engagementRingToDiamond.source", "engagementRing.diamondPort"],
+    ["engagementRingToDiamond.target", "diamond.engagementRingPort"],
+    ["engagementRingToBand.source", "engagementRing.ringPort"],
+    ["engagementRingToBand.target", "band.ringPort"]
+  ],
+  "constraints": {
+    "engagementRingToBandConstraint": true
+  }
+}

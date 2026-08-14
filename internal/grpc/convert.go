@@ -14,8 +14,20 @@ import (
 )
 
 // SymbolToProto converts a Symbol to protobuf SymbolInfo.
-// This is the public API for gRPC service use.
+// This is the public API for gRPC service use. It builds a conversion context
+// of its own; a caller converting several symbols of one model should build one
+// with NewSymbolContext and call SymbolToProtoIn, so that name resolution is
+// memoized across the symbols.
 func SymbolToProto(sym *symbols.Symbol, idx *symbols.Index) *pb.SymbolInfo {
+	return SymbolToProtoIn(sym, NewSymbolContext(idx))
+}
+
+// SymbolToProtoIn converts a Symbol to protobuf SymbolInfo in an existing
+// conversion context.
+func SymbolToProtoIn(sym *symbols.Symbol, sc *SymbolContext) *pb.SymbolInfo {
+	defer sc.Lock()()
+
+	idx := sc.Index
 	info := &pb.SymbolInfo{
 		Id:       idx.GetFQN(sym), // Fully qualified name
 		Name:     sym.Name,
@@ -37,6 +49,13 @@ func SymbolToProto(sym *symbols.Symbol, idx *symbols.Index) *pb.SymbolInfo {
 		}
 		info.ChildIds = childIDs
 	}
+
+	// Static type facts: the resolved type, the declared multiplicity and every
+	// generalization edge. These are what a client needs to reconstruct the
+	// element's type without re-deriving it from the metadata strings.
+	info.TypeInfo = sc.typeInfoOf(sym)
+	info.Multiplicity = sc.multiplicityOf(sym)
+	info.Specializations = sc.specializationsOf(sym)
 
 	// Attributes populated later when semantic layer ready
 	info.Attributes = []*pb.AttributeInfo{}
@@ -254,6 +273,13 @@ func ValueToProto(val runtime.Value) *pb.Value {
 			}
 		}
 		return &pb.Value{Kind: &pb.Value_Sequence{Sequence: &pb.ValueSequence{Elements: pbElements}}}
+	case runtime.ValVariant:
+		// The wire Value has no variant form: the object a selected variant
+		// materialized is reported by identity, a valueless selection as unsupported.
+		if id, ok := val.Object(); ok {
+			return &pb.Value{Kind: &pb.Value_InstanceId{InstanceId: id}}
+		}
+		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: variant selection"}}
 	case runtime.ValQuantity:
 		// The wire Value has no magnitude-and-unit form, and sending the bare
 		// magnitude would drop the unit, so the value is reported unsupported.
@@ -295,6 +321,99 @@ func ProtoToValue(pv *pb.Value) runtime.Value {
 	}
 }
 
+const (
+	// maxGraphDepth bounds how deep Instantiate expands nested objects.
+	maxGraphDepth = 8
+	// maxGraphInstances caps how many instances one response serializes.
+	maxGraphInstances = 1000
+)
+
+// InstanceGraphToProto converts inst and every instance reachable from it. The
+// root is returned first; runtime instances live only for the duration of a
+// request, so the whole reachable graph is serialized while the context is alive.
+//
+// Expansion stops at a child whose type is already on the path, at maxGraphDepth
+// and at maxGraphInstances: reading a composite slot materializes the object it
+// holds, so a self-referential part would otherwise instantiate forever. An
+// unexpanded child stays a bare instance id.
+func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) (*pb.Instance, []*pb.Instance) {
+	var all []*pb.Instance
+	seen := make(map[int64]bool)
+	onPath := make(map[*symbols.Symbol]bool)
+
+	var walk func(*runtime.Instance, int) *pb.Instance
+	walk = func(cur *runtime.Instance, depth int) *pb.Instance {
+		if seen[cur.ID] || len(all) >= maxGraphInstances {
+			return nil
+		}
+		seen[cur.ID] = true
+		onPath[cur.Type] = true
+		defer delete(onPath, cur.Type)
+
+		// InstanceToProto reads every slot through GetSlot, which is what
+		// lazily materializes the children the ids below resolve to.
+		pbInst := InstanceToProto(rt, cur, idx)
+		all = append(all, pbInst)
+
+		if depth >= maxGraphDepth {
+			return pbInst
+		}
+
+		for _, slot := range pbInst.Slots {
+			for _, id := range instanceRefs(slot) {
+				child, ok := rt.Instance(id)
+				if !ok || onPath[child.Type] {
+					continue
+				}
+				walk(child, depth+1)
+			}
+		}
+		return pbInst
+	}
+
+	root := walk(inst, 0)
+	return root, all
+}
+
+// instanceRefs collects the instance IDs a slot value references, scalar or not.
+func instanceRefs(slot *pb.SlotValue) []int64 {
+	var ids []int64
+	var collect func(*pb.Value)
+	collect = func(v *pb.Value) {
+		switch k := v.GetKind().(type) {
+		case *pb.Value_InstanceId:
+			ids = append(ids, k.InstanceId)
+		case *pb.Value_Sequence:
+			for _, elem := range k.Sequence.GetElements() {
+				collect(elem)
+			}
+		}
+	}
+	if slot.Value != nil {
+		collect(slot.Value)
+	}
+	for _, v := range slot.Values {
+		collect(v)
+	}
+	return ids
+}
+
+// collectionElements returns what a collection slot holds; a multi-valued
+// feature's contents can be either a sequence or a set.
+func collectionElements(val runtime.Value) []runtime.Value {
+	switch val.Kind {
+	case runtime.ValSequence:
+		if val.Sequence != nil {
+			return val.Sequence.Elements()
+		}
+	case runtime.ValSet:
+		if val.Set != nil {
+			return val.Set.Elements()
+		}
+	}
+	return nil
+}
+
 // InstanceToProto converts runtime.Instance to protobuf Instance. Slots are read
 // through Instance.GetSlot, so a derived default is evaluated against the
 // instance rather than reported as an unmaterialized slot.
@@ -306,7 +425,7 @@ func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 		if err != nil {
 			pbSlots[name] = &pb.SlotValue{
 				FeatureName: name,
-				Value:       &pb.Value{Kind: &pb.Value_Null{Null: err.Error()}},
+				Error:       err.Error(),
 			}
 			continue
 		}
@@ -319,14 +438,14 @@ func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 		// Check multiplicity to determine scalar vs collection
 		mult := slot.Feature.Multiplicity
 		if !mult.Upper.Infinite && mult.Upper.Value <= 1 {
-			// Scalar slot
-			pbSlot.Value = ValueToProto(slot.Value)
+			// Scalar slot. An unmaterialized one holds no value; marshalling it
+			// anyway would report the empty value as an unsupported null.
+			if slot.Materialized {
+				pbSlot.Value = ValueToProto(slot.Value)
+			}
 		} else {
-			// Collection slot
-			if slot.Values.Kind == runtime.ValSequence && slot.Values.Sequence != nil {
-				for _, elem := range slot.Values.Sequence.Elements() {
-					pbSlot.Values = append(pbSlot.Values, ValueToProto(elem))
-				}
+			for _, elem := range collectionElements(slot.Values) {
+				pbSlot.Values = append(pbSlot.Values, ValueToProto(elem))
 			}
 		}
 

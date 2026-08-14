@@ -9,7 +9,7 @@
               (DeferMember
                 (*ast.QualifiedName)
                 (CallEvent operation="setSpeed" parameters=[value]))))
-          (*ast.SubstateMember)
+          (SubstateMember name="ready")
           (*ast.StateNode)
           (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
             (ConnectorEnd target="<nil>"

@@ -72,11 +72,12 @@ func constText(v semantics.Value) string {
 
 // evalIndexExpr evaluates `magnitude [unit]`, the quantity expression: a
 // number and the measurement reference it is expressed in. The sequence index
-// `seq#(i)` shares the node but not the meaning, and is not evaluated here.
+// `seq#(i)` shares the node but not the meaning; the bracket the notation was
+// written with is what tells the two apart, and the index is evaluated as the
+// sequence operation it is (collections.go).
 func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 	if !n.Bracket {
-		// The sequence index is a separate operation and stays unsupported.
-		return Value{}, fmt.Errorf("unsupported node type: %T", n)
+		return ec.evalSequenceIndex(n)
 	}
 	term, err := ec.ctx.model.UnitTermOfExpr(ec.scope, n.Index)
 	if err != nil {
@@ -91,29 +92,8 @@ func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 		return Value{}, fmt.Errorf("%w: magnitude of a quantity is %s, want a number", ErrNotAQuantity, magnitude.Kind)
 	}
 
-	unit := Unit{Text: unitText(n.Index), Term: term}
+	unit := Unit{Text: semantics.UnitExprText(n.Index), Term: term}
 	return Value{Kind: ValQuantity, Quantity: &Quantity{Num: magnitude.Const, Unit: unit}}, nil
-}
-
-// unitText renders a unit expression as written, so a diagnostic and a printed
-// value name the unit the model used rather than its reduction.
-func unitText(node ast.Node) string {
-	switch n := node.(type) {
-	case *ast.FeatureReference:
-		return qualifiedNameText(n.Name)
-	case *ast.OperatorExpr:
-		switch {
-		case len(n.Operands) == 2:
-			return unitText(n.Operands[0]) + n.Operator.String() + unitText(n.Operands[1])
-		case len(n.Operands) == 1:
-			return n.Operator.String() + unitText(n.Operands[0])
-		}
-	case *ast.LiteralInteger:
-		return n.Value
-	case *ast.LiteralReal:
-		return n.Value
-	}
-	return ""
 }
 
 // asQuantity views a value as a quantity: a quantity as itself, and a bare

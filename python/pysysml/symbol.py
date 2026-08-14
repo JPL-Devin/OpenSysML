@@ -2,8 +2,15 @@
 
 from typing import List, Optional, TYPE_CHECKING
 
+from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
+
 if TYPE_CHECKING:
     from pysysml.proto import sysml_pb2
+
+# Kind strings emitted by the service (internal/core/symbols: symbolKindNames).
+# Matched case-insensitively so older PascalCase producers still work.
+ATTRIBUTE_KINDS = frozenset({"attributedef", "attributeusage"})
+PART_KINDS = frozenset({"partdef", "partusage"})
 
 
 class Symbol:
@@ -15,7 +22,7 @@ class Symbol:
     Attributes:
         id: Unique symbol identifier (fully-qualified name)
         name: Simple name of the symbol
-        kind: SysML element kind (e.g., "PartDef", "AttributeUsage")
+        kind: SysML element kind (e.g., "partDef", "attributeUsage")
     """
     
     def __init__(self, pb_symbol: "sysml_pb2.SymbolInfo", client: Optional[object], model_hash: str):
@@ -51,6 +58,36 @@ class Symbol:
         """Return copy of symbol metadata dictionary."""
         return dict(self._pb.metadata)
     
+    @property
+    def type_facts(self) -> Optional[TypeFacts]:
+        """Return the symbol's static type, or None when it carries no type."""
+        if not self._pb.HasField("type_info"):
+            return None
+        return TypeFacts.from_pb(self._pb.type_info)
+
+    @property
+    def multiplicity(self) -> Optional[Multiplicity]:
+        """Return the declared multiplicity range, or None when undeclared."""
+        if not self._pb.HasField("multiplicity"):
+            return None
+        return Multiplicity.from_pb(self._pb.multiplicity)
+
+    @property
+    def specializations(self) -> List[Specialization]:
+        """Return all generalization edges declared on this symbol."""
+        return [Specialization.from_pb(spec) for spec in self._pb.specializations]
+
+    def facts(self) -> SymbolFacts:
+        """Return this symbol's static facts, detached from the protobuf message."""
+        return SymbolFacts(
+            id=self.id,
+            name=self.name,
+            kind=self.kind,
+            type=self.type_facts,
+            multiplicity=self.multiplicity,
+            specializations=tuple(self.specializations),
+        )
+
     def children(self) -> List["Symbol"]:
         """Return all child symbols.
         
@@ -78,26 +115,20 @@ class Symbol:
         return result
     
     def attributes(self) -> List["Symbol"]:
-        """Return child symbols that are attributes.
-        
-        Filters children to only those with 'Attribute' in their kind
-        (e.g., AttributeUsage, PartAttributeUsage, AttributeDef).
+        """Return child symbols that are attribute definitions or usages.
         
         Returns:
             List of attribute Symbol objects
         """
-        return [child for child in self.children() if "Attribute" in child.kind]
+        return [child for child in self.children() if child.kind.lower() in ATTRIBUTE_KINDS]
     
     def parts(self) -> List["Symbol"]:
-        """Return child symbols that are parts.
-        
-        Filters children to only those with 'Part' in their kind
-        (e.g., PartUsage, PartDef).
+        """Return child symbols that are part definitions or usages.
         
         Returns:
             List of part Symbol objects
         """
-        return [child for child in self.children() if "Part" in child.kind]
+        return [child for child in self.children() if child.kind.lower() in PART_KINDS]
     
     def get_attr(self, name: str) -> Optional["Symbol"]:
         """Get attribute by name.

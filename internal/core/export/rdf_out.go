@@ -248,6 +248,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		}
 		e.flags(subject, []boolProperty{
 			{"isAbstract", n.IsAbstract},
+			{"isVariation", n.IsVariation},
+			{"isVariant", n.IsVariant},
 			{"isReference", n.IsReference},
 			{"isAll", n.IsAll},
 			{"isEnd", n.IsEnd},
@@ -255,12 +257,13 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			{"isConstant", n.IsConstant},
 			{"isEvent", n.IsEvent},
 			{"isIndividual", n.IsIndividual},
-			{"isSnapshot", n.IsSnapshot},
+			{"isSnapshot", n.Portion == ast.PortionSnapshot},
+			{"isTimeslice", n.Portion == ast.PortionTimeslice},
 			{"isComposite", n.IsComposite},
 			{"isDerived", n.IsDerived},
 			{"isOrdered", n.IsOrdered},
 			{"isNonunique", n.IsNonunique},
-			{"isConjugated", n.IsConjugated},
+			{"isConjugated", n.HasConjugatedTyping()},
 			{"isAccept", n.IsAccept},
 			{"isResult", n.IsResult},
 		})

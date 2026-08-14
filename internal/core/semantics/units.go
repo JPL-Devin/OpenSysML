@@ -610,6 +610,30 @@ func (m *Model) unitTermOfOperator(scope *symbols.Scope, n *ast.OperatorExpr) (U
 	}
 }
 
+// UnitExprText renders an expression in unit position as written, so a
+// diagnostic, a printed value or an exported type fact names the unit the model
+// used rather than its reduction.
+func UnitExprText(node ast.Node) string {
+	switch n := node.(type) {
+	case *ast.FeatureReference:
+		return QualifiedNameText(n.Name)
+	case *ast.QualifiedName:
+		return QualifiedNameText(n)
+	case *ast.OperatorExpr:
+		switch {
+		case len(n.Operands) == 2:
+			return UnitExprText(n.Operands[0]) + n.Operator.String() + UnitExprText(n.Operands[1])
+		case len(n.Operands) == 1:
+			return n.Operator.String() + UnitExprText(n.Operands[0])
+		}
+	case *ast.LiteralInteger:
+		return n.Value
+	case *ast.LiteralReal:
+		return n.Value
+	}
+	return ""
+}
+
 // libSymbol resolves a library element by qualified name, uniquely or not at
 // all: a name two documents declare is no evidence of the library's element.
 func (m *Model) libSymbol(fqn string) *symbols.Symbol {

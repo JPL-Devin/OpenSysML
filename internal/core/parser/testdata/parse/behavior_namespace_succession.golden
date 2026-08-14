@@ -1,0 +1,15 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Sequenced" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="part" name="part1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="action" name="action1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Usage kind="requirement" name="requirement1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="part1::action1"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="requirement1"
+            (*ast.QualifiedName)))))))

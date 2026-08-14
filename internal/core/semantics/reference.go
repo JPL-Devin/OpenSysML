@@ -114,15 +114,18 @@ func (m *Model) MemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 	return order
 }
 
-// contributors returns the direct member-contributing neighbours of sym:
-// its supertypes, then the feature it reference-subsets.
+// contributors returns the direct member-contributing neighbours of sym: its
+// supertypes, the base usage every usage element subsets, then the feature it
+// reference-subsets. The base usage contributes members only, not conformance.
 func (m *Model) contributors(sym *symbols.Symbol) []*symbols.Symbol {
 	supers := m.DirectSupertypes(sym)
-	ref := m.ReferencedFeature(sym)
-	if ref == nil {
-		return supers
-	}
-	out := make([]*symbols.Symbol, 0, len(supers)+1)
+	out := make([]*symbols.Symbol, 0, len(supers)+2)
 	out = append(out, supers...)
-	return append(out, ref)
+	if base := m.implicitBaseUsage(sym); base != nil {
+		out = append(out, base)
+	}
+	if ref := m.ReferencedFeature(sym); ref != nil {
+		out = append(out, ref)
+	}
+	return out
 }

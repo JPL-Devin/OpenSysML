@@ -19,6 +19,19 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// CapabilityTypeFacts names the capability of populating SymbolInfo.type_info,
+// .multiplicity and .specializations, which typed code generation requires.
+const CapabilityTypeFacts = "type_facts"
+
+// capabilities is what this build supports, in report order. A capability is
+// only ever added: renaming or dropping one breaks clients that require it.
+var capabilities = []string{CapabilityTypeFacts}
+
+// Capabilities returns the capability names this build of the service reports.
+func Capabilities() []string {
+	return append([]string(nil), capabilities...)
+}
+
 // Service implements SysMLServiceServer
 type Service struct {
 	pb.UnimplementedSysMLServiceServer
@@ -26,12 +39,14 @@ type Service struct {
 	// budgets bounds every runtime context the service creates, read once from
 	// the environment at construction.
 	budgets runtime.Budgets
+	// version is the build version GetServerInfo reports, informational only.
+	version string
 }
 
-// NewService creates a gRPC service with specified cache size. It returns an
-// error if cacheSize is not positive, or if a budget variable holds anything but
-// a positive integer.
-func NewService(cacheSize int) (*Service, error) {
+// NewService creates a gRPC service with specified cache size, reporting
+// version as its build version. It returns an error if cacheSize is not
+// positive, or if a budget variable holds anything but a positive integer.
+func NewService(cacheSize int, version string) (*Service, error) {
 	cache, err := NewCache(cacheSize)
 	if err != nil {
 		return nil, err
@@ -40,7 +55,17 @@ func NewService(cacheSize int) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{cache: cache, budgets: budgets}, nil
+	return &Service{cache: cache, budgets: budgets, version: version}, nil
+}
+
+// GetServerInfo reports the service's build version and capabilities. A service
+// too old to have this RPC fails the call with UNIMPLEMENTED, which is itself
+// the answer that it predates every capability.
+func (s *Service) GetServerInfo(ctx context.Context, req *pb.ServerInfoRequest) (*pb.ServerInfoResponse, error) {
+	return &pb.ServerInfoResponse{
+		Version:      s.version,
+		Capabilities: Capabilities(),
+	}, nil
 }
 
 // newRuntime returns a runtime context under the service's budgets.
@@ -168,7 +193,7 @@ func (s *Service) GetSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.
 
 	// Convert first match to proto
 	return &pb.SymbolResponse{
-		Symbol: SymbolToProto(syms[0], cached.Index),
+		Symbol: SymbolToProtoIn(syms[0], cached.SymbolContext()),
 	}, nil
 }
 
@@ -284,8 +309,10 @@ func (s *Service) Instantiate(ctx context.Context, req *pb.InstantiateRequest) (
 		}, nil
 	}
 
+	root, all := InstanceGraphToProto(runtimeCtx, inst, cached.Index)
 	return &pb.InstantiateResponse{
-		Instance: InstanceToProto(runtimeCtx, inst, cached.Index),
+		Instance:  root,
+		Instances: all,
 	}, nil
 }
 
@@ -411,7 +438,7 @@ func (s *Service) buildParseResponse(modelHash string, model *CachedModel) *pb.P
 				}
 			}
 		} else {
-			rootSymbol = SymbolToProto(rootSyms[0], model.Index)
+			rootSymbol = SymbolToProtoIn(rootSyms[0], model.SymbolContext())
 		}
 	}
 

@@ -1,0 +1,9 @@
+{
+	"type": "state",
+	"libraries": true,
+	"finalState": "done",
+	"stateVisits": ["start", "step", "again", "step", "done"],
+	"outputs": {
+		"i": {"type": "Integer", "value": 3}
+	}
+}

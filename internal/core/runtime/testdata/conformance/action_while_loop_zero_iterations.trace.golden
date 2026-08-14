@@ -1,6 +1,8 @@
 step 1: token 1@accumulate
-  eval feature total -> 7
-  eval literal 5 -> 5
-eval operator < -> false
+stmt while
+  iteration 1
+      eval feature total -> 7
+      eval literal 5 -> 5
+    eval operator < -> false
 step 2: token 1@end
 step 3: no active tokens

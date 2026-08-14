@@ -21,6 +21,11 @@ type StateGraph struct {
 	// what the names in its entry, do and exit behaviors resolve against.
 	StateScopes map[*ast.StateNode]*symbols.Scope
 
+	// Behaviors: state → its lowered entry, do and exit behaviors. The executor
+	// runs these rather than the state's AST members, so an inline action body is
+	// executable statements by the time it is reached.
+	Behaviors map[*ast.StateNode]*StateBehaviors
+
 	// declOf: synthesized state → the declaration it was built from, since the
 	// scope tree is keyed by what the scope builder saw rather than by the state
 	// nodes lowering derives from it.
@@ -75,11 +80,20 @@ type StateGraph struct {
 
 // Transition represents a state transition (lowered from TransitionEdge or TransitionMember).
 type Transition struct {
-	Source  ast.Node   // *ast.StateNode or *ast.PseudostateNode
-	Target  ast.Node   // *ast.StateNode or *ast.PseudostateNode
-	Trigger ast.Node   // TimeEvent, ChangeEvent, SignalEvent, CallEvent, nil = completion
-	Guard   ast.Node   // guard expression, nil = no guard
-	Effect  []ast.Node // effect actions
+	// Name is the transition's own name, when it was written with one
+	// (`transition maintain first idle then busy`), and "" when it was not.
+	Name    string
+	Source  ast.Node // *ast.StateNode or *ast.PseudostateNode
+	Target  ast.Node // *ast.StateNode or *ast.PseudostateNode
+	Trigger ast.Node // TimeEvent, ChangeEvent, SignalEvent, CallEvent, nil = completion
+	Guard   ast.Node // guard expression, nil = no guard
+	// Effect are the transition's effect behaviors, lowered the same way a state's
+	// entry, do and exit behaviors are.
+	Effect []StateBehavior
+	// Via is the port the accepted occurrence must arrive at
+	// (`accept Ping via commPort`), and "" when the trigger names no port, in
+	// which case an occurrence reaching the machine by any route fires it.
+	Via string
 
 	// Scope is the scope the transition was declared in, in which the expressions
 	// its trigger carries — a time event's duration, a change event's condition —
@@ -100,6 +114,7 @@ func ToStateGraph(stateMachineDecl ast.Node, scope *symbols.Scope) (*StateGraph,
 	graph := &StateGraph{
 		Scope:            scope,
 		StateScopes:      make(map[*ast.StateNode]*symbols.Scope),
+		Behaviors:        make(map[*ast.StateNode]*StateBehaviors),
 		declOf:           make(map[*ast.StateNode]ast.Node),
 		States:           make([]*ast.StateNode, 0),
 		Pseudostates:     make(map[string]*ast.PseudostateNode),
@@ -124,7 +139,7 @@ func ToStateGraph(stateMachineDecl ast.Node, scope *symbols.Scope) (*StateGraph,
 		return nil, fmt.Errorf("state machine must be Usage or Definition, got %T", stateMachineDecl)
 	}
 
-	graph.Connections = lowerConnections(members)
+	graph.Connections = lowerConnections(members, OwnerBehavior)
 	graph.Attributes = lowerAttributes(members)
 
 	// First pass: collect states and pseudostates
@@ -334,6 +349,11 @@ func stateNodeFromUsage(graph *StateGraph, usage *ast.Usage) *ast.StateNode {
 func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNode, scope *symbols.Scope) error {
 	graph.States = append(graph.States, state)
 	graph.StateScopes[state] = scope
+	graph.Behaviors[state] = &StateBehaviors{
+		Entry: LowerBehaviors(state.Entry, scope),
+		Do:    LowerBehaviors(state.Do, scope),
+		Exit:  LowerBehaviors(state.Exit, scope),
+	}
 	if parent != nil {
 		graph.ParentState[state] = parent
 	}
@@ -478,7 +498,7 @@ func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge, scope *sym
 		Target:    targetState,
 		Trigger:   edge.Trigger,
 		Guard:     edge.Guard,
-		Effect:    edge.Effect,
+		Effect:    LowerBehaviors(edge.Effect, scope),
 		Scope:     scope,
 		BodyScope: scope,
 	}, nil
@@ -547,6 +567,11 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 		}
 	}
 
+	// A transition the parser could not read a target from names no edge.
+	if member.Target == nil {
+		return nil, fmt.Errorf("transition %s names no target", orAnonymous(member.Name))
+	}
+
 	// Try to find target as state or pseudostate
 	var target ast.Node
 	targetState := findStateByName(graph.States, member.Target)
@@ -572,17 +597,27 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 			member.Target.Parts[len(member.Target.Parts)-1].Text, stateNames)
 	}
 
+	// A trigger's parameters are members of a scope of the transition's own, which
+	// its guard and effect resolve in (symbols/bodyscopes.go).
+	bodyScope := symbols.TriggerScope(scope, member)
 	return &Transition{
-		Source:  source,
-		Target:  target,
-		Trigger: classifyTrigger(member.Trigger),
-		Guard:   member.Guard,
-		Effect:  member.Effect,
-		Scope:   scope,
-		// A call trigger's parameters are members of a scope of the transition's
-		// own, which its guard and effect resolve in (symbols/bodyscopes.go).
-		BodyScope: symbols.CallTriggerScope(scope, member),
+		Name:      member.Name,
+		Source:    source,
+		Target:    target,
+		Trigger:   classifyTrigger(member.Trigger),
+		Guard:     member.Guard,
+		Effect:    LowerBehaviors(member.Effect, bodyScope),
+		Via:       ast.SimpleName(member.Via),
+		Scope:     scope,
+		BodyScope: bodyScope,
 	}, nil
+}
+
+// isEntrySubaction reports whether member is the entry subaction of the body a
+// succession was written in.
+func isEntrySubaction(member ast.Node) bool {
+	_, ok := unwrapMembership(member).(*ast.EntryMember)
+	return ok
 }
 
 // classifyTrigger converts a raw trigger expression into a typed TriggerEvent.
@@ -608,6 +643,21 @@ func classifyTrigger(trigger ast.Node) ast.Node {
 		return trigger
 	}
 
+	// A payload parameter: the accept states the occurrence it takes as a
+	// parameter declaration — by its type (`accept msg : Warning`), by the event
+	// it subsets (`accept :> shutDown`) — or carries a time or change event the
+	// parameter was parsed with (`accept when x > 1`).
+	if payload, ok := trigger.(*ast.Usage); ok {
+		if payload.Value != nil {
+			return classifyTrigger(payload.Value)
+		}
+		return &ast.AcceptEvent{
+			SignalType: relationshipTarget(payload, ast.RelTyping),
+			Subsets:    relationshipTarget(payload, ast.RelSubsets, ast.RelRedefines, ast.RelSpecializes, ast.RelReferences),
+			Payload:    payload,
+		}
+	}
+
 	// FeatureReference (bare name) → extract QualifiedName and treat as signal trigger
 	if featureRef, ok := trigger.(*ast.FeatureReference); ok {
 		return &ast.AcceptEvent{
@@ -626,6 +676,25 @@ func classifyTrigger(trigger ast.Node) ast.Node {
 	return &ast.ChangeEvent{
 		Condition: trigger,
 	}
+}
+
+// relationshipTarget returns the qualified name a usage's first relationship of
+// one of the given kinds names, or nil when it declares none.
+func relationshipTarget(usage *ast.Usage, kinds ...ast.RelationshipKind) *ast.QualifiedName {
+	for _, rel := range usage.Relationships {
+		if rel == nil {
+			continue
+		}
+		for _, kind := range kinds {
+			if rel.Kind != kind {
+				continue
+			}
+			if qn, ok := rel.Target.(*ast.QualifiedName); ok {
+				return qn
+			}
+		}
+	}
+	return nil
 }
 
 // collectTransitions recursively processes member lists to collect transitions.
@@ -722,6 +791,14 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 
 			sourceState := findStateByName(searchScope, n.Source)
 			targetState := findStateByName(searchScope, n.Target)
+
+			// `entry; then off;` — a succession out of the body's own entry
+			// subaction names the state it starts in (SysML 7.19.3), the same as
+			// `initial start; start then off;`.
+			if sourceState == nil && targetState != nil && isEntrySubaction(n.SourceMember) {
+				targetState.IsInitial = true
+				continue
+			}
 
 			if sourceState != nil && targetState != nil {
 				trans := &Transition{

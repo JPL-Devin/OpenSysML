@@ -1,0 +1,86 @@
+enter calc test::factorial
+  bind n = 6 [argument]
+  stmt declare acc
+    eval literal 1 -> 1
+  stmt declare i
+    eval literal 1 -> 1
+  stmt while
+    iteration 1
+        eval feature i -> 1
+        eval feature n -> 6
+      eval operator <= -> true
+      stmt assign acc
+          eval feature acc -> 1
+          eval feature i -> 1
+        eval operator * -> 1
+      stmt assign i
+          eval feature i -> 1
+          eval literal 1 -> 1
+        eval operator + -> 2
+    iteration 2
+        eval feature i -> 2
+        eval feature n -> 6
+      eval operator <= -> true
+      stmt assign acc
+          eval feature acc -> 1
+          eval feature i -> 2
+        eval operator * -> 2
+      stmt assign i
+          eval feature i -> 2
+          eval literal 1 -> 1
+        eval operator + -> 3
+    iteration 3
+        eval feature i -> 3
+        eval feature n -> 6
+      eval operator <= -> true
+      stmt assign acc
+          eval feature acc -> 2
+          eval feature i -> 3
+        eval operator * -> 6
+      stmt assign i
+          eval feature i -> 3
+          eval literal 1 -> 1
+        eval operator + -> 4
+    iteration 4
+        eval feature i -> 4
+        eval feature n -> 6
+      eval operator <= -> true
+      stmt assign acc
+          eval feature acc -> 6
+          eval feature i -> 4
+        eval operator * -> 24
+      stmt assign i
+          eval feature i -> 4
+          eval literal 1 -> 1
+        eval operator + -> 5
+    iteration 5
+        eval feature i -> 5
+        eval feature n -> 6
+      eval operator <= -> true
+      stmt assign acc
+          eval feature acc -> 24
+          eval feature i -> 5
+        eval operator * -> 120
+      stmt assign i
+          eval feature i -> 5
+          eval literal 1 -> 1
+        eval operator + -> 6
+    iteration 6
+        eval feature i -> 6
+        eval feature n -> 6
+      eval operator <= -> true
+      stmt assign acc
+          eval feature acc -> 120
+          eval feature i -> 6
+        eval operator * -> 720
+      stmt assign i
+          eval feature i -> 6
+          eval literal 1 -> 1
+        eval operator + -> 7
+    iteration 7
+        eval feature i -> 7
+        eval feature n -> 6
+      eval operator <= -> false
+  stmt return
+    eval feature acc -> 720
+exit calc test::factorial -> 720

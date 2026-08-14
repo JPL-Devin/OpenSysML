@@ -116,6 +116,27 @@ func (k DefinitionKind) String() string {
 	}
 }
 
+// PortionKind is the portion an occurrence usage declares of its type
+// (OccurrenceUsage::portionKind, SysML v2 8.3.9.11).
+type PortionKind int
+
+const (
+	PortionNone PortionKind = iota
+	PortionSnapshot
+	PortionTimeslice
+)
+
+// Keyword returns the notation for the portion kind, empty for PortionNone.
+func (k PortionKind) Keyword() string {
+	switch k {
+	case PortionSnapshot:
+		return "snapshot"
+	case PortionTimeslice:
+		return "timeslice"
+	}
+	return ""
+}
+
 // UsageKind discriminates the concrete usage taxonomy element.
 type UsageKind int
 
@@ -131,7 +152,19 @@ const (
 	UsageView
 	UsageViewpoint
 	UsageRendering
+	// UsageViewRendering is the rendering a view body names with `render`
+	// (SysML.xtext ViewRenderingMember/ViewRenderingUsage, SysML v2 §8.3.26): a
+	// RenderingUsage owned by a ViewRenderingMembership, which either references
+	// an existing rendering (`render asTreeDiagram;`) or declares one
+	// (`render rendering r : AsTree;`).
+	UsageViewRendering
 	UsageConcern
+	// UsageFramedConcern is the concern a requirement, concern or viewpoint body
+	// frames with `frame` (SysML.xtext FramedConcernMember/FramedConcernUsage,
+	// SysML v2 §8.3.20): a ConcernUsage owned by a FramedConcernMembership,
+	// either referencing an existing concern (`frame 'system breakdown';`) or
+	// declaring one (`frame concern c : SafetyConcern;`).
+	UsageFramedConcern
 	// Tier B.
 	UsageConnection
 	UsageConnector
@@ -153,6 +186,14 @@ const (
 	UsageRequirement
 	UsageSatisfy // satisfy requirement ... by ...
 	UsageSubject
+	// UsageActor is an actor of a requirement, use case or viewpoint
+	// (SysML.xtext ActorMember/ActorUsage, SysML v2 §8.3.19): a PartUsage owned
+	// by an ActorMembership. The notation declares it; it has no reference form.
+	UsageActor
+	// UsageStakeholder is a stakeholder of a requirement, concern or viewpoint
+	// (SysML.xtext StakeholderMember/StakeholderUsage, SysML v2 §8.3.19): a
+	// PartUsage owned by a StakeholderMembership, declared like an actor.
+	UsageStakeholder
 	UsageObjective
 	UsageCase
 	UsageAnalysisCase
@@ -189,8 +230,12 @@ func (k UsageKind) String() string {
 		return "viewpoint"
 	case UsageRendering:
 		return "rendering"
+	case UsageViewRendering:
+		return "render"
 	case UsageConcern:
 		return "concern"
+	case UsageFramedConcern:
+		return "frame"
 	case UsageConnection:
 		return "connection"
 	case UsageConnector:
@@ -229,6 +274,10 @@ func (k UsageKind) String() string {
 		return "satisfy"
 	case UsageSubject:
 		return "subject"
+	case UsageActor:
+		return "actor"
+	case UsageStakeholder:
+		return "stakeholder"
 	case UsageObjective:
 		return "objective"
 	case UsageCase:
@@ -350,6 +399,10 @@ type Relationship struct {
 	NodeBase
 	Kind   RelationshipKind
 	Target Node // QualifiedName or Expression (e.g., FeatureChainExpr for interfacingPorts.incomingTransfers)
+	// Conjugated records the `~` of a ConjugatedPortTyping (SysML v2
+	// 8.3.12.3): the type is the conjugate of Target, which reverses the
+	// directions of the target port definition's features.
+	Conjugated bool
 }
 
 // Multiplicity is a `[n]` / `[lo..hi]` / `[*]` bound on a usage. Bounds are
@@ -392,6 +445,8 @@ type Usage struct {
 	// kept to tell those spellings apart.
 	Keyword      string
 	IsAbstract   bool
+	IsVariation  bool // 'variation' modifier: the usage is a variation point
+	IsVariant    bool // declared with 'variant': a variant of the enclosing variation
 	IsReference  bool
 	IsAll        bool // 'all' multiplicity propagation modifier
 	IsEnd        bool // 'end' feature modifier
@@ -399,9 +454,14 @@ type Usage struct {
 	IsConstant   bool // 'constant' feature modifier
 	IsEvent      bool // 'event' modifier for event-driven occurrences
 	IsIndividual bool // 'individual' modifier: OccurrenceUsage::isIndividual
-	IsSnapshot   bool // 'snapshot' modifier: OccurrenceUsage::portionKind = snapshot
-	IsAccept     bool // 'accept' action for message consumption
-	IsResult     bool // declared with 'return': the result parameter of a calculation/expression
+	// Portion is the `snapshot` or `timeslice` prefix of an occurrence usage
+	// (OccurrenceUsage::portionKind, SysML v2 8.3.9.11).
+	Portion  PortionKind
+	IsAccept bool // 'accept' action for message consumption
+	// IsBodyParameter marks the `action [<name>] { … }` a loop or branch body is
+	// written as (SysML.xtext ActionBodyParameter), not a nested action node.
+	IsBodyParameter bool
+	IsResult        bool // declared with 'return': the result parameter of a calculation/expression
 	// IsNegated is the `not` of `assert not constraint { … }` and
 	// `assert not satisfy … by …`: the conditions are asserted to be false
 	// (Invariant::isNegated, SysML v2 §8.3.21.10).
@@ -423,7 +483,22 @@ type Usage struct {
 	// that do not use them.
 	ConnectorEnds []*ConnectorEnd // connection / interface / allocation usage ends
 	FlowEnds      *FlowEnds       // flow usage ends
-	IsConjugated  bool            // `~` conjugation on port / interface
+}
+
+// HasConjugatedTyping reports whether the usage declares a `: ~P` typing.
+func (u *Usage) HasConjugatedTyping() bool {
+	_, ok := u.ConjugatedTyping()
+	return ok
+}
+
+// ConjugatedTyping returns the usage's conjugated port typing (`: ~P`), if any.
+func (u *Usage) ConjugatedTyping() (*Relationship, bool) {
+	for _, r := range u.Relationships {
+		if r != nil && r.Kind == RelTyping && r.Conjugated {
+			return r, true
+		}
+	}
+	return nil, false
 }
 
 // FlowEnds holds the ends of a flow usage: the `from`/`to` targets and an
@@ -459,6 +534,22 @@ func (c *ConnectorEnd) ReferencedTarget() Node {
 		if rel != nil && rel.Kind == RelReferences && rel.Target != nil {
 			return rel.Target
 		}
+	}
+	return c.Reference
+}
+
+// AttachedTarget returns the node naming the feature this end attaches to: what
+// it reference-subsets when it declares a name of its own (`connect bead
+// references t.bead`), and the target it names otherwise (`connect a.p to b.q`).
+func (c *ConnectorEnd) AttachedTarget() Node {
+	if c == nil {
+		return nil
+	}
+	if _, declaresName := c.DeclaredName(); declaresName {
+		return c.ReferencedTarget()
+	}
+	if c.Target != nil {
+		return c.Target
 	}
 	return c.Reference
 }

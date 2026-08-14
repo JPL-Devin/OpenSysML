@@ -9,6 +9,11 @@ var (
 	// ErrStepLimitExceeded is returned when the evaluation step counter exceeds maxSteps.
 	ErrStepLimitExceeded = errors.New("evaluation step limit exceeded")
 
+	// ErrElementLimitExceeded is returned when the collection elements one run
+	// materializes exceed maxElements. It is a bound on memory rather than on
+	// work, so it is its own error and its own budget.
+	ErrElementLimitExceeded = errors.New("collection element limit exceeded")
+
 	// ErrUnresolvedReference is returned when a feature reference cannot be resolved.
 	ErrUnresolvedReference = errors.New("unresolved reference")
 
@@ -46,12 +51,39 @@ var (
 	// expression, directly or by inheritance.
 	ErrNoResultExpression = errors.New("no result expression")
 
+	// ErrUnsupportedOperator is returned when an operator has no runtime
+	// evaluation, so an expression naming it fails rather than yielding nothing.
+	ErrUnsupportedOperator = errors.New("unsupported operator")
+
+	// ErrCalcNoReturn is returned when a calc body runs to its end without
+	// returning: it computed no result, which is not the same as a null one.
+	ErrCalcNoReturn = errors.New("calculation returned no value")
+
+	// ErrCalcSideEffect is returned when a calc body states an effect on the
+	// world outside it — send, perform, accept, terminate. A calculation
+	// computes a value, so an effect is rejected rather than performed.
+	ErrCalcSideEffect = errors.New("side effect in a calculation body")
+
+	// ErrCalcExternalAssignment is returned when a calc body assigns to a name it
+	// does not declare itself, which would make the calculation impure.
+	ErrCalcExternalAssignment = errors.New("assignment outside the calculation body")
+
+	// ErrReturnOutsideCalc is returned when a `return` is executed by a host that
+	// has no result to return, an action node's body.
+	ErrReturnOutsideCalc = errors.New("'return' outside a calculation body")
+
 	// ErrAcceptDeadlock is returned when an action can no longer progress
 	// because every token it has left is parked at an accept, so no token can
 	// post the message any of them waits for. An accept suspends the action
 	// rather than failing, so this is how a suspension that can never end is
 	// reported instead of hanging.
 	ErrAcceptDeadlock = errors.New("accept deadlock")
+
+	// ErrNoClock is returned when a behavior waits for a time event where no
+	// clock advances: an action body has no time base of its own, so
+	// `accept at t` / `accept after d` written among an action's nodes is
+	// reported rather than passed through as if the instant had arrived.
+	ErrNoClock = errors.New("no clock to wait on")
 
 	// ErrCalcRecursionLimit is returned when calc invocation nests deeper than
 	// maxCalcNestingDepth, which a recursive calc would otherwise do until the
@@ -75,6 +107,13 @@ var (
 	// through other slots, on the slot being computed.
 	ErrCyclicSlot = errors.New("cyclic slot dependency")
 
+	// ErrConnectorEnd is returned when a connector cannot be attached to the
+	// features its ends name: an end naming nothing reachable from the object
+	// owning the connector, or one carrying no value. A connector whose ends
+	// cannot be attached relates nothing, so it is an error rather than an object
+	// with defaults at its ends.
+	ErrConnectorEnd = errors.New("connector end cannot be attached")
+
 	// ErrNotAQuantity is returned when `x [y]` is not a quantity expression:
 	// y names no measurement unit, or x is no magnitude.
 	ErrNotAQuantity = errors.New("not a quantity expression")
@@ -92,6 +131,74 @@ var (
 	// requirement to evaluate: it references none, or references one that
 	// resolves to nothing.
 	ErrNoRequirement = errors.New("no requirement to satisfy")
+
+	// ErrNotACalcUsage is returned when an output feature is read from a symbol
+	// that is not a calc usage: only a usage carries an evaluation whose outputs
+	// are features.
+	ErrNotACalcUsage = errors.New("not a calc usage")
+
+	// ErrUnknownOutput is returned when a name read from a calc usage is not one
+	// of the output features its calc declares.
+	ErrUnknownOutput = errors.New("unknown output")
+
+	// ErrOutputNotAssigned is returned when a declared output carries no value
+	// because the activation never assigned it. It is a kind of ErrNoValue.
+	ErrOutputNotAssigned = fmt.Errorf("%w: output never assigned", ErrNoValue)
+
+	// ErrConflictingOutput is returned when one activation would bind an output
+	// twice: by its declaration and by an assignment, or by two assignments.
+	ErrConflictingOutput = errors.New("output bound more than once")
+
+	// ErrCyclicOutput is returned when an output feature's binding depends,
+	// directly or through other outputs, on the output being computed.
+	ErrCyclicOutput = errors.New("cyclic output dependency")
+
+	// ErrAmbiguousResult is returned when a calc declaring several output
+	// features is invoked as an expression. A function invocation has exactly
+	// one result (KerML 7.4.9), so a calc that designates none has no value to
+	// hand back and is read through a calc usage's output features instead.
+	ErrAmbiguousResult = errors.New("calculation has no single result")
+
+	// ErrIndexOutOfRange is returned when a sequence index names no position of
+	// the sequence it indexes. Sequence indices are 1-based (KerML
+	// SequenceFunctions::'#' takes `index: Positive[1]`), so 0 is out of range
+	// as much as size+1 is.
+	ErrIndexOutOfRange = errors.New("sequence index out of range")
+
+	// ErrBodyArity is returned when the body expression a collection operation
+	// is given declares a number of parameters the operation cannot call it
+	// with: `select` calls its selector with one element, so a selector
+	// declaring two parameters has no second argument to receive.
+	ErrBodyArity = errors.New("body parameter count mismatch")
+
+	// ErrReceiverWithNamedArgs is returned when a receiver is written before a
+	// call whose arguments are named, `x->f(a = 1)`. The receiver binds by
+	// position and the arguments by name, so which parameter the receiver binds
+	// to is unstated; it is reported rather than dropped.
+	ErrReceiverWithNamedArgs = errors.New("receiver combined with named arguments")
+
+	// ErrVariationUnselected is returned when a variation is read without having
+	// been bound to one of its variants: it classifies its variants abstractly,
+	// so it stands for no one value until a variant is selected.
+	ErrVariationUnselected = errors.New("variation has no variant selected")
+
+	// ErrNotAVariant is returned when a variation is bound to something that is
+	// not one of the variants it offers.
+	ErrNotAVariant = errors.New("not a variant of the variation")
+
+	// ErrMultipleVariants is returned when a variation is bound to more than one
+	// variant, which selects no single configuration.
+	ErrMultipleVariants = errors.New("more than one variant selected")
+
+	// ErrConflictingRedefinition is returned when one declaration values the
+	// same feature under two of its names: a redefinition renames one feature,
+	// so which of the two values it holds would be a silent pick.
+	ErrConflictingRedefinition = errors.New("one feature valued under two names")
+
+	// ErrValuedFeatureRestated is returned when a feature is both bound to a
+	// value and given a body restating features of it: the bound value supplies
+	// those features, so the restatement could only be silently dropped.
+	ErrValuedFeatureRestated = errors.New("feature both valued and restated in a body")
 
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of

@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -21,15 +22,28 @@ type calcParameter struct {
 }
 
 // calcShape is a calc's invocation interface: the input parameters it binds, in
-// positional order, and the expression its body returns. Both are resolved
-// across the specialization chain, so a usage typed by a calc definition
-// inherits that definition's parameters and result.
+// positional order, the output features it computes, and the expression its body
+// returns. All are resolved across the specialization chain, so a usage typed by
+// a calc definition inherits that definition's parameters, outputs and result.
 type calcShape struct {
-	Sym         *symbols.Symbol
-	Name        string // qualified name, for diagnostics and traces
-	Params      []calcParameter
-	Result      ast.Node
-	ResultOwner *symbols.Symbol // the calc whose body declares Result
+	Sym    *symbols.Symbol
+	Name   string // qualified name, for diagnostics and traces
+	Params []calcParameter
+	// Outputs are the calc's output features — its `out` parameters and the
+	// result parameter a `return` declares — in declaration order.
+	Outputs []calcOutput
+	// Body is the computation the calc states, lowered in the scope of the calc
+	// that declares it: local declarations, assignments, conditionals, loops and
+	// returns, in declaration order.
+	Body      []lower.Statement
+	BodyOwner *symbols.Symbol // the calc whose body declares Body
+	// Steps is Body without the bindings of its `out` features, which are
+	// evaluated when those features are read rather than run as statements.
+	Steps []lower.Statement
+	// BodyOutputs are the output features some statement of the body assigns,
+	// whatever path the execution takes. A calc that binds its outputs this way
+	// computes them though it returns nothing, so it states a computation.
+	BodyOutputs map[string]bool
 }
 
 // calcShapeOf resolves the invocation interface of a calc symbol: its
@@ -51,15 +65,20 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	// Most general first, so an inherited parameter keeps the position it has in
 	// the calc that declares it and a redeclaration refines it in place.
 	chain := ctx.calcChain(sym)
-	result, resultOwner := calcResult(chain)
+	body, bodyOwner := calcBody(chain)
 	shape := &calcShape{
-		Sym:         sym,
-		Name:        name,
-		Params:      calcParameters(chain),
-		Result:      result,
-		ResultOwner: resultOwner,
+		Sym:       sym,
+		Name:      name,
+		Params:    calcParameters(chain),
+		Outputs:   calcOutputs(chain),
+		Body:      body,
+		BodyOwner: bodyOwner,
+		Steps:     calcSteps(body),
 	}
-	if shape.Result == nil {
+	shape.BodyOutputs = assignedOutputs(shape.Steps, shape.Outputs)
+	// A calc computes nothing when it neither returns a value nor binds an output
+	// feature — by a declaration or by an assignment in its body.
+	if !lower.Returns(shape.Body) && len(shape.BodyOutputs) == 0 {
 		return nil, fmt.Errorf("%w: calc %s has no return expression", ErrNoResultExpression, name)
 	}
 
@@ -104,8 +123,11 @@ func calcParameters(chain []*symbols.Symbol) []calcParameter {
 			}
 			param := calcParameter{Name: name, Default: usage.Value, Owner: link}
 			if at, seen := index[param.Name]; seen {
+				// A redeclaration binding no value keeps the inherited default,
+				// which is written in the scope of the calc that stated it.
 				if param.Default == nil {
 					param.Default = params[at].Default
+					param.Owner = params[at].Owner
 				}
 				params[at] = param
 				continue
@@ -117,34 +139,25 @@ func calcParameters(chain []*symbols.Symbol) []calcParameter {
 	return params
 }
 
-// calcResult returns the result expression the invoked calc evaluates — its own
-// if it declares one, otherwise the closest inherited one — with the calc that
-// declares it, whose scope the expression is written in.
-func calcResult(chain []*symbols.Symbol) (ast.Node, *symbols.Symbol) {
+// calcBody returns the computation the invoked calc runs — its own body if that
+// states one, otherwise the closest inherited one — with the calc that declares
+// it, whose scope the body's statements are written in.
+func calcBody(chain []*symbols.Symbol) ([]lower.Statement, *symbols.Symbol) {
+	var stated []lower.Statement
+	var owner *symbols.Symbol
 	for i := len(chain) - 1; i >= 0; i-- {
-		for _, member := range declMembers(chain[i].Decl) {
-			if expr := resultExpression(member); expr != nil {
-				return expr, chain[i]
-			}
+		link := chain[i]
+		stmts := lower.CalcBody(declMembers(link.Decl), link.Scope)
+		if lower.Returns(stmts) {
+			return stmts, link
+		}
+		// A body that computes but returns nothing leaves an inherited result in
+		// force, so keep looking up the chain before settling for it.
+		if stated == nil && len(stmts) > 0 {
+			stated, owner = stmts, link
 		}
 	}
-	return nil, nil
-}
-
-// resultExpression returns the value a calc body member returns, for either
-// notation: `return <expr>;` and a bound return parameter `return : T = <expr>;`.
-// A return parameter that binds no value only names the result, so it carries no
-// expression and leaves the inherited one in force.
-func resultExpression(member ast.Node) ast.Node {
-	switch m := member.(type) {
-	case *ast.ResultMember:
-		return m.Expression
-	case *ast.Usage:
-		if m.Direction == ast.DirOut {
-			return m.Value
-		}
-	}
-	return nil
+	return stated, owner
 }
 
 // calcArgs are the arguments of one calc invocation. The notation keeps the two
@@ -197,16 +210,13 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 		return Value{}, err
 	}
 
-	if ctx.calcDepth >= maxCalcNestingDepth {
-		return Value{}, fmt.Errorf(
-			"%w: calc %s nested more than %d deep (recursive calc?)",
-			ErrCalcRecursionLimit, shape.Name, maxCalcNestingDepth,
-		)
+	leave, err := ctx.enterCalc(shape.Name)
+	if err != nil {
+		return Value{}, err
 	}
-	ctx.calcDepth++
-	defer func() { ctx.calcDepth-- }()
+	defer leave()
 
-	ec := NewEvalContext(ctx, ctx.calcScope(shape.ResultOwner, shape.Sym, callerScope))
+	ec := NewEvalContext(ctx, ctx.calcScope(shape.BodyOwner, shape.Sym, callerScope))
 
 	if ec.trace != nil {
 		ec.trace.RecordCalcEnter(shape.Name)
@@ -215,22 +225,14 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	bindings := make(map[string]Value, len(shape.Params))
 	ec.Push(bindings)
 
-	for i, param := range shape.Params {
-		defaultScope := ctx.calcScope(param.Owner, shape.Sym, callerScope)
-		value, source, err := ec.evalIn(defaultScope).bindCalcParameter(shape, param, args, i)
-		if err != nil {
-			if ec.trace != nil {
-				ec.trace.RecordCalcExitError(shape.Name, err)
-			}
-			return Value{}, err
-		}
-		bindings[param.Name] = value
+	if err := ctx.bindCalcParameters(shape, ec, args, callerScope, bindings, nil); err != nil {
 		if ec.trace != nil {
-			ec.trace.RecordCalcBind(param.Name, value, source)
+			ec.trace.RecordCalcExitError(shape.Name, err)
 		}
+		return Value{}, err
 	}
 
-	result, err := ec.Eval(shape.Result)
+	result, err := ctx.runCalcBody(shape, bindings, callerScope)
 	if ec.trace != nil {
 		if err != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
@@ -242,6 +244,95 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 		return Value{}, fmt.Errorf("calc %s: %w", shape.Name, err)
 	}
 	return result, nil
+}
+
+// enterCalc counts one calc evaluation onto the stack, refusing to go deeper
+// than maxCalcNestingDepth so a recursive calc reports a typed error rather than
+// exhausting the stack. The returned function takes it back off.
+func (ctx *Context) enterCalc(name string) (func(), error) {
+	if ctx.calcDepth >= maxCalcNestingDepth {
+		return nil, fmt.Errorf(
+			"%w: calc %s nested more than %d deep (recursive calc?)",
+			ErrCalcRecursionLimit, name, maxCalcNestingDepth,
+		)
+	}
+	ctx.calcDepth++
+	return func() { ctx.calcDepth-- }, nil
+}
+
+// bindCalcParameters binds the calc's input parameters into bindings: each
+// parameter's argument, or, for a parameter no argument supplies, the default
+// declared closest to the invoked calc, evaluated in the scope of the calc
+// declaring it. ec supplies the environment defaults are evaluated in; nested,
+// when non-null, is the environment reading a nested usage, which the bindings
+// the usage itself declares are written in and evaluate against.
+func (ctx *Context) bindCalcParameters(
+	shape *calcShape,
+	ec *EvalContext,
+	args calcArgs,
+	callerScope *symbols.Scope,
+	bindings map[string]Value,
+	nested *EvalContext,
+) error {
+	for i, param := range shape.Params {
+		defaultScope := ctx.calcScope(param.Owner, shape.Sym, callerScope)
+		binder := ec
+		if nested != nil && param.Owner == shape.Sym {
+			binder = nested
+		}
+		value, source, err := binder.evalIn(defaultScope).bindCalcParameter(shape, param, args, i)
+		if err != nil {
+			return err
+		}
+		bindings[param.Name] = value
+		if ec.trace != nil {
+			ec.trace.RecordCalcBind(param.Name, value, source)
+		}
+	}
+	return nil
+}
+
+// runCalcBody runs the calc's computation in an environment of its own —
+// bindings holds its parameters and its locals — and answers with the one value
+// the invocation yields: what the body returned, or, for a body that returns
+// nothing, the calc's designated output feature.
+func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, callerScope *symbols.Scope) (Value, error) {
+	result, returned, activation, err := ctx.runCalcSteps(shape, bindings)
+	// The invocation's activation ends with the value it yields, which is the last
+	// thing evaluated in it.
+	defer ctx.endActivation(activation)
+	if err != nil {
+		return Value{}, err
+	}
+	if returned {
+		return result, nil
+	}
+	out, err := shape.designatedOutput()
+	if err != nil {
+		return Value{}, err
+	}
+	// The designated output's binding may name the calc's other outputs, and one
+	// naming itself is a cycle rather than an evaluation, so it is evaluated
+	// through the same run bookkeeping a calc usage's outputs use.
+	run := newCalcRun(shape, callerScope, nil, bindings)
+	run.activation = activation
+	// The invocation already holds this evaluation's nesting slot.
+	run.onStack = true
+	return run.value(ctx, out)
+}
+
+// runCalcSteps runs the calc's lowered computation, reporting whether it
+// returned a value and the activation it ran in. bindings holds the calc's
+// parameters on the way in and its locals on the way out.
+func (ctx *Context) runCalcSteps(shape *calcShape, bindings map[string]Value) (Value, bool, int64, error) {
+	host := &calcStmtHost{shape: shape}
+	engine := newStmtEngine(ctx, host, bindings)
+
+	flow, err := engine.run(shape.Steps)
+	if err != nil {
+		return Value{}, false, engine.activation, err
+	}
+	return host.result, flow == flowReturn, engine.activation, nil
 }
 
 // checkArgs rejects an argument list that cannot bind to the parameters at all:
@@ -324,15 +415,20 @@ func (ctx *Context) calcScope(declarer, invoked *symbols.Symbol, callerScope *sy
 	return callerScope
 }
 
-// hasCalcBody reports whether sym's calc chain declares a result expression to
-// evaluate. A library function declared without one — or a symbol loaded from the
-// library index, which carries no declaration at all — has no body.
+// hasCalcBody reports whether sym's calc chain states a computation of its own:
+// a result expression, or a body assigning an output it declares. A library
+// function declared without one — or a symbol loaded from the library index,
+// which carries no declaration at all — has no body.
 func (ctx *Context) hasCalcBody(sym *symbols.Symbol) bool {
 	if sym == nil || sym.Decl == nil || !isCalcDecl(sym.Decl) {
 		return false
 	}
-	result, _ := calcResult(ctx.calcChain(sym))
-	return result != nil
+	chain := ctx.calcChain(sym)
+	body, _ := calcBody(chain)
+	if lower.Returns(body) {
+		return true
+	}
+	return len(assignedOutputs(calcSteps(body), calcOutputs(chain))) > 0
 }
 
 // isCalcDecl reports whether a declaration is a calc definition or calc usage.
@@ -357,6 +453,42 @@ func isCalcSymbol(sym *symbols.Symbol) bool {
 		return isCalcDecl(sym.Decl)
 	}
 	return sym.Kind == symbols.SymbolCalcDef || sym.Kind == symbols.SymbolCalcUsage
+}
+
+// isActionSymbol reports whether sym declares an action, reading its declaration
+// when it has one and its symbol kind otherwise.
+func isActionSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefAction
+	case *ast.Usage:
+		return d.Kind == ast.UsageAction
+	}
+	if sym.Decl != nil {
+		return false
+	}
+	return sym.Kind == symbols.SymbolActionDef || sym.Kind == symbols.SymbolActionUsage
+}
+
+// isStateSymbol reports whether sym declares a state, reading its declaration when
+// it has one and its symbol kind otherwise.
+func isStateSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefState
+	case *ast.Usage:
+		return d.Kind == ast.UsageState
+	}
+	if sym.Decl != nil {
+		return false
+	}
+	return sym.Kind == symbols.SymbolStateDef || sym.Kind == symbols.SymbolStateUsage
 }
 
 // declMembers returns the body members of a definition or usage, unwrapping the

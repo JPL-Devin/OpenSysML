@@ -65,7 +65,9 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 	expected := loadExpectedOutcome(t, conformanceDir, testName)
 
 	// Parse and build model
-	file := parser.New(source.New(sysmlPath, sysmlData)).ParseFile()
+	p := parser.New(source.New(sysmlPath, sysmlData))
+	file := p.ParseFile()
+	checkDiagnostics(t, p.Diagnostics, expected.Diagnostics)
 
 	idx := symbols.NewIndex()
 	// A case whose model names library elements — the measurement unit of a
@@ -101,13 +103,22 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 	switch expected.Type {
 	case "calc":
 		ctx.SetTrace(trace)
-		calcSym := findBehavioralSymbol(t, rootScope, ast.DefCalc, ast.UsageCalc)
+		calcSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefCalc, ast.UsageCalc)
 		args := make([]Value, len(expected.Inputs))
 		for i, input := range expected.Inputs {
 			args[i] = expectedToRuntimeValue(t, input)
 		}
 		if _, err := ctx.InvokeCalc(calcSym, args, rootScope); err != nil {
 			unrecordable("invoke calc: %v", err)
+		}
+		traceOutput = trace.String()
+	case "calcUsage":
+		// Reading every output of the usage traces one evaluation of its body,
+		// which is what makes the evaluate-once guarantee visible in the golden.
+		ctx.SetTrace(trace)
+		usageSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefCalc, ast.UsageCalc)
+		if _, err := ctx.CalcUsageOutputs(usageSym, usageSym.OwnerScope, nil); err != nil {
+			unrecordable("evaluate calc usage: %v", err)
 		}
 		traceOutput = trace.String()
 	case "constraint":

@@ -6,6 +6,76 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Unreleased
 
+### Runtime
+
+- A fifth runaway bound, `SYSML_MAX_ELEMENTS` (default 1 000 000), bounds the
+  collection elements one evaluation holds rather than the work a run does: an
+  element is a 104-byte `Value` living as long as the collection holding it, so
+  the default holds ~104 MB of them, in the band the other defaults were sized
+  against. Every materializing path is charged — a range, a sequence literal,
+  `->collect` and the other collection operations — and exceeding it is
+  `ErrElementLimitExceeded` naming the variable, not the step limit: `1..10000000`
+  used to conjure ~1 GB before the step budget reported it. A statement releases
+  what it materialized, so a loop building a small collection each iteration is
+  bounded by what it holds rather than by what it has produced in total.
+- An action node's body ends the activation it ran in, so a run stepping the same
+  body many times no longer holds what every execution's calc usages computed.
+- A calc usage declared in an action's body or among a state machine's members
+  binds its inputs from the values the behavior has reached, as one in a calc's
+  body does: `calc t : Twice { in k = v; }` after `assign v := 2.0` reads 2.0
+  rather than the value `v` was declared with.
+- An evaluation outside a body — a decision or transition guard, a change
+  condition or duration, an inline node expression, an attribute or slot default,
+  an action argument, a constraint check — runs in a scope of its own, so what a
+  calc usage answers it and the elements a collection it evaluates materializes
+  live no longer than the step. A decision revisited after its body assigned
+  reads the usage again over those values instead of the first evaluation's
+  result, and a long run whose guard builds a small list is bounded by what it
+  holds rather than stopped as a runaway. Reads within one step still share the
+  scope, and a read through a part's feature chain belongs to the evaluation
+  making it.
+- `%budget` prints the five bounds a session runs on with the variable that
+  raises each, and a literal expression that spends one is answered with that
+  failure instead of "no declarations loaded".
+
+### Python bindings and `sysml-grpc`
+
+- `Instantiate` returns every instance reachable from the root, so a Python caller
+  expands a composite slot (`inst.engine.power`) instead of holding a bare instance
+  id, and a slot the service could not evaluate is reported in `SlotValue.error`
+  rather than as a null value. On the client, slot values convert to Python
+  scalars, lists and nested `Instance`s, with the raw protobuf still reachable
+  through `get_slot()`/`raw_slots`; attribute and item access raise
+  `AttributeError`/`KeyError`/`SlotError` rather than returning `None`. (#110)
+- `python -m pysysml.generate` emits a Python class per SysML definition —
+  properties that carry the static type and perform the runtime delegation, so an
+  editor completes `inst.mass` and a type checker rejects `inst.mas`. `GetSymbol`
+  reports the type facts this needs (`type_info` with primitive reduction,
+  `multiplicity`, all specialization edges), `pysysml` ships `py.typed`, and
+  emission is deterministic so the output can be committed. (#111)
+- `GetServerInfo` reports the service's build version and the capabilities it
+  supports by name, so a client can require a capability instead of comparing
+  version strings — versions of source and forked builds are not comparable, and a
+  service that predates the RPC answers `UNIMPLEMENTED`, which is itself the
+  answer. Typed generation requires the `type_facts` capability and fails naming
+  the service in use, where it came from and how to replace it. Against a service
+  without it, every generated feature was typed `object`, indistinguishable from a
+  feature that is genuinely untyped: the v0.0.5 `sysml-grpc` predates `type_info`,
+  so a caller letting `pysysml` download the released binary silently got a
+  useless module.
+- A generated module records the model source hash and the generator's emission
+  schema, and `pysysml.generate --check` regenerates in memory and exits non-zero
+  when the committed module is missing or would change, writing nothing — a stale
+  module was previously found at attribute access, or never, since a feature
+  removed from the model keeps type-checking.
+- `TypedObject.from_instance` rejects an instance of another definition, naming
+  both types, instead of accepting it and failing later with a confusing
+  `TypeMismatchError` on the first slot read. An instance of a definition that
+  specializes the expected one is accepted; an instance whose type no generated
+  class describes is accepted too, because instantiating a usage reports the
+  usage's own FQN, which the client cannot relate to a definition.
+  `unchecked(instance)` is the explicit escape hatch.
+
 ## 0.0.5 — 2026-08-12
 
 ### Language and semantics

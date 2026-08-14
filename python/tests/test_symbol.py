@@ -18,7 +18,7 @@ class TestSymbolBasicProperties:
         info = sysml_pb2.SymbolInfo(
             id="Vehicles::Vehicle",
             name="Vehicle",
-            kind="PartDef",
+            kind="partDef",
             metadata={"source": "test.sysml", "line": "5"}
         )
         
@@ -28,7 +28,7 @@ class TestSymbolBasicProperties:
         # Verify properties
         assert sym.id == "Vehicles::Vehicle"
         assert sym.name == "Vehicle"
-        assert sym.kind == "PartDef"
+        assert sym.kind == "partDef"
         assert sym.metadata == {"source": "test.sysml", "line": "5"}
         assert isinstance(sym.metadata, dict)
     
@@ -38,7 +38,7 @@ class TestSymbolBasicProperties:
         info = sysml_pb2.SymbolInfo(
             id="Model",
             name="Model",
-            kind="Package"
+            kind="package"
         )
         
         # Create Symbol without client
@@ -47,19 +47,19 @@ class TestSymbolBasicProperties:
         # Verify properties still work
         assert sym.id == "Model"
         assert sym.name == "Model"
-        assert sym.kind == "Package"
+        assert sym.kind == "package"
     
     def test_symbol_str(self):
         """Test __str__ returns 'name (kind)' format."""
         info = sysml_pb2.SymbolInfo(
             id="Vehicles::Vehicle",
             name="Vehicle",
-            kind="PartDef"
+            kind="partDef"
         )
         sym = Symbol(info, None, "model_abc123")
         
         # Verify __str__ format
-        assert str(sym) == "Vehicle (PartDef)"
+        assert str(sym) == "Vehicle (partDef)"
 
 
 class TestSymbolChildren:
@@ -74,12 +74,12 @@ class TestSymbolChildren:
         child1_info = sysml_pb2.SymbolInfo(
             id="Vehicles::Vehicle::mass",
             name="mass",
-            kind="AttributeUsage"
+            kind="attributeUsage"
         )
         child2_info = sysml_pb2.SymbolInfo(
             id="Vehicles::Vehicle::speed",
             name="speed",
-            kind="AttributeUsage"
+            kind="attributeUsage"
         )
         mock_client.get_symbol.side_effect = [child1_info, child2_info]
         
@@ -87,7 +87,7 @@ class TestSymbolChildren:
         parent_info = sysml_pb2.SymbolInfo(
             id="Vehicles::Vehicle",
             name="Vehicle",
-            kind="PartDef",
+            kind="partDef",
             child_ids=["Vehicles::Vehicle::mass", "Vehicles::Vehicle::speed"]
         )
         
@@ -118,7 +118,7 @@ class TestSymbolChildren:
         child_info = sysml_pb2.SymbolInfo(
             id="Vehicles::Vehicle::mass",
             name="mass",
-            kind="AttributeUsage"
+            kind="attributeUsage"
         )
         mock_client.get_symbol.return_value = child_info
         
@@ -126,7 +126,7 @@ class TestSymbolChildren:
         parent_info = sysml_pb2.SymbolInfo(
             id="Vehicles::Vehicle",
             name="Vehicle",
-            kind="PartDef",
+            kind="partDef",
             child_ids=["Vehicles::Vehicle::mass"]
         )
         
@@ -153,7 +153,7 @@ class TestSymbolChildren:
         info = sysml_pb2.SymbolInfo(
             id="Vehicles::Vehicle",
             name="Vehicle",
-            kind="PartDef",
+            kind="partDef",
             child_ids=[]
         )
         
@@ -172,7 +172,7 @@ class TestSymbolChildren:
         info = sysml_pb2.SymbolInfo(
             id="Model",
             name="Model",
-            kind="Package",
+            kind="package",
             child_ids=["Model::Vehicles", "Model::Parts"]
         )
         
@@ -192,7 +192,7 @@ class TestSymbolChildren:
         child1_info = sysml_pb2.SymbolInfo(
             id="Vehicles::Vehicle::mass",
             name="mass",
-            kind="AttributeUsage"
+            kind="attributeUsage"
         )
         # Second call returns None (symbol not found or RPC error)
         mock_client.get_symbol.side_effect = [child1_info, None]
@@ -201,7 +201,7 @@ class TestSymbolChildren:
         parent_info = sysml_pb2.SymbolInfo(
             id="Vehicles::Vehicle",
             name="Vehicle",
-            kind="PartDef",
+            kind="partDef",
             child_ids=["Vehicles::Vehicle::mass", "Vehicles::Vehicle::invalid"]
         )
         
@@ -217,61 +217,62 @@ class TestSymbolChildren:
 
 
 class TestSymbolAttributes:
-    """Test Symbol.attributes() method."""
+    """Test Symbol.attributes(), parts() and get_attr() against real service kinds."""
 
-    def test_symbol_attributes_filtering(self):
-        """Test attributes() filters children with 'Attribute' in kind."""
-        # Create mock client
-        mock_client = Mock()
-        
-        # Mock get_symbol to return mixed children
-        attr1_info = sysml_pb2.SymbolInfo(
-            id="Vehicles::Vehicle::mass",
-            name="mass",
-            kind="AttributeUsage"
-        )
-        part_info = sysml_pb2.SymbolInfo(
-            id="Vehicles::Vehicle::engine",
-            name="engine",
-            kind="PartUsage"
-        )
-        attr2_info = sysml_pb2.SymbolInfo(
-            id="Vehicles::Vehicle::length",
-            name="length",
-            kind="PartAttributeUsage"  # Contains "Attribute"
-        )
-        attr3_info = sysml_pb2.SymbolInfo(
-            id="Vehicles::Vehicle::year",
-            name="year",
-            kind="AttributeDef"  # Contains "Attribute"
-        )
-        
-        mock_client.get_symbol.side_effect = [attr1_info, part_info, attr2_info, attr3_info]
-        
-        # Create parent SymbolInfo
+    def _vehicle(self, mock_client):
+        """Build a Vehicle symbol whose children use the service's kind strings."""
+        children = [
+            sysml_pb2.SymbolInfo(id="Vehicles::Vehicle::mass", name="mass", kind="attributeUsage"),
+            sysml_pb2.SymbolInfo(id="Vehicles::Vehicle::engine", name="engine", kind="partUsage"),
+            sysml_pb2.SymbolInfo(id="Vehicles::Vehicle::Wheel", name="Wheel", kind="partDef"),
+            sysml_pb2.SymbolInfo(id="Vehicles::Vehicle::Color", name="Color", kind="attributeDef"),
+            sysml_pb2.SymbolInfo(id="Vehicles::Vehicle::cargo", name="cargo", kind="itemUsage"),
+        ]
+        mock_client.get_symbol.side_effect = children
         parent_info = sysml_pb2.SymbolInfo(
             id="Vehicles::Vehicle",
             name="Vehicle",
-            kind="PartDef",
-            child_ids=[
-                "Vehicles::Vehicle::mass",
-                "Vehicles::Vehicle::engine",
-                "Vehicles::Vehicle::length",
-                "Vehicles::Vehicle::year"
-            ]
+            kind="partDef",
+            child_ids=[child.id for child in children],
         )
-        
-        # Create parent Symbol
-        parent = Symbol(parent_info, mock_client, "model_abc123")
-        
-        # Get attributes - should filter by "Attribute" in kind
+        return Symbol(parent_info, mock_client, "model_abc123")
+
+    def test_attributes_matches_service_kinds(self):
+        """attributes() selects attributeUsage/attributeDef children."""
+        parent = self._vehicle(Mock())
+
         attributes = parent.attributes()
-        
-        # Verify only symbols with "Attribute" in kind
-        assert len(attributes) == 3
-        assert attributes[0].id == "Vehicles::Vehicle::mass"
-        assert attributes[0].kind == "AttributeUsage"
-        assert attributes[1].id == "Vehicles::Vehicle::length"
-        assert attributes[1].kind == "PartAttributeUsage"
-        assert attributes[2].id == "Vehicles::Vehicle::year"
-        assert attributes[2].kind == "AttributeDef"
+
+        assert [attr.name for attr in attributes] == ["mass", "Color"]
+
+    def test_parts_matches_service_kinds(self):
+        """parts() selects partUsage/partDef children."""
+        parent = self._vehicle(Mock())
+
+        parts = parent.parts()
+
+        assert [part.name for part in parts] == ["engine", "Wheel"]
+
+    def test_get_attr_finds_attribute(self):
+        """get_attr() returns the named attribute, None otherwise."""
+        parent = self._vehicle(Mock())
+
+        assert parent.get_attr("mass").kind == "attributeUsage"
+        assert parent.get_attr("engine") is None
+        assert parent.get_attr("missing") is None
+
+    def test_kind_matching_is_case_insensitive(self):
+        """Kinds are matched case-insensitively, so PascalCase producers work."""
+        mock_client = Mock()
+        mock_client.get_symbol.side_effect = [
+            sysml_pb2.SymbolInfo(id="P::mass", name="mass", kind="AttributeUsage"),
+            sysml_pb2.SymbolInfo(id="P::engine", name="engine", kind="PartUsage"),
+        ]
+        parent = Symbol(
+            sysml_pb2.SymbolInfo(id="P", name="P", kind="PartDef", child_ids=["P::mass", "P::engine"]),
+            mock_client,
+            "model_abc123",
+        )
+
+        assert [attr.name for attr in parent.attributes()] == ["mass"]
+        assert [part.name for part in parent.parts()] == ["engine"]

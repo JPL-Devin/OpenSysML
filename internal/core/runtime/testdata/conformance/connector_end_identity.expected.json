@@ -1,0 +1,21 @@
+{
+  "type": "instance",
+  "instantiate": "test::Sys",
+  "libraries": true,
+  "slots": {
+    "link": {"type": "Instance"},
+    "spareLink": {"type": "Instance"},
+    "iface": {"type": "Instance"}
+  },
+  "identical": [
+    ["link.source", "a.p"],
+    ["link.target", "b.q"],
+    ["spareLink.target", "b.q"],
+    ["iface.source", "a.p"],
+    ["iface.target", "b.q"]
+  ],
+  "distinct": [
+    ["link.source", "spareLink.source"],
+    ["link", "iface"]
+  ]
+}

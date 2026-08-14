@@ -116,16 +116,6 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		if len(d.Body) > 0 {
 			buildMembers(child, d.Body)
 		}
-	case *ast.ActorMember:
-		// ActorMember declares a requirement/use-case actor: actor <name> : <Type>;
-		// or actor <name> = <expr>; either form binds the name in the body.
-		if d.Name != "" {
-			id := ast.Identification{Name: d.Name}
-			child := NewScope(scope, d)
-			sym := newSymbol(id, SymbolPartUsage, d, vis, child, scope, trivia)
-			defineIdent(scope, id, sym)
-			scope.AddChild(child)
-		}
 	case *ast.Import, *ast.FilterMember, *ast.ErrorNode:
 		// Imports are processed during resolution; filters hold expressions;
 		// error nodes have no declaration. Nothing to register here.
@@ -164,6 +154,19 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		for _, region := range d.Regions {
 			buildDecl(child, region, ast.VisibilityDefault, nil)
 		}
+	case *ast.TransitionMember:
+		// A named transition is a feature of the state that declares it (SysML v2
+		// §7.19.2: TransitionUsage specializes ActionUsage), and its effect
+		// behaviors are features of the transition, so `t.effectAction` resolves.
+		if d.Name == "" {
+			return
+		}
+		id := ast.Identification{Name: d.Name}
+		child := NewScope(scope, d)
+		sym := newSymbol(id, SymbolActionUsage, d, vis, child, scope, trivia)
+		defineIdent(scope, id, sym)
+		scope.AddChild(child)
+		buildMembers(child, d.Effect)
 	case *ast.StateRegion:
 		// A region is a namespace of its own: sibling regions routinely reuse
 		// state names (each region declaring its own `initial start`), so their
@@ -407,11 +410,15 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 		return SymbolViewUsage
 	case ast.UsageViewpoint:
 		return SymbolViewpointUsage
-	case ast.UsageRendering:
+	case ast.UsageRendering, ast.UsageViewRendering:
+		// A view's `render` member owns a rendering usage (SysML v2 §8.3.26).
 		return SymbolRenderingUsage
-	case ast.UsageConcern:
+	case ast.UsageConcern, ast.UsageFramedConcern:
+		// A framed concern is a concern usage (SysML v2 §8.3.20).
 		return SymbolConcernUsage
-	case ast.UsageConnection:
+	case ast.UsageConnection, ast.UsageConnector:
+		// A KerML `connector` is the connection usage of the kernel layer
+		// (KerML 1.0 §7.4.6), so it is one kind of symbol.
 		return SymbolConnectionUsage
 	case ast.UsageFlow:
 		return SymbolFlowUsage
@@ -444,6 +451,9 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 		return SymbolPartUsage
 	case ast.UsageObjective:
 		// Objective is a requirement parameter - treat as part usage for structural purposes
+		return SymbolPartUsage
+	case ast.UsageActor, ast.UsageStakeholder:
+		// An actor and a stakeholder are part usages (SysML v2 §8.3.19).
 		return SymbolPartUsage
 	default:
 		return SymbolUnknown

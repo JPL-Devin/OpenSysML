@@ -192,6 +192,43 @@ func TestEvalErrors(t *testing.T) {
 	wants(t, run(t, empty, "%eval mass"), "no declarations loaded")
 }
 
+// An expression of literals alone is answered without any declarations, so a
+// failure of one is the answer and is reported as it is: declaring something
+// would not change it, and "no declarations loaded" would say to try.
+func TestEvalReportsTheAnswerOfALiteralExpressionThatFails(t *testing.T) {
+	empty := NewSession()
+	wants(t, run(t, empty, "%eval (1, 2, 3)#(0)"), "sequence index 0 is outside 1..3")
+	wants(t, run(t, empty, "%eval (1, 2, 3)#(1.5)"),
+		"sequence index requires an Integer index")
+	wants(t, run(t, empty, "%eval (1, 2, 3).{in x; in y; x}"),
+		"calls its body with 1 argument(s), but it declares 2 parameter(s)")
+	// A budget the literal expression itself spends is the answer too, and the
+	// session's bounds are the ones in force.
+	budgets := runtime.DefaultBudgets()
+	budgets.MaxElements = 10
+	if err := empty.SetBudgets(budgets); err != nil {
+		t.Fatalf("SetBudgets: %v", err)
+	}
+	wants(t, run(t, empty, "%eval (1..100)->size()"),
+		"collection element limit exceeded (10 elements; raise "+runtime.MaxElementsEnvVar)
+	// A name is the one failure declarations do answer, so it still says so.
+	wants(t, run(t, empty, "%eval mass + 1"), "no declarations loaded")
+}
+
+// A collection operation is answered from literals alone, but a name the
+// session declares is that declaration's: the library implementation cannot
+// answer for a calc the session wrote under the same name.
+func TestEvalPrefersASessionDeclarationOverALibraryOperation(t *testing.T) {
+	empty := NewSession()
+	wants(t, run(t, empty, "%eval size((1, 2, 3))"), "= 3")
+	wants(t, run(t, empty, "%eval sum((1, 2, 3))"), "= 6")
+
+	own := NewSession()
+	own.Submit("calc sum { in a; in b; return : Integer = a + b; }")
+	wants(t, run(t, own, "%eval sum(1, 2)"), "= 3")
+	wants(t, run(t, own, "%eval sum((1, 2, 3))"), "error:")
+}
+
 func TestCalcWithPositionalArgs(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%calc add 20 22"), "✓ add(20, 22)", "= 42")
@@ -527,6 +564,35 @@ func TestCalcParsesExpressionArguments(t *testing.T) {
 	wants(t, run(t, s, "%calc Fall v0=-15.0 [m/s] tb=8.5 [s]"), "named arguments are not supported")
 }
 
+// %calc runs a calculation whose body is statements — locals, a loop, an early
+// return — the same way it runs one that is a single expression.
+func TestCalcRunsAStatementBody(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package P {
+		calc def factorial {
+			in n;
+			attribute acc = 1;
+			attribute i = 1;
+			while i <= n {
+				acc = acc * i;
+				i = i + 1;
+			}
+			return : Integer = acc;
+		}
+		calc def firstOver {
+			in limit;
+			for x in (1, 5, 9) {
+				if x > limit { return : Integer = x; }
+			}
+			return : Integer = 0;
+		}
+	}`)
+	wants(t, run(t, s, "%calc P::factorial 6"), "✓ P::factorial(6)", "= 720")
+	wants(t, run(t, s, "%calc P::factorial 0"), "= 1")
+	wants(t, run(t, s, "%calc P::firstOver 3"), "= 5")
+	wants(t, run(t, s, "%calc P::firstOver 100"), "= 0")
+}
+
 // A whitespace-separated argument may be signed: `5 -3` is two arguments, while
 // `5 - 3` — an expression left unfinished across the space — is one.
 func TestCalcSeparatesSignedArguments(t *testing.T) {
@@ -550,4 +616,70 @@ func TestFormatValueQuantityUsesRealFormatting(t *testing.T) {
 	s := quantitySession(t)
 	wants(t, run(t, s, "%eval -15.200531548598184 [m/s]"), "= -15.20 [m/s]")
 	wants(t, run(t, s, "%eval 32.99999999999993 [s]"), "= 33.00 [s]")
+}
+
+// A calc usage computes output features rather than one result, so %calc lists
+// every output of one evaluation and %eval reads them as features.
+func TestCalcUsageOutputsAtThePrompt(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package M {
+		calc def Two { in n; out a = n + 1; out b = n * 2; }
+		calc c : Two { in n = 5; }
+		attribute z = c.b;
+		part p {
+			calc d : Two { in n = 7; }
+			attribute q = d.a;
+		}
+	}`)
+	wants(t, run(t, s, "%calc M::c"), "✓ M::c", "a = 6", "b = 10")
+	wants(t, run(t, s, "%eval M::c.a"), "= 6")
+	wants(t, run(t, s, "%eval M::c.b"), "= 10")
+	wants(t, run(t, s, "%eval M::z"), "= 10")
+	wants(t, run(t, s, "%eval M::p::q"), "= 8")
+}
+
+// A calculation yields exactly one result, so invoking one that computes several
+// outputs and designates none is reported instead of answering with whichever
+// output comes first.
+func TestCalcWithSeveralOutputsIsNotInvocable(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package M {
+		calc def Two { in n; out a = n + 1; out b = n * 2; }
+	}`)
+	wants(t, run(t, s, "%calc M::Two 5"), "has no single result", "a, b")
+	wants(t, run(t, s, "%eval M::Two(5)"), "has no single result")
+}
+
+// A signal a state's entry action sent through a port is in flight and due now:
+// %advance must dispatch it, so stepping the debugger reaches the same state
+// running the machine to completion does.
+func TestAdvanceDeliversPendingPortSignal(t *testing.T) {
+	s := loadFixture(t, "../core/runtime/testdata/conformance/state_transition_accept_via_port.sysml")
+	run(t, s, "%state Radio")
+
+	wants(t, run(t, s, "%advance 1"), "Current state: done", "State machine completed")
+	wants(t, run(t, s, "%current"), "received = 1")
+}
+
+// A machine performed by an object routes over that object's connections, so
+// naming the object is how the debugger reaches a variant selection: two objects
+// of one type each drive the machine to the state their own variant connects to.
+func TestStateDebuggerRoutesForThePerformingObject(t *testing.T) {
+	s := loadFixture(t, "../core/runtime/testdata/conformance/variant_connection_per_owner.sysml")
+
+	run(t, s, "%instantiate VariantRouting::alpha")
+	run(t, s, "%instantiate VariantRouting::beta")
+
+	wants(t, run(t, s, "%state VariantRouting::Router::Route VariantRouting::alpha"), "✓ Started state machine executor")
+	wants(t, run(t, s, "%advance 1"), "Current state: arrived")
+
+	wants(t, run(t, s, "%state VariantRouting::Router::Route VariantRouting::beta"), "✓ Started state machine executor")
+	wants(t, run(t, s, "%advance 1"), "Current state: diverted")
+}
+
+// A behavior performed by nothing routes over its own connections only, and an
+// object named for a behavior that was never instantiated is reported.
+func TestStateDebuggerReportsAnUninstantiatedPerformer(t *testing.T) {
+	s := loadFixture(t, "../core/runtime/testdata/conformance/variant_connection_per_owner.sysml")
+	wants(t, run(t, s, "%state VariantRouting::Router::Route VariantRouting::alpha"), "no instance of")
 }

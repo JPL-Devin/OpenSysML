@@ -92,7 +92,12 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 	case *ast.Usage:
 		bodyScopesInRelationships(scope, d.Relationships)
 		bodyScopesInMultiplicity(scope, d.Multiplicity)
-		bodyScopesInExpr(scope, d.Value)
+		// An accept node keeps its trigger in the usage's value.
+		if d.IsAccept {
+			bodyScopesInTrigger(scope, d.Value)
+		} else {
+			bodyScopesInExpr(scope, d.Value)
+		}
 		for _, end := range d.ConnectorEnds {
 			if end == nil {
 				continue
@@ -127,8 +132,6 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 	case *ast.RequireMember:
 		bodyScopesInExpr(scope, d.Expression)
 		buildBodyScopes(scope, d.Body)
-	case *ast.ActorMember:
-		bodyScopesInExpr(scope, d.BindingExpr)
 	case *ast.EntryMember:
 		buildBodyScopes(scope, d.Actions)
 	case *ast.DoMember:
@@ -159,9 +162,9 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		buildBodyScopes(states, d.States)
 	case *ast.TransitionMember:
 		bodyScopesInTrigger(scope, d.Trigger)
-		// The parameters a call trigger declares are visible to the transition's
-		// own guard and effect, and nowhere else.
-		body := newCallTriggerScope(scope, d)
+		// The parameters a trigger declares are visible to the transition's own
+		// guard and effect, and nowhere else.
+		body := newTriggerScope(scope, d)
 		bodyScopesInExpr(body, d.Guard)
 		buildBodyScopes(body, d.Effect)
 	case *ast.SendStatement:
@@ -183,6 +186,7 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		}
 		bodyScopesInExpr(scope, d.Collection)
 		bodyScopesInExpr(body, d.Condition)
+		bodyScopesInExpr(body, d.Until)
 		buildBodyScopes(body, d.Body)
 	case *ast.IfActionNode:
 		bodyScopesInExpr(scope, d.Condition)
@@ -199,44 +203,121 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 	}
 }
 
-// CallTriggerScope returns the scope holding the parameters trans's call
-// trigger declares, or parent when it declares none.
-func CallTriggerScope(parent *Scope, trans *ast.TransitionMember) *Scope {
+// TriggerScope returns the innermost scope trans's guard and effect resolve
+// against: the one holding the parameters its trigger declares when it declares
+// any, the transition's own scope when it has one, and parent otherwise.
+func TriggerScope(parent *Scope, trans *ast.TransitionMember) *Scope {
 	if parent == nil {
 		return nil
 	}
-	for _, ch := range parent.Children() {
-		if ch.Node() == trans {
-			return ch
+	scope := parent
+	if child := bodyScopeChild(parent, trans); child != nil {
+		scope = child
+		if params := triggerParameterScope(child, trans); params != nil {
+			scope = params
 		}
 	}
-	return parent
+	return scope
 }
 
-// newCallTriggerScope creates and links the scope a call trigger's parameters
-// declare into, so `accept setSpeed(value) if value > 0` resolves `value`.
-func newCallTriggerScope(parent *Scope, trans *ast.TransitionMember) *Scope {
-	callEvent, ok := trans.Trigger.(*ast.CallEvent)
-	if !ok || len(callEvent.Parameters) == 0 {
+// newTriggerScope creates and links the scope a trigger's parameters declare
+// into, so `accept setSpeed(value) if value > 0` resolves `value` and
+// `accept w : Warning do assign level := w` resolves `w`.
+func newTriggerScope(parent *Scope, trans *ast.TransitionMember) *Scope {
+	// A named transition already owns a scope holding its effect members
+	// (builder.buildDecl); an unnamed one owns none until its trigger needs it.
+	scope := bodyScopeChild(parent, trans)
+	define := triggerParameterDefiner(trans.Trigger)
+	if define == nil {
+		if scope != nil {
+			return scope
+		}
 		return parent
 	}
-	if existing := bodyScopeChild(parent, trans); existing != nil {
-		return existing
+	if scope == nil {
+		scope = NewScope(parent, trans)
+		scope.markBodyLocal()
+		parent.AddChild(scope)
 	}
-	scope := NewScope(parent, trans)
-	scope.markBodyLocal()
-	for _, param := range callEvent.Parameters {
-		scope.Define(param.Text, &Symbol{
-			Name:       param.Text,
-			Kind:       SymbolAttributeUsage,
-			Decl:       callEvent,
-			DeclSpan:   param.Span,
-			NameSpan:   param.Span,
+	// The parameters go in a scope of their own, nested in the transition's: they
+	// are visible to the guard and effect that resolve through it, but are not
+	// features of the transition the way its effect behaviors are.
+	params := triggerParameterScope(scope, trans)
+	if params == nil {
+		params = NewScope(scope, trans.Trigger)
+		params.markBodyLocal()
+		scope.AddChild(params)
+	}
+	define(params)
+	return params
+}
+
+// triggerParameterScope returns the scope holding the parameters trans's
+// trigger declares, or nil when it has none.
+func triggerParameterScope(transScope *Scope, trans *ast.TransitionMember) *Scope {
+	if trans.Trigger == nil {
+		return nil
+	}
+	return bodyScopeChild(transScope, trans.Trigger)
+}
+
+// triggerParameterDefiner returns a function defining the parameters trigger
+// declares, or nil when it declares none.
+func triggerParameterDefiner(trigger ast.Node) func(*Scope) {
+	switch t := trigger.(type) {
+	case *ast.CallEvent:
+		if len(t.Parameters) == 0 {
+			return nil
+		}
+		return func(scope *Scope) {
+			for _, param := range t.Parameters {
+				scope.Define(param.Text, &Symbol{
+					Name:       param.Text,
+					Kind:       SymbolAttributeUsage,
+					Decl:       t,
+					DeclSpan:   param.Span,
+					NameSpan:   param.Span,
+					OwnerScope: scope,
+				})
+			}
+		}
+	case *ast.AcceptEvent:
+		return payloadParameterDefiner(t.Payload)
+	case *ast.Usage:
+		// The parser gives an accept's payload parameter as the usage it was
+		// written as (`accept w : Warning`); lowering classifies it. A usage
+		// carrying a value carries a time or change event instead, which declares
+		// no parameter.
+		if t.Value != nil {
+			return nil
+		}
+		return payloadParameterDefiner(t)
+	default:
+		return nil
+	}
+}
+
+// payloadParameterDefiner returns a function defining the payload parameter an
+// accept names, or nil when it names none. The parameter holds the received
+// occurrence and is visible to the transition's guard and effect only.
+func payloadParameterDefiner(payload *ast.Usage) func(*Scope) {
+	if payload == nil {
+		return nil
+	}
+	name, nameSpan := ast.EffectiveName(payload)
+	if name == "" {
+		return nil
+	}
+	return func(scope *Scope) {
+		scope.Define(name, &Symbol{
+			Name:       name,
+			Kind:       SymbolItemUsage,
+			Decl:       payload,
+			DeclSpan:   payload.Span(),
+			NameSpan:   nameSpan,
 			OwnerScope: scope,
 		})
 	}
-	parent.AddChild(scope)
-	return scope
 }
 
 // bodyScopesInTrigger mirrors resolve's trigger handling: only the payload

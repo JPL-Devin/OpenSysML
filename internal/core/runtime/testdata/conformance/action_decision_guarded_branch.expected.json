@@ -1,0 +1,7 @@
+{
+	"type": "action",
+	"outputs": {
+		"battery": {"type": "Integer", "value": 10},
+		"alerted": {"type": "Integer", "value": 1}
+	}
+}

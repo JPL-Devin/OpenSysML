@@ -124,9 +124,9 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"allocation":  ast.UsageAllocation,
 	"allocate":    ast.UsageAllocation, // Short form for allocation usage
 	"binding":     ast.UsageBinding,
-	"actor":       ast.UsageAttribute, // Use case actor
-	"render":      ast.UsageAttribute, // View rendering
-	"bind":        ast.UsageBinding,   // shorthand for binding
+	"actor":       ast.UsageActor,         // actor of a requirement, use case or viewpoint
+	"render":      ast.UsageViewRendering, // rendering a view body names
+	"bind":        ast.UsageBinding,       // shorthand for binding
 	// Tier C.
 	"action":       ast.UsageAction,
 	"perform":      ast.UsageAction, // perform keyword creates action usage
@@ -148,8 +148,8 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"include":      ast.UsageUseCase, // include creates use case usage with includes relationship
 	"subject":      ast.UsageSubject,
 	"objective":    ast.UsageObjective,
-	"stakeholder":  ast.UsageAttribute, // stakeholder in viewpoints/concerns
-	"frame":        ast.UsageAttribute, // frame in viewpoints/views
+	"stakeholder":  ast.UsageStakeholder,
+	"frame":        ast.UsageFramedConcern,
 	"case":         ast.UsageCase,
 	"analysis":     ast.UsageAnalysisCase,
 	"verification": ast.UsageVerificationCase,
@@ -202,14 +202,15 @@ var relationshipKeywords = map[string]ast.RelationshipKind{
 type featureMods struct {
 	isAbstract        bool
 	isVariation       bool
+	isVariant         bool
 	isReference       bool
 	isEnd             bool
 	isChain           bool
 	isConstant        bool
-	isEvent           bool // event modifier for occurrences
-	isIndividual      bool // individual modifier for individuals/snapshots
-	isSnapshot        bool // snapshot modifier for snapshots
-	isNegated         bool // `not` of `assert not <kind>`: the conditions are asserted to be false
+	isEvent           bool            // event modifier for occurrences
+	isIndividual      bool            // individual modifier for individuals/snapshots
+	portion           ast.PortionKind // 'snapshot' / 'timeslice' portion prefix
+	isNegated         bool            // `not` of `assert not <kind>`: the conditions are asserted to be false
 	visibility        ast.Visibility
 	direction         ast.FeatureDirection
 	isComposite       bool
@@ -230,6 +231,12 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 		if mods.isAbstract {
 			d.IsAbstract = true
 		}
+		if mods.isVariation {
+			d.IsVariation = true
+		}
+		if mods.isVariant {
+			d.IsVariant = true
+		}
 		if mods.isReference {
 			d.IsReference = true
 		}
@@ -248,8 +255,8 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 		if mods.isIndividual {
 			d.IsIndividual = true
 		}
-		if mods.isSnapshot {
-			d.IsSnapshot = true
+		if mods.portion != ast.PortionNone {
+			d.Portion = mods.portion
 		}
 		if mods.isNegated {
 			d.IsNegated = true
@@ -302,6 +309,11 @@ func (p *Parser) atKindPrefix() bool {
 	if !p.at(lexer.Keyword) || notKindPrefixKeywords[p.peek().KeywordID] {
 		return false
 	}
+	// A feature modifier qualifies the declaration itself (`variation part v`),
+	// so it is parsed as a modifier rather than dropped as a kind prefix.
+	if featureModifierKeywords[p.peek().KeywordID] {
+		return false
+	}
 	if !isKindKeyword(p.peekN(1)) {
 		return false
 	}
@@ -319,6 +331,18 @@ func (p *Parser) atSecondaryKind(firstKeyword string) bool {
 		return true
 	}
 	return !namesDeclaration(p.peekN(1))
+}
+
+// atPortionedKind reports whether the current token is the kind keyword of the
+// usage a portion prefix portions (`timeslice item : Cargo`). A kind keyword
+// there is always the kind, never the portion's name, since the portion keyword
+// itself is the only kind a bare portion usage declares.
+func (p *Parser) atPortionedKind() bool {
+	if !p.at(lexer.Keyword) {
+		return false
+	}
+	_, ok := usageKindKeywords[p.peek().KeywordID]
+	return ok
 }
 
 // isKindKeyword reports whether the token is a def or usage kind keyword.
@@ -469,14 +493,13 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			}
 			m.isIndividual = true
 		case "snapshot":
-			// Check if standalone usage: snapshot <name> ...
-			// If followed by identifier/qualified name, could be usage keyword
+			// The portion loop in parseDefUsage reads a portion prefix the same way
+			// for either keyword; only another modifier after it is handled here.
 			nextTok := p.peekN(1)
-			if nextTok.Kind == lexer.Identifier || (nextTok.Kind == lexer.Keyword && !isModifierOrKindKeyword(nextTok.KeywordID)) {
-				// Treat as usage keyword, stop consuming modifiers
+			if nextTok.Kind != lexer.Keyword || !featureModifierKeywords[nextTok.KeywordID] {
 				return m
 			}
-			m.isSnapshot = true
+			m.portion = ast.PortionSnapshot
 		case "public":
 			m.visibility = ast.VisibilityPublic
 		case "protected":
@@ -578,6 +601,26 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 
 	mods := p.parseFeatureModifiers()
 
+	// `snapshot` and `timeslice` portion the occurrence usage they prefix:
+	// `timeslice item i;` as well as the bare `timeslice t;`
+	// (SysML v2 8.3.9.11, PortionUsage).
+	for p.atKeyword("snapshot") || p.atKeyword("timeslice") {
+		tok := p.advance()
+		portion := ast.PortionSnapshot
+		if tok.KeywordID == "timeslice" {
+			portion = ast.PortionTimeslice
+		}
+		if mods.portion != ast.PortionNone {
+			p.error(tok.Span, "a usage declares at most one portion kind ('snapshot' or 'timeslice')")
+		}
+		mods.portion = portion
+		// Without a kind keyword the portion itself declares an occurrence usage.
+		if !p.atPortionedKind() {
+			isAll := p.acceptKeyword("all")
+			return applyPrefixes(p.parseUsage(start, ast.UsageOccurrence, tok.KeywordID, mods, isAll))
+		}
+	}
+
 	// Two-word `use case` kind keyword.
 	if p.atUseCase() {
 		p.advance() // 'use'
@@ -602,7 +645,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		p.advance()   // consume 'perform'
 		kw = "action" // treat as regular action keyword
 		// Continue to dual-keyword path (don't enter usage-only block)
-	} else if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "include" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" || kw == "timeslice" || kw == "snapshot" {
+	} else if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "include" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" {
 		// Check for usage-only keywords that never have def forms
 
 		// Special case: perform <ref>; (shorthand without action keyword)
@@ -612,12 +655,50 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parsePerformedActionReference(start, mods, "perform"))
 		}
 
+		// A member keyword can also be an ordinary name: KerML has no `frame` or
+		// `render` keyword, and the Kernel Semantic Library writes `in frame :
+		// SpatialFrame[1]`. Read the keyword as the declaration's own name
+		// unless what follows can begin the member form.
+		if (kw == "frame" || kw == "render") && !p.atMemberKeywordUsedAsKeyword(kw) {
+			return applyPrefixes(p.parseUsage(start, ast.UsageAttribute, "", mods, false))
+		}
+
 		p.advance() // consume the kind keyword
-		// `snapshot s` is an occurrence usage whose portionKind is snapshot.
-		if kw == "snapshot" {
-			mods.isSnapshot = true
+		// `variant x` declares a variant of the variation that owns it
+		// (VariantMembership, SysML v2 §7.20).
+		if kw == "variant" {
+			mods.isVariant = true
 		}
 		isAll := p.acceptKeyword("all")
+
+		// `render` names the rendering a view uses (ViewRenderingMember) and
+		// `frame` the concern a requirement frames (FramedConcernMember). Each
+		// owns a usage that either references an existing element —
+		// `render asTreeDiagram;`, `frame 'system breakdown';` — or declares one
+		// after the kind keyword the notation spells out, `render rendering r`
+		// and `frame concern c` (SysML.xtext ViewRenderingUsage,
+		// FramedConcernUsage; SysML v2 §8.3.20, §8.3.26). Only the declaration
+		// form states a name.
+		if kw == "render" || kw == "frame" {
+			declKeyword, noun, body := "rendering", "rendering", p.parseDefUsageBodyMembers
+			if kw == "frame" {
+				declKeyword, noun, body = "concern", "concern", p.parseRequirementBody
+			}
+			if p.acceptKeyword(declKeyword) {
+				return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], kw, mods, isAll))
+			}
+			return applyPrefixes(p.parseReferenceMemberUsage(start, usageKindKeywords[kw], kw, noun, mods, body, false))
+		}
+
+		// `exhibit state modes { … }` and `exhibit state modes : Modes;` state
+		// the exhibited state after the state keyword, where the reference form
+		// `exhibit modes;` names an existing one (SysML.xtext ExhibitStateUsage:
+		// `'exhibit' ( OwnedReferenceSubsetting … | StateUsageKeyword
+		// UsageDeclaration? ) ValuePart? StateUsageBody`; SysML v2 §8.3.17).
+		if kw == "exhibit" && p.atKeyword("state") {
+			p.advance() // consume 'state'
+			return applyPrefixes(p.parseUsage(start, ast.UsageState, "exhibit state", mods, isAll))
+		}
 
 		// Special case: include use case <name> (full form)
 		// If include is followed by "use case", consume them and parse as use case with includes relationship
@@ -690,7 +771,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			}
 
 			// Optional relationships (e.g., :>> target)
-			rels, _ := p.parseRelationships(true)
+			rels := p.parseRelationships(true)
 			u.Relationships = append(u.Relationships, rels...)
 
 			// Expect semicolon or body
@@ -797,6 +878,12 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// Fallback: if we have modifiers but no kind keyword, assume it's a generic usage (e.g., "in x: Integer;")
 		// This is common for parameters in calc/action bodies.
 		// Also check if name + multiplicity/modifiers follow (e.g., "in seq[1..*] ordered;")
+		// An `end` whose declaration is omitted entirely is only an interface
+		// default end or an `end ref` (SysML v2 8.2.2.14.1).
+		if mods.isEnd && (p.at(lexer.Semicolon) || p.at(lexer.LBrace)) {
+			return applyPrefixes(p.parseAnonymousEndUsage(start, mods))
+		}
+
 		hasModifiers := mods.direction != ast.DirNone || mods.isReference || mods.isEnd || mods.isComposite || mods.isDerived
 		hasNameWithMultOrMods := p.atNameOrKeyword() && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon || isPostModifierKeyword(p.peekN(1)))
 		// SysML v2 §7.27.4: a user-defined keyword may declare a usage without
@@ -878,11 +965,12 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 		Visibility:  mods.visibility,
 		Ident:       p.parseIdentification(),
 	}
-	def.Relationships, _ = p.parseRelationships(false)
+	def.Relationships = p.parseRelationships(false)
 
 	// Dispatch to specialized body parsers based on kind
 	var members []ast.Node
 	var hasBody bool
+	defer p.pushBodyContext(defBodyContext(kind))()
 	switch kind {
 	case ast.DefAction, ast.DefOccurrence:
 		// Action/occurrence def bodies: mixed (declarations + behavioral statements)
@@ -941,6 +1029,26 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 	return def
 }
 
+// defBodyContext returns the body notation a definition of the given kind
+// declares its members in.
+func defBodyContext(kind ast.DefinitionKind) bodyContext {
+	switch kind {
+	case ast.DefInterface:
+		return bodyInterface
+	}
+	return bodyOther
+}
+
+// usageBodyContext returns the body notation a usage of the given kind declares
+// its members in.
+func usageBodyContext(kind ast.UsageKind) bodyContext {
+	switch kind {
+	case ast.UsageInterface:
+		return bodyInterface
+	}
+	return bodyOther
+}
+
 // isBehavioralKeyword checks if next token is a behavioral keyword
 func (p *Parser) isBehavioralKeyword() bool {
 	if !p.at(lexer.Keyword) {
@@ -948,8 +1056,10 @@ func (p *Parser) isBehavioralKeyword() bool {
 	}
 	kw := p.peek().KeywordID
 	switch kw {
-	case "first", "done", "fork", "join", "merge", "decision", "action", "then",
-		"assign", "perform", "while", "loop", "if", "send", "terminate", "for":
+	case "first", "done", "fork", "join", "merge", "decision", "decide", "action", "then",
+		"assign", "perform", "while", "loop", "if", "send", "terminate", "for",
+		// `else <target>;` is a DefaultTargetSuccession member (SysML.xtext).
+		"else":
 		return true
 	}
 	return false
@@ -1120,6 +1230,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		Keyword:      keyword,
 		IsNegated:    mods.isNegated,
 		IsAbstract:   mods.isAbstract,
+		IsVariation:  mods.isVariation,
+		IsVariant:    mods.isVariant,
 		IsReference:  mods.isReference,
 		IsAll:        isAll,
 		IsEnd:        mods.isEnd,
@@ -1127,7 +1239,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		IsConstant:   mods.isConstant,
 		IsEvent:      mods.isEvent,
 		IsIndividual: mods.isIndividual,
-		IsSnapshot:   mods.isSnapshot,
+		Portion:      mods.portion,
 		Visibility:   mods.visibility,
 		Direction:    mods.direction,
 		IsComposite:  mods.isComposite,
@@ -1145,22 +1257,28 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	// Full form: satisfy [requirement] <name> by <name> { body }
 	// Short form: satisfy/verify <name>;
 	if kind == ast.UsageSatisfy {
-		// Per SatisfyRequirementUsage: without the `requirement` keyword the name is
-		// a reference subsetting of an existing requirement usage, not a typing;
-		// with the keyword it declares a new requirement usage.
-		declaresRequirement := p.acceptKeyword("requirement")
-
-		reqName := p.parseQualifiedName()
-		if reqName != nil {
-			if declaresRequirement && len(reqName.Parts) == 1 {
-				u.Ident.Name = reqName.Parts[0].Text
-				u.Ident.NameSpan = reqName.Parts[0].Span
-			} else {
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelSubsets,
-					Target: reqName,
-				})
+		// The declaration form is a full UsageDeclaration, so it may state a
+		// type as well as a name (`satisfy requirement r : Req1 by v;`), while
+		// the reference form names an existing requirement usage and declares
+		// nothing.
+		if p.acceptKeyword("requirement") {
+			// The UsageDeclaration is optional, and `by` introduces the subject
+			// rather than naming the satisfaction (`satisfy requirement by v;`).
+			if !p.atKeyword("by") {
+				u.Ident = p.parseUsageIdentification(kind)
 			}
+			declRels := p.parseRelationships(true)
+			u.Relationships = append(u.Relationships, declRels...)
+		} else if reqName := p.parseQualifiedName(); reqName != nil {
+			u.Relationships = append(u.Relationships, &ast.Relationship{
+				Kind:   ast.RelSubsets,
+				Target: reqName,
+			})
+		}
+
+		// ValuePart? — a satisfy usage may bind a value like any usage.
+		if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
+			u.Value = p.ParseExpression()
 		}
 
 		// Check for optional "by" clause. Per SatisfyRequirementUsage the `by`
@@ -1180,7 +1298,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		if p.accept2(lexer.Semicolon) {
 			u.HasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			leave := p.pushBodyContext(usageBodyContext(kind))
 			u.Members = p.parseRequirementBody()
+			leave()
 			u.HasBody = true
 		}
 		u.NodeSpan = p.spanFrom(start)
@@ -1235,6 +1355,21 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			u.Multiplicity = p.parseMultiplicity()
 		}
 
+		// `binding name bind src = tgt` both names the connector and states its
+		// ends, so the keyword follows the name instead of replacing it.
+		if u.Ident.Name != "" && p.atKeyword("bind") {
+			p.advance()
+			if p.at(lexer.LBracket) {
+				p.parseMultiplicity() // end multiplicity, not the connector's
+			}
+			if source := p.parseRelationshipTarget(); source != nil {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelRedefines, // Use redefines to mark binding source
+					Target: source,
+				})
+			}
+		}
+
 		// Check for source expression: binding [mult] name[mult2] source = target
 		// If we have name[mult] and next token is NOT "of" or "=", parse source expression
 		if u.Ident.Name != "" && !p.atKeyword("of") && !p.at(lexer.Eq) && (p.atName() || p.atNameOrKeyword()) {
@@ -1275,7 +1410,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		}
 
 		// Parse body or semicolon
+		leave := p.pushBodyContext(usageBodyContext(kind))
 		members, hasBody := p.parseDefUsageBody()
+		leave()
 		u.Members = members
 		u.HasBody = hasBody
 		u.NodeSpan = p.spanFrom(start)
@@ -1300,7 +1437,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	// (SysML.xtext FeatureDeclaration): `part redefines wheel` is the same unnamed
 	// usage as `part :>> wheel`. The name it answers to is its redefinition's, and
 	// the symbol layer derives that (KerML 7.3.4.5, symbols.effectiveIdent).
-	preRels, conjugated := p.parseRelationships(true)
+	preRels := p.parseRelationships(true)
 	// A bare flow shorthand `flow x to y` and anonymous succession `succession x then y` have no declaration name
 	// Anonymous connector starts with 'from' keyword (e.g., `connector : X from y to z`)
 	skipIdentification := (kind == ast.UsageFlow && p.atFlowShorthand()) ||
@@ -1312,9 +1449,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	}
 
 	// Parse post-identification relationships (e.g., : Type)
-	postIdRels, postConj := p.parseRelationships(true)
+	postIdRels := p.parseRelationships(true)
 	u.Relationships = append(preRels, postIdRels...)
-	u.IsConjugated = conjugated || postConj
 
 	// For anonymous succession/flow, skip multiplicity parsing - it belongs to connector ends
 	// UNLESS earlyMultiplicity was already parsed (e.g., `succession [mult] first ...`)
@@ -1341,7 +1477,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	//     p.peek().Kind, p.peek().KeywordID, p.peek().Span.Offset)
 
 	// Parse additional relationships after modifiers (e.g., :> target)
-	postRels, _ := p.parseRelationships(true)
+	postRels := p.parseRelationships(true)
 	u.Relationships = append(u.Relationships, postRels...)
 
 	if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
@@ -1352,6 +1488,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	// Dispatch to specialized body parsers based on kind
 	var members []ast.Node
 	var hasBody bool
+	defer p.pushBodyContext(usageBodyContext(kind))()
 	switch kind {
 	case ast.UsageAction:
 		// Action usage bodies: mixed (declarations + behavioral statements)
@@ -1359,7 +1496,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		// 1. action name; (no body)
 		// 2. action name { in item x; action nested {...}; first ...; } (braced mixed body)
 		// 3. action name \n statements (inline behavioral body without braces)
-		if p.accept2(lexer.Semicolon) {
+		if p.atTransitionEffectStatement(start) && p.atEffectEnd() {
+			// 4. action written as a transition's effect: no body of its own, and
+			// the transition owns the ';' (`do action alarm : Alarm;`).
+			hasBody = false
+		} else if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if p.at(lexer.LBrace) {
 			// Braced body - use mixed parser (handles declarations + behavioral)
@@ -1374,7 +1515,15 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			// a following statement that is not chained belongs to the enclosing body.
 			// EXCEPT: a 'then' chaining to a declaration is namespace-level
 			// succession, not behavioral succession - stop parsing body
+			//
+			// An unbraced body written as a transition's effect ends where the
+			// transition does, so the transition owns its statement's ';'.
+			inEffect := p.atTransitionEffectStatement(start)
+			savedEffectStmtStart := p.effectStmtStart
 			for !p.atEOF() && !p.atNamespaceSuccession() {
+				if inEffect {
+					p.effectStmtStart = p.peek().Span.Offset
+				}
 				members = append(members, p.parseActionMember())
 				// Only an inline statement continues the body; `then a b;` names
 				// members of the enclosing body.
@@ -1382,6 +1531,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 					break
 				}
 			}
+			p.effectStmtStart = savedEffectStmtStart
 			hasBody = true
 		} else {
 			// Expected ';' or '{' or behavioral keyword
@@ -1444,10 +1594,13 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		} else {
 			p.expect(lexer.LBrace, "expected '{' or ';'")
 		}
-	case ast.UsageRequirement, ast.UsageConcern, ast.UsageViewpoint:
+	case ast.UsageRequirement, ast.UsageConcern, ast.UsageViewpoint, ast.UsageFramedConcern, ast.UsageObjective:
 		// Requirement bodies: { subject/assume/require/actor ... }. A concern
 		// usage is a requirement usage and a viewpoint usage a concern usage
-		// (SysML v2 §7.19), so they carry the same members.
+		// (SysML v2 §7.19), so they carry the same members; a framed concern is
+		// a concern usage and its declaration form ends in a RequirementBody
+		// (SysML.xtext FramedConcernUsage). An objective is a requirement usage
+		// too (SysML.xtext ObjectiveRequirementUsage).
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
@@ -1479,6 +1632,16 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	return u
 }
 
+// parseSuccessionAsUsage parses a succession stated without the `succession`
+// keyword (SysML v2 8.2.2.13.3): `first a then b;`.
+func (p *Parser) parseSuccessionAsUsage(start int) ast.Node {
+	u := &ast.Usage{Kind: ast.UsageSuccession}
+	p.parseConnectorEnds(u, "")
+	u.Members, u.HasBody = p.parseDefUsageBody()
+	u.NodeSpan = p.spanFrom(start)
+	return u
+}
+
 // parseDefUsageBody parses a definition/usage body: `;` (no body) or
 // `{ member* }`. Body members may be nested def/usage declarations or ordinary
 // namespace members, each carrying optional visibility.
@@ -1489,6 +1652,12 @@ func (p *Parser) parseDefUsageBody() (members []ast.Node, hasBody bool) {
 	if _, ok := p.expect(lexer.LBrace, "expected '{' or ';' after declaration"); !ok {
 		return nil, false
 	}
+	return p.parseDefUsageBodyMembers(), true
+}
+
+// parseDefUsageBodyMembers parses the members of a definition/usage body up to
+// and including its closing brace, with the opening brace already consumed.
+func (p *Parser) parseDefUsageBodyMembers() []ast.Node {
 	body := p.newBodyBuilder()
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
@@ -1512,7 +1681,7 @@ func (p *Parser) parseDefUsageBody() (members []ast.Node, hasBody bool) {
 		}
 	}
 	p.expect(lexer.RBrace, "expected '}' to close body")
-	return body.finish(), true
+	return body.finish()
 }
 
 // parseBodyMember parses one body member: an optional visibility prefix
@@ -1768,24 +1937,26 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return m
 	}
 
-	// Check for inline flow statement: flow [from] X to Y;
-	// This is anonymous flow usage
-	// Distinguish from flow declarations: flow : Type ... or flow name : Type ...
-	// If next token after 'flow' is identifier (not colon), it's inline flow
+	// Check for the shorthand flow statement `flow X to Y;`, whose first name is
+	// an end rather than the flow's own name (SysML.xtext `FlowDeclaration`
+	// second alternative). Every other form — `flow : Type …`, `flow name …`,
+	// `flow [name] from X to Y` — declares the flow itself and is parsed as a
+	// usage declaration below.
 	if p.atKeyword("flow") {
-		// Lookahead: flow <id/featureChain> to ... = inline flow
+		// Lookahead: flow <id/featureChain> to ... = shorthand ends
 		//            flow : Type ... = flow usage declaration
-		//            flow <name> : Type ... = flow usage declaration
+		//            flow <name> [from X] to Y ... = flow usage declaration
 		nextTok := p.peekN(1)
 		isInlineFlow := false
 		if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.Keyword {
 			// Could be flow name or flow source
-			// Check if followed by 'to' or 'from' (inline) vs colon/relationship (declaration)
+			// `flow f from x to y` names the flow, so only `to` or a feature
+			// chain after the first name marks the shorthand.
 			tok2 := p.peekN(2)
-			if tok2.Kind == lexer.Keyword && (tok2.KeywordID == "to" || tok2.KeywordID == "from") {
+			if tok2.Kind == lexer.Keyword && tok2.KeywordID == "to" {
 				isInlineFlow = true
 			} else if tok2.Kind == lexer.Dot || tok2.Kind == lexer.ColonColon {
-				// Feature chain - likely inline flow
+				// Feature chain - the name is an end, not the flow's own name
 				isInlineFlow = true
 			}
 		}
@@ -1863,92 +2034,37 @@ func (p *Parser) parseBodyMember() ast.Node {
 		}
 	}
 
-	// Check for accept action syntax: action <name> accept <param> : Type [via <port>];
-	// Pattern: action trigger accept scene : Scene;
-	// Pattern: action trigger accept scene : Scene via viewPort;
-	if p.atKeyword("action") {
-		// Lookahead for accept pattern: action <id> accept <id> : Type
-		if p.peekN(1).Kind == lexer.Identifier {
-			tok2 := p.peekN(2)
-			if tok2.Kind == lexer.Keyword && tok2.KeywordID == "accept" {
-				// Accept action syntax - create simple action with output feature
-				p.advance() // consume 'action'
-				actionName := p.src.Text(p.peek().Span)
-				p.advance() // consume name
-				p.advance() // consume 'accept'
+	// An accept node (SysML.xtext `AcceptNode`):
+	//
+	//	action <name>? accept <payload> ('via' <port>)? (';' | '{' … '}')
+	//
+	// The payload says what the action waits for — a type (`accept scene :
+	// Scene`), an event feature (`accept :> shutDown`) or a trigger expression
+	// (`accept when x > 1`) — and is parsed by the one payload parser triggers
+	// also use, so every spelling reaches lowering the same way.
+	if p.atAcceptNode() {
+		return p.parseAcceptNode(start, vis, trivia)
+	}
 
-				// Parse param: name : Type
-				paramStart := p.peek().Span.Offset
-				paramName := ""
-				var paramType *ast.QualifiedName
-				if p.at(lexer.Identifier) {
-					paramName = p.src.Text(p.peek().Span)
-					p.advance()
-				}
-				if p.accept2(lexer.Colon) {
-					paramType = p.parseQualifiedName()
-				}
-				paramSpan := p.spanFrom(paramStart)
-
-				// Optional 'via' port
-				var viaPort *ast.QualifiedName
-				if p.acceptKeyword("via") {
-					viaPort = p.parseQualifiedName()
-				}
-
-				// Create action usage with output attribute member
-				actionUsage := &ast.Usage{
-					Kind: ast.UsageAction,
-					Ident: ast.Identification{
-						Name:     actionName,
-						NameSpan: source.Span{}, // fill from token if needed
-					},
-				}
-
-				// Add output parameter as attribute member
-				if paramName != "" && paramType != nil {
-					paramUsage := &ast.Usage{
-						Kind: ast.UsageAttribute,
-						Ident: ast.Identification{
-							Name:     paramName,
-							NameSpan: source.Span{},
-						},
-						Relationships: []*ast.Relationship{
-							{Kind: ast.RelTyping, Target: paramType},
-						},
-						Direction: ast.DirOut,
-						IsAccept:  true, // Mark as accept parameter
-					}
-					// The span covers only the parameter, not the enclosing
-					// declaration it is a synthetic member of.
-					paramUsage.NodeSpan = paramSpan
-					actionUsage.Members = append(actionUsage.Members, &ast.Membership{
-						Member: paramUsage,
-					})
-				}
-
-				// Add via port as the receiving port relationship
-				if viaPort != nil {
-					actionUsage.Relationships = append(actionUsage.Relationships, &ast.Relationship{
-						Kind:   ast.RelVia,
-						Target: viaPort,
-					})
-				}
-
-				p.expect(lexer.Semicolon, "expected ';' after accept action")
-
-				actionUsage.NodeSpan = p.spanFrom(start)
-				actionUsage.SetLeadingTrivia(trivia)
-
-				m := &ast.Membership{
-					Visibility: vis,
-					Member:     actionUsage,
-				}
-				m.NodeSpan = actionUsage.Span()
-				m.SetLeadingTrivia(trivia)
-				return m
-			}
+	// A transition usage stating its ends (SysML.xtext `TransitionUsage`):
+	//
+	//	transition <name>? first <source> … then <target>;
+	//	transition <name>? <source> to <target> …;
+	//
+	// One parser reads every transition, wherever it is written, so a named
+	// transition carries the same trigger, guard and effect a nameless one does
+	// and lowering sees one representation. A `transition` declaring no ends
+	// (`transition t : Signalling;`) is an ordinary usage and parsed below.
+	if p.atKeyword("transition") && p.atTransitionEnds() {
+		p.advance() // consume 'transition'
+		node := p.parseTransitionMember(start)
+		if tr, ok := node.(interface{ SetLeadingTrivia([]ast.Trivia) }); ok {
+			tr.SetLeadingTrivia(trivia)
 		}
+		m := &ast.Membership{Visibility: vis, Member: node}
+		m.NodeSpan = node.Span()
+		m.SetLeadingTrivia(trivia)
+		return m
 	}
 
 	// Check for anonymous feature pattern: [modifiers] [name] : Type OR [modifiers] :>> relationships
@@ -1965,6 +2081,13 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// Merge visibility into mods if it was parsed earlier
 		if hasVisibility {
 			mods.visibility = vis
+		}
+
+		// An `end` with no declaration at all is an interface body's default
+		// end (SysML v2 8.2.2.14 DefaultInterfaceEnd, `isEnd ?= 'end' Usage`
+		// over an optional UsageDeclaration).
+		if mods.isEnd && (p.at(lexer.Semicolon) || p.at(lexer.LBrace)) {
+			return p.parseAnonymousEnd(start, trivia, vis, mods)
 		}
 
 		// Special case: end shortname [mult] feature name pattern
@@ -2075,7 +2198,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 					// Parse optional relationship clauses before definition keyword
 					// Pattern: end shortname[mult] subsets X feature Y
 					for p.atRelationshipKeyword() {
-						rel, _ := p.parseRelationships(true)
+						rel := p.parseRelationships(true)
 						endRels = append(endRels, rel...)
 					}
 
@@ -2149,7 +2272,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 						// Parse optional relationship clauses before definition keyword
 						for p.atRelationshipKeyword() {
-							rel, _ := p.parseRelationships(true)
+							rel := p.parseRelationships(true)
 							endRels = append(endRels, rel...)
 						}
 
@@ -2249,7 +2372,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 			// Parse as anonymous usage (attribute by default)
 			u := &ast.Usage{
-				Kind:        ast.UsageAttribute,
+				Kind:        p.anonymousUsageKind(mods),
 				Ident:       id,
 				Visibility:  mods.visibility,
 				IsReference: mods.isReference,
@@ -2269,16 +2392,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			// If we consumed a colon, parse typing relationship(s)
 			// Support comma-separated types: : Type1, Type2, Type3
 			if hasNameAndType || hasTypeOnly {
-				for {
-					u.Relationships = append(u.Relationships, &ast.Relationship{
-						Kind:   ast.RelTyping,
-						Target: p.parseQualifiedName(),
-					})
-					// Check for comma - if present, parse additional type
-					if !p.accept2(lexer.Comma) {
-						break
-					}
-				}
+				u.Relationships = append(u.Relationships, p.parseTypingRelationships()...)
 			}
 
 			// Parse optional multiplicity
@@ -2300,9 +2414,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			}
 
 			// Parse additional relationships
-			moreRels, conjugated := p.parseRelationships(true)
-			u.Relationships = append(u.Relationships, moreRels...)
-			u.IsConjugated = conjugated
+			u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
 
 			// Parse optional value (= expr or default expr)
 			if p.accept2(lexer.Eq) || p.acceptKeyword("default") {
@@ -2340,10 +2452,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 		// Parse typing/relationships
 		p.advance() // consume ':'
-		u.Relationships = append(u.Relationships, &ast.Relationship{
-			Kind:   ast.RelTyping,
-			Target: p.parseQualifiedName(),
-		})
+		u.Relationships = append(u.Relationships, p.parseTypingRelationships()...)
 
 		// Parse optional multiplicity
 		if p.at(lexer.LBracket) {
@@ -2360,9 +2469,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		}
 
 		// Parse additional relationships
-		moreRels, conjugated := p.parseRelationships(true)
-		u.Relationships = append(u.Relationships, moreRels...)
-		u.IsConjugated = conjugated
+		u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
 
 		// Parse optional value (= expr or default expr)
 		if p.accept2(lexer.Eq) || p.acceptKeyword("default") {
@@ -2389,11 +2496,20 @@ func (p *Parser) parseBodyMember() ast.Node {
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" ||
 		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "verify" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint" ||
 		p.peek().KeywordID == "interaction" || p.peek().KeywordID == "bool" || p.peek().KeywordID == "assoc" || p.peek().KeywordID == "struct" ||
-		p.peek().KeywordID == "class" || p.peek().KeywordID == "predicate")
+		p.peek().KeywordID == "class" || p.peek().KeywordID == "predicate" ||
+		// A view or viewpoint member keyword names no literal either: `render;`
+		// and `frame;` are members missing the reference they are written with
+		// (ViewRenderingUsage, FramedConcernUsage), diagnosed as such.
+		p.peek().KeywordID == "render" || p.peek().KeywordID == "frame" ||
+		p.peek().KeywordID == "stakeholder" || p.peek().KeywordID == "actor")
 	// A relationship keyword is not a literal's name either: `redefines;` and
 	// `redefines = 5;` are specializations missing their target, diagnosed as
 	// such, exactly as `:>>;` and `:>> = 5;` are.
-	if !isUsageOnlyKwForEnum && !p.atFeatureSpecialization() && p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
+	// A kind keyword before a body declares an anonymous usage of that kind
+	// (`action { … }`), not a literal named by it: a name spelling a reserved
+	// keyword must be written as an unrestricted name (KerML §7.2.4).
+	anonKindDecl := nextKind == lexer.LBrace && isKindKeyword(p.peek())
+	if !isUsageOnlyKwForEnum && !anonKindDecl && !p.atFeatureSpecialization() && p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
 		seg, _ := p.parseNameSegmentRelaxed()
 		id := ast.Identification{Name: seg.Text, NameSpan: seg.Span}
 
@@ -2511,8 +2627,48 @@ func (p *Parser) noBodyMemberMessage() string {
 // that introduced it is already consumed; kw carries it for errors and to record
 // which synonym was written.
 func (p *Parser) parsePerformedActionReference(start int, mods featureMods, kw string) *ast.Usage {
+	return p.parseReferenceMemberUsage(start, ast.UsageAction, kw, "action", mods, p.parseActionBodyMixed, true)
+}
+
+// atMemberKeywordUsedAsKeyword reports whether the `frame` or `render` token at
+// the cursor introduces a member rather than being the name of the declaration
+// it starts. Both member forms continue with the referenced name or with the
+// notation's own kind keyword (SysML.xtext ViewRenderingUsage,
+// FramedConcernUsage), so anything else — a multiplicity, a specialization, a
+// type, a body — can only follow a name, and `frame` and `render` are legal
+// names in KerML.
+func (p *Parser) atMemberKeywordUsedAsKeyword(kw string) bool {
+	next := p.peekN(1)
+	switch next.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
+		return true
+	case lexer.Keyword:
+		if kw == "frame" {
+			return next.KeywordID == "concern"
+		}
+		return next.KeywordID == "rendering"
+	}
+	return false
+}
+
+// parseReferenceMemberUsage parses the reference form that SysML.xtext spells
+// `ownedRelationship += OwnedReferenceSubsetting FeatureSpecializationPart?
+// ValuePart?` followed by the member's body: a performed action
+// (PerformActionUsageDeclaration), the rendering a view names
+// (ViewRenderingUsage) and the concern a requirement frames
+// (FramedConcernUsage) are all written that way. Such a member names an
+// existing feature and declares no name of its own, so the reference is
+// recorded as a ReferenceSubsetting and the identification left empty; the name
+// the member answers to is its reference's (KerML 7.3.4.5, ast.EffectiveName).
+//
+// The introducing keyword is already consumed; kw records which synonym was
+// written, noun names the referenced element in diagnostics, parseBody parses
+// the body members once '{' is consumed, and allowValue states whether the
+// notation admits a `ValuePart`: a performed action does, the rendering a view
+// names and the concern a requirement frames do not.
+func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, noun string, mods featureMods, parseBody func() []ast.Node, allowValue bool) *ast.Usage {
 	u := &ast.Usage{
-		Kind:        ast.UsageAction,
+		Kind:        kind,
 		Keyword:     kw,
 		IsAbstract:  mods.isAbstract,
 		IsReference: mods.isReference,
@@ -2530,29 +2686,36 @@ func (p *Parser) parsePerformedActionReference(start int, mods featureMods, kw s
 			Target: target,
 		})
 	} else {
-		p.error(p.peek().Span, fmt.Sprintf("expected an action reference after '%s'", kw))
+		p.error(p.peek().Span, fmt.Sprintf("expected a %s reference after '%s'", noun, kw))
 	}
 
 	// FeatureSpecializationPart? ValuePart?
 	if p.at(lexer.LBracket) {
 		u.Multiplicity = p.parseMultiplicity()
 	}
-	specRels, conjugated := p.parseRelationships(true)
+	specRels := p.parseRelationships(true)
 	u.Relationships = append(u.Relationships, specRels...)
-	u.IsConjugated = conjugated
-	if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
+	if allowValue && (p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default")) {
 		u.Value = p.ParseExpression()
 	}
 
 	switch {
+	case p.atTransitionEffectStatement(start) && p.atEffectEnd():
+		// A performed action written as a transition's effect is ended by the
+		// transition's next clause or by the ';' the transition itself consumes.
+		u.HasBody = false
 	case p.accept2(lexer.Semicolon):
 		u.HasBody = false
 	case p.at(lexer.LBrace):
 		p.advance()
-		u.Members = p.parseActionBodyMixed()
+		u.Members = parseBody()
 		u.HasBody = true
+	case allowValue && (p.atKeyword("then") || p.atKeyword("if") || p.atKeyword("do")):
+		// A performed action written as a transition's effect is terminated by
+		// the transition's next clause: `do perform notify then idle;`.
+		u.HasBody = false
 	case target != nil:
-		p.error(p.peek().Span, fmt.Sprintf("expected ';' or '{' after '%s' action reference", kw))
+		p.error(p.peek().Span, fmt.Sprintf("expected ';' or '{' after '%s' %s reference", kw, noun))
 	}
 
 	u.NodeSpan = p.spanFrom(start)
@@ -2611,29 +2774,103 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 // the meaning of the symbolic `:>` operator (subsets on a usage, specializes on
 // a definition). Each clause may carry a comma-separated target list; every
 // target becomes its own Relationship sharing the clause kind.
-func (p *Parser) parseRelationships(isUsage bool) (rels []*ast.Relationship, conjugated bool) {
+func (p *Parser) parseRelationships(isUsage bool) (rels []*ast.Relationship) {
 	for {
 		kind, ok := p.relationshipClauseKind(isUsage)
 		if !ok {
-			return rels, conjugated
+			return rels
 		}
 		for {
-			start := p.peek().Span.Offset
-			// A leading `~` on a typing target is conjugation (`: ~ Type`).
-			if p.accept2(lexer.Tilde) && kind == ast.RelTyping {
-				conjugated = true
-			}
-			// Parse target using specialized parser that handles both qualified names
-			// and feature chains but does NOT consume body expressions.
-			target := p.parseRelationshipTarget()
-			r := &ast.Relationship{Kind: kind, Target: target}
-			r.NodeSpan = p.spanFrom(start)
+			r := p.parseRelationshipClauseTarget(kind)
 			rels = append(rels, r)
 			if !p.accept2(lexer.Comma) {
 				break
 			}
 		}
 	}
+}
+
+// anonymousUsageKind returns the kind of a usage declared without a kind
+// keyword. An interface body's default end is a port usage (SysML v2 8.2.2.14
+// DefaultInterfaceEnd); anywhere else the kind-less form is a reference usage,
+// which this parser represents as an attribute usage.
+func (p *Parser) anonymousUsageKind(mods featureMods) ast.UsageKind {
+	if mods.isEnd && p.bodyContext() == bodyInterface {
+		return ast.UsagePort
+	}
+	return ast.UsageAttribute
+}
+
+// parseAnonymousEnd parses an `end` whose declaration is omitted entirely
+// (`end ;`, `end { ... }`) as a body member.
+func (p *Parser) parseAnonymousEnd(start int, trivia []ast.Trivia, vis ast.Visibility, mods featureMods) ast.Node {
+	node := p.parseAnonymousEndUsage(start, mods)
+	if en, ok := node.(*ast.ErrorNode); ok {
+		en.SetLeadingTrivia(trivia)
+		return en
+	}
+	mem := &ast.Membership{Visibility: vis, Member: node}
+	mem.NodeSpan = node.Span()
+	mem.SetLeadingTrivia(trivia)
+	return mem
+}
+
+// parseAnonymousEndUsage parses an `end` whose declaration is omitted entirely.
+// Only an interface body's default end (SysML v2 8.2.2.14.1) and an explicit
+// `end ref` (8.2.2.7.2 ReferenceUsage) may omit it.
+func (p *Parser) parseAnonymousEndUsage(start int, mods featureMods) ast.Node {
+	kind := ast.UsageAttribute
+	switch {
+	case p.bodyContext() == bodyInterface:
+		kind = ast.UsagePort
+	case mods.isReference:
+	default:
+		return p.errorNodeSkip(start,
+			"this `end` must declare a name, type or `ref` (write `end ref;`): only an interface body may declare a bare `end;` (SysML v2 8.2.2.14.1 DefaultInterfaceEnd)")
+	}
+	u := &ast.Usage{
+		Kind:         kind,
+		IsEnd:        true,
+		Visibility:   mods.visibility,
+		IsReference:  mods.isReference,
+		IsDerived:    mods.isDerived,
+		IsComposite:  mods.isComposite,
+		Direction:    mods.direction,
+		Multiplicity: mods.earlyMultiplicity,
+	}
+	u.Members, u.HasBody = p.parseDefUsageBody()
+	u.NodeSpan = p.spanFrom(start)
+	return u
+}
+
+// parseTypingRelationships parses the comma-separated target list of a typing
+// clause whose ':' has already been consumed.
+func (p *Parser) parseTypingRelationships() []*ast.Relationship {
+	var rels []*ast.Relationship
+	for {
+		rels = append(rels, p.parseRelationshipClauseTarget(ast.RelTyping))
+		if !p.accept2(lexer.Comma) {
+			return rels
+		}
+	}
+}
+
+// parseRelationshipClauseTarget parses one target of a relationship clause,
+// including the `~` of a conjugated port typing (SysML v2 8.2.2.12).
+func (p *Parser) parseRelationshipClauseTarget(kind ast.RelationshipKind) *ast.Relationship {
+	start := p.peek().Span.Offset
+	tildeTok, conjugated := p.accept(lexer.Tilde)
+	if conjugated && kind != ast.RelTyping {
+		p.error(tildeTok.Span, "'~' conjugates a port type and is only allowed after ':' or 'defined by'")
+	}
+	// Handles both qualified names and feature chains, but not body expressions.
+	target := p.parseRelationshipTarget()
+	if target == nil && conjugated {
+		p.error(p.peek().Span, "expected a port definition name after '~'")
+	}
+	r := &ast.Relationship{Kind: kind, Target: target, Conjugated: conjugated && kind == ast.RelTyping}
+	r.NodeSpan = p.spanFrom(start)
+	return r
 }
 
 // parseTierBEnds parses the distinctive Tier B usage grammar following the
@@ -2661,10 +2898,6 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 		} else {
 			p.parseConnectorFromTo(u)
 		}
-	case ast.UsageTransition:
-		// Transition usage syntax: first <end> accept <param> via <end> then <end>
-		// Pattern: transition name first start accept payload: Type via receiver then done;
-		p.parseTransitionUsageEnds(u)
 	case ast.UsageSuccession:
 		p.parseConnectorEnds(u, "") // succession has no intermediate keyword
 	case ast.UsageAllocation:
@@ -2815,7 +3048,7 @@ func (p *Parser) parseConnectorEnd() *ast.ConnectorEnd {
 
 	// Optional relationships (e.g., ::> for interface binding)
 	// Parse relationships until we hit a stopping keyword (to/from/then/references) or terminator
-	rels, _ := p.parseRelationships(true)
+	rels := p.parseRelationships(true)
 	ce.Relationships = rels
 
 	ce.NodeSpan = p.spanFrom(start)
@@ -2974,53 +3207,35 @@ func (p *Parser) parseFlowTo(fe *ast.FlowEnds) {
 	p.error(p.peek().Span, "expected 'to' between flow ends")
 }
 
-// parseTransitionUsageEnds parses transition usage connector-like ends with special keywords.
-// Pattern: first <end> accept <param> via <end> then <end>
-// Example: transition t first start accept payload: Type via receiver then done;
-func (p *Parser) parseTransitionUsageEnds(u *ast.Usage) {
-	// Parse "first <end>" if present
-	if p.acceptKeyword("first") {
-		end := p.parseConnectorEnd()
-		if end != nil {
-			u.ConnectorEnds = append(u.ConnectorEnds, end)
-		}
+// atTransitionEnds reports whether the `transition` at the cursor states its
+// ends — `first <source>` or `<source> to <target>` — as opposed to declaring a
+// transition feature without them (`transition t : Signalling;`). The
+// transition's own name, when it has one, stands between the keyword and the
+// ends.
+func (p *Parser) atTransitionEnds() bool {
+	i := 1
+	// Only the `first` spelling can carry a name of the transition's own; in the
+	// `to` spelling the first name is the source itself.
+	if (p.peekN(i).Kind == lexer.Identifier || p.peekN(i).Kind == lexer.UnrestrictedName) &&
+		p.peekIsKeyword(i+1, "first") {
+		i++
 	}
-
-	// Parse "accept <param>" - this is body parameter, not connector end
-	if p.acceptKeyword("accept") {
-		// Parse parameter with optional name and type
-		var paramName string
-		var paramType *ast.QualifiedName
-
-		if seg, ok := p.parseNameSegment(); ok {
-			paramName = seg.Text
-			if p.at(lexer.Colon) {
-				p.advance() // :
-				paramType = p.parseQualifiedName()
-			}
-		}
-
-		// Store as body parameter in Members (similar to calc/function params)
-		// For now, create simple documentation node as placeholder
-		// Full implementation would need BodyParam support in Usage.Members
-		_ = paramName // use later when we extend AST
-		_ = paramType
+	if p.peekIsKeyword(i, "first") {
+		return true
 	}
-
-	// Parse "via <end>" if present
-	if p.acceptKeyword("via") {
-		end := p.parseConnectorEnd()
-		if end != nil {
-			u.ConnectorEnds = append(u.ConnectorEnds, end)
+	// `<source> to <target>`, where the source may be a qualified name and, as a
+	// state name, may be spelled with a keyword.
+	for {
+		switch p.peekN(i).Kind {
+		case lexer.Identifier, lexer.UnrestrictedName, lexer.Keyword:
+		default:
+			return false
 		}
-	}
-
-	// Parse "then <end>"
-	if p.acceptKeyword("then") {
-		end := p.parseConnectorEnd()
-		if end != nil {
-			u.ConnectorEnds = append(u.ConnectorEnds, end)
+		if p.peekN(i+1).Kind == lexer.ColonColon {
+			i += 2
+			continue
 		}
+		return p.peekIsKeyword(i+1, "to")
 	}
 }
 

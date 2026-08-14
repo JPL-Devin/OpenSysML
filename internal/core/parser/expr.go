@@ -54,7 +54,11 @@ type binOp struct {
 
 // binaryOpFor returns the binary operator for the current token, if any.
 func (p *Parser) binaryOpFor() (binOp, bool) {
-	t := p.peek()
+	return binaryOpForToken(p.peek())
+}
+
+// binaryOpForToken returns the binary operator t spells, if any.
+func binaryOpForToken(t lexer.Token) (binOp, bool) {
 	switch t.Kind {
 	case lexer.QuestionQ:
 		return binOp{ast.OpNullCoalesce, precNullCoalesce, false, false}, true
@@ -234,85 +238,18 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 			expr = fc
 
 		case p.at(lexer.DotQuestion):
-			// `.?{ body }` (select) or `.?{in param; expr}` (filter with lambda).
+			// `.?{ body }` (select). The body is a body expression whatever it
+			// declares, so `.?{in x; x > 0}` and a bare `.?{...}` parse alike and
+			// the parameters of either are the parameters of one node kind.
 			p.advance() // .?
-
-			// Lookahead: if '{' followed by direction keyword (in/out), parse as lambda
-			// Otherwise parse as body expr (select)
-			if p.at(lexer.LBrace) {
-				next := p.peekN(1)
-				if next.Kind == lexer.Keyword && (next.KeywordID == "in" || next.KeywordID == "out" || next.KeywordID == "inout") {
-					// Lambda expression
-					lambdaStart := p.peek().Span.Offset
-					p.advance() // consume '{'
-
-					// Parse parameters (simplified direction params without bodies)
-					var params []ast.Node
-					for p.at(lexer.Keyword) && (p.peek().KeywordID == "in" || p.peek().KeywordID == "out" || p.peek().KeywordID == "inout") {
-						paramStart := p.peek().Span.Offset
-
-						// Parse direction
-						dirTok := p.advance()
-						var direction ast.FeatureDirection
-						switch dirTok.KeywordID {
-						case "in":
-							direction = ast.DirIn
-						case "out":
-							direction = ast.DirOut
-						case "inout":
-							direction = ast.DirInOut
-						}
-
-						// Parse name
-						ident := p.parseIdentification()
-
-						// Parse optional typing/relationships
-						rels, _ := p.parseRelationships(true)
-
-						// Create attribute usage for lambda parameter
-						param := &ast.Usage{
-							Kind:          ast.UsageAttribute,
-							Ident:         ident,
-							Relationships: rels,
-							Direction:     direction,
-						}
-						param.NodeSpan = p.spanFrom(paramStart)
-
-						params = append(params, param)
-
-						// Expect semicolon between params and body
-						if !p.accept2(lexer.Semicolon) {
-							break
-						}
-					}
-
-					// Parse body expression
-					body := p.ParseExpression()
-
-					p.expect(lexer.RBrace, "expected '}' after lambda body")
-
-					lambda := &ast.LambdaExpr{
-						Parameters: params,
-						Body:       body,
-					}
-					lambda.NodeSpan = p.spanFrom(lambdaStart)
-
-					// Wrap in select expression (filter operator applied to lambda)
-					s := &ast.SelectExpr{Operand: expr, Body: lambda}
-					s.NodeSpan = p.spanFrom(start)
-					expr = s
-				} else {
-					// Regular body expr (select)
-					body := p.parseBodyExpr(p.peek().Span.Offset)
-					s := &ast.SelectExpr{Operand: expr, Body: body}
-					s.NodeSpan = p.spanFrom(start)
-					expr = s
-				}
-			} else {
-				// No brace, error
+			if !p.at(lexer.LBrace) {
 				p.error(p.peek().Span, "expected '{' after '.?'")
 				return expr
 			}
+			body := p.parseBodyExpr(p.peek().Span.Offset)
+			s := &ast.SelectExpr{Operand: expr, Body: body}
+			s.NodeSpan = p.spanFrom(start)
+			expr = s
 
 		case p.at(lexer.Hash):
 			// `#( index )` sequence index.
@@ -634,7 +571,14 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 			isRef = true
 		}
 
-		if seg, ok := p.parseNameSegment(); ok {
+		seg, ok := p.parseNameSegment()
+		if !ok {
+			// `in` declares a parameter, and a parameter is named: a body whose
+			// parameter has no name declares nothing its result could read, so
+			// the notation is reported rather than parsed as a body of none.
+			p.error(p.peek().Span, "expected a name after 'in' in a body parameter")
+		}
+		if ok {
 			var paramMembers []ast.Node
 			if p.at(lexer.Colon) {
 				p.advance() // :
@@ -644,6 +588,10 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 					paramMult = p.parseMultiplicity()
 				}
 			}
+			// A parameter may specialize a feature instead of naming a type
+			// (`in p :> ISQ::mass`), which is how a filter names the feature its
+			// elements redefine.
+			paramRels := p.parseRelationships(true)
 			if p.at(lexer.Eq) {
 				p.advance() // =
 				paramValue = p.ParseExpression()
@@ -657,13 +605,14 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 				p.expect(lexer.RBrace, "expected '}'")
 			}
 			b.Params = append(b.Params, ast.BodyParam{
-				Name:         seg.Text,
-				Type:         paramType,
-				Multiplicity: paramMult,
-				Value:        paramValue,
-				IsReference:  isRef,
-				Members:      paramMembers,
-				Span:         seg.Span,
+				Name:          seg.Text,
+				Type:          paramType,
+				Multiplicity:  paramMult,
+				Value:         paramValue,
+				IsReference:   isRef,
+				Members:       paramMembers,
+				Relationships: paramRels,
+				Span:          seg.Span,
 			})
 		}
 		// No semicolon expected if param has body

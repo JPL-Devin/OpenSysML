@@ -1,0 +1,14 @@
+{
+	"type": "instance",
+	"libraries": true,
+	"instantiate": "test::h",
+	"slots": {
+		"apartOutput": {"type": "Integer", "value": 6},
+		"apartValue": {"type": "Integer", "value": 500},
+		"togetherOutput": {"type": "Integer", "value": 10},
+		"togetherValue": {"type": "Integer", "value": 10},
+		"bothFirst": {"type": "Integer", "value": 6},
+		"bothSecond": {"type": "Integer", "value": 7},
+		"bothValue": {"type": "Integer", "value": 500}
+	}
+}

@@ -351,6 +351,36 @@ func TestConstraint_RedefinitionMultiplicityInvalid(t *testing.T) {
 	}
 }
 
+// `[*]` is `0..*` in a redefinition: it keeps an inherited `0..*` but loosens an
+// inherited `1..*`, dropping its lower bound to 0.
+func TestConstraint_RedefinitionUnboundedMultiplicity(t *testing.T) {
+	tests := []struct {
+		name      string
+		inherited string
+		wantDiag  bool
+	}{
+		{"redefines optional collection", "0..*", false},
+		{"redefines required collection", "1..*", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := `
+				attribute def SpeedType;
+				part def Vehicle {
+					attribute speed : SpeedType[` + tt.inherited + `];
+				}
+				part def Car specializes Vehicle {
+					attribute speed : SpeedType[*] :>> Vehicle::speed;
+				}
+			`
+			diags := constraintDiags(t, src)
+			if got := hasCode(diags, "redefinition-multiplicity"); got != tt.wantDiag {
+				t.Fatalf("redefinition-multiplicity = %v, want %v (diags %v)", got, tt.wantDiag, diags)
+			}
+		})
+	}
+}
+
 // --- V-C4 Track 4 Integration: typing conformance + redefinition ---
 
 func TestConstraint_Track4Integration(t *testing.T) {
@@ -511,5 +541,114 @@ func TestConstraintUnnamedRedefinitionNoValueOK(t *testing.T) {
 	`
 	if diags := constraintDiags(t, src); hasCode(diags, "redefinition-no-derived-name") {
 		t.Fatalf("unexpected redefinition-no-derived-name, got %v", diags)
+	}
+}
+
+// TestConstraintInterfaceEndConjugation covers SysML v2 §7.12.2: the ports at
+// the two ends of an interface must have conjugate directed features, which one
+// conjugated end (~P) supplies and two like-typed ends do not.
+func TestConstraintInterfaceEndConjugation(t *testing.T) {
+	const ports = `port def P { in item cmd; out item tlm; }
+`
+	conjugated := constraintDiags(t, ports+`interface def I {
+		end a : P;
+		end b : ~P;
+	}`)
+	if hasCode(conjugated, "port-conjugation") {
+		t.Errorf("unexpected port-conjugation diagnostic for conjugate ends: %v", conjugated)
+	}
+
+	mismatched := constraintDiags(t, ports+`interface def I {
+		end a : P;
+		end b : P;
+	}`)
+	if !hasCode(mismatched, "port-conjugation") {
+		t.Errorf("expected port-conjugation diagnostic for like-typed ends, got %v", mismatched)
+	}
+
+	// A port with no directed features imposes nothing.
+	undirected := constraintDiags(t, `port def U { attribute x; }
+	interface def I {
+		end a : U;
+		end b : U;
+	}`)
+	if hasCode(undirected, "port-conjugation") {
+		t.Errorf("unexpected port-conjugation diagnostic for undirected ports: %v", undirected)
+	}
+
+	// Conjugation constrains directed features only, so ports holding different
+	// undirected features still line up.
+	extra := constraintDiags(t, `port def A { attribute pressure; out item flow; }
+	port def B { in item flow; }
+	interface def I {
+		end a : A;
+		end b : B;
+	}`)
+	if hasCode(extra, "port-conjugation") {
+		t.Errorf("unexpected port-conjugation diagnostic for conjugate directed features: %v", extra)
+	}
+}
+
+// A `variant` whose owner is not a variation offers no choice, so it is reported
+// as a warning: the member is well-formed, only its `variant` keyword is idle.
+func TestConstraintVariantOutsideVariation(t *testing.T) {
+	src := `
+		part def Widget {
+			variant attribute misplaced = 1.0;
+		}
+	`
+	diags := constraintDiags(t, src)
+	var got *Diagnostic
+	for i, d := range diags {
+		if d.Code == "variant-outside-variation" {
+			got = &diags[i]
+		}
+	}
+	if got == nil {
+		t.Fatalf("expected variant-outside-variation diagnostic, got %v", diags)
+	}
+	if got.Severity != SeverityWarning {
+		t.Errorf("severity = %v, want warning", got.Severity)
+	}
+	if !strings.Contains(got.Message, "variant misplaced is declared in Widget") {
+		t.Errorf("message %q does not name the variant and its owner", got.Message)
+	}
+}
+
+// A variant of a variation is exactly what `variant` is for, so nothing is
+// reported for it.
+func TestConstraintVariantInsideVariationOK(t *testing.T) {
+	src := `
+		part def Widget {
+			variation attribute pick {
+				variant attribute cheap = 1.0;
+				variant attribute rich = 2.0;
+			}
+		}
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "variant-outside-variation") {
+		t.Fatalf("unexpected variant-outside-variation, got %v", diags)
+	}
+}
+
+// A usage typed by a variation definition, and one redefining a variation usage,
+// are variation points without restating the modifier.
+func TestConstraintVariantUnderInheritedVariationOK(t *testing.T) {
+	src := `
+		part def Engine;
+		variation part def EngineChoice :> Engine;
+		part def Car {
+			part engine : EngineChoice {
+				variant part electric : Engine;
+			}
+		}
+		abstract part refined : Car {
+			part :>> engine {
+				variant part petrol : Engine;
+			}
+		}
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "variant-outside-variation") {
+		t.Fatalf("unexpected variant-outside-variation, got %v", diags)
 	}
 }

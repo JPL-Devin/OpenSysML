@@ -152,6 +152,49 @@ def test_model_find():
     assert missing is None
 
 
+def test_model_find_accepts_fully_qualified_name():
+    """A symbol's own id round-trips back into find()."""
+    pb_root = sysml_pb2.SymbolInfo(
+        id="Lander",
+        name="Lander",
+        kind="package",
+        metadata={},
+        child_ids=["Lander::Rhs"],
+        attributes=[],
+    )
+
+    pb_rhs = sysml_pb2.SymbolInfo(
+        id="Lander::Rhs",
+        name="Rhs",
+        kind="calcDef",
+        metadata={},
+        child_ids=[],
+        attributes=[],
+    )
+
+    mock_client = Mock()
+    mock_client.get_symbol.side_effect = lambda model_hash, symbol_id: {
+        "Lander::Rhs": pb_rhs,
+    }.get(symbol_id)
+
+    model = Model(
+        sysml_pb2.ParseFileResponse(model_hash="hash", root=pb_root, diagnostics=[]),
+        mock_client,
+    )
+
+    by_short_name = model.find("Rhs")
+    by_fqn = model.find("Lander::Rhs")
+
+    assert by_short_name is not None
+    assert by_fqn is not None
+    assert by_fqn.id == by_short_name.id == "Lander::Rhs"
+    assert by_fqn.kind == "calcDef"
+
+    # The root's own id is accepted too, and a name no symbol carries is not.
+    assert model.find("Lander") is not None
+    assert model.find("Lander::Missing") is None
+
+
 def test_model_find_short_circuit():
     # Model with one child
     pb_root = sysml_pb2.SymbolInfo(
@@ -192,3 +235,55 @@ def test_model_find_short_circuit():
     
     # Should have called get_symbol only once (for Target, not its children)
     # Note: children() is lazy, so get_symbol only called when explicitly requested
+
+
+def test_model_get_by_fqn():
+    pb_root = sysml_pb2.SymbolInfo(
+        id="MyModel",
+        name="MyModel",
+        kind="Package",
+        metadata={},
+        child_ids=["MyModel::Vehicle"],
+        attributes=[],
+    )
+
+    pb_vehicle = sysml_pb2.SymbolInfo(
+        id="MyModel::Vehicle",
+        name="Vehicle",
+        kind="PartDef",
+        metadata={},
+        child_ids=["MyModel::Vehicle::engine"],
+        attributes=[],
+    )
+
+    pb_engine = sysml_pb2.SymbolInfo(
+        id="MyModel::Vehicle::engine",
+        name="engine",
+        kind="partUsage",
+        metadata={},
+        child_ids=[],
+        attributes=[],
+    )
+
+    pb_response = sysml_pb2.ParseFileResponse(
+        model_hash="hash",
+        root=pb_root,
+        diagnostics=[],
+    )
+
+    mock_client = Mock()
+    mapping = {
+        "MyModel::Vehicle": pb_vehicle,
+        "MyModel::Vehicle::engine": pb_engine,
+    }
+    mock_client.get_symbol.side_effect = lambda model_hash, symbol_id: mapping.get(symbol_id)
+
+    model = Model(pb_response, mock_client)
+
+    assert model.get("MyModel").id == "MyModel"
+    assert model.get("MyModel::Vehicle").name == "Vehicle"
+    assert model.get("MyModel::Vehicle::engine").name == "engine"
+
+    # A short name is not an FQN, and an unknown FQN is not an error.
+    assert model.get("Vehicle") is None
+    assert model.get("MyModel::Missing") is None

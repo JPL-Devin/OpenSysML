@@ -1,0 +1,70 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="test" library=false standard=false
+      (Import visibility="private" all=false kind=membership recursive=false imported="ScalarValues::Real")
+      (Membership visibility="default"
+        (Definition kind="attribute" abstract=false variation=false name="Cost"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="v" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))
+              (LiteralReal value="1.0")))))
+      (Membership visibility="default"
+        (Definition kind="attribute" abstract=false variation=false name="Assembly"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="piece" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Cost
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Ring"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="ringCost" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Cost
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="assembly" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Assembly
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Band"
+          (Relationship kind="specializes" target=Ring
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="bandCost" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=ringCost
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Band
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=bandCost
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="redefines" target=v
+                    (*ast.QualifiedName))
+                  (LiteralReal value="400.0")))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=assembly
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="redefines" target=piece
+                    (*ast.QualifiedName))
+                  (Membership visibility="default"
+                    (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                      (Relationship kind="redefines" target=v
+                        (*ast.QualifiedName))
+                      (LiteralReal value="5.0")))))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="declared" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Cost
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="redefines" target=v
+                    (*ast.QualifiedName))
+                  (LiteralReal value="7.0"))))))))))

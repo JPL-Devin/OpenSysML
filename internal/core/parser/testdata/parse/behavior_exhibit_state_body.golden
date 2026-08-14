@@ -1,0 +1,21 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="part" abstract=false variation=false name="Spacecraft"
+      (Membership visibility="default"
+        (Usage kind="state" name="spacecraftModes" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="exhibit state"
+          (EntryMember)
+          (SuccessionEdge source="@entry" target="off")
+          (SubstateMember name="off")
+          (SubstateMember name="waitingGSPing")
+          (SubstateMember name="transmitting")
+          (TransitionMember source="waitingGSPing" target="transmitting" trigger="Ground Station Ping")
+          (TransitionMember source="transmitting" target="off"
+            (ChangeEvent
+              (FeatureReference name="done"))
+            (SendStatement via=false
+              (InvocationExpr type="Telemetry")
+              (FeatureReference name="ground")))))
+      (Membership visibility="default"
+        (Usage kind="state" name="declaredOnly" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="exhibit state"
+          (Relationship kind="typing" target=SpacecraftModes
+            (*ast.QualifiedName)))))))

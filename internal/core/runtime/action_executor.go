@@ -13,8 +13,11 @@ import (
 
 // ActionExecutor executes action bodies using token-flow semantics.
 type ActionExecutor struct {
-	ctx         *Context
-	action      *symbols.Symbol
+	ctx    *Context
+	action *symbols.Symbol
+	// self is the object performing the action: its connections route what the
+	// action sends, and its selections decide which variant's connection does.
+	self        *Instance
 	graph       *lower.ActionGraph // Execution IR
 	tokens      []Token
 	state       ExecutionState
@@ -46,8 +49,9 @@ func (e *ActionExecutor) SetInputs(inputs map[string]Value) {
 	e.inputs = inputs
 }
 
-// newActionExecutor creates an action executor.
-func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, error) {
+// newActionExecutor creates an action executor. self is the object performing
+// the action, nil for an action no object performs.
+func newActionExecutor(ctx *Context, action *symbols.Symbol, self *Instance) (*ActionExecutor, error) {
 	if action.Kind != symbols.SymbolActionUsage && action.Kind != symbols.SymbolActionDef {
 		return nil, fmt.Errorf("symbol %s is not an action", action.Name)
 	}
@@ -62,6 +66,7 @@ func newActionExecutor(ctx *Context, action *symbols.Symbol) (*ActionExecutor, e
 	exec := &ActionExecutor{
 		ctx:         ctx,
 		action:      action,
+		self:        self,
 		graph:       graph,
 		tokens:      make([]Token, 0),
 		state:       StateReady,
@@ -401,8 +406,9 @@ func (e *ActionExecutor) NodeNames() []string {
 // initializeAttributes populates tokenData with the attribute defaults lowering
 // recorded, evaluated in the scope the action's body was declared in.
 func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error {
+	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
-		ec := NewEvalContext(e.ctx, e.graph.Scope)
 		value, err := ec.Eval(attr.Value)
 		if err != nil {
 			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
@@ -478,6 +484,12 @@ func (e *ActionExecutor) stepToken(tokenIdx int) error {
 			return e.stepNestedAction(tokenIdx)
 		}
 		return fmt.Errorf("unsupported usage kind in action: %v", node.Kind)
+	case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode,
+		*ast.SendStatement, *ast.TerminateStatement:
+		// An action node member written as a statement (`then send x via p;`,
+		// `then loop action { … } until c;`): lowering gave it the one statement
+		// it was written as for a body, and a succession put it in the flow.
+		return e.stepStatementNode(tokenIdx)
 	default:
 		return fmt.Errorf("unsupported node type: %T", node)
 	}
@@ -676,6 +688,7 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 	// is pushed over it, so a token value shadows a same-named declaration.
 	ec := NewEvalContext(e.ctx, e.graph.Scope)
 	ec.Push(token.Data) // Make token data available to guard expressions
+	defer ec.beginStep()()
 
 	// Two-pass evaluation:
 	// 1. Evaluate all guarded edges first
@@ -748,6 +761,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 		// shadowing it.
 		ec := NewEvalContext(e.ctx, e.graph.Scope)
 		ec.Push(token.Data) // Make token data available
+		defer ec.beginStep()()
 		result, err := ec.Eval(node.Expression)
 		if err != nil {
 			return fmt.Errorf("eval expression: %w", err)
@@ -784,7 +798,9 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 	}
 
 	// Apply data flows: transfer data from this node's output pins to target input pins
-	e.applyDataFlows(token, node)
+	if err := e.applyDataFlows(token, node); err != nil {
+		return err
+	}
 
 	token.Location = successors[0]
 	return nil
@@ -802,9 +818,33 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	// arrives the token parks here: the action is suspended, not failed, and
 	// the next step retries the match.
 	accept, isAccept := e.graph.Accepts[usage]
-	if isAccept {
+	if isAccept && accept.Trigger != nil {
+		// A trigger waits for time to pass or for a condition to hold rather
+		// than for a message, so it is answered here and not from the queue.
+		ready, err := e.triggerHolds(accept, token)
+		if err != nil {
+			return err
+		}
+		if !ready {
+			if token.Wait == nil {
+				token.Wait = &AcceptWait{
+					ParamName: accept.ParamName,
+					Trigger:   triggerDescription(accept.Trigger),
+					Since:     e.stepCount + 1,
+				}
+			}
+			return nil
+		}
+		token.Wait = nil
+	} else if isAccept {
+		// An accept node waits for the occurrence its payload names: a message of
+		// the type it was typed with, or of the event it subsets.
+		want := accept.SignalType
+		if want == "" {
+			want = accept.SubsetsEvent
+		}
 		msg, taken := e.ctx.TakeMessage(func(m Message) bool {
-			if !m.arrivedAt(accept.ViaPort) || !m.carriesSignal(accept.SignalType) {
+			if !m.arrivedAt(accept.ViaPort) || !m.reachedObject(objectID(e.self)) || !m.carriesSignal(want) {
 				return false
 			}
 			// A message routed to this accept's port is already addressed by the
@@ -816,7 +856,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			if token.Wait == nil {
 				token.Wait = &AcceptWait{
 					ParamName:  accept.ParamName,
-					SignalType: accept.SignalType,
+					SignalType: want,
 					ViaPort:    accept.ViaPort,
 					// stepCount is incremented once the step finishes, so the
 					// step now in progress is the next one.
@@ -826,7 +866,14 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			return nil
 		}
 		token.Wait = nil
-		token.Data[accept.ParamName] = msg.Payload["value"]
+		if accept.ParamName != "" {
+			value, held := msg.Payload["value"]
+			if !held {
+				return fmt.Errorf("%w: accept %s: %s carries no single value to bind",
+					ErrNoValue, accept.ParamName, orAnonymousSignal(msg.SignalType))
+			}
+			token.Data[accept.ParamName] = value
+		}
 	}
 
 	// A usage that performs another action (perform X / action a : X / a = X(...))
@@ -842,8 +889,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	}
 
 	// Execute the node's lowered statements in declaration order.
-	env := &stmtEnv{data: token.Data}
-	if err := e.execStatements(usage, e.graph.Bodies[usage], env); err != nil {
+	if err := e.executeBody(usage, token); err != nil {
 		return err
 	}
 
@@ -856,29 +902,134 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		return fmt.Errorf("nested action %s has multiple successors", ActionNodeName(usage))
 	}
 
+	// The flows out of this node carry what its body produced to the pins the
+	// nodes downstream read.
+	if err := e.applyDataFlows(token, token.Location); err != nil {
+		return err
+	}
+
 	token.Location = successors[0]
 	return nil
 }
 
-// applyDataFlows transfers data along object flow edges.
-// Copies data from source pins to target pins for all outgoing data flows.
-func (e *ActionExecutor) applyDataFlows(token *Token, sourceNode ast.Node) {
-	flows, ok := e.graph.DataFlows[sourceNode]
-	if !ok || len(flows) == 0 {
-		return
+// triggerHolds reports whether the time or change event an accept waits for has
+// happened. A change event holds when its condition does, which every step
+// re-evaluates in the action's scope with the token's data over it — the same
+// polling a state machine's change transitions use. A time event needs a clock
+// the action executor does not have, so it is reported rather than treated as
+// having already fired.
+func (e *ActionExecutor) triggerHolds(accept lower.Accept, token *Token) (bool, error) {
+	switch t := accept.Trigger.(type) {
+	case *ast.ChangeEvent:
+		ec := NewEvalContext(e.ctx, e.graph.Scope)
+		ec.Push(token.Data)
+		defer ec.beginStep()()
+		result, err := ec.Eval(t.Condition)
+		if err != nil {
+			return false, fmt.Errorf("eval accept condition: %w", err)
+		}
+		if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
+			return false, fmt.Errorf("%w: accept when: condition must evaluate to boolean, got %v", ErrTypeMismatch, result.Kind)
+		}
+		return result.Const.Bool, nil
+	case *ast.TimeEvent:
+		return false, fmt.Errorf("%w: %s in an action body: a time event is only waited on by a state machine's transitions",
+			ErrNoClock, triggerDescription(t))
+	default:
+		return false, fmt.Errorf("accept trigger of kind %T is not executed", accept.Trigger)
+	}
+}
+
+// stepStatementNode runs an action node member the author wrote as a statement
+// and advances the token, which is what the node contributes to the flow: it
+// runs the statements lowering recorded for it, then leaves for its successor.
+func (e *ActionExecutor) stepStatementNode(tokenIdx int) error {
+	token := &e.tokens[tokenIdx]
+	node := token.Location
+
+	if err := e.executeBody(node, token); err != nil {
+		return err
 	}
 
-	for _, flow := range flows {
-		// Get data from source pin
+	successors := e.graph.Edges[node]
+	if len(successors) == 0 {
+		// As for a nested action, a node the token cannot leave is reported
+		// rather than treated as the end of the action.
+		return fmt.Errorf("%s node has no successors", statementNodeKeyword(node))
+	}
+	if len(successors) > 1 {
+		return fmt.Errorf("%s node has multiple successors", statementNodeKeyword(node))
+	}
+
+	token.Location = successors[0]
+	return nil
+}
+
+// statementNodeKeyword names a statement node for a message about it, since a
+// node written as a statement has no name to report.
+func statementNodeKeyword(node ast.Node) string {
+	switch n := node.(type) {
+	case *ast.WhileLoopActionNode:
+		return "a '" + n.Kind.String() + "' loop"
+	case *ast.IfActionNode:
+		return "an 'if'"
+	case *ast.AssignmentActionNode:
+		return "an 'assign'"
+	case *ast.SendStatement:
+		return "a 'send'"
+	case *ast.TerminateStatement:
+		return "a 'terminate'"
+	default:
+		return fmt.Sprintf("a %T", node)
+	}
+}
+
+// applyDataFlows transfers data along the object flows out of sourceNode: the
+// value at each flow's source pin becomes the value at its target pin, which is
+// what the target node reads when the token reaches it. A flow whose source pin
+// holds nothing moves nothing and is reported, since a declared flow that
+// silently carries no payload is a wrong result rather than a no-op.
+func (e *ActionExecutor) applyDataFlows(token *Token, sourceNode ast.Node) error {
+	for _, flow := range e.graph.DataFlows[sourceNode] {
 		sourceData, ok := token.Data[flow.SourcePin]
 		if !ok {
-			// No data at source pin - skip this flow
-			continue
+			return fmt.Errorf(
+				"%s: %s produced no value at %s",
+				flowDescription(flow), nodeDescription(sourceNode), orAnyPin(flow.SourcePin),
+			)
 		}
-
-		// Store in target pin (will be available when token reaches target)
 		token.Data[flow.TargetPin] = sourceData
 	}
+	return nil
+}
+
+// flowDescription names a data flow for a diagnostic: its own name when it was
+// declared with one, and the pins it joins otherwise.
+func flowDescription(flow lower.ObjectFlow) string {
+	if flow.Name != "" {
+		return "flow " + flow.Name
+	}
+	return fmt.Sprintf(
+		"flow from %s to %s",
+		orAnyPin(flow.SourcePin), orAnyPin(flow.TargetPin),
+	)
+}
+
+// orAnyPin names a pin an end left implicit.
+func orAnyPin(pin string) string {
+	if pin == "" {
+		return "its output"
+	}
+	return pin
+}
+
+// nodeDescription names an action node for a diagnostic, falling back to the
+// kind of node it is when the notation gave it no name.
+func nodeDescription(node ast.Node) string {
+	if name := ActionNodeName(node); name != "" {
+		return "node " + name
+	}
+	return fmt.Sprintf("the %T", node)
 }
 
 // --- Public accessor methods for REPL debugging ---

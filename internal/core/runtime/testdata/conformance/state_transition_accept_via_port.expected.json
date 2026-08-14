@@ -1,0 +1,16 @@
+{
+  "type": "state",
+  "finalState": "done",
+  "stateVisits": [
+    "start",
+    "waitingGSPing",
+    "transmitting",
+    "done"
+  ],
+  "outputs": {
+    "received": {
+      "type": "Integer",
+      "value": 1
+    }
+  }
+}

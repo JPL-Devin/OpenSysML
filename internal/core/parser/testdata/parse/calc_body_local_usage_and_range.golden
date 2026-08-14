@@ -1,0 +1,144 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="CalcBodyLocalUsage" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Rates"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="px" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="pv" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="dx" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (FeatureReference name="pv")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="dv" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (OperatorExpr operator="-"
+                (LiteralReal value="0.0")
+                (FeatureReference name="px"))))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Propagate"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))
+              (LiteralReal value="1.0")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="v" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))
+              (LiteralReal value="0.0")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="i" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="0")))
+          (WhileLoopActionNode kind="while" variable=""
+            (OperatorExpr operator="<"
+              (FeatureReference name="i")
+              (FeatureReference name="n"))
+            (Usage kind="calc" name="r" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Rates
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="px" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                  (FeatureReference name="x")))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="pv" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                  (FeatureReference name="v"))))
+            (*ast.AssignmentActionNode)
+            (*ast.AssignmentActionNode)
+            (*ast.AssignmentActionNode))
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Real
+              (*ast.QualifiedName))
+            (FeatureReference name="x"))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Branching"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="k" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (IfActionNode
+            (OperatorExpr operator=">"
+              (FeatureReference name="k")
+              (LiteralReal value="0.0"))
+            (IfBranchNode kind="then"
+              (Membership visibility="default"
+                (Usage kind="calc" name="up" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Rates
+                    (*ast.QualifiedName))
+                  (Membership visibility="default"
+                    (Usage kind="attribute" name="px" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                      (FeatureReference name="k")))
+                  (Membership visibility="default"
+                    (Usage kind="attribute" name="pv" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                      (LiteralReal value="1.0")))))
+              (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                (Relationship kind="typing" target=Real
+                  (*ast.QualifiedName))
+                (FeatureChainExpr member="dx"
+                  (FeatureReference name="up"))))
+            (IfBranchNode kind="else"
+              (Membership visibility="default"
+                (Usage kind="calc" name="down" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Rates
+                    (*ast.QualifiedName))
+                  (Membership visibility="default"
+                    (Usage kind="attribute" name="px" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                      (OperatorExpr operator="-"
+                        (LiteralReal value="0.0")
+                        (FeatureReference name="k"))))
+                  (Membership visibility="default"
+                    (Usage kind="attribute" name="pv" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                      (LiteralReal value="2.0")))))
+              (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                (Relationship kind="typing" target=Real
+                  (*ast.QualifiedName))
+                (FeatureChainExpr member="dv"
+                  (FeatureReference name="down")))))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Squares"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (InvocationExpr type="collect"
+                (OperatorExpr operator=".."
+                  (LiteralInteger value="1")
+                  (FeatureReference name="n"))
+                (BodyExpr params=[i]
+                  (OperatorExpr operator="*"
+                    (FeatureReference name="i")
+                    (FeatureReference name="i"))))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="window" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (InvocationExpr type="collect"
+                (OperatorExpr operator=".."
+                  (LiteralInteger value="2")
+                  (LiteralInteger value="3"))
+                (BodyExpr params=[i]
+                  (FeatureReference name="i")))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="total" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="0")))
+          (WhileLoopActionNode kind="for" variable="i"
+            (OperatorExpr operator=".."
+              (LiteralInteger value="1")
+              (FeatureReference name="n"))
+            (*ast.AssignmentActionNode))
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Integer
+              (*ast.QualifiedName))
+            (FeatureReference name="total")))))))

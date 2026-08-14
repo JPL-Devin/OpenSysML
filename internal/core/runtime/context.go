@@ -4,8 +4,10 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -25,11 +27,46 @@ type Context struct {
 	maxStateEvents int64
 	maxDoSteps     int64
 
+	// elements and maxElements bound the collection elements one run materializes,
+	// which is what its memory grows with, unlike a step.
+	elements    int64
+	maxElements int64
+
 	features map[*symbols.Symbol][]EffectiveFeature
 
 	// calcShapes memoizes resolved calc invocation interfaces (parameters,
 	// defaults, result expression) per calc symbol.
 	calcShapes map[*symbols.Symbol]*calcShape
+
+	// calcUsageRuns holds the evaluation of each calc usage read in an activation
+	// under way, so reading several outputs of one usage answers from one
+	// execution of its body. An activation's evaluations end with it.
+	calcUsageRuns map[int64]map[calcUsageKey]*calcRun
+
+	// activations numbers the body activations begun in this context: a calc
+	// invocation, a block entry, a loop iteration, a body application.
+	activations int64
+
+	// occurrences holds the object each usage carrying no value of its own
+	// denotes, so a feature chain through a part reads one occurrence of it.
+	occurrences map[*symbols.Symbol]int64
+
+	// variantObjects holds the object a variant stands for per owner that
+	// selected it, so repeated reads of one selection read the same object.
+	variantObjects map[variantObject]int64
+
+	// selectedVariants records, per owner and variation name, the variant bound
+	// to it in this run. Routing consults it: a connection a `variant interface`
+	// declares joins its ends only where that variant is the one selected.
+	selectedVariants map[variantSelection]string
+
+	// materializingConnectors holds the connectors whose ends are being attached,
+	// so a connector reached from its own end is reported as a cycle.
+	materializingConnectors map[connectorRef]bool
+
+	// objectConns memoizes the connections declared by each type an object is
+	// of, which a behavior that object performs routes over.
+	objectConns map[*symbols.Symbol][]lower.Connection
 
 	// trace records evaluation, nil when not tracing.
 	trace *TraceRecorder
@@ -53,12 +90,35 @@ type Context struct {
 	// derivingSlots holds the slots whose defaults are being evaluated, so a
 	// default that refers back to its own slot is reported as a cycle.
 	derivingSlots map[slotRef]bool
+
+	// collectingSubsets holds the slots whose subsetting features are being read,
+	// so features that subset each other are reported as a cycle.
+	collectingSubsets map[slotRef]bool
+
+	// sources holds the text of the files the model was read from, by name, so an
+	// error about a declaration can say where it was written. A file no caller
+	// registered is reported by name and byte offset instead.
+	sources map[string]*source.SourceFile
 }
 
 // slotRef identifies one slot of one instance.
 type slotRef struct {
 	instance int64
 	feature  string
+}
+
+// variantSelection identifies a variation point of one object: two objects of a
+// type each select their own variant of the same variation.
+type variantSelection struct {
+	owner     int64
+	variation string
+}
+
+// connectorRef identifies one connector being materialized in the context of
+// the object whose features its ends name.
+type connectorRef struct {
+	owner     int64
+	connector *symbols.Symbol
 }
 
 // NewContext creates a runtime context backed by the given semantic model.
@@ -80,12 +140,59 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		features:   make(map[*symbols.Symbol][]EffectiveFeature),
 		calcShapes: make(map[*symbols.Symbol]*calcShape),
 
+		calcUsageRuns: make(map[int64]map[calcUsageKey]*calcRun),
+
 		maxActionSteps: DefaultMaxActionSteps,
 		maxStateEvents: DefaultMaxStateEvents,
 		maxDoSteps:     DefaultMaxDoSteps,
+		maxElements:    DefaultMaxElements,
 
-		derivingSlots: make(map[slotRef]bool),
+		occurrences:      make(map[*symbols.Symbol]int64),
+		variantObjects:   make(map[variantObject]int64),
+		selectedVariants: make(map[variantSelection]string),
+
+		materializingConnectors: make(map[connectorRef]bool),
+		objectConns:             make(map[*symbols.Symbol][]lower.Connection),
+		derivingSlots:           make(map[slotRef]bool),
+		collectingSubsets:       make(map[slotRef]bool),
+		sources:                 make(map[string]*source.SourceFile),
 	}
+}
+
+// RegisterSource gives the context the text of a file the model was read from,
+// so an error about a declaration in it reports a line and column.
+func (ctx *Context) RegisterSource(sf *source.SourceFile) {
+	if sf == nil {
+		return
+	}
+	ctx.sources[sf.Name()] = sf
+}
+
+// sourceLocation renders where a span in a file was written, as
+// `file:line:col`. It falls back to a byte offset for a file whose text was not
+// registered, and to the file name alone when there is no span, so a diagnostic
+// always says as much as the context knows.
+func (ctx *Context) sourceLocation(file string, span source.Span) string {
+	if file == "" {
+		return ""
+	}
+	sf, ok := ctx.sources[file]
+	if !ok || span.End() > sf.Len() {
+		if span.Len == 0 && span.Offset == 0 {
+			return file
+		}
+		return fmt.Sprintf("%s:#%d", file, span.Offset)
+	}
+	pos := sf.Lines().PosAt(span.Offset)
+	return fmt.Sprintf("%s:%d:%d", file, pos.Line, pos.Col)
+}
+
+// symbolLocation renders where a symbol was declared, empty for none.
+func (ctx *Context) symbolLocation(sym *symbols.Symbol) string {
+	if sym == nil {
+		return ""
+	}
+	return ctx.sourceLocation(sym.DocName, sym.DeclSpan)
 }
 
 // SetTrace attaches a trace recorder to this context, so that every expression
@@ -113,6 +220,8 @@ func (ctx *Context) allocateID() int64 {
 func (ctx *Context) beginRun() func() {
 	if ctx.runDepth == 0 {
 		ctx.steps = 0
+		ctx.elements = 0
+		ctx.calcUsageRuns = make(map[int64]map[calcUsageKey]*calcRun)
 	}
 	ctx.runDepth++
 	return func() { ctx.runDepth-- }
@@ -126,10 +235,32 @@ func (ctx *Context) beginRun() func() {
 func (ctx *Context) beginExecutorRun(started *bool) func() {
 	if ctx.runDepth == 0 && !*started {
 		ctx.steps = 0
+		ctx.elements = 0
+		ctx.calcUsageRuns = make(map[int64]map[calcUsageKey]*calcRun)
 	}
 	*started = true
 	ctx.runDepth++
 	return func() { ctx.runDepth-- }
+}
+
+// newActivation begins one activation: the identity of a single execution of a
+// body, which the values a calc usage answers within it belong to.
+func (ctx *Context) newActivation() int64 {
+	ctx.activations++
+	return ctx.activations
+}
+
+// endActivation forgets what an activation computed, once it has ended, and the
+// activations of the calc usage evaluations it held.
+func (ctx *Context) endActivation(activation int64) {
+	runs, ok := ctx.calcUsageRuns[activation]
+	if !ok {
+		return
+	}
+	delete(ctx.calcUsageRuns, activation)
+	for _, run := range runs {
+		ctx.endActivation(run.activation)
+	}
 }
 
 // incrementStep increments the step counter and returns ErrStepLimitExceeded if limit reached.
@@ -138,6 +269,35 @@ func (ctx *Context) incrementStep() error {
 	ctx.steps++
 	if ctx.steps > ctx.maxSteps {
 		return fmt.Errorf("%w (%d steps; raise %s to allow more)", ErrStepLimitExceeded, ctx.maxSteps, MaxStepsEnvVar)
+	}
+	return nil
+}
+
+// elementScope brackets one evaluation and returns the function releasing what
+// it materialized, so the bound counts elements held at once, not in total.
+func (ctx *Context) elementScope() func() {
+	held := ctx.elements
+	return func() { ctx.elements = held }
+}
+
+// beginStep brackets one evaluation outside a body: it answers the activation the
+// evaluation runs in and the function ending it, releasing what it materialized.
+func (ctx *Context) beginStep() (int64, func()) {
+	activation := ctx.newActivation()
+	release := ctx.elementScope()
+	return activation, func() {
+		ctx.endActivation(activation)
+		release()
+	}
+}
+
+// chargeElements counts elements an evaluation materializes, which unlike a step
+// is memory the collection holding it keeps, against the element budget.
+func (ctx *Context) chargeElements(n int64) error {
+	ctx.elements += n
+	// A count that overflowed is past any budget, so it reads as one.
+	if ctx.elements > ctx.maxElements || ctx.elements < 0 {
+		return fmt.Errorf("%w (%d elements; raise %s to allow more)", ErrElementLimitExceeded, ctx.maxElements, MaxElementsEnvVar)
 	}
 	return nil
 }
@@ -213,8 +373,13 @@ func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Sco
 func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members []scopedMember, self *Instance, subject *Instance) (map[string]Value, error) {
 	bindings := make(map[string]Value)
 	features := ctx.conditionFeatures(sym)
+	// The bindings are evaluated as one, so a calc usage two of them read answers
+	// from one evaluation, and the next check reads it again.
+	activation, endStep := ctx.beginStep()
+	defer endStep()
 	evalIn := func(memberScope *symbols.Scope) *EvalContext {
 		ec := NewEvalContextIn(ctx, memberScope, self)
+		ec.activation = activation
 		ec.features = features
 		ec.Push(bindings)
 		return ec
@@ -227,11 +392,12 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
 			what, name, expr, isSubject = "subject", rm.Name, rm.BindingExpr, true
-		case *ast.ActorMember:
-			what, name, expr = "actor", rm.Name, rm.BindingExpr
 		case *ast.Usage:
-			if rm.Kind == ast.UsageSubject {
-				name, isSubject = rm.Ident.Name, true
+			switch rm.Kind {
+			case ast.UsageSubject:
+				name, isSubject = effectiveName(rm), true
+			case ast.UsageActor:
+				what, name, expr = "actor", effectiveName(rm), rm.Value
 			}
 		default:
 			continue
@@ -252,6 +418,13 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		bindings[name] = value
 	}
 	return bindings, nil
+}
+
+// effectiveName is the name a usage answers to, which for a member written as a
+// reference is its reference's rather than a declared one (ast.EffectiveName).
+func effectiveName(u *ast.Usage) string {
+	name, _ := ast.EffectiveName(u)
+	return name
 }
 
 // negatedDecl reports whether sym's declaration asserts that its conditions do
@@ -359,10 +532,17 @@ func (ctx *Context) ExecuteAction(action *symbols.Symbol) (map[string]Value, err
 // provided input parameter bindings (keyed by parameter name). Inputs override
 // action attribute defaults of the same name. Returns final token data.
 func (ctx *Context) ExecuteActionWithInputs(action *symbols.Symbol, inputs map[string]Value) (map[string]Value, error) {
+	return ctx.ExecuteActionPerformedBy(action, nil, inputs)
+}
+
+// ExecuteActionPerformedBy executes an action performed by self, whose
+// connections route what the action sends and whose variant selections decide
+// which of them are realized. A nil self performs the action outside any object.
+func (ctx *Context) ExecuteActionPerformedBy(action *symbols.Symbol, self *Instance, inputs map[string]Value) (map[string]Value, error) {
 	defer ctx.beginRun()()
 
 	// Create executor
-	exec, err := newActionExecutor(ctx, action)
+	exec, err := newActionExecutor(ctx, action, self)
 	if err != nil {
 		return nil, fmt.Errorf("create action executor: %w", err)
 	}
@@ -402,10 +582,17 @@ func (ctx *Context) ExecuteState(stateMachine *symbols.Symbol) (map[string]Value
 // events until completion or suspension. Returns the final state data and the
 // ordered list of visited state names.
 func (ctx *Context) ExecuteStateWithEvents(stateMachine *symbols.Symbol, events []string) (map[string]Value, []string, error) {
+	return ctx.ExecuteStatePerformedBy(stateMachine, nil, events)
+}
+
+// ExecuteStatePerformedBy executes a state machine performed by self, whose
+// connections route what the machine sends and whose variant selections decide
+// which of them are realized. A nil self performs it outside any object.
+func (ctx *Context) ExecuteStatePerformedBy(stateMachine *symbols.Symbol, self *Instance, events []string) (map[string]Value, []string, error) {
 	defer ctx.beginRun()()
 
 	// Create executor
-	exec, err := newStateExecutor(ctx, stateMachine)
+	exec, err := newStateExecutor(ctx, stateMachine, self)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create state executor: %w", err)
 	}
@@ -432,7 +619,13 @@ func (ctx *Context) ExecuteStateWithEvents(stateMachine *symbols.Symbol, events 
 // CreateActionExecutor creates an action executor without starting execution.
 // For REPL debugging - allows step-by-step execution control.
 func (ctx *Context) CreateActionExecutor(action *symbols.Symbol) (*ActionExecutor, error) {
-	exec, err := newActionExecutor(ctx, action)
+	return ctx.CreateActionExecutorFor(action, nil)
+}
+
+// CreateActionExecutorFor creates an action executor for an action performed by
+// self, without starting execution.
+func (ctx *Context) CreateActionExecutorFor(action *symbols.Symbol, self *Instance) (*ActionExecutor, error) {
+	exec, err := newActionExecutor(ctx, action, self)
 	if err != nil {
 		return nil, fmt.Errorf("create action executor: %w", err)
 	}
@@ -448,7 +641,13 @@ func (ctx *Context) CreateActionExecutor(action *symbols.Symbol) (*ActionExecuto
 // CreateStateExecutor creates a state executor without starting execution.
 // For REPL debugging - allows step-by-step execution control.
 func (ctx *Context) CreateStateExecutor(stateMachine *symbols.Symbol) (*StateExecutor, error) {
-	exec, err := newStateExecutor(ctx, stateMachine)
+	return ctx.CreateStateExecutorFor(stateMachine, nil)
+}
+
+// CreateStateExecutorFor creates a state executor for a machine performed by
+// self, without starting execution.
+func (ctx *Context) CreateStateExecutorFor(stateMachine *symbols.Symbol, self *Instance) (*StateExecutor, error) {
+	exec, err := newStateExecutor(ctx, stateMachine, self)
 	if err != nil {
 		return nil, fmt.Errorf("create state executor: %w", err)
 	}

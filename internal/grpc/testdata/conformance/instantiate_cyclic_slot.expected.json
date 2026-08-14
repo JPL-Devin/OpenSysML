@@ -1,0 +1,10 @@
+{
+  "rpc": "Instantiate",
+  "symbol_id": "test::Cyclic",
+  "expected_slots": {
+    "a": {
+      "materialized": false,
+      "error": "cyclic"
+    }
+  }
+}
