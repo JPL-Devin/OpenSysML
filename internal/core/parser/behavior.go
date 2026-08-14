@@ -1691,9 +1691,8 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// A subject parameter is a full usage (SysML v2 8.2.2.16): an optional name,
 	// an optional specialization part, a multiplicity, a value and a body.
 	var name string
-	if p.atName() {
-		name = p.src.Text(p.peek().Span)
-		p.advance()
+	if seg, ok := p.parseNameSegment(); ok {
+		name = seg.Text
 
 		// Named binding: subject <name> = <expr>;
 		if p.at(lexer.Eq) {

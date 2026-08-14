@@ -617,7 +617,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		mods.portion = portion
 		// Without a kind keyword the portion itself declares an occurrence usage.
 		if !p.atUsageKindKeyword() {
-			return applyPrefixes(p.parseUsage(start, ast.UsageOccurrence, tok.KeywordID, mods, false))
+			isAll := p.acceptKeyword("all")
+			return applyPrefixes(p.parseUsage(start, ast.UsageOccurrence, tok.KeywordID, mods, isAll))
 		}
 	}
 
