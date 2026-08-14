@@ -126,18 +126,20 @@ func (s *Session) List() []string {
 // before it. They document what follows, so folding them into the same snippet
 // makes a later redeclaration replace the comments along with the declaration
 // instead of leaving stale documentation above whatever is current.
-// A file is accumulated rather than superseded: several files of one model
-// commonly open the same package, so a load replaces only what the same file
-// contributed before, keyed by the file it came from.
+//
+// A loaded file supersedes only itself and what the prompt said about the same
+// names, since several files of one model commonly open the same package.
 func (s *Session) accept(origin, src string) (joined string, offset int) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
 	if origin != "" {
+		set := nameSet(names)
 		kept := s.snippets[:0]
 		for _, sn := range s.snippets {
-			if sn.origin != origin {
-				kept = append(kept, sn)
+			if sn.origin == origin || (sn.origin == "" && intersects(sn.names, set)) {
+				continue
 			}
+			kept = append(kept, sn)
 		}
 		s.snippets = append(kept, snippet{src: src, names: names, origin: origin})
 		joined = s.joined()
@@ -146,10 +148,7 @@ func (s *Session) accept(origin, src string) (joined string, offset int) {
 	var comments string
 	if len(names) > 0 {
 		comments = s.takeLeadingComments()
-		set := make(map[string]bool, len(names))
-		for _, n := range names {
-			set[n] = true
-		}
+		set := nameSet(names)
 		kept := s.snippets[:0]
 		for _, sn := range s.snippets {
 			if !intersects(sn.names, set) {
@@ -211,6 +210,14 @@ func (s *Session) joined() string {
 		parts[i] = sn.src
 	}
 	return strings.Join(parts, "\n")
+}
+
+func nameSet(names []string) map[string]bool {
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set
 }
 
 func intersects(names []string, set map[string]bool) bool {

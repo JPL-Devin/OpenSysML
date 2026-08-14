@@ -227,6 +227,25 @@ func TestCheckFilesOpeningTheSamePackage(t *testing.T) {
 	}
 }
 
+// TestCheckHonoursVerbosity checks that a check reports at the verbosity asked
+// for: -quiet reports errors only, and -debug names the pass behind a finding.
+func TestCheckHonoursVerbosity(t *testing.T) {
+	binary := buildCLI(t)
+
+	const warns = "package W {\n    attribute flag = 1 == \"one\";\n}\n"
+	quiet := check(t, binary, warns, "-quiet", "-validate")
+	wantReport(t, quiet, 0, "no errors")
+	if strings.Contains(quiet.output(), "warning:") {
+		t.Errorf("-quiet reported a warning it was asked to suppress:\n%s", quiet.output())
+	}
+	wantReport(t, check(t, binary, warns, "-validate"), 0, "warning: comparing Natural with String")
+	wantReport(t, check(t, binary, warns, "-debug", "-validate"), 0, "[type/type.expr]")
+
+	// An error is what stops the check, so no verbosity hides it.
+	wantReport(t, check(t, binary, "package E {\n    part x : Nope::Missing;\n}\n", "-quiet", "-validate"),
+		2, "error: unresolved reference: Nope::Missing")
+}
+
 // TestConvertAndCheckAreSeparateRuns checks that a check asked for alongside a
 // conversion is reported as a misuse, rather than the conversion silently
 // answering nothing about the model.

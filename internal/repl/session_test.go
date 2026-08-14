@@ -109,3 +109,18 @@ func TestLoadedFilesAccumulateByFile(t *testing.T) {
 		t.Errorf("reloading a file dropped another file: %q", joined)
 	}
 }
+
+// A loaded file supersedes what was typed at the prompt about the same names,
+// so the name it declares stays unambiguous.
+func TestLoadedFileSupersedesPromptDeclarations(t *testing.T) {
+	s := NewSession()
+	s.accept("", "part def A;")
+	joined, _ := s.accept("a.sysml", "part def A { part y; }")
+
+	if got := len(s.List()); got != 1 {
+		t.Errorf("want the typed declaration replaced, got %d snippets: %v", got, s.List())
+	}
+	if !strings.Contains(joined, "part y") {
+		t.Errorf("the loaded declaration is missing: %q", joined)
+	}
+}

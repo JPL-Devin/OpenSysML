@@ -75,7 +75,7 @@ func (s *Session) LoadFileSummary(path string) ([]string, error) {
 
 // DiagnosticLines reports the analysis of everything submitted so far as the
 // prompt prints it: the source line each finding is on, under a position naming
-// the file the finding is in.
+// the file the finding is in, at the verbosity the session was asked for.
 func (s *Session) DiagnosticLines() []string {
 	diags := s.Diagnostics()
 	if len(diags) == 0 {
@@ -90,10 +90,13 @@ func (s *Session) DiagnosticLines() []string {
 			if d.Span.Offset < start || (d.Span.Offset > end && i != len(s.snippets)-1) {
 				continue
 			}
+			if d.Severity != passes.SeverityError && s.verbosity <= VerbosityQuiet {
+				continue
+			}
 			d.Span.Offset -= start
 			own = append(own, d)
 		}
-		out = append(out, renderDiagnostics(own, sn.src, 1, false, sn.origin)...)
+		out = append(out, renderDiagnostics(own, sn.src, 1, s.verbosity >= VerbosityDebug, sn.origin)...)
 		start = end + 1 // the newline joined() writes between snippets
 	}
 	return out
