@@ -84,7 +84,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nThe input format is taken from the file extension (.sysml, .kerml, .ttl) unless\n")
 		fmt.Fprintf(os.Stderr, "-from names it. Converting to the format it is already in rewrites the input:\n")
 		fmt.Fprintf(os.Stderr, "notation is reformatted, Turtle is normalized.\n")
-		fmt.Fprintf(os.Stderr, "\nFlags may be written before or after the model they apply to.\n")
+		fmt.Fprintf(os.Stderr, "\nFlags may be written before or after the model they apply to. A file named like\n")
+		fmt.Fprintf(os.Stderr, "a flag is read as a file after --, which ends the flags: sysml -trace -- -m.sysml\n")
 	}
 
 	flag.Var(&evalExprs, "eval", "Evaluate expression and exit (can be specified multiple times)")

@@ -88,9 +88,63 @@ member still fails with `cannot convert the *ast.SubstateMember/…ResultMember 
 plain `package Demo { part def Engine { attribute power = 300.0; } }` for `.ttl` assertions rather
 than a file from `examples/`.
 
+**Not one file in `examples/*.sysml` or `internal/repl/testdata/*.sysml` converts to `ttl`** — every
+one fails on an unsupported construct (`*ast.SubstateMember`, `*ast.ResultMember`, `*ast.StateNode`,
+`*ast.StateRegion`, `*ast.ConstraintMember`, `*ast.AssignmentActionNode`, `*ast.InitialNode`,
+`*ast.SubjectMember`, or a `duplicate declaration of "result"`). So a Turtle test needs a
+hand-written fixture; this one round-trips and yields exactly 1180 bytes of Turtle:
+
+```
+package Demo {
+    // a comment
+    part def Vehicle {
+        attribute mass;
+    }
+    part v : Vehicle;
+}
+```
+
+Use it for byte-identity assertions across argument orders (`md5sum … | sort -u | wc -l` must print
+`1`) — comparing hashes is far stronger evidence than eyeballing that each invocation "worked".
+Beware: `-convert sysml` **does** normalize tab indentation to 4 spaces (comments and inline/
+multi-line layout survive), so a tab-indented fixture like `vehicle_package.sysml` will never be
+byte-equal to its own reformatted output. Assert idempotency (pass 2 == pass 1) rather than
+fixture-equality (pass 1 == input).
+
 For formatter changes, the cheap adversarial check is idempotency over real models:
 convert every `examples/*.sysml` with `-convert sysml` twice and `diff` the two outputs — all eight
-must be byte-identical, and stderr must stay empty for well-formed input.
+must be byte-identical, and stderr must stay empty for well-formed input. Pipe the whole loop
+through `sort | uniq -c` so the evidence is one aggregate count instead of a screenful that scrolls
+the failures off the top:
+
+```bash
+for f in examples/*.sysml internal/repl/testdata/*.sysml; do
+  ./bin/sysml "$f" -convert sysml > /tmp/p1 2>/dev/null
+  ./bin/sysml /tmp/p1 -convert sysml -from sysml > /tmp/p2 2>/dev/null
+  cmp -s /tmp/p1 /tmp/p2 && echo idempotent || echo "NOT IDEMPOTENT: $f"
+done | sort | uniq -c
+```
+
+## Argument order and the `--` marker
+
+`cmd/sysml/args.go` permutes arguments before `flag.Parse`, so flags may be written **after** the
+model (`sysml model.sysml -convert ttl`, `sysml model.sysml -trace`). This code is on the path for
+*every* invocation, so any change to it needs the unrelated modes (`-e`, `-debug`, `-trace`,
+`-quiet`, plain REPL load, `-version`, `-h`) re-checked, not just the conversion flow.
+
+The orders worth covering, since each hits a different branch: model first, flags first, model
+*between* two flags (`-o out.ttl model.sysml -convert ttl`), a joined value (`-convert=ttl`), an
+`-o` value that itself starts with a dash (`-o -weird.ttl`), and a flag whose value could be
+mistaken for a model (`-from sysml in.txt -convert ttl` — if `sysml` is read as the file you get a
+bogus `open sysml: no such file`).
+
+A **file name beginning with a dash needs the `--` marker**: `sysml -weird.sysml` is reported as
+`flag provided but not defined: -weird.sysml` (correct — a genuine typo like `--badflag` must still
+be caught), while `sysml -e "1+1" -- -weird.sysml` loads it. Remember `--` is POSIX end-of-options,
+so **everything after it is positional**: `sysml -- -weird.sysml -e "1+1"` loads the model and then
+tries to open `-e` as a second file (`load -e: open -e: no such file or directory`). Write the flags
+*before* the marker. A regression here is easy to miss — assert on a dash-leading file name
+explicitly, because a permutation bug that drops `--` still looks fine for ordinary file names.
 
 ## Fixtures worth knowing
 
