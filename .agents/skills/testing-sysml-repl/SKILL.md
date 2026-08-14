@@ -117,6 +117,9 @@ must be byte-identical, and stderr must stay empty for well-formed input.
 
 ## Variations, variants and redefinition-inherited members
 
+This section describes the fixtures and rendering added by PR #122, so it applies only once
+that PR is on `main`.
+
 Fixtures live in `internal/core/runtime/testdata/conformance/`: `variation_attribute_selection.sysml`
 (`test::idealDiamond`), `variation_part_selection.sysml` (`test::electricVehicle`),
 `variation_interface_selection.sysml` (`test::nestedAssembly`), `variation_unselected.sysml`
