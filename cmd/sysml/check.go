@@ -30,17 +30,30 @@ type checks struct {
 	calcs        stringSlice
 	actions      stringSlice
 	states       stringSlice
-	// advanceTime is -advance as written, parsed where a bad value is reported in
-	// whichever form the caller asked for.
-	advanceTime string
-	jsonOut     bool
+	advance      advanceTime
+	jsonOut      bool
+}
+
+// advanceTime is -advance as written, parsed where a bad value is reported in
+// whichever form the caller asked for. An empty value is a misuse rather than
+// silently no advance, so it records that the flag was written.
+type advanceTime struct {
+	value string
+	given bool
+}
+
+func (a *advanceTime) String() string { return a.value }
+
+func (a *advanceTime) Set(value string) error {
+	a.value, a.given = value, true
+	return nil
 }
 
 // requested reports whether checking mode was asked for rather than a prompt.
 // -json and -advance check nothing themselves, but are included so their misuse
 // is reported rather than leaving a script at a prompt it cannot answer.
 func (c *checks) requested() bool {
-	return c.validate || c.jsonOut || c.advanceTime != "" || len(c.instantiate) > 0 || len(c.constraints) > 0 ||
+	return c.validate || c.jsonOut || c.advance.given || len(c.instantiate) > 0 || len(c.constraints) > 0 ||
 		len(c.requirements) > 0 || len(c.satisfy) > 0 || len(c.calcs) > 0 ||
 		len(c.actions) > 0 || len(c.states) > 0
 }
@@ -91,6 +104,14 @@ func (t *satisfyTargets) tookNoValue() bool {
 	return false
 }
 
+// refuse reports a misused flag in whichever form the caller asked for, so a
+// script reading the JSON document reads why no check was made.
+func refuse(c checks, message string) int {
+	rep := newReporter(c.jsonOut)
+	rep.failed(message)
+	return rep.finish()
+}
+
 // runChecks loads the model, creates the objects asked for, evaluates the checks
 // and runs the behavior named on the command line, reporting each outcome as it
 // is decided. The result is the exit status: every verdict held, one of them
@@ -99,12 +120,12 @@ func runChecks(files []string, exprs []string, c checks) int {
 	rep := newReporter(c.jsonOut)
 
 	var advance float64
-	if c.advanceTime != "" {
+	if c.advance.given {
 		if len(c.states) == 0 {
 			rep.failed("-advance is the time a state machine runs for; name one, as -state <name>")
 			return rep.finish()
 		}
-		duration, err := parseAdvance(c.advanceTime)
+		duration, err := parseAdvance(c.advance.value)
 		if err != nil {
 			rep.failed(err.Error())
 			return rep.finish()
@@ -189,7 +210,7 @@ func runChecks(files []string, exprs []string, c checks) int {
 	}
 	for _, value := range c.states {
 		name, performer := splitPerformer(value)
-		if c.advanceTime != "" {
+		if c.advance.given {
 			rep.verdict(sess.RunStateMachineFor(name, advance, performer...))
 			continue
 		}

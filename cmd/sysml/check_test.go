@@ -148,6 +148,19 @@ func TestCheckSatisfyThroughCLI(t *testing.T) {
 		"no satisfaction assertion in Rover::touchdown")
 }
 
+// TestConvertAndCheckAreSeparateRuns checks that a check asked for alongside a
+// conversion is reported as a misuse, rather than the conversion silently
+// answering nothing about the model.
+func TestConvertAndCheckAreSeparateRuns(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, checkModel, "-convert", "ttl", "-validate")
+	wantReport(t, got, 2, "-convert writes the model out")
+	if strings.Contains(got.stdout, "@prefix") {
+		t.Errorf("the model was converted anyway:\n%s", got.output())
+	}
+}
+
 // TestSatisfyCanBeTurnedOff checks that the off spelling of a flag declared
 // boolean asks for no satisfaction check, rather than for an element named
 // "false", so -satisfy=$on works in a script.

@@ -108,6 +108,10 @@ func TestCheckGatesOnLiteralEvaluationFailure(t *testing.T) {
 func TestAdvanceTakesADuration(t *testing.T) {
 	binary := buildCLI(t)
 
+	// A flag written with no value at all is a misuse too, not no advance.
+	wantReport(t, check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", ""), 2,
+		"-advance takes a number of time units")
+
 	for _, value := range []string{"NaN", "Inf", "-1"} {
 		got := check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", value)
 		wantReport(t, got, 2, "-advance takes a duration")

@@ -124,7 +124,7 @@ func main() {
 	flag.Var(&modelChecks.calcs, "calc", "Invoke this calculation and report what it computed, as -calc \"Fall(3, 4)\" (repeatable)")
 	flag.Var(&modelChecks.actions, "action", "Run this action to completion, as -action \"Drive rover1\" to run it on an object (repeatable)")
 	flag.Var(&modelChecks.states, "state", "Run this state machine, as -state \"Mission rover1\" to run it on an object (repeatable)")
-	flag.StringVar(&modelChecks.advanceTime, "advance", "", "Simulated time units to run each -state machine for (default: only its initial transition)")
+	flag.Var(&modelChecks.advance, "advance", "Simulated time units to run each -state machine for (default: only its initial transition)")
 	flag.BoolVar(&modelChecks.jsonOut, "json", false, "Report checks as one JSON document rather than as lines")
 	if err := flag.CommandLine.Parse(permuteArgs(flag.CommandLine, os.Args[1:])); err != nil {
 		// flag.CommandLine exits on error; unreachable unless that changes.
@@ -149,6 +149,10 @@ func main() {
 	args := flag.Args()
 
 	if convertFormat != "" {
+		if modelChecks.requested() {
+			os.Exit(refuse(modelChecks,
+				"-convert writes the model out and decides nothing about it; check it in its own run"))
+		}
 		if err := runConvert(args); err != nil {
 			fmt.Fprintln(os.Stderr, "sysml:", err)
 			os.Exit(1)
