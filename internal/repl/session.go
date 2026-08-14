@@ -42,6 +42,14 @@ type Session struct {
 	actionExec *actionSession
 	stateExec  *stateSession
 
+	// Why the debugging sessions and the instances are gone, when a submission
+	// ended them. A command that finds nothing active reports this rather than
+	// leaving the user to guess.
+	endedAction   *endedSession
+	endedState    *endedSession
+	lostInstances int // how many instances the last submission that dropped any took
+	lostAt        int // the submission that dropped them
+
 	// trace records execution steps while tracing is on, nil otherwise.
 	trace *runtime.TraceRecorder
 
@@ -123,29 +131,43 @@ func (s *Session) List() []string {
 // before it. They document what follows, so folding them into the same snippet
 // makes a later redeclaration replace the comments along with the declaration
 // instead of leaving stale documentation above whatever is current.
-func (s *Session) accept(src string) (joined string, offset int) {
+func (s *Session) accept(src string) (joined string, offset int, drops []dropReport) {
 	root := parser.New(source.New(docName, []byte(src))).ParseFile()
 	names := declaredNames(root)
+	text := src
 	var comments string
 	if len(names) > 0 {
-		comments = s.takeLeadingComments()
 		set := make(map[string]bool, len(names))
 		for _, n := range names {
 			set[n] = true
 		}
+		// Re-typing a namespace adds to the one already in the buffer. The
+		// merged text stands for both, and is appended like any other
+		// submission so a report still scopes to the tail of the buffer. The
+		// comments above the addition document its members, which the merged
+		// text already carries, so they are left where they are.
+		if merged, drop, ok := s.mergeSubmission(src, root); ok {
+			text = merged
+			drops = append(drops, drop)
+		} else {
+			comments = s.takeLeadingComments()
+		}
+		top := topLevelMembers(root)
 		kept := s.snippets[:0]
 		for _, sn := range s.snippets {
 			if !intersects(sn.names, set) {
 				kept = append(kept, sn)
+				continue
 			}
+			drops = append(drops, replacedReport(sn, set, src, top))
 		}
 		s.snippets = kept
 	}
-	s.snippets = append(s.snippets, snippet{src: comments + src, names: names})
+	s.snippets = append(s.snippets, snippet{src: comments + text, names: names})
 	joined = s.joined()
 	// The offset marks what the user typed, not the comments folded in front of
 	// it, so diagnostics keep the line numbers of the submission.
-	return joined, len(joined) - len(src)
+	return joined, len(joined) - len(text), drops
 }
 
 // takeLeadingComments removes the trailing run of comment-only snippets and
@@ -212,7 +234,7 @@ func intersects(names []string, set map[string]bool) bool {
 // prior snippet (see accept).
 func (s *Session) Submit(src string) Result {
 	declared := declaredNames(parser.New(source.New(docName, []byte(src))).ParseFile())
-	joined, offset := s.accept(src)
+	joined, offset, drops := s.accept(src)
 	s.version++
 	s.ws.Open(docName, []byte(joined), s.version)
 	// The document is a new AST and scope tree, so anything derived from the
@@ -220,8 +242,13 @@ func (s *Session) Submit(src string) Result {
 	// new runtime context. The index is re-used and brought up to date on the
 	// next lookup instead, which is why it records the version it holds.
 	s.rtCtx = nil
-	s.instances = make(map[string]*runtime.Instance)
-	notices := s.dropStaleDebugSessions(declared)
+	notices := dropNotices(drops)
+	if n := len(s.instances); n > 0 {
+		s.instances = make(map[string]*runtime.Instance)
+		s.lostInstances, s.lostAt = n, s.version
+		notices = append(notices, instancesDroppedNotice(n))
+	}
+	notices = append(notices, s.dropStaleDebugSessions(declared)...)
 	diags := s.ws.Diagnostics(docName)
 	var members []ast.Node
 	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
@@ -253,10 +280,22 @@ func (s *Session) dropStaleDebugSessions(declared []string) []string {
 	var notices []string
 	if s.actionExec != nil && redeclared[s.actionExec.rootName] {
 		notices = append(notices, debugSessionEnded("action", s.actionExec.name, s.actionExec.rootName))
+		s.endedAction = &endedSession{
+			kind:     "action",
+			name:     s.actionExec.name,
+			rootName: s.actionExec.rootName,
+			version:  s.version,
+		}
 		s.actionExec = nil
 	}
 	if s.stateExec != nil && redeclared[s.stateExec.rootName] {
 		notices = append(notices, debugSessionEnded("state", s.stateExec.name, s.stateExec.rootName))
+		s.endedState = &endedSession{
+			kind:     "state machine",
+			name:     s.stateExec.name,
+			rootName: s.stateExec.rootName,
+			version:  s.version,
+		}
 		s.stateExec = nil
 	}
 	return notices
@@ -293,6 +332,9 @@ func (s *Session) Clear() {
 	s.instances = make(map[string]*runtime.Instance)
 	s.actionExec = nil
 	s.stateExec = nil
+	s.endedAction = nil
+	s.endedState = nil
+	s.lostInstances, s.lostAt = 0, 0
 }
 
 // getOrCreateRuntime lazily creates runtime context when first needed.

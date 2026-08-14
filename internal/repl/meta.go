@@ -266,6 +266,7 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 	// Keyed by the resolved name, so %slots finds the instance whichever
 	// spelling of the name created it.
 	s.instances[fqn] = inst
+	s.lostInstances, s.lostAt = 0, 0
 	return []string{
 		fmt.Sprintf("✓ Created instance of %s", fqn),
 		fmt.Sprintf("  ID: %d", inst.ID),
@@ -752,6 +753,9 @@ func featureVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *
 // doInstances lists all instantiated objects.
 func (s *Session) doInstances() ([]string, bool, error) {
 	if len(s.instances) == 0 {
+		if note := instancesGoneNote(s.lostInstances, s.lostAt); note != "" {
+			return []string{note}, false, nil
+		}
 		return []string{"(no instances created)"}, false, nil
 	}
 
@@ -1390,6 +1394,7 @@ func (s *Session) doAction(name string, performer []string) ([]string, bool, err
 		symbol:   sym,
 		executor: exec,
 	}
+	s.endedAction = nil
 
 	// Display initial state
 	tokens := exec.Tokens()
@@ -1405,7 +1410,7 @@ func (s *Session) doAction(name string, performer []string) ([]string, bool, err
 // doStep advances the action executor one step.
 func (s *Session) doStep() ([]string, bool, error) {
 	if s.actionExec == nil {
-		return []string{"error: no active action session (use %action <name> first)"}, false, nil
+		return []string{s.noActionSessionMsg()}, false, nil
 	}
 
 	exec := s.actionExec.executor
@@ -1446,7 +1451,7 @@ func (s *Session) doStep() ([]string, bool, error) {
 // doContinue runs the action to completion.
 func (s *Session) doContinue() ([]string, bool, error) {
 	if s.actionExec == nil {
-		return []string{"error: no active action session (use %action <name> first)"}, false, nil
+		return []string{s.noActionSessionMsg()}, false, nil
 	}
 
 	exec := s.actionExec.executor
@@ -1493,7 +1498,7 @@ func (s *Session) doContinue() ([]string, bool, error) {
 // doTokens displays active tokens.
 func (s *Session) doTokens() ([]string, bool, error) {
 	if s.actionExec == nil {
-		return []string{"error: no active action session (use %action <name> first)"}, false, nil
+		return []string{s.noActionSessionMsg()}, false, nil
 	}
 
 	exec := s.actionExec.executor
@@ -1548,7 +1553,7 @@ func anonymousNodeLabel(node ast.Node) string {
 // doBreak sets a breakpoint at a named node of the running action.
 func (s *Session) doBreak(nodeName string) ([]string, bool, error) {
 	if s.actionExec == nil {
-		return []string{"error: no active action session (use %action <name> first)"}, false, nil
+		return []string{s.noActionSessionMsg()}, false, nil
 	}
 
 	exec := s.actionExec.executor
@@ -1571,7 +1576,7 @@ func (s *Session) doBreak(nodeName string) ([]string, bool, error) {
 // doStop stops the current debugging session.
 func (s *Session) doStop() ([]string, bool, error) {
 	if s.actionExec == nil && s.stateExec == nil {
-		return []string{"error: no active debugging session"}, false, nil
+		return []string{s.noDebugSessionMsg()}, false, nil
 	}
 
 	sessionName := ""
@@ -1624,6 +1629,7 @@ func (s *Session) doStateMachine(name string, performer []string) ([]string, boo
 		executor: exec,
 		now:      exec.CurrentTime(),
 	}
+	s.endedState = nil
 
 	return []string{
 		fmt.Sprintf("✓ Started state machine executor for %q", name),
@@ -1638,7 +1644,7 @@ func (s *Session) doStateMachine(name string, performer []string) ([]string, boo
 // doEvents displays the event queue.
 func (s *Session) doEvents() ([]string, bool, error) {
 	if s.stateExec == nil {
-		return []string{"error: no active state machine session (use %state <name> first)"}, false, nil
+		return []string{s.noStateSessionMsg()}, false, nil
 	}
 
 	exec := s.stateExec.executor
@@ -1658,7 +1664,7 @@ func (s *Session) doEvents() ([]string, bool, error) {
 // doCurrent shows current state and configuration.
 func (s *Session) doCurrent() ([]string, bool, error) {
 	if s.stateExec == nil {
-		return []string{"error: no active state machine session (use %state <name> first)"}, false, nil
+		return []string{s.noStateSessionMsg()}, false, nil
 	}
 
 	exec := s.stateExec.executor
@@ -1730,7 +1736,7 @@ func parseDuration(arg string) (float64, error) {
 // event scheduled at or before the deadline.
 func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 	if s.stateExec == nil {
-		return []string{"error: no active state machine session (use %state <name> first)"}, false, nil
+		return []string{s.noStateSessionMsg()}, false, nil
 	}
 
 	duration, err := parseDuration(timeStr)

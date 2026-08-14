@@ -20,7 +20,7 @@ func TestAcceptReplacesByName(t *testing.T) {
 	s := NewSession()
 	s.accept("package P { }")
 	s.accept("namespace N;")
-	joined, _ := s.accept("package P { } // redefined")
+	joined, _, _ := s.accept("package P { } // redefined")
 	// P should appear once (the new one); N preserved; order = N then new P.
 	if got := s.List(); len(got) != 2 {
 		t.Fatalf("want 2 snippets, got %d: %v", len(got), got)
@@ -30,6 +30,74 @@ func TestAcceptReplacesByName(t *testing.T) {
 	}
 	if strings.Count(joined, "package P") != 1 {
 		t.Fatalf("P not deduplicated: %q", joined)
+	}
+}
+
+// Re-typing a namespace to add a member adds to the one already in the buffer:
+// a REPL user builds a package up a line at a time, so a second body is an
+// addition, not a replacement of everything typed before it.
+func TestResubmittedNamespaceMergesItsBody(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { part def A; }")
+	res := s.Submit("package P { part def B; }")
+
+	list := strings.Join(s.List(), "\n")
+	wants(t, list, "part def A", "part def B")
+	if got := len(s.List()); got != 1 {
+		t.Errorf("want one snippet standing for the merged package, got %d: %v", got, s.List())
+	}
+	if !hasNotice(res, "added to the existing package P") {
+		t.Errorf("merge was not reported: %v", res.Notices)
+	}
+}
+
+// A member the new body redeclares still replaces the old one — and is named,
+// so the definition that was superseded is not lost silently.
+func TestMergedNamespaceReportsTheMembersItReplaces(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { part def A { attribute x = 1; } part def C; }")
+	res := s.Submit("package P { part def A; }")
+
+	list := strings.Join(s.List(), "\n")
+	wants(t, list, "part def C")
+	rejects(t, list, "attribute x = 1")
+	if !hasNotice(res, "replacing part def A") {
+		t.Errorf("replaced member was not reported: %v", res.Notices)
+	}
+}
+
+// Merging must not deduplicate what one submission declares twice: the buffer
+// keeps both, so the submission is still a duplicate declaration.
+func TestMergeKeepsDuplicateDeclarationsOfOneSubmission(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { part def C; }")
+	s.Submit("package P { part def A; part def A; }")
+
+	if got := strings.Count(strings.Join(s.List(), "\n"), "part def A"); got != 2 {
+		t.Errorf("want both duplicate declarations kept, got %d: %v", got, s.List())
+	}
+}
+
+// Nesting merges too, so adding to a nested package keeps the members of both
+// it and its parent.
+func TestNestedNamespaceMergeKeepsNestedMembers(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { part def Top; package Q { part def A; } }")
+	s.Submit("package P { package Q { part def B; } }")
+
+	wants(t, strings.Join(s.List(), "\n"), "part def Top", "part def A", "part def B")
+}
+
+// An empty body is how a namespace is emptied, so it still replaces — and says
+// what it dropped.
+func TestEmptyBodyReplacesNamespaceWithANotice(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { part def A; }")
+	res := s.Submit("package P { }")
+
+	rejects(t, strings.Join(s.List(), "\n"), "part def A")
+	if !hasNotice(res, "replaced package P (part def A no longer declared)") {
+		t.Errorf("replacement was not reported: %v", res.Notices)
 	}
 }
 
@@ -56,7 +124,7 @@ func TestLeadingCommentIsReplacedWithItsDeclaration(t *testing.T) {
 	s := NewSession()
 	s.accept("// doc for A")
 	s.accept("part def A;")
-	joined, _ := s.accept("part def A { part y; }")
+	joined, _, _ := s.accept("part def A { part y; }")
 
 	if strings.Contains(joined, "doc for A") {
 		t.Errorf("stale comment survived the redeclaration: %q", joined)
@@ -70,7 +138,7 @@ func TestLeadingCommentIsReplacedWithItsDeclaration(t *testing.T) {
 func TestTrailingCommentIsKept(t *testing.T) {
 	s := NewSession()
 	s.accept("part def A;")
-	joined, _ := s.accept("// thinking out loud")
+	joined, _, _ := s.accept("// thinking out loud")
 	if !strings.Contains(joined, "thinking out loud") {
 		t.Errorf("comment dropped: %q", joined)
 	}

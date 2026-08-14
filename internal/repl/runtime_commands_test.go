@@ -47,6 +47,16 @@ func wants(t *testing.T, got string, fragments ...string) {
 	}
 }
 
+// hasNotice reports whether any of a submission's notices mentions fragment.
+func hasNotice(res Result, fragment string) bool {
+	for _, n := range res.Notices {
+		if strings.Contains(n, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
 // rejects asserts no fragment appears in got.
 func rejects(t *testing.T, got string, fragments ...string) {
 	t.Helper()
@@ -149,7 +159,10 @@ func TestInstancesDoNotOutliveTheirRuntimeContext(t *testing.T) {
 	wants(t, run(t, s, "%instances"), "Demo::Vehicle")
 
 	s.Submit(`package Demo { part def Trailer { attribute mass = 900.0; } }`)
-	wants(t, run(t, s, "%instances"), "(no instances created)")
+	// The empty listing now says why it is empty: on its own it reads like a
+	// fresh session, which is how the loss used to go unnoticed.
+	wants(t, run(t, s, "%instances"),
+		"no instances created", "1 instance was dropped when the declarations changed at submission 2")
 	wants(t, run(t, s, "%instantiate Demo::Trailer"), "ID: 1")
 	rejects(t, run(t, s, "%instances"), "Demo::Vehicle")
 }
