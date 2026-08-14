@@ -316,6 +316,32 @@ guarantees, and what the mapping does not cover.
 
 ---
 
+## Running from a Script
+
+`-e` evaluates without entering the prompt, so a model can be queried from a
+shell:
+
+```bash
+$ sysml -e "RdfInteropDemo::Rover::mass" examples/rdf-interop-demo.sysml
+✓ package RdfInteropDemo
+✓ RdfInteropDemo::Rover::mass
+  = 899.00
+```
+
+Two things matter before a pipeline depends on it:
+
+- **A model's diagnostics and a failed evaluation are printed on stdout, and
+  leave the exit status `0`.** Only the command's own failures — a file it could
+  not read, a conversion it refused, a misused flag — go to stderr and exit
+  non-zero. A successful `-convert -o` also reports its `wrote <file> …` note on
+  stderr, so that stdout carries the conversion alone.
+- **The exit status therefore says whether the command ran, not whether the model
+  was sound.** The status codes are documented once, in
+  [examples/CLI_USAGE.md § Exit status](../examples/CLI_USAGE.md#exit-status),
+  with a CI recipe that reads the output instead.
+
+---
+
 ## REPL Commands
 
 | Command | Description |
@@ -602,25 +628,44 @@ drift) and the F5 development loop.
 Other editors can still launch `bin/sysml-lsp` over stdio through their own
 generic LSP client; only the highlighting is VS Code-specific.
 
-**LSP features (all implemented):**
-- ✅ Document synchronization (incremental updates)
-- ✅ Diagnostics (syntax + semantic errors, real-time)
+**What the server advertises at `initialize`** — the capabilities it answers, taken
+from a live session with `bin/sysml-lsp`:
+
+- ✅ Document synchronization, incremental (`textDocumentSync.change: 2`)
+- ✅ Diagnostics (syntax + semantic errors, published on open and on change)
 - ✅ Hover (symbol info, type, multiplicity)
 - ✅ Go-to-definition (cross-document navigation)
 - ✅ Find references (workspace-wide search)
-- ✅ Completion (typed kinds and details; `v.` offers members of `v`'s type, `Pkg::` offers that namespace's members, library names included)
+- ✅ Completion (trigger characters `:` and `.`; typed kinds and details, `v.` offers members of `v`'s type, `Pkg::` offers that namespace's members, library names included)
 - ✅ Document symbols (outline view)
 - ✅ Workspace symbols (global search)
+- ✅ Document formatting (`textDocument/formatting`, whole-file edit)
+- ✅ Rename, with prepare (`textDocument/prepareRename`, `textDocument/rename`)
 
-**Test the server:**
-```bash
-# Check version
-./sysml-lsp --version
+**Not implemented:** semantic tokens, code actions, signature help, range
+formatting, code lens, inlay hints. A client asking for one of those gets the
+method-not-found answer rather than a partial result.
 
-# Test with example file
-echo 'part Wheel { attribute diameter = 16.0; }' > test.sysml
-# Open test.sysml in VS Code, hover over "Wheel" to see symbol info
+**Test the server:** the protocol is JSON-RPC over stdio, so a request can be sent
+by hand. Formatting a badly indented file and renaming a definition, run against
+`bin/sysml-lsp`:
+
 ```
+→ textDocument/formatting  (file: "package P {\npart def Wheel {\nattribute diameter = 16.0;\n}\npart w : Wheel;\n}\n")
+← [{"range": {"start": {"line": 0, "character": 0}, "end": {"line": 6, "character": 0}},
+    "newText": "package P {\n    part def Wheel {\n        attribute diameter = 16.0;\n    }\n    part w : Wheel;\n}\n"}]
+
+→ textDocument/rename      (position: line 1, character 10; newName: "Tyre")
+← {"changes": {"file:///tmp/lsp-demo.sysml": [
+      {"range": {"start": {"line": 1, "character": 9}, "end": {"line": 1, "character": 14}}, "newText": "Tyre"},
+      {"range": {"start": {"line": 4, "character": 9}, "end": {"line": 4, "character": 14}}, "newText": "Tyre"}]}}
+```
+
+The rename edits the declaration and the `part w : Wheel` reference together —
+it is resolution-driven, not a textual replace.
+
+In an editor, check the install by hovering: open a file containing
+`part Wheel { attribute diameter = 16.0; }` and hover over `Wheel`.
 
 ---
 
