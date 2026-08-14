@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 	"testing"
@@ -110,6 +111,16 @@ func TestNestedCalcNamesTheFailingCalc(t *testing.T) {
 	}
 	if strings.Contains(got, "frames") {
 		t.Errorf("err = %q; want no frame count for distinct calcs", got)
+	}
+}
+
+// TestMutualRecursionNamesTheFrameItCollapsed pins the collapsed frame naming
+// the calc it was entered for, not one an inner frame recorded.
+func TestMutualRecursionNamesTheFrameItCollapsed(t *testing.T) {
+	inner := calcFrame("a", errors.New("boom"))
+	got := calcFrame("a", calcFrame("b", inner)).Error()
+	if !strings.HasPrefix(got, "calc a: … 2 frames: ") {
+		t.Errorf("err = %q; want the outer frame named a", got)
 	}
 }
 

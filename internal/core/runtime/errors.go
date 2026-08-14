@@ -279,7 +279,7 @@ func calcFrame(calc string, err error) error {
 	if errors.As(err, &framed) {
 		if framed.calcs[calc] {
 			return &CalcFrameError{
-				Calc:   framed.Calc,
+				Calc:   calc,
 				Frames: framed.Frames + 1,
 				Err:    framed.Err,
 				calcs:  framed.calcs,
