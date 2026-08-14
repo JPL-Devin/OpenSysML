@@ -180,3 +180,44 @@ func TestMismatchCaretOnlyForTypedOperator(t *testing.T) {
 		})
 	}
 }
+
+// TestDeclarationCaretCountsPrintedCells pins the same cell counting for a
+// declaration diagnostic, whose caret and column share the rendering.
+func TestDeclarationCaretCountsPrintedCells(t *testing.T) {
+	lines := renderResult(NewSession().Submit("attribute αβ = 1 +"), VerbosityNormal)
+	got := strings.Join(lines, "\n")
+	for _, want := range []string{"1:11: error:", "attribute αβ = 1 +", "          ^~"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q in output:\n%s", want, got)
+		}
+	}
+}
+
+// TestCaretCountsPrintedCells pins that a caret and the column it is reported
+// under are measured in terminal cells, so multi-byte and East Asian wide runes
+// before the finding do not push the caret past what it points at.
+func TestCaretCountsPrintedCells(t *testing.T) {
+	cases := []struct {
+		name string
+		line string
+		want []string
+	}{{
+		name: "multi-byte runes before the caret",
+		line: `%eval "αβγ" +`,
+		want: []string{"error: 1:8: expected an expression", `"αβγ" +`, "       ^"},
+	}, {
+		name: "wide runes count two cells",
+		line: `%eval "日本" +`,
+		want: []string{"error: 1:9: expected an expression", `"日本" +`, "        ^"},
+	}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := run(t, NewSession(), tc.line)
+			for _, want := range tc.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("expected %q in output:\n%s", want, got)
+				}
+			}
+		})
+	}
+}

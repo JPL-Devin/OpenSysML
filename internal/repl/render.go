@@ -3,6 +3,9 @@ package repl
 import (
 	"fmt"
 	"strings"
+	"unicode"
+
+	"golang.org/x/text/width"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
@@ -151,9 +154,9 @@ func qnString(qn *ast.QualifiedName) string {
 // buffer; pass wholeBuffer to number against the buffer instead. When origin is
 // set each block also carries the pass that produced the diagnostic.
 //
-// Note: byte-column carets assume ASCII/monospace alignment; multi-byte runes
-// before the caret will misalign by display width. Acceptable for v1 — the LSP
-// server owns UTF-16 correctness; the REPL caret is only a terminal aid.
+// Columns and carets are counted in printed cells, so a line with multi-byte
+// runes before the finding still points at it; the LSP server owns UTF-16
+// correctness separately.
 func renderDiagnostics(diags []passes.Diagnostic, src string, locate func(offset int) (string, int), origin bool) []string {
 	if len(diags) == 0 {
 		return nil
@@ -168,15 +171,22 @@ func renderDiagnostics(diags []passes.Diagnostic, src string, locate func(offset
 		if file != "" {
 			where = file + ":"
 		}
-		head := fmt.Sprintf("%s%d:%d: %s: %s", where, p.Line-baseLine+1, p.Col, d.Severity.String(), d.Message)
+		srcLine := ""
+		if p.Line-1 >= 0 && p.Line-1 < len(lines) {
+			srcLine = lines[p.Line-1]
+		}
+		col := p.Col
+		if p.Col-1 <= len(srcLine) {
+			col = displayWidth(srcLine[:p.Col-1]) + 1
+		}
+		head := fmt.Sprintf("%s%d:%d: %s: %s", where, p.Line-baseLine+1, col, d.Severity.String(), d.Message)
 		if origin {
 			head += fmt.Sprintf(" [%s]", diagOrigin(d))
 		}
 		out = append(out, head)
 		if p.Line-1 >= 0 && p.Line-1 < len(lines) {
-			srcLine := lines[p.Line-1]
 			out = append(out, srcLine)
-			out = append(out, caretLine(p.Col, d.Span.Len, len(srcLine)))
+			out = append(out, caretLine(srcLine, p.Col-1, d.Span.Len))
 		}
 	}
 	return out
@@ -199,41 +209,64 @@ func diagOrigin(d passes.Diagnostic) string {
 // exprError reports msg against a one-line expression the way a declaration
 // diagnostic is reported: position, source echo and caret. base is the offset
 // the expression starts at in the text span was measured in.
+// The reported column counts printed cells, not bytes, so it agrees with the
+// caret under the echo.
 func exprError(expr, msg string, span source.Span, base int) error {
-	col := span.Offset - base + 1
-	if col < 1 {
-		col = 1
+	start := span.Offset - base
+	if start < 0 {
+		start = 0
 	}
-	if col > len(expr)+1 {
-		col = len(expr) + 1
+	if start > len(expr) {
+		start = len(expr)
 	}
-	return fmt.Errorf("1:%d: %s\n%s\n%s", col, msg, expr, caretLine(col, span.Len, len(expr)))
+	return fmt.Errorf("1:%d: %s\n%s\n%s", displayWidth(expr[:start])+1, msg, expr, caretLine(expr, start, span.Len))
 }
 
-// caretLine builds "   ^~~~" with (col-1) leading spaces and a caret span of
-// width max(1, spanLen), clamped so it never runs past the source line.
-func caretLine(col, spanLen, lineLen int) string {
-	if col < 1 {
-		col = 1
+// caretLine builds "   ^~~~" under the span starting at byte offset start of
+// line, measured in printed cells so multi-byte runes stay aligned.
+func caretLine(line string, start, spanLen int) string {
+	if start < 0 {
+		start = 0
 	}
-	lead := col - 1
-	width := spanLen
+	if start > len(line) {
+		start = len(line)
+	}
+	end := start + spanLen
+	if end > len(line) {
+		end = len(line)
+	}
+	width := 0
+	if end > start {
+		width = displayWidth(line[start:end])
+	}
 	if width < 1 {
 		width = 1
 	}
-	if lead+width > lineLen {
-		width = lineLen - lead
-		if width < 1 {
-			width = 1
-		}
-	}
 	var b strings.Builder
-	b.WriteString(strings.Repeat(" ", lead))
+	b.WriteString(strings.Repeat(" ", displayWidth(line[:start])))
 	b.WriteByte('^')
 	if width > 1 {
 		b.WriteString(strings.Repeat("~", width-1))
 	}
 	return b.String()
+}
+
+// displayWidth is the number of terminal cells s occupies: two for the East
+// Asian wide and fullwidth runes, one for everything else, and none for the
+// combining marks that render on the rune before them.
+func displayWidth(s string) int {
+	cells := 0
+	for _, r := range s {
+		switch {
+		case unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r):
+		case width.LookupRune(r).Kind() == width.EastAsianWide,
+			width.LookupRune(r).Kind() == width.EastAsianFullwidth:
+			cells += 2
+		default:
+			cells++
+		}
+	}
+	return cells
 }
 
 // renderResult produces the printable lines for a submission at the given
