@@ -152,12 +152,28 @@ func simpleName(sym *symbols.Symbol) string {
 // matching name.
 func (r *Resolver) lookupImports(scope *symbols.Scope, name string) (*symbols.Symbol, bool) {
 	node := scope.Node()
-	for _, imp := range importsOf(node) {
+	for _, imp := range r.importsOf(node) {
 		if sym, ok := r.matchImport(scope, imp, name); ok {
 			return sym, true
 		}
 	}
 	return nil, false
+}
+
+// importsOf is importsOf memoized. The tree is immutable once parsed, so the
+// imports a node declares are found once and kept: an unqualified name is looked
+// up against them for every reference in the namespace, and a namespace holds as
+// many references as it has declarations.
+func (r *Resolver) importsOf(node ast.Node) []*ast.Import {
+	if node == nil {
+		return nil
+	}
+	if imports, ok := r.imports[node]; ok {
+		return imports
+	}
+	imports := importsOf(node)
+	r.imports[node] = imports
+	return imports
 }
 
 // importsOf returns the *ast.Import declarations directly in a namespace-bearing

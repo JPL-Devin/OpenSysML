@@ -744,10 +744,5 @@ func unwrapType(n ast.Node) ast.Node {
 }
 
 func childScopeOf(scope *symbols.Scope, decl ast.Node) *symbols.Scope {
-	for _, c := range scope.Children() {
-		if c.Node() == decl {
-			return c
-		}
-	}
-	return nil
+	return scope.ChildFor(decl)
 }

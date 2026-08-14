@@ -66,6 +66,12 @@ func (s *stringSlice) Set(value string) error {
 }
 
 func main() {
+	os.Exit(runCLI())
+}
+
+// runCLI carries out what the command line asked for and returns the exit
+// status, so a profile started for the run is written before the process exits.
+func runCLI() int {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: sysml [options] [file...]\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
@@ -102,6 +108,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "notation is reformatted, Turtle is normalized.\n")
 		fmt.Fprintf(os.Stderr, "\nFlags may be written before or after the model they apply to. A file named like\n")
 		fmt.Fprintf(os.Stderr, "a flag is read as a file after --, which ends the flags: sysml -trace -- -m.sysml\n")
+		fmt.Fprintf(os.Stderr, "\nProfiling a run:\n")
+		fmt.Fprintf(os.Stderr, "  sysml -validate -memstats model.sysml            # Report what the run cost, on stderr\n")
+		fmt.Fprintf(os.Stderr, "  sysml -validate -memprofile heap.out model.sysml # Write a heap profile for go tool pprof\n")
+		fmt.Fprintf(os.Stderr, "  sysml -validate -cpuprofile cpu.out model.sysml  # Write a CPU profile for go tool pprof\n")
 	}
 
 	flag.Var(&evalExprs, "eval", "Evaluate expression and exit (can be specified multiple times)")
@@ -126,15 +136,25 @@ func main() {
 	flag.Var(&modelChecks.states, "state", "Run this state machine, as -state \"Mission rover1\" to run it on an object (repeatable)")
 	flag.Var(&modelChecks.advance, "advance", "Simulated time units to run each -state machine for (default: only its initial transition)")
 	flag.BoolVar(&modelChecks.jsonOut, "json", false, "Report checks as one JSON document rather than as lines")
+	flag.StringVar(&cpuProfilePath, "cpuprofile", "", "Write a CPU profile of the run to this file, for go tool pprof")
+	flag.StringVar(&memProfilePath, "memprofile", "", "Write a heap profile of the run to this file, for go tool pprof")
+	flag.BoolVar(&memStats, "memstats", false, "Report on stderr what the run cost: wall time, memory allocated, memory taken from the OS")
 	if err := flag.CommandLine.Parse(permuteArgs(flag.CommandLine, os.Args[1:])); err != nil {
 		// flag.CommandLine exits on error; unreachable unless that changes.
-		os.Exit(2)
+		return 2
 	}
 
 	if debugMode && quietMode {
 		fmt.Fprintln(os.Stderr, "sysml: -debug and -quiet are mutually exclusive")
-		os.Exit(2)
+		return 2
 	}
+
+	stopProfiling, err := startProfiling()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sysml:", err)
+		return 2
+	}
+	defer stopProfiling()
 
 	// Handle version flag
 	if showVersion {
@@ -142,7 +162,7 @@ func main() {
 		fmt.Printf("  Commit:     %s\n", Commit)
 		fmt.Printf("  Build time: %s\n", BuildTime)
 		fmt.Printf("  Go version: %s\n", GoVersion)
-		os.Exit(0)
+		return 0
 	}
 
 	// Get positional arguments (files to load)
@@ -150,63 +170,63 @@ func main() {
 
 	if convertFormat != "" {
 		if modelChecks.requested() {
-			os.Exit(refuse(modelChecks,
-				"-convert writes the model out and decides nothing about it; check it in its own run"))
+			return refuse(modelChecks,
+				"-convert writes the model out and decides nothing about it; check it in its own run")
 		}
 		if err := runConvert(args); err != nil {
 			fmt.Fprintln(os.Stderr, "sysml:", err)
-			os.Exit(1)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	// Resolve the run bounds before any model runs, so a bad value is reported at
 	// startup rather than mistaken for the default at execution time. Reporting the
 	// version and converting a model evaluate nothing, so they are handled above.
-	var err error
 	budgets, err = runtime.BudgetsFromEnv()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "sysml:", err)
-		os.Exit(2)
+		return 2
 	}
 
 	// Checking mode: load, check what was named, and exit on the verdict.
 	if modelChecks.requested() {
-		os.Exit(runChecks(args, evalExprs, modelChecks))
+		return runChecks(args, evalExprs, modelChecks)
 	}
 
 	// Non-interactive mode: files + eval expressions, execute and exit
 	if len(args) > 0 && len(evalExprs) > 0 {
 		if err := runNonInteractive(args, evalExprs); err != nil {
 			fmt.Fprintln(os.Stderr, "sysml:", err)
-			os.Exit(1)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	// Eval-only mode: just evaluate expressions and exit
 	if len(evalExprs) > 0 {
 		if err := runNonInteractive(nil, evalExprs); err != nil {
 			fmt.Fprintln(os.Stderr, "sysml:", err)
-			os.Exit(1)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	if len(args) == 0 {
 		// No files: interactive REPL
 		if err := runInteractive(); err != nil {
 			fmt.Fprintln(os.Stderr, "sysml:", err)
-			os.Exit(1)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	// Files provided: load and enter interactive mode
 	if err := runInteractiveWithFiles(args); err != nil {
 		fmt.Fprintln(os.Stderr, "sysml:", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 func runInteractive() error {
