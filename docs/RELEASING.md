@@ -192,8 +192,10 @@ The token lives in a **restricted context**, not in project environment
 variables, so only the release path can read it:
 
 1. In CircleCI, **Organization Settings → Contexts**, in the context named
-   `pypi` (create it if the organization does not have it yet).
-2. **Restrict it to a security group** (Contexts → `pypi` → *Add security
+   `PyPI` (create it if the organization does not have it yet). A context
+   reference in the config is matched exactly, so the name must be spelled with
+   the same case in both places.
+2. **Restrict it to a security group** (Contexts → `PyPI` → *Add security
    group*) so only that group's members can run a job that uses it. A context
    with no group restriction is readable by every project job.
 3. Add the token as `PYPI_API_TOKEN` (an *environment variable* in that
@@ -207,7 +209,7 @@ variables, so only the release path can read it:
 ```yaml
       - publish-pypi:
           context:
-            - pypi
+            - PyPI
 ```
 
 Any other variables that context happens to carry are ignored. In particular a
@@ -229,7 +231,7 @@ be created for a project that does not exist. So:
 
 1. **Before the first release**, create an **account-scoped** API token
    (PyPI → Account settings → API tokens → *Add API token*, scope *Entire
-   account*) and put it in the `pypi` context as `PYPI_API_TOKEN`. Treat
+   account*) and put it in the `PyPI` context as `PYPI_API_TOKEN`. Treat
    it as a credential that can publish anything the account owns.
 2. **Immediately after the first upload succeeds**, replace it: create a token
    scoped to the `pysysml` project only, update `PYPI_API_TOKEN` in the context,
