@@ -575,6 +575,18 @@ func TestConstraintInterfaceEndConjugation(t *testing.T) {
 	if hasCode(undirected, "port-conjugation") {
 		t.Errorf("unexpected port-conjugation diagnostic for undirected ports: %v", undirected)
 	}
+
+	// Conjugation constrains directed features only, so ports holding different
+	// undirected features still line up.
+	extra := constraintDiags(t, `port def A { attribute pressure; out item flow; }
+	port def B { in item flow; }
+	interface def I {
+		end a : A;
+		end b : B;
+	}`)
+	if hasCode(extra, "port-conjugation") {
+		t.Errorf("unexpected port-conjugation diagnostic for conjugate directed features: %v", extra)
+	}
 }
 
 // A `variant` whose owner is not a variation offers no choice, so it is reported

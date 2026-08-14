@@ -181,12 +181,16 @@ func (m *Model) PortsConform(a, b *symbols.Symbol) bool {
 	return m.featuresMatchConjugate(m.PortFeatures(a), m.PortFeatures(b))
 }
 
-// featuresMatchConjugate reports whether every named feature in features has a
-// counterpart in others with a conforming type and the conjugate direction.
+// featuresMatchConjugate reports whether every named directed feature in
+// features has a counterpart in others with a conforming type and the conjugate
+// direction. Undirected features carry no flow, so they impose nothing.
 func (m *Model) featuresMatchConjugate(features, others []PortFeature) bool {
 	for _, feature := range features {
 		if feature.Name == "" {
 			continue // an unnamed feature has nothing to be matched by name
+		}
+		if feature.Direction == ast.DirNone {
+			continue // conjugation constrains directed features only (§7.12.2)
 		}
 		match, ok := findPortFeature(others, feature.Name)
 		if !ok {

@@ -31,6 +31,54 @@ func TestResolveQualifiedRequirement(t *testing.T) {
 	}
 }
 
+// The member reference-subsets the requirement it names, so its body redefines
+// that requirement's features by their plain names too, not only by their
+// qualified ones (SysML.xtext RequirementConstraintUsage).
+func TestResolveRequiredRequirementFeatureByPlainName(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `package Starkit {
+		requirement def MaxFuelMassRequirement {
+			attribute actualFuelMass;
+		}
+		package FuelMassAnalysis {
+			requirement fuelMassRequirement : MaxFuelMassRequirement;
+		}
+		analysis def FuelMassAnalysisCase {
+			attribute calculatedFuelMass;
+			objective fuelMassAnalysisObjective {
+				require FuelMassAnalysis::fuelMassRequirement {
+					:>> actualFuelMass = calculatedFuelMass;
+				}
+				assume FuelMassAnalysis::fuelMassRequirement {
+					:>> actualFuelMass = calculatedFuelMass;
+				}
+			}
+		}
+	}`)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
+	}
+}
+
+// A plain name the referenced requirement does not declare is still reported:
+// its features are searched, not assumed.
+func TestResolveRequiredRequirementUnknownPlainName(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `package Starkit {
+		requirement def R { attribute mass; }
+		package A { requirement r : R; }
+		analysis def C {
+			attribute m;
+			objective o {
+				require A::r {
+					:>> missingFeature = m;
+				}
+			}
+		}
+	}`)
+	if len(r.Diagnostics) == 0 {
+		t.Fatalf("expected an unresolved diagnostic for missingFeature")
+	}
+}
+
 // A required requirement that names no such member is reported, so a qualified
 // target is resolved rather than accepted on sight.
 func TestResolveQualifiedRequirementUnresolved(t *testing.T) {
