@@ -441,3 +441,17 @@ func TestMergedDiagnosticKeepsTheSubmittedLine(t *testing.T) {
 	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
 	wants(t, out, "1:17: error: unresolved reference: Missing")
 }
+
+// A loaded file supersedes what was typed about the same names, taking the rest
+// of that submission with it, so the load says what it replaced.
+func TestLoadingAFileReportsTheTypedDeclarationsItReplaces(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "m.sysml")
+
+	s := NewSession()
+	s.Submit("part def Z;\npackage M { part def B; }")
+	res := s.submit(path, "package M { part def A; }")
+
+	if !hasNotice(res, "part def Z, part def B no longer declared") {
+		t.Errorf("notices = %v, want the typed declarations the load replaced", res.Notices)
+	}
+}

@@ -190,16 +190,21 @@ func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
 	if origin != "" {
 		set := nameSet(names)
 		key := fileKey(origin)
+		top := topLevelMembers(root)
 		kept := s.snippets[:0]
 		for _, sn := range s.snippets {
-			if sn.key == key || (sn.origin == "" && intersects(sn.names, set)) {
-				// Re-reading a file rewrites what it declared, which is what
-				// ends a debugging session over it; loading reports itself, so
-				// the report carries no notice of its own.
+			switch {
+			case sn.key == key:
+				// Re-reading the same file is a refresh the load reports
+				// itself, so only what it rewrote is recorded.
 				drops = append(drops, dropReport{gone: sn.names})
-				continue
+			case sn.origin == "" && intersects(sn.names, set):
+				// The file supersedes what was typed about the same names,
+				// which is a loss to report like any other.
+				drops = append(drops, replacedReport(sn, set, top))
+			default:
+				kept = append(kept, sn)
 			}
-			kept = append(kept, sn)
 		}
 		s.snippets = append(kept, snippet{src: src, names: names, origin: origin, key: key, gen: s.version})
 		return drops
