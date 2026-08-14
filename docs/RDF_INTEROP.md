@@ -193,15 +193,20 @@ lost, as *Limitations* describes; the package's `doc` and `comment` are
 declarations and survive.
 
 [`examples/semantic-layer/demo.sysml`](../examples/semantic-layer/demo.sysml)
-also converts. **None of the other demos in `examples/` do**: each of them shows a
-behavior, so the conversion stops at a state, a region, an assignment, a
-value-computing `return` or a name two members of one body share. A reader
-looking for a convertible model starts from the two above:
+converts too, as do the structure-only `parser_features_demo_*.kerml` files
+(except `..._advanced_bodies.kerml`, which computes a value, and
+`..._modifiers.kerml`, which declares one name twice). **None of the other
+`.sysml` demos convert**: each shows a behavior, so the conversion stops at a
+state, a region, an assignment, a value-computing `return` or a name two members
+of one body share.
 
 ```bash
 $ sysml examples/state-machine-demo.sysml -convert ttl
 sysml: cannot convert the *ast.SubstateMember at examples/state-machine-demo.sysml:7:13
 ```
+
+So a reader looking for a convertible model starts from the two `.sysml` files
+named above.
 
 ## Limitations
 

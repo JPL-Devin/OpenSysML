@@ -237,6 +237,7 @@ with status `0`:
 
 ```bash
 $ sysml -e "Demo::Vehicle::nope" model.sysml
+✓ package Demo
 error: symbol "Demo::Vehicle::nope" not found
 $ echo $?
 0
