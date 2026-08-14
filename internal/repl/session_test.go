@@ -90,3 +90,22 @@ func TestSubmitReportsTheSubmittedLine(t *testing.T) {
 		}
 	}
 }
+
+// Several files of one model commonly open the same package, so a loaded file
+// supersedes only what that same file contributed before.
+func TestLoadedFilesAccumulateByFile(t *testing.T) {
+	s := NewSession()
+	s.accept("a.sysml", "package M { part def A; }")
+	s.accept("b.sysml", "package M { part def B; }")
+	if got := len(s.List()); got != 2 {
+		t.Errorf("want both files kept, got %d: %v", got, s.List())
+	}
+
+	joined, _ := s.accept("a.sysml", "package M { part def C; }")
+	if strings.Contains(joined, "part def A") {
+		t.Errorf("reloading a file kept its previous contents: %q", joined)
+	}
+	if !strings.Contains(joined, "part def B") {
+		t.Errorf("reloading a file dropped another file: %q", joined)
+	}
+}

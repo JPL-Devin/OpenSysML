@@ -192,6 +192,41 @@ func TestCheckModelSplitAcrossFiles(t *testing.T) {
 	}
 }
 
+// TestCheckFilesOpeningTheSamePackage checks that files of one model that open
+// the same package accumulate: neither the elements nor the findings of the
+// earlier file are superseded by the later one declaring that package too.
+func TestCheckFilesOpeningTheSamePackage(t *testing.T) {
+	binary := buildCLI(t)
+
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first.sysml")
+	second := filepath.Join(dir, "second.sysml")
+	if err := os.WriteFile(first, []byte("package M {\n    constraint Held { assert 1.0 <= 2.0; }\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte("package M {\n    constraint Also { assert 2.0 <= 3.0; }\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := exec.Command(binary, "-constraint", "M::Held", "-constraint", "M::Also", first, second).CombinedOutput()
+	if err != nil {
+		t.Errorf("a constraint of each file = %v, want both checked\n%s", err, out)
+	}
+
+	// An error in the first file must still stop the check, rather than being
+	// dropped along with the file the second one redeclared.
+	if err := os.WriteFile(first, []byte("package M {\n    part x : Nope::Missing;\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err = exec.Command(binary, "-validate", first, second).CombinedOutput()
+	if err == nil {
+		t.Errorf("-validate accepted a model whose first file has an error:\n%s", out)
+	}
+	if !strings.Contains(string(out), "first.sysml:2:14: error: unresolved reference: Nope::Missing") {
+		t.Errorf("the first file's error was not reported:\n%s", out)
+	}
+}
+
 // TestConvertAndCheckAreSeparateRuns checks that a check asked for alongside a
 // conversion is reported as a misuse, rather than the conversion silently
 // answering nothing about the model.
