@@ -273,9 +273,9 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 // as a line of output so a caller outside the prompt can act on it.
 func (s *Session) evalExpr(expr string) ([]string, error) {
 	// Try literal evaluation first (works even with empty session)
-	literalResult, isLiteral := s.tryEvalLiteral(expr)
+	literalResult, isLiteral, litErr := s.tryEvalLiteral(expr)
 	if isLiteral {
-		return literalResult, nil
+		return literalResult, litErr
 	}
 
 	// For feature references/complex expressions, need session context
@@ -390,14 +390,15 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 	}, nil
 }
 
-// tryEvalLiteral attempts to evaluate standalone literal expressions.
-func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
+// tryEvalLiteral attempts to evaluate standalone literal expressions. It reports
+// whether the expression is one it answered, and what an answered one failed on.
+func (s *Session) tryEvalLiteral(expr string) ([]string, bool, error) {
 	// A name the session declares is answered by that declaration, so the empty
 	// model this pass evaluates in must not answer for it: a library operation
 	// reached by its unqualified name would otherwise stand in for a calc the
 	// session wrote under the same name.
 	if s.declaresANameIn(expr) {
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Parse as standalone attribute
@@ -406,7 +407,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 	root := p.ParseFile()
 
 	if len(p.Diagnostics) > 0 || len(root.Members) == 0 {
-		return nil, false
+		return nil, false, nil
 	}
 
 	member := root.Members[0]
@@ -417,7 +418,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 
 	usage, ok := member.(*ast.Usage)
 	if !ok || usage.Value == nil {
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Use runtime context with empty model (no symbols needed for literals)
@@ -425,7 +426,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
 	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.budgets.MaxSteps)
 	if err := ctx.SetBudgets(s.budgets); err != nil {
-		return nil, false
+		return nil, false, nil
 	}
 
 	val, err := ctx.Eval(usage.Value)
@@ -437,15 +438,15 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool) {
 		// no position, is reported here instead of being hidden behind "no
 		// declarations loaded".
 		if isLiteralAnswerError(err) {
-			return []string{fmt.Sprintf("error: evaluation failed: %v", err)}, true
+			return nil, true, fmt.Errorf("evaluation failed: %w", err)
 		}
-		return nil, false
+		return nil, false, nil
 	}
 
 	return []string{
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(val)),
-	}, true
+	}, true, nil
 }
 
 // doBudget lists the bounds one run of this session may spend, each with the
@@ -1370,7 +1371,7 @@ func (s *Session) doStep() ([]string, bool, error) {
 
 	if exec.State() == runtime.StateCompleted {
 		out = append(out, "", "✓ Action completed")
-		out = append(out, renderResults(exec.Results(), "  ")...)
+		out = append(out, renderResults(exec.Results())...)
 	}
 
 	return out, false, nil
@@ -1415,23 +1416,22 @@ func (s *Session) continueAction() ([]string, []NamedValue, error) {
 		"✓ Action completed",
 		fmt.Sprintf("  Final state: %s", exec.State()),
 	}
-	out = append(out, renderResults(exec.Results(), "")...)
+	out = append(out, renderResults(exec.Results())...)
 
 	return out, namedValues(exec.Results()), nil
 }
 
 // renderResults lists an action's output values, in name order so a report of
-// the same run always reads the same way. indent is prefixed to each line,
-// which is what nests the list under a step's report.
-func renderResults(results map[string]runtime.Value, indent string) []string {
+// the same run always reads the same way.
+func renderResults(results map[string]runtime.Value) []string {
 	values := namedValues(results)
 	if len(values) == 0 {
 		return nil
 	}
 	out := make([]string, 0, len(values)+1)
-	out = append(out, indent+"  Results:")
+	out = append(out, "  Results:")
 	for _, v := range values {
-		out = append(out, fmt.Sprintf("%s    %s = %s", indent, v.Name, v.Value))
+		out = append(out, fmt.Sprintf("    %s = %s", v.Name, v.Value))
 	}
 	return out
 }

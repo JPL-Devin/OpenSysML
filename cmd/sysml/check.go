@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -193,6 +194,9 @@ func parseAdvance(value string) (float64, error) {
 	duration, err := strconv.ParseFloat(value, 64)
 	if err != nil {
 		return 0, fmt.Errorf("-advance takes a number of time units, not %q", value)
+	}
+	if math.IsNaN(duration) || math.IsInf(duration, 0) {
+		return 0, fmt.Errorf("-advance takes a duration to run for, and %q is not one", value)
 	}
 	if duration < 0 {
 		return 0, fmt.Errorf("-advance takes a duration to run for, and %v runs backwards", duration)

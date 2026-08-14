@@ -86,6 +86,33 @@ func TestCheckGatesOnEvaluationFailure(t *testing.T) {
 	}
 }
 
+// TestCheckGatesOnLiteralEvaluationFailure checks that an expression of literals
+// alone that the prompt answers with its failure — an index naming no position —
+// stops a check too, rather than being printed as though it evaluated.
+func TestCheckGatesOnLiteralEvaluationFailure(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, checkModel, "-constraint", "Rover::MassBudget", "-e", "(1, 2, 3)#(7)")
+	wantReport(t, got, 2, "evaluation failed")
+	if strings.Contains(got.stdout, "Constraint Rover::MassBudget passed") {
+		t.Errorf("a verdict was reported after an expression failed:\n%s", got.output())
+	}
+}
+
+// TestAdvanceTakesADuration checks that a value that is not a duration to run
+// for is reported, rather than running the machine for no time and holding.
+func TestAdvanceTakesADuration(t *testing.T) {
+	binary := buildCLI(t)
+
+	for _, value := range []string{"NaN", "Inf", "-1"} {
+		got := check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", value)
+		wantReport(t, got, 2, "-advance takes a duration")
+		if strings.Contains(got.stdout, "Started state machine executor") {
+			t.Errorf("-advance %s ran the machine anyway:\n%s", value, got.output())
+		}
+	}
+}
+
 // TestValidate checks the diagnostics gate on its own: a model that analyses
 // cleanly succeeds, and one that does not exits 2 with what analysis found.
 func TestValidate(t *testing.T) {
