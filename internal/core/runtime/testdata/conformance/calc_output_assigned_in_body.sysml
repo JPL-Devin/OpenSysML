@@ -39,6 +39,19 @@ package test {
 		}
 	}
 
+	// An output is accumulated by the statements that write it, the last of them to
+	// run being its binding for the activation.
+	calc def Accum {
+		in n : Integer;
+		out total : Integer;
+		attribute i : Integer = 1;
+		total = 0;
+		while i <= n {
+			total = total + i;
+			i = i + 1;
+		}
+	}
+
 	// An inout is bound by the invocation and rebound by the body.
 	calc def Bump {
 		inout p : Integer;
@@ -52,6 +65,7 @@ package test {
 		calc ca : TwoAssign { in n = 5; }
 		calc cl : LoopBranch { in n = 5; }
 		calc cb : Bump { in p = 5; }
+		calc cn : Accum { in n = 5; }
 
 		attribute sa : Integer = cs.a;
 		attribute sb : Integer = cs.b;
@@ -61,5 +75,6 @@ package test {
 		attribute size : String = cl.size;
 		attribute pv : Integer = cb.p;
 		attribute qv : Integer = cb.q;
+		attribute acc : Integer = cn.total;
 	}
 }

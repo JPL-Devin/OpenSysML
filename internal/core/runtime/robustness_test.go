@@ -2997,8 +2997,9 @@ func testCalcOutputValuedAndAssigned(t *testing.T) {
 	}
 }
 
-// testCalcOutputAssignedTwice: one activation binding an output twice is
-// reported rather than keeping whichever assignment ran last.
+// testCalcOutputAssignedTwice: a body assigning an output more than once leaves
+// it bound to the last assignment that ran, the same as a body local, so an
+// output may be initialized and then accumulated into.
 func testCalcOutputAssignedTwice(t *testing.T) {
 	src := `
 		package test {
@@ -3006,14 +3007,24 @@ func testCalcOutputAssignedTwice(t *testing.T) {
 				in n : Integer;
 				out a : Integer;
 				a = n + 1;
-				a = n + 2;
+				a = a + 1;
 			}
 			calc c : Twice { in n = 5; }
 		}
 	`
-	err := calcUsageOutputInSource(t, src, "c", "a", 10000)
-	if !errors.Is(err, ErrConflictingOutput) {
-		t.Errorf("expected ErrConflictingOutput, got: %v", err)
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	ctx.maxSteps = 10000
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "c", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("calc usage c not found")
+	}
+
+	value, err := ctx.CalcUsageOutput(sym, "a", sym.OwnerScope, nil)
+	if err != nil {
+		t.Fatalf("reading output a of c: %v", err)
+	}
+	if got := FormatTraceValue(value); got != "7" {
+		t.Errorf("output a = %s, want 7", got)
 	}
 }
 

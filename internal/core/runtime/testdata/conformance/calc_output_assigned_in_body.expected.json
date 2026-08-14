@@ -10,6 +10,7 @@
 		"total": {"type": "Integer", "value": 15},
 		"size": {"type": "String", "value": "big"},
 		"pv": {"type": "Integer", "value": 6},
-		"qv": {"type": "Integer", "value": 60}
+		"qv": {"type": "Integer", "value": 60},
+		"acc": {"type": "Integer", "value": 15}
 	}
 }

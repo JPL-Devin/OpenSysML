@@ -144,16 +144,6 @@ func (e *StateExecutor) evalStep(node ast.Node, scope *symbols.Scope) (Value, er
 	return ec.Eval(node)
 }
 
-// stateScope returns the scope a state's body was declared in, which is what
-// the names in its entry, do and exit behaviors resolve against. It falls back
-// to the machine's own scope for a state lowering recorded none for.
-func (e *StateExecutor) stateScope(state *ast.StateNode) *symbols.Scope {
-	if scope := e.graph.StateScopes[state]; scope != nil {
-		return scope
-	}
-	return e.graph.Scope
-}
-
 // getNodeName returns the name of a StateNode or PseudostateNode.
 func getNodeName(node ast.Node) string {
 	switch n := node.(type) {

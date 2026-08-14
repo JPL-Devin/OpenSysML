@@ -11,9 +11,6 @@ import (
 type calcStmtHost struct {
 	shape  *calcShape
 	result Value // the value its `return` yielded
-	// bound are the outputs this activation assigned, so a second assignment to
-	// one is reported rather than overwriting it.
-	bound map[string]bool
 }
 
 // describe names the body in a diagnostic; the invocation adds the calc's name.
@@ -48,18 +45,9 @@ func (h *calcStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ low
 			ErrConflictingOutput, name, h.shape.Name,
 		)
 	}
-	if h.bound[name] {
-		return fmt.Errorf(
-			"%w: output %s of calc %s is assigned more than once by one activation",
-			ErrConflictingOutput, name, h.shape.Name,
-		)
-	}
-	if h.bound == nil {
-		h.bound = make(map[string]bool)
-	}
-	h.bound[name] = true
-	// Written to the body's own data, so later statements read the output bound
-	// and the read that follows the activation answers from it.
+	// Written to the body's own data, so later statements read the output bound —
+	// an assignment may accumulate into it — and the read that follows the
+	// activation answers from what the body left.
 	env.data[name] = value
 	return nil
 }

@@ -495,6 +495,11 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 		if m.Kind == ast.UsageAction && m.IsBodyParameter {
 			return lowerBlock(m, m.Members, childScope(scope, m))
 		}
+		// An action usage naming the action it performs is a performed action, which
+		// the host executes or rejects as its own purity demands.
+		if m.Kind == ast.UsageAction && performsAction(m) {
+			return Effect{Kind: EffectPerform, Node: m, Scope: scope}
+		}
 		return Unsupported{Description: usageDescription(m), Node: m, Scope: scope}
 	default:
 		return Unsupported{Description: fmt.Sprintf("%T", member), Node: member, Scope: scope}

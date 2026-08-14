@@ -1,0 +1,8 @@
+{
+	"type": "state",
+	"finalState": "done",
+	"stateVisits": ["init", "active", "done"],
+	"outputs": {
+		"counter": {"type": "Integer", "value": 101}
+	}
+}
