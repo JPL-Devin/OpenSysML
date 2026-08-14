@@ -74,6 +74,14 @@ func TestCompleteNames(t *testing.T) {
 			wants:   []string{"ScalarValues::Integer"},
 			rejects: []string{"ScalarValues::Integer::"},
 		},
+		{
+			// A completed namespace still answers with its members: offering
+			// the typed word back inserts nothing.
+			name:    "a whole namespace offers its members",
+			line:    "%eval ScalarValues",
+			wants:   []string{"ScalarValues::Integer"},
+			rejects: []string{"ScalarValues::Integer::"},
+		},
 		{name: "inside an expression", line: "%eval 1 + Whe", wants: []string{"Wheel"}},
 		{name: "no match", line: "%eval zzzznotaname", rejects: []string{"Wheel", "sqrt"}},
 	}

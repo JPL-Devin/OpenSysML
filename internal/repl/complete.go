@@ -154,9 +154,15 @@ func (s *Session) nameCompletions(word string) []string {
 				continue
 			}
 			// One segment at a time: completing "ISQ" to every name under it
-			// would answer with the whole library.
-			if cut := strings.Index(fqn[len(word):], "::"); cut >= 0 {
-				add(fqn[:len(word)+cut])
+			// would answer with the whole library. A word that already spells a
+			// namespace is answered with that namespace's members, not itself.
+			rest := fqn[len(word):]
+			skip := 0
+			if strings.HasPrefix(rest, "::") {
+				skip = len("::")
+			}
+			if cut := strings.Index(rest[skip:], "::"); cut >= 0 {
+				add(fqn[:len(word)+skip+cut])
 				continue
 			}
 			add(fqn)
