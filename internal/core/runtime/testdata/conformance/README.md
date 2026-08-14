@@ -182,6 +182,9 @@ Supported types:
 - `String`: JSON string
 - `Null`: JSON null
 - `Quantity`: JSON number, with the `unit` the magnitude is written in
+- `Sequence`: the `elements` it holds, in order, instead of `value` — for a
+  multi-valued feature, whose order is part of its contract
+- `Instance`: an object, whose identity a case does not pin (no `value`)
 - `Variant`: the name of the variant a variation feature is bound to, as a JSON
   string (`{"type": "Variant", "value": "cutIdeal"}`)
 

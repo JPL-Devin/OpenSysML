@@ -3,6 +3,7 @@ package runtime
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -27,6 +28,9 @@ type ExpectedValue struct {
 	// ("m/s"). A quantity carries it, so a case asserting one pins that the unit
 	// survived the computation rather than only the magnitude.
 	Unit string `json:"unit,omitempty"`
+	// Elements are the members a Sequence holds, in order, for a case asserting a
+	// multi-valued feature. Set it instead of value.
+	Elements []ExpectedValue `json:"elements,omitempty"`
 	// Error is the text producing this value must fail with, for a slot whose
 	// contract is a diagnostic. Set it instead of type and value.
 	Error string `json:"error,omitempty"`
@@ -650,7 +654,7 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 			t.Errorf("slot %q: %v", name, err)
 			continue
 		}
-		validateValue(t, name, expectedVal, slot.Value)
+		validateValue(t, name, expectedVal, slot.HeldValue())
 	}
 
 	for name, wantSatisfied := range expected.Constraints {
@@ -806,6 +810,23 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 // validateValue checks if runtime Value matches ExpectedValue
 func validateValue(t *testing.T, name string, expected ExpectedValue, actual Value) {
 	switch expected.Type {
+	case "Sequence":
+		if actual.Kind != ValSequence {
+			t.Errorf("%s: type = %v, want Sequence", name, actual.Kind)
+			return
+		}
+		elements := elementsOf(actual)
+		if len(elements) != len(expected.Elements) {
+			t.Errorf("%s: %d elements, want %d", name, len(elements), len(expected.Elements))
+			return
+		}
+		for i, want := range expected.Elements {
+			validateValue(t, fmt.Sprintf("%s#(%d)", name, i+1), want, elements[i])
+		}
+	case "Instance":
+		if actual.Kind != ValInstance {
+			t.Errorf("%s: type = %v, want Instance", name, actual.Kind)
+		}
 	case "Integer":
 		if actual.Kind != ValConst || actual.Const.Kind != semantics.ValInt {
 			t.Errorf("%s: type = %v (Const.Kind=%v), want Integer", name, actual.Kind, actual.Const.Kind)

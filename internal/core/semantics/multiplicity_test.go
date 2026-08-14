@@ -34,6 +34,37 @@ func TestMultiplicityRangeStar(t *testing.T) {
 	}
 }
 
+// A single unbounded bound is 0..*, not *..*: the lower bound follows the upper
+// one only when the upper one is bounded (KerML 1.0 §8.2.5.11).
+func TestMultiplicitySingleBoundStar(t *testing.T) {
+	m, root := buildModel(t, "part def C { part parts [*]; part exact [*..*]; }")
+	c := sym(t, root, "C")
+
+	parts, _ := c.Scope.LookupLocal("parts")
+	r, ok := m.MultiplicityOf(parts)
+	if !ok {
+		t.Fatalf("MultiplicityOf(parts) not ok")
+	}
+	if !r.Lower.Known || r.Lower.Infinite || r.Lower.Value != 0 {
+		t.Fatalf("[*] lower = %+v, want 0", r.Lower)
+	}
+	if !r.Upper.Known || !r.Upper.Infinite {
+		t.Fatalf("[*] upper = %+v, want infinite", r.Upper)
+	}
+	if valid, evalOK := r.LowerLeUpper(); !evalOK || !valid {
+		t.Fatalf("[*] LowerLeUpper = %v, %v; want true, true", valid, evalOK)
+	}
+
+	exact, _ := c.Scope.LookupLocal("exact")
+	r, ok = m.MultiplicityOf(exact)
+	if !ok {
+		t.Fatalf("MultiplicityOf(exact) not ok")
+	}
+	if !r.Lower.Infinite || !r.Upper.Infinite {
+		t.Fatalf("[*..*] = %+v, want both bounds infinite", r)
+	}
+}
+
 func TestMultiplicityLowerLeUpper(t *testing.T) {
 	m, root := buildModel(t, "part def C { part a [2..5]; part b [5..2]; part c [1..*]; }")
 	c := sym(t, root, "C")

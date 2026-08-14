@@ -15,8 +15,8 @@ type Bound struct {
 }
 
 // Range is an extracted multiplicity [lower..upper]. For the single-bound form
-// `[n]`, Lower and Upper are both n (matching KerML, where a lone bound is both
-// the lower and upper bound).
+// `[n]`, Lower and Upper are both n, except for `[*]`, whose lower bound is 0
+// (KerML 1.0 §8.2.5.11, multiplicity textual notation).
 type Range struct {
 	Lower Bound
 	Upper Bound
@@ -55,8 +55,12 @@ func (m *Model) multiplicityRange(mult *ast.Multiplicity) (Range, bool) {
 	if mult.IsRange {
 		return Range{Lower: m.boundOf(mult.Lower), Upper: m.boundOf(mult.Upper)}, true
 	}
-	// Single-bound `[n]`: the parser stores the sole bound in Lower; lower == upper.
+	// Single-bound `[n]`: the parser stores the sole bound in Lower. The bound is
+	// both bounds, unless it is unbounded, where the lower bound is 0.
 	b := m.boundOf(mult.Lower)
+	if b.Infinite {
+		return Range{Lower: Bound{Value: 0, Known: true}, Upper: b}, true
+	}
 	return Range{Lower: b, Upper: b}, true
 }
 

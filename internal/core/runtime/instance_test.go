@@ -165,6 +165,40 @@ func TestMultiValuedDefaultMaterializes(t *testing.T) {
 	}
 }
 
+// A multi-valued feature that is typed as well as given a default holds the
+// default's contents rather than an instantiation of its type.
+func TestTypedMultiValuedDefaultHoldsItsContents(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def Sub { attribute volume : Real; }
+			part def Ctx {
+				part subsystem : Sub[0..*];
+				attribute volumes : Real[0..*] = subsystem.volume;
+			}
+			part ctx : Ctx {
+				part a : Sub :> subsystem { attribute :>> volume = 2.0; }
+				part b : Sub :> subsystem { attribute :>> volume = 3.5; }
+			}
+		}
+	`))
+	matches := idx.LookupQualified("test::ctx")
+	if len(matches) != 1 {
+		t.Fatalf("test::ctx: %d matching symbols, want 1", len(matches))
+	}
+	inst, err := ctx.Instantiate(matches[0])
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	slot, err := inst.GetSlot(ctx, "volumes")
+	if err != nil {
+		t.Fatalf("GetSlot(volumes): %v", err)
+	}
+	if got := FormatTraceValue(slot.HeldValue()); got != "(2.0, 3.5)" {
+		t.Errorf("volumes = %s, want (2.0, 3.5)", got)
+	}
+}
+
 // A nested part usage with a body of its own is an object shaped by that body:
 // what it redeclares must win over what its type declares.
 func TestNestedUsageBodyOverridesItsType(t *testing.T) {

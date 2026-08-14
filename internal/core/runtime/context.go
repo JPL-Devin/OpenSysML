@@ -75,6 +75,10 @@ type Context struct {
 	// derivingSlots holds the slots whose defaults are being evaluated, so a
 	// default that refers back to its own slot is reported as a cycle.
 	derivingSlots map[slotRef]bool
+
+	// collectingSubsets holds the slots whose subsetting features are being read,
+	// so features that subset each other are reported as a cycle.
+	collectingSubsets map[slotRef]bool
 }
 
 // slotRef identifies one slot of one instance.
@@ -109,9 +113,10 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxDoSteps:     DefaultMaxDoSteps,
 		maxElements:    DefaultMaxElements,
 
-		occurrences:    make(map[*symbols.Symbol]int64),
-		variantObjects: make(map[variantObject]int64),
-		derivingSlots:  make(map[slotRef]bool),
+		occurrences:       make(map[*symbols.Symbol]int64),
+		variantObjects:    make(map[variantObject]int64),
+		derivingSlots:     make(map[slotRef]bool),
+		collectingSubsets: make(map[slotRef]bool),
 	}
 }
 
