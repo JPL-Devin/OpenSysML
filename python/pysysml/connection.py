@@ -1102,7 +1102,10 @@ class Connection:
         if info is None:
             # A handshake that failed says nothing about the service, so it is
             # neither trusted for the rest of the session nor stopped.
-            if required is None and not self._required_capabilities:
+            if required is None:
+                # A required capability is checked over the connection's own
+                # channel, which asks again rather than trusting a failed call,
+                # and no replacement could add one without another release.
                 self._hold_running_service(None)
                 return True
             raise StaleServiceError(

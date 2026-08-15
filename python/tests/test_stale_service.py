@@ -160,6 +160,21 @@ def test_a_handshake_that_fails_is_not_taken_for_an_answer(
         assert info.has(CAPABILITY_QUERY)
 
 
+def test_a_capability_asked_for_survives_a_handshake_that_fails_once(
+    running_service, tmp_home, monkeypatch
+):
+    """A capability asked for is settled by asking again, not by refusing.
+
+    No release was asked for, so nothing could be started in place of this
+    service anyway, and which error a caller catches must not turn on RPC luck.
+    """
+    monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
+    port = running_service(capabilities=[CAPABILITY_QUERY], handshake_failures=1)
+
+    with Connection(port=port, require_capabilities=[CAPABILITY_QUERY]) as conn:
+        assert conn.server_info().has(CAPABILITY_QUERY)
+
+
 def test_a_handshake_that_fails_is_reported_when_a_release_was_asked_for(
     running_service, tmp_home, monkeypatch
 ):
