@@ -2,6 +2,7 @@ package symbols
 
 import (
 	"testing"
+	"time"
 
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -476,5 +477,296 @@ func TestLookupDirectChildrenFromDropsPrivatelyImportedNames(t *testing.T) {
 	}
 	if got := len(idx.LookupDirectChildren("Mid")); got != 2 {
 		t.Errorf("LookupDirectChildren(Mid) = %d symbols, want 2", got)
+	}
+}
+
+// The index records the conditions a re-export is subject to instead of judging
+// them: an import's filter clause and the `filter` members of the namespace it
+// imports into gate the name it surfaced, while a name the namespace declares
+// itself is never gated (KerML 8.2.4).
+func TestExpandWildcardImportsGatesAFilteredReexport(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; part def Bolt; }")
+	addDoc(t, idx, "safe.sysml", `package Safe {
+		public import Base::*[@Safety];
+		filter @Safety;
+		part def Own;
+	}`)
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	routes := idx.ReexportGates("", "Safe::Belt", belt, "")
+	if len(routes) != 1 {
+		t.Fatalf("Safe::Belt is gated by %d routes, want 1", len(routes))
+	}
+	// The import's clause and the namespace's filter member, composed.
+	if len(routes[0]) != 2 {
+		t.Errorf("the route to Safe::Belt carries %d conditions, want 2", len(routes[0]))
+	}
+	own := lookupOne(t, idx, "Safe::Own")
+	if routes := idx.ReexportGates("", "Safe::Own", own, ""); len(routes) != 0 {
+		t.Errorf("the declared member Safe::Own is gated by %d routes, want none", len(routes))
+	}
+}
+
+// A name two imports surface is reached through either of them, so the index
+// records a route each: an unfiltered import re-exports the name whatever a
+// filtered import of the same namespace would reject.
+func TestExpandWildcardImportsKeepsAnUnfilteredRoute(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "both.sysml", `package Both {
+		public import Base::*[@Safety];
+		public import Base::*;
+	}`)
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	routes := idx.ReexportGates("", "Both::Belt", belt, "")
+	if len(routes) != 1 || len(routes[0]) != 0 {
+		t.Fatalf("Both::Belt is gated by %v, want a single unconditional route", routes)
+	}
+}
+
+// Expansion repeats over an importer whenever its imports may have changed, so
+// the conditions of one import must be recorded once however often it is read.
+func TestExpandWildcardImportsRecordsAGateOnce(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "safe.sysml", "package Safe { public import Base::*[@Safety]; }")
+	idx.ExpandWildcardImports()
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	if routes := idx.ReexportGates("", "Safe::Belt", belt, ""); len(routes) != 1 {
+		t.Errorf("Safe::Belt is gated by %d routes after two expansions, want 1", len(routes))
+	}
+}
+
+// A namespace importing a filtering one onward carries that namespace's
+// conditions along with its own, so the onward route is no wider than the one it
+// imports through.
+func TestExpandWildcardImportsCarriesGatesOnward(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "safe.sysml", `package Safe {
+		public import Base::*;
+		filter @Safety;
+	}`)
+	addDoc(t, idx, "onward.sysml", "package Onward { public import Safe::*; }")
+	addDoc(t, idx, "further.sysml", `package Further {
+		public import Onward::*[@Mandatory];
+	}`)
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	for fqn, want := range map[string]int{
+		"Safe::Belt":    1, // the namespace's own filter member
+		"Onward::Belt":  1, // inherited from Safe, which added nothing of its own
+		"Further::Belt": 2, // Safe's filter member and this import's clause
+	} {
+		routes := idx.ReexportGates("", fqn, belt, "")
+		if len(routes) != 1 {
+			t.Fatalf("%s is gated by %d routes, want 1", fqn, len(routes))
+		}
+		if len(routes[0]) != want {
+			t.Errorf("the route to %s carries %d conditions, want %d", fqn, len(routes[0]), want)
+		}
+	}
+}
+
+// An unconditional route into a filtering namespace stays a route of its own
+// when a further namespace imports it onward, so a name reachable unfiltered
+// through one import is not narrowed by another.
+func TestExpandWildcardImportsCarriesEachRouteOnward(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "mid.sysml", `package Mid {
+		public import Base::*[@Safety];
+		public import Base::*;
+	}`)
+	addDoc(t, idx, "onward.sysml", "package Onward { public import Mid::*; }")
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	routes := idx.ReexportGates("", "Onward::Belt", belt, "")
+	if len(routes) != 1 || len(routes[0]) != 0 {
+		t.Fatalf("Onward::Belt is gated by %v, want a single unconditional route", routes)
+	}
+}
+
+// A route widening a claim after a namespace importing it onward was already
+// derived has to reach that importer: the wider route arrives in a later round,
+// and the importer copied the narrower one (see routesOnward).
+func TestExpandWildcardImportsCarriesAWidenedRouteOnward(t *testing.T) {
+	// Repeat: derivation order decides which round widens the claim.
+	for i := 0; i < 8; i++ {
+		idx := NewIndex()
+		addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+		addDoc(t, idx, "a.sysml", "package Aonward { public import Safe::*; }")
+		addDoc(t, idx, "safe.sysml", `package Safe {
+			public import Base::*[@Safety];
+			public import Zalt::*;
+		}`)
+		addDoc(t, idx, "zalt.sysml", "package Zalt { public import Base::*; }")
+		idx.ExpandWildcardImports()
+
+		belt := lookupOne(t, idx, "Base::Belt")
+		for _, fqn := range []string{"Safe::Belt", "Aonward::Belt"} {
+			routes := idx.ReexportGates("", fqn, belt, "")
+			if len(routes) != 1 || len(routes[0]) != 0 {
+				t.Fatalf("run %d: %s is gated by %v, want a single unconditional route", i, fqn, routes)
+			}
+		}
+	}
+}
+
+// A cycle of filtered imports settles: composing a route with a condition it
+// already carries adds nothing, so the routes stay bounded and expansion
+// terminates instead of composing ever longer condition chains.
+func TestExpandWildcardImportsSettlesOnACycleOfFilters(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml", "package A { part def X; }")
+	addDoc(t, idx, "b.sysml", "package B { public import A::*[@a]; public import C::*[@c]; }")
+	addDoc(t, idx, "c.sysml", "package C { public import B::*[@b]; }")
+
+	done := make(chan struct{})
+	go func() { defer close(done); idx.ExpandWildcardImports() }()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("expansion did not settle on a cycle of filtered imports")
+	}
+
+	x := lookupOne(t, idx, "A::X")
+	for fqn, want := range map[string]int{"B::X": 1, "C::X": 2} {
+		routes := idx.ReexportGates("", fqn, x, "")
+		if len(routes) != 1 || len(routes[0]) != want {
+			t.Errorf("%s is gated by %v, want a single route of %d conditions", fqn, routes, want)
+		}
+	}
+}
+
+// A namespace's filters may be declared by another document than its imports,
+// so adding or removing that document has to re-derive the routes into it: a
+// gate recorded before a filter arrived would keep admitting everything.
+func TestNamespaceFilterFromAnotherDocumentRegatesReexports(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "imports.sysml", "package Safe { public import Base::*; }")
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	if routes := idx.ReexportGates("", "Safe::Belt", belt, ""); len(routes) != 1 || len(routes[0]) != 0 {
+		t.Fatalf("Safe::Belt is gated by %v before any filter, want a single unconditional route", routes)
+	}
+
+	addDoc(t, idx, "filter.sysml", "package Safe { filter @Safety; }")
+	idx.ExpandWildcardImports()
+	routes := idx.ReexportGates("", "Safe::Belt", belt, "")
+	if len(routes) != 1 || len(routes[0]) != 1 {
+		t.Fatalf("Safe::Belt is gated by %v once a filter is declared, want one route of one condition", routes)
+	}
+
+	idx.RemoveDocument("filter.sysml")
+	if routes := idx.ReexportGates("", "Safe::Belt", belt, ""); len(routes) != 1 || len(routes[0]) != 0 {
+		t.Fatalf("Safe::Belt is gated by %v once the filter is gone, want a single unconditional route", routes)
+	}
+}
+
+// Two documents can import the same namespace into one package, so dropping the
+// document whose import is unfiltered has to take its unconditional route with
+// it — otherwise the surviving document's filter would keep admitting everything.
+func TestDroppingAnUnfilteredImportLeavesTheSurvivingFilterInForce(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "plain.sysml", "package Safe { public import Base::*; }")
+	addDoc(t, idx, "filtered.sysml", "package Safe { public import Base::*[@Safety]; }")
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	routes := idx.ReexportGates("", "Safe::Belt", belt, "")
+	if len(routes) != 2 {
+		t.Fatalf("Safe::Belt is gated by %v, want a route per importing document", routes)
+	}
+
+	idx.RemoveDocument("plain.sysml")
+	routes = idx.ReexportGates("", "Safe::Belt", belt, "")
+	if len(routes) != 1 || len(routes[0]) != 1 {
+		t.Fatalf("Safe::Belt is gated by %v once the unfiltered import is gone, want one route of one condition", routes)
+	}
+}
+
+// A private import is a route only for lookups made inside the importing
+// namespace, so its unconditional route must not answer one from outside and
+// defeat the filter of a public import of the same namespace.
+func TestAPrivateRouteDoesNotAnswerALookupFromOutside(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "app.sysml", `package Safe {
+		private import Base::*;
+		public import Base::*[@Safety];
+	}`)
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	routes := idx.ReexportGates("", "Safe::Belt", belt, "")
+	if len(routes) != 1 || len(routes[0]) != 1 {
+		t.Fatalf("Safe::Belt is gated by %v from outside, want only the public import's filtered route", routes)
+	}
+	routes = idx.ReexportGates("", "Safe::Belt", belt, "Safe")
+	if len(routes) != 2 {
+		t.Errorf("Safe::Belt is gated by %v from within Safe, want the private route too", routes)
+	}
+}
+
+// A root-level re-export belongs to the importing document's own root namespace,
+// so a lookup made in another document does not reach it.
+func TestARootReexportIsVisibleOnlyInItsOwnDocument(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "importer.sysml", "import Base::*;")
+	addDoc(t, idx, "other.sysml", "package Other;")
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	if !idx.ReexportVisible("importer.sysml", "Belt", belt) {
+		t.Error("the importing document's own root import surfaces Belt there")
+	}
+	if idx.ReexportVisible("other.sysml", "Belt", belt) {
+		t.Error("another document does not see a name imported into importer.sysml's root")
+	}
+	if !idx.ReexportVisible("other.sysml", "Base::Belt", belt) {
+		t.Error("Base::Belt is declared, not re-exported, and is visible everywhere")
+	}
+}
+
+// lookupOne returns the single symbol registered under fqn.
+func lookupOne(t *testing.T, idx *Index, fqn string) *Symbol {
+	t.Helper()
+	syms := idx.LookupQualified(fqn)
+	if len(syms) != 1 {
+		t.Fatalf("%s names %d symbols, want 1", fqn, len(syms))
+	}
+	return syms[0]
+}
+
+// Each document owns its root namespace, so a `filter` one document states
+// there gates its own root-level imports and no other document's.
+func TestRootNamespaceFiltersGateOnlyTheirOwnDocument(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "filtered.sysml", "import Base::*;\nfilter @Safety;")
+	addDoc(t, idx, "plain.sysml", "import Base::*;")
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	routes := idx.ReexportGates("filtered.sysml", "Belt", belt, "")
+	if len(routes) != 1 || len(routes[0]) != 1 {
+		t.Fatalf("the filtering document's route to Belt carries %v, want one condition", routes)
+	}
+	routes = idx.ReexportGates("plain.sysml", "Belt", belt, "")
+	if len(routes) != 1 || len(routes[0]) != 0 {
+		t.Errorf("the other document's route to Belt carries %v, want no condition", routes)
 	}
 }

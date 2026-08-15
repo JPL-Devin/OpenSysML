@@ -14,6 +14,7 @@ func DefaultRegistry() *Registry {
 	reg.Register(SyntaxPass{})
 	reg.Register(NameResolutionPass{})
 	reg.Register(TypeCheckPass{})
+	reg.Register(ElementFilterPass{})
 	reg.Register(ConstraintPass{})
 	return reg
 }

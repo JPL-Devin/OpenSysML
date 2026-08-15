@@ -132,6 +132,9 @@ type Reference struct {
 	// Redefines is set when QN is the target of a redefinition, which names a
 	// feature of Scope's generals rather than a member of Scope itself.
 	Redefines bool
+	// Condition is set when QN is a name inside an element-filter condition, which
+	// its own namespace's filters do not restrict (see InCondition).
+	Condition bool
 }
 
 // ResolveReference resolves a single name occurrence, honoring both the
@@ -143,6 +146,15 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 	var hide *refFilter
 	if ref.Referrer != nil {
 		hide = &refFilter{decl: ref.Referrer}
+	}
+	if ref.Condition {
+		ref.Condition = false
+		var (
+			sym *symbols.Symbol
+			ok  bool
+		)
+		r.InCondition(func() { sym, ok = r.ResolveReference(ref) })
+		return sym, ok
 	}
 	if ref.Chain != nil {
 		owner, ok := r.resolveTarget(ref.Scope, ref.Chain.Operand, hide)

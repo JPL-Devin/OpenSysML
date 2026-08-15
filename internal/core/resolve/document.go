@@ -65,6 +65,9 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 	case *ast.Import:
 		r.ResolveQualified(scope, d.Imported)
+		if d.FilterExpr != nil {
+			r.InCondition(func() { r.resolveExpr(scope, d.FilterExpr) })
+		}
 	case *ast.Alias:
 		r.ResolveQualified(scope, d.For)
 	case *ast.Dependency:
@@ -80,7 +83,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.ResolveQualified(scope, a)
 		}
 	case *ast.FilterMember:
-		r.resolveExpr(scope, d.Condition)
+		r.InCondition(func() { r.resolveExpr(scope, d.Condition) })
 	case *ast.Definition:
 		r.resolvePrefixes(scope, d.Prefixes)
 		r.resolveRelationships(scope, d, d.Relationships)
@@ -651,7 +654,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 // same relationship — does not find the borrowed name instead.
 func (r *Resolver) recordRedefined(qn *ast.QualifiedName, sym *symbols.Symbol) {
 	r.recordPart(qn, 0, sym)
-	r.memo[qn] = resolution{sym: sym, ok: true}
+	r.memoize(qn, resolution{sym: sym, ok: true})
 }
 
 // findSpecializationTargets returns symbols for all specialization targets in the relationship list.
@@ -965,7 +968,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 	}
 
 	// Store final resolution in memo
-	r.memo[qn] = resolution{cur, true}
+	r.memoize(qn, resolution{cur, true})
 }
 
 // getOperandSymbol returns the symbol of an expression operand WITHOUT following

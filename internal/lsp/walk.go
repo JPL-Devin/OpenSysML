@@ -27,18 +27,35 @@ func collectRefs(root *ast.RootNamespace, rootScope *symbols.Scope) []qnRef {
 
 type refCollector struct {
 	refs []qnRef
+	// condition is set while the names of an element-filter condition are walked.
+	condition bool
+}
+
+// push records a reference, marking it as a filter condition's own name when one
+// is being walked: those names resolve unfiltered, as in resolve/document.go.
+func (c *refCollector) push(ref resolve.Reference) {
+	ref.Condition = c.condition
+	c.refs = append(c.refs, qnRef{ref})
+}
+
+// conditionExpr walks the names of a filter condition.
+func (c *refCollector) conditionExpr(scope *symbols.Scope, e ast.Node) {
+	prev := c.condition
+	c.condition = true
+	defer func() { c.condition = prev }()
+	c.expr(scope, e)
 }
 
 func (c *refCollector) add(scope *symbols.Scope, qn *ast.QualifiedName) {
 	if qn != nil {
-		c.refs = append(c.refs, qnRef{resolve.Reference{Scope: scope, QN: qn}})
+		c.push(resolve.Reference{Scope: scope, QN: qn})
 	}
 }
 
 // addReference records the target of a reference subsetting owned by decl.
 func (c *refCollector) addReference(scope *symbols.Scope, decl ast.Node, qn *ast.QualifiedName) {
 	if qn != nil {
-		c.refs = append(c.refs, qnRef{resolve.Reference{Scope: scope, QN: qn, Referrer: decl}})
+		c.push(resolve.Reference{Scope: scope, QN: qn, Referrer: decl})
 	}
 }
 
@@ -46,7 +63,7 @@ func (c *refCollector) addReference(scope *symbols.Scope, decl ast.Node, qn *ast
 // owning scope's generals rather than a member of the scope itself.
 func (c *refCollector) addRedefinition(scope *symbols.Scope, qn *ast.QualifiedName) {
 	if qn != nil {
-		c.refs = append(c.refs, qnRef{resolve.Reference{Scope: scope, QN: qn, Redefines: true}})
+		c.push(resolve.Reference{Scope: scope, QN: qn, Redefines: true})
 	}
 }
 
@@ -54,9 +71,7 @@ func (c *refCollector) addRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 // members of the operand rather than elements of scope.
 func (c *refCollector) addChainMember(scope *symbols.Scope, decl ast.Node, chain *ast.FeatureChainExpr) {
 	if chain != nil && chain.Member != nil {
-		c.refs = append(c.refs, qnRef{resolve.Reference{
-			Scope: scope, QN: chain.Member, Referrer: decl, Chain: chain,
-		}})
+		c.push(resolve.Reference{Scope: scope, QN: chain.Member, Referrer: decl, Chain: chain})
 	}
 }
 
@@ -94,6 +109,7 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 	case *ast.Import:
 		c.add(scope, d.Imported)
+		c.conditionExpr(scope, d.FilterExpr)
 	case *ast.Alias:
 		c.add(scope, d.For)
 	case *ast.Dependency:
@@ -109,7 +125,7 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			c.add(scope, a)
 		}
 	case *ast.FilterMember:
-		c.expr(scope, d.Condition)
+		c.conditionExpr(scope, d.Condition)
 	case *ast.Definition:
 		c.prefixes(scope, d.Prefixes)
 		c.relationships(scope, d, d.Relationships)

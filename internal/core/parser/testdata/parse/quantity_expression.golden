@@ -1,7 +1,7 @@
 (RootNamespace
   (Membership visibility="default"
     (Package name="quantities" library=false standard=false
-      (Import visibility="default" all=false kind=namespace recursive=false imported="SI")
+      (Import visibility="default" all=false kind=namespace recursive=false imported="SI" filtered=false)
       (Membership visibility="default"
         (Usage kind="attribute" name="maxVerticalSpeed" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (IndexExpr bracket=true

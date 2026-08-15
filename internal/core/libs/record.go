@@ -13,7 +13,7 @@ import (
 // formatVersion is the on-disk index record format version. Bump it whenever
 // the persisted shape changes, or the resolution a record captures changes; a
 // mismatch invalidates all cached records.
-const formatVersion = 14
+const formatVersion = 15
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.
 // It deliberately excludes the AST-backed Decl and the Scope/OwnerScope
@@ -28,6 +28,18 @@ type symRecord struct {
 	WildcardImports []wildcardImport // for packages: its `import X::*` declarations
 	AliasTarget     string           // for aliases: raw target text of "alias X for Y"
 	Unit            *unitFacts       // for measurement units: their reduction to base units
+
+	// Annotations is the metadata annotating the symbol. An element filter
+	// classifies a candidate by what annotates it, which a restored symbol has no
+	// declaration left to state, so it is recorded here.
+	Annotations []symbols.AnnotationFacts
+
+	// NamespaceFilters holds the conditions of the namespace's `filter` members,
+	// compiled. A compiled condition names every element it tests by
+	// fully-qualified name, so it needs neither the expression it was parsed from
+	// nor the scope that expression's names meant something in — which is what
+	// lets a restored library filter what it re-exports the way a parsed one does.
+	NamespaceFilters []*symbols.FilterPredicate
 }
 
 // unitFacts is the gob-encodable projection of a measurement unit reduced to
@@ -50,6 +62,9 @@ type unitFactor struct {
 type wildcardImport struct {
 	Target  string
 	Private bool
+	// Filter is the condition of the import's `[...]` clause, compiled, or nil
+	// for an unfiltered import.
+	Filter *symbols.FilterPredicate
 }
 
 // IndexRecord is the serializable snapshot of one library document's symbols.
@@ -63,13 +78,16 @@ type IndexRecord struct {
 // target it declares resolved. Returns nil if the document is unknown.
 // Targets are resolved through r, so the record holds the fully-qualified name
 // of each supertype rather than text that only means something in its own file.
-func recordFromIndex(name string, idx *symbols.Index, r *resolve.Resolver) (*IndexRecord, bool) {
+// The model is shared across the records of one library, so the whole-index
+// work it memoizes — the metadata `about` relationships an annotation lookup
+// reads — is done once rather than once per file.
+func recordFromIndex(name string, idx *symbols.Index, r *resolve.Resolver, model *semantics.Model) (*IndexRecord, bool) {
 	root := idx.DocumentRoot(name)
 	if root == nil {
 		return nil, false
 	}
 	rec := &IndexRecord{Name: name}
-	complete := collectScope(root, "", rec, semantics.NewModel(r), idx, r)
+	complete := collectScope(root, "", rec, model, idx, r)
 	return rec, complete
 }
 
@@ -86,14 +104,16 @@ func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, model *
 		supers, resolved := supersOf(sym, idx, r)
 		complete = complete && resolved
 		rec.Symbols = append(rec.Symbols, symRecord{
-			FQN:             fqn,
-			ShortName:       shortNameOf(sym.Decl),
-			Kind:            sym.Kind,
-			Span:            sym.DeclSpan,
-			Supers:          supers,
-			WildcardImports: wildcardImportsOf(sym.Decl),
-			AliasTarget:     aliasTargetOf(sym.Decl),
-			Unit:            unitFactsOf(sym, model, idx),
+			FQN:              fqn,
+			ShortName:        shortNameOf(sym.Decl),
+			Kind:             sym.Kind,
+			Span:             sym.DeclSpan,
+			Supers:           supers,
+			WildcardImports:  wildcardImportsOf(sym.Decl, sym.Scope, model),
+			AliasTarget:      aliasTargetOf(sym.Decl),
+			Unit:             unitFactsOf(sym, model, idx),
+			Annotations:      model.AnnotationFactsOf(sym),
+			NamespaceFilters: namespaceFiltersOf(sym, model),
 		})
 		if sym.Scope != nil {
 			complete = collectScope(sym.Scope, fqn, rec, model, idx, r) && complete
@@ -197,8 +217,10 @@ func qualifiedNameText(qn *ast.QualifiedName) string {
 }
 
 // wildcardImportsOf extracts the `import X::*` declarations of a Package or
-// Namespace, target text and visibility. Returns nil for non-namespace nodes.
-func wildcardImportsOf(decl ast.Node) []wildcardImport {
+// Namespace: target text, visibility, and the compiled condition of a filter
+// clause, whose names are resolved against scope while the declaration is still
+// there to resolve them in. Returns nil for non-namespace nodes.
+func wildcardImportsOf(decl ast.Node, scope *symbols.Scope, model *semantics.Model) []wildcardImport {
 	var members []ast.Node
 	switch d := decl.(type) {
 	case *ast.Package:
@@ -215,10 +237,30 @@ func wildcardImportsOf(decl ast.Node) []wildcardImport {
 		if !ok || imp.Kind != ast.ImportNamespace || imp.Imported == nil {
 			continue
 		}
-		out = append(out, wildcardImport{
+		entry := wildcardImport{
 			Target:  qualifiedNameText(imp.Imported),
 			Private: imp.Visibility == ast.VisibilityPrivate,
-		})
+		}
+		if imp.FilterExpr != nil {
+			entry.Filter = model.CompileElementFilter(symbols.ElementFilter{
+				Expr:  imp.FilterExpr,
+				Scope: scope,
+				Span:  imp.FilterExpr.Span(),
+			})
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+// namespaceFiltersOf compiles the conditions of the `filter` members the symbol's
+// namespace declares, so that they restrict what a restored library re-exports.
+func namespaceFiltersOf(sym *symbols.Symbol, model *semantics.Model) []*symbols.FilterPredicate {
+	var out []*symbols.FilterPredicate
+	for _, f := range symbols.NamespaceFiltersIn(sym.Scope) {
+		if pred := model.CompileElementFilter(f); pred != nil {
+			out = append(out, pred)
+		}
 	}
 	return out
 }

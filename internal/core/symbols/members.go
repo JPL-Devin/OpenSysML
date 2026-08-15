@@ -18,6 +18,23 @@ func (s *Scope) Members() []*Symbol {
 	return out
 }
 
+// DocNameOf is the document a scope belongs to, read from the name SetDocName
+// stamped on its symbols. It identifies a scope tree the index does not hold —
+// a document builds its own for the editor — by name rather than by identity.
+func DocNameOf(scope *Scope) string {
+	for s := scope; s != nil; s = s.Parent() {
+		if owner := s.Owner(); owner != nil && owner.DocName != "" {
+			return owner.DocName
+		}
+		for _, sym := range s.Members() {
+			if sym.DocName != "" {
+				return sym.DocName
+			}
+		}
+	}
+	return ""
+}
+
 // SetDocName stamps name onto every symbol in the scope tree (members and
 // all descendant scopes), recording which document declares each symbol.
 // Recursion follows the child links, so scopes no symbol owns — loop bodies and
