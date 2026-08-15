@@ -909,10 +909,21 @@ from a live session with `bin/sysml-lsp`:
 - ✅ Workspace symbols (global search)
 - ✅ Document formatting (`textDocument/formatting`, whole-file edit)
 - ✅ Rename, with prepare (`textDocument/prepareRename`, `textDocument/rename`)
+- ✅ Semantic tokens, full document and range (`textDocument/semanticTokens/full`,
+  `textDocument/semanticTokens/range`; legend advertised at `initialize`,
+  keywords/comments/literals from the token stream, names classified from the
+  symbol table and the resolver, with the `declaration`, `definition`, `readonly`
+  and `abstract` modifiers)
+- ✅ Code actions, quick-fix kind only (`textDocument/codeAction`: spelling of an
+  unresolved name, importing the namespace that declares it, inserting a missing
+  semicolon the parser located exactly)
 
-**Not implemented:** semantic tokens, code actions, signature help, range
-formatting, code lens, inlay hints. A client asking for one of those gets the
-method-not-found answer rather than a partial result.
+**Not implemented:** semantic token deltas (`semanticTokens/full/delta` — the
+server holds no previous result to diff against, so a client re-requests the
+full set), signature help, range formatting, code lens, inlay hints. A client
+asking for one of those gets the method-not-found answer rather than a partial
+result. Quick fixes are offered only where the repair is unambiguous: a syntax
+error that may want either a body or a semicolon carries none.
 
 **Test the server:** the protocol is JSON-RPC over stdio, so a request can be sent
 by hand. Formatting a badly indented file and renaming a definition, run against

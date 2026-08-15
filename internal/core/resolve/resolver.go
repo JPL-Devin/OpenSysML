@@ -197,9 +197,11 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 		r.memoize(at, res)
 	}
 	if !res.ok {
+		span := spanOf(at)
 		r.report(Diagnostic{
-			Span:    spanOf(at),
+			Span:    span,
 			Message: r.unresolvedMessage(scope, name),
+			Fixes:   r.unresolvedFixes(scope, name, span),
 		})
 	}
 	return res.sym, res.ok

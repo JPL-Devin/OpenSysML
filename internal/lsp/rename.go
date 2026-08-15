@@ -67,7 +67,7 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 			continue
 		}
 		for _, ref := range collectRefs(doc.AST, doc.Scope) {
-			segs := s.ws.ResolveReferenceSegmentsInDoc(docName, ref.Reference)
+			segs := s.ws.ResolveReferenceSegmentsInDoc(docName, ref)
 			for i, seg := range segs {
 				if sameSymbol(seg, target) {
 					addEdit(docName, doc.Content, ref.QN.Parts[i].Span)
@@ -90,7 +90,7 @@ func (s *Server) renameTarget(name string, pos protocol.Position) (*symbols.Symb
 	// On a reference: rename the symbol the containing segment denotes, so
 	// renaming from the `A` of `A::B` renames A, not B.
 	if ref := refAtOffset(collectRefs(doc.AST, doc.Scope), offset); ref != nil {
-		segs := s.ws.ResolveReferenceSegmentsInDoc(name, ref.Reference)
+		segs := s.ws.ResolveReferenceSegmentsInDoc(name, *ref)
 		for i, part := range ref.QN.Parts {
 			if offset < part.Span.Offset || offset >= part.Span.End() {
 				continue

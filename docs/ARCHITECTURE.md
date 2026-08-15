@@ -149,6 +149,13 @@ source → lexer → parser → AST → symbol index → resolve → passes
 - **Context:** Exposes `Resolver()` + `Model()` (both lazy, memoized)
 - **DefaultRegistry:** SyntaxPass, NameResolutionPass, TypeCheckPass, ConstraintPass
 - **Tiered execution:** Higher tiers skipped if lower tier errors
+- **Quick fixes:** A `Diagnostic` carries the `quickfix.Fix` values (`internal/core/quickfix`) the layer reporting it attached, so an editor offers edits without parsing messages
+
+### 6a. Highlighting (`internal/core/highlight`)
+
+- **Semantic tokens:** `Tokens(content, root, scope, Resolution)` — keywords, comments and literals from the lexer; declared names from the symbol table; reference segments from the resolver
+- **Ordered and disjoint:** the result is sorted by offset with overlaps dropped, semantics winning, so a consumer encodes it directly
+- **Vocabulary:** LSP token types and modifiers (`Classes()`, `Modifiers()` give legend order)
 
 ### 7. Workspace (`internal/core/model`)
 
@@ -317,6 +324,17 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - Symbol-based suggestions
 - Future: keyword completion, snippet support
 
+**Semantic Tokens (textDocument/semanticTokens/full, /range):**
+- Legend advertised at `initialize`; tokens classified by `internal/core/highlight`
+- Keywords, comments and literals from the token stream; names from the symbol
+  table and the resolver, with declaration/definition/readonly/abstract modifiers
+- Encoded relative to the previous token, split per line; no delta support
+
+**Code Actions (textDocument/codeAction):**
+- Quick fixes only, from the `quickfix.Fix` values parser and resolver
+  diagnostics carry — spelling of an unresolved name, importing the namespace
+  declaring it, inserting a semicolon the parser located exactly
+
 **Document Symbols (textDocument/documentSymbol):**
 - Outline view (packages, parts, attributes, actions, states)
 - Hierarchical structure
@@ -338,7 +356,8 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - `diagnostics.go` — Error publishing
 - `hover.go`, `completion.go`, `definition.go`, `references.go`, `symbols.go` — Feature implementations
 - `posmap.go` — UTF-8 offset ↔ LSP line/character conversion
-- `walk.go` — AST traversal for symbol extraction
+- `semantictokens.go`, `codeaction.go` — Semantic tokens and quick fixes
+- `walk.go` — Reference lookup over `resolve.References`
 
 **Testing:**
 - 88 tests covering all features

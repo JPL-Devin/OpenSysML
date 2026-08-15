@@ -3,6 +3,7 @@ package parser
 import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
+	"github.com/Open-MBEE/Systemica/internal/core/quickfix"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
@@ -204,13 +205,39 @@ func (p *Parser) expect(k lexer.Kind, msg string) (lexer.Token, bool) {
 	if p.at(k) {
 		return p.advance(), true
 	}
+	if k == lexer.Semicolon {
+		// The statement ends where the last token consumed for it ends, which is
+		// where the missing ';' goes; the diagnostic sits on the token that
+		// should have followed it.
+		p.errorWithFixes(p.peek().Span, msg, quickfix.Fix{
+			Title:     "Insert ';'",
+			Edits:     []quickfix.Edit{quickfix.Insert(p.lastEnd(), ";")},
+			Preferred: true,
+		})
+		return p.peek(), false
+	}
 	p.error(p.peek().Span, msg)
 	return p.peek(), false
+}
+
+// lastEnd returns the end offset of the last consumed non-trivia token, or the
+// start of the current one when nothing has been consumed.
+func (p *Parser) lastEnd() int {
+	if p.pos > 0 && p.pos <= len(p.buf) {
+		return p.buf[p.pos-1].Span.End()
+	}
+	return p.peek().Span.Offset
 }
 
 // error records a diagnostic that makes the parse ill-formed.
 func (p *Parser) error(sp source.Span, msg string) {
 	p.Diagnostics = append(p.Diagnostics, Diagnostic{Span: sp, Message: msg})
+}
+
+// errorWithFixes records an ill-formed-parse diagnostic that unambiguous edits
+// resolve.
+func (p *Parser) errorWithFixes(sp source.Span, msg string, fixes ...quickfix.Fix) {
+	p.Diagnostics = append(p.Diagnostics, Diagnostic{Span: sp, Message: msg, Fixes: fixes})
 }
 
 // warn records a diagnostic for input that parses to the tree the author meant

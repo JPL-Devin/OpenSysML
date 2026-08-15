@@ -177,6 +177,7 @@ func (w *Workspace) Diagnostics(name string) []passes.Diagnostic {
 			Message:  pd.Message,
 			Code:     "syntax",
 			Source:   "syntax",
+			Fixes:    pd.Fixes,
 		})
 	}
 	for _, pw := range doc.ParseWarnings {
@@ -186,6 +187,7 @@ func (w *Workspace) Diagnostics(name string) []passes.Diagnostic {
 			Message:  pw.Message,
 			Code:     pw.Code,
 			Source:   "syntax",
+			Fixes:    pw.Fixes,
 		})
 	}
 	diags := passes.Analyze(name, doc.AST, parseDiags, w.index)
