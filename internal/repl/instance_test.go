@@ -343,6 +343,29 @@ func TestConnectorEndsAreReadAgainAfterADependencyChanges(t *testing.T) {
 	wants(t, run(t, s, "%instantiate Demo::A"), "ID: 5")
 }
 
+// A collection holds copies of what the features subsetting it hold, so it is
+// collected again when one of those is derived from a declaration that changed:
+// otherwise one object reads two values for the same thing.
+func TestCollectionIsCollectedAgainAfterADependencyChanges(t *testing.T) {
+	s := NewSession()
+	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 2.0; }")
+	s.Submit("part def A { attribute pool : ScalarValues::Real[*]; attribute one :> pool = double(3.0); }")
+	wants(t, run(t, s, "%instantiate A"), "ID: 1")
+	wants(t, run(t, s, "%slots A"), "pool = [6.00]", "one = 6.00")
+
+	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
+	wants(t, run(t, s, "%slots A"), "pool = [9.00]", "one = 9.00")
+
+	// A collection of objects is kept, so its members keep their identities.
+	s.Submit("package D { part def B; part def C { part xs : B[3]; } }")
+	wants(t, run(t, s, "%instantiate D::C"), "ID:")
+	held := run(t, s, "%slots D::C")
+	s.Submit("part def Widget;")
+	if got := run(t, s, "%slots D::C"); got != held {
+		t.Errorf("the objects of the collection read\n%s\nwant\n%s", got, held)
+	}
+}
+
 // A variation's default states which variant an object selects rather than a
 // value to compute, so the object bound to it is the same object across a
 // submission rather than one materialized again under a new identity.

@@ -194,6 +194,23 @@ func (ctx *Context) derivedSlot(s *Slot) bool {
 	return !ctx.model.IsVariationFeature(s.Feature.Symbol)
 }
 
+// collectedSlot reports whether the slot holds a collection of values copied out
+// of the features subsetting it, which are read again here rather than kept: one
+// of them may be derived from a declaration that changed. A collection holding
+// objects is kept, since those objects are carried over under their identities.
+func (ctx *Context) collectedSlot(s *Slot) bool {
+	if !s.Materialized || (s.Values.Kind != ValSequence && s.Values.Kind != ValSet) {
+		return false
+	}
+	object := false
+	ctx.walkValue(s.Values, func(v Value) {
+		if _, held := v.Object(); held {
+			object = true
+		}
+	})
+	return !object
+}
+
 // connectorSlot reports whether the slot holds the object of a connector, which
 // holds the features it connects rather than values of its own, so a new context
 // attaches its ends again rather than keeping what they read before.
@@ -536,6 +553,10 @@ func (a *adoption) commit() {
 			// A value an expression states is derived again here, so it cannot go
 			// stale against what that expression now reads.
 			if a.ctx.derivedSlot(slot) {
+				slot.Value, slot.Values, slot.Materialized = Value{}, Value{}, false
+				continue
+			}
+			if a.ctx.collectedSlot(slot) {
 				slot.Value, slot.Values, slot.Materialized = Value{}, Value{}, false
 				continue
 			}
