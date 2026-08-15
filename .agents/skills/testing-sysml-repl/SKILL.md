@@ -1291,6 +1291,58 @@ Trap while driving the REPL on camera: typing `clear` at the `sysml>` prompt not
 (`1:1: error: expected a namespace member`) but leaves garbage in the session buffer that makes a
 subsequent `%eval Pkg::part.attr` fail with a parse error. `%clear` and re-`%load` recovers.
 
+## The stream/status contract of a non-interactive run (PR #161)
+
+Since #161 every run that is not a prompt splits its output: **results on stdout** (evaluated values,
+conversion bytes, verdict lines, `✓` echoes of what a load declared) and **findings on stderr**
+(diagnostics, warnings, the `sysml: … did not analyse cleanly` note, `wrote <file> (ttl, N bytes)`),
+with `0` = done, `1` = the model answered a check false, `2` = nothing could be decided. Any change in
+`cmd/sysml/{main.go,status.go,check.go}` or `internal/repl/{load.go,render.go}` can break it silently,
+so test it as a **table over every mode**, always with `>out 2>err </dev/null` and `echo $?`:
+capturing `2>&1` hides exactly the defect. A ready-made driver pattern (one `PASS`/`FAIL` line per
+row, asserting status + required stdout needles + stderr needles that must be **absent** from stdout
++ "stdout empty") lives in the session that tested #161; re-create it rather than eyeballing output,
+because it is legible on camera and a leak turns a row red.
+
+Values that held at `6079699` (broken = `package Bad { part def A { attribute x : ; } }`):
+
+| run | exit | stdout | stderr |
+|---|---|---|---|
+| `-e 1+1 <good>` / `-calc`/`-action`/`-state` on a clean model | 0 | `✓ package …`, `= 2` / `= 18` / `total = 5` | empty |
+| any of those over the broken model | 2 | **empty** | `error: expected a name`, `sysml: … did not analyse cleanly` |
+| `-e nope <good>` (unresolved name) | 2 | `✓ package …` only | `sysml: unresolved reference: nope` |
+| `-validate <broken>` | 2 | empty | `… did not analyse cleanly; no check was made` |
+| plain `sysml <broken>` **non-tty** | 2 | banner only | diagnostics |
+| `-convert ttl <model>` | 0 | Turtle | empty |
+| `-convert ttl -o f` | 0 | **empty** | `wrote f (ttl, 1540 bytes)` |
+| `-convert ttl <broken> -o f` | 2 | empty | syntax errors, **and no file is created** |
+| `-constraint` false / holds / unresolved / warning-only | 1 / 0 / 2 / 0 | verdict line | warning + unresolved verdicts only |
+
+Traps found while testing it:
+
+- **The tty override is the one path unit tests cannot cover.** `atTerminal()` (`status.go`) forces
+  status `0` when stdin is a terminal, so `./bin/sysml <broken>.sysml` at a real terminal must load,
+  report on stderr, open the prompt and exit `0` on `%quit`, while
+  `printf '%%quit\n' | ./bin/sysml <broken>.sysml` exits `2`. Verify the tty half in Konsole (or with
+  `script -qec "./bin/sysml <broken>.sysml > /tmp/o 2>/tmp/e; echo TTYSTATUS=\$?" /dev/null < in`);
+  a plain pipe silently tests the other branch.
+- **`part def ;` is *not* a bad line** — it parses as an anonymous part def and prints `✓ part def`.
+  To show the prompt surviving a bad line, use `%eval nope` (unresolved) and
+  `part def B { attribute q : ; }` (syntax error), then a following `%eval 6*7` → `= 42` as proof the
+  session continued. Expect the `note: an earlier session error is unresolved …` line afterwards.
+- `-convert ttl` of most models fails on unsupported constructs — a **constraint member** is one
+  (`cannot convert the constraint member at …`, exit 2). That makes a check-oriented fixture a useful
+  negative row but useless as the clean-conversion row; use
+  `package Demo { part def Engine; part def Vehicle { attribute mass : Real = 1200.0; part engine : Engine[1]; } }`
+  (1540 bytes of Turtle) for the positive one.
+- Real repo models to use instead of hand-written ones: `examples/state-machine-demo.sysml` (and 6
+  others) analyse clean, while `examples/phase-c-behavioral-bodies.sysml` and
+  `examples/parser_features_demo_action_semantics.sysml` do **not** — a free "broken model" that is
+  more convincing than a toy fixture.
+- Cheap contrast for this PR class: build the parent commit (`git worktree add /tmp/old<sha> <sha>`)
+  and run `-e '1+1' <broken>.sysml` through both. Pre-fix prints the diagnostic **and** `= 2` on
+  stdout with exit `0` — the single most convincing frame in the recording.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
