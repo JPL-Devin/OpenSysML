@@ -254,12 +254,12 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - Lowering to execution IR lives in `internal/core/lower/` (`ToActionGraph`, `ToStateGraph`)
 
 **Testing:**
-- **Golden ASTs**: 80 fixtures - `internal/core/parser/testdata/parse/`
+- **Golden ASTs**: 81 fixtures - `internal/core/parser/testdata/parse/`
 - **Negative tests**: 127 subtests - `internal/core/parser/negative_test.go`
 - **Unit tests**: 43 tests (action, state) - `action_executor_test.go`, `state_executor_test.go`
 - **Conformance gate**: 211 cases (all passing: calc×56, action×50, state×41, requirement×12, instance×9, unit×7, constraint×7, satisfy×5, variation×5, redefinition×5, variant×3, feature×3, ballandchain×3, and one each of accept, attribute, connector, cubesat and multiplicity) - `conformance_test.go`
 - **Golden traces**: 69 `.trace.golden` files (action×28, calc×25, state×12, constraint×4) - `trace_test.go`
-- **Robustness**: 143 failure-mode subtests (deadlock, unbound params, missing features, dangling transitions, sourceless accept, step budget, pseudostate dead ends and cycles, history and defer misuse, send/accept misrouting, calc arity/recursion, `perform` reference failures) - `robustness_test.go`
+- **Robustness**: 146 failure-mode subtests (deadlock, unbound params, missing features, dangling transitions, sourceless accept, step budget, pseudostate dead ends and cycles, history and defer misuse, send/accept misrouting, calc arity/recursion, `perform` reference failures) - `robustness_test.go`
 - **Coverage**: All behavioral types fully functional. Action: 14/14 features ✅. State: 13/13 features ✅. Calc: 8/8 ✅. Constraint: 5/5 ✅. Requirement: 5/5 ✅. Evaluation: 7/7 ✅.
 
 **Measured Compliance:** See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for semantic rule → implementation → test case mapping with status (✅ faithful / ⚠️ approximate / ❌ not yet implemented).
@@ -487,7 +487,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 #### 2. Golden AST Snapshots
 - **Purpose:** Verify AST structure matches expected output
 - **Location:** `internal/core/parser/golden_test.go`
-- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (80 representative files)
+- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (81 representative files)
 - **Goldens:** `testdata/parse/*.golden` (AST dumps)
 - **Acceptance:** Parse output matches golden file
 - **Update flag:** `go test -run TestGolden -update` (regenerate goldens after intentional changes)
@@ -533,7 +533,7 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 #### 1. Golden AST Fixtures
 - **Purpose:** Lock in parse structure before execution changes
 - **Location:** `internal/core/parser/testdata/parse/` (behavioral fixtures)
-- **Coverage:** 80 fixtures in total, behavioral ones (action, calc, constraint, requirement, state) among them
+- **Coverage:** 81 fixtures in total, behavioral ones (action, calc, constraint, requirement, state) among them
 - **Acceptance:** `TestGolden` passes, AST dumps match expectations
 - **Update flag:** `go test -run TestGolden -update`
 
@@ -583,7 +583,7 @@ go test -v -run TestExecutionConformance ./internal/core/runtime
 #### 4. Runtime Robustness Tests
 - **Purpose:** Verify malformed/pathological behaviors fail gracefully (typed errors, no panics/hangs)
 - **Location:** `internal/core/runtime/robustness_test.go`
-- **Test:** `TestRuntimeRobustness` with 143 failure-mode subtests
+- **Test:** `TestRuntimeRobustness` with 146 failure-mode subtests
 - **Acceptance:** All return typed errors, never panic, timeout guard (60s) prevents hangs
 
 **Failure modes:**

@@ -885,7 +885,7 @@ are tracked here):
 | `value.go` | Runtime value representation (ValConst, ValString, ValInstance) | ~150 |
 | `trace.go` | Deterministic execution and calc-evaluation trace recording, canonical value rendering | ~290 |
 | `conformance_test.go` | Conformance gate (211 cases) | ~480 |
-| `robustness_test.go` | Failure-mode tests (143 subtests) | ~830 |
+| `robustness_test.go` | Failure-mode tests (146 subtests) | ~830 |
 | `trace_test.go` | Golden trace test infrastructure | ~200 |
 | `trace_calc_test.go` | Trace determinism and canonical rendering unit tests | ~180 |
 
@@ -912,8 +912,8 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 **Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
 - Execution conformance cases: 211 (all passing)
 - gRPC conformance cases: 8 (all passing)
-- Robustness subtests: 143 (all passing)
-- Golden AST fixtures: 80
+- Robustness subtests: 146 (all passing)
+- Golden AST fixtures: 81
 - Golden execution traces: 69
 - Negative parser subtests: 127
 
