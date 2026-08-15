@@ -74,7 +74,8 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 
 - Converting a model whose behavior is stated as action or state nodes to RDF
   still reports the node and aborts (initial nodes, `perform`, `send`,
-  `terminate`, loop nodes, state regions): 65 of the 110 example models convert.
+  `terminate`, loop nodes, state regions): 71 of the 120 models under `examples/`
+  convert.
 - A nested feature redefined on an instantiated object is not yet the subject of
   a check or an `%eval`, so those answer about the declaration while `%slots`
   shows the instantiated value.

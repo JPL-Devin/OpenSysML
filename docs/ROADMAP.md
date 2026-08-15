@@ -519,8 +519,9 @@ variation semantics currently rest on the enclosing `variation` definition alone
 
 Constraint-bearing models convert since the condition members were mapped, but an action or
 state body that carries nodes still reports the node and aborts: measured on the built binary,
-65 of the 110 example models convert, and the 45 refusals are initial nodes, `perform`, `send`,
-`terminate`, loop nodes, state regions and substates, plus four duplicate declarations.
+71 of the 120 models under `examples/` convert (8 of the 19 top-level models, 62 of the 100
+training copies, and the semantic-layer demo), and the 49 refusals are initial nodes, `perform`,
+`send`, `terminate`, loop nodes, state regions and substates, plus four duplicate declarations.
 `RDF_INTEROP.md` § Limitations lists the shapes. The fix is metaclasses for the behavioral
 nodes, not a wider fallback — a graph missing a model's steps would be worse than a refusal.
 
