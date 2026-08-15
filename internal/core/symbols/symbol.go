@@ -177,6 +177,20 @@ type UnitFactorFacts struct {
 	Exponent float64
 }
 
+// DimensionFacts is a quantity dimension as a cached library symbol carries it:
+// the base quantities it is a product of powers of, each named by its qualified
+// name. Empty factors are the dimension of a count or a ratio of like quantities.
+type DimensionFacts struct {
+	Factors []DimensionFactorFacts
+}
+
+// DimensionFactorFacts is one base quantity of a dimension, named by its
+// qualified name, and its exponent.
+type DimensionFactorFacts struct {
+	FQN      string
+	Exponent float64
+}
+
 // Symbol describes one declared name. The same declaration may be reachable
 // through more than one Symbol only when it declares both a short and a
 // primary name; in that case a single Symbol is registered under both keys.
@@ -220,6 +234,13 @@ type Symbol struct {
 	// declares could not be read back. Nil for a symbol that is not a
 	// measurement unit, and for live-parsed symbols, which use Decl instead.
 	Unit *UnitFacts
+
+	// Dimension is the quantity dimension persisted for a cached library symbol,
+	// whose declaration is absent: the power factors a unit definition states are
+	// declared members with bound values, which the declaration takes with it.
+	// Nil for a symbol whose dimension is not determined, and for live-parsed
+	// symbols, which are read from Decl instead.
+	Dimension *DimensionFacts
 
 	// NamingTarget is the reference that named this symbol when EffectiveName
 	// is set: the target of its reference subsetting or redefinition. Resolving

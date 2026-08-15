@@ -13,7 +13,7 @@ import (
 // formatVersion is the on-disk index record format version. Bump it whenever
 // the persisted shape changes, or the resolution a record captures changes; a
 // mismatch invalidates all cached records.
-const formatVersion = 15
+const formatVersion = 16
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.
 // It deliberately excludes the AST-backed Decl and the Scope/OwnerScope
@@ -28,6 +28,11 @@ type symRecord struct {
 	WildcardImports []wildcardImport // for packages: its `import X::*` declarations
 	AliasTarget     string           // for aliases: raw target text of "alias X for Y"
 	Unit            *unitFacts       // for measurement units: their reduction to base units
+
+	// Dimension is the quantity dimension a measurement unit measures in. A unit
+	// definition states it as members with bound values, which a restored symbol
+	// has no declaration left to hold.
+	Dimension *symbols.DimensionFacts
 
 	// Annotations is the metadata annotating the symbol. An element filter
 	// classifies a candidate by what annotates it, which a restored symbol has no
@@ -112,6 +117,7 @@ func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, model *
 			WildcardImports:  wildcardImportsOf(sym.Decl, sym.Scope, model),
 			AliasTarget:      aliasTargetOf(sym.Decl),
 			Unit:             unitFactsOf(sym, model, idx),
+			Dimension:        dimensionFactsOf(sym, model, idx),
 			Annotations:      model.AnnotationFactsOf(sym),
 			NamespaceFilters: namespaceFiltersOf(sym, model),
 		})
@@ -144,6 +150,16 @@ func unitFactsOf(sym *symbols.Symbol, model *semantics.Model, idx *symbols.Index
 		facts.Factors = append(facts.Factors, unitFactor{FQN: baseFQN, Exponent: f.Exponent})
 	}
 	return facts
+}
+
+// dimensionFactsOf records the dimension a measurement unit measures in, so it
+// survives caching: the power factors it is declared by are members with bound
+// values, which the dropped declaration would take with them.
+func dimensionFactsOf(sym *symbols.Symbol, model *semantics.Model, idx *symbols.Index) *symbols.DimensionFacts {
+	if !model.IsMeasurementUnit(sym) {
+		return nil
+	}
+	return model.DimensionFactsOf(sym, idx)
 }
 
 // supersOf resolves the generalization edges declared by a Definition or Usage

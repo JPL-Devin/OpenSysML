@@ -13,6 +13,7 @@ type RecordEntry struct {
 	WildcardImports []WildcardImport // for packages: its `import X::*` declarations
 	AliasTarget     string           // for aliases: raw target text of "alias X for Y"
 	Unit            *UnitFacts       // for measurement units: their reduction to base units
+	Dimension       *DimensionFacts  // for measurement units: the quantity dimension they measure in
 
 	// Annotations are the metadata annotating the symbol, which an element
 	// filter classifies it by and its absent declaration would have stated.
@@ -42,6 +43,7 @@ func (idx *Index) AddRecords(name string, entries []RecordEntry) {
 			SuperFQNs:      e.Supers,
 			AliasTargetFQN: e.AliasTarget,
 			Unit:           e.Unit,
+			Dimension:      e.Dimension,
 			Annotations:    e.Annotations,
 		}
 		idx.register(e.FQN, sym)
