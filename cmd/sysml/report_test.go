@@ -44,6 +44,10 @@ func TestUndecidedVerdictTakesTheCommandPrefix(t *testing.T) {
 		name:  "what a run printed before it stopped is not restated",
 		lines: []string{"✓ action Mission::Descend started", "error: action stopped at Falling without completing"},
 		want:  []string{"✓ action Mission::Descend started", "sysml: action stopped at Falling without completing"},
+	}, {
+		name:  "a trace of the run does not make its statement one line among many",
+		lines: []string{"[trace] step 1: Descend", "no satisfaction assertion in the session"},
+		want:  []string{"[trace] step 1: Descend", "sysml: no satisfaction assertion in the session"},
 	}}
 
 	for _, tc := range cases {

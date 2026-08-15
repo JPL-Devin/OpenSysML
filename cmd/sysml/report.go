@@ -19,8 +19,11 @@ const (
 )
 
 // locatesSource matches a line that locates a finding in the model source, as
-// `model.sysml:1:42: …` does.
+// `model.sysml:1:42: …` does. tracePrefix marks a step of the run the prompt
+// recorded, which states nothing about the check.
 var locatesSource = regexp.MustCompile(`^[^\s:]+:\d+:\d+: `)
+
+const tracePrefix = "[trace] "
 
 // asCommandProblem states a check that could not be made under the command's
 // prefix, in place of the prompt's, whether or not the prompt gave it one. A line
@@ -35,10 +38,26 @@ func asCommandProblem(lines []string) []string {
 		}
 		out = append(out, line)
 	}
-	if !restated && len(out) == 1 && !locatesSource.MatchString(out[0]) {
-		out[0] = commandPrefix + out[0]
+	if i := loneStatement(out); !restated && i >= 0 {
+		out[i] = commandPrefix + out[i]
 	}
 	return out
+}
+
+// loneStatement is where a verdict states its outcome in a single line of its
+// own, or -1 when its lines are a run's own output instead.
+func loneStatement(lines []string) int {
+	found := -1
+	for i, line := range lines {
+		if strings.HasPrefix(line, tracePrefix) {
+			continue
+		}
+		if found >= 0 || locatesSource.MatchString(line) {
+			return -1
+		}
+		found = i
+	}
+	return found
 }
 
 // asCommandFailure states a failure under the command's prefix, in place of the
