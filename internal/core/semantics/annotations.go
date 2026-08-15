@@ -120,9 +120,9 @@ func (m *Model) declaredAnnotations(sym *symbols.Symbol) []annotation {
 	case *ast.Usage:
 		prefixes, members = d.Prefixes, d.Members
 	case *ast.Package:
-		members = d.Members
+		prefixes, members = d.Prefixes, d.Members
 	case *ast.Namespace:
-		members = d.Members
+		prefixes, members = d.Prefixes, d.Members
 	default:
 		return nil
 	}

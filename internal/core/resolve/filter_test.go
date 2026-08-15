@@ -130,6 +130,31 @@ func TestFilteredExposeSurfacesASubset(t *testing.T) {
 	}
 }
 
+// A lookup made while a condition's own names are being resolved is unfiltered,
+// so its answer is not remembered: whether a filtered-out name resolves must not
+// depend on a condition having reached it first.
+func TestALookupMadeWhileAConditionIsResolvedIsNotRemembered(t *testing.T) {
+	idx := expandedIndexOf(t, map[string]string{
+		"lib.sysml": filterLib,
+		"app.sysml": "package App { public import Lib::*[@Safety]; }",
+	})
+	app := scopeOf(t, idx.DocumentRoot("app.sysml"), "App")
+
+	r := judgingResolver(idx)
+	ref := ident("Radio")
+	r.InCondition(func() { r.ResolveName(app, "Radio", ref) })
+	if _, ok := r.ResolveName(app, "Radio", ref); ok {
+		t.Error("the filter rejects Radio, which must not resolve because a condition reached it first")
+	}
+
+	r = judgingResolver(idx)
+	qname := qn(false, "App", "Radio")
+	r.InCondition(func() { r.ResolveQualified(nil, qname) })
+	if _, ok := r.ResolveQualified(nil, qname); ok {
+		t.Error("App::Radio names a filtered-out element, whichever lookup reached it first")
+	}
+}
+
 // Without a semantic model there is nothing to judge a condition with, and an
 // unevaluable filter keeps the element rather than silently hiding it.
 func TestFilterWithoutAModelKeepsEveryElement(t *testing.T) {

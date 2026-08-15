@@ -77,6 +77,18 @@ func TestFilterPrefixMetadata(t *testing.T) {
 	want(t, cond, selects(t, metadataModel, cond, "Belt", "keylessEntry"), true, false)
 }
 
+// A package or namespace carries prefix metadata as a definition does, so a
+// filter classifying by it selects an annotated one.
+func TestFilterPrefixMetadataOnAPackage(t *testing.T) {
+	const src = `
+		metadata def Safety;
+		#Safety package Restraints;
+		#Safety namespace Airbags;
+		package Audio;
+	`
+	want(t, "@Safety", selects(t, src, "@Safety", "Restraints", "Airbags", "Audio"), true, true, false)
+}
+
 func TestFilterBodyMetadata(t *testing.T) {
 	const cond = "@Safety"
 	want(t, cond, selects(t, metadataModel, cond, "seatBelt", "airBag", "keylessEntry"), true, true, false)

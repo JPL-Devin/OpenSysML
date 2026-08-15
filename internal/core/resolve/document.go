@@ -654,7 +654,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 // same relationship — does not find the borrowed name instead.
 func (r *Resolver) recordRedefined(qn *ast.QualifiedName, sym *symbols.Symbol) {
 	r.recordPart(qn, 0, sym)
-	r.memo[qn] = resolution{sym: sym, ok: true}
+	r.memoize(qn, resolution{sym: sym, ok: true})
 }
 
 // findSpecializationTargets returns symbols for all specialization targets in the relationship list.
@@ -968,7 +968,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 	}
 
 	// Store final resolution in memo
-	r.memo[qn] = resolution{cur, true}
+	r.memoize(qn, resolution{cur, true})
 }
 
 // getOperandSymbol returns the symbol of an expression operand WITHOUT following

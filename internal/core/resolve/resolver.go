@@ -168,7 +168,7 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	// A failure met during a semantic query is not memoized: the reference it
 	// belongs to must still report when its own document is resolved.
 	if res.ok || r.quiet == 0 {
-		r.memo[qn] = res
+		r.memoize(qn, res)
 	}
 	return res.sym, res.ok
 }
@@ -182,8 +182,8 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 		}
 	}
 	res := r.walkUnqualified(scope, name)
-	if at != nil && (res.ok || r.quiet == 0) {
-		r.memo[at] = res
+	if res.ok || r.quiet == 0 {
+		r.memoize(at, res)
 	}
 	if !res.ok {
 		r.report(Diagnostic{
@@ -211,9 +211,20 @@ func (r *Resolver) aside(f func()) {
 	f()
 }
 
+// memoize remembers a reference's resolution, except one reached while a filter
+// condition's names were resolved: those lookups are unfiltered (see
+// InCondition), and an ordinary reference must not inherit an unjudged answer.
+func (r *Resolver) memoize(at ast.Node, res resolution) {
+	if at == nil || r.inCondition > 0 {
+		return
+	}
+	r.memo[at] = res
+}
+
 // InCondition runs the resolution of a filter condition's own names, which its
 // namespace's filters do not restrict: a condition naming a metadata type the
 // namespace imports would otherwise be filtered by itself (KerML 8.2.4).
+// Nothing resolved meanwhile is memoized, so the bypass reaches no other lookup.
 func (r *Resolver) InCondition(f func()) {
 	r.inCondition++
 	defer func() { r.inCondition-- }()

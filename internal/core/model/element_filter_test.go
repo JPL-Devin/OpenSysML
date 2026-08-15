@@ -57,6 +57,15 @@ package Nested {
 	}
 }
 
+package Assemblies {
+	#Vehicles::Safety package Restraints { part strap; }
+	package Audio { part radio; }
+}
+
+package FilteredPackages {
+	public import Assemblies::*[@Vehicles::Safety];
+}
+
 package UnqualifiedFilter {
 	public import Vehicles::*;
 	public import Vehicles::vehicle::*;
@@ -82,6 +91,27 @@ func openFilterWorkspace(t *testing.T, client string) []string {
 		msgs = append(msgs, d.Message)
 	}
 	return msgs
+}
+
+// A package is annotated by its prefix metadata like any other element, so a
+// filter classifying by that metadata surfaces the tagged package and no other.
+func TestFilteredImportClassifiesATaggedPackage(t *testing.T) {
+	client := `package Client {
+		private import FilteredPackages::*;
+		part a :> Restraints::strap;
+	}`
+	if got := openFilterWorkspace(t, client); len(got) != 0 {
+		t.Fatalf("a #Safety package must pass a filter selecting @Safety, got %v", got)
+	}
+
+	client = `package Client {
+		private import FilteredPackages::*;
+		part a :> Audio::radio;
+	}`
+	got := openFilterWorkspace(t, client)
+	if len(got) != 1 || !strings.Contains(got[0], "Audio") {
+		t.Fatalf("an untagged package must not pass the filter, got %v", got)
+	}
 }
 
 func TestNamespaceFilterSurfacesAnnotatedMembers(t *testing.T) {
