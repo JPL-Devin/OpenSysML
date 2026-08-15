@@ -1263,9 +1263,8 @@ class Connection:
                 
                 for attempt in range(max_retries):
                     time.sleep(retry_delay)
-                    # An answer proves the address is served, not that it is
-                    # served by the process started here — one that could not
-                    # bind the address exits and leaves the old one answering.
+                    # One that could not bind the address exits and leaves the
+                    # old service answering the probe.
                     if process.poll() is not None:
                         self._service_started_here_died(process.poll())
                     if self._probe_service(self.host, self.port, timeout=2.0):
