@@ -898,6 +898,42 @@ auto-start is both the realistic user path and the only way it writes its pidfil
 service you started yourself makes `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
 fail — that is the documented `docs/ROADMAP.md` §P1 gap, not a new bug.
 
+### Service lifecycle, the stale-service check and `require_capabilities` (PR #181)
+
+Since PR #181 `Connection` interrogates whatever is *already* listening (`GetServerInfo`) and
+compares it against the release asked for (`connect(version=...)` or `$PYSYSML_GRPC_VERSION`) plus
+`require_capabilities=[...]`; a mismatch raises `pysysml.StaleServiceError`. To test that surface
+you **do** need a hand-started service — that is precisely the "foreign process" case:
+
+```bash
+./bin/sysml-grpc -port 50099 &                   # a port other than 50051 keeps the auto-start
+                                                 # tests independent
+PYSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> StaleServiceError
+```
+
+- Ownership is decided in `_started_by_this_client`: `~/.pysysml/sysml-grpc.pid` must name the
+  process **and** its cmdline must end `['-port', str(port)]`. A hand-started service has no
+  pidfile, so it must be reported and left running — assert `psutil.pid_exists(pid)` *and* that a
+  subsequent connect still serves (`model.instantiate(...)`), not just that an exception was raised.
+- A locally built binary reports the **commit** as its version (`version e695687`), not a `vX.Y.Z`
+  tag, so any `PYSYSML_GRPC_VERSION=v0.0.x` is a mismatch — handy, and it also means asking for a
+  tag while a dev build runs will *always* raise.
+- Capability names the service reports today: `convert`, `query`, `type_facts`, `verification`.
+  A bogus `require_capabilities=['time_travel']` surfaces as `StaleServiceError` (not
+  `MissingCapabilityError`) when a service is already listening, and it resolves in <0.2 s — time
+  the run so a hang is visible as a number.
+- `pysysml` has **no module-level `load_from_content`**; use `conn.load_from_content(...)`.
+- Lifecycle state lives in `~/.pysysml/sysml-grpc.{pid,refcount,lock}`. Reset a clean auto-start
+  state with `pkill -f sysml-grpc; rm -f ~/.pysysml/sysml-grpc.pid ~/.pysysml/sysml-grpc.refcount`.
+  Refcount behaviour worth asserting both within one process (two `connect()`s) and across two
+  processes: 1 → 2 → 1, service still serving the remaining holder, and pidfile/refcount removed
+  only when the last one closes.
+- The known-failing pair with a service on :50051
+  (`test_integration.py::…::test_load_nonexistent_file_real_server`,
+  `test_lifecycle.py::…::test_service_shuts_down_when_last_process_exits`) reproduces on `main`;
+  run `pytest tests/ -q` from `python/` both with and without a listener so you can tell a new
+  failure from those two.
+
 Client API shapes that are easy to get wrong:
 
 - `Model.find(name)` returns **one `Symbol` or `None`**, not a list — iterating it raises
