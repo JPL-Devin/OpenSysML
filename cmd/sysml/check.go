@@ -10,16 +10,6 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/repl"
 )
 
-// Exit statuses of a model check. A verdict the model decided is reported by
-// status 1, which is a report about the model; anything that stopped the check
-// from being made is status 2, the same status a misused flag exits with, since
-// in neither case did the model answer.
-const (
-	exitHolds       = 0
-	exitFailed      = 1
-	exitUnevaluable = 2
-)
-
 // checks are the model checks and runs named on the command line, in the order
 // they are carried out: objects are created first, so a verdict is about them,
 // and behavior runs after the conditions the model states about it.
@@ -189,7 +179,9 @@ func runChecks(files []string, exprs []string, c checks) int {
 	for _, output := range loaded {
 		rep.info(output)
 	}
-	rep.info(sess.DiagnosticLines())
+	// A clean model's warnings are still findings rather than results, so they
+	// are kept off the stream the verdicts are reported on.
+	rep.problem(sess.DiagnosticLines())
 
 	// What analysis found is reported as data whatever was checked, so a caller
 	// parsing the report reads the warnings the printed load output carries.

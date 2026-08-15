@@ -30,8 +30,8 @@ func TestLoadFilesAcceptsADirectory(t *testing.T) {
 	write(t, filepath.Join(dir, "defs", "defs.sysml"), "package Defs { part def Wheel; }\n")
 
 	sess := repl.NewSession()
-	if err := loadFiles(sess, []string{dir}); err != nil {
-		t.Fatalf("loadFiles(%s): %v", dir, err)
+	if status, err := loadFiles(sess, []string{dir}); err != nil || status != exitHolds {
+		t.Fatalf("loadFiles(%s) = %d, %v", dir, status, err)
 	}
 	if got := sess.List(); len(got) != 2 {
 		t.Fatalf("want both files in the session, got %v", got)
@@ -44,8 +44,8 @@ func TestLoadFilesAcceptsAGlob(t *testing.T) {
 	write(t, filepath.Join(dir, "b.sysml"), "package B { }\n")
 
 	sess := repl.NewSession()
-	if err := loadFiles(sess, []string{filepath.Join(dir, "*.sysml")}); err != nil {
-		t.Fatalf("loadFiles(glob): %v", err)
+	if status, err := loadFiles(sess, []string{filepath.Join(dir, "*.sysml")}); err != nil || status != exitHolds {
+		t.Fatalf("loadFiles(glob) = %d, %v", status, err)
 	}
 	if got := sess.List(); len(got) != 2 {
 		t.Fatalf("want 2 declarations, got %v", got)
@@ -54,15 +54,19 @@ func TestLoadFilesAcceptsAGlob(t *testing.T) {
 
 func TestLoadFilesReportsAMissingPath(t *testing.T) {
 	sess := repl.NewSession()
-	if err := loadFiles(sess, []string{filepath.Join(t.TempDir(), "nope.sysml")}); err == nil {
+	status, err := loadFiles(sess, []string{filepath.Join(t.TempDir(), "nope.sysml")})
+	if err == nil {
 		t.Fatal("expected an error for a path that does not exist")
+	}
+	if status != exitUnevaluable {
+		t.Errorf("status = %d, want %d for a path that could not be read", status, exitUnevaluable)
 	}
 }
 
 func TestLoadFilesWithoutPathsDoesNothing(t *testing.T) {
 	sess := repl.NewSession()
-	if err := loadFiles(sess, nil); err != nil {
-		t.Fatalf("loadFiles(nil): %v", err)
+	if status, err := loadFiles(sess, nil); err != nil || status != exitHolds {
+		t.Fatalf("loadFiles(nil) = %d, %v", status, err)
 	}
 	if got := sess.List(); len(got) != 0 {
 		t.Fatalf("want an empty session, got %v", got)

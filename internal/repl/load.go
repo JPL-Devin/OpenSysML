@@ -22,9 +22,35 @@ func (s *Session) LoadPaths(paths []string) ([]string, error) {
 }
 
 func (s *Session) loadPaths(paths []string) ([]string, error) {
-	files, err := ExpandPaths(paths)
+	rep, err := s.loadPathsReport(paths)
 	if err != nil {
 		return nil, err
+	}
+	out := append(rep.Loaded, rep.Found...)
+	return append(out, rep.Declared...), nil
+}
+
+// LoadReport is what a load produced, in parts so a caller can keep what the
+// analysis found off the stream it prints results on.
+type LoadReport struct {
+	Loaded   []string // the files read, when more than one was
+	Found    []string // diagnostics and the notes that belong with them
+	Declared []string // what the load declared, empty if the analysis errored
+	Errors   bool     // whether the analysis found an error
+}
+
+// LoadPathsReport loads model files as LoadPaths does, reporting what the
+// analysis found apart from what the load declared.
+func (s *Session) LoadPathsReport(paths []string) (LoadReport, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.loadPathsReport(paths)
+}
+
+func (s *Session) loadPathsReport(paths []string) (LoadReport, error) {
+	files, err := ExpandPaths(paths)
+	if err != nil {
+		return LoadReport{}, err
 	}
 	srcs := make([]SourceFile, 0, len(files))
 	for _, file := range files {
@@ -32,18 +58,19 @@ func (s *Session) loadPaths(paths []string) ([]string, error) {
 		// directory or pattern they named.
 		data, err := os.ReadFile(file)
 		if err != nil {
-			return nil, readError(file, err)
+			return LoadReport{}, readError(file, err)
 		}
 		srcs = append(srcs, SourceFile{Name: file, Text: string(data)})
 	}
-	var out []string
+	var loaded []string
 	if len(files) > 1 {
-		out = append(out, fmt.Sprintf("loaded %d files:", len(files)))
+		loaded = append(loaded, fmt.Sprintf("loaded %d files:", len(files)))
 		for _, file := range files {
-			out = append(out, "  "+file)
+			loaded = append(loaded, "  "+file)
 		}
 	}
-	return append(out, renderResult(s.submitFiles(srcs), s.verbosity)...), nil
+	found, declared := renderSplit(s.submitFiles(srcs), s.verbosity)
+	return LoadReport{Loaded: loaded, Found: found, Declared: declared, Errors: s.HasErrors()}, nil
 }
 
 // ExpandPaths turns the paths a caller was given — files, directories to walk

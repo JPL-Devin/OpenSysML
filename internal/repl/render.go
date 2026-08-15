@@ -308,32 +308,34 @@ func displayWidth(s string) int {
 // summary above them. A submission that failed to analyse gets diagnostics
 // instead of a summary, since it declared nothing usable.
 func renderResult(r Result, v Verbosity) []string {
+	found, declared := renderSplit(r, v)
+	return append(found, declared...)
+}
+
+// renderSplit renders a submission as renderResult does, keeping what the
+// analysis found apart from what the submission declared, so a caller outside
+// the prompt can send the two to different streams.
+func renderSplit(r Result, v Verbosity) (found, declared []string) {
 	if v >= VerbosityDebug {
-		return renderDebug(r)
+		// Everything the analysis produced over the whole buffer, at
+		// buffer-absolute positions, plus where this submission landed in it.
+		found = []string{fmt.Sprintf("[debug] submission at buffer line %d; %d diagnostic(s) over the whole buffer",
+			r.baseLine(), len(r.Diagnostics))}
+		found = append(found, renderDiagnostics(r.Diagnostics, r.Source, wholeBuffer, true)...)
+		return found, append(renderSummary(r.Members), r.Notices...)
 	}
 	diags := scopedDiagnostics(r, v)
-	out := renderDiagnostics(diags, r.Source, r.diagLocation, false)
+	found = renderDiagnostics(diags, r.Source, r.diagLocation, false)
 	if hasError(diags) {
-		return append(out, r.Notices...)
+		return found, r.Notices
 	}
 	// A validation tier is skipped once a lower tier errors anywhere in the
 	// buffer, so a clean report on this submission would otherwise read as a
 	// full check when the deeper passes never ran.
 	if r.analysisBlocked() {
-		out = append(out, blockedNote)
+		found = append(found, blockedNote)
 	}
-	out = append(out, renderSummary(r.ownMembers())...)
-	return append(out, r.Notices...)
-}
-
-// renderDebug reports everything the analysis produced over the whole buffer,
-// at buffer-absolute positions, plus where this submission landed in it.
-func renderDebug(r Result) []string {
-	out := []string{fmt.Sprintf("[debug] submission at buffer line %d; %d diagnostic(s) over the whole buffer",
-		r.baseLine(), len(r.Diagnostics))}
-	out = append(out, renderDiagnostics(r.Diagnostics, r.Source, wholeBuffer, true)...)
-	out = append(out, renderSummary(r.Members)...)
-	return append(out, r.Notices...)
+	return found, append(renderSummary(r.ownMembers()), r.Notices...)
 }
 
 // scopedDiagnostics keeps the diagnostics of this submission that the verbosity
