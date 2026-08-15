@@ -7,9 +7,8 @@ import (
 	"testing"
 )
 
-// TestVersionReportsWhatTheLinkerSet builds the binary the way the Makefile and
-// the release build do, so a rename of the metadata variables cannot silently
-// leave a released binary reporting "dev".
+// Builds with the Makefile's -X flag names, so renaming the metadata variables
+// cannot silently leave a released binary reporting "dev".
 func TestVersionReportsWhatTheLinkerSet(t *testing.T) {
 	binary := filepath.Join(t.TempDir(), "sysml-grpc")
 	ldflags := "-X main.Version=v9.9.9 -X main.Commit=abc1234 -X main.BuildTime=2026-01-02_03:04:05"
