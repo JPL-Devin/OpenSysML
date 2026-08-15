@@ -114,7 +114,7 @@ def test_ensure_binary_downloads():
             mock_download.return_value = '/fake/path/sysml-grpc'
             path = ensure_binary(version='v0.1.0')
             assert path == '/fake/path/sysml-grpc'
-            mock_download.assert_called_once_with(version='v0.1.0')
+            mock_download.assert_called_once_with(version='v0.1.0', github_repo=None)
 
 
 def test_ensure_binary_raises_without_version():
@@ -251,7 +251,7 @@ def test_ensure_binary_downloads_version_from_env(monkeypatch):
         with patch('pysysml.binary.download_binary') as mock_download:
             mock_download.return_value = '/fake/path/sysml-grpc'
             assert ensure_binary() == '/fake/path/sysml-grpc'
-            mock_download.assert_called_once_with(version='v0.0.4')
+            mock_download.assert_called_once_with(version='v0.0.4', github_repo=None)
 
 
 def test_download_binary_records_the_release(cache):
@@ -270,7 +270,11 @@ def test_download_binary_records_the_release(cache):
             download_binary(version='v0.0.7')
 
     with open(metadata_path()) as f:
-        assert json.load(f) == {'version': 'v0.0.7', 'sha256': checksum}
+        assert json.load(f) == {
+            'version': 'v0.0.7',
+            'sha256': checksum,
+            'repo': 'Open-MBEE/Systemica',
+        }
     assert cached_release() == 'v0.0.7'
 
 
@@ -371,7 +375,7 @@ def test_ensure_binary_replaces_a_cache_from_another_release(cache):
         mock_download.return_value = '/downloaded/sysml-grpc'
         with pytest.warns(UserWarning, match='v0.0.5'):
             assert ensure_binary(version='v0.0.7') == '/downloaded/sysml-grpc'
-        mock_download.assert_called_once_with(version='v0.0.7')
+        mock_download.assert_called_once_with(version='v0.0.7', github_repo=None)
 
 
 def test_ensure_binary_keeps_a_cache_when_no_version_is_asked_for(cache):
@@ -380,3 +384,25 @@ def test_ensure_binary_keeps_a_cache_when_no_version_is_asked_for(cache):
     with patch('pysysml.binary.download_binary') as mock_download:
         assert ensure_binary() == binary_path
         mock_download.assert_not_called()
+
+
+def test_cache_from_another_repository_is_not_the_release_asked_for(cache, monkeypatch):
+    """Test a fork's build is not served for the same tag of another repository."""
+    cache(version='v0.0.7')  # recorded against the default repository
+    monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'someone/fork')
+
+    assert cached_release() is None
+    reason = stale_cache_reason('v0.0.7')
+    assert 'downloaded from Open-MBEE/Systemica' in reason
+    assert 'someone/fork' in reason
+
+
+def test_resolve_latest_version_gives_up_rather_than_hanging():
+    """Test the releases query is bounded, being on the cached-binary fast path."""
+    release = Mock()
+    release.read.return_value = b'{"tag_name": "v0.0.7"}'
+    response = Mock(__enter__=Mock(return_value=release), __exit__=Mock(return_value=False))
+    with patch('urllib.request.urlopen', return_value=response) as urlopen:
+        assert resolve_latest_version() == 'v0.0.7'
+
+    assert urlopen.call_args.kwargs['timeout'] > 0
