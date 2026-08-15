@@ -7,6 +7,7 @@ import platform
 import stat
 import urllib.error
 import urllib.request
+import warnings
 from pysysml.errors import ConnectionError
 
 # Releases publish sysml-grpc-<goos>-<goarch> raw, with a .sha256 sidecar.
@@ -92,6 +93,97 @@ def get_binary_path():
     return os.path.join(base_dir, binary_name)
 
 
+def metadata_path():
+    """Path of the record of which release the cached binary was downloaded from.
+
+    Returns:
+        str: Absolute path to the sidecar (e.g. ~/.pysysml/bin/sysml-grpc.json)
+    """
+    return get_binary_path() + '.json'
+
+
+def read_metadata():
+    """Read the record beside the cached binary.
+
+    Returns:
+        dict: What was recorded, or empty when nothing readable was
+    """
+    try:
+        with open(metadata_path(), 'r') as f:
+            recorded = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return recorded if isinstance(recorded, dict) else {}
+
+
+def write_metadata(version, sha256):
+    """Record which release the cached binary is, and its digest.
+
+    Args:
+        version (str): Release tag downloaded, resolved (never 'latest')
+        sha256 (str): SHA-256 hex digest of the binary written
+    """
+    path = metadata_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w') as f:
+        json.dump({'version': version, 'sha256': sha256}, f)
+
+
+def cached_release():
+    """Release tag the cached binary was downloaded from.
+
+    The digest is re-checked, so a binary swapped in by hand is not read as the
+    release it displaced.
+
+    Returns:
+        str or None: Release tag, or None when the cache cannot be vouched for
+    """
+    recorded = read_metadata()
+    version, digest = recorded.get('version'), recorded.get('sha256')
+    if not version or not digest:
+        return None
+    try:
+        if not verify_checksum(get_binary_path(), digest):
+            return None
+    except OSError:
+        return None
+    return version
+
+
+def stale_cache_reason(version, github_repo=None):
+    """Why the cached binary is not the release that was asked for.
+
+    A cache left by an earlier release otherwise serves a client asking for a
+    newer one, which then fails on whatever that build cannot do.
+
+    Args:
+        version (str or None): Release tag asked for, 'latest', or None when
+            nothing was asked for, which any cached binary answers
+        github_repo (str, optional): GitHub repository (owner/repo)
+
+    Returns:
+        str or None: Why the cache does not answer for version, or None when it does
+    """
+    if version is None:
+        return None
+    if version == 'latest':
+        try:
+            version = resolve_latest_version(github_repo)
+        except ConnectionError:
+            # Unreachable releases are no reason to discard a working cache.
+            return None
+
+    have = cached_release()
+    if have == version:
+        return None
+    if have is None:
+        return (
+            f"the binary cached at {get_binary_path()} was not downloaded by this "
+            f"client, so which release it is cannot be told, and {version} was asked for"
+        )
+    return f"the binary cached at {get_binary_path()} is {have}, but {version} was asked for"
+
+
 def download_binary(version='latest', github_repo=None):
     """Download sysml-grpc binary from GitHub releases with checksum verification.
     
@@ -154,6 +246,9 @@ def download_binary(version='latest', github_repo=None):
         # Make executable
         os.chmod(binary_path, 0o755)
         
+        # Record the release, so a later run can tell what the cache holds.
+        write_metadata(version, expected_checksum)
+        
         return binary_path
         
     except urllib.error.URLError as e:
@@ -186,6 +281,9 @@ def verify_checksum(binary_path, expected_sha256):
 def ensure_binary(force_download=False, version=None):
     """Ensure sysml-grpc binary is available, downloading if necessary.
     
+    A cached binary is reused only when it is the release asked for; when no
+    version is asked for, whatever is cached stands, locally built included.
+    
     Args:
         force_download (bool): If True, download even if binary exists
         version (str, optional): Specific version tag to download (e.g. 'v0.1.0'),
@@ -208,7 +306,13 @@ def ensure_binary(force_download=False, version=None):
     # Check if binary already exists and is executable
     if not force_download and os.path.exists(binary_path):
         if os.access(binary_path, os.X_OK):
-            return binary_path
+            stale = stale_cache_reason(version)
+            if stale is None:
+                return binary_path
+            warnings.warn(
+                f"Replacing the cached sysml-grpc: {stale}. Downloading {version}.",
+                stacklevel=2,
+            )
     
     # If no binary and no version specified, cannot auto-download
     if version is None:

@@ -14,6 +14,7 @@ then ``False``, and no capability is claimed.
 from dataclasses import dataclass
 from typing import FrozenSet
 
+from pysysml.binary import get_binary_path
 from pysysml.errors import PySysMLError
 
 #: Static type facts on ``SymbolInfo`` — ``type_info``, ``multiplicity`` and
@@ -92,6 +93,16 @@ class MissingCapabilityError(PySysMLError):
         )
         self.capability = capability
         self.info = info
+
+
+def upgrade_remedy(capability: str) -> str:
+    """Remedy for a service lacking ``capability``, naming both routes to one that has it."""
+    return (
+        f"run a sysml-grpc whose GetServerInfo reports {capability!r}: set "
+        f"$PYSYSML_GRPC_VERSION to a release that has it, which replaces the binary "
+        f"cached at {get_binary_path()} when that is another release, or build one "
+        f"with `make build-grpc` and start it yourself"
+    )
 
 
 def require(info: ServerInfo, capability: str, remedy: str) -> None:

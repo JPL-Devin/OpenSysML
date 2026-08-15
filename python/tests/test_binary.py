@@ -1,19 +1,46 @@
 """Tests for binary management module."""
 
 import hashlib
+import json
 import os
 import platform
 import pytest
 from unittest.mock import patch, Mock, mock_open
 from pysysml.binary import (
+    cached_release,
     default_github_repo,
     detect_platform,
     get_binary_path,
     download_binary,
+    metadata_path,
     resolve_latest_version,
+    stale_cache_reason,
     verify_checksum,
+    write_metadata,
     ensure_binary
 )
+
+
+@pytest.fixture
+def cache(tmp_path, monkeypatch):
+    """A cache directory this test owns, with helpers to fill it.
+
+    Yields:
+        A callable placing binary content, optionally recorded as a release
+    """
+    binary_path = str(tmp_path / 'sysml-grpc')
+    monkeypatch.setattr('pysysml.binary.get_binary_path', lambda: binary_path)
+    monkeypatch.delenv('PYSYSML_GRPC_VERSION', raising=False)
+
+    def place(content=b'cached binary', version=None):
+        with open(binary_path, 'wb') as f:
+            f.write(content)
+        os.chmod(binary_path, 0o755)
+        if version is not None:
+            write_metadata(version, hashlib.sha256(content).hexdigest())
+        return binary_path
+
+    return place
 
 
 def test_detect_platform():
@@ -225,3 +252,86 @@ def test_ensure_binary_downloads_version_from_env(monkeypatch):
             mock_download.return_value = '/fake/path/sysml-grpc'
             assert ensure_binary() == '/fake/path/sysml-grpc'
             mock_download.assert_called_once_with(version='v0.0.4')
+
+
+def test_download_binary_records_the_release(cache):
+    """Test a download records which release the cache now holds."""
+    data = b'fake binary content'
+    checksum = hashlib.sha256(data).hexdigest()
+    responses = [
+        Mock(__enter__=Mock(return_value=Mock(read=Mock(
+            return_value=f"{checksum}  sysml-grpc-linux-amd64\n".encode()))),
+            __exit__=Mock(return_value=False)),
+        Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=data))),
+             __exit__=Mock(return_value=False)),
+    ]
+    with patch('urllib.request.urlopen', side_effect=responses):
+        with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
+            download_binary(version='v0.0.7')
+
+    with open(metadata_path()) as f:
+        assert json.load(f) == {'version': 'v0.0.7', 'sha256': checksum}
+    assert cached_release() == 'v0.0.7'
+
+
+def test_cached_release_unknown_when_binary_was_replaced(cache):
+    """Test a binary swapped under a recorded name is not read as that release."""
+    binary_path = cache(b'downloaded', version='v0.0.7')
+    with open(binary_path, 'wb') as f:
+        f.write(b'something else entirely')
+    assert cached_release() is None
+
+
+def test_stale_cache_reason_accepts_the_release_asked_for(cache):
+    """Test the cache is reused when it is the release asked for."""
+    cache(version='v0.0.7')
+    assert stale_cache_reason('v0.0.7') is None
+    assert stale_cache_reason(None) is None
+
+
+def test_stale_cache_reason_names_another_release(cache):
+    """Test a cache from another release is reported, naming both tags."""
+    cache(version='v0.0.5')
+    reason = stale_cache_reason('v0.0.7')
+    assert 'v0.0.5' in reason and 'v0.0.7' in reason
+
+
+def test_stale_cache_reason_for_an_unidentifiable_binary(cache):
+    """Test a cache this client did not download cannot answer for a release."""
+    cache()  # No record beside it: a hand-placed or pre-existing binary.
+    assert 'cannot be told' in stale_cache_reason('v0.0.7')
+
+
+def test_stale_cache_reason_keeps_the_cache_when_offline(cache):
+    """Test version='latest' keeps a working cache when releases are unreachable."""
+    from pysysml.errors import ConnectionError
+    cache(version='v0.0.7')
+    with patch('pysysml.binary.resolve_latest_version',
+               side_effect=ConnectionError('no network')):
+        assert stale_cache_reason('latest') is None
+
+
+def test_ensure_binary_reuses_the_release_asked_for(cache):
+    """Test no download happens when the cache is already that release."""
+    binary_path = cache(version='v0.0.7')
+    with patch('pysysml.binary.download_binary') as mock_download:
+        assert ensure_binary(version='v0.0.7') == binary_path
+        mock_download.assert_not_called()
+
+
+def test_ensure_binary_replaces_a_cache_from_another_release(cache):
+    """Test a stale cache is replaced rather than served, with a warning saying so."""
+    cache(version='v0.0.5')
+    with patch('pysysml.binary.download_binary') as mock_download:
+        mock_download.return_value = '/downloaded/sysml-grpc'
+        with pytest.warns(UserWarning, match='v0.0.5'):
+            assert ensure_binary(version='v0.0.7') == '/downloaded/sysml-grpc'
+        mock_download.assert_called_once_with(version='v0.0.7')
+
+
+def test_ensure_binary_keeps_a_cache_when_no_version_is_asked_for(cache):
+    """Test a locally built binary is left alone when nothing names a release."""
+    binary_path = cache()
+    with patch('pysysml.binary.download_binary') as mock_download:
+        assert ensure_binary() == binary_path
+        mock_download.assert_not_called()
