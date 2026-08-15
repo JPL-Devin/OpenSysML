@@ -181,6 +181,22 @@ func TestCheckOfConditionCarriedBySeveralObjectsIsUnresolved(t *testing.T) {
 		"carried by more than one object")
 }
 
+// A name of another kind is answered as such however many objects of its type
+// the session holds, rather than as a question about which one it is about.
+func TestCheckOfWrongKindIsAnsweredBeforeItsSubject(t *testing.T) {
+	s := loadSource(t, inheritedConditionFixture)
+	for _, name := range []string{"P::hot", "P::cold"} {
+		if _, err := s.InstantiateNamed(name); err != nil {
+			t.Fatalf("InstantiateNamed(%s): %v", name, err)
+		}
+	}
+
+	wantVerdict(t, s.CheckConstraint("P::Sensor::reading"), VerdictUnresolved,
+		"not a constraint")
+	wantVerdict(t, s.CheckRequirement("P::Sensor::reading"), VerdictUnresolved,
+		"not a requirement")
+}
+
 // TestInstantiateNamedRejectsUnknownName checks that a name the session cannot
 // resolve is an error a caller can fail on, not a silent no-op.
 func TestInstantiateNamedRejectsUnknownName(t *testing.T) {
