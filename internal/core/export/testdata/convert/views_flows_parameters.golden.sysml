@@ -9,8 +9,10 @@ package FlowsAndViews {
         end port consumerPort : FuelPort;
         flow supplierPort.fuelSupply to consumerPort.fuelSupply;
     }
+    part tanks : Tank[*] nonunique;
     part vehicle {
         part tank : Tank;
+        part spares : Tank[0..2] nonunique subsets tanks;
         part engine : Engine;
         allocate tank to engine;
     }

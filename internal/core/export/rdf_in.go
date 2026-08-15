@@ -327,7 +327,7 @@ func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) string {
 		words = append(words, "def")
 	}
 	words = append(words, d.identWords(el)...)
-	words = append(words, d.relationshipWords(el)...)
+	words = append(words, d.relationshipWords(el, "")...)
 	return strings.Join(words, " ")
 }
 
@@ -414,24 +414,27 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	if accept := d.acceptParam(el); accept != nil {
 		words = append(words, "accept")
 		words = append(words, d.identWords(accept)...)
-		words = append(words, d.relationshipWords(accept)...)
+		words = append(words, d.relationshipWords(accept, "")...)
 	}
-	words = append(words, d.relationshipWords(el, skip...)...)
-	// A multiplicity binds to the name or type it follows, with no space
-	// before the bracket.
-	head := strings.Join(words, " ") + d.multiplicityText(el)
-	var tail []string
+	// The multiplicity part (`[1] ordered nonunique`) qualifies the type it
+	// follows, so it goes with the typing clause and ahead of any further
+	// specialization; with no type it follows the name.
+	multPart := d.multiplicityText(el)
 	if d.boolOf(el, rdf.SysML+"isOrdered") {
-		tail = append(tail, "ordered")
+		multPart += " ordered"
 	}
 	if d.boolOf(el, rdf.SysML+"isNonunique") {
-		tail = append(tail, "nonunique")
+		multPart += " nonunique"
 	}
+	if len(d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelTyping])) > 0 {
+		words = append(words, d.relationshipWords(el, multPart, skip...)...)
+		multPart = ""
+	} else {
+		words = append(words, d.relationshipWords(el, "", skip...)...)
+	}
+	head := strings.Join(words, " ") + multPart
 	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
-		tail = append(tail, "=", value)
-	}
-	if len(tail) > 0 {
-		head += " " + strings.Join(tail, " ")
+		head += " = " + value
 	}
 	return head, nil
 }
@@ -695,8 +698,9 @@ func (d *decoder) visibility(el *element) string {
 }
 
 // relationshipWords renders the typing and specialization clauses of a
-// declaration head, in the order the grammar expects.
-func (d *decoder) relationshipWords(el *element, skip ...ast.RelationshipKind) []string {
+// declaration head, in the order the grammar expects. multPart, when given, is
+// the multiplicity part the typing clause carries.
+func (d *decoder) relationshipWords(el *element, multPart string, skip ...ast.RelationshipKind) []string {
 	var words []string
 	for _, kind := range relationshipOrder {
 		if slices.Contains(skip, kind) {
@@ -713,7 +717,11 @@ func (d *decoder) relationshipWords(el *element, skip ...ast.RelationshipKind) [
 				targets[i] = "~" + target
 			}
 		}
-		words = append(words, relationshipSyntax[kind], strings.Join(targets, ", "))
+		clause := strings.Join(targets, ", ")
+		if kind == ast.RelTyping {
+			clause += multPart
+		}
+		words = append(words, relationshipSyntax[kind], clause)
 	}
 	return words
 }

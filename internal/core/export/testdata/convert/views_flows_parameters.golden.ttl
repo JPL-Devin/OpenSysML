@@ -79,11 +79,22 @@ elmt:FlowsAndViews::FuelInterface::consumerPort
     sysx:memberIndex "2"^^xsd:integer ;
     sysx:sourceText "flow supplierPort.fuelSupply to consumerPort.fuelSupply;" .
 
+elmt:FlowsAndViews::tanks
+    a sysml:PartUsage ;
+    sysml:qualifiedName "FlowsAndViews::tanks" ;
+    sysml:owningNamespace elmt:FlowsAndViews ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:declaredName "tanks" ;
+    sysml:isNonunique "true"^^xsd:boolean ;
+    sysml:type elmt:FlowsAndViews::Tank ;
+    sysml:upperBound "*" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
 elmt:FlowsAndViews::vehicle
     a sysml:PartUsage ;
     sysml:qualifiedName "FlowsAndViews::vehicle" ;
     sysml:owningNamespace elmt:FlowsAndViews ;
-    sysx:memberIndex "4"^^xsd:integer ;
+    sysx:memberIndex "5"^^xsd:integer ;
     sysml:declaredName "vehicle" ;
     sysx:hasBody "true"^^xsd:boolean .
 
@@ -96,27 +107,40 @@ elmt:FlowsAndViews::vehicle::tank
     sysml:type elmt:FlowsAndViews::Tank ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:FlowsAndViews::vehicle::spares
+    a sysml:PartUsage ;
+    sysml:qualifiedName "FlowsAndViews::vehicle::spares" ;
+    sysml:owningNamespace elmt:FlowsAndViews::vehicle ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "spares" ;
+    sysml:isNonunique "true"^^xsd:boolean ;
+    sysml:type elmt:FlowsAndViews::Tank ;
+    sysml:subsets elmt:FlowsAndViews::tanks ;
+    sysml:lowerBound "0" ;
+    sysml:upperBound "2" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
 elmt:FlowsAndViews::vehicle::engine
     a sysml:PartUsage ;
     sysml:qualifiedName "FlowsAndViews::vehicle::engine" ;
     sysml:owningNamespace elmt:FlowsAndViews::vehicle ;
-    sysx:memberIndex "1"^^xsd:integer ;
+    sysx:memberIndex "2"^^xsd:integer ;
     sysml:declaredName "engine" ;
     sysml:type elmt:FlowsAndViews::Engine ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:FlowsAndViews::vehicle::@2>
+<urn:sysmlv2:element:FlowsAndViews::vehicle::@3>
     a sysml:AllocationUsage ;
-    sysml:qualifiedName "FlowsAndViews::vehicle::@2" ;
+    sysml:qualifiedName "FlowsAndViews::vehicle::@3" ;
     sysml:owningNamespace elmt:FlowsAndViews::vehicle ;
-    sysx:memberIndex "2"^^xsd:integer ;
+    sysx:memberIndex "3"^^xsd:integer ;
     sysx:sourceText "allocate tank to engine;" .
 
 elmt:FlowsAndViews::Measure
     a sysml:ActionDefinition ;
     sysml:qualifiedName "FlowsAndViews::Measure" ;
     sysml:owningNamespace elmt:FlowsAndViews ;
-    sysx:memberIndex "5"^^xsd:integer ;
+    sysx:memberIndex "6"^^xsd:integer ;
     sysml:declaredName "Measure" ;
     sysx:hasBody "true"^^xsd:boolean .
 
@@ -144,7 +168,7 @@ elmt:FlowsAndViews::StructureView
     a sysml:ViewDefinition ;
     sysml:qualifiedName "FlowsAndViews::StructureView" ;
     sysml:owningNamespace elmt:FlowsAndViews ;
-    sysx:memberIndex "6"^^xsd:integer ;
+    sysx:memberIndex "7"^^xsd:integer ;
     sysml:declaredName "StructureView" ;
     sysx:hasBody "true"^^xsd:boolean .
 
@@ -159,7 +183,7 @@ elmt:FlowsAndViews::vehicleView
     a sysml:ViewUsage ;
     sysml:qualifiedName "FlowsAndViews::vehicleView" ;
     sysml:owningNamespace elmt:FlowsAndViews ;
-    sysx:memberIndex "7"^^xsd:integer ;
+    sysx:memberIndex "8"^^xsd:integer ;
     sysml:declaredName "vehicleView" ;
     sysml:type elmt:FlowsAndViews::StructureView ;
     sysx:hasBody "true"^^xsd:boolean .

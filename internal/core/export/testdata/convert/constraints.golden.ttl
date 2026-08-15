@@ -294,3 +294,23 @@ elmt:Constraints::Rover::lightEnough::r
     sysml:direction "in" ;
     sysml:value "100" ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Constraints::Rover::refined
+    a sysml:RequirementUsage ;
+    sysml:qualifiedName "Constraints::Rover::refined" ;
+    sysml:owningNamespace elmt:Constraints::Rover ;
+    sysx:memberIndex "7"^^xsd:integer ;
+    sysml:declaredName "refined" ;
+    sysml:type elmt:Constraints::Rover::lightEnough ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Constraints::Rover::refined::r
+    a sysml:SubjectMembership ;
+    sysml:qualifiedName "Constraints::Rover::refined::r" ;
+    sysml:owningNamespace elmt:Constraints::Rover::refined ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "r" ;
+    sysml:type elmt:Constraints::Rover ;
+    sysml:redefines elmt:Constraints::Rover::lightEnough::r ;
+    sysml:upperBound "1" ;
+    sysx:hasBody "true"^^xsd:boolean .

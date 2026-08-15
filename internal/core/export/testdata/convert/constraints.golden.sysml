@@ -41,5 +41,9 @@ package Constraints {
                 in attribute limit = 100;
             }
         }
+        requirement refined : lightEnough {
+            subject r : Rover[1] redefines lightEnough::r {
+            }
+        }
     }
 }
