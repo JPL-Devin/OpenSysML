@@ -1,0 +1,7 @@
+{
+	"type": "action",
+	"outputs": {
+		"x": {"type": "Integer", "value": 7},
+		"y": {"type": "Integer", "value": 9}
+	}
+}

@@ -43,7 +43,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 **Purpose:** Verify AST structure matches expected output
 
 - **Test:** `TestGolden` (internal/core/parser/)
-- **Fixtures:** `testdata/parse/*.sysml` (33 representative files)
+- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (81 representative files)
 - **Goldens:** `testdata/parse/*.golden` (AST dumps)
 - **Acceptance:** Parse output matches golden file
 
@@ -73,7 +73,7 @@ Future work: If SysML printer added, verify `parse(print(parse(input))) == parse
 **Purpose:** Verify parser rejects malformed input gracefully
 
 - **Test:** `TestNegative` (internal/core/parser/)
-- **Coverage:** 36 malformed inputs (27 behavioral + 9 structural)
+- **Coverage:** 127 malformed-input subtests
 - **Acceptance:** Each case produces diagnostics (never panics)
 
 **Examples:**
@@ -93,7 +93,7 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 **Purpose:** Lock in parse structure before execution changes
 
 - **Location:** `internal/core/parser/testdata/parse/` (behavioral fixtures)
-- **Coverage:** 20 behavioral fixtures (action×4, calc×4, constraint×1, requirement×2, state×9)
+- **Coverage:** 81 fixtures in total, behavioral ones among them
 - **Acceptance:** `TestGolden` passes, AST dumps match expectations
 
 **Behavioral fixtures:**
@@ -112,12 +112,12 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 - **Schema:** `internal/core/runtime/testdata/conformance/README.md`
 - **Allowlist:** `known_failures.txt` (currently empty)
 
-**Coverage (51 cases - all passing):**
-- Calc: parameter binding, return values, defaults, inherited parameters, unary ops, qualified names, type coercion, nested and from-constraint invocation (×10)
-- Constraint: assert, assume, negation (×3)
-- Requirement: require, subject, actor, assume, nested (×5)
-- Action: token flow, outputs, nested invocation, send/accept, port communication, `perform` reference and shorthand, accept...then (×8)
-- State: simple, do behavior, concurrent do, transition effect, choice/junction/fork-join pseudostates, orthogonal regions and region pseudostates, shallow/deep history, entry/exit points, deferred/undeferred events, call and timed triggers, signal discrimination/unmatched, self signal (×25)
+**Coverage (211 cases - all passing, by fixture prefix):**
+- Calc: parameter binding, return values, defaults, inherited parameters, unary ops, qualified names, type coercion, body-local usages, statement bodies, nested and from-constraint invocation (×56)
+- Action: token flow, outputs, nested invocation, send/accept, port communication, `perform` reference and shorthand, accept...then, flows, loops and decisions (×50)
+- State: simple, do behavior, concurrent do, transition effect, choice/junction/fork-join pseudostates, orthogonal regions and region pseudostates, shallow/deep history, entry/exit points, deferred/undeferred events, call and timed triggers, signal discrimination/unmatched, self signal (×41)
+- Requirement: require, subject, actor, assume, nested (×12)
+- Instance (×9), unit and quantity (×7), constraint assert/assume/negation (×7), satisfy (×5), variation (×5), redefinition (×5), variant (×3), feature chains (×3), ball-and-chain (×3), and one each of accept, attribute, connector, cubesat and multiplicity
 
 ```bash
 go test -v -run TestExecutionConformance ./internal/core/runtime
@@ -130,7 +130,7 @@ go test -v -run TestExecutionConformance ./internal/core/runtime
 - **Test:** `TestExecutionTrace` (internal/core/runtime/)
 - **Format:** `.trace.golden` files
 - **Determinism:** Token sorting by ID, fixed event queue tie-breaking
-- **Coverage:** 22 `.trace.golden` files (calc×10, constraint×3, action×2, state×7)
+- **Coverage:** 69 `.trace.golden` files (action×28, calc×25, state×12, constraint×4)
 
 **Trace format examples:**
 - Action: `step 1: token T1@node1, token T2@node2` (sorted)
@@ -146,7 +146,7 @@ go test -run TestExecutionTrace -update-traces ./internal/core/runtime
 **Purpose:** Verify malformed/pathological behaviors fail gracefully
 
 - **Test:** `TestRuntimeRobustness` (internal/core/runtime/)
-- **Coverage:** 29 failure modes
+- **Coverage:** 146 failure-mode subtests
 - **Acceptance:** Typed errors, never panic, 60s timeout guard
 
 **Failure modes:**

@@ -21,6 +21,9 @@ import (
 func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
 	t.Run("action_whose_last_node_has_no_succession", testActionWhoseLastNodeHasNoSuccession)
+	t.Run("first_node_with_a_second_succession", testFirstNodeWithASecondSuccession)
+	t.Run("first_beside_an_initial_node", testFirstBesideAnInitialNode)
+	t.Run("first_naming_a_final_node", testFirstNamingAFinalNode)
 	t.Run("fork_branches_assigning_the_same_feature", testForkBranchesAssigningTheSameFeature)
 	t.Run("decision_no_satisfied_guard", testDecisionNoSatisfiedGuard)
 	t.Run("state_dangling_transition", testStateDanglingTransition)
@@ -1367,6 +1370,95 @@ func testActionWhoseLastNodeHasNoSuccession(t *testing.T) {
 		if len(exec.Tokens()) != 0 {
 			t.Fatalf("step %d past the end revived %d token(s)", i+1, len(exec.Tokens()))
 		}
+	}
+}
+
+// testFirstNodeWithASecondSuccession: the succession out of a `first` end leaves
+// from the node it names, so a second succession out of that node is ambiguous.
+func testFirstNodeWithASecondSuccession(t *testing.T) {
+	src := `
+		package test {
+			action seq {
+				action s1;
+				action s2;
+				action s3;
+				first s1 then s2;
+				then s1 s3;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "seq", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action seq not found")
+	}
+
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+
+	err = exec.RunToCompletion()
+	if err == nil {
+		t.Fatal("a first node with two successions ran to completion")
+	}
+	if !strings.Contains(err.Error(), "multiple successors") {
+		t.Fatalf("error = %q, want it to report multiple successors", err)
+	}
+}
+
+// testFirstBesideAnInitialNode: a body declaring an initial node of its own and a
+// `first` end naming a declared node states two starts, which lowering rejects.
+func testFirstBesideAnInitialNode(t *testing.T) {
+	src := `
+		package test {
+			action seq {
+				action s1;
+				action s2;
+				first start;
+				first s1 then s2;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "seq", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action seq not found")
+	}
+
+	if _, err := ctx.CreateActionExecutor(sym); err == nil {
+		t.Fatal("two starts lowered without an error")
+	} else if !strings.Contains(err.Error(), "multiple initial nodes") {
+		t.Fatalf("error = %q, want it to report multiple initial nodes", err)
+	}
+}
+
+// testFirstNamingAFinalNode: a flow cannot start where it ends, so lowering
+// rejects it rather than completing with the declared node never run.
+func testFirstNamingAFinalNode(t *testing.T) {
+	src := `
+		package test {
+			action seq {
+				attribute x = 0;
+				action s1 { assign x := 7; }
+				done fin;
+				first fin then s1;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "seq", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action seq not found")
+	}
+
+	if _, err := ctx.CreateActionExecutor(sym); err == nil {
+		t.Fatal("a first end naming a final node lowered without an error")
+	} else if !strings.Contains(err.Error(), "final node fin") {
+		t.Fatalf("error = %q, want it to name the final node", err)
 	}
 }
 

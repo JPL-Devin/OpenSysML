@@ -160,21 +160,21 @@ sysml> %advance 30
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (52 golden ASTs, 59 negative tests) |
-| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 46 calc/constraint/requirement/satisfy cases passing) |
-| Action execution engine (Tier 5) | ✅ Complete (35 conformance cases passing) |
-| State machine runtime (Tier 5) | ✅ Complete (31 conformance cases: transitions, accept events, sourceless) |
-| REPL debugging commands | ✅ Complete — `%constraint`, `%requirement`, `%satisfy` and `%calc` are REPL-only: no gRPC/CLI equivalent |
+| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (81 golden ASTs, 127 negative tests) |
+| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 80 calc/constraint/requirement/satisfy cases passing) |
+| Action execution engine (Tier 5) | ✅ Complete (50 conformance cases passing) |
+| State machine runtime (Tier 5) | ✅ Complete (41 conformance cases: transitions, accept events, sourceless) |
+| REPL debugging commands | ✅ Complete — `%constraint`, `%requirement`, `%satisfy` and `%calc` also answer from the command line (`-constraint`, `-requirement`, `-satisfy`, `-calc`) and over gRPC, on one evaluation |
 | Model save & SysML ↔ RDF Turtle conversion (`%save`, `sysml -convert`) | ✅ Complete for model **structure** (packages, definitions, usages, ports, connections, values, documentation) — a behavioral member is refused, see [RDF_INTEROP.md § Limitations](docs/RDF_INTEROP.md#limitations); worked example: [examples/rdf-interop-demo.sysml](examples/rdf-interop-demo.sysml) |
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Diagnostics, hover, go-to-definition, references, symbols, completion, formatting, rename (semantic tokens, code actions, signature help not implemented) |
-| gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime RPCs) |
-| Python client library | ✅ Complete for the RPCs that exist (connection lifecycle, parse/symbols/eval/instantiate/execute, IPython hooks, DataFrame) — constraint/requirement/satisfy/calc verification is not among them |
+| gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime, verification, conversion and Query RPCs) |
+| Python client library | ✅ Complete for the RPCs that exist (connection lifecycle, parse/symbols/eval/instantiate/execute, constraint/requirement/satisfaction/calc verification, conversion, Query, IPython hooks, DataFrame) |
 
 **Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).
-**Test coverage:** 2,465 tests and subtests (2,460 pass, 5 skip themselves; 1,384 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 52 golden ASTs, 59 negatives, 121 conformance cases, 40 golden traces, 57 robustness subtests.
+**Test coverage:** 3,597 tests and subtests (3,592 pass, 5 skip themselves; 1,932 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 81 golden ASTs, 127 negatives, 211 conformance cases, 69 golden traces, 146 robustness subtests.
 **Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
-**Behavioral execution:** Calc/constraint/requirement/satisfy fully functional. Action/state executors complete with nested invocation, control flow keywords, loop and conditional statements, send statement (121/121 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
+**Behavioral execution:** Calc/constraint/requirement/satisfy fully functional. Action/state executors complete with nested invocation, control flow keywords, loop and conditional statements, send statement (211/211 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
 **Training examples:** 98/100 files clean (2 files, 4 errors), gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 

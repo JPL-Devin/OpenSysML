@@ -571,10 +571,10 @@ was fixed (see the objective-typing re-pin above).
 
 | Category | Pass | Fail | Pass Rate |
 |----------|------|------|-----------|
-| **All Examples** | 97 | 3 | 97% |
-| **Excluding the 2 files whose errors are OMG bugs** | 97 | 1 | 99% |
+| **All Examples** | 98 | 2 | 98% |
+| **Excluding the 2 files whose errors are OMG bugs** | 98 | 0 | 100% |
 
-**Note**: Of the 3 files with errors, two fail only because of bugs in the OMG material itself (`start`/`done` instead of `startShot`/`endShot`); the third is the objective kind-table gap listed above.
+**Note**: Both remaining files fail only because of bugs in the OMG material itself (`start`/`done` instead of `startShot`/`endShot`), so 98/100 is the ceiling.
 
 ---
 
@@ -609,7 +609,7 @@ directory and fails if any file's diagnostics differ between the two.
 
 ## Conclusion
 
-**Implementation Status**: Core behavioral semantics complete (61/61 execution conformance cases passing).
+**Implementation Status**: Core behavioral semantics complete (211/211 execution conformance cases passing).
 
 **Training Example Status**: 98/100 clean (2 files, 4 errors). What remains is two files that use
 feature names KerML does not define (`start`/`done` instead of `startShot`/`endShot`) — bugs in the
