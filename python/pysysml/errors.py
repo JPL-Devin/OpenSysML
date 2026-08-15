@@ -124,6 +124,15 @@ class ExecutionError(PySysMLError, builtins.RuntimeError):
         self.diagnostics = diagnostics or []
 
 
+class WrongKindError(ExecutionError):
+    """Raised when a call named an element of another kind than it asks about.
+
+    Verifying ``Wheel`` as a constraint is a wrong request, not an undecided
+    verdict about the model, so it raises as naming no element at all does. An
+    :class:`ExecutionError`, since that is what such a failure used to be.
+    """
+
+
 class ModelError(PySysMLError):
     """Raised when a model the service parsed has errors and the caller wanted none.
 
@@ -348,6 +357,7 @@ __all__ = [
     "TypeMismatchError",
     "UnsupportedOperationError",
     "UnsupportedValueError",
+    "WrongKindError",
     "from_rpc_error",
     "translate_rpc_errors",
 ]

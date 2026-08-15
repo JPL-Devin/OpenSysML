@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 from pysysml.capabilities import CAPABILITY_VERIFICATION, MissingCapabilityError
 from pysysml.connection import Connection
-from pysysml.errors import ExecutionError, ModelNotFoundError
+from pysysml.errors import ExecutionError, ModelNotFoundError, WrongKindError
 from pysysml.proto import sysml_pb2
 from pysysml.verdict import CalcResult, Verdict
 
@@ -385,3 +385,120 @@ class TestVerdictLines:
         assert str(verdict) == (
             "\u2713 not satisfy touchdown by fastLander holds"
         )
+
+
+class TestWrongKind:
+    """A wrong-kind request raises, as naming no element at all already does.
+
+    The kind is read from the response's typed reason, never from the message.
+    """
+
+    def _wrong_kind_verdict(self, kind, element_id):
+        return sysml_pb2.Verdict(
+            kind=kind,
+            element_id=element_id,
+            holds=False,
+            error=f"not a {kind}: {element_id} is a part def",
+            failure_reason=sysml_pb2.FAILURE_REASON_WRONG_KIND,
+        )
+
+    def test_verify_constraint_raises(self):
+        stub = Mock()
+        stub.VerifyConstraint.return_value = sysml_pb2.VerifyConstraintResponse(
+            verdict=self._wrong_kind_verdict("constraint", "Demo::Wheel"),
+        )
+        conn = make_connection(stub)
+
+        with pytest.raises(WrongKindError) as exc_info:
+            conn.verify_constraint("Demo::Wheel", "hash1")
+        assert "not a constraint" in str(exc_info.value)
+        # It stays an ExecutionError, which is what such a failure used to be.
+        assert isinstance(exc_info.value, ExecutionError)
+
+    def test_verify_requirement_raises(self):
+        stub = Mock()
+        stub.VerifyRequirement.return_value = sysml_pb2.VerifyRequirementResponse(
+            verdict=self._wrong_kind_verdict("requirement", "Demo::Wheel"),
+        )
+        conn = make_connection(stub)
+
+        with pytest.raises(WrongKindError):
+            conn.verify_requirement("Demo::Wheel", "hash1")
+
+    def test_verify_satisfaction_raises(self):
+        stub = Mock()
+        stub.VerifySatisfaction.return_value = sysml_pb2.VerifySatisfactionResponse(
+            error="Demo::V states no satisfaction assertion",
+            failure_reason=sysml_pb2.FAILURE_REASON_WRONG_KIND,
+        )
+        conn = make_connection(stub)
+
+        with pytest.raises(WrongKindError):
+            conn.verify_satisfaction("hash1", symbol_id="Demo::V")
+
+    def test_verify_satisfaction_raises_for_a_wrong_kind_verdict(self):
+        stub = Mock()
+        stub.VerifySatisfaction.return_value = sysml_pb2.VerifySatisfactionResponse(
+            verdicts=[self._wrong_kind_verdict("satisfy", "Demo::Wheel")],
+        )
+        conn = make_connection(stub)
+
+        with pytest.raises(WrongKindError):
+            conn.verify_satisfaction("hash1", symbol_id="Demo::Wheel")
+
+    def test_calc_raises(self):
+        stub = Mock()
+        stub.EvaluateCalc.return_value = sysml_pb2.EvaluateCalcResponse(
+            error="not a calc: Demo::Wheel is a part def",
+            failure_reason=sysml_pb2.FAILURE_REASON_WRONG_KIND,
+        )
+        conn = make_connection(stub)
+
+        with pytest.raises(WrongKindError):
+            conn.calc("Demo::Wheel", "hash1", arguments=[1])
+
+    def test_a_failure_to_evaluate_is_not_a_wrong_kind(self):
+        stub = Mock()
+        stub.EvaluateCalc.return_value = sysml_pb2.EvaluateCalcResponse(
+            error="calc invocation failed: division by zero",
+            failure_reason=sysml_pb2.FAILURE_REASON_EVALUATION,
+        )
+        conn = make_connection(stub)
+
+        with pytest.raises(ExecutionError) as exc_info:
+            conn.calc("Demo::div", "hash1", arguments=[1, 0])
+        assert not isinstance(exc_info.value, WrongKindError)
+
+    def test_a_verdict_of_false_is_still_a_verdict(self):
+        stub = Mock()
+        stub.VerifyConstraint.return_value = sysml_pb2.VerifyConstraintResponse(
+            verdict=sysml_pb2.Verdict(
+                kind="constraint",
+                element_id="Demo::Vehicle::massLight",
+                holds=False,
+                condition="mass < 100.0",
+            ),
+        )
+        conn = make_connection(stub)
+
+        verdict = conn.verify_constraint("Demo::Vehicle::massLight", "hash1")
+        assert verdict.holds is False
+        assert verdict.condition == "mass < 100.0"
+
+    def test_an_unevaluated_verdict_is_still_a_verdict(self):
+        # A condition the runtime could not evaluate is reported on the verdict,
+        # as it was; only a wrong request became an exception.
+        stub = Mock()
+        stub.VerifyConstraint.return_value = sysml_pb2.VerifyConstraintResponse(
+            verdict=sysml_pb2.Verdict(
+                kind="constraint",
+                element_id="Demo::Vehicle::massOK",
+                holds=False,
+                error="unbound feature: mass",
+            ),
+        )
+        conn = make_connection(stub)
+
+        verdict = conn.verify_constraint("Demo::Vehicle::massOK", "hash1")
+        assert verdict.evaluated is False
+        assert verdict.error == "unbound feature: mass"
