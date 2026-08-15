@@ -7,6 +7,7 @@ drives ``Connection`` against it with a release asked for.
 """
 
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,7 @@ import pytest
 from pysysml.capabilities import (
     CAPABILITY_CONVERT,
     CAPABILITY_QUERY,
+    MissingCapabilityError,
     ServerInfo,
     mismatch_reason,
 )
@@ -34,14 +36,18 @@ class OldService(sysml_pb2_grpc.SysMLServiceServicer):
     """A sysml-grpc of an earlier release, healthy and answering."""
 
     def __init__(self, version="v0.0.5", capabilities=(CAPABILITY_CONVERT,),
-                 answers_handshake=True):
+                 answers_handshake=True, handshake_failures=0):
         self._version = version
         self._capabilities = list(capabilities)
         self._answers_handshake = answers_handshake
+        self._handshake_failures = handshake_failures
 
     def GetServerInfo(self, request, context):
         if not self._answers_handshake:
             context.abort(grpc.StatusCode.UNIMPLEMENTED, "unknown method GetServerInfo")
+        if self._handshake_failures > 0:
+            self._handshake_failures -= 1
+            context.abort(grpc.StatusCode.INTERNAL, "busy")
         return sysml_pb2.ServerInfoResponse(
             version=self._version, capabilities=self._capabilities
         )
@@ -130,6 +136,57 @@ def test_a_foreign_service_lacking_a_required_capability_is_reported(
     assert repr(CAPABILITY_QUERY) in excinfo.value.reason
 
 
+def test_a_handshake_that_fails_is_not_taken_for_an_answer(
+    running_service, tmp_home, monkeypatch
+):
+    """A call that failed says nothing, so it is neither cached nor trusted.
+
+    Recording it as a service reporting no capabilities would refuse every
+    capability-gated call for the life of the connection.
+    """
+    monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
+    port = running_service(version="v0.0.5", capabilities=[CAPABILITY_QUERY],
+                           handshake_failures=1)
+
+    with Connection(port=port) as conn:
+        info = conn.server_info()
+        assert info.version == "v0.0.5"
+        assert info.has(CAPABILITY_QUERY)
+
+
+def test_a_handshake_that_fails_is_reported_when_a_release_was_asked_for(
+    running_service, tmp_home, monkeypatch
+):
+    """A service that could not be asked is reported, not stopped."""
+    port = running_service(handshake_failures=1)
+    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+
+    with pytest.raises(StaleServiceError) as excinfo:
+        Connection(port=port)
+
+    assert "GetServerInfo call to it failed" in excinfo.value.reason
+
+
+def test_a_refused_connection_releases_what_it_took(tmp_home, monkeypatch):
+    """A connection refused for a missing capability holds no reference afterwards.
+
+    The connection is never returned, so nothing else can close its channel or
+    release the reference it took on the service it started.
+    """
+    monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
+    port = _free_port()
+    monkeypatch.setattr(
+        "pysysml.connection.ensure_binary",
+        lambda **kwargs: _fake_service_binary(capabilities=()),
+    )
+
+    with pytest.raises(MissingCapabilityError):
+        Connection(port=port, require_capabilities=[CAPABILITY_QUERY])
+
+    assert not os.path.exists(_get_refcount_path())
+    assert not os.path.exists(_get_pidfile_path())
+
+
 def test_a_matching_service_is_adopted(running_service, tmp_home, monkeypatch):
     """A running service that is what was asked for is used, as before."""
     port = running_service(version="v0.0.7", capabilities=[CAPABILITY_CONVERT])
@@ -177,6 +234,7 @@ def test_a_service_this_client_started_is_replaced(
     monkeypatch.setattr(
         "pysysml.connection.ensure_binary", lambda **kwargs: "/nonexistent/sysml-grpc"
     )
+    monkeypatch.setattr("pysysml.connection.cached_release", lambda: "v0.0.7")
 
     with pytest.warns(RuntimeWarning, match="replaced the sysml-grpc service"):
         with pytest.raises(ConnectionError, match="Binary not found"):
@@ -206,6 +264,100 @@ def test_a_service_another_connection_holds_is_not_replaced(
     finally:
         owned.terminate()
         owned.wait(timeout=5)
+
+
+def test_a_service_this_client_started_is_kept_when_replacing_it_gains_nothing(
+    running_service, tmp_home, monkeypatch
+):
+    """Stopping a service to start the same build again is no replacement.
+
+    The binary that would be started cannot be shown to be the release asked
+    for, since a download that fails leaves the cache as it was.
+    """
+    port = running_service(version="v0.0.5")
+    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+
+    owned = _fake_owned_service(port)
+    _record_pidfile(owned.pid)
+    monkeypatch.setattr(
+        "pysysml.connection.ensure_binary", lambda **kwargs: "/nonexistent/sysml-grpc"
+    )
+    monkeypatch.setattr("pysysml.connection.cached_release", lambda: "v0.0.5")
+
+    try:
+        with pytest.raises(StaleServiceError) as excinfo:
+            Connection(port=port)
+        assert "serve the same build again" in excinfo.value.remedy
+        assert owned.poll() is None  # still running
+    finally:
+        owned.terminate()
+        owned.wait(timeout=5)
+
+
+def test_a_service_lacking_only_a_capability_is_never_stopped(
+    running_service, tmp_home, monkeypatch
+):
+    """No release was asked for, so starting the same binary changes nothing.
+
+    The service is left running and the missing capability reported, rather
+    than stopped to make room for a build reporting the same capabilities.
+    """
+    monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
+    port = running_service(capabilities=[CAPABILITY_CONVERT])
+
+    owned = _fake_owned_service(port)
+    _record_pidfile(owned.pid)
+
+    try:
+        with pytest.raises(StaleServiceError) as excinfo:
+            Connection(port=port, require_capabilities=[CAPABILITY_QUERY])
+        assert repr(CAPABILITY_QUERY) in excinfo.value.reason
+        assert owned.poll() is None  # still running
+    finally:
+        owned.terminate()
+        owned.wait(timeout=5)
+
+
+def _free_port():
+    """A port nothing is listening on, for a service started by the client."""
+    with socket.socket() as sock:
+        sock.bind(("localhost", 0))
+        return sock.getsockname()[1]
+
+
+def _fake_service_binary(capabilities=(), version="v0.0.7"):
+    """An executable serving the handshake like a release, for the start path.
+
+    Named sysml-grpc, since the lifecycle recognizes its own service by the
+    command line it started.
+    """
+    path = os.path.join(tempfile.mkdtemp(), "sysml-grpc")
+    with open(path, "w") as f:
+        f.write(f"""#!{sys.executable}
+import sys
+from concurrent import futures
+import grpc
+from pysysml.proto import sysml_pb2, sysml_pb2_grpc
+
+
+class Service(sysml_pb2_grpc.SysMLServiceServicer):
+    def GetServerInfo(self, request, context):
+        return sysml_pb2.ServerInfoResponse(
+            version={version!r}, capabilities={list(capabilities)!r}
+        )
+
+    def GetDiagnostics(self, request, context):
+        context.abort(grpc.StatusCode.NOT_FOUND, "model not found")
+
+
+server = grpc.server(futures.ThreadPoolExecutor(max_workers=2))
+sysml_pb2_grpc.add_SysMLServiceServicer_to_server(Service(), server)
+server.add_insecure_port("localhost:" + sys.argv[2])
+server.start()
+server.wait_for_termination()
+""")
+    os.chmod(path, 0o755)
+    return path
 
 
 def _fake_owned_service(port):

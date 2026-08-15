@@ -629,10 +629,14 @@ of serving an old build whose first newer call fails as a
 `MissingCapabilityError`. `connect(version=…, require_capabilities=[…])` asks
 explicitly; `PYSYSML_GRPC_VERSION` asks for a release for the binary cache and
 the running service alike, and with neither set whatever answers is accepted.
-Such a service is stopped only when this client's own pidfile says it started it
-and no other client still holds it — a service you are running deliberately is
-never killed, so the remedy asks you to stop it, name another port, or accept
-what is running.
+Such a service is stopped only when this client's own pidfile says it started it,
+no other client still holds it, and the binary that would be started in its place
+can be shown to be the release asked for — a service you are running deliberately
+is never killed, and one is never stopped only to start the same build again, so
+the remedy asks you to stop it, name another port, or accept what is running. A
+service that only lacks a required *capability* is therefore always reported, not
+replaced: capabilities come with a release, so restarting the same binary would
+report the same ones.
 
 ## Development
 

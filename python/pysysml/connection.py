@@ -10,7 +10,7 @@ import warnings
 from filelock import FileLock, Timeout
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
-from pysysml.binary import ensure_binary, resolve_latest_version
+from pysysml.binary import cached_release, ensure_binary, resolve_latest_version
 from pysysml.capabilities import (
     CAPABILITY_CONVERT,
     CAPABILITY_QUERY,
@@ -28,6 +28,7 @@ from pysysml.errors import (
     ExecutionError,
     ModelFileNotFoundError,
     ModelNotFoundError,
+    PySysMLError,
     StaleServiceError,
     UnsupportedValueError,
     WrongKindError,
@@ -302,8 +303,14 @@ class Connection:
         
         self._channel = grpc.insecure_channel(self._address)
         self._stub = sysml_pb2_grpc.SysMLServiceStub(self._channel)
-        for capability in sorted(self._required_capabilities):
-            require(self.server_info(), capability, upgrade_remedy(capability))
+        try:
+            for capability in sorted(self._required_capabilities):
+                require(self.server_info(), capability, upgrade_remedy(capability))
+        except BaseException:
+            # A refused connection is never returned, so nothing else can
+            # release its channel or the reference it took on the service.
+            self.close()
+            raise
     
     def close(self):
         """Close the gRPC channel and decrement refcount."""
@@ -944,8 +951,9 @@ class Connection:
             timeout (float): RPC timeout in seconds
 
         Returns:
-            ServerInfo: What it reported; ``answered`` is False when it could not
-                say, whether because it predates the handshake or the call failed
+            ServerInfo or None: What it reported; ``answered`` is False when it
+                predates the handshake, which is itself an answer, and None when
+                the call failed, so nothing was learned
         """
         channel = grpc.insecure_channel(self._address)
         try:
@@ -953,7 +961,9 @@ class Connection:
             response = stub.GetServerInfo(
                 sysml_pb2.ServerInfoRequest(), timeout=timeout
             )
-        except grpc.RpcError:
+        except grpc.RpcError as e:
+            if e.code() != grpc.StatusCode.UNIMPLEMENTED:
+                return None
             return ServerInfo(
                 version='',
                 capabilities=frozenset(),
@@ -1012,25 +1022,72 @@ class Connection:
 
         Raises:
             StaleServiceError: If it is not the service asked for and this
-                client is not the one that started it
+                client may not, or cannot usefully, stop it
         """
+        required = self._required_release()
         info = self._running_service_info()
-        reason = mismatch_reason(
-            info,
-            version=self._required_release(),
-            capabilities=self._required_capabilities,
-        )
-        if reason is not None:
-            self._replace_mismatched_service(reason, info)
-            return False
+        if info is None:
+            # A handshake that failed says nothing about the service, so it is
+            # neither trusted for the rest of the session nor stopped.
+            if required is None and not self._required_capabilities:
+                self._hold_running_service(None)
+                return True
+            raise StaleServiceError(
+                self._address,
+                "the GetServerInfo call to it failed, so it cannot be shown to "
+                "be the service that was asked for",
+                "retry, since the service may answer next time; or reach "
+                "another one with connect(port=<other port>)",
+            )
 
+        release_reason = mismatch_reason(info, version=required)
+        capability_reason = mismatch_reason(
+            info, capabilities=self._required_capabilities
+        )
+        if release_reason is None and capability_reason is None:
+            self._hold_running_service(info)
+            return True
+        if release_reason is None:
+            # Only another release can report other capabilities, so a service
+            # that is the release asked for is reported, never stopped.
+            missing = sorted(
+                c for c in self._required_capabilities if not info.has(c)
+            )
+            raise StaleServiceError(
+                self._address, capability_reason, upgrade_remedy(missing[0]),
+                info=info,
+            )
+
+        reason = "; ".join(
+            r for r in (release_reason, capability_reason) if r is not None
+        )
+        self._replace_mismatched_service(reason, info, required)
+        return False
+
+    def _hold_running_service(self, info):
+        """Take a reference on the service already listening.
+
+        Caller must hold the lockfile. ``info`` is None when the handshake could
+        not be made, so it is asked again over the connection's own channel.
+        """
         self._server_info = info
         _increment_refcount()
         self._holds_refcount = True
         atexit.register(self._cleanup_service)
-        return True
 
-    def _replace_mismatched_service(self, reason, info):
+    def _replacement_serves(self, required):
+        """Whether starting the binary would serve the release asked for.
+
+        Stopping a service to start the same build gains nothing, so a
+        replacement that cannot differ is reported instead of made.
+        """
+        try:
+            ensure_binary(version=self._version)
+        except PySysMLError:
+            return False
+        return cached_release() == required
+
+    def _replace_mismatched_service(self, reason, info, required):
         """Stop a mismatched service, if this client started it and nothing else uses it.
 
         Caller must hold the lockfile. A service this client cannot show to be
@@ -1040,9 +1097,11 @@ class Connection:
         Args:
             reason (str): How the running service differs from the one asked for
             info (ServerInfo): What it reported about itself
+            required (str): Release tag the replacement must report
 
         Raises:
-            StaleServiceError: If this client may not stop it
+            StaleServiceError: If this client may not stop it, or stopping it
+                would only start the same build again
         """
         process = self._started_by_this_client()
         if process is None:
@@ -1062,6 +1121,15 @@ class Connection:
                 f"service, so it is not this client's to stop; close them and "
                 f"retry, or reach a service of your own with "
                 f"connect(port=<other port>)",
+                info=info,
+            )
+        if not self._replacement_serves(required):
+            raise StaleServiceError(
+                self._address, reason,
+                f"this client started that service, but the binary it would "
+                f"start in its place cannot be shown to be {required}, so "
+                f"stopping it would serve the same build again; make {required} "
+                f"reachable (or ask for the release you have) and retry",
                 info=info,
             )
         if not _stop_process(process):
