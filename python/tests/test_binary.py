@@ -19,6 +19,7 @@ from pysysml.binary import (
     write_metadata,
     ensure_binary
 )
+from pysysml.errors import ConnectionError as PySysMLConnectionError
 
 
 @pytest.fixture
@@ -302,7 +303,6 @@ def test_download_binary_overwrites_the_cache_it_replaces(cache):
 
 def test_download_binary_reports_a_cache_it_cannot_install_over(cache):
     """Test a binary held open by a running service is reported, not raised raw."""
-    from pysysml.errors import ConnectionError
     binary_path = cache(version='v0.0.5')
     data = b'the release asked for'
     checksum = hashlib.sha256(data).hexdigest()
@@ -316,7 +316,7 @@ def test_download_binary_reports_a_cache_it_cannot_install_over(cache):
     with patch('urllib.request.urlopen', side_effect=responses):
         with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
             with patch('os.replace', side_effect=PermissionError('in use')):
-                with pytest.raises(ConnectionError, match='could not install it'):
+                with pytest.raises(PySysMLConnectionError, match='could not install it'):
                     download_binary(version='v0.0.7')
 
     assert not os.path.exists(binary_path + '.tmp')
@@ -406,3 +406,12 @@ def test_resolve_latest_version_gives_up_rather_than_hanging():
         assert resolve_latest_version() == 'v0.0.7'
 
     assert urlopen.call_args.kwargs['timeout'] > 0
+
+
+def test_a_timed_out_release_query_keeps_a_working_cache(cache):
+    """Test a network that drops traffic leaves the cached binary in use."""
+    cache(version='v0.0.7')
+    with patch('urllib.request.urlopen', side_effect=TimeoutError('timed out')):
+        assert stale_cache_reason('latest') is None
+        with pytest.raises(PySysMLConnectionError, match='Failed to resolve latest release'):
+            resolve_latest_version()

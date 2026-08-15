@@ -45,7 +45,8 @@ def resolve_latest_version(github_repo=None):
     try:
         with urllib.request.urlopen(url, timeout=NETWORK_TIMEOUT) as response:
             release = json.loads(response.read().decode('utf-8'))
-    except (urllib.error.URLError, ValueError) as e:
+    # A timeout while reading the response is a TimeoutError, not a URLError.
+    except (urllib.error.URLError, TimeoutError, ValueError) as e:
         raise ConnectionError(f"Failed to resolve latest release from {url}: {e}")
 
     tag = release.get('tag_name')
@@ -282,7 +283,7 @@ def download_binary(version='latest', github_repo=None):
         
         return binary_path
         
-    except urllib.error.URLError as e:
+    except (urllib.error.URLError, TimeoutError) as e:
         raise ConnectionError(f"Failed to download binary from {binary_url}: {e}")
 
 
