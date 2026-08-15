@@ -107,6 +107,29 @@ func TestAFileNamedDashIsStillRead(t *testing.T) {
 	}
 }
 
+// TestStdinFromADeviceIsRead checks that a "-" whose standard input is /dev/null
+// — what a CI runner or a supervisor commonly leaves it as — is read as the
+// empty model it is, rather than mistaken for a terminal.
+func TestStdinFromADeviceIsRead(t *testing.T) {
+	binary := buildCLI(t)
+
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer devNull.Close()
+
+	cmd := exec.Command(binary, "-validate", "-")
+	cmd.Stdin = devNull
+	got := runCommand(t, cmd)
+	if got.status != exitHolds {
+		t.Fatalf("exit status = %d, want %d\n%s", got.status, exitHolds, got.output())
+	}
+	if !strings.Contains(got.stdout, "✓ <stdin>: no errors") {
+		t.Errorf("standard input from %s was not read:\n%s", os.DevNull, got.output())
+	}
+}
+
 // runStdin runs the binary with the model on standard input rather than in a
 // file, which is what a "-" on the command line asks it to read.
 func runStdin(t *testing.T, binary, model string, args ...string) runOutcome {
