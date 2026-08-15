@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"testing"
 )
 
@@ -9,32 +8,14 @@ func TestToken_Creation(t *testing.T) {
 	token := Token{
 		ID:       1,
 		Location: nil, // Will use actual AST node in real usage
-		Data:     make(map[string]Value),
 	}
 
 	if token.ID != 1 {
 		t.Errorf("expected ID 1, got %d", token.ID)
 	}
 
-	if token.Data == nil {
-		t.Error("expected non-nil Data map")
-	}
-}
-
-func TestToken_DataStorage(t *testing.T) {
-	token := Token{
-		ID:   1,
-		Data: make(map[string]Value),
-	}
-
-	token.Data["x"] = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 42}}
-
-	val, exists := token.Data["x"]
-	if !exists {
-		t.Error("expected data key 'x' to exist")
-	}
-	if val.Const.Int != 42 {
-		t.Errorf("expected value 42, got %d", val.Const.Int)
+	if token.Wait != nil {
+		t.Error("expected a new token to wait for nothing")
 	}
 }
 

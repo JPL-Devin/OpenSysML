@@ -275,7 +275,7 @@ Both residual items are closed by the unit-resolution work; see `docs/SPEC_COMPL
 - **Port routing ignores direction and conjugation.** A message reaches every port connected by
   a connector in the same behavior body, and a port of the enclosing part is invisible to the
   behavior.
-- **Accept-parameter visibility.** The payload lives in shared token data, which scoping does
+- **Accept-parameter visibility.** The payload lives in the action's shared feature space, which scoping does
   not model, so a sibling node reading it by simple name reports unresolved.
 - **Transition endpoint names** are resolved at lowering, not at the name-resolution tier, so a
   misspelled endpoint surfaces late. Error timing is part of the contract (AGENTS.md §4):

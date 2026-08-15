@@ -348,10 +348,9 @@ Execution runtime (Tiers 1-5: instances, expressions, behaviors).
 
 **Behavioral Execution (Tier 5):**
 
-- **`Token`** — Control/data token for action execution
+- **`Token`** — Control token for action execution, carrying no values of its own
   - `ID int64` — Unique token ID
   - `Location ast.Node` — Current node (InitialNode, ActionExecutionNode, etc.)
-  - `Data map[string]Value` — Token data (pin values)
 
 - **`ActionExecutor`** — Petri-net token-flow execution engine
   - `Step() error` — Advance all tokens one step
@@ -359,6 +358,7 @@ Execution runtime (Tiers 1-5: instances, expressions, behaviors).
   - `Tokens() []Token` — Get active tokens (copy)
   - `State() ExecutionState` — Current execution state (Ready/Running/Completed/Suspended)
   - `Results() map[string]Value` — Get results after completion
+  - `Data() map[string]Value` — The action's live feature space, shared by every token
   - `SetBreakpoint(nodeName string)` — Set breakpoint on node
   - `ClearBreakpoints()` — Clear all breakpoints
   - `ActionSymbol() *symbols.Symbol` — Get action symbol
