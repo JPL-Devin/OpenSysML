@@ -252,10 +252,12 @@ func (w *Workspace) MembersOnPath(scope *symbols.Scope, path []string) []*symbol
 	// A cached library symbol has no scope, and a package's own scope does not
 	// hold what its imports brought in; both are reachable through the index,
 	// as seen from the namespace the completion is requested in so that another
-	// namespace's private imports stay hidden.
+	// namespace's private imports stay hidden. An element the namespace's
+	// filters reject is no member of it, so it is not offered either.
 	if fqn := w.index.GetFQN(sym); fqn != "" {
 		from := resolver.ReferringNamespaceFQN(scope)
-		members = append(members, w.index.LookupDirectChildrenFrom(fqn, from)...)
+		children := w.index.LookupDirectChildrenFrom(fqn, from)
+		members = append(members, resolver.AdmittedChildrenOf(scope, fqn, children)...)
 	}
 	return members
 }

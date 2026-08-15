@@ -1,6 +1,8 @@
 package resolve
 
 import (
+	"strings"
+
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -94,6 +96,31 @@ func (r *Resolver) admittedUnder(doc, from, fqn string, cands []*symbols.Symbol)
 		return kept
 	}
 	return kept
+}
+
+// AdmittedChildrenOf keeps the members of the namespace fqn that a lookup made
+// in scope can reach, so an enumeration of a namespace (completion) offers only
+// names resolution then admits.
+func (r *Resolver) AdmittedChildrenOf(scope *symbols.Scope, fqn string, children []*symbols.Symbol) []*symbols.Symbol {
+	if fqn == "" || len(children) == 0 {
+		return children
+	}
+	doc, from := r.documentOf(scope), r.ReferringNamespaceFQN(scope)
+	kept := make([]*symbols.Symbol, 0, len(children))
+	for _, sym := range children {
+		if r.admitsUnderName(doc, from, fqn+"::"+localNameOf(sym), sym) {
+			kept = append(kept, sym)
+		}
+	}
+	return kept
+}
+
+// localNameOf is the last segment of sym's name, i.e. the name it is a member under.
+func localNameOf(sym *symbols.Symbol) string {
+	if i := strings.LastIndex(sym.Name, "::"); i >= 0 {
+		return sym.Name[i+len("::"):]
+	}
+	return sym.Name
 }
 
 // admits reports whether cand satisfies every one of filters. A condition the

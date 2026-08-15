@@ -93,6 +93,32 @@ func openFilterWorkspace(t *testing.T, client string) []string {
 	return msgs
 }
 
+// Completion enumerates a namespace's members through the index; a filter's
+// verdict has to reach that enumeration too, or a name is offered that resolution
+// then rejects.
+func TestFilteredMembersAreNotOfferedForCompletion(t *testing.T) {
+	ws := NewWorkspace()
+	ws.Open("file:///vehicles.sysml", []byte(filterModelSource), 1)
+	ws.Open("file:///client.sysml", []byte(`package Client { }`), 1)
+	doc := ws.Document("file:///client.sysml")
+	if doc == nil || doc.Scope == nil {
+		t.Fatal("the client document has no scope")
+	}
+
+	for _, ns := range []string{"SafetyFeatures", "FilteredImport"} {
+		var names []string
+		for _, sym := range ws.MembersOnPath(doc.Scope, []string{ns}) {
+			names = append(names, sym.Name)
+		}
+		if slices.ContainsFunc(names, func(n string) bool { return strings.HasSuffix(n, "keylessEntry") }) {
+			t.Errorf("%s filters keylessEntry out, so completion must not offer it, got %v", ns, names)
+		}
+		if !slices.ContainsFunc(names, func(n string) bool { return strings.HasSuffix(n, "seatBelt") }) {
+			t.Errorf("%s admits seatBelt, which completion must offer, got %v", ns, names)
+		}
+	}
+}
+
 // A package is annotated by its prefix metadata like any other element, so a
 // filter classifying by that metadata surfaces the tagged package and no other.
 func TestFilteredImportClassifiesATaggedPackage(t *testing.T) {
