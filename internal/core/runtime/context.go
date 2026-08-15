@@ -13,9 +13,11 @@ import (
 
 // Context carries runtime execution state. One per workspace session.
 type Context struct {
-	model     *semantics.Model
-	resolver  *resolve.Resolver
-	nextID    int64
+	model    *semantics.Model
+	resolver *resolve.Resolver
+	// ids hands out instance identities. Contexts holding the same objects share
+	// one sequence, so no two of them name different objects alike.
+	ids       *idSequence
 	steps     int64
 	maxSteps  int64
 	instances map[int64]*Instance
@@ -133,7 +135,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 	return &Context{
 		model:      model,
 		resolver:   resolver,
-		nextID:     1, // IDs start at 1 (0 = invalid)
+		ids:        &idSequence{next: 1}, // IDs start at 1 (0 = invalid)
 		steps:      0,
 		maxSteps:   maxSteps,
 		instances:  make(map[int64]*Instance),
@@ -206,11 +208,28 @@ func (ctx *Context) Model() *semantics.Model {
 	return ctx.model
 }
 
+// idSequence hands out instance identities, one per object over the contexts
+// sharing it.
+type idSequence struct {
+	next int64
+}
+
+func (s *idSequence) take() int64 {
+	id := s.next
+	s.next++
+	return id
+}
+
+// atLeast raises the sequence to hand out id next, never lowering it.
+func (s *idSequence) atLeast(id int64) {
+	if id > s.next {
+		s.next = id
+	}
+}
+
 // allocateID returns the next instance ID and increments the counter.
 func (ctx *Context) allocateID() int64 {
-	id := ctx.nextID
-	ctx.nextID++
-	return id
+	return ctx.ids.take()
 }
 
 // beginRun starts a run and returns the function that ends it, resetting the

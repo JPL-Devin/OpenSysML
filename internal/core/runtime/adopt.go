@@ -62,14 +62,16 @@ func (ctx *Context) ShapesOfType(sym *symbols.Symbol) *Shapes {
 	return shapes
 }
 
-// Changed returns the first declaration this context no longer resolves the way
-// shapes recorded it, so a caller can name what invalidated the state it took
-// those shapes for.
+// Changed returns the declaration this context no longer resolves the way shapes
+// recorded it, so a caller can name what invalidated the state it took those
+// shapes for. They were recorded outwards, so reading them back names the one
+// that changed rather than one that only holds it.
 func (ctx *Context) Changed(shapes *Shapes) (string, bool) {
 	if shapes == nil || ctx.resolver == nil || ctx.resolver.Index() == nil {
 		return "", false
 	}
-	for _, fqn := range shapes.types {
+	for i := len(shapes.types) - 1; i >= 0; i-- {
+		fqn := shapes.types[i]
 		if !ctx.resolvesTo(fqn, shapes.digests[fqn]) {
 			return fqn, true
 		}
@@ -124,6 +126,25 @@ func (ctx *Context) recordShape(sym *symbols.Symbol, shapes *Shapes) {
 	}
 	shapes.digests[fqn] = ctx.ShapeDigest(sym)
 	shapes.types = append(shapes.types, fqn)
+	ctx.recordDependencies(sym, shapes)
+}
+
+// recordDependencies records the declarations reached through a type's features,
+// so a change to one of them is named as itself. An unnamed one is left to the
+// owner's digest, which already covers it.
+func (ctx *Context) recordDependencies(sym *symbols.Symbol, shapes *Shapes) {
+	for _, feat := range ctx.FeaturesOf(sym) {
+		fqn := ctx.fqnOf(feat.Type)
+		if fqn == "" {
+			continue
+		}
+		if _, done := shapes.digests[fqn]; done {
+			continue
+		}
+		shapes.digests[fqn] = ctx.ShapeDigest(feat.Type)
+		shapes.types = append(shapes.types, fqn)
+		ctx.recordDependencies(feat.Type, shapes)
+	}
 }
 
 // slotNames lists the object's slot names in a fixed order, so what is done
@@ -261,7 +282,9 @@ func (ctx *Context) fqnOf(sym *symbols.Symbol) string {
 // of the document they were materialized from. Each object is rebound to the
 // declaration of the same qualified name here, which must resolve to the shape
 // recorded in shapes; anything else is refused with the context left untouched.
-// The objects are moved rather than copied: prev must not be used afterwards.
+// The objects are moved rather than copied, so prev holds them too afterwards
+// and shares this context's identity sequence; nothing new should be
+// materialized through prev, which registers it there alone.
 func (ctx *Context) Adopt(prev *Context, shapes *Shapes, obj *Instance) error {
 	if prev == nil || shapes == nil || obj == nil {
 		return &AdoptError{Reason: "there is nothing to carry over"}
@@ -481,15 +504,13 @@ func (a *adoption) commit() {
 			plan.obj.Ends[i].Value = a.rewrite(plan.obj.Ends[i].Value)
 		}
 		a.ctx.registerInstance(plan.obj)
-		if id >= a.ctx.nextID {
-			a.ctx.nextID = id + 1
-		}
+		a.ctx.ids.atLeast(id + 1)
 	}
-	// Identities are handed out above the ones carried over, so an object
-	// materialized next cannot be given the identity of one still live.
-	if a.prev.nextID > a.ctx.nextID {
-		a.ctx.nextID = a.prev.nextID
-	}
+	// The previous context holds the same objects and a run over it may outlive
+	// this call, so both hand out identities from one sequence: no object created
+	// next is given the identity of one still live.
+	a.ctx.ids.atLeast(a.prev.ids.next)
+	a.prev.ids = a.ctx.ids
 	a.carryDerived(adopted)
 }
 

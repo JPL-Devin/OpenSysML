@@ -170,8 +170,9 @@ func TestDebuggerEndsWhenADeclarationItDependsOnChanges(t *testing.T) {
 	run(t, s, "%action tally")
 
 	res = s.Submit("part def Kind { attribute size = 2.0; }")
-	if !hasNotice(res, `action debugging session for "tally" ended`) || !hasNotice(res, "Kind") {
-		t.Fatalf("notices = %v, want the session ended and Kind named", res.Notices)
+	// The declaration that moved is named, not the behavior the user left alone.
+	if !hasNotice(res, `action debugging session for "tally" ended (Kind was redeclared)`) {
+		t.Fatalf("notices = %v, want the session ended and Kind named as what changed", res.Notices)
 	}
 	wants(t, run(t, s, "%step"), "no active action session")
 }

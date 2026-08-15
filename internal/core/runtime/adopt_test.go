@@ -110,6 +110,31 @@ func TestAdoptRefusesAChangedDependency(t *testing.T) {
 	}
 }
 
+// The objects are shared with the context they came from, which a run started
+// before the re-analysis still materializes through, so both contexts hand out
+// identities from one sequence rather than each from where it stood.
+func TestAdoptSharesTheIdentitySequence(t *testing.T) {
+	prev := contextOver(t, adoptSrc)
+	obj := vehicleIn(t, prev)
+	shapes := prev.ShapesOf(obj)
+
+	ctx := contextOver(t, adoptSrc+"\npart def Widget;")
+	if err := ctx.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+
+	handed := map[int64]bool{}
+	for _, id := range []int64{ctx.allocateID(), prev.allocateID(), ctx.allocateID()} {
+		if _, found := ctx.Instance(id); found {
+			t.Errorf("identity %d is handed out again while the object holding it is live", id)
+		}
+		if handed[id] {
+			t.Errorf("identity %d was handed out twice", id)
+		}
+		handed[id] = true
+	}
+}
+
 // Changed names the declaration a context resolves differently, which is what a
 // caller reports as having invalidated the state it holds.
 func TestChangedNamesTheDeclarationThatMoved(t *testing.T) {
@@ -119,12 +144,12 @@ func TestChangedNamesTheDeclarationThatMoved(t *testing.T) {
 	if fqn, ok := contextOver(t, adoptSrc+"\npart def Widget;").Changed(shapes); ok {
 		t.Errorf("Changed reported %q over an unrelated declaration", fqn)
 	}
-	// A change to the engine is a change to what a vehicle is, so the object's own
-	// declaration is the one named.
+	// A change to the engine is a change to what a vehicle is, but what moved is
+	// the engine, so that is what is named rather than the type holding it.
 	ctx := contextOver(t, strings.Replace(adoptSrc, "power = 300.0", "power = 100.0", 1))
 	fqn, ok := ctx.Changed(shapes)
-	if !ok || fqn != "Demo::Vehicle" {
-		t.Errorf("Changed() = %q, %v; want Demo::Vehicle", fqn, ok)
+	if !ok || fqn != "Demo::Engine" {
+		t.Errorf("Changed() = %q, %v; want Demo::Engine", fqn, ok)
 	}
 }
 
