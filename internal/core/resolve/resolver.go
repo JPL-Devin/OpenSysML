@@ -53,11 +53,11 @@ type Resolver struct {
 	constraintRefs []constraintRef
 	// suggestions are the spellings an unresolvable name may have meant, kept
 	// per name and scope; names is the index's name table they are looked up in.
-	// suggesting marks a suggestion being scored, whose own lookups must not ask
-	// for suggestions of their own.
+	// suggesting holds the suggestions being scored, so scoring one cannot
+	// recurse into scoring itself.
 	suggestions map[suggestKey][]string
 	names       *suggest.Table
-	suggesting  bool
+	suggesting  map[suggestKey]bool
 }
 
 // New creates a resolver over the given index.
@@ -71,6 +71,7 @@ func New(idx *symbols.Index) *Resolver {
 		naming:    map[*symbols.Symbol]bool{},
 
 		suggestions: map[suggestKey][]string{},
+		suggesting:  map[suggestKey]bool{},
 
 		inheritedImports: map[*symbols.Symbol]bool{},
 	}

@@ -17,15 +17,20 @@ type suggestKey struct {
 // under — an unimported library name — and the near spellings a typo justifies,
 // each scored by how the user would reach it. Memoized per scope and name.
 func (r *Resolver) suggestFor(scope *symbols.Scope, name string) []string {
-	if r.idx == nil || name == "" || r.suggesting {
+	if r.idx == nil || name == "" {
 		return nil
 	}
 	key := suggestKey{scope: scope, name: name}
 	if cands, ok := r.suggestions[key]; ok {
 		return cands
 	}
-	r.suggesting = true
-	defer func() { r.suggesting = false }()
+	// Scoring resolves names, which may report one unresolved in turn: another
+	// name is still worth suggesting for, this one is not.
+	if r.suggesting[key] {
+		return nil
+	}
+	r.suggesting[key] = true
+	defer delete(r.suggesting, key)
 
 	table := r.suggestTable()
 	var cands []suggest.Candidate

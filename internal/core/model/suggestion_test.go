@@ -52,6 +52,11 @@ func TestUnresolvedReferenceSuggestsSpelling(t *testing.T) {
 			want: "unresolved reference: Intger — did you mean Integer?",
 		},
 		{
+			name: "a name reported while another is being scored is still hinted",
+			src:  "part def Wheel;\npart def Sensor;\npackage P { public import Q::*; part w : Whel; }\npackage Q { import Sensoor; }",
+			want: "unresolved reference: Sensoor — did you mean Sensor?",
+		},
+		{
 			name:   "a qualified name is not second-guessed",
 			src:    "part def A { attribute x : Nowhere::Integer; }",
 			want:   "unresolved reference: Nowhere::Integer",
