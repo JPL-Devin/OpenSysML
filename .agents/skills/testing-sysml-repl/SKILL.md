@@ -655,10 +655,34 @@ Recipes that actually distinguish working from broken here (used to verify PR #1
   (`outer` calling `inner`: `7.00 → 10.00`; `attribute h = g * 2.0` read by `m`: `11.00 → 15.00`).
   The assertion that catches the earlier stale-value bug is **`%eval` must agree with `%slots`** after
   every such change — a `%slots` that keeps the old number while `%eval` of the same expression
-  returns the new one is the failure signature. Slots materialized some other way (composite parts,
-  connector ends, collections) must keep their carried values *and* nested instance IDs
-  (`w = Instance(ID: 2)`). Drops are still expected for the instance's own redeclared definition and
-  for a change to a declaration one of its features is typed by.
+  returns the new one is the failure signature. Composite parts keep their carried values *and*
+  nested instance IDs (`w = Instance(ID: 2)`). Drops are still expected for the instance's own
+  redeclared definition and for a change to a declaration one of its features is typed by.
+- **What is read again vs kept on carry-over** (`adopt.go` `derivedSlot`/`connectorSlot`/
+  `collectedSlot`, as of 4947ca3 + 65b04ec). Four distinct classes, each with its own recipe:
+  - *Connector slots are read again under the same identity.* `connection c1 connect a.x to b.y;`
+    where `a.x = double(3.0)`: after redeclaring `double` with `x * 3.0`, `%slots` must show
+    `x = 9.00` **and** `c1 = Instance(ID: 4)` (unchanged) **and** `source = 9.00`. A `source` that
+    stays `6.00` next to `x = 9.00` is the bug. This applies to named *and* anonymous connectors.
+  - *A variation's selected variant is carried, not derived* — its default names a variant rather
+    than a value. `part :>> engine = engine::electric;` must keep `electric (Instance ID: 2)` across
+    an unrelated `part def Widget;`; an id that moves (2 → 3) means the variant slot was wrongly
+    treated as derived. Changing the selection to `engine::petrol` must still drop with the notice.
+  - *A collection of scalars is collected again* (its members are copies of what the subsetting
+    features hold): `attribute pool : Real[*]; attribute one :> pool = double(3.0);` must go
+    `pool = [6.00] / one = 6.00` → `pool = [9.00] / one = 9.00`. `pool` stuck at `[6.00]` while
+    `one = 9.00` is the failure — the object then reads two values for one thing.
+  - *A collection of objects is kept*, since those objects carry over under their identities:
+    `part xs : B[3]` must print the identical `[Instance(ID: 2), Instance(ID: 3), Instance(ID: 4)]`
+    after an unrelated submission, and the next `%instantiate` must not reuse 2/3/4.
+- **A stale carried value only shows if the slot was materialized before the change.** These
+  carry-over slot bugs need a `%slots` (or other read) *between* `%instantiate` and the redeclaration:
+  without it the slot was never materialized, so there is nothing stale to keep and even a broken
+  build prints the right number. Contrast runs against a binary built from the parent commit
+  (`git worktree add /tmp/wt-old <parent> && go build -o /tmp/old-sysml ./cmd/sysml`) are the cheapest
+  way to prove a case actually discriminates — but include that intermediate read in both runs.
+  Conversely, the *anonymous* connector-id case must also be checked with **no** read in between
+  (two unrelated submissions back to back, then one `%slots`), which is a separate code path.
 - **Never put a literal TAB in piped REPL input** (`printf '…\t…' | ./bin/sysml`): readline enters
   completion mode and the process dies with `panic: bytes: negative Repeat count`. Use spaces in
   one-line rehearsal snippets.
