@@ -10,6 +10,8 @@ package 'Quoted Names' {
     alias 'the rover' for 'Rover Model';
     part 'my rover' : 'Rover Model' :> 'Rover Model';
     part 'off model' : 'Not Declared Here';
+    part def 'state';
+    part 'a state' : 'state';
 }
 package Consumer {
     import 'Quoted Names'::*;

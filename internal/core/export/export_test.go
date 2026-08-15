@@ -230,6 +230,10 @@ func TestQuotedNamesSurviveRDF(t *testing.T) {
 		"alias 'the rover' for 'Rover Model';",
 		"part 'off model' : 'Not Declared Here';",
 		"import 'Other Package'::*;",
+		// A reserved word and a quote are names a graph can carry, and both
+		// need quoting to lex as the name again.
+		"part def 'state';",
+		"part def 'it\\'s';",
 	} {
 		src := "package P {\n\tpart def 'Rover Model';\n\t" + decl + "\n}"
 		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)

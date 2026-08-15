@@ -629,11 +629,35 @@ func (d *decoder) identWords(el *element) []string {
 
 // nameText writes a name as the notation spells it: the graph carries the name
 // itself, so one that is not a basic name needs its quotes back (KerML §8.2.2).
+// A reserved word lexes as a keyword rather than a name, so a name spelling one
+// needs the quotes too.
 func nameText(name string) string {
-	if lexer.IsIdentifier(name) {
+	if lexer.IsIdentifier(name) && !lexer.IsKeyword(name) {
 		return name
 	}
-	return "'" + name + "'"
+	return "'" + escapeName(name) + "'"
+}
+
+// escapeName escapes a quote the name itself contains, which would otherwise
+// close the unrestricted name early. The parser keeps the escapes a name was
+// written with, so one already escaped is left alone.
+func escapeName(name string) string {
+	var b strings.Builder
+	for i := 0; i < len(name); i++ {
+		switch name[i] {
+		case '\\':
+			b.WriteByte(name[i])
+			if i+1 < len(name) {
+				i++
+				b.WriteByte(name[i])
+			}
+		case '\'':
+			b.WriteString(`\'`)
+		default:
+			b.WriteByte(name[i])
+		}
+	}
+	return b.String()
 }
 
 // qualifiedNameText writes a qualified name segment by segment, since each

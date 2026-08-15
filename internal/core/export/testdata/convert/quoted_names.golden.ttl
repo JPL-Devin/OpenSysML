@@ -91,6 +91,23 @@
     sysml:type "'Not Declared Here'" ;
     sysx:hasBody "false"^^xsd:boolean .
 
+<urn:sysmlv2:element:Quoted%20Names::state>
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Quoted Names::state" ;
+    sysml:owningNamespace <urn:sysmlv2:element:Quoted%20Names> ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysml:declaredName "state" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:Quoted%20Names::a%20state>
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Quoted Names::a state" ;
+    sysml:owningNamespace <urn:sysmlv2:element:Quoted%20Names> ;
+    sysx:memberIndex "6"^^xsd:integer ;
+    sysml:declaredName "a state" ;
+    sysml:type <urn:sysmlv2:element:Quoted%20Names::state> ;
+    sysx:hasBody "false"^^xsd:boolean .
+
 elmt:Consumer
     a sysml:Package ;
     sysml:qualifiedName "Consumer" ;
