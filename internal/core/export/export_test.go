@@ -147,6 +147,78 @@ func TestKindKeywordSynonymsSurviveRDF(t *testing.T) {
 	}
 }
 
+// A condition member states a condition rather than declaring a feature, so
+// each form it is written in has to come back as written: the keyword it states
+// the condition with, its negation, and the nesting of a braced condition.
+func TestConditionMembersSurviveRDF(t *testing.T) {
+	for _, member := range []string{
+		"assert mass > 0;",
+		"assume mass != 0;",
+		"assert not mass > 1000;",
+		"mass < 1000;",
+		"assert constraint inner {\n            mass < 1000;\n        }",
+	} {
+		src := "package P {\n\tattribute mass;\n\tconstraint c {\n\t\t" + member + "\n\t}\n}"
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("%s: to turtle: %v", member, err)
+		}
+		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("%s: back to notation: %v", member, err)
+		}
+		if !strings.Contains(string(back), member) {
+			t.Errorf("the condition %q was rewritten:\n%s", member, back)
+		}
+	}
+}
+
+// A requirement's assumptions and required conditions are members of the same
+// kind, written as a condition, as the constraint they state, or as a body.
+func TestRequirementConditionsSurviveRDF(t *testing.T) {
+	for _, member := range []string{
+		"assume mass > 0;",
+		"require mass < 100;",
+		"require Light;",
+		"require constraint {\n            mass < 100;\n        }",
+	} {
+		src := "package P {\n\tattribute mass;\n\tconstraint def Light;\n\trequirement r {\n\t\t" + member + "\n\t}\n}"
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("%s: to turtle: %v", member, err)
+		}
+		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("%s: back to notation: %v", member, err)
+		}
+		if !strings.Contains(string(back), member) {
+			t.Errorf("the requirement member %q was rewritten:\n%s", member, back)
+		}
+	}
+}
+
+// `assert` before a kind keyword says what the declaration it qualifies is for,
+// so dropping it would come back as a plain constraint — a different model.
+func TestAssertedUsagePrefixSurvivesRDF(t *testing.T) {
+	for _, decl := range []string{
+		"assert constraint ok : Light;",
+		"assert not constraint bad : Light;",
+	} {
+		src := "package P {\n\tconstraint def Light;\n\tpart def Q {\n\t\t" + decl + "\n\t}\n}"
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("%s: to turtle: %v", decl, err)
+		}
+		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("%s: back to notation: %v", decl, err)
+		}
+		if !strings.Contains(string(back), decl) {
+			t.Errorf("the prefix of %q was dropped:\n%s", decl, back)
+		}
+	}
+}
+
 // A keyword sitting in a comment inside a declaration head is trivia, not the
 // declaration's kind, so it must not become the keyword written back.
 func TestCommentInHeadDoesNotChangeKeyword(t *testing.T) {

@@ -443,17 +443,21 @@ type Usage struct {
 	// Keyword is the kind keyword as written. Several synonyms map to one Kind
 	// (`datatype`, `feature` and `attribute` all give UsageAttribute), so it is
 	// kept to tell those spellings apart.
-	Keyword      string
-	IsAbstract   bool
-	IsVariation  bool // 'variation' modifier: the usage is a variation point
-	IsVariant    bool // declared with 'variant': a variant of the enclosing variation
-	IsReference  bool
-	IsAll        bool // 'all' multiplicity propagation modifier
-	IsEnd        bool // 'end' feature modifier
-	IsChain      bool // 'chain' feature modifier
-	IsConstant   bool // 'constant' feature modifier
-	IsEvent      bool // 'event' modifier for event-driven occurrences
-	IsIndividual bool // 'individual' modifier: OccurrenceUsage::isIndividual
+	Keyword string
+	// PrefixKeyword is the keyword written ahead of the kind keyword to qualify
+	// it rather than to name the declaration: the `assert` of
+	// `assert constraint c : C` (SysML.xtext AssertConstraintUsage).
+	PrefixKeyword string
+	IsAbstract    bool
+	IsVariation   bool // 'variation' modifier: the usage is a variation point
+	IsVariant     bool // declared with 'variant': a variant of the enclosing variation
+	IsReference   bool
+	IsAll         bool // 'all' multiplicity propagation modifier
+	IsEnd         bool // 'end' feature modifier
+	IsChain       bool // 'chain' feature modifier
+	IsConstant    bool // 'constant' feature modifier
+	IsEvent       bool // 'event' modifier for event-driven occurrences
+	IsIndividual  bool // 'individual' modifier: OccurrenceUsage::isIndividual
 	// Portion is the `snapshot` or `timeslice` prefix of an occurrence usage
 	// (OccurrenceUsage::portionKind, SysML v2 8.3.9.11).
 	Portion  PortionKind

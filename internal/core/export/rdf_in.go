@@ -232,6 +232,20 @@ func (d *decoder) head(el *element) (string, error) {
 			return "", d.missing(el, "sysx:"+xFilter, "a filter is its condition")
 		}
 		return "filter " + condition, nil
+	case mConstraint:
+		// A bare condition states no keyword of its own; it asserts implicitly.
+		keyword, _ := d.stringOf(el, rdf.Systemica+xDeclaredKeyword)
+		return d.conditionHead(el, keyword)
+	case mAssume:
+		return d.conditionHead(el, "assume")
+	case mRequire:
+		return d.conditionHead(el, "require")
+	case mResult:
+		value, ok := d.stringOf(el, rdf.SysML+pValue)
+		if !ok {
+			return "", d.missing(el, "sysml:"+pValue, "a result member is the expression it returns")
+		}
+		return "return " + value, nil
 	}
 	// A succession carrying its ends as references is the one the parser builds
 	// for a `then`, written back as the edge form: `then <source> <target>;`
@@ -359,6 +373,14 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 			words = append(words, flag.keyword)
 		}
 	}
+	// A prefix qualifies the kind keyword after it, and the `not` of
+	// `assert not constraint c` negates the declaration that prefix introduces.
+	if prefix, ok := d.stringOf(el, rdf.Systemica+xDeclaredPrefix); ok {
+		words = append(words, prefix)
+		if d.boolOf(el, rdf.SysML+"isNegated") {
+			words = append(words, "not")
+		}
+	}
 	words = append(words, keyword)
 	// `chain` qualifies the kind keyword it follows, unlike the modifiers above.
 	if d.boolOf(el, rdf.SysML+"isChain") {
@@ -405,6 +427,33 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 		head += " " + strings.Join(tail, " ")
 	}
 	return head
+}
+
+// conditionHead rebuilds a condition member from its properties: an inline
+// condition (`assert x > 0`), the constraint it states (`require R`), or a
+// nested constraint whose conditions are its body (`assume constraint { … }`).
+func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
+	var words []string
+	if keyword != "" {
+		words = append(words, keyword)
+	}
+	if d.boolOf(el, rdf.SysML+"isNegated") {
+		words = append(words, "not")
+	}
+	switch condition, ok := d.stringOf(el, rdf.Systemica+xCondition); {
+	case ok:
+		words = append(words, condition)
+	case d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences]) != "":
+		words = append(words, d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences]))
+	case d.boolOf(el, rdf.Systemica+xHasBody):
+		// The nested-constraint form spells out the kind it declares, so the
+		// braces that follow are read as a constraint body rather than a name.
+		words = append(words, "constraint")
+		words = append(words, d.identWords(el)...)
+	default:
+		return "", d.missing(el, "sysx:"+xCondition, "a condition member states a condition")
+	}
+	return strings.Join(words, " "), nil
 }
 
 // acceptParam returns the synthetic parameter of an accept shorthand, whose

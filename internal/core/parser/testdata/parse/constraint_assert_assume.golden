@@ -9,12 +9,12 @@
         (Usage kind="attribute" name="temp" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="typing" target=Real
             (*ast.QualifiedName))))
-      (ConstraintMember assert=true negated=false name="safetyLimit"
+      (ConstraintMember assert=true negated=false keyword="assert" name="safetyLimit"
         (ConstraintMember assert=true negated=false
           (OperatorExpr operator="<"
             (FeatureReference name="pressure")
             (LiteralInteger value="100"))))
-      (ConstraintMember assert=false negated=false name="operatingConditions"
+      (ConstraintMember assert=false negated=false keyword="assume" name="operatingConditions"
         (ConstraintMember assert=true negated=false
           (OperatorExpr operator="and"
             (OperatorExpr operator=">"

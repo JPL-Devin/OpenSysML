@@ -354,7 +354,10 @@ type ResultMember struct {
 // Syntax: assert <expression>; or assume <expression>;
 type ConstraintMember struct {
 	NodeBase
-	IsAssert   bool   // true for 'assert', false for 'assume'
+	IsAssert bool // true for 'assert', false for 'assume'
+	// Keyword is the keyword the condition was written with: "assert",
+	// "assume", or "" for a bare condition, which asserts implicitly.
+	Keyword    string
 	IsNegated  bool   // true if 'not' keyword present (assert not expr)
 	Expression Node   // the constraint expression, nil when stated through Body
 	Name       string // name of the nested constraint, when it has one
