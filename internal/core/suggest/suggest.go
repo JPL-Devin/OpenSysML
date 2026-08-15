@@ -18,6 +18,108 @@ const Limit = 3
 // re-exports popular names many times.
 const scanLimit = 200
 
+// NeighbourLimit bounds how many near spellings are considered for one name,
+// so a common short name does not cost a scope search per registered name.
+const NeighbourLimit = 25
+
+// slack is how much further than the best candidate another may be and still be
+// offered: a name two or more edits worse is not the same guess.
+const slack = 1
+
+// Candidate is a spelling a name that did not resolve may have meant, beside
+// what makes it plausible: how far it is from the typed name, and how the user
+// would reach it.
+type Candidate struct {
+	Spelling string // what to offer: a name usable as written, else a qualified path
+	Distance int    // edit distance from the typed name
+	InScope  bool   // the spelling resolves from the reference's scope as written
+	Library  bool   // declared by bundled library content, not by the workspace
+}
+
+// reach ranks how the user would have to reach a candidate: a spelling that
+// resolves where they typed it beats one only a qualified path reaches, and
+// their own declaration beats a bundled library name.
+func (c Candidate) reach() int {
+	r := 0
+	if !c.InScope {
+		r += 2
+	}
+	if c.Library {
+		r++
+	}
+	return r
+}
+
+// dominates reports whether c rules out other: it is at least as close and at
+// least as reachable, and strictly better in one of the two. A candidate a
+// better one rules out is not offered, so a distant library name is not listed
+// beside the declaration one edit from the typed name.
+func (c Candidate) dominates(other Candidate) bool {
+	if c.Distance > other.Distance || c.reach() > other.reach() {
+		return false
+	}
+	return c.Distance < other.Distance || c.reach() < other.reach()
+}
+
+// Rank offers the candidates no other candidate rules out, closest and most
+// reachable first, at most Limit of them. Ordering is total, so the same
+// candidate set always reads the same way.
+func Rank(cands []Candidate) []string {
+	offerable := make([]Candidate, 0, len(cands))
+	best := -1
+	for _, c := range cands {
+		if c.Spelling == "" {
+			continue
+		}
+		offerable = append(offerable, c)
+		if best < 0 || c.Distance < best {
+			best = c.Distance
+		}
+	}
+	kept := make([]Candidate, 0, len(offerable))
+	for _, c := range offerable {
+		if c.Distance > best+slack || dominated(c, offerable) {
+			continue
+		}
+		kept = append(kept, c)
+	}
+	sort.Slice(kept, func(i, j int) bool {
+		a, b := kept[i], kept[j]
+		switch {
+		case a.Distance != b.Distance:
+			return a.Distance < b.Distance
+		case a.reach() != b.reach():
+			return a.reach() < b.reach()
+		case len(a.Spelling) != len(b.Spelling):
+			return len(a.Spelling) < len(b.Spelling)
+		}
+		return a.Spelling < b.Spelling
+	})
+	seen := map[string]bool{}
+	out := make([]string, 0, Limit)
+	for _, c := range kept {
+		if seen[c.Spelling] {
+			continue
+		}
+		seen[c.Spelling] = true
+		out = append(out, c.Spelling)
+		if len(out) == Limit {
+			break
+		}
+	}
+	return out
+}
+
+// dominated reports whether any candidate rules c out.
+func dominated(c Candidate, cands []Candidate) bool {
+	for _, other := range cands {
+		if other.Spelling != c.Spelling && other.dominates(c) {
+			return true
+		}
+	}
+	return false
+}
+
 // Qualified returns the qualified names, shortest first, under which the index
 // declares the simple name name: `Integer` is declared as `ScalarValues::Integer`.
 func Qualified(idx *symbols.Index, name string) []string {
@@ -89,56 +191,76 @@ func LastSegment(fqn string) string {
 	return fqn
 }
 
-// Nearest returns the candidates closest to word by edit distance, within the
-// tolerance a typo of that length justifies, in distance then name order.
+// Nearest returns the spellings closest to word by edit distance, within the
+// budget a typo of that length justifies. It is what a surface with one flat
+// set of equally reachable names asks — the REPL's meta commands.
 func Nearest(word string, candidates []string) []string {
-	tolerance := toleranceFor(len([]rune(word)))
+	return Rank(candidatesOf(Neighbours(word, candidates)))
+}
+
+// Neighbours returns the candidates within word's edit-distance budget, closest
+// first, at most NeighbourLimit of them.
+func Neighbours(word string, candidates []string) []Neighbour {
+	budget := Budget(len([]rune(word)))
 	lower := strings.ToLower(word)
-	var hits []scored
+	var hits []Neighbour
 	for _, c := range candidates {
 		if c == word {
 			continue
 		}
-		if d := EditDistance(lower, strings.ToLower(c)); d <= tolerance {
-			hits = append(hits, scored{name: c, dist: d})
+		if EditDistance(lower, strings.ToLower(c)) <= budget {
+			hits = append(hits, Neighbour{Name: c, Distance: EditDistance(word, c)})
 		}
 	}
-	return rank(hits)
+	return nearestFirst(hits)
 }
 
-// scored is a candidate beside its distance from the word that did not resolve.
-type scored struct {
-	name string
-	dist int
+// Neighbour is a registered name beside its distance from the one that did not
+// resolve. The budget is spent case-insensitively — a wrong case is a typo —
+// but Distance counts case, so a name spelled as typed is the closer guess.
+type Neighbour struct {
+	Name     string
+	Distance int
 }
 
-// toleranceFor is how many edits a typo of n runes justifies.
-func toleranceFor(n int) int {
-	switch {
-	case n >= 9:
-		return 3
-	case n >= 6:
-		return 2
-	}
-	return 1
-}
-
-// rank orders candidates by distance then name, keeping at most Limit of them.
-func rank(hits []scored) []string {
+// nearestFirst orders neighbours by distance then name and keeps at most
+// NeighbourLimit, so what a caller then scores is bounded and deterministic.
+func nearestFirst(hits []Neighbour) []Neighbour {
 	sort.Slice(hits, func(i, j int) bool {
-		if hits[i].dist != hits[j].dist {
-			return hits[i].dist < hits[j].dist
+		if hits[i].Distance != hits[j].Distance {
+			return hits[i].Distance < hits[j].Distance
 		}
-		return hits[i].name < hits[j].name
+		return hits[i].Name < hits[j].Name
 	})
-	out := make([]string, 0, len(hits))
+	if len(hits) > NeighbourLimit {
+		hits = hits[:NeighbourLimit]
+	}
+	return hits
+}
+
+// candidatesOf reads neighbours as candidates reached alike, for a caller that
+// has no scope to judge them from.
+func candidatesOf(hits []Neighbour) []Candidate {
+	out := make([]Candidate, 0, len(hits))
 	for _, h := range hits {
-		out = append(out, h.name)
-		if len(out) == Limit {
-			break
-		}
+		out = append(out, Candidate{Spelling: h.Name, Distance: h.Distance})
 	}
 	return out
+}
+
+// Budget is how many edits a name of n runes justifies as a typo. It scales
+// with the name, since one edit of a short name reaches most short names: a
+// name of two runes or fewer is too short for a typo to be identifiable.
+func Budget(n int) int {
+	switch {
+	case n <= 2:
+		return 0
+	case n <= 5:
+		return 1
+	case n <= 8:
+		return 2
+	}
+	return 3
 }
 
 // EditDistance is the Levenshtein distance between a and b, counting a

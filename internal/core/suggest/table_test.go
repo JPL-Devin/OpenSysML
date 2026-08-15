@@ -21,8 +21,8 @@ func TestTableAgreesWithScan(t *testing.T) {
 			if name == "" {
 				return
 			}
-			if got, want := table.Nearest(name), suggest.Nearest(name, names); !equal(got, want) {
-				t.Errorf("Table.Nearest(%q) = %v, want %v", name, got, want)
+			if got, want := neighbourNames(table.Neighbours(name)), neighbourNames(suggest.Neighbours(name, names)); !equal(got, want) {
+				t.Errorf("Table.Neighbours(%q) = %v, want %v", name, got, want)
 			}
 		})
 	}
@@ -34,9 +34,18 @@ func TestTableWithoutIndex(t *testing.T) {
 	if got := table.Qualified("Integer"); len(got) > 0 {
 		t.Errorf("Table.Qualified over no index = %v, want none", got)
 	}
-	if got := table.Nearest("Integer"); len(got) > 0 {
-		t.Errorf("Table.Nearest over no index = %v, want none", got)
+	if got := table.Neighbours("Integer"); len(got) > 0 {
+		t.Errorf("Table.Neighbours over no index = %v, want none", got)
 	}
+}
+
+// neighbourNames reads the names off neighbours, in the order they came.
+func neighbourNames(hits []suggest.Neighbour) []string {
+	out := make([]string, 0, len(hits))
+	for _, h := range hits {
+		out = append(out, h.Name)
+	}
+	return out
 }
 
 func equal(a, b []string) bool {

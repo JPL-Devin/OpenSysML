@@ -69,9 +69,12 @@ type Resolver struct {
 	// redefine a feature of the requirement it references by plain name.
 	constraintRefs []constraintRef
 	// suggestions are the spellings an unresolvable name may have meant, kept
-	// per name; names is the index's name table they are looked up in.
-	suggestions map[string][]string
+	// per name and scope; names is the index's name table they are looked up in.
+	// suggesting holds the suggestions being scored, so scoring one cannot
+	// recurse into scoring itself.
+	suggestions map[suggestKey][]string
 	names       *suggest.Table
+	suggesting  map[suggestKey]bool
 }
 
 // New creates a resolver over the given index.
@@ -85,7 +88,8 @@ func New(idx *symbols.Index) *Resolver {
 		naming:    map[*symbols.Symbol]bool{},
 		nsFilters: map[*symbols.Scope][]symbols.ElementFilter{},
 
-		suggestions: map[string][]string{},
+		suggestions: map[suggestKey][]string{},
+		suggesting:  map[suggestKey]bool{},
 
 		inheritedImports: map[*symbols.Symbol]bool{},
 	}
@@ -195,7 +199,7 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 	if !res.ok {
 		r.report(Diagnostic{
 			Span:    spanOf(at),
-			Message: r.unresolvedMessage(name),
+			Message: r.unresolvedMessage(scope, name),
 		})
 	}
 	return res.sym, res.ok

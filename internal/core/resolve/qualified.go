@@ -25,7 +25,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		if res.ok {
 			r.recordPart(qn, 0, res.sym)
 		} else {
-			r.unresolved(qn)
+			r.unresolved(scope, qn)
 		}
 		return res
 	}
@@ -90,7 +90,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 				// Every candidate the name reaches is filtered out, so it is not a
 				// member of the namespace it appears under (KerML 8.2.4) and no
 				// other route may recover it.
-				r.unresolved(qn)
+				r.unresolved(scope, qn)
 				return resolution{nil, false}
 			}
 		}
@@ -99,7 +99,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		// there: it is invisible from here (KerML 8.2.3.3), and the member search
 		// below reaches cached symbols by a route that does not know that.
 		if len(all) == 0 && r.idx != nil && r.idx.HiddenFrom(memberFQN, from) {
-			r.unresolved(qn)
+			r.unresolved(scope, qn)
 			return resolution{nil, false}
 		}
 
@@ -113,7 +113,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		}
 
 		if len(all) == 0 {
-			r.unresolved(qn)
+			r.unresolved(scope, qn)
 			return resolution{nil, false}
 		}
 		if len(all) > 1 {
@@ -212,10 +212,10 @@ func rootOf(scope *symbols.Scope) *symbols.Scope {
 // unresolved records an unresolved-reference diagnostic, offering the spellings
 // a simple name may have meant. A qualified name already says where to look, so
 // only an unqualified one is second-guessed.
-func (r *Resolver) unresolved(qn *ast.QualifiedName) {
-	msg := "unresolved reference: " + qnText(qn)
+func (r *Resolver) unresolved(scope *symbols.Scope, qn *ast.QualifiedName) {
+	msg := unresolvedReferencePrefix + qnText(qn)
 	if len(qn.Parts) == 1 && !qn.Global {
-		msg = r.unresolvedMessage(qn.Parts[0].Text)
+		msg = r.unresolvedMessage(scope, qn.Parts[0].Text)
 	}
 	r.report(Diagnostic{
 		Span:    qn.Span(),
