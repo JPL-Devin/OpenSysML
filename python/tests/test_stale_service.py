@@ -105,6 +105,7 @@ def test_a_foreign_service_of_another_release_is_reported_not_killed(
     assert f"stop the service listening on localhost:{port} yourself" in error.remedy
     assert error.info.version == "v0.0.5"
     # Still serving: nothing was killed.
+    monkeypatch.delenv("PYSYSML_GRPC_VERSION")
     with Connection(port=port, auto_start=False) as conn:
         assert conn.server_info().version == "v0.0.5"
     assert not os.path.exists(_get_pidfile_path())
@@ -185,6 +186,25 @@ def test_a_refused_connection_releases_what_it_took(tmp_home, monkeypatch):
 
     assert not os.path.exists(_get_refcount_path())
     assert not os.path.exists(_get_pidfile_path())
+
+
+def test_a_service_the_caller_manages_is_checked_too(
+    running_service, tmp_home, monkeypatch
+):
+    """A release asked for is checked even when this client starts nothing.
+
+    Reporting the mismatch needs no ownership, since nothing is stopped; only
+    replacing the service does.
+    """
+    port = running_service(version="v0.0.5")
+
+    with pytest.raises(StaleServiceError) as excinfo:
+        Connection(port=port, auto_start=False, version="v0.0.7")
+
+    assert "v0.0.5" in excinfo.value.reason and "v0.0.7" in excinfo.value.reason
+    assert not os.path.exists(_get_refcount_path())
+    with Connection(port=port, auto_start=False) as conn:
+        assert conn.server_info().version == "v0.0.5"
 
 
 def test_a_matching_service_is_adopted(running_service, tmp_home, monkeypatch):

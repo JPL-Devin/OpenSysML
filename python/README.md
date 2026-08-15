@@ -636,7 +636,9 @@ is never killed, and one is never stopped only to start the same build again, so
 the remedy asks you to stop it, name another port, or accept what is running. A
 service that only lacks a required *capability* is therefore always reported, not
 replaced: capabilities come with a release, so restarting the same binary would
-report the same ones.
+report the same ones. `auto_start=False` checks the release too — reporting a
+mismatch stops nothing, so it needs no ownership — it simply has nothing to start
+in its place.
 
 ## Development
 

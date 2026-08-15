@@ -270,8 +270,9 @@ class Connection:
             version (str, optional): Release tag the service must report, or
                 'latest'. Defaults to $PYSYSML_GRPC_VERSION, the same tag the
                 binary cache is checked against; without either, whatever
-                release answers is accepted. Checked while the service is being
-                started or adopted, so only when auto_start is True.
+                release answers is accepted. Checked whether the service is
+                started here or managed by the caller, though only a service
+                this client started can be replaced.
             require_capabilities (iterable, optional): Capability names the
                 service must report, checked once at connect time rather than
                 when the first call needing one is made
@@ -305,6 +306,8 @@ class Connection:
         self._channel = grpc.insecure_channel(self._address)
         self._stub = sysml_pb2_grpc.SysMLServiceStub(self._channel)
         try:
+            if not auto_start:
+                self._check_managed_service_release()
             for capability in sorted(self._required_capabilities):
                 require(self.server_info(), capability, upgrade_remedy(capability))
         except BaseException:
@@ -313,6 +316,26 @@ class Connection:
             self.close()
             raise
     
+    def _check_managed_service_release(self):
+        """Check the release of a service this client was told not to start.
+
+        Nothing can be started in its place, so the mismatch is reported rather
+        than acted on; ownership does not matter, since nothing is stopped.
+        """
+        required = self._required_release()
+        if required is None:
+            return
+        info = self.server_info()
+        reason = mismatch_reason(info, version=required)
+        if reason is not None:
+            raise StaleServiceError(
+                self._address, reason,
+                f"reach a {required} service with connect(port=<its port>), or "
+                f"accept what is running by passing version=None and unsetting "
+                f"$PYSYSML_GRPC_VERSION",
+                info=info,
+            )
+
     def close(self):
         """Close the gRPC channel and decrement refcount."""
         if self._channel:

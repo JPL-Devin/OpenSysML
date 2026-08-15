@@ -127,7 +127,8 @@ def connect(host='localhost', port=None, auto_start=True, version=None,
         port (int, optional): Service port (default: 50051)
         auto_start (bool): If True, automatically start service if not running (default: True)
         version (str, optional): Release tag the service must report, or
-            'latest'; defaults to $PYSYSML_GRPC_VERSION
+            'latest'; defaults to $PYSYSML_GRPC_VERSION. Checked whether the
+            service is started here or managed by the caller
         require_capabilities (iterable, optional): Capability names the service
             must report, checked at connect time
     
