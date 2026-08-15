@@ -212,6 +212,34 @@ def test_a_service_the_caller_manages_is_checked_too(
         assert conn.server_info().version == "v0.0.5"
 
 
+def test_the_newest_release_is_looked_up_once_per_connection(
+    running_service, tmp_home, monkeypatch
+):
+    """A lookup of 'latest' that later fails cannot turn the check off.
+
+    Resolving it per check would let a flaky second lookup read as "no release
+    asked for", and would cost a lookup on every check besides.
+    """
+    port = running_service(version="v0.0.5")
+    lookups = []
+
+    def resolve_latest_version():
+        lookups.append(None)
+        if len(lookups) > 1:
+            raise ConnectionError("release lookup unavailable")
+        return "v0.0.7"
+
+    monkeypatch.setattr(
+        "pysysml.connection.resolve_latest_version", resolve_latest_version
+    )
+
+    with pytest.raises(StaleServiceError) as excinfo:
+        Connection(port=port, auto_start=False, version="latest")
+
+    assert "v0.0.5" in excinfo.value.reason and "v0.0.7" in excinfo.value.reason
+    assert len(lookups) == 1
+
+
 def test_a_service_the_caller_has_not_started_yet_is_checked_at_the_first_call(
     running_service, tmp_home, monkeypatch
 ):

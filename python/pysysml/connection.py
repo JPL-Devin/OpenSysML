@@ -44,6 +44,9 @@ from pysysml.verdict import CalcResult, Verdict
 #: Port the service listens on when a caller names none.
 DEFAULT_PORT = 50051
 
+#: A required release not looked up yet, distinct from 'none required'.
+_UNRESOLVED = object()
+
 
 def split_target(host, port=None):
     """Split a ``host:port`` string written as the host into host and port.
@@ -299,6 +302,7 @@ class Connection:
         self._holds_refcount = False
         self._version = version or os.environ.get('PYSYSML_GRPC_VERSION') or None
         self._required_capabilities = frozenset(require_capabilities or ())
+        self._resolved_release = _UNRESOLVED
         # A caller-managed service that was not listening yet is checked at the
         # first handshake, so auto_start=False stays free of eager I/O.
         self._check_release_on_handshake = False
@@ -1032,16 +1036,20 @@ class Connection:
         )
 
     def _required_release(self):
-        """Release tag the service must report, resolved, or None if none is required.
+        """Release tag the service must report, or None if none is required.
 
-        An unresolvable 'latest' requires nothing, as for the binary cache.
+        An unresolvable 'latest' requires nothing, as for the binary cache. The
+        answer is resolved once, so every check of a connection uses the same one.
         """
-        if self._version != 'latest':
-            return self._version
-        try:
-            return resolve_latest_version()
-        except ConnectionError:
-            return None
+        if self._resolved_release is _UNRESOLVED:
+            if self._version != 'latest':
+                self._resolved_release = self._version
+            else:
+                try:
+                    self._resolved_release = resolve_latest_version()
+                except ConnectionError:
+                    self._resolved_release = None
+        return self._resolved_release
 
     def _started_by_this_client(self):
         """The service process this client's records say it started on this port.
