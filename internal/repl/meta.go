@@ -896,9 +896,19 @@ func (s *Session) doInstances() ([]string, bool, error) {
 		return []string{"(no instances created)"}, false, nil
 	}
 
+	names := make([]string, 0, len(s.instances))
+	for name := range s.instances {
+		names = append(names, name)
+	}
+	slices.Sort(names)
 	lines := []string{"Instances:"}
-	for name, inst := range s.instances {
-		lines = append(lines, fmt.Sprintf("  %s (ID: %d)", name, inst.ID))
+	for _, name := range names {
+		lines = append(lines, fmt.Sprintf("  %s (ID: %d)", name, s.instances[name].ID))
+	}
+	// Some of what the session materialized may be gone even though the rest
+	// survived, which the list would otherwise not say.
+	if note := instancesPartlyGoneNote(s.lostInstances, s.lostAt); note != "" {
+		lines = append(lines, note)
 	}
 	return lines, false, nil
 }
@@ -1414,19 +1424,21 @@ func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
 // performingObject resolves the object a debugging session's behavior is
 // performed by: its connections route what the behavior sends. No argument
 // performs the behavior outside any object.
-func (s *Session) performingObject(args []string) (*runtime.Instance, error) {
+// It also returns the name that object is held under, so a submission that drops
+// it can end the session.
+func (s *Session) performingObject(args []string) (*runtime.Instance, string, error) {
 	if len(args) == 0 {
-		return nil, nil
+		return nil, "", nil
 	}
 	_, fqn, lerr := s.lookupSymbol(args[0])
 	if lerr != nil {
-		return nil, lerr
+		return nil, "", lerr
 	}
 	inst, ok := s.instances[fqn]
 	if !ok {
-		return nil, fmt.Errorf("no instance of %q (use %%instantiate first)", fqn)
+		return nil, "", fmt.Errorf("no instance of %q (use %%instantiate first)", fqn)
 	}
-	return inst, nil
+	return inst, fqn, nil
 }
 
 // --- Action Debugging Commands ---
@@ -1461,7 +1473,7 @@ func (s *Session) startAction(name string, performer []string) ([]string, error)
 		return nil, fmt.Errorf("%q is not an action", name)
 	}
 
-	self, perr := s.performingObject(performer)
+	self, selfFQN, perr := s.performingObject(performer)
 	if perr != nil {
 		return nil, perr
 	}
@@ -1477,6 +1489,7 @@ func (s *Session) startAction(name string, performer []string) ([]string, error)
 	s.actionExec = &actionSession{
 		name:     name,
 		fqn:      qualifiedOr(fqn, name),
+		selfFQN:  selfFQN,
 		symbol:   sym,
 		executor: exec,
 	}
@@ -1713,7 +1726,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		return nil, fmt.Errorf("%q is not a state machine", name)
 	}
 
-	self, perr := s.performingObject(performer)
+	self, selfFQN, perr := s.performingObject(performer)
 	if perr != nil {
 		return nil, perr
 	}
@@ -1729,6 +1742,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	s.stateExec = &stateSession{
 		name:     name,
 		fqn:      qualifiedOr(fqn, name),
+		selfFQN:  selfFQN,
 		symbol:   sym,
 		executor: exec,
 		now:      exec.CurrentTime(),

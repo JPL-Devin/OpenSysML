@@ -24,6 +24,11 @@ type Result struct {
 	Origins     []Origin            // the files of THIS submission, in buffer order
 	Notices     []string            // side effects of the submission, e.g. a debugging session it ended
 
+	// Blocked names the unresolved error that stopped the deeper checks from
+	// running over this submission, nil when they ran or when the session already
+	// reported that error.
+	Blocked *blocker
+
 	// own locates this submission inside Source when it was merged into text
 	// already in the buffer, which is not one tail region. Empty for a
 	// submission appended whole, where everything from Offset on is its own.
@@ -332,8 +337,8 @@ func renderSplit(r Result, v Verbosity) (found, declared []string) {
 	// A validation tier is skipped once a lower tier errors anywhere in the
 	// buffer, so a clean report on this submission would otherwise read as a
 	// full check when the deeper passes never ran.
-	if r.analysisBlocked() {
-		found = append(found, blockedNote)
+	if note := r.Blocked.note(); note != "" {
+		found = append(found, note)
 	}
 	return found, append(renderSummary(r.ownMembers()), r.Notices...)
 }
@@ -354,18 +359,69 @@ func scopedDiagnostics(r Result, v Verbosity) []passes.Diagnostic {
 	return out
 }
 
-// blockedNote warns that a clean report is not a full check.
-const blockedNote = "note: an earlier session error is unresolved, so deeper checks may not have run here (see it with -debug)"
+// blocker is the unresolved error that stopped the higher validation tiers from
+// running over a submission: the buffer line it was reported on, what it said,
+// and how many further errors sit elsewhere in the buffer.
+type blocker struct {
+	offset  int
+	line    int
+	message string
+	more    int
+}
 
-// analysisBlocked reports whether an error outside this submission stopped the
-// higher validation tiers from running over it.
-func (r Result) analysisBlocked() bool {
-	for _, d := range r.Diagnostics {
-		if d.Severity == passes.SeverityError && !r.mine(d.Span) {
-			return true
-		}
+// key identifies what is blocking the checks, so an unchanged blockage is
+// reported once rather than on every submission made under it, while a new error
+// joining it is reported again.
+func (b *blocker) key() string {
+	return fmt.Sprintf("%d:%d:%s", b.more, b.offset, b.message)
+}
+
+// note warns that a clean report is not a full check, naming the line the
+// unresolved error is on so it can be gone back to rather than only known about.
+// The error itself is not re-reported: it is this submission's report, and the
+// finding belongs to the line it was written on.
+func (b *blocker) note() string {
+	if b == nil {
+		return ""
 	}
-	return false
+	if b.more > 0 {
+		return fmt.Sprintf("note: deeper checks may not have run here: the error on buffer line %d is unresolved, with %s elsewhere in the buffer (see them with -debug)",
+			b.line, countOf(b.more, "error", "errors"))
+	}
+	return fmt.Sprintf("note: deeper checks may not have run here: the error on buffer line %d is unresolved (see it with -debug)", b.line)
+}
+
+// blockedBy reports the unresolved error that stopped the deeper checks from
+// running over this submission, and records it as reported: a standing error is
+// named on the first submission that ran under it, not on every one after.
+func (s *Session) blockedBy(r Result) *blocker {
+	b := r.analysisBlocked()
+	if b == nil {
+		s.notedBlocker = ""
+		return nil
+	}
+	if key := b.key(); key != s.notedBlocker {
+		s.notedBlocker = key
+		return b
+	}
+	return nil
+}
+
+// analysisBlocked returns the error outside this submission that stopped the
+// higher validation tiers from running over it, nil when there is none.
+func (r Result) analysisBlocked() *blocker {
+	var first *blocker
+	for _, d := range r.Diagnostics {
+		if d.Severity != passes.SeverityError || r.mine(d.Span) {
+			continue
+		}
+		if first != nil {
+			first.more++
+			continue
+		}
+		first = &blocker{offset: d.Span.Offset, line: r.lineOf(d.Span.Offset), message: d.Message}
+	}
+	return first
 }
 
 func hasError(diags []passes.Diagnostic) bool {

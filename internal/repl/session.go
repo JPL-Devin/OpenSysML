@@ -75,6 +75,11 @@ type Session struct {
 	lostInstances int // how many instances the last submission that dropped any took
 	lostAt        int // the submission that dropped them
 
+	// notedBlocker identifies the unresolved error the session has already
+	// reported as blocking the deeper checks, so it is named once rather than on
+	// every submission after it.
+	notedBlocker string
+
 	// trace records execution steps while tracing is on, nil otherwise.
 	trace *runtime.TraceRecorder
 
@@ -89,7 +94,10 @@ type actionSession struct {
 	name string
 	// fqn is the debugged action's qualified name. Superseding it, or a namespace
 	// it lives in, rewrites the graph being run and ends the session.
-	fqn      string
+	fqn string
+	// selfFQN names the object performing the behavior, empty when it performs
+	// outside any object. Losing that object ends the session with it.
+	selfFQN  string
 	symbol   *symbols.Symbol
 	executor *runtime.ActionExecutor
 }
@@ -102,11 +110,21 @@ func (a *actionSession) fqnOf() string {
 	return a.fqn
 }
 
+// selfOf returns the name of the performing object, or "" for none.
+func (a *actionSession) selfOf() string {
+	if a == nil {
+		return ""
+	}
+	return a.selfFQN
+}
+
 // stateSession holds an active state machine executor debugging session.
 type stateSession struct {
 	name string
 	// fqn is the debugged state machine's qualified name; see actionSession.fqn.
-	fqn      string
+	fqn string
+	// selfFQN names the performing object; see actionSession.selfFQN.
+	selfFQN  string
 	symbol   *symbols.Symbol
 	executor *runtime.StateExecutor
 	// now is the debugger's clock. The executor's own clock only moves when an
@@ -121,6 +139,14 @@ func (s *stateSession) fqnOf() string {
 		return ""
 	}
 	return s.fqn
+}
+
+// selfOf returns the name of the performing object, or "" for none.
+func (s *stateSession) selfOf() string {
+	if s == nil {
+		return ""
+	}
+	return s.selfFQN
 }
 
 // NewSession returns a session over a fresh workspace.
@@ -484,25 +510,27 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 	if at, ok := firstText(own); ok {
 		offset = at
 	}
+	// What the session holds is recorded against the resolution that produced it
+	// before the new text replaces that resolution, so what the new document does
+	// not change can be told apart from what it does.
+	over := s.recordCarryover()
 	s.ws.Open(docName, []byte(joined), s.version)
-	// The document is a new AST and scope tree, so anything derived from the
-	// previous one is stale — including instances, whose IDs restart with the
-	// new runtime context. The index is re-used and brought up to date on the
-	// next lookup instead, which is why it records the version it holds.
+	// The document is a new AST and scope tree, so the context derived from the
+	// previous one is replaced; the objects it holds are carried into the new one
+	// where the declarations they were materialized against are unchanged. The
+	// index is re-used and brought up to date on the next lookup instead, which is
+	// why it records the version it holds.
 	s.rtCtx = nil
+	gone := goneNames(drops)
 	notices := dropNotices(drops)
-	if n := len(s.instances); n > 0 {
-		s.instances = make(map[string]*runtime.Instance)
-		s.lostInstances, s.lostAt = n, s.version
-		notices = append(notices, instancesDroppedNotice(n))
-	}
-	notices = append(notices, s.dropStaleDebugSessions(drops)...)
+	notices = append(notices, s.carryOverObjects(over, gone)...)
+	notices = append(notices, s.dropStaleDebugSessions(gone, over)...)
 	diags := s.annotateDiagnostics(s.ws.Diagnostics(docName))
 	var members []ast.Node
 	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
 		members = doc.AST.Members
 	}
-	return Result{
+	res := Result{
 		Members:     members,
 		Declared:    declared,
 		Diagnostics: diags,
@@ -512,47 +540,81 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 		own:         own,
 		Notices:     notices,
 	}
+	res.Blocked = s.blockedBy(res)
+	return res
 }
 
-// dropStaleDebugSessions ends the debugging sessions whose declaration this
-// submission superseded, and reports each one it ended. A session over a
-// declaration the submission left alone survives — including one merged into a
-// namespace that only gained an unrelated member: it keeps running against the
-// graph and runtime context it started with, so stepping through a behavior does
-// not require avoiding the prompt.
-func (s *Session) dropStaleDebugSessions(drops []dropReport) []string {
-	var gone []string
-	for _, d := range drops {
-		gone = append(gone, d.gone...)
-	}
-	if len(gone) == 0 {
+// dropStaleDebugSessions ends the debugging sessions this submission
+// invalidated, and reports each one it ended. A session over a declaration the
+// submission left alone survives — including one merged into a namespace that
+// only gained an unrelated member: it keeps running against the graph and runtime
+// context it started with, so stepping through a behavior does not require
+// avoiding the prompt.
+func (s *Session) dropStaleDebugSessions(gone []string, over carryover) []string {
+	if s.actionExec == nil && s.stateExec == nil {
 		return nil
 	}
 	var notices []string
-	if by, ok := supersededBy(gone, s.actionExec.fqnOf()); ok {
-		notices = append(notices, debugSessionEnded("action", s.actionExec.name, by))
+	if by, objectGone, ok := s.staleDebugState(gone, s.actionExec.fqnOf(), s.actionExec.selfOf(), over.action); ok {
+		notices = append(notices, debugSessionEnded("action", s.actionExec.name, by, objectGone))
 		s.endedAction = &endedSession{
-			kind:     "action",
-			name:     s.actionExec.name,
-			rootName: by,
-			version:  s.version,
+			kind:       "action",
+			name:       s.actionExec.name,
+			rootName:   by,
+			objectGone: objectGone,
+			version:    s.version,
 		}
 		s.actionExec = nil
 	}
-	if by, ok := supersededBy(gone, s.stateExec.fqnOf()); ok {
-		notices = append(notices, debugSessionEnded("state", s.stateExec.name, by))
+	if by, objectGone, ok := s.staleDebugState(gone, s.stateExec.fqnOf(), s.stateExec.selfOf(), over.state); ok {
+		notices = append(notices, debugSessionEnded("state", s.stateExec.name, by, objectGone))
 		s.endedState = &endedSession{
-			kind:     "state machine",
-			name:     s.stateExec.name,
-			rootName: by,
-			version:  s.version,
+			kind:       "state machine",
+			name:       s.stateExec.name,
+			rootName:   by,
+			objectGone: objectGone,
+			version:    s.version,
 		}
 		s.stateExec = nil
 	}
 	return notices
 }
 
-func debugSessionEnded(kind, name, superseded string) string {
+// staleDebugState names the declaration that invalidated a debugging session:
+// one this submission superseded, one the session was started against that no
+// longer resolves to the same shape, or the one behind an object performing the
+// behavior that this submission dropped.
+// It reports separately that what went was the performing object, which reads as
+// a different loss from a redeclaration.
+func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, shapes *runtime.Shapes) (string, bool, bool) {
+	if fqn == "" {
+		return "", false, false
+	}
+	if by, ok := supersededBy(gone, fqn); ok {
+		return by, false, true
+	}
+	// The behavior is performed by an object this submission dropped, so what it
+	// runs against is no longer part of the session.
+	if selfFQN != "" {
+		if _, kept := s.instances[selfFQN]; !kept {
+			return selfFQN, true, true
+		}
+	}
+	if shapes == nil {
+		return "", false, false
+	}
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return "", false, false
+	}
+	by, changed := ctx.Changed(shapes)
+	return by, false, changed
+}
+
+func debugSessionEnded(kind, name, superseded string, objectGone bool) string {
+	if objectGone {
+		return fmt.Sprintf("note: %s debugging session for %q ended (the object %s performing it was dropped)", kind, name, superseded)
+	}
 	return fmt.Sprintf("note: %s debugging session for %q ended (%s was redeclared)", kind, name, superseded)
 }
 
@@ -593,6 +655,7 @@ func (s *Session) clear() {
 	s.endedAction = nil
 	s.endedState = nil
 	s.lostInstances, s.lostAt = 0, 0
+	s.notedBlocker = ""
 }
 
 // getOrCreateRuntime lazily creates runtime context when first needed.

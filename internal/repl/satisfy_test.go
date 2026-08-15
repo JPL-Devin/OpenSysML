@@ -24,6 +24,21 @@ func TestSatisfyVerdicts(t *testing.T) {
 	wants(t, run(t, empty, "%satisfy"), "no declarations loaded")
 }
 
+// TestSatisfyReportsNothingCheckedAsUndecided checks that a session stating no
+// assertion answers as the prompt answers any check it could not make, so a
+// caller outside the prompt reports it the way it reports the others.
+func TestSatisfyReportsNothingCheckedAsUndecided(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def A;")
+
+	wants(t, run(t, s, "%satisfy"), "error: no satisfaction assertion in the session")
+	for _, v := range s.CheckSatisfy("") {
+		if v.Status != VerdictUnresolved {
+			t.Errorf("status = %v, want unresolved", v.Status)
+		}
+	}
+}
+
 // TestSatisfyUsesInstantiatedSubject checks that a verdict is about the object
 // the session created for the subject, not a fresh one.
 func TestSatisfyUsesInstantiatedSubject(t *testing.T) {

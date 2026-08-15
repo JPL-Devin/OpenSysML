@@ -157,6 +157,46 @@ func TestTopLevelRedeclarationEndsDebugger(t *testing.T) {
 	wants(t, run(t, s, "%step"), "no active action session")
 }
 
+// A behavior is invalidated by a change to what it depends on, not only by a
+// change to itself: redeclaring a type its features are of rewrites what those
+// features mean, so the session ends and names that declaration.
+func TestDebuggerEndsWhenADeclarationItDependsOnChanges(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Kind { attribute size = 1.0; }")
+	res := s.Submit("action tally {\n\tpart k : Kind;\n\tfirst start;\n\tdone end;\n\tthen start end;\n}")
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+	}
+	run(t, s, "%action tally")
+
+	res = s.Submit("part def Kind { attribute size = 2.0; }")
+	if !hasNotice(res, `action debugging session for "tally" ended`) || !hasNotice(res, "Kind") {
+		t.Fatalf("notices = %v, want the session ended and Kind named", res.Notices)
+	}
+	wants(t, run(t, s, "%step"), "no active action session")
+}
+
+// A behavior performed by an object runs against that object, so a submission
+// that drops it ends the session and says which object went.
+func TestDebuggerEndsWhenItsPerformingObjectIsDropped(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Holder { attribute size = 1.0; }")
+	res := s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tdone end;\n\tthen start end;\n}")
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+	}
+	run(t, s, "%instantiate Holder")
+	if started := run(t, s, "%action tally Holder"); !strings.Contains(started, "Started action executor") {
+		t.Fatalf("%%action failed: %s", started)
+	}
+
+	res = s.Submit("part def Holder { attribute size = 2.0; }")
+	if !hasNotice(res, `the object Holder performing it was dropped`) {
+		t.Fatalf("notices = %v, want the performing object named", res.Notices)
+	}
+	wants(t, run(t, s, "%step"), "no active action session", "the object Holder performing it was dropped")
+}
+
 // The same contract for the state machine debugger.
 func TestStateDebuggerSurvivesUnrelatedSubmission(t *testing.T) {
 	s := loadFixture(t, "testdata/state_debug.sysml")
@@ -171,6 +211,64 @@ func TestStateDebuggerSurvivesUnrelatedSubmission(t *testing.T) {
 	rejects(t, run(t, s, "%current"), "no active")
 }
 
+// --- Instance lifetime across submissions ---
+
+// A declaration that cannot affect an object leaves it alone. The object is
+// carried into the resolution the submission produced, so it is still usable
+// there rather than a stale pointer into the document it was built against.
+func TestInstanceSurvivesUnrelatedDeclaration(t *testing.T) {
+	s := loadFixture(t, "testdata/vehicle_package.sysml")
+	wants(t, run(t, s, "%instantiate Demo::Vehicle"), "ID: 1")
+
+	if res := s.Submit("part def Widget;"); len(res.Notices) != 0 {
+		t.Fatalf("unrelated declaration reported %v", res.Notices)
+	}
+	listing := run(t, s, "%instances")
+	wants(t, listing, "Demo::Vehicle (ID: 1)")
+	rejects(t, listing, "dropped")
+
+	wants(t, run(t, s, "%slots Demo::Vehicle"), "mass = 1500.00")
+	wants(t, run(t, s, "%eval Demo::Vehicle::mass"), "1500.00")
+	// The carried objects hold their identities in the new context — the vehicle
+	// and the engine part inside it — so the next object built does not reuse one.
+	wants(t, run(t, s, "%instantiate Demo::Engine"), "ID: 3")
+}
+
+// An object is invalidated by a change to what its declaration depends on, not
+// only by a change to that declaration: redeclaring a type one of its features
+// is of rewrites what the object holds.
+func TestInstanceDropsWhenADeclarationItDependsOnChanges(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Kind { attribute size = 1.0; }")
+	s.Submit("part def Holder { part k : Kind; }")
+	wants(t, run(t, s, "%instantiate Holder"), "ID: 1")
+
+	res := s.Submit("part def Kind { attribute size = 2.0; }")
+	if !hasNotice(res, "1 instance was dropped") {
+		t.Fatalf("notices = %v, want the dropped instance counted", res.Notices)
+	}
+	wants(t, run(t, s, "%instances"), "no instances created", "1 instance was dropped")
+}
+
+// A submission that invalidates some of what the session holds says so even
+// though the rest survived: a listing of the survivors alone would read as
+// though nothing went.
+func TestInstancesReportsASurvivorAlongsideALoss(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def A { attribute x = 1.0; }")
+	s.Submit("part def B { attribute y = 2.0; }")
+	wants(t, run(t, s, "%instantiate A"), "ID: 1")
+	wants(t, run(t, s, "%instantiate B"), "ID: 2")
+
+	res := s.Submit("part def B { attribute y = 3.0; }")
+	if !hasNotice(res, "1 instance was dropped") {
+		t.Fatalf("notices = %v, want one dropped instance counted", res.Notices)
+	}
+	listing := run(t, s, "%instances")
+	wants(t, listing, "A (ID: 1)", "1 instance was also dropped")
+	rejects(t, listing, "B (ID")
+}
+
 // The instances a submission invalidates are counted in a notice, so the
 // objects created before it do not disappear without a word.
 func TestSubmissionReportsTheInstancesItDropped(t *testing.T) {
@@ -178,7 +276,8 @@ func TestSubmissionReportsTheInstancesItDropped(t *testing.T) {
 	run(t, s, "%instantiate Demo::Vehicle")
 	run(t, s, "%instantiate Demo::Engine")
 
-	res := s.Submit("part def Widget;")
+	// Redeclaring the package the two definitions live in rewrites both of them.
+	res := s.Submit("package Demo { part def Engine; part def Vehicle; }")
 	if !hasNotice(res, "2 instances were dropped") {
 		t.Fatalf("notices = %v, want the dropped instances counted", res.Notices)
 	}
@@ -186,7 +285,7 @@ func TestSubmissionReportsTheInstancesItDropped(t *testing.T) {
 	// after the accepted line rather than before it.
 	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
 	wants(t, out, "2 instances were dropped")
-	if strings.Index(out, "✓ part def Widget") > strings.Index(out, "note:") {
+	if strings.Index(out, "✓ package Demo") > strings.Index(out, "note:") {
 		t.Errorf("note printed before the declaration it followed from:\n%s", out)
 	}
 }
