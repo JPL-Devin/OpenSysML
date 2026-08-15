@@ -148,6 +148,20 @@ func (r *Resolver) AdmittedChildrenOf(scope *symbols.Scope, fqn string, children
 	return kept
 }
 
+// AdmittedTopLevel keeps the root-level names a lookup made in doc reaches, so
+// an enumeration of them (completion) offers only names resolution then admits:
+// a name another document's import borrowed, or one this document's import
+// filter rejects, is no member of this document's root namespace.
+func (r *Resolver) AdmittedTopLevel(doc string, bindings []symbols.RootBinding) []*symbols.Symbol {
+	kept := make([]*symbols.Symbol, 0, len(bindings))
+	for _, b := range bindings {
+		if r.admitsUnderName(doc, "", b.Name, b.Sym) {
+			kept = append(kept, b.Sym)
+		}
+	}
+	return kept
+}
+
 // localNameOf is the last segment of sym's name, i.e. the name it is a member under.
 func localNameOf(sym *symbols.Symbol) string {
 	if i := strings.LastIndex(sym.Name, "::"); i >= 0 {

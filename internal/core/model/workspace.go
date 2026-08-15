@@ -216,7 +216,8 @@ func (w *Workspace) LookupQualified(fqn string) []*symbols.Symbol {
 func (w *Workspace) TopLevelSymbols(doc string) []*symbols.Symbol {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	return w.index.TopLevelSymbols(doc)
+	resolver, _ := w.newResolver()
+	return resolver.AdmittedTopLevel(doc, w.index.TopLevelBindings(doc))
 }
 
 // MembersOnPath returns the members visible on the element that path names from

@@ -1233,8 +1233,26 @@ func (idx *Index) LookupDirectChildren(prefix string) []*Symbol {
 // top-level packages and every document's top-level declarations, less the
 // names only another document's private import surfaced (KerML 8.2.3.3).
 func (idx *Index) TopLevelSymbols(doc string) []*Symbol {
+	bindings := idx.TopLevelBindings(doc)
+	out := make([]*Symbol, 0, len(bindings))
+	for _, b := range bindings {
+		out = append(out, b.Sym)
+	}
+	return out
+}
+
+// RootBinding is a name registered at the index root and the symbol it names.
+type RootBinding struct {
+	Name string
+	Sym  *Symbol
+}
+
+// TopLevelBindings is TopLevelSymbols with the name each symbol is registered
+// under, which a caller gating those names by their element filters needs: a
+// borrowed symbol's own name is not the root name it appears under.
+func (idx *Index) TopLevelBindings(doc string) []RootBinding {
 	claimed := idx.docReexports[doc]
-	var out []*Symbol
+	var out []RootBinding
 	seen := make(map[*Symbol]bool)
 	for _, fqn := range idx.childKeys("") {
 		hidden := idx.hidden[fqn]
@@ -1246,7 +1264,7 @@ func (idx *Index) TopLevelSymbols(doc string) []*Symbol {
 				continue // only some other document's private import surfaced it
 			}
 			seen[sym] = true
-			out = append(out, sym)
+			out = append(out, RootBinding{Name: fqn, Sym: sym})
 		}
 	}
 	return out

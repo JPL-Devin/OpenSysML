@@ -751,3 +751,32 @@ package Vehicles {
 		}
 	}
 }
+
+// Completion enumerates a document's root-level names, which a filtered import
+// and another document's import both narrow: it must offer only what resolution
+// then admits.
+func TestCompletionOffersOnlyAdmittedRootNames(t *testing.T) {
+	ws := NewWorkspace()
+	ws.Open("file:///lib.sysml", []byte(`package Lib {
+	metadata def Safety;
+	part seatBelt { @Safety; }
+	part radio;
+}`), 1)
+	ws.Open("file:///a.sysml", []byte("import Lib::*[@Lib::Safety];\npart x;"), 1)
+	ws.Open("file:///b.sysml", []byte("part y;"), 1)
+
+	for doc, want := range map[string]map[string]bool{
+		"file:///a.sysml": {"seatBelt": true, "radio": false},
+		"file:///b.sysml": {"seatBelt": false, "radio": false},
+	} {
+		offered := make(map[string]bool)
+		for _, sym := range ws.TopLevelSymbols(doc) {
+			offered[sym.Name] = true
+		}
+		for name, ok := range want {
+			if offered[name] != ok {
+				t.Errorf("%s offers %s = %v, want %v", doc, name, offered[name], ok)
+			}
+		}
+	}
+}
