@@ -912,6 +912,57 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   `ExecutionError`/`RuntimeError`) and that `__cause__` is the original `grpc.RpcError`. A dead
   service is reproducible with `pysysml.connect(port=50123, auto_start=False)`.
 
+### The `Query` RPC / `model.query(...)` (SysML v2 API & Services, PR #155)
+
+`internal/grpc/query.go` + `python/pysysml/query.py` implement the standard's Query resource
+(`scope`/`select`/`where`, `PrimitiveConstraint` with `=`/`>`/`<` and `inverse`,
+`CompositeConstraint` with `and`/`or`). Testing notes that generalize:
+
+- **Refresh `~/.pysysml/bin/sysml-grpc` or you test a stale service.** A missing capability shows
+  up as a `MissingCapabilityError` or an "unimplemented" RPC rather than a build failure, so start
+  every run with `make build-grpc && cp bin/sysml-grpc ~/.pysysml/bin/sysml-grpc` and print
+  `md5sum` of both plus `git log --oneline -1` on camera. `GetServerInfo().capabilities` should
+  list `type_facts, convert, verification, query`.
+- **The Python layer validates before the wire, so client-path tests cannot reach service-side
+  faults.** Undefined payload keys, an empty composite and a missing operator are rejected locally
+  as `QueryError`. To exercise the service's own validation (unknown property, unknown scope, `>`
+  on a non-ordered property, non-numeric operand, `Constraint` with neither variant, unset query)
+  call the raw stub: `model.connection._stub.Query(sysml_pb2.QueryRequest(...))`. Assert **both**
+  paths — the typed client error and the service's `INVALID_ARGUMENT` message naming the problem.
+- Typed client errors are the contract: `INVALID_ARGUMENT` → `InvalidRequestError` (also a
+  `ValueError`), a bogus/evicted `model_hash` → `ModelNotFoundError` (**NOT_FOUND** is intended
+  here, consistent with the other RPCs — don't file it as a wrong status). If a raw
+  `grpc._InactiveRpcError` reaches the caller, the call is missing `translate_rpc_errors()`.
+- **A query matching nothing must be an empty list, never an error.** Always assert that
+  explicitly, otherwise a validation bug that silently answers `[]` looks like a pass.
+- **Anonymous members are the classic scope-walk bug.** A `doc`/comment note, an anonymous usage or
+  an anonymous `connect` has a degenerate FQN (`Pkg::`), so an unguarded walk answers non-unique
+  `@id`s. Keep a fixture with all four shapes and assert, per model: no empty/degenerate `@id`, no
+  duplicates, anonymous elements absent, **and** that named descendants of a named parent are still
+  answered (the fix drops descendants of anonymous elements too, so it can over-prune). Element
+  counts are the canary: `examples/rdf-interop-demo.sysml` is 22 elements with the fix (25 before),
+  4 of them PartUsages, so an `inverse` partition is 18 + 4 = 22.
+- **Stdlib elements restored from the library cache are lossy** and this is documented, not a bug:
+  ~47 elements under `Base`/`Occurrences`/`Links`/`Clocks` come back with **no** `@type` (their
+  symbol kind is `SymbolUnknown`), so they never match `@type =` but are kept by its `inverse`; ~12
+  `*Definition`s (e.g. `ScalarValues::Boolean`) come back with **no** `isAbstract`. Any claim in
+  docs/API.md that the `@type` mapping is total is a doc bug unless it is scoped to "every kind a
+  parsed declaration can have".
+- Property-absence is the documented shape throughout: `owner` absent for a top-level package,
+  `type` absent for an untyped attribute, `declaredName` absent for an *effective* name. A one-line
+  fixture (`part :>> engine;` inside `part v`) gives the effective-name case, with a sibling
+  `part motor2;` as the control that still carries `declaredName`.
+- Good fixtures: `examples/rdf-interop-demo.sysml` (nesting + PartUsages),
+  `examples/sysml-v2-training/04. Subsetting/Subsetting Example.sysml` (`[*]` vs `[4]` — proves `*`
+  behaves as infinity for `>` and is excluded by `< 5`, plus `abstract part def`),
+  `examples/state-machine-demo.sysml` (imports `ScalarValues::*`; an empty scope must still answer
+  only its own 5 elements, not the stdlib).
+- Drive it as one scripted assertion runner (`PASS/FAIL <id> <claim> | <evidence>` lines and a
+  final `n/n assertions passed`) with an `input()` pause between sections when `QT_PAUSE=1`, then
+  step the pauses on camera. Never type `clear` at such a pause — it is consumed as the Enter for
+  the *next* section and you lose that section from the screen; use Konsole's `shift+PageUp`
+  scrollback to recover it.
+
 ## Typed codegen (`python -m pysysml.generate`, Tier 2)
 
 `python -m pysysml.generate <model.sysml> [-o out.py] [--host --port]` loads the model through
