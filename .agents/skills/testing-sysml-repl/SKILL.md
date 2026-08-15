@@ -647,6 +647,18 @@ Recipes that actually distinguish working from broken here (used to verify PR #1
   `package Q { part s : P::Ship; }`, `%instantiate Q::s`, `%action P::Ship::tally Q::s`) and then
   resubmit `package Q` with an extra member → `note: action debugging session for "P::Ship::tally"
   ended (the object Q::s performing it was dropped)`. Redeclaring `P` instead names the declaration.
+- **Value expressions are re-derived, not invalidated** (as of the `runtime.Adopt` change in
+  PR #168): a carried slot whose feature has a value expression (`attribute m = double(3.0);`) is
+  reset to unmaterialized, so the new context recomputes it from the declarations the expression
+  reads *now*. Redeclaring `calc def double` with `x * 3.0` therefore keeps `ID: 1` and prints **no**
+  drop notice, while `%slots A` moves `6.00 → 9.00`; the same holds through chains
+  (`outer` calling `inner`: `7.00 → 10.00`; `attribute h = g * 2.0` read by `m`: `11.00 → 15.00`).
+  The assertion that catches the earlier stale-value bug is **`%eval` must agree with `%slots`** after
+  every such change — a `%slots` that keeps the old number while `%eval` of the same expression
+  returns the new one is the failure signature. Slots materialized some other way (composite parts,
+  connector ends, collections) must keep their carried values *and* nested instance IDs
+  (`w = Instance(ID: 2)`). Drops are still expected for the instance's own redeclared definition and
+  for a change to a declaration one of its features is typed by.
 - **Never put a literal TAB in piped REPL input** (`printf '…\t…' | ./bin/sysml`): readline enters
   completion mode and the process dies with `panic: bytes: negative Repeat count`. Use spaces in
   one-line rehearsal snippets.
