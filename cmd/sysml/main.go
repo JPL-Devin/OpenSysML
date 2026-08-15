@@ -151,10 +151,12 @@ func runCLI() int {
 		fmt.Fprintf(os.Stderr, "  sysml -action Drive model.sysml                # Run an action to completion\n")
 		fmt.Fprintf(os.Stderr, "  sysml -state Mission -advance 10 model.sysml   # Run a state machine for 10 time units\n")
 		fmt.Fprintf(os.Stderr, "  sysml -satisfy -json model.sysml               # Report the verdicts as JSON\n")
-		fmt.Fprintf(os.Stderr, "\nA check reports its verdict and exits 0 when every verdict holds, 1 when one\n")
-		fmt.Fprintf(os.Stderr, "fails, and 2 when a check could not be made at all — an unresolved name, a\n")
-		fmt.Fprintf(os.Stderr, "model that did not analyse cleanly — so a model check can gate a build. Each\n")
-		fmt.Fprintf(os.Stderr, "flag may be repeated.\n")
+		fmt.Fprintf(os.Stderr, "\nEvery run that is not a prompt exits 0 when it did what was asked, 1 when the\n")
+		fmt.Fprintf(os.Stderr, "model answered false for a check, and 2 when what was asked could not be\n")
+		fmt.Fprintf(os.Stderr, "carried out at all — an unreadable file, a model that did not analyse cleanly,\n")
+		fmt.Fprintf(os.Stderr, "an unresolved name, a failed conversion — so a run can gate a build. What was\n")
+		fmt.Fprintf(os.Stderr, "asked for is reported on stdout and what went wrong on stderr. Each check flag\n")
+		fmt.Fprintf(os.Stderr, "may be repeated.\n")
 		fmt.Fprintf(os.Stderr, "\nConversion:\n")
 		fmt.Fprintf(os.Stderr, "  sysml model.sysml -convert ttl              # SysML notation to RDF Turtle, on stdout\n")
 		fmt.Fprintf(os.Stderr, "  sysml model.ttl -convert sysml              # RDF Turtle to SysML notation\n")
@@ -231,10 +233,9 @@ func runCLI() int {
 				"-convert writes the model out and decides nothing about it; check it in its own run")
 		}
 		if err := runConvert(args); err != nil {
-			fmt.Fprintln(os.Stderr, "sysml:", err)
-			return 1
+			return fail(err)
 		}
-		return 0
+		return exitHolds
 	}
 
 	// Resolve the run bounds before any model runs, so a bad value is reported at
@@ -251,43 +252,13 @@ func runCLI() int {
 		return runChecks(args, evalExprs, modelChecks)
 	}
 
-	// Non-interactive mode: files + eval expressions, execute and exit
-	if len(args) > 0 && len(evalExprs) > 0 {
-		if err := runNonInteractive(args, evalExprs); err != nil {
-			fmt.Fprintln(os.Stderr, "sysml:", err)
-			return 1
-		}
-		return 0
-	}
-
-	// Eval-only mode: just evaluate expressions and exit
+	// Non-interactive mode: evaluate the expressions against the model and exit.
 	if len(evalExprs) > 0 {
-		if err := runNonInteractive(nil, evalExprs); err != nil {
-			fmt.Fprintln(os.Stderr, "sysml:", err)
-			return 1
-		}
-		return 0
+		return runNonInteractive(args, evalExprs)
 	}
 
-	if len(args) == 0 {
-		// No files: interactive REPL
-		if err := runInteractive(); err != nil {
-			fmt.Fprintln(os.Stderr, "sysml:", err)
-			return 1
-		}
-		return 0
-	}
-
-	// Files provided: load and enter interactive mode
-	if err := runInteractiveWithFiles(args); err != nil {
-		fmt.Fprintln(os.Stderr, "sysml:", err)
-		return 1
-	}
-	return 0
-}
-
-func runInteractive() error {
-	return runInteractiveWithFiles(nil)
+	// No expression to evaluate: load whatever was named and take lines.
+	return runInteractiveWithFiles(args)
 }
 
 // newSession returns a session in the output modes the flags asked for, under
@@ -309,7 +280,10 @@ func newSession() *repl.Session {
 	return sess
 }
 
-func runInteractiveWithFiles(files []string) error {
+// runInteractiveWithFiles loads what was named and takes lines from the prompt.
+// A model that did not analyse leaves the status of a run that decided nothing,
+// except at a terminal, where the prompt that opens is where it gets fixed.
+func runInteractiveWithFiles(files []string) int {
 	sess := newSession()
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          "sysml> ",
@@ -319,57 +293,68 @@ func runInteractiveWithFiles(files []string) error {
 		EOFPrompt:       "bye",
 	})
 	if err != nil {
-		return err
+		return fail(err)
 	}
 	defer rl.Close()
 
-	// Load files before starting interactive loop
-	if err := loadFiles(sess, files); err != nil {
-		return err
+	status, err := loadFiles(sess, files)
+	if err != nil {
+		return fail(err)
+	}
+	if atTerminal() {
+		status = exitHolds
 	}
 
 	fmt.Println("SysML v2 REPL — %help for commands, Ctrl-D to exit")
-	return repl.Loop(&rlReader{rl: rl}, os.Stdout, sess)
+	if err := repl.Loop(&rlReader{rl: rl}, os.Stdout, sess); err != nil {
+		return fail(err)
+	}
+	return status
 }
 
 // loadFiles submits every positional path — a file, a directory to walk or a
 // glob — as a single load, so a declaration in one file resolves against the
-// others whichever order they were named in.
-func loadFiles(sess *repl.Session, files []string) error {
+// others whichever order they were named in. What the load declared is reported
+// on stdout and what the analysis found on stderr; the status is that of a run
+// that decided nothing when the model did not analyse cleanly.
+func loadFiles(sess *repl.Session, files []string) (int, error) {
 	if len(files) == 0 {
-		return nil
+		return exitHolds, nil
 	}
-	output, err := sess.LoadPaths(files)
+	report, err := sess.LoadPathsReport(files)
 	if err != nil {
 		// Returned unwrapped: the caller reports it, so the operation and the
 		// path are named once.
-		return err
+		return exitUnevaluable, err
 	}
-	for _, line := range output {
-		fmt.Println(line)
+	writeLines(os.Stdout, report.Loaded)
+	writeLines(os.Stderr, report.Found)
+	if report.Errors {
+		fmt.Fprintf(os.Stderr, "sysml: %s did not analyse cleanly\n", strings.Join(files, ", "))
+		return exitUnevaluable, nil
 	}
-	return nil
+	writeLines(os.Stdout, report.Declared)
+	return exitHolds, nil
 }
 
-func runNonInteractive(files []string, exprs []string) error {
+// runNonInteractive loads the model and evaluates every expression asked for,
+// reporting the values on stdout and anything that stopped it on stderr.
+func runNonInteractive(files []string, exprs []string) int {
 	sess := newSession()
-
-	// Load files first
-	if err := loadFiles(sess, files); err != nil {
-		return err
+	status, err := loadFiles(sess, files)
+	if err != nil {
+		return fail(err)
+	}
+	if status != exitHolds {
+		return status
 	}
 
-	// Then evaluate expressions
 	for _, expr := range exprs {
-		output, _, err := sess.RunMeta("%eval " + expr)
+		output, err := sess.EvalExpr(expr)
 		if err != nil {
-			return err
+			return fail(err)
 		}
-		// Print evaluation results
-		for _, line := range output {
-			fmt.Println(line)
-		}
+		writeLines(os.Stdout, output)
 	}
-
-	return nil
+	return exitHolds
 }
