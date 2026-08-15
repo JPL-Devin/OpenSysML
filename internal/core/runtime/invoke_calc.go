@@ -59,7 +59,7 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 
 	name := ctx.qualifiedSymbolName(sym)
 	if !isCalcDecl(sym.Decl) {
-		return nil, fmt.Errorf("%w: %s is not a calc definition or usage (%T)", ErrNotACalc, name, sym.Decl)
+		return nil, fmt.Errorf("%w: %s is %s, not a calc definition or usage", ErrNotACalc, name, describeDecl(sym.Decl))
 	}
 
 	// Most general first, so an inherited parameter keeps the position it has in
@@ -241,7 +241,7 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 		}
 	}
 	if err != nil {
-		return Value{}, fmt.Errorf("calc %s: %w", shape.Name, err)
+		return Value{}, calcFrame(shape.Name, err)
 	}
 	return result, nil
 }

@@ -82,7 +82,7 @@ func TestCheckDirectoryExitStatus(t *testing.T) {
 
 	wantReport(t, checkPaths(t, binary, "-constraint", "Checks::Held", dir), 0, "✓ Constraint Checks::Held passed")
 	wantReport(t, checkPaths(t, binary, "-constraint", "Checks::Fails", dir), 1, "✗ Constraint Checks::Fails failed")
-	wantReport(t, checkPaths(t, binary, "-constraint", "Checks::nosuch", dir), 2, `symbol "Checks::nosuch" not found`)
+	wantReport(t, checkPaths(t, binary, "-constraint", "Checks::nosuch", dir), 2, "unresolved reference: Checks::nosuch")
 
 	// A file of the directory that does not analyse cleanly decides nothing, so
 	// the run exits 2 and names the file the error is in.

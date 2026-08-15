@@ -104,7 +104,7 @@ func convertFrom(req *pb.ConvertRequest, name string) (export.Format, error) {
 	}
 	from, err := export.FormatOfPath(name)
 	if err != nil {
-		return 0, status.Error(codes.InvalidArgument, export.Advise(err, "pass from_format").Error())
+		return 0, status.Error(codes.InvalidArgument, export.Advise(err, "pass from_format, or "+export.ExtensionAdvice).Error())
 	}
 	return from, nil
 }

@@ -55,7 +55,7 @@ func errorLines(lines []string, _ []NamedValue, err error) ([]string, bool, erro
 func (s *Session) LoadFile(path string) ([]string, error) {
 	data, err := os.ReadFile(expandHome(path))
 	if err != nil {
-		return nil, fmt.Errorf("load %s: %w", path, err)
+		return nil, readError(path, err)
 	}
 	return renderResult(s.submit(path, string(data)), s.verbosity), nil
 }
@@ -67,7 +67,7 @@ func (s *Session) LoadFile(path string) ([]string, error) {
 func (s *Session) LoadFileSummary(path string) ([]string, error) {
 	data, err := os.ReadFile(expandHome(path))
 	if err != nil {
-		return nil, fmt.Errorf("load %s: %w", path, err)
+		return nil, readError(path, err)
 	}
 	res := s.submit(path, string(data))
 	return append(append([]string(nil), res.Notices...), renderSummary(res.ownMembers())...), nil

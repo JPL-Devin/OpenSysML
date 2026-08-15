@@ -285,7 +285,8 @@ func loadFiles(sess *repl.Session, files []string) error {
 	}
 	output, err := sess.LoadPaths(files)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error loading:", err)
+		// Returned unwrapped: the caller reports it, so the operation and the
+		// path are named once.
 		return err
 	}
 	for _, line := range output {

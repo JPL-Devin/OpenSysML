@@ -81,11 +81,11 @@ func TestCheckGatesOnEvaluationFailure(t *testing.T) {
 	binary := buildCLI(t)
 
 	got := check(t, binary, checkModel, "-constraint", "Rover::MassBudget", "-e", "nosuchfeature + 1")
-	wantReport(t, got, 2, "unresolved feature: nosuchfeature")
-	if !strings.Contains(got.stderr, "unresolved feature") {
+	wantReport(t, got, 2, "unresolved reference: nosuchfeature")
+	if !strings.Contains(got.stderr, "unresolved reference") {
 		t.Errorf("a failed evaluation was not reported on stderr:\n%s", got.output())
 	}
-	if strings.Contains(got.stdout, "unresolved feature") {
+	if strings.Contains(got.stdout, "unresolved reference") {
 		t.Errorf("a failed evaluation was reported on stdout:\n%s", got.stdout)
 	}
 }
@@ -152,7 +152,7 @@ func TestRunCalc(t *testing.T) {
 	wantReport(t, check(t, binary, behaviorModel, "-calc", "Mission::Fall(3, 2)"), 0, "= 18")
 	// The prompt's spelling, arguments separated by spaces, is accepted too.
 	wantReport(t, check(t, binary, behaviorModel, "-calc", "Mission::Fall 3 2"), 0, "= 18")
-	wantReport(t, check(t, binary, behaviorModel, "-calc", "Mission::nosuch(1)"), 2, `symbol "Mission::nosuch" not found`)
+	wantReport(t, check(t, binary, behaviorModel, "-calc", "Mission::nosuch(1)"), 2, "unresolved reference: Mission::nosuch")
 	wantReport(t, check(t, binary, behaviorModel, "-calc", "Mission::Fall(3)"), 2, `parameter "g" has no argument`)
 }
 
@@ -168,7 +168,7 @@ func TestRunAction(t *testing.T) {
 	}
 
 	wantReport(t, check(t, binary, behaviorModel, "-action", "Mission::Cycle"), 2, "is not an action")
-	wantReport(t, check(t, binary, behaviorModel, "-action", "Mission::nosuch"), 2, `symbol "Mission::nosuch" not found`)
+	wantReport(t, check(t, binary, behaviorModel, "-action", "Mission::nosuch"), 2, "unresolved reference: Mission::nosuch")
 }
 
 // TestRunStateMachine checks that a machine runs for the simulated time asked

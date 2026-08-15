@@ -70,7 +70,7 @@ func TestCheckConstraintStatus(t *testing.T) {
 		"✗ Constraint Rover::TooHeavy failed",
 		"Assertion evaluated to false: 210.0 <= 200.0")
 	wantVerdict(t, s.CheckConstraint("nosuch"), VerdictUnresolved,
-		`symbol "nosuch" not found`)
+		"unresolved reference: nosuch")
 	wantVerdict(t, NewSession().CheckConstraint("Rover::MassBudget"), VerdictUnresolved,
 		"no declarations loaded")
 }
@@ -85,7 +85,7 @@ func TestCheckRequirementStatus(t *testing.T) {
 		"✗ Requirement Rover::PowerShortfall failed",
 		"Required condition evaluated to false: 300.0 >= 450.0")
 	wantVerdict(t, s.CheckRequirement("nosuch"), VerdictUnresolved,
-		`symbol "nosuch" not found`)
+		"unresolved reference: nosuch")
 }
 
 // TestConditionThatCouldNotBeEvaluated checks that an evaluation which could not
@@ -166,7 +166,7 @@ func TestCheckSatisfyStatuses(t *testing.T) {
 	wantVerdict(t, none[0], VerdictUnresolved, "no satisfaction assertion in Landing::touchdown")
 
 	unknown := s.CheckSatisfy("nosuch")
-	wantVerdict(t, unknown[0], VerdictUnresolved, `symbol "nosuch" not found`)
+	wantVerdict(t, unknown[0], VerdictUnresolved, "unresolved reference: nosuch")
 
 	empty := NewSession().CheckSatisfy("")
 	wantVerdict(t, empty[0], VerdictUnresolved, "no declarations loaded")

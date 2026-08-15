@@ -3,6 +3,7 @@ package export
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/rdf"
@@ -384,7 +385,10 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			Note: "fix the syntax error before converting",
 		}
 	}
-	return &UnsupportedError{What: fmt.Sprintf("the %T at %s", node, e.where(node))}
+	return &UnsupportedError{
+		What: fmt.Sprintf("the %s at %s", nodeDescription(node), e.where(node)),
+		Note: rdfLimitationsNote,
+	}
 }
 
 // verbatimUsage reports whether a usage's declaration head has to be carried as
@@ -524,6 +528,44 @@ func (e *encoder) text(node ast.Node) string {
 		return ""
 	}
 	return strings.TrimSpace(e.file.Text(node.Span()))
+}
+
+// rdfLimitationsNote is the remedy for a construct the RDF mapping does not
+// represent, as docs/RDF_INTEROP.md § Limitations states it.
+const rdfLimitationsNote = "save to .sysml or .kerml instead, which writes the source exactly; " +
+	"see docs/RDF_INTEROP.md § Limitations"
+
+// nodeDescription names a construct the way the notation does — "part def",
+// "substate member" — so an error about one prints no Go type name.
+func nodeDescription(node ast.Node) string {
+	switch n := node.(type) {
+	case nil:
+		return "declaration"
+	case *ast.Definition:
+		return n.Kind.String() + " def"
+	case *ast.Usage:
+		return n.Kind.String() + " usage"
+	}
+	return spacedWords(strings.TrimPrefix(fmt.Sprintf("%T", node), "*ast."))
+}
+
+// spacedWords turns a node type's name into lower-case words, so
+// "SubstateMember" reads as "substate member".
+func spacedWords(name string) string {
+	if name == "" {
+		return "declaration"
+	}
+	var b strings.Builder
+	for i, r := range name {
+		if unicode.IsUpper(r) {
+			if i > 0 {
+				b.WriteByte(' ')
+			}
+			r = unicode.ToLower(r)
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func (e *encoder) where(node ast.Node) string {

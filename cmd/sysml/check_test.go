@@ -119,11 +119,11 @@ func TestCheckExitStatus(t *testing.T) {
 		1, "✗ Constraint Rover::TooHeavy failed", "✓ Constraint Rover::MassBudget passed")
 
 	wantReport(t, check(t, binary, checkModel, "-constraint", "Rover::nosuch"),
-		2, `symbol "Rover::nosuch" not found`)
+		2, "unresolved reference: Rover::nosuch")
 
 	// Not deciding outranks a failed verdict: the model was not fully checked.
 	wantReport(t, check(t, binary, checkModel, "-constraint", "Rover::TooHeavy", "-requirement", "nosuch"),
-		2, "✗ Constraint Rover::TooHeavy failed", `symbol "nosuch" not found`)
+		2, "✗ Constraint Rover::TooHeavy failed", "unresolved reference: nosuch")
 
 	// A requirement whose subject nothing binds decided nothing about the model,
 	// however the prompt words it, so it is not reported as a failure.
@@ -287,7 +287,7 @@ func TestCheckAgainstInstantiatedObject(t *testing.T) {
 		"✓ Constraint Rover::pack::notOvercharged passed (on Rover::pack ID: 1)")
 
 	wantReport(t, check(t, binary, checkModel, "-instantiate", "Rover::nosuch", "-constraint", "Rover::MassBudget"),
-		2, `symbol "Rover::nosuch" not found`)
+		2, "unresolved reference: Rover::nosuch")
 }
 
 // TestCheckReportsVerdictsOnStdout checks that a verdict is a result on stdout,
@@ -302,7 +302,7 @@ func TestCheckReportsVerdictsOnStdout(t *testing.T) {
 	}
 
 	unresolved := check(t, binary, checkModel, "-constraint", "nosuch")
-	if !strings.Contains(unresolved.stderr, `symbol "nosuch" not found`) {
+	if !strings.Contains(unresolved.stderr, "unresolved reference: nosuch") {
 		t.Errorf("an unmade check was not reported on stderr:\n%s", unresolved.output())
 	}
 }

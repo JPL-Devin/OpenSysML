@@ -16,7 +16,7 @@ func TestSatisfyVerdicts(t *testing.T) {
 	)
 
 	wants(t, run(t, s, "%satisfy Landing::analysisContext"), "✓ satisfy touchdown by slowLander holds")
-	wants(t, run(t, s, "%satisfy nosuch"), `symbol "nosuch" not found`)
+	wants(t, run(t, s, "%satisfy nosuch"), `unresolved reference: nosuch`)
 	// A requirement is not itself an assertion, and states none.
 	wants(t, run(t, s, "%satisfy touchdown"), "no satisfaction assertion in Landing::touchdown")
 

@@ -159,7 +159,7 @@ func addQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) {
 // the product or quotient of theirs — `10 [m] / 2 [s]` is `5 [m/s]`.
 func scaleQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) {
 	if op == ast.OpDiv && toReal(right.Num) == 0 {
-		return Value{}, fmt.Errorf("division by zero")
+		return Value{}, ErrDivisionByZero
 	}
 	// The magnitudes are combined in the units they were written in, and the
 	// resulting unit is composed from the same two units, so no conversion is
