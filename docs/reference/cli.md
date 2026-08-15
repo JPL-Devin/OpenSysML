@@ -141,6 +141,23 @@ echo "%load model.sysml
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
 
+Check flags, each repeatable. `-instantiate` runs first whatever order they are
+written in, so the verdicts after it are about that object:
+
+| Flag | Checks |
+|------|--------|
+| `-validate` | Nothing about the model's conditions: only that it analyses cleanly |
+| `-constraint <name>` | One constraint, as `%constraint` does |
+| `-requirement <name>` | One requirement, as `%requirement` does |
+| `-satisfy` | Every satisfaction assertion the model states |
+| `-satisfy=<name>` | Only the assertions the named element states (`-satisfy=false` asks for none) |
+| `-instantiate <name>` | Creates an object first, so the verdicts are about it |
+| `-calc "<name>(<args>)"` | Invokes a calculation and reports what it computed |
+| `-action "<name> [object]"` | Runs an action to completion and reports its outputs |
+| `-state "<name> [object]"` | Runs a state machine and reports where it settled |
+| `-advance <time>` | Simulated time units each `-state` machine is run for |
+| `-json` | Reports the checks as one JSON document rather than as lines |
+
 **Arguments:**
 - `[file...]` - SysML files to load (loaded in order)
 

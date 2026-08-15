@@ -80,29 +80,17 @@ $ sysml -satisfy checks.sysml
   Required condition evaluated to false: sensor.reading <= sensor.threshold
 ```
 
-| Flag | Checks |
-|------|--------|
-| `-validate` | Nothing about the model's conditions: only that it analyses cleanly |
-| `-constraint <name>` | One constraint, as `%constraint` does |
-| `-requirement <name>` | One requirement, as `%requirement` does |
-| `-satisfy` | Every satisfaction assertion the model states |
-| `-satisfy=<name>` | Only the assertions the named element states (`-satisfy=false` asks for none) |
-| `-instantiate <name>` | Creates an object first, so the verdicts are about it |
-| `-calc "<name>(<args>)"` | Invokes a calculation and reports what it computed |
-| `-action "<name> [object]"` | Runs an action to completion and reports its outputs |
-| `-state "<name> [object]"` | Runs a state machine and reports where it settled |
-| `-advance <time>` | Simulated time units each `-state` machine is run for |
-| `-json` | Reports the checks as one JSON document rather than as lines |
+Every check flag is listed in
+[reference/cli.md § Command Reference](../reference/cli.md#command-reference):
+one constraint or requirement by name, every satisfaction assertion the model
+states, a calculation, an action, a state machine, and `-json` for a machine-readable
+report.
 
 The exit status is what a build step gates on, and it is the same on every run
 that is not a prompt — an evaluation, a conversion, a plain load — not only on a
-check:
-
-| Status | Meaning |
-|--------|---------|
-| `0` | Every check held, and whatever else was asked for was done |
-| `1` | The model answered false for at least one check |
-| `2` | What was asked was never decided: an unknown name, a subject with no object to evaluate against, a model that would not load or analyse cleanly, a conversion that could not be written, or a misused flag |
+check: `0` when what was asked for was done, `1` when the model answered false,
+`2` when nothing was decided. The whole contract is in
+[reference/cli.md § Exit status](../reference/cli.md#exit-status).
 
 Status 2 is kept apart from 1 because an undecided check is not evidence against
 the model — treat it as a broken check, not a failing one. A condition that
