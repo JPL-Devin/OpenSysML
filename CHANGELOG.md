@@ -49,6 +49,26 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 - A flag may be written after the model it applies to (`sysml model.sysml -trace`),
   which Go's flag package would otherwise read as two files to load.
 
+### Editor support
+
+- A first-party VS Code extension lives in `editors/vscode`: TextMate
+  highlighting for `.sysml` and `.kerml`, comment/bracket configuration, and an
+  LSP client that launches `sysml-lsp` from `systemica.server.path`, a
+  workspace's `bin/sysml-lsp`, or `PATH` — highlighting still works when no
+  server is found. It is built and side-loaded from this repository
+  (`make vscode-package`) and is published to no marketplace. The grammars are
+  generated from `internal/core/lexer.Keywords()` and a Go test fails when the
+  committed ones are stale, so highlighting cannot drift from the lexer.
+- LSP completion is typed and context-aware: items carry the kind, detail
+  (`partUsage : Vehicle`) and documentation that hover shows, `v.` offers the
+  members of `v`'s type — inherited ones included — and nothing else, `Pkg::`
+  offers that namespace's members, and the standard library's top-level names
+  are offered alongside the ones in scope. Prefix filtering stays on the client.
+- `sysml-lsp` serves a session over one reader: it used to start a second read
+  loop over its own stdio, so an editor's traffic raced two decoders and the
+  server died with corrupted framing ("missing Content-Length header") within
+  seconds of typing.
+
 ### Python bindings and `sysml-grpc`
 
 - `Instantiate` returns every instance reachable from the root, so a Python caller
