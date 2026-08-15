@@ -8,12 +8,12 @@ Get up and running with Systemica in 5 minutes.
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/Open-MBEE/Systemica/releases):
 
-**Linux (x64):**
+**Linux (x64; use `systemica-linux-arm64.tar.gz` on arm64):**
 ```bash
-wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-linux-amd64.tar.gz
-tar xzf sysml-linux-amd64.tar.gz
-sudo mv sysml-linux-amd64 /usr/local/bin/sysml
-chmod +x /usr/local/bin/sysml
+wget https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-linux-amd64.tar.gz
+tar xzf systemica-linux-amd64.tar.gz
+sudo mv sysml sysml-lsp /usr/local/bin/
+chmod +x /usr/local/bin/sysml /usr/local/bin/sysml-lsp
 ```
 
 **macOS (Intel or Apple Silicon) — Homebrew is the recommended path:**
@@ -431,6 +431,19 @@ bad.sysml:2:45: error: expected an expression
                                             ^
 sysml: bad.sysml did not analyse cleanly; no check was made
 exit=2
+```
+
+A lone `-` names standard input wherever a file is taken, so a model can be
+piped in; its diagnostics are counted from `<stdin>`. A file really called `-` is
+read by naming it `./-`, and `-convert` needs `-from` for piped input because the
+stream carries no extension to take the format from.
+
+```bash
+$ cat checks.sysml | sysml -validate -
+✓ package MyModel
+✓ <stdin>: no errors
+
+$ cat checks.sysml | sysml - -convert ttl -from sysml > model.ttl
 ```
 
 Every check mode is gated the same way, so a model with an error never reports a

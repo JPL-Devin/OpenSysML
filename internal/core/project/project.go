@@ -12,6 +12,17 @@ import (
 	"strings"
 )
 
+// Stdin is the path that names standard input, by the convention that a lone
+// "-" is read from the stream rather than from a file of that name. A file
+// really called "-" is named as "./-".
+const Stdin = "-"
+
+// StdinName is what a model read from standard input is called in diagnostics.
+const StdinName = "<stdin>"
+
+// IsStdin reports whether path names standard input.
+func IsStdin(path string) bool { return path == Stdin }
+
 // modelExts are the file extensions a directory walk collects.
 var modelExts = []string{".sysml", ".kerml"}
 
@@ -58,6 +69,11 @@ func Expand(inputs []string) ([]string, error) {
 
 // expandOne expands a single input path.
 func expandOne(input string) ([]string, error) {
+	// Standard input is neither statted nor globbed: "-" names the stream
+	// wherever it is written, even where a file of that name exists.
+	if IsStdin(input) {
+		return []string{input}, nil
+	}
 	info, err := os.Stat(input)
 	switch {
 	case err == nil && info.IsDir():

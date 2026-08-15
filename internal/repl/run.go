@@ -3,10 +3,10 @@ package repl
 import (
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/Systemica/internal/core/project"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
@@ -50,16 +50,17 @@ func errorLines(lines []string, _ []NamedValue, err error) ([]string, bool, erro
 }
 
 // LoadFile submits the contents of path to the session and returns the lines
-// `%load` prints. The error is the file it could not read; a model that read
-// but did not analyse cleanly is reported by Diagnostics.
+// `%load` prints. A lone "-" reads standard input. The error is the file it
+// could not read; a model that read but did not analyse cleanly is reported by
+// Diagnostics.
 func (s *Session) LoadFile(path string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	data, err := os.ReadFile(expandHome(path))
+	name, data, err := project.ReadFile(expandHome(path))
 	if err != nil {
-		return nil, readError(path, err)
+		return nil, readError(name, err)
 	}
-	return renderResult(s.submit(path, string(data)), s.verbosity), nil
+	return renderResult(s.submit(name, string(data)), s.verbosity), nil
 }
 
 // LoadFileSummary submits the contents of path and returns only what it
@@ -69,11 +70,11 @@ func (s *Session) LoadFile(path string) ([]string, error) {
 func (s *Session) LoadFileSummary(path string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	data, err := os.ReadFile(expandHome(path))
+	name, data, err := project.ReadFile(expandHome(path))
 	if err != nil {
-		return nil, readError(path, err)
+		return nil, readError(name, err)
 	}
-	res := s.submit(path, string(data))
+	res := s.submit(name, string(data))
 	return append(append([]string(nil), res.Notices...), renderSummary(res.ownMembers())...), nil
 }
 
