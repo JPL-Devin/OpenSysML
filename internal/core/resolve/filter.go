@@ -15,12 +15,7 @@ import (
 // of the namespace declaring the import, which restrict every membership it
 // imports — including a `filter` beside the `expose` lines of a view.
 func (r *Resolver) importAdmits(scope *symbols.Scope, imp *ast.Import) func(*symbols.Symbol) bool {
-	var filters []symbols.ElementFilter
-	// A condition's own names are resolved unfiltered, or the condition would
-	// filter itself.
-	if r.inCondition == 0 {
-		filters = r.namespaceFilters(scope)
-	}
+	filters := r.namespaceFilters(scope)
 	if imp.FilterExpr != nil {
 		filters = append(append([]symbols.ElementFilter{}, filters...), symbols.ElementFilter{
 			Expr:  imp.FilterExpr,
@@ -103,6 +98,12 @@ func (r *Resolver) admittedUnder(doc, fqn string, cands []*symbols.Symbol) []*sy
 // silently hides model content; the filter pass reports it.
 func (r *Resolver) admits(filters []symbols.ElementFilter, cand *symbols.Symbol) bool {
 	if len(filters) == 0 || cand == nil {
+		return true
+	}
+	// A condition's own names are resolved unfiltered, or the condition would
+	// filter itself: judging a candidate compiles the condition, which cannot
+	// resolve a name whose resolution is what asked.
+	if r.inCondition > 0 {
 		return true
 	}
 	judge, ok := r.model.(elementFilterJudge)

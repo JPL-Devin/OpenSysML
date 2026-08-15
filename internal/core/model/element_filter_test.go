@@ -540,6 +540,31 @@ part inA :> Radio;`
 	}
 }
 
+// A condition may name a metadata type the import it gates is what brings in, so
+// the condition's own names have to be resolved without applying it to itself.
+func TestAnImportFilterMayNameAMetadataTypeThatImportSurfaces(t *testing.T) {
+	lib := `package Lib { metadata def Safety; part def Radio; #Safety part def Belt; }`
+	for name, src := range map[string]string{
+		"in a package": `package P { private import Lib::*[@Safety]; part x :> Radio; part y :> Belt; }`,
+		"at the root": `import Lib::*[@Safety];
+part x :> Radio;
+part y :> Belt;`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			ws := NewWorkspace()
+			ws.Open("file:///lib.sysml", []byte(lib), 1)
+			ws.Open("file:///a.sysml", []byte(src), 1)
+			var msgs []string
+			for _, d := range ws.Diagnostics("file:///a.sysml") {
+				msgs = append(msgs, d.Message)
+			}
+			if len(msgs) != 1 || !strings.Contains(msgs[0], "unresolved reference: Radio") {
+				t.Fatalf("the filter should resolve Safety through its own import and hide only Radio, got %v", msgs)
+			}
+		})
+	}
+}
+
 func TestAnUnresolvedNameInAnImportFilterIsReported(t *testing.T) {
 	lib := `package Lib { metadata def Safety; part def Radio; }`
 	src := `package P { private import Lib::*[@NoSuchMeta]; part x :> Radio; }`
