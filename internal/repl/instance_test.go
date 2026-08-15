@@ -235,6 +235,29 @@ func TestInstanceSurvivesUnrelatedDeclaration(t *testing.T) {
 	wants(t, run(t, s, "%instantiate Demo::Engine"), "ID: 3")
 }
 
+// A connector its owner declares no name for costs the object nothing: it is
+// materialized again in the resolution the submission produced, so the object
+// survives an unrelated declaration and its connector is still shown.
+func TestInstanceOwningAnAnonymousConnectorSurvives(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package Demo {
+		port def P;
+		part def A { port p : P; }
+		part def B { port q : P; }
+		part def Sys { part a : A; part b : B; connect a.p to b.q; }
+	}`)
+	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
+	wants(t, run(t, s, "%slots Demo::Sys"), "(anonymous connector)")
+
+	if res := s.Submit("part def Widget;"); len(res.Notices) != 0 {
+		t.Fatalf("unrelated declaration reported %v", res.Notices)
+	}
+	listing := run(t, s, "%instances")
+	wants(t, listing, "Demo::Sys (ID: 1)")
+	rejects(t, listing, "dropped")
+	wants(t, run(t, s, "%slots Demo::Sys"), "(anonymous connector)")
+}
+
 // An object is invalidated by a change to what its declaration depends on, not
 // only by a change to that declaration: redeclaring a type one of its features
 // is of rewrites what the object holds.

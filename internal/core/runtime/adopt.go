@@ -45,8 +45,9 @@ func (e *AdoptError) Error() string {
 }
 
 // ShapesOf records the shapes obj and everything it holds were materialized
-// against: the objects reachable through its slots, connector ends and anonymous
-// connectors, plus the variants its values selected.
+// against: the objects reachable through its slots and connector ends, plus the
+// variants its values selected. A connector no name reaches is materialized
+// again rather than carried, so it is no part of this.
 func (ctx *Context) ShapesOf(obj *Instance) *Shapes {
 	shapes := &Shapes{digests: make(map[string]string)}
 	ctx.recordShapes(obj, shapes, make(map[int64]bool))
@@ -108,15 +109,13 @@ func (ctx *Context) recordShapes(obj *Instance, shapes *Shapes, seen map[int64]b
 			}
 		})
 	}
-	for _, id := range obj.anonymous {
-		if held, found := ctx.instances[id]; found {
-			ctx.recordShapes(held, shapes, seen)
-		}
-	}
 }
 
+// recordShape records the shape of a declaration state was taken against, or
+// notes that there is none to compare it by: a declaration of no name of its own
+// is reached by no name in a later resolution, whatever scope it sits in.
 func (ctx *Context) recordShape(sym *symbols.Symbol, shapes *Shapes) {
-	if ctx.fqnOf(sym) == "" {
+	if sym == nil || sym.Name == "" || ctx.fqnOf(sym) == "" {
 		shapes.unnamed = true
 		return
 	}
@@ -398,11 +397,6 @@ func (a *adoption) plan(obj *Instance) error {
 			return err
 		}
 	}
-	for _, id := range obj.anonymous {
-		if err := a.planHeld(fqn, id); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -533,6 +527,9 @@ func (a *adoption) commit() {
 		for i := range plan.obj.Ends {
 			plan.obj.Ends[i].Value = a.rewrite(plan.obj.Ends[i].Value)
 		}
+		// The connectors the owner names no name are reached by no name here, so
+		// they are materialized again against the declarations as they are now.
+		plan.obj.anonymous = nil
 		a.ctx.registerInstance(plan.obj)
 		a.ctx.ids.atLeast(id + 1)
 	}

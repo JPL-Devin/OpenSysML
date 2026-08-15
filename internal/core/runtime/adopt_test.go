@@ -117,6 +117,55 @@ func TestAdoptDerivesAValueAgainstTheNewDeclarations(t *testing.T) {
 	}
 }
 
+const adoptConnectSrc = `package Demo {
+	port def P;
+	part def A { port p : P; }
+	part def B { port q : P; }
+	part def Sys { part a : A; part b : B; connect a.p to b.q; }
+}`
+
+// A connector its owner declares no name for is a member no name can be looked
+// up again, so it is left to the new context to materialize rather than costing
+// the object that owns it.
+func TestAdoptCarriesAnObjectOwningAnAnonymousConnector(t *testing.T) {
+	prev := contextOver(t, adoptConnectSrc)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if conns, err := obj.OwnedConnectors(prev); err != nil {
+		t.Fatalf("OwnedConnectors: %v", err)
+	} else if len(conns) != 1 {
+		t.Fatalf("the object owns %d anonymous connectors, want 1", len(conns))
+	}
+	shapes := prev.ShapesOf(obj)
+
+	ctx := contextOver(t, adoptConnectSrc+"\npart def Widget;")
+	if err := ctx.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	conns, err := obj.OwnedConnectors(ctx)
+	if err != nil {
+		t.Fatalf("OwnedConnectors after the carry-over: %v", err)
+	}
+	if len(conns) != 1 {
+		t.Fatalf("the carried object owns %d anonymous connectors, want 1", len(conns))
+	}
+	if _, found := ctx.Instance(conns[0].ID); !found {
+		t.Errorf("the connector object %d is not held by the context that materialized it", conns[0].ID)
+	}
+	port := slotInstance(t, ctx, obj, "a", "p")
+	if end := conns[0].Ends[0].Value; !holdsObject(end, port.ID) {
+		t.Errorf("the connector end holds %v, want the port object %d of the carried object", end, port.ID)
+	}
+}
+
+// holdsObject reports whether the value is the object of the given identity.
+func holdsObject(val Value, id int64) bool {
+	got, ok := val.Object()
+	return ok && got == id
+}
+
 // A declaration that no longer resolves to the shape an object was materialized
 // against cannot hold that object, so it is refused rather than rebound onto
 // slots that no longer mean the same thing.
