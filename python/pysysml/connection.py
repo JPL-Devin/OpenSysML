@@ -16,6 +16,7 @@ from pysysml.capabilities import (
     CAPABILITY_VERIFICATION,
     ServerInfo,
     require,
+    upgrade_remedy,
 )
 from pysysml.conversion import Conversion
 from pysysml.diagnostic import Diagnostic
@@ -387,8 +388,7 @@ class Connection:
         require(
             self.server_info(),
             CAPABILITY_CONVERT,
-            "upgrade the sysml-grpc service to a build whose GetServerInfo "
-            "reports 'convert'",
+            upgrade_remedy(CAPABILITY_CONVERT),
         )
 
         request = sysml_pb2.ConvertRequest(
@@ -443,8 +443,7 @@ class Connection:
         require(
             self.server_info(),
             CAPABILITY_QUERY,
-            "upgrade the sysml-grpc service to a build whose GetServerInfo "
-            "reports 'query'",
+            upgrade_remedy(CAPABILITY_QUERY),
         )
         request = sysml_pb2.QueryRequest(
             model_hash=model_hash,
@@ -770,8 +769,7 @@ class Connection:
         require(
             self.server_info(),
             CAPABILITY_VERIFICATION,
-            "upgrade the sysml-grpc service to a build whose GetServerInfo "
-            "reports 'verification'",
+            upgrade_remedy(CAPABILITY_VERIFICATION),
         )
 
     def _verdict_of(self, response):

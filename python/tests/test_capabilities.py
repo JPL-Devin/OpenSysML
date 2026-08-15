@@ -10,11 +10,19 @@ which is indistinguishable from a feature that is genuinely untyped.
 
 from concurrent import futures
 
+from unittest.mock import patch
+
 import grpc
 import pytest
 
-from pysysml.capabilities import CAPABILITY_TYPE_FACTS, MissingCapabilityError
+from pysysml.capabilities import (
+    CAPABILITY_QUERY,
+    CAPABILITY_TYPE_FACTS,
+    MissingCapabilityError,
+    upgrade_remedy,
+)
 from pysysml.connection import Connection
+from pysysml.errors import ConnectionError
 from pysysml.generate import main, require_type_facts
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 
@@ -151,3 +159,12 @@ def test_generation_succeeds_against_a_service_reporting_type_facts(
 
     assert _run_generate(monkeypatch, tmp_path, port, source, output) == 0
     assert "SYSML_MODEL_HASH" in output.read_text()
+
+
+def test_remedy_survives_a_platform_with_no_release_build():
+    """The advice is still given where no release binary exists to name."""
+    with patch('pysysml.capabilities.get_binary_path',
+               side_effect=ConnectionError('Unsupported operating system')):
+        remedy = upgrade_remedy(CAPABILITY_QUERY)
+    assert "cached locally" in remedy
+    assert "PYSYSML_GRPC_VERSION" in remedy and "make build-grpc" in remedy
