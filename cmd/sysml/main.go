@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/chzyer/readline"
 
@@ -37,9 +38,66 @@ func (r *rlReader) ReadLine(prompt string) (string, error) {
 	return line, err
 }
 
+// sessionCompleter completes prompt input from the session: meta commands,
+// declared and library names, and file paths after %load and %save.
+type sessionCompleter struct{ sess *repl.Session }
+
+// Do answers a tab press with the remainder of each candidate, as readline's
+// AutoCompleter expects, and how many runes of the word were already typed.
+func (c *sessionCompleter) Do(line []rune, pos int) ([][]rune, int) {
+	if pos < 0 || pos > len(line) {
+		pos = len(line)
+	}
+	comp := c.sess.Complete(string(line), len(string(line[:pos])))
+	out := make([][]rune, 0, len(comp.Candidates))
+	for _, cand := range comp.Candidates {
+		out = append(out, []rune(strings.TrimPrefix(cand, comp.Prefix)))
+	}
+	return out, utf8.RuneCountInString(comp.Prefix)
+}
+
+// historyPath returns the file the prompt keeps its history in:
+// $XDG_STATE_HOME/sysml/history when that is set, and ~/.sysml_history
+// otherwise. It returns "" when neither can be written, which leaves the
+// history in memory for the session rather than failing the prompt.
+func historyPath() string {
+	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
+		if path, ok := writableFile(filepath.Join(dir, "sysml"), "history"); ok {
+			return path
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	path, ok := writableFile(home, ".sysml_history")
+	if !ok {
+		return ""
+	}
+	return path
+}
+
+// writableFile returns the path of name in dir, creating dir and confirming the
+// file can be appended to.
+func writableFile(dir, name string) (string, bool) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", false
+	}
+	path := filepath.Join(dir, name)
+	f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return "", false
+	}
+	if cerr := f.Close(); cerr != nil {
+		return "", false
+	}
+	return path, true
+}
+
 // CLI flags
 var (
 	evalExprs     stringSlice
+	showHelp      bool
 	showVersion   bool
 	debugMode     bool
 	quietMode     bool
@@ -69,51 +127,67 @@ func main() {
 	os.Exit(runCLI())
 }
 
+// printUsage writes the help to w: the caller chooses the stream, since help
+// asked for is a result and help shown over a misuse belongs with the error.
+func printUsage(w io.Writer) {
+	// PrintDefaults writes to the flag set's own stream, restored after so it does
+	// not decide where a later error is reported.
+	previous := flag.CommandLine.Output()
+	flag.CommandLine.SetOutput(w)
+	defer flag.CommandLine.SetOutput(previous)
+
+	fmt.Fprintf(w, "Usage: sysml [options] [file...]\n\n")
+	fmt.Fprintf(w, "Options:\n")
+	flag.PrintDefaults()
+	fmt.Fprintf(w, "\nExamples:\n")
+	fmt.Fprintf(w, "  sysml                     # Start interactive REPL\n")
+	fmt.Fprintf(w, "  sysml -e \"5 + 3\"          # Evaluate and exit\n")
+	fmt.Fprintf(w, "  sysml -e \"expr\" file.sysml # Load file, evaluate, and exit\n")
+	fmt.Fprintf(w, "  sysml file.sysml          # Load file and start REPL\n")
+	fmt.Fprintf(w, "  sysml -debug file.sysml   # Load file, reporting every diagnostic\n")
+	fmt.Fprintf(w, "  sysml -trace file.sysml   # Load file, reporting each execution step\n")
+	fmt.Fprintf(w, "\nChecking a model:\n")
+	fmt.Fprintf(w, "  sysml -constraint MassBudget model.sysml       # Evaluate one constraint and exit\n")
+	fmt.Fprintf(w, "  sysml -requirement PowerMargin model.sysml     # Evaluate one requirement and exit\n")
+	fmt.Fprintf(w, "  sysml -satisfy model.sysml                     # Evaluate every satisfaction assertion\n")
+	fmt.Fprintf(w, "  sysml -satisfy=Ctx model.sysml                 # ...only the ones Ctx states\n")
+	fmt.Fprintf(w, "  sysml -instantiate p -constraint C model.sysml  # Check C against an object of p\n")
+	fmt.Fprintf(w, "  sysml -validate model.sysml                    # Report diagnostics only\n")
+	fmt.Fprintf(w, "  sysml -calc \"Fall(3, 4)\" model.sysml           # Invoke a calculation\n")
+	fmt.Fprintf(w, "  sysml -action Drive model.sysml                # Run an action to completion\n")
+	fmt.Fprintf(w, "  sysml -state Mission -advance 10 model.sysml   # Run a state machine for 10 time units\n")
+	fmt.Fprintf(w, "  sysml -satisfy -json model.sysml               # Report the verdicts as JSON\n")
+	fmt.Fprintf(w, "\nEvery run that is not a prompt exits 0 when it did what was asked, 1 when the\n")
+	fmt.Fprintf(w, "model answered false for a check, and 2 when what was asked could not be\n")
+	fmt.Fprintf(w, "carried out at all — an unreadable file, a model that did not analyse cleanly,\n")
+	fmt.Fprintf(w, "an unresolved name, a failed conversion — so a run can gate a build. What was\n")
+	fmt.Fprintf(w, "asked for is reported on stdout and what went wrong on stderr, prefixed\n")
+	fmt.Fprintf(w, "\"sysml: \" unless it locates a finding in the source. Each check flag may be\n")
+	fmt.Fprintf(w, "repeated.\n")
+	fmt.Fprintf(w, "\nConversion:\n")
+	fmt.Fprintf(w, "  sysml model.sysml -convert ttl              # SysML notation to RDF Turtle, on stdout\n")
+	fmt.Fprintf(w, "  sysml model.ttl -convert sysml              # RDF Turtle to SysML notation\n")
+	fmt.Fprintf(w, "  sysml model.sysml -convert ttl -o m.ttl     # Write the conversion to a file\n")
+	fmt.Fprintf(w, "  sysml in.txt -convert ttl -from sysml       # Name the input format explicitly\n")
+	fmt.Fprintf(w, "\nThe input format is taken from the file extension (.sysml, .kerml, .ttl) unless\n")
+	fmt.Fprintf(w, "-from names it. Converting to the format it is already in rewrites the input:\n")
+	fmt.Fprintf(w, "notation is reformatted, Turtle is normalized.\n")
+	fmt.Fprintf(w, "\nFlags may be written before or after the model they apply to. A file named like\n")
+	fmt.Fprintf(w, "a flag is read as a file after --, which ends the flags: sysml -trace -- -m.sysml\n")
+	fmt.Fprintf(w, "\nProfiling a run:\n")
+	fmt.Fprintf(w, "  sysml -validate -memstats model.sysml            # Report what the run cost, on stderr\n")
+	fmt.Fprintf(w, "  sysml -validate -memprofile heap.out model.sysml # Write a heap profile for go tool pprof\n")
+	fmt.Fprintf(w, "  sysml -validate -cpuprofile cpu.out model.sysml  # Write a CPU profile for go tool pprof\n")
+}
+
 // runCLI carries out what the command line asked for and returns the exit
 // status, so a profile started for the run is written before the process exits.
 func runCLI() int {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: sysml [options] [file...]\n\n")
-		fmt.Fprintf(os.Stderr, "Options:\n")
-		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nExamples:\n")
-		fmt.Fprintf(os.Stderr, "  sysml                     # Start interactive REPL\n")
-		fmt.Fprintf(os.Stderr, "  sysml -e \"5 + 3\"          # Evaluate and exit\n")
-		fmt.Fprintf(os.Stderr, "  sysml -e \"expr\" file.sysml # Load file, evaluate, and exit\n")
-		fmt.Fprintf(os.Stderr, "  sysml file.sysml          # Load file and start REPL\n")
-		fmt.Fprintf(os.Stderr, "  sysml -debug file.sysml   # Load file, reporting every diagnostic\n")
-		fmt.Fprintf(os.Stderr, "  sysml -trace file.sysml   # Load file, reporting each execution step\n")
-		fmt.Fprintf(os.Stderr, "\nChecking a model:\n")
-		fmt.Fprintf(os.Stderr, "  sysml -constraint MassBudget model.sysml       # Evaluate one constraint and exit\n")
-		fmt.Fprintf(os.Stderr, "  sysml -requirement PowerMargin model.sysml     # Evaluate one requirement and exit\n")
-		fmt.Fprintf(os.Stderr, "  sysml -satisfy model.sysml                     # Evaluate every satisfaction assertion\n")
-		fmt.Fprintf(os.Stderr, "  sysml -satisfy=Ctx model.sysml                 # ...only the ones Ctx states\n")
-		fmt.Fprintf(os.Stderr, "  sysml -instantiate p -constraint C model.sysml  # Check C against an object of p\n")
-		fmt.Fprintf(os.Stderr, "  sysml -validate model.sysml                    # Report diagnostics only\n")
-		fmt.Fprintf(os.Stderr, "  sysml -calc \"Fall(3, 4)\" model.sysml           # Invoke a calculation\n")
-		fmt.Fprintf(os.Stderr, "  sysml -action Drive model.sysml                # Run an action to completion\n")
-		fmt.Fprintf(os.Stderr, "  sysml -state Mission -advance 10 model.sysml   # Run a state machine for 10 time units\n")
-		fmt.Fprintf(os.Stderr, "  sysml -satisfy -json model.sysml               # Report the verdicts as JSON\n")
-		fmt.Fprintf(os.Stderr, "\nA check reports its verdict and exits 0 when every verdict holds, 1 when one\n")
-		fmt.Fprintf(os.Stderr, "fails, and 2 when a check could not be made at all — an unresolved name, a\n")
-		fmt.Fprintf(os.Stderr, "model that did not analyse cleanly — so a model check can gate a build. Each\n")
-		fmt.Fprintf(os.Stderr, "flag may be repeated.\n")
-		fmt.Fprintf(os.Stderr, "\nConversion:\n")
-		fmt.Fprintf(os.Stderr, "  sysml model.sysml -convert ttl              # SysML notation to RDF Turtle, on stdout\n")
-		fmt.Fprintf(os.Stderr, "  sysml model.ttl -convert sysml              # RDF Turtle to SysML notation\n")
-		fmt.Fprintf(os.Stderr, "  sysml model.sysml -convert ttl -o m.ttl     # Write the conversion to a file\n")
-		fmt.Fprintf(os.Stderr, "  sysml in.txt -convert ttl -from sysml       # Name the input format explicitly\n")
-		fmt.Fprintf(os.Stderr, "\nThe input format is taken from the file extension (.sysml, .kerml, .ttl) unless\n")
-		fmt.Fprintf(os.Stderr, "-from names it. Converting to the format it is already in rewrites the input:\n")
-		fmt.Fprintf(os.Stderr, "notation is reformatted, Turtle is normalized.\n")
-		fmt.Fprintf(os.Stderr, "\nFlags may be written before or after the model they apply to. A file named like\n")
-		fmt.Fprintf(os.Stderr, "a flag is read as a file after --, which ends the flags: sysml -trace -- -m.sysml\n")
-		fmt.Fprintf(os.Stderr, "\nProfiling a run:\n")
-		fmt.Fprintf(os.Stderr, "  sysml -validate -memstats model.sysml            # Report what the run cost, on stderr\n")
-		fmt.Fprintf(os.Stderr, "  sysml -validate -memprofile heap.out model.sysml # Write a heap profile for go tool pprof\n")
-		fmt.Fprintf(os.Stderr, "  sysml -validate -cpuprofile cpu.out model.sysml  # Write a CPU profile for go tool pprof\n")
-	}
+	// Usage shown over a misuse goes on the stream the error naming it goes on.
+	flag.Usage = func() { printUsage(flag.CommandLine.Output()) }
 
+	flag.BoolVar(&showHelp, "help", false, "Show this help and exit")
+	flag.BoolVar(&showHelp, "h", false, "Show this help (shorthand)")
 	flag.Var(&evalExprs, "eval", "Evaluate expression and exit (can be specified multiple times)")
 	flag.Var(&evalExprs, "e", "Evaluate expression and exit (shorthand)")
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
@@ -142,6 +216,13 @@ func runCLI() int {
 	if err := flag.CommandLine.Parse(permuteArgs(flag.CommandLine, os.Args[1:])); err != nil {
 		// flag.CommandLine exits on error; unreachable unless that changes.
 		return 2
+	}
+
+	// Help that was asked for is the result of the run: it belongs on stdout, where
+	// it can be piped, and the run did what was asked.
+	if showHelp {
+		printUsage(os.Stdout)
+		return exitHolds
 	}
 
 	if debugMode && quietMode {
@@ -174,10 +255,9 @@ func runCLI() int {
 				"-convert writes the model out and decides nothing about it; check it in its own run")
 		}
 		if err := runConvert(args); err != nil {
-			fmt.Fprintln(os.Stderr, "sysml:", err)
-			return 1
+			return fail(err)
 		}
-		return 0
+		return exitHolds
 	}
 
 	// Resolve the run bounds before any model runs, so a bad value is reported at
@@ -194,43 +274,13 @@ func runCLI() int {
 		return runChecks(args, evalExprs, modelChecks)
 	}
 
-	// Non-interactive mode: files + eval expressions, execute and exit
-	if len(args) > 0 && len(evalExprs) > 0 {
-		if err := runNonInteractive(args, evalExprs); err != nil {
-			fmt.Fprintln(os.Stderr, "sysml:", err)
-			return 1
-		}
-		return 0
-	}
-
-	// Eval-only mode: just evaluate expressions and exit
+	// Non-interactive mode: evaluate the expressions against the model and exit.
 	if len(evalExprs) > 0 {
-		if err := runNonInteractive(nil, evalExprs); err != nil {
-			fmt.Fprintln(os.Stderr, "sysml:", err)
-			return 1
-		}
-		return 0
+		return runNonInteractive(args, evalExprs)
 	}
 
-	if len(args) == 0 {
-		// No files: interactive REPL
-		if err := runInteractive(); err != nil {
-			fmt.Fprintln(os.Stderr, "sysml:", err)
-			return 1
-		}
-		return 0
-	}
-
-	// Files provided: load and enter interactive mode
-	if err := runInteractiveWithFiles(args); err != nil {
-		fmt.Fprintln(os.Stderr, "sysml:", err)
-		return 1
-	}
-	return 0
-}
-
-func runInteractive() error {
-	return runInteractiveWithFiles(nil)
+	// No expression to evaluate: load whatever was named and take lines.
+	return runInteractiveWithFiles(args)
 }
 
 // newSession returns a session in the output modes the flags asked for, under
@@ -252,68 +302,81 @@ func newSession() *repl.Session {
 	return sess
 }
 
-func runInteractiveWithFiles(files []string) error {
-	histPath := filepath.Join(os.TempDir(), "sysml-repl.history")
+// runInteractiveWithFiles loads what was named and takes lines from the prompt.
+// A model that did not analyse leaves the status of a run that decided nothing,
+// except at a terminal, where the prompt that opens is where it gets fixed.
+func runInteractiveWithFiles(files []string) int {
+	sess := newSession()
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          "sysml> ",
-		HistoryFile:     histPath,
+		HistoryFile:     historyPath(),
+		AutoComplete:    &sessionCompleter{sess: sess},
 		InterruptPrompt: "^C",
 		EOFPrompt:       "bye",
 	})
 	if err != nil {
-		return err
+		return fail(err)
 	}
 	defer rl.Close()
 
-	sess := newSession()
-
-	// Load files before starting interactive loop
-	if err := loadFiles(sess, files); err != nil {
-		return err
+	status, err := loadFiles(sess, files)
+	if err != nil {
+		return fail(err)
+	}
+	if atTerminal() {
+		status = exitHolds
 	}
 
 	fmt.Println("SysML v2 REPL — %help for commands, Ctrl-D to exit")
-	return repl.Loop(&rlReader{rl: rl}, os.Stdout, sess)
+	if err := repl.Loop(&rlReader{rl: rl}, os.Stdout, sess); err != nil {
+		return fail(err)
+	}
+	return status
 }
 
 // loadFiles submits every positional path — a file, a directory to walk or a
 // glob — as a single load, so a declaration in one file resolves against the
-// others whichever order they were named in.
-func loadFiles(sess *repl.Session, files []string) error {
+// others whichever order they were named in. What the load declared is reported
+// on stdout and what the analysis found on stderr; the status is that of a run
+// that decided nothing when the model did not analyse cleanly.
+func loadFiles(sess *repl.Session, files []string) (int, error) {
 	if len(files) == 0 {
-		return nil
+		return exitHolds, nil
 	}
-	output, err := sess.LoadPaths(files)
+	report, err := sess.LoadPathsReport(files)
 	if err != nil {
 		// Returned unwrapped: the caller reports it, so the operation and the
 		// path are named once.
-		return err
+		return exitUnevaluable, err
 	}
-	for _, line := range output {
-		fmt.Println(line)
+	writeLines(os.Stdout, report.Loaded)
+	writeLines(os.Stderr, report.Found)
+	if report.Errors {
+		fmt.Fprintf(os.Stderr, "sysml: %s did not analyse cleanly\n", strings.Join(files, ", "))
+		return exitUnevaluable, nil
 	}
-	return nil
+	writeLines(os.Stdout, report.Declared)
+	return exitHolds, nil
 }
 
-func runNonInteractive(files []string, exprs []string) error {
+// runNonInteractive loads the model and evaluates every expression asked for,
+// reporting the values on stdout and anything that stopped it on stderr.
+func runNonInteractive(files []string, exprs []string) int {
 	sess := newSession()
-
-	// Load files first
-	if err := loadFiles(sess, files); err != nil {
-		return err
+	status, err := loadFiles(sess, files)
+	if err != nil {
+		return fail(err)
+	}
+	if status != exitHolds {
+		return status
 	}
 
-	// Then evaluate expressions
 	for _, expr := range exprs {
-		output, _, err := sess.RunMeta("%eval " + expr)
+		output, err := sess.EvalExpr(expr)
 		if err != nil {
-			return err
+			return fail(err)
 		}
-		// Print evaluation results
-		for _, line := range output {
-			fmt.Println(line)
-		}
+		writeLines(os.Stdout, output)
 	}
-
-	return nil
+	return exitHolds
 }

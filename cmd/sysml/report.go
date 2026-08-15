@@ -5,9 +5,31 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/repl"
 )
+
+// The prefix this command reports a failure under, as `prog: ` does in any Unix
+// tool, and the one the prompt renders the same failure under.
+const (
+	commandPrefix = "sysml: "
+	promptPrefix  = "error: "
+)
+
+// asCommandProblem restates the lines of a check that could not be made in the
+// command's prefix. A line locating a finding in the source
+// (`model.sysml:1:42: error: …`) is about the model, and keeps its own shape.
+func asCommandProblem(lines []string) []string {
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if rest, ok := strings.CutPrefix(line, promptPrefix); ok {
+			line = commandPrefix + rest
+		}
+		out = append(out, line)
+	}
+	return out
+}
 
 // reporter collects what a check mode run decided and reports it, either as the
 // lines the prompt prints or as one JSON document. It also owns the exit status,
@@ -115,7 +137,7 @@ func (r *reporter) problem(lines []string) {
 func (r *reporter) failed(message string) {
 	r.report.Errors = append(r.report.Errors, message)
 	if !r.json {
-		fmt.Fprintln(r.err, "sysml:", message)
+		fmt.Fprintln(r.err, commandPrefix+message)
 	}
 }
 
@@ -145,7 +167,7 @@ func (r *reporter) verdict(v repl.Verdict) {
 		return
 	}
 	if v.Status == repl.VerdictUnresolved {
-		r.problem(v.Lines)
+		r.problem(asCommandProblem(v.Lines))
 		return
 	}
 	r.info(v.Lines)
@@ -170,7 +192,7 @@ func (r *reporter) finish() int {
 	out, err := json.MarshalIndent(r.report, "", "  ")
 	if err != nil {
 		// Unreachable: every field of the report marshals.
-		fmt.Fprintln(r.err, "sysml:", err)
+		fmt.Fprintln(r.err, commandPrefix+err.Error())
 		return exitUnevaluable
 	}
 	fmt.Fprintln(r.out, string(out))

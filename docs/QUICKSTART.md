@@ -366,13 +366,15 @@ $ sysml -satisfy checks.sysml
 | `-advance <time>` | Simulated time units each `-state` machine is run for |
 | `-json` | Reports the checks as one JSON document rather than as lines |
 
-The exit status is what a build step gates on:
+The exit status is what a build step gates on, and it is the same on every run
+that is not a prompt — an evaluation, a conversion, a plain load — not only on a
+check:
 
 | Status | Meaning |
 |--------|---------|
-| `0` | Every check held |
+| `0` | Every check held, and whatever else was asked for was done |
 | `1` | The model answered false for at least one check |
-| `2` | A check was never decided: an unknown name, a subject with no object to evaluate against, a model that would not load, or a misused flag |
+| `2` | What was asked was never decided: an unknown name, a subject with no object to evaluate against, a model that would not load or analyse cleanly, a conversion that could not be written, or a misused flag |
 
 Status 2 is kept apart from 1 because an undecided check is not evidence against
 the model — treat it as a broken check, not a failing one. A condition that
@@ -407,7 +409,8 @@ as `assert satisfy healthy by hot;` and check it with `-satisfy`, which creates
 the subject itself — `-requirement` decides a requirement whose conditions stand
 on their own, or one carried by a part an `-instantiate` created.
 
-A verdict is written to stdout and an undecided check to stderr, so
+A verdict is written to stdout and an undecided check to stderr, as is every
+other finding — diagnostics and warnings included — so
 `sysml -satisfy checks.sysml > verdicts.txt` keeps the results and leaves what
 went wrong on the terminal.
 
@@ -590,15 +593,16 @@ $ sysml -e "RdfInteropDemo::Rover::mass" examples/rdf-interop-demo.sysml
 
 Two things matter before a pipeline depends on it:
 
-- **A model's diagnostics and a failed evaluation are printed on stdout, and
-  leave the exit status `0`.** Only the command's own failures — a file it could
-  not read, a conversion it refused, a misused flag — go to stderr and exit
-  non-zero. A successful `-convert -o` also reports its `wrote <file> …` note on
-  stderr, so that stdout carries the conversion alone.
-- **The exit status therefore says whether the command ran, not whether the model
-  was sound.** The status codes are documented once, in
+- **What was asked for is on stdout and what went wrong on stderr.** Evaluated
+  values, conversion output and verdict lines are results; a model's diagnostics
+  and warnings, a failed evaluation, a file that could not be read and the
+  `wrote <file> …` note of a successful `-convert -o` are not, so that stdout
+  carries the conversion alone.
+- **The exit status says whether the model answered what was asked**: `0` it did,
+  `1` it answered false, `2` it answered nothing. A warning leaves the status `0`.
+  The status codes are documented once, in
   [examples/CLI_USAGE.md § Exit status](../examples/CLI_USAGE.md#exit-status),
-  with a CI recipe that reads the output instead.
+  with a CI recipe that gates on them.
 
 ---
 
@@ -614,6 +618,9 @@ Two things matter before a pipeline depends on it:
 | `%verbosity [level]` | Show or set output level: `quiet` (errors only), `normal`, `debug` (every diagnostic over the whole buffer) |
 | `%trace [on\|off]` | Show or set execution tracing: each evaluation, calc invocation, action step and state transition |
 | `%budget` | Show the five bounds one run may spend, each with the variable that raises it |
+| **Library Discovery** | |
+| `%search <substring>` | List the declared and library symbols whose qualified name contains the substring, with the kind of each |
+| `%builtins` | List the library functions the runtime implements directly (`sqrt`, `abs`, `max`, `floor`, `x->isEmpty()`, `x->sum()` …) |
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create instance from part definition |
 | `%slots <name>` | Show instance slots and values |
@@ -625,6 +632,7 @@ Two things matter before a pipeline depends on it:
 | `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
 | `%satisfy [name]` | Evaluate satisfaction assertions of the model, or of one element |
 | **Control** | |
+| `Tab` | Complete meta commands, symbol names, and file paths after `%load` and `%save` |
 | `Ctrl-D` | Exit REPL |
 
 ---
@@ -1037,7 +1045,7 @@ Check `examples/` directory:
 
 **REPL doesn't show prompt:**
 - Check terminal supports readline (most Unix shells do)
-- History stored in `$TMPDIR/sysml-repl.history`
+- History stored in `$XDG_STATE_HOME/sysml/history`, or `~/.sysml_history` when `XDG_STATE_HOME` is unset; an unwritable path leaves history in memory for the session
 
 **Import errors after build:**
 - Run `go mod tidy`

@@ -912,6 +912,57 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   `ExecutionError`/`RuntimeError`) and that `__cause__` is the original `grpc.RpcError`. A dead
   service is reproducible with `pysysml.connect(port=50123, auto_start=False)`.
 
+### The `Query` RPC / `model.query(...)` (SysML v2 API & Services, PR #155)
+
+`internal/grpc/query.go` + `python/pysysml/query.py` implement the standard's Query resource
+(`scope`/`select`/`where`, `PrimitiveConstraint` with `=`/`>`/`<` and `inverse`,
+`CompositeConstraint` with `and`/`or`). Testing notes that generalize:
+
+- **Refresh `~/.pysysml/bin/sysml-grpc` or you test a stale service.** A missing capability shows
+  up as a `MissingCapabilityError` or an "unimplemented" RPC rather than a build failure, so start
+  every run with `make build-grpc && cp bin/sysml-grpc ~/.pysysml/bin/sysml-grpc` and print
+  `md5sum` of both plus `git log --oneline -1` on camera. `GetServerInfo().capabilities` should
+  list `type_facts, convert, verification, query`.
+- **The Python layer validates before the wire, so client-path tests cannot reach service-side
+  faults.** Undefined payload keys, an empty composite and a missing operator are rejected locally
+  as `QueryError`. To exercise the service's own validation (unknown property, unknown scope, `>`
+  on a non-ordered property, non-numeric operand, `Constraint` with neither variant, unset query)
+  call the raw stub: `model.connection._stub.Query(sysml_pb2.QueryRequest(...))`. Assert **both**
+  paths — the typed client error and the service's `INVALID_ARGUMENT` message naming the problem.
+- Typed client errors are the contract: `INVALID_ARGUMENT` → `InvalidRequestError` (also a
+  `ValueError`), a bogus/evicted `model_hash` → `ModelNotFoundError` (**NOT_FOUND** is intended
+  here, consistent with the other RPCs — don't file it as a wrong status). If a raw
+  `grpc._InactiveRpcError` reaches the caller, the call is missing `translate_rpc_errors()`.
+- **A query matching nothing must be an empty list, never an error.** Always assert that
+  explicitly, otherwise a validation bug that silently answers `[]` looks like a pass.
+- **Anonymous members are the classic scope-walk bug.** A `doc`/comment note, an anonymous usage or
+  an anonymous `connect` has a degenerate FQN (`Pkg::`), so an unguarded walk answers non-unique
+  `@id`s. Keep a fixture with all four shapes and assert, per model: no empty/degenerate `@id`, no
+  duplicates, anonymous elements absent, **and** that named descendants of a named parent are still
+  answered (the fix drops descendants of anonymous elements too, so it can over-prune). Element
+  counts are the canary: `examples/rdf-interop-demo.sysml` is 22 elements with the fix (25 before),
+  4 of them PartUsages, so an `inverse` partition is 18 + 4 = 22.
+- **Stdlib elements restored from the library cache are lossy** and this is documented, not a bug:
+  ~47 elements under `Base`/`Occurrences`/`Links`/`Clocks` come back with **no** `@type` (their
+  symbol kind is `SymbolUnknown`), so they never match `@type =` but are kept by its `inverse`; ~12
+  `*Definition`s (e.g. `ScalarValues::Boolean`) come back with **no** `isAbstract`. Any claim in
+  docs/API.md that the `@type` mapping is total is a doc bug unless it is scoped to "every kind a
+  parsed declaration can have".
+- Property-absence is the documented shape throughout: `owner` absent for a top-level package,
+  `type` absent for an untyped attribute, `declaredName` absent for an *effective* name. A one-line
+  fixture (`part :>> engine;` inside `part v`) gives the effective-name case, with a sibling
+  `part motor2;` as the control that still carries `declaredName`.
+- Good fixtures: `examples/rdf-interop-demo.sysml` (nesting + PartUsages),
+  `examples/sysml-v2-training/04. Subsetting/Subsetting Example.sysml` (`[*]` vs `[4]` — proves `*`
+  behaves as infinity for `>` and is excluded by `< 5`, plus `abstract part def`),
+  `examples/state-machine-demo.sysml` (imports `ScalarValues::*`; an empty scope must still answer
+  only its own 5 elements, not the stdlib).
+- Drive it as one scripted assertion runner (`PASS/FAIL <id> <claim> | <evidence>` lines and a
+  final `n/n assertions passed`) with an `input()` pause between sections when `QT_PAUSE=1`, then
+  step the pauses on camera. Never type `clear` at such a pause — it is consumed as the Enter for
+  the *next* section and you lose that section from the screen; use Konsole's `shift+PageUp`
+  scrollback to recover it.
+
 ## Typed codegen (`python -m pysysml.generate`, Tier 2)
 
 `python -m pysysml.generate <model.sysml> [-o out.py] [--host --port]` loads the model through
@@ -1240,6 +1291,58 @@ Trap while driving the REPL on camera: typing `clear` at the `sysml>` prompt not
 (`1:1: error: expected a namespace member`) but leaves garbage in the session buffer that makes a
 subsequent `%eval Pkg::part.attr` fail with a parse error. `%clear` and re-`%load` recovers.
 
+## The stream/status contract of a non-interactive run (PR #161)
+
+Since #161 every run that is not a prompt splits its output: **results on stdout** (evaluated values,
+conversion bytes, verdict lines, `✓` echoes of what a load declared) and **findings on stderr**
+(diagnostics, warnings, the `sysml: … did not analyse cleanly` note, `wrote <file> (ttl, N bytes)`),
+with `0` = done, `1` = the model answered a check false, `2` = nothing could be decided. Any change in
+`cmd/sysml/{main.go,status.go,check.go}` or `internal/repl/{load.go,render.go}` can break it silently,
+so test it as a **table over every mode**, always with `>out 2>err </dev/null` and `echo $?`:
+capturing `2>&1` hides exactly the defect. A ready-made driver pattern (one `PASS`/`FAIL` line per
+row, asserting status + required stdout needles + stderr needles that must be **absent** from stdout
++ "stdout empty") lives in the session that tested #161; re-create it rather than eyeballing output,
+because it is legible on camera and a leak turns a row red.
+
+Values that held at `6079699` (broken = `package Bad { part def A { attribute x : ; } }`):
+
+| run | exit | stdout | stderr |
+|---|---|---|---|
+| `-e 1+1 <good>` / `-calc`/`-action`/`-state` on a clean model | 0 | `✓ package …`, `= 2` / `= 18` / `total = 5` | empty |
+| any of those over the broken model | 2 | **empty** | `error: expected a name`, `sysml: … did not analyse cleanly` |
+| `-e nope <good>` (unresolved name) | 2 | `✓ package …` only | `sysml: unresolved reference: nope` |
+| `-validate <broken>` | 2 | empty | `… did not analyse cleanly; no check was made` |
+| plain `sysml <broken>` **non-tty** | 2 | banner only | diagnostics |
+| `-convert ttl <model>` | 0 | Turtle | empty |
+| `-convert ttl -o f` | 0 | **empty** | `wrote f (ttl, 1540 bytes)` |
+| `-convert ttl <broken> -o f` | 2 | empty | syntax errors, **and no file is created** |
+| `-constraint` false / holds / unresolved / warning-only | 1 / 0 / 2 / 0 | verdict line | warning + unresolved verdicts only |
+
+Traps found while testing it:
+
+- **The tty override is the one path unit tests cannot cover.** `atTerminal()` (`status.go`) forces
+  status `0` when stdin is a terminal, so `./bin/sysml <broken>.sysml` at a real terminal must load,
+  report on stderr, open the prompt and exit `0` on `%quit`, while
+  `printf '%%quit\n' | ./bin/sysml <broken>.sysml` exits `2`. Verify the tty half in Konsole (or with
+  `script -qec "./bin/sysml <broken>.sysml > /tmp/o 2>/tmp/e; echo TTYSTATUS=\$?" /dev/null < in`);
+  a plain pipe silently tests the other branch.
+- **`part def ;` is *not* a bad line** — it parses as an anonymous part def and prints `✓ part def`.
+  To show the prompt surviving a bad line, use `%eval nope` (unresolved) and
+  `part def B { attribute q : ; }` (syntax error), then a following `%eval 6*7` → `= 42` as proof the
+  session continued. Expect the `note: an earlier session error is unresolved …` line afterwards.
+- `-convert ttl` of most models fails on unsupported constructs — a **constraint member** is one
+  (`cannot convert the constraint member at …`, exit 2). That makes a check-oriented fixture a useful
+  negative row but useless as the clean-conversion row; use
+  `package Demo { part def Engine; part def Vehicle { attribute mass : Real = 1200.0; part engine : Engine[1]; } }`
+  (1540 bytes of Turtle) for the positive one.
+- Real repo models to use instead of hand-written ones: `examples/state-machine-demo.sysml` (and 6
+  others) analyse clean, while `examples/phase-c-behavioral-bodies.sysml` and
+  `examples/parser_features_demo_action_semantics.sysml` do **not** — a free "broken model" that is
+  more convincing than a toy fixture.
+- Cheap contrast for this PR class: build the parent commit (`git worktree add /tmp/old<sha> <sha>`)
+  and run `-e '1+1' <broken>.sysml` through both. Pre-fix prints the diagnostic **and** `= 2` on
+  stdout with exit `0` — the single most convincing frame in the recording.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
@@ -1462,3 +1565,50 @@ Discovered while testing inline `entry action { … }` bodies and calc `out` ass
   `output bound more than once` (declaration value plus a body assignment; two *body* assignments
   are legal, the last one winning), `assignment outside the calculation body: <name> is not declared
   by the calculation`, `no result expression: calc … has no return expression`.
+
+## "Did you mean" suggestions on unresolved references (PR #167)
+
+The suggestion is produced in the resolver (`internal/core/suggest` + `internal/core/resolve/suggest.go`),
+so it belongs to the diagnostic and every surface renders the same string. Verify all three surfaces —
+they used to disagree, and the REPL used to post-annotate its own copy:
+
+```bash
+./bin/sysml -validate f.sysml            # CLI: "... — did you mean ScalarValues::Integer?", exit 2
+printf 'part def A { attribute x : Integer = 1; }\n' | ./bin/sysml | grep -c 'did you mean'   # must be 1
+```
+
+- Canonical fixture: `part def A { attribute x : Integer = 1; }` → `unresolved reference: Integer —
+  did you mean ScalarValues::Integer?` and exit `2`. A bare library name is *supposed* to fail:
+  only top-level packages are in the root namespace, so the fix is `private import ScalarValues::*;`
+  inside a `package`, which must then validate `✓ … no errors` / exit `0`.
+- **Duplication is the regression to watch in the REPL.** Count `did you mean` occurrences rather
+  than eyeballing them, and compare the text after `error: ` with the CLI's byte for byte. A
+  parent-commit binary is the cheapest contrast: pre-fix the CLI prints *no* suggestion while the
+  REPL prints one, so "old REPL also showed a hint" is expected and not evidence of duplication.
+- The LSP path is checkable in ~15 s without VS Code: drive `./bin/sysml-lsp` over stdio with a
+  three-message script (`initialize`, `initialized`, `textDocument/didOpen`) and read
+  `textDocument/publishDiagnostics`; the message must match the CLI exactly.
+- Shapes with deliberately different behavior, all worth asserting:
+  - a **qualified** unresolved name gets NO `did you mean` — it reports
+    `(no namespace "Nowhere" is loaded; "Integer" is declared as …)` instead;
+  - operator members are never offered (`typable()` filters `IntegerFunctions::+`, `#`, `..`), so a
+    typo like `Plu` yields no suggestion while `Abz` → `RealFunctions::abs`;
+  - a long garbage identifier (≥ 100 chars) must yield zero suggestions and still exit `2`;
+  - edit-distance tolerance widens with length (1 / 2 / 3 at ≥ 6 / ≥ 9 runes), so a 6-char typo like
+    `Intger` legitimately offers noisy extras (`Items::Item::boundingShapes::edges::inter`,
+    `VectorFunctions::inner`) after the right answer — assert the *first* candidate, not the list.
+- **`examples/` is a gate.** All 20 files under `examples/` (excluding `examples/sysml-v2-training`)
+  must validate with exit 0:
+  ```bash
+  for x in $(find examples -name '*.sysml' -o -name '*.kerml' | grep -v sysml-v2-training); do
+    ./bin/sysml -validate $x >/dev/null 2>&1 || echo "FAIL $x"; done
+  ```
+- Fixtures for the parser/semantics fixes shipped alongside (each fails on the parent commit):
+  `binding b of f = v;` (old: `type must be a definition, found attributeUsage`),
+  a **constraint usage** — not `constraint def` — declaring `in` params plus `assert`/`assume`
+  conditions (old: `expected '{' or ';'`), and
+  `vertices->ControlFunctions::exists{p : Point; p.x > 0}` (old: `no scope for member lookup in p`).
+- **REPL adversarial gotcha:** typing unbalanced braces (`part def }}} {{{ ;;;`) puts the prompt into
+  multi-line continuation (`...>`) and silently swallows subsequent lines. Press `ctrl+c` to abandon
+  the buffer — it flushes the accumulated parse errors and returns a clean `sysml>` prompt, which is
+  itself a good no-panic assertion.

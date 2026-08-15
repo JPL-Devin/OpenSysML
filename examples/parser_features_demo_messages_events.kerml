@@ -10,11 +10,15 @@
  */
 
 package MessagesAndEvents {
+
+    // The library is not implicitly visible: a bare name needs an import.
+    private import ScalarValues::*;
+
     
     // ===== Message Keyword (Task 88) =====
     
-    // Message is a synonym for flow
-    abstract message Message {
+    // A message is a flow, so a flow definition types one
+    abstract flow def Message {
         feature content: String;
         feature timestamp: Real;
     }

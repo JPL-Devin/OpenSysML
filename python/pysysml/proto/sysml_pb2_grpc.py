@@ -100,6 +100,11 @@ class SysMLServiceStub:
                 request_serializer=sysml__pb2.EvaluateCalcRequest.SerializeToString,
                 response_deserializer=sysml__pb2.EvaluateCalcResponse.FromString,
                 _registered_method=True)
+        self.Query = channel.unary_unary(
+                '/sysml.SysMLService/Query',
+                request_serializer=sysml__pb2.QueryRequest.SerializeToString,
+                response_deserializer=sysml__pb2.QueryResponse.FromString,
+                _registered_method=True)
 
 
 class SysMLServiceServicer:
@@ -199,6 +204,15 @@ class SysMLServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Query(self, request, context):
+        """Run a SysML v2 API & Services Query over a parsed model: scope/select/where
+        as the standard defines them, so a client that speaks that API can filter a
+        model here. Reported as the "query" capability.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SysMLServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -266,6 +280,11 @@ def add_SysMLServiceServicer_to_server(servicer, server):
                     servicer.EvaluateCalc,
                     request_deserializer=sysml__pb2.EvaluateCalcRequest.FromString,
                     response_serializer=sysml__pb2.EvaluateCalcResponse.SerializeToString,
+            ),
+            'Query': grpc.unary_unary_rpc_method_handler(
+                    servicer.Query,
+                    request_deserializer=sysml__pb2.QueryRequest.FromString,
+                    response_serializer=sysml__pb2.QueryResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -620,6 +639,33 @@ class SysMLService:
             '/sysml.SysMLService/EvaluateCalc',
             sysml__pb2.EvaluateCalcRequest.SerializeToString,
             sysml__pb2.EvaluateCalcResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Query(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/Query',
+            sysml__pb2.QueryRequest.SerializeToString,
+            sysml__pb2.QueryResponse.FromString,
             options,
             channel_credentials,
             insecure,

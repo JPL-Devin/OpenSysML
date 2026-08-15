@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
@@ -47,6 +48,11 @@ type snippet struct {
 
 // Session accumulates submissions into a single implicit <repl> document.
 type Session struct {
+	// mu serializes the session's exported entry points, which a frontend may
+	// call from more than one goroutine: readline answers Tab from its own input
+	// goroutine while the loop is still evaluating the previous line.
+	mu sync.Mutex
+
 	ws       *model.Workspace
 	snippets []snippet
 	version  int
@@ -148,6 +154,12 @@ func (s *Session) Budgets() runtime.Budgets {
 
 // List returns a one-line summary per surviving snippet.
 func (s *Session) List() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.list()
+}
+
+func (s *Session) list() []string {
 	out := make([]string, 0, len(s.snippets))
 	for _, sn := range s.snippets {
 		out = append(out, sn.src)
@@ -405,7 +417,9 @@ func intersects(names []string, set map[string]bool) bool {
 // live session context; a later redeclaration of the same name replaces the
 // prior snippet (see accept).
 func (s *Session) Submit(src string) Result {
-	return s.SubmitAll([]string{src})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.submitAll([]string{src})
 }
 
 // SourceFile is one source of a submission together with the file it was read
@@ -417,17 +431,23 @@ type SourceFile struct {
 
 // SubmitAll accumulates every src as one submission, from no file in particular.
 func (s *Session) SubmitAll(srcs []string) Result {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.submitAll(srcs)
+}
+
+func (s *Session) submitAll(srcs []string) Result {
 	files := make([]SourceFile, 0, len(srcs))
 	for _, src := range srcs {
 		files = append(files, SourceFile{Text: src})
 	}
-	return s.SubmitFiles(files)
+	return s.submitFiles(files)
 }
 
 // submit accumulates src as Submit does, recording the file it came from when it
 // came from one.
 func (s *Session) submit(origin, src string) Result {
-	return s.SubmitFiles([]SourceFile{{Name: origin, Text: src}})
+	return s.submitFiles([]SourceFile{{Name: origin, Text: src}})
 }
 
 // SubmitFiles accumulates every file as one submission: all of them are accepted
@@ -435,6 +455,12 @@ func (s *Session) submit(origin, src string) Result {
 // against the others no matter which order they arrive in. This is what makes
 // loading a multi-file project order-independent.
 func (s *Session) SubmitFiles(files []SourceFile) Result {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.submitFiles(files)
+}
+
+func (s *Session) submitFiles(files []SourceFile) Result {
 	var (
 		declared []string
 		drops    []dropReport
@@ -471,6 +497,7 @@ func (s *Session) SubmitFiles(files []SourceFile) Result {
 		notices = append(notices, instancesDroppedNotice(n))
 	}
 	notices = append(notices, s.dropStaleDebugSessions(drops)...)
+	// The diagnostics already carry their own "did you mean" hints.
 	diags := s.ws.Diagnostics(docName)
 	var members []ast.Node
 	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
@@ -546,6 +573,12 @@ func supersededBy(gone []string, fqn string) (string, bool) {
 
 // Clear resets the session, dropping all accumulated declarations.
 func (s *Session) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clear()
+}
+
+func (s *Session) clear() {
 	s.ws.Remove(docName)
 	s.snippets = nil
 	s.version = 0
@@ -569,7 +602,9 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 		return s.rtCtx, nil
 	}
 
-	idx := s.symbolIndex()
+	// Falls back to the library index so a library symbol can be evaluated or
+	// instantiated before the session declares anything.
+	idx := s.browseIndex()
 	if idx == nil {
 		return nil, fmt.Errorf("no document loaded")
 	}

@@ -22,6 +22,22 @@ const (
 	verdictSatisfy     = "satisfy"
 )
 
+// failureReason classifies a failure for the wire, so a client acts on the kind
+// of failure rather than on the message text.
+func failureReason(err error) pb.FailureReason {
+	switch {
+	case err == nil:
+		return pb.FailureReason_FAILURE_REASON_UNSPECIFIED
+	case errors.Is(err, runtime.ErrNotAConstraint),
+		errors.Is(err, runtime.ErrNotARequirement),
+		errors.Is(err, runtime.ErrNotASatisfaction),
+		errors.Is(err, runtime.ErrNotACalc):
+		return pb.FailureReason_FAILURE_REASON_WRONG_KIND
+	default:
+		return pb.FailureReason_FAILURE_REASON_EVALUATION
+	}
+}
+
 // verifyContext is everything a verification RPC needs from a cached model: the
 // runtime it evaluates in and the index its names resolve against.
 type verifyContext struct {
@@ -108,6 +124,7 @@ func (v *verifyContext) verdict(kind string, sym *symbols.Symbol, element string
 		// A verdict of false the runtime did not attribute to one condition.
 	default:
 		out.Error = err.Error()
+		out.FailureReason = failureReason(err)
 	}
 	return out
 }
@@ -191,9 +208,12 @@ func (s *Service) VerifySatisfaction(ctx context.Context, req *pb.VerifySatisfac
 				Instances: instances,
 			}, nil
 		}
+		// A symbol that is neither an assertion nor a scope stating any is the
+		// wrong kind of thing to ask about, not an undecided answer.
 		if sym.Scope == nil {
 			return &pb.VerifySatisfactionResponse{
-				Error: fmt.Sprintf("%s states no satisfaction assertion", req.SymbolId),
+				Error:         fmt.Sprintf("%s states no satisfaction assertion", req.SymbolId),
+				FailureReason: pb.FailureReason_FAILURE_REASON_WRONG_KIND,
 			}, nil
 		}
 		scope = sym.Scope
@@ -253,7 +273,10 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 	if len(req.Arguments) == 0 {
 		outputs, handled, cerr := v.calcUsageOutputs(sym)
 		if cerr != nil {
-			return &pb.EvaluateCalcResponse{Error: cerr.Error()}, nil
+			return &pb.EvaluateCalcResponse{
+				Error:         cerr.Error(),
+				FailureReason: failureReason(cerr),
+			}, nil
 		}
 		if handled {
 			return &pb.EvaluateCalcResponse{Outputs: outputs}, nil
@@ -268,7 +291,8 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 	result, err := v.runtime.InvokeCalc(sym, args, v.declaringScope(sym))
 	if err != nil {
 		return &pb.EvaluateCalcResponse{
-			Error: fmt.Sprintf("calc invocation failed: %v", err),
+			Error:         fmt.Sprintf("calc invocation failed: %v", err),
+			FailureReason: failureReason(err),
 		}, nil
 	}
 	return &pb.EvaluateCalcResponse{Result: ValueToProto(result)}, nil

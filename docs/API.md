@@ -536,6 +536,8 @@ type LineReader interface {
 
 **Meta Commands:**
 - `%help`, `%list`, `%clear`, `%load <file>`
+- `%search <substring>` — List the declared and library symbols whose qualified name contains the substring, with the kind of each
+- `%builtins` — List the library functions the runtime implements directly
 - `%instantiate <name>`, `%slots <name>`, `%instances`
 - `%eval <expr>`
 - `%calc <name> [args...]` — Invoke calculation with arguments
@@ -548,6 +550,164 @@ type LineReader interface {
 session := repl.NewSession()
 repl.Loop(reader, os.Stdout, session)
 ```
+
+---
+
+## SysML v2 API & Services `Query`
+
+The gRPC service implements the query surface the **SysML v2 API & Services**
+standard defines, so a client that speaks that API — the
+[`SysML-v2-API-Java-Client`](https://github.com/Systems-Modeling/SysML-v2-API-Java-Client),
+the SysML v2 API Cookbook notebooks, MATLAB System Composer's `executeQuery` —
+can filter a model Systemica parsed. The standard's schema is authoritative:
+`api/openapi.yaml` in the Java client, components `Query`, `Constraint`,
+`PrimitiveConstraint`, `CompositeConstraint`.
+
+**Implementation:** `internal/grpc/query.go` (`Service.Query`), reported from
+`GetServerInfo` as the `query` capability. Python: `model.query(...)`
+(`python/pysysml/query.py`).
+
+### The query model
+
+```
+Query          scope[]    elements to consider; empty is the whole loaded model
+               select[]   properties to report; empty reports every one
+               where      one Constraint; absent selects the whole scope
+
+Constraint     PrimitiveConstraint | CompositeConstraint      (a protobuf oneof)
+
+PrimitiveConstraint   property, operator (= > <), value[], inverse
+CompositeConstraint   operator (and | or), constraint[]        (nests arbitrarily)
+```
+
+The RPC takes the same shape, with the standard's JSON names preserved, so
+translation from the standard's JSON is mechanical:
+
+```proto
+rpc Query(QueryRequest) returns (QueryResponse);   // api/proto/sysml.proto
+```
+
+A cookbook payload, sent verbatim through the Python client:
+
+```python
+model = pysysml.load("examples/vehicle.sysml")
+model.query({"@type": "Query", "where": {
+    "@type": "PrimitiveConstraint",
+    "operator": "=", "property": "@type", "value": ["PartUsage"]}})
+```
+
+Each answered element is `@id` (its qualified name), `@type` and the selected
+properties it has. A property an element does not have is **absent**, not empty.
+
+An element with no qualified identity — an unnamed `doc`, an anonymous usage, an
+anonymous `connect` — is **not** answered: its qualified name has an empty
+segment (`Demo::`), so it is neither unique nor a name a `scope` could use. The
+standard identifies an element by `@id`, and such an element has none
+(`TestQueryOmitsElementsWithNoQualifiedIdentity`).
+
+Neither is one declared inside an action body — a branch of an `if`, a loop body —
+since the body is owned by no element and so names its declarations only locally
+(`step`, not `Demo::Drive::step`): that name identifies no element and could not
+be used as a `scope` (`TestQueryOmitsBodyLocalDeclarations`). An answered `@id` is
+always a qualified name that the model resolves back to that element.
+
+### Queryable properties
+
+The set is closed and is the single source of truth in
+`queryProperties` (`internal/grpc/query.go`). A property outside it is an
+`INVALID_ARGUMENT` error listing the ones that exist — never a silently empty
+answer.
+
+| Property | Reports | Ordered |
+|---|---|---|
+| `@id` | The element's qualified name, which is also how `scope` names it | |
+| `qualifiedName` | Same as `@id` | |
+| `@type` | The element's metamodel type (table below) | |
+| `name` | The element's own name, the last segment of its qualified name | |
+| `declaredName` | `name`, absent when the name is an effective name borrowed from a referenced feature | |
+| `owner` | Qualified name of the owning element; absent for a top-level element, whose owner is the document root | |
+| `isAbstract` | `true`/`false` for a definition or usage; absent for anything else, and for a standard-library element restored from cache, which carries no declaration | |
+| `type` | Qualified name of the resolved type of a typed feature; absent when untyped or unresolved | |
+| `multiplicityLower` | Declared lower bound | ✅ |
+| `multiplicityUpper` | Declared upper bound, `*` when unbounded | ✅ |
+
+### `@type` — symbol kind → metamodel type
+
+Mapping Systemica's symbol kinds onto the standard's metamodel type names is the
+substantive design decision here; `metamodelTypeNames`
+(`internal/grpc/query.go`) is the single source of truth, and
+`TestMetamodelTypeNameCoversEveryKind` keeps it total over every kind a parsed
+declaration can have. A standard-library element restored from cache may carry no
+kind at all, and then reports **no** `@type`: it is answered, but never matches a
+`@type =` comparison (and is kept by the inverse of one).
+
+| Systemica kind | `@type` |
+|---|---|
+| `package`, `namespace` | `Package`, `Namespace` |
+| `partDef` / `partUsage` | `PartDefinition` / `PartUsage` |
+| `attributeDef` / `attributeUsage` | `AttributeDefinition` / `AttributeUsage` |
+| `itemDef` / `itemUsage` | `ItemDefinition` / `ItemUsage` |
+| `occurrenceDef` / `occurrenceUsage` | `OccurrenceDefinition` / `OccurrenceUsage` |
+| `portDef` / `portUsage` | `PortDefinition` / `PortUsage` |
+| `interfaceDef` / `interfaceUsage` | `InterfaceDefinition` / `InterfaceUsage` |
+| `connectionDef` / `connectionUsage` | `ConnectionDefinition` / `ConnectionUsage` |
+| `flowDef` / `flowUsage`, `allocationDef` / `allocationUsage` | `FlowDefinition` / `FlowUsage`, `AllocationDefinition` / `AllocationUsage` |
+| `actionDef` / `actionUsage`, `stateDef` / `stateUsage` | `ActionDefinition` / `ActionUsage`, `StateDefinition` / `StateUsage` |
+| `calcDef` / `calcUsage` | `CalculationDefinition` / `CalculationUsage` |
+| `constraintDef` / `constraintUsage`, `requirementDef` / `requirementUsage` | `ConstraintDefinition` / `ConstraintUsage`, `RequirementDefinition` / `RequirementUsage` |
+| `caseDef` / `caseUsage` and the analysis / verification / use-case forms | `CaseDefinition` / `CaseUsage`, `AnalysisCase…`, `VerificationCase…`, `UseCase…` |
+| `viewDef`, `viewpointDef`, `renderingDef`, `concernDef` and their usages | `ViewDefinition`, `ViewpointDefinition`, `RenderingDefinition`, `ConcernDefinition` and `…Usage` |
+| `enumerationDef` / `enumerationUsage`, `metadataDef` / `metadataUsage`, `metaclass` | `EnumerationDefinition` / `EnumerationUsage`, `MetadataDefinition` / `MetadataUsage`, `Metaclass` |
+| `comment`, `documentation`, `textualRepresentation`, `dependency` | `Comment`, `Documentation`, `TextualRepresentation`, `Dependency` |
+
+Three kinds have no distinct metamodel type, and report the closest one that
+exists — documented as approximations rather than hidden:
+
+| Systemica kind | `@type` | Why |
+|---|---|---|
+| `individualDef` / `individualUsage` | `OccurrenceDefinition` / `OccurrenceUsage` | An individual is an occurrence with `isIndividual` set, not a type of its own |
+| `connectorEnd` | `Feature` | A connector end is a `Feature` with `isEnd` set |
+| `alias` | `Membership` | An alias is a named membership, not an element |
+
+### Comparison semantics
+
+Where the standard is vague, these are the choices this implementation makes:
+
+- `=` compares the property's value as text, and matches if it equals **any** of
+  the listed values. The standard writes one value and its clients write a list
+  for `@type`; one value is the degenerate case of the same rule.
+- `>` and `<` compare numbers, and require exactly one operand and an ordered
+  property (the `multiplicity*` pair). A non-ordered property, more than one
+  operand, or an operand that is not a number is an `INVALID_ARGUMENT` error, not
+  a false verdict. `*` parses as infinity, so `multiplicityUpper > 1` holds for
+  an unbounded feature.
+- An element that simply *has no value* for the property fails the comparison —
+  that is a fact about the element, not a fault in the query.
+- `inverse` negates the verdict of its own constraint, so a constraint and its
+  inverse partition the scope.
+- `and`/`or` combine nested verdicts, short-circuiting once one is decisive.
+- The whole `where` tree is judged **before** any element is read, so a fault in
+  it — an unknown property, a missing operator, an empty composite, `>` on an
+  unordered property — is reported whatever the scope holds, including a model
+  that declares nothing (`TestQueryFaultIsReportedWithNoElementsToConsider`), and
+  wherever it sits, including under an already-decisive sibling.
+- `scope` considers each named element **and everything nested inside it**, in
+  declaration order, parents first; a name the model does not have is an error.
+  An empty scope enumerates the parsed document (not the standard library, which
+  is reachable by naming a library element as a scope).
+
+### Not supported — by design of the standard
+
+The standard's query model is deliberately weak, and this is an interop surface,
+not Systemica's expressive query story:
+
+- **No graph traversal and no transitive closure.** There is no "all elements
+  under X", no "everything that specializes Y", no path expressions and no joins.
+  Containment is expressible only as a `scope`; specialization is not expressible
+  at all, even though `semantics.Model` can answer it.
+- No `owningProject` / `@id` on the query resource (single-model service, no
+  project or commit store), no derived or computed properties, and no ordering or
+  paging of results — elements come back in declaration order.
 
 ---
 

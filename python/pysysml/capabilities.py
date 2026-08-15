@@ -34,6 +34,10 @@ CAPABILITY_CONVERT = "convert"
 #: indistinguishable from a broken channel.
 CAPABILITY_VERIFICATION = "verification"
 
+#: The ``Query`` RPC, which evaluates a SysML v2 API & Services ``Query`` over a
+#: loaded model. Without it a query fails as an unimplemented method, which is
+#: indistinguishable from a broken channel.
+CAPABILITY_QUERY = "query"
 
 @dataclass(frozen=True)
 class ServerInfo:

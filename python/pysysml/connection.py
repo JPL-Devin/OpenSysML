@@ -12,6 +12,7 @@ from pysysml.model import Model
 from pysysml.binary import ensure_binary
 from pysysml.capabilities import (
     CAPABILITY_CONVERT,
+    CAPABILITY_QUERY,
     CAPABILITY_VERIFICATION,
     ServerInfo,
     require,
@@ -25,11 +26,87 @@ from pysysml.errors import (
     ModelFileNotFoundError,
     ModelNotFoundError,
     UnsupportedValueError,
+    WrongKindError,
     from_rpc_error,
     translate_rpc_errors,
 )
+from pysysml.query import build_query, elements_of
 from pysysml.values import value_to_python
 from pysysml.verdict import CalcResult, Verdict
+
+
+#: Port the service listens on when a caller names none.
+DEFAULT_PORT = 50051
+
+
+def split_target(host, port=None):
+    """Split a ``host:port`` string written as the host into host and port.
+
+    ``connect("localhost:50123")`` names an address, not a hostname, so it is
+    read as one rather than building ``localhost:50123:50051`` and reporting the
+    service unreachable at an address nobody asked for.
+
+    Args:
+        host (str): Hostname, or a ``host:port`` address
+        port (int, optional): Port; None is no port given, so an address's own
+            port stands and a plain hostname gets DEFAULT_PORT
+
+    Returns:
+        tuple[str, int]: The host and port to connect to
+
+    Raises:
+        ValueError: If the address's port is not a number, or disagrees with a
+            port also given
+    """
+    if not isinstance(host, str) or ':' not in host:
+        return host, DEFAULT_PORT if port is None else port
+
+    # A bare IPv6 address has colons of its own; only a bracketed one, or a
+    # single colon, names a port.
+    if host.startswith('['):
+        closing = host.find(']')
+        if closing == -1 or not host[closing + 1:].startswith(':'):
+            return host, DEFAULT_PORT if port is None else port
+        name, written = host[:closing + 1], host[closing + 2:]
+    elif host.count(':') > 1:
+        return host, DEFAULT_PORT if port is None else port
+    else:
+        name, written = host.split(':', 1)
+
+    if not written.isdigit():
+        raise ValueError(
+            f"host={host!r} names no port this client can read; pass "
+            f"host and port separately, as connect({name!r}, <port>)"
+        )
+    embedded = int(written)
+    if port is not None and port != embedded:
+        raise ValueError(
+            f"host={host!r} and port={port} name different ports; give the "
+            f"port once"
+        )
+    return name, embedded
+
+
+def _failure_of(message, failure_reason, diagnostics):
+    """Build the error for a failure the service classified.
+
+    The kind is read from the response's typed reason, so a wrong request and a
+    condition that could not be evaluated are told apart without reading the
+    message text.
+    """
+    if failure_reason == sysml_pb2.FAILURE_REASON_WRONG_KIND:
+        return WrongKindError(message, diagnostics=diagnostics)
+    return ExecutionError(message, diagnostics=diagnostics)
+
+
+def _raise_wrong_kind(pb_verdict, diagnostics):
+    """Raise when a verdict reports the named element is of another kind.
+
+    Such a verdict is no answer about the model, so it is raised rather than
+    returned as an undecided one; every other failure stays in verdict.error.
+    """
+    if pb_verdict.failure_reason == sysml_pb2.FAILURE_REASON_WRONG_KIND:
+        raise WrongKindError(pb_verdict.error, diagnostics=diagnostics)
 
 
 def _get_lockfile_path():
@@ -128,14 +205,20 @@ class Connection:
         port (int): Service port
     """
     
-    def __init__(self, host='localhost', port=50051, auto_start=True):
+    def __init__(self, host='localhost', port=None, auto_start=True):
         """Initialize connection to sysml-grpc service.
         
         Args:
-            host (str): Service hostname (default: 'localhost')
-            port (int): Service port (default: 50051)
+            host (str): Service hostname, or a ``host:port`` address, whose port
+                is used when no separate port is given (default: 'localhost')
+            port (int, optional): Service port (default: 50051)
             auto_start (bool): If True, automatically start service if not running (default: True)
+
+        Raises:
+            ValueError: If host names a port that is unreadable or disagrees
+                with port
         """
+        host, port = split_target(host, port)
         self.host = host
         self.port = port
         self._address = f"{host}:{port}"
@@ -335,6 +418,42 @@ class Connection:
             diagnostics=diagnostics,
         )
 
+    def query(self, model_hash, payload=None, scope=None, select=None, where=None):
+        """Run a SysML v2 API & Services Query over a loaded model.
+
+        The query is the standard's JSON object, so a cookbook payload works
+        verbatim, or the same thing as keywords. See :mod:`pysysml.query`.
+
+        Args:
+            model_hash (str): Hash of the model to query
+            payload (dict, optional): The standard's ``Query`` object
+            scope (list, optional): Elements to consider; empty is the whole model
+            select (list, optional): Properties to report; empty reports every one
+            where (dict, optional): Constraint to filter by
+
+        Returns:
+            list[QueryElement]: The elements selected, in declaration order
+
+        Raises:
+            QueryError: If the query is not one the standard's model describes
+            MissingCapabilityError: If the service cannot query
+            InvalidRequestError: If a property or scope is unknown to the service
+            ModelNotFoundError: If the model is no longer cached
+        """
+        require(
+            self.server_info(),
+            CAPABILITY_QUERY,
+            "upgrade the sysml-grpc service to a build whose GetServerInfo "
+            "reports 'query'",
+        )
+        request = sysml_pb2.QueryRequest(
+            model_hash=model_hash,
+            query=build_query(payload, scope=scope, select=select, where=where),
+        )
+        with translate_rpc_errors():
+            response = self._stub.Query(request)
+        return elements_of(response)
+
     def get_symbol(self, model_hash, symbol_id):
         """Fetch symbol by ID from cached model.
         
@@ -507,6 +626,8 @@ class Connection:
                 ``verdict.error``.
 
         Raises:
+            WrongKindError: If symbol_id names an element that is not a
+                constraint, which is a wrong request rather than a verdict
             ExecutionError: If the request could not be answered at all — an
                 unknown symbol, a subject that could not be instantiated
             MissingCapabilityError: If the service cannot verify
@@ -535,6 +656,8 @@ class Connection:
             Verdict: The answer
 
         Raises:
+            WrongKindError: If symbol_id names an element that is not a
+                requirement
             ExecutionError: If the request could not be answered at all
             MissingCapabilityError: If the service cannot verify
             ModelNotFoundError: If the service no longer holds the model
@@ -567,6 +690,8 @@ class Connection:
                 model stating no assertion gives an empty list.
 
         Raises:
+            WrongKindError: If symbol_id names an element that can state no
+                satisfaction assertion
             ExecutionError: If the request could not be answered at all
             MissingCapabilityError: If the service cannot verify
             ModelNotFoundError: If the service no longer holds the model
@@ -581,7 +706,11 @@ class Connection:
 
         diagnostics = [Diagnostic(d) for d in response.diagnostics]
         if response.error:
-            raise ExecutionError(response.error, diagnostics=diagnostics)
+            raise _failure_of(
+                response.error, response.failure_reason, diagnostics
+            )
+        for pb_verdict in response.verdicts:
+            _raise_wrong_kind(pb_verdict, diagnostics)
         instances = self._instances_of(response)
         return [
             Verdict(pb_verdict, instances=instances, diagnostics=diagnostics)
@@ -605,6 +734,7 @@ class Connection:
                 a calc usage computed
 
         Raises:
+            WrongKindError: If symbol_id names an element that is not a calc
             ExecutionError: If the calculation could not be evaluated
             MissingCapabilityError: If the service cannot verify
             ModelNotFoundError: If the service no longer holds the model
@@ -620,7 +750,9 @@ class Connection:
 
         diagnostics = [Diagnostic(d) for d in response.diagnostics]
         if response.error:
-            raise ExecutionError(response.error, diagnostics=diagnostics)
+            raise _failure_of(
+                response.error, response.failure_reason, diagnostics
+            )
 
         outputs = {}
         for output in response.outputs:
@@ -647,6 +779,7 @@ class Connection:
         diagnostics = [Diagnostic(d) for d in response.diagnostics]
         if response.error:
             raise ExecutionError(response.error, diagnostics=diagnostics)
+        _raise_wrong_kind(response.verdict, diagnostics)
         return Verdict(
             response.verdict,
             instances=self._instances_of(response),

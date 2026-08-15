@@ -251,14 +251,16 @@ func (s *Session) InstantiateNamed(name string) ([]string, error) {
 }
 
 func (s *Session) instantiateNamed(name string) ([]string, error) {
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
-		return nil, fmt.Errorf("runtime init: %w", err)
-	}
-
+	// Resolved before the runtime is built, so a misspelling is reported as one
+	// even when the session has nothing to instantiate from.
 	sym, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
 		return nil, lerr
+	}
+
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return nil, fmt.Errorf("runtime init: %w", err)
 	}
 
 	inst, err := ctx.Instantiate(sym)

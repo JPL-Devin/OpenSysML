@@ -53,6 +53,8 @@ func errorLines(lines []string, _ []NamedValue, err error) ([]string, bool, erro
 // `%load` prints. The error is the file it could not read; a model that read
 // but did not analyse cleanly is reported by Diagnostics.
 func (s *Session) LoadFile(path string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	data, err := os.ReadFile(expandHome(path))
 	if err != nil {
 		return nil, readError(path, err)
@@ -65,6 +67,8 @@ func (s *Session) LoadFile(path string) ([]string, error) {
 // that spans several files reports the analysis once every file is in, a
 // reference from one file to another resolving only then.
 func (s *Session) LoadFileSummary(path string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	data, err := os.ReadFile(expandHome(path))
 	if err != nil {
 		return nil, readError(path, err)
