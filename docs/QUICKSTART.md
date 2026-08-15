@@ -391,7 +391,7 @@ exit=1
 
 $ sysml -constraint MyModel::nosuch checks.sysml; echo "exit=$?"
 ✓ package MyModel
-error: symbol "MyModel::nosuch" not found
+error: unresolved reference: MyModel::nosuch
 exit=2
 
 $ sysml -requirement MyModel::healthy checks.sysml; echo "exit=$?"

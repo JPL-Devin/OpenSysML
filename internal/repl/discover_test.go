@@ -174,18 +174,18 @@ func TestSymbolSuggestion(t *testing.T) {
 			name:    "misspelled declaration",
 			declare: "part def Wheel { attribute diameter = 1.0; }",
 			line:    "%instantiate Whel",
-			wants:   []string{`symbol "Whel" not found`, "did you mean Wheel?"},
+			wants:   []string{"unresolved reference: Whel", "did you mean Wheel?"},
 		},
 		{
 			name:  "bare library name is offered qualified",
 			line:  "%instantiate Integer",
-			wants: []string{`symbol "Integer" not found`, "did you mean ScalarValues::Integer?"},
+			wants: []string{"unresolved reference: Integer", "did you mean ScalarValues::Integer?"},
 		},
 		{
 			name:    "nothing close",
 			declare: "part def Wheel { attribute diameter = 1.0; }",
 			line:    "%instantiate Zzzzqqqqwwww",
-			wants:   []string{`symbol "Zzzzqqqqwwww" not found`},
+			wants:   []string{"unresolved reference: Zzzzqqqqwwww"},
 		},
 	}
 

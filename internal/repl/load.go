@@ -3,6 +3,7 @@ package repl
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 
 	"github.com/Open-MBEE/Systemica/internal/core/project"
@@ -31,7 +32,7 @@ func (s *Session) loadPaths(paths []string) ([]string, error) {
 		// directory or pattern they named.
 		data, err := os.ReadFile(file)
 		if err != nil {
-			return nil, fmt.Errorf("load %s: %w", file, err)
+			return nil, readError(file, err)
 		}
 		srcs = append(srcs, SourceFile{Name: file, Text: string(data)})
 	}
@@ -66,4 +67,14 @@ func expandHomes(paths []string) []string {
 		out = append(out, expandHome(p))
 	}
 	return out
+}
+
+// readError reports a file that could not be read, naming the path once: the
+// read error repeats it and so does every caller that wraps this.
+func readError(path string, err error) error {
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) {
+		err = pathErr.Err
+	}
+	return fmt.Errorf("cannot read %s: %w", path, err)
 }

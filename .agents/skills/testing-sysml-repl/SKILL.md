@@ -270,7 +270,7 @@ because the obvious ones cannot:
   (`state working { attribute localGain = 4.0; entry { assign result := localGain + pkgBonus; } }`),
   and for nesting a substate inside a `region` must declare one read by its own entry action.
   A broken build reports `error: event processing failed: enter state: entry action: eval assignment
-  RHS: unresolved feature: localGain`.
+  RHS: unresolved reference: localGain`.
 - **Always include a shadowing case, because the failure mode is a wrong value, not an error.** Give
   a state (or an action, or a loop/if block) a member whose name also exists at package level with a
   *different* value, and assert the inner one wins. A build that hands out the enclosing scope
@@ -310,14 +310,14 @@ because the obvious ones cannot:
   invalidate the other snippet. `./bin/sysml <file>` per variant keeps the runs independent.
 - Meta-commands are only understood at the `sysml>` prompt: a shell habit like `clear; %action foo`
   is parsed as SysML, pollutes the session buffer, and can make an already-loaded package's symbols
-  stop resolving (`symbol "DescentR::propagate" not found`). Type shell and REPL commands in
+  stop resolving (`unresolved reference: DescentR::propagate`). Type shell and REPL commands in
   separate turns, and `%clear` (or restart) if a stray line lands in the buffer.
 - `%satisfy` takes no argument (every satisfaction assertion the model states) or the name of the
   element stating them, since `assert satisfy … by …` is anonymous.
 - Instances are keyed by resolved FQN, so `%instantiate Vehicle` then `%slots Demo::Vehicle` must
   hit the same `ID`, and the reverse spelling too. Differing IDs = broken keying.
 - Qualified attribute access works with a full FQN (`%eval Demo::Engine::power` → `= 300.00`) but a
-  **partial** qualification (`%eval Engine::power`) is `symbol ... not found` — the qualified path
+  **partial** qualification (`%eval Engine::power`) is `unresolved reference: …` — the qualified path
   goes through the index, which wants the whole FQN. Expect this, don't file it as a bug without
   checking intent.
 - `%break <node>`: unknown node names are rejected *with the valid node list*; after a stop,
@@ -552,7 +552,7 @@ follow them with the cheap canaries: `%action tally` + `%continue` → `total = 
 `Session.accept` (internal/repl/session.go) drops any earlier snippet whose **declared names**
 intersect the new submission's. So typing `package Demo { part def Trailer { ... } }` to *add* a
 member to an already-loaded `package Demo` **replaces the whole package** — `Demo::Vehicle` and
-friends become `symbol ... not found`, while `%instances` still lists the now-orphaned instance and
+friends become `unresolved reference: …`, while `%instances` still lists the now-orphaned instance and
 instance IDs restart. When you just want to add declarations mid-session, use a **different package
 name**. When you want to prove that newly-typed declarations are visible to the qualified-name path
 (the `s.idx`/`s.rtCtx`/`s.instances` invalidation in `Submit`), a fresh package avoids conflating the
@@ -594,7 +594,7 @@ package Lib { part def Widget { attribute size = 3.0; } }
 package P { public import Lib::*; }
 %instantiate P::Widget      -> ✓ Created instance of Lib::Widget    (resolved FQN is the DECLARING one)
 package P { }               -> replaces the earlier snippet (same declared name)
-%instantiate P::Widget      -> error: symbol "P::Widget" not found  (re-export unwound)
+%instantiate P::Widget      -> error: unresolved reference: P::Widget  (re-export unwound)
 %instantiate Lib::Widget    -> ✓ Created instance of Lib::Widget    (purge must not over-remove)
 package P { public import Lib::*; }
 %instantiate P::Widget      -> ✓ ... again, and never "is ambiguous"
@@ -603,7 +603,7 @@ package P { public import Lib::*; }
 Notes that save time:
 
 - A re-export registers the symbol under the importing namespace but **never copies its subtree**:
-  `P::Widget` resolves while `%eval P::Widget::size` is `symbol ... not found`. Use the declaring
+  `P::Widget` resolves while `%eval P::Widget::size` is `unresolved reference: …`. Use the declaring
   FQN (`%eval Lib::Widget::size` → `= 3.00`). This is intended (confirmed by the maintainer).
 - Resubmitting the same importing package several times must keep resolving and must never produce
   `is ambiguous` — duplicate re-export registrations would surface as ambiguity, so assert the
@@ -835,7 +835,7 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   the error reads `no value for feature maxSpeed`.
 - A subject of an unrelated type is *not* rejected: `verify_constraint(c, subject=<an attribute
   or a calc>)` instantiates it and answers from declared defaults. If you need a raising subject,
-  use a name that does not exist (`symbol not found: …`).
+  use a name that does not exist (`unresolved reference: …`).
 - `verify_satisfaction(fqn)` narrowed to an element that states no assertion returns an **empty
   list**, so `satisfied()` is vacuously `True`; the `"<x> states no satisfaction assertion"`
   error branch in `verify.go` only fires for a scope-less symbol and is hard to reach.
@@ -1008,7 +1008,7 @@ Three cheap, high-signal sweeps:
    assertions that separate working from broken are: `%slots` lists the member as **`x = 5`**
    (broken revisions show `sn = 5` with `x = 1`, or a bogus `redefines = <unknown>` slot);
    `%eval T::A::x` **and** `%eval T::A::sn` both evaluate; and an action body doing
-   `assign total := total + x` completes instead of `unresolved feature: x`. Load-level `✓ package T`
+   `assign total := total + x` completes instead of `unresolved reference: x`. Load-level `✓ package T`
    proves nothing here.
 
 Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
@@ -1022,7 +1022,7 @@ consumers reading `Usage.Ident.Name` break silently downstream. The probes that 
 fixed from broken, each with a visible A/B against `main`:
 
 - **Attribute default** — `attribute redefines x = 5;` in an action body with a statement reading
-  `x`; a lost name surfaces as `error: execution failed: eval assignment RHS: unresolved feature: x`,
+  `x`; a lost name surfaces as `error: execution failed: eval assignment RHS: unresolved reference: x`,
   not as a parse error.
 - **Step ordering** — `action redefines bump { … }` ordered by `then start bump; then bump end;`.
   A lost name fails at lowering: `succession edge references undefined target node`.
@@ -1085,7 +1085,7 @@ that imports `SI::*`. Consequences to test deliberately, because they surprise u
   `package Demo { attribute mass = 3.0; }`, `%eval mass * 2` = `6.00` but `%eval 1.0 [m]` starts
   failing `unresolved unit m` (Demo imports nothing).
 - With two packages, only the last one's members resolve unqualified (`%eval b * 3` works,
-  `%eval a + b` is `unresolved feature: a`); qualify them (`%eval P1::a + P2::b` = `3.00`).
+  `%eval a + b` is `unresolved reference: a`); qualify them (`%eval P1::a + P2::b` = `3.00`).
 - `%eval <unit>` (e.g. `%eval m`) resolves through that scope and answers
   `error: "m" has no value to evaluate`, not `symbol "m" not found` — the latter is the pre-fix
   signature.
@@ -1209,6 +1209,61 @@ revision. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
 over a pipe is not visible in the video and should be reported as weaker evidence.
 
+**Never type `clear` at the `sysml>` prompt while recording.** It is submitted as SysML, not run by
+the shell, so it leaves an unresolved session error and every later submission gains a
+`note: an earlier session error is unresolved, so deeper checks may not have run here` line that
+looks like a defect in the frame. Clear the screen *before* starting the REPL (`clear; ./bin/sysml`),
+scroll instead with `shift+PageUp`/`shift+PageDown` when long output (`%builtins`, `%help`) runs off
+the top, or quit and restart the REPL for a clean screen.
+
+## Tab completion and anything else readline-driven (PR #148)
+
+This section and the next describe behavior added by PR #148 (which also adds `%search` and
+`%builtins`), so they apply only once that PR is on `main`.
+
+`cmd/sysml` installs an `AutoComplete` on the readline config, and **readline disables completion
+when the terminal reports a width of 0** — which is what a plain pipe reports. So
+`printf '%%bui\t\n' | ./bin/sysml` proves nothing about completion: the TAB is just swallowed.
+Two ways to drive it:
+
+1. **Konsole** (what belongs in a recording): send TAB with the computer tool's
+   `key: "Tab"`, and discard a line with `ctrl+u` between cases — note `ctrl+u` kills only to the
+   left of the cursor, so add `ctrl+k` first if the cursor is mid-line.
+2. **A pty harness** (for discovering expected values quickly, off camera): fork a pty, set the
+   window size, then write keystrokes. The essential part is the ioctl:
+
+   ```python
+   pid, fd = pty.fork()                     # child: os.execv("./bin/sysml", [...])
+   fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+   os.write(fd, b"%eval sqr\t")             # then read fd after a short settle
+   ```
+
+   The captured stream is full of `ESC[2K` redraws; grep the last redraw of the prompt line rather
+   than trying to read it as plain text.
+
+Completion cases worth covering, and their shapes: a unique meta-command prefix completes in place
+(`%bui`+TAB → `%builtins`), an ambiguous one lists on the second TAB
+(`%s`+TAB TAB → `%satisfy %save %search %slots %state %step %stop`), names after `%eval` come from
+session declarations, builtin function names and the library (`sqr`→`sqrt`), a qualified prefix
+offers **one segment at a time** (`ScalarValues::`+TAB lists only that package's members, never the
+whole library; `ScalarValues`+TAB inserts the `::` and lists the same members), and `%load`/`%save`
+complete filesystem paths with a trailing `/` on directories.
+Adversarial cases that all behaved correctly and are cheap to re-check: TAB with the cursor mid-line
+must keep the text to its right, TAB on an empty line lists (capped) names without hanging,
+completion into a nonexistent directory inserts nothing, and completion still works on a line long
+enough to wrap several terminal rows.
+
+## Where the prompt keeps its history (PR #148)
+
+History is `$XDG_STATE_HOME/sysml/history` when that variable is set (directory created 0700, file
+0600), else `~/.sysml_history`; older builds used `$TMPDIR/sysml-repl.history`, so a stale
+`/tmp/sysml-repl.history` may be left over from a contrast binary — delete it before asserting "the
+new build writes nothing to /tmp". Reuse across runs is testable without a second human: run the
+REPL, `%quit`, start it again and press `Up`. An unwritable location must degrade quietly (prompt
+starts, no warning, history in memory only) — exercise it with `XDG_STATE_HOME` pointing at a
+`chmod 500` directory *and* at a regular file, since those fail in different places
+(`MkdirAll` vs `OpenFile`).
+
 ## Connector usages and their ends (PR #132)
 
 This section describes runtime materialization of connector usages, so it applies once that PR is
@@ -1257,7 +1312,7 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
   `engagementRing.ringPort` / `band.ringPort`, not the disconnected variant's ports. But the
   send/accept *routing* side cannot be driven: an action usage does not inherit its `action def`'s
   nodes (`initialize action: no initial node found`), `%action` cannot resolve a nested action of a
-  selecting part usage (`symbol "Route::sysDirect::comm" not found`), and a sibling
+  selecting part usage (`unresolved reference: Route::sysDirect::comm`), and a sibling
   `ref :>> link = link::direct;` in the same body does not bind the selection — the run still ends in
   `accept deadlock in action comm: nothing can post the awaited message`. What *is* testable, and
   worth doing, is the negative plus a positive control: a plain (non-variation)

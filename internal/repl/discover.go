@@ -1,7 +1,6 @@
 package repl
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -362,15 +361,25 @@ func (s *Session) declaredSymbolNames() []string {
 // notFoundError reports a name no declaration answers to, offering the
 // qualified name the index does know it under, or the nearest spellings.
 func (s *Session) notFoundError(name string) error {
-	msg := fmt.Sprintf("symbol %q not found", name)
+	err := unresolvedError(name)
+	msg := err.Error()
 	if !strings.Contains(name, "::") {
 		if idx := s.browseIndex(); idx != nil {
 			if qualified := withSuggestion(msg, name, qualifiedCandidates(idx, name)); qualified != msg {
-				return errors.New(qualified)
+				return suggestionError(err, msg, qualified)
 			}
 		}
 	}
-	return errors.New(withSuggestion(msg, name, s.suggestSymbol(name)))
+	return suggestionError(err, msg, withSuggestion(msg, name, s.suggestSymbol(name)))
+}
+
+// suggestionError offers what suggested added to msg while keeping err's
+// sentinel, which callers match on to tell a missing name from other failures.
+func suggestionError(err error, msg, suggested string) error {
+	if suggested == msg {
+		return err
+	}
+	return fmt.Errorf("%w%s", err, strings.TrimPrefix(suggested, msg))
 }
 
 // unknownCommandLine reports an unrecognised meta command, naming the closest

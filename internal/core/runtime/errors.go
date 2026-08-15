@@ -3,6 +3,8 @@ package runtime
 import (
 	"errors"
 	"fmt"
+
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 var (
@@ -17,13 +19,12 @@ var (
 	// ErrUnresolvedReference is returned when a feature reference cannot be resolved.
 	ErrUnresolvedReference = errors.New("unresolved reference")
 
-	// ErrUnresolvedFeature is returned when an unqualified name in an expression
-	// names nothing the expression's scope, its frames or its object supply, so a
-	// value the model never declared is reported rather than assumed.
-	ErrUnresolvedFeature = errors.New("unresolved feature")
-
 	// ErrTypeMismatch is returned when an operation receives a value of unexpected type.
 	ErrTypeMismatch = errors.New("type mismatch")
+
+	// ErrDivisionByZero is returned when a division or remainder has a zero
+	// divisor. It is the answer to the expression, not a missing declaration.
+	ErrDivisionByZero = errors.New("division by zero")
 
 	// ErrMultiplicityViolation is returned when a slot access/assignment violates multiplicity bounds.
 	ErrMultiplicityViolation = errors.New("multiplicity violation")
@@ -34,6 +35,16 @@ var (
 	// ErrNotACalc is returned when a calc invocation targets a symbol that is
 	// not a calc definition or usage.
 	ErrNotACalc = errors.New("not a calc")
+
+	// ErrNotAConstraint is returned when a symbol asked to be evaluated as a
+	// constraint declares something else. It is a usage error about the request,
+	// not a verdict about the model, so callers can tell the two apart.
+	ErrNotAConstraint = errors.New("not a constraint")
+
+	// ErrNotARequirement is returned when a symbol asked to be evaluated as a
+	// requirement declares something else. Like ErrNotAConstraint it reports the
+	// request, not the model.
+	ErrNotARequirement = errors.New("not a requirement")
 
 	// ErrCalcArity is returned when a calc invocation passes more arguments than
 	// the calc declares input parameters.
@@ -221,6 +232,68 @@ func (e *ViolationError) Error() string {
 }
 
 func (e *ViolationError) Unwrap() error { return ErrViolated }
+
+// OperandTypeError reports an operator applied to operand types it is not
+// defined for, naming the operator and both operands and carrying the span of
+// the expression so a surface holding the source can point at it.
+type OperandTypeError struct {
+	Op    string      // the operator, as written
+	Left  string      // description of the left operand's type
+	Right string      // description of the right operand's type
+	Span  source.Span // span of the operator expression
+}
+
+func (e *OperandTypeError) Error() string {
+	return fmt.Sprintf("%v: operator '%s' is not defined for %s and %s", ErrTypeMismatch, e.Op, e.Left, e.Right)
+}
+
+func (e *OperandTypeError) Unwrap() error { return ErrTypeMismatch }
+
+// CalcFrameError reports an error raised inside a calc invocation, counting the
+// calc frames it propagated through so a recursion reports a depth rather than
+// one wrapped line per frame.
+type CalcFrameError struct {
+	Calc   string // the calc the error surfaced from
+	Frames int    // calc frames the error propagated through
+	Err    error
+
+	// calcs names every calc the chain already passed through, so a cycle is
+	// counted rather than wrapped again.
+	calcs map[string]bool
+}
+
+func (e *CalcFrameError) Error() string {
+	if e.Frames > 1 {
+		return fmt.Sprintf("calc %s: … %d frames: %v", e.Calc, e.Frames, e.Err)
+	}
+	return fmt.Sprintf("calc %s: %v", e.Calc, e.Err)
+}
+
+func (e *CalcFrameError) Unwrap() error { return e.Err }
+
+// calcFrame adds one calc frame to err. A calc the chain already passed through
+// is counted rather than wrapped again, so a recursion reports a depth instead
+// of one line per frame, while a calc calling another still names both.
+func calcFrame(calc string, err error) error {
+	var framed *CalcFrameError
+	if errors.As(err, &framed) {
+		if framed.calcs[calc] {
+			return &CalcFrameError{
+				Calc:   calc,
+				Frames: framed.Frames + 1,
+				Err:    framed.Err,
+				calcs:  framed.calcs,
+			}
+		}
+		calcs := make(map[string]bool, len(framed.calcs)+1)
+		for name := range framed.calcs {
+			calcs[name] = true
+		}
+		calcs[calc] = true
+		return &CalcFrameError{Calc: calc, Frames: 1, Err: err, calcs: calcs}
+	}
+	return &CalcFrameError{Calc: calc, Frames: 1, Err: err, calcs: map[string]bool{calc: true}}
+}
 
 // EvalError wraps an evaluation error with source context.
 type EvalError struct {

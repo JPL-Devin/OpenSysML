@@ -129,6 +129,12 @@ func (s *Session) walkSlots(inst *runtime.Instance, name string, segments []stri
 	return inst, name
 }
 
+// unresolvedError reports a name nothing declares, in the wording every surface
+// uses for it: the parser's diagnostic and the runtime's sentinel.
+func unresolvedError(name string) error {
+	return fmt.Errorf("%w: %s", runtime.ErrUnresolvedReference, name)
+}
+
 // AmbiguousNameError reports a name that matched more than one declaration. It
 // is distinct from a name found nowhere: a command may look elsewhere for the
 // latter, but must never answer about one of several candidates.

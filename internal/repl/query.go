@@ -104,6 +104,11 @@ func (s *Session) checkConstraint(name string) Verdict {
 
 	inst, owner := s.owningInstance(target.fqn)
 	passed, err := target.ctx.EvaluateConstraintOn(target.sym, target.scope, inst)
+	// A name that declares something else is a wrong argument, not a verdict:
+	// reporting it as a failed constraint would read as a fault in the model.
+	if errors.Is(err, runtime.ErrNotAConstraint) {
+		return unresolvedVerdict(name, err.Error())
+	}
 	if err != nil || !passed {
 		return Verdict{Subject: name, Status: failedStatus(err), Lines: []string{
 			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
@@ -129,6 +134,11 @@ func (s *Session) checkRequirement(name string) Verdict {
 
 	inst, owner := s.owningInstance(target.fqn)
 	passed, err := target.ctx.EvaluateRequirementOn(target.sym, target.scope, inst)
+	// As for a constraint: a name of another kind is a wrong argument rather
+	// than an unsatisfied requirement.
+	if errors.Is(err, runtime.ErrNotARequirement) {
+		return unresolvedVerdict(name, err.Error())
+	}
 	if err != nil || !passed {
 		return Verdict{Subject: name, Status: failedStatus(err), Lines: []string{
 			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),

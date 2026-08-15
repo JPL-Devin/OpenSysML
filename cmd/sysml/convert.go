@@ -92,5 +92,5 @@ func resolveFormat(flagValue, path string) (export.Format, error) {
 		return export.ParseFormat(flagValue)
 	}
 	f, err := export.FormatOfPath(path)
-	return f, export.Advise(err, "pass -from")
+	return f, export.Advise(err, "pass -from, or "+export.ExtensionAdvice)
 }

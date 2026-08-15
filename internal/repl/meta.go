@@ -313,10 +313,6 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 	return lines, false, nil
 }
 
-// noDeclarationsMsg answers an expression only session declarations could give
-// a meaning to.
-const noDeclarationsMsg = "no declarations loaded (literals work, but feature references need declarations)"
-
 // doEval evaluates an expression.
 func (s *Session) doEval(expr string) ([]string, bool, error) {
 	lines, err := s.evalExpr(expr)
@@ -343,7 +339,7 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		if doc == nil || doc.Scope == nil {
-			return nil, errors.New(noDeclarationsMsg)
+			return nil, s.errWithoutDeclarations(expr)
 		}
 		return nil, err
 	}
@@ -399,7 +395,7 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 	// A compound expression is evaluated in the session's own namespace, which
 	// an empty session does not have.
 	if doc == nil || doc.Scope == nil {
-		return nil, errors.New(noDeclarationsMsg)
+		return nil, s.errWithoutDeclarations(expr)
 	}
 
 	// Complex expression with feature refs - inject into session context
@@ -411,11 +407,13 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		if lookupErr != nil {
 			return nil, lookupErr
 		}
-		msgs := make([]string, 0, len(p.Diagnostics))
-		for _, d := range p.Diagnostics {
-			msgs = append(msgs, "\n  "+d.Message)
+		// These diagnostics describe the session fragment the expression was
+		// appended to, so the expression is parsed on its own to report the
+		// first error that is about what was typed.
+		if _, diags := parseExprAlone(expr); len(diags) > 0 {
+			return nil, exprError(expr, diags[0].Message, diags[0].Span, len(exprPrefix))
 		}
-		return nil, fmt.Errorf("parse failed:%s", strings.Join(msgs, ""))
+		return nil, fmt.Errorf("parse failed: %s", p.Diagnostics[0].Message)
 	}
 
 	// Find __eval__ attribute (should be last member)
@@ -445,13 +443,106 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		if lookupErr != nil {
 			return nil, lookupErr
 		}
-		return nil, fmt.Errorf("evaluation failed: %w", err)
+		return nil, evalError(expr, err, len(tempSrc)-len(expr)-1)
 	}
 
 	return []string{
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(val)),
 	}, nil
+}
+
+// exprPrefix wraps an expression as a declaration of its own, so parsing it
+// alone reports positions the typed expression explains.
+const exprPrefix = "attribute __lit__ = "
+
+// parseExprAlone parses expr as the value of a declaration of its own, so its
+// diagnostics are about the expression rather than about a session fragment it
+// was appended to. Spans are offsets into exprPrefix + expr.
+func parseExprAlone(expr string) (ast.Node, []parser.Diagnostic) {
+	p := parser.New(source.New("literal", []byte(exprPrefix+expr+";")))
+	root := p.ParseFile()
+	if len(p.Diagnostics) > 0 {
+		return nil, p.Diagnostics
+	}
+	if len(root.Members) == 0 {
+		return nil, nil
+	}
+	member := root.Members[0]
+	if mem, ok := member.(*ast.Membership); ok {
+		member = mem.Member
+	}
+	usage, ok := member.(*ast.Usage)
+	if !ok {
+		return nil, nil
+	}
+	return usage.Value, nil
+}
+
+// errWithoutDeclarations reports why an expression an empty session could not
+// answer failed. Only a failure declarations would answer — a name nothing
+// declares — is met with the no-declarations message; a syntax error or a real
+// evaluation failure, such as a division by zero, is the answer itself.
+func (s *Session) errWithoutDeclarations(expr string) error {
+	value, diags := parseExprAlone(expr)
+	if len(diags) > 0 {
+		return exprError(expr, diags[0].Message, diags[0].Span, len(exprPrefix))
+	}
+	if value != nil {
+		if ctx, err := emptyRuntime(s.budgets); err == nil {
+			_, evalErr := ctx.Eval(value)
+			if evalErr != nil && !declarationsWouldAnswer(evalErr) {
+				return evalError(expr, evalErr, len(exprPrefix))
+			}
+		}
+	}
+	return errors.New("no declarations loaded (literals work, but feature references need declarations)")
+}
+
+// declarationsWouldAnswer reports whether err is a failure declarations would
+// answer — a name, a unit or a value nothing declares — rather than the answer
+// of the expression itself.
+func declarationsWouldAnswer(err error) bool {
+	return errors.Is(err, runtime.ErrUnresolvedReference) ||
+		errors.Is(err, semantics.ErrNotAUnit) ||
+		errors.Is(err, runtime.ErrNoValue)
+}
+
+// evalError reports an evaluation failure, giving one that carries the span of
+// the expression it failed in the caret treatment declarations get. base is the
+// offset expr starts at in the text the span was measured in.
+func evalError(expr string, err error, base int) error {
+	var operand *runtime.OperandTypeError
+	// A span is a position in the typed expression only when the operator was
+	// written there; one in a declaration the expression reached keeps the
+	// wrapped message, which names the calc or feature it is in.
+	if errors.As(err, &operand) && mismatchInExpr(expr, operand, base) {
+		return exprError(expr, operand.Error(), operand.Span, base)
+	}
+	return fmt.Errorf("evaluation failed: %w", err)
+}
+
+// mismatchInExpr reports whether the mismatch was written in expr: its span has
+// to land inside expr and the text there has to be the operator it names, since
+// a span alone is an offset a declaration in another file could also occupy.
+func mismatchInExpr(expr string, operand *runtime.OperandTypeError, base int) bool {
+	start, end := operand.Span.Offset-base, operand.Span.End()-base
+	if start < 0 || end > len(expr) || start >= end {
+		return false
+	}
+	return strings.Contains(expr[start:end], operand.Op)
+}
+
+// emptyRuntime is a context over an empty model, which answers an expression of
+// literals alone and nothing a session declares.
+func emptyRuntime(budgets runtime.Budgets) (*runtime.Context, error) {
+	emptyIdx := symbols.NewIndex()
+	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
+	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), budgets.MaxSteps)
+	if err := ctx.SetBudgets(budgets); err != nil {
+		return nil, err
+	}
+	return ctx, nil
 }
 
 // tryEvalLiteral attempts to evaluate standalone literal expressions. It reports
@@ -466,34 +557,18 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool, error) {
 	}
 
 	// Parse as standalone attribute
-	src := fmt.Sprintf("attribute __lit__ = %s;", expr)
-	p := parser.New(source.New("literal", []byte(src)))
-	root := p.ParseFile()
-
-	if len(p.Diagnostics) > 0 || len(root.Members) == 0 {
-		return nil, false, nil
-	}
-
-	member := root.Members[0]
-	// Unwrap Membership if present
-	if mem, ok := member.(*ast.Membership); ok {
-		member = mem.Member
-	}
-
-	usage, ok := member.(*ast.Usage)
-	if !ok || usage.Value == nil {
+	value, diags := parseExprAlone(expr)
+	if len(diags) > 0 || value == nil {
 		return nil, false, nil
 	}
 
 	// Use runtime context with empty model (no symbols needed for literals)
-	emptyIdx := symbols.NewIndex()
-	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
-	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), s.budgets.MaxSteps)
-	if err := ctx.SetBudgets(s.budgets); err != nil {
+	ctx, err := emptyRuntime(s.budgets)
+	if err != nil {
 		return nil, false, nil
 	}
 
-	val, err := ctx.Eval(usage.Value)
+	val, err := ctx.Eval(value)
 	if err != nil {
 		// A failure the session's declarations could answer — a name or a unit
 		// this empty model knows nothing of — is not the answer, so the
@@ -502,7 +577,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool, error) {
 		// no position, is reported here instead of being hidden behind "no
 		// declarations loaded".
 		if isLiteralAnswerError(err) {
-			return nil, true, fmt.Errorf("evaluation failed: %w", err)
+			return nil, true, evalError(expr, err, len(exprPrefix))
 		}
 		return nil, false, nil
 	}
@@ -564,6 +639,7 @@ func isLiteralAnswerError(err error) bool {
 		runtime.ErrIndexOutOfRange,
 		runtime.ErrBodyArity,
 		runtime.ErrTypeMismatch,
+		runtime.ErrDivisionByZero,
 		runtime.ErrMultiplicityViolation,
 		runtime.ErrStepLimitExceeded,
 		runtime.ErrElementLimitExceeded,
@@ -956,6 +1032,11 @@ func (s *Session) evalCalc(calcName, argText string) ([]string, []NamedValue, er
 
 	result, err := ctx.InvokeCalc(sym, argValues, scope)
 	if err != nil {
+		// A name of another kind is a wrong argument, so it is reported as
+		// itself rather than as a calculation that failed.
+		if errors.Is(err, runtime.ErrNotACalc) {
+			return nil, nil, err
+		}
 		return nil, nil, fmt.Errorf("calc invocation failed: %w", err)
 	}
 

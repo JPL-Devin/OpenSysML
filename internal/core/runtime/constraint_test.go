@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
@@ -50,8 +49,8 @@ func TestConstraintEvaluation_Assert(t *testing.T) {
 		t.Fatal("Expected error for unbound 'value'")
 	}
 
-	if !strings.Contains(err.Error(), "unresolved feature") {
-		t.Logf("✓ Got expected error: %v", err)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Errorf("err = %v; want it to be an unresolved reference", err)
 	}
 }
 
