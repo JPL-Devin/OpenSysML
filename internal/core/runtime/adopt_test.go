@@ -66,8 +66,12 @@ func TestAdoptCarriesAnObjectIntoAReanalysis(t *testing.T) {
 	if features := ctx.FeaturesOf(obj.Type); feat != &features[indexOfFeature(t, features, "mass")] {
 		t.Error("a slot still fills a feature of the analysis the object was built against")
 	}
-	if got := obj.Slots["mass"].Value; got.Kind != ValConst || !strings.Contains(fmt.Sprint(got.Const), "1500") {
-		t.Errorf("mass = %v, want the value it was materialized with", got)
+	mass, err := obj.GetSlot(ctx, "mass")
+	if err != nil {
+		t.Fatalf("GetSlot(mass): %v", err)
+	}
+	if got := mass.Value; got.Kind != ValConst || !strings.Contains(fmt.Sprint(got.Const), "1500") {
+		t.Errorf("mass = %v, want the value its declaration states", got)
 	}
 	// The identities carried over are taken, so the next object gets a new one.
 	next, err := ctx.Instantiate(lookupOne(t, ctx.resolver.Index(), "Demo::Engine"))
@@ -76,6 +80,40 @@ func TestAdoptCarriesAnObjectIntoAReanalysis(t *testing.T) {
 	}
 	if next.ID == obj.ID || next.ID == nested {
 		t.Errorf("new object took the identity %d of one carried over", next.ID)
+	}
+}
+
+const adoptCalcSrc = `package Demo {
+	calc def double { in x; return : ScalarValues::Real = x * 2.0; }
+	part def Gauge { attribute reading = double(3.0); }
+}`
+
+// A slot holding what a value expression states is derived again in the context
+// it is carried into, so it reads the declarations that expression names as they
+// are now rather than keeping what they said when it was materialized.
+func TestAdoptDerivesAValueAgainstTheNewDeclarations(t *testing.T) {
+	prev := contextOver(t, adoptCalcSrc)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Gauge"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if slot, err := obj.GetSlot(prev, "reading"); err != nil {
+		t.Fatalf("GetSlot(reading): %v", err)
+	} else if got := fmt.Sprint(slot.Value.Const); !strings.Contains(got, "6") {
+		t.Fatalf("reading = %s, want 6", got)
+	}
+	shapes := prev.ShapesOf(obj)
+
+	ctx := contextOver(t, strings.Replace(adoptCalcSrc, "x * 2.0", "x * 3.0", 1))
+	if err := ctx.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	slot, err := obj.GetSlot(ctx, "reading")
+	if err != nil {
+		t.Fatalf("GetSlot(reading): %v", err)
+	}
+	if got := fmt.Sprint(slot.Value.Const); !strings.Contains(got, "9") {
+		t.Errorf("reading = %s, want 9 from the calc as it is declared now", got)
 	}
 }
 

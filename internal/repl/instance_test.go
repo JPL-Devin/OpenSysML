@@ -251,10 +251,10 @@ func TestInstanceDropsWhenADeclarationItDependsOnChanges(t *testing.T) {
 	wants(t, run(t, s, "%instances"), "no instances created", "1 instance was dropped")
 }
 
-// A value an object computed from an expression is invalidated by a change to
-// what that expression reads, not only by a change to the declarations it is
-// written in: the text stays the same while the value it names no longer holds.
-func TestInstanceDropsWhenAnExpressionItReadsChanges(t *testing.T) {
+// A value an object computed from an expression is computed again against the
+// declarations that expression reads now, so a change to one of them updates the
+// object rather than going unseen or costing it.
+func TestInstanceRederivesAValueWhenAnExpressionItReadsChanges(t *testing.T) {
 	s := NewSession()
 	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 2.0; }")
 	s.Submit("part def A { attribute m = double(3.0); }")
@@ -262,12 +262,33 @@ func TestInstanceDropsWhenAnExpressionItReadsChanges(t *testing.T) {
 	wants(t, run(t, s, "%slots A"), "m = 6.00")
 
 	res := s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
-	if !hasNotice(res, "1 instance was dropped") {
-		t.Fatalf("notices = %v, want the dropped instance counted", res.Notices)
+	if hasNotice(res, "instance was dropped") {
+		t.Fatalf("notices = %v, want the object kept", res.Notices)
 	}
-	rejects(t, run(t, s, "%instances"), "6.00")
-	run(t, s, "%instantiate A")
 	wants(t, run(t, s, "%slots A"), "m = 9.00")
+}
+
+// The declarations an expression reads are reached through other expressions
+// too, so a change two reads away is seen as well.
+func TestInstanceRederivesAValueThroughAChainOfReads(t *testing.T) {
+	s := NewSession()
+	s.Submit("calc def inner { in x; return : ScalarValues::Real = x * 2.0; }")
+	s.Submit("calc def outer { in y; return : ScalarValues::Real = inner(y) + 1.0; }")
+	s.Submit("part def A { attribute m = outer(3.0); }")
+	wants(t, run(t, s, "%instantiate A"), "ID: 1")
+	wants(t, run(t, s, "%slots A"), "m = 7.00")
+
+	s.Submit("calc def inner { in x; return : ScalarValues::Real = x * 3.0; }")
+	wants(t, run(t, s, "%slots A"), "m = 10.00")
+
+	s.Submit("attribute g = 5.0;")
+	s.Submit("attribute h = g * 2.0;")
+	s.Submit("part def B { attribute m = h + 1.0; }")
+	wants(t, run(t, s, "%instantiate B"), "ID:")
+	wants(t, run(t, s, "%slots B"), "m = 11.00")
+
+	s.Submit("attribute g = 7.0;")
+	wants(t, run(t, s, "%slots B"), "m = 15.00")
 }
 
 // A submission that invalidates some of what the session holds says so even

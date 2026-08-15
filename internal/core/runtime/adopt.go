@@ -18,7 +18,6 @@ type Shapes struct {
 	digests map[string]string // type FQN → resolved shape
 	types   []string          // the FQNs above, in the order they were reached
 	unnamed bool              // an object of a type with no qualified name
-	opaque  bool              // a value written by an expression whose reads are unknown
 }
 
 // Types lists the qualified names of the types the objects are of, so a caller
@@ -124,6 +123,24 @@ func (ctx *Context) recordShape(sym *symbols.Symbol, shapes *Shapes) {
 	ctx.recordReached(sym, shapes)
 }
 
+// recordReached records sym's shape and the shapes of the types its features
+// hold: a change to any of them is a change to what an object of sym holds.
+func (ctx *Context) recordReached(sym *symbols.Symbol, shapes *Shapes) {
+	fqn := ctx.fqnOf(sym)
+	if fqn == "" {
+		return
+	}
+	if _, done := shapes.digests[fqn]; done {
+		return
+	}
+	shapes.digests[fqn] = ctx.ShapeDigest(sym)
+	shapes.types = append(shapes.types, fqn)
+	features := ctx.FeaturesOf(sym)
+	for i := range features {
+		ctx.recordReached(features[i].Type, shapes)
+	}
+}
+
 // slotNames lists the object's slot names in a fixed order, so what is done
 // over its slots does not depend on map order.
 func (obj *Instance) slotNames() []string {
@@ -147,6 +164,30 @@ func (obj *Instance) held() []Value {
 		out = append(out, end.Value)
 	}
 	return out
+}
+
+// carried returns the values the object keeps across a carry-over: what a value
+// expression states is left out, since it is derived again rather than kept.
+func (obj *Instance) carried() []Value {
+	names := obj.slotNames()
+	out := make([]Value, 0, 2*len(names)+len(obj.Ends))
+	for _, name := range names {
+		slot := obj.Slots[name]
+		if slot.derived() {
+			continue
+		}
+		out = append(out, slot.Value, slot.Values)
+	}
+	for _, end := range obj.Ends {
+		out = append(out, end.Value)
+	}
+	return out
+}
+
+// derived reports whether the slot holds what a value expression states, which a
+// new context computes again from the declarations that expression now reads.
+func (s *Slot) derived() bool {
+	return s.Feature != nil && s.Feature.DefaultValue != nil
 }
 
 // walkValue visits a value and everything nested in it.
@@ -269,9 +310,6 @@ func (ctx *Context) Adopt(prev *Context, shapes *Shapes, obj *Instance) error {
 	if shapes.unnamed {
 		return &AdoptError{Reason: "it is of a declaration with no qualified name"}
 	}
-	if shapes.opaque {
-		return &AdoptError{Reason: "it holds a value written by an expression whose reads are unknown"}
-	}
 	a := &adoption{ctx: ctx, prev: prev, shapes: shapes,
 		plans:   make(map[int64]*adoptPlan),
 		rebound: make(map[*symbols.Symbol]*symbols.Symbol),
@@ -355,7 +393,7 @@ func (a *adoption) plan(obj *Instance) error {
 		plan.features[name] = feat
 	}
 	a.plans[obj.ID] = plan
-	for _, val := range obj.held() {
+	for _, val := range obj.carried() {
 		if err := a.planValue(fqn, val); err != nil {
 			return err
 		}
@@ -483,6 +521,12 @@ func (a *adoption) commit() {
 			}
 			done[slot] = true
 			slot.Feature = plan.featureFor(name, slot)
+			// A value an expression states is derived again here, so it cannot go
+			// stale against what that expression now reads.
+			if slot.derived() {
+				slot.Value, slot.Values, slot.Materialized = Value{}, Value{}, false
+				continue
+			}
 			slot.Value = a.rewrite(slot.Value)
 			slot.Values = a.rewrite(slot.Values)
 		}
