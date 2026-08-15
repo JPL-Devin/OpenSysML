@@ -269,7 +269,7 @@ func (m *Model) compileReference(scope *symbols.Scope, qn *ast.QualifiedName, sp
 	if !ok || sym == nil {
 		return unsupported(span, fmt.Sprintf("%s does not resolve", qnText(qn)))
 	}
-	if owner := ownerSymbol(sym); owner != nil && isMetadataType(owner) {
+	if owner := m.ownerOf(sym); owner != nil && isMetadataType(owner) {
 		ownerFQN := m.fqnOf(owner)
 		if ownerFQN == "" {
 			return unsupported(span, fmt.Sprintf("the metadata type of %s has no qualified name", qnText(qn)))
@@ -818,6 +818,27 @@ func ownerSymbol(sym *symbols.Symbol) *symbols.Symbol {
 		return nil
 	}
 	return sym.OwnerScope.Owner()
+}
+
+// ownerOf is the element declaring sym: its owning scope's owner, or — for a
+// symbol restored from a cache record, which carries no scope — the namespace its
+// indexed name names.
+func (m *Model) ownerOf(sym *symbols.Symbol) *symbols.Symbol {
+	if owner := ownerSymbol(sym); owner != nil {
+		return owner
+	}
+	if sym == nil || m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	fqn := m.fqnOf(sym)
+	i := strings.LastIndex(fqn, "::")
+	if i < 0 {
+		return nil
+	}
+	if owners := m.resolver.Index().LookupQualified(fqn[:i]); len(owners) == 1 {
+		return owners[0]
+	}
+	return nil
 }
 
 // isMetadataType reports whether a symbol is a metadata definition or a KerML

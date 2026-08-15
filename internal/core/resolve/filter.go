@@ -79,7 +79,12 @@ func (r *Resolver) documentOf(scope *symbols.Scope) string {
 	if r.idx == nil {
 		return ""
 	}
-	return r.idx.DocumentOfRoot(rootOf(scope))
+	if doc := r.idx.DocumentOfRoot(rootOf(scope)); doc != "" {
+		return doc
+	}
+	// A document builds its own scope tree for the editor, which the index does
+	// not hold, so identify it by the document name stamped on its symbols.
+	return symbols.DocNameOf(scope)
 }
 
 // admitsUnderName reports whether cand is reachable under the name fqn from the

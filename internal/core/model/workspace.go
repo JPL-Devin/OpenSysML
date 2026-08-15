@@ -231,9 +231,7 @@ func (w *Workspace) MembersOnPath(scope *symbols.Scope, path []string) []*symbol
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	resolver := resolve.New(w.index)
-	sem := semantics.NewModel(resolver)
-	resolver.SetModel(sem)
+	resolver, sem := w.newResolver()
 
 	sym, ok := resolver.ResolveName(scope, path[0], nil)
 	if !ok || sym == nil {
@@ -260,6 +258,16 @@ func (w *Workspace) MembersOnPath(scope *symbols.Scope, path []string) []*symbol
 		members = append(members, resolver.AdmittedChildrenOf(scope, fqn, children)...)
 	}
 	return members
+}
+
+// newResolver is a resolver over the index with a semantic model attached: an
+// inherited member and the element filters gating an import are both answered by
+// the model, so a read path without one resolves differently to a checked one.
+func (w *Workspace) newResolver() (*resolve.Resolver, *semantics.Model) {
+	resolver := resolve.New(w.index)
+	sem := semantics.NewModel(resolver)
+	resolver.SetModel(sem)
+	return resolver, sem
 }
 
 // Document returns the current parsed document for name, or nil.
@@ -292,7 +300,8 @@ func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn 
 func (w *Workspace) ResolveReferenceInDoc(name string, ref resolve.Reference) (*symbols.Symbol, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	return resolve.New(w.index).ResolveReference(ref)
+	resolver, _ := w.newResolver()
+	return resolver.ResolveReference(ref)
 }
 
 // ResolveQualifiedSegmentsInDoc resolves a qualified name and returns the symbol
@@ -311,7 +320,7 @@ func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Refer
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	r := resolve.New(w.index)
+	r, _ := w.newResolver()
 	r.ResolveReference(ref)
 	out := make([]*symbols.Symbol, len(ref.QN.Parts))
 	for i := range ref.QN.Parts {

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 )
 
 // filterWorkspace is a two-document workspace exercising both element-filter
@@ -678,5 +680,74 @@ func TestAnUnresolvedNameInAnImportFilterIsReported(t *testing.T) {
 	}
 	if len(msgs) != 1 || !strings.Contains(msgs[0], "unresolved reference: NoSuchMeta") {
 		t.Fatalf("a typo in an import's filter clause should be an unresolved reference, got %v", msgs)
+	}
+}
+
+// TestEditorResolutionMatchesDiagnosticsForARootImport locks the editor read
+// path (go-to-definition, hover, rename) to the same verdict the diagnostics
+// give: a document builds its own scope tree, whose document the index does not
+// know by identity, and it needs a semantic model to judge a filter at all.
+func TestEditorResolutionMatchesDiagnosticsForARootImport(t *testing.T) {
+	ws := NewWorkspace()
+	ws.Open("file:///vehicles.sysml", []byte(filterModelSource), 1)
+	ws.Open("file:///app.sysml", []byte("import Vehicles::vehicle::*[@Vehicles::Safety];\npart a :> seatBelt;"), 1)
+	doc := ws.Document("file:///app.sysml")
+	if doc == nil || doc.Scope == nil {
+		t.Fatal("the document has no scope")
+	}
+	for name, want := range map[string]bool{"seatBelt": true, "keylessEntry": false} {
+		qn := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: name}}}
+		if _, ok := ws.ResolveQualifiedInDoc("file:///app.sysml", doc.Scope, qn); ok != want {
+			t.Errorf("the root import resolves %s in the editor = %v, want %v", name, ok, want)
+		}
+	}
+}
+
+// A condition reading a feature through its metadata type (`Safety::isMandatory`)
+// has to recognise that type whether the library declaring it was parsed or
+// restored: a restored symbol has no owning scope, only an indexed name.
+func TestAFeatureComparisonIsCacheStateIndependent(t *testing.T) {
+	libDir := t.TempDir()
+	lib := `package Meta {
+	private import ScalarValues::Boolean;
+	metadata def Safety { attribute isMandatory : Boolean; }
+}
+
+package Vehicles {
+	part vehicle {
+		part seatBelt { @Meta::Safety{isMandatory = true;} }
+		part mirror { @Meta::Safety{isMandatory = false;} }
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(libDir, "lib.sysml"), []byte(lib), 0o600); err != nil {
+		t.Fatalf("write library: %v", err)
+	}
+	t.Setenv("SYSML_LIBRARY_PATH", libDir)
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	client := `package C {
+		private import Vehicles::vehicle::*[@Meta::Safety and Meta::Safety::isMandatory == true];
+		part a :> seatBelt;
+		part b :> mirror;
+	}`
+	var first []string
+	for run := 1; run <= 3; run++ { // run 1 parses the library, later runs restore it
+		ws := NewWorkspace()
+		ws.Open("file:///c.sysml", []byte(client), 1)
+		var msgs []string
+		for _, d := range ws.Diagnostics("file:///c.sysml") {
+			msgs = append(msgs, d.Message)
+		}
+		if run == 1 {
+			if len(msgs) != 1 || !strings.Contains(msgs[0], "mirror") {
+				t.Fatalf("run 1: the comparison should hide mirror and only it, got %v", msgs)
+			}
+			first = msgs
+			continue
+		}
+		if !slices.Equal(msgs, first) {
+			t.Fatalf("run %d over a cache-restored library reports %v, but %v when parsed", run, msgs, first)
+		}
 	}
 }
