@@ -261,7 +261,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - Lowering to execution IR lives in `internal/core/lower/` (`ToActionGraph`, `ToStateGraph`)
 
 **Testing:**
-- **Golden ASTs**: 81 fixtures - `internal/core/parser/testdata/parse/`
+- **Golden ASTs**: 82 fixtures - `internal/core/parser/testdata/parse/`
 - **Negative tests**: 127 subtests - `internal/core/parser/negative_test.go`
 - **Unit tests**: 43 tests (action, state) - `action_executor_test.go`, `state_executor_test.go`
 - **Conformance gate**: 211 cases (all passing: calc×56, action×50, state×41, requirement×12, instance×9, unit×7, constraint×7, satisfy×5, variation×5, redefinition×5, variant×3, feature×3, ballandchain×3, and one each of accept, attribute, connector, cubesat and multiplicity) - `conformance_test.go`
@@ -283,7 +283,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 
 **Package:** `internal/lsp`  
 **Binary:** `cmd/sysml-lsp`  
-**Status:** ✅ Complete (stdio protocol, 8 LSP features, 88 tests)
+**Status:** ✅ Complete (stdio protocol, 10 LSP features, 104 tests)
 
 ### Features
 
@@ -360,7 +360,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - `walk.go` — Reference lookup over `resolve.References`
 
 **Testing:**
-- 88 tests covering all features
+- 104 tests covering all features
 - Integration tests with mock clients
 - Incremental sync edge cases (astral plane characters, multi-change, offset-zero insertion)
 
@@ -506,7 +506,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 #### 2. Golden AST Snapshots
 - **Purpose:** Verify AST structure matches expected output
 - **Location:** `internal/core/parser/golden_test.go`
-- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (81 representative files)
+- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (82 representative files)
 - **Goldens:** `testdata/parse/*.golden` (AST dumps)
 - **Acceptance:** Parse output matches golden file
 - **Update flag:** `go test -run TestGolden -update` (regenerate goldens after intentional changes)
@@ -552,7 +552,7 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 #### 1. Golden AST Fixtures
 - **Purpose:** Lock in parse structure before execution changes
 - **Location:** `internal/core/parser/testdata/parse/` (behavioral fixtures)
-- **Coverage:** 81 fixtures in total, behavioral ones (action, calc, constraint, requirement, state) among them
+- **Coverage:** 82 fixtures in total, behavioral ones (action, calc, constraint, requirement, state) among them
 - **Acceptance:** `TestGolden` passes, AST dumps match expectations
 - **Update flag:** `go test -run TestGolden -update`
 
