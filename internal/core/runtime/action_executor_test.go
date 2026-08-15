@@ -415,6 +415,65 @@ func TestActionExecutor_ForkNode_NoSuccessors(t *testing.T) {
 	}
 }
 
+// A node with no succession out of it ends its flow: each forked branch retires
+// there, and the action completes once the last token has.
+func TestActionExecutor_NodeWithoutSuccessorsRetiresItsToken(t *testing.T) {
+	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
+
+	initial := &ast.InitialNode{Name: "start"}
+	fork := &ast.ForkNode{Name: "split"}
+	task1 := &ast.ActionExecutionNode{
+		Name:       "task1",
+		Expression: &ast.LiteralInteger{Value: "1"},
+	}
+	task2 := &ast.ActionExecutionNode{
+		Name:       "task2",
+		Expression: &ast.LiteralInteger{Value: "2"},
+	}
+
+	// initial → fork → [task1, task2], neither task having a successor.
+	actionSym := &symbols.Symbol{
+		Name: "EndsWithoutAFinalNode",
+		Kind: symbols.SymbolActionUsage,
+		Decl: &ast.Usage{
+			Kind:  ast.UsageAction,
+			Ident: ast.Identification{Name: "EndsWithoutAFinalNode"},
+			Members: []ast.Node{
+				initial, fork, task1, task2,
+				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "start"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "split"}}}},
+				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "split"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "task1"}}}},
+				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "split"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "task2"}}}},
+			},
+		},
+	}
+
+	exec, err := newActionExecutor(ctx, actionSym, nil)
+	if err != nil {
+		t.Fatalf("create executor: %v", err)
+	}
+
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+
+	if exec.State() != StateCompleted {
+		t.Errorf("expected StateCompleted, got %s", exec.State())
+	}
+	if len(exec.tokens) != 0 {
+		t.Errorf("expected every token retired, %d left", len(exec.tokens))
+	}
+	result, ok := exec.Results()["result"]
+	if !ok {
+		t.Fatal("expected the retired tokens to leave their data as results")
+	}
+	if result.Kind != ValConst || result.Const.Kind != semantics.ValInt {
+		t.Errorf("unexpected result: %v", result)
+	}
+}
+
 func TestActionExecutor_JoinNode(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
 

@@ -20,6 +20,7 @@ import (
 
 func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
+	t.Run("action_whose_last_node_has_no_succession", testActionWhoseLastNodeHasNoSuccession)
 	t.Run("decision_no_satisfied_guard", testDecisionNoSatisfiedGuard)
 	t.Run("state_dangling_transition", testStateDanglingTransition)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
@@ -1320,6 +1321,51 @@ func testDeadlockJoinStarvation(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "deadlock") {
 		t.Errorf("expected a deadlock error, got: %v", err)
+	}
+}
+
+// testActionWhoseLastNodeHasNoSuccession: a node the flow leads no further from
+// ends the flow, so an action declaring no `done` node completes instead of
+// failing, and stepping past the end neither errors nor spins.
+func testActionWhoseLastNodeHasNoSuccession(t *testing.T) {
+	src := `
+		package test {
+			action ends {
+				first start;
+				then action a;
+				then action b;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "ends", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action ends not found")
+	}
+
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run action whose last node has no succession: %v", err)
+	}
+	if exec.State() != StateCompleted {
+		t.Fatalf("expected the action to complete, got state %s", exec.State())
+	}
+
+	for i := 0; i < 3; i++ {
+		if err := exec.Step(); err != nil {
+			t.Fatalf("step %d past the end: %v", i+1, err)
+		}
+		if exec.State() != StateCompleted {
+			t.Fatalf("step %d past the end left state %s", i+1, exec.State())
+		}
+		if len(exec.Tokens()) != 0 {
+			t.Fatalf("step %d past the end revived %d token(s)", i+1, len(exec.Tokens()))
+		}
 	}
 }
 
