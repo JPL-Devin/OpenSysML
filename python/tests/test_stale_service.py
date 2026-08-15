@@ -276,6 +276,29 @@ def test_a_service_the_caller_has_not_started_yet_is_checked_at_the_first_call(
         conn.close()
 
 
+def test_a_deferred_check_is_made_by_whichever_call_comes_first(
+    running_service, tmp_home, monkeypatch
+):
+    """Any call answers a check still owed, not only the ones asking what it is.
+
+    Scripts load and evaluate without ever asking for capabilities, so a check
+    reached only through server_info() would never be made for them.
+    """
+    port = running_service(version="v0.0.5")
+    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+    # As if that service had come up only after the client was built.
+    monkeypatch.setattr(
+        Connection, "_running_service_info", lambda self, timeout=5.0: None
+    )
+
+    conn = Connection(port=port, auto_start=False)
+    try:
+        with pytest.raises(StaleServiceError):
+            conn.load("/does/not/matter.sysml")
+    finally:
+        conn.close()
+
+
 def test_a_matching_service_is_adopted(running_service, tmp_home, monkeypatch):
     """A running service that is what was asked for is used, as before."""
     port = running_service(version="v0.0.7", capabilities=[CAPABILITY_CONVERT])

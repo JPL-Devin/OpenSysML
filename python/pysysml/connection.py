@@ -312,7 +312,7 @@ class Connection:
             self._ensure_service()
         
         self._channel = grpc.insecure_channel(self._address)
-        self._stub = sysml_pb2_grpc.SysMLServiceStub(self._channel)
+        self._service = sysml_pb2_grpc.SysMLServiceStub(self._channel)
         try:
             if not auto_start:
                 self._check_managed_service_release()
@@ -373,6 +373,17 @@ class Connection:
         """Context manager exit."""
         self.close()
     
+    @property
+    def _stub(self):
+        """The service stub, with any release check still owed done first.
+
+        Every call goes through here, so a service that came up after the client
+        was built is checked at whichever call reaches it first.
+        """
+        if self._check_release_on_handshake:
+            self.server_info()
+        return self._service
+
     def server_info(self):
         """Ask the service what it is and what it supports.
 
@@ -391,7 +402,7 @@ class Connection:
         if self._server_info is None:
             request = sysml_pb2.ServerInfoRequest()
             try:
-                response = self._stub.GetServerInfo(request)
+                response = self._service.GetServerInfo(request)
             except grpc.RpcError as e:
                 if e.code() != grpc.StatusCode.UNIMPLEMENTED:
                     raise from_rpc_error(e) from e
