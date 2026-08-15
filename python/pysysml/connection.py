@@ -272,7 +272,8 @@ class Connection:
                 binary cache is checked against; without either, whatever
                 release answers is accepted. Checked whether the service is
                 started here or managed by the caller, though only a service
-                this client started can be replaced.
+                this client started can be replaced. A caller-managed service
+                that is not listening yet is checked at the first call instead.
             require_capabilities (iterable, optional): Capability names the
                 service must report, checked once at connect time rather than
                 when the first call needing one is made
@@ -298,6 +299,9 @@ class Connection:
         self._holds_refcount = False
         self._version = version or os.environ.get('PYSYSML_GRPC_VERSION') or None
         self._required_capabilities = frozenset(require_capabilities or ())
+        # A caller-managed service that was not listening yet is checked at the
+        # first handshake, so auto_start=False stays free of eager I/O.
+        self._check_release_on_handshake = False
         
         # Auto-start service if requested
         if auto_start:
@@ -319,13 +323,28 @@ class Connection:
     def _check_managed_service_release(self):
         """Check the release of a service this client was told not to start.
 
-        Nothing can be started in its place, so the mismatch is reported rather
-        than acted on; ownership does not matter, since nothing is stopped.
+        Nothing can be started in its place, so a mismatch is reported rather
+        than acted on; ownership does not matter, since nothing is stopped. A
+        service the caller manages may not be listening yet, so one that cannot
+        be asked is checked at the first handshake instead of refused here.
+        """
+        if self._required_release() is None:
+            return
+        info = self._running_service_info()
+        if info is None:
+            self._check_release_on_handshake = True
+            return
+        self._raise_if_release_mismatch(info)
+
+    def _raise_if_release_mismatch(self, info):
+        """Report a service that is not the release asked for.
+
+        Raises:
+            StaleServiceError: If what it reports differs from the requirement
         """
         required = self._required_release()
         if required is None:
             return
-        info = self.server_info()
         reason = mismatch_reason(info, version=required)
         if reason is not None:
             raise StaleServiceError(
@@ -360,6 +379,10 @@ class Connection:
             ServerInfo: Reported version and capabilities. ``answered`` is False
                 when the service predates the GetServerInfo RPC, in which case
                 it claims no capabilities.
+
+        Raises:
+            StaleServiceError: If a release was asked for and this first answer
+                shows the service is another one
         """
         if self._server_info is None:
             request = sysml_pb2.ServerInfoRequest()
@@ -381,6 +404,9 @@ class Connection:
                     answered=True,
                     origin=self._origin,
                 )
+            if self._check_release_on_handshake:
+                self._check_release_on_handshake = False
+                self._raise_if_release_mismatch(self._server_info)
         return self._server_info
 
     def load(self, file_path, strict=False):
@@ -1045,6 +1071,8 @@ class Connection:
                 stopped and one must now be started in its place
 
         Raises:
+            MissingCapabilityError: If it is the release asked for but lacks a
+                required capability, which no replacement could add
             StaleServiceError: If it is not the service asked for and this
                 client may not, or cannot usefully, stop it
         """
@@ -1073,14 +1101,10 @@ class Connection:
             return True
         if release_reason is None:
             # Only another release can report other capabilities, so a service
-            # that is the release asked for is reported, never stopped.
-            missing = sorted(
-                c for c in self._required_capabilities if not info.has(c)
-            )
-            raise StaleServiceError(
-                self._address, capability_reason, upgrade_remedy(missing[0]),
-                info=info,
-            )
+            # that is the release asked for is reported, never stopped. The
+            # shortfall is the documented one, whoever started the service.
+            for capability in sorted(self._required_capabilities):
+                require(info, capability, upgrade_remedy(capability))
 
         reason = "; ".join(
             r for r in (release_reason, capability_reason) if r is not None

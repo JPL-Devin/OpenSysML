@@ -634,11 +634,12 @@ no other client still holds it, and the binary that would be started in its plac
 can be shown to be the release asked for — a service you are running deliberately
 is never killed, and one is never stopped only to start the same build again, so
 the remedy asks you to stop it, name another port, or accept what is running. A
-service that only lacks a required *capability* is therefore always reported, not
-replaced: capabilities come with a release, so restarting the same binary would
-report the same ones. `auto_start=False` checks the release too — reporting a
-mismatch stops nothing, so it needs no ownership — it simply has nothing to start
-in its place.
+service that only lacks a required *capability* is therefore always reported as
+`MissingCapabilityError`, never replaced: capabilities come with a release, so
+restarting the same binary would report the same ones, and the class you catch
+does not depend on who started the service. `auto_start=False` checks the release
+too — reporting a mismatch stops nothing, so it needs no ownership — but stays
+lazy: a service of yours that is not listening yet is checked once it answers.
 
 ## Development
 

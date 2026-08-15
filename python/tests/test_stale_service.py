@@ -126,15 +126,20 @@ def test_a_foreign_service_that_cannot_say_what_it_is_is_reported(
 
 
 def test_a_foreign_service_lacking_a_required_capability_is_reported(
-    running_service, tmp_home
+    running_service, tmp_home, monkeypatch
 ):
-    """Capabilities asked for at connect time are checked against it too."""
+    """A missing capability is the documented error, whoever started the service.
+
+    Which process happens to be listening must not change the class a caller
+    has to catch for one condition.
+    """
+    monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
     port = running_service(capabilities=[CAPABILITY_CONVERT])
 
-    with pytest.raises(StaleServiceError) as excinfo:
+    with pytest.raises(MissingCapabilityError) as excinfo:
         Connection(port=port, require_capabilities=[CAPABILITY_QUERY])
 
-    assert repr(CAPABILITY_QUERY) in excinfo.value.reason
+    assert CAPABILITY_QUERY in str(excinfo.value)
 
 
 def test_a_handshake_that_fails_is_not_taken_for_an_answer(
@@ -205,6 +210,38 @@ def test_a_service_the_caller_manages_is_checked_too(
     assert not os.path.exists(_get_refcount_path())
     with Connection(port=port, auto_start=False) as conn:
         assert conn.server_info().version == "v0.0.5"
+
+
+def test_a_service_the_caller_has_not_started_yet_is_checked_at_the_first_call(
+    running_service, tmp_home, monkeypatch
+):
+    """auto_start=False stays lazy: an unreachable service is not refused early.
+
+    Callers build the client before starting their own service, so the release
+    is checked once the service answers rather than at construction.
+    """
+    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+
+    conn = Connection(port=_free_port(), auto_start=False)
+
+    try:
+        with pytest.raises(ConnectionError):
+            conn.server_info()
+    finally:
+        conn.close()
+
+    port = running_service(version="v0.0.5")
+    # As if that service had come up only after the client was built.
+    monkeypatch.setattr(
+        Connection, "_running_service_info", lambda self, timeout=5.0: None
+    )
+    conn = Connection(host=f"localhost:{port}", auto_start=False)
+    try:
+        with pytest.raises(StaleServiceError) as excinfo:
+            conn.server_info()
+        assert "v0.0.5" in excinfo.value.reason
+    finally:
+        conn.close()
 
 
 def test_a_matching_service_is_adopted(running_service, tmp_home, monkeypatch):
@@ -357,9 +394,9 @@ def test_a_service_lacking_only_a_capability_is_never_stopped(
     _record_pidfile(owned.pid)
 
     try:
-        with pytest.raises(StaleServiceError) as excinfo:
+        with pytest.raises(MissingCapabilityError) as excinfo:
             Connection(port=port, require_capabilities=[CAPABILITY_QUERY])
-        assert repr(CAPABILITY_QUERY) in excinfo.value.reason
+        assert CAPABILITY_QUERY in str(excinfo.value)
         assert owned.poll() is None  # still running
     finally:
         owned.terminate()
