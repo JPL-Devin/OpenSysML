@@ -180,8 +180,8 @@ All tests should pass with this demo loaded.
 
 ## Related Documentation
 
-- [Semantic Layer Completion Design](../../docs/superpowers/specs/2026-08-01-semantic-layer-completion-design.md) - Full specification
-- [Implementation Plan](../../docs/superpowers/plans/2026-08-01-semantic-layer-completion.md) - Detailed task breakdown
+- [Architecture](../../docs/internals/architecture.md) - the pipeline this demo exercises
+- [Spec compliance](../../docs/project/spec-compliance.md) - semantic rule to implementation to test
 - [PR #11](https://github.com/Open-MBEE/Systemica/pull/11) - Pull request with all changes
 
 ## Contributing

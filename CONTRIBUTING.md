@@ -82,7 +82,7 @@ go test ./internal/core/parser
 3. **Negative tests:** `go test -run TestNegative ./internal/core/parser`
 4. **Update goldens** (after intentional changes): `go test -run TestGolden -update ./internal/core/parser`
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#parser-test-contract) for full details on the parser testing contract.
+See [docs/internals/architecture.md](docs/internals/architecture.md#parser-test-contract) for full details on the parser testing contract.
 
 ### Static Analysis
 
@@ -238,13 +238,42 @@ github.com/Open-MBEE/Systemica
 ├── internal/repl/         # REPL implementation
 ├── python/                # Python client bindings (pysysml)
 ├── docs/                  # Documentation
+│   ├── guide/             # The handbook, in reading order
+│   ├── reference/         # CLI, REPL, environment, APIs, RDF mapping
+│   ├── internals/         # Architecture, testing, performance, design notes
+│   └── project/           # Compliance, roadmap, releasing, measurements
 ├── testdata/              # Test fixtures
 └── .circleci/             # CI configuration
 ```
 
+## Documentation
+
+Documentation is organized by what a reader wants, not by the feature that landed. Four areas,
+mapped in [docs/README.md](docs/README.md):
+
+- **[docs/guide/](docs/guide/)** — *how do I use it?* A numbered handbook read in order.
+- **[docs/reference/](docs/reference/)** — *what does this flag, command, API or triple mean?*
+  Look-up material, exhaustive rather than narrative.
+- **[docs/internals/](docs/internals/)** — *how is it built?* For someone changing the code.
+- **[docs/project/](docs/project/)** — *where does the project stand?* Compliance, roadmap,
+  release and testing process, and measured counts.
+
+When a change needs documenting:
+
+- **Extend the chapter that already covers the surface** rather than adding a page per feature —
+  a new REPL command belongs in [reference/repl-commands.md](docs/reference/repl-commands.md) and
+  the chapter that teaches the workflow, not in a new `MY_FEATURE.md`.
+- **Teach in the guide, enumerate in the reference.** Don't repeat a flag table in both; link.
+- **Measured numbers have one home** (fixture, corpus and conversion counts live in
+  [docs/project/](docs/project/)); elsewhere, link to it instead of restating a number that
+  will drift.
+- **Moving or renaming a page means updating its inbound links.** Run
+  `python3 scripts/check-doc-links.py` — it fails on a link to a missing file or heading and
+  runs in CI. Leave a one-paragraph pointer behind at a path that outside links may already use.
+
 ## Architecture
 
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design.
+See [ARCHITECTURE.md](docs/internals/architecture.md) for detailed design.
 
 **Key principles:**
 - **Immutable AST:** Syntax-only, never mutated

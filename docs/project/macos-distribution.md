@@ -76,12 +76,12 @@ Two consequences worth knowing:
 
 Notes on the last row: telling users to strip quarantine is a poor default because it
 trains them to bypass Gatekeeper on any download, and it gives them no way to tell our
-archive from a tampered one. It is documented in `docs/QUICKSTART.md` as an escape hatch
+archive from a tampered one. It is documented in `docs/guide/01-install.md` as an escape hatch
 *next to* the checksum verification step, not as the recommended path.
 
 ## 4. What this change actually lands
 
-1. **Docs** (`README.md`, `docs/QUICKSTART.md`): a macOS section that recommends
+1. **Docs** (`README.md`, `docs/guide/01-install.md`): a macOS section that recommends
    `brew install Open-MBEE/tap/systemica`, with `curl`/`go install` and the
    quarantine-clearing + checksum-verification commands as fallbacks.
 2. **Release artifacts** (`.circleci/config.yml`): in addition to the existing per-binary

@@ -9,7 +9,7 @@ translates it to the ``Query`` RPC's protobuf.
 
 It is an interop surface: the standard's query model has no graph traversal and
 no transitive closure, so a question like "everything under this part" is a
-scope, not a constraint. ``docs/API.md`` states exactly what is supported.
+scope, not a constraint. ``docs/reference/api.md`` states exactly what is supported.
 """
 
 from dataclasses import dataclass

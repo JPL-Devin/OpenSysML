@@ -1,7 +1,7 @@
 # Parser Robustness & Correctness — COMPLETE
 
 **Status:** All Phases Delivered (Phases 1-6)
-**Audience:** Historical reference for parser evolution. For active development, see test contracts in `docs/ARCHITECTURE.md`.
+**Audience:** Historical reference for parser evolution. For active development, see test contracts in `docs/internals/architecture.md`.
 
 ---
 
@@ -61,7 +61,7 @@ Parser evolved from coverage-driven (per-file whack-a-mole) to grammar-driven de
 
 ## Active Test Contracts
 
-See `docs/ARCHITECTURE.md` for current test requirements:
+See `docs/internals/architecture.md` for current test requirements:
 - **Parser Test Contract**: 4 layers (conformance, golden, negative, round-trip)
 - **Behavioral Test Contract**: 4 layers (golden ASTs, conformance, traces, robustness)
 

@@ -146,7 +146,8 @@ Models that convert to Turtle are a narrow set, but the set grows: **condition m
 state and action nodes still do not. Anything with a state substate, an initial node, `perform`,
 `send`, an assignment or prefix metadata still fails with
 `cannot convert the <thing> at <file>:<line>:<col>: save to .sysml or .kerml instead …` and exit 2.
-As of that PR, 65 of the 110 `examples/**/*.sysml` convert cleanly (50 before it), so a Turtle test
+Measured after that PR: 71 of the 120 models under `examples/` convert cleanly — 8 of the 19
+top-level models, 62 of the 100 training copies, and the semantic-layer demo — so a Turtle test
 can use real models — the Constraints/Requirements/Analysis/Verification training packages are the
 richest. A useful sweep, which also proves "the message is clear and it never panics":
 
@@ -888,12 +889,12 @@ type name in trace output means a node kind is missing from that switch.
 
 ## Spot-checking the docs against the binary
 
-`docs/QUICKSTART.md` and `README.md` contain REPL transcripts that are easy to let rot. Verify them
+`docs/guide/` and `README.md` contain REPL transcripts that are easy to let rot. Verify them
 by **typing them by hand** at the prompt in a GUI terminal, not over a pipe: some failure modes (a
 blank line inside a braced declaration ending the submission early) only exist interactively.
 Discover the expected values over a pipe first, then do one clean recorded pass.
 
-As of PR #107 the QUICKSTART/README action- and state-debugging transcripts are real captured output
+As of PR #107 the guide and README action- and state-debugging transcripts are real captured output
 and match the binary verbatim, including the hint lines
 (`Use %step to advance, %tokens to inspect, %continue to run to completion`,
 `Use %tokens to inspect, %step or %continue to resume`,
@@ -907,8 +908,8 @@ Traps worth re-checking after any doc or REPL edit:
   comes back as a single `✓ state X` with zero diagnostics.
 - **`%save` over an existing file appends `(replaced the existing file)`.** A doc block whose earlier
   step created or loaded that same file must show the suffix. Byte counts are exact and
-  content-dependent (`saved 181 bytes of sysml` / `saved 1872 bytes of ttl` for the QUICKSTART
-  `MyModel` file) — recompute them whenever the sample model changes.
+  content-dependent (`saved 181 bytes of sysml` / `saved 1872 bytes of ttl` for the
+  `MyModel` file of guide chapter 7) — recompute them whenever the sample model changes.
 - **Snippets using `Real` need `import ScalarValues::*;` in the session**, or the submission is
   rejected with `error: unresolved reference: Real` and no `✓` echo. A snippet relying on an import
   made in an earlier, separate doc section fails for a reader who starts a fresh REPL there.
@@ -935,7 +936,7 @@ Do **not** start the service by hand. `Connection._ensure_service`
 (`python/pysysml/connection.py`) probes `localhost:50051` and spawns the binary itself; letting it
 auto-start is both the realistic user path and the only way it writes its pidfile. Attaching to a
 service you started yourself makes `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
-fail — that is the documented `docs/ROADMAP.md` §P1 gap, not a new bug.
+fail — that is the documented `docs/project/roadmap.md` §P1 gap, not a new bug.
 
 ### Service lifecycle, the stale-service check and `require_capabilities` (PR #181)
 
@@ -1168,7 +1169,7 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   ~47 elements under `Base`/`Occurrences`/`Links`/`Clocks` come back with **no** `@type` (their
   symbol kind is `SymbolUnknown`), so they never match `@type =` but are kept by its `inverse`; ~12
   `*Definition`s (e.g. `ScalarValues::Boolean`) come back with **no** `isAbstract`. Any claim in
-  docs/API.md that the `@type` mapping is total is a doc bug unless it is scoped to "every kind a
+  docs/reference/api.md that the `@type` mapping is total is a doc bug unless it is scoped to "every kind a
   parsed declaration can have".
 - Property-absence is the documented shape throughout: `owner` absent for a top-level package,
   `type` absent for an untyped attribute, `declaredName` absent for an *effective* name. A one-line

@@ -38,6 +38,10 @@ jobs:
           command: go vet ./...
 
       - run:
+          name: Check documentation links
+          command: python3 scripts/check-doc-links.py
+
+      - run:
           name: Run static analysis (staticcheck + gosec)
           command: make lint
       
@@ -97,7 +101,7 @@ jobs:
             pip install pytest pytest-mock
       
       # The integration tests skip without a service on localhost:50051, and
-      # starting one here fails test_lifecycle: see docs/ROADMAP.md §P1.
+      # starting one here fails test_lifecycle: see docs/project/roadmap.md §P1.
       - run:
           name: Run Python tests
           command: |
@@ -131,14 +135,14 @@ jobs:
           name: Require the publishing token
           command: |
             # A pre-release version goes to TestPyPI (the dry run described in
-            # docs/RELEASING.md), everything else to PyPI, so only the token for
+            # docs/project/releasing.md), everything else to PyPI, so only the token for
             # the index actually being used is required.
             if [ "$(python python/scripts/check_version.py --pre-release)" = "yes" ]; then
               if [ -z "${TEST_PYPI_API_TOKEN:-}" ]; then
                 echo "Error: TEST_PYPI_API_TOKEN is not set, and ${CIRCLE_TAG} names a"
                 echo "pre-release version, which is published to TestPyPI."
                 echo "Add it to the 'PyPI' context (Organization Settings ->"
-                echo "Contexts) as a TestPyPI API token. See docs/RELEASING.md."
+                echo "Contexts) as a TestPyPI API token. See docs/project/releasing.md."
                 exit 1
               fi
             elif [ -z "${PYPI_API_TOKEN:-}" ]; then
@@ -147,7 +151,7 @@ jobs:
               echo "rather than failing later with a 403."
               echo "Add it to the 'PyPI' context (Organization Settings ->"
               echo "Contexts) and make sure this job references that context."
-              echo "See docs/RELEASING.md."
+              echo "See docs/project/releasing.md."
               exit 1
             fi
 

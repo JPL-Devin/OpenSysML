@@ -11,7 +11,7 @@ import (
 // Element filters (KerML 8.2.4, SysML v2 7.4.4) restrict which imported
 // elements a namespace surfaces, never its declared ones. They are applied
 // where a lookup enumerates the candidates an import surfaced, since only the
-// semantic model can judge a condition (docs/SPEC_COMPLIANCE.md).
+// semantic model can judge a condition (docs/project/spec-compliance.md).
 
 // importAdmits returns the test an element an import surfaces has to pass: the
 // import's own filter clause (`import P::*[@Safety]`) and the `filter` members

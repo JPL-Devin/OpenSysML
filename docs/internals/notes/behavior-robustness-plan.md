@@ -23,7 +23,7 @@
 ### Reference facts (verified — do not re-derive)
 - **Runtime execution APIs** on `internal/core/runtime/context.go`: `ExecuteAction` (`:310`), `ExecuteState` (`:337`), `CreateActionExecutor` (`:379`), `CreateStateExecutor` (`:395`), `InvokeCalc` (`:228`), `EvaluateConstraint` (`:81`), `EvaluateRequirement` (`:148`).
 - **Executors:** `ActionExecutor` (`internal/core/runtime/action_executor.go`): `Step()` (`:66`), `RunToCompletion()` (`:136`), `Tokens()` (`:670`), `SetBreakpoint()` (`:687`), `SetTrace()`. `StateExecutor` (`internal/core/runtime/state_executor.go`): `ProcessNextEvent()` (`:543`), `CurrentState()` (`:502`), `SetTrace()`.
-- **Oracle:** OMG SysML-v2 Pilot Implementation (2026-05, commit `4c289b926`) is the behavioral-semantics reference (UML 2.5.1 activity/state-machine alignment claimed in `docs/ARCHITECTURE.md:206`).
+- **Oracle:** OMG SysML-v2 Pilot Implementation (2026-05, commit `4c289b926`) is the behavioral-semantics reference (UML 2.5.1 activity/state-machine alignment claimed in `docs/internals/architecture.md:206`).
 - **Conformance gate:** `internal/core/runtime/conformance_test.go` runs `.sysml` + `.expected.json` pairs from `internal/core/runtime/testdata/conformance/`. Known failures in `known_failures.txt`.
 - **Trace gate:** `internal/core/runtime/trace_test.go` compares executor output against `.trace.golden` files.
 
@@ -46,7 +46,7 @@
 ### Task B5.1 — Failure-mode tests
 - **File:** `internal/core/runtime/robustness_test.go`.
 - **Cases (each must return a typed error, never panic/hang):**
-  - Deadlocked action (join awaiting a token that never arrives — exercise the deadlock detector referenced in `docs/ARCHITECTURE.md:214`)
+  - Deadlocked action (join awaiting a token that never arrives — exercise the deadlock detector referenced in `docs/internals/architecture.md:214`)
   - Decision with no satisfied guard
   - State machine with unreachable/dangling transition
   - Calc with unbound parameter
@@ -69,12 +69,12 @@
 - **Acceptance:** every executor node type and evaluation path appears with a status and at least one conformance case (or a filed follow-up for `todo`).
 
 ### Task B6.2 — Reconcile docs to measured reality
-- **Files:** `docs/ARCHITECTURE.md` (Tier 4/5 "✅ COMPLETE" claims at `:191-241`), `README.md`.
+- **Files:** `docs/internals/architecture.md` (Tier 4/5 "✅ COMPLETE" claims at `:191-241`), `README.md`.
 - Replace absolute claims with the conformance-gate result and link to `TestExecutionConformance` / `BEHAVIOR_SEMANTICS_MAP.md` as the source of truth. State which constructs are executable vs. parsed-only, matching the gate.
 - **Acceptance:** no unverifiable superlatives; claims trace to a passing test.
 
 ### Task B6.3 — Testing contract
-- Extend the "Parser Test Contract" section in `docs/ARCHITECTURE.md` with a "Behavior Test Contract": behavioral goldens, execution conformance, golden traces, runtime negatives. Reference from `CONTRIBUTING.md`.
+- Extend the "Parser Test Contract" section in `docs/internals/architecture.md` with a "Behavior Test Contract": behavioral goldens, execution conformance, golden traces, runtime negatives. Reference from `CONTRIBUTING.md`.
 - **Acceptance:** contract documented; new behavioral features require all four layers.
 
 ---
@@ -337,7 +337,7 @@ go test ./internal/core/runtime/ -run TestExecutionTrace -update-traces
 - docs/BEHAVIOR_SEMANTICS_MAP.md (285 lines)
 
 **Files modified:**
-- docs/ARCHITECTURE.md: Tier 4/5 claims, behavioral test contract, contributing section
+- docs/internals/architecture.md: Tier 4/5 claims, behavioral test contract, contributing section
 - README.md: status table, test coverage, execution runtime description
 - docs/BEHAVIOR_ROBUSTNESS_PLAN.md: status update to "Complete"
 

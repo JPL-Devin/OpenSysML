@@ -135,7 +135,7 @@ echo "%load model.sysml
 | `--debug` | | Report every diagnostic over the whole session buffer, with the pass that produced it |
 | `--quiet` | | Report errors only, suppressing warnings |
 | `--trace` | | Report each execution step: expression evaluation, calc invocation, action tokens, state transitions |
-| `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf` (see [RDF_INTEROP.md](../docs/RDF_INTEROP.md)) |
+| `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf` (see [the RDF mapping](rdf-mapping.md)) |
 | `--from <format>` | | Input format for `--convert` (default: from the input's extension) |
 | `--output <file>` | `-o` | Write the conversion to a file instead of stdout |
 | `--version` | `-v` | Show version information |
@@ -247,7 +247,7 @@ log is not by itself a failure. The status is.
 ## Exit status
 
 The whole contract, which is the same whatever the run was asked to do. This is
-the one place it is written down; [docs/QUICKSTART.md](../docs/QUICKSTART.md)
+the one place it is written down; [the guide](../guide/)
 links here.
 
 | Status | Means |
@@ -270,7 +270,7 @@ sysml: SYSML_MAX_STEPS="abc" is not an integer: set it to a positive number of e
 2
 
 $ sysml examples/state-machine-demo.sysml -convert ttl; echo $?
-sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7:13: save to .sysml or .kerml instead, which writes the source exactly; see docs/RDF_INTEROP.md § Limitations
+sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7:13: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
 2
 ```
 

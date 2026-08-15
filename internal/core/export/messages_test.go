@@ -9,10 +9,10 @@ import (
 
 // TestUnsupportedConversionMessages pins the text of a conversion refusal: the
 // position of the construct, its SysML name rather than a Go type, and the
-// remedy docs/RDF_INTEROP.md documents.
+// remedy docs/reference/rdf-mapping.md documents.
 func TestUnsupportedConversionMessages(t *testing.T) {
 	const remedy = "save to .sysml or .kerml instead, which writes the source exactly; " +
-		"see docs/RDF_INTEROP.md § Limitations"
+		"see docs/reference/rdf-mapping.md § Limitations"
 
 	cases := []struct {
 		name string

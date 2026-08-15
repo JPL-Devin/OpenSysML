@@ -121,7 +121,7 @@ Two entries went clean and one reports more; every other file kept its exact cou
 
 | File | Was | Now | Verdict |
 |---|---|---|---|
-| `34. Verification/Verification Case Usage Example` | 3 × `unresolved reference: testVehicle`/`massMeasured` | 6 × `individual cannot specialize partDef` / `... cannot be typed by individualDef` | The three name-resolution false positives are fixed by this change: `perform vehicleMassTest;` used to shadow the verification usage it performs with an empty feature, so `vehicleMassTest.collectData` and the redefinitions under it resolved to nothing. With the name-resolution tier clean, the type tier runs on this file for the first time (tiers are skipped after a lower tier errors) and reports six pre-existing false positives about individuals: `individual def TestSystem :> MassVerificationSystem;` and `individual testSystem : TestSystem` are well-formed (SysML 7.9.5), and the kind tables in `passes/typecheck.go` do not yet accept an individual definition specializing an occurrence definition. Recorded, not fixed, to keep this change scoped; see `docs/SPEC_COMPLIANCE.md`. |
+| `34. Verification/Verification Case Usage Example` | 3 × `unresolved reference: testVehicle`/`massMeasured` | 6 × `individual cannot specialize partDef` / `... cannot be typed by individualDef` | The three name-resolution false positives are fixed by this change: `perform vehicleMassTest;` used to shadow the verification usage it performs with an empty feature, so `vehicleMassTest.collectData` and the redefinitions under it resolved to nothing. With the name-resolution tier clean, the type tier runs on this file for the first time (tiers are skipped after a lower tier errors) and reports six pre-existing false positives about individuals: `individual def TestSystem :> MassVerificationSystem;` and `individual testSystem : TestSystem` are well-formed (SysML 7.9.5), and the kind tables in `passes/typecheck.go` do not yet accept an individual definition specializing an occurrence definition. Recorded, not fixed, to keep this change scoped; see `docs/project/spec-compliance.md`. |
 
 ### Verdicts for the message-payload re-pin (82/100)
 
@@ -216,7 +216,7 @@ pins the parameter case (the parameter takes the redefined parameter's type),
 and the new `TestLikeNamedUsageIsNotAnImplicitRedefinition` pins the other side:
 a like-named undirected usage keeps the standard library base of its kind
 instead of being silently treated as a redefinition. We still do not diagnose
-the name conflict itself; that gap is recorded in `docs/SPEC_COMPLIANCE.md`.
+the name conflict itself; that gap is recorded in `docs/project/spec-compliance.md`.
 
 ### Verdicts for the individual-definition re-pin (89/100, 90/100 with the import-in-definition-body fix below)
 

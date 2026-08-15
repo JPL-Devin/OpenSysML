@@ -78,10 +78,10 @@ internal/lsp/            LSP protocol implementation
 internal/repl/           REPL loop
 testdata/                shared fixtures (.sysml, .kerml, .golden)
 examples/                example models and demos
-docs/                    ARCHITECTURE.md, SPEC_COMPLIANCE.md, QUICKSTART.md, etc.
+docs/                    guide/ (handbook), reference/, internals/, project/ (status)
 ```
 
-Read `docs/ARCHITECTURE.md` before non-trivial work — it documents the pipeline, tiers, and test contracts in depth.
+Read `docs/internals/architecture.md` before non-trivial work — it documents the pipeline, tiers, and test contracts in depth.
 
 ---
 
@@ -111,7 +111,7 @@ When touching the lexer/parser or adding grammar:
 3. **Golden execution traces** for ordering-sensitive behavior (fork/join, transitions): `go test -run TestExecutionTrace ./internal/core/runtime` (update flag: `-update-traces`).
 4. **Robustness:** add a failure-mode case to `robustness_test.go` (deadlock, unbound params, missing refs, dangling transitions, step budget). Must return typed errors, never panic or hang.
 
-Then update `docs/SPEC_COMPLIANCE.md` mapping: semantic rule → implementation (file:function) → test → status (✅ faithful / ⚠️ approximate / ❌ not implemented / 🚧 known failure).
+Then update `docs/project/spec-compliance.md` mapping: semantic rule → implementation (file:function) → test → status (✅ faithful / ⚠️ approximate / ❌ not implemented / 🚧 known failure).
 
 ### 5.3 General
 - Unit tests live beside code as `*_test.go`, one concern per test.
@@ -167,7 +167,7 @@ Bug-fix discipline (small, scoped diffs) does **not** apply to feature work. For
 4. **Implement layer by layer**, keeping `go build ./...` and `go vet ./...` green at each step.
 5. **Handle all cases explicitly.** Every unsupported path returns a typed error with a clear message — never a silent no-op, panic, or wrong result.
 6. **Remove interim scaffolding** (bridges, temporary fields, debug prints, dead code) before finishing.
-7. **Verify the full gate** (§2) and **update `docs/SPEC_COMPLIANCE.md`** with honest status flags.
+7. **Verify the full gate** (§2) and **update `docs/project/spec-compliance.md`** with honest status flags.
 
 **When a feature is genuinely too large to finish correctly in one pass:** stop and flag it. Deliver a correct, complete *subset* with the remaining scope explicitly documented as known limitations + failing/`t.Skip`-with-reason tests or a `known_failures` entry. Never fake completeness.
 
@@ -182,4 +182,4 @@ Bug-fix discipline (small, scoped diffs) does **not** apply to feature work. For
 - **Leaving unused structs/functions** after a refactor — `go vet ./...` and clean them up.
 - **Assuming where states/members live** (Members vs Substates vs Regions) — verify against actual parser output.
 
-See `CONTRIBUTING.md` and `docs/ARCHITECTURE.md` for the authoritative, detailed references.
+See `CONTRIBUTING.md` and `docs/internals/architecture.md` for the authoritative, detailed references.

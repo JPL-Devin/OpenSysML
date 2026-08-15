@@ -49,10 +49,11 @@ Then check the release-facing text:
 
 - `CHANGELOG.md` has an entry for this version, dated, with the previous
   version's entry unchanged.
-- `README.md` and `docs/QUICKSTART.md` transcripts match what the binary
-  prints. Build it (`make build-sysml`) and paste a few commands through it.
+- `README.md` and `docs/guide/` transcripts match what the binary prints.
+  Build it (`make build-sysml`) and paste a few commands through it.
+- `python3 scripts/check-doc-links.py` reports no broken link (CI gates on it too).
 - Test counts match a real run and agree across the docs that repeat them
-  (`docs/SPEC_COMPLIANCE.md`, `docs/ARCHITECTURE.md`, `docs/TRAINING_EXAMPLES.md`,
+  (`docs/project/spec-compliance.md`, `docs/internals/architecture.md`, `docs/project/training-examples.md`,
   `README.md`), and no compliance row claims more than the implementation does.
 
 ## Tagging
@@ -131,12 +132,12 @@ that release's assets rather than appending duplicates.
    scripts/render-homebrew-formula.sh v0.0.5 > Formula/systemica.rb
    ```
 
-   See [packaging/homebrew/README.md](../packaging/homebrew/README.md).
+   See [packaging/homebrew/README.md](../../packaging/homebrew/README.md).
 
 3. **Say what is not signed.** macOS binaries are not Developer ID signed or
    notarized and Windows binaries are not Authenticode signed, so a browser
    download trips Gatekeeper or SmartScreen. Point release notes at
-   [MACOS_DISTRIBUTION.md](MACOS_DISTRIBUTION.md), which gives the workarounds
+   [MACOS_DISTRIBUTION.md](macos-distribution.md), which gives the workarounds
    and what signing would take.
 
 ## Releasing pysysml to PyPI

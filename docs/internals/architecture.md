@@ -213,7 +213,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 
 **Package:** `internal/core/runtime`  
 **Status:** Complete. Conformance gate: 211/211 cases passing (calc/constraint/requirement/satisfy/action/state all functional).  
-**Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for detailed compliance mapping (~98% faithful implementation).
+**Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for detailed compliance mapping (~98% faithful implementation).
 
 **Architecture:**
 
@@ -269,7 +269,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - **Robustness**: 146 failure-mode subtests (deadlock, unbound params, missing features, dangling transitions, sourceless accept, step budget, pseudostate dead ends and cycles, history and defer misuse, send/accept misrouting, calc arity/recursion, `perform` reference failures) - `robustness_test.go`
 - **Coverage**: All behavioral types fully functional. Action: 14/14 features ✅. State: 13/13 features ✅. Calc: 8/8 ✅. Constraint: 5/5 ✅. Requirement: 5/5 ✅. Evaluation: 7/7 ✅.
 
-**Measured Compliance:** See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for semantic rule → implementation → test case mapping with status (✅ faithful / ⚠️ approximate / ❌ not yet implemented).
+**Measured Compliance:** See [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for semantic rule → implementation → test case mapping with status (✅ faithful / ⚠️ approximate / ❌ not yet implemented).
 
 ### Tier 6 — Analysis & Verification Drivers ⏳ (Future)
 
@@ -375,7 +375,7 @@ go build -o sysml-lsp ./cmd/sysml-lsp
 - Neovim: nvim-lspconfig custom server
 - Emacs: lsp-mode manual server registration
 
-See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
+See [the guide](../guide/) for VS Code configuration.
 
 ---
 
@@ -466,7 +466,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 
 | Component | Status |
 |-----------|--------|
-| Lexer/Parser (structural + behavioral) | ✅ Operational (95/95 stdlib clean - see [conformance gate](../internal/core/libs/stdlib_conformance_test.go)) |
+| Lexer/Parser (structural + behavioral) | ✅ Operational (95/95 stdlib clean - see [conformance gate](../../internal/core/libs/stdlib_conformance_test.go)) |
 | Symbol resolution & type system | ✅ Complete |
 | Validation passes (syntax → constraints) | ✅ Complete |
 | Expression evaluator & instance model (Tiers 1-3) | ✅ Complete |
@@ -480,7 +480,7 @@ See [QUICKSTART.md](QUICKSTART.md) for VS Code configuration.
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
 
-**Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
+**Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](../../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 
 ---
 
@@ -632,7 +632,7 @@ go test -v -run TestRuntimeRobustness -timeout 60s ./internal/core/runtime
 
 ### Behavioral Semantics Map
 
-**See:** [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for UML/KerML semantic rule → implementation → test case → status mapping.
+**See:** [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for UML/KerML semantic rule → implementation → test case → status mapping.
 
 Every behavioral feature must have:
 - Semantic rule reference (UML 2.5.1 / KerML / SysML v2)
@@ -669,10 +669,10 @@ When adding execution support for behavioral constructs (actions, states, calc, 
 3. ✅ Add conformance case: `.sysml` + `.expected.json` in `internal/core/runtime/testdata/conformance/`
 4. ✅ Add golden trace case: `.trace.golden` for ordering-sensitive features (fork/join, transitions)
 5. ✅ Add robustness test for failure modes (deadlock, unbound params, missing refs)
-6. ✅ Update `docs/SPEC_COMPLIANCE.md` with semantic rule → implementation → test → status
+6. ✅ Update `docs/project/spec-compliance.md` with semantic rule → implementation → test → status
 7. ✅ Verify all tests pass: `go test ./internal/core/parser/ ./internal/core/runtime/`
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for full contribution guidelines.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) for full contribution guidelines.
 
 ---
 

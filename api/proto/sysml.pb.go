@@ -3255,7 +3255,7 @@ type PrimitiveConstraint struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Negates the comparison's verdict.
 	Inverse bool `protobuf:"varint,1,opt,name=inverse,proto3" json:"inverse,omitempty"`
-	// Property to compare, as named in docs/API.md's query property table
+	// Property to compare, as named in docs/reference/api.md's query property table
 	// ("@type", "name", "qualifiedName", ...). An unknown one fails the call.
 	Property string            `protobuf:"bytes,2,opt,name=property,proto3" json:"property,omitempty"`
 	Operator PrimitiveOperator `protobuf:"varint,3,opt,name=operator,proto3,enum=sysml.PrimitiveOperator" json:"operator,omitempty"`

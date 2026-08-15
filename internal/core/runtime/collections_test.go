@@ -316,7 +316,7 @@ func TestCollectionOperationErrors(t *testing.T) {
 		{"xs->collect {in x; x + \"a\"}", ErrTypeMismatch},
 		// An index outside the sequence names no element to remove and is
 		// reported, where the vendored body would answer the sequence unchanged
-		// (docs/SPEC_COMPLIANCE.md records the divergence).
+		// (docs/project/spec-compliance.md records the divergence).
 		{"xs->excludingAt(4)", ErrIndexOutOfRange},
 		{"xs->excludingAt(2, 1)", ErrIndexOutOfRange},
 		{"xs->excludingAt(2, 9)", ErrIndexOutOfRange},

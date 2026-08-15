@@ -212,7 +212,7 @@ When adding execution support for actions, states, calc, constraints, requiremen
 3. ✅ Add conformance case: `.sysml` + `.expected.json` in `internal/core/runtime/testdata/conformance/`
 4. ✅ Add golden trace case: `.trace.golden` for ordering-sensitive features
 5. ✅ Add robustness test for failure modes (deadlock, unbound params, missing refs)
-6. ✅ Update `docs/SPEC_COMPLIANCE.md` with semantic rule → implementation → test → status
+6. ✅ Update `docs/project/spec-compliance.md` with semantic rule → implementation → test → status
 7. ✅ Verify all tests pass: `go test ./internal/core/parser/ ./internal/core/runtime/`
 
 ---

@@ -8,7 +8,7 @@ import (
 )
 
 // Benchmarks over synthetic models of a stated size: a super-linear cost is
-// visible only across sizes. See docs/PERFORMANCE.md.
+// visible only across sizes. See docs/internals/performance.md.
 //
 //	go test ./internal/repl -run '^$' -bench . -benchmem
 //
