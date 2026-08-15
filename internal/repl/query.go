@@ -3,7 +3,6 @@ package repl
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -82,6 +81,22 @@ func unresolvedVerdict(subject, msg string) Verdict {
 	return Verdict{Subject: subject, Status: VerdictUnresolved, Lines: []string{"error: " + msg}}
 }
 
+// unevaluable reports whether an evaluation error left a check undecided, as
+// against the model itself answering the condition false.
+func unevaluable(err error) bool {
+	return err != nil && failedStatus(err) == VerdictUnresolved
+}
+
+// unevaluableVerdict reports a condition whose evaluation could not be carried
+// out, saying so and naming why: it decided nothing, so its text must not read
+// as a verdict against the model. what names the condition, e.g. "Constraint C".
+func unevaluableVerdict(subject, what string, err error, inst *runtime.Instance, owner string) Verdict {
+	return Verdict{Subject: subject, Status: VerdictUnresolved, Lines: []string{
+		fmt.Sprintf("? %s could not be evaluated%s", what, onInstance(inst, owner)),
+		fmt.Sprintf("  Error: %v", err),
+	}}
+}
+
 // withTrace prefixes a verdict with the execution trace its evaluation produced,
 // so a caller outside the prompt reports what `%trace on` reports there.
 func (s *Session) withTrace(v Verdict) Verdict {
@@ -113,8 +128,11 @@ func (s *Session) checkConstraint(name string) Verdict {
 		return *bad
 	}
 	passed, err := target.ctx.EvaluateConstraintOn(target.sym, target.scope, inst)
+	if unevaluable(err) {
+		return unevaluableVerdict(name, "Constraint "+name, err, inst, owner)
+	}
 	if err != nil || !passed {
-		return Verdict{Subject: name, Status: failedStatus(err), Lines: []string{
+		return Verdict{Subject: name, Status: VerdictFails, Lines: []string{
 			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
 			"  " + verdictDetail("Assertion", err),
 		}}
@@ -146,8 +164,11 @@ func (s *Session) checkRequirement(name string) Verdict {
 		return *bad
 	}
 	passed, err := target.ctx.EvaluateRequirementOn(target.sym, target.scope, inst)
+	if unevaluable(err) {
+		return unevaluableVerdict(name, "Requirement "+name, err, inst, owner)
+	}
 	if err != nil || !passed {
-		return Verdict{Subject: name, Status: failedStatus(err), Lines: []string{
+		return Verdict{Subject: name, Status: VerdictFails, Lines: []string{
 			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),
 			"  " + verdictDetail("Required condition", err),
 		}}
@@ -220,25 +241,15 @@ type checkTarget struct {
 	ctx   *runtime.Context
 }
 
-// checkSubject is the object a check is about: the one instantiated under the name it
-// was reached by, else the single carrier. Several carriers yield the third result;
-// none leaves the check about declared defaults.
+// checkSubject is the object a check is about, as `%eval` answers about the same
+// one. A subject that is a question yields the third result.
 func (s *Session) checkSubject(name string, target checkTarget) (*runtime.Instance, string, *Verdict) {
-	if inst, owner := s.owningInstance(target.fqn); inst != nil {
-		return inst, owner, nil
-	}
-	carriers := s.carrierInstances(target.sym)
-	switch len(carriers) {
-	case 0:
-		return nil, "", nil
-	case 1:
-		return s.instances[carriers[0]], carriers[0], nil
-	default:
-		bad := unresolvedVerdict(name, fmt.Sprintf(
-			"%s is carried by more than one object of this session (%s): check it on one of them, or start a session holding the one you mean",
-			name, strings.Join(carriers, ", ")))
+	inst, owner, err := s.subjectFor(name, target.fqn, target.sym)
+	if err != nil {
+		bad := unresolvedVerdict(name, err.Error())
 		return nil, "", &bad
 	}
+	return inst, owner, nil
 }
 
 // resolveCheckTarget resolves the element a constraint/requirement check names.
