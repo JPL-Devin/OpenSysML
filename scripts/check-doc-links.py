@@ -4,7 +4,8 @@
 A link to a file must name a file that exists; a link with a `#fragment` must name a
 heading that exists in that file (or an explicit anchor). External links, mailto: and
 in-page-only fragments pointing at a heading of the same file are checked too. A page
-named in prose as `docs/….md` must exist as well, outside the historical plan notes.
+named in prose as `docs/….md` must exist as well, outside the historical plan notes. What a
+fenced code block shows is a sample rather than structure, so none of it is read either way.
 
 Run from the repository root:
 
@@ -16,6 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*$", re.MULTILINE)
 ANCHOR = re.compile(r"<a\s+(?:id|name)=[\"']([^\"']+)[\"']", re.IGNORECASE)
@@ -24,6 +26,23 @@ SKIP_PREFIX = ("http://", "https://", "mailto:", "tel:", "ftp://")
 CITED = re.compile(r"`(docs/[A-Za-z0-9_./-]+\.md)`")
 # Records of what a plan created at the time; their paths are history, not pointers.
 HISTORICAL = ("docs/internals/notes/", "docs/internals/design/")
+
+
+def prose(text: str) -> str:
+    """The text outside fenced code blocks, whose links and `#` lines are samples, not structure."""
+    kept: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines():
+        opening = FENCE.match(line)
+        if fence is None:
+            if opening:
+                fence = opening.group(1)
+            else:
+                kept.append(line)
+            continue
+        if opening and opening.group(1)[0] == fence[0] and len(opening.group(1)) >= len(fence):
+            fence = None
+    return "\n".join(kept)
 
 
 def slugs(heading: str) -> set[str]:
@@ -40,10 +59,14 @@ def slugs(heading: str) -> set[str]:
 
 
 def anchors_of(path: Path) -> set[str]:
-    text = path.read_text(encoding="utf-8", errors="replace")
+    text = prose(path.read_text(encoding="utf-8", errors="replace"))
     found: set[str] = set()
+    seen: dict[str, int] = {}
     for heading in HEADING.findall(text):
-        found.update(slugs(heading))
+        for slug in slugs(heading):
+            # GitHub disambiguates a repeated heading with -1, -2, … in document order.
+            found.add(slug if slug not in seen else f"{slug}-{seen[slug]}")
+            seen[slug] = seen.get(slug, 0) + 1
     found.update(ANCHOR.findall(text))
     return found
 
@@ -61,7 +84,7 @@ def main() -> int:
     failures: list[str] = []
 
     for md in tracked_markdown():
-        text = md.read_text(encoding="utf-8", errors="replace")
+        text = prose(md.read_text(encoding="utf-8", errors="replace"))
         for raw in LINK.findall(text):
             link = raw.strip()
             if not link or link.startswith(SKIP_PREFIX):
