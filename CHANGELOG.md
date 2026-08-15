@@ -4,7 +4,35 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/RELEASING.md](docs/RELEASING.md).
 
-## Unreleased
+## 0.0.7 — 2026-08-15
+
+0.0.6 was tagged from this section before it was cut, so the changes it carried
+are listed here rather than under a heading of their own.
+
+### Language and semantics
+
+- Element filters are evaluated: `filter <expr>;` in a package, definition or
+  usage body, `import P::*[@T]` on an import, and a filter written at a
+  document's root all gate what the names beside them bring into scope. A
+  condition is a boolean predicate over one candidate with the candidate as the
+  implicit `self` (KerML 8.2.4), so it is judged against a symbol and the
+  metadata annotating it — prefix metadata, a metadata member of the body, and
+  `metadata m about X` — with conformance through the candidate's supertypes, so
+  `@Safety` matches a metadata type specializing `Safety`. A condition the
+  evaluated subset does not cover is reported as such
+  (`this filter condition cannot be evaluated, so it selects nothing and is not
+  applied`) and one that does not yield a boolean is an error, rather than either
+  silently selecting nothing. A root filter applies to its own document only, and
+  a namespace's filter does not gate lookups made inside its own body.
+- `@Safety` parses as the classification expression it is rather than a feature
+  reference to the metadata type, which had lost the classification.
+- A KerML `class`/`struct`/`assoc`/`behavior`/`predicate`/`interaction`
+  declaration is classified rather than left unclassified, so the type checker
+  judges it instead of exempting every unclassified usage — a binding's mismatch
+  is still reported.
+- A condition starting with an expression keyword (`true`, `null`, `if`) survives
+  in a parameterised constraint body, where it used to be read as a nameless
+  declaration and dropped.
 
 ### Runtime
 
@@ -37,6 +65,17 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 - `%budget` prints the five bounds a session runs on with the variable that
   raises each, and a literal expression that spends one is answered with that
   failure instead of "no declarations loaded".
+- An action flow ends at a node with no succession, so an action whose last node
+  is a plain nested action reaches `Completed` instead of failing the run with
+  `nested action b has no successors`.
+- A performance holds its values in one feature space its tokens share, because a
+  fork duplicates control and not values: concurrent branches are steps of the
+  one performance, so both branches' assignments survive where the last token to
+  retire used to overwrite the others. Which write decides a feature two branches
+  both assign is step order, stated in `docs/SPEC_COMPLIANCE.md`.
+- A runtime failure names SysML kinds and operands rather than Go types, a
+  recursion reports a frame count and names the calc it collapsed, and a division
+  by zero is reported as one.
 
 ### `sysml` command line
 
@@ -48,6 +87,53 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   nothing extra. `-from` still names an input format the extension does not.
 - A flag may be written after the model it applies to (`sysml model.sysml -trace`),
   which Go's flag package would otherwise read as two files to load.
+- A model is checked from a script or a build step without a prompt:
+  `-validate`, `-constraint`, `-requirement`, `-satisfy`, `-instantiate`,
+  `-calc`, `-action`, `-state -advance` and `-json`. The verdict comes from the
+  runtime rather than from a printed line — one evaluation stands behind both the
+  command and the prompt's `%constraint`/`%requirement`/`%satisfy`.
+- **Exit status is meaningful on every path**: `0` when the requested operation
+  succeeded and every requested check held, `1` when a check answered false, `2`
+  when nothing was decided — a model that did not analyse, an expression that
+  could not be evaluated, an unreadable input, a misused flag. A check is gated
+  on analysis, so a verdict is never reported about a model nobody could read.
+- Findings and diagnostics go to **stderr** and requested output to **stdout**,
+  under one `sysml: ` prefix, so a pipeline consumes results and a log carries
+  failures. Requested help (`-h`) is stdout and exit 0; an unknown flag stays
+  stderr and exit 2. The interactive prompt is unchanged.
+- A directory or a glob loads as a multi-file project — `sysml <dir>`,
+  `sysml 'src/*.sysml'`, `%load <dir>` — expanded, sorted and deduplicated, and
+  submitted as one submission, so resolution does not depend on load order.
+  Diagnostics are reported against the file they came from at that file's own
+  line numbers, and only model files among a glob's matches contribute.
+- `-cpuprofile`, `-memprofile` and `-memstats` profile a load or a run.
+
+### REPL
+
+- A session no longer loses state silently. Re-typing a namespace merges into the
+  one already in the buffer instead of replacing its body, additions are laid out
+  where they belong, and every declaration, instance or debugging session that a
+  submission did drop is reported, naming the submission that ended it.
+- An instance and an active `%action`/`%state` session survive a submission that
+  did not change what they depend on: an object whose declaration identity and
+  resolved shape are unchanged is rebound into the new context, keeping its
+  identity, its derived values, its connector ends and a selected variant, and
+  only genuinely invalidated state is dropped with a notice. Declaring an
+  unrelated `part def B;` no longer discards the instance of `A`. A surviving
+  debugger keeps the executor it was started with rather than being re-lowered.
+- The library is discoverable at the prompt: `%search <substring>` and
+  `%builtins`, Tab completion over meta commands, symbols and paths, the nearest
+  spelling of a mistyped command or symbol, and history kept outside the
+  temporary directory.
+- The diagnostic wording agrees with the other surfaces: `%eval`
+  reports one parser diagnostic with a position and a caret rather than a cascade,
+  an empty session no longer answers a real failure with "no declarations
+  loaded", a blocked check names the line the unresolved error sits on and says
+  so once, and a caret is drawn only for what was typed, counted in printed cells
+  so multi-byte source stays aligned.
+- `-satisfy` with no satisfaction assertion in the model is an undecided verdict
+  like its siblings, so the command reports
+  `sysml: no satisfaction assertion in the session` and exits 2.
 
 ### Editor support
 
@@ -68,6 +154,27 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   loop over its own stdio, so an editor's traffic raced two decoders and the
   server died with corrupted framing ("missing Content-Length header") within
   seconds of typing.
+- Completion applies the element filters in force where the name is being
+  completed, and resolves a filter condition's own names unfiltered, so the
+  editor offers what the document can actually reach.
+
+### Diagnostics
+
+- An unresolved name carries the nearest spelling on **every** surface — command
+  line, prompt and editor — where the hint used to exist only at the prompt:
+  `unresolved reference: Whel — did you mean Wheel?`. A bare library name is
+  offered its qualified spelling (`Integer` → `ScalarValues::Integer`), since the
+  base library is not implicitly visible; the shipped examples import what they
+  use, and every `examples/*.sysml` and `examples/*.kerml` now analyses cleanly.
+- Candidates are ranked by how the reader would reach them, not by edit distance
+  alone: the budget scales with the typed name's length (a name of two characters
+  is not guessed at), a spelling as typed beats one differing in case, a name in
+  scope beats one reachable only by a path, the reader's own declaration beats a
+  bundled library one, a dominated candidate is dropped, and at most three are
+  offered. A misspelling is not sent to a name nested in another element's body,
+  which would take two corrections — so `Whel` beside your own `Wheel` offers
+  `Wheel` alone, and with nothing close in the document it offers nothing rather
+  than `SysML::Systems::TriggerKind::when`.
 
 ### Python bindings and `sysml-grpc`
 
@@ -149,7 +256,43 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   port 50123 instead of building the target `localhost:50123:50051` and reporting
   a service start timeout for an address nobody asked for. A port named twice with
   two values, and a port that is not a number, raise `ValueError` naming the
-  mistake.
+  mistake. The `pysysml.generate` and `bench_latency` command lines report a
+  host/port disagreement as an `error: …` line and exit 2 rather than as a
+  traceback.
+- A `Query` RPC evaluates the SysML v2 API & Services query model (scope /
+  select / where, primitive and composite constraints) over the symbol index and
+  semantic model, with `model.query()` accepting the standard's JSON payloads
+  verbatim. The standard's model has no traversal or transitive closure, so this
+  is an interop surface for its clients rather than a query language;
+  `docs/API.md` and `docs/SPEC_COMPLIANCE.md` state what is supported. An
+  element with no qualified identity — a doc note, an anonymous usage, a
+  `connect` — is omitted rather than answered under a non-unique `@id`.
+
+### Performance
+
+- Loading a large model is linear where it was quadratic: three lookups scanned a
+  namespace's members or child scopes once per member. Child scopes are indexed
+  by the declaration owning them, a namespace's imports are memoized, and a
+  member's owner is found through the scope's owner link.
+  `docs/PERFORMANCE.md` records the measurements.
+- `ParseFile` hits its cache on the source it read, so re-loading unchanged
+  content costs ~0.5 ms instead of re-parsing and reloading the standard library
+  (~35 ms).
+
+### Removed
+
+- `internal/core/deps` — the `sysml.toml` manifest, lockfile, git fetcher and
+  resolver — is deleted. Nothing imported it: no manifest was ever looked for by
+  the command line, the prompt or the server, and the README claim it backed is
+  gone.
+
+### Documentation
+
+- `README.md`, `docs/QUICKSTART.md` and `examples/CLI_USAGE.md` describe the
+  shipped command line, editor and RDF surfaces, including the exit-status
+  contract and the streams each finding is written to. The claims that overstated
+  what ships — dependency management, and the IDE and Python verification
+  caveats — are corrected.
 
 ## 0.0.5 — 2026-08-12
 

@@ -66,7 +66,7 @@ git tag -a v0.0.5 -m "v0.0.5"
 git push origin v0.0.5
 ```
 
-The tag belongs on the repository the releases live on. v0.0.1–v0.0.4 are
+The tag belongs on the repository the releases live on. v0.0.1–v0.0.6 are
 releases of `Open-MBEE/Systemica`, while development happens on
 `JPL-Devin/Systemica`, which has no tags at all — so cutting a release means
 promoting `main` upstream first (v0.0.4 came through Open-MBEE PR #47) and
