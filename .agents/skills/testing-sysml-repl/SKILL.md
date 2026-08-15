@@ -1016,9 +1016,24 @@ failure raises `pysysml.errors.RuntimeError` with the executor's message
 yourself, `pysysml.connect("localhost", 50551, auto_start=False)` avoids the
 `Binary not found at ~/.pysysml/bin/sysml-grpc` error — but prefer the auto-start path per above.
 
+Fixture trap when proving `Model.execute_action` / `Model.execute_state` "exist and work": an action
+that only declares parameters (`action add : Add { in x = 2.0; out z = x + y; }`) validates clean but
+raises `ExecutionError: initialize action: no initial node found in action add` — there is nothing to
+execute. Do not read that as a broken RPC; borrow a body-bearing fixture instead, e.g.
+`internal/core/runtime/testdata/conformance/action_body_local_calc_usage.sysml`
+(`execute_action("test::run")` → `{'v': 2.0, 'i': 3, 'doubled': 4.0, 'acc': 12.0}`) and
+`state_anonymous_action_body.sysml`
+(`execute_state("Test::Bodies")` → `states_visited ['start','working','nstart','nested','done']`,
+`final_context {'log': 321879}`). Those two doubles are the cheapest end-to-end proof that both
+RPCs really run rather than merely being present on the object.
+
 Suite baseline: `cd python && python -m pytest tests/ -q` with no service running should be
 `148 passed, 24 skipped` (~40s; it was `75 passed, 18 skipped` before the Tier 1/Tier 2 client
-work), and `158 passed, 14 skipped` with a service running. The skips are the integration
+work), and `158 passed, 14 skipped` with a service running. As of the 0.0.8 prep branch
+(`b0f5f23`) that baseline is `368 passed, 26 skipped` in ~42 s from the repo root
+(`python -m pytest python/tests/ -q`), with one expected `UserWarning` from
+`test_a_cache_survives_a_replacement_that_cannot_be_downloaded` — re-measure rather than trusting an
+older count. The skips are the integration
 tests gating on a live service. `pytest` is **not**
 installed in `~/pysysml-venv` by default — `~/pysysml-venv/bin/pip install pytest` first, or
 `python -m pytest` fails with `No module named pytest` (the `pytest` on `PATH` belongs to an
@@ -1046,6 +1061,32 @@ naming the path or URL. `PYSYSML_GITHUB_REPO` overrides the repo. Beware: these 
 unauthenticated GitHub API, so repeated runs flip from a truthful `HTTP Error 404: Not Found` to a
 misleading `HTTP Error 403: rate limit exceeded` — rehearse sparingly and report the 404 wording,
 not whichever one the recording happened to catch.
+
+#### The stale-*cache* decision is testable offline (PR #178)
+
+`stale_cache_reason(version, github_repo=None)` decides whether `~/.pysysml/bin/sysml-grpc` may
+answer for a requested release, and it needs no network — drive it directly and write the sidecar
+`~/.pysysml/bin/sysml-grpc.json` (`{"version":…, "sha256":…, "repo":…}`) by hand. The four shapes
+worth asserting, with the wording each produces:
+
+| sidecar | asked for | reason |
+|---|---|---|
+| absent | `v0.0.8` | `… was not downloaded by this client, so which release it is cannot be told` |
+| `v0.0.7` + **true** sha256 of the file | `v0.0.8` | `… is v0.0.7, but v0.0.8 was asked for` |
+| `v0.0.7` + wrong sha256 (hand-swapped binary) | `v0.0.8` | falls back to the "not downloaded by this client" wording |
+| `v0.0.8` but `"repo":"someone/Systemica-fork"` | `v0.0.8` | `… was downloaded from someone/Systemica-fork, but v0.0.8 of Open-MBEE/Systemica was asked for` |
+
+- The digest is re-verified (`cached_release`), so a *true* sha256 in the sidecar is what makes the
+  "is v0.0.7" branch reachable — a placeholder digest silently tests the wrong branch.
+- `stale_cache_reason(None)` is `None` **by design**: with `$PYSYSML_GRPC_VERSION` unset any cached
+  binary is taken on faith. So before any Python check, `cp bin/sysml-grpc ~/.pysysml/bin/` —
+  otherwise a binary from an older release answers as if it were your build, and
+  `~/.pysysml/bin/sysml-grpc -version` is the one-line way to confirm which build you are testing.
+- `ensure_binary(version=…)` on a stale cache emits `UserWarning: Replacing the cached sysml-grpc: …`
+  and then, when the download fails (403/404 in a sandbox), a second
+  `UserWarning: Keeping the cached sysml-grpc … could not be downloaded` and returns the old path.
+  That is the only observable half of the replacement without network; say so rather than claiming
+  the replacement was proven. Always back up the cache + sidecar and restore them afterwards.
 
 ### Verification RPCs, typed errors and strict loading (`pysysml` Tier 3, PR #149)
 
