@@ -1,6 +1,8 @@
 package resolve
 
 import (
+	"strings"
+
 	"github.com/Open-MBEE/Systemica/internal/core/suggest"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -50,7 +52,9 @@ func (r *Resolver) suggestFor(scope *symbols.Scope, name string) []string {
 // candidateFor scores one near spelling: what the user would have to write to
 // reach it from scope — the name itself when it resolves there, else the
 // qualified path that declares it — and whether that is one of their own
-// declarations or a bundled library name.
+// declarations or a bundled library name. A misspelling is not offered a path
+// the user cannot import: fixing the spelling and qualifying a name nested in
+// some other element is two corrections, which is past coincidence.
 func (r *Resolver) candidateFor(scope *symbols.Scope, near suggest.Neighbour) (suggest.Candidate, bool) {
 	if res := r.walkUnqualified(scope, near.Name); res.ok {
 		return suggest.Candidate{
@@ -60,15 +64,30 @@ func (r *Resolver) candidateFor(scope *symbols.Scope, near suggest.Neighbour) (s
 			Library:  r.idx.Library(res.sym),
 		}, true
 	}
-	qualified := r.suggestTable().Qualified(near.Name)
-	if len(qualified) == 0 {
-		return suggest.Candidate{}, false
+	for _, fqn := range r.suggestTable().Qualified(near.Name) {
+		if r.importable(fqn) {
+			return suggest.Candidate{
+				Spelling: fqn,
+				Distance: near.Distance,
+				Library:  r.libraryFQN(fqn),
+			}, true
+		}
 	}
-	return suggest.Candidate{
-		Spelling: qualified[0],
-		Distance: near.Distance,
-		Library:  r.libraryFQN(qualified[0]),
-	}, true
+	return suggest.Candidate{}, false
+}
+
+// importable reports whether fqn is declared in a namespace the user can name
+// an import of: a package or namespace, rather than the body of some element.
+func (r *Resolver) importable(fqn string) bool {
+	i := strings.LastIndex(fqn, "::")
+	if i < 0 {
+		return true
+	}
+	owner := r.idx.Declaring(fqn[:i])
+	if owner == nil {
+		return false
+	}
+	return owner.Kind == symbols.SymbolPackage || owner.Kind == symbols.SymbolNamespace
 }
 
 // libraryFQN reports whether fqn names a bundled library declaration.
