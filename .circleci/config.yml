@@ -182,7 +182,7 @@ jobs:
               echo "so this job fails rather than half-publishing. Re-running a"
               echo "release for the same version is therefore not an operation PyPI"
               echo "supports, unlike publish-github-release, which replaces assets"
-              echo "with 'ghr -delete'. Bump the version in"
+              echo "with 'ghr -replace'. Bump the version in"
               echo "python/pysysml/_version.py and tag pysysml-v<new version>."
               exit 1
             fi
@@ -382,10 +382,6 @@ jobs:
             echo "Release artifacts:"
             ls -la dist/release/
             
-            # Debug: Check available token variables
-            echo "Checking for GitHub tokens..."
-            env | grep -i "github\|circle" | grep -i token || echo "No tokens found in env"
-            
             # Try different token variable names
             TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-${CIRCLE_TOKEN}}}"
             if [ -z "$TOKEN" ]; then
@@ -393,11 +389,16 @@ jobs:
               exit 1
             fi
             
+            # '-replace' reuses an existing release and only re-uploads assets of
+            # the same name, so hand-written notes, title and prerelease/latest
+            # flags survive a re-run. Never '-delete': that is an alias of
+            # '-recreate', which deletes the release *and its tag* and creates an
+            # empty one. A tag with no release yet still gets one created here.
             ghr -t "${TOKEN}" \
                 -u "${CIRCLE_PROJECT_USERNAME}" \
                 -r "${CIRCLE_PROJECT_REPONAME}" \
                 -c "${CIRCLE_SHA1}" \
-                -delete \
+                -replace \
                 "${VERSION}" \
                 dist/release/
 
@@ -457,7 +458,7 @@ workflows:
   # not from a release matching its own version, so a client fix should not need
   # a core release and a core release should not need a PyPI upload. Keeping the
   # irreversible half on its own tag also keeps `v*` re-runnable, which
-  # publish-github-release relies on ('ghr -delete').
+  # publish-github-release relies on ('ghr -replace').
   release-python:
     jobs:
       - build-and-test:

@@ -95,8 +95,16 @@ windows/amd64.
 
 `publish-github-release` uploads them with `ghr`, using a token from
 `GITHUB_TOKEN`, `GH_TOKEN` or `CIRCLE_TOKEN` in the CircleCI project settings.
-It runs with `-delete`, so re-running the workflow for the same tag replaces
-that release's assets rather than appending duplicates.
+It runs with `-replace`, so re-running the workflow for the same tag replaces
+that release's assets rather than appending duplicates, and leaves everything
+else on the release alone: notes, title and the prerelease/latest flags survive.
+A tag that has no release yet still gets one created.
+
+Do not go back to `-delete`. It is an alias of `-recreate`: it deletes the
+existing release *and its tag* and creates an empty one, which wipes
+hand-written release notes (the notes must therefore be on a published release —
+`ghr` does not see a draft release for the tag and would publish a second, empty
+one alongside it).
 
 ## After the release
 
@@ -123,10 +131,18 @@ that release's assets rather than appending duplicates.
    A checksum mismatch there means the sidecar and the binary came from
    different builds.
 
-2. **Render the Homebrew formula** and commit it to the tap repository
-   `Open-MBEE/homebrew-tap` (not this repository — the copy here is a template
-   with `__TAG__`/`__SHA256_*__` placeholders; the tap repository name needs the
-   `homebrew-` prefix or `brew tap Open-MBEE/tap` cannot clone it):
+2. **Let the Homebrew tap pick the release up.** The tap repository
+   `Open-MBEE/homebrew-tap` updates itself: a scheduled workflow there resolves
+   the latest `Open-MBEE/Systemica` release, renders `Formula/systemica.rb` from
+   this repository's `scripts/render-homebrew-formula.sh` and formula template at
+   that tag, and commits only when the file changed. Nothing here triggers it, so
+   the formula follows the release within the workflow's schedule interval.
+
+   If it does not, check the workflow run in the tap repository. The render reads
+   the release's `SHA256SUMS.txt`, so a release missing that asset (or missing a
+   `systemica-<os>-<arch>.tar.gz` line in it) fails the run loudly instead of
+   committing a broken formula — re-run `publish-github-release` for the tag and
+   then the tap workflow (`workflow_dispatch`). Rendering by hand still works:
 
    ```bash
    scripts/render-homebrew-formula.sh v0.0.5 > Formula/systemica.rb
@@ -158,7 +174,7 @@ against, and tying the two together would put a new, immutable PyPI version on
 every core release and would block a client-only fix behind a core release.
 
 Keeping them apart also protects the `v*` path: `publish-github-release` runs
-`ghr -delete`, so re-running a core release is an ordinary operation, while a
+`ghr -replace`, so re-running a core release is an ordinary operation, while a
 PyPI version can be yanked but never re-uploaded. A re-run must never have an
 irreversible upload hanging off it.
 
