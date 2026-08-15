@@ -7,13 +7,17 @@
 
 package EdgeCasesAndAdvanced {
     
+    // The library is not implicitly visible: a bare name needs an import.
+    private import ScalarValues::*;
+    private import StatePerformances::StatePerformance;
+    
     // ===== Keywords as Feature Names in Expressions (Task 70) =====
     // From StatePerformances.kerml line 77-90
     // Keywords like 'exit', 'entry' can appear in feature chain expressions
     
     function testKeywordAccess {
-        in oSP: Performance;
-        in thatSP: Performance;
+        in oSP: StatePerformance;
+        in thatSP: StatePerformance;
         return result: Boolean = 
             oSP.exit == thatSP.exit;
     }
@@ -24,6 +28,9 @@ package EdgeCasesAndAdvanced {
     feature ProcessFlow {
         feature itemCount: Integer;
         
+        step initialize[1];
+        step process[1];
+        
         succession [itemCount] items 
             first [1] initialize
             then [1] process;
@@ -32,7 +39,16 @@ package EdgeCasesAndAdvanced {
     // ===== Bind Keyword Shorthand (Task 62) =====
     // From Actions.sysml and States.sysml
     
-    state AcceptingState {
+    // 'bind' binds a feature to a feature of a nested action
+    action def AcceptingTransition {
+        inout payload[0..*];
+        ref receiver[0..1];
+        
+        action accepter {
+            inout payload[0..*];
+            ref receiver[0..1];
+        }
+        
         bind payload = accepter.payload;
         bind receiver = accepter.receiver;
     }
@@ -40,7 +56,9 @@ package EdgeCasesAndAdvanced {
     // ===== Step Usage with 'do' as Name (Task 67) =====
     // From StatePerformances.kerml
     
-    feature StatePerformance {
+    feature StatePerformanceSteps {
+        abstract step middle[1..*];
+        
         step entry[1];
         step do[1] subsets middle;
         step exit[1];

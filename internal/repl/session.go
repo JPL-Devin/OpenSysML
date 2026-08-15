@@ -525,7 +525,8 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 	notices := dropNotices(drops)
 	notices = append(notices, s.carryOverObjects(over, gone)...)
 	notices = append(notices, s.dropStaleDebugSessions(gone, over)...)
-	diags := s.annotateDiagnostics(s.ws.Diagnostics(docName))
+	// The diagnostics already carry their own "did you mean" hints.
+	diags := s.ws.Diagnostics(docName)
 	var members []ast.Node
 	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
 		members = doc.AST.Members

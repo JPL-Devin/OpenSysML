@@ -1,0 +1,51 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="part" abstract=false variation=false name="Tank"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="level" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="full" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Boolean
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="notOverfull" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (ConstraintMember assert=true negated=false
+            (OperatorExpr operator=">="
+              (FeatureReference name="x")
+              (LiteralInteger value="0")))
+          (ConstraintMember assert=false negated=true
+            (OperatorExpr operator=">"
+              (FeatureReference name="x")
+              (LiteralInteger value="100")))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="keywordInitial" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (ConstraintMember assert=true negated=false
+            (LiteralBool value=true))
+          (ConstraintMember assert=true negated=true
+            (LiteralBool value=false))
+          (ConstraintMember assert=false negated=false
+            (OperatorExpr operator="!="
+              (NullExpr)
+              (FeatureReference name="x")))
+          (ConstraintMember assert=true negated=false
+            (OperatorExpr operator="if"
+              (OperatorExpr operator=">"
+                (FeatureReference name="x")
+                (LiteralInteger value="0"))
+              (LiteralBool value=true)
+              (LiteralBool value=false)))))
+      (Membership visibility="default"
+        (Usage kind="binding" name="levelIsFull" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="references" target=full
+            (*ast.QualifiedName))
+          (FeatureReference name="level"))))))

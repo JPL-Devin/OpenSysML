@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -501,5 +502,98 @@ func TestEvaluateCalcUnknownSymbol(t *testing.T) {
 	}
 	if !strings.Contains(resp.Error, "NoSuchCalc") {
 		t.Errorf("error = %q, want it to name the missing symbol", resp.Error)
+	}
+}
+
+// TestVerifyWrongKindIsClassified verifies naming an element of another kind is
+// reported as a wrong request, distinguishably from an undecided verdict.
+func TestVerifyWrongKindIsClassified(t *testing.T) {
+	srv := mustNewService(t, 10)
+	hash := mustVerifyModel(t, srv, verifyModelSource, "verify-wrong-kind")
+
+	constraint, err := srv.VerifyConstraint(context.Background(), &pb.VerifyConstraintRequest{
+		ModelHash: hash,
+		SymbolId:  "Demo::Vehicle",
+	})
+	if err != nil {
+		t.Fatalf("VerifyConstraint: %v", err)
+	}
+	if constraint.Verdict.FailureReason != pb.FailureReason_FAILURE_REASON_WRONG_KIND {
+		t.Errorf("constraint: failure_reason = %v, want WRONG_KIND (%q)",
+			constraint.Verdict.FailureReason, constraint.Verdict.Error)
+	}
+
+	requirement, err := srv.VerifyRequirement(context.Background(), &pb.VerifyRequirementRequest{
+		ModelHash: hash,
+		SymbolId:  "Demo::Vehicle",
+	})
+	if err != nil {
+		t.Fatalf("VerifyRequirement: %v", err)
+	}
+	if requirement.Verdict.FailureReason != pb.FailureReason_FAILURE_REASON_WRONG_KIND {
+		t.Errorf("requirement: failure_reason = %v, want WRONG_KIND (%q)",
+			requirement.Verdict.FailureReason, requirement.Verdict.Error)
+	}
+
+	calc, err := srv.EvaluateCalc(context.Background(), &pb.EvaluateCalcRequest{
+		ModelHash: hash,
+		SymbolId:  "Demo::Vehicle",
+		Arguments: []*pb.Value{{Kind: &pb.Value_IntValue{IntValue: 1}}},
+	})
+	if err != nil {
+		t.Fatalf("EvaluateCalc: %v", err)
+	}
+	if calc.FailureReason != pb.FailureReason_FAILURE_REASON_WRONG_KIND {
+		t.Errorf("calc: failure_reason = %v, want WRONG_KIND (%q)", calc.FailureReason, calc.Error)
+	}
+
+	// An element with a body may state an assertion, so only one that can hold
+	// no members at all is the wrong kind of thing to narrow satisfaction to.
+	if got := failureReason(runtime.ErrNotASatisfaction); got != pb.FailureReason_FAILURE_REASON_WRONG_KIND {
+		t.Errorf("satisfy: failureReason(ErrNotASatisfaction) = %v, want WRONG_KIND", got)
+	}
+}
+
+// TestVerifySatisfactionOfAnAliasIsWrongKind verifies narrowing satisfaction to an
+// element that can state none is reported as a wrong request.
+func TestVerifySatisfactionOfAnAliasIsWrongKind(t *testing.T) {
+	srv := mustNewService(t, 10)
+	hash := mustVerifyModel(t, srv, `package Demo {
+	part def Vehicle;
+	alias V for Vehicle;
+}
+`, "verify-satisfy-alias")
+
+	resp, err := srv.VerifySatisfaction(context.Background(), &pb.VerifySatisfactionRequest{
+		ModelHash: hash,
+		SymbolId:  "Demo::V",
+	})
+	if err != nil {
+		t.Fatalf("VerifySatisfaction: %v", err)
+	}
+	if resp.FailureReason != pb.FailureReason_FAILURE_REASON_WRONG_KIND {
+		t.Errorf("failure_reason = %v, want WRONG_KIND (%q)", resp.FailureReason, resp.Error)
+	}
+}
+
+// TestVerdictFalseCarriesNoFailureReason verifies a model answering false stays a
+// verdict, so a client reading the reason cannot mistake it for a bad request.
+func TestVerdictFalseCarriesNoFailureReason(t *testing.T) {
+	srv := mustNewService(t, 10)
+	hash := mustVerifyModel(t, srv, verifyModelSource, "verify-false-reason")
+
+	resp, err := srv.VerifyConstraint(context.Background(), &pb.VerifyConstraintRequest{
+		ModelHash:       hash,
+		SymbolId:        "Demo::Vehicle::massLight",
+		SubjectSymbolId: "Demo::sedan",
+	})
+	if err != nil {
+		t.Fatalf("VerifyConstraint: %v", err)
+	}
+	if resp.Verdict.Holds {
+		t.Fatal("massLight on sedan: holds = true, want false")
+	}
+	if resp.Verdict.FailureReason != pb.FailureReason_FAILURE_REASON_UNSPECIFIED {
+		t.Errorf("failure_reason = %v, want UNSPECIFIED", resp.Verdict.FailureReason)
 	}
 }

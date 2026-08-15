@@ -31,6 +31,13 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			continue
 		}
 
+		// A constraint body that declares parameters is read here, so its
+		// asserted conditions are members of this body too.
+		if p.atConstraintCondition() {
+			body.add(p.parseConstraintMember())
+			continue
+		}
+
 		// Check for 'return' keyword → ResultMember
 		if p.isResultKeyword() {
 			body.add(p.parseResultMember())
@@ -1663,6 +1670,34 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 
 	p.expect(lexer.RBrace, "expected '}' after constraint body")
 	return members
+}
+
+// atConstraintCondition reports whether an `assert`/`assume` condition follows,
+// as against a named constraint usage (`assert constraint { … }`).
+func (p *Parser) atConstraintCondition() bool {
+	if !p.atKeyword("assert") && !p.atKeyword("assume") {
+		return false
+	}
+	n := 1
+	if t := p.peekN(n); t.Kind == lexer.Keyword && t.KeywordID == "not" {
+		n++
+	}
+	t := p.peekN(n)
+	if t.Kind != lexer.Keyword {
+		return true
+	}
+	// A keyword that starts an expression starts a condition too (atExprStart).
+	return exprStartKeywords[t.KeywordID]
+}
+
+// exprStartKeywords are the keywords that begin an expression rather than a
+// declaration; atExprStart accepts the same set.
+var exprStartKeywords = map[string]bool{
+	"null":  true,
+	"true":  true,
+	"false": true,
+	"new":   true,
+	"if":    true,
 }
 
 // parseConstraintMember parses one constraint member: assert/assume [not] <expr>;

@@ -129,6 +129,27 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
 - `python/scripts/bench_latency.py` reports p50/p95/p99 per client call, and
   `python/README.md` documents the measurements and what they mean for a real-time
   analytics loop.
+- `Model.eval(expression, context_symbol_id=...)` evaluates against the model it
+  is called on, so evaluation is no longer the one operation making a caller carry
+  the hash back to the connection: `model.eval("1+1")` for
+  `conn.eval("1+1", model.hash)`. The typed failures are the connection's —
+  `ExecutionError` for an expression that cannot be evaluated, `ModelNotFoundError`
+  for an evicted model.
+- Naming an element of the wrong kind raises `WrongKindError` (an
+  `ExecutionError`) from `verify_constraint`, `verify_requirement`,
+  `verify_satisfaction` and `calc`, as naming an element that does not exist
+  already did: verifying a part def as a constraint used to answer with a verdict
+  whose `holds` was false, telling a caller its model does not hold when the
+  answer was that it named a part def. The service reports the distinction as a
+  typed `FailureReason` on `Verdict`, `VerifySatisfactionResponse` and
+  `EvaluateCalcResponse`, so the client classifies it without reading the message
+  text.
+- A `host:port` address given as the host is read as one, on `connect` and on the
+  module-level helpers taking `host`/`port`: `connect("localhost:50123")` reaches
+  port 50123 instead of building the target `localhost:50123:50051` and reporting
+  a service start timeout for an address nobody asked for. A port named twice with
+  two values, and a port that is not a number, raise `ValueError` naming the
+  mistake.
 
 ## 0.0.5 — 2026-08-12
 

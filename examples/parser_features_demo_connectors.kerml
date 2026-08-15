@@ -9,9 +9,23 @@
 
 package demo_connectors {
 	
+	// The library is not implicitly visible: a bare name needs an import.
+	private import Occurrences::MatesWith;
+	
+	// The types the connections below use.
+	connection def MatingConnection;
+	connection def DataLink;
+	connection def DataConnection;
+	
 	// Connection patterns with connect keyword (Task 55 fix)
 	feature connectionPatterns {
 		doc /* Connection with typing and connect keyword */
+		
+		feature partA[1];
+		feature partB[1];
+		feature sensor[1];
+		feature processor[1];
+		feature actuator[1];
 		
 		// Named connection with typing
 		connection mating :MatingConnection {
@@ -33,6 +47,19 @@ package demo_connectors {
 		 * Succession establishes temporal ordering.
 		 * Supports both named and anonymous forms with first/then.
 		 */
+		
+		feature startEvent[1];
+		feature endEvent[1];
+		feature causes {
+			feature startShot[1];
+		}
+		feature effects[1];
+		feature initStep[1];
+		feature processStep[1];
+		feature input[1];
+		feature output[1];
+		feature a[1];
+		feature b[1];
 		
 		// Named succession with first/then
 		succession eventOrder first [1] startEvent then [1] endEvent;
@@ -61,6 +88,7 @@ package demo_connectors {
 		action validate;
 		action execute;
 		action finalize;
+		action fallback;
 		
 		// Succession relationships establish order
 		succession init first [1] initialize then [1] validate;
@@ -73,6 +101,16 @@ package demo_connectors {
 	
 	// Complex connector scenario
 	feature sensorNetwork {
+		feature sensors[*] {
+			feature measure[1];
+		}
+		feature hub[1] {
+			feature aggregate[1];
+		}
+		feature processors[*] {
+			feature analyze[1];
+		}
+		
 		// Multiple sensors connected to hub
 		connection :DataConnection connect [*] sensors to [1] hub;
 		

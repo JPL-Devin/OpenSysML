@@ -879,6 +879,18 @@ func (idx *Index) LookupQualifiedFrom(fqn, fromFQN string) []*Symbol {
 	return owned
 }
 
+// Declaring returns the symbol fqn declares, and nil when fqn only re-exports a
+// declaration made elsewhere. The lookup is made from fqn itself, so a private
+// member is visible where it is declared.
+func (idx *Index) Declaring(fqn string) *Symbol {
+	for _, sym := range idx.LookupQualifiedFrom(fqn, fqn) {
+		if sym != nil && idx.GetFQN(sym) == fqn {
+			return sym
+		}
+	}
+	return nil
+}
+
 // HiddenFrom reports whether every symbol registered under fqn is one only a
 // private import surfaced there, seen from the namespace fromFQN. It is the
 // reason LookupQualifiedFrom found nothing, so a caller that falls back to

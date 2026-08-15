@@ -47,12 +47,18 @@ def measure(label, call, iterations, results):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="localhost")
-    parser.add_argument("--port", type=int, default=50051)
+    # No default: an unwritten port lets --host carry its own (default 50051).
+    parser.add_argument("--port", type=int)
     parser.add_argument("--iterations", type=int, default=200)
     args = parser.parse_args(argv)
 
     start = time.perf_counter()
-    conn = Connection(host=args.host, port=args.port, auto_start=False)
+    try:
+        conn = Connection(host=args.host, port=args.port, auto_start=False)
+    except ValueError as exc:
+        # A misread --host/--port is the caller's mistake, not a crash.
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     model = conn.load_from_content(MODEL)
     setup_ms = (time.perf_counter() - start) * 1000.0
 

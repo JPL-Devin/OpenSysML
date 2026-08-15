@@ -13,6 +13,11 @@
 
 package Declarations {
     
+    // The library is not implicitly visible: a bare name needs an import
+    // (KerML 8.2.3.5 — only the top-level elements of a root namespace are).
+    private import ScalarValues::*;
+    private import Occurrences::Occurrence;
+    
     // ===== Multiplicity Declarations (Task 73) =====
     
     multiplicity exactlyOne [1..1] {
@@ -77,8 +82,8 @@ package Declarations {
     }
     
     feature SetOperations {
-        feature setA: Element[*];
-        feature setB: Element[*];
+        feature setA: Anything[*];
+        feature setB: Anything[*];
         
         // Disjoint statement
         disjoint setA from setB;

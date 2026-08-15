@@ -1607,3 +1607,50 @@ Discovered while testing inline `entry action { … }` bodies and calc `out` ass
   `output bound more than once` (declaration value plus a body assignment; two *body* assignments
   are legal, the last one winning), `assignment outside the calculation body: <name> is not declared
   by the calculation`, `no result expression: calc … has no return expression`.
+
+## "Did you mean" suggestions on unresolved references (PR #167)
+
+The suggestion is produced in the resolver (`internal/core/suggest` + `internal/core/resolve/suggest.go`),
+so it belongs to the diagnostic and every surface renders the same string. Verify all three surfaces —
+they used to disagree, and the REPL used to post-annotate its own copy:
+
+```bash
+./bin/sysml -validate f.sysml            # CLI: "... — did you mean ScalarValues::Integer?", exit 2
+printf 'part def A { attribute x : Integer = 1; }\n' | ./bin/sysml | grep -c 'did you mean'   # must be 1
+```
+
+- Canonical fixture: `part def A { attribute x : Integer = 1; }` → `unresolved reference: Integer —
+  did you mean ScalarValues::Integer?` and exit `2`. A bare library name is *supposed* to fail:
+  only top-level packages are in the root namespace, so the fix is `private import ScalarValues::*;`
+  inside a `package`, which must then validate `✓ … no errors` / exit `0`.
+- **Duplication is the regression to watch in the REPL.** Count `did you mean` occurrences rather
+  than eyeballing them, and compare the text after `error: ` with the CLI's byte for byte. A
+  parent-commit binary is the cheapest contrast: pre-fix the CLI prints *no* suggestion while the
+  REPL prints one, so "old REPL also showed a hint" is expected and not evidence of duplication.
+- The LSP path is checkable in ~15 s without VS Code: drive `./bin/sysml-lsp` over stdio with a
+  three-message script (`initialize`, `initialized`, `textDocument/didOpen`) and read
+  `textDocument/publishDiagnostics`; the message must match the CLI exactly.
+- Shapes with deliberately different behavior, all worth asserting:
+  - a **qualified** unresolved name gets NO `did you mean` — it reports
+    `(no namespace "Nowhere" is loaded; "Integer" is declared as …)` instead;
+  - operator members are never offered (`typable()` filters `IntegerFunctions::+`, `#`, `..`), so a
+    typo like `Plu` yields no suggestion while `Abz` → `RealFunctions::abs`;
+  - a long garbage identifier (≥ 100 chars) must yield zero suggestions and still exit `2`;
+  - edit-distance tolerance widens with length (1 / 2 / 3 at ≥ 6 / ≥ 9 runes), so a 6-char typo like
+    `Intger` legitimately offers noisy extras (`Items::Item::boundingShapes::edges::inter`,
+    `VectorFunctions::inner`) after the right answer — assert the *first* candidate, not the list.
+- **`examples/` is a gate.** All 20 files under `examples/` (excluding `examples/sysml-v2-training`)
+  must validate with exit 0:
+  ```bash
+  for x in $(find examples -name '*.sysml' -o -name '*.kerml' | grep -v sysml-v2-training); do
+    ./bin/sysml -validate $x >/dev/null 2>&1 || echo "FAIL $x"; done
+  ```
+- Fixtures for the parser/semantics fixes shipped alongside (each fails on the parent commit):
+  `binding b of f = v;` (old: `type must be a definition, found attributeUsage`),
+  a **constraint usage** — not `constraint def` — declaring `in` params plus `assert`/`assume`
+  conditions (old: `expected '{' or ';'`), and
+  `vertices->ControlFunctions::exists{p : Point; p.x > 0}` (old: `no scope for member lookup in p`).
+- **REPL adversarial gotcha:** typing unbalanced braces (`part def }}} {{{ ;;;`) puts the prompt into
+  multi-line continuation (`...>`) and silently swallows subsequent lines. Press `ctrl+c` to abandon
+  the buffer — it flushes the accumulated parse errors and returns a clean `sysml>` prompt, which is
+  itself a good no-panic assertion.

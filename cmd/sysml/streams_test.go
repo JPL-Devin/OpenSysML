@@ -14,8 +14,8 @@ import (
 const brokenModel = "package Bad { part def A { attribute x : ; } }\n"
 
 // TestStreamsAndStatus checks the contract every non-interactive run keeps: what
-// was asked for on stdout, what went wrong on stderr, and a status that says
-// whether it was carried out.
+// was asked for on stdout, what went wrong on stderr under the command's own
+// prefix, and a status that says whether it was carried out.
 func TestStreamsAndStatus(t *testing.T) {
 	binary := buildCLI(t)
 
@@ -26,6 +26,7 @@ func TestStreamsAndStatus(t *testing.T) {
 		status    int
 		stdout    []string // must be on stdout
 		stderr    []string // must be on stderr, and not on stdout
+		absent    []string // must be on neither stream
 		emptyOut  bool     // stdout must be empty
 		emptyErrs bool     // stderr must be empty
 	}{{
@@ -47,7 +48,8 @@ func TestStreamsAndStatus(t *testing.T) {
 		args:   []string{"-e", "nope"},
 		status: exitUnevaluable,
 		stdout: []string{"✓ package Rover"},
-		stderr: []string{"unresolved reference: nope"},
+		stderr: []string{"sysml: unresolved reference: nope"},
+		absent: []string{"error: unresolved reference"},
 	}, {
 		name:   "a model that does not analyse is a failed load",
 		model:  brokenModel,
@@ -65,19 +67,29 @@ func TestStreamsAndStatus(t *testing.T) {
 		model:  behaviorModel,
 		args:   []string{"-calc", "Mission::nosuch(1)"},
 		status: exitUnevaluable,
-		stderr: []string{"unresolved reference: Mission::nosuch"},
+		stderr: []string{"sysml: unresolved reference: Mission::nosuch"},
+		absent: []string{"error: unresolved reference"},
 	}, {
 		name:   "an action that could not be run is reported",
 		model:  behaviorModel,
 		args:   []string{"-action", "Mission::nosuch"},
 		status: exitUnevaluable,
-		stderr: []string{"nosuch"},
+		stderr: []string{"nosuch", "sysml: unresolved reference: Mission::nosuch"},
+		absent: []string{"error: unresolved reference"},
 	}, {
 		name:   "a state machine that could not be run is reported",
 		model:  behaviorModel,
 		args:   []string{"-state", "Mission::nosuch"},
 		status: exitUnevaluable,
-		stderr: []string{"nosuch"},
+		stderr: []string{"nosuch", "sysml: unresolved reference: Mission::nosuch"},
+		absent: []string{"error: unresolved reference"},
+	}, {
+		name:   "a constraint that could not be checked is reported",
+		model:  checkModel,
+		args:   []string{"-constraint", "Rover::nosuch"},
+		status: exitUnevaluable,
+		stderr: []string{"sysml: unresolved reference: Rover::nosuch"},
+		absent: []string{"error: unresolved reference"},
 	}, {
 		// The line goes through the same boundary as the other undecided
 		// verdicts, so the command reports it under the command's prefix.
@@ -123,7 +135,28 @@ func TestStreamsAndStatus(t *testing.T) {
 		model:    brokenModel,
 		args:     []string{"-convert", "ttl"},
 		status:   exitUnevaluable,
-		stderr:   []string{"expected a name"},
+		stderr:   []string{"expected a name", "sysml: "},
+		emptyOut: true,
+	}, {
+		name:     "a format that is not a format is reported under the command's prefix",
+		model:    sampleModel,
+		args:     []string{"-convert", "nosuchformat"},
+		status:   exitUnevaluable,
+		stderr:   []string{"sysml: unknown format \"nosuchformat\""},
+		emptyOut: true,
+	}, {
+		name:      "the help asked for is a result on stdout",
+		model:     checkModel,
+		args:      []string{"-h"},
+		status:    exitHolds,
+		stdout:    []string{"Usage: sysml [options] [file...]", "-convert string"},
+		emptyErrs: true,
+	}, {
+		name:     "a flag that is not defined is reported with the usage on stderr",
+		model:    checkModel,
+		args:     []string{"--nosuchflag"},
+		status:   exitUnevaluable,
+		stderr:   []string{"flag provided but not defined: -nosuchflag", "Usage: sysml [options] [file...]"},
 		emptyOut: true,
 	}}
 
@@ -144,6 +177,11 @@ func TestStreamsAndStatus(t *testing.T) {
 				}
 				if strings.Contains(got.stdout, want) {
 					t.Errorf("%q was reported on stdout:\n%s", want, got.stdout)
+				}
+			}
+			for _, unwanted := range tc.absent {
+				if strings.Contains(got.output(), unwanted) {
+					t.Errorf("%q was reported:\n%s", unwanted, got.output())
 				}
 			}
 			if tc.emptyOut && got.stdout != "" {

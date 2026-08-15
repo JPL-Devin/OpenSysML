@@ -1,7 +1,9 @@
 """Tests for Model class."""
 
+import pytest
 from unittest.mock import Mock
 from pysysml.proto import sysml_pb2
+from pysysml.errors import ExecutionError
 from pysysml.model import Model
 
 
@@ -287,3 +289,38 @@ def test_model_get_by_fqn():
     # A short name is not an FQN, and an unknown FQN is not an error.
     assert model.get("Vehicle") is None
     assert model.get("MyModel::Missing") is None
+
+
+class TestModelEval:
+    """Evaluation is on the model, so a caller need not carry its hash."""
+
+    def _model(self, client):
+        pb_response = sysml_pb2.ParseFileResponse(
+            model_hash="hash1",
+            root=sysml_pb2.SymbolInfo(id="Demo", name="Demo", kind="Package"),
+        )
+        return Model(pb_response, client)
+
+    def test_eval_passes_the_models_hash(self):
+        client = Mock()
+        client.eval.return_value = 2
+
+        assert self._model(client).eval("1+1") == 2
+        client.eval.assert_called_once_with("1+1", "hash1", context_symbol_id=None)
+
+    def test_eval_passes_a_context_symbol(self):
+        client = Mock()
+        client.eval.return_value = 1500.0
+
+        model = self._model(client)
+        assert model.eval("mass", context_symbol_id="Demo::sedan") == 1500.0
+        client.eval.assert_called_once_with(
+            "mass", "hash1", context_symbol_id="Demo::sedan"
+        )
+
+    def test_eval_raises_what_the_connection_raises(self):
+        client = Mock()
+        client.eval.side_effect = ExecutionError("division by zero")
+
+        with pytest.raises(ExecutionError):
+            self._model(client).eval("1/0")

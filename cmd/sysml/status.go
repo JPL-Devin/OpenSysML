@@ -18,7 +18,7 @@ const (
 // fail reports on stderr what stopped the run, returning the status of a run
 // that decided nothing.
 func fail(err error) int {
-	fmt.Fprintln(os.Stderr, "sysml:", err)
+	fmt.Fprintln(os.Stderr, commandPrefix+err.Error())
 	return exitUnevaluable
 }
 

@@ -273,6 +273,30 @@ class Model:
 
         return None
 
+    def eval(self, expression, context_symbol_id=None):
+        """Evaluate a SysML expression against this model.
+
+        Args:
+            expression (str): SysML expression (e.g., "1 + 1")
+            context_symbol_id (str, optional): FQN of the symbol whose scope the
+                expression's names resolve in
+
+        Returns:
+            The evaluated value, as a Python value
+
+        Raises:
+            ExecutionError: If the expression could not be evaluated
+            ModelNotFoundError: If the service no longer holds this model
+            UnsupportedValueError: If the result cannot be represented on the wire
+
+        Example:
+            >>> model.eval("1 + 1")
+            2
+        """
+        return self._client.eval(
+            expression, self._hash, context_symbol_id=context_symbol_id
+        )
+
     def verify_constraint(self, symbol_id, subject=None):
         """Ask whether one of this model's constraints holds.
 
@@ -283,6 +307,11 @@ class Model:
 
         Returns:
             Verdict: The answer; false is the model's answer, not an exception
+
+        Raises:
+            WrongKindError: If symbol_id names an element that is not a
+                constraint
+            ExecutionError: If the request could not be answered at all
         """
         return self._client.verify_constraint(
             symbol_id, self._hash, subject_symbol_id=subject
@@ -298,6 +327,11 @@ class Model:
 
         Returns:
             Verdict: The answer
+
+        Raises:
+            WrongKindError: If symbol_id names an element that is not a
+                requirement
+            ExecutionError: If the request could not be answered at all
         """
         return self._client.verify_requirement(
             symbol_id, self._hash, subject_symbol_id=subject
@@ -316,7 +350,13 @@ class Model:
                 a named satisfaction assertion
 
         Returns:
-            list[Verdict]: One verdict per assertion, in declaration order
+            list[Verdict]: One verdict per assertion, in declaration order. An
+                element stating none gives an empty list.
+
+        Raises:
+            WrongKindError: If symbol_id names an element that can state no
+                satisfaction assertion
+            ExecutionError: If the request could not be answered at all
         """
         return self._client.verify_satisfaction(self._hash, symbol_id=symbol_id)
 
@@ -345,6 +385,10 @@ class Model:
 
         Returns:
             CalcResult: The value returned, or the outputs a calc usage computed
+
+        Raises:
+            WrongKindError: If symbol_id names an element that is not a calc
+            ExecutionError: If the calculation could not be evaluated
         """
         return self._client.calc(symbol_id, self._hash, arguments=arguments)
 
