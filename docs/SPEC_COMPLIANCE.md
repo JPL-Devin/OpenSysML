@@ -916,7 +916,7 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 - Execution conformance cases: 211 (all passing)
 - gRPC conformance cases: 8 (all passing)
 - Robustness subtests: 146 (all passing)
-- Golden AST fixtures: 81
+- Golden AST fixtures: 82
 - Golden execution traces: 69
 - Negative parser subtests: 127
 

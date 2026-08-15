@@ -43,7 +43,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 **Purpose:** Verify AST structure matches expected output
 
 - **Test:** `TestGolden` (internal/core/parser/)
-- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (81 representative files)
+- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (82 representative files)
 - **Goldens:** `testdata/parse/*.golden` (AST dumps)
 - **Acceptance:** Parse output matches golden file
 
@@ -93,7 +93,7 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 **Purpose:** Lock in parse structure before execution changes
 
 - **Location:** `internal/core/parser/testdata/parse/` (behavioral fixtures)
-- **Coverage:** 81 fixtures in total, behavioral ones among them
+- **Coverage:** 82 fixtures in total, behavioral ones among them
 - **Acceptance:** `TestGolden` passes, AST dumps match expectations
 
 **Behavioral fixtures:**
