@@ -41,7 +41,9 @@ to a client asking for a newer one; otherwise an old build answers and the call
 fails as a `MissingCapabilityError` naming a capability the requested release does
 have. Asking for a release is what
 triggers that check, so with `PYSYSML_GRPC_VERSION` unset a binary you put there
-yourself (option 3) is left alone.
+yourself (option 3) is left alone. If the release asked for cannot be downloaded
+(no asset for your platform, no network), the cached binary keeps serving and the
+warning says so, rather than the connection failing.
 
 The published releases up to v0.0.4 carry the `sysml`/`sysml-lsp` archives only;
 `sysml-grpc` binaries are published from the next release onward, so until then

@@ -314,7 +314,8 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
     """Ensure sysml-grpc binary is available, downloading if necessary.
     
     A cached binary is reused only when it is the release asked for; when no
-    version is asked for, whatever is cached stands, locally built included.
+    version is asked for, whatever is cached stands, locally built included. A
+    replacement that cannot be downloaded leaves the working cache in place.
     
     Args:
         force_download (bool): If True, download even if binary exists
@@ -336,11 +337,13 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
         version = os.environ.get('PYSYSML_GRPC_VERSION') or None
     
     # Check if binary already exists and is executable
+    cached = None
     if not force_download and os.path.exists(binary_path):
         if os.access(binary_path, os.X_OK):
             stale = stale_cache_reason(version, github_repo)
             if stale is None:
                 return binary_path
+            cached = binary_path
             warnings.warn(
                 f"Replacing the cached sysml-grpc: {stale}. Downloading {version}.",
                 stacklevel=2,
@@ -355,4 +358,15 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
         )
     
     # Download binary with explicit version
-    return download_binary(version=version, github_repo=github_repo)
+    try:
+        return download_binary(version=version, github_repo=github_repo)
+    except ConnectionError as e:
+        if cached is None:
+            raise
+        # A release with no binary to fetch is no reason to lose a working one.
+        warnings.warn(
+            f"Keeping the cached sysml-grpc at {cached}: {version} could not be "
+            f"downloaded ({e}). It may be an older release than asked for.",
+            stacklevel=2,
+        )
+        return cached

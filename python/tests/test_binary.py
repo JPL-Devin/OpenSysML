@@ -415,3 +415,14 @@ def test_a_timed_out_release_query_keeps_a_working_cache(cache):
         assert stale_cache_reason('latest') is None
         with pytest.raises(PySysMLConnectionError, match='Failed to resolve latest release'):
             resolve_latest_version()
+
+
+def test_a_cache_survives_a_replacement_that_cannot_be_downloaded(cache):
+    """Test a working binary keeps serving when the release asked for cannot be had."""
+    binary_path = cache(version='v0.0.5')
+    with patch('pysysml.binary.download_binary',
+               side_effect=PySysMLConnectionError('404 Not Found')):
+        with pytest.warns(UserWarning, match='Keeping the cached sysml-grpc'):
+            assert ensure_binary(version='v0.0.7') == binary_path
+
+    assert cached_release() == 'v0.0.5'
