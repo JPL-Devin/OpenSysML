@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 
 import pysysml
 from pysysml.connection import DEFAULT_PORT, Connection, split_target
+from pysysml.generate import main as generate_main
 
 
 class TestSplitTarget:
@@ -104,6 +105,21 @@ class TestModuleHelpersReadAnAddress:
         ):
             with pytest.raises(ValueError):
                 call()
+
+    def test_the_generator_cli_lets_an_address_carry_its_port(self, tmp_path):
+        # --port unwritten must stay unwritten, or --host's port disagrees with it.
+        source = tmp_path / "demo.sysml"
+        source.write_text("package Demo;\n")
+        recorded = {}
+
+        def record(file_path, host='localhost', port=None, strict=False):
+            recorded['target'] = (host, port)
+            raise KeyboardInterrupt
+
+        with patch('pysysml.load', record):
+            with pytest.raises(KeyboardInterrupt):
+                generate_main([str(source), "--host", "localhost:50123"])
+        assert recorded['target'] == ("localhost:50123", None)
 
     def test_an_address_reaches_the_port_it_names(self):
         with patch('pysysml.Connection') as connection:

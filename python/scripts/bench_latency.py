@@ -47,7 +47,8 @@ def measure(label, call, iterations, results):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="localhost")
-    parser.add_argument("--port", type=int, default=50051)
+    # No default: an unwritten port lets --host carry its own (default 50051).
+    parser.add_argument("--port", type=int)
     parser.add_argument("--iterations", type=int, default=200)
     args = parser.parse_args(argv)
 

@@ -417,7 +417,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     parser.add_argument("source", help="path to a .sysml file")
     parser.add_argument("-o", "--output", help="output .py path (default: stdout)")
     parser.add_argument("--host", default="localhost", help="sysml-grpc host")
-    parser.add_argument("--port", type=int, default=50051, help="sysml-grpc port")
+    # No default: an unwritten port lets --host carry its own (default 50051).
+    parser.add_argument("--port", type=int, help="sysml-grpc port (default: 50051)")
     parser.add_argument(
         "--check",
         action="store_true",
