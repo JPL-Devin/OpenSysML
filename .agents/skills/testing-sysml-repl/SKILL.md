@@ -471,6 +471,43 @@ Testing this family end-to-end has a few traps that cost a whole run if hit late
 - Don't name a pysysml probe script `grpc.py`: `sys.path[0]` shadows the real `grpc` package and
   pysysml dies with `partially initialized module 'pysysml'`, which looks like a client bug.
 
+## Fork/join and an action's shared value space (PR #170)
+
+An action performance holds **one** value space (`ActionExecutor.data`, read back by `Results()` and
+`Data()`); a fork duplicates control only, a join merges nothing, and a retiring token carries
+nothing out. Consequences worth asserting whenever anything in `internal/core/runtime`'s action path
+changes:
+
+- Every branch's writes must appear in `Results:` together. The historical bug (pre-#170) was that
+  each token carried its own copy of the data, so only the **last-retired** token's snapshot
+  survived — a broken build still completes with `✓ Action completed`, just missing values, so
+  "it ran" proves nothing. Always A/B against a binary built from the parent commit and assert the
+  exact numbers.
+- Fixtures that distinguish working from broken, and the values a correct build gives (an incorrect
+  build zeroes the branch that retires first):
+  `fork` + two branches assigning `x`/`y` → `x=1 y=2`; three branches → `1/2/3`; nested forks where
+  the inner join's successor reads what the inner branches wrote; a branch whose body is a
+  `while` loop (`n=10 i=5` — the loop runs entirely within one token step); a branch that reads a
+  feature the other branch wrote (`seen=42`, since a read after the other branch's write sees it);
+  an `accept` in one branch (`action rcv accept n : Integer;` with the other branch sending);
+  a branch ending at a node with **no succession** (no join) — both branches' values must survive;
+  a fork whose branch invokes a nested action with `in`/`out` params that itself forks (only
+  parameters cross the boundary — the callee's own locals must NOT appear in the caller's results).
+- Both branches assigning the **same** attribute is deterministic last-write-in-step-order, not a
+  merge: assert a single stable value over repeated runs (`w=10` for branches writing 10 then 20)
+  and that it never panics, hangs or drops the feature.
+- `%tokens` prints token **locations** followed by one shared `Values:` block, never per-token
+  values. At a fork expect `Token 2 @ left` / `Token 3 @ right` with a single `Values:` — per-token
+  blocks or duplicated names are the pre-#170 display. After completion `%tokens` says
+  `No active tokens` and the values only show in the `Results:` of the final `%continue`.
+- An unsatisfiable `accept` inside a fork branch must still fail fast (exit 2, ~0.1 s) with
+  `accept deadlock in action <name>: … ; N token(s) blocked for another reason` — never hang.
+- Model-writing traps met while building these fixtures: `after` is a reserved keyword (bad node
+  name); an accept's bound parameter is only resolvable from other nodes when the owner is written
+  `action Foo { … }` rather than `action def Foo { … }` — otherwise the reader body reports
+  `unresolved reference: n`; the CLI has **no** flag for action inputs, so exercise `in`/`out`
+  parameters by having a caller action invoke `action call = Callee(a = 3, b = 4);`.
+
 ## Control flow inside an action node body
 
 `while`, `loop … until` (braced and unbraced), `for … in` and `if`/`else` execute inside an
