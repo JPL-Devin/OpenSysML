@@ -24,6 +24,7 @@ const filterModelSource = `package Vehicles {
 	part vehicle {
 		part seatBelt { @Safety{isMandatory = true;} }
 		part airBag { @CrashSafety{isMandatory = false;} }
+		part mirror { @Safety; }
 		part keylessEntry;
 	}
 }
@@ -179,6 +180,28 @@ func TestFilteredImportComparesAnnotationFeature(t *testing.T) {
 	got = openFilterWorkspace(t, client)
 	if len(got) != 1 || !strings.Contains(got[0], "keylessEntry") {
 		t.Fatalf("an unannotated element must not pass a guarded filter, got %v", got)
+	}
+}
+
+// A feature the annotation binds nothing to has no value, so the comparison
+// reading it does not hold and the element is not surfaced — while a condition
+// only testing the annotation still surfaces it.
+func TestFilteredImportRejectsAnUnboundAnnotationFeature(t *testing.T) {
+	client := `package Client {
+		private import FilteredImport::*;
+		part a :> mirror;
+	}`
+	if got := openFilterWorkspace(t, client); len(got) != 0 {
+		t.Fatalf("an annotated element should pass a filter testing only the annotation, got %v", got)
+	}
+
+	client = `package Client {
+		private import MandatorySafety::*;
+		part a :> mirror;
+	}`
+	got := openFilterWorkspace(t, client)
+	if len(got) != 1 || !strings.Contains(got[0], "mirror") {
+		t.Fatalf("an element binding no value to the compared feature must not pass, got %v", got)
 	}
 }
 

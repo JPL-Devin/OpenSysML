@@ -175,7 +175,7 @@ func (m *Model) prefixAnnotation(scope *symbols.Scope, p *ast.PrefixMetadata) (a
 	if !ok || typ == nil {
 		return annotation{}, false
 	}
-	return annotation{typ: typ, typFQN: m.fqnOf(typ), values: m.annotationValues(scope, p.Body)}, true
+	return m.annotationOfType(typ, scope, p.Body), true
 }
 
 // usageAnnotation reads one metadata-usage annotation, whose type is what the
@@ -193,9 +193,36 @@ func (m *Model) usageAnnotation(scope *symbols.Scope, u *ast.Usage) (annotation,
 		if !ok || typ == nil {
 			continue
 		}
-		return annotation{typ: typ, typFQN: m.fqnOf(typ), values: m.annotationValues(bodyScope(u, scope), u.Members)}, true
+		return m.annotationOfType(typ, bodyScope(u, scope), u.Members), true
 	}
 	return annotation{}, false
+}
+
+// annotationOfType is one annotation of metadata type typ, valued by what its
+// body binds plus the defaults typ declares for what the body leaves unbound.
+func (m *Model) annotationOfType(typ *symbols.Symbol, scope *symbols.Scope, body []ast.Node) annotation {
+	values := m.annotationValues(scope, body)
+	m.addTypeDefaults(typ, values)
+	return annotation{typ: typ, typFQN: m.fqnOf(typ), values: values}
+}
+
+// addTypeDefaults adds the value the metadata type declares for each feature the
+// annotation body leaves unbound, since an annotation inherits its type's values.
+func (m *Model) addTypeDefaults(typ *symbols.Symbol, values map[string]symbols.FilterValue) {
+	for _, member := range m.MembersOf(typ) {
+		usage, ok := member.Decl.(*ast.Usage)
+		if !ok || usage.Value == nil {
+			continue
+		}
+		name := simpleSymbolName(member)
+		if name == "" {
+			continue
+		}
+		if _, bound := values[name]; bound {
+			continue
+		}
+		values[name] = m.annotationValue(member.OwnerScope, usage.Value)
+	}
 }
 
 // bodyScope is the scope a metadata usage's body resolves names against. The

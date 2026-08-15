@@ -143,7 +143,6 @@ func TestFilterUnevaluableExpression(t *testing.T) {
 	}{
 		{"@Nonexistent", "keylessEntry", "does not resolve"},
 		{"someFunction(1)", "keylessEntry", "invocation"},
-		{"@Safety and (as Comfort).level > 1", "seatBelt", "not annotated by"},
 	}
 	for _, tc := range cases {
 		cond, reason := tc.cond, tc.reason
@@ -158,6 +157,37 @@ func TestFilterUnevaluableExpression(t *testing.T) {
 			t.Fatalf("%q: an unevaluable condition must keep the element", cond)
 		}
 	}
+}
+
+// A feature nothing binds has an empty value sequence, so a condition reading it
+// yields nothing and does not select: `#Safety part def Belt` binds no
+// isMandatory and no level. `==` and `!=` are declared over `[0..1]` and do
+// decide, nothing being equal only to nothing, which is why `!= true` holds of
+// the element `== true` does not.
+func TestFilterUnsetAnnotationFeature(t *testing.T) {
+	cases := map[string][]bool{
+		"@Safety and Safety::isMandatory == true": {false, true},
+		"@Safety and (as Safety).level > 1":       {false, true},
+		"@Safety and not (as Safety).isMandatory": {false, false},
+		"@Safety and Safety::isMandatory != true": {true, false},
+		"@Safety and (as Comfort).level > 1":      {false, false},
+	}
+	for cond, expect := range cases {
+		want(t, cond, selects(t, metadataModel, cond, "Belt", "seatBelt"), expect...)
+	}
+}
+
+// An annotation inherits the feature values its metadata type declares, so a
+// condition reading a feature the annotation body leaves unbound sees the type's
+// value rather than nothing.
+func TestFilterAnnotationFeatureDefault(t *testing.T) {
+	const src = `
+		metadata def Certified { attribute isMandatory = true; }
+		#Certified part def Belt;
+		part def Radio;
+	`
+	const cond = "@Certified and Certified::isMandatory == true"
+	want(t, cond, selects(t, src, cond, "Belt", "Radio"), true, false)
 }
 
 // A condition that evaluates to something other than a boolean cannot select

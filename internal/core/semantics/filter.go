@@ -23,6 +23,11 @@ import (
 // predicate is then run against each candidate. The compiled form is also what a
 // library carries in its index cache, so a filtered import selects the same
 // elements whether its library was parsed or restored.
+//
+// Reading a feature bound to nothing yields the empty sequence, which orderings
+// (declared over `DataValue[1]`) propagate and `==`/`!=` (over `[0..1]`) decide
+// against any value. Nothing is not true, so the candidate is not selected: a
+// verdict, not the unevaluable case, and so not reported.
 
 var (
 	// ErrFilterUnevaluable reports a filter condition outside the subset of
@@ -98,6 +103,9 @@ func (m *Model) EvalElementFilter(f symbols.ElementFilter, cand *symbols.Symbol)
 		return v.value, v.err
 	}
 	val, err := m.evalPredicate(pred, cand)
+	if err == nil && val.Kind == symbols.FilterValueEmpty {
+		val = boolValue(false) // nothing is not true, so it selects nothing
+	}
 	if err == nil && val.Kind != symbols.FilterValueBool {
 		err = &FilterError{Err: ErrFilterNotBoolean, Reason: describeValueKind(val.Kind), Span: pred.Span}
 	}
@@ -307,26 +315,37 @@ func (m *Model) evalPredicate(p *symbols.FilterPredicate, cand *symbols.Symbol) 
 		if err != nil {
 			return symbols.FilterValue{}, err
 		}
-		return boolValue(!v), nil
+		if v.Kind == symbols.FilterValueEmpty {
+			return v, nil
+		}
+		return boolValue(!v.Bool), nil
 
 	case symbols.FilterAnd, symbols.FilterOr, symbols.FilterXor, symbols.FilterImplies:
 		left, err := m.evalBool(p.Operands[0], cand)
 		if err != nil {
 			return symbols.FilterValue{}, err
 		}
+		// Nothing to decide from yields nothing, leaving the candidate
+		// unselected rather than the condition rejected.
+		if left.Kind == symbols.FilterValueEmpty {
+			return left, nil
+		}
 		// `and`, `or` and `implies` are decided by their left operand alone
 		// where it settles the answer, so the right one is not evaluated. This
 		// is what makes the guarded form filters are written in work: in
 		// `@Safety and (as Safety).level > 4` the feature is only read from an
 		// element the guard established has that annotation to read it from.
-		if decided, ok := shortCircuit(p.Op, left); ok {
+		if decided, ok := shortCircuit(p.Op, left.Bool); ok {
 			return boolValue(decided), nil
 		}
 		right, err := m.evalBool(p.Operands[1], cand)
 		if err != nil {
 			return symbols.FilterValue{}, err
 		}
-		return boolValue(evalFilterBool(p.Op, left, right)), nil
+		if right.Kind == symbols.FilterValueEmpty {
+			return right, nil
+		}
+		return boolValue(evalFilterBool(p.Op, left.Bool, right.Bool)), nil
 
 	case symbols.FilterEq, symbols.FilterNeq, symbols.FilterLt, symbols.FilterLe,
 		symbols.FilterGt, symbols.FilterGe:
@@ -335,16 +354,17 @@ func (m *Model) evalPredicate(p *symbols.FilterPredicate, cand *symbols.Symbol) 
 	return symbols.FilterValue{}, &FilterError{Err: ErrFilterUnevaluable, Reason: "unknown filter operation", Span: p.Span}
 }
 
-// evalBool evaluates an operand a boolean operator needs.
-func (m *Model) evalBool(p *symbols.FilterPredicate, cand *symbols.Symbol) (bool, error) {
+// evalBool evaluates an operand a boolean operator needs: a boolean, or nothing
+// at all, which the operator propagates.
+func (m *Model) evalBool(p *symbols.FilterPredicate, cand *symbols.Symbol) (symbols.FilterValue, error) {
 	v, err := m.evalPredicate(p, cand)
 	if err != nil {
-		return false, err
+		return symbols.FilterValue{}, err
 	}
-	if v.Kind != symbols.FilterValueBool {
-		return false, &FilterError{Err: ErrFilterNotBoolean, Reason: describeValueKind(v.Kind), Span: p.Span}
+	if v.Kind != symbols.FilterValueBool && v.Kind != symbols.FilterValueEmpty {
+		return symbols.FilterValue{}, &FilterError{Err: ErrFilterNotBoolean, Reason: describeValueKind(v.Kind), Span: p.Span}
 	}
-	return v.Bool, nil
+	return v, nil
 }
 
 // shortCircuit reports the value a boolean operator's left operand settles on
@@ -390,6 +410,14 @@ func (m *Model) evalComparison(p *symbols.FilterPredicate, cand *symbols.Symbol)
 		return symbols.FilterValue{}, err
 	}
 	equality := p.Op == symbols.FilterEq || p.Op == symbols.FilterNeq
+	if left.Kind == symbols.FilterValueEmpty || right.Kind == symbols.FilterValueEmpty {
+		if !equality { // an ordering needs a value on each side to compare
+			return emptyValue(), nil
+		}
+		// `==` is declared over `[0..1]`: nothing equals only nothing.
+		both := left.Kind == right.Kind
+		return boolValue(both == (p.Op == symbols.FilterEq)), nil
+	}
 	if equality && (left.Kind == symbols.FilterValueRef || right.Kind == symbols.FilterValueRef ||
 		left.Kind == symbols.FilterValueString || right.Kind == symbols.FilterValueString ||
 		left.Kind == symbols.FilterValueBool || right.Kind == symbols.FilterValueBool) {
@@ -429,7 +457,9 @@ func (m *Model) evalComparison(p *symbols.FilterPredicate, cand *symbols.Symbol)
 }
 
 // annotationFeatureValue reads the value the candidate's annotation of the
-// predicate's metadata type binds its feature to.
+// predicate's metadata type binds its feature to. A feature nothing binds, or one
+// read from an annotation the candidate does not carry, has an empty value
+// sequence, which leaves the comparison reading it false rather than unevaluable.
 func (m *Model) annotationFeatureValue(cand *symbols.Symbol, p *symbols.FilterPredicate) (symbols.FilterValue, error) {
 	typ := m.symbolByFQN(p.TypeFQN)
 	for _, a := range m.annotationsOf(cand) {
@@ -449,11 +479,7 @@ func (m *Model) annotationFeatureValue(cand *symbols.Symbol, p *symbols.FilterPr
 		}
 		return v, nil
 	}
-	return symbols.FilterValue{}, &FilterError{
-		Err:    ErrFilterUnevaluable,
-		Reason: fmt.Sprintf("%s is not annotated by %s, so %s has no value", nameOf(cand), p.TypeFQN, p.Feature),
-		Span:   p.Span,
-	}
+	return emptyValue(), nil
 }
 
 // annotatedBy reports whether the candidate is annotated by metadata conforming
@@ -670,6 +696,11 @@ func boolValue(b bool) symbols.FilterValue {
 	return symbols.FilterValue{Kind: symbols.FilterValueBool, Bool: b}
 }
 
+// emptyValue is the empty sequence, the value of a feature bound to nothing.
+func emptyValue() symbols.FilterValue {
+	return symbols.FilterValue{Kind: symbols.FilterValueEmpty}
+}
+
 // numericValue returns a value as a float64 for comparison, and whether it is a
 // number at all.
 func numericValue(v symbols.FilterValue) (float64, bool) {
@@ -696,6 +727,8 @@ func describeValueKind(k symbols.FilterValueKind) string {
 		return "a string"
 	case symbols.FilterValueRef:
 		return "an element reference"
+	case symbols.FilterValueEmpty:
+		return "nothing"
 	default:
 		return "no value"
 	}
@@ -777,17 +810,6 @@ func simpleSymbolName(sym *symbols.Symbol) string {
 		return ""
 	}
 	return simpleName(sym.Name)
-}
-
-// nameOf names an element for a diagnostic message.
-func nameOf(sym *symbols.Symbol) string {
-	if sym == nil {
-		return "the element"
-	}
-	if name := simpleSymbolName(sym); name != "" {
-		return name
-	}
-	return "the element"
 }
 
 // ownerSymbol returns the element a symbol is a member of.

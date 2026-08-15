@@ -118,6 +118,10 @@ const (
 	// FilterValueRef is a reference to an element used as a value, such as an
 	// enumeration literal, compared by identity of the element it names.
 	FilterValueRef
+	// FilterValueEmpty is the absence of a value — the empty sequence a feature
+	// bound to nothing has. It is a result, unlike FilterValueUnknown, which
+	// says a value could not be determined.
+	FilterValueEmpty
 )
 
 // FilterValue is a constant a filter predicate yields or compares: a literal, or
