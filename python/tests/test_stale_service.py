@@ -240,6 +240,10 @@ def test_a_service_the_caller_has_not_started_yet_is_checked_at_the_first_call(
         with pytest.raises(StaleServiceError) as excinfo:
             conn.server_info()
         assert "v0.0.5" in excinfo.value.reason
+        # A caller that carries on past the first refusal is refused again,
+        # rather than served by the release it did not ask for.
+        with pytest.raises(StaleServiceError):
+            conn.server_info()
     finally:
         conn.close()
 

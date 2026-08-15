@@ -404,9 +404,11 @@ class Connection:
                     answered=True,
                     origin=self._origin,
                 )
-            if self._check_release_on_handshake:
-                self._check_release_on_handshake = False
-                self._raise_if_release_mismatch(self._server_info)
+        # Cleared only once the check passes, so a mismatch keeps being reported
+        # instead of the connection turning usable after one error.
+        if self._check_release_on_handshake:
+            self._raise_if_release_mismatch(self._server_info)
+            self._check_release_on_handshake = False
         return self._server_info
 
     def load(self, file_path, strict=False):
