@@ -1746,3 +1746,61 @@ object whose type conforms to the type declaring the condition, else declared de
 - `%slots <usage>` is the independent oracle — `inRange: <constraint: violated>` must agree with
   the verdict for the same object. Declaring anything new in the REPL drops all instances, so a
   following check silently reverts to defaults (assert the missing `(on …)` suffix there).
+
+## A lone `-` as standard input (PR #179)
+
+`internal/core/project.ReadFile` reads `os.Stdin` once (memoized with `sync.Once`) whenever a path
+is exactly `-`, names it `<stdin>` in diagnostics, and refuses a terminal with
+`standard input is a terminal; redirect it or name a file`. That makes stdin usable in every
+path-taking mode: `-validate`, `-e`, `-calc`, `-constraint`, `-action`, `-state`, `-convert`, and a
+plain positional load.
+
+The convincing test is a **paired run**: `bin/sysml -validate m.sysml` against
+`cat m.sysml | bin/sysml -validate -`, for a clean *and* a broken model. Everything but the model
+name must match, including the line:column of each diagnostic and the exit status (0 / 2). Build the
+parent revision (see the contrast-binary recipe) to show the same pipe answering
+`sysml: cannot read -: no such file or directory` before the change.
+
+Cases worth walking, with what they should answer:
+
+| command | expected |
+|---|---|
+| `cat m | sysml a.sysml - -validate` | `✓ a.sysml, <stdin>: no errors` — flags may follow the paths |
+| `cat m | sysml -validate - -` | `✓ <stdin>, <stdin>: no errors`, exit 0 (one memoized read, no hang) |
+| `: | sysml -validate -` | `✓ <stdin>: no errors`, exit 0 — empty stdin is an empty model, not an error |
+| `head -c 200000 /dev/urandom | sysml -validate -` | ~1800 `<stdin>:L:C: error: expected a namespace member`, exit 2 |
+| `sysml -convert ttl -` | refused: `standard input carries no file name to take the format from`, exit 2 |
+| `cat m | sysml - -convert ttl -from sysml` | conversion on stdout; `-o f` writes `wrote f (ttl, N bytes)` |
+| `cd d && sysml -validate ./-` | reads a file *really* named `-`; a bare `-` in that directory still reads the pipe |
+| `%load -` at the interactive prompt | `error: cannot read <stdin>: standard input is a terminal…`, and the REPL keeps going |
+
+Two traps when testing this:
+
+- **Always wrap in `timeout`.** The whole risk of the change is a run that blocks on a stdin nobody
+  redirected. For the terminal case a pipe is not enough — give the process a real tty with
+  `script -qec "timeout 10 bin/sysml -validate -; echo TTYSTATUS=\$?" /dev/null </dev/null`; it must
+  print the refusal immediately with status 2.
+- **Do not read the exit status through `| head`.** `$?` is then `head`'s, and `${PIPESTATUS[0]}` is
+  `cat`'s; a SIGPIPE kill shows up as 141 and looks like a defect. Redirect to files
+  (`>out 2>err; echo $?`) and grep them instead.
+- Piping a *model* into a plain `sysml -` also consumes the prompt stream, so the REPL prints its
+  banner and exits at once with the load's status — expected, not a hang. Inside a piped prompt
+  session, `%load -` swallows the remaining script lines as model text, which is worth noting but is
+  inherent to one stdin.
+
+## `sysml-lsp` command line (PR #179)
+
+`cmd/sysml-lsp` parses args with a `flag.FlagSet`: `-version`/`--version`/`-v` print the version and
+`-h`/`-help` the usage, both on **stdout** with status 0; an undefined flag or a stray positional
+argument prints `flag provided but not defined: …` / `sysml-lsp: unexpected argument "…"` plus the
+usage on **stderr** with status 2, and nothing on stdout. Assert the stream split
+(`>out 2>err`, then `wc -c <out`), not just the text — the point of the change is that a misuse no
+longer enters protocol mode and dies with `failed reading header line: EOF` (which is what the parent
+binary does, exit 1).
+
+With no args it still speaks LSP. Drive it from Python: write
+`Content-Length: N\r\n\r\n<json>` frames to stdin, read the header line, blank line, then N bytes.
+`initialize` must answer `"capabilities"` with `completionProvider`, and `shutdown` `{"result":null}`.
+**Pre-existing, not a regression:** after the `exit` notification the process only ends when stdin is
+closed, and then reports `sysml-lsp: failed reading header line: EOF` with status 1 — identical on the
+parent binary, so verify against the contrast binary before reporting it.
