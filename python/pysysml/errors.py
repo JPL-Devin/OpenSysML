@@ -47,6 +47,33 @@ class ChecksumMismatchError(ConnectionError):
     """
 
 
+class StaleServiceError(ConnectionError):
+    """Raised when the service already listening is not the one asked for.
+
+    A service this client did not start is reported rather than stopped, since
+    the client cannot assume the process is its own.
+
+    Attributes:
+        address (str): Address the mismatched service is listening on
+        reason (str): How it differs from the service that was asked for
+        remedy (str): What to do about it
+        info (ServerInfo): What it reported about itself, or None when it could
+            not be asked
+    """
+
+    def __init__(self, address, reason, remedy, info=None):
+        super().__init__(
+            f"the sysml-grpc service already listening on {address} is not the "
+            f"one this client asked for: {reason}.\n"
+            f"  service: {info.describe() if info is not None else address}\n"
+            f"  fix:     {remedy}"
+        )
+        self.address = address
+        self.reason = reason
+        self.remedy = remedy
+        self.info = info
+
+
 class UnsupportedValueError(PySysMLError):
     """Raised when the service sends a value the wire format cannot represent."""
 
@@ -363,6 +390,7 @@ __all__ = [
     "ServiceError",
     "ServiceTimeoutError",
     "SlotError",
+    "StaleServiceError",
     "SymbolNotFoundError",
     "TypeMismatchError",
     "UnsupportedOperationError",

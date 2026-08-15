@@ -6,15 +6,17 @@ import os
 import psutil
 import subprocess
 import time
+import warnings
 from filelock import FileLock, Timeout
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
-from pysysml.binary import ensure_binary
+from pysysml.binary import ensure_binary, resolve_latest_version
 from pysysml.capabilities import (
     CAPABILITY_CONVERT,
     CAPABILITY_QUERY,
     CAPABILITY_VERIFICATION,
     ServerInfo,
+    mismatch_reason,
     require,
     upgrade_remedy,
 )
@@ -26,6 +28,7 @@ from pysysml.errors import (
     ExecutionError,
     ModelFileNotFoundError,
     ModelNotFoundError,
+    StaleServiceError,
     UnsupportedValueError,
     WrongKindError,
     from_rpc_error,
@@ -196,6 +199,53 @@ def _is_pidfile_stale():
         return (True, None)
 
 
+def _read_refcount():
+    """How many clients hold a reference to the service. Caller must hold lockfile."""
+    refcount_path = _get_refcount_path()
+    try:
+        with open(refcount_path, 'r') as f:
+            return int(f.read().strip())
+    except (FileNotFoundError, ValueError):
+        return 0
+
+
+def _remove_service_state():
+    """Forget the pidfile and refcount of a service that is gone.
+
+    Caller must hold the lockfile.
+    """
+    for path in (_get_pidfile_path(), _get_refcount_path()):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+
+
+def _stop_process(process):
+    """Stop a service process, killing it if it will not terminate.
+
+    Args:
+        process (psutil.Process): The process to stop
+
+    Returns:
+        bool: Whether the process is gone afterwards
+    """
+    try:
+        process.terminate()
+        process.wait(timeout=5)
+    except psutil.NoSuchProcess:
+        pass
+    except (psutil.TimeoutExpired, psutil.AccessDenied):
+        try:
+            process.kill()
+            process.wait(timeout=5)
+        except psutil.NoSuchProcess:
+            pass
+        except (psutil.TimeoutExpired, psutil.AccessDenied):
+            return False
+    return True
+
+
 class Connection:
     """Manages connection to sysml-grpc service.
     
@@ -206,7 +256,8 @@ class Connection:
         port (int): Service port
     """
     
-    def __init__(self, host='localhost', port=None, auto_start=True):
+    def __init__(self, host='localhost', port=None, auto_start=True,
+                 version=None, require_capabilities=None):
         """Initialize connection to sysml-grpc service.
         
         Args:
@@ -214,10 +265,21 @@ class Connection:
                 is used when no separate port is given (default: 'localhost')
             port (int, optional): Service port (default: 50051)
             auto_start (bool): If True, automatically start service if not running (default: True)
+            version (str, optional): Release tag the service must report, or
+                'latest'. Defaults to $PYSYSML_GRPC_VERSION, the same tag the
+                binary cache is checked against; without either, whatever
+                release answers is accepted. Checked while the service is being
+                started or adopted, so only when auto_start is True.
+            require_capabilities (iterable, optional): Capability names the
+                service must report, checked once at connect time rather than
+                when the first call needing one is made
 
         Raises:
             ValueError: If host names a port that is unreadable or disagrees
                 with port
+            StaleServiceError: If another release is already listening on the
+                address and this client may not stop it
+            MissingCapabilityError: If the service lacks a required capability
         """
         host, port = split_target(host, port)
         self.host = host
@@ -231,6 +293,8 @@ class Connection:
         self._server_info = None
         # Only connections that took a reference may release one on close.
         self._holds_refcount = False
+        self._version = version or os.environ.get('PYSYSML_GRPC_VERSION') or None
+        self._required_capabilities = frozenset(require_capabilities or ())
         
         # Auto-start service if requested
         if auto_start:
@@ -238,6 +302,8 @@ class Connection:
         
         self._channel = grpc.insecure_channel(self._address)
         self._stub = sysml_pb2_grpc.SysMLServiceStub(self._channel)
+        for capability in sorted(self._required_capabilities):
+            require(self.server_info(), capability, upgrade_remedy(capability))
     
     def close(self):
         """Close the gRPC channel and decrement refcount."""
@@ -871,6 +937,148 @@ class Connection:
         finally:
             channel.close()
     
+    def _running_service_info(self, timeout=5.0):
+        """Ask the service already listening what it is, over a channel of its own.
+
+        Args:
+            timeout (float): RPC timeout in seconds
+
+        Returns:
+            ServerInfo: What it reported; ``answered`` is False when it could not
+                say, whether because it predates the handshake or the call failed
+        """
+        channel = grpc.insecure_channel(self._address)
+        try:
+            stub = sysml_pb2_grpc.SysMLServiceStub(channel)
+            response = stub.GetServerInfo(
+                sysml_pb2.ServerInfoRequest(), timeout=timeout
+            )
+        except grpc.RpcError:
+            return ServerInfo(
+                version='',
+                capabilities=frozenset(),
+                answered=False,
+                origin=self._origin,
+            )
+        finally:
+            channel.close()
+        return ServerInfo(
+            version=response.version,
+            capabilities=frozenset(response.capabilities),
+            answered=True,
+            origin=self._origin,
+        )
+
+    def _required_release(self):
+        """Release tag the service must report, resolved, or None if none is required.
+
+        An unresolvable 'latest' requires nothing, as for the binary cache.
+        """
+        if self._version != 'latest':
+            return self._version
+        try:
+            return resolve_latest_version()
+        except ConnectionError:
+            return None
+
+    def _started_by_this_client(self):
+        """The service process this client's records say it started on this port.
+
+        Ownership is read from the pidfile and the process's command line, so a
+        service the user started is never taken for one of ours.
+
+        Returns:
+            psutil.Process or None: The owned process, or None if there is none
+        """
+        stale, process = _is_pidfile_stale()
+        if stale or process is None:
+            return None
+        try:
+            cmdline = process.cmdline()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return None
+        if cmdline[-2:] != ['-port', str(self.port)]:
+            return None
+        return process
+
+    def _adopt_running_service(self):
+        """Take over the service already listening, or make room for the one asked for.
+
+        Caller must hold the lockfile.
+
+        Returns:
+            bool: True when the running service was adopted, False when it was
+                stopped and one must now be started in its place
+
+        Raises:
+            StaleServiceError: If it is not the service asked for and this
+                client is not the one that started it
+        """
+        info = self._running_service_info()
+        reason = mismatch_reason(
+            info,
+            version=self._required_release(),
+            capabilities=self._required_capabilities,
+        )
+        if reason is not None:
+            self._replace_mismatched_service(reason, info)
+            return False
+
+        self._server_info = info
+        _increment_refcount()
+        self._holds_refcount = True
+        atexit.register(self._cleanup_service)
+        return True
+
+    def _replace_mismatched_service(self, reason, info):
+        """Stop a mismatched service, if this client started it and nothing else uses it.
+
+        Caller must hold the lockfile. A service this client cannot show to be
+        its own is reported rather than killed: the user may be running it
+        deliberately.
+
+        Args:
+            reason (str): How the running service differs from the one asked for
+            info (ServerInfo): What it reported about itself
+
+        Raises:
+            StaleServiceError: If this client may not stop it
+        """
+        process = self._started_by_this_client()
+        if process is None:
+            raise StaleServiceError(
+                self._address, reason,
+                f"stop the service listening on {self._address} yourself, then "
+                f"retry so this client starts the one it asks for; or reach "
+                f"another one with connect(port=<other port>); or ask for what "
+                f"is running by unsetting $PYSYSML_GRPC_VERSION",
+                info=info,
+            )
+        holders = _read_refcount()
+        if holders > 0:
+            raise StaleServiceError(
+                self._address, reason,
+                f"{holders} other pysysml connection(s) still hold this "
+                f"service, so it is not this client's to stop; close them and "
+                f"retry, or reach a service of your own with "
+                f"connect(port=<other port>)",
+                info=info,
+            )
+        if not _stop_process(process):
+            raise StaleServiceError(
+                self._address, reason,
+                f"this client started that service but could not stop it "
+                f"(pid {process.pid}); stop it yourself and retry",
+                info=info,
+            )
+        warnings.warn(
+            f"replaced the sysml-grpc service this client started on "
+            f"{self._address}: {reason}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        _remove_service_state()
+
     def _ensure_service(self):
         """Ensure sysml-grpc service is running, with lockfile coordination.
         
@@ -905,18 +1113,15 @@ class Connection:
                 
                 # Check if service already running (another process may have started it)
                 if self._probe_service(self.host, self.port):
-                    # Service running - increment refcount and return
                     self._origin = (
                         f"service already listening on {self._address}, "
                         f"not started by this client"
                     )
-                    _increment_refcount()
-                    self._holds_refcount = True
-                    atexit.register(self._cleanup_service)
-                    return
+                    if self._adopt_running_service():
+                        return
                 
                 # Get binary path
-                binary_path = ensure_binary()
+                binary_path = ensure_binary(version=self._version)
                 if not os.path.exists(binary_path):
                     raise ConnectionError(f"Binary not found after download: {binary_path}")
                 self._origin = f"{binary_path}, started by this client"

@@ -132,7 +132,7 @@ Slot values come back as Python values, and a slot holding an object comes back
 as a nested `Instance`:
 
 ```python
-inst = pysysml.instantiate("Demo::Vehicle", model_hash=model.hash)
+inst = model.instantiate("Demo::Vehicle")
 
 inst.mass                 # 1500.0
 inst["mass"]              # 1500.0
@@ -174,9 +174,21 @@ returning `False`; use `slots` to inspect an instance whose slots may have faile
 `eval` returns a single value, so a result the wire format cannot represent raises
 `UnsupportedValueError` rather than being reported per entry.
 
+Actions and state machines run on the model too:
+
+```python
+model.execute_action("Demo::addFive", inputs={"result": 10})   # {'result': 15}
+model.execute_state("Demo::Machine", events=["go"])            # {'states_visited': [...], ...}
+```
+
 `execute_action` and `execute_state` apply the same policy to their result maps:
 a value the wire format cannot represent is reported as an
 `UnsupportedValueError` in that entry, leaving the other entries intact.
+
+Every call about a loaded model is a `Model` method, and the module-level
+`pysysml.instantiate`/`eval`/`convert` remain for instantiating straight out of a
+file (`pysysml.instantiate("Demo::Vehicle", file_path="model.sysml")`) or against
+a hash obtained elsewhere (`model_hash=…`).
 
 ### Verification: constraints, requirements, satisfaction, calc
 
@@ -290,6 +302,7 @@ grpc` and switch on status codes; the original `grpc.RpcError` stays reachable a
 ```
 PySysMLError
 ├── ConnectionError            service unreachable or would not start (UNAVAILABLE)
+│   └── StaleServiceError      another release is already listening on that address
 ├── ServiceError               any other status the service failed a call with
 │   ├── ModelNotFoundError     the model hash is no longer in the service cache
 │   ├── ModelFileNotFoundError the service could not read the path (also FileNotFoundError)
@@ -464,8 +477,8 @@ What that means in practice:
 - **Reuse one `Connection`.** Channel setup plus the first parse is tens of
   milliseconds; the module-level functions already share a singleton.
 - **Parse once, then query by hash.** Repeated `load` of unchanged content hits
-  the service cache and costs ~0.5 ms, but passing `model.hash` to `eval`,
-  `instantiate` and `execute_*` skips even that. The cache holds 100 models
+  the service cache and costs ~0.5 ms, but asking the model itself (`model.eval`,
+  `model.instantiate`, `model.execute_*`, which pass its hash) skips even that. The cache holds 100 models
   (`-cache-size`) and evicts least-recently-used, so a stream of distinct
   sources will evict a model you still hold a hash for.
 - **Batch.** One RPC carrying many samples beats one RPC per sample; at ~0.5 ms
@@ -494,7 +507,7 @@ import pysysml
 from demo_types import Vehicle
 
 model = pysysml.load("internal/repl/testdata/vehicle_package.sysml")
-inst = pysysml.instantiate("Demo::Vehicle", model_hash=model.hash)
+inst = model.instantiate("Demo::Vehicle")
 
 v: Vehicle = Vehicle.from_instance(inst)   # a typed view over the Instance
 v.mass                                      # 1500.0, typed float
@@ -608,6 +621,18 @@ named twice with two values raises `ValueError` naming the disagreement rather
 than timing out against an address nobody asked for. The helpers taking
 `host`/`port` (`load`, `eval`, `convert`, `instantiate`) read it the same way. The service is reference-counted across
 processes, so the last client to exit shuts it down.
+
+A service *already listening* on the port is checked the way the cached binary
+is: it is asked what it is with `GetServerInfo`, and a release other than the one
+asked for raises `StaleServiceError` naming the mismatch and the remedy, instead
+of serving an old build whose first newer call fails as a
+`MissingCapabilityError`. `connect(version=…, require_capabilities=[…])` asks
+explicitly; `PYSYSML_GRPC_VERSION` asks for a release for the binary cache and
+the running service alike, and with neither set whatever answers is accepted.
+Such a service is stopped only when this client's own pidfile says it started it
+and no other client still holds it — a service you are running deliberately is
+never killed, so the remedy asks you to stop it, name another port, or accept
+what is running.
 
 ## Development
 

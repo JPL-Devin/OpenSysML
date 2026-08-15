@@ -1,7 +1,10 @@
 """Tests for Model class."""
 
+import inspect
+
 import pytest
 from unittest.mock import Mock
+from pysysml.connection import Connection
 from pysysml.proto import sysml_pb2
 from pysysml.errors import ExecutionError
 from pysysml.model import Model
@@ -324,3 +327,78 @@ class TestModelEval:
 
         with pytest.raises(ExecutionError):
             self._model(client).eval("1/0")
+
+class TestModelRuntimeCalls:
+    """Instantiating and executing are on the model too, for the same reason."""
+
+    def _model(self, client):
+        pb_response = sysml_pb2.ParseFileResponse(
+            model_hash="hash1",
+            root=sysml_pb2.SymbolInfo(id="Demo", name="Demo", kind="Package"),
+        )
+        return Model(pb_response, client)
+
+    def test_instantiate_passes_the_models_hash(self):
+        client = Mock()
+        client.instantiate.return_value = "instance"
+
+        assert self._model(client).instantiate("Demo::Vehicle") == "instance"
+        client.instantiate.assert_called_once_with("Demo::Vehicle", "hash1")
+
+    def test_execute_action_passes_the_models_hash_and_inputs(self):
+        client = Mock()
+        client.execute_action.return_value = {"result": 15}
+
+        model = self._model(client)
+        assert model.execute_action("Demo::add", inputs={"result": 10}) == {"result": 15}
+        client.execute_action.assert_called_once_with(
+            "Demo::add", "hash1", inputs={"result": 10}
+        )
+
+    def test_execute_state_passes_the_models_hash_and_events(self):
+        client = Mock()
+        client.execute_state.return_value = {"states_visited": ["init"]}
+
+        model = self._model(client)
+        assert model.execute_state("Demo::Machine", events=["go"]) == {
+            "states_visited": ["init"]
+        }
+        client.execute_state.assert_called_once_with(
+            "Demo::Machine", "hash1", events=["go"]
+        )
+
+    def test_instantiate_raises_what_the_connection_raises(self):
+        client = Mock()
+        client.instantiate.side_effect = ExecutionError("not instantiable")
+
+        with pytest.raises(ExecutionError):
+            self._model(client).instantiate("Demo::Vehicle")
+
+
+#: Connection calls whose model-level counterpart is named differently:
+#: get_symbol is the raw protobuf lookup behind Model.get and model[name].
+MODEL_LEVEL_ALIASES = {"get_symbol": "get"}
+
+
+def test_every_call_about_a_loaded_model_is_reachable_on_the_model():
+    """A Connection call taking a model_hash must have a Model counterpart.
+
+    Without one, the call a script reaches for after load() raises
+    AttributeError and the hash has to be carried back to the connection by
+    hand — which is what a Model is for.
+    """
+    hash_taking = {
+        name
+        for name, member in inspect.getmembers(Connection, inspect.isfunction)
+        if not name.startswith("_")
+        and "model_hash" in inspect.signature(member).parameters
+    }
+    # A rename that empties this set would pass the assertion below vacuously.
+    assert "instantiate" in hash_taking
+
+    missing = {
+        name
+        for name in hash_taking
+        if not callable(getattr(Model, MODEL_LEVEL_ALIASES.get(name, name), None))
+    }
+    assert missing == set()
