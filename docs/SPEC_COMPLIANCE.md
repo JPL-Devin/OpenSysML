@@ -882,8 +882,8 @@ are tracked here):
 | `eval.go` | Expression evaluation (operators, literals, features) | ~758 |
 | `value.go` | Runtime value representation (ValConst, ValString, ValInstance) | ~150 |
 | `trace.go` | Deterministic execution and calc-evaluation trace recording, canonical value rendering | ~290 |
-| `conformance_test.go` | Conformance gate (71 cases) | ~480 |
-| `robustness_test.go` | Failure-mode tests (39 subtests) | ~830 |
+| `conformance_test.go` | Conformance gate (209 cases) | ~480 |
+| `robustness_test.go` | Failure-mode tests (143 subtests) | ~830 |
 | `trace_test.go` | Golden trace test infrastructure | ~200 |
 | `trace_calc_test.go` | Trace determinism and canonical rendering unit tests | ~180 |
 
@@ -955,7 +955,7 @@ is used as an input, an output, or an intermediate form.
 |-----------|----------------|-----------|--------|
 | Save a model as notation, preserving comments and notes | `export.Convert` → `format.Source` (token stream, not an AST re-print) | `export_test.go:TestSaveKeepsComments`, `repl/save_test.go:TestMetaSaveSysML` | ✅ Faithful |
 | Save a model as RDF Turtle | `export.ToRDF` + `rdf.WriteTurtle` | `repl/save_test.go:TestMetaSaveTurtle`, golden `.golden.ttl` fixtures | ✅ Faithful |
-| Notation → RDF for every definition/usage keyword the parser accepts | `export/kinds.go` metaclass tables, `rdf_out.go` `encode` | `export_test.go:TestGoldenConversions` (14 fixtures) | ✅ Faithful |
+| Notation → RDF for every definition/usage keyword the parser accepts | `export/kinds.go` metaclass tables, `rdf_out.go` `encode` | `export_test.go:TestGoldenConversions` (18 fixtures) | ✅ Faithful |
 | RDF → notation for the mapped subset | `rdf_in.go` `ToSysML` | `export_test.go:TestGoldenConversions`, `TestConvertedNotationParses` | ✅ Faithful |
 | Round trip preserves the graph (`sysml→ttl→sysml→ttl` is stable) | both directions | `export_test.go:TestRoundTripIsLossless` | ✅ Faithful |
 | Deterministic, reversible element IRIs keyed by qualified name | `rdf/vocab.go` `ElementIRI`/`QualifiedNameOf` | `rdf_test.go:TestElementIRIRoundTrip`, `export_test.go:TestElementIRIsAreQualifiedNames` | ✅ Faithful |
@@ -1062,7 +1062,7 @@ the `@type` mapping and the comparison choices.
 
 **Current:**
 - ✅ Layer 1 (Golden AST): Covered via parser tests (fixtures in internal/core/parser/testdata/)
-- ✅ Layer 2 (Execution conformance): `internal/grpc/conformance_test.go` drives `Evaluate`, `Instantiate`, `ExecuteAction` and `ExecuteState` from `.sysml` + `.expected.json` pairs in `internal/grpc/testdata/conformance/` (6 cases, one of them a failure mode), each parsed through the `ParseFile` RPC so the whole wrapper is exercised. Schema: that directory's `README.md`.
+- ✅ Layer 2 (Execution conformance): `internal/grpc/conformance_test.go` drives `Evaluate`, `Instantiate`, `ExecuteAction` and `ExecuteState` from `.sysml` + `.expected.json` pairs in `internal/grpc/testdata/conformance/` (8 cases, one of them a failure mode), each parsed through the `ParseFile` RPC so the whole wrapper is exercised. Schema: that directory's `README.md`.
 - ✅ Layer 3 (Golden traces): N/A — the wrapper adds no ordering behavior of its own; traces are pinned at the runtime tier.
 - ✅ Layer 4 (Robustness): `internal/grpc/robustness_test.go` covers the wrapper's failure modes (unknown model hash, unknown symbol, malformed expression); execution-level failure modes stay pinned in `internal/core/runtime/robustness_test.go`.
 

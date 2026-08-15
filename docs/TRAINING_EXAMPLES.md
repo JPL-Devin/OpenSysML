@@ -571,10 +571,10 @@ was fixed (see the objective-typing re-pin above).
 
 | Category | Pass | Fail | Pass Rate |
 |----------|------|------|-----------|
-| **All Examples** | 97 | 3 | 97% |
-| **Excluding the 2 files whose errors are OMG bugs** | 97 | 1 | 99% |
+| **All Examples** | 98 | 2 | 98% |
+| **Excluding the 2 files whose errors are OMG bugs** | 98 | 0 | 100% |
 
-**Note**: Of the 3 files with errors, two fail only because of bugs in the OMG material itself (`start`/`done` instead of `startShot`/`endShot`); the third is the objective kind-table gap listed above.
+**Note**: Both remaining files fail only because of bugs in the OMG material itself (`start`/`done` instead of `startShot`/`endShot`), so 98/100 is the ceiling.
 
 ---
 

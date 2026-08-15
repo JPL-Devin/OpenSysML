@@ -487,7 +487,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 #### 2. Golden AST Snapshots
 - **Purpose:** Verify AST structure matches expected output
 - **Location:** `internal/core/parser/golden_test.go`
-- **Fixtures:** `testdata/parse/*.sysml` (16 representative files)
+- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (80 representative files)
 - **Goldens:** `testdata/parse/*.golden` (AST dumps)
 - **Acceptance:** Parse output matches golden file
 - **Update flag:** `go test -run TestGolden -update` (regenerate goldens after intentional changes)
@@ -511,7 +511,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 #### 4. Negative Test Suite
 - **Purpose:** Verify parser rejects malformed input gracefully
 - **Location:** `internal/core/parser/negative_test.go`
-- **Test:** `TestNegative` with 36 malformed inputs (27 behavioral + 9 structural)
+- **Test:** `TestNegative` with 127 malformed-input subtests
 - **Acceptance:** Each case produces diagnostics (doesn't panic)
 - **Coverage:** Unclosed blocks, unexpected tokens, invalid syntax, incomplete behavioral members
 
