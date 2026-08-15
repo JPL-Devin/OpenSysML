@@ -3,6 +3,7 @@ package resolve
 import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/Systemica/internal/core/suggest"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -51,9 +52,9 @@ type Resolver struct {
 	// redefine a feature of the requirement it references by plain name.
 	constraintRefs []constraintRef
 	// suggestions are the spellings an unresolvable name may have meant, kept
-	// per name; names is the list of simple names they rank against.
+	// per name; names is the index's name table they are looked up in.
 	suggestions map[string][]string
-	names       []string
+	names       *suggest.Table
 }
 
 // New creates a resolver over the given index.

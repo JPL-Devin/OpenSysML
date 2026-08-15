@@ -14,10 +14,11 @@ func (r *Resolver) suggestFor(name string) []string {
 	if cands, ok := r.suggestions[name]; ok {
 		return cands
 	}
-	cands := suggest.Qualified(r.idx, name)
+	table := r.suggestTable()
+	cands := table.Qualified(name)
 	if len(cands) == 0 {
-		for _, near := range suggest.Nearest(name, r.simpleNames()) {
-			if qualified := suggest.Qualified(r.idx, near); len(qualified) > 0 {
+		for _, near := range table.Nearest(name) {
+			if qualified := table.Qualified(near); len(qualified) > 0 {
 				cands = append(cands, qualified[0])
 			}
 		}
@@ -26,10 +27,11 @@ func (r *Resolver) suggestFor(name string) []string {
 	return cands
 }
 
-// simpleNames are the names the index registers, computed once per resolver.
-func (r *Resolver) simpleNames() []string {
+// suggestTable indexes the names the index registers, swept once per resolver:
+// a suggestion is a lookup, not a scan of the whole library per unresolved name.
+func (r *Resolver) suggestTable() *suggest.Table {
 	if r.names == nil {
-		r.names = suggest.SimpleNames(r.idx)
+		r.names = suggest.NewTable(r.idx)
 	}
 	return r.names
 }

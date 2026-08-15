@@ -92,26 +92,39 @@ func LastSegment(fqn string) string {
 // Nearest returns the candidates closest to word by edit distance, within the
 // tolerance a typo of that length justifies, in distance then name order.
 func Nearest(word string, candidates []string) []string {
-	tolerance := 1
-	switch n := len([]rune(word)); {
-	case n >= 9:
-		tolerance = 3
-	case n >= 6:
-		tolerance = 2
-	}
-	type scored struct {
-		name string
-		dist int
-	}
+	tolerance := toleranceFor(len([]rune(word)))
+	lower := strings.ToLower(word)
 	var hits []scored
 	for _, c := range candidates {
 		if c == word {
 			continue
 		}
-		if d := EditDistance(strings.ToLower(word), strings.ToLower(c)); d <= tolerance {
+		if d := EditDistance(lower, strings.ToLower(c)); d <= tolerance {
 			hits = append(hits, scored{name: c, dist: d})
 		}
 	}
+	return rank(hits)
+}
+
+// scored is a candidate beside its distance from the word that did not resolve.
+type scored struct {
+	name string
+	dist int
+}
+
+// toleranceFor is how many edits a typo of n runes justifies.
+func toleranceFor(n int) int {
+	switch {
+	case n >= 9:
+		return 3
+	case n >= 6:
+		return 2
+	}
+	return 1
+}
+
+// rank orders candidates by distance then name, keeping at most Limit of them.
+func rank(hits []scored) []string {
 	sort.Slice(hits, func(i, j int) bool {
 		if hits[i].dist != hits[j].dist {
 			return hits[i].dist < hits[j].dist
