@@ -112,7 +112,7 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 - **Schema:** `internal/core/runtime/testdata/conformance/README.md`
 - **Allowlist:** `known_failures.txt` (currently empty)
 
-**Coverage (209 cases - all passing, by fixture prefix):**
+**Coverage (211 cases - all passing, by fixture prefix):**
 - Calc: parameter binding, return values, defaults, inherited parameters, unary ops, qualified names, type coercion, body-local usages, statement bodies, nested and from-constraint invocation (×56)
 - Action: token flow, outputs, nested invocation, send/accept, port communication, `perform` reference and shorthand, accept...then, flows, loops and decisions (×48)
 - State: simple, do behavior, concurrent do, transition effect, choice/junction/fork-join pseudostates, orthogonal regions and region pseudostates, shallow/deep history, entry/exit points, deferred/undeferred events, call and timed triggers, signal discrimination/unmatched, self signal (×41)
@@ -130,7 +130,7 @@ go test -v -run TestExecutionConformance ./internal/core/runtime
 - **Test:** `TestExecutionTrace` (internal/core/runtime/)
 - **Format:** `.trace.golden` files
 - **Determinism:** Token sorting by ID, fixed event queue tie-breaking
-- **Coverage:** 67 `.trace.golden` files (action×26, calc×25, state×12, constraint×4)
+- **Coverage:** 69 `.trace.golden` files (action×28, calc×25, state×12, constraint×4)
 
 **Trace format examples:**
 - Action: `step 1: token T1@node1, token T2@node2` (sorted)
