@@ -918,7 +918,7 @@ See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Coverage by Feature Type** (execution conformance cases, by fixture prefix, 211 total):
 - Calc: 56 conformance + 25 golden traces (includes unary, coercion, qualified-name, body-local usages, statement bodies, KerML library and Systemica extension library function evaluation)
-- Action: 48 conformance + 26 golden traces
+- Action: 50 conformance + 28 golden traces
 - State: 41 conformance + 12 golden traces
 - Requirement: 12 conformance
 - Instance: 9 conformance (`instance_derived_slots`, `instance_constraint_binding`, `instance_inherited_constraint`, `instance_library_function_default`, `instance_nested_usage_body`, `instance_unnamed_redefinition` among them)

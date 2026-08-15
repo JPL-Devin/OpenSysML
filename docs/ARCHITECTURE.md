@@ -554,7 +554,7 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 
 **Coverage (211 cases, by fixture prefix):**
 - Calc: parameter binding, return values, defaults, inherited parameters, unary operators, type coercion, qualified names, body-local usages, statement bodies, nested and from-constraint invocation (×56)
-- Action: token flow, outputs, nested invocation, send/accept, port communication, `perform` reference and shorthand, accept...then, flows, loops and decisions (×48)
+- Action: token flow, outputs, nested invocation, send/accept, port communication, `perform` reference and shorthand, accept...then, flows, loops and decisions (×50)
 - State: simple, do behavior, concurrent do, transition effect, choice/junction/fork-join pseudostates, orthogonal regions and region pseudostates, shallow/deep history, entry/exit points, deferred/undeferred events, call and timed triggers, signal discrimination/unmatched, self signal (×41)
 - Requirement: require/subject/actor/assume satisfaction, nested (×12)
 - Instance: derived slots, constraint binding, inherited constraints, nested usage bodies (×9)

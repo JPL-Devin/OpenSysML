@@ -162,7 +162,7 @@ sysml> %advance 30
 | Workspace/reindex/file watching | ✅ Complete |
 | Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (80 golden ASTs, 127 negative tests) |
 | Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 80 calc/constraint/requirement/satisfy cases passing) |
-| Action execution engine (Tier 5) | ✅ Complete (48 conformance cases passing) |
+| Action execution engine (Tier 5) | ✅ Complete (50 conformance cases passing) |
 | State machine runtime (Tier 5) | ✅ Complete (41 conformance cases: transitions, accept events, sourceless) |
 | REPL debugging commands | ✅ Complete — `%constraint`, `%requirement`, `%satisfy` and `%calc` also answer from the command line (`-constraint`, `-requirement`, `-satisfy`, `-calc`) and over gRPC, on one evaluation |
 | Model save & SysML ↔ RDF Turtle conversion (`%save`, `sysml -convert`) | ✅ Complete for model **structure** (packages, definitions, usages, ports, connections, values, documentation) — a behavioral member is refused, see [RDF_INTEROP.md § Limitations](docs/RDF_INTEROP.md#limitations); worked example: [examples/rdf-interop-demo.sysml](examples/rdf-interop-demo.sysml) |
