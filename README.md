@@ -304,7 +304,7 @@ import pysysml
 model = pysysml.load("vehicle.sysml")
 
 # Evaluate expressions
-result = pysysml.eval("2 + 2", model_hash=model.hash)
+result = model.eval("2 + 2")
 print(result)  # 4
 
 # Instantiate parts

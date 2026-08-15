@@ -26,12 +26,86 @@ from pysysml.errors import (
     ModelFileNotFoundError,
     ModelNotFoundError,
     UnsupportedValueError,
+    WrongKindError,
     from_rpc_error,
     translate_rpc_errors,
 )
 from pysysml.query import build_query, elements_of
 from pysysml.values import value_to_python
 from pysysml.verdict import CalcResult, Verdict
+
+
+#: Port the service listens on when a caller names none.
+DEFAULT_PORT = 50051
+
+
+def split_target(host, port=DEFAULT_PORT):
+    """Split a ``host:port`` string written as the host into host and port.
+
+    ``connect("localhost:50123")`` names an address, not a hostname, so it is
+    read as one rather than building ``localhost:50123:50051`` and reporting the
+    service unreachable at an address nobody asked for.
+
+    Args:
+        host (str): Hostname, or a ``host:port`` address
+        port (int): Port, when the host names none
+
+    Returns:
+        tuple[str, int]: The host and port to connect to
+
+    Raises:
+        ValueError: If the address's port is not a number, or disagrees with a
+            port also given
+    """
+    if not isinstance(host, str) or ':' not in host:
+        return host, port
+
+    # A bare IPv6 address has colons of its own; only a bracketed one, or a
+    # single colon, names a port.
+    if host.startswith('['):
+        closing = host.find(']')
+        if closing == -1 or not host[closing + 1:].startswith(':'):
+            return host, port
+        name, _, written = host[:closing + 1], ':', host[closing + 2:]
+    elif host.count(':') > 1:
+        return host, port
+    else:
+        name, written = host.split(':', 1)
+
+    if not written.isdigit():
+        raise ValueError(
+            f"host={host!r} names no port this client can read; pass "
+            f"host and port separately, as connect({name!r}, <port>)"
+        )
+    embedded = int(written)
+    if port != DEFAULT_PORT and port != embedded:
+        raise ValueError(
+            f"host={host!r} and port={port} name different ports; give the "
+            f"port once"
+        )
+    return name, embedded
+
+
+def _failure_of(message, failure_reason, diagnostics):
+    """Build the error for a failure the service classified.
+
+    The kind is read from the response's typed reason, so a wrong request and a
+    condition that could not be evaluated are told apart without reading the
+    message text.
+    """
+    if failure_reason == sysml_pb2.FAILURE_REASON_WRONG_KIND:
+        return WrongKindError(message, diagnostics=diagnostics)
+    return ExecutionError(message, diagnostics=diagnostics)
+
+
+def _raise_wrong_kind(pb_verdict, diagnostics):
+    """Raise when a verdict reports the named element is of another kind.
+
+    Such a verdict is no answer about the model, so it is raised rather than
+    returned as an undecided one; every other failure stays in verdict.error.
+    """
+    if pb_verdict.failure_reason == sysml_pb2.FAILURE_REASON_WRONG_KIND:
+        raise WrongKindError(pb_verdict.error, diagnostics=diagnostics)
 
 
 def _get_lockfile_path():
@@ -130,14 +204,20 @@ class Connection:
         port (int): Service port
     """
     
-    def __init__(self, host='localhost', port=50051, auto_start=True):
+    def __init__(self, host='localhost', port=DEFAULT_PORT, auto_start=True):
         """Initialize connection to sysml-grpc service.
         
         Args:
-            host (str): Service hostname (default: 'localhost')
+            host (str): Service hostname, or a ``host:port`` address, whose port
+                is used when no separate port is given (default: 'localhost')
             port (int): Service port (default: 50051)
             auto_start (bool): If True, automatically start service if not running (default: True)
+
+        Raises:
+            ValueError: If host names a port that is unreadable or disagrees
+                with port
         """
+        host, port = split_target(host, port)
         self.host = host
         self.port = port
         self._address = f"{host}:{port}"
@@ -545,6 +625,8 @@ class Connection:
                 ``verdict.error``.
 
         Raises:
+            WrongKindError: If symbol_id names an element that is not a
+                constraint, which is a wrong request rather than a verdict
             ExecutionError: If the request could not be answered at all — an
                 unknown symbol, a subject that could not be instantiated
             MissingCapabilityError: If the service cannot verify
@@ -573,6 +655,8 @@ class Connection:
             Verdict: The answer
 
         Raises:
+            WrongKindError: If symbol_id names an element that is not a
+                requirement
             ExecutionError: If the request could not be answered at all
             MissingCapabilityError: If the service cannot verify
             ModelNotFoundError: If the service no longer holds the model
@@ -605,6 +689,8 @@ class Connection:
                 model stating no assertion gives an empty list.
 
         Raises:
+            WrongKindError: If symbol_id names an element that can state no
+                satisfaction assertion
             ExecutionError: If the request could not be answered at all
             MissingCapabilityError: If the service cannot verify
             ModelNotFoundError: If the service no longer holds the model
@@ -619,7 +705,11 @@ class Connection:
 
         diagnostics = [Diagnostic(d) for d in response.diagnostics]
         if response.error:
-            raise ExecutionError(response.error, diagnostics=diagnostics)
+            raise _failure_of(
+                response.error, response.failure_reason, diagnostics
+            )
+        for pb_verdict in response.verdicts:
+            _raise_wrong_kind(pb_verdict, diagnostics)
         instances = self._instances_of(response)
         return [
             Verdict(pb_verdict, instances=instances, diagnostics=diagnostics)
@@ -643,6 +733,7 @@ class Connection:
                 a calc usage computed
 
         Raises:
+            WrongKindError: If symbol_id names an element that is not a calc
             ExecutionError: If the calculation could not be evaluated
             MissingCapabilityError: If the service cannot verify
             ModelNotFoundError: If the service no longer holds the model
@@ -658,7 +749,9 @@ class Connection:
 
         diagnostics = [Diagnostic(d) for d in response.diagnostics]
         if response.error:
-            raise ExecutionError(response.error, diagnostics=diagnostics)
+            raise _failure_of(
+                response.error, response.failure_reason, diagnostics
+            )
 
         outputs = {}
         for output in response.outputs:
@@ -685,6 +778,7 @@ class Connection:
         diagnostics = [Diagnostic(d) for d in response.diagnostics]
         if response.error:
             raise ExecutionError(response.error, diagnostics=diagnostics)
+        _raise_wrong_kind(response.verdict, diagnostics)
         return Verdict(
             response.verdict,
             instances=self._instances_of(response),
