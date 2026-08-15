@@ -266,6 +266,13 @@ func TestInstanceOwningAnAnonymousConnectorSurvives(t *testing.T) {
 	}
 	// Nothing else took the identity the connector kept.
 	wants(t, run(t, s, "%instantiate Demo::A"), "ID: 7")
+
+	// Submissions nothing reads the connectors between keep the identity too.
+	s.Submit("part def Gizmo;")
+	s.Submit("part def Doodad;")
+	if got := connectorLine(t, run(t, s, "%slots Demo::Sys")); got != connector {
+		t.Errorf("after two unread submissions the connector reads %q, want %q", got, connector)
+	}
 }
 
 // connectorLine returns the line of a %slots listing that holds the object's
