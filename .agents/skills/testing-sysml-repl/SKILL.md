@@ -1874,3 +1874,47 @@ With no args it still speaks LSP. Drive it from Python: write
 **Pre-existing, not a regression:** after the `exit` notification the process only ends when stdin is
 closed, and then reports `sysml-lsp: failed reading header line: EOF` with status 1 — identical on the
 parent binary, so verify against the contrast binary before reporting it.
+
+## Static dimension (unit-commensurability) warnings (PR #184)
+
+`checkDimensions` (`internal/core/passes/typecheck_dimension.go`) emits a **type-tier warning** for
+`+ - < > <= >= == !=` when both operand dimensions are statically known and incommensurable, e.g.
+`operator '<' combines incommensurable quantities: ISQBase::MassValue (dimension M) and m (dimension L)`.
+It is a warning, so `-validate` still exits **0**; evaluating the same constraint still fails with
+`incommensurable units: cannot express m (SI::metre) in kg (1000·SI::gram)` and exit **2**. `-quiet`
+suppresses it; `-json` reports it as `"severity":"warning","pass":"type","code":"type.expr"` with
+`"exit": 0`.
+
+Fixture gotchas that cost time here:
+
+- Every fixture needs `public import ScalarValues::*;` if it mentions `Real`/`Boolean`, else
+  `unresolved reference: Real — did you mean ScalarValues::Real?` aborts before any check runs
+  (`did not analyse cleanly; no check was made`, exit 2) and the test proves nothing.
+- Unit names are the stdlib's: `t`, `deg`, `degC` do **not** resolve; `°`/`°C` do not even lex in a
+  `[...]` unit position. Use `g`, `K`, `rad`, `Hz`, `Bq`, `N * m`, `J`. `ISQ::TemperatureValue` is an
+  **alias** for `ISQBase::ThermodynamicTemperatureValue`.
+- **Naming an attribute `m` shadows `SI::metre`**, so `1.0 [m]` inside that scope is not a quantity
+  at all and every dimension check there goes silent. The runtime says so explicitly
+  (`m resolves to the attributeUsage m declared in …, shadowing the measurement unit SI::metre`).
+  Never name a fixture attribute after a unit unless shadowing is the thing under test.
+
+Cache interaction: `libs.formatVersion` bumped 15→16 and the cache persists `DimensionFacts`
+(`~/.cache/sysml-ls/libs`, or `$XDG_CACHE_HOME/sysml-ls/libs`). To exercise both paths,
+`rm -rf ~/.cache/sysml-ls/libs` and run **the very first** validation on the file you care about —
+only that first run is cold, since it repopulates the cache for every later file in the same loop.
+Known cosmetic divergence: cold names the quantity type by leaf name (`MassValue`), warm by
+qualified name (`ISQBase::MassValue`); assert verdicts and exit codes rather than byte-identical text.
+
+Silent-by-design shapes (assert zero `warning:` lines): commensurable comparisons (mm vs m, m/s vs
+km/h), dimensionless arithmetic, `xs#(1)` indexing, an untyped attribute later `assign`ed a quantity,
+a calc *invocation* result operand, and a calc body written without `return` (`calc def C { in q : …;
+q < 1.0 [m] }` never warns, while the `return : Boolean = …` form does). A **typed** parameter
+(`in q : ISQ::MassValue`) *does* warn — its dimension is statically known — and an operand whose type
+is reached through a stdlib **alias** currently does **not** warn even though the un-aliased twin does.
+
+Cheap false-positive sweep, worth running for any diagnostic-adding pass:
+
+```bash
+for f in $(find examples testdata -name '*.sysml'); do ./bin/sysml -validate "$f" 2>&1 \
+  | grep 'incommensurable quantities'; done   # expect no output (403 files, ~90 s)
+```
