@@ -1390,11 +1390,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 				// Store source multiplicity somewhere - for now skip or use relationships
 				p.parseMultiplicity() // consume but don't store separately
 			}
-			// Parse target as typing relationship
+			// `of` names the feature the binding binds, not its type.
 			target := p.parseRelationshipTarget()
 			if target != nil {
 				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelTyping,
+					Kind:   ast.RelReferences,
 					Target: target,
 				})
 			}

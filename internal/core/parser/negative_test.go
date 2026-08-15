@@ -36,6 +36,11 @@ func TestNegative(t *testing.T) {
 		{"calc_assignment_no_value", "calc def C { i = ; }"},
 		{"calc_if_no_body", "calc def C { if i < 2 }"},
 		{"constraint_incomplete", "constraint c { assert }"},
+		// A parameterised constraint body asserts conditions like any other, so a
+		// condition that is missing its expression is an error there too.
+		{"constraint_params_assert_no_condition", "constraint c { in x : Real; assert; }"},
+		{"constraint_params_assume_no_condition", "constraint c { in x : Real; assume }"},
+		{"constraint_params_assert_not_no_condition", "constraint c { in x : Real; assert not; }"},
 		{"state_fork_no_name", "state s { fork ; }"},
 		{"state_join_no_semicolon", "state s { join sync state t; }"},
 		{"call_trigger_unclosed_params", "state s { accept op(a then t; }"},

@@ -14,6 +14,14 @@
 
 package AdvancedBodies {
     
+    // The library is not implicitly visible: a bare name needs an import.
+    private import ScalarValues::*;
+    private import Transfers::Transfer;
+    private import Performances::Performance;
+    private import ControlFunctions::exists;
+    private import ControlFunctions::forAll;
+    private import SequenceFunctions::size;
+    
     // ===== Predicate with Return Statements (Task 83) =====
     
     abstract predicate TransferCheck {
@@ -51,7 +59,7 @@ package AdvancedBodies {
     
     // ===== Shorthand Body Param Syntax (Task 87) =====
     
-    feature Point { feature x: Real; feature y: Real; }
+    classifier Point { feature x: Real; feature y: Real; }
     
     feature Shape {
         feature vertices: Point[*];
@@ -66,7 +74,7 @@ package AdvancedBodies {
     
     // ===== Bool Bodies with Return (Task 80) =====
     
-    bool earlierCheck : Boolean {
+    bool earlierCheck {
         in t1: Transfer [1];
         in t2: Transfer [1];
         
@@ -88,7 +96,7 @@ package AdvancedBodies {
         
         // Feature declarations inside constraint body
         ref ownedPerformances: Performance[*];
-        ref subperformances: Performance[*];
+        ref nestedPerformances: Performance[*];
         
         // Constraint expressions
         assert ownedPerformances->size() > 0;

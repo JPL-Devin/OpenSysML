@@ -9,6 +9,14 @@
  */
 
 package demo_modifiers {
+	// The library is not implicitly visible: a bare name needs an import.
+	private import ScalarValues::*;
+	private import Items::Item;
+
+	// The types the demos below refer to.
+	classifier Config;
+	port def ConnectionPort;
+
 	feature VisibilityExample {
 		doc /*
 		 * Demo: Visibility and modifier features
@@ -51,7 +59,7 @@ package demo_modifiers {
 			doc /* Combined: ordered bag */
 		}
 		
-		port connections: Connection[1..*] nonunique {
+		port connections: ConnectionPort[1..*] nonunique {
 			doc /* Port with nonunique after multiplicity (from Interfaces.sysml pattern) */
 		}
 	}

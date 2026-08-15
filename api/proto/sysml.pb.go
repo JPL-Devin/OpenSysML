@@ -21,6 +21,57 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// FailureReason says what kind of failure an `error` reports, so a client acts
+// on the kind rather than on the message text.
+type FailureReason int32
+
+const (
+	FailureReason_FAILURE_REASON_UNSPECIFIED FailureReason = 0 // no failure, or one not classified
+	FailureReason_FAILURE_REASON_EVALUATION  FailureReason = 1 // the condition or calculation could not be evaluated
+	FailureReason_FAILURE_REASON_WRONG_KIND  FailureReason = 2 // the symbol named declares something else
+)
+
+// Enum value maps for FailureReason.
+var (
+	FailureReason_name = map[int32]string{
+		0: "FAILURE_REASON_UNSPECIFIED",
+		1: "FAILURE_REASON_EVALUATION",
+		2: "FAILURE_REASON_WRONG_KIND",
+	}
+	FailureReason_value = map[string]int32{
+		"FAILURE_REASON_UNSPECIFIED": 0,
+		"FAILURE_REASON_EVALUATION":  1,
+		"FAILURE_REASON_WRONG_KIND":  2,
+	}
+)
+
+func (x FailureReason) Enum() *FailureReason {
+	p := new(FailureReason)
+	*p = x
+	return p
+}
+
+func (x FailureReason) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (FailureReason) Descriptor() protoreflect.EnumDescriptor {
+	return file_sysml_proto_enumTypes[0].Descriptor()
+}
+
+func (FailureReason) Type() protoreflect.EnumType {
+	return &file_sysml_proto_enumTypes[0]
+}
+
+func (x FailureReason) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use FailureReason.Descriptor instead.
+func (FailureReason) EnumDescriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{0}
+}
+
 // PrimitiveOperator is the standard's PrimitiveConstraint.operator.
 type PrimitiveOperator int32
 
@@ -58,11 +109,11 @@ func (x PrimitiveOperator) String() string {
 }
 
 func (PrimitiveOperator) Descriptor() protoreflect.EnumDescriptor {
-	return file_sysml_proto_enumTypes[0].Descriptor()
+	return file_sysml_proto_enumTypes[1].Descriptor()
 }
 
 func (PrimitiveOperator) Type() protoreflect.EnumType {
-	return &file_sysml_proto_enumTypes[0]
+	return &file_sysml_proto_enumTypes[1]
 }
 
 func (x PrimitiveOperator) Number() protoreflect.EnumNumber {
@@ -71,7 +122,7 @@ func (x PrimitiveOperator) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PrimitiveOperator.Descriptor instead.
 func (PrimitiveOperator) EnumDescriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{0}
+	return file_sysml_proto_rawDescGZIP(), []int{1}
 }
 
 // CompositeOperator is the standard's CompositeConstraint.operator.
@@ -108,11 +159,11 @@ func (x CompositeOperator) String() string {
 }
 
 func (CompositeOperator) Descriptor() protoreflect.EnumDescriptor {
-	return file_sysml_proto_enumTypes[1].Descriptor()
+	return file_sysml_proto_enumTypes[2].Descriptor()
 }
 
 func (CompositeOperator) Type() protoreflect.EnumType {
-	return &file_sysml_proto_enumTypes[1]
+	return &file_sysml_proto_enumTypes[2]
 }
 
 func (x CompositeOperator) Number() protoreflect.EnumNumber {
@@ -121,7 +172,7 @@ func (x CompositeOperator) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use CompositeOperator.Descriptor instead.
 func (CompositeOperator) EnumDescriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{1}
+	return file_sysml_proto_rawDescGZIP(), []int{2}
 }
 
 // Verdict is one verification's answer: whether the condition held, and, when
@@ -149,7 +200,11 @@ type Verdict struct {
 	// Set when evaluation failed rather than the model answering false: unbound
 	// features, incommensurable units, an exhausted step budget. `holds` is then
 	// false but is not a verdict.
-	Error         string `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
+	Error string `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
+	// What kind of failure `error` reports. WRONG_KIND says the symbol named
+	// declares something else, which is a wrong request rather than an undecided
+	// verdict about the model.
+	FailureReason FailureReason `protobuf:"varint,9,opt,name=failure_reason,json=failureReason,proto3,enum=sysml.FailureReason" json:"failure_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -238,6 +293,13 @@ func (x *Verdict) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *Verdict) GetFailureReason() FailureReason {
+	if x != nil {
+		return x.FailureReason
+	}
+	return FailureReason_FAILURE_REASON_UNSPECIFIED
 }
 
 // VerifyConstraintRequest asks whether a constraint holds, as %constraint does.
@@ -573,11 +635,13 @@ func (x *VerifySatisfactionRequest) GetSymbolId() string {
 // VerifySatisfactionResponse carries one verdict per assertion evaluated, in
 // declaration order. No assertion at all is an empty list, not an error.
 type VerifySatisfactionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Verdicts      []*Verdict             `protobuf:"bytes,1,rep,name=verdicts,proto3" json:"verdicts,omitempty"`
-	Instances     []*Instance            `protobuf:"bytes,2,rep,name=instances,proto3" json:"instances,omitempty"`
-	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
-	Diagnostics   []*Diagnostic          `protobuf:"bytes,4,rep,name=diagnostics,proto3" json:"diagnostics,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Verdicts    []*Verdict             `protobuf:"bytes,1,rep,name=verdicts,proto3" json:"verdicts,omitempty"`
+	Instances   []*Instance            `protobuf:"bytes,2,rep,name=instances,proto3" json:"instances,omitempty"`
+	Error       string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	Diagnostics []*Diagnostic          `protobuf:"bytes,4,rep,name=diagnostics,proto3" json:"diagnostics,omitempty"`
+	// What kind of failure `error` reports.
+	FailureReason FailureReason `protobuf:"varint,5,opt,name=failure_reason,json=failureReason,proto3,enum=sysml.FailureReason" json:"failure_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -638,6 +702,13 @@ func (x *VerifySatisfactionResponse) GetDiagnostics() []*Diagnostic {
 		return x.Diagnostics
 	}
 	return nil
+}
+
+func (x *VerifySatisfactionResponse) GetFailureReason() FailureReason {
+	if x != nil {
+		return x.FailureReason
+	}
+	return FailureReason_FAILURE_REASON_UNSPECIFIED
 }
 
 // EvaluateCalcRequest invokes a calculation, as %calc does. Arguments are bound
@@ -713,9 +784,11 @@ type EvaluateCalcResponse struct {
 	Result *Value `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	// Output features of a calc usage evaluated from its own members, in
 	// declaration order. Empty for an invocation with arguments.
-	Outputs       []*CalcOutput `protobuf:"bytes,2,rep,name=outputs,proto3" json:"outputs,omitempty"`
-	Error         string        `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
-	Diagnostics   []*Diagnostic `protobuf:"bytes,4,rep,name=diagnostics,proto3" json:"diagnostics,omitempty"`
+	Outputs     []*CalcOutput `protobuf:"bytes,2,rep,name=outputs,proto3" json:"outputs,omitempty"`
+	Error       string        `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	Diagnostics []*Diagnostic `protobuf:"bytes,4,rep,name=diagnostics,proto3" json:"diagnostics,omitempty"`
+	// What kind of failure `error` reports.
+	FailureReason FailureReason `protobuf:"varint,5,opt,name=failure_reason,json=failureReason,proto3,enum=sysml.FailureReason" json:"failure_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -776,6 +849,13 @@ func (x *EvaluateCalcResponse) GetDiagnostics() []*Diagnostic {
 		return x.Diagnostics
 	}
 	return nil
+}
+
+func (x *EvaluateCalcResponse) GetFailureReason() FailureReason {
+	if x != nil {
+		return x.FailureReason
+	}
+	return FailureReason_FAILURE_REASON_UNSPECIFIED
 }
 
 // CalcOutput is one output feature a calc usage computed.
@@ -3367,7 +3447,7 @@ var File_sysml_proto protoreflect.FileDescriptor
 
 const file_sysml_proto_rawDesc = "" +
 	"\n" +
-	"\vsysml.proto\x12\x05sysml\"\xeb\x01\n" +
+	"\vsysml.proto\x12\x05sysml\"\xa8\x02\n" +
 	"\aVerdict\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1d\n" +
 	"\n" +
@@ -3378,7 +3458,8 @@ const file_sysml_proto_rawDesc = "" +
 	"\vinstance_id\x18\x06 \x01(\x03R\n" +
 	"instanceId\x12(\n" +
 	"\x10instance_type_id\x18\a \x01(\tR\x0einstanceTypeId\x12\x14\n" +
-	"\x05error\x18\b \x01(\tR\x05error\"\x81\x01\n" +
+	"\x05error\x18\b \x01(\tR\x05error\x12;\n" +
+	"\x0efailure_reason\x18\t \x01(\x0e2\x14.sysml.FailureReasonR\rfailureReason\"\x81\x01\n" +
 	"\x17VerifyConstraintRequest\x12\x1d\n" +
 	"\n" +
 	"model_hash\x18\x01 \x01(\tR\tmodelHash\x12\x1b\n" +
@@ -3402,22 +3483,24 @@ const file_sysml_proto_rawDesc = "" +
 	"\x19VerifySatisfactionRequest\x12\x1d\n" +
 	"\n" +
 	"model_hash\x18\x01 \x01(\tR\tmodelHash\x12\x1b\n" +
-	"\tsymbol_id\x18\x02 \x01(\tR\bsymbolId\"\xc2\x01\n" +
+	"\tsymbol_id\x18\x02 \x01(\tR\bsymbolId\"\xff\x01\n" +
 	"\x1aVerifySatisfactionResponse\x12*\n" +
 	"\bverdicts\x18\x01 \x03(\v2\x0e.sysml.VerdictR\bverdicts\x12-\n" +
 	"\tinstances\x18\x02 \x03(\v2\x0f.sysml.InstanceR\tinstances\x12\x14\n" +
 	"\x05error\x18\x03 \x01(\tR\x05error\x123\n" +
-	"\vdiagnostics\x18\x04 \x03(\v2\x11.sysml.DiagnosticR\vdiagnostics\"}\n" +
+	"\vdiagnostics\x18\x04 \x03(\v2\x11.sysml.DiagnosticR\vdiagnostics\x12;\n" +
+	"\x0efailure_reason\x18\x05 \x01(\x0e2\x14.sysml.FailureReasonR\rfailureReason\"}\n" +
 	"\x13EvaluateCalcRequest\x12\x1d\n" +
 	"\n" +
 	"model_hash\x18\x01 \x01(\tR\tmodelHash\x12\x1b\n" +
 	"\tsymbol_id\x18\x02 \x01(\tR\bsymbolId\x12*\n" +
-	"\targuments\x18\x03 \x03(\v2\f.sysml.ValueR\targuments\"\xb4\x01\n" +
+	"\targuments\x18\x03 \x03(\v2\f.sysml.ValueR\targuments\"\xf1\x01\n" +
 	"\x14EvaluateCalcResponse\x12$\n" +
 	"\x06result\x18\x01 \x01(\v2\f.sysml.ValueR\x06result\x12+\n" +
 	"\aoutputs\x18\x02 \x03(\v2\x11.sysml.CalcOutputR\aoutputs\x12\x14\n" +
 	"\x05error\x18\x03 \x01(\tR\x05error\x123\n" +
-	"\vdiagnostics\x18\x04 \x03(\v2\x11.sysml.DiagnosticR\vdiagnostics\"D\n" +
+	"\vdiagnostics\x18\x04 \x03(\v2\x11.sysml.DiagnosticR\vdiagnostics\x12;\n" +
+	"\x0efailure_reason\x18\x05 \x01(\x0e2\x14.sysml.FailureReasonR\rfailureReason\"D\n" +
 	"\n" +
 	"CalcOutput\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\"\n" +
@@ -3628,7 +3711,11 @@ const file_sysml_proto_rawDesc = "" +
 	"properties\x1a=\n" +
 	"\x0fPropertiesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\x92\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*m\n" +
+	"\rFailureReason\x12\x1e\n" +
+	"\x1aFAILURE_REASON_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19FAILURE_REASON_EVALUATION\x10\x01\x12\x1d\n" +
+	"\x19FAILURE_REASON_WRONG_KIND\x10\x02*\x92\x01\n" +
 	"\x11PrimitiveOperator\x12\"\n" +
 	"\x1ePRIMITIVE_OPERATOR_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18PRIMITIVE_OPERATOR_EQUAL\x10\x01\x12\x1e\n" +
@@ -3666,152 +3753,156 @@ func file_sysml_proto_rawDescGZIP() []byte {
 	return file_sysml_proto_rawDescData
 }
 
-var file_sysml_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_sysml_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_sysml_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
 var file_sysml_proto_goTypes = []any{
-	(PrimitiveOperator)(0),             // 0: sysml.PrimitiveOperator
-	(CompositeOperator)(0),             // 1: sysml.CompositeOperator
-	(*Verdict)(nil),                    // 2: sysml.Verdict
-	(*VerifyConstraintRequest)(nil),    // 3: sysml.VerifyConstraintRequest
-	(*VerifyConstraintResponse)(nil),   // 4: sysml.VerifyConstraintResponse
-	(*VerifyRequirementRequest)(nil),   // 5: sysml.VerifyRequirementRequest
-	(*VerifyRequirementResponse)(nil),  // 6: sysml.VerifyRequirementResponse
-	(*VerifySatisfactionRequest)(nil),  // 7: sysml.VerifySatisfactionRequest
-	(*VerifySatisfactionResponse)(nil), // 8: sysml.VerifySatisfactionResponse
-	(*EvaluateCalcRequest)(nil),        // 9: sysml.EvaluateCalcRequest
-	(*EvaluateCalcResponse)(nil),       // 10: sysml.EvaluateCalcResponse
-	(*CalcOutput)(nil),                 // 11: sysml.CalcOutput
-	(*ParseFileRequest)(nil),           // 12: sysml.ParseFileRequest
-	(*ParseFileResponse)(nil),          // 13: sysml.ParseFileResponse
-	(*GetSymbolRequest)(nil),           // 14: sysml.GetSymbolRequest
-	(*SymbolResponse)(nil),             // 15: sysml.SymbolResponse
-	(*DiagnosticsRequest)(nil),         // 16: sysml.DiagnosticsRequest
-	(*DiagnosticsResponse)(nil),        // 17: sysml.DiagnosticsResponse
-	(*EvaluateRequest)(nil),            // 18: sysml.EvaluateRequest
-	(*EvaluateResponse)(nil),           // 19: sysml.EvaluateResponse
-	(*Instance)(nil),                   // 20: sysml.Instance
-	(*SlotValue)(nil),                  // 21: sysml.SlotValue
-	(*InstantiateRequest)(nil),         // 22: sysml.InstantiateRequest
-	(*InstantiateResponse)(nil),        // 23: sysml.InstantiateResponse
-	(*ExecuteActionRequest)(nil),       // 24: sysml.ExecuteActionRequest
-	(*ExecuteActionResponse)(nil),      // 25: sysml.ExecuteActionResponse
-	(*ExecuteStateRequest)(nil),        // 26: sysml.ExecuteStateRequest
-	(*ExecuteStateResponse)(nil),       // 27: sysml.ExecuteStateResponse
-	(*ConvertRequest)(nil),             // 28: sysml.ConvertRequest
-	(*ConvertResponse)(nil),            // 29: sysml.ConvertResponse
-	(*SymbolInfo)(nil),                 // 30: sysml.SymbolInfo
-	(*Specialization)(nil),             // 31: sysml.Specialization
-	(*TypeInfo)(nil),                   // 32: sysml.TypeInfo
-	(*MultiplicityInfo)(nil),           // 33: sysml.MultiplicityInfo
-	(*AttributeInfo)(nil),              // 34: sysml.AttributeInfo
-	(*Value)(nil),                      // 35: sysml.Value
-	(*ValueSequence)(nil),              // 36: sysml.ValueSequence
-	(*Diagnostic)(nil),                 // 37: sysml.Diagnostic
-	(*Span)(nil),                       // 38: sysml.Span
-	(*ServerInfoRequest)(nil),          // 39: sysml.ServerInfoRequest
-	(*ServerInfoResponse)(nil),         // 40: sysml.ServerInfoResponse
-	(*QueryRequest)(nil),               // 41: sysml.QueryRequest
-	(*QueryResponse)(nil),              // 42: sysml.QueryResponse
-	(*Query)(nil),                      // 43: sysml.Query
-	(*Constraint)(nil),                 // 44: sysml.Constraint
-	(*PrimitiveConstraint)(nil),        // 45: sysml.PrimitiveConstraint
-	(*CompositeConstraint)(nil),        // 46: sysml.CompositeConstraint
-	(*QueryResultElement)(nil),         // 47: sysml.QueryResultElement
-	nil,                                // 48: sysml.Instance.SlotsEntry
-	nil,                                // 49: sysml.ExecuteActionRequest.InputsEntry
-	nil,                                // 50: sysml.ExecuteActionResponse.OutputsEntry
-	nil,                                // 51: sysml.ExecuteStateResponse.FinalContextEntry
-	nil,                                // 52: sysml.SymbolInfo.MetadataEntry
-	nil,                                // 53: sysml.QueryResultElement.PropertiesEntry
+	(FailureReason)(0),                 // 0: sysml.FailureReason
+	(PrimitiveOperator)(0),             // 1: sysml.PrimitiveOperator
+	(CompositeOperator)(0),             // 2: sysml.CompositeOperator
+	(*Verdict)(nil),                    // 3: sysml.Verdict
+	(*VerifyConstraintRequest)(nil),    // 4: sysml.VerifyConstraintRequest
+	(*VerifyConstraintResponse)(nil),   // 5: sysml.VerifyConstraintResponse
+	(*VerifyRequirementRequest)(nil),   // 6: sysml.VerifyRequirementRequest
+	(*VerifyRequirementResponse)(nil),  // 7: sysml.VerifyRequirementResponse
+	(*VerifySatisfactionRequest)(nil),  // 8: sysml.VerifySatisfactionRequest
+	(*VerifySatisfactionResponse)(nil), // 9: sysml.VerifySatisfactionResponse
+	(*EvaluateCalcRequest)(nil),        // 10: sysml.EvaluateCalcRequest
+	(*EvaluateCalcResponse)(nil),       // 11: sysml.EvaluateCalcResponse
+	(*CalcOutput)(nil),                 // 12: sysml.CalcOutput
+	(*ParseFileRequest)(nil),           // 13: sysml.ParseFileRequest
+	(*ParseFileResponse)(nil),          // 14: sysml.ParseFileResponse
+	(*GetSymbolRequest)(nil),           // 15: sysml.GetSymbolRequest
+	(*SymbolResponse)(nil),             // 16: sysml.SymbolResponse
+	(*DiagnosticsRequest)(nil),         // 17: sysml.DiagnosticsRequest
+	(*DiagnosticsResponse)(nil),        // 18: sysml.DiagnosticsResponse
+	(*EvaluateRequest)(nil),            // 19: sysml.EvaluateRequest
+	(*EvaluateResponse)(nil),           // 20: sysml.EvaluateResponse
+	(*Instance)(nil),                   // 21: sysml.Instance
+	(*SlotValue)(nil),                  // 22: sysml.SlotValue
+	(*InstantiateRequest)(nil),         // 23: sysml.InstantiateRequest
+	(*InstantiateResponse)(nil),        // 24: sysml.InstantiateResponse
+	(*ExecuteActionRequest)(nil),       // 25: sysml.ExecuteActionRequest
+	(*ExecuteActionResponse)(nil),      // 26: sysml.ExecuteActionResponse
+	(*ExecuteStateRequest)(nil),        // 27: sysml.ExecuteStateRequest
+	(*ExecuteStateResponse)(nil),       // 28: sysml.ExecuteStateResponse
+	(*ConvertRequest)(nil),             // 29: sysml.ConvertRequest
+	(*ConvertResponse)(nil),            // 30: sysml.ConvertResponse
+	(*SymbolInfo)(nil),                 // 31: sysml.SymbolInfo
+	(*Specialization)(nil),             // 32: sysml.Specialization
+	(*TypeInfo)(nil),                   // 33: sysml.TypeInfo
+	(*MultiplicityInfo)(nil),           // 34: sysml.MultiplicityInfo
+	(*AttributeInfo)(nil),              // 35: sysml.AttributeInfo
+	(*Value)(nil),                      // 36: sysml.Value
+	(*ValueSequence)(nil),              // 37: sysml.ValueSequence
+	(*Diagnostic)(nil),                 // 38: sysml.Diagnostic
+	(*Span)(nil),                       // 39: sysml.Span
+	(*ServerInfoRequest)(nil),          // 40: sysml.ServerInfoRequest
+	(*ServerInfoResponse)(nil),         // 41: sysml.ServerInfoResponse
+	(*QueryRequest)(nil),               // 42: sysml.QueryRequest
+	(*QueryResponse)(nil),              // 43: sysml.QueryResponse
+	(*Query)(nil),                      // 44: sysml.Query
+	(*Constraint)(nil),                 // 45: sysml.Constraint
+	(*PrimitiveConstraint)(nil),        // 46: sysml.PrimitiveConstraint
+	(*CompositeConstraint)(nil),        // 47: sysml.CompositeConstraint
+	(*QueryResultElement)(nil),         // 48: sysml.QueryResultElement
+	nil,                                // 49: sysml.Instance.SlotsEntry
+	nil,                                // 50: sysml.ExecuteActionRequest.InputsEntry
+	nil,                                // 51: sysml.ExecuteActionResponse.OutputsEntry
+	nil,                                // 52: sysml.ExecuteStateResponse.FinalContextEntry
+	nil,                                // 53: sysml.SymbolInfo.MetadataEntry
+	nil,                                // 54: sysml.QueryResultElement.PropertiesEntry
 }
 var file_sysml_proto_depIdxs = []int32{
-	2,  // 0: sysml.VerifyConstraintResponse.verdict:type_name -> sysml.Verdict
-	20, // 1: sysml.VerifyConstraintResponse.instances:type_name -> sysml.Instance
-	37, // 2: sysml.VerifyConstraintResponse.diagnostics:type_name -> sysml.Diagnostic
-	2,  // 3: sysml.VerifyRequirementResponse.verdict:type_name -> sysml.Verdict
-	20, // 4: sysml.VerifyRequirementResponse.instances:type_name -> sysml.Instance
-	37, // 5: sysml.VerifyRequirementResponse.diagnostics:type_name -> sysml.Diagnostic
-	2,  // 6: sysml.VerifySatisfactionResponse.verdicts:type_name -> sysml.Verdict
-	20, // 7: sysml.VerifySatisfactionResponse.instances:type_name -> sysml.Instance
-	37, // 8: sysml.VerifySatisfactionResponse.diagnostics:type_name -> sysml.Diagnostic
-	35, // 9: sysml.EvaluateCalcRequest.arguments:type_name -> sysml.Value
-	35, // 10: sysml.EvaluateCalcResponse.result:type_name -> sysml.Value
-	11, // 11: sysml.EvaluateCalcResponse.outputs:type_name -> sysml.CalcOutput
-	37, // 12: sysml.EvaluateCalcResponse.diagnostics:type_name -> sysml.Diagnostic
-	35, // 13: sysml.CalcOutput.value:type_name -> sysml.Value
-	30, // 14: sysml.ParseFileResponse.root:type_name -> sysml.SymbolInfo
-	37, // 15: sysml.ParseFileResponse.diagnostics:type_name -> sysml.Diagnostic
-	30, // 16: sysml.SymbolResponse.symbol:type_name -> sysml.SymbolInfo
-	37, // 17: sysml.DiagnosticsResponse.diagnostics:type_name -> sysml.Diagnostic
-	35, // 18: sysml.EvaluateResponse.result:type_name -> sysml.Value
-	37, // 19: sysml.EvaluateResponse.diagnostics:type_name -> sysml.Diagnostic
-	48, // 20: sysml.Instance.slots:type_name -> sysml.Instance.SlotsEntry
-	35, // 21: sysml.SlotValue.value:type_name -> sysml.Value
-	35, // 22: sysml.SlotValue.values:type_name -> sysml.Value
-	20, // 23: sysml.InstantiateResponse.instance:type_name -> sysml.Instance
-	37, // 24: sysml.InstantiateResponse.diagnostics:type_name -> sysml.Diagnostic
-	20, // 25: sysml.InstantiateResponse.instances:type_name -> sysml.Instance
-	49, // 26: sysml.ExecuteActionRequest.inputs:type_name -> sysml.ExecuteActionRequest.InputsEntry
-	50, // 27: sysml.ExecuteActionResponse.outputs:type_name -> sysml.ExecuteActionResponse.OutputsEntry
-	37, // 28: sysml.ExecuteActionResponse.diagnostics:type_name -> sysml.Diagnostic
-	51, // 29: sysml.ExecuteStateResponse.final_context:type_name -> sysml.ExecuteStateResponse.FinalContextEntry
-	37, // 30: sysml.ExecuteStateResponse.diagnostics:type_name -> sysml.Diagnostic
-	37, // 31: sysml.ConvertResponse.diagnostics:type_name -> sysml.Diagnostic
-	52, // 32: sysml.SymbolInfo.metadata:type_name -> sysml.SymbolInfo.MetadataEntry
-	34, // 33: sysml.SymbolInfo.attributes:type_name -> sysml.AttributeInfo
-	32, // 34: sysml.SymbolInfo.type_info:type_name -> sysml.TypeInfo
-	33, // 35: sysml.SymbolInfo.multiplicity:type_name -> sysml.MultiplicityInfo
-	31, // 36: sysml.SymbolInfo.specializations:type_name -> sysml.Specialization
-	35, // 37: sysml.AttributeInfo.value:type_name -> sysml.Value
-	36, // 38: sysml.Value.sequence:type_name -> sysml.ValueSequence
-	35, // 39: sysml.ValueSequence.elements:type_name -> sysml.Value
-	38, // 40: sysml.Diagnostic.span:type_name -> sysml.Span
-	43, // 41: sysml.QueryRequest.query:type_name -> sysml.Query
-	47, // 42: sysml.QueryResponse.elements:type_name -> sysml.QueryResultElement
-	44, // 43: sysml.Query.where:type_name -> sysml.Constraint
-	45, // 44: sysml.Constraint.primitive:type_name -> sysml.PrimitiveConstraint
-	46, // 45: sysml.Constraint.composite:type_name -> sysml.CompositeConstraint
-	0,  // 46: sysml.PrimitiveConstraint.operator:type_name -> sysml.PrimitiveOperator
-	1,  // 47: sysml.CompositeConstraint.operator:type_name -> sysml.CompositeOperator
-	44, // 48: sysml.CompositeConstraint.constraint:type_name -> sysml.Constraint
-	53, // 49: sysml.QueryResultElement.properties:type_name -> sysml.QueryResultElement.PropertiesEntry
-	21, // 50: sysml.Instance.SlotsEntry.value:type_name -> sysml.SlotValue
-	35, // 51: sysml.ExecuteActionRequest.InputsEntry.value:type_name -> sysml.Value
-	35, // 52: sysml.ExecuteActionResponse.OutputsEntry.value:type_name -> sysml.Value
-	35, // 53: sysml.ExecuteStateResponse.FinalContextEntry.value:type_name -> sysml.Value
-	39, // 54: sysml.SysMLService.GetServerInfo:input_type -> sysml.ServerInfoRequest
-	12, // 55: sysml.SysMLService.ParseFile:input_type -> sysml.ParseFileRequest
-	14, // 56: sysml.SysMLService.GetSymbol:input_type -> sysml.GetSymbolRequest
-	16, // 57: sysml.SysMLService.GetDiagnostics:input_type -> sysml.DiagnosticsRequest
-	18, // 58: sysml.SysMLService.Evaluate:input_type -> sysml.EvaluateRequest
-	22, // 59: sysml.SysMLService.Instantiate:input_type -> sysml.InstantiateRequest
-	24, // 60: sysml.SysMLService.ExecuteAction:input_type -> sysml.ExecuteActionRequest
-	26, // 61: sysml.SysMLService.ExecuteState:input_type -> sysml.ExecuteStateRequest
-	28, // 62: sysml.SysMLService.Convert:input_type -> sysml.ConvertRequest
-	3,  // 63: sysml.SysMLService.VerifyConstraint:input_type -> sysml.VerifyConstraintRequest
-	5,  // 64: sysml.SysMLService.VerifyRequirement:input_type -> sysml.VerifyRequirementRequest
-	7,  // 65: sysml.SysMLService.VerifySatisfaction:input_type -> sysml.VerifySatisfactionRequest
-	9,  // 66: sysml.SysMLService.EvaluateCalc:input_type -> sysml.EvaluateCalcRequest
-	41, // 67: sysml.SysMLService.Query:input_type -> sysml.QueryRequest
-	40, // 68: sysml.SysMLService.GetServerInfo:output_type -> sysml.ServerInfoResponse
-	13, // 69: sysml.SysMLService.ParseFile:output_type -> sysml.ParseFileResponse
-	15, // 70: sysml.SysMLService.GetSymbol:output_type -> sysml.SymbolResponse
-	17, // 71: sysml.SysMLService.GetDiagnostics:output_type -> sysml.DiagnosticsResponse
-	19, // 72: sysml.SysMLService.Evaluate:output_type -> sysml.EvaluateResponse
-	23, // 73: sysml.SysMLService.Instantiate:output_type -> sysml.InstantiateResponse
-	25, // 74: sysml.SysMLService.ExecuteAction:output_type -> sysml.ExecuteActionResponse
-	27, // 75: sysml.SysMLService.ExecuteState:output_type -> sysml.ExecuteStateResponse
-	29, // 76: sysml.SysMLService.Convert:output_type -> sysml.ConvertResponse
-	4,  // 77: sysml.SysMLService.VerifyConstraint:output_type -> sysml.VerifyConstraintResponse
-	6,  // 78: sysml.SysMLService.VerifyRequirement:output_type -> sysml.VerifyRequirementResponse
-	8,  // 79: sysml.SysMLService.VerifySatisfaction:output_type -> sysml.VerifySatisfactionResponse
-	10, // 80: sysml.SysMLService.EvaluateCalc:output_type -> sysml.EvaluateCalcResponse
-	42, // 81: sysml.SysMLService.Query:output_type -> sysml.QueryResponse
-	68, // [68:82] is the sub-list for method output_type
-	54, // [54:68] is the sub-list for method input_type
-	54, // [54:54] is the sub-list for extension type_name
-	54, // [54:54] is the sub-list for extension extendee
-	0,  // [0:54] is the sub-list for field type_name
+	0,  // 0: sysml.Verdict.failure_reason:type_name -> sysml.FailureReason
+	3,  // 1: sysml.VerifyConstraintResponse.verdict:type_name -> sysml.Verdict
+	21, // 2: sysml.VerifyConstraintResponse.instances:type_name -> sysml.Instance
+	38, // 3: sysml.VerifyConstraintResponse.diagnostics:type_name -> sysml.Diagnostic
+	3,  // 4: sysml.VerifyRequirementResponse.verdict:type_name -> sysml.Verdict
+	21, // 5: sysml.VerifyRequirementResponse.instances:type_name -> sysml.Instance
+	38, // 6: sysml.VerifyRequirementResponse.diagnostics:type_name -> sysml.Diagnostic
+	3,  // 7: sysml.VerifySatisfactionResponse.verdicts:type_name -> sysml.Verdict
+	21, // 8: sysml.VerifySatisfactionResponse.instances:type_name -> sysml.Instance
+	38, // 9: sysml.VerifySatisfactionResponse.diagnostics:type_name -> sysml.Diagnostic
+	0,  // 10: sysml.VerifySatisfactionResponse.failure_reason:type_name -> sysml.FailureReason
+	36, // 11: sysml.EvaluateCalcRequest.arguments:type_name -> sysml.Value
+	36, // 12: sysml.EvaluateCalcResponse.result:type_name -> sysml.Value
+	12, // 13: sysml.EvaluateCalcResponse.outputs:type_name -> sysml.CalcOutput
+	38, // 14: sysml.EvaluateCalcResponse.diagnostics:type_name -> sysml.Diagnostic
+	0,  // 15: sysml.EvaluateCalcResponse.failure_reason:type_name -> sysml.FailureReason
+	36, // 16: sysml.CalcOutput.value:type_name -> sysml.Value
+	31, // 17: sysml.ParseFileResponse.root:type_name -> sysml.SymbolInfo
+	38, // 18: sysml.ParseFileResponse.diagnostics:type_name -> sysml.Diagnostic
+	31, // 19: sysml.SymbolResponse.symbol:type_name -> sysml.SymbolInfo
+	38, // 20: sysml.DiagnosticsResponse.diagnostics:type_name -> sysml.Diagnostic
+	36, // 21: sysml.EvaluateResponse.result:type_name -> sysml.Value
+	38, // 22: sysml.EvaluateResponse.diagnostics:type_name -> sysml.Diagnostic
+	49, // 23: sysml.Instance.slots:type_name -> sysml.Instance.SlotsEntry
+	36, // 24: sysml.SlotValue.value:type_name -> sysml.Value
+	36, // 25: sysml.SlotValue.values:type_name -> sysml.Value
+	21, // 26: sysml.InstantiateResponse.instance:type_name -> sysml.Instance
+	38, // 27: sysml.InstantiateResponse.diagnostics:type_name -> sysml.Diagnostic
+	21, // 28: sysml.InstantiateResponse.instances:type_name -> sysml.Instance
+	50, // 29: sysml.ExecuteActionRequest.inputs:type_name -> sysml.ExecuteActionRequest.InputsEntry
+	51, // 30: sysml.ExecuteActionResponse.outputs:type_name -> sysml.ExecuteActionResponse.OutputsEntry
+	38, // 31: sysml.ExecuteActionResponse.diagnostics:type_name -> sysml.Diagnostic
+	52, // 32: sysml.ExecuteStateResponse.final_context:type_name -> sysml.ExecuteStateResponse.FinalContextEntry
+	38, // 33: sysml.ExecuteStateResponse.diagnostics:type_name -> sysml.Diagnostic
+	38, // 34: sysml.ConvertResponse.diagnostics:type_name -> sysml.Diagnostic
+	53, // 35: sysml.SymbolInfo.metadata:type_name -> sysml.SymbolInfo.MetadataEntry
+	35, // 36: sysml.SymbolInfo.attributes:type_name -> sysml.AttributeInfo
+	33, // 37: sysml.SymbolInfo.type_info:type_name -> sysml.TypeInfo
+	34, // 38: sysml.SymbolInfo.multiplicity:type_name -> sysml.MultiplicityInfo
+	32, // 39: sysml.SymbolInfo.specializations:type_name -> sysml.Specialization
+	36, // 40: sysml.AttributeInfo.value:type_name -> sysml.Value
+	37, // 41: sysml.Value.sequence:type_name -> sysml.ValueSequence
+	36, // 42: sysml.ValueSequence.elements:type_name -> sysml.Value
+	39, // 43: sysml.Diagnostic.span:type_name -> sysml.Span
+	44, // 44: sysml.QueryRequest.query:type_name -> sysml.Query
+	48, // 45: sysml.QueryResponse.elements:type_name -> sysml.QueryResultElement
+	45, // 46: sysml.Query.where:type_name -> sysml.Constraint
+	46, // 47: sysml.Constraint.primitive:type_name -> sysml.PrimitiveConstraint
+	47, // 48: sysml.Constraint.composite:type_name -> sysml.CompositeConstraint
+	1,  // 49: sysml.PrimitiveConstraint.operator:type_name -> sysml.PrimitiveOperator
+	2,  // 50: sysml.CompositeConstraint.operator:type_name -> sysml.CompositeOperator
+	45, // 51: sysml.CompositeConstraint.constraint:type_name -> sysml.Constraint
+	54, // 52: sysml.QueryResultElement.properties:type_name -> sysml.QueryResultElement.PropertiesEntry
+	22, // 53: sysml.Instance.SlotsEntry.value:type_name -> sysml.SlotValue
+	36, // 54: sysml.ExecuteActionRequest.InputsEntry.value:type_name -> sysml.Value
+	36, // 55: sysml.ExecuteActionResponse.OutputsEntry.value:type_name -> sysml.Value
+	36, // 56: sysml.ExecuteStateResponse.FinalContextEntry.value:type_name -> sysml.Value
+	40, // 57: sysml.SysMLService.GetServerInfo:input_type -> sysml.ServerInfoRequest
+	13, // 58: sysml.SysMLService.ParseFile:input_type -> sysml.ParseFileRequest
+	15, // 59: sysml.SysMLService.GetSymbol:input_type -> sysml.GetSymbolRequest
+	17, // 60: sysml.SysMLService.GetDiagnostics:input_type -> sysml.DiagnosticsRequest
+	19, // 61: sysml.SysMLService.Evaluate:input_type -> sysml.EvaluateRequest
+	23, // 62: sysml.SysMLService.Instantiate:input_type -> sysml.InstantiateRequest
+	25, // 63: sysml.SysMLService.ExecuteAction:input_type -> sysml.ExecuteActionRequest
+	27, // 64: sysml.SysMLService.ExecuteState:input_type -> sysml.ExecuteStateRequest
+	29, // 65: sysml.SysMLService.Convert:input_type -> sysml.ConvertRequest
+	4,  // 66: sysml.SysMLService.VerifyConstraint:input_type -> sysml.VerifyConstraintRequest
+	6,  // 67: sysml.SysMLService.VerifyRequirement:input_type -> sysml.VerifyRequirementRequest
+	8,  // 68: sysml.SysMLService.VerifySatisfaction:input_type -> sysml.VerifySatisfactionRequest
+	10, // 69: sysml.SysMLService.EvaluateCalc:input_type -> sysml.EvaluateCalcRequest
+	42, // 70: sysml.SysMLService.Query:input_type -> sysml.QueryRequest
+	41, // 71: sysml.SysMLService.GetServerInfo:output_type -> sysml.ServerInfoResponse
+	14, // 72: sysml.SysMLService.ParseFile:output_type -> sysml.ParseFileResponse
+	16, // 73: sysml.SysMLService.GetSymbol:output_type -> sysml.SymbolResponse
+	18, // 74: sysml.SysMLService.GetDiagnostics:output_type -> sysml.DiagnosticsResponse
+	20, // 75: sysml.SysMLService.Evaluate:output_type -> sysml.EvaluateResponse
+	24, // 76: sysml.SysMLService.Instantiate:output_type -> sysml.InstantiateResponse
+	26, // 77: sysml.SysMLService.ExecuteAction:output_type -> sysml.ExecuteActionResponse
+	28, // 78: sysml.SysMLService.ExecuteState:output_type -> sysml.ExecuteStateResponse
+	30, // 79: sysml.SysMLService.Convert:output_type -> sysml.ConvertResponse
+	5,  // 80: sysml.SysMLService.VerifyConstraint:output_type -> sysml.VerifyConstraintResponse
+	7,  // 81: sysml.SysMLService.VerifyRequirement:output_type -> sysml.VerifyRequirementResponse
+	9,  // 82: sysml.SysMLService.VerifySatisfaction:output_type -> sysml.VerifySatisfactionResponse
+	11, // 83: sysml.SysMLService.EvaluateCalc:output_type -> sysml.EvaluateCalcResponse
+	43, // 84: sysml.SysMLService.Query:output_type -> sysml.QueryResponse
+	71, // [71:85] is the sub-list for method output_type
+	57, // [57:71] is the sub-list for method input_type
+	57, // [57:57] is the sub-list for extension type_name
+	57, // [57:57] is the sub-list for extension extendee
+	0,  // [0:57] is the sub-list for field type_name
 }
 
 func init() { file_sysml_proto_init() }
@@ -3846,7 +3937,7 @@ func file_sysml_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sysml_proto_rawDesc), len(file_sysml_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   52,
 			NumExtensions: 0,
 			NumServices:   1,

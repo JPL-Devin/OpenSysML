@@ -47,8 +47,12 @@ model = pysysml.load("model.sysml")
 for d in model.diagnostics:
     print(d)
 
-print(pysysml.eval("1 + 2 * 3", file_path="model.sysml"))
+print(model.eval("1 + 2 * 3"))
 ```
+
+Evaluation is on the model, like every other operation, so a script never carries
+the model hash back to the connection. `model.eval(expr, context_symbol_id=…)`
+resolves the expression's names in that element's scope.
 
 ### Loading a model that has to be usable
 
@@ -228,6 +232,22 @@ returning a verdict. Narrowing to an element that states no satisfaction
 assertion is not such a request: it answers with no verdicts, and `satisfied()`
 is then vacuously `True`.
 
+**Naming the wrong kind of element is a wrong request, not a verdict.** Asking
+whether a part def holds as a constraint raises `WrongKindError` (an
+`ExecutionError`) from `verify_constraint`, `verify_requirement`,
+`verify_satisfaction` and `calc`, as naming an element that does not exist
+already does — so a caller reading `.holds` is never told "your model does not
+hold" when the answer is "you named a part def":
+
+```python
+model.verify_constraint("Demo::Wheel")
+# pysysml.errors.WrongKindError: not a constraint: Demo::Wheel is a part def,
+# not a constraint definition or usage
+```
+
+The kind is read from a typed `failure_reason` the service reports, never from
+the message text.
+
 `verify_satisfaction` answers many assertions in one call and reports one object
 graph for them all, so `verdict.instances` holds every object that call built;
 select the one a verdict is about with its `instance_id`:
@@ -266,6 +286,7 @@ PySysMLError
 │   ├── ServiceTimeoutError    deadline exceeded or cancelled (also TimeoutError)
 │   └── UnsupportedOperationError  the service does not implement the call
 ├── ExecutionError             eval/instantiate/execute/verify failed (also RuntimeError)
+│   └── WrongKindError         the call named an element of another kind than it asks about
 ├── ModelError                 strict load of a model with error diagnostics
 ├── SymbolNotFoundError        model["Nope"] (also KeyError)
 ├── SlotError                  a slot could not be evaluated
@@ -570,7 +591,11 @@ dodge one.
 
 `pysysml.connect(host, port, auto_start=True)` returns a `Connection` when you
 want to manage the service yourself; the module-level functions share a lazily
-created singleton connection instead. The service is reference-counted across
+created singleton connection instead. A `host:port` address written as the host
+is read as one — `connect("localhost:50123")` reaches port 50123 — and a port
+named twice with two values raises `ValueError` naming the disagreement rather
+than timing out against an address nobody asked for. The helpers taking
+`host`/`port` (`load`, `eval`, `convert`, `instantiate`) read it the same way. The service is reference-counted across
 processes, so the last client to exit shuts it down.
 
 ## Development

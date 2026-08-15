@@ -94,9 +94,31 @@ func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
 		return d.Relationships
 	case *ast.ConnectorEnd:
 		return d.Relationships
+	case *ast.BodyExpr:
+		// A body parameter is not a node of its own, so its symbol declares the
+		// body and names the parameter its typing is written on.
+		return bodyParamRelationships(d, sym.Name)
 	default:
 		return nil
 	}
+}
+
+// bodyParamRelationships returns the relationships of the body parameter named
+// name, its typing included.
+func bodyParamRelationships(body *ast.BodyExpr, name string) []*ast.Relationship {
+	for i := range body.Params {
+		p := &body.Params[i]
+		if p.Name != name {
+			continue
+		}
+		if p.Type == nil {
+			return p.Relationships
+		}
+		out := make([]*ast.Relationship, 0, len(p.Relationships)+1)
+		out = append(out, &ast.Relationship{Kind: ast.RelTyping, Target: p.Type})
+		return append(out, p.Relationships...)
+	}
+	return nil
 }
 
 // DirectSupertypes returns the immediate supertype symbols of sym: the resolved

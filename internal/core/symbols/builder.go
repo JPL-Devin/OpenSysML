@@ -384,6 +384,8 @@ func definitionSymbolKind(k ast.DefinitionKind) SymbolKind {
 		return SymbolVerificationCaseDef
 	case ast.DefUseCase:
 		return SymbolUseCaseDef
+	case ast.DefClass, ast.DefStruct, ast.DefAssoc, ast.DefBehavior, ast.DefPredicate:
+		return SymbolKerMLType
 	default:
 		return SymbolUnknown
 	}
@@ -455,6 +457,15 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 	case ast.UsageActor, ast.UsageStakeholder:
 		// An actor and a stakeholder are part usages (SysML v2 §8.3.19).
 		return SymbolPartUsage
+	case ast.UsageClass, ast.UsageStruct, ast.UsageAssoc, ast.UsageBehavior,
+		ast.UsagePredicate, ast.UsageInteraction:
+		// The parser records a KerML type declaration as a usage; it declares a
+		// type, not a feature (KerML 1.0 §8.3).
+		return SymbolKerMLType
+	case ast.UsageStep:
+		// A KerML step is a feature typed by a behavior, which is what a SysML
+		// action usage is (SysML v2 §8.3.14).
+		return SymbolActionUsage
 	default:
 		return SymbolUnknown
 	}

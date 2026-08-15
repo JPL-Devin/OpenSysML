@@ -47,6 +47,14 @@ service SysMLService {
   rpc Query(QueryRequest) returns (QueryResponse);
 }
 
+// FailureReason says what kind of failure an `error` reports, so a client acts
+// on the kind rather than on the message text.
+enum FailureReason {
+  FAILURE_REASON_UNSPECIFIED = 0;  // no failure, or one not classified
+  FAILURE_REASON_EVALUATION = 1;   // the condition or calculation could not be evaluated
+  FAILURE_REASON_WRONG_KIND = 2;   // the symbol named declares something else
+}
+
 // Verdict is one verification's answer: whether the condition held, and, when
 // it did not, which condition the model answered false about.
 message Verdict {
@@ -72,6 +80,10 @@ message Verdict {
   // features, incommensurable units, an exhausted step budget. `holds` is then
   // false but is not a verdict.
   string error = 8;
+  // What kind of failure `error` reports. WRONG_KIND says the symbol named
+  // declares something else, which is a wrong request rather than an undecided
+  // verdict about the model.
+  FailureReason failure_reason = 9;
 }
 
 // VerifyConstraintRequest asks whether a constraint holds, as %constraint does.
@@ -134,6 +146,8 @@ message VerifySatisfactionResponse {
   repeated Instance instances = 2;
   string error = 3;
   repeated Diagnostic diagnostics = 4;
+  // What kind of failure `error` reports.
+  FailureReason failure_reason = 5;
 }
 
 // EvaluateCalcRequest invokes a calculation, as %calc does. Arguments are bound
@@ -157,6 +171,8 @@ message EvaluateCalcResponse {
   repeated CalcOutput outputs = 2;
   string error = 3;
   repeated Diagnostic diagnostics = 4;
+  // What kind of failure `error` reports.
+  FailureReason failure_reason = 5;
 }
 
 // CalcOutput is one output feature a calc usage computed.
