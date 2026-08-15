@@ -372,6 +372,60 @@ func TestQueryMalformedConstraintsFail(t *testing.T) {
 	}
 }
 
+// TestQueryFaultIsReportedWithNoElementsToConsider verifies a query is judged
+// before any element is: over a model that declares nothing, an invalid query
+// still fails rather than reading as "nothing matched".
+func TestQueryFaultIsReportedWithNoElementsToConsider(t *testing.T) {
+	srv := mustNewService(t, 10)
+	parsed, err := srv.ParseFile(context.Background(), &pb.ParseFileRequest{
+		Source: &pb.ParseFileRequest_Content{Content: "// nothing but a comment\n"},
+	})
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+	empty, err := srv.Query(context.Background(), &pb.QueryRequest{
+		ModelHash: parsed.ModelHash,
+		Query:     &pb.Query{},
+	})
+	if err != nil {
+		t.Fatalf("Query over an empty model failed: %v", err)
+	}
+	if len(empty.Elements) != 0 {
+		t.Fatalf("elements = %v, want the model to declare none", empty.Elements)
+	}
+
+	cases := map[string]struct {
+		where *pb.Constraint
+		want  QueryErrorKind
+	}{
+		"unknown property":   {primitive("colour", opEqual, false, "red"), QueryErrUnknownProperty},
+		"no operator":        {primitive(QueryPropName, pb.PrimitiveOperator_PRIMITIVE_OPERATOR_UNSPECIFIED, false, "x"), QueryErrMalformedConstraint},
+		"empty composite":    {composite(pb.CompositeOperator_COMPOSITE_OPERATOR_OR), QueryErrMalformedConstraint},
+		"unordered property": {primitive(QueryPropName, pb.PrimitiveOperator_PRIMITIVE_OPERATOR_GREATER, false, "1"), QueryErrUnorderedProperty},
+		"unparsable operand": {primitive(QueryPropMultiplicityUpper, pb.PrimitiveOperator_PRIMITIVE_OPERATOR_LESS, false, "many"), QueryErrUnparsableValue},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := srv.Query(context.Background(), &pb.QueryRequest{
+				ModelHash: parsed.ModelHash,
+				Query:     &pb.Query{Where: tc.where},
+			})
+			assertQueryError(t, err, tc.want)
+		})
+	}
+}
+
+// TestQueryFaultUnderADecisiveConstraintIsReported verifies a malformed nested
+// constraint fails the call even when a sibling already decides the verdict.
+func TestQueryFaultUnderADecisiveConstraintIsReported(t *testing.T) {
+	_, err := runQuery(t, &pb.Query{
+		Where: composite(pb.CompositeOperator_COMPOSITE_OPERATOR_OR,
+			primitive(QueryPropType, opEqual, false, "PartUsage"),
+			primitive("colour", opEqual, false, "red")),
+	})
+	assertQueryError(t, err, QueryErrUnknownProperty)
+}
+
 // TestQueryUnsetQueryFails verifies a request with no query at all fails.
 func TestQueryUnsetQueryFails(t *testing.T) {
 	srv := mustNewService(t, 10)

@@ -260,22 +260,23 @@ func (s *Service) Query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryRes
 	defer sc.Lock()()
 	eval := &queryEval{sc: sc}
 
-	candidates, err := eval.candidates(cached, req.Query.Scope)
-	if err != nil {
+	// The query is judged before any element is: whether it is one the service
+	// can evaluate cannot depend on how many elements it happens to consider.
+	if err := validateConstraint(req.Query.Where); err != nil {
 		return nil, err
 	}
 	projection, err := projectedProperties(req.Query.Select)
 	if err != nil {
 		return nil, err
 	}
+	candidates, err := eval.candidates(cached, req.Query.Scope)
+	if err != nil {
+		return nil, err
+	}
 
 	elements := make([]*pb.QueryResultElement, 0, len(candidates))
 	for _, sym := range candidates {
-		matched, err := eval.matches(sym, req.Query.Where)
-		if err != nil {
-			return nil, err
-		}
-		if !matched {
+		if !eval.matches(sym, req.Query.Where) {
 			continue
 		}
 		elements = append(elements, eval.project(sym, projection))
@@ -456,12 +457,79 @@ func (e *queryEval) project(sym *symbols.Symbol, selected []string) *pb.QueryRes
 	return element
 }
 
-// matches reports whether an element satisfies a constraint. An unset
-// constraint matches every element, as a query with no `where` selects its
-// whole scope.
-func (e *queryEval) matches(sym *symbols.Symbol, constraint *pb.Constraint) (bool, error) {
+// validateConstraint reports whether a constraint is one the service can
+// evaluate at all: every fault in a query is found here, before any element is
+// read, so an empty scope cannot turn a malformed query into "nothing matched".
+func validateConstraint(constraint *pb.Constraint) error {
 	if constraint == nil {
-		return true, nil
+		return nil // a query with no `where` selects its whole scope
+	}
+	switch form := constraint.Constraint.(type) {
+	case *pb.Constraint_Primitive:
+		return validatePrimitive(form.Primitive)
+	case *pb.Constraint_Composite:
+		return validateComposite(form.Composite)
+	default:
+		return queryErrorf(QueryErrMalformedConstraint,
+			"constraint is neither a PrimitiveConstraint nor a CompositeConstraint")
+	}
+}
+
+// validatePrimitive checks a comparison names a queryable property, has an
+// operator, and has operands that operator can compare.
+func validatePrimitive(c *pb.PrimitiveConstraint) error {
+	if c == nil {
+		return queryErrorf(QueryErrMalformedConstraint, "PrimitiveConstraint is unset")
+	}
+	property, ok := queryProperties[c.Property]
+	if !ok {
+		return unknownProperty(c.Property)
+	}
+	if len(c.Value) == 0 {
+		return queryErrorf(QueryErrMalformedConstraint,
+			"PrimitiveConstraint on %q has no value to compare against", c.Property)
+	}
+	switch c.Operator {
+	case pb.PrimitiveOperator_PRIMITIVE_OPERATOR_EQUAL:
+		return nil
+	case pb.PrimitiveOperator_PRIMITIVE_OPERATOR_GREATER,
+		pb.PrimitiveOperator_PRIMITIVE_OPERATOR_LESS:
+		return validateOrdered(c, property)
+	default:
+		return queryErrorf(QueryErrMalformedConstraint,
+			"PrimitiveConstraint on %q has no operator", c.Property)
+	}
+}
+
+// validateComposite checks a combination has an operator, something to combine,
+// and no malformed constraint anywhere beneath it, decisive or not.
+func validateComposite(c *pb.CompositeConstraint) error {
+	if c == nil {
+		return queryErrorf(QueryErrMalformedConstraint, "CompositeConstraint is unset")
+	}
+	if len(c.Constraint) == 0 {
+		return queryErrorf(QueryErrMalformedConstraint,
+			"CompositeConstraint has no constraints to combine")
+	}
+	switch c.Operator {
+	case pb.CompositeOperator_COMPOSITE_OPERATOR_AND, pb.CompositeOperator_COMPOSITE_OPERATOR_OR:
+	default:
+		return queryErrorf(QueryErrMalformedConstraint, "CompositeConstraint has no operator")
+	}
+	for _, nested := range c.Constraint {
+		if err := validateConstraint(nested); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// matches reports whether an element satisfies a constraint, which
+// validateConstraint has already found evaluable. An unset constraint matches
+// every element, as a query with no `where` selects its whole scope.
+func (e *queryEval) matches(sym *symbols.Symbol, constraint *pb.Constraint) bool {
+	if constraint == nil {
+		return true
 	}
 	switch form := constraint.Constraint.(type) {
 	case *pb.Constraint_Primitive:
@@ -469,46 +537,25 @@ func (e *queryEval) matches(sym *symbols.Symbol, constraint *pb.Constraint) (boo
 	case *pb.Constraint_Composite:
 		return e.matchesComposite(sym, form.Composite)
 	default:
-		return false, queryErrorf(QueryErrMalformedConstraint,
-			"constraint is neither a PrimitiveConstraint nor a CompositeConstraint")
+		return true
 	}
 }
 
 // matchesPrimitive compares one property of an element, negating the verdict
 // when the constraint is inverse.
-func (e *queryEval) matchesPrimitive(sym *symbols.Symbol, c *pb.PrimitiveConstraint) (bool, error) {
-	if c == nil {
-		return false, queryErrorf(QueryErrMalformedConstraint, "PrimitiveConstraint is unset")
-	}
-	property, ok := queryProperties[c.Property]
-	if !ok {
-		return false, unknownProperty(c.Property)
-	}
-	if len(c.Value) == 0 {
-		return false, queryErrorf(QueryErrMalformedConstraint,
-			"PrimitiveConstraint on %q has no value to compare against", c.Property)
-	}
-
+func (e *queryEval) matchesPrimitive(sym *symbols.Symbol, c *pb.PrimitiveConstraint) bool {
+	property := queryProperties[c.Property]
 	value, has := property.read(e, sym)
 	var verdict bool
-	switch c.Operator {
-	case pb.PrimitiveOperator_PRIMITIVE_OPERATOR_EQUAL:
+	if c.Operator == pb.PrimitiveOperator_PRIMITIVE_OPERATOR_EQUAL {
 		verdict = has && equalsAny(value, c.Value)
-	case pb.PrimitiveOperator_PRIMITIVE_OPERATOR_GREATER,
-		pb.PrimitiveOperator_PRIMITIVE_OPERATOR_LESS:
-		var err error
-		verdict, err = compareOrdered(c, property, value, has)
-		if err != nil {
-			return false, err
-		}
-	default:
-		return false, queryErrorf(QueryErrMalformedConstraint,
-			"PrimitiveConstraint on %q has no operator", c.Property)
+	} else {
+		verdict = has && compareOrdered(c, value)
 	}
 	if c.Inverse {
-		return !verdict, nil
+		return !verdict
 	}
-	return verdict, nil
+	return verdict
 }
 
 // equalsAny reports whether the property's value is one of the constraint's.
@@ -523,37 +570,42 @@ func equalsAny(value string, candidates []string) bool {
 	return false
 }
 
-// compareOrdered evaluates > or <. A non-ordered property or an operand that is
-// not one number is a fault in the query; an element whose own value is absent or
-// unparsable simply fails the comparison, which is a fact about the element.
-func compareOrdered(c *pb.PrimitiveConstraint, property queryProperty, value string, has bool) (bool, error) {
+// validateOrdered checks > or < has an ordered property and one numeric operand:
+// either fault is a fault in the query, never a false verdict.
+func validateOrdered(c *pb.PrimitiveConstraint, property queryProperty) error {
 	if !property.ordered {
-		return false, queryErrorf(QueryErrUnorderedProperty,
+		return queryErrorf(QueryErrUnorderedProperty,
 			"query property %q is not ordered, so %s cannot compare it",
 			c.Property, operatorText(c.Operator))
 	}
 	if len(c.Value) != 1 {
-		return false, queryErrorf(QueryErrMalformedConstraint,
+		return queryErrorf(QueryErrMalformedConstraint,
 			"%s on %q compares against exactly one value, got %d",
 			operatorText(c.Operator), c.Property, len(c.Value))
 	}
-	operand, err := parseOrdered(c.Value[0])
-	if err != nil {
-		return false, queryErrorf(QueryErrUnparsableValue,
+	if _, err := parseOrdered(c.Value[0]); err != nil {
+		return queryErrorf(QueryErrUnparsableValue,
 			"%s on %q needs a number to compare against, got %q",
 			operatorText(c.Operator), c.Property, c.Value[0])
 	}
-	if !has {
-		return false, nil
+	return nil
+}
+
+// compareOrdered evaluates > or < against an element's own value. A value that
+// is not a number fails the comparison: that is a fact about the element.
+func compareOrdered(c *pb.PrimitiveConstraint, value string) bool {
+	operand, err := parseOrdered(c.Value[0])
+	if err != nil {
+		return false
 	}
 	actual, err := parseOrdered(value)
 	if err != nil {
-		return false, nil
+		return false
 	}
 	if c.Operator == pb.PrimitiveOperator_PRIMITIVE_OPERATOR_GREATER {
-		return actual > operand, nil
+		return actual > operand
 	}
-	return actual < operand, nil
+	return actual < operand
 }
 
 // parseOrdered reads a number, accepting the unbounded multiplicity "*" as the
@@ -579,38 +631,14 @@ func operatorText(op pb.PrimitiveOperator) string {
 	}
 }
 
-// matchesComposite combines the verdicts of nested constraints. An empty list
-// is a fault in the query: neither verdict is defensible.
-func (e *queryEval) matchesComposite(sym *symbols.Symbol, c *pb.CompositeConstraint) (bool, error) {
-	if c == nil {
-		return false, queryErrorf(QueryErrMalformedConstraint, "CompositeConstraint is unset")
-	}
-	if len(c.Constraint) == 0 {
-		return false, queryErrorf(QueryErrMalformedConstraint,
-			"CompositeConstraint has no constraints to combine")
-	}
-	switch c.Operator {
-	case pb.CompositeOperator_COMPOSITE_OPERATOR_AND:
-		for _, nested := range c.Constraint {
-			matched, err := e.matches(sym, nested)
-			if err != nil || !matched {
-				return false, err
-			}
+// matchesComposite combines the verdicts of nested constraints, short-circuiting
+// once one is decisive.
+func (e *queryEval) matchesComposite(sym *symbols.Symbol, c *pb.CompositeConstraint) bool {
+	and := c.Operator == pb.CompositeOperator_COMPOSITE_OPERATOR_AND
+	for _, nested := range c.Constraint {
+		if e.matches(sym, nested) != and {
+			return !and
 		}
-		return true, nil
-	case pb.CompositeOperator_COMPOSITE_OPERATOR_OR:
-		for _, nested := range c.Constraint {
-			matched, err := e.matches(sym, nested)
-			if err != nil {
-				return false, err
-			}
-			if matched {
-				return true, nil
-			}
-		}
-		return false, nil
-	default:
-		return false, queryErrorf(QueryErrMalformedConstraint,
-			"CompositeConstraint has no operator")
 	}
+	return and
 }

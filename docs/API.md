@@ -692,8 +692,12 @@ Where the standard is vague, these are the choices this implementation makes:
   that is a fact about the element, not a fault in the query.
 - `inverse` negates the verdict of its own constraint, so a constraint and its
   inverse partition the scope.
-- `and`/`or` combine nested verdicts and short-circuit, so a malformed
-  constraint after a decisive one is not reported.
+- `and`/`or` combine nested verdicts, short-circuiting once one is decisive.
+- The whole `where` tree is judged **before** any element is read, so a fault in
+  it — an unknown property, a missing operator, an empty composite, `>` on an
+  unordered property — is reported whatever the scope holds, including a model
+  that declares nothing (`TestQueryFaultIsReportedWithNoElementsToConsider`), and
+  wherever it sits, including under an already-decisive sibling.
 - `scope` considers each named element **and everything nested inside it**, in
   declaration order, parents first; a name the model does not have is an error.
   An empty scope enumerates the parsed document (not the standard library, which
