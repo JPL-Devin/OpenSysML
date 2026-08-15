@@ -121,6 +121,19 @@ class TestModuleHelpersReadAnAddress:
                 generate_main([str(source), "--host", "localhost:50123"])
         assert recorded['target'] == ("localhost:50123", None)
 
+    def test_the_generator_cli_reports_a_disagreement_as_an_error(self, tmp_path,
+                                                                  capsys):
+        # The library raises; the CLI names the mistake rather than tracing back.
+        source = tmp_path / "demo.sysml"
+        source.write_text("package Demo;\n")
+        code = generate_main(
+            [str(source), "--host", "localhost:50123", "--port", "50051"]
+        )
+        assert code == 2
+        stderr = capsys.readouterr().err
+        assert stderr.startswith("error: ")
+        assert "different ports" in stderr
+
     def test_an_address_reaches_the_port_it_names(self):
         with patch('pysysml.Connection') as connection:
             pysysml.load("demo.sysml", "localhost:50123")

@@ -53,7 +53,12 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     start = time.perf_counter()
-    conn = Connection(host=args.host, port=args.port, auto_start=False)
+    try:
+        conn = Connection(host=args.host, port=args.port, auto_start=False)
+    except ValueError as exc:
+        # A misread --host/--port is the caller's mistake, not a crash.
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     model = conn.load_from_content(MODEL)
     setup_ms = (time.perf_counter() - start) * 1000.0
 

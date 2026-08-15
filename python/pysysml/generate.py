@@ -440,7 +440,13 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         print(f"error: cannot read {args.source}: {exc}", file=sys.stderr)
         return 2
 
-    model = pysysml.load(args.source, host=args.host, port=args.port)
+    try:
+        model = pysysml.load(args.source, host=args.host, port=args.port)
+    except ValueError as exc:
+        # A misread --host/--port is the caller's mistake, not a crash.
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
     try:
         require_type_facts(model.connection)
     except MissingCapabilityError as exc:
