@@ -14,9 +14,8 @@ type Edit struct {
 	OwnLine bool
 }
 
-// Fix is one unambiguous way to resolve a diagnostic: a title to offer it under
-// and the edits applying it, all within the document the diagnostic belongs to.
-// Preferred marks the fix an editor may apply without asking.
+// Fix is one unambiguous way to resolve a diagnostic, within the document that
+// diagnostic belongs to. Preferred marks a fix an editor may apply unprompted.
 type Fix struct {
 	Title     string
 	Edits     []Edit
@@ -38,10 +37,8 @@ func InsertLine(offset int, text string) Edit {
 	return Edit{Span: source.Span{Offset: offset}, NewText: text, OwnLine: true}
 }
 
-// Render resolves an edit against the document it applies to, returning the span
-// to replace and the text to replace it with. An own-line edit is terminated by
-// a newline and followed by the indentation of the line it is inserted before,
-// so the declaration that line holds keeps its place.
+// Render resolves an edit against its document, returning the span to replace and
+// the replacement. An own-line edit keeps the line it precedes on its own line.
 func (e Edit) Render(content []byte) (source.Span, string) {
 	if !e.OwnLine {
 		return e.Span, e.NewText

@@ -10,10 +10,8 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// unresolvedFixes returns the edits that resolve an unresolved simple name
-// written in scope: spelling it as one of the candidates the suggestion machinery
-// ranked, and, where a candidate is that very name declared elsewhere, importing
-// the namespace declaring it so the name resolves as written.
+// unresolvedFixes returns the edits resolving an unresolved simple name: writing
+// it as a ranked candidate, or importing the namespace declaring that name.
 func (r *Resolver) unresolvedFixes(scope *symbols.Scope, name string, span source.Span) []quickfix.Fix {
 	if span.Len == 0 {
 		return nil
@@ -36,9 +34,8 @@ func (r *Resolver) unresolvedFixes(scope *symbols.Scope, name string, span sourc
 	return fixes
 }
 
-// importFix imports the namespace declaring cand, which resolves the reference
-// only where cand is the written name declared elsewhere: a misspelled name
-// needs its spelling fixed too, and that is a second correction.
+// importFix imports the namespace declaring cand, offered only where cand is the
+// written name declared elsewhere, so the import alone resolves the reference.
 func (r *Resolver) importFix(scope *symbols.Scope, name, cand string) (quickfix.Fix, bool) {
 	cut := strings.LastIndex(cand, "::")
 	if cut < 0 || suggest.LastSegment(cand) != name || !r.importable(cand) {
@@ -56,10 +53,8 @@ func (r *Resolver) importFix(scope *symbols.Scope, name, cand string) (quickfix.
 	}, true
 }
 
-// importAnchor is the offset an import declaration is inserted at: the start of
-// the first member of the nearest enclosing namespace, which is a position an
-// import is a legal member of. A namespace with no members at all has no
-// reference to resolve.
+// importAnchor is where an import is inserted: before the first member of the
+// nearest enclosing namespace, a position an import is a legal member at.
 func importAnchor(scope *symbols.Scope) (int, bool) {
 	for s := scope; s != nil; s = s.Parent() {
 		var members []ast.Node
@@ -71,8 +66,8 @@ func importAnchor(scope *symbols.Scope) (int, bool) {
 		case *ast.RootNamespace:
 			members = node.Members
 		case nil:
-			// The document root scope carries no node, and an import is a member
-			// of the root namespace, so the top of the file is where it goes.
+			// The document root scope carries no node, so the top of the file is
+			// where a root-namespace import goes.
 			return 0, true
 		default:
 			continue

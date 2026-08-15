@@ -10,9 +10,8 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
-// semanticTokensProvider is the semanticTokensProvider capability. The protocol
-// library's options type predates the legend, so the shape LSP 3.16 defines is
-// declared here; delta requests are not supported, so full is plain true.
+// semanticTokensProvider is the LSP 3.16 capability shape, declared here because
+// the protocol library's options type predates the legend. Deltas are not served.
 type semanticTokensProvider struct {
 	Legend protocol.SemanticTokensLegend `json:"legend"`
 	Full   bool                          `json:"full"`
@@ -47,9 +46,8 @@ func (s *Server) SemanticTokensFull(ctx context.Context, params *protocol.Semant
 	}, nil
 }
 
-// SemanticTokensRange answers the semantic tokens overlapping a range, which is
-// the full document's tokens filtered: highlighting a name needs the whole
-// document resolved either way.
+// SemanticTokensRange answers the tokens overlapping a range, the document's
+// tokens filtered: highlighting a name resolves the whole document either way.
 func (s *Server) SemanticTokensRange(ctx context.Context, params *protocol.SemanticTokensRangeParams) (*protocol.SemanticTokens, error) {
 	name := uriToName(params.TextDocument.URI)
 	doc := s.ws.Document(name)
@@ -66,9 +64,8 @@ func (s *Server) SemanticTokensRange(ctx context.Context, params *protocol.Seman
 	return &protocol.SemanticTokens{Data: encodeTokens(doc.Content, in)}, nil
 }
 
-// encodeTokens encodes tokens in the protocol's relative form: line delta,
-// character delta, length, type index and modifier bitset, all in UTF-16 units.
-// A token spanning lines is split per line, which the encoding requires.
+// encodeTokens encodes tokens relative to their predecessor in UTF-16 units,
+// splitting a multi-line token per line as the encoding requires.
 func encodeTokens(content []byte, toks []highlight.Token) []uint32 {
 	data := make([]uint32, 0, 5*len(toks))
 	prevLine, prevChar := uint32(0), uint32(0)

@@ -10,20 +10,16 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// Resolution answers what the names of a document refer to. A caller owning a
-// resolver over the workspace index supplies it; without one, only lexical and
-// declared names are classified.
+// Resolution answers what the names of a document refer to. Without one, only
+// lexical and declared names are classified.
 type Resolution interface {
 	// SegmentSymbols resolves one reference and returns the symbol each segment
 	// of its qualified name denotes, nil where a segment did not resolve.
 	SegmentSymbols(ref resolve.Reference) []*symbols.Symbol
 }
 
-// Tokens classifies a document into semantic tokens ordered by source position
-// and free of overlap, so a consumer can encode them directly. A name is
-// classified from the symbol table where it is declared and from the resolver
-// where it refers to a declaration elsewhere; keywords, comments and literals
-// come from the token stream the parser consumed.
+// Tokens classifies a document into semantic tokens ordered by position and free
+// of overlap, from the lexer, the symbol table and the resolver.
 func Tokens(content []byte, root *ast.RootNamespace, scope *symbols.Scope, res Resolution) []Token {
 	var (
 		semantic []Token
@@ -34,9 +30,8 @@ func Tokens(content []byte, root *ast.RootNamespace, scope *symbols.Scope, res R
 	return merge(semantic, lexical)
 }
 
-// lexicalTokens classifies the keywords, comments and literals of a document.
-// They are lexical facts, so they are read from the same lexer the parser uses
-// rather than recognized again.
+// lexicalTokens classifies keywords, comments and literals, read from the same
+// lexer the parser uses rather than recognized again.
 func lexicalTokens(content []byte) []Token {
 	if len(content) == 0 {
 		return nil
@@ -91,9 +86,8 @@ func declarationTokens(scope *symbols.Scope) []Token {
 	var walk func(*symbols.Scope)
 	walk = func(s *symbols.Scope) {
 		for _, sym := range s.AllMembers() {
-			// An anonymous member has no name to highlight, and one whose name
-			// was borrowed from a referenced feature is highlighted where that
-			// reference is.
+			// An anonymous member has no name; a borrowed one is highlighted at
+			// the reference it came from.
 			if sym == nil || sym.EffectiveName || sym.NameSpan.Len == 0 {
 				continue
 			}
@@ -108,10 +102,8 @@ func declarationTokens(scope *symbols.Scope) []Token {
 	return out
 }
 
-// referenceTokens classifies every name a document's references resolve to,
-// segment by segment, so each part of `A::B::C` is highlighted as what it
-// denotes. An unresolved segment yields no token; it carries a diagnostic
-// instead.
+// referenceTokens classifies each segment of every reference as what it denotes.
+// An unresolved segment yields no token; it carries a diagnostic instead.
 func referenceTokens(root *ast.RootNamespace, scope *symbols.Scope, res Resolution) []Token {
 	if res == nil {
 		return nil
@@ -133,9 +125,8 @@ func referenceTokens(root *ast.RootNamespace, scope *symbols.Scope, res Resoluti
 	return out
 }
 
-// merge orders semantic and lexical tokens by position and drops every token
-// overlapping one already kept, semantic tokens winning: a name spelled as an
-// unrestricted name or as a keyword is highlighted for what it means.
+// merge orders tokens by position and drops overlaps, semantics winning: a name
+// spelled as an unrestricted name or a keyword is highlighted for what it means.
 func merge(semantic, lexical []Token) []Token {
 	type entry struct {
 		tok      Token
