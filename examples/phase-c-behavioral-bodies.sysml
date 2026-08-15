@@ -4,19 +4,74 @@
 
 package PhaseC {
     
+    // The library is not implicitly visible: a bare name needs an import.
+    private import ScalarValues::*;
+    private import RealFunctions::sqrt;
+    private import RealFunctions::min;
+    private import RealFunctions::max;
+    
+    // The definitions the bodies below refer to.
+    part def Vehicle {
+        attribute speed : Real;
+        attribute brakeForce : Real;
+        part brakes {
+            attribute worn : Boolean;
+            attribute functional : Boolean;
+        }
+        part airbags {
+            attribute deployed : Boolean;
+        }
+    }
+    
+    part def Driver;
+    part def AuthenticatedUser;
+    part def AutonomousVehicle;
+    
+    part def BrakingSystem {
+        attribute response : Real;
+        attribute force : Real;
+    }
+    
+    part def HumanOperator {
+        attribute alertLevel : Real;
+    }
+    
+    part def AutopilotSystem {
+        attribute calibrated : Boolean;
+        attribute sensorHealth : Real;
+        attribute responseTime : Real;
+    }
+    
+    attribute def Password {
+        attribute length : Integer;
+        attribute hasUpperCase : Boolean;
+        attribute hasDigit : Boolean;
+    }
+    
     // ==========================================
     // PHASE C1: Calculation Bodies
     // ==========================================
     
     calc totalPrice {
+        in basePrice : Real;
+        in quantity : Integer;
+        in taxRate : Real;
+        
         return basePrice * quantity * (1.0 + taxRate);
     }
     
     calc def DistanceFormula {
+        in dx : Real;
+        in dy : Real;
+        
         return sqrt(dx * dx + dy * dy);
     }
     
     calc boundedValue {
+        in input : Real;
+        in lowerBound : Real;
+        in upperBound : Real;
+        
         return min(max(input, lowerBound), upperBound);
     }
     
@@ -25,16 +80,24 @@ package PhaseC {
     // ==========================================
     
     constraint validRange {
+        in x : Real;
+        in initialized : Boolean;
+        
         assert x >= 0;
         assert x <= 100;
         assume initialized;
     }
     
     constraint def NonNegative {
+        in value : Real;
+        
         assert not value < 0;
     }
     
     constraint safeBraking {
+        in vehicle : Vehicle;
+        in minimumRequired : Real;
+        
         assume vehicle.speed > 0;
         assert vehicle.brakeForce >= minimumRequired;
         assert not vehicle.brakes.worn;
@@ -53,6 +116,10 @@ package PhaseC {
     }
     
     requirement def EmergencyStop {
+        attribute threshold : Real;
+        attribute maxDelay : Real;
+        attribute emergencyForce : Real;
+        
         subject system : BrakingSystem;
         actor operator : HumanOperator;
         assume operator.alertLevel > threshold;
@@ -61,7 +128,7 @@ package PhaseC {
     }
     
     requirement PasswordPolicy {
-        subject password : String;
+        subject password : Password;
         require password.length >= 8;
         require password.hasUpperCase;
         require password.hasDigit;
@@ -103,6 +170,8 @@ package PhaseC {
     // ==========================================
     
     state Running {
+        attribute lowBattery : Boolean;
+        
         entry { action initialize; }
         do { action processData; }
         exit { action cleanup; }
@@ -117,6 +186,9 @@ package PhaseC {
     }
     
     state def ConnectionStateMachine {
+        attribute authSuccess : Boolean;
+        attribute authFailure : Boolean;
+        
         entry { 
             action openSocket;
             action authenticate;
@@ -145,6 +217,10 @@ package PhaseC {
     }
     
     state VehicleOperating {
+        attribute targetSpeedReached : Boolean;
+        attribute speedZero : Boolean;
+        attribute emergencyDetected : Boolean;
+        
         entry { action startEngine; }
         
         state Idling;
@@ -180,10 +256,17 @@ package PhaseC {
     }
     
     calc def RiskScore {
+        in sensorHealth : Real;
+        in trafficDensity : Real;
+        
         return (1.0 - sensorHealth) * trafficDensity;
     }
     
     state def AutopilotMode {
+        attribute allSystemsReady : Boolean;
+        attribute sensorFailure : Boolean;
+        attribute safeHandoff : Boolean;
+        
         entry { action validateSensors; }
         
         state Monitoring;

@@ -294,15 +294,20 @@ func (tc *typeChecker) checkConjugatedTyping(scope *symbols.Scope, rel *ast.Rela
 
 func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.SymbolKind) string {
 	isDef, defKind, useKind, direction := decl.isDef, decl.defKind, decl.useKind, decl.direction
+	// A KerML declaration (`classifier`, `class`, `datatype`, `feature`) has no
+	// SysML usage-kind counterpart, so its kind is unknown and no mismatch
+	// against it can be asserted.
+	if target == symbols.SymbolUnknown && rel != ast.RelSpecializes {
+		return ""
+	}
 	switch rel {
 	case ast.RelSpecializes:
 		want := defSymbolKind(defKind)
 		if !isDef {
 			return "only a definition may specialize; found a usage"
 		}
-		// Skip validation if target is unresolved
 		if target == symbols.SymbolUnknown {
-			return "" // Unresolved reference already reported elsewhere
+			return "" // an unclassified kind constrains nothing
 		}
 		if !isDefKind(target) {
 			return fmt.Sprintf("%s cannot specialize %s (target is not a definition)", defKind, target)

@@ -9,6 +9,18 @@
 
 package demo_relationships {
 	
+	// The library is not implicitly visible: a bare name needs an import.
+	private import Base::*;
+	private import ScalarValues::*;
+	private import Items::Item;
+	
+	// The types the demos below refer to.
+	classifier Node;
+	classifier Endpoint;
+	classifier DataSource {
+		feature target: Endpoint[1];
+	}
+	
 	// Inverse of relationship - establishes bidirectional links
 	assoc struct BidirectionalLink {
 		doc /* Example of inverse relationships from Occurrences.kerml */
@@ -18,12 +30,12 @@ package demo_relationships {
 	}
 	
 	// Unions relationship - combines multiple features
+	feature setA: Item[*];
+	feature setB: Item[*];
+	feature setC: Item[*];
+	
 	feature unifiedCollection: Item[*] unions setA, setB, setC {
 		doc /* Unions combines multiple collections into one */
-		
-		feature setA: Item[*];
-		feature setB: Item[*];
-		feature setC: Item[*];
 	}
 	
 	// Chains relationship - feature chaining for navigation

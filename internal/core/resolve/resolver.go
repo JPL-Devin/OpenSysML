@@ -50,6 +50,10 @@ type Resolver struct {
 	// members whose bodies are being walked, innermost last: such a body may
 	// redefine a feature of the requirement it references by plain name.
 	constraintRefs []constraintRef
+	// suggestions are the spellings an unresolvable name may have meant, kept
+	// per name; names is the list of simple names they rank against.
+	suggestions map[string][]string
+	names       []string
 }
 
 // New creates a resolver over the given index.
@@ -61,6 +65,8 @@ func New(idx *symbols.Index) *Resolver {
 		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
 		imports:   map[ast.Node][]*ast.Import{},
 		naming:    map[*symbols.Symbol]bool{},
+
+		suggestions: map[string][]string{},
 
 		inheritedImports: map[*symbols.Symbol]bool{},
 	}
@@ -166,7 +172,7 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 	if !res.ok {
 		r.Diagnostics = append(r.Diagnostics, Diagnostic{
 			Span:    spanOf(at),
-			Message: "unresolved reference: " + name,
+			Message: r.unresolvedMessage(name),
 		})
 	}
 	return res.sym, res.ok
