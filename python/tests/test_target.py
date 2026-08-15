@@ -30,6 +30,12 @@ class TestSplitTarget:
             split_target("localhost:50123", 50999)
         assert "different ports" in str(exc_info.value)
 
+    def test_the_standard_port_written_out_disagrees_like_any_other(self):
+        # A port given as 50051 was given, not omitted, so it disagrees too.
+        with pytest.raises(ValueError) as exc_info:
+            split_target("localhost:50123", DEFAULT_PORT)
+        assert "different ports" in str(exc_info.value)
+
     def test_an_unreadable_port_names_the_mistake(self):
         with pytest.raises(ValueError) as exc_info:
             split_target("localhost:grpc")
@@ -70,6 +76,8 @@ class TestConnectionTarget:
     def test_a_disagreeing_port_is_rejected_before_any_call(self):
         with pytest.raises(ValueError):
             self._connection("localhost:50123", 50999)
+        with pytest.raises(ValueError):
+            self._connection("localhost:50123", DEFAULT_PORT)
 
 
 class TestModuleHelpersReadAnAddress:
@@ -92,6 +100,7 @@ class TestModuleHelpersReadAnAddress:
                                         host="localhost:50123", port=50999),
             lambda: pysysml.convert("sysml", model_hash="h",
                                     host="localhost:50123", port=50999),
+            lambda: pysysml.load("demo.sysml", "localhost:50123", DEFAULT_PORT),
         ):
             with pytest.raises(ValueError):
                 call()

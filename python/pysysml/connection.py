@@ -39,7 +39,7 @@ from pysysml.verdict import CalcResult, Verdict
 DEFAULT_PORT = 50051
 
 
-def split_target(host, port=DEFAULT_PORT):
+def split_target(host, port=None):
     """Split a ``host:port`` string written as the host into host and port.
 
     ``connect("localhost:50123")`` names an address, not a hostname, so it is
@@ -48,7 +48,8 @@ def split_target(host, port=DEFAULT_PORT):
 
     Args:
         host (str): Hostname, or a ``host:port`` address
-        port (int): Port, when the host names none
+        port (int, optional): Port; None is no port given, so an address's own
+            port stands and a plain hostname gets DEFAULT_PORT
 
     Returns:
         tuple[str, int]: The host and port to connect to
@@ -58,17 +59,17 @@ def split_target(host, port=DEFAULT_PORT):
             port also given
     """
     if not isinstance(host, str) or ':' not in host:
-        return host, port
+        return host, DEFAULT_PORT if port is None else port
 
     # A bare IPv6 address has colons of its own; only a bracketed one, or a
     # single colon, names a port.
     if host.startswith('['):
         closing = host.find(']')
         if closing == -1 or not host[closing + 1:].startswith(':'):
-            return host, port
-        name, _, written = host[:closing + 1], ':', host[closing + 2:]
+            return host, DEFAULT_PORT if port is None else port
+        name, written = host[:closing + 1], host[closing + 2:]
     elif host.count(':') > 1:
-        return host, port
+        return host, DEFAULT_PORT if port is None else port
     else:
         name, written = host.split(':', 1)
 
@@ -78,7 +79,7 @@ def split_target(host, port=DEFAULT_PORT):
             f"host and port separately, as connect({name!r}, <port>)"
         )
     embedded = int(written)
-    if port != DEFAULT_PORT and port != embedded:
+    if port is not None and port != embedded:
         raise ValueError(
             f"host={host!r} and port={port} name different ports; give the "
             f"port once"
@@ -204,13 +205,13 @@ class Connection:
         port (int): Service port
     """
     
-    def __init__(self, host='localhost', port=DEFAULT_PORT, auto_start=True):
+    def __init__(self, host='localhost', port=None, auto_start=True):
         """Initialize connection to sysml-grpc service.
         
         Args:
             host (str): Service hostname, or a ``host:port`` address, whose port
                 is used when no separate port is given (default: 'localhost')
-            port (int): Service port (default: 50051)
+            port (int, optional): Service port (default: 50051)
             auto_start (bool): If True, automatically start service if not running (default: True)
 
         Raises:

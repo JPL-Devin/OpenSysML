@@ -39,6 +39,7 @@ __all__ = [
     "WrongKindError",
     "load", "connect", "convert",
     "eval", "instantiate",
+    "DEFAULT_PORT", "split_target",
     "__version__"
 ]
 
@@ -55,7 +56,7 @@ _default_connection = None
 _default_connection_params = None
 
 
-def _get_default_connection(host='localhost', port=DEFAULT_PORT):
+def _get_default_connection(host='localhost', port=None):
     """Get or create the default module-level connection.
     
     If called with different host/port than last time, creates new connection.
@@ -64,7 +65,7 @@ def _get_default_connection(host='localhost', port=DEFAULT_PORT):
     
     Args:
         host (str): Service hostname, or a ``host:port`` address
-        port (int): Service port (default: 50051)
+        port (int, optional): Service port (default: 50051)
     
     Returns:
         Connection: Singleton default connection
@@ -87,7 +88,7 @@ def _get_default_connection(host='localhost', port=DEFAULT_PORT):
     return _default_connection
 
 
-def load(file_path, host='localhost', port=DEFAULT_PORT, strict=False):
+def load(file_path, host='localhost', port=None, strict=False):
     """Load a SysML model from file using the default connection.
     
     Convenience function that uses a module-level singleton connection.
@@ -95,7 +96,7 @@ def load(file_path, host='localhost', port=DEFAULT_PORT, strict=False):
     Args:
         file_path (str): Path to .sysml file
         host (str): Service hostname, or a ``host:port`` address
-        port (int): Service port (default: 50051)
+        port (int, optional): Service port (default: 50051)
         strict (bool): Refuse a model the service reported errors for, rather
             than returning one whose lookups fail later
     
@@ -112,7 +113,7 @@ def load(file_path, host='localhost', port=DEFAULT_PORT, strict=False):
     return conn.load(file_path, strict=strict)
 
 
-def connect(host='localhost', port=DEFAULT_PORT, auto_start=True):
+def connect(host='localhost', port=None, auto_start=True):
     """Create a new connection to sysml-grpc service.
     
     Convenience function that creates a new Connection instance.
@@ -120,7 +121,7 @@ def connect(host='localhost', port=DEFAULT_PORT, auto_start=True):
     Args:
         host (str): Service hostname, or a ``host:port`` address, whose port is
             used when no separate port is given (default: 'localhost')
-        port (int): Service port (default: 50051)
+        port (int, optional): Service port (default: 50051)
         auto_start (bool): If True, automatically start service if not running (default: True)
     
     Returns:
@@ -134,12 +135,13 @@ def connect(host='localhost', port=DEFAULT_PORT, auto_start=True):
         >>> conn.port
         50123
     """
+    host, port = split_target(host, port)
     return Connection(host, port, auto_start=auto_start)
 
 
 def convert(to_format, file_path=None, content=None, model_hash=None,
             from_format='', tolerate_syntax_errors=False, host='localhost',
-            port=DEFAULT_PORT):
+            port=None):
     """Write a model out in another format (module-level convenience).
 
     Args:
@@ -154,7 +156,7 @@ def convert(to_format, file_path=None, content=None, model_hash=None,
         tolerate_syntax_errors (bool): Write notation back out even when the
             parser could not read all of it
         host (str): Service hostname, or a ``host:port`` address
-        port (int): Service port (default: 50051)
+        port (int, optional): Service port (default: 50051)
 
     Returns:
         Conversion: The converted model; ``str()`` of it is the text
@@ -177,7 +179,7 @@ def convert(to_format, file_path=None, content=None, model_hash=None,
 
 
 def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
-         host='localhost', port=DEFAULT_PORT):
+         host='localhost', port=None):
     """Evaluate a SysML expression (module-level convenience).
 
     A model in hand has :meth:`Model.eval`, which needs neither the hash nor the
@@ -189,7 +191,7 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
         model_hash (str, optional): Use existing model hash
         context_symbol_id (str, optional): Context for evaluation
         host (str): Service hostname, or a ``host:port`` address
-        port (int): Service port (default: 50051)
+        port (int, optional): Service port (default: 50051)
         
     Returns:
         Evaluated value
@@ -221,7 +223,7 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
 
 
 def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',
-                port=DEFAULT_PORT):
+                port=None):
     """Instantiate a part/usage (module-level convenience).
     
     Args:
@@ -229,7 +231,7 @@ def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',
         file_path (str, optional): Parse this file first
         model_hash (str, optional): Use existing model hash
         host (str): Service hostname, or a ``host:port`` address
-        port (int): Service port (default: 50051)
+        port (int, optional): Service port (default: 50051)
         
     Returns:
         Instance: Instance object
