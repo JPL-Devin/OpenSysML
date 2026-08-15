@@ -5,7 +5,7 @@
 
 ## Overview
 
-Pseudostates are transient vertices in state machines that enable complex control flow. This document covers **choice** and **junction** pseudostates in detail, and the routing and history semantics of the remaining kinds below. The textual notation for every kind is tabulated in `docs/grammar/README.md`.
+Pseudostates are transient vertices in state machines that enable complex control flow. This document covers **choice** and **junction** pseudostates in detail, and the routing and history semantics of the remaining kinds below. The textual notation for every kind is tabulated in `docs/reference/grammar/README.md`.
 
 ### Choice vs Junction
 
@@ -65,7 +65,7 @@ state def SafetyMonitor {
 
 **History, entry/exit points and deferral** (a Systemica extension — the OMG
 textual notation has no production for pseudostates or for deferral; see
-`docs/grammar/README.md`):
+`docs/reference/grammar/README.md`):
 ```sysml
 state def Player {
     state playing {
@@ -407,4 +407,4 @@ region.
   guards over data an effect on the incoming transition changes.
 - Entry points, exit points and history are a Systemica extension to the OMG
   textual notation, which has no production for any pseudostate; see
-  `docs/grammar/README.md`.
+  `docs/reference/grammar/README.md`.

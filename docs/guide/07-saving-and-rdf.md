@@ -154,7 +154,7 @@ that leaves converting is measured in
 
 ```bash
 $ sysml examples/state-machine-demo.sysml -convert ttl
-sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7:13: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md
+sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7:13: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
 ```
 
 ---

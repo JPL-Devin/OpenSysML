@@ -3,7 +3,8 @@
 
 A link to a file must name a file that exists; a link with a `#fragment` must name a
 heading that exists in that file (or an explicit anchor). External links, mailto: and
-in-page-only fragments pointing at a heading of the same file are checked too.
+in-page-only fragments pointing at a heading of the same file are checked too. A page
+named in prose as `docs/….md` must exist as well, outside the historical plan notes.
 
 Run from the repository root:
 
@@ -19,6 +20,10 @@ LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*$", re.MULTILINE)
 ANCHOR = re.compile(r"<a\s+(?:id|name)=[\"']([^\"']+)[\"']", re.IGNORECASE)
 SKIP_PREFIX = ("http://", "https://", "mailto:", "tel:", "ftp://")
+# A page named in prose as `docs/…md` rather than linked, which a move breaks just as silently.
+CITED = re.compile(r"`(docs/[A-Za-z0-9_./-]+\.md)`")
+# Records of what a plan created at the time; their paths are history, not pointers.
+HISTORICAL = ("docs/internals/notes/", "docs/internals/design/")
 
 
 def slugs(heading: str) -> set[str]:
@@ -85,6 +90,12 @@ def main() -> int:
                 anchors[dest] = anchors_of(dest)
             if fragment.lower() not in anchors[dest]:
                 failures.append(f"{md}: no heading '#{fragment}' in {target or md.name}")
+
+        if md.as_posix().startswith(HISTORICAL):
+            continue
+        for cited in sorted(set(CITED.findall(text))):
+            if not (root / cited).exists():
+                failures.append(f"{md}: no such file, cited in prose: {cited}")
 
     for failure in sorted(failures):
         print(failure)
