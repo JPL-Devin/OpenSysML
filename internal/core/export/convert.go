@@ -30,9 +30,10 @@
 // # Known limitations
 //
 // Expression-valued positions — feature values, multiplicity bounds, filter
-// conditions, succession guards — are carried as their source text rather than
-// as expression trees. They convert back exactly, and a consumer that only
-// reads the model structure is unaffected, but SPARQL cannot see inside them.
+// conditions, constraint conditions, succession guards — are carried as their
+// source text rather than as expression trees. They convert back exactly, and a
+// consumer that only reads the model structure is unaffected, but SPARQL cannot
+// see inside them.
 //
 // A declaration whose head binds ends rather than naming a single feature —
 // connect, bind, flow, succession, transition, accept and satisfy — is carried

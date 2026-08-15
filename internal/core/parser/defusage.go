@@ -211,6 +211,7 @@ type featureMods struct {
 	isIndividual      bool            // individual modifier for individuals/snapshots
 	portion           ast.PortionKind // 'snapshot' / 'timeslice' portion prefix
 	isNegated         bool            // `not` of `assert not <kind>`: the conditions are asserted to be false
+	prefixKeyword     string          // keyword qualifying the kind that follows it: the `assert` of `assert constraint c`
 	visibility        ast.Visibility
 	direction         ast.FeatureDirection
 	isComposite       bool
@@ -860,6 +861,11 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		if isKindKeyword(p.peek()) &&
 			(kindPrefixKeywords[kw] || (kw == "variant" && !namesDeclaration(p.peekN(1)))) {
 			kindKeyword = p.peek().KeywordID
+			// `variant` is a modifier of the declaration it prefixes, recorded
+			// as isVariant; a prefix keyword says what the declaration is for.
+			if kindPrefixKeywords[kw] {
+				mods.prefixKeyword = kw
+			}
 			p.advance()
 		}
 		return applyPrefixes(p.parseUsage(start, usageKindKeywords[kindKeyword], kindKeyword, mods, isAll))
@@ -1226,26 +1232,27 @@ func (p *Parser) isAnonymousSuccession() bool {
 // token stream, kept for the same reason as in parseDefinition.
 func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods featureMods, isAll bool) *ast.Usage {
 	u := &ast.Usage{
-		Kind:         kind,
-		Keyword:      keyword,
-		IsNegated:    mods.isNegated,
-		IsAbstract:   mods.isAbstract,
-		IsVariation:  mods.isVariation,
-		IsVariant:    mods.isVariant,
-		IsReference:  mods.isReference,
-		IsAll:        isAll,
-		IsEnd:        mods.isEnd,
-		IsChain:      mods.isChain,
-		IsConstant:   mods.isConstant,
-		IsEvent:      mods.isEvent,
-		IsIndividual: mods.isIndividual,
-		Portion:      mods.portion,
-		Visibility:   mods.visibility,
-		Direction:    mods.direction,
-		IsComposite:  mods.isComposite,
-		IsDerived:    mods.isDerived,
-		IsOrdered:    mods.isOrdered,
-		IsNonunique:  mods.isNonunique,
+		Kind:          kind,
+		Keyword:       keyword,
+		PrefixKeyword: mods.prefixKeyword,
+		IsNegated:     mods.isNegated,
+		IsAbstract:    mods.isAbstract,
+		IsVariation:   mods.isVariation,
+		IsVariant:     mods.isVariant,
+		IsReference:   mods.isReference,
+		IsAll:         isAll,
+		IsEnd:         mods.isEnd,
+		IsChain:       mods.isChain,
+		IsConstant:    mods.isConstant,
+		IsEvent:       mods.isEvent,
+		IsIndividual:  mods.isIndividual,
+		Portion:       mods.portion,
+		Visibility:    mods.visibility,
+		Direction:     mods.direction,
+		IsComposite:   mods.isComposite,
+		IsDerived:     mods.isDerived,
+		IsOrdered:     mods.isOrdered,
+		IsNonunique:   mods.isNonunique,
 	}
 
 	// Apply early multiplicity if present (for "end [mult] ref ..." syntax)
@@ -1967,7 +1974,6 @@ func (p *Parser) parseBodyMember() ast.Node {
 			u := &ast.Usage{
 				Kind: ast.UsageFlow,
 			}
-			u.NodeBase.NodeSpan = p.spanFrom(start)
 			u.SetLeadingTrivia(trivia)
 
 			// Check for optional 'from' keyword
@@ -1978,6 +1984,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 			p.parseTierBEnds(u, ast.UsageFlow)
 
 			p.expect(lexer.Semicolon, "expected ';' after flow statement")
+			// The ends belong to the declaration, so its span covers them.
+			u.NodeBase.NodeSpan = p.spanFrom(start)
 
 			m := &ast.Membership{
 				Visibility: vis,
@@ -2016,13 +2024,14 @@ func (p *Parser) parseBodyMember() ast.Node {
 			u := &ast.Usage{
 				Kind: ast.UsageAllocation,
 			}
-			u.NodeBase.NodeSpan = p.spanFrom(start)
 			u.SetLeadingTrivia(trivia)
 
 			// Parse allocation ends: source to target
 			p.parseTierBEnds(u, ast.UsageAllocation)
 
 			p.expect(lexer.Semicolon, "expected ';' after allocate statement")
+			// The ends belong to the declaration, so its span covers them.
+			u.NodeBase.NodeSpan = p.spanFrom(start)
 
 			m := &ast.Membership{
 				Visibility: vis,
@@ -2544,12 +2553,18 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// it is its name (`action flow { ... }` is an action named `flow`); that is
 	// parsed below, which reads the name instead of dropping it.
 	if p.at(lexer.Keyword) && p.atKindPrefix() {
+		prefix := p.peek().KeywordID
 		p.advance() // consume the prefix keyword
 		inner := p.parseDeclaration(start)
 		if inner == nil {
 			en := p.errorNodeSkip(start, "expected a body member")
 			en.SetLeadingTrivia(trivia)
 			return en
+		}
+		// A prefix that says what the declaration is for is part of it
+		// (`assert constraint c` is an AssertConstraintUsage).
+		if u, ok := inner.(*ast.Usage); ok && kindPrefixKeywords[prefix] && u.PrefixKeyword == "" {
+			u.PrefixKeyword = prefix
 		}
 		mem := &ast.Membership{Visibility: vis, Member: inner}
 		mem.NodeSpan = p.spanFrom(start)

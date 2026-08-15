@@ -1,0 +1,27 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ParameterRelationshipKeywords" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Wheel"))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Measure"
+          (Membership visibility="default"
+            (Usage kind="part" name="w" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=Wheel
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="mass" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="specializes" target=Wheel
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="r" ref=true direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="references" target=Wheel
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="hub" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Wheel
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="rim" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=Wheel
+                (*ast.QualifiedName)))))))))

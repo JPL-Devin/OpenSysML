@@ -17,6 +17,20 @@ func IsKeyword(s string) bool {
 	return ok
 }
 
+// IsIdentifier reports whether s can be written as a basic name (KerML §8.2.2);
+// a name that cannot needs the quotes of an unrestricted name.
+func IsIdentifier(s string) bool {
+	if s == "" || !isIdentStart(s[0]) {
+		return false
+	}
+	for i := 1; i < len(s); i++ {
+		if !isIdentCont(s[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 var keywordList = []string{
 	// KerML + SysML union (deduplicated). Contextual keywords included;
 	// parser disambiguates identifier usage.

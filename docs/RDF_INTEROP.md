@@ -130,7 +130,10 @@ decode back exactly.
   inside the model and as plain literals where it does not: `sysml:type`
   (the `:` clause), `specializes`, `subsets`, `redefines`, `references`,
   `crosses`, `disjointFrom`, `intersects`, `inverseOf`, `unions`, `chains`,
-  `includes`, `via`, `annotates`, `subject`
+  `includes`, `via`, `annotates`, `subject`. A literal carries the name itself,
+  without the quotes an unrestricted name is written with; a target that is an
+  expression rather than a name (a feature chain, say) is carried as the text it
+  was written as, typed `sysx:Expression` to tell the two apart.
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity
 - `sysml:value` — a feature's value
 - `sysml:importedNamespace`, `sysml:aliasedElement`, `sysml:client`,
@@ -144,12 +147,15 @@ The `sysx:` properties:
 | `sysx:memberIndex` | Declaration order. The notation is sensitive to the order of members; an RDF graph is an unordered set, so the index is what lets a conversion back to notation reproduce the original sequence. |
 | `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. |
 | `sysx:sourceText` | The verbatim source of the constructs described under *Limitations*. |
-| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. |
+| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly). |
+| `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
+| `sysx:condition` | The condition a condition member states, as its notation. |
 
-Three metaclass names have no counterpart in the OMG vocabulary and are typed in
+Seven metaclass names have no counterpart in the OMG vocabulary and are typed in
 the `sysx:` namespace rather than `sysml:`, so a consumer can tell them from the
-standard metaclasses: `sysx:Alias`, `sysx:FilterMember` and
-`sysx:MultiplicityDeclaration`.
+standard metaclasses: `sysx:Alias`, `sysx:FilterMember`,
+`sysx:MultiplicityDeclaration`, `sysx:ConstraintMember`, `sysx:AssumeMember`,
+`sysx:RequireMember` and `sysx:ResultMember`.
 
 Comments, documentation and textual representations convert as their own
 elements (`sysml:Comment`, `sysml:Documentation`, `sysml:TextualRepresentation`)
@@ -193,20 +199,18 @@ lost, as *Limitations* describes; the package's `doc` and `comment` are
 declarations and survive.
 
 [`examples/semantic-layer/demo.sysml`](../examples/semantic-layer/demo.sysml)
-converts too, as do the structure-only `parser_features_demo_*.kerml` files
-(except `..._advanced_bodies.kerml`, which computes a value, and
-`..._modifiers.kerml`, which declares one name twice). **None of the other
-`.sysml` demos convert**: each shows a behavior, so the conversion stops at a
-state, a region, an assignment, a value-computing `return` or a name two members
-of one body share.
+and [`examples/repl-behavioral-demo.sysml`](../examples/repl-behavioral-demo.sysml)
+convert too, as do the structure-only `parser_features_demo_*.kerml` files
+(except `..._advanced_bodies.kerml`, which computes a value, and three that each
+declare one name twice). Of the 20 models under `examples/`, 9 convert, and 62 of
+the 100 files of the OMG training corpus. The rest show a behavior, so the
+conversion stops at a state, a region, an assignment, an action node or a name
+two members of one body share:
 
 ```bash
 $ sysml examples/state-machine-demo.sysml -convert ttl
-sysml: cannot convert the *ast.SubstateMember at examples/state-machine-demo.sysml:7:13
+sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7:13: save to .sysml or .kerml instead, which writes the source exactly; see docs/RDF_INTEROP.md § Limitations
 ```
-
-So a reader looking for a convertible model starts from the two `.sysml` files
-named above.
 
 ## Limitations
 
@@ -216,10 +220,10 @@ graph that lacks the text reports an error naming the element rather than
 guessing.
 
 **Expressions are carried as source text.** Feature values, multiplicity
-bounds, filter conditions and succession guards are stored as their notation
-(`sysml:value "1200.0"`) rather than decomposed into expression trees. They
-convert back exactly and a consumer reading model structure is unaffected, but
-SPARQL cannot see inside them.
+bounds, filter conditions, constraint conditions and succession guards are
+stored as their notation (`sysml:value "1200.0"`) rather than decomposed into
+expression trees. They convert back exactly and a consumer reading model
+structure is unaffected, but SPARQL cannot see inside them.
 
 **Lexical comments do not survive the RDF hop.** `//` and `/* */` trivia is
 attached to no element, so a `notation → RDF → notation` round trip drops it:
@@ -277,31 +281,37 @@ conversion time, so they are normalized rather than reported — the one place
 this mapping changes a model without saying so. Recording them in the parser is
 roadmap item D5. Save straight to `.sysml` when they matter.
 
-**A condition or a behavior statement is refused.** The mapping covers model
-*structure* — packages, definitions, usages, features, imports, connectors,
-successions, satisfy assertions — and has no metaclass for the members that state
-a condition or a step, so converting a model containing one reports the member
-rather than dropping it. Measured against the built binary, each of these is
-`cannot convert the <node> at <file>:<line>`:
+**Conditions convert; a behavior statement is refused.** The members that state
+a condition are carried, each as the `sysx:` metaclass named above with its
+condition as `sysx:condition`: a constraint body's conditions (`assert`,
+`assume`, a bare condition, and the `not` of `assert not …` as
+`sysml:isNegated`), a nested `assert constraint [name] { … }`, a requirement's
+`assume`/`require` members in all three forms (an expression, the constraint
+they name, or a body), `subject s : X;` as the `sysml:SubjectMembership` it
+declares, and `return <expr>;`. The `assert` prefixing a named usage
+(`assert constraint c : C`) is carried as `sysx:declaredPrefix`. The conditions
+themselves are notation, with the limits stated above.
+
+The mapping still covers model *structure* only for behavior: it has no
+metaclass for the members that state a step, so converting a model containing
+one reports the member rather than dropping it. Measured against the built
+binary, each of these is `cannot convert the <node> at <file>:<line>`:
 
 | written | refused as |
 |---|---|
-| `require <expr>;`, `require constraint { … }` | `*ast.RequireMember` |
-| `assume <expr>;` | `*ast.AssumeMember` |
-| a constraint body's condition, `assert constraint { … }` | `*ast.ConstraintMember` |
-| `subject s : X;` | `*ast.SubjectMember` |
-| `return <expr>;` computing a value (a bare `return x;` converts) | `*ast.ResultMember` |
 | `assign x := 1;` | `*ast.AssignmentActionNode` |
 | `if … { … }`, `while`/`loop`/`for … in …` | `*ast.IfActionNode`, `*ast.WhileLoopActionNode` |
 | `state s { … }` inside a state machine | `*ast.SubstateMember` |
 | `accept … then …`, a transition member | `*ast.TransitionMember` |
 | `entry`/`do`/`exit` | `*ast.EntryMember`, `*ast.DoMember`, `*ast.ExitMember` |
 
-So a requirement that states a condition, and any state machine or action body
-that carries statements, cannot be exported to Turtle today; save to `.sysml`
-instead. Carrying them needs the expression-tree mapping (roadmap D1) and
-metaclasses for the behavioral members, not a wider fallback — a graph missing a
-model's conditions would be worse than a refusal.
+The list is not exhaustive: an action or state body carries several more node
+kinds (an initial node, `perform`, `send`, `fork`, a control-flow edge, a state
+region, prefix metadata), each refused the same way. So any state machine or
+action body that carries statements cannot be exported to Turtle today; save to
+`.sysml` instead. Carrying them needs metaclasses for the behavioral nodes, not
+a wider fallback — a graph missing a model's steps would be worse than a
+refusal.
 
 **A synonym keyword that names no element of its own is refused.** `perform a : A`
 puts its subject in an inline reference rather than a declared name, a shape the

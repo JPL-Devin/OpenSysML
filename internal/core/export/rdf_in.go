@@ -9,6 +9,7 @@ import (
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/format"
+	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/rdf"
 )
 
@@ -232,6 +233,20 @@ func (d *decoder) head(el *element) (string, error) {
 			return "", d.missing(el, "sysx:"+xFilter, "a filter is its condition")
 		}
 		return "filter " + condition, nil
+	case mConstraint:
+		// A bare condition states no keyword of its own; it asserts implicitly.
+		keyword, _ := d.stringOf(el, rdf.Systemica+xDeclaredKeyword)
+		return d.conditionHead(el, keyword)
+	case mAssume:
+		return d.conditionHead(el, "assume")
+	case mRequire:
+		return d.conditionHead(el, "require")
+	case mResult:
+		value, ok := d.stringOf(el, rdf.SysML+pValue)
+		if !ok {
+			return "", d.missing(el, "sysml:"+pValue, "a result member is the expression it returns")
+		}
+		return "return " + value, nil
 	}
 	// A succession carrying its ends as references is the one the parser builds
 	// for a `then`, written back as the edge form: `then <source> <target>;`
@@ -255,7 +270,7 @@ func (d *decoder) head(el *element) (string, error) {
 		return d.definitionHead(el, kind), nil
 	}
 	if kind, ok := metaclassUsage[el.metaclass]; ok {
-		return d.usageHead(el, kind), nil
+		return d.usageHead(el, kind)
 	}
 	return "", &UnsupportedError{
 		What: fmt.Sprintf("the element <%s> of type sysml:%s", el.iri, el.metaclass),
@@ -312,11 +327,11 @@ func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) string {
 		words = append(words, "def")
 	}
 	words = append(words, d.identWords(el)...)
-	words = append(words, d.relationshipWords(el)...)
+	words = append(words, d.relationshipWords(el, "")...)
 	return strings.Join(words, " ")
 }
 
-func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
+func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	var words []string
 	words = append(words, d.prefixWords(el)...)
 	if keyword := d.visibility(el); keyword != "" {
@@ -359,6 +374,20 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 			words = append(words, flag.keyword)
 		}
 	}
+	// A prefix qualifies the kind keyword after it, and the `not` of
+	// `assert not constraint c` negates the declaration that prefix introduces.
+	// Negation on its own has no notation, so it is reported rather than dropped.
+	prefix, hasPrefix := d.stringOf(el, rdf.Systemica+xDeclaredPrefix)
+	negated := d.boolOf(el, rdf.SysML+"isNegated")
+	switch {
+	case hasPrefix:
+		words = append(words, prefix)
+		if negated {
+			words = append(words, "not")
+		}
+	case negated:
+		return "", d.missing(el, "sysx:"+xDeclaredPrefix, "the `not` of a negated declaration qualifies the prefix keyword it follows")
+	}
 	words = append(words, keyword)
 	// `chain` qualifies the kind keyword it follows, unlike the modifiers above.
 	if d.boolOf(el, rdf.SysML+"isChain") {
@@ -385,26 +414,56 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 	if accept := d.acceptParam(el); accept != nil {
 		words = append(words, "accept")
 		words = append(words, d.identWords(accept)...)
-		words = append(words, d.relationshipWords(accept)...)
+		words = append(words, d.relationshipWords(accept, "")...)
 	}
-	words = append(words, d.relationshipWords(el, skip...)...)
-	// A multiplicity binds to the name or type it follows, with no space
-	// before the bracket.
-	head := strings.Join(words, " ") + d.multiplicityText(el)
-	var tail []string
+	// The multiplicity part (`[1] ordered nonunique`) qualifies the type it
+	// follows, so it goes with the typing clause and ahead of any further
+	// specialization; with no type it follows the name.
+	multPart := d.multiplicityText(el)
 	if d.boolOf(el, rdf.SysML+"isOrdered") {
-		tail = append(tail, "ordered")
+		multPart += " ordered"
 	}
 	if d.boolOf(el, rdf.SysML+"isNonunique") {
-		tail = append(tail, "nonunique")
+		multPart += " nonunique"
 	}
+	if len(d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelTyping])) > 0 {
+		words = append(words, d.relationshipWords(el, multPart, skip...)...)
+		multPart = ""
+	} else {
+		words = append(words, d.relationshipWords(el, "", skip...)...)
+	}
+	head := strings.Join(words, " ") + multPart
 	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
-		tail = append(tail, "=", value)
+		head += " = " + value
 	}
-	if len(tail) > 0 {
-		head += " " + strings.Join(tail, " ")
+	return head, nil
+}
+
+// conditionHead rebuilds a condition member from its properties: an inline
+// condition (`assert x > 0`), the constraint it states (`require R`), or a
+// nested constraint whose conditions are its body (`assume constraint { … }`).
+func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
+	var words []string
+	if keyword != "" {
+		words = append(words, keyword)
 	}
-	return head
+	if d.boolOf(el, rdf.SysML+"isNegated") {
+		words = append(words, "not")
+	}
+	switch condition, ok := d.stringOf(el, rdf.Systemica+xCondition); {
+	case ok:
+		words = append(words, condition)
+	case d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences]) != "":
+		words = append(words, d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences]))
+	case d.boolOf(el, rdf.Systemica+xHasBody):
+		// The nested-constraint form spells out the kind it declares, so the
+		// braces that follow are read as a constraint body rather than a name.
+		words = append(words, "constraint")
+		words = append(words, d.identWords(el)...)
+	default:
+		return "", d.missing(el, "sysx:"+xCondition, "a condition member states a condition")
+	}
+	return strings.Join(words, " "), nil
 }
 
 // acceptParam returns the synthetic parameter of an accept shorthand, whose
@@ -429,21 +488,25 @@ func (d *decoder) missing(el *element, property, why string) error {
 
 func (d *decoder) importHead(el *element) (string, error) {
 	var words []string
-	if keyword := d.visibility(el); keyword != "" {
+	// An expose is always protected and always imports all (SysML v2 8.3.26.2),
+	// so its keyword states both: writing them as well does not parse.
+	expose := d.boolOf(el, rdf.Systemica+xExpose)
+	if keyword := d.visibility(el); keyword != "" && !expose {
 		words = append(words, keyword)
 	}
-	if d.boolOf(el, rdf.Systemica+xExpose) {
+	if expose {
 		words = append(words, "expose")
 	} else {
 		words = append(words, "import")
-	}
-	if d.boolOf(el, rdf.SysML+pIsImportAll) {
-		words = append(words, "all")
+		if d.boolOf(el, rdf.SysML+pIsImportAll) {
+			words = append(words, "all")
+		}
 	}
 	imported, ok := d.stringOf(el, rdf.SysML+pImportedNamespace)
 	if !ok {
 		return "", d.missing(el, "sysml:"+pImportedNamespace, "an import names the namespace it imports")
 	}
+	imported = qualifiedNameText(imported)
 	switch {
 	case d.boolOf(el, rdf.Systemica+xRecursive):
 		imported += "::**"
@@ -559,12 +622,63 @@ func (d *decoder) keywordOr(el *element, canonical string) string {
 func (d *decoder) identWords(el *element) []string {
 	var words []string
 	if short, ok := d.stringOf(el, rdf.SysML+pDeclaredShortName); ok {
-		words = append(words, "<"+short+">")
+		words = append(words, "<"+nameText(short)+">")
 	}
 	if name, ok := d.stringOf(el, rdf.SysML+pDeclaredName); ok {
-		words = append(words, name)
+		words = append(words, nameText(name))
 	}
 	return words
+}
+
+// nameText writes a name as the notation spells it: the graph carries the name
+// itself, so one that is not a basic name needs its quotes back (KerML §8.2.2).
+// A reserved word lexes as a keyword rather than a name, so a name spelling one
+// needs the quotes too.
+func nameText(name string) string {
+	if lexer.IsIdentifier(name) && !lexer.IsKeyword(name) {
+		return name
+	}
+	return "'" + escapeName(name) + "'"
+}
+
+// escapeName escapes a quote the name itself contains, which would otherwise
+// close the unrestricted name early. The parser keeps the escapes a name was
+// written with, so one already escaped is left alone.
+func escapeName(name string) string {
+	var b strings.Builder
+	for i := 0; i < len(name); i++ {
+		switch name[i] {
+		case '\\':
+			b.WriteByte(name[i])
+			if i+1 < len(name) {
+				i++
+				b.WriteByte(name[i])
+			}
+		case '\'':
+			b.WriteString(`\'`)
+		default:
+			b.WriteByte(name[i])
+		}
+	}
+	return b.String()
+}
+
+// qualifiedNameText writes a qualified name segment by segment, since each
+// segment is a name of its own and is quoted on its own.
+func qualifiedNameText(qname string) string {
+	global := strings.HasPrefix(qname, "$::")
+	if global {
+		qname = strings.TrimPrefix(qname, "$::")
+	}
+	segments := strings.Split(qname, "::")
+	for i, segment := range segments {
+		segments[i] = nameText(segment)
+	}
+	out := strings.Join(segments, "::")
+	if global {
+		return "$::" + out
+	}
+	return out
 }
 
 func (d *decoder) prefixWords(el *element) []string {
@@ -584,8 +698,9 @@ func (d *decoder) visibility(el *element) string {
 }
 
 // relationshipWords renders the typing and specialization clauses of a
-// declaration head, in the order the grammar expects.
-func (d *decoder) relationshipWords(el *element, skip ...ast.RelationshipKind) []string {
+// declaration head, in the order the grammar expects. multPart, when given, is
+// the multiplicity part the typing clause carries.
+func (d *decoder) relationshipWords(el *element, multPart string, skip ...ast.RelationshipKind) []string {
 	var words []string
 	for _, kind := range relationshipOrder {
 		if slices.Contains(skip, kind) {
@@ -602,7 +717,11 @@ func (d *decoder) relationshipWords(el *element, skip ...ast.RelationshipKind) [
 				targets[i] = "~" + target
 			}
 		}
-		words = append(words, relationshipSyntax[kind], strings.Join(targets, ", "))
+		clause := strings.Join(targets, ", ")
+		if kind == ast.RelTyping {
+			clause += multPart
+		}
+		words = append(words, relationshipSyntax[kind], clause)
 	}
 	return words
 }
@@ -641,24 +760,28 @@ func (d *decoder) referenceList(el *element, property string) []string {
 
 // referenceName renders a reference term as the name to write in source.
 //
-// A literal is a name that resolved outside this model, and is written as it
-// was. An element IRI is written relative to the scope the reference appears
-// in — the same name the author would have written — falling back to the full
-// qualified name when the target is not in scope.
+// A literal is a name that resolved outside this model, quoted where the
+// notation needs it, except an expression literal, which is already the text it
+// was written as. An element IRI is written relative to the scope the reference
+// appears in — the same name the author would have written — falling back to the
+// full qualified name when the target is not in scope.
 func (d *decoder) referenceName(term rdf.Term, scope string) string {
 	if term.IsLiteral() {
-		return term.Value
+		if term.Datatype == rdf.Systemica+dtExpression {
+			return term.Value
+		}
+		return qualifiedNameText(term.Value)
 	}
 	qname, ok := rdf.QualifiedNameOf(term.Value)
 	if !ok {
-		return rdf.LocalName(term.Value)
+		return qualifiedNameText(rdf.LocalName(term.Value))
 	}
 	for {
 		if scope == "" {
-			return qname
+			return qualifiedNameText(qname)
 		}
 		if rest, found := strings.CutPrefix(qname, scope+"::"); found {
-			return rest
+			return qualifiedNameText(rest)
 		}
 		cut := strings.LastIndex(scope, "::")
 		if cut < 0 {

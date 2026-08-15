@@ -47,7 +47,13 @@ const (
 	xRecursive       = "isRecursive"
 	xExpose          = "isExpose"
 	xDeclaredKeyword = "declaredKeyword"
+	xDeclaredPrefix  = "declaredPrefix"
+	xCondition       = "condition"
 )
+
+// dtExpression is the datatype of a relationship target that is not a name but
+// an expression, carried as the text it was written as rather than as a name.
+const dtExpression = "Expression"
 
 // Metaclass names for the constructs that have no SysML metaclass of their own
 // in this mapping.
@@ -55,6 +61,13 @@ const (
 	mAlias        = "Alias"
 	mFilter       = "FilterMember"
 	mMultiplicity = "MultiplicityDeclaration"
+	// The members that state a condition or a result rather than declaring a
+	// feature: the conditions of a constraint body, a requirement's assumptions
+	// and required conditions, and a calculation's result expression.
+	mConstraint = "ConstraintMember"
+	mAssume     = "AssumeMember"
+	mRequire    = "RequireMember"
+	mResult     = "ResultMember"
 )
 
 // boolProperty pairs an RDF property name with the AST flag it mirrors. Only
@@ -247,10 +260,16 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 				return err
 			}
 		}
+		// The prefix a kind keyword was qualified with (`assert constraint c`)
+		// states what the usage is for, so it is part of the declaration.
+		if n.PrefixKeyword != "" {
+			e.graph.Add(subject, e.sysx(xDeclaredPrefix), rdf.String(n.PrefixKeyword))
+		}
 		e.flags(subject, []boolProperty{
 			{"isAbstract", n.IsAbstract},
 			{"isVariation", n.IsVariation},
 			{"isVariant", n.IsVariant},
+			{"isNegated", n.IsNegated},
 			{"isReference", n.IsReference},
 			{"isAll", n.IsAll},
 			{"isEnd", n.IsEnd},
@@ -357,6 +376,50 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Members, fqn, subject)
 
+	case *ast.ConstraintMember:
+		// A condition of a constraint body, written inline (`assert x > 0;`) or
+		// as a nested constraint (`assert constraint [name] { … }`).
+		head(rdf.SystemicaTerm(mConstraint))
+		if n.Name != "" {
+			e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(n.Name))
+		}
+		if n.Keyword != "" {
+			e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(n.Keyword))
+		}
+		e.flags(subject, []boolProperty{{"isNegated", n.IsNegated}})
+		return e.condition(subject, fqn, owner, n.Expression, nil, n.Body)
+
+	case *ast.AssumeMember:
+		head(rdf.SystemicaTerm(mAssume))
+		return e.condition(subject, fqn, owner, n.Expression, n.Reference, n.Body)
+
+	case *ast.RequireMember:
+		head(rdf.SystemicaTerm(mRequire))
+		return e.condition(subject, fqn, owner, n.Expression, n.Reference, n.Body)
+
+	case *ast.ResultMember:
+		head(rdf.SystemicaTerm(mResult))
+		e.graph.Add(subject, e.sysml(pValue), rdf.String(e.text(n.Expression)))
+		return nil
+
+	case *ast.SubjectMember:
+		// A subject parameter is a usage of its own (SysML v2 8.2.2.16), so it
+		// is mapped as the SubjectMembership a `subject s : X` declares.
+		head(rdf.SysMLTerm(usageMetaclass[ast.UsageSubject]))
+		if n.Name != "" {
+			e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(n.Name))
+		}
+		if n.TypeRef != nil {
+			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelTyping]), e.reference(owner, qualifiedText(n.TypeRef)))
+		}
+		e.relationships(subject, owner, n.Relationships)
+		e.multiplicity(subject, n.Multiplicity)
+		if n.BindingExpr != nil {
+			e.graph.Add(subject, e.sysml(pValue), rdf.String(e.text(n.BindingExpr)))
+		}
+		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
+		return e.encode(n.Body, fqn, subject)
+
 	case *ast.FilterMember:
 		head(rdf.SystemicaTerm(mFilter))
 		e.graph.Add(subject, e.sysx(xFilter), rdf.String(e.text(n.Condition)))
@@ -389,6 +452,24 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		What: fmt.Sprintf("the %s at %s", nodeDescription(node), e.where(node)),
 		Note: rdfLimitationsNote,
 	}
+}
+
+// condition emits the three forms a condition member is written in: an inline
+// expression, a reference to the constraint it states (`require R { … }`), or a
+// nested constraint stating its conditions in a body. The expression is carried
+// as its source text, as every expression-valued position in this mapping is.
+func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, ref *ast.QualifiedName, body []ast.Node) error {
+	if expr != nil {
+		e.graph.Add(subject, e.sysx(xCondition), rdf.String(e.text(expr)))
+		return nil
+	}
+	if ref != nil {
+		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]), e.reference(owner, qualifiedText(ref)))
+	}
+	// Both remaining forms — a nested constraint and the constraint a member
+	// names — are written with a body, whether or not it has members.
+	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
+	return e.encode(body, fqn, subject)
 }
 
 // verbatimUsage reports whether a usage's declaration head has to be carried as
@@ -465,7 +546,14 @@ func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Rela
 		if !ok {
 			continue
 		}
-		e.graph.Add(subject, e.sysml(property), e.reference(owner, e.text(rel.Target)))
+		// A name is mapped as a reference, which links it when this document
+		// declares it; a feature chain or other expression is not a name, so it
+		// is carried as the text it was written as.
+		if name, ok := rel.Target.(*ast.QualifiedName); ok {
+			e.graph.Add(subject, e.sysml(property), e.reference(owner, qualifiedText(name)))
+			continue
+		}
+		e.graph.Add(subject, e.sysml(property), rdf.TypedLiteral(e.text(rel.Target), rdf.Systemica+dtExpression))
 	}
 }
 
@@ -520,6 +608,8 @@ func (e *encoder) reference(owner, name string) rdf.Term {
 		}
 		scope = scope[:cut]
 	}
+	// A name that links to nothing is carried as the plain name; the quotes an
+	// unrestricted name needs are notation, added when it is written back out.
 	return rdf.String(name)
 }
 
@@ -613,6 +703,14 @@ func declaredNameAndMembers(node ast.Node) (string, []ast.Node) {
 		return n.Ident.Name, n.Body
 	case *ast.MultiplicityDecl:
 		return n.Ident.Name, n.Members
+	case *ast.ConstraintMember:
+		return n.Name, n.Body
+	case *ast.AssumeMember:
+		return "", n.Body
+	case *ast.RequireMember:
+		return "", n.Body
+	case *ast.SubjectMember:
+		return n.Name, n.Body
 	case *ast.Comment:
 		return n.Ident.Name, nil
 	case *ast.Documentation:

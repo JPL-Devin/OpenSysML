@@ -76,7 +76,7 @@
                 (*ast.QualifiedName))
               (FeatureReference name="engagementRingToBand::connected")))
           (Membership visibility="default"
-            (Usage kind="constraint" name="isIdeal" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="constraint" name="isIdeal" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert"
               (ConstraintMember assert=true negated=false
                 (OperatorExpr operator="=="
                   (FeatureReference name="cut")
