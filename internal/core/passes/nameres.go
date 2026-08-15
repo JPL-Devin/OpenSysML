@@ -41,6 +41,7 @@ func (NameResolutionPass) Run(ctx *Context, name string, root *ast.RootNamespace
 			Message:  d.Message,
 			Code:     code,
 			Source:   "name-resolution",
+			Fixes:    d.Fixes,
 		})
 	}
 	return out

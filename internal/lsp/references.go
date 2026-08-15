@@ -24,7 +24,7 @@ func (s *Server) References(ctx context.Context, params *protocol.ReferenceParam
 	// or on a declaration (find the symbol whose DeclSpan contains the cursor).
 	var target *symbols.Symbol
 	if ref := refAtOffset(refs, offset); ref != nil {
-		if sym, ok := s.ws.ResolveReferenceInDoc(name, ref.Reference); ok {
+		if sym, ok := s.ws.ResolveReferenceInDoc(name, *ref); ok {
 			target = sym
 		}
 	}
@@ -40,7 +40,7 @@ func (s *Server) References(ctx context.Context, params *protocol.ReferenceParam
 		out = append(out, s.symbolLocation(name, target))
 	}
 	for _, ref := range refs {
-		sym, ok := s.ws.ResolveReferenceInDoc(name, ref.Reference)
+		sym, ok := s.ws.ResolveReferenceInDoc(name, ref)
 		// Pointer identity: same-document resolution stays inside the Document-tree
 		// scope captured above (ref.Scope points into doc.Scope), so sym and target
 		// are both Document-tree pointers and comparable. Cross-document references

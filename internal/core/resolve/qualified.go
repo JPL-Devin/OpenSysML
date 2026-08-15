@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/quickfix"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -214,12 +215,16 @@ func rootOf(scope *symbols.Scope) *symbols.Scope {
 // only an unqualified one is second-guessed.
 func (r *Resolver) unresolved(scope *symbols.Scope, qn *ast.QualifiedName) {
 	msg := unresolvedReferencePrefix + qnText(qn)
+	var fixes []quickfix.Fix
 	if len(qn.Parts) == 1 && !qn.Global {
-		msg = r.unresolvedMessage(scope, qn.Parts[0].Text)
+		name := qn.Parts[0].Text
+		msg = r.unresolvedMessage(scope, name)
+		fixes = r.unresolvedFixes(scope, name, qn.Span())
 	}
 	r.report(Diagnostic{
 		Span:    qn.Span(),
 		Message: msg,
+		Fixes:   fixes,
 	})
 }
 
