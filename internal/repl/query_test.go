@@ -125,6 +125,62 @@ func TestCheckOnInstantiatedObject(t *testing.T) {
 		"✗ Constraint Rover::pack::nearlyEmpty failed (on Rover::pack ID: 1)")
 }
 
+// inheritedConditionFixture declares its conditions on the definition, which two
+// usages carry with values of their own.
+const inheritedConditionFixture = `package P {
+    part def Sensor {
+        attribute reading = 0.0;
+        constraint inRange { reading <= 100.0 }
+        requirement ok { require reading <= 100.0; }
+    }
+    part hot : Sensor { attribute :>> reading = 140.0; }
+    part cold : Sensor { attribute :>> reading = 20.0; }
+}
+`
+
+// TestCheckOfInheritedConditionIsAboutTheObject: a condition a definition
+// declares is checked against the object of a usage carrying it, since a verdict
+// about the definition's defaults would pass while that object violates it.
+func TestCheckOfInheritedConditionIsAboutTheObject(t *testing.T) {
+	s := loadSource(t, inheritedConditionFixture)
+	if _, err := s.InstantiateNamed("P::hot"); err != nil {
+		t.Fatalf("InstantiateNamed: %v", err)
+	}
+
+	wantVerdict(t, s.CheckConstraint("P::Sensor::inRange"), VerdictFails,
+		"✗ Constraint P::Sensor::inRange failed (on P::hot ID: 1)")
+	wantVerdict(t, s.CheckRequirement("P::Sensor::ok"), VerdictFails,
+		"✗ Requirement P::Sensor::ok failed (on P::hot ID: 1)")
+}
+
+// A session holding no object of the declaring type still answers about declared
+// defaults, and says nothing about an object.
+func TestCheckWithoutAnObjectUsesDeclaredDefaults(t *testing.T) {
+	s := loadSource(t, inheritedConditionFixture)
+	v := s.CheckConstraint("P::Sensor::inRange")
+	wantVerdict(t, v, VerdictHolds, "✓ Constraint P::Sensor::inRange passed")
+	if got := strings.Join(v.Lines, "\n"); strings.Contains(got, "(on ") {
+		t.Errorf("verdict claims an object:\n%s", got)
+	}
+}
+
+// Two objects carry the same inherited condition, so which one a verdict would
+// be about is a question: answering about either would report the other's
+// verdict half the time.
+func TestCheckOfConditionCarriedBySeveralObjectsIsUnresolved(t *testing.T) {
+	s := loadSource(t, inheritedConditionFixture)
+	for _, name := range []string{"P::hot", "P::cold"} {
+		if _, err := s.InstantiateNamed(name); err != nil {
+			t.Fatalf("InstantiateNamed(%s): %v", name, err)
+		}
+	}
+
+	wantVerdict(t, s.CheckConstraint("P::Sensor::inRange"), VerdictUnresolved,
+		"carried by more than one object", "P::cold, P::hot")
+	wantVerdict(t, s.CheckRequirement("P::Sensor::ok"), VerdictUnresolved,
+		"carried by more than one object")
+}
+
 // TestInstantiateNamedRejectsUnknownName checks that a name the session cannot
 // resolve is an error a caller can fail on, not a silent no-op.
 func TestInstantiateNamedRejectsUnknownName(t *testing.T) {

@@ -100,6 +100,33 @@ func (s *Session) owningInstance(fqn string) (*runtime.Instance, string) {
 	return nil, ""
 }
 
+// carrierInstances names the session's objects that carry sym's conditions: a
+// condition of a definition is a condition of every object of it, so an object of
+// `part hot : Sensor` carries `Sensor::inRange`. Sorted, for a stable report.
+func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
+	if sym == nil || sym.OwnerScope == nil {
+		return nil
+	}
+	declaring := sym.OwnerScope.Owner()
+	if declaring == nil || len(s.instances) == 0 {
+		return nil
+	}
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return nil
+	}
+	model := ctx.Model()
+	var names []string
+	for name, inst := range s.instances {
+		if inst == nil || !model.Conforms(inst.Type, declaring) {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // walkSlots follows a chain of part slots from inst. An unwalkable segment
 // yields no object, since binding to an ancestor would answer about the wrong one.
 func (s *Session) walkSlots(inst *runtime.Instance, name string, segments []string) (*runtime.Instance, string) {
