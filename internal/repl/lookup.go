@@ -100,9 +100,8 @@ func (s *Session) owningInstance(fqn string) (*runtime.Instance, string) {
 	return nil, ""
 }
 
-// carrierInstances names the session's objects that carry sym's conditions: a
-// condition of a definition is a condition of every object of it, so an object of
-// `part hot : Sensor` carries `Sensor::inRange`. Sorted, for a stable report.
+// carrierInstances names the session's objects of the type declaring sym, sorted:
+// an object of `part hot : Sensor` carries `Sensor::inRange`.
 func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 	if sym == nil || sym.OwnerScope == nil {
 		return nil

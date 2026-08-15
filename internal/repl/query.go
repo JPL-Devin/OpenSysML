@@ -220,10 +220,9 @@ type checkTarget struct {
 	ctx   *runtime.Context
 }
 
-// checkSubject is the object a check is about: the one instantiated under the
-// name it was reached by, else the single object carrying the condition. Several
-// carriers make the subject a question — the non-nil third result — and none
-// leaves the check about declared defaults.
+// checkSubject is the object a check is about: the one instantiated under the name it
+// was reached by, else the single carrier. Several carriers yield the third result;
+// none leaves the check about declared defaults.
 func (s *Session) checkSubject(name string, target checkTarget) (*runtime.Instance, string, *Verdict) {
 	if inst, owner := s.owningInstance(target.fqn); inst != nil {
 		return inst, owner, nil
