@@ -684,14 +684,21 @@ follow them with the cheap canaries: `%action tally` + `%continue` → `total = 
 
 ## Session-accumulation trap (bites both testers and features)
 
-`Session.accept` (internal/repl/session.go) drops any earlier snippet whose **declared names**
-intersect the new submission's. So typing `package Demo { part def Trailer { ... } }` to *add* a
-member to an already-loaded `package Demo` **replaces the whole package** — `Demo::Vehicle` and
-friends become `unresolved reference: …`, and the instances of them are dropped (with a notice) since
-the declarations they were built from are gone. When you just want to add declarations mid-session, use a **different package
-name**. When you want to prove that newly-typed declarations are visible to the qualified-name path
-(the `s.idx`/`s.rtCtx`/`s.instances` invalidation in `Submit`), a fresh package avoids conflating the
-two behaviors.
+Whether re-typing a namespace **adds to** it or **replaces** it depends on where the earlier one
+came from (`mergeSubmission`, internal/repl/merge.go):
+
+- **Typed earlier at the prompt → merged.** `package Demo { part def Trailer; }` folds into the
+  `package Demo` already typed: `note: added to the existing package Demo (its other members are
+  kept)`, and `Demo::Vehicle` still resolves. Re-typing a *member* replaces that member and says
+  so (`note: added to the existing package Demo, replacing part def Wheel`), which is also what
+  drops the instances built from it.
+- **Loaded from a file (`%load`) → replaced.** A loaded snippet keeps its identity, so
+  `package ActionExecutorDemo { part def Trailer; }` after loading that example reports
+  `note: replaced package ActionExecutorDemo (action def SimpleAction no longer declared)` and the
+  file's members are gone. This is the shape that bites a test written against a `%load`ed
+  fixture — use a **different package name** to add declarations there.
+- An **empty body** (`package Demo { }`) is the deliberate way to empty a namespace, and a
+  submission with a different header (or declaring more than one thing) replaces rather than merges.
 
 `Submit` **carries instances over** what a submission did not change (`internal/repl/carryover.go`,
 `runtime.Adopt`): after an unrelated `part def B;`, `%instances` still lists the instance with the

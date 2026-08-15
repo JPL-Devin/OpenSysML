@@ -146,10 +146,11 @@ declarations and survive.
 and [`examples/repl-behavioral-demo.sysml`](../../examples/repl-behavioral-demo.sysml)
 convert too, as do the structure-only `parser_features_demo_*.kerml` files
 (except `..._advanced_bodies.kerml`, which computes a value, and three that each
-declare one name twice). Of the 19 top-level models under `examples/`, 8 convert, as do 62 of
-the 100 training-corpus copies and the semantic-layer demo — 71 of 120 in total. The rest show a behavior, so the
-conversion stops at a state, a region, an assignment, an action node or a name
-two members of one body share:
+declare one name twice). What converts is structure; a model whose point is a
+behavior does not, the conversion stopping at a state, a region, an assignment,
+an action node or a name two members of one body share (how much of `examples/`
+that leaves converting is measured in
+[project/roadmap.md](../project/roadmap.md#d6--a-behavioral-node-has-no-metaclass-so-a-model-stating-steps-cannot-convert)):
 
 ```bash
 $ sysml examples/state-machine-demo.sysml -convert ttl

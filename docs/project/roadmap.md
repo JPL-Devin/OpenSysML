@@ -396,18 +396,15 @@ pass's reach, not in the dimension inference.
 None of these are capability gaps; the REPL executes models. They are the rough edges a new
 user meets.
 
-## B1 — a declaration ends an in-progress debugger session
+## B1 — a declaration ends an in-progress debugger session — done
 
-`Session.Submit` clears everything derived from the previous document, including `s.actionExec`
-and `s.stateExec`, so typing any declaration mid-session silently ends an `%action`/`%state`
-session and wipes instances. The maintainer accepted this as "fine for now" and asked for
-refinement: keep the session alive when the declarations it depends on are unchanged, or at
-minimum say the session was dropped instead of failing the next `%step`/`%advance` with "no
-active session".
-
-Related: `Session.accept` drops any earlier snippet whose declared names intersect the new one,
-so re-typing `package Demo { … }` to add a member replaces the whole package body rather than
-merging it.
+`Session.Submit` used to clear everything derived from the previous document, so any declaration
+typed mid-session silently ended an `%action`/`%state` session and wiped instances. It is now
+scoped to what the submission changed: `mergeSubmission` folds a re-typed namespace into the one
+already in the session instead of replacing its body, `carryOverObjects` carries instantiated
+objects whose declarations are untouched, and `dropStaleDebugSessions` ends only a session over a
+declaration the submission rewrote — reporting it as a `note:` rather than failing the next
+`%step` with "no active session". Documented in `docs/guide/04-repl.md`.
 
 ## B2 — `%eval` of a compound expression cannot reach a package member — done
 

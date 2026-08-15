@@ -7,11 +7,17 @@ command answers about.
 ```
 $ sysml
 SysML v2 REPL — %help for commands, Ctrl-D to exit
+sysml> import ScalarValues::*;
+✓ import ScalarValues::*
 sysml> package Demo { part def Wheel { attribute diameter : Real = 16.0; } }
 ✓ package Demo
 sysml> %eval Demo::Wheel::diameter
+✓ Demo::Wheel::diameter
   = 16.00
 ```
+
+The import is what makes `Real` resolvable, as in [chapter 2](02-first-model.md); a session that
+uses a library type without it is rejected with `unresolved reference: Real`.
 
 ## What a submission does
 
@@ -19,14 +25,17 @@ A declaration is parsed and validated on submission, and the result is reported 
 `✓` with the declared name, or the diagnostics. An unterminated declaration continues on the
 next line (`  ...>`) until its braces close.
 
-Two consequences of the session model are worth knowing before a long session:
+Two properties of the session model are worth knowing before a long session:
 
-- **A submission replaces any earlier snippet declaring the same names.** Re-typing
-  `package Demo { … }` to add one member replaces the whole package body rather than merging
-  into it, so keep a growing model in a file and `%load` it.
-- **A submission resets what was derived from the previous model** — the instances created with
-  `%instantiate`, and an active `%action`/`%state` debugging session. `%step` after a
-  declaration reports that there is no active session; start the debugger again.
+- **A submission adds to the namespace already in the session.** Re-typing `package Demo { … }`
+  with one more member folds into the declaration already there — `note: added to the existing
+  package Demo (its other members are kept)` — rather than replacing its body. Re-typing a
+  member *does* replace that member, and says so; an empty body (`package Demo { }`) is how a
+  namespace is emptied.
+- **A submission only invalidates what it changed.** Objects created with `%instantiate` are
+  carried over while the declarations they were built from are untouched, and an
+  `%action`/`%state` debugging session over a declaration the submission left alone keeps
+  running. What is dropped is reported as a `note:` line saying what to re-run.
 
 `%list` shows the session's declarations, `%clear` resets it, and `%save` writes it out
 ([chapter 7](07-saving-and-rdf.md)).
@@ -39,7 +48,9 @@ sysml> %load examples/*.sysml
 sysml> %load examples/
 ```
 
-`%load` takes files, globs and directories, and submits their contents as if typed. Tab
+`%load` takes files, globs and directories, and submits their contents as if typed — with one
+difference: a loaded namespace keeps the file's identity, so re-typing it at the prompt *replaces*
+it (`note: replaced package …`) rather than adding to it. Edit the file and load it again. Tab
 completes paths after `%load` and `%save`, and completes meta-commands and symbol names
 everywhere else.
 

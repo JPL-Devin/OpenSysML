@@ -21,22 +21,26 @@ ANCHOR = re.compile(r"<a\s+(?:id|name)=[\"']([^\"']+)[\"']", re.IGNORECASE)
 SKIP_PREFIX = ("http://", "https://", "mailto:", "tel:", "ftp://")
 
 
-def slug(heading: str) -> str:
-    """GitHub's heading slug: lowercased, punctuation dropped, spaces to dashes."""
+def slugs(heading: str) -> set[str]:
+    """GitHub's heading slug: lowercased, punctuation dropped, spaces to dashes.
+
+    GitHub dashes every space, so punctuation dropped between words leaves a run
+    of dashes; the collapsed spelling is accepted too, since that is what a
+    reader writes by hand.
+    """
     text = re.sub(r"`|\*|_|<[^>]+>", "", heading)
     text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
     text = text.strip().lower()
     text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE)
-    return re.sub(r"\s+", "-", text)
+    each = re.sub(r"\s", "-", text)
+    return {s for s in (each, re.sub(r"-+", "-", each)) if s}
 
 
 def anchors_of(path: Path) -> set[str]:
     text = path.read_text(encoding="utf-8", errors="replace")
     found: set[str] = set()
     for heading in HEADING.findall(text):
-        base = slug(heading)
-        if base:
-            found.add(base)
+        found.update(slugs(heading))
     found.update(ANCHOR.findall(text))
     return found
 
