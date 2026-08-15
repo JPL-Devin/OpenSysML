@@ -908,25 +908,27 @@ are tracked here):
 See [`TESTING.md`](TESTING.md) for complete test contract details.
 
 **Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
-- Execution conformance cases: 113 (all passing)
-- gRPC conformance cases: 6 (all passing)
-- Robustness subtests: 54 (all passing)
-- Golden AST fixtures: 52
-- Golden execution traces: 40
-- Negative parser subtests: 49
+- Execution conformance cases: 209 (all passing)
+- gRPC conformance cases: 8 (all passing)
+- Robustness subtests: 143 (all passing)
+- Golden AST fixtures: 80
+- Golden execution traces: 67
+- Negative parser subtests: 127
 
-**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 113 total):
-- Calc: 15 conformance + 12 golden traces (includes unary, coercion, qualified-name, KerML library and Systemica extension library function evaluation)
-- Constraint: 7 conformance + 4 golden traces
+**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 209 total):
+- Calc: 56 conformance + 25 golden traces (includes unary, coercion, qualified-name, body-local usages, statement bodies, KerML library and Systemica extension library function evaluation)
+- Action: 48 conformance + 26 golden traces
+- State: 41 conformance + 12 golden traces
 - Requirement: 12 conformance
-- Action: 35 conformance + 17 golden traces
-- State: 30 conformance + 7 golden traces
-- Accept: 1 conformance (`accept_then_transition`)
-- Instance: 8 conformance (`instance_derived_slots`, `instance_constraint_binding`, `instance_inherited_constraint`, `instance_library_function_default`, `instance_nested_usage_body`, `instance_unnamed_redefinition` among them)
+- Instance: 9 conformance (`instance_derived_slots`, `instance_constraint_binding`, `instance_inherited_constraint`, `instance_library_function_default`, `instance_nested_usage_body`, `instance_unnamed_redefinition` among them)
+- Unit and quantity: 7 conformance
+- Constraint: 7 conformance + 4 golden traces
+- Satisfy: 5 conformance; variation: 5; redefinition: 5; variant: 3; feature chains: 3; ball-and-chain: 3
+- One each of accept (`accept_then_transition`), attribute, connector, cubesat and multiplicity
 
 **Quality Gates:**
 - Parser: 95/95 stdlib files clean (94 vendored OMG, 1 Systemica extension)
-- Execution conformance: 113/113 cases passing
+- Execution conformance: 209/209 cases passing
 - Training examples: 98/100 clean (2 files / 4 errors, both pinned OMG source bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
 
