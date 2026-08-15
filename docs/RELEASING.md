@@ -94,8 +94,16 @@ windows/amd64.
 
 `publish-github-release` uploads them with `ghr`, using a token from
 `GITHUB_TOKEN`, `GH_TOKEN` or `CIRCLE_TOKEN` in the CircleCI project settings.
-It runs with `-delete`, so re-running the workflow for the same tag replaces
-that release's assets rather than appending duplicates.
+It runs with `-replace`, so re-running the workflow for the same tag replaces
+that release's assets rather than appending duplicates, and leaves everything
+else on the release alone: notes, title and the prerelease/latest flags survive.
+A tag that has no release yet still gets one created.
+
+Do not go back to `-delete`. It is an alias of `-recreate`: it deletes the
+existing release *and its tag* and creates an empty one, which wipes
+hand-written release notes (the notes must therefore be on a published release —
+`ghr` does not see a draft release for the tag and would publish a second, empty
+one alongside it).
 
 ## After the release
 
@@ -157,7 +165,7 @@ against, and tying the two together would put a new, immutable PyPI version on
 every core release and would block a client-only fix behind a core release.
 
 Keeping them apart also protects the `v*` path: `publish-github-release` runs
-`ghr -delete`, so re-running a core release is an ordinary operation, while a
+`ghr -replace`, so re-running a core release is an ordinary operation, while a
 PyPI version can be yanked but never re-uploaded. A re-run must never have an
 irreversible upload hanging off it.
 
