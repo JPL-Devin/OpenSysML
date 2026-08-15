@@ -75,6 +75,26 @@ func TestDimensionMismatchWarnsInArithmetic(t *testing.T) {
 	}
 }
 
+// TestDimensionMismatchWarnsThroughAlias covers an operand whose quantity type is
+// named through a library alias, which fixes the same dimension the type it
+// aliases does.
+func TestDimensionMismatchWarnsThroughAlias(t *testing.T) {
+	warnings, errs := dimensionDiagnostics(t, `package Test {
+		private import ISQ::*;
+		private import SI::*;
+		part def Oven {
+			attribute temp : ISQ::TemperatureValue = 300.0 [K];
+			constraint bad { temp < 400.0 [kg] }
+		}
+	}`)
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("want 1 dimensional warning, got %d: %v", len(warnings), warnings)
+	}
+}
+
 // TestDimensionCommensurableSilent covers units of one dimension at different
 // scales, and a derived dimension composed by unit arithmetic: both convert at
 // evaluation, so neither may warn.
@@ -128,8 +148,9 @@ func TestDimensionlessSilent(t *testing.T) {
 }
 
 // TestDimensionUnknownSilent covers the documented limitation: a dimension that
-// only evaluation determines — a calculation result, a constraint parameter, an
+// only evaluation determines — a calculation result, an untyped parameter, an
 // unresolved reference, or a value an assignment may replace — is not guessed at.
+// A parameter that declares a quantity type does fix a dimension, and warns.
 func TestDimensionUnknownSilent(t *testing.T) {
 	for name, src := range map[string]string{
 		"calc result": `package Test {
@@ -141,7 +162,7 @@ func TestDimensionUnknownSilent(t *testing.T) {
 				constraint maybe { mass < Limit() }
 			}
 		}`,
-		"constraint parameter": `package Test {
+		"untyped constraint parameter": `package Test {
 			private import ISQ::*;
 			private import SI::*;
 			constraint def Under {

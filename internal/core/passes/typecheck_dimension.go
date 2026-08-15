@@ -54,7 +54,7 @@ func describeDimension(d semantics.Dimension) string {
 		return fmt.Sprintf("%s (dimensionless)", d.Unit)
 	}
 	if d.Unit == "" {
-		return fmt.Sprintf("dimension %s", d)
+		return fmt.Sprintf("a value of dimension %s", d)
 	}
 	return fmt.Sprintf("%s (dimension %s)", d.Unit, d)
 }

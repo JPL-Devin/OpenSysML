@@ -40,7 +40,7 @@ func (d Dimension) String() string {
 		if out != "" {
 			out += "·"
 		}
-		out += baseQuantityName(factor.Unit)
+		out += leafName(factor.Unit.Name)
 		if factor.Exponent != 1 {
 			out += fmt.Sprintf("^%g", factor.Exponent)
 		}
@@ -51,10 +51,10 @@ func (d Dimension) String() string {
 	return out
 }
 
-// baseQuantityName is the declared name of a base quantity, which a cached
-// symbol carries as the leaf of its qualified name.
-func baseQuantityName(sym *symbols.Symbol) string {
-	name := sym.Name
+// leafName is a symbol's declared name: a cached symbol carries it as the leaf of
+// its qualified name, so a diagnostic reads the same whether the library was
+// parsed or restored from the index cache.
+func leafName(name string) string {
 	if i := strings.LastIndex(name, "::"); i >= 0 {
 		return name[i+2:]
 	}
@@ -68,9 +68,10 @@ type dimensionResult struct {
 }
 
 // DimensionOfExpr reports the dimension of an expression's value when the
-// declarations it names determine it statically. A unit that comes from a
-// parameter, a calculation result, an unresolved reference or an unbound
-// redefinition is not determined, and is reported as unknown rather than guessed.
+// declarations it names determine it statically. A dimension that only
+// evaluation determines — an untyped feature or parameter, a calculation result,
+// an unresolved reference, an unbound redefinition — is reported as unknown
+// rather than guessed.
 func (m *Model) DimensionOfExpr(scope *symbols.Scope, node ast.Node) (Dimension, bool) {
 	if m == nil || node == nil {
 		return Dimension{}, false
@@ -206,7 +207,7 @@ func (m *Model) dimensionOfFeature(sym *symbols.Symbol) (Dimension, bool) {
 		if !ok {
 			return Dimension{}, false
 		}
-		return Dimension{Term: term, Unit: typ.Name}, true
+		return Dimension{Term: term, Unit: leafName(typ.Name)}, true
 	}
 	return Dimension{}, false
 }
@@ -220,6 +221,13 @@ func (m *Model) quantityValueTypeOf(sym *symbols.Symbol) *symbols.Symbol {
 		return nil
 	}
 	for _, super := range m.AllSupertypes(sym) {
+		if m.resolver != nil {
+			// A type named through an alias (ISQ::TemperatureValue) is reached as the
+			// alias, which declares no dimension of its own.
+			if alias, ok := m.resolver.ResolveAliasTarget(super); ok {
+				super = alias
+			}
+		}
 		if super == quantity || super.Kind != symbols.SymbolAttributeDef {
 			continue
 		}
