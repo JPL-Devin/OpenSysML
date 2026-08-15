@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/repl"
@@ -17,18 +18,33 @@ const (
 	promptPrefix  = "error: "
 )
 
-// asCommandProblem restates the lines of a check that could not be made in the
-// command's prefix. A line locating a finding in the source
-// (`model.sysml:1:42: error: …`) is about the model, and keeps its own shape.
+// locatesSource matches a line that locates a finding in the model source, as
+// `model.sysml:1:42: …` does.
+var locatesSource = regexp.MustCompile(`^[^\s:]+:\d+:\d+: `)
+
+// asCommandProblem states a check that could not be made under the command's
+// prefix, in place of the prompt's, whether or not the prompt gave it one. A line
+// locating a finding in the source, and the lines of a run that stopped, keep
+// their own shape.
 func asCommandProblem(lines []string) []string {
 	out := make([]string, 0, len(lines))
+	restated := false
 	for _, line := range lines {
 		if rest, ok := strings.CutPrefix(line, promptPrefix); ok {
-			line = commandPrefix + rest
+			line, restated = commandPrefix+rest, true
 		}
 		out = append(out, line)
 	}
+	if !restated && len(out) == 1 && !locatesSource.MatchString(out[0]) {
+		out[0] = commandPrefix + out[0]
+	}
 	return out
+}
+
+// asCommandFailure states a failure under the command's prefix, in place of the
+// prompt's when the failure is already phrased the way the prompt phrases it.
+func asCommandFailure(message string) string {
+	return commandPrefix + strings.TrimPrefix(message, promptPrefix)
 }
 
 // reporter collects what a check mode run decided and reports it, either as the
@@ -140,7 +156,7 @@ func (r *reporter) problem(lines []string) {
 func (r *reporter) failed(message string) {
 	r.report.Errors = append(r.report.Errors, message)
 	if !r.json {
-		fmt.Fprintln(r.err, commandPrefix+message)
+		fmt.Fprintln(r.err, asCommandFailure(message))
 	}
 }
 
