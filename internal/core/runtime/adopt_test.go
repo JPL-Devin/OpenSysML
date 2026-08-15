@@ -111,20 +111,25 @@ func TestAdoptRefusesAChangedDependency(t *testing.T) {
 }
 
 // The objects are shared with the context they came from, which a run started
-// before the re-analysis still materializes through, so both contexts hand out
-// identities from one sequence rather than each from where it stood.
+// before the re-analysis still materializes through, so every context that holds
+// them hands out identities from one sequence — including the first one, several
+// re-analyses later.
 func TestAdoptSharesTheIdentitySequence(t *testing.T) {
-	prev := contextOver(t, adoptSrc)
-	obj := vehicleIn(t, prev)
-	shapes := prev.ShapesOf(obj)
+	first := contextOver(t, adoptSrc)
+	obj := vehicleIn(t, first)
+	shapes := first.ShapesOf(obj)
 
-	ctx := contextOver(t, adoptSrc+"\npart def Widget;")
-	if err := ctx.Adopt(prev, shapes, obj); err != nil {
-		t.Fatalf("Adopt: %v", err)
+	ctx := first
+	for _, extra := range []string{"\npart def Widget;", "\npart def Gadget;"} {
+		next := contextOver(t, adoptSrc+extra)
+		if err := next.Adopt(ctx, shapes, obj); err != nil {
+			t.Fatalf("Adopt: %v", err)
+		}
+		ctx = next
 	}
 
 	handed := map[int64]bool{}
-	for _, id := range []int64{ctx.allocateID(), prev.allocateID(), ctx.allocateID()} {
+	for _, id := range []int64{ctx.allocateID(), first.allocateID(), ctx.allocateID()} {
 		if _, found := ctx.Instance(id); found {
 			t.Errorf("identity %d is handed out again while the object holding it is live", id)
 		}

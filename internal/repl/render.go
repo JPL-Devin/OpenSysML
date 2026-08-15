@@ -367,6 +367,11 @@ type blocker struct {
 	line    int
 	message string
 	more    int
+
+	// reported records the blockage as named, and is called when the note is
+	// emitted rather than when it is prepared: a rendering that leaves the note
+	// out has not told the user anything to be quiet about afterwards.
+	reported func()
 }
 
 // key identifies what is blocking the checks, so an unchanged blockage is
@@ -384,6 +389,9 @@ func (b *blocker) note() string {
 	if b == nil {
 		return ""
 	}
+	if b.reported != nil {
+		b.reported()
+	}
 	if b.more > 0 {
 		return fmt.Sprintf("note: deeper checks may not have run here: the error on buffer line %d is unresolved, with %s elsewhere in the buffer (see them with -debug)",
 			b.line, countOf(b.more, "error", "errors"))
@@ -392,19 +400,20 @@ func (b *blocker) note() string {
 }
 
 // blockedBy reports the unresolved error that stopped the deeper checks from
-// running over this submission, and records it as reported: a standing error is
-// named on the first submission that ran under it, not on every one after.
+// running over this submission: a standing error is named on the first
+// submission whose report says so, not on every one after it.
 func (s *Session) blockedBy(r Result) *blocker {
 	b := r.analysisBlocked()
 	if b == nil {
 		s.notedBlocker = ""
 		return nil
 	}
-	if key := b.key(); key != s.notedBlocker {
-		s.notedBlocker = key
-		return b
+	key := b.key()
+	if key == s.notedBlocker {
+		return nil
 	}
-	return nil
+	b.reported = func() { s.notedBlocker = key }
+	return b
 }
 
 // analysisBlocked returns the error outside this submission that stopped the

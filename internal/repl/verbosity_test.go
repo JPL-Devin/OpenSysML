@@ -60,6 +60,30 @@ func TestBlockingErrorIsNamedOnceNotOnEverySubmission(t *testing.T) {
 	wants(t, third, "deeper checks may not have run here", "1 error elsewhere in the buffer")
 }
 
+// A report that leaves the note out has said nothing to be quiet about: a
+// submission rendered at debug verbosity, or one with errors of its own, does
+// not use up the one warning the standing error gets.
+func TestBlockingErrorIsStillNamedWhenTheNoteWasNotPrinted(t *testing.T) {
+	s := NewSession()
+	s.Submit("namespace N { import Missing::X; }")
+
+	debug := strings.Join(renderResult(s.Submit("package P { }"), VerbosityDebug), "\n")
+	rejects(t, debug, "deeper checks may not have run here")
+
+	named := strings.Join(renderResult(s.Submit("package Q { }"), VerbosityNormal), "\n")
+	wants(t, named, "deeper checks may not have run here", "buffer line 1")
+
+	// Nor does a submission reporting errors of its own, which is what there is
+	// to read there instead of the note.
+	other := NewSession()
+	other.Submit("namespace N { import Missing::X; }")
+	res := other.Submit("package R { import Gone::Z; }")
+	rejects(t, strings.Join(renderResult(res, VerbosityNormal), "\n"), "deeper checks may not have run here")
+	if other.notedBlocker != "" {
+		t.Errorf("notedBlocker = %q after a report that left the note out", other.notedBlocker)
+	}
+}
+
 // The summary covers what this submission declared, not the whole buffer.
 func TestSummaryCoversOnlyThisSubmission(t *testing.T) {
 	s := NewSession()

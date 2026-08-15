@@ -18,6 +18,7 @@ type Shapes struct {
 	digests map[string]string // type FQN → resolved shape
 	types   []string          // the FQNs above, in the order they were reached
 	unnamed bool              // an object of a type with no qualified name
+	opaque  bool              // a value written by an expression whose reads are unknown
 }
 
 // Types lists the qualified names of the types the objects are of, so a caller
@@ -116,35 +117,11 @@ func (ctx *Context) recordShapes(obj *Instance, shapes *Shapes, seen map[int64]b
 }
 
 func (ctx *Context) recordShape(sym *symbols.Symbol, shapes *Shapes) {
-	fqn := ctx.fqnOf(sym)
-	if fqn == "" {
+	if ctx.fqnOf(sym) == "" {
 		shapes.unnamed = true
 		return
 	}
-	if _, done := shapes.digests[fqn]; done {
-		return
-	}
-	shapes.digests[fqn] = ctx.ShapeDigest(sym)
-	shapes.types = append(shapes.types, fqn)
-	ctx.recordDependencies(sym, shapes)
-}
-
-// recordDependencies records the declarations reached through a type's features,
-// so a change to one of them is named as itself. An unnamed one is left to the
-// owner's digest, which already covers it.
-func (ctx *Context) recordDependencies(sym *symbols.Symbol, shapes *Shapes) {
-	for _, feat := range ctx.FeaturesOf(sym) {
-		fqn := ctx.fqnOf(feat.Type)
-		if fqn == "" {
-			continue
-		}
-		if _, done := shapes.digests[fqn]; done {
-			continue
-		}
-		shapes.digests[fqn] = ctx.ShapeDigest(feat.Type)
-		shapes.types = append(shapes.types, fqn)
-		ctx.recordDependencies(feat.Type, shapes)
-	}
+	ctx.recordReached(sym, shapes)
 }
 
 // slotNames lists the object's slot names in a fixed order, so what is done
@@ -283,7 +260,7 @@ func (ctx *Context) fqnOf(sym *symbols.Symbol) string {
 // declaration of the same qualified name here, which must resolve to the shape
 // recorded in shapes; anything else is refused with the context left untouched.
 // The objects are moved rather than copied, so prev holds them too afterwards
-// and shares this context's identity sequence; nothing new should be
+// and this context takes over its identity sequence; nothing new should be
 // materialized through prev, which registers it there alone.
 func (ctx *Context) Adopt(prev *Context, shapes *Shapes, obj *Instance) error {
 	if prev == nil || shapes == nil || obj == nil {
@@ -291,6 +268,9 @@ func (ctx *Context) Adopt(prev *Context, shapes *Shapes, obj *Instance) error {
 	}
 	if shapes.unnamed {
 		return &AdoptError{Reason: "it is of a declaration with no qualified name"}
+	}
+	if shapes.opaque {
+		return &AdoptError{Reason: "it holds a value written by an expression whose reads are unknown"}
 	}
 	a := &adoption{ctx: ctx, prev: prev, shapes: shapes,
 		plans:   make(map[int64]*adoptPlan),
@@ -483,6 +463,12 @@ func (a *adoption) rebind(sym *symbols.Symbol, what string) (*symbols.Symbol, er
 // commit moves the planned objects into this context, rebinding what each of
 // them points at and taking over the derived state that is about them.
 func (a *adoption) commit() {
+	// The previous context holds the same objects and a run over it may outlive
+	// this call, so this context takes over its sequence rather than raising one
+	// of its own: every context reached this way hands out identities from the
+	// one sequence, so none of them names a live object again.
+	a.prev.ids.atLeast(a.ctx.ids.next)
+	a.ctx.ids = a.prev.ids
 	adopted := make(map[int64]bool, len(a.plans))
 	for id, plan := range a.plans {
 		adopted[id] = true
@@ -506,11 +492,6 @@ func (a *adoption) commit() {
 		a.ctx.registerInstance(plan.obj)
 		a.ctx.ids.atLeast(id + 1)
 	}
-	// The previous context holds the same objects and a run over it may outlive
-	// this call, so both hand out identities from one sequence: no object created
-	// next is given the identity of one still live.
-	a.ctx.ids.atLeast(a.prev.ids.next)
-	a.prev.ids = a.ctx.ids
 	a.carryDerived(adopted)
 }
 

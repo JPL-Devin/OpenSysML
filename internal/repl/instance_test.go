@@ -251,6 +251,25 @@ func TestInstanceDropsWhenADeclarationItDependsOnChanges(t *testing.T) {
 	wants(t, run(t, s, "%instances"), "no instances created", "1 instance was dropped")
 }
 
+// A value an object computed from an expression is invalidated by a change to
+// what that expression reads, not only by a change to the declarations it is
+// written in: the text stays the same while the value it names no longer holds.
+func TestInstanceDropsWhenAnExpressionItReadsChanges(t *testing.T) {
+	s := NewSession()
+	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 2.0; }")
+	s.Submit("part def A { attribute m = double(3.0); }")
+	wants(t, run(t, s, "%instantiate A"), "ID: 1")
+	wants(t, run(t, s, "%slots A"), "m = 6.00")
+
+	res := s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
+	if !hasNotice(res, "1 instance was dropped") {
+		t.Fatalf("notices = %v, want the dropped instance counted", res.Notices)
+	}
+	rejects(t, run(t, s, "%instances"), "6.00")
+	run(t, s, "%instantiate A")
+	wants(t, run(t, s, "%slots A"), "m = 9.00")
+}
+
 // A submission that invalidates some of what the session holds says so even
 // though the rest survived: a listing of the survivors alone would read as
 // though nothing went.
