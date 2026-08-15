@@ -16,6 +16,12 @@ import (
 // loaded after it makes. Diagnostics name the file they belong to and count
 // lines from its start.
 func (s *Session) LoadPaths(paths []string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.loadPaths(paths)
+}
+
+func (s *Session) loadPaths(paths []string) ([]string, error) {
 	files, err := ExpandPaths(paths)
 	if err != nil {
 		return nil, err
@@ -37,7 +43,7 @@ func (s *Session) LoadPaths(paths []string) ([]string, error) {
 			out = append(out, "  "+file)
 		}
 	}
-	return append(out, renderResult(s.SubmitFiles(srcs), s.verbosity)...), nil
+	return append(out, renderResult(s.submitFiles(srcs), s.verbosity)...), nil
 }
 
 // ExpandPaths turns the paths a caller was given — files, directories to walk

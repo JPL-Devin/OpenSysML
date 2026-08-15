@@ -614,6 +614,9 @@ Two things matter before a pipeline depends on it:
 | `%verbosity [level]` | Show or set output level: `quiet` (errors only), `normal`, `debug` (every diagnostic over the whole buffer) |
 | `%trace [on\|off]` | Show or set execution tracing: each evaluation, calc invocation, action step and state transition |
 | `%budget` | Show the five bounds one run may spend, each with the variable that raises it |
+| **Library Discovery** | |
+| `%search <substring>` | List the declared and library symbols whose qualified name contains the substring, with the kind of each |
+| `%builtins` | List the library functions the runtime implements directly (`sqrt`, `abs`, `max`, `floor`, `x->isEmpty()`, `x->sum()` …) |
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create instance from part definition |
 | `%slots <name>` | Show instance slots and values |
@@ -625,6 +628,7 @@ Two things matter before a pipeline depends on it:
 | `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
 | `%satisfy [name]` | Evaluate satisfaction assertions of the model, or of one element |
 | **Control** | |
+| `Tab` | Complete meta commands, symbol names, and file paths after `%load` and `%save` |
 | `Ctrl-D` | Exit REPL |
 
 ---
@@ -1037,7 +1041,7 @@ Check `examples/` directory:
 
 **REPL doesn't show prompt:**
 - Check terminal supports readline (most Unix shells do)
-- History stored in `$TMPDIR/sysml-repl.history`
+- History stored in `$XDG_STATE_HOME/sysml/history`, or `~/.sysml_history` when `XDG_STATE_HOME` is unset; an unwritable path leaves history in memory for the session
 
 **Import errors after build:**
 - Run `go mod tidy`

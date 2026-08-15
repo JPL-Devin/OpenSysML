@@ -21,6 +21,43 @@ var builtins map[string]func(*EvalContext, []Value) (Value, error)
 // same name still resolves to itself.
 var builtinsByLocalName map[string]func(*EvalContext, []Value) (Value, error)
 
+// builtinLocalNames records which library declaration each unqualified name
+// denotes, so the mapping can be listed as well as dispatched on.
+var builtinLocalNames = map[string]string{
+	"size":         "SequenceFunctions::size",
+	"isEmpty":      "SequenceFunctions::isEmpty",
+	"notEmpty":     "SequenceFunctions::notEmpty",
+	"includes":     "SequenceFunctions::includes",
+	"includesOnly": "SequenceFunctions::includesOnly",
+	"excludes":     "SequenceFunctions::excludes",
+	"equals":       "SequenceFunctions::equals",
+	"same":         "SequenceFunctions::same",
+	"union":        "SequenceFunctions::union",
+	"intersection": "SequenceFunctions::intersection",
+	"including":    "SequenceFunctions::including",
+	"excluding":    "SequenceFunctions::excluding",
+	"subsequence":  "SequenceFunctions::subsequence",
+	"excludingAt":  "SequenceFunctions::excludingAt",
+	"head":         "SequenceFunctions::head",
+	"tail":         "SequenceFunctions::tail",
+	"last":         "SequenceFunctions::last",
+	"contains":     "CollectionFunctions::contains",
+	"containsAll":  "CollectionFunctions::containsAll",
+	"select":       "ControlFunctions::select",
+	"selectOne":    "ControlFunctions::selectOne",
+	"reject":       "ControlFunctions::reject",
+	"collect":      "ControlFunctions::collect",
+	"forAll":       "ControlFunctions::forAll",
+	"exists":       "ControlFunctions::exists",
+	"allTrue":      "ControlFunctions::allTrue",
+	"anyTrue":      "ControlFunctions::anyTrue",
+	"reduce":       "ControlFunctions::reduce",
+	"minimize":     "ControlFunctions::minimize",
+	"maximize":     "ControlFunctions::maximize",
+	"sum":          "NumericalFunctions::sum",
+	"product":      "NumericalFunctions::product",
+}
+
 func init() {
 	builtins = map[string]func(*EvalContext, []Value) (Value, error){
 		// SequenceFunctions: the operations on general sequences of values.
@@ -93,40 +130,7 @@ func init() {
 	}
 
 	builtinsByLocalName = map[string]func(*EvalContext, []Value) (Value, error){}
-	for local, fqn := range map[string]string{
-		"size":         "SequenceFunctions::size",
-		"isEmpty":      "SequenceFunctions::isEmpty",
-		"notEmpty":     "SequenceFunctions::notEmpty",
-		"includes":     "SequenceFunctions::includes",
-		"includesOnly": "SequenceFunctions::includesOnly",
-		"excludes":     "SequenceFunctions::excludes",
-		"equals":       "SequenceFunctions::equals",
-		"same":         "SequenceFunctions::same",
-		"union":        "SequenceFunctions::union",
-		"intersection": "SequenceFunctions::intersection",
-		"including":    "SequenceFunctions::including",
-		"excluding":    "SequenceFunctions::excluding",
-		"subsequence":  "SequenceFunctions::subsequence",
-		"excludingAt":  "SequenceFunctions::excludingAt",
-		"head":         "SequenceFunctions::head",
-		"tail":         "SequenceFunctions::tail",
-		"last":         "SequenceFunctions::last",
-		"contains":     "CollectionFunctions::contains",
-		"containsAll":  "CollectionFunctions::containsAll",
-		"select":       "ControlFunctions::select",
-		"selectOne":    "ControlFunctions::selectOne",
-		"reject":       "ControlFunctions::reject",
-		"collect":      "ControlFunctions::collect",
-		"forAll":       "ControlFunctions::forAll",
-		"exists":       "ControlFunctions::exists",
-		"allTrue":      "ControlFunctions::allTrue",
-		"anyTrue":      "ControlFunctions::anyTrue",
-		"reduce":       "ControlFunctions::reduce",
-		"minimize":     "ControlFunctions::minimize",
-		"maximize":     "ControlFunctions::maximize",
-		"sum":          "NumericalFunctions::sum",
-		"product":      "NumericalFunctions::product",
-	} {
+	for local, fqn := range builtinLocalNames {
 		fn, ok := builtins[fqn]
 		if !ok {
 			panic("runtime: unqualified name " + local + " maps to unregistered built-in " + fqn)
