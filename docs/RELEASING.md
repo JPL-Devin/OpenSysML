@@ -130,10 +130,18 @@ one alongside it).
    A checksum mismatch there means the sidecar and the binary came from
    different builds.
 
-2. **Render the Homebrew formula** and commit it to the tap repository
-   `Open-MBEE/homebrew-tap` (not this repository — the copy here is a template
-   with `__TAG__`/`__SHA256_*__` placeholders; the tap repository name needs the
-   `homebrew-` prefix or `brew tap Open-MBEE/tap` cannot clone it):
+2. **Let the Homebrew tap pick the release up.** The tap repository
+   `Open-MBEE/homebrew-tap` updates itself: a scheduled workflow there resolves
+   the latest `Open-MBEE/Systemica` release, renders `Formula/systemica.rb` from
+   this repository's `scripts/render-homebrew-formula.sh` and formula template at
+   that tag, and commits only when the file changed. Nothing here triggers it, so
+   the formula follows the release within the workflow's schedule interval.
+
+   If it does not, check the workflow run in the tap repository. The render reads
+   the release's `SHA256SUMS.txt`, so a release missing that asset (or missing a
+   `systemica-<os>-<arch>.tar.gz` line in it) fails the run loudly instead of
+   committing a broken formula — re-run `publish-github-release` for the tag and
+   then the tap workflow (`workflow_dispatch`). Rendering by hand still works:
 
    ```bash
    scripts/render-homebrew-formula.sh v0.0.5 > Formula/systemica.rb
