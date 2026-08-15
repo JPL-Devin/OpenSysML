@@ -93,6 +93,28 @@ func openFilterWorkspace(t *testing.T, client string) []string {
 	return msgs
 }
 
+// A namespace's filters and its imports may be written in different documents;
+// the filter restricts what the import brings in either way, so an unqualified
+// lookup inside the importing declaration is gated like a lookup from outside.
+func TestNamespaceFilterFromAnotherDocumentGatesItsImports(t *testing.T) {
+	ws := NewWorkspace()
+	ws.Open("file:///vehicles.sysml", []byte(filterModelSource), 1)
+	ws.Open("file:///filter.sysml", []byte("package Split { filter @Vehicles::Safety; }"), 1)
+	ws.Open("file:///imports.sysml", []byte(`package Split {
+		public import Vehicles::vehicle::*;
+		part a :> seatBelt;
+		part c :> keylessEntry;
+	}`), 1)
+
+	var msgs []string
+	for _, d := range ws.Diagnostics("file:///imports.sysml") {
+		msgs = append(msgs, d.Message)
+	}
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "keylessEntry") {
+		t.Fatalf("the other document's filter must hide keylessEntry and only it, got %v", msgs)
+	}
+}
+
 // Completion enumerates a namespace's members through the index; a filter's
 // verdict has to reach that enumeration too, or a name is offered that resolution
 // then rejects.

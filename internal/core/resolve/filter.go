@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -41,8 +42,35 @@ func (r *Resolver) namespaceFilters(scope *symbols.Scope) []symbols.ElementFilte
 		return filters
 	}
 	filters := symbols.NamespaceFiltersIn(scope)
+	// A namespace can be declared by more than one document, and a filter any of
+	// its declarations states restricts every membership it imports — the same
+	// conditions the index gates its re-exports with.
+	if fqn := r.namespaceFQNOf(scope); fqn != "" {
+		for _, f := range r.idx.NamespaceFiltersOf(fqn) {
+			if !statesCondition(filters, f) {
+				filters = append(filters, f)
+			}
+		}
+	}
 	r.nsFilters[scope] = filters
 	return filters
+}
+
+// namespaceFQNOf is the indexed name of the namespace owning scope, or "" for a
+// root or unnamed one, whose filters no other declaration shares.
+func (r *Resolver) namespaceFQNOf(scope *symbols.Scope) string {
+	if r.idx == nil || scope.Owner() == nil || scope.Owner().Name == "" {
+		return ""
+	}
+	return withoutEmptySegments(r.idx.GetFQN(scope.Owner()))
+}
+
+// statesCondition reports whether filters already hold f's condition, which the
+// namespace's own declaration and the index both answer for.
+func statesCondition(filters []symbols.ElementFilter, f symbols.ElementFilter) bool {
+	return slices.ContainsFunc(filters, func(have symbols.ElementFilter) bool {
+		return have.Same(f) || (have.Expr != nil && have.Expr == f.Expr)
+	})
 }
 
 // documentOf names the document scope belongs to, which decides the routes to a
