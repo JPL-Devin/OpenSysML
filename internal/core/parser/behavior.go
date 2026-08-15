@@ -1682,7 +1682,22 @@ func (p *Parser) atConstraintCondition() bool {
 	if t := p.peekN(n); t.Kind == lexer.Keyword && t.KeywordID == "not" {
 		n++
 	}
-	return p.peekN(n).Kind != lexer.Keyword
+	t := p.peekN(n)
+	if t.Kind != lexer.Keyword {
+		return true
+	}
+	// A keyword that starts an expression starts a condition too (atExprStart).
+	return exprStartKeywords[t.KeywordID]
+}
+
+// exprStartKeywords are the keywords that begin an expression rather than a
+// declaration; atExprStart accepts the same set.
+var exprStartKeywords = map[string]bool{
+	"null":  true,
+	"true":  true,
+	"false": true,
+	"new":   true,
+	"if":    true,
 }
 
 // parseConstraintMember parses one constraint member: assert/assume [not] <expr>;

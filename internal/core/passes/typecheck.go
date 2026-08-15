@@ -298,6 +298,11 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 	// SysML usage-kind counterpart, so its kind is unknown and no mismatch
 	// against it can be asserted.
 	if target == symbols.SymbolUnknown && rel != ast.RelSpecializes {
+		// That a definition may not subset or redefine a feature is a property of
+		// the declaration, so an unclassified target does not excuse it.
+		if isDef && (rel == ast.RelSubsets || rel == ast.RelRedefines) {
+			return fmt.Sprintf("a definition may not %s a feature", rel)
+		}
 		return ""
 	}
 	switch rel {

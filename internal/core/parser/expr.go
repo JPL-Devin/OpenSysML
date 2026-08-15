@@ -210,11 +210,7 @@ func (p *Parser) atExprStart() bool {
 		t.Kind == lexer.Star || // infinity
 		t.Kind == lexer.LParen ||
 		t.Kind == lexer.LBrace ||
-		p.atKeyword("null") ||
-		p.atKeyword("true") ||
-		p.atKeyword("false") ||
-		p.atKeyword("new") ||
-		p.atKeyword("if")
+		(t.Kind == lexer.Keyword && exprStartKeywords[t.KeywordID])
 }
 
 // parsePostfixes applies zero or more postfix operators to expr.
