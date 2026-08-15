@@ -492,15 +492,21 @@ func (a *adoption) rebind(sym *symbols.Symbol, what string) (*symbols.Symbol, er
 	return found, nil
 }
 
+// AdoptIdentities takes over the identity sequence of a context this one
+// replaces, without carrying any object over: objects a run started before still
+// materializes through it, so neither context may hand out the other's.
+func (ctx *Context) AdoptIdentities(prev *Context) {
+	if prev == nil || prev == ctx || prev.ids == nil || prev.ids == ctx.ids {
+		return
+	}
+	prev.ids.atLeast(ctx.ids.next)
+	ctx.ids = prev.ids
+}
+
 // commit moves the planned objects into this context, rebinding what each of
 // them points at and taking over the derived state that is about them.
 func (a *adoption) commit() {
-	// The previous context holds the same objects and a run over it may outlive
-	// this call, so this context takes over its sequence rather than raising one
-	// of its own: every context reached this way hands out identities from the
-	// one sequence, so none of them names a live object again.
-	a.prev.ids.atLeast(a.ctx.ids.next)
-	a.ctx.ids = a.prev.ids
+	a.ctx.AdoptIdentities(a.prev)
 	adopted := make(map[int64]bool, len(a.plans))
 	for id, plan := range a.plans {
 		adopted[id] = true

@@ -333,6 +333,47 @@ func TestInstancesReportsASurvivorAlongsideALoss(t *testing.T) {
 	rejects(t, listing, "B (ID")
 }
 
+// A submission that carries nothing over still takes over the identities of a
+// context a debugging session goes on materializing objects through.
+func TestSubmissionKeepsTheIdentitiesADebuggedContextHandedOut(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Holder { attribute size = 1.0; }")
+	res := s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tdone end;\n\tthen start end;\n}")
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+	}
+	wants(t, run(t, s, "%instantiate Holder"), "ID: 1")
+	if started := run(t, s, "%action tally"); !strings.Contains(started, "Started action executor") {
+		t.Fatalf("%%action failed: %s", started)
+	}
+
+	// The object goes with its declaration, so nothing is carried over — but the
+	// session still runs against the context that handed out identity 1.
+	res = s.Submit("part def Holder { attribute size = 2.0; }")
+	if !hasNotice(res, "1 instance was dropped") {
+		t.Fatalf("notices = %v, want the redeclared object dropped", res.Notices)
+	}
+	rejects(t, run(t, s, "%tokens"), "no active")
+	wants(t, run(t, s, "%instantiate Holder"), "ID: 2")
+}
+
+// A loss belongs to the submission that caused it: once a later one has taken
+// nothing, the listing stops explaining a loss it no longer describes.
+func TestInstancesStopsRepeatingAnOldLoss(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def A { attribute x = 1.0; }")
+	s.Submit("part def B { attribute y = 2.0; }")
+	run(t, s, "%instantiate A")
+	run(t, s, "%instantiate B")
+	s.Submit("part def B { attribute y = 3.0; }")
+	wants(t, run(t, s, "%instances"), "1 instance was also dropped")
+
+	s.Submit("part def Widget;")
+	listing := run(t, s, "%instances")
+	wants(t, listing, "A (ID: 1)")
+	rejects(t, listing, "dropped")
+}
+
 // The instances a submission invalidates are counted in a notice, so the
 // objects created before it do not disappear without a word.
 func TestSubmissionReportsTheInstancesItDropped(t *testing.T) {

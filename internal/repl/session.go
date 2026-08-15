@@ -58,7 +58,10 @@ type Session struct {
 	version  int
 
 	// Runtime execution context
-	rtCtx      *runtime.Context
+	rtCtx *runtime.Context
+	// replaced is a context a debugging session still runs against, whose identity
+	// sequence the context built next takes over.
+	replaced   *runtime.Context
 	idx        *symbols.Index               // index over the session document, shared by lookup and runtime
 	idxVersion int                          // document version idx holds, 0 when it holds none
 	instances  map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
@@ -78,7 +81,7 @@ type Session struct {
 	// notedBlocker identifies the unresolved error the session has already
 	// reported as blocking the deeper checks, so it is named once rather than on
 	// every submission after it.
-	notedBlocker string
+	notedBlocker blockerNote
 
 	// trace records execution steps while tracing is on, nil otherwise.
 	trace *runtime.TraceRecorder
@@ -525,6 +528,7 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 	notices := dropNotices(drops)
 	notices = append(notices, s.carryOverObjects(over, gone)...)
 	notices = append(notices, s.dropStaleDebugSessions(gone, over)...)
+	s.keepIdentitiesOf(over.prev)
 	// The diagnostics already carry their own "did you mean" hints.
 	diags := s.ws.Diagnostics(docName)
 	var members []ast.Node
@@ -543,6 +547,20 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 	}
 	res.Blocked = s.blockedBy(res)
 	return res
+}
+
+// keepIdentitiesOf hands a replaced context's identity sequence to the context
+// taking its place while a debugging session still materializes objects through
+// it, so the two never name one identity for two objects.
+func (s *Session) keepIdentitiesOf(prev *runtime.Context) {
+	if prev == nil || (s.actionExec == nil && s.stateExec == nil) {
+		s.replaced = nil
+		return
+	}
+	s.replaced = prev
+	if s.rtCtx != nil {
+		s.rtCtx.AdoptIdentities(prev)
+	}
 }
 
 // dropStaleDebugSessions ends the debugging sessions this submission
@@ -644,7 +662,7 @@ func (s *Session) clear() {
 	s.ws.Remove(docName)
 	s.snippets = nil
 	s.version = 0
-	s.rtCtx = nil
+	s.rtCtx, s.replaced = nil, nil
 	if s.idx != nil {
 		// Drop the document, keep the library the index was built with.
 		s.idx.RemoveDocument(docName)
@@ -656,7 +674,7 @@ func (s *Session) clear() {
 	s.endedAction = nil
 	s.endedState = nil
 	s.lostInstances, s.lostAt = 0, 0
-	s.notedBlocker = ""
+	s.notedBlocker.record("")
 }
 
 // getOrCreateRuntime lazily creates runtime context when first needed.
@@ -683,6 +701,7 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 	if doc := s.ws.Document(docName); doc != nil {
 		ctx.RegisterSource(source.New(docName, doc.Content))
 	}
+	ctx.AdoptIdentities(s.replaced)
 	s.rtCtx = ctx
 	s.rtCtx.SetTrace(s.trace)
 	return s.rtCtx, nil

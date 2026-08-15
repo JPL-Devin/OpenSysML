@@ -79,6 +79,9 @@ func (s *Session) carryOverObjects(over carryover, gone []string) []string {
 	dropped := len(s.instances) - len(kept)
 	s.instances = kept
 	if dropped == 0 {
+		// Nothing went this time, so an earlier loss is no longer what a listing of
+		// the survivors has to explain: it was reported when it happened.
+		s.lostInstances, s.lostAt = 0, 0
 		return nil
 	}
 	s.lostInstances, s.lostAt = dropped, s.version

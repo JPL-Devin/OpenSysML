@@ -79,8 +79,8 @@ func TestBlockingErrorIsStillNamedWhenTheNoteWasNotPrinted(t *testing.T) {
 	other.Submit("namespace N { import Missing::X; }")
 	res := other.Submit("package R { import Gone::Z; }")
 	rejects(t, strings.Join(renderResult(res, VerbosityNormal), "\n"), "deeper checks may not have run here")
-	if other.notedBlocker != "" {
-		t.Errorf("notedBlocker = %q after a report that left the note out", other.notedBlocker)
+	if key := other.notedBlocker.reportedKey(); key != "" {
+		t.Errorf("notedBlocker = %q after a report that left the note out", key)
 	}
 }
 

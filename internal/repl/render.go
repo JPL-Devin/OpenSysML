@@ -3,6 +3,7 @@ package repl
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"unicode"
 
 	"golang.org/x/text/width"
@@ -405,15 +406,35 @@ func (b *blocker) note() string {
 func (s *Session) blockedBy(r Result) *blocker {
 	b := r.analysisBlocked()
 	if b == nil {
-		s.notedBlocker = ""
+		s.notedBlocker.record("")
 		return nil
 	}
 	key := b.key()
-	if key == s.notedBlocker {
+	if key == s.notedBlocker.reportedKey() {
 		return nil
 	}
-	b.reported = func() { s.notedBlocker = key }
+	b.reported = func() { s.notedBlocker.record(key) }
 	return b
+}
+
+// blockerNote is the blockage a session has already named. Rendering is what
+// names it, and runs after the submission released the session lock, so this
+// carries a lock of its own.
+type blockerNote struct {
+	mu  sync.Mutex
+	key string
+}
+
+func (n *blockerNote) reportedKey() string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.key
+}
+
+func (n *blockerNote) record(key string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.key = key
 }
 
 // analysisBlocked returns the error outside this submission that stopped the
