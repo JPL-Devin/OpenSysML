@@ -1,11 +1,12 @@
 # Systemica — Roadmap
 
-Baseline: `main` @ `a6c5fd8`, verified locally on 2026-08-11 with Go 1.25.0.
+Baseline: `main` @ `6e46500`, verified locally on 2026-08-15 with Go 1.25.13.
 Read `AGENTS.md` first; it governs everything below.
 
-0.0.4 is released, from `Open-MBEE/Systemica` main at `a554b20` (promoted through Open-MBEE
-PR #47). 0.0.5 is prepared but **not tagged**. Everything in "Release follow-through" is
-maintainer- or account-gated; everything after it is ordinary engineering work.
+0.0.7 is released from `Open-MBEE/Systemica`, carrying `sysml`, `sysml-lsp` and `sysml-grpc`
+archives. `main` since carries the nine post-0.0.7 fixes listed under Unreleased in
+`CHANGELOG.md` and is release-ready. Everything in "Release follow-through" is maintainer- or
+account-gated; everything after it is ordinary engineering work.
 
 ## Where the repository stands
 
@@ -20,7 +21,7 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`, `staticch
 | gRPC conformance cases | 8 |
 | Golden execution traces | 69 |
 | Runtime robustness subtests | 146 |
-| Golden AST fixtures | 81 |
+| Golden AST fixtures | 82 |
 | Negative parser subtests | 127 |
 
 Statement coverage, measured today with `go test -cover ./...`:
@@ -47,7 +48,7 @@ drifted file and record the verdict in `docs/TRAINING_EXAMPLES.md`.
 
 # Release follow-through
 
-## R1 — tag 0.0.5 (maintainer, blocking everything else in this section)
+## R1 — tag the next release (maintainer, blocking everything else in this section)
 
 Releases live on `Open-MBEE/Systemica`; development happens on `JPL-Devin/Systemica`, which
 has no tags at all. So the tag is preceded by promoting `main` upstream, as 0.0.4 was through
@@ -55,8 +56,8 @@ Open-MBEE PR #47:
 
 ```bash
 # on Open-MBEE/Systemica, after main carries the release commit
-git tag -a v0.0.5 -m "v0.0.5"
-git push origin v0.0.5
+git tag -a v0.0.8 -m "v0.0.8"
+git push origin v0.0.8
 ```
 
 The publish job needs `GITHUB_TOKEN`, `GH_TOKEN` or `CIRCLE_TOKEN` in the CircleCI project.
@@ -81,9 +82,9 @@ the restricted CircleCI context `PyPI` holding `PYPI_API_TOKEN` (and optionally
 
 Also decide the default download repository. `python/pysysml/binary.py` defaults to
 `Open-MBEE/Systemica`, releases are currently cut from `JPL-Devin/Systemica`, and
-`PYSYSML_GITHUB_REPO` is the override. Note that no released tag carries `sysml-grpc` assets
-yet — v0.0.4's assets are the `sysml`/`sysml-lsp` archives only — so `pysysml` cannot fetch a
-binary until 0.0.5 is released, and `pip install pysysml` should not be advertised before it.
+`PYSYSML_GITHUB_REPO` is the override. `sysml-grpc` assets ship from 0.0.5 onward,
+so `pysysml` can fetch a binary from a released tag; `pip install pysysml` still waits on the
+PyPI project above.
 
 ## R3 — Homebrew tap
 
@@ -123,12 +124,12 @@ Go toolchain. That makes the following gaps user-visible for the first time.
 
 ## P1 — the integration tests skip in CI, and cannot simply be un-skipped
 
-`python/tests/test_integration.py` and `test_runtime_integration.py` (15 tests) skip themselves
+`python/tests/test_integration.py` and `test_runtime_integration.py` (20 tests) skip themselves
 unless a service answers on `localhost:50051`. CI installs the binary but starts nothing, so
 they skip there too, and the client↔service path has never been exercised by CI.
 
 Starting a service in the `python-test` job is **not** the fix on its own — verified: with one
-running, the 15 tests pass but `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
+running, the 20 tests pass but `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
 fails, because `Connection._ensure_service` returns early when it probes a healthy service and
 writes no pidfile, so the refcount can never shut that service down and the test cannot find a
 pid to watch. Half of that ownership model is now in place: a connection releases a reference
@@ -176,6 +177,10 @@ become base classes.
   `to_dataframe()` under-report.
 - The download verifies a checksum served from the same origin as the binary, which detects
   corruption but not a compromised release; a pinned hash per version would be stronger.
+- `Model.eval` takes a scope, not a subject, so an expression cannot be evaluated against an
+  object the way `%eval` does after `%instantiate`: `verify_constraint` takes a subject, `eval`
+  does not, and a caller reads the declared default instead. Carrying the subject to
+  `Evaluate` is a service-side change as well as a client one.
 
 ---
 
@@ -371,6 +376,19 @@ never the total, and land it only while the corpus sits at its 98/100 ceiling.
   silently accepted (also `in event ;`). Reproduce first; it was never re-verified after the
   occurrence-modifier work.
 
+## A8 — a nested feature redefined on an object is not the subject of a check or an `%eval`
+
+The direct case landed: a condition declared on a definition is checked against the object
+carrying it. A *nested* redefinition is not reached, so `%eval A::Outer::b::c` and
+`%constraint A::Inner::small` answer about the declaration while `%slots` shows the
+instantiated value — the same class of wrong-subject answer, one level down.
+
+## A9 — a `calc` body without `return` is not expression-type-checked
+
+Such a body reaches no expression-typing pass, so the static dimensional warning (and every
+other type-tier finding about its expressions) cannot be reported inside it. The gap is in the
+pass's reach, not in the dimension inference.
+
 ---
 
 # Track B — REPL refinements
@@ -496,6 +514,15 @@ parser recording the prefix, most likely as a field alongside `ast.Usage.Keyword
 the encoder can carry it and the documented exception goes away. Worth checking at the same
 time whether anything downstream *should* distinguish a variant from a plain member, since
 variation semantics currently rest on the enclosing `variation` definition alone.
+
+## D6 — a behavioral node has no metaclass, so a model stating steps cannot convert
+
+Constraint-bearing models convert since the condition members were mapped, but an action or
+state body that carries nodes still reports the node and aborts: measured on the built binary,
+65 of the 110 example models convert, and the 45 refusals are initial nodes, `perform`, `send`,
+`terminate`, loop nodes, state regions and substates, plus four duplicate declarations.
+`RDF_INTEROP.md` § Limitations lists the shapes. The fix is metaclasses for the behavioral
+nodes, not a wider fallback — a graph missing a model's steps would be worse than a refusal.
 
 ---
 

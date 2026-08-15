@@ -283,7 +283,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 
 **Package:** `internal/lsp`  
 **Binary:** `cmd/sysml-lsp`  
-**Status:** ✅ Complete (stdio protocol, 8 LSP features, 88 tests)
+**Status:** ✅ Complete (stdio protocol, 10 LSP features, 104 tests)
 
 ### Features
 
@@ -360,7 +360,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - `walk.go` — Reference lookup over `resolve.References`
 
 **Testing:**
-- 88 tests covering all features
+- 104 tests covering all features
 - Integration tests with mock clients
 - Incremental sync edge cases (astral plane characters, multi-change, offset-zero insertion)
 

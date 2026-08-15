@@ -4,6 +4,85 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/RELEASING.md](docs/RELEASING.md).
 
+## Unreleased
+
+### Diagnostics
+
+- A comparison or sum of quantities whose dimensions are both statically
+  determined and incommensurable (`mass < 1000.0 [m]`) is reported as a
+  type-tier warning at validation time, from the stdlib `QuantityDimension`
+  power factors, instead of only when the expression is evaluated. Evaluation
+  keeps its hard error and a warning changes no exit status; a dimension a
+  declaration does not determine stays unknown and is not reported.
+
+### REPL
+
+- A check of a condition declared on a definition is answered about the object
+  that carries it, so `%constraint`, `%requirement` and `-constraint` on an
+  instantiated model report the object's values rather than the declaration's
+  defaults — a violating model used to be answered `✓ passed` with exit 0.
+- `%eval` reads the object carrying the feature when the session holds one, so a
+  check and an `%eval` in the same session no longer answer about different
+  subjects; where several objects carry the feature it refuses to choose.
+- A condition whose evaluation could not be carried out is worded as undecided
+  (`? … could not be evaluated`) and names why, keeping exit 2, where it used to
+  print a failure while exiting 2.
+
+### `sysml` command line
+
+- A lone `-` names standard input wherever a model path is taken, `-convert`
+  included, and is reported as `<stdin>`; it is read even when stdin is
+  `/dev/null`, and stays distinct from a file named `-`.
+- `sysml-lsp` parses its command line with the `flag` package, so `-version`
+  works and an unreadable flag is a usage error rather than protocol mode.
+
+### Editor support
+
+- `textDocument/semanticTokens/full` and `/range` are implemented, over a new
+  `internal/core/highlight` package, and `textDocument/codeAction` answers
+  quick fixes carried as structured edits from the layer that reported the
+  diagnostic — a located semicolon, a near-miss spelling, an importable
+  namespace. Token deltas are not implemented and are not advertised.
+
+### RDF interoperability
+
+- The members that state a condition — a constraint body's conditions, a
+  requirement's assumptions and required conditions, a subject and a result —
+  have a mapping, so converting a model with a constraint no longer aborts.
+  Conditions are carried as `sysx:condition` notation, as every
+  expression-valued position in this mapping is.
+- Turtle written back as SysML spells the notation: an unrestricted name gets
+  its quotes, so a model with a quoted name re-parses.
+
+### Python bindings and `sysml-grpc`
+
+- `sysml-grpc -version` reports the metadata the linker sets, where a released
+  binary said `version dev / commit unknown`.
+- A cached `~/.pysysml/bin/sysml-grpc` records the release and repository it was
+  downloaded from beside it, and a cache from another release is replaced rather
+  than served. A failed integrity check is its own `ChecksumMismatchError` and
+  is never answered from the cache; a download that fails on the network keeps
+  the working binary.
+- A service already listening is asked what it is and compared against the
+  release and capabilities asked for, raising `StaleServiceError` naming the
+  remedy instead of a `MissingCapabilityError` on the first newer call. It is
+  stopped only when this client started it and no other client holds it.
+- `Model` gained `instantiate`, `execute_action` and `execute_state`, so every
+  call taking a model hash is reachable on the model it is about.
+
+### Known limitations
+
+- Converting a model whose behavior is stated as action or state nodes to RDF
+  still reports the node and aborts (initial nodes, `perform`, `send`,
+  `terminate`, loop nodes, state regions): 65 of the 110 example models convert.
+- A nested feature redefined on an instantiated object is not yet the subject of
+  a check or an `%eval`, so those answer about the declaration while `%slots`
+  shows the instantiated value.
+- A `calc` body written without `return` is not expression-type-checked, so no
+  static dimensional warning is reported inside it.
+- Submitting any declaration to the REPL ends an active `%action` or `%state`
+  debugging session.
+
 ## 0.0.7 — 2026-08-15
 
 0.0.6 was tagged from this section before it was cut, so the changes it carried
