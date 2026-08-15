@@ -219,6 +219,61 @@ func TestAssertedUsagePrefixSurvivesRDF(t *testing.T) {
 	}
 }
 
+// The graph carries a name rather than the notation it was written in, so a
+// name that is not a basic name (KerML §8.2.2) has to be written back with the
+// quotes of an unrestricted name — without them it is two names, or none.
+func TestQuotedNamesSurviveRDF(t *testing.T) {
+	for _, decl := range []string{
+		"package 'Package Example';",
+		"part def <'1'> 'Lander Model';",
+		"part 'my rover' : 'Rover Model';",
+		"alias 'the rover' for 'Rover Model';",
+		"part 'off model' : 'Not Declared Here';",
+		"import 'Other Package'::*;",
+	} {
+		src := "package P {\n\tpart def 'Rover Model';\n\t" + decl + "\n}"
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("%s: to turtle: %v", decl, err)
+		}
+		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("%s: back to notation: %v", decl, err)
+		}
+		if !strings.Contains(string(back), decl) {
+			t.Errorf("the quoted names of %q were rewritten:\n%s", decl, back)
+		}
+		p := parser.New(source.New("m.converted.sysml", back))
+		p.ParseFile()
+		if len(p.Diagnostics) > 0 {
+			t.Errorf("%s: converted notation does not parse: %v\n%s", decl, p.Diagnostics, back)
+		}
+	}
+}
+
+// Empty braces are part of what a declaration says, so a subject written with
+// them must not come back terminated by a semicolon.
+func TestSubjectBodySurvivesRDF(t *testing.T) {
+	for member, want := range map[string]string{
+		"subject r : Rover;":    "subject r : Rover;",
+		"subject r : Rover { }": "subject r : Rover {",
+		"subject s : Rover { }": "subject s : Rover {",
+	} {
+		src := "package P {\n\tpart def Rover;\n\trequirement req {\n\t\t" + member + "\n\t}\n}"
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("%s: to turtle: %v", member, err)
+		}
+		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("%s: back to notation: %v", member, err)
+		}
+		if !strings.Contains(string(back), want) {
+			t.Errorf("the subject %q was rewritten:\n%s", member, back)
+		}
+	}
+}
+
 // A keyword sitting in a comment inside a declaration head is trivia, not the
 // declaration's kind, so it must not become the keyword written back.
 func TestCommentInHeadDoesNotChangeKeyword(t *testing.T) {
@@ -598,6 +653,11 @@ func TestMissingRequiredPropertyIsUnsupported(t *testing.T) {
     sysml:declaredName "R" ; sysml:owningNamespace elmt:P ; sysml:body "x" .`,
 		"import without importedNamespace": `<urn:sysmlv2:element:P::I> a sysml:Import ;
     sysml:owningNamespace elmt:P .`,
+		// `not` negates the declaration a prefix introduces (`assert not
+		// constraint c`), so negation without one has no notation.
+		"negation without declaredPrefix": `@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+<urn:sysmlv2:element:P::c> a sysml:ConstraintUsage ; sysml:declaredName "c" ;
+    sysml:owningNamespace elmt:P ; sysml:isNegated "true"^^xsd:boolean .`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := export.Convert("m.ttl", []byte(head+subject), export.FormatTurtle, export.FormatSysML)

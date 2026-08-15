@@ -1974,7 +1974,6 @@ func (p *Parser) parseBodyMember() ast.Node {
 			u := &ast.Usage{
 				Kind: ast.UsageFlow,
 			}
-			u.NodeBase.NodeSpan = p.spanFrom(start)
 			u.SetLeadingTrivia(trivia)
 
 			// Check for optional 'from' keyword
@@ -1985,6 +1984,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 			p.parseTierBEnds(u, ast.UsageFlow)
 
 			p.expect(lexer.Semicolon, "expected ';' after flow statement")
+			// The ends belong to the declaration, so its span covers them.
+			u.NodeBase.NodeSpan = p.spanFrom(start)
 
 			m := &ast.Membership{
 				Visibility: vis,
@@ -2023,13 +2024,14 @@ func (p *Parser) parseBodyMember() ast.Node {
 			u := &ast.Usage{
 				Kind: ast.UsageAllocation,
 			}
-			u.NodeBase.NodeSpan = p.spanFrom(start)
 			u.SetLeadingTrivia(trivia)
 
 			// Parse allocation ends: source to target
 			p.parseTierBEnds(u, ast.UsageAllocation)
 
 			p.expect(lexer.Semicolon, "expected ';' after allocate statement")
+			// The ends belong to the declaration, so its span covers them.
+			u.NodeBase.NodeSpan = p.spanFrom(start)
 
 			m := &ast.Membership{
 				Visibility: vis,

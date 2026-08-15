@@ -9,6 +9,7 @@ import (
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/format"
+	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/rdf"
 )
 
@@ -269,7 +270,7 @@ func (d *decoder) head(el *element) (string, error) {
 		return d.definitionHead(el, kind), nil
 	}
 	if kind, ok := metaclassUsage[el.metaclass]; ok {
-		return d.usageHead(el, kind), nil
+		return d.usageHead(el, kind)
 	}
 	return "", &UnsupportedError{
 		What: fmt.Sprintf("the element <%s> of type sysml:%s", el.iri, el.metaclass),
@@ -330,7 +331,7 @@ func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) string {
 	return strings.Join(words, " ")
 }
 
-func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
+func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	var words []string
 	words = append(words, d.prefixWords(el)...)
 	if keyword := d.visibility(el); keyword != "" {
@@ -375,11 +376,17 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 	}
 	// A prefix qualifies the kind keyword after it, and the `not` of
 	// `assert not constraint c` negates the declaration that prefix introduces.
-	if prefix, ok := d.stringOf(el, rdf.Systemica+xDeclaredPrefix); ok {
+	// Negation on its own has no notation, so it is reported rather than dropped.
+	prefix, hasPrefix := d.stringOf(el, rdf.Systemica+xDeclaredPrefix)
+	negated := d.boolOf(el, rdf.SysML+"isNegated")
+	switch {
+	case hasPrefix:
 		words = append(words, prefix)
-		if d.boolOf(el, rdf.SysML+"isNegated") {
+		if negated {
 			words = append(words, "not")
 		}
+	case negated:
+		return "", d.missing(el, "sysx:"+xDeclaredPrefix, "the `not` of a negated declaration qualifies the prefix keyword it follows")
 	}
 	words = append(words, keyword)
 	// `chain` qualifies the kind keyword it follows, unlike the modifiers above.
@@ -426,7 +433,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) string {
 	if len(tail) > 0 {
 		head += " " + strings.Join(tail, " ")
 	}
-	return head
+	return head, nil
 }
 
 // conditionHead rebuilds a condition member from its properties: an inline
@@ -478,21 +485,25 @@ func (d *decoder) missing(el *element, property, why string) error {
 
 func (d *decoder) importHead(el *element) (string, error) {
 	var words []string
-	if keyword := d.visibility(el); keyword != "" {
+	// An expose is always protected and always imports all (SysML v2 8.3.26.2),
+	// so its keyword states both: writing them as well does not parse.
+	expose := d.boolOf(el, rdf.Systemica+xExpose)
+	if keyword := d.visibility(el); keyword != "" && !expose {
 		words = append(words, keyword)
 	}
-	if d.boolOf(el, rdf.Systemica+xExpose) {
+	if expose {
 		words = append(words, "expose")
 	} else {
 		words = append(words, "import")
-	}
-	if d.boolOf(el, rdf.SysML+pIsImportAll) {
-		words = append(words, "all")
+		if d.boolOf(el, rdf.SysML+pIsImportAll) {
+			words = append(words, "all")
+		}
 	}
 	imported, ok := d.stringOf(el, rdf.SysML+pImportedNamespace)
 	if !ok {
 		return "", d.missing(el, "sysml:"+pImportedNamespace, "an import names the namespace it imports")
 	}
+	imported = qualifiedNameText(imported)
 	switch {
 	case d.boolOf(el, rdf.Systemica+xRecursive):
 		imported += "::**"
@@ -608,12 +619,39 @@ func (d *decoder) keywordOr(el *element, canonical string) string {
 func (d *decoder) identWords(el *element) []string {
 	var words []string
 	if short, ok := d.stringOf(el, rdf.SysML+pDeclaredShortName); ok {
-		words = append(words, "<"+short+">")
+		words = append(words, "<"+nameText(short)+">")
 	}
 	if name, ok := d.stringOf(el, rdf.SysML+pDeclaredName); ok {
-		words = append(words, name)
+		words = append(words, nameText(name))
 	}
 	return words
+}
+
+// nameText writes a name as the notation spells it: the graph carries the name
+// itself, so one that is not a basic name needs its quotes back (KerML §8.2.2).
+func nameText(name string) string {
+	if lexer.IsIdentifier(name) {
+		return name
+	}
+	return "'" + name + "'"
+}
+
+// qualifiedNameText writes a qualified name segment by segment, since each
+// segment is a name of its own and is quoted on its own.
+func qualifiedNameText(qname string) string {
+	global := strings.HasPrefix(qname, "$::")
+	if global {
+		qname = strings.TrimPrefix(qname, "$::")
+	}
+	segments := strings.Split(qname, "::")
+	for i, segment := range segments {
+		segments[i] = nameText(segment)
+	}
+	out := strings.Join(segments, "::")
+	if global {
+		return "$::" + out
+	}
+	return out
 }
 
 func (d *decoder) prefixWords(el *element) []string {
@@ -700,14 +738,14 @@ func (d *decoder) referenceName(term rdf.Term, scope string) string {
 	}
 	qname, ok := rdf.QualifiedNameOf(term.Value)
 	if !ok {
-		return rdf.LocalName(term.Value)
+		return qualifiedNameText(rdf.LocalName(term.Value))
 	}
 	for {
 		if scope == "" {
-			return qname
+			return qualifiedNameText(qname)
 		}
 		if rest, found := strings.CutPrefix(qname, scope+"::"); found {
-			return rest
+			return qualifiedNameText(rest)
 		}
 		cut := strings.LastIndex(scope, "::")
 		if cut < 0 {

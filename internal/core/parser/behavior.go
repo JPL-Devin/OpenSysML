@@ -296,13 +296,10 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		multiplicity = p.parseMultiplicity()
 	}
 
-	// Optional typing and relationships (: Type, :> SuperType, ::> Redefines, etc)
-	var relationships []*ast.Relationship
-	if p.at(lexer.Colon) || p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) ||
-		p.at(lexer.ColonColonGt) || p.at(lexer.ColonEq) {
-		rels := p.parseRelationships(true)
-		relationships = append(relationships, rels...)
-	}
+	// Optional typing and relationships, written either as an operator (`:>`) or
+	// as the keyword it stands for (`subsets`); parseRelationships consumes
+	// nothing when neither begins the token at the cursor.
+	relationships := p.parseRelationships(true)
 
 	// Optional multiplicity after relationships if not already parsed (e.g., :> target[mult])
 	if multiplicity == nil && p.at(lexer.LBracket) {
@@ -1936,6 +1933,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 
 	if p.at(lexer.LBrace) {
 		p.advance()
+		node.HasBody = true
 		node.Body = p.parseRequirementBody()
 	} else {
 		p.expect(lexer.Semicolon, "expected ';' or '{' after subject declaration")

@@ -413,7 +413,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		if n.BindingExpr != nil {
 			e.graph.Add(subject, e.sysml(pValue), rdf.String(e.text(n.BindingExpr)))
 		}
-		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(len(n.Body) > 0))
+		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
 	case *ast.FilterMember:
@@ -542,7 +542,14 @@ func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Rela
 		if !ok {
 			continue
 		}
-		e.graph.Add(subject, e.sysml(property), e.reference(owner, e.text(rel.Target)))
+		// A name is mapped as a reference, which links it when this document
+		// declares it; a feature chain or other expression is not a name, so it
+		// is carried as the text it was written as.
+		if name, ok := rel.Target.(*ast.QualifiedName); ok {
+			e.graph.Add(subject, e.sysml(property), e.reference(owner, qualifiedText(name)))
+			continue
+		}
+		e.graph.Add(subject, e.sysml(property), rdf.String(e.text(rel.Target)))
 	}
 }
 
@@ -597,7 +604,9 @@ func (e *encoder) reference(owner, name string) rdf.Term {
 		}
 		scope = scope[:cut]
 	}
-	return rdf.String(name)
+	// A name that links to nothing is carried as notation, so a name needing
+	// the quotes of an unrestricted name keeps them.
+	return rdf.String(qualifiedNameText(name))
 }
 
 func (e *encoder) text(node ast.Node) string {

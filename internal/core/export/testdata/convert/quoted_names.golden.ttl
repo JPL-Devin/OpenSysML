@@ -1,0 +1,126 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:systemica:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:sysmlv2:element:Quoted%20Names>
+    a sysml:Package ;
+    sysml:qualifiedName "Quoted Names" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Quoted Names" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+<urn:sysmlv2:element:Quoted%20Names::Mass%20(kg)>
+    a sysml:AttributeDefinition ;
+    sysml:qualifiedName "Quoted Names::Mass (kg)" ;
+    sysml:owningNamespace <urn:sysmlv2:element:Quoted%20Names> ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Mass (kg)" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:Quoted%20Names::Rover%20Model>
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Quoted Names::Rover Model" ;
+    sysml:owningNamespace <urn:sysmlv2:element:Quoted%20Names> ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "Rover Model" ;
+    sysml:declaredShortName "1" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+<urn:sysmlv2:element:Quoted%20Names::Rover%20Model::dry%20mass>
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Quoted Names::Rover Model::dry mass" ;
+    sysml:owningNamespace <urn:sysmlv2:element:Quoted%20Names::Rover%20Model> ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "dry mass" ;
+    sysml:type <urn:sysmlv2:element:Quoted%20Names::Mass%20(kg)> ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:Quoted%20Names::Rover%20Model::mass%20limit>
+    a sysml:ConstraintUsage ;
+    sysml:qualifiedName "Quoted Names::Rover Model::mass limit" ;
+    sysml:owningNamespace <urn:sysmlv2:element:Quoted%20Names::Rover%20Model> ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "mass limit" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+<urn:sysmlv2:element:Quoted%20Names::Rover%20Model::mass%20limit::@0>
+    a sysx:ConstraintMember ;
+    sysml:qualifiedName "Quoted Names::Rover Model::mass limit::@0" ;
+    sysml:owningNamespace <urn:sysmlv2:element:Quoted%20Names::Rover%20Model::mass%20limit> ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:declaredKeyword "assert" ;
+    sysx:condition "'dry mass' > 0" .
+
+<urn:sysmlv2:element:Quoted%20Names::Rover%20Model::is%20light>
+    a sysml:ConstraintUsage ;
+    sysml:qualifiedName "Quoted Names::Rover Model::is light" ;
+    sysml:owningNamespace <urn:sysmlv2:element:Quoted%20Names::Rover%20Model> ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:declaredName "is light" ;
+    sysx:declaredPrefix "assert" ;
+    sysml:type <urn:sysmlv2:element:Quoted%20Names::Rover%20Model::mass%20limit> ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:Quoted%20Names::the%20rover>
+    a sysx:Alias ;
+    sysml:qualifiedName "Quoted Names::the rover" ;
+    sysml:owningNamespace <urn:sysmlv2:element:Quoted%20Names> ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:declaredName "the rover" ;
+    sysml:aliasedElement <urn:sysmlv2:element:Quoted%20Names::Rover%20Model> ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:Quoted%20Names::my%20rover>
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Quoted Names::my rover" ;
+    sysml:owningNamespace <urn:sysmlv2:element:Quoted%20Names> ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:declaredName "my rover" ;
+    sysml:type <urn:sysmlv2:element:Quoted%20Names::Rover%20Model> ;
+    sysml:subsets <urn:sysmlv2:element:Quoted%20Names::Rover%20Model> ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:Quoted%20Names::off%20model>
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Quoted Names::off model" ;
+    sysml:owningNamespace <urn:sysmlv2:element:Quoted%20Names> ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:declaredName "off model" ;
+    sysml:type "'Not Declared Here'" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Consumer
+    a sysml:Package ;
+    sysml:qualifiedName "Consumer" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "Consumer" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+<urn:sysmlv2:element:Consumer::@0>
+    a sysml:Import ;
+    sysml:qualifiedName "Consumer::@0" ;
+    sysml:owningNamespace elmt:Consumer ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:importedNamespace "Quoted Names" ;
+    sysx:isNamespaceImport "true"^^xsd:boolean ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Consumer::r
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Consumer::r" ;
+    sysml:owningNamespace elmt:Consumer ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "r" ;
+    sysml:type <urn:sysmlv2:element:Quoted%20Names::Rover%20Model> ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:Consumer::@2>
+    a sysml:Dependency ;
+    sysml:qualifiedName "Consumer::@2" ;
+    sysml:owningNamespace elmt:Consumer ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:client elmt:Consumer::r ;
+    sysml:supplier <urn:sysmlv2:element:Quoted%20Names::Rover%20Model> ;
+    sysx:hasBody "false"^^xsd:boolean .

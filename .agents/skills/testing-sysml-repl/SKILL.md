@@ -141,16 +141,24 @@ direction *is* a real AST print, so a round-trip through Turtle is the way to se
 A useful corollary: to prove "no relationship was recorded", count the triples in the `.ttl`, never
 grep the reformatted `.sysml`.
 
-Models that convert to Turtle are a narrow set: anything with state substates or a `calc` result
-member still fails with `cannot convert the *ast.SubstateMember/…ResultMember at …`, so use a
-plain `package Demo { part def Engine { attribute power = 300.0; } }` for `.ttl` assertions rather
-than a file from `examples/`.
+Models that convert to Turtle are a narrow set, but the set grows: **condition members
+(constraint/requirement `assert`/`assume`/`require`, `subject`, `return`) map since PR #182**, while
+state and action nodes still do not. Anything with a state substate, an initial node, `perform`,
+`send`, an assignment or prefix metadata still fails with
+`cannot convert the <thing> at <file>:<line>:<col>: save to .sysml or .kerml instead …` and exit 2.
+As of that PR, 65 of the 110 `examples/**/*.sysml` convert cleanly (50 before it), so a Turtle test
+can use real models — the Constraints/Requirements/Analysis/Verification training packages are the
+richest. A useful sweep, which also proves "the message is clear and it never panics":
 
-**Not one file in `examples/*.sysml` or `internal/repl/testdata/*.sysml` converts to `ttl`** — every
-one fails on an unsupported construct (`*ast.SubstateMember`, `*ast.ResultMember`, `*ast.StateNode`,
-`*ast.StateRegion`, `*ast.ConstraintMember`, `*ast.AssignmentActionNode`, `*ast.InitialNode`,
-`*ast.SubjectMember`, or a `duplicate declaration of "result"`). So a Turtle test needs a
-hand-written fixture; this one round-trips and yields exactly 1180 bytes of Turtle:
+```bash
+find examples -name '*.sysml' -print0 | while IFS= read -r -d '' f; do
+  out=$(./bin/sysml -convert ttl "$f" -o /tmp/e.ttl 2>&1) \
+    && echo "OK $f" || echo "FAIL $f :: $(echo "$out" | head -1)"
+done | sort | uniq -c        # note -print0: many training paths contain spaces
+```
+
+A hand-written fixture is still the smallest positive case; this one round-trips and yields exactly
+1180 bytes of Turtle:
 
 ```
 package Demo {
@@ -182,6 +190,37 @@ for f in examples/*.sysml internal/repl/testdata/*.sysml; do
   cmp -s /tmp/p1 /tmp/p2 && echo idempotent || echo "NOT IDEMPOTENT: $f"
 done | sort | uniq -c
 ```
+
+## Proving a Turtle round trip loses nothing
+
+`.sysml -> .ttl -> .sysml` is never byte-equal to the input (the back direction is a canonical AST
+print: it spells out `in attribute x`, `return attribute`, adds the `;` after a bare condition and
+re-indents). So assert **fixed points and AST identity**, never input-equality:
+
+- `model.sysml -> a.ttl -> a.sysml -> b.ttl` with `diff a.ttl b.ttl` empty — this simultaneously
+  proves the emitted Turtle is well-formed and reloadable and that nothing was lost.
+- `b.ttl -> b.sysml` and `diff a.sysml b.sysml` empty (notation fixed point).
+- Strongest: compare the **parsed AST** of the original and of the round trip. There is no CLI dump
+  flag, so build a throwaway `main.go` that calls `parser.New(source.New(path, bytes)).ParseFile()`
+  and prints `ast.Dump(f)`. It must live *inside* the repo module (`internal/…` blocks an outside
+  module), so `mkdir tmp_dumpcmd && go build -o /tmp/dump ./tmp_dumpcmd && rm -rf tmp_dumpcmd`, then
+  `diff <(/tmp/dump orig.sysml) <(/tmp/dump rt.sysml)`. Empty output is the no-silent-data-loss
+  proof; `git status --porcelain` afterwards confirms the repo is untouched.
+
+Two round-trip failure classes are **pre-existing** (reproduce them with a binary from the parent
+commit before reporting them as regressions):
+
+- **Quoted names are printed unquoted.** `package 'Package Example'` comes back as
+  `package Package Example {` and `<'1'>` as `<1>`, so the re-parse fails with
+  `1:17: expected '{' or ';'`. Most `examples/sysml-v2-training` files use quoted names, so sanitize
+  them (`sed -E "s/package '([^']*)'/package P/"`) before a round-trip sweep, or the whole sweep is
+  red for one unrelated printer bug.
+- `ref` on an `end` attribute is dropped and `redefines`/`typing` relationship order is swapped in a
+  couple of models.
+
+Also note the parser rejects `require constraint <name> { … }` (a *named* nested constraint after
+`require`/`assume`): `expected '{' after 'require constraint'`. Only the anonymous form and the
+`require R { … }` reference form parse, so an export test cannot cover the named variant.
 
 ## Argument order and the `--` marker
 
