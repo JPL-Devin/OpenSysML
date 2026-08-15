@@ -1,14 +1,14 @@
 """Binary management for sysml-grpc service."""
 
 import hashlib
+import http.client
 import json
 import os
 import platform
 import stat
-import urllib.error
 import urllib.request
 import warnings
-from pysysml.errors import ConnectionError
+from pysysml.errors import ChecksumMismatchError, ConnectionError
 
 # Releases publish sysml-grpc-<goos>-<goarch> raw, with a .sha256 sidecar.
 # PYSYSML_GITHUB_REPO overrides the repository they are fetched from.
@@ -45,8 +45,9 @@ def resolve_latest_version(github_repo=None):
     try:
         with urllib.request.urlopen(url, timeout=NETWORK_TIMEOUT) as response:
             release = json.loads(response.read().decode('utf-8'))
-    # A timeout while reading the response is a TimeoutError, not a URLError.
-    except (urllib.error.URLError, TimeoutError, ValueError) as e:
+    # urlopen leaves read-phase failures unwrapped, so a timeout, a reset
+    # connection or a truncated body is not a URLError.
+    except (OSError, http.client.HTTPException, ValueError) as e:
         raise ConnectionError(f"Failed to resolve latest release from {url}: {e}")
 
     tag = release.get('tag_name')
@@ -219,7 +220,8 @@ def download_binary(version='latest', github_repo=None):
         str: Path to downloaded binary
     
     Raises:
-        RuntimeError: If download fails or checksum mismatch
+        ChecksumMismatchError: If the download does not match its published digest
+        ConnectionError: If the download or its installation fails
     """
     github_repo = github_repo or default_github_repo()
     if version == 'latest':
@@ -258,7 +260,7 @@ def download_binary(version='latest', github_repo=None):
         # Verify checksum
         if not verify_checksum(temp_path, expected_checksum):
             os.remove(temp_path)
-            raise ConnectionError(
+            raise ChecksumMismatchError(
                 f"Checksum mismatch for {binary_name}. "
                 f"Expected {expected_checksum}, but download does not match. "
                 f"Binary may be corrupted or tampered with."
@@ -283,7 +285,9 @@ def download_binary(version='latest', github_repo=None):
         
         return binary_path
         
-    except (urllib.error.URLError, TimeoutError) as e:
+    except ConnectionError:
+        raise
+    except (OSError, http.client.HTTPException) as e:
         raise ConnectionError(f"Failed to download binary from {binary_url}: {e}")
 
 
@@ -360,6 +364,9 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
     # Download binary with explicit version
     try:
         return download_binary(version=version, github_repo=github_repo)
+    except ChecksumMismatchError:
+        # A download that may have been tampered with is not a reason to fall back.
+        raise
     except ConnectionError as e:
         if cached is None:
             raise

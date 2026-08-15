@@ -1,6 +1,7 @@
 """Tests for binary management module."""
 
 import hashlib
+import http.client
 import json
 import os
 import platform
@@ -19,6 +20,7 @@ from pysysml.binary import (
     write_metadata,
     ensure_binary
 )
+from pysysml.errors import ChecksumMismatchError
 from pysysml.errors import ConnectionError as PySysMLConnectionError
 
 
@@ -426,3 +428,22 @@ def test_a_cache_survives_a_replacement_that_cannot_be_downloaded(cache):
             assert ensure_binary(version='v0.0.7') == binary_path
 
     assert cached_release() == 'v0.0.5'
+
+
+def test_a_tampered_download_is_not_answered_from_the_cache(cache):
+    """Test an integrity failure refuses to start rather than serving the old binary."""
+    cache(version='v0.0.5')
+    with patch('pysysml.binary.download_binary',
+               side_effect=ChecksumMismatchError('Checksum mismatch')):
+        with pytest.warns(UserWarning, match='Replacing the cached sysml-grpc'):
+            with pytest.raises(ChecksumMismatchError):
+                ensure_binary(version='v0.0.7')
+
+
+def test_a_dropped_connection_keeps_a_working_cache(cache):
+    """Test a reset connection is a transport failure, not a startup failure."""
+    binary_path = cache(version='v0.0.7')
+    with patch('urllib.request.urlopen',
+               side_effect=http.client.RemoteDisconnected('closed')):
+        assert stale_cache_reason('latest') is None
+        assert ensure_binary(version='latest') == binary_path

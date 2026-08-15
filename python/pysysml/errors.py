@@ -38,6 +38,15 @@ class ConnectionError(PySysMLError, builtins.ConnectionError):
         self.code = code
 
 
+class ChecksumMismatchError(ConnectionError):
+    """Raised when a downloaded binary does not match the checksum published for it.
+
+    A :class:`ConnectionError`, since the service cannot be started, but its own
+    class so that a possibly tampered download is never handled as a transport
+    failure and answered from whatever was cached before.
+    """
+
+
 class UnsupportedValueError(PySysMLError):
     """Raised when the service sends a value the wire format cannot represent."""
 
@@ -342,6 +351,7 @@ def __getattr__(name):
 
 __all__ = [
     "PySysMLError",
+    "ChecksumMismatchError",
     "ConnectionError",
     "ConversionError",
     "ExecutionError",
