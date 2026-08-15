@@ -511,22 +511,23 @@ func (e *ActionExecutor) stepInitialNode(tokenIdx int) error {
 
 // stepFinalNode consumes token and checks for completion.
 func (e *ActionExecutor) stepFinalNode(tokenIdx int) error {
-	token := &e.tokens[tokenIdx]
+	e.retireToken(tokenIdx)
+	return nil
+}
 
-	// Save token data to results before consuming
+// retireToken ends a token's flow: what it carries becomes a result of the
+// action, and the action completes once no token is left to move.
+func (e *ActionExecutor) retireToken(tokenIdx int) {
+	token := &e.tokens[tokenIdx]
 	for k, v := range token.Data {
 		e.results[k] = v
 	}
 
-	// Remove token
 	e.tokens = append(e.tokens[:tokenIdx], e.tokens[tokenIdx+1:]...)
 
-	// Check if all tokens consumed
 	if len(e.tokens) == 0 {
 		e.state = StateCompleted
 	}
-
-	return nil
 }
 
 // stepForkNode spawns N tokens (one per successor).
@@ -790,9 +791,6 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 
 	// Advance to successor
 	successors := e.graph.Edges[token.Location]
-	if len(successors) == 0 {
-		return fmt.Errorf("action node %s has no successors", node.Name)
-	}
 	if len(successors) > 1 {
 		return fmt.Errorf("action node %s has multiple successors (decision nodes not yet supported)", node.Name)
 	}
@@ -800,6 +798,11 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 	// Apply data flows: transfer data from this node's output pins to target input pins
 	if err := e.applyDataFlows(token, node); err != nil {
 		return err
+	}
+
+	if len(successors) == 0 {
+		e.retireToken(tokenIdx)
+		return nil
 	}
 
 	token.Location = successors[0]
@@ -895,9 +898,6 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 
 	// Advance to successor
 	successors := e.graph.Edges[token.Location]
-	if len(successors) == 0 {
-		return fmt.Errorf("nested action %s has no successors", ActionNodeName(usage))
-	}
 	if len(successors) > 1 {
 		return fmt.Errorf("nested action %s has multiple successors", ActionNodeName(usage))
 	}
@@ -906,6 +906,13 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	// nodes downstream read.
 	if err := e.applyDataFlows(token, token.Location); err != nil {
 		return err
+	}
+
+	// A node the flow leads no further from is where this flow ends: the action
+	// inherits its `done` snapshot, so no succession to a final node is needed.
+	if len(successors) == 0 {
+		e.retireToken(tokenIdx)
+		return nil
 	}
 
 	token.Location = successors[0]
@@ -952,13 +959,14 @@ func (e *ActionExecutor) stepStatementNode(tokenIdx int) error {
 	}
 
 	successors := e.graph.Edges[node]
-	if len(successors) == 0 {
-		// As for a nested action, a node the token cannot leave is reported
-		// rather than treated as the end of the action.
-		return fmt.Errorf("%s node has no successors", statementNodeKeyword(node))
-	}
 	if len(successors) > 1 {
 		return fmt.Errorf("%s node has multiple successors", statementNodeKeyword(node))
+	}
+
+	// As for a nested action, a node with nothing after it ends the flow.
+	if len(successors) == 0 {
+		e.retireToken(tokenIdx)
+		return nil
 	}
 
 	token.Location = successors[0]
