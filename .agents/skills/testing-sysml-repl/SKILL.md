@@ -919,12 +919,16 @@ PYSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> StaleSe
   tag, so any `PYSYSML_GRPC_VERSION=v0.0.x` is a mismatch — handy, and it also means asking for a
   tag while a dev build runs will *always* raise.
 - Capability names the service reports today: `convert`, `query`, `type_facts`, `verification`.
-  A bogus `require_capabilities=['time_travel']` surfaces as `StaleServiceError` (not
-  `MissingCapabilityError`) when a service is already listening, and it resolves in <0.2 s — time
-  the run so a hang is visible as a number.
+  A bogus `require_capabilities=['time_travel']` surfaces as `MissingCapabilityError` whoever
+  started the service (only a release mismatch is a `StaleServiceError`), and it resolves in
+  <0.2 s — time the run so a hang is visible as a number.
+- With `auto_start=False` the release check is lazy: a service that was not listening when the
+  client was built is checked at the first call of *any* kind, so assert it through `conn.load(...)`
+  and not only through `conn.server_info()`.
 - `pysysml` has **no module-level `load_from_content`**; use `conn.load_from_content(...)`.
 - Lifecycle state lives in `~/.pysysml/sysml-grpc.{pid,refcount,lock}`. Reset a clean auto-start
-  state with `pkill -f sysml-grpc; rm -f ~/.pysysml/sysml-grpc.pid ~/.pysysml/sysml-grpc.refcount`.
+  state with `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc.pid ~/.pysysml/sysml-grpc.refcount`
+  (`-x`, never `-f`, which matches your own shell — see the pkill trap below).
   Refcount behaviour worth asserting both within one process (two `connect()`s) and across two
   processes: 1 → 2 → 1, service still serving the remaining holder, and pidfile/refcount removed
   only when the last one closes.
