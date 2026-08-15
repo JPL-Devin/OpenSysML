@@ -16,7 +16,9 @@ That fetches `sysml/src/training` from the pinned pilot release
 (https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) into
 `sysml-v2-training/`, which is gitignored.
 
-**Status:** 97/100 training files are clean. See [docs/project/training-examples.md](../docs/project/training-examples.md) for details.
+**Status:** the corpus gate's current result is in
+[docs/project/training-examples.md](../docs/project/training-examples.md), with the files that
+still report errors and why.
 
 ## Other Examples
 

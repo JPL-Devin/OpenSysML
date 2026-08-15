@@ -269,7 +269,9 @@ When a change needs documenting:
   will drift.
 - **Moving or renaming a page means updating its inbound links.** Run
   `python3 scripts/check-doc-links.py` — it fails on a link to a missing file or heading and
-  runs in CI. Leave a one-paragraph pointer behind at a path that outside links may already use.
+  runs in CI. Where a released `README.md` linked the old path, leave a one-paragraph pointer
+  behind there (`docs/ARCHITECTURE.md` and friends are such pointers); a page only ever linked
+  from inside `docs/` is moved outright.
 
 ## Architecture
 
