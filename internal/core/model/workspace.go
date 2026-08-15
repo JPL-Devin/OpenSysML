@@ -216,7 +216,8 @@ func (w *Workspace) LookupQualified(fqn string) []*symbols.Symbol {
 func (w *Workspace) TopLevelSymbols(doc string) []*symbols.Symbol {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	return w.index.TopLevelSymbols(doc)
+	resolver, _ := w.newResolver()
+	return resolver.AdmittedTopLevel(doc, w.index.TopLevelBindings(doc))
 }
 
 // MembersOnPath returns the members visible on the element that path names from
@@ -231,9 +232,7 @@ func (w *Workspace) MembersOnPath(scope *symbols.Scope, path []string) []*symbol
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	resolver := resolve.New(w.index)
-	sem := semantics.NewModel(resolver)
-	resolver.SetModel(sem)
+	resolver, sem := w.newResolver()
 
 	sym, ok := resolver.ResolveName(scope, path[0], nil)
 	if !ok || sym == nil {
@@ -252,12 +251,24 @@ func (w *Workspace) MembersOnPath(scope *symbols.Scope, path []string) []*symbol
 	// A cached library symbol has no scope, and a package's own scope does not
 	// hold what its imports brought in; both are reachable through the index,
 	// as seen from the namespace the completion is requested in so that another
-	// namespace's private imports stay hidden.
+	// namespace's private imports stay hidden. An element the namespace's
+	// filters reject is no member of it, so it is not offered either.
 	if fqn := w.index.GetFQN(sym); fqn != "" {
 		from := resolver.ReferringNamespaceFQN(scope)
-		members = append(members, w.index.LookupDirectChildrenFrom(fqn, from)...)
+		children := w.index.LookupDirectChildrenFrom(fqn, from)
+		members = append(members, resolver.AdmittedChildrenOf(scope, fqn, children)...)
 	}
 	return members
+}
+
+// newResolver is a resolver over the index with a semantic model attached: an
+// inherited member and the element filters gating an import are both answered by
+// the model, so a read path without one resolves differently to a checked one.
+func (w *Workspace) newResolver() (*resolve.Resolver, *semantics.Model) {
+	resolver := resolve.New(w.index)
+	sem := semantics.NewModel(resolver)
+	resolver.SetModel(sem)
+	return resolver, sem
 }
 
 // Document returns the current parsed document for name, or nil.
@@ -290,7 +301,8 @@ func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn 
 func (w *Workspace) ResolveReferenceInDoc(name string, ref resolve.Reference) (*symbols.Symbol, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	return resolve.New(w.index).ResolveReference(ref)
+	resolver, _ := w.newResolver()
+	return resolver.ResolveReference(ref)
 }
 
 // ResolveQualifiedSegmentsInDoc resolves a qualified name and returns the symbol
@@ -309,7 +321,7 @@ func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Refer
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	r := resolve.New(w.index)
+	r, _ := w.newResolver()
 	r.ResolveReference(ref)
 	out := make([]*symbols.Symbol, len(ref.QN.Parts))
 	for i := range ref.QN.Parts {

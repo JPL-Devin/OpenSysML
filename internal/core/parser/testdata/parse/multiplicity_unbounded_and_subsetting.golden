@@ -1,7 +1,7 @@
 (RootNamespace
   (Membership visibility="default"
     (Package name="M" library=false standard=false
-      (Import visibility="private" all=false kind=membership recursive=false imported="ScalarValues::Real")
+      (Import visibility="private" all=false kind=membership recursive=false imported="ScalarValues::Real" filtered=false)
       (Membership visibility="default"
         (Definition kind="part" abstract=false variation=false name="Sub"
           (Membership visibility="default"

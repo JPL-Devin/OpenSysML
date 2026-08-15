@@ -230,9 +230,13 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.IsExpose {
 			label = "Expose"
 		}
-		fmt.Fprintf(b, `(%s visibility=%q all=%t kind=%s recursive=%t imported=%q`,
-			label, visibilityString(v.Visibility), v.IsAll, importKindString(v.Kind), v.IsRecursive, qnString(v.Imported))
-		writeChildren(b, depth, v.Body)
+		fmt.Fprintf(b, `(%s visibility=%q all=%t kind=%s recursive=%t imported=%q filtered=%t`,
+			label, visibilityString(v.Visibility), v.IsAll, importKindString(v.Kind), v.IsRecursive, qnString(v.Imported), v.FilterExpr != nil)
+		kids := v.Body
+		if v.FilterExpr != nil {
+			kids = append([]Node{v.FilterExpr}, kids...)
+		}
+		writeChildren(b, depth, kids)
 		return
 	case *Alias:
 		fmt.Fprintf(b, `(Alias visibility=%q name=%q for=%q`,

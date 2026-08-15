@@ -57,7 +57,7 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 		}
 	}
 	// Final fallback: check global index (cross-document top-level names)
-	if sym, n := r.lookupGlobalTop(name); n == 1 && !hide.hides(sym) {
+	if sym, n := r.lookupGlobalTop(scope, name); n == 1 && !hide.hides(sym) {
 		return resolution{sym: sym, ok: true}
 	}
 	return resolution{}
@@ -205,6 +205,13 @@ func importsOf(node ast.Node) []*ast.Import {
 }
 
 // matchImport tries to satisfy name through a single import declaration.
+//
+// An element the import's filter clause rejects, or one rejected by a `filter`
+// member of the namespace declaring the import, is not brought in at all — so a
+// name only such an element bears does not resolve through this import
+// (KerML 8.2.4, SysML v2 7.4.4). A rejected element does not end the search
+// either: another element of the same name elsewhere in an imported subtree may
+// be admitted.
 func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name string) (*symbols.Symbol, bool) {
 	if imp.Imported == nil || len(imp.Imported.Parts) == 0 {
 		return nil, false
@@ -213,6 +220,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 	if !ok {
 		return nil, false
 	}
+	admit := r.importAdmits(scope, imp)
 	if imp.Kind == ast.ImportMembership {
 		// The imported member itself (last segment) is visible by its own name.
 		// For FQN-indexed symbols (stdlib), target.Name may be the full FQN, so extract last segment.
@@ -220,15 +228,11 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		if idx := strings.LastIndex(targetName, "::"); idx >= 0 {
 			targetName = targetName[idx+2:]
 		}
-		if targetName == name {
-			return target, true
-		}
-		// Also check short name (e.g., "kg" for "kilogram")
-		if target.ShortName != "" && target.ShortName == name {
+		if (targetName == name || (target.ShortName != "" && target.ShortName == name)) && admit(target) {
 			return target, true
 		}
 		if imp.IsRecursive && target.Scope != nil {
-			if sym, ok := lookupInSubtree(target.Scope, name, imp, map[*symbols.Scope]bool{}); ok {
+			if sym, ok := lookupInSubtree(target.Scope, name, imp, admit, map[*symbols.Scope]bool{}); ok {
 				return sym, true
 			}
 		}
@@ -237,7 +241,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 	// Namespace import: visible members of the target's scope are surfaced.
 	// Check scope first if available
 	if target.Scope != nil {
-		if sym, ok := target.Scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) {
+		if sym, ok := target.Scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) && admit(sym) {
 			return sym, true
 		}
 	}
@@ -259,17 +263,22 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 			if idx := strings.LastIndex(symName, "::"); idx >= 0 {
 				symName = symName[idx+2:]
 			}
-			if symName == name && visibleThroughImport(imp, sym) {
-				return sym, true
+			if symName != name && (sym.ShortName == "" || sym.ShortName != name) {
+				continue
 			}
-			// Also check short name (e.g., "kg" for "kilogram")
-			if sym.ShortName != "" && sym.ShortName == name && visibleThroughImport(imp, sym) {
+			// The target may itself have surfaced the name through an import of
+			// its own, filtered by its `filter` members: what it re-exports
+			// onward is what those select.
+			if !r.admitsUnderName("", r.ReferringNamespaceFQN(scope), target.Name+"::"+name, sym) {
+				continue
+			}
+			if visibleThroughImport(imp, sym) && admit(sym) {
 				return sym, true
 			}
 		}
 	}
 	if imp.IsRecursive {
-		if sym, ok := lookupInSubtree(target.Scope, name, imp, map[*symbols.Scope]bool{}); ok {
+		if sym, ok := lookupInSubtree(target.Scope, name, imp, admit, map[*symbols.Scope]bool{}); ok {
 			return sym, true
 		}
 	}
@@ -279,17 +288,17 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 // lookupInSubtree searches a scope and all descendant scopes for a match on
 // name that imp may surface. A match the import cannot surface does not end the
 // walk: another scope in the subtree may hold a visible one.
-func lookupInSubtree(scope *symbols.Scope, name string, imp *ast.Import, seen map[*symbols.Scope]bool) (*symbols.Symbol, bool) {
+func lookupInSubtree(scope *symbols.Scope, name string, imp *ast.Import, admit func(*symbols.Symbol) bool, seen map[*symbols.Scope]bool) (*symbols.Symbol, bool) {
 	// A body-local name is not a member of the namespace being imported.
 	if scope == nil || seen[scope] || scope.BodyLocal() {
 		return nil, false
 	}
 	seen[scope] = true
-	if sym, ok := scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) {
+	if sym, ok := scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) && admit(sym) {
 		return sym, true
 	}
 	for _, child := range scope.Children() {
-		if sym, ok := lookupInSubtree(child, name, imp, seen); ok {
+		if sym, ok := lookupInSubtree(child, name, imp, admit, seen); ok {
 			return sym, true
 		}
 	}

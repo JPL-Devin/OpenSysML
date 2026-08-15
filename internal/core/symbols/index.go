@@ -28,6 +28,7 @@ type reexportKey struct {
 // alike.
 type Index struct {
 	docRoots      map[string]*Scope     // document name -> root scope
+	docOfRoot     map[*Scope]string     // root scope -> document name
 	fqn           map[string][]*Symbol  // fully-qualified name -> symbols
 	contributions map[string][]fqnEntry // document name -> entries it added
 
@@ -45,15 +46,16 @@ type Index struct {
 	hidden     map[string]map[*Symbol]bool
 
 	// reexportDocs attributes each re-export to every document whose wildcard
-	// imports surface it, recording whether that document surfaces it publicly;
-	// docReexports is the per-document inverse. Two documents importing the same
-	// namespace surface the same names, so removal drops one document's claim and
-	// keeps the registration while another document still makes it.
+	// imports surface it, recording whether that document surfaces it publicly and
+	// the element-filter conditions its imports impose; docReexports is the
+	// per-document inverse. Two documents importing the same namespace surface the
+	// same names, so removal drops one document's claim and keeps the registration
+	// while another document still makes it.
 	//
 	// This is deliberately not folded into contributions: that is an append-only
 	// slice per document, and a re-export has to be found by (FQN, symbol) to
 	// drop one document's claim, or purged across all documents at once.
-	reexportDocs map[reexportKey]map[string]bool
+	reexportDocs map[reexportKey]map[string]*reexportClaim
 	docReexports map[string]map[reexportKey]bool
 
 	// declaredAt maps a symbol to the FQN its declaration gives it, which is the
@@ -79,6 +81,40 @@ type Index struct {
 	// with the document.
 	libraryDocs map[string]bool
 	librarySyms map[*Symbol]bool
+
+	// nsFilters holds the element-filter conditions a namespace declares per
+	// document that declares it, alongside wildcardMeta and for the same reason:
+	// they restrict the memberships that namespace's imports bring in, so they are
+	// read on every expansion of it.
+	nsFilters map[string]map[string][]ElementFilter
+}
+
+// reexportClaim is one document's claim on a re-export: whether its imports
+// surface the name publicly, and the element-filter conditions they impose on
+// it. Conditions are recorded rather than applied here — judging a candidate
+// needs the semantic model, which the index has no access to — and are read back
+// by the resolver, which evaluates them (see ReexportGates).
+//
+// A name can be surfaced by more than one import, so the conditions are held per
+// route: the element is a member if *any* route admits it, which is what makes an
+// unfiltered import of the same namespace re-export it regardless of another
+// route's filter. A zero-length route is one no filter restricts.
+//
+// Holding the routes with the claim that produced them is what keeps them exact:
+// dropping a document's claim drops its routes, so a surviving document's filter
+// is not defeated by a route that no longer exists.
+type reexportClaim struct {
+	public bool
+	routes []gateRoute
+}
+
+// gateRoute is one route a name reached a namespace by: the conditions it
+// imposes, and whether the import that made it was private, which keeps the
+// route out of a lookup made from outside that namespace (KerML 8.2.3.3) —
+// a private unfiltered import must not defeat a public filtered one.
+type gateRoute struct {
+	private bool
+	filters []ElementFilter
 }
 
 // nsChange is what happened to a namespace's direct members since the last
@@ -90,22 +126,26 @@ type nsChange struct {
 }
 
 // WildcardImport is one `import X::*` declaration: the target's raw qualified
-// name text and whether the import was declared private.
+// name text, whether the import was declared private, and the filter condition
+// restricting what it brings in (`import X::*[@Safety]`), which is zero for an
+// unfiltered import.
 type WildcardImport struct {
 	Target  string
 	Private bool
+	Filter  ElementFilter
 }
 
 // NewIndex creates an empty index.
 func NewIndex() *Index {
 	return &Index{
 		docRoots:      make(map[string]*Scope),
+		docOfRoot:     make(map[*Scope]string),
 		fqn:           make(map[string][]*Symbol),
 		contributions: make(map[string][]fqnEntry),
 		wildcardMeta:  make(map[string]map[string][]WildcardImport),
 		reexported:    make(map[string]map[*Symbol]bool),
 		hidden:        make(map[string]map[*Symbol]bool),
-		reexportDocs:  make(map[reexportKey]map[string]bool),
+		reexportDocs:  make(map[reexportKey]map[string]*reexportClaim),
 		docReexports:  make(map[string]map[reexportKey]bool),
 		declaredAt:    make(map[*Symbol]string),
 		children:      make(map[string]map[string]bool),
@@ -113,6 +153,7 @@ func NewIndex() *Index {
 		lastTargets:   make(map[string][]resolvedImport),
 		libraryDocs:   make(map[string]bool),
 		librarySyms:   make(map[*Symbol]bool),
+		nsFilters:     make(map[string]map[string][]ElementFilter),
 	}
 }
 
@@ -129,13 +170,15 @@ func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
 	rs := Build(root)
 	SetDocName(rs, name)
 	idx.docRoots[name] = rs
+	idx.docOfRoot[rs] = name
 	idx.indexScope(name, rs, "")
 
-	// Extract wildcard imports from root namespace itself
-	// (root is not a symbol, so indexScope won't process its imports)
-	if wildcards := extractWildcardImports(root); len(wildcards) > 0 {
+	// Extract wildcard imports and filters from the root namespace itself
+	// (root is not a symbol, so indexScope won't process its members)
+	if wildcards := extractWildcardImports(root, rs); len(wildcards) > 0 {
 		idx.setWildcardImports("", name, wildcards)
 	}
+	idx.SetNamespaceFilters("", name, extractNamespaceFilters(root, rs))
 }
 
 // setWildcardImports records the wildcard imports doc states through the
@@ -260,6 +303,7 @@ type statedImport struct {
 	doc     string
 	target  string
 	private bool
+	filter  ElementFilter
 }
 
 // resolvedImport is one wildcard import paired with the FQN its target resolves
@@ -283,7 +327,7 @@ func (idx *Index) imports(pkgFQN string) []statedImport {
 	var out []statedImport
 	for _, doc := range docs {
 		for _, imp := range byDoc[doc] {
-			out = append(out, statedImport{doc: doc, target: imp.Target, private: imp.Private})
+			out = append(out, statedImport{doc: doc, target: imp.Target, private: imp.Private, filter: imp.Filter})
 		}
 	}
 	return out
@@ -341,17 +385,25 @@ func (idx *Index) expandImporter(pkgFQN string) {
 		if targetFQN == "" {
 			continue // target not found or ambiguous
 		}
+		// The conditions this import adds: its own filter clause, and the `filter`
+		// members of the namespace it imports into, which restrict that namespace's
+		// imported memberships (KerML 8.2.4). They gate the re-export rather than
+		// suppressing it, because whether a candidate satisfies them is a question
+		// only the semantic model can answer.
+		gate := nonZeroFilters(append([]ElementFilter{imp.filter}, idx.namespaceFiltersGating(pkgFQN, imp.doc)...))
 		for _, child := range idx.exportedChildren(targetFQN) {
 			// Extract child's primary name
 			childName := child.Name
 			if i := lastIndex(childName, "::"); i >= 0 {
 				childName = childName[i+2:]
 			}
-			idx.reexport(joinFQN(pkgFQN, childName), child, imp.doc, imp.private)
+			idx.reexportGated(joinFQN(pkgFQN, childName), child, imp.doc, imp.private,
+				idx.routesOnward(imp.doc, joinFQN(targetFQN, childName), child, gate))
 
 			// Also re-export under short name if different from primary name
 			if child.ShortName != "" && child.ShortName != childName {
-				idx.reexport(joinFQN(pkgFQN, child.ShortName), child, imp.doc, imp.private)
+				idx.reexportGated(joinFQN(pkgFQN, child.ShortName), child, imp.doc, imp.private,
+					idx.routesOnward(imp.doc, joinFQN(targetFQN, child.ShortName), child, gate))
 			}
 		}
 	}
@@ -544,6 +596,7 @@ func (idx *Index) RemoveDocument(name string) {
 	}
 	delete(idx.libraryDocs, name)
 	delete(idx.contributions, name)
+	delete(idx.docOfRoot, idx.docRoots[name])
 	delete(idx.docRoots, name)
 
 	for pkgFQN, byDoc := range idx.wildcardMeta {
@@ -561,6 +614,7 @@ func (idx *Index) RemoveDocument(name string) {
 		idx.dropClaim(key, name)
 	}
 	delete(idx.docReexports, name)
+	idx.dropNamespaceFilters(name)
 
 	idx.ExpandWildcardImports()
 }
@@ -639,6 +693,175 @@ func (idx *Index) reexportedAt(fqn string) []*Symbol {
 // recording the claim so that removing doc can take it back. An entry the
 // importing namespace declares itself is left alone: a cycle of wildcard imports
 // brings a package its own members back, and they are not borrowed.
+// routesOnward composes the conditions already gating a name inside the
+// namespace it is imported from — sourceFQN, where an earlier import surfaced it
+// — with the ones this import adds. A filter therefore keeps holding when a
+// further namespace imports the filtering one onward, and the target's several
+// routes each stay a route of their own.
+func (idx *Index) routesOnward(doc, sourceFQN string, sym *Symbol, gate []ElementFilter) [][]ElementFilter {
+	// The importing namespace is outside the one it imports from, so only that
+	// one's public routes reach it.
+	inherited := idx.ReexportGates(doc, sourceFQN, sym, "")
+	if len(inherited) == 0 {
+		return [][]ElementFilter{gate}
+	}
+	out := make([][]ElementFilter, 0, len(inherited))
+	for _, route := range inherited {
+		out = append(out, addFilters(route, gate))
+	}
+	return out
+}
+
+// addFilters composes two routes' conditions, dropping one the route already
+// carries: conditions apply conjunctively, so repeating one adds nothing — and a
+// cycle of filtered imports would otherwise compose forever.
+func addFilters(route, add []ElementFilter) []ElementFilter {
+	out := append([]ElementFilter{}, route...)
+	for _, f := range add {
+		if !hasFilter(out, f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// hasFilter reports whether a route already carries the condition f.
+func hasFilter(route []ElementFilter, f ElementFilter) bool {
+	for _, have := range route {
+		if have.Same(f) {
+			return true
+		}
+	}
+	return false
+}
+
+// filtersSubsume reports whether a route conditioned by a admits everything one
+// conditioned by b does, which holds when a's conditions are a subset of b's.
+func filtersSubsume(a, b []ElementFilter) bool {
+	for _, f := range a {
+		if !hasFilter(b, f) {
+			return false
+		}
+	}
+	return true
+}
+
+// reexportGated is reexport, additionally recording the element-filter
+// conditions the routes that surfaced the name impose on it. Routes accumulate:
+// a name is a member of the importing namespace when any one of them admits it,
+// so an unfiltered import re-exports it whatever another route filters out.
+func (idx *Index) reexportGated(fqn string, sym *Symbol, doc string, private bool, gates [][]ElementFilter) {
+	idx.reexport(fqn, sym, doc, private)
+	if !idx.reexported[fqn][sym] {
+		return // the namespace declares it; nothing was borrowed
+	}
+	claim := idx.reexportDocs[reexportKey{fqn: fqn, sym: sym}][doc]
+	if claim == nil {
+		return
+	}
+	widened := false
+	for _, gate := range gates {
+		widened = claim.record(gateRoute{private: private, filters: gate}) || widened
+	}
+	// A namespace importing this one onward copied the narrower routes, so a
+	// widened claim has to reach it too (see routesOnward).
+	if parent, _ := splitFQN(fqn); widened && parent != "" {
+		idx.markGained(parent)
+	}
+}
+
+// record adds a route to the claim, unless one of the same visibility already
+// admits at least as much — an unconditional route makes the conditional ones
+// beside it redundant, and re-expanding an importer records nothing new. Keeping
+// only the routes no other subsumes also bounds the set, which is what lets a
+// cycle of filtered imports settle. It reports whether the claim now admits more
+// than it did.
+func (c *reexportClaim) record(route gateRoute) bool {
+	for _, have := range c.routes {
+		if have.private == route.private && filtersSubsume(have.filters, route.filters) {
+			return false
+		}
+	}
+	kept := make([]gateRoute, 0, len(c.routes)+1)
+	for _, have := range c.routes {
+		if have.private != route.private || !filtersSubsume(route.filters, have.filters) {
+			kept = append(kept, have)
+		}
+	}
+	c.routes = append(kept, route)
+	return true
+}
+
+// ReexportGates returns the element-filter conditions the name fqn is subject to
+// when it reaches a lookup as sym, one entry per route that surfaced it: the
+// conditions of the import that surfaced it along that route plus the importing
+// namespace's own `filter` members. A name a namespace declares itself has no
+// route and so no conditions.
+//
+// The resolver reads them and evaluates them against its semantic model, and
+// admits the element when any route's conditions all hold: a candidate every
+// route rejects is not a member of the namespace it appears under, so no route
+// to it resolves (KerML 8.2.4).
+// A private import's route only answers a lookup made from within the importing
+// namespace, which from names ("" for one made from anywhere else).
+func (idx *Index) ReexportGates(doc, fqn string, sym *Symbol, from string) [][]ElementFilter {
+	claims := idx.reexportDocs[reexportKey{fqn: fqn, sym: sym}]
+	parent, _ := splitFQN(fqn)
+	if parent == "" {
+		// Each document owns its root namespace alone, so only the routes of the
+		// document looking the name up gate it — and they are its own.
+		return claims[doc].gateRoutes(true)
+	}
+	inside := withinNamespace(from, parent)
+	var out [][]ElementFilter
+	for _, claim := range claims {
+		out = append(out, claim.gateRoutes(inside)...)
+	}
+	return out
+}
+
+// ReexportVisible reports whether a lookup made in doc reaches sym under the
+// name fqn. A root-level name a wildcard import surfaced is a member of the
+// importing document's own root namespace, so it is not visible in another
+// document (KerML 8.2.3.3); a name under a namespace is visible wherever that
+// namespace is.
+func (idx *Index) ReexportVisible(doc, fqn string, sym *Symbol) bool {
+	if parent, _ := splitFQN(fqn); parent != "" {
+		return true
+	}
+	if !idx.reexported[fqn][sym] {
+		return true // declared under this name rather than borrowed
+	}
+	return idx.reexportDocs[reexportKey{fqn: fqn, sym: sym}][doc] != nil
+}
+
+// gateRoutes returns the conditions of the routes a claim recorded that a lookup
+// may take, and none for an absent claim.
+func (c *reexportClaim) gateRoutes(private bool) [][]ElementFilter {
+	if c == nil {
+		return nil
+	}
+	out := make([][]ElementFilter, 0, len(c.routes))
+	for _, route := range c.routes {
+		if route.private && !private {
+			continue
+		}
+		out = append(out, route.filters)
+	}
+	return out
+}
+
+// nonZeroFilters drops the absent conditions of an unfiltered import.
+func nonZeroFilters(filters []ElementFilter) []ElementFilter {
+	var out []ElementFilter
+	for _, f := range filters {
+		if !f.IsZero() {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 func (idx *Index) reexport(fqn string, sym *Symbol, doc string, private bool) {
 	registered := idx.hasFQN(fqn, sym)
 	if registered && !idx.reexported[fqn][sym] {
@@ -657,13 +880,18 @@ func (idx *Index) reexport(fqn string, sym *Symbol, doc string, private bool) {
 func (idx *Index) claimReexport(key reexportKey, doc string, public bool) {
 	docs := idx.reexportDocs[key]
 	if docs == nil {
-		docs = make(map[string]bool)
+		docs = make(map[string]*reexportClaim)
 		idx.reexportDocs[key] = docs
 	}
-	if wasPublic, claimed := docs[doc]; claimed && (wasPublic || !public) {
+	claim, claimed := docs[doc]
+	if claimed && (claim.public || !public) {
 		return // nothing new
 	}
-	docs[doc] = docs[doc] || public
+	if !claimed {
+		claim = &reexportClaim{}
+		docs[doc] = claim
+	}
+	claim.public = claim.public || public
 	if idx.docReexports[doc] == nil {
 		idx.docReexports[doc] = make(map[reexportKey]bool)
 	}
@@ -681,7 +909,7 @@ func (idx *Index) dropClaim(key reexportKey, doc string) {
 	if _, claimed := docs[doc]; !claimed {
 		return
 	}
-	delete(docs, doc)
+	delete(docs, doc) // the routes this document recorded go with its claim
 	if len(docs) == 0 {
 		delete(idx.reexportDocs, key)
 		idx.deregister(key.fqn, key.sym)
@@ -716,8 +944,8 @@ func (idx *Index) applyReexportMarks(key reexportKey) {
 		return
 	}
 	setMark(idx.reexported, key.fqn, key.sym)
-	for _, public := range docs {
-		if public {
+	for _, claim := range docs {
+		if claim.public {
 			clearMark(idx.hidden, key.fqn, key.sym)
 			return
 		}
@@ -770,11 +998,12 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 				idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: shortFQN, sym: sym})
 			}
 
-			// Extract wildcard imports from packages/namespaces
+			// Extract wildcard imports and filters from packages/namespaces
 			if sym.Kind == SymbolPackage || sym.Kind == SymbolNamespace {
-				if wildcards := extractWildcardImports(sym.Decl); len(wildcards) > 0 {
+				if wildcards := extractWildcardImports(sym.Decl, sym.Scope); len(wildcards) > 0 {
 					idx.setWildcardImports(fqn, doc, wildcards)
 				}
+				idx.SetNamespaceFilters(fqn, doc, extractNamespaceFilters(sym.Decl, sym.Scope))
 			}
 
 			if sym.Scope != nil {
@@ -795,29 +1024,21 @@ func joinFQN(prefix, name string) string {
 // extractWildcardImports extracts the wildcard imports of a Package, Namespace,
 // or RootNamespace AST node: the raw qualified name text (e.g. "ISQBase") and
 // declared visibility of each `import <name>::*` statement.
-func extractWildcardImports(decl ast.Node) []WildcardImport {
-	var members []ast.Node
-	switch d := decl.(type) {
-	case *ast.Package:
-		members = d.Members
-	case *ast.Namespace:
-		members = d.Members
-	case *ast.RootNamespace:
-		members = d.Members
-	default:
-		return nil
-	}
-
+func extractWildcardImports(decl ast.Node, scope *Scope) []WildcardImport {
 	var out []WildcardImport
-	for _, m := range members {
+	for _, m := range namespaceMembers(decl) {
 		imp, ok := m.(*ast.Import)
 		if !ok || imp.Kind != ast.ImportNamespace || imp.Imported == nil {
 			continue
 		}
-		out = append(out, WildcardImport{
+		wi := WildcardImport{
 			Target:  qualifiedNameText(imp.Imported),
 			Private: imp.Visibility == ast.VisibilityPrivate,
-		})
+		}
+		if imp.FilterExpr != nil {
+			wi.Filter = ElementFilter{Expr: imp.FilterExpr, Scope: scope, Span: imp.FilterExpr.Span()}
+		}
+		out = append(out, wi)
 	}
 	return out
 }
@@ -1063,13 +1284,21 @@ func (idx *Index) LookupDirectChildren(prefix string) []*Symbol {
 	return out
 }
 
-// TopLevelSymbols returns the symbols registered at the root of the index as
-// seen from doc ("" meaning from outside every document): the library's
-// top-level packages and every document's top-level declarations, less the
-// names only another document's private import surfaced (KerML 8.2.3.3).
-func (idx *Index) TopLevelSymbols(doc string) []*Symbol {
+// RootBinding is a name registered at the index root and the symbol it names.
+type RootBinding struct {
+	Name string
+	Sym  *Symbol
+}
+
+// TopLevelBindings returns the names registered at the root of the index as seen
+// from doc ("" meaning from outside every document) and the symbol each names:
+// the library's top-level packages and every document's top-level declarations,
+// less the names only another document's private import surfaced (KerML
+// 8.2.3.3). A caller gating those names by their element filters needs the name,
+// since a borrowed symbol's own name is not the root name it appears under.
+func (idx *Index) TopLevelBindings(doc string) []RootBinding {
 	claimed := idx.docReexports[doc]
-	var out []*Symbol
+	var out []RootBinding
 	seen := make(map[*Symbol]bool)
 	for _, fqn := range idx.childKeys("") {
 		hidden := idx.hidden[fqn]
@@ -1081,7 +1310,7 @@ func (idx *Index) TopLevelSymbols(doc string) []*Symbol {
 				continue // only some other document's private import surfaced it
 			}
 			seen[sym] = true
-			out = append(out, sym)
+			out = append(out, RootBinding{Name: fqn, Sym: sym})
 		}
 	}
 	return out
@@ -1145,6 +1374,12 @@ func (idx *Index) GetFQN(sym *Symbol) string {
 		result += "::" + parts[i]
 	}
 	return result
+}
+
+// DocumentOfRoot returns the name of the document whose root scope this is, or
+// "" for any other scope.
+func (idx *Index) DocumentOfRoot(scope *Scope) string {
+	return idx.docOfRoot[scope]
 }
 
 // DocumentRoot returns the root scope for the named document, or nil.

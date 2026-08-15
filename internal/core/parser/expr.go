@@ -349,16 +349,22 @@ func (p *Parser) parseBase() ast.Node {
 	case p.at(lexer.LBrace):
 		return setBase(p.parseBodyExpr(start))
 
-	case p.at(lexer.At):
-		// Metadata selector: @MetadataType
-		// Used in filter expressions: filter @Safety;
-		p.advance() // consume '@'
-		metaType := p.parseQualifiedName()
-		fr := &ast.FeatureReference{Name: metaType}
-		fr.NodeSpan = p.spanFrom(start)
-		// Wrap in unary op to preserve @ semantics?
-		// For now, treat as feature reference to metadata type
-		return setBase(fr)
+	case p.at(lexer.At), p.at(lexer.AtAt):
+		// A classification expression whose operand is left implicit:
+		// `@MetadataType` and `@@Metaclass` (KerML.xtext ClassificationExpression
+		// and MetaclassificationExpression both make the tested operand
+		// optional). The omitted operand is the element the expression is
+		// evaluated for — `self` — which an element filter supplies as the
+		// candidate element, so Operands stays empty rather than holding a
+		// synthesized reference to a name that is not in scope.
+		op := ast.OpAt
+		if p.at(lexer.AtAt) {
+			op = ast.OpMetaAt
+		}
+		p.advance() // consume '@' or '@@'
+		e := &ast.OperatorExpr{Operator: op, TypeRef: p.parseQualifiedName()}
+		e.NodeSpan = p.spanFrom(start)
+		return setBase(e)
 
 	case p.atName(), p.at(lexer.Keyword):
 		// Parse qualified name or keyword-as-name

@@ -1,8 +1,8 @@
 (RootNamespace
   (Membership visibility="default"
     (Package name="descent" library=false standard=false
-      (Import visibility="private" all=false kind=namespace recursive=false imported="SI")
-      (Import visibility="private" all=false kind=namespace recursive=false imported="ISQ")
+      (Import visibility="private" all=false kind=namespace recursive=false imported="SI" filtered=false)
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ISQ" filtered=false)
       (Membership visibility="default"
         (Usage kind="action" name="propagate" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"

@@ -25,6 +25,15 @@ type supertypeLookup interface {
 	DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol
 }
 
+// elementFilterJudge is the part of the semantic model that decides an element
+// filter: whether the element an import would surface is selected by the
+// condition restricting it (KerML 8.2.4). A condition classifies a candidate by
+// the metadata annotating it, which only the model knows.
+// *semantics.Model implements it.
+type elementFilterJudge interface {
+	SatisfiesElementFilter(f symbols.ElementFilter, cand *symbols.Symbol) bool
+}
+
 // resolution is a memoized lookup outcome.
 type resolution struct {
 	sym *symbols.Symbol
@@ -42,8 +51,16 @@ type Resolver struct {
 	// and kept: see (*Resolver).importsOf.
 	imports     map[ast.Node][]*ast.Import
 	Diagnostics []Diagnostic
-	model       MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
-	naming      map[*symbols.Symbol]bool // effective names being computed, for cycle detection
+	// quiet is nonzero while a lookup is made on behalf of a semantic query
+	// rather than a reference in the document being resolved.
+	quiet int
+	// inCondition is nonzero while a filter condition's own names are resolved,
+	// which the condition does not filter.
+	inCondition int
+	// nsFilters are the `filter` members of a namespace, extracted once per scope.
+	nsFilters map[*symbols.Scope][]symbols.ElementFilter
+	model     MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
+	naming    map[*symbols.Symbol]bool // effective names being computed, for cycle detection
 	// inheritedImports are the declarations whose supertypes' imports are being
 	// searched, so a specialization cycle ends the walk.
 	inheritedImports map[*symbols.Symbol]bool
@@ -69,6 +86,7 @@ func New(idx *symbols.Index) *Resolver {
 		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
 		imports:   map[ast.Node][]*ast.Import{},
 		naming:    map[*symbols.Symbol]bool{},
+		nsFilters: map[*symbols.Scope][]symbols.ElementFilter{},
 
 		suggestions: map[suggestKey][]string{},
 		suggesting:  map[suggestKey]bool{},
@@ -158,7 +176,11 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	// A feature that took its name from qn is never what qn names.
 	res := r.walkQualified(scope, qn, hide.hiding(qn))
 	delete(r.resolving, qn)
-	r.memo[qn] = res
+	// A failure met during a semantic query is not memoized: the reference it
+	// belongs to must still report when its own document is resolved.
+	if res.ok || r.quiet == 0 {
+		r.memoize(qn, res)
+	}
 	return res.sym, res.ok
 }
 
@@ -171,16 +193,53 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 		}
 	}
 	res := r.walkUnqualified(scope, name)
-	if at != nil {
-		r.memo[at] = res
+	if res.ok || r.quiet == 0 {
+		r.memoize(at, res)
 	}
 	if !res.ok {
-		r.Diagnostics = append(r.Diagnostics, Diagnostic{
+		r.report(Diagnostic{
 			Span:    spanOf(at),
 			Message: r.unresolvedMessage(scope, name),
 		})
 	}
 	return res.sym, res.ok
+}
+
+// report records a diagnostic, unless the lookup that produced it was made for
+// a semantic query rather than for a reference in this document (see aside).
+func (r *Resolver) report(d Diagnostic) {
+	if r.quiet > 0 {
+		return
+	}
+	r.Diagnostics = append(r.Diagnostics, d)
+}
+
+// aside runs a lookup made for a semantic query, whose diagnostics belong to
+// the document declaring what it reached, not to the one being resolved.
+func (r *Resolver) aside(f func()) {
+	r.quiet++
+	defer func() { r.quiet-- }()
+	f()
+}
+
+// memoize remembers a reference's resolution, except one reached while a filter
+// condition's names were resolved: those lookups are unfiltered (see
+// InCondition), and an ordinary reference must not inherit an unjudged answer.
+func (r *Resolver) memoize(at ast.Node, res resolution) {
+	if at == nil || r.inCondition > 0 {
+		return
+	}
+	r.memo[at] = res
+}
+
+// InCondition runs the resolution of a filter condition's own names, which its
+// namespace's filters do not restrict: a condition naming a metadata type the
+// namespace imports would otherwise be filtered by itself (KerML 8.2.4).
+// Nothing resolved meanwhile is memoized, so the bypass reaches no other lookup.
+func (r *Resolver) InCondition(f func()) {
+	r.inCondition++
+	defer func() { r.inCondition-- }()
+	f()
 }
 
 func spanOf(n ast.Node) source.Span {

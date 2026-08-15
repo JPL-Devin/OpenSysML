@@ -8,6 +8,7 @@ import (
 
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -86,8 +87,9 @@ func (l *Loader) Persist(idx *symbols.Index) {
 	}
 	defer l.cache.Prune()
 	r := resolve.New(idx)
+	model := semantics.NewModel(r) // shared: its whole-index memoization is per-model
 	for _, p := range l.parsed {
-		rec, resolved := recordFromIndex(p.name, idx, r)
+		rec, resolved := recordFromIndex(p.name, idx, r, model)
 		if rec == nil || (l.RequireResolved && !resolved) {
 			continue
 		}
@@ -134,6 +136,9 @@ func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
 			WildcardImports: wildcardImportEntries(s.WildcardImports),
 			AliasTarget:     s.AliasTarget,
 			Unit:            unitFactsEntry(s.Unit),
+
+			Annotations:      s.Annotations,
+			NamespaceFilters: s.NamespaceFilters,
 		}
 	}
 	return out
@@ -159,6 +164,9 @@ func wildcardImportEntries(imports []wildcardImport) []symbols.WildcardImport {
 	out := make([]symbols.WildcardImport, len(imports))
 	for i, imp := range imports {
 		out[i] = symbols.WildcardImport{Target: imp.Target, Private: imp.Private}
+		if imp.Filter != nil {
+			out[i].Filter = symbols.ElementFilter{Pred: imp.Filter, Span: imp.Filter.Span}
+		}
 	}
 	return out
 }

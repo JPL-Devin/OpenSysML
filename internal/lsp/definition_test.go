@@ -237,3 +237,45 @@ func TestDefinitionConnectorEndReferenceIsNotASiblingEnd(t *testing.T) {
 		t.Errorf("decl line = %d, want 8 (the part, not the sibling end)", locs[0].Range.Start.Line)
 	}
 }
+
+// A name in a filter condition resolves through the imports of its own
+// namespace, which the namespace's filters must not restrict — the diagnostics
+// pass resolves it that way, and the editor has to agree or rename skips it.
+func TestDefinitionMetadataTypeInsideAFilterCondition(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/def_filter.sysml").Filename()
+	src := `package Lib {
+	metadata def Safety;
+	metadata def Other;
+	part seatBelt;
+}
+package P {
+	private import Lib::*[@Other];
+	filter @Safety;
+}`
+	ws.Open(name, []byte(src), 1)
+	for _, d := range ws.Diagnostics(name) {
+		t.Fatalf("the source reports %q", d.Message)
+	}
+
+	// Line 1 declares Safety, line 2 Other; each is named again in P.
+	for _, tc := range []struct {
+		name string
+		decl uint32
+	}{{"Other", 2}, {"Safety", 1}} {
+		pos := offsetToPosition([]byte(src), strings.LastIndex(src, tc.name))
+		locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+				Position:     pos,
+			},
+		})
+		if err != nil {
+			t.Fatalf("Definition(%s) err = %v", tc.name, err)
+		}
+		if len(locs) != 1 || locs[0].Range.Start.Line != tc.decl {
+			t.Errorf("Definition(%s) = %+v, want its declaration on line %d", tc.name, locs, tc.decl)
+		}
+	}
+}
