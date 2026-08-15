@@ -19,8 +19,16 @@ version scanned from URL` if it is also stated explicitly.
 ## The tap
 
 The tap lives in the separate repository [`Open-MBEE/homebrew-tap`][tap] (public, default
-branch `master`), holding one generated file, `Formula/systemica.rb`. Nothing in this
-repository publishes it — the render script writes the file, a maintainer commits it there.
+branch `master`), holding one generated file, `Formula/systemica.rb`. That repository updates
+itself: a workflow there runs on a schedule (and on `workflow_dispatch`), resolves the latest
+`Open-MBEE/Systemica` release tag, fetches `scripts/render-homebrew-formula.sh` and
+`packaging/homebrew/Formula/systemica.rb` from this repository *at that tag*, renders
+`Formula/systemica.rb`, and commits only when the file changed. It uses the tap repository's
+own `GITHUB_TOKEN`, so there is no cross-repository secret and nothing here triggers it.
+
+The script and the template here stay the source it renders from, so a change to either must
+keep working when fetched standalone at a tag: the script may not depend on anything else in
+this repository except the template path it already reads.
 The repository name must keep the `homebrew-` prefix: `brew tap <user>/<repo>` always expands
 to `github.com/<user>/homebrew-<repo>`, so a repository named plain `tap` cannot be tapped.
 
@@ -63,14 +71,20 @@ brew audit --strict --online local/systest/systemica
 
 ## Per release
 
-The release job publishes stable artifact names, so only two things change per release:
+The release job publishes stable artifact names, so cutting a release takes one step:
 
 1. Tag `vX.Y.Z` and let CircleCI publish the release (per-binary archives,
    `systemica-<os>-<arch>.tar.gz`/`.zip` bundles, and `SHA256SUMS.txt`).
-2. In the tap: `./scripts/render-homebrew-formula.sh vX.Y.Z > Formula/systemica.rb`, commit,
-   push. Five values change — the tag in the four URLs (which is also where Homebrew reads
-   the version from) and the four `sha256` lines.
+2. Nothing else: the tap's own scheduled workflow renders and commits the formula within its
+   schedule interval. Five values change — the tag in the four URLs (which is also where
+   Homebrew reads the version from) and the four `sha256` lines.
 
-This can be automated later: a tag-triggered job could run the render script and push the
-tap commit, but that needs a token with write access to `Open-MBEE/homebrew-tap` stored as a
-CI secret, which is a maintainer decision and is deliberately not set up here.
+The manual route remains the fallback when the tap has to be corrected out of band — render
+from a checkout of this repository and commit the result in the tap:
+
+```bash
+./scripts/render-homebrew-formula.sh vX.Y.Z > Formula/systemica.rb
+```
+
+A release without `SHA256SUMS.txt`, or without a `systemica-<os>-<arch>.tar.gz` line in it,
+fails the render loudly rather than producing a formula with a wrong or missing checksum.
