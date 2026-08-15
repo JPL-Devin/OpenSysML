@@ -693,21 +693,28 @@ func (idx *Index) reexportGated(fqn string, sym *Symbol, doc string, private boo
 	if claim == nil {
 		return
 	}
+	widened := false
 	for _, gate := range gates {
-		claim.record(gateRoute{private: private, filters: gate})
+		widened = claim.record(gateRoute{private: private, filters: gate}) || widened
+	}
+	// A namespace importing this one onward copied the narrower routes, so a
+	// widened claim has to reach it too (see routesOnward).
+	if parent, _ := splitFQN(fqn); widened && parent != "" {
+		idx.markGained(parent)
 	}
 }
 
 // record adds a route to the claim, unless one of the same visibility already
 // admits at least as much: an unconditional route makes the conditional ones
-// beside it redundant, and re-expanding an importer records nothing new.
-func (c *reexportClaim) record(route gateRoute) {
+// beside it redundant, and re-expanding an importer records nothing new. It
+// reports whether the claim now admits more than it did.
+func (c *reexportClaim) record(route gateRoute) bool {
 	for _, have := range c.routes {
 		if have.private != route.private {
 			continue
 		}
 		if len(have.filters) == 0 || sameFilters(have.filters, route.filters) {
-			return
+			return false
 		}
 	}
 	if len(route.filters) == 0 {
@@ -720,6 +727,7 @@ func (c *reexportClaim) record(route gateRoute) {
 		c.routes = kept
 	}
 	c.routes = append(c.routes, route)
+	return true
 }
 
 // sameFilters reports whether two routes impose the same conditions in the same

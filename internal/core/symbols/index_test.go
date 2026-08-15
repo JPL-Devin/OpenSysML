@@ -594,6 +594,32 @@ func TestExpandWildcardImportsCarriesEachRouteOnward(t *testing.T) {
 	}
 }
 
+// A route widening a claim after a namespace importing it onward was already
+// derived has to reach that importer: the wider route arrives in a later round,
+// and the importer copied the narrower one (see routesOnward).
+func TestExpandWildcardImportsCarriesAWidenedRouteOnward(t *testing.T) {
+	// Repeat: derivation order decides which round widens the claim.
+	for i := 0; i < 8; i++ {
+		idx := NewIndex()
+		addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+		addDoc(t, idx, "a.sysml", "package Aonward { public import Safe::*; }")
+		addDoc(t, idx, "safe.sysml", `package Safe {
+			public import Base::*[@Safety];
+			public import Zalt::*;
+		}`)
+		addDoc(t, idx, "zalt.sysml", "package Zalt { public import Base::*; }")
+		idx.ExpandWildcardImports()
+
+		belt := lookupOne(t, idx, "Base::Belt")
+		for _, fqn := range []string{"Safe::Belt", "Aonward::Belt"} {
+			routes := idx.ReexportGates("", fqn, belt, "")
+			if len(routes) != 1 || len(routes[0]) != 0 {
+				t.Fatalf("run %d: %s is gated by %v, want a single unconditional route", i, fqn, routes)
+			}
+		}
+	}
+}
+
 // A namespace's filters may be declared by another document than its imports,
 // so adding or removing that document has to re-derive the routes into it: a
 // gate recorded before a filter arrived would keep admitting everything.
