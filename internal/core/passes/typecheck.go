@@ -294,12 +294,12 @@ func (tc *typeChecker) checkConjugatedTyping(scope *symbols.Scope, rel *ast.Rela
 
 func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.SymbolKind) string {
 	isDef, defKind, useKind, direction := decl.isDef, decl.defKind, decl.useKind, decl.direction
-	// A KerML declaration (`classifier`, `class`, `datatype`, `feature`) has no
-	// SysML usage-kind counterpart, so its kind is unknown and no mismatch
-	// against it can be asserted.
-	if target == symbols.SymbolUnknown && rel != ast.RelSpecializes {
+	// Every SysML definition specializes a KerML type (a part def is a Structure,
+	// an action def a Behavior …), so a KerML type declaration is a valid target
+	// of any kind and no mismatch against it can be asserted.
+	if target == symbols.SymbolKerMLType && rel != ast.RelSpecializes {
 		// That a definition may not subset or redefine a feature is a property of
-		// the declaration, so an unclassified target does not excuse it.
+		// the declaration, so the target's kind does not excuse it.
 		if isDef && (rel == ast.RelSubsets || rel == ast.RelRedefines) {
 			return fmt.Sprintf("a definition may not %s a feature", rel)
 		}
@@ -311,8 +311,8 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		if !isDef {
 			return "only a definition may specialize; found a usage"
 		}
-		if target == symbols.SymbolUnknown {
-			return "" // an unclassified kind constrains nothing
+		if target == symbols.SymbolUnknown || target == symbols.SymbolKerMLType {
+			return "" // a KerML type or an unclassified kind constrains nothing
 		}
 		if !isDefKind(target) {
 			return fmt.Sprintf("%s cannot specialize %s (target is not a definition)", defKind, target)
@@ -526,6 +526,7 @@ var defSymbolKinds = map[symbols.SymbolKind]bool{
 	symbols.SymbolAnalysisCaseDef:     true,
 	symbols.SymbolVerificationCaseDef: true,
 	symbols.SymbolUseCaseDef:          true,
+	symbols.SymbolKerMLType:           true, // KerML class/struct/assoc/behavior/predicate
 	symbols.SymbolAlias:               true, // Aliases can be used as types
 }
 

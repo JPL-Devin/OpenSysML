@@ -79,6 +79,10 @@ const (
 	// SymbolConnectorEnd is an end feature a connector usage declares in its
 	// connect clause (`connect bead references t.bead`).
 	SymbolConnectorEnd
+	// SymbolKerMLType classifies a KerML type declaration — `class`,
+	// `classifier`, `struct`, `assoc`, `behavior`, `predicate` — which the SysML
+	// definition taxonomy has no counterpart for.
+	SymbolKerMLType
 )
 
 var symbolKindNames = map[SymbolKind]string{
@@ -142,6 +146,7 @@ var symbolKindNames = map[SymbolKind]string{
 	SymbolVerificationCaseUsage: "verificationCaseUsage",
 	SymbolUseCaseUsage:          "useCaseUsage",
 	SymbolConnectorEnd:          "connectorEnd",
+	SymbolKerMLType:             "kermlType",
 }
 
 // String returns the display name of the kind.
