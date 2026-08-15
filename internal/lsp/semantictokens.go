@@ -3,6 +3,7 @@ package lsp
 import (
 	"bytes"
 	"context"
+	"unicode/utf8"
 
 	"go.lsp.dev/protocol"
 
@@ -69,9 +70,10 @@ func (s *Server) SemanticTokensRange(ctx context.Context, params *protocol.Seman
 func encodeTokens(content []byte, toks []highlight.Token) []uint32 {
 	data := make([]uint32, 0, 5*len(toks))
 	prevLine, prevChar := uint32(0), uint32(0)
+	cursor := &lineCursor{content: content}
 	for _, tok := range toks {
 		for _, part := range splitLines(content, tok.Span) {
-			pos := offsetToPosition(content, part.Offset)
+			pos := cursor.positionAt(part.Offset)
 			length := utf16Len(content[part.Offset:part.End()])
 			deltaLine := pos.Line - prevLine
 			deltaChar := pos.Character
@@ -84,6 +86,39 @@ func encodeTokens(content []byte, toks []highlight.Token) []uint32 {
 		}
 	}
 	return data
+}
+
+// lineCursor converts increasing byte offsets to positions in one forward pass,
+// so encoding a whole document's tokens stays linear in its length.
+type lineCursor struct {
+	content []byte
+	offset  int
+	line    int
+	char    int
+}
+
+// positionAt is the position of offset, resuming from the last one answered. An
+// offset behind that one restarts the pass, so the result never depends on order.
+func (c *lineCursor) positionAt(offset int) protocol.Position {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(c.content) {
+		offset = len(c.content)
+	}
+	if offset < c.offset {
+		c.offset, c.line, c.char = 0, 0, 0
+	}
+	for c.offset < offset {
+		r, size := utf8.DecodeRune(c.content[c.offset:])
+		c.offset += size
+		if r == '\n' {
+			c.line, c.char = c.line+1, 0
+			continue
+		}
+		c.char += utf16RuneLen(r)
+	}
+	return protocol.Position{Line: uint32Clamp(c.line), Character: uint32Clamp(c.char)}
 }
 
 // splitLines cuts a span into one span per line it covers, dropping the line

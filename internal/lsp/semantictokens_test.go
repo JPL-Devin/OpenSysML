@@ -282,3 +282,16 @@ func TestSemanticTokensLegendCoversTheClassifier(t *testing.T) {
 		}
 	}
 }
+
+// The cursor answers what a scan from the start of the document answers, for
+// offsets in order and out of it, so encoding stays linear without changing.
+func TestLineCursorMatchesAScanFromTheStart(t *testing.T) {
+	content := []byte("package P {\n    // 🚗 é note\n    part def Wheel;\n\n    part w : Wheel;\n}\n")
+	offsets := []int{0, 7, 12, 16, 30, 40, 55, len(content), 3, 0, len(content) - 1}
+	cursor := &lineCursor{content: content}
+	for _, off := range offsets {
+		if got, want := cursor.positionAt(off), offsetToPosition(content, off); got != want {
+			t.Errorf("positionAt(%d) = %v, want %v", off, got, want)
+		}
+	}
+}
