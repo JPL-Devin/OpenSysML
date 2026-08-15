@@ -1,0 +1,35 @@
+package symbols
+
+import (
+	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
+)
+
+// The parser records KerML type declarations as usages, so they are classified
+// from their usage kind rather than left unclassified.
+func TestKerMLTypeDeclarationsAreClassified(t *testing.T) {
+	src := "package P { class C; classifier D; struct S; assoc A; behavior B; " +
+		"interaction I; predicate Q; step s; }"
+	root := Build(parser.New(source.New("p.kerml", []byte(src))).ParseFile())
+	pkg, ok := root.LookupLocal("P")
+	if !ok {
+		t.Fatal("package P not indexed")
+	}
+	want := map[string]SymbolKind{
+		"C": SymbolKerMLType, "D": SymbolKerMLType, "S": SymbolKerMLType,
+		"A": SymbolKerMLType, "B": SymbolKerMLType, "I": SymbolKerMLType,
+		"Q": SymbolKerMLType, "s": SymbolActionUsage,
+	}
+	for name, kind := range want {
+		sym, ok := pkg.Scope.LookupLocal(name)
+		if !ok {
+			t.Errorf("%s not indexed", name)
+			continue
+		}
+		if sym.Kind != kind {
+			t.Errorf("kind of %s = %v, want %v", name, sym.Kind, kind)
+		}
+	}
+}

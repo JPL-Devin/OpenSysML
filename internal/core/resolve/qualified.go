@@ -188,11 +188,17 @@ func rootOf(scope *symbols.Scope) *symbols.Scope {
 	return scope
 }
 
-// unresolved records an unresolved-reference diagnostic.
+// unresolved records an unresolved-reference diagnostic, offering the spellings
+// a simple name may have meant. A qualified name already says where to look, so
+// only an unqualified one is second-guessed.
 func (r *Resolver) unresolved(qn *ast.QualifiedName) {
+	msg := "unresolved reference: " + qnText(qn)
+	if len(qn.Parts) == 1 && !qn.Global {
+		msg = r.unresolvedMessage(qn.Parts[0].Text)
+	}
 	r.Diagnostics = append(r.Diagnostics, Diagnostic{
 		Span:    qn.Span(),
-		Message: "unresolved reference: " + qnText(qn),
+		Message: msg,
 	})
 }
 

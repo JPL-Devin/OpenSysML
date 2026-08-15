@@ -6,6 +6,10 @@
  */
 
 package demo_defaults {
+
+    // The library is not implicitly visible: a bare name needs an import.
+    private import ScalarValues::*;
+
 	
 	// Default keyword vs equals sign
 	feature comparisonExamples {

@@ -300,9 +300,8 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		if !isDef {
 			return "only a definition may specialize; found a usage"
 		}
-		// Skip validation if target is unresolved
-		if target == symbols.SymbolUnknown {
-			return "" // Unresolved reference already reported elsewhere
+		if target == symbols.SymbolUnknown || target == symbols.SymbolKerMLType {
+			return "" // a KerML type or an unclassified kind constrains nothing
 		}
 		if !isDefKind(target) {
 			return fmt.Sprintf("%s cannot specialize %s (target is not a definition)", defKind, target)
@@ -352,6 +351,12 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		// connects is typed by (`end supplierPort : FuelOutPort`), so the usage-kind
 		// taxonomy does not constrain it.
 		if decl.isEnd {
+			return ""
+		}
+		// Every SysML definition specializes a KerML type (a part def is a
+		// Structure, an action def a Behavior …), so a KerML type may type a usage
+		// of any kind (KerML 1.0 §8.3.4).
+		if target == symbols.SymbolKerMLType {
 			return ""
 		}
 		// An `individual` or `snapshot` usage is an occurrence usage, and an
@@ -516,6 +521,7 @@ var defSymbolKinds = map[symbols.SymbolKind]bool{
 	symbols.SymbolAnalysisCaseDef:     true,
 	symbols.SymbolVerificationCaseDef: true,
 	symbols.SymbolUseCaseDef:          true,
+	symbols.SymbolKerMLType:           true, // KerML class/struct/assoc/behavior/predicate
 	symbols.SymbolAlias:               true, // Aliases can be used as types
 }
 
