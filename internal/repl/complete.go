@@ -79,7 +79,10 @@ func sharedPrefix(candidates []string) string {
 	prefix := candidates[0]
 	for _, c := range candidates[1:] {
 		for !strings.HasPrefix(c, prefix) {
-			prefix = prefix[:len(prefix)-1]
+			// Trimmed a character at a time: a prefix cut mid-character is
+			// inserted at the prompt as a replacement character.
+			_, size := utf8.DecodeLastRuneInString(prefix)
+			prefix = prefix[:len(prefix)-size]
 		}
 	}
 	return prefix
