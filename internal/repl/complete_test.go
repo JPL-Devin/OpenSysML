@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 )
 
 // contains reports whether candidates holds want.
@@ -284,6 +285,32 @@ func TestCompletionBoundKeepsInsertion(t *testing.T) {
 			}
 			if shared := sharedPrefix(got.Candidates); len(got.Candidates) > 0 && shared != tt.wantShared {
 				t.Fatalf("shared prefix = %q, want %q", shared, tt.wantShared)
+			}
+		})
+	}
+}
+
+// TestSharedPrefixKeepsWholeCharacters checks the shared prefix of names that
+// differ inside a multi-byte character stays valid text the prompt can insert.
+func TestSharedPrefixKeepsWholeCharacters(t *testing.T) {
+	tests := []struct {
+		name       string
+		candidates []string
+		want       string
+	}{
+		{name: "differ inside a character", candidates: []string{"masé", "masê"}, want: "mas"},
+		{name: "share a whole character", candidates: []string{"señor", "señora"}, want: "señor"},
+		{name: "differ at the first character", candidates: []string{"Δv", "Ωv"}, want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sharedPrefix(tt.candidates)
+			if got != tt.want {
+				t.Fatalf("sharedPrefix = %q, want %q", got, tt.want)
+			}
+			if !utf8.ValidString(got) {
+				t.Fatalf("sharedPrefix %q is not valid UTF-8", got)
 			}
 		})
 	}
