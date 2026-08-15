@@ -335,7 +335,10 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 
 	// `first a then b;` names the node the flow starts at rather than declaring an
 	// initial node of its own, so a itself is the initial node and holds the edge.
-	firstNode := resolveFirstNode(graph)
+	firstNode, err := resolveFirstNode(graph)
+	if err != nil {
+		return nil, err
+	}
 
 	// Note: Initial node is optional at graph construction time.
 	// The executor's initialize() will validate and return the error if missing.
@@ -428,10 +431,10 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 // resolveFirstNode reinterprets a `first a …;` whose name is a node the body
 // declares: a is the flow's first node, so the initial node it parsed as is not
 // a node of the graph. Returns the named node each such initial node stands for.
-func resolveFirstNode(graph *ActionGraph) map[*ast.InitialNode]ast.Node {
+func resolveFirstNode(graph *ActionGraph) (map[*ast.InitialNode]ast.Node, error) {
 	initial, ok := graph.Initial.(*ast.InitialNode)
 	if !ok || initial.Name == "" {
-		return nil
+		return nil, nil
 	}
 	var named ast.Node
 	for _, node := range graph.Nodes {
@@ -441,13 +444,18 @@ func resolveFirstNode(graph *ActionGraph) map[*ast.InitialNode]ast.Node {
 		}
 	}
 	if named == nil {
-		return nil
+		return nil, nil
+	}
+	if _, isFinal := named.(*ast.FinalNode); isFinal {
+		// A flow cannot start where it ends: naming a final node would retire the
+		// token before any succession out of it is taken.
+		return nil, fmt.Errorf("first names the final node %s, so the action would end before it started", initial.Name)
 	}
 	graph.Initial = named
 	graph.Nodes = slices.DeleteFunc(graph.Nodes, func(node ast.Node) bool {
 		return node == ast.Node(initial)
 	})
-	return map[*ast.InitialNode]ast.Node{initial: named}
+	return map[*ast.InitialNode]ast.Node{initial: named}, nil
 }
 
 // lowerBody records a nested action node's statements and the message it waits

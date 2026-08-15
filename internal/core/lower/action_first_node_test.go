@@ -1,9 +1,12 @@
 package lower
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
 
 // `first a then b;` names the node the flow starts at, so a is the graph's
@@ -75,6 +78,31 @@ func TestToActionGraph_FirstDeclaresItsOwnInitialNode(t *testing.T) {
 	}
 	if edges := graph.Edges[initial]; len(edges) != 1 || edges[0] != nodeNamed(t, graph, "s1") {
 		t.Errorf("initial edges = %v, want [s1]", edges)
+	}
+}
+
+// A `first` end naming a final node states a flow that ends where it starts.
+func TestToActionGraph_FirstNamesAFinalNode(t *testing.T) {
+	src := `
+		action seq {
+			action s1;
+			done fin;
+			first fin then s1;
+		}
+	`
+	p := parser.New(source.New("test.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) > 0 {
+		t.Fatalf("parse errors: %v", p.Diagnostics)
+	}
+
+	usage := root.Members[0].(*ast.Membership).Member.(*ast.Usage)
+	_, err := ToActionGraph(usage, nil)
+	if err == nil {
+		t.Fatal("a first end naming a final node lowered without an error")
+	}
+	if !strings.Contains(err.Error(), "final node fin") {
+		t.Errorf("error = %q, want it to name the final node", err)
 	}
 }
 

@@ -71,7 +71,10 @@ are listed here rather than under a heading of their own.
 - `first s1 then s2;` starts the flow at `s1`, the node it names, rather than at
   an initial node of its own whose only edge reached `s2`: `s1` used to be
   skipped, losing what its body assigned, while the run still reported
-  `Completed`. Written apart as `first s1; then s1 s2;` it behaves the same.
+  `Completed`. Written apart as `first s1; then s1 s2;` it behaves the same. A
+  body states one start, so a `first` end naming the body's final node — a flow
+  that would end where it starts — is now rejected rather than reported
+  `Completed` with the declared node never run.
 - A performance holds its values in one feature space its tokens share, because a
   fork duplicates control and not values: concurrent branches are steps of the
   one performance, so both branches' assignments survive where the last token to
