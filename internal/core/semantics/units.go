@@ -541,6 +541,9 @@ func (m *Model) unitOutside(sym *symbols.Symbol) *symbols.Symbol {
 
 // fqnOf returns the qualified name the index knows a symbol by, or its own name.
 func (m *Model) fqnOf(sym *symbols.Symbol) string {
+	if sym == nil {
+		return ""
+	}
 	if m.resolver == nil || m.resolver.Index() == nil {
 		return sym.Name
 	}

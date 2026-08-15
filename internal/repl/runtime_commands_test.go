@@ -47,6 +47,16 @@ func wants(t *testing.T, got string, fragments ...string) {
 	}
 }
 
+// hasNotice reports whether any of a submission's notices mentions fragment.
+func hasNotice(res Result, fragment string) bool {
+	for _, n := range res.Notices {
+		if strings.Contains(n, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
 // rejects asserts no fragment appears in got.
 func rejects(t *testing.T, got string, fragments ...string) {
 	t.Helper()
@@ -88,7 +98,7 @@ func TestREPLPackagedModelWorkflow(t *testing.T) {
 		"✓ Constraint withinMassLimit passed",
 		"Instances:",
 	)
-	rejects(t, got, "not found", "error:")
+	rejects(t, got, "unresolved reference", "error:")
 }
 
 func TestInstantiateFindsPackageMemberBySimpleAndQualifiedName(t *testing.T) {
@@ -108,8 +118,8 @@ func TestInstantiateFindsPackageMemberBySimpleAndQualifiedName(t *testing.T) {
 
 func TestInstantiateUnknownSymbol(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
-	wants(t, run(t, s, "%instantiate Nope"), `error: symbol "Nope" not found`)
-	wants(t, run(t, s, "%instantiate Demo::Nope"), `error: symbol "Demo::Nope" not found`)
+	wants(t, run(t, s, "%instantiate Nope"), `error: unresolved reference: Nope`)
+	wants(t, run(t, s, "%instantiate Demo::Nope"), `error: unresolved reference: Demo::Nope`)
 }
 
 // A simple name matching in two packages is reported with the candidates rather
@@ -140,18 +150,20 @@ func TestLookupSeesDeclarationsAddedAfterFirstLookup(t *testing.T) {
 	wants(t, run(t, s, "%eval Demo::Trailer::mass"), "900.00")
 }
 
-// A submission discards the runtime context, which restarts instance IDs, so
-// instances created before it must not survive into the new one.
-func TestInstancesDoNotOutliveTheirRuntimeContext(t *testing.T) {
+// An instance does not outlive the declaration it is of: redeclaring that
+// definition rewrites what its slots mean, so the object built from the old one
+// goes, and the listing says why rather than reading like a fresh session.
+func TestInstancesDoNotOutliveTheirDeclaration(t *testing.T) {
 	s := NewSession()
 	s.Submit(`package Demo { part def Vehicle { attribute mass = 1500.0; } }`)
 	wants(t, run(t, s, "%instantiate Demo::Vehicle"), "ID: 1")
 	wants(t, run(t, s, "%instances"), "Demo::Vehicle")
 
-	s.Submit(`package Demo { part def Trailer { attribute mass = 900.0; } }`)
-	wants(t, run(t, s, "%instances"), "(no instances created)")
-	wants(t, run(t, s, "%instantiate Demo::Trailer"), "ID: 1")
-	rejects(t, run(t, s, "%instances"), "Demo::Vehicle")
+	s.Submit(`package Demo { part def Vehicle { attribute mass = 900.0; } }`)
+	wants(t, run(t, s, "%instances"),
+		"no instances created", "1 instance was dropped when the declarations changed at submission 2")
+	wants(t, run(t, s, "%instantiate Demo::Vehicle"), "ID: 1")
+	wants(t, run(t, s, "%slots Demo::Vehicle"), "mass = 900.00")
 }
 
 func TestSlotsWithoutInstance(t *testing.T) {
@@ -184,7 +196,7 @@ func TestEvalLiteralFeatureAndCompound(t *testing.T) {
 
 func TestEvalErrors(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
-	wants(t, run(t, s, "%eval missing"), `symbol "missing" not found`)
+	wants(t, run(t, s, "%eval missing"), `unresolved reference: missing`)
 	// A part def is a symbol, but not one with a value.
 	wants(t, run(t, s, "%eval Demo::Vehicle"), "has no value to evaluate")
 
@@ -233,14 +245,14 @@ func TestCalcWithPositionalArgs(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%calc add 20 22"), "✓ add(20, 22)", "= 42")
 	wants(t, run(t, s, "%calc Demo::add 1 2"), "= 3")
-	wants(t, run(t, s, "%calc nosuch 1"), `symbol "nosuch" not found`)
+	wants(t, run(t, s, "%calc nosuch 1"), `unresolved reference: nosuch`)
 }
 
 func TestConstraintPassAndFail(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%constraint withinMassLimit"), "✓ Constraint withinMassLimit passed")
 	wants(t, run(t, s, "%constraint Demo::overMassLimit"), "✗ Constraint Demo::overMassLimit failed")
-	wants(t, run(t, s, "%constraint nosuch"), `symbol "nosuch" not found`)
+	wants(t, run(t, s, "%constraint nosuch"), `unresolved reference: nosuch`)
 }
 
 // A condition is evaluated in the scope the element was declared in, not in the
@@ -263,7 +275,7 @@ func TestRequirement(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%requirement SafeMass"), "✓ Requirement SafeMass satisfied")
 	wants(t, run(t, s, "%requirement Demo::SafeMass"), "satisfied")
-	wants(t, run(t, s, "%requirement nosuch"), `symbol "nosuch" not found`)
+	wants(t, run(t, s, "%requirement nosuch"), `unresolved reference: nosuch`)
 }
 
 func TestFormatValue(t *testing.T) {
@@ -302,6 +314,26 @@ func TestActionDebuggerRunsToResult(t *testing.T) {
 	wants(t, run(t, s, "%stop"), `✓ Stopped debugging session for "tally"`)
 }
 
+// An action reports the values it produced the same way however it was driven,
+// so a run stepped to its end reads like one run to completion.
+func TestSteppedActionReportsResultsLikeContinue(t *testing.T) {
+	s := loadFixture(t, "testdata/action_debug.sysml")
+
+	run(t, s, "%action tally")
+	var stepped string
+	for i := 0; i < 10; i++ {
+		stepped = run(t, s, "%step")
+		if strings.Contains(stepped, "✓ Action completed") {
+			break
+		}
+	}
+	wants(t, stepped, "\n  Results:\n    total = 5")
+
+	run(t, s, "%stop")
+	run(t, s, "%action tally")
+	wants(t, run(t, s, "%continue"), "\n  Results:\n    total = 5")
+}
+
 // %tokens names the node a token sits on, not its Go type.
 func TestTokensShowNodeNames(t *testing.T) {
 	s := loadFixture(t, "testdata/action_debug.sysml")
@@ -314,7 +346,7 @@ func TestTokensShowNodeNames(t *testing.T) {
 func TestActionDebuggerRejectsNonAction(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%action Vehicle"), "is not an action")
-	wants(t, run(t, s, "%action nosuch"), `symbol "nosuch" not found`)
+	wants(t, run(t, s, "%action nosuch"), `unresolved reference: nosuch`)
 }
 
 // %break stops a run when a token reaches the node, and the run resumes from
@@ -424,7 +456,7 @@ func TestCurrentShowsOrthogonalRegions(t *testing.T) {
 func TestStateDebuggerRejectsNonStateMachine(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%state Vehicle"), "is not a state machine")
-	wants(t, run(t, s, "%state nosuch"), `symbol "nosuch" not found`)
+	wants(t, run(t, s, "%state nosuch"), `unresolved reference: nosuch`)
 }
 
 func TestParseDuration(t *testing.T) {
@@ -522,9 +554,9 @@ func TestEvalResolvesImportedUnitsUnqualified(t *testing.T) {
 	// The unit itself is a declaration the imports make visible: it resolves,
 	// and reports that it holds no value rather than that it is unknown.
 	wants(t, run(t, s, "%eval m"), "has no value to evaluate")
-	rejects(t, run(t, s, "%eval m"), "not found")
+	rejects(t, run(t, s, "%eval m"), "unresolved reference")
 	// A name nothing declares still reports that it is unknown.
-	wants(t, run(t, s, "%eval nosuch"), `symbol "nosuch" not found`)
+	wants(t, run(t, s, "%eval nosuch"), `unresolved reference: nosuch`)
 
 	// The same scope is what a compound expression names its members in.
 	pkg := NewSession()

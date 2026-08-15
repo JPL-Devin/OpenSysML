@@ -34,6 +34,64 @@ Then `/tmp/old-sysml` vs `./bin/sysml` on identical input is the strongest evide
 it rules out "the test would have passed anyway". Especially valuable for diagnostic wording and
 line/column numbers, where a screenshot of the new behavior alone proves nothing.
 
+## Profiling flags: `-memstats`, `-cpuprofile`, `-memprofile` (PR #156)
+
+`main()` is a one-liner over `runCLI()` returning an exit status, so every profile is flushed by a
+`defer` before the process exits. That makes **exit codes the main regression risk** of any change
+in `cmd/sysml/main.go`: walk every mode and assert the status, since a `return` mistranslated from
+`os.Exit` is invisible in the output text. Values observed at bb0cfdc:
+
+| command | exit |
+|---|---|
+| `-version`, `-eval '1+2'`, `-validate <clean>`, `<m> -convert sysml -o f`, `<m> -eval '1+1'` | 0 |
+| `-validate <model with errors>` (reported as `did not analyse cleanly; no check was made`) | 2 |
+| `<m> -convert sysml -validate` (refuses: "check it in its own run"; writes no file) | 2 |
+| `-debug -quiet`, `SYSML_MAX_STEPS=abc …`, `-cpuprofile`/`-memprofile` on an unwritable path | 2 |
+
+- `-memstats` writes exactly one line to **stderr** (`sysml: 637ms wall, 242.6 MiB allocated in
+  … allocations over … collections, … MiB taken from the OS`). Prove the split with
+  `>out 2>err` and `cat` both — a memstats line on stdout would break `-convert -o /dev/stdout`
+  and JSON reporting.
+- It fires for the interactive REPL too, after `goodbye`, because it runs in the deferred stop.
+  This is the cheapest check that the profile flush survives the REPL path.
+- Heap profiles are written at end of run, when the model is already unreachable, so read them as
+  `go tool pprof -top -sample_index=alloc_space <file>` (plain `-top` shows inuse_space and looks
+  almost empty). Expect `parser.(*Parser).fill` / `parseUsage` and `symbols.*` at the top.
+- A 0-byte profile, or `unrecognized profile format` from pprof, is the signature of the flush not
+  happening — treat it as a failure of the runCLI change rather than a pprof problem.
+- Unwritable-path errors must abort before any model work: assert no `✓` line is printed.
+- Generate a load big enough for the numbers to be meaningful (a ~28k-line model with several
+  hundred `part def`s allocates ~240 MiB, ~600 ms); `/tmp/m*.sysml` generators from earlier
+  sessions may still be around.
+
+## Diagnostics-unchanged checks for core refactors
+
+For perf refactors in `internal/core` (scope indexes, resolve memoization, redefinition-owner
+lookup) the only convincing evidence is a **byte-for-byte diff against a binary built from the
+parent commit** (see the contrast-binary recipe above):
+
+```bash
+for f in inherit_ok noinherit imports_ok imports_bad; do
+  diff <(./bin/sysml -validate /tmp/pt/$f.sysml 2>&1; echo $?) \
+       <(/tmp/old-sysml -validate /tmp/pt/$f.sysml 2>&1; echo $?) >/dev/null \
+    && echo "$f: IDENTICAL" || echo "$f: DIFFERS"
+done
+```
+
+Fixtures that actually exercise the redefinition-owner path:
+
+- **clean:** `part def Base { attribute speed : SpeedType; }`, `part def Car :> Base;`,
+  `part def RaceCar :> Car { attribute speed : SpeedType :>> Base::speed; }` — inheritance through
+  a chain must stay clean.
+- **still an error:** the same `:>> Base::speed` inside a `part def Other` that does *not*
+  specialize `Base` → `error: speed redefines speed, but speed is not an inherited member of Other`
+  (code `redefinition-no-inherited`).
+- Note an unqualified `attribute :>> weight : Real;` naming a member nothing declares reports
+  `unresolved reference: weight` from name resolution instead, never `redefinition-no-inherited` —
+  use the **qualified** `:>> Base::speed` form to reach the constraint pass.
+- Imports: a wildcard `import Lib::*` plus a nested `import Lib::Inner::Wheel` for the positive
+  case, and a usage of an undeclared type for the negative (`unresolved reference: Gearbox`).
+
 ## Two ways to drive it
 
 1. **Non-interactive (fast, for exploration and expected-value discovery).** The REPL reads a
@@ -48,11 +106,13 @@ line/column numbers, where a screenshot of the new behavior alone proves nothing
 
 ## Saving and converting models (`%save`, `sysml -convert`)
 
-Format comes from the **file extension**, so a destination without one is rejected before any
-writing happens. That bites on devices and pipes: `-o /dev/null`, `-o /dev/stdout`,
-`-o /dev/fd/63` and a FIFO named without a suffix all need an explicit `-to sysml` / `-to ttl`,
-otherwise you get `cannot tell the format of "/dev/null": it has no extension, so pass -from/-to`
-and no write is attempted. The REPL has no such flags, so `%save` says
+The CLI is `sysml <model> -convert <format>`: the model is a positional argument and `-convert`
+names the format to write, so the output path never decides it — `-o /dev/null`, `-o /dev/stdout`,
+`-o /dev/fd/63` and a FIFO named without a suffix all work as they are. An *input* whose
+extension names no format needs `-from`, otherwise you get
+`cannot tell the format of "input.txt": expected .sysml, .kerml or .ttl, so pass -from`
+and no write is attempted. The REPL takes the format from the file extension and has no such
+flags, so `%save` says
 `name the file with a .sysml, .kerml or .ttl extension` instead — check the two surfaces word
 their advice differently and neither mentions the other's remedy.
 
@@ -72,10 +132,10 @@ branch of `internal/core/export/write.go`:
 - assert the negative too: no leftover `.name.sysml.<digits>` temp files, and failure messages
   must name the path the user typed rather than the temp file.
 
-**`-convert x.sysml -to sysml` is a source-preserving formatter, not an AST printer.** It keeps the
+**`x.sysml -convert sysml` is a source-preserving formatter, not an AST printer.** It keeps the
 original inline/multi-line layout and reproduces surface notation verbatim (a member-attached
 `then part b;` comes back as `then part b;`, not as the desugared `then a b;`), so its output is
-**not** evidence about what the parser built. To assert on AST/desugaring, use `-to ttl` (generated
+**not** evidence about what the parser built. To assert on AST/desugaring, use `-convert ttl` (generated
 from the tree — e.g. `grep -c SuccessionAsUsage`) or a parser golden fixture. The `.ttl -> .sysml`
 direction *is* a real AST print, so a round-trip through Turtle is the way to see canonical notation.
 A useful corollary: to prove "no relationship was recorded", count the triples in the `.ttl`, never
@@ -86,9 +146,63 @@ member still fails with `cannot convert the *ast.SubstateMember/…ResultMember 
 plain `package Demo { part def Engine { attribute power = 300.0; } }` for `.ttl` assertions rather
 than a file from `examples/`.
 
+**Not one file in `examples/*.sysml` or `internal/repl/testdata/*.sysml` converts to `ttl`** — every
+one fails on an unsupported construct (`*ast.SubstateMember`, `*ast.ResultMember`, `*ast.StateNode`,
+`*ast.StateRegion`, `*ast.ConstraintMember`, `*ast.AssignmentActionNode`, `*ast.InitialNode`,
+`*ast.SubjectMember`, or a `duplicate declaration of "result"`). So a Turtle test needs a
+hand-written fixture; this one round-trips and yields exactly 1180 bytes of Turtle:
+
+```
+package Demo {
+    // a comment
+    part def Vehicle {
+        attribute mass;
+    }
+    part v : Vehicle;
+}
+```
+
+Use it for byte-identity assertions across argument orders (`md5sum … | sort -u | wc -l` must print
+`1`) — comparing hashes is far stronger evidence than eyeballing that each invocation "worked".
+Beware: `-convert sysml` **does** normalize tab indentation to 4 spaces (comments and inline/
+multi-line layout survive), so a tab-indented fixture like `vehicle_package.sysml` will never be
+byte-equal to its own reformatted output. Assert idempotency (pass 2 == pass 1) rather than
+fixture-equality (pass 1 == input).
+
 For formatter changes, the cheap adversarial check is idempotency over real models:
-convert every `examples/*.sysml` with `-to sysml` twice and `diff` the two outputs — all eight
-must be byte-identical, and stderr must stay empty for well-formed input.
+convert every `examples/*.sysml` with `-convert sysml` twice and `diff` the two outputs — all eight
+must be byte-identical, and stderr must stay empty for well-formed input. Pipe the whole loop
+through `sort | uniq -c` so the evidence is one aggregate count instead of a screenful that scrolls
+the failures off the top:
+
+```bash
+for f in examples/*.sysml internal/repl/testdata/*.sysml; do
+  ./bin/sysml "$f" -convert sysml > /tmp/p1 2>/dev/null
+  ./bin/sysml /tmp/p1 -convert sysml -from sysml > /tmp/p2 2>/dev/null
+  cmp -s /tmp/p1 /tmp/p2 && echo idempotent || echo "NOT IDEMPOTENT: $f"
+done | sort | uniq -c
+```
+
+## Argument order and the `--` marker
+
+`cmd/sysml/args.go` permutes arguments before `flag.Parse`, so flags may be written **after** the
+model (`sysml model.sysml -convert ttl`, `sysml model.sysml -trace`). This code is on the path for
+*every* invocation, so any change to it needs the unrelated modes (`-e`, `-debug`, `-trace`,
+`-quiet`, plain REPL load, `-version`, `-h`) re-checked, not just the conversion flow.
+
+The orders worth covering, since each hits a different branch: model first, flags first, model
+*between* two flags (`-o out.ttl model.sysml -convert ttl`), a joined value (`-convert=ttl`), an
+`-o` value that itself starts with a dash (`-o -weird.ttl`), and a flag whose value could be
+mistaken for a model (`-from sysml in.txt -convert ttl` — if `sysml` is read as the file you get a
+bogus `open sysml: no such file`).
+
+A **file name beginning with a dash needs the `--` marker**: `sysml -weird.sysml` is reported as
+`flag provided but not defined: -weird.sysml` (correct — a genuine typo like `--badflag` must still
+be caught), while `sysml -e "1+1" -- -weird.sysml` loads it. Remember `--` is POSIX end-of-options,
+so **everything after it is positional**: `sysml -- -weird.sysml -e "1+1"` loads the model and then
+tries to open `-e` as a second file (`load -e: open -e: no such file or directory`). Write the flags
+*before* the marker. A regression here is easy to miss — assert on a dash-leading file name
+explicitly, because a permutation bug that drops `--` still looks fine for ordinary file names.
 
 ## Fixtures worth knowing
 
@@ -214,7 +328,7 @@ because the obvious ones cannot:
   (`state working { attribute localGain = 4.0; entry { assign result := localGain + pkgBonus; } }`),
   and for nesting a substate inside a `region` must declare one read by its own entry action.
   A broken build reports `error: event processing failed: enter state: entry action: eval assignment
-  RHS: unresolved feature: localGain`.
+  RHS: unresolved reference: localGain`.
 - **Always include a shadowing case, because the failure mode is a wrong value, not an error.** Give
   a state (or an action, or a loop/if block) a member whose name also exists at package level with a
   *different* value, and assert the inner one wins. A build that hands out the enclosing scope
@@ -254,14 +368,14 @@ because the obvious ones cannot:
   invalidate the other snippet. `./bin/sysml <file>` per variant keeps the runs independent.
 - Meta-commands are only understood at the `sysml>` prompt: a shell habit like `clear; %action foo`
   is parsed as SysML, pollutes the session buffer, and can make an already-loaded package's symbols
-  stop resolving (`symbol "DescentR::propagate" not found`). Type shell and REPL commands in
+  stop resolving (`unresolved reference: DescentR::propagate`). Type shell and REPL commands in
   separate turns, and `%clear` (or restart) if a stray line lands in the buffer.
 - `%satisfy` takes no argument (every satisfaction assertion the model states) or the name of the
   element stating them, since `assert satisfy … by …` is anonymous.
 - Instances are keyed by resolved FQN, so `%instantiate Vehicle` then `%slots Demo::Vehicle` must
   hit the same `ID`, and the reverse spelling too. Differing IDs = broken keying.
 - Qualified attribute access works with a full FQN (`%eval Demo::Engine::power` → `= 300.00`) but a
-  **partial** qualification (`%eval Engine::power`) is `symbol ... not found` — the qualified path
+  **partial** qualification (`%eval Engine::power`) is `unresolved reference: …` — the qualified path
   goes through the index, which wants the whole FQN. Expect this, don't file it as a bug without
   checking intent.
 - `%break <node>`: unknown node names are rejected *with the valid node list*; after a stop,
@@ -356,6 +470,43 @@ Testing this family end-to-end has a few traps that cost a whole run if hit late
   structural/unresolved-library vs behavioral rather than trusting the count alone.
 - Don't name a pysysml probe script `grpc.py`: `sys.path[0]` shadows the real `grpc` package and
   pysysml dies with `partially initialized module 'pysysml'`, which looks like a client bug.
+
+## Fork/join and an action's shared value space (PR #170)
+
+An action performance holds **one** value space (`ActionExecutor.data`, read back by `Results()` and
+`Data()`); a fork duplicates control only, a join merges nothing, and a retiring token carries
+nothing out. Consequences worth asserting whenever anything in `internal/core/runtime`'s action path
+changes:
+
+- Every branch's writes must appear in `Results:` together. The historical bug (pre-#170) was that
+  each token carried its own copy of the data, so only the **last-retired** token's snapshot
+  survived — a broken build still completes with `✓ Action completed`, just missing values, so
+  "it ran" proves nothing. Always A/B against a binary built from the parent commit and assert the
+  exact numbers.
+- Fixtures that distinguish working from broken, and the values a correct build gives (an incorrect
+  build zeroes the branch that retires first):
+  `fork` + two branches assigning `x`/`y` → `x=1 y=2`; three branches → `1/2/3`; nested forks where
+  the inner join's successor reads what the inner branches wrote; a branch whose body is a
+  `while` loop (`n=10 i=5` — the loop runs entirely within one token step); a branch that reads a
+  feature the other branch wrote (`seen=42`, since a read after the other branch's write sees it);
+  an `accept` in one branch (`action rcv accept n : Integer;` with the other branch sending);
+  a branch ending at a node with **no succession** (no join) — both branches' values must survive;
+  a fork whose branch invokes a nested action with `in`/`out` params that itself forks (only
+  parameters cross the boundary — the callee's own locals must NOT appear in the caller's results).
+- Both branches assigning the **same** attribute is deterministic last-write-in-step-order, not a
+  merge: assert a single stable value over repeated runs (`w=10` for branches writing 10 then 20)
+  and that it never panics, hangs or drops the feature.
+- `%tokens` prints token **locations** followed by one shared `Values:` block, never per-token
+  values. At a fork expect `Token 2 @ left` / `Token 3 @ right` with a single `Values:` — per-token
+  blocks or duplicated names are the pre-#170 display. After completion `%tokens` says
+  `No active tokens` and the values only show in the `Results:` of the final `%continue`.
+- An unsatisfiable `accept` inside a fork branch must still fail fast (exit 2, ~0.1 s) with
+  `accept deadlock in action <name>: … ; N token(s) blocked for another reason` — never hang.
+- Model-writing traps met while building these fixtures: `after` is a reserved keyword (bad node
+  name); an accept's bound parameter is only resolvable from other nodes when the owner is written
+  `action Foo { … }` rather than `action def Foo { … }` — otherwise the reader body reports
+  `unresolved reference: n`; the CLI has **no** flag for action inputs, so exercise `in`/`out`
+  parameters by having a caller action invoke `action call = Callee(a = 3, b = 4);`.
 
 ## Control flow inside an action node body
 
@@ -496,18 +647,82 @@ follow them with the cheap canaries: `%action tally` + `%continue` → `total = 
 `Session.accept` (internal/repl/session.go) drops any earlier snippet whose **declared names**
 intersect the new submission's. So typing `package Demo { part def Trailer { ... } }` to *add* a
 member to an already-loaded `package Demo` **replaces the whole package** — `Demo::Vehicle` and
-friends become `symbol ... not found`, while `%instances` still lists the now-orphaned instance and
-instance IDs restart. When you just want to add declarations mid-session, use a **different package
+friends become `unresolved reference: …`, and the instances of them are dropped (with a notice) since
+the declarations they were built from are gone. When you just want to add declarations mid-session, use a **different package
 name**. When you want to prove that newly-typed declarations are visible to the qualified-name path
 (the `s.idx`/`s.rtCtx`/`s.instances` invalidation in `Submit`), a fresh package avoids conflating the
 two behaviors.
 
-`Submit` also resets `s.instances`, so **any** submission wipes previously created instances:
-expect `%instances` → `(no instances created)` right afterwards, the next `%instantiate` to get
-`ID: 1`, and `%slots` on a still-valid symbol to say `no instance of "…" (use %instantiate first)`
-rather than printing stale slots. An active `%action`/`%state` debugging session is *deliberately*
-not reset by a submission — it keeps running against the executor built from the older document. Per
-the maintainer this is intended; do not report it as a bug.
+`Submit` **carries instances over** what a submission did not change (`internal/repl/carryover.go`,
+`runtime.Adopt`): after an unrelated `part def B;`, `%instances` still lists the instance with the
+**same ID**, `%slots` still prints its values, and the next `%instantiate` gets a *fresh* ID rather
+than `ID: 1`. What the submission invalidated still goes — redeclaring the instance's own definition,
+or a declaration its features are typed by — and then the notice
+`note: N instance(s) … dropped because the declarations changed` is expected, with `%instances`
+saying so too (`(no instances created; …)`, or `(… also dropped …)` when only some went). An active
+`%action`/`%state` debugging session likewise survives an unrelated submission and ends, with a
+notice naming the declaration, when what it depends on changes.
+
+Recipes that actually distinguish working from broken here (used to verify PR #168):
+
+- **Survival:** `part def A { attribute x : ScalarValues::Integer = 1; }` + `%instantiate A` +
+  `part def B;` → no drop notice, `%instances` → `A (ID: 1)`, `%slots A` → `x = 1`. The parent
+  commit's binary (see the contrast-binary recipe) prints the drop notice and
+  `error: no instance of "A"` on the same input, so run both on camera.
+- **Partial loss:** instantiate two definitions, then redeclare only one → `note: 1 instance was
+  dropped …` plus `%instances` listing the survivor and
+  `(1 instance was also dropped when the declarations changed at submission N — re-run %instantiate)`.
+  A `part def D { part t : T; }` instance is dropped by redeclaring `T`, not only `D`.
+- **Fresh IDs:** the next `%instantiate` after a survival gets the next unused ID (2, 3, …); an ID
+  restarting at 1 while an older instance still lists is the failure signature.
+- **Debugger:** `%tokens` is the action-side inspector — `%current` answers
+  `no active state machine session` for an action session, which is not a bug. After the session
+  ends, `%step`/`%current` report `error: no active … session: … ended when <name> was redeclared at
+  submission N`.
+- **Performer-based end notice:** to lose the *object* without superseding the behavior, keep them in
+  separate packages (`package P { part def Ship { action tally { … } } }`,
+  `package Q { part s : P::Ship; }`, `%instantiate Q::s`, `%action P::Ship::tally Q::s`) and then
+  resubmit `package Q` with an extra member → `note: action debugging session for "P::Ship::tally"
+  ended (the object Q::s performing it was dropped)`. Redeclaring `P` instead names the declaration.
+- **Value expressions are re-derived, not invalidated** (as of the `runtime.Adopt` change in
+  PR #168): a carried slot whose feature has a value expression (`attribute m = double(3.0);`) is
+  reset to unmaterialized, so the new context recomputes it from the declarations the expression
+  reads *now*. Redeclaring `calc def double` with `x * 3.0` therefore keeps `ID: 1` and prints **no**
+  drop notice, while `%slots A` moves `6.00 → 9.00`; the same holds through chains
+  (`outer` calling `inner`: `7.00 → 10.00`; `attribute h = g * 2.0` read by `m`: `11.00 → 15.00`).
+  The assertion that catches the earlier stale-value bug is **`%eval` must agree with `%slots`** after
+  every such change — a `%slots` that keeps the old number while `%eval` of the same expression
+  returns the new one is the failure signature. Composite parts keep their carried values *and*
+  nested instance IDs (`w = Instance(ID: 2)`). Drops are still expected for the instance's own
+  redeclared definition and for a change to a declaration one of its features is typed by.
+- **What is read again vs kept on carry-over** (`adopt.go` `derivedSlot`/`connectorSlot`/
+  `collectedSlot`, as of 4947ca3 + 65b04ec). Four distinct classes, each with its own recipe:
+  - *Connector slots are read again under the same identity.* `connection c1 connect a.x to b.y;`
+    where `a.x = double(3.0)`: after redeclaring `double` with `x * 3.0`, `%slots` must show
+    `x = 9.00` **and** `c1 = Instance(ID: 4)` (unchanged) **and** `source = 9.00`. A `source` that
+    stays `6.00` next to `x = 9.00` is the bug. This applies to named *and* anonymous connectors.
+  - *A variation's selected variant is carried, not derived* — its default names a variant rather
+    than a value. `part :>> engine = engine::electric;` must keep `electric (Instance ID: 2)` across
+    an unrelated `part def Widget;`; an id that moves (2 → 3) means the variant slot was wrongly
+    treated as derived. Changing the selection to `engine::petrol` must still drop with the notice.
+  - *A collection of scalars is collected again* (its members are copies of what the subsetting
+    features hold): `attribute pool : Real[*]; attribute one :> pool = double(3.0);` must go
+    `pool = [6.00] / one = 6.00` → `pool = [9.00] / one = 9.00`. `pool` stuck at `[6.00]` while
+    `one = 9.00` is the failure — the object then reads two values for one thing.
+  - *A collection of objects is kept*, since those objects carry over under their identities:
+    `part xs : B[3]` must print the identical `[Instance(ID: 2), Instance(ID: 3), Instance(ID: 4)]`
+    after an unrelated submission, and the next `%instantiate` must not reuse 2/3/4.
+- **A stale carried value only shows if the slot was materialized before the change.** These
+  carry-over slot bugs need a `%slots` (or other read) *between* `%instantiate` and the redeclaration:
+  without it the slot was never materialized, so there is nothing stale to keep and even a broken
+  build prints the right number. Contrast runs against a binary built from the parent commit
+  (`git worktree add /tmp/wt-old <parent> && go build -o /tmp/old-sysml ./cmd/sysml`) are the cheapest
+  way to prove a case actually discriminates — but include that intermediate read in both runs.
+  Conversely, the *anonymous* connector-id case must also be checked with **no** read in between
+  (two unrelated submissions back to back, then one `%slots`), which is a separate code path.
+- **Never put a literal TAB in piped REPL input** (`printf '…\t…' | ./bin/sysml`): readline enters
+  completion mode and the process dies with `panic: bytes: negative Repeat count`. Use spaces in
+  one-line rehearsal snippets.
 
 Also: analysis still runs over the whole accumulated buffer, but since PR #65 the **report** is
 scoped to the submission just made, so one bad snippet no longer keeps re-printing its error on
@@ -516,9 +731,10 @@ later submissions. Two consequences when testing:
 - Reported line/column numbers are **relative to what you just typed** (`Result.Offset` /
   `baseLine()` in `internal/repl/render.go`), so a one-line submission reports `1:36:` no matter how
   much is already in the buffer. Only `%verbosity debug` numbers against the whole buffer.
-- While an earlier error is unresolved, a later clean submission prints
-  `note: an earlier session error is unresolved, so deeper checks may not have run here (see it with
-  -debug)` before its summary. That note is expected, not a failure.
+- While an earlier error is unresolved, the next clean submission prints
+  `note: deeper checks may not have run here: the error on buffer line N is unresolved (see it with
+  -debug)` before its summary. That note is expected, not a failure — and it is printed **once**, not
+  on every later submission, so its absence on the ones after is also expected.
 
 Still true: accidentally typing a shell command like `clear` at the `>` prompt is parsed as SysML
 and pollutes the buffer. `%clear` resets the session.
@@ -538,7 +754,7 @@ package Lib { part def Widget { attribute size = 3.0; } }
 package P { public import Lib::*; }
 %instantiate P::Widget      -> ✓ Created instance of Lib::Widget    (resolved FQN is the DECLARING one)
 package P { }               -> replaces the earlier snippet (same declared name)
-%instantiate P::Widget      -> error: symbol "P::Widget" not found  (re-export unwound)
+%instantiate P::Widget      -> error: unresolved reference: P::Widget  (re-export unwound)
 %instantiate Lib::Widget    -> ✓ Created instance of Lib::Widget    (purge must not over-remove)
 package P { public import Lib::*; }
 %instantiate P::Widget      -> ✓ ... again, and never "is ambiguous"
@@ -547,7 +763,7 @@ package P { public import Lib::*; }
 Notes that save time:
 
 - A re-export registers the symbol under the importing namespace but **never copies its subtree**:
-  `P::Widget` resolves while `%eval P::Widget::size` is `symbol ... not found`. Use the declaring
+  `P::Widget` resolves while `%eval P::Widget::size` is `unresolved reference: …`. Use the declaring
   FQN (`%eval Lib::Widget::size` → `= 3.00`). This is intended (confirmed by the maintainer).
 - Resubmitting the same importing package several times must keep resolving and must never produce
   `is ambiguous` — duplicate re-export registrations would surface as ambiguity, so assert the
@@ -752,6 +968,103 @@ unauthenticated GitHub API, so repeated runs flip from a truthful `HTTP Error 40
 misleading `HTTP Error 403: rate limit exceeded` — rehearse sparingly and report the 404 wording,
 not whichever one the recording happened to catch.
 
+### Verification RPCs, typed errors and strict loading (`pysysml` Tier 3, PR #149)
+
+The verification questions the REPL answers with `%constraint`, `%requirement`, `%satisfy` and
+`%calc` are also RPCs (`internal/grpc/verify.go`), wrapped as `Model.verify_constraint /
+verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from Python:
+
+- Use a **clean venv** — the box's default `python3` may carry an incompatible `protobuf`, which
+  fails at `import pysysml`. A venv with `pip install -e python/` (e.g. `~/pv`) is the reliable
+  interpreter; rebuild with `make build-grpc` and **re-copy** `bin/sysml-grpc` to
+  `~/.pysysml/bin/` after every rebuild or the client silently auto-starts the old binary.
+- Argument order bites: `Connection.eval(expression, model_hash)`,
+  `Connection.instantiate(symbol_id, model_hash)`, `Connection.verify_constraint(symbol_id,
+  model_hash, subject_symbol_id=…)`, `Connection.calc(symbol_id, model_hash, arguments=[…])` —
+  hash **second**. On `Model` the hash is implicit and the kwarg is `subject=`. There is no
+  `Connection.evaluate`. Getting the order wrong yields a confusing
+  `ModelNotFoundError: model not found: Demo::sedan`.
+- `Instance.slots` is a **property** (a dict), not a method; unmaterialized slots (constraint and
+  requirement usages) appear as `SlotError` values inside it, which is expected.
+- The three-way semantics worth asserting separately: a condition evaluating **false** is a
+  verdict (`holds False`, `.condition` set, `.error == ''`, `raise_for_error()` silent); a
+  **failure to evaluate** is `.error` non-empty with `.evaluated False` and
+  `raise_for_error()` raising `ExecutionError`; an **unanswerable request** (unknown symbol)
+  raises `ExecutionError` from the call. Force the middle case with a requirement whose
+  attribute is never bound (`requirement loose : SpeedRequirement;` with `maxSpeed` unbound) —
+  the error reads `no value for feature maxSpeed`.
+- A subject of an unrelated type is *not* rejected: `verify_constraint(c, subject=<an attribute
+  or a calc>)` instantiates it and answers from declared defaults. If you need a raising subject,
+  use a name that does not exist (`unresolved reference: …`).
+- `verify_satisfaction(fqn)` narrowed to an element that states no assertion returns an **empty
+  list**, so `satisfied()` is vacuously `True`; the `"<x> states no satisfaction assertion"`
+  error branch in `verify.go` only fires for a scope-less symbol and is hard to reach.
+- Each verdict from `verify_satisfaction()` carries the **whole response's** instance graph, so
+  `verdict.instances` includes other assertions' subjects — filter on `verdict.instance_id`.
+- Model-cache eviction is testable for real (the service caches 100 models, `-cache-size`):
+  load a model, then `load_from_content` 120 throwaway packages, then call any RPC with the old
+  hash → `ModelNotFoundError`. Takes ~1 minute; run it in the background.
+- Capability negotiation against an "old" service can be simulated without an old binary:
+  `conn._server_info = ServerInfo(version='old', capabilities=frozenset({'convert'}),
+  answered=True, origin='simulated')` → the verify calls raise `MissingCapabilityError` before
+  any RPC. Label it as simulated in the report.
+- gRPC status translation lives in `pysysml/errors.py`: assert both the pysysml class and the
+  builtin it also is (`ModelFileNotFoundError`/`FileNotFoundError`,
+  `InvalidRequestError`/`ValueError`, `ConnectionError`/`ConnectionError`,
+  `ExecutionError`/`RuntimeError`) and that `__cause__` is the original `grpc.RpcError`. A dead
+  service is reproducible with `pysysml.connect(port=50123, auto_start=False)`.
+
+### The `Query` RPC / `model.query(...)` (SysML v2 API & Services, PR #155)
+
+`internal/grpc/query.go` + `python/pysysml/query.py` implement the standard's Query resource
+(`scope`/`select`/`where`, `PrimitiveConstraint` with `=`/`>`/`<` and `inverse`,
+`CompositeConstraint` with `and`/`or`). Testing notes that generalize:
+
+- **Refresh `~/.pysysml/bin/sysml-grpc` or you test a stale service.** A missing capability shows
+  up as a `MissingCapabilityError` or an "unimplemented" RPC rather than a build failure, so start
+  every run with `make build-grpc && cp bin/sysml-grpc ~/.pysysml/bin/sysml-grpc` and print
+  `md5sum` of both plus `git log --oneline -1` on camera. `GetServerInfo().capabilities` should
+  list `type_facts, convert, verification, query`.
+- **The Python layer validates before the wire, so client-path tests cannot reach service-side
+  faults.** Undefined payload keys, an empty composite and a missing operator are rejected locally
+  as `QueryError`. To exercise the service's own validation (unknown property, unknown scope, `>`
+  on a non-ordered property, non-numeric operand, `Constraint` with neither variant, unset query)
+  call the raw stub: `model.connection._stub.Query(sysml_pb2.QueryRequest(...))`. Assert **both**
+  paths — the typed client error and the service's `INVALID_ARGUMENT` message naming the problem.
+- Typed client errors are the contract: `INVALID_ARGUMENT` → `InvalidRequestError` (also a
+  `ValueError`), a bogus/evicted `model_hash` → `ModelNotFoundError` (**NOT_FOUND** is intended
+  here, consistent with the other RPCs — don't file it as a wrong status). If a raw
+  `grpc._InactiveRpcError` reaches the caller, the call is missing `translate_rpc_errors()`.
+- **A query matching nothing must be an empty list, never an error.** Always assert that
+  explicitly, otherwise a validation bug that silently answers `[]` looks like a pass.
+- **Anonymous members are the classic scope-walk bug.** A `doc`/comment note, an anonymous usage or
+  an anonymous `connect` has a degenerate FQN (`Pkg::`), so an unguarded walk answers non-unique
+  `@id`s. Keep a fixture with all four shapes and assert, per model: no empty/degenerate `@id`, no
+  duplicates, anonymous elements absent, **and** that named descendants of a named parent are still
+  answered (the fix drops descendants of anonymous elements too, so it can over-prune). Element
+  counts are the canary: `examples/rdf-interop-demo.sysml` is 22 elements with the fix (25 before),
+  4 of them PartUsages, so an `inverse` partition is 18 + 4 = 22.
+- **Stdlib elements restored from the library cache are lossy** and this is documented, not a bug:
+  ~47 elements under `Base`/`Occurrences`/`Links`/`Clocks` come back with **no** `@type` (their
+  symbol kind is `SymbolUnknown`), so they never match `@type =` but are kept by its `inverse`; ~12
+  `*Definition`s (e.g. `ScalarValues::Boolean`) come back with **no** `isAbstract`. Any claim in
+  docs/API.md that the `@type` mapping is total is a doc bug unless it is scoped to "every kind a
+  parsed declaration can have".
+- Property-absence is the documented shape throughout: `owner` absent for a top-level package,
+  `type` absent for an untyped attribute, `declaredName` absent for an *effective* name. A one-line
+  fixture (`part :>> engine;` inside `part v`) gives the effective-name case, with a sibling
+  `part motor2;` as the control that still carries `declaredName`.
+- Good fixtures: `examples/rdf-interop-demo.sysml` (nesting + PartUsages),
+  `examples/sysml-v2-training/04. Subsetting/Subsetting Example.sysml` (`[*]` vs `[4]` — proves `*`
+  behaves as infinity for `>` and is excluded by `< 5`, plus `abstract part def`),
+  `examples/state-machine-demo.sysml` (imports `ScalarValues::*`; an empty scope must still answer
+  only its own 5 elements, not the stdlib).
+- Drive it as one scripted assertion runner (`PASS/FAIL <id> <claim> | <evidence>` lines and a
+  final `n/n assertions passed`) with an `input()` pause between sections when `QT_PAUSE=1`, then
+  step the pauses on camera. Never type `clear` at such a pause — it is consumed as the Enter for
+  the *next* section and you lose that section from the screen; use Konsole's `shift+PageUp`
+  scrollback to recover it.
+
 ## Typed codegen (`python -m pysysml.generate`, Tier 2)
 
 `python -m pysysml.generate <model.sysml> [-o out.py] [--host --port]` loads the model through
@@ -906,7 +1219,7 @@ Three cheap, high-signal sweeps:
    assertions that separate working from broken are: `%slots` lists the member as **`x = 5`**
    (broken revisions show `sn = 5` with `x = 1`, or a bogus `redefines = <unknown>` slot);
    `%eval T::A::x` **and** `%eval T::A::sn` both evaluate; and an action body doing
-   `assign total := total + x` completes instead of `unresolved feature: x`. Load-level `✓ package T`
+   `assign total := total + x` completes instead of `unresolved reference: x`. Load-level `✓ package T`
    proves nothing here.
 
 Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
@@ -920,7 +1233,7 @@ consumers reading `Usage.Ident.Name` break silently downstream. The probes that 
 fixed from broken, each with a visible A/B against `main`:
 
 - **Attribute default** — `attribute redefines x = 5;` in an action body with a statement reading
-  `x`; a lost name surfaces as `error: execution failed: eval assignment RHS: unresolved feature: x`,
+  `x`; a lost name surfaces as `error: execution failed: eval assignment RHS: unresolved reference: x`,
   not as a parse error.
 - **Step ordering** — `action redefines bump { … }` ordered by `then start bump; then bump end;`.
   A lost name fails at lowering: `succession edge references undefined target node`.
@@ -983,7 +1296,7 @@ that imports `SI::*`. Consequences to test deliberately, because they surprise u
   `package Demo { attribute mass = 3.0; }`, `%eval mass * 2` = `6.00` but `%eval 1.0 [m]` starts
   failing `unresolved unit m` (Demo imports nothing).
 - With two packages, only the last one's members resolve unqualified (`%eval b * 3` works,
-  `%eval a + b` is `unresolved feature: a`); qualify them (`%eval P1::a + P2::b` = `3.00`).
+  `%eval a + b` is `unresolved reference: a`); qualify them (`%eval P1::a + P2::b` = `3.00`).
 - `%eval <unit>` (e.g. `%eval m`) resolves through that scope and answers
   `error: "m" has no value to evaluate`, not `symbol "m" not found` — the latter is the pre-fix
   signature.
@@ -1034,6 +1347,105 @@ its output rather than in an exit code — so assert on the exact rendered text:
   pre-existing rendering, not evidence of a new bug, so do not report it as one without an A/B
   against `main`.
 
+## Multi-file projects: `%load <path>...` and positional dirs/globs (PR #146)
+
+`sysml <dir|glob|file>...` and `%load <path>...` expand to model files via
+`internal/core/project.Expand`, and every file is accepted before one analysis pass
+(`Session.SubmitAll`), so load order does not affect name resolution. Shapes to expect:
+
+- More than one file prints a `loaded N files:` header listing each path (a single file prints no
+  header — a good tell that the multi-file path was taken).
+- Only `.sysml`/`.kerml` are collected; a `.md` sibling and any **hidden** directory (`.git`,
+  `.hidden`) are skipped. Put an unparseable file inside a `.hidden/` dir: any diagnostic from it
+  means the skip broke.
+- Errors are worth asserting verbatim: `no .sysml or .kerml files in <dir>`,
+  `no model files match "<pattern>"`, `load <file>: open <file>: no such file or directory`, and
+  `usage: %load <file|dir|glob>...` for a bare `%load`.
+- Duplicates dedupe by absolute path, so `file dir/` where `dir` contains `file` loads it once.
+- `~` and quoted paths with spaces work; quote globs in the REPL (`%load "/tmp/p/*.sysml"`) and on
+  the CLI so the shell does not pre-expand them.
+- `-convert` still takes exactly one file: a directory gives
+  `cannot tell the format of "<dir>": it has no extension, so pass -from`.
+
+**Two regressions fixed late in #146 — re-check both after any change to the load path:**
+
+1. *Per-file diagnostic positions.* Diagnostics from a load are printed as
+   `<file>:<line>:<col>: ...` with the line counted from that file's start. With `a-ok.sysml`
+   (5 lines) sorting before `b-bad.sysml` whose line 3 is `attribute z = ;`, a directory load must
+   report `/tmp/bp/b-bad.sysml:3:17:` — the same position the file reports when loaded alone. A
+   joined-buffer line (e.g. `9:17`) or a missing filename is the bug returning
+   (`Session.origins`/`Result.locate` attribute an offset to its file).
+2. *Every loaded file survives the load.* Two files of one load declaring the same top-level name
+   must both stay in the session (`%list` shows both); name-based snippet replacement only
+   supersedes **earlier** submissions. Retyping a declaration at the prompt must still replace what
+   a previous load put there.
+3. *Symlinked directories are walked.* `%load /tmp/link-to-proj` loads the files behind the link,
+   symlinked subdirectories included, each resolved directory at most once so a link cycle
+   terminates; a dangling link is skipped. A project reached through a symlink is a realistic
+   setup, so include one.
+
+To prove order-independence is real rather than accidental, name the referencing file **first**
+alphabetically (e.g. `a-uses.sysml` importing a package declared in `b-defs.sysml`). The pre-#146
+binary emits `unresolved reference: Defs` / `Widget` / `size` on exactly that input, which is the
+strongest available evidence.
+
+Trap while driving the REPL on camera: typing `clear` at the `sysml>` prompt not only errors
+(`1:1: error: expected a namespace member`) but leaves garbage in the session buffer that makes a
+subsequent `%eval Pkg::part.attr` fail with a parse error. `%clear` and re-`%load` recovers.
+
+## The stream/status contract of a non-interactive run (PR #161)
+
+Since #161 every run that is not a prompt splits its output: **results on stdout** (evaluated values,
+conversion bytes, verdict lines, `✓` echoes of what a load declared) and **findings on stderr**
+(diagnostics, warnings, the `sysml: … did not analyse cleanly` note, `wrote <file> (ttl, N bytes)`),
+with `0` = done, `1` = the model answered a check false, `2` = nothing could be decided. Any change in
+`cmd/sysml/{main.go,status.go,check.go}` or `internal/repl/{load.go,render.go}` can break it silently,
+so test it as a **table over every mode**, always with `>out 2>err </dev/null` and `echo $?`:
+capturing `2>&1` hides exactly the defect. A ready-made driver pattern (one `PASS`/`FAIL` line per
+row, asserting status + required stdout needles + stderr needles that must be **absent** from stdout
++ "stdout empty") lives in the session that tested #161; re-create it rather than eyeballing output,
+because it is legible on camera and a leak turns a row red.
+
+Values that held at `6079699` (broken = `package Bad { part def A { attribute x : ; } }`):
+
+| run | exit | stdout | stderr |
+|---|---|---|---|
+| `-e 1+1 <good>` / `-calc`/`-action`/`-state` on a clean model | 0 | `✓ package …`, `= 2` / `= 18` / `total = 5` | empty |
+| any of those over the broken model | 2 | **empty** | `error: expected a name`, `sysml: … did not analyse cleanly` |
+| `-e nope <good>` (unresolved name) | 2 | `✓ package …` only | `sysml: unresolved reference: nope` |
+| `-validate <broken>` | 2 | empty | `… did not analyse cleanly; no check was made` |
+| plain `sysml <broken>` **non-tty** | 2 | banner only | diagnostics |
+| `-convert ttl <model>` | 0 | Turtle | empty |
+| `-convert ttl -o f` | 0 | **empty** | `wrote f (ttl, 1540 bytes)` |
+| `-convert ttl <broken> -o f` | 2 | empty | syntax errors, **and no file is created** |
+| `-constraint` false / holds / unresolved / warning-only | 1 / 0 / 2 / 0 | verdict line | warning + unresolved verdicts only |
+
+Traps found while testing it:
+
+- **The tty override is the one path unit tests cannot cover.** `atTerminal()` (`status.go`) forces
+  status `0` when stdin is a terminal, so `./bin/sysml <broken>.sysml` at a real terminal must load,
+  report on stderr, open the prompt and exit `0` on `%quit`, while
+  `printf '%%quit\n' | ./bin/sysml <broken>.sysml` exits `2`. Verify the tty half in Konsole (or with
+  `script -qec "./bin/sysml <broken>.sysml > /tmp/o 2>/tmp/e; echo TTYSTATUS=\$?" /dev/null < in`);
+  a plain pipe silently tests the other branch.
+- **`part def ;` is *not* a bad line** — it parses as an anonymous part def and prints `✓ part def`.
+  To show the prompt surviving a bad line, use `%eval nope` (unresolved) and
+  `part def B { attribute q : ; }` (syntax error), then a following `%eval 6*7` → `= 42` as proof the
+  session continued. Expect the `note: deeper checks may not have run here: the error on buffer line
+  N is unresolved …` line on the submission after the bad one.
+- `-convert ttl` of most models fails on unsupported constructs — a **constraint member** is one
+  (`cannot convert the constraint member at …`, exit 2). That makes a check-oriented fixture a useful
+  negative row but useless as the clean-conversion row; use
+  `package Demo { part def Engine; part def Vehicle { attribute mass : Real = 1200.0; part engine : Engine[1]; } }`
+  (1540 bytes of Turtle) for the positive one.
+- Real repo models to use instead of hand-written ones: `examples/state-machine-demo.sysml` (and 6
+  others) analyse clean, while `examples/phase-c-behavioral-bodies.sysml` and
+  `examples/parser_features_demo_action_semantics.sysml` do **not** — a free "broken model" that is
+  more convincing than a toy fixture.
+- Cheap contrast for this PR class: build the parent commit (`git worktree add /tmp/old<sha> <sha>`)
+  and run `-e '1+1' <broken>.sysml` through both. Pre-fix prints the diagnostic **and** `= 2` on
+  stdout with exit `0` — the single most convincing frame in the recording.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
@@ -1060,6 +1472,61 @@ venv off the system interpreter:
 revision. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
 over a pipe is not visible in the video and should be reported as weaker evidence.
+
+**Never type `clear` at the `sysml>` prompt while recording.** It is submitted as SysML, not run by
+the shell, so it leaves an unresolved session error and the next submission gains a
+`note: deeper checks may not have run here: the error on buffer line N is unresolved` line that
+looks like a defect in the frame. Clear the screen *before* starting the REPL (`clear; ./bin/sysml`),
+scroll instead with `shift+PageUp`/`shift+PageDown` when long output (`%builtins`, `%help`) runs off
+the top, or quit and restart the REPL for a clean screen.
+
+## Tab completion and anything else readline-driven (PR #148)
+
+This section and the next describe behavior added by PR #148 (which also adds `%search` and
+`%builtins`), so they apply only once that PR is on `main`.
+
+`cmd/sysml` installs an `AutoComplete` on the readline config, and **readline disables completion
+when the terminal reports a width of 0** — which is what a plain pipe reports. So
+`printf '%%bui\t\n' | ./bin/sysml` proves nothing about completion: the TAB is just swallowed.
+Two ways to drive it:
+
+1. **Konsole** (what belongs in a recording): send TAB with the computer tool's
+   `key: "Tab"`, and discard a line with `ctrl+u` between cases — note `ctrl+u` kills only to the
+   left of the cursor, so add `ctrl+k` first if the cursor is mid-line.
+2. **A pty harness** (for discovering expected values quickly, off camera): fork a pty, set the
+   window size, then write keystrokes. The essential part is the ioctl:
+
+   ```python
+   pid, fd = pty.fork()                     # child: os.execv("./bin/sysml", [...])
+   fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+   os.write(fd, b"%eval sqr\t")             # then read fd after a short settle
+   ```
+
+   The captured stream is full of `ESC[2K` redraws; grep the last redraw of the prompt line rather
+   than trying to read it as plain text.
+
+Completion cases worth covering, and their shapes: a unique meta-command prefix completes in place
+(`%bui`+TAB → `%builtins`), an ambiguous one lists on the second TAB
+(`%s`+TAB TAB → `%satisfy %save %search %slots %state %step %stop`), names after `%eval` come from
+session declarations, builtin function names and the library (`sqr`→`sqrt`), a qualified prefix
+offers **one segment at a time** (`ScalarValues::`+TAB lists only that package's members, never the
+whole library; `ScalarValues`+TAB inserts the `::` and lists the same members), and `%load`/`%save`
+complete filesystem paths with a trailing `/` on directories.
+Adversarial cases that all behaved correctly and are cheap to re-check: TAB with the cursor mid-line
+must keep the text to its right, TAB on an empty line lists (capped) names without hanging,
+completion into a nonexistent directory inserts nothing, and completion still works on a line long
+enough to wrap several terminal rows.
+
+## Where the prompt keeps its history (PR #148)
+
+History is `$XDG_STATE_HOME/sysml/history` when that variable is set (directory created 0700, file
+0600), else `~/.sysml_history`; older builds used `$TMPDIR/sysml-repl.history`, so a stale
+`/tmp/sysml-repl.history` may be left over from a contrast binary — delete it before asserting "the
+new build writes nothing to /tmp". Reuse across runs is testable without a second human: run the
+REPL, `%quit`, start it again and press `Up`. An unwritable location must degrade quietly (prompt
+starts, no warning, history in memory only) — exercise it with `XDG_STATE_HOME` pointing at a
+`chmod 500` directory *and* at a regular file, since those fail in different places
+(`MkdirAll` vs `OpenFile`).
 
 ## Connector usages and their ends (PR #132)
 
@@ -1109,7 +1576,7 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
   `engagementRing.ringPort` / `band.ringPort`, not the disconnected variant's ports. But the
   send/accept *routing* side cannot be driven: an action usage does not inherit its `action def`'s
   nodes (`initialize action: no initial node found`), `%action` cannot resolve a nested action of a
-  selecting part usage (`symbol "Route::sysDirect::comm" not found`), and a sibling
+  selecting part usage (`unresolved reference: Route::sysDirect::comm`), and a sibling
   `ref :>> link = link::direct;` in the same body does not bind the selection — the run still ends in
   `accept deadlock in action comm: nothing can post the awaited message`. What *is* testable, and
   worth doing, is the negative plus a positive control: a plain (non-variation)
@@ -1201,3 +1668,50 @@ Discovered while testing inline `entry action { … }` bodies and calc `out` ass
   `output bound more than once` (declaration value plus a body assignment; two *body* assignments
   are legal, the last one winning), `assignment outside the calculation body: <name> is not declared
   by the calculation`, `no result expression: calc … has no return expression`.
+
+## "Did you mean" suggestions on unresolved references (PR #167)
+
+The suggestion is produced in the resolver (`internal/core/suggest` + `internal/core/resolve/suggest.go`),
+so it belongs to the diagnostic and every surface renders the same string. Verify all three surfaces —
+they used to disagree, and the REPL used to post-annotate its own copy:
+
+```bash
+./bin/sysml -validate f.sysml            # CLI: "... — did you mean ScalarValues::Integer?", exit 2
+printf 'part def A { attribute x : Integer = 1; }\n' | ./bin/sysml | grep -c 'did you mean'   # must be 1
+```
+
+- Canonical fixture: `part def A { attribute x : Integer = 1; }` → `unresolved reference: Integer —
+  did you mean ScalarValues::Integer?` and exit `2`. A bare library name is *supposed* to fail:
+  only top-level packages are in the root namespace, so the fix is `private import ScalarValues::*;`
+  inside a `package`, which must then validate `✓ … no errors` / exit `0`.
+- **Duplication is the regression to watch in the REPL.** Count `did you mean` occurrences rather
+  than eyeballing them, and compare the text after `error: ` with the CLI's byte for byte. A
+  parent-commit binary is the cheapest contrast: pre-fix the CLI prints *no* suggestion while the
+  REPL prints one, so "old REPL also showed a hint" is expected and not evidence of duplication.
+- The LSP path is checkable in ~15 s without VS Code: drive `./bin/sysml-lsp` over stdio with a
+  three-message script (`initialize`, `initialized`, `textDocument/didOpen`) and read
+  `textDocument/publishDiagnostics`; the message must match the CLI exactly.
+- Shapes with deliberately different behavior, all worth asserting:
+  - a **qualified** unresolved name gets NO `did you mean` — it reports
+    `(no namespace "Nowhere" is loaded; "Integer" is declared as …)` instead;
+  - operator members are never offered (`typable()` filters `IntegerFunctions::+`, `#`, `..`), so a
+    typo like `Plu` yields no suggestion while `Abz` → `RealFunctions::abs`;
+  - a long garbage identifier (≥ 100 chars) must yield zero suggestions and still exit `2`;
+  - edit-distance tolerance widens with length (1 / 2 / 3 at ≥ 6 / ≥ 9 runes), so a 6-char typo like
+    `Intger` legitimately offers noisy extras (`Items::Item::boundingShapes::edges::inter`,
+    `VectorFunctions::inner`) after the right answer — assert the *first* candidate, not the list.
+- **`examples/` is a gate.** All 20 files under `examples/` (excluding `examples/sysml-v2-training`)
+  must validate with exit 0:
+  ```bash
+  for x in $(find examples -name '*.sysml' -o -name '*.kerml' | grep -v sysml-v2-training); do
+    ./bin/sysml -validate $x >/dev/null 2>&1 || echo "FAIL $x"; done
+  ```
+- Fixtures for the parser/semantics fixes shipped alongside (each fails on the parent commit):
+  `binding b of f = v;` (old: `type must be a definition, found attributeUsage`),
+  a **constraint usage** — not `constraint def` — declaring `in` params plus `assert`/`assume`
+  conditions (old: `expected '{' or ';'`), and
+  `vertices->ControlFunctions::exists{p : Point; p.x > 0}` (old: `no scope for member lookup in p`).
+- **REPL adversarial gotcha:** typing unbalanced braces (`part def }}} {{{ ;;;`) puts the prompt into
+  multi-line continuation (`...>`) and silently swallows subsequent lines. Press `ctrl+c` to abandon
+  the buffer — it flushes the accumulated parse errors and returns a clean `sysml>` prompt, which is
+  itself a good no-panic assertion.

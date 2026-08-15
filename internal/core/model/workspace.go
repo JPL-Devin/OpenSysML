@@ -8,6 +8,7 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/libs"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -208,6 +209,68 @@ func (w *Workspace) LookupQualified(fqn string) []*symbols.Symbol {
 	return out
 }
 
+// TopLevelSymbols returns the symbols declared at the root of the index as seen
+// from the document named doc: the standard library's top-level packages and
+// every document's top-level declarations. This is the read path for completion,
+// which offers library names that no open document declares.
+func (w *Workspace) TopLevelSymbols(doc string) []*symbols.Symbol {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	resolver, _ := w.newResolver()
+	return resolver.AdmittedTopLevel(doc, w.index.TopLevelBindings(doc))
+}
+
+// MembersOnPath returns the members visible on the element that path names from
+// scope — the members of a usage's type included, since typing is a
+// generalization edge — so that completion after `v.` offers what `v` has.
+// Segments after the first are looked up as members of the previous one; an
+// unresolved segment yields no members.
+func (w *Workspace) MembersOnPath(scope *symbols.Scope, path []string) []*symbols.Symbol {
+	if scope == nil || len(path) == 0 {
+		return nil
+	}
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	resolver, sem := w.newResolver()
+
+	sym, ok := resolver.ResolveName(scope, path[0], nil)
+	if !ok || sym == nil {
+		return nil
+	}
+	for _, seg := range path[1:] {
+		if sym, ok = sem.LookupMember(sym, seg); !ok || sym == nil {
+			return nil
+		}
+	}
+	if target, ok := resolver.ResolveAliasTarget(sym); ok {
+		sym = target
+	}
+
+	members := sem.MembersOf(sym)
+	// A cached library symbol has no scope, and a package's own scope does not
+	// hold what its imports brought in; both are reachable through the index,
+	// as seen from the namespace the completion is requested in so that another
+	// namespace's private imports stay hidden. An element the namespace's
+	// filters reject is no member of it, so it is not offered either.
+	if fqn := w.index.GetFQN(sym); fqn != "" {
+		from := resolver.ReferringNamespaceFQN(scope)
+		children := w.index.LookupDirectChildrenFrom(fqn, from)
+		members = append(members, resolver.AdmittedChildrenOf(scope, fqn, children)...)
+	}
+	return members
+}
+
+// newResolver is a resolver over the index with a semantic model attached: an
+// inherited member and the element filters gating an import are both answered by
+// the model, so a read path without one resolves differently to a checked one.
+func (w *Workspace) newResolver() (*resolve.Resolver, *semantics.Model) {
+	resolver := resolve.New(w.index)
+	sem := semantics.NewModel(resolver)
+	resolver.SetModel(sem)
+	return resolver, sem
+}
+
 // Document returns the current parsed document for name, or nil.
 func (w *Workspace) Document(name string) *Document {
 	w.mu.RLock()
@@ -238,7 +301,8 @@ func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn 
 func (w *Workspace) ResolveReferenceInDoc(name string, ref resolve.Reference) (*symbols.Symbol, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	return resolve.New(w.index).ResolveReference(ref)
+	resolver, _ := w.newResolver()
+	return resolver.ResolveReference(ref)
 }
 
 // ResolveQualifiedSegmentsInDoc resolves a qualified name and returns the symbol
@@ -257,7 +321,7 @@ func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Refer
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	r := resolve.New(w.index)
+	r, _ := w.newResolver()
 	r.ResolveReference(ref)
 	out := make([]*symbols.Symbol, len(ref.QN.Parts))
 	for i := range ref.QN.Parts {

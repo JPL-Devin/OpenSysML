@@ -25,6 +25,160 @@ service SysMLService {
   rpc Instantiate(InstantiateRequest) returns (InstantiateResponse);
   rpc ExecuteAction(ExecuteActionRequest) returns (ExecuteActionResponse);
   rpc ExecuteState(ExecuteStateRequest) returns (ExecuteStateResponse);
+
+  // Convert a model between the representations Systemica writes — SysML
+  // textual notation and RDF Turtle — so a client can write a model back out
+  // rather than only read it. Reported as the "convert" capability.
+  rpc Convert(ConvertRequest) returns (ConvertResponse);
+
+  // Verification: the answers the REPL's %constraint, %requirement, %satisfy
+  // and %calc give, so "does this model satisfy its requirements?" can be asked
+  // by a script. Each evaluates the same runtime paths the prompt does and
+  // returns a verdict rather than formatted lines. Reported as the
+  // "verification" capability.
+  rpc VerifyConstraint(VerifyConstraintRequest) returns (VerifyConstraintResponse);
+  rpc VerifyRequirement(VerifyRequirementRequest) returns (VerifyRequirementResponse);
+  rpc VerifySatisfaction(VerifySatisfactionRequest) returns (VerifySatisfactionResponse);
+  rpc EvaluateCalc(EvaluateCalcRequest) returns (EvaluateCalcResponse);
+
+  // Run a SysML v2 API & Services Query over a parsed model: scope/select/where
+  // as the standard defines them, so a client that speaks that API can filter a
+  // model here. Reported as the "query" capability.
+  rpc Query(QueryRequest) returns (QueryResponse);
+}
+
+// FailureReason says what kind of failure an `error` reports, so a client acts
+// on the kind rather than on the message text.
+enum FailureReason {
+  FAILURE_REASON_UNSPECIFIED = 0;  // no failure, or one not classified
+  FAILURE_REASON_EVALUATION = 1;   // the condition or calculation could not be evaluated
+  FAILURE_REASON_WRONG_KIND = 2;   // the symbol named declares something else
+}
+
+// Verdict is one verification's answer: whether the condition held, and, when
+// it did not, which condition the model answered false about.
+message Verdict {
+  // What was verified: "constraint", "requirement" or "satisfy".
+  string kind = 1;
+  // FQN of the element verified; empty for an anonymous satisfy assertion.
+  string element_id = 2;
+  // The element as a reader names it: its FQN, or, for an anonymous satisfy
+  // assertion, the assertion as written ("satisfy Range by cruise").
+  string element = 3;
+  // Whether the condition holds. False with an empty `error` is the model's own
+  // answer; false with an `error` is no answer at all.
+  bool holds = 4;
+  // The condition that evaluated to false, as written, when the runtime names
+  // one. Empty when the verdict holds or the condition is not named.
+  string condition = 5;
+  // Instance the verdict is about, 0 when it is about declared values alone.
+  // Its slots are in `instances`, so a client can read what made it fail.
+  int64 instance_id = 6;
+  // Type of `instance_id`, as an FQN, for naming the object in a report.
+  string instance_type_id = 7;
+  // Set when evaluation failed rather than the model answering false: unbound
+  // features, incommensurable units, an exhausted step budget. `holds` is then
+  // false but is not a verdict.
+  string error = 8;
+  // What kind of failure `error` reports. WRONG_KIND says the symbol named
+  // declares something else, which is a wrong request rather than an undecided
+  // verdict about the model.
+  FailureReason failure_reason = 9;
+}
+
+// VerifyConstraintRequest asks whether a constraint holds, as %constraint does.
+message VerifyConstraintRequest {
+  string model_hash = 1;
+  // FQN of the constraint definition or usage to evaluate.
+  string symbol_id = 2;
+  // Optional FQN of a part/usage to instantiate and evaluate the constraint
+  // against, so the verdict is about concrete values rather than declared
+  // defaults. The prompt evaluates against the object a %instantiate created;
+  // a call carries no session, so it names the subject instead.
+  string subject_symbol_id = 3;
+}
+
+// VerifyConstraintResponse carries the verdict.
+message VerifyConstraintResponse {
+  Verdict verdict = 1;
+  // Instances reachable from the verdict's subject, including it, so its slot
+  // values need no follow-up RPC. Empty when the verdict names no instance.
+  repeated Instance instances = 2;
+  // Set when the request could not be answered at all — an unknown symbol, a
+  // subject that could not be built. `verdict` is then unset.
+  string error = 3;
+  repeated Diagnostic diagnostics = 4;
+}
+
+// VerifyRequirementRequest asks whether a requirement is satisfied, as
+// %requirement does.
+message VerifyRequirementRequest {
+  string model_hash = 1;
+  // FQN of the requirement definition or usage to evaluate.
+  string symbol_id = 2;
+  // Optional FQN of a part/usage to instantiate and evaluate against.
+  string subject_symbol_id = 3;
+}
+
+// VerifyRequirementResponse carries the verdict.
+message VerifyRequirementResponse {
+  Verdict verdict = 1;
+  repeated Instance instances = 2;
+  string error = 3;
+  repeated Diagnostic diagnostics = 4;
+}
+
+// VerifySatisfactionRequest asks whether the satisfaction assertions a model
+// states hold, as %satisfy does. Each is evaluated against an object of its
+// subject, built for the call.
+message VerifySatisfactionRequest {
+  string model_hash = 1;
+  // Optional FQN limiting evaluation: the assertions stated within that
+  // element, or that element itself when it is a named satisfy assertion. Empty
+  // evaluates every assertion the model states.
+  string symbol_id = 2;
+}
+
+// VerifySatisfactionResponse carries one verdict per assertion evaluated, in
+// declaration order. No assertion at all is an empty list, not an error.
+message VerifySatisfactionResponse {
+  repeated Verdict verdicts = 1;
+  repeated Instance instances = 2;
+  string error = 3;
+  repeated Diagnostic diagnostics = 4;
+  // What kind of failure `error` reports.
+  FailureReason failure_reason = 5;
+}
+
+// EvaluateCalcRequest invokes a calculation, as %calc does. Arguments are bound
+// positionally; a calc usage named with no arguments binds its inputs from its
+// own members and reports every output feature it computes (SysML 7.17).
+message EvaluateCalcRequest {
+  string model_hash = 1;
+  // FQN of the calc definition or usage.
+  string symbol_id = 2;
+  // Positional arguments. The notation writes named arguments inside an
+  // invocation's parentheses, which this request does not carry.
+  repeated Value arguments = 3;
+}
+
+// EvaluateCalcResponse carries what the calculation computed.
+message EvaluateCalcResponse {
+  // The value an invocation returned; unset when `outputs` carries the answer.
+  Value result = 1;
+  // Output features of a calc usage evaluated from its own members, in
+  // declaration order. Empty for an invocation with arguments.
+  repeated CalcOutput outputs = 2;
+  string error = 3;
+  repeated Diagnostic diagnostics = 4;
+  // What kind of failure `error` reports.
+  FailureReason failure_reason = 5;
+}
+
+// CalcOutput is one output feature a calc usage computed.
+message CalcOutput {
+  string name = 1;
+  Value value = 2;
 }
 
 // ParseFileRequest specifies the source to parse
@@ -33,7 +187,9 @@ message ParseFileRequest {
     string file_path = 1;
     string content = 2;
   }
-  string content_hash = 3;  // sha256 for cache lookup
+  // Ignored: the service keys its cache by the source it read, so a repeated
+  // parse hits the cache whether or not a client sends this.
+  string content_hash = 3 [deprecated = true];
 }
 
 // ParseFileResponse contains parsed model info
@@ -140,6 +296,41 @@ message ExecuteStateResponse {
   map<string, Value> final_context = 2;
   string error = 3;
   repeated Diagnostic diagnostics = 4;
+}
+
+// ConvertRequest asks for a model in another representation. A model_hash
+// converts the source that parse read, so a file edited since then does not
+// change the answer; a file_path is read afresh and content is carried inline.
+message ConvertRequest {
+  oneof source {
+    string file_path = 1;
+    string content = 2;
+    string model_hash = 6;
+  }
+  // "sysml", "kerml", "text", "ttl", "turtle" or "rdf". Empty infers from
+  // file_path's extension, and is notation for a model_hash, since that is what
+  // parse reads; inline content has neither, so it must say.
+  string from_format = 3;
+  // Format to write, named as in from_format. Empty is rejected.
+  string to_format = 4;
+  // Write notation back out even when the parser could not read all of it,
+  // reporting its syntax errors as diagnostics. Notation to notation only:
+  // every other direction builds a graph, where unreadable declarations would
+  // go missing silently.
+  bool tolerate_syntax_errors = 5;
+}
+
+// ConvertResponse contains the converted model.
+message ConvertResponse {
+  string content = 1;
+  // Formats used, so a caller that let from_format be inferred learns what it
+  // was inferred as.
+  string from_format = 2;
+  string to_format = 3;
+  string error = 4;  // non-empty if the conversion failed; content is unset
+  // Syntax errors tolerated under tolerate_syntax_errors, or those that failed
+  // the conversion.
+  repeated Diagnostic diagnostics = 5;
 }
 
 // SymbolInfo represents any SysML element
@@ -257,5 +448,96 @@ message ServerInfoResponse {
   // Currently defined:
   //   "type_facts" - SymbolInfo carries type_info, multiplicity and
   //                  specializations, which typed code generation needs.
+  //   "convert"    - the Convert RPC writes a model back out as SysML notation
+  //                  or RDF Turtle.
+  //   "verification" - the VerifyConstraint, VerifyRequirement,
+  //                  VerifySatisfaction and EvaluateCalc RPCs answer the
+  //                  questions the REPL's %constraint, %requirement, %satisfy
+  //                  and %calc answer.
+  //   "query"      - the Query RPC evaluates a SysML v2 API & Services Query.
   repeated string capabilities = 2;
+}
+
+// QueryRequest runs a Query against a model the service already parsed.
+message QueryRequest {
+  string model_hash = 1;  // from ParseFile response
+  Query query = 2;
+}
+
+// QueryResponse contains the elements the query selected, in the order they are
+// declared in the model. A query that matches nothing answers with no elements;
+// a query the service cannot evaluate fails the call with INVALID_ARGUMENT
+// rather than answering empty.
+message QueryResponse {
+  repeated QueryResultElement elements = 1;
+}
+
+// Query is the standard's Query resource (SysML v2 API & Services). Its `@type`
+// is fixed and carries no information on the wire, and its identity fields
+// (`@id`, `owningProject`) belong to a repository that stores queries, which
+// this service is not: it evaluates a query against a parsed model.
+message Query {
+  // Elements the query considers, each named by qualified name, together with
+  // every element nested inside them. Empty considers the whole loaded model.
+  // Corresponds to the standard's `scope` of DataIdentity references.
+  repeated string scope = 1;
+  // Properties to report for each matched element. Empty reports all of them.
+  repeated string select = 2;
+  // Filter every considered element must satisfy. Unset matches all of them.
+  Constraint where = 3;
+}
+
+// Constraint is the standard's Constraint, whose `@type` discriminates between
+// its two forms. On the wire the form is the oneof arm, not a type tag.
+message Constraint {
+  oneof constraint {
+    PrimitiveConstraint primitive = 1;
+    CompositeConstraint composite = 2;
+  }
+}
+
+// PrimitiveConstraint compares one property of an element against a value.
+message PrimitiveConstraint {
+  // Negates the comparison's verdict.
+  bool inverse = 1;
+  // Property to compare, as named in docs/API.md's query property table
+  // ("@type", "name", "qualifiedName", ...). An unknown one fails the call.
+  string property = 2;
+  PrimitiveOperator operator = 3;
+  // Values to compare against. The standard writes one value, and its clients
+  // also write a list for `@type`; with `=` the element matches any of them,
+  // while `>` and `<` require exactly one.
+  repeated string value = 4;
+}
+
+// PrimitiveOperator is the standard's PrimitiveConstraint.operator.
+enum PrimitiveOperator {
+  PRIMITIVE_OPERATOR_UNSPECIFIED = 0;  // unset; fails the call
+  PRIMITIVE_OPERATOR_EQUAL = 1;        // "="
+  PRIMITIVE_OPERATOR_GREATER = 2;      // ">"
+  PRIMITIVE_OPERATOR_LESS = 3;         // "<"
+}
+
+// CompositeConstraint combines constraints. An empty constraint list fails the
+// call: it has no defensible verdict.
+message CompositeConstraint {
+  CompositeOperator operator = 1;
+  repeated Constraint constraint = 2;
+}
+
+// CompositeOperator is the standard's CompositeConstraint.operator.
+enum CompositeOperator {
+  COMPOSITE_OPERATOR_UNSPECIFIED = 0;  // unset; fails the call
+  COMPOSITE_OPERATOR_AND = 1;          // "and"
+  COMPOSITE_OPERATOR_OR = 2;           // "or"
+}
+
+// QueryResultElement is one matched element. `id` and `type` are always
+// reported, since an element record is not usable without them; `properties`
+// carries what `select` asked for, omitting a property the element does not
+// have.
+message QueryResultElement {
+  string id = 1;    // qualified name, the identity this service reports
+  string type = 2;  // metamodel type name ("PartUsage", "PartDefinition", ...)
+  map<string, string> properties = 3;
 }

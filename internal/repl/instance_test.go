@@ -131,7 +131,7 @@ func TestRedeclarationEndsDebuggerWithNotice(t *testing.T) {
 	run(t, s, "%action tally")
 
 	res := s.Submit("package Debug {\n\taction tally {\n\t\tfirst start;\n\t\tdone end;\n\t\tthen start end;\n\t}\n}")
-	if len(res.Notices) != 1 || !strings.Contains(res.Notices[0], `action debugging session for "tally" ended`) {
+	if !hasNotice(res, `action debugging session for "tally" ended`) {
 		t.Fatalf("notices = %v, want an ended-session note", res.Notices)
 	}
 	if !strings.Contains(strings.Join(renderResult(res, VerbosityNormal), "\n"), "ended") {
@@ -151,10 +151,51 @@ func TestTopLevelRedeclarationEndsDebugger(t *testing.T) {
 	run(t, s, "%action tally")
 
 	res := s.Submit(tally)
-	if len(res.Notices) != 1 || !strings.Contains(res.Notices[0], `action debugging session for "tally" ended`) {
+	if !hasNotice(res, `action debugging session for "tally" ended`) {
 		t.Fatalf("notices = %v, want an ended-session note", res.Notices)
 	}
 	wants(t, run(t, s, "%step"), "no active action session")
+}
+
+// A behavior is invalidated by a change to what it depends on, not only by a
+// change to itself: redeclaring a type its features are of rewrites what those
+// features mean, so the session ends and names that declaration.
+func TestDebuggerEndsWhenADeclarationItDependsOnChanges(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Kind { attribute size = 1.0; }")
+	res := s.Submit("action tally {\n\tpart k : Kind;\n\tfirst start;\n\tdone end;\n\tthen start end;\n}")
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+	}
+	run(t, s, "%action tally")
+
+	res = s.Submit("part def Kind { attribute size = 2.0; }")
+	// The declaration that moved is named, not the behavior the user left alone.
+	if !hasNotice(res, `action debugging session for "tally" ended (Kind was redeclared)`) {
+		t.Fatalf("notices = %v, want the session ended and Kind named as what changed", res.Notices)
+	}
+	wants(t, run(t, s, "%step"), "no active action session")
+}
+
+// A behavior performed by an object runs against that object, so a submission
+// that drops it ends the session and says which object went.
+func TestDebuggerEndsWhenItsPerformingObjectIsDropped(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Holder { attribute size = 1.0; }")
+	res := s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tdone end;\n\tthen start end;\n}")
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+	}
+	run(t, s, "%instantiate Holder")
+	if started := run(t, s, "%action tally Holder"); !strings.Contains(started, "Started action executor") {
+		t.Fatalf("%%action failed: %s", started)
+	}
+
+	res = s.Submit("part def Holder { attribute size = 2.0; }")
+	if !hasNotice(res, `the object Holder performing it was dropped`) {
+		t.Fatalf("notices = %v, want the performing object named", res.Notices)
+	}
+	wants(t, run(t, s, "%step"), "no active action session", "the object Holder performing it was dropped")
 }
 
 // The same contract for the state machine debugger.
@@ -169,6 +210,334 @@ func TestStateDebuggerSurvivesUnrelatedSubmission(t *testing.T) {
 		t.Errorf("unrelated submission reported %v", res.Notices)
 	}
 	rejects(t, run(t, s, "%current"), "no active")
+}
+
+// --- Instance lifetime across submissions ---
+
+// A declaration that cannot affect an object leaves it alone. The object is
+// carried into the resolution the submission produced, so it is still usable
+// there rather than a stale pointer into the document it was built against.
+func TestInstanceSurvivesUnrelatedDeclaration(t *testing.T) {
+	s := loadFixture(t, "testdata/vehicle_package.sysml")
+	wants(t, run(t, s, "%instantiate Demo::Vehicle"), "ID: 1")
+
+	if res := s.Submit("part def Widget;"); len(res.Notices) != 0 {
+		t.Fatalf("unrelated declaration reported %v", res.Notices)
+	}
+	listing := run(t, s, "%instances")
+	wants(t, listing, "Demo::Vehicle (ID: 1)")
+	rejects(t, listing, "dropped")
+
+	wants(t, run(t, s, "%slots Demo::Vehicle"), "mass = 1500.00")
+	wants(t, run(t, s, "%eval Demo::Vehicle::mass"), "1500.00")
+	// The carried objects hold their identities in the new context — the vehicle
+	// and the engine part inside it — so the next object built does not reuse one.
+	wants(t, run(t, s, "%instantiate Demo::Engine"), "ID: 3")
+}
+
+// A connector its owner declares no name for costs the object nothing: it is
+// materialized again in the resolution the submission produced, under the
+// identity it had, so the object survives an unrelated declaration whole.
+func TestInstanceOwningAnAnonymousConnectorSurvives(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package Demo {
+		port def P;
+		part def A { port p : P; }
+		part def B { port q : P; }
+		part def Sys { part a : A; part b : B; connect a.p to b.q; }
+	}`)
+	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
+	slots := run(t, s, "%slots Demo::Sys")
+	wants(t, slots, "(anonymous connector)")
+	connector := connectorLine(t, slots)
+
+	for _, decl := range []string{"part def Widget;", "part def Gadget;"} {
+		if res := s.Submit(decl); len(res.Notices) != 0 {
+			t.Fatalf("%s reported %v", decl, res.Notices)
+		}
+		listing := run(t, s, "%instances")
+		wants(t, listing, "Demo::Sys (ID: 1)")
+		rejects(t, listing, "dropped")
+		// The same connector of the same object is named the same, submission
+		// after submission, rather than costing an identity each time.
+		if got := connectorLine(t, run(t, s, "%slots Demo::Sys")); got != connector {
+			t.Errorf("after %s the connector reads %q, want %q", decl, got, connector)
+		}
+	}
+	// Nothing else took the identity the connector kept.
+	wants(t, run(t, s, "%instantiate Demo::A"), "ID: 7")
+
+	// Submissions nothing reads the connectors between keep the identity too.
+	s.Submit("part def Gizmo;")
+	s.Submit("part def Doodad;")
+	if got := connectorLine(t, run(t, s, "%slots Demo::Sys")); got != connector {
+		t.Errorf("after two unread submissions the connector reads %q, want %q", got, connector)
+	}
+}
+
+// connectorLine returns the line of a %slots listing that holds the object's
+// anonymous connector.
+func connectorLine(t *testing.T, listing string) string {
+	t.Helper()
+	for _, line := range strings.Split(listing, "\n") {
+		if strings.Contains(line, "(anonymous connector)") {
+			return strings.TrimSpace(line)
+		}
+	}
+	t.Fatalf("no anonymous connector in:\n%s", listing)
+	return ""
+}
+
+// An object is invalidated by a change to what its declaration depends on, not
+// only by a change to that declaration: redeclaring a type one of its features
+// is of rewrites what the object holds.
+func TestInstanceDropsWhenADeclarationItDependsOnChanges(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Kind { attribute size = 1.0; }")
+	s.Submit("part def Holder { part k : Kind; }")
+	wants(t, run(t, s, "%instantiate Holder"), "ID: 1")
+
+	res := s.Submit("part def Kind { attribute size = 2.0; }")
+	if !hasNotice(res, "1 instance was dropped") {
+		t.Fatalf("notices = %v, want the dropped instance counted", res.Notices)
+	}
+	wants(t, run(t, s, "%instances"), "no instances created", "1 instance was dropped")
+}
+
+// A value an object computed from an expression is computed again against the
+// declarations that expression reads now, so a change to one of them updates the
+// object rather than going unseen or costing it.
+func TestInstanceRederivesAValueWhenAnExpressionItReadsChanges(t *testing.T) {
+	s := NewSession()
+	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 2.0; }")
+	s.Submit("part def A { attribute m = double(3.0); }")
+	wants(t, run(t, s, "%instantiate A"), "ID: 1")
+	wants(t, run(t, s, "%slots A"), "m = 6.00")
+
+	res := s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
+	if hasNotice(res, "instance was dropped") {
+		t.Fatalf("notices = %v, want the object kept", res.Notices)
+	}
+	wants(t, run(t, s, "%slots A"), "m = 9.00")
+}
+
+// A connector holds the features it connects rather than values of its own, so
+// an end reads what the feature holds now: a change to what a connected value is
+// computed from must not leave the end disagreeing with it.
+func TestConnectorEndsAreReadAgainAfterADependencyChanges(t *testing.T) {
+	s := NewSession()
+	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 2.0; }")
+	s.Submit(`package Demo {
+		part def A { attribute x = double(3.0); }
+		part def B { attribute y = 1.0; }
+		part def Sys { part a : A; part b : B; connection c1 connect a.x to b.y; }
+	}`)
+	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
+	wants(t, run(t, s, "%slots Demo::Sys"), "x = 6.00", "c1 = Instance(ID: 4)", "source = 6.00")
+
+	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
+	// The end reads the new value, under the identity the connector kept.
+	wants(t, run(t, s, "%slots Demo::Sys"), "x = 9.00", "c1 = Instance(ID: 4)", "source = 9.00")
+
+	// Nothing else took that identity.
+	wants(t, run(t, s, "%instantiate Demo::A"), "ID: 5")
+}
+
+// A collection holds copies of what the features subsetting it hold, so it is
+// collected again when one of those is derived from a declaration that changed.
+func TestCollectionIsCollectedAgainAfterADependencyChanges(t *testing.T) {
+	s := NewSession()
+	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 2.0; }")
+	s.Submit("part def A { attribute pool : ScalarValues::Real[*]; attribute one :> pool = double(3.0); }")
+	wants(t, run(t, s, "%instantiate A"), "ID: 1")
+	wants(t, run(t, s, "%slots A"), "pool = [6.00]", "one = 6.00")
+
+	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
+	wants(t, run(t, s, "%slots A"), "pool = [9.00]", "one = 9.00")
+
+	// A collection of objects is kept, so its members keep their identities.
+	s.Submit("package D { part def B; part def C { part xs : B[3]; } }")
+	wants(t, run(t, s, "%instantiate D::C"), "ID:")
+	held := run(t, s, "%slots D::C")
+	s.Submit("part def Widget;")
+	if got := run(t, s, "%slots D::C"); got != held {
+		t.Errorf("the objects of the collection read\n%s\nwant\n%s", got, held)
+	}
+}
+
+// A variation's default states which variant an object selects rather than a
+// value to compute, so the object bound to it is the same object across a
+// submission rather than one materialized again under a new identity.
+func TestSelectedVariantKeepsItsIdentity(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package Demo {
+		part def Engine { attribute size = 1.0; }
+		abstract part family {
+			variation part engine : Engine {
+				variant part electric : Engine;
+				variant part petrol : Engine;
+			}
+		}
+		part sedan :> family { part :>> engine = engine::electric; }
+	}`)
+	wants(t, run(t, s, "%instantiate Demo::sedan"), "ID: 1")
+	wants(t, run(t, s, "%slots Demo::sedan"), "engine = electric (Instance ID: 2)")
+
+	if res := s.Submit("part def Widget;"); len(res.Notices) != 0 {
+		t.Fatalf("an unrelated declaration reported %v", res.Notices)
+	}
+	wants(t, run(t, s, "%slots Demo::sedan"), "engine = electric (Instance ID: 2)")
+	wants(t, run(t, s, "%instantiate Demo::Engine"), "ID: 3")
+
+	// A change to which variant is selected still invalidates the object.
+	res := s.Submit(`package Demo {
+		part def Engine { attribute size = 1.0; }
+		abstract part family {
+			variation part engine : Engine {
+				variant part electric : Engine;
+				variant part petrol : Engine;
+			}
+		}
+		part sedan :> family { part :>> engine = engine::petrol; }
+	}`)
+	if !hasNotice(res, "dropped because the declarations changed") {
+		t.Fatalf("notices = %v, want the object of the changed selection dropped", res.Notices)
+	}
+}
+
+// The declarations an expression reads are reached through other expressions
+// too, so a change two reads away is seen as well.
+func TestInstanceRederivesAValueThroughAChainOfReads(t *testing.T) {
+	s := NewSession()
+	s.Submit("calc def inner { in x; return : ScalarValues::Real = x * 2.0; }")
+	s.Submit("calc def outer { in y; return : ScalarValues::Real = inner(y) + 1.0; }")
+	s.Submit("part def A { attribute m = outer(3.0); }")
+	wants(t, run(t, s, "%instantiate A"), "ID: 1")
+	wants(t, run(t, s, "%slots A"), "m = 7.00")
+
+	s.Submit("calc def inner { in x; return : ScalarValues::Real = x * 3.0; }")
+	wants(t, run(t, s, "%slots A"), "m = 10.00")
+
+	s.Submit("attribute g = 5.0;")
+	s.Submit("attribute h = g * 2.0;")
+	s.Submit("part def B { attribute m = h + 1.0; }")
+	wants(t, run(t, s, "%instantiate B"), "ID:")
+	wants(t, run(t, s, "%slots B"), "m = 11.00")
+
+	s.Submit("attribute g = 7.0;")
+	wants(t, run(t, s, "%slots B"), "m = 15.00")
+}
+
+// A submission that invalidates some of what the session holds says so even
+// though the rest survived: a listing of the survivors alone would read as
+// though nothing went.
+func TestInstancesReportsASurvivorAlongsideALoss(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def A { attribute x = 1.0; }")
+	s.Submit("part def B { attribute y = 2.0; }")
+	wants(t, run(t, s, "%instantiate A"), "ID: 1")
+	wants(t, run(t, s, "%instantiate B"), "ID: 2")
+
+	res := s.Submit("part def B { attribute y = 3.0; }")
+	if !hasNotice(res, "1 instance was dropped") {
+		t.Fatalf("notices = %v, want one dropped instance counted", res.Notices)
+	}
+	listing := run(t, s, "%instances")
+	wants(t, listing, "A (ID: 1)", "1 instance was also dropped")
+	rejects(t, listing, "B (ID")
+}
+
+// A submission that carries nothing over still takes over the identities of a
+// context a debugging session goes on materializing objects through.
+func TestSubmissionKeepsTheIdentitiesADebuggedContextHandedOut(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def Holder { attribute size = 1.0; }")
+	res := s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tdone end;\n\tthen start end;\n}")
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+	}
+	wants(t, run(t, s, "%instantiate Holder"), "ID: 1")
+	if started := run(t, s, "%action tally"); !strings.Contains(started, "Started action executor") {
+		t.Fatalf("%%action failed: %s", started)
+	}
+
+	// The object goes with its declaration, so nothing is carried over — but the
+	// session still runs against the context that handed out identity 1.
+	res = s.Submit("part def Holder { attribute size = 2.0; }")
+	if !hasNotice(res, "1 instance was dropped") {
+		t.Fatalf("notices = %v, want the redeclared object dropped", res.Notices)
+	}
+	rejects(t, run(t, s, "%tokens"), "no active")
+	wants(t, run(t, s, "%instantiate Holder"), "ID: 2")
+}
+
+// A loss belongs to the submission that caused it: once a later one has taken
+// nothing, the listing stops explaining a loss it no longer describes.
+func TestInstancesStopsRepeatingAnOldLoss(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def A { attribute x = 1.0; }")
+	s.Submit("part def B { attribute y = 2.0; }")
+	run(t, s, "%instantiate A")
+	run(t, s, "%instantiate B")
+	s.Submit("part def B { attribute y = 3.0; }")
+	wants(t, run(t, s, "%instances"), "1 instance was also dropped")
+
+	s.Submit("part def Widget;")
+	listing := run(t, s, "%instances")
+	wants(t, listing, "A (ID: 1)")
+	rejects(t, listing, "dropped")
+}
+
+// The instances a submission invalidates are counted in a notice, so the
+// objects created before it do not disappear without a word.
+func TestSubmissionReportsTheInstancesItDropped(t *testing.T) {
+	s := loadFixture(t, "testdata/vehicle_package.sysml")
+	run(t, s, "%instantiate Demo::Vehicle")
+	run(t, s, "%instantiate Demo::Engine")
+
+	// Redeclaring the package the two definitions live in rewrites both of them.
+	res := s.Submit("package Demo { part def Engine; part def Vehicle; }")
+	if !hasNotice(res, "2 instances were dropped") {
+		t.Fatalf("notices = %v, want the dropped instances counted", res.Notices)
+	}
+	// A note reads as a consequence of the declaration it follows, so it comes
+	// after the accepted line rather than before it.
+	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
+	wants(t, out, "2 instances were dropped")
+	if strings.Index(out, "✓ package Demo") > strings.Index(out, "note:") {
+		t.Errorf("note printed before the declaration it followed from:\n%s", out)
+	}
+}
+
+// A command that would drive an ended action session says which submission
+// ended it, instead of reporting only that nothing is active.
+func TestEndedActionSessionExplainsItselfToEveryCommand(t *testing.T) {
+	s := loadFixture(t, "testdata/action_debug.sysml")
+	run(t, s, "%action tally")
+	s.Submit("package Debug {\n\taction tally {\n\t\tfirst start;\n\t\tdone end;\n\t\tthen start end;\n\t}\n}")
+
+	const why = `the action session for "tally" ended when Debug::tally was redeclared at submission 2`
+	wants(t, run(t, s, "%step"), why)
+	wants(t, run(t, s, "%tokens"), why)
+	wants(t, run(t, s, "%continue"), why)
+	wants(t, run(t, s, "%stop"), "ended when Debug::tally was redeclared at submission 2")
+
+	// Starting a new session clears the explanation with it.
+	run(t, s, "%action tally")
+	rejects(t, run(t, s, "%step"), "no active action session")
+}
+
+// The same for the state machine debugger, whose commands are %current and
+// %advance.
+func TestEndedStateSessionExplainsItselfToEveryCommand(t *testing.T) {
+	s := loadFixture(t, "testdata/state_debug.sysml")
+	run(t, s, "%state Cycle")
+	s.Submit("package Debug {\n\tstate Cycle {\n\t\tinitial init;\n\t\tfinal done;\n\t\tinit then done;\n\t}\n}")
+
+	const why = `the state machine session for "Cycle" ended when Debug::Cycle was redeclared at submission 2`
+	wants(t, run(t, s, "%current"), why)
+	wants(t, run(t, s, "%advance 1"), why)
+	wants(t, run(t, s, "%events"), why)
 }
 
 // A member of a nested part is answered against that part, not against the
@@ -247,4 +616,17 @@ func TestSlotsTruncateWideNesting(t *testing.T) {
 	if n := strings.Count(got, "\n"); n > maxSlotLines+10 {
 		t.Errorf("listing ran to %d lines, want it bounded near %d:\n%.400s", n, maxSlotLines, got)
 	}
+}
+
+// Adding a member to a package leaves the rest of its body as it was, so a
+// debugging session over another member of it keeps running.
+func TestDebugSessionSurvivesAnAdditionToItsPackage(t *testing.T) {
+	s := loadFixture(t, "testdata/action_debug.sysml")
+	run(t, s, "%action tally")
+	res := s.Submit("package Debug { part def Widget; }")
+
+	if hasNotice(res, "debugging session") {
+		t.Errorf("notices = %v, want the untouched session kept", res.Notices)
+	}
+	wants(t, run(t, s, "%tokens"), "Active tokens")
 }

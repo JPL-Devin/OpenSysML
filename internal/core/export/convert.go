@@ -88,7 +88,7 @@ var formatNames = map[string]Format{
 	"rdf":    FormatTurtle,
 }
 
-// ParseFormat resolves a format name, as given to `-from`/`-to`.
+// ParseFormat resolves a format name, as given to `-convert`/`-from`.
 func ParseFormat(name string) (Format, error) {
 	if f, ok := formatNames[strings.ToLower(strings.TrimSpace(name))]; ok {
 		return f, nil
@@ -97,7 +97,7 @@ func ParseFormat(name string) (Format, error) {
 }
 
 // UnknownFormatError reports that a path does not say which format to write.
-// The remedy differs by surface — the command line has -from/-to, the REPL only
+// The remedy differs by surface — the command line has -convert/-from, the REPL only
 // has the file name — so the caller supplies it with Advise.
 type UnknownFormatError struct {
 	Path string
@@ -120,6 +120,10 @@ func (e *UnknownFormatError) Error() string {
 	return msg
 }
 
+// ExtensionAdvice is the remedy every surface shares: the file name says which
+// format to write. A surface with a format flag names it alongside this.
+const ExtensionAdvice = "name the file with a .sysml, .kerml or .ttl extension"
+
 // Advise returns err with the surface's remedy attached when it is an
 // *UnknownFormatError, and unchanged otherwise.
 func Advise(err error, advice string) error {
@@ -131,7 +135,7 @@ func Advise(err error, advice string) error {
 }
 
 // FormatOfPath infers the format from a file extension, so that the common case
-// needs no -from/-to. A path that names no format yields an
+// needs no -from. A path that names no format yields an
 // *UnknownFormatError carrying no advice; pass it through Advise to add the
 // remedy the calling surface offers.
 func FormatOfPath(path string) (Format, error) {
@@ -153,6 +157,12 @@ func FormatOfPath(path string) (Format, error) {
 type SyntaxError struct {
 	Name     string
 	Messages []string
+	// Diags are the diagnostics behind Messages, for a caller that reports them
+	// with their spans. Empty when the input is not notation, since a Turtle
+	// reader reports a message and no span.
+	Diags []parser.Diagnostic
+	// File is what Diags' spans point into; nil when Diags is empty.
+	File *source.SourceFile
 }
 
 func (e *SyntaxError) Error() string {
@@ -255,5 +265,5 @@ func syntaxError(name string, file *source.SourceFile, p *parser.Parser) *Syntax
 		pos := lines.PosAt(diag.Span.Offset)
 		messages = append(messages, fmt.Sprintf("%d:%d: %s", pos.Line, pos.Col, diag.Message))
 	}
-	return &SyntaxError{Name: name, Messages: messages}
+	return &SyntaxError{Name: name, Messages: messages, Diags: p.Diagnostics, File: file}
 }

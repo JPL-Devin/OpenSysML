@@ -55,6 +55,24 @@ func TestResolveQualifiedFromRoot(t *testing.T) {
 	}
 }
 
+// A segment is looked up under the name the index registered the namespace
+// walked so far under, not under the path the reference spells: an inner
+// namespace does not borrow a same-named top-level one's members.
+func TestResolveQualifiedDoesNotReachASameNamedOuterNamespace(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"lib.sysml": "package Mid { package Inner { part def Thing; } }",
+		"app.sysml": `package Outer {
+			package Mid { package Inner; }
+		}`,
+	})
+	outer := scopeOf(t, idx.DocumentRoot("app.sysml"), "Outer")
+
+	r := New(idx)
+	if _, ok := r.ResolveQualified(outer, qn(false, "Mid", "Inner", "Thing")); ok {
+		t.Error("Outer::Mid::Inner declares no Thing, and the unrelated Mid::Inner::Thing is not it")
+	}
+}
+
 func TestResolveQualifiedMissingSegment(t *testing.T) {
 	idx := indexOf(t, map[string]string{
 		"a.sysml": "package P { package Q; }",

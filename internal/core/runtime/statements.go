@@ -200,7 +200,7 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 		if s.Value != nil {
 			evaluated, err := e.evalIn(s.Scope).Eval(s.Value)
 			if err != nil {
-				return flowNext, fmt.Errorf("eval returned expression: %w", err)
+				return flowNext, fmt.Errorf("evaluating the returned expression: %w", err)
 			}
 			value = evaluated
 		}

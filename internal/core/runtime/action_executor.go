@@ -26,10 +26,12 @@ type ActionExecutor struct {
 	breakpoints map[string]bool
 	// firedBreakpoints records the token visits a breakpoint already stopped on.
 	firedBreakpoints map[breakpointVisit]bool
-	results          map[string]Value  // Accumulated results from consumed final tokens
-	mergeVisited     map[ast.Node]bool // Track merge node visits
-	inputs           map[string]Value  // Input parameter bindings seeded into the initial token
-	pausedAt         string            // Node name RunToCompletion stopped at, empty when it ran to the end
+	// data holds the values this performance's features hold: one space every
+	// token reads and writes, so branches out of a fork see each other's effects.
+	data         map[string]Value
+	mergeVisited map[ast.Node]bool // Track merge node visits
+	inputs       map[string]Value  // Input parameter bindings, applied over attribute defaults
+	pausedAt     string            // Node name RunToCompletion stopped at, empty when it ran to the end
 
 	// runStarted marks this executor's run as begun, so the step budget is reset
 	// once however many calls the run is driven over.
@@ -42,7 +44,7 @@ type breakpointVisit struct {
 	node  ast.Node
 }
 
-// SetInputs binds input parameter values that seed the initial token's data.
+// SetInputs binds input parameter values into the action's feature space.
 // Inputs are applied after attribute defaults, so they override defaults with
 // the same name. Must be called before initialize().
 func (e *ActionExecutor) SetInputs(inputs map[string]Value) {
@@ -74,7 +76,7 @@ func newActionExecutor(ctx *Context, action *symbols.Symbol, self *Instance) (*A
 		breakpoints: make(map[string]bool),
 
 		firedBreakpoints: make(map[breakpointVisit]bool),
-		results:          make(map[string]Value),
+		data:             make(map[string]Value),
 		mergeVisited:     make(map[ast.Node]bool),
 	}
 
@@ -403,9 +405,9 @@ func (e *ActionExecutor) NodeNames() []string {
 	return names
 }
 
-// initializeAttributes populates tokenData with the attribute defaults lowering
-// recorded, evaluated in the scope the action's body was declared in.
-func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error {
+// initializeAttributes populates the feature space with the attribute defaults
+// lowering recorded, evaluated in the scope the action's body was declared in.
+func (e *ActionExecutor) initializeAttributes() error {
 	ec := NewEvalContext(e.ctx, e.graph.Scope)
 	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
@@ -413,7 +415,7 @@ func (e *ActionExecutor) initializeAttributes(tokenData map[string]Value) error 
 		if err != nil {
 			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
 		}
-		tokenData[attr.Name] = value
+		e.data[attr.Name] = value
 	}
 
 	return nil
@@ -430,23 +432,20 @@ func (e *ActionExecutor) initialize() error {
 
 	initialNode := e.graph.Initial
 
-	// Spawn initial token
-	tokenData := make(map[string]Value)
-
-	// Initialize with action attribute defaults
-	if err := e.initializeAttributes(tokenData); err != nil {
+	// Initialize the feature space with the action's attribute defaults.
+	if err := e.initializeAttributes(); err != nil {
 		return fmt.Errorf("initialize attributes: %w", err)
 	}
 
 	// Apply input parameter bindings, overriding any defaults with the same name.
 	for name, value := range e.inputs {
-		tokenData[name] = value
+		e.data[name] = value
 	}
 
+	// Spawn initial token
 	token := Token{
 		ID:       e.nextTokenID,
 		Location: initialNode,
-		Data:     tokenData,
 	}
 	e.nextTokenID++
 	e.tokens = append(e.tokens, token)
@@ -511,25 +510,22 @@ func (e *ActionExecutor) stepInitialNode(tokenIdx int) error {
 
 // stepFinalNode consumes token and checks for completion.
 func (e *ActionExecutor) stepFinalNode(tokenIdx int) error {
-	token := &e.tokens[tokenIdx]
-
-	// Save token data to results before consuming
-	for k, v := range token.Data {
-		e.results[k] = v
-	}
-
-	// Remove token
-	e.tokens = append(e.tokens[:tokenIdx], e.tokens[tokenIdx+1:]...)
-
-	// Check if all tokens consumed
-	if len(e.tokens) == 0 {
-		e.state = StateCompleted
-	}
-
+	e.retireToken(tokenIdx)
 	return nil
 }
 
-// stepForkNode spawns N tokens (one per successor).
+// retireToken ends a token's flow. Its effects live in the action's features, so
+// retiring it carries nothing out; the action completes once no token is left.
+func (e *ActionExecutor) retireToken(tokenIdx int) {
+	e.tokens = append(e.tokens[:tokenIdx], e.tokens[tokenIdx+1:]...)
+
+	if len(e.tokens) == 0 {
+		e.state = StateCompleted
+	}
+}
+
+// stepForkNode spawns N tokens (one per successor). A fork duplicates control
+// only: its branches go on reading and writing the action's own features.
 func (e *ActionExecutor) stepForkNode(tokenIdx int) error {
 	token := &e.tokens[tokenIdx]
 	node := token.Location.(*ast.ForkNode)
@@ -545,7 +541,6 @@ func (e *ActionExecutor) stepForkNode(tokenIdx int) error {
 		newToken := Token{
 			ID:       e.nextTokenID,
 			Location: succ,
-			Data:     copyTokenData(token.Data), // Copy data to each fork
 		}
 		e.nextTokenID++
 		newTokens = append(newTokens, newToken)
@@ -582,23 +577,11 @@ func (e *ActionExecutor) stepJoinNode(tokenIdx int) error {
 		return nil
 	}
 
-	// Ready: collect all join tokens and remaining tokens
-	joinTokens := make([]Token, 0, tokensAtJoin)
+	// Ready: the branches' tokens are consumed, every other token stays.
 	remainingTokens := make([]Token, 0, len(e.tokens)-tokensAtJoin)
-
 	for _, t := range e.tokens {
-		if t.Location == node {
-			joinTokens = append(joinTokens, t)
-		} else {
+		if t.Location != node {
 			remainingTokens = append(remainingTokens, t)
-		}
-	}
-
-	// Merge token data (last-write-wins)
-	mergedData := make(map[string]Value)
-	for _, t := range joinTokens {
-		for k, v := range t.Data {
-			mergedData[k] = v
 		}
 	}
 
@@ -611,11 +594,11 @@ func (e *ActionExecutor) stepJoinNode(tokenIdx int) error {
 		return fmt.Errorf("join node %s has multiple successors", node.Name)
 	}
 
-	// Create output token at successor
+	// Create output token at successor. The branches wrote to the action's own
+	// features, so there is nothing per-branch left to merge here.
 	outputToken := Token{
 		ID:       e.nextTokenID,
 		Location: successors[0],
-		Data:     mergedData,
 	}
 	e.nextTokenID++
 
@@ -683,11 +666,10 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 		return fmt.Errorf("decision node %s has no successors", decisionNode.Name)
 	}
 
-	// Evaluate guards for each successor. A guard on an edge is written among the
-	// action's own members, so it resolves in the action's scope; the token's data
-	// is pushed over it, so a token value shadows a same-named declaration.
+	// A guard resolves in the action's scope, with the action's current feature
+	// values pushed over it so they shadow same-named declarations.
 	ec := NewEvalContext(e.ctx, e.graph.Scope)
-	ec.Push(token.Data) // Make token data available to guard expressions
+	ec.Push(e.data)
 	defer ec.beginStep()()
 
 	// Two-pass evaluation:
@@ -737,17 +719,6 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 	return fmt.Errorf("decision node %s: no true guard", decisionNode.Name)
 }
 
-// copyTokenData creates a shallow copy of token data map.
-// This is sufficient as Value structs are copied by value, and pointer
-// fields (Sequence, Set) are intended to be shared across forked tokens.
-func copyTokenData(data map[string]Value) map[string]Value {
-	copy := make(map[string]Value)
-	for k, v := range data {
-		copy[k] = v
-	}
-	return copy
-}
-
 // stepActionExecutionNode evaluates inline expression or invokes nested action.
 func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 	token := &e.tokens[tokenIdx]
@@ -757,10 +728,9 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 	}
 
 	if node.Expression != nil {
-		// Evaluate inline expression in the action's own scope, the token's data
-		// shadowing it.
+		// Evaluate in the action's scope, its feature values shadowing it.
 		ec := NewEvalContext(e.ctx, e.graph.Scope)
-		ec.Push(token.Data) // Make token data available
+		ec.Push(e.data)
 		defer ec.beginStep()()
 		result, err := ec.Eval(node.Expression)
 		if err != nil {
@@ -775,31 +745,33 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 				outputPin = flows[0].SourcePin
 			}
 		}
-		token.Data[outputPin] = result
+		e.data[outputPin] = result
 	} else if node.ActionRef != nil {
 		outputs, err := invokeAction(
-			e.ctx, e.action.Scope, actionInvocation{target: node.ActionRef}, token.Data,
+			e.ctx, e.action.Scope, actionInvocation{target: node.ActionRef}, e.data,
 		)
 		if err != nil {
 			return err
 		}
 		for name, value := range outputs {
-			token.Data[name] = value
+			e.data[name] = value
 		}
 	}
 
 	// Advance to successor
 	successors := e.graph.Edges[token.Location]
-	if len(successors) == 0 {
-		return fmt.Errorf("action node %s has no successors", node.Name)
-	}
 	if len(successors) > 1 {
 		return fmt.Errorf("action node %s has multiple successors (decision nodes not yet supported)", node.Name)
 	}
 
 	// Apply data flows: transfer data from this node's output pins to target input pins
-	if err := e.applyDataFlows(token, node); err != nil {
+	if err := e.applyDataFlows(node); err != nil {
 		return err
+	}
+
+	if len(successors) == 0 {
+		e.retireToken(tokenIdx)
+		return nil
 	}
 
 	token.Location = successors[0]
@@ -821,7 +793,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	if isAccept && accept.Trigger != nil {
 		// A trigger waits for time to pass or for a condition to hold rather
 		// than for a message, so it is answered here and not from the queue.
-		ready, err := e.triggerHolds(accept, token)
+		ready, err := e.triggerHolds(accept)
 		if err != nil {
 			return err
 		}
@@ -872,40 +844,44 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 				return fmt.Errorf("%w: accept %s: %s carries no single value to bind",
 					ErrNoValue, accept.ParamName, orAnonymousSignal(msg.SignalType))
 			}
-			token.Data[accept.ParamName] = value
+			e.data[accept.ParamName] = value
 		}
 	}
 
 	// A usage that performs another action (perform X / action a : X / a = X(...))
 	// runs that action to completion before its own body.
 	if inv, ok := nestedInvocation(usage); ok {
-		outputs, err := invokeAction(e.ctx, e.action.Scope, inv, token.Data)
+		outputs, err := invokeAction(e.ctx, e.action.Scope, inv, e.data)
 		if err != nil {
 			return err
 		}
 		for name, value := range outputs {
-			token.Data[name] = value
+			e.data[name] = value
 		}
 	}
 
 	// Execute the node's lowered statements in declaration order.
-	if err := e.executeBody(usage, token); err != nil {
+	if err := e.executeBody(usage); err != nil {
 		return err
 	}
 
 	// Advance to successor
 	successors := e.graph.Edges[token.Location]
-	if len(successors) == 0 {
-		return fmt.Errorf("nested action %s has no successors", ActionNodeName(usage))
-	}
 	if len(successors) > 1 {
 		return fmt.Errorf("nested action %s has multiple successors", ActionNodeName(usage))
 	}
 
 	// The flows out of this node carry what its body produced to the pins the
 	// nodes downstream read.
-	if err := e.applyDataFlows(token, token.Location); err != nil {
+	if err := e.applyDataFlows(token.Location); err != nil {
 		return err
+	}
+
+	// A node the flow leads no further from is where this flow ends: the action
+	// inherits its `done` snapshot, so no succession to a final node is needed.
+	if len(successors) == 0 {
+		e.retireToken(tokenIdx)
+		return nil
 	}
 
 	token.Location = successors[0]
@@ -914,15 +890,15 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 
 // triggerHolds reports whether the time or change event an accept waits for has
 // happened. A change event holds when its condition does, which every step
-// re-evaluates in the action's scope with the token's data over it — the same
+// re-evaluates in the action's scope with its feature values over it — the same
 // polling a state machine's change transitions use. A time event needs a clock
 // the action executor does not have, so it is reported rather than treated as
 // having already fired.
-func (e *ActionExecutor) triggerHolds(accept lower.Accept, token *Token) (bool, error) {
+func (e *ActionExecutor) triggerHolds(accept lower.Accept) (bool, error) {
 	switch t := accept.Trigger.(type) {
 	case *ast.ChangeEvent:
 		ec := NewEvalContext(e.ctx, e.graph.Scope)
-		ec.Push(token.Data)
+		ec.Push(e.data)
 		defer ec.beginStep()()
 		result, err := ec.Eval(t.Condition)
 		if err != nil {
@@ -947,18 +923,19 @@ func (e *ActionExecutor) stepStatementNode(tokenIdx int) error {
 	token := &e.tokens[tokenIdx]
 	node := token.Location
 
-	if err := e.executeBody(node, token); err != nil {
+	if err := e.executeBody(node); err != nil {
 		return err
 	}
 
 	successors := e.graph.Edges[node]
-	if len(successors) == 0 {
-		// As for a nested action, a node the token cannot leave is reported
-		// rather than treated as the end of the action.
-		return fmt.Errorf("%s node has no successors", statementNodeKeyword(node))
-	}
 	if len(successors) > 1 {
 		return fmt.Errorf("%s node has multiple successors", statementNodeKeyword(node))
+	}
+
+	// As for a nested action, a node with nothing after it ends the flow.
+	if len(successors) == 0 {
+		e.retireToken(tokenIdx)
+		return nil
 	}
 
 	token.Location = successors[0]
@@ -989,16 +966,16 @@ func statementNodeKeyword(node ast.Node) string {
 // what the target node reads when the token reaches it. A flow whose source pin
 // holds nothing moves nothing and is reported, since a declared flow that
 // silently carries no payload is a wrong result rather than a no-op.
-func (e *ActionExecutor) applyDataFlows(token *Token, sourceNode ast.Node) error {
+func (e *ActionExecutor) applyDataFlows(sourceNode ast.Node) error {
 	for _, flow := range e.graph.DataFlows[sourceNode] {
-		sourceData, ok := token.Data[flow.SourcePin]
+		sourceData, ok := e.data[flow.SourcePin]
 		if !ok {
 			return fmt.Errorf(
 				"%s: %s produced no value at %s",
 				flowDescription(flow), nodeDescription(sourceNode), orAnyPin(flow.SourcePin),
 			)
 		}
-		token.Data[flow.TargetPin] = sourceData
+		e.data[flow.TargetPin] = sourceData
 	}
 	return nil
 }
@@ -1046,9 +1023,19 @@ func (e *ActionExecutor) State() ExecutionState {
 	return e.state
 }
 
-// Results returns accumulated results from final nodes.
+// Results returns the values the action's features currently hold: one space
+// every token shares, so every branch's effects are reported.
 func (e *ActionExecutor) Results() map[string]Value {
-	return e.results
+	results := make(map[string]Value, len(e.data))
+	for name, value := range e.data {
+		results[name] = value
+	}
+	return results
+}
+
+// Data returns the action's live feature space, which its nodes read and write.
+func (e *ActionExecutor) Data() map[string]Value {
+	return e.data
 }
 
 // SetBreakpoint adds a breakpoint at the given node name.

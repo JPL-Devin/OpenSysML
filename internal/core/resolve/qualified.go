@@ -25,7 +25,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		if res.ok {
 			r.recordPart(qn, 0, res.sym)
 		} else {
-			r.unresolved(qn)
+			r.unresolved(scope, qn)
 		}
 		return res
 	}
@@ -48,7 +48,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		cur = res.sym
 	}
 	if cur == nil {
-		sym, n := r.lookupGlobalTop(first)
+		sym, n := r.lookupGlobalTop(scope, first)
 		if n > 1 {
 			r.ambiguous(qn, n)
 			return resolution{nil, false}
@@ -62,7 +62,8 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 	r.recordPart(qn, 0, cur)
 
 	// Walk remaining segments as local members of the current symbol's scope.
-	from := r.referringNamespaceFQN(scope)
+	from := r.ReferringNamespaceFQN(scope)
+	curFQN := r.registeredFQN(cur)
 	for i, seg := range qn.Parts[1:] {
 		var all []*symbols.Symbol
 
@@ -71,30 +72,34 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 			all = symbols.PreferDeclared(cur.Scope.LookupLocalAll(seg.Text))
 		}
 
-		// If local lookup fails (or no scope), try building the FQN and looking in the global index.
-		// This handles cases like ScalarValues::Real where ScalarValues is a package
-		// from stdlib that was indexed with full FQNs but doesn't have a populated Scope.
+		// If local lookup fails (or no scope), look the segment up under the FQN
+		// walked so far. This handles cases like ScalarValues::Real where
+		// ScalarValues is a package from stdlib that was indexed with full FQNs
+		// but doesn't have a populated Scope, at any nesting depth.
+		memberFQN := curFQN + "::" + seg.Text
 		if len(all) == 0 && r.idx != nil {
-			// For the simple 2-part case (most common), build FQN from current symbol + segment
-			if i == 0 && cur != nil {
-				// First segment after the initial lookup: cur::seg
-				fqn := cur.Name + "::" + seg.Text
-				candidates := r.idx.LookupQualifiedFrom(fqn, from)
-				if len(candidates) == 1 {
-					all = candidates
-				} else if len(candidates) > 1 {
-					r.ambiguous(qn, len(candidates))
-					return resolution{nil, false}
-				}
+			found := r.idx.LookupQualifiedFrom(memberFQN, from)
+			candidates := r.admittedUnder(r.documentOf(scope), from, memberFQN, found)
+			switch {
+			case len(candidates) == 1:
+				all = candidates
+			case len(candidates) > 1:
+				r.ambiguous(qn, len(candidates))
+				return resolution{nil, false}
+			case len(found) > 0:
+				// Every candidate the name reaches is filtered out, so it is not a
+				// member of the namespace it appears under (KerML 8.2.4) and no
+				// other route may recover it.
+				r.unresolved(scope, qn)
+				return resolution{nil, false}
 			}
-			// TODO: Handle deeper nesting if needed
 		}
 
 		// The name exists under cur but only because a private import surfaced it
 		// there: it is invisible from here (KerML 8.2.3.3), and the member search
 		// below reaches cached symbols by a route that does not know that.
-		if len(all) == 0 && r.idx != nil && r.idx.HiddenFrom(cur.Name+"::"+seg.Text, from) {
-			r.unresolved(qn)
+		if len(all) == 0 && r.idx != nil && r.idx.HiddenFrom(memberFQN, from) {
+			r.unresolved(scope, qn)
 			return resolution{nil, false}
 		}
 
@@ -108,7 +113,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		}
 
 		if len(all) == 0 {
-			r.unresolved(qn)
+			r.unresolved(scope, qn)
 			return resolution{nil, false}
 		}
 		if len(all) > 1 {
@@ -116,17 +121,31 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 			return resolution{nil, false}
 		}
 		cur = all[0]
+		curFQN = r.registeredFQN(cur)
 		r.recordPart(qn, i+1, cur)
 	}
 	return resolution{cur, true}
 }
 
-// referringNamespaceFQN returns the fully-qualified name of the namespace a
+// registeredFQN is the name a symbol's own members are indexed under: the path
+// the index walks for a parsed symbol, and the already-qualified name a symbol
+// restored from a cache record carries.
+func (r *Resolver) registeredFQN(sym *symbols.Symbol) string {
+	if r.idx == nil || sym == nil {
+		return ""
+	}
+	if fqn := withoutEmptySegments(r.idx.GetFQN(sym)); fqn != "" {
+		return fqn
+	}
+	return sym.Name
+}
+
+// ReferringNamespaceFQN returns the fully-qualified name of the namespace a
 // reference made in scope belongs to, or "" for one made outside any namespace.
 // It is the context a qualified lookup is answered in: a name a private wildcard
 // import brought into a namespace is a member of it but visible only from
 // within (KerML 8.2.3.3), so `Mid::Hidden` resolves inside Mid and nowhere else.
-func (r *Resolver) referringNamespaceFQN(scope *symbols.Scope) string {
+func (r *Resolver) ReferringNamespaceFQN(scope *symbols.Scope) string {
 	if r.idx == nil {
 		return ""
 	}
@@ -166,11 +185,13 @@ func (r *Resolver) lookupInRoot(scope *symbols.Scope, name string) *symbols.Symb
 // index. Returns the unique match and the total number of matches, so the
 // caller can report ambiguity (n > 1) rather than silently degrading to
 // "unresolved". A unique symbol is returned only when n == 1.
-func (r *Resolver) lookupGlobalTop(name string) (*symbols.Symbol, int) {
+func (r *Resolver) lookupGlobalTop(scope *symbols.Scope, name string) (*symbols.Symbol, int) {
 	if r.idx == nil {
 		return nil, 0
 	}
-	syms := r.idx.LookupQualified(name)
+	// A name reached here may be one a filtered import surfaced at a document's
+	// root, so the conditions of the routes registering it decide it here too.
+	syms := r.admittedUnder(r.documentOf(scope), r.ReferringNamespaceFQN(scope), name, r.idx.LookupQualified(name))
 	if len(syms) == 1 {
 		return syms[0], 1
 	}
@@ -188,11 +209,17 @@ func rootOf(scope *symbols.Scope) *symbols.Scope {
 	return scope
 }
 
-// unresolved records an unresolved-reference diagnostic.
-func (r *Resolver) unresolved(qn *ast.QualifiedName) {
-	r.Diagnostics = append(r.Diagnostics, Diagnostic{
+// unresolved records an unresolved-reference diagnostic, offering the spellings
+// a simple name may have meant. A qualified name already says where to look, so
+// only an unqualified one is second-guessed.
+func (r *Resolver) unresolved(scope *symbols.Scope, qn *ast.QualifiedName) {
+	msg := unresolvedReferencePrefix + qnText(qn)
+	if len(qn.Parts) == 1 && !qn.Global {
+		msg = r.unresolvedMessage(scope, qn.Parts[0].Text)
+	}
+	r.report(Diagnostic{
 		Span:    qn.Span(),
-		Message: "unresolved reference: " + qnText(qn),
+		Message: msg,
 	})
 }
 
@@ -209,12 +236,12 @@ func (r *Resolver) unresolvedNamespace(qn *ast.QualifiedName, ns string) {
 				ns, last, strings.Join(cands, ", "))
 		}
 	}
-	r.Diagnostics = append(r.Diagnostics, Diagnostic{Span: qn.Span(), Message: msg})
+	r.report(Diagnostic{Span: qn.Span(), Message: msg})
 }
 
 // ambiguous records an ambiguity diagnostic reporting the number of matches.
 func (r *Resolver) ambiguous(qn *ast.QualifiedName, n int) {
-	r.Diagnostics = append(r.Diagnostics, Diagnostic{
+	r.report(Diagnostic{
 		Span:    qn.Span(),
 		Message: fmt.Sprintf("ambiguous reference: %s (%d candidates)", qnText(qn), n),
 	})

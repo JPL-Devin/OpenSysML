@@ -22,6 +22,22 @@ from pysysml.errors import PySysMLError
 #: genuinely untyped.
 CAPABILITY_TYPE_FACTS = "type_facts"
 
+#: The ``Convert`` RPC, which writes a model back out as SysML notation or RDF
+#: Turtle. Without it a conversion request fails as an unimplemented method,
+#: which is indistinguishable from a broken channel.
+CAPABILITY_CONVERT = "convert"
+
+#: The verification RPCs — ``VerifyConstraint``, ``VerifyRequirement``,
+#: ``VerifySatisfaction`` and ``EvaluateCalc`` — which answer the questions the
+#: REPL's ``%constraint``, ``%requirement``, ``%satisfy`` and ``%calc`` answer.
+#: Without it those calls fail as unimplemented methods, which is
+#: indistinguishable from a broken channel.
+CAPABILITY_VERIFICATION = "verification"
+
+#: The ``Query`` RPC, which evaluates a SysML v2 API & Services ``Query`` over a
+#: loaded model. Without it a query fails as an unimplemented method, which is
+#: indistinguishable from a broken channel.
+CAPABILITY_QUERY = "query"
 
 @dataclass(frozen=True)
 class ServerInfo:

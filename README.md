@@ -133,18 +133,18 @@ sysml> %advance 30
 
 **Think Python/Rust/Go tooling, but for SysML v2:**
 
-- **Language Server** — First-class IDE support (VS Code, IntelliJ, Emacs, etc.) with live diagnostics, semantic hover, go-to-definition, intelligent completion, and workspace-wide symbol search.
+- **Language Server** — A standard LSP server (`sysml-lsp`) with live diagnostics, semantic hover, go-to-definition, find references, completion, workspace-wide symbol search, formatting and rename. A VS Code extension with TextMate grammars for `.sysml` and `.kerml` ships in [editors/vscode](editors/vscode), and any editor with a generic LSP client can drive the server directly — [QUICKSTART](docs/QUICKSTART.md#language-server-ide-support) walks through both. *Not yet:* the extension is built from source rather than published to a marketplace, and the server implements neither semantic tokens nor code actions.
 - **Interactive REPL** — Exploratory modeling environment: define models incrementally, evaluate expressions on-the-fly, instantiate parts, run calculations, inspect runtime state—like IPython/Jupyter for systems engineering.
 - **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (activity fork/join parallelism, decision guards, hierarchical/orthogonal states, choice/junction pseudostates, TimeEvent/ChangeEvent/AcceptEvent, sourceless transitions). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured behavioral coverage.
-- **Python Client Library** — gRPC-based Python bindings for programmatic access: parse models, resolve symbols, evaluate expressions, instantiate parts, execute actions/state machines. Includes IPython display hooks for Jupyter notebooks and pandas DataFrame integration.
-- **Modern Toolchain** — Dependency management (local + remote git), incremental compilation, bundled standard library, persistent semantic caches—`cargo`/`go mod` ergonomics for systems modeling.
+- **Python Client Library** — gRPC-based Python bindings for programmatic access: parse models, resolve symbols, evaluate expressions, instantiate parts, execute actions/state machines. Includes IPython display hooks for Jupyter notebooks and pandas DataFrame integration. Constraint, requirement, satisfaction and calc verdicts are available as RPCs (`verify_constraint`, `verify_requirement`, `verify_satisfaction`, `calc`).
+- **Modern Toolchain** — Incremental compilation, bundled standard library, persistent semantic caches. A model is a set of files, named on the command line or opened by the editor.
 
 ## Goals
 
 - **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
 - **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 Systemica extension)
 - **Executable models:** Instantiate, evaluate, simulate—turn specifications into running systems
-- **Real-world ergonomics:** Multi-file projects, incremental analysis, rich diagnostics
+- **Real-world ergonomics:** Multi-file workspaces, incremental analysis, rich diagnostics
 
 ## Status
 
@@ -164,12 +164,12 @@ sysml> %advance 30
 | Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 46 calc/constraint/requirement/satisfy cases passing) |
 | Action execution engine (Tier 5) | ✅ Complete (35 conformance cases passing) |
 | State machine runtime (Tier 5) | ✅ Complete (31 conformance cases: transitions, accept events, sourceless) |
-| REPL debugging commands | ✅ Complete |
-| Model save & SysML ↔ RDF Turtle conversion (`%save`, `sysml -convert`) | ✅ Complete (see [RDF_INTEROP.md](docs/RDF_INTEROP.md) for the mapping and its limitations) |
+| REPL debugging commands | ✅ Complete — `%constraint`, `%requirement`, `%satisfy` and `%calc` are REPL-only: no gRPC/CLI equivalent |
+| Model save & SysML ↔ RDF Turtle conversion (`%save`, `sysml -convert`) | ✅ Complete for model **structure** (packages, definitions, usages, ports, connections, values, documentation) — a behavioral member is refused, see [RDF_INTEROP.md § Limitations](docs/RDF_INTEROP.md#limitations); worked example: [examples/rdf-interop-demo.sysml](examples/rdf-interop-demo.sysml) |
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Diagnostics, hover, go-to-definition, references, symbols, completion, formatting, rename (semantic tokens, code actions, signature help not implemented) |
 | gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime RPCs) |
-| Python client library | ✅ Complete (connection lifecycle, runtime APIs, IPython hooks, DataFrame) |
+| Python client library | ✅ Complete for the RPCs that exist (connection lifecycle, parse/symbols/eval/instantiate/execute, IPython hooks, DataFrame) — constraint/requirement/satisfy/calc verification is not among them |
 
 **Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).
 **Test coverage:** 2,465 tests and subtests (2,460 pass, 5 skip themselves; 1,384 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 52 golden ASTs, 59 negatives, 121 conformance cases, 40 golden traces, 57 robustness subtests.
@@ -184,7 +184,7 @@ sysml> %advance 30
 ┌─────────────────────────────────────────────────────────┐
 │  Frontends: LSP Server │ Interactive REPL               │
 ├─────────────────────────────────────────────────────────┤
-│  Workspace: Multi-file projects, dependency management  │
+│  Workspace: Multi-file documents, incremental reindex   │
 ├─────────────────────────────────────────────────────────┤
 │  Semantic Engine: Types, resolution, validation         │
 ├─────────────────────────────────────────────────────────┤
@@ -304,7 +304,7 @@ import pysysml
 model = pysysml.load("vehicle.sysml")
 
 # Evaluate expressions
-result = pysysml.eval("2 + 2", model_hash=model.hash)
+result = model.eval("2 + 2")
 print(result)  # 4
 
 # Instantiate parts

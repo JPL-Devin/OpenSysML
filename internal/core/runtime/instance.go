@@ -27,6 +27,23 @@ type Instance struct {
 	// materialized to, nil until they are asked for. An empty slice means there
 	// are none.
 	anonymous []int64
+
+	// keptAnonymous holds the identities those objects had before a carry-over, in
+	// declaration order, which the ones materialized again here take back.
+	keptAnonymous []int64
+
+	// keptConnectors holds, per slot of a named connector, the identity the object
+	// of it had before a carry-over, which the one materialized again takes back.
+	keptConnectors map[*Slot]int64
+}
+
+// keepConnector remembers the identity the object of a named connector slot had,
+// so the one materialized again against the new declarations keeps it.
+func (inst *Instance) keepConnector(slot *Slot, id int64) {
+	if inst.keptConnectors == nil {
+		inst.keptConnectors = make(map[*Slot]int64)
+	}
+	inst.keptConnectors[slot] = id
 }
 
 // Slot holds the runtime value(s) for one feature.
@@ -50,6 +67,12 @@ func (s *Slot) HeldValue() Value {
 // Allocates ID, creates slots per FeaturesOf(sym), evaluates default values,
 // leaves composite features lazy. Returns the instance or an error.
 func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
+	return ctx.instantiateAs(sym, 0)
+}
+
+// instantiateAs materializes an object under the given identity, falling back to
+// the next one this context hands out when that identity is none or taken here.
+func (ctx *Context) instantiateAs(sym *symbols.Symbol, id int64) (*Instance, error) {
 	defer ctx.beginRun()()
 
 	// Check step limit (I3)
@@ -57,8 +80,10 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 		return nil, err
 	}
 
-	// Allocate ID
-	id := ctx.allocateID()
+	if _, taken := ctx.instances[id]; taken || id <= 0 {
+		id = ctx.allocateID()
+	}
+	ctx.ids.atLeast(id + 1)
 
 	// Create instance
 	inst := &Instance{

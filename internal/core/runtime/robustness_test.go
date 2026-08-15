@@ -20,6 +20,8 @@ import (
 
 func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
+	t.Run("action_whose_last_node_has_no_succession", testActionWhoseLastNodeHasNoSuccession)
+	t.Run("fork_branches_assigning_the_same_feature", testForkBranchesAssigningTheSameFeature)
 	t.Run("decision_no_satisfied_guard", testDecisionNoSatisfiedGuard)
 	t.Run("state_dangling_transition", testStateDanglingTransition)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
@@ -740,8 +742,8 @@ func testStateTransitionEffectReadsAnUnknownFeature(t *testing.T) {
 		}
 	}`)
 	err := exec.RunToCompletion()
-	if !errors.Is(err, ErrUnresolvedFeature) {
-		t.Fatalf("err = %v; want ErrUnresolvedFeature", err)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("err = %v; want ErrUnresolvedReference", err)
 	}
 	if !strings.Contains(err.Error(), "missingName") {
 		t.Errorf("err = %v; want it to name the unresolved feature", err)
@@ -1320,6 +1322,116 @@ func testDeadlockJoinStarvation(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "deadlock") {
 		t.Errorf("expected a deadlock error, got: %v", err)
+	}
+}
+
+// testActionWhoseLastNodeHasNoSuccession: a node the flow leads no further from
+// ends the flow, so an action declaring no `done` node completes instead of
+// failing, and stepping past the end neither errors nor spins.
+func testActionWhoseLastNodeHasNoSuccession(t *testing.T) {
+	src := `
+		package test {
+			action ends {
+				first start;
+				then action a;
+				then action b;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "ends", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action ends not found")
+	}
+
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run action whose last node has no succession: %v", err)
+	}
+	if exec.State() != StateCompleted {
+		t.Fatalf("expected the action to complete, got state %s", exec.State())
+	}
+
+	for i := 0; i < 3; i++ {
+		if err := exec.Step(); err != nil {
+			t.Fatalf("step %d past the end: %v", i+1, err)
+		}
+		if exec.State() != StateCompleted {
+			t.Fatalf("step %d past the end left state %s", i+1, exec.State())
+		}
+		if len(exec.Tokens()) != 0 {
+			t.Fatalf("step %d past the end revived %d token(s)", i+1, len(exec.Tokens()))
+		}
+	}
+}
+
+// testForkBranchesAssigningTheSameFeature: concurrent branches writing one feature
+// are unordered by the spec; the runtime resolves them by its own step order.
+func testForkBranchesAssigningTheSameFeature(t *testing.T) {
+	src := `
+		package test {
+			action clash {
+				attribute x : Integer = 0;
+
+				first start;
+				fork split;
+				action left { assign x := 1; }
+				action right { assign x := 2; }
+				join sync;
+				done end;
+
+				then start split;
+				then split left;
+				then split right;
+				then left sync;
+				then right sync;
+				then sync end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "clash", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action clash not found")
+	}
+
+	var first semantics.Value
+	for run := 0; run < 3; run++ {
+		exec, err := ctx.CreateActionExecutor(sym)
+		if err != nil {
+			t.Fatalf("run %d create action executor: %v", run+1, err)
+		}
+		if err := exec.RunToCompletion(); err != nil {
+			t.Fatalf("run %d conflicting writes: %v", run+1, err)
+		}
+		if exec.State() != StateCompleted {
+			t.Fatalf("run %d left state %s", run+1, exec.State())
+		}
+
+		got, ok := exec.Results()["x"]
+		if !ok {
+			t.Fatalf("run %d lost the contested feature x", run+1)
+		}
+		if got.Kind != ValConst || got.Const.Kind != semantics.ValInt {
+			t.Fatalf("run %d gave x a non-integer value: %+v", run+1, got)
+		}
+		if got.Const.Int != 1 && got.Const.Int != 2 {
+			t.Fatalf("run %d gave x %d, which neither branch assigned", run+1, got.Const.Int)
+		}
+		if run == 0 {
+			first = got.Const
+			continue
+		}
+		if got.Const.Int != first.Int {
+			t.Fatalf("run %d gave x %d after run 1 gave %d: execution is not deterministic",
+				run+1, got.Const.Int, first.Int)
+		}
 	}
 }
 
@@ -2224,8 +2336,8 @@ func testActionBodyUnresolvedFeature(t *testing.T) {
 	}
 
 	out, err := ctx.ExecuteAction(sym)
-	if !errors.Is(err, ErrUnresolvedFeature) {
-		t.Fatalf("outputs = %v, err = %v; want ErrUnresolvedFeature", out, err)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("outputs = %v, err = %v; want ErrUnresolvedReference", out, err)
 	}
 	if !strings.Contains(err.Error(), "missingName") {
 		t.Errorf("err = %v; want it to name the unresolved feature", err)

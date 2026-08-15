@@ -79,6 +79,10 @@ const (
 	// SymbolConnectorEnd is an end feature a connector usage declares in its
 	// connect clause (`connect bead references t.bead`).
 	SymbolConnectorEnd
+	// SymbolKerMLType classifies a KerML type declaration — `class`,
+	// `classifier`, `struct`, `assoc`, `behavior`, `predicate` — which the SysML
+	// definition taxonomy has no counterpart for.
+	SymbolKerMLType
 )
 
 var symbolKindNames = map[SymbolKind]string{
@@ -142,6 +146,7 @@ var symbolKindNames = map[SymbolKind]string{
 	SymbolVerificationCaseUsage: "verificationCaseUsage",
 	SymbolUseCaseUsage:          "useCaseUsage",
 	SymbolConnectorEnd:          "connectorEnd",
+	SymbolKerMLType:             "kermlType",
 }
 
 // String returns the display name of the kind.
@@ -221,4 +226,28 @@ type Symbol struct {
 	// that reference must not see the name it gave away, or it would resolve to
 	// the feature that borrowed it (KerML 7.3.4.5).
 	NamingTarget ast.Node
+
+	// Annotations are the metadata annotations of a cached library symbol,
+	// whose declaration is absent: an element filter classifies a candidate by
+	// the metadata annotating it, so a restored symbol has to carry what its
+	// declaration would have said. Empty for live-parsed symbols, which are read
+	// from Decl instead.
+	Annotations []AnnotationFacts
+}
+
+// AnnotationFacts is one metadata annotation of a cached library symbol: the
+// fully-qualified name of the metadata type annotating it, and the values the
+// annotation body binds its features to, as written.
+type AnnotationFacts struct {
+	TypeFQN string
+	Values  []AnnotationValueFacts
+}
+
+// AnnotationValueFacts is one feature binding inside an annotation body
+// (`@Safety{isMandatory = true;}`), holding the value already evaluated, so that
+// a filter condition reading it decides the same way where the declaration it
+// came from is gone.
+type AnnotationValueFacts struct {
+	Feature string
+	Value   FilterValue
 }

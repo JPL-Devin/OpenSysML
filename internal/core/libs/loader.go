@@ -8,6 +8,7 @@ import (
 
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -37,10 +38,10 @@ func NewLoader(src Source, cache *Cache) *Loader {
 	return &Loader{src: src, cache: cache}
 }
 
-// Load reads the named library file and registers its symbols into idx. On a
-// cache hit the reduced record is restored directly, skipping lexing/parsing;
-// on a miss the file is parsed and registered, and its record is written by a
-// later call to Persist.
+// Load reads the named library file and registers its symbols into idx, marked
+// as library content. On a cache hit the reduced record is restored directly,
+// skipping lexing/parsing; on a miss the file is parsed and registered, and its
+// record is written by a later call to Persist.
 func (l *Loader) Load(name string, idx *symbols.Index) error {
 	content, err := l.src.Read(name)
 	if err != nil {
@@ -51,6 +52,7 @@ func (l *Loader) Load(name string, idx *symbols.Index) error {
 	if l.cache == nil {
 		p := parser.New(source.New(name, content))
 		idx.AddDocument(name, p.ParseFile())
+		idx.MarkLibrary(name)
 		return nil
 	}
 
@@ -59,6 +61,7 @@ func (l *Loader) Load(name string, idx *symbols.Index) error {
 	// Cache hit: restore reduced records, skip lexing/parsing entirely.
 	if rec, ok := l.cache.Load(key); ok {
 		idx.AddRecords(name, recordEntries(rec))
+		idx.MarkLibrary(name)
 		return nil
 	}
 
@@ -67,6 +70,7 @@ func (l *Loader) Load(name string, idx *symbols.Index) error {
 	p := parser.New(source.New(name, content))
 	root := p.ParseFile()
 	idx.AddDocument(name, root)
+	idx.MarkLibrary(name)
 	l.parsed = append(l.parsed, pending{name: name, key: key})
 	return nil
 }
@@ -83,8 +87,9 @@ func (l *Loader) Persist(idx *symbols.Index) {
 	}
 	defer l.cache.Prune()
 	r := resolve.New(idx)
+	model := semantics.NewModel(r) // shared: its whole-index memoization is per-model
 	for _, p := range l.parsed {
-		rec, resolved := recordFromIndex(p.name, idx, r)
+		rec, resolved := recordFromIndex(p.name, idx, r, model)
 		if rec == nil || (l.RequireResolved && !resolved) {
 			continue
 		}
@@ -131,6 +136,9 @@ func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
 			WildcardImports: wildcardImportEntries(s.WildcardImports),
 			AliasTarget:     s.AliasTarget,
 			Unit:            unitFactsEntry(s.Unit),
+
+			Annotations:      s.Annotations,
+			NamespaceFilters: s.NamespaceFilters,
 		}
 	}
 	return out
@@ -156,6 +164,9 @@ func wildcardImportEntries(imports []wildcardImport) []symbols.WildcardImport {
 	out := make([]symbols.WildcardImport, len(imports))
 	for i, imp := range imports {
 		out[i] = symbols.WildcardImport{Target: imp.Target, Private: imp.Private}
+		if imp.Filter != nil {
+			out[i].Filter = symbols.ElementFilter{Pred: imp.Filter, Span: imp.Filter.Span}
+		}
 	}
 	return out
 }

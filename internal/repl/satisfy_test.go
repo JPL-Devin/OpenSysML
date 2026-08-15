@@ -16,12 +16,27 @@ func TestSatisfyVerdicts(t *testing.T) {
 	)
 
 	wants(t, run(t, s, "%satisfy Landing::analysisContext"), "✓ satisfy touchdown by slowLander holds")
-	wants(t, run(t, s, "%satisfy nosuch"), `symbol "nosuch" not found`)
+	wants(t, run(t, s, "%satisfy nosuch"), `unresolved reference: nosuch`)
 	// A requirement is not itself an assertion, and states none.
 	wants(t, run(t, s, "%satisfy touchdown"), "no satisfaction assertion in Landing::touchdown")
 
 	empty := NewSession()
 	wants(t, run(t, empty, "%satisfy"), "no declarations loaded")
+}
+
+// TestSatisfyReportsNothingCheckedAsUndecided checks that a session stating no
+// assertion answers as the prompt answers any check it could not make, so a
+// caller outside the prompt reports it the way it reports the others.
+func TestSatisfyReportsNothingCheckedAsUndecided(t *testing.T) {
+	s := NewSession()
+	s.Submit("part def A;")
+
+	wants(t, run(t, s, "%satisfy"), "error: no satisfaction assertion in the session")
+	for _, v := range s.CheckSatisfy("") {
+		if v.Status != VerdictUnresolved {
+			t.Errorf("status = %v, want unresolved", v.Status)
+		}
+	}
 }
 
 // TestSatisfyUsesInstantiatedSubject checks that a verdict is about the object

@@ -13,9 +13,11 @@ import (
 
 // Context carries runtime execution state. One per workspace session.
 type Context struct {
-	model     *semantics.Model
-	resolver  *resolve.Resolver
-	nextID    int64
+	model    *semantics.Model
+	resolver *resolve.Resolver
+	// ids hands out instance identities. Contexts holding the same objects share
+	// one sequence, so no two of them name different objects alike.
+	ids       *idSequence
 	steps     int64
 	maxSteps  int64
 	instances map[int64]*Instance
@@ -133,7 +135,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 	return &Context{
 		model:      model,
 		resolver:   resolver,
-		nextID:     1, // IDs start at 1 (0 = invalid)
+		ids:        &idSequence{next: 1}, // IDs start at 1 (0 = invalid)
 		steps:      0,
 		maxSteps:   maxSteps,
 		instances:  make(map[int64]*Instance),
@@ -206,11 +208,28 @@ func (ctx *Context) Model() *semantics.Model {
 	return ctx.model
 }
 
+// idSequence hands out instance identities, one per object over the contexts
+// sharing it.
+type idSequence struct {
+	next int64
+}
+
+func (s *idSequence) take() int64 {
+	id := s.next
+	s.next++
+	return id
+}
+
+// atLeast raises the sequence to hand out id next, never lowering it.
+func (s *idSequence) atLeast(id int64) {
+	if id > s.next {
+		s.next = id
+	}
+}
+
 // allocateID returns the next instance ID and increments the counter.
 func (ctx *Context) allocateID() int64 {
-	id := ctx.nextID
-	ctx.nextID++
-	return id
+	return ctx.ids.take()
 }
 
 // beginRun starts a run and returns the function that ends it, resetting the
@@ -343,14 +362,14 @@ func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Sco
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind != ast.DefConstraint {
-			return false, fmt.Errorf("not a constraint definition: %s", sym.Name)
+			return false, notOfKind(ErrNotAConstraint, sym, "constraint")
 		}
 	case *ast.Usage:
 		if decl.Kind != ast.UsageConstraint {
-			return false, fmt.Errorf("not a constraint usage: %s", sym.Name)
+			return false, notOfKind(ErrNotAConstraint, sym, "constraint")
 		}
 	default:
-		return false, fmt.Errorf("invalid constraint symbol: %s (%T)", sym.Name, sym.Decl)
+		return false, notOfKind(ErrNotAConstraint, sym, "constraint")
 	}
 
 	// Evaluate every condition the constraint states, inherited ones included.
@@ -489,14 +508,14 @@ func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Sc
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind != ast.DefRequirement {
-			return false, fmt.Errorf("not a requirement definition: %s", sym.Name)
+			return false, notOfKind(ErrNotARequirement, sym, "requirement")
 		}
 	case *ast.Usage:
 		if decl.Kind != ast.UsageRequirement {
-			return false, fmt.Errorf("not a requirement usage: %s", sym.Name)
+			return false, notOfKind(ErrNotARequirement, sym, "requirement")
 		}
 	default:
-		return false, fmt.Errorf("invalid requirement symbol: %s (%T)", sym.Name, sym.Decl)
+		return false, notOfKind(ErrNotARequirement, sym, "requirement")
 	}
 
 	// Requirement-local bindings are shared by every member, whichever scope it
@@ -523,14 +542,14 @@ func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Sc
 }
 
 // ExecuteAction executes an action definition/usage to completion.
-// Returns final token data from the action's execution.
+// Returns the values the action's features hold when it completed.
 func (ctx *Context) ExecuteAction(action *symbols.Symbol) (map[string]Value, error) {
 	return ctx.ExecuteActionWithInputs(action, nil)
 }
 
-// ExecuteActionWithInputs executes an action, seeding the initial token with the
+// ExecuteActionWithInputs executes an action, seeding its feature space with the
 // provided input parameter bindings (keyed by parameter name). Inputs override
-// action attribute defaults of the same name. Returns final token data.
+// action attribute defaults of the same name. Returns the final feature values.
 func (ctx *Context) ExecuteActionWithInputs(action *symbols.Symbol, inputs map[string]Value) (map[string]Value, error) {
 	return ctx.ExecuteActionPerformedBy(action, nil, inputs)
 }
@@ -562,8 +581,8 @@ func (ctx *Context) ExecuteActionPerformedBy(action *symbols.Symbol, self *Insta
 		return nil, fmt.Errorf("execute action: %w", err)
 	}
 
-	// Return accumulated results from final nodes
-	return exec.results, nil
+	// Return the values the action's features hold once it completed
+	return exec.Results(), nil
 }
 
 // ExecuteState executes a state machine, processing events until completion or suspension.

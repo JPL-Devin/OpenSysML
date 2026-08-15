@@ -24,19 +24,25 @@ rather than a guess, and an empty session writes no file.
 ## Converting from the command line
 
 ```bash
-sysml -convert model.sysml -o model.ttl     # notation to RDF
-sysml -convert model.ttl   -o model.sysml   # RDF to notation
-sysml -convert model.sysml                  # to stdout, in the other format
+sysml model.sysml -convert ttl -o model.ttl     # notation to RDF
+sysml model.ttl -convert sysml -o model.sysml   # RDF to notation
+sysml model.sysml -convert ttl                  # to stdout
 ```
 
-The format of each side is taken from its file extension. When an extension is
-missing or unrecognized, name the formats explicitly:
+The model is a positional argument, as it is for every other mode of the
+command, and `-convert` names the format to convert it to. Flags may be written
+before or after the model.
+
+The input format is taken from the file extension. When that extension is
+missing or unrecognized, `-from` names it:
 
 ```bash
-sysml -convert input.txt -from sysml -to ttl
+sysml input.txt -convert ttl -from sysml
 ```
 
-`-from`/`-to` accept `sysml`, `kerml`, `text`, `ttl`, `turtle` and `rdf`.
+`-convert`/`-from` accept `sysml`, `kerml`, `text`, `ttl`, `turtle` and `rdf`.
+The output path plays no part in choosing the format, so a destination with no
+extension — `-o /dev/null`, a FIFO — needs nothing extra.
 
 Converting to the same format rewrites the input: notation is reformatted, and
 Turtle is normalized (prefixes sorted, predicates grouped by subject).
@@ -46,6 +52,27 @@ Turtle is normalized (prefixes sorted, predicates grouped by subject).
 The command exits non-zero and writes nothing on any input it cannot convert
 faithfully — a syntax error in the notation, malformed Turtle, or an RDF
 construct outside the mapping below. It never writes a partial model.
+
+## Converting over gRPC and from Python
+
+The same conversion is a service method, `Convert`, reported as the `convert`
+capability by `GetServerInfo`. It reads a `file_path` the service opens or
+`content` carried inline, takes the format names `-from`/`-to` take, and returns
+the written text with its formats, or an `error` plus the diagnostics explaining
+it. `tolerate_syntax_errors` writes notation despite syntax errors, and is
+rejected for any direction that builds a graph, where an unparsed declaration
+would go missing without saying so.
+
+From Python:
+
+```python
+model = pysysml.load("model.sysml")
+model.save("model.ttl")                          # SysML notation to RDF
+pysysml.convert("sysml", file_path="model.ttl")  # and back
+```
+
+See [python/README.md](../python/README.md) for the full client API and its
+measured latency.
 
 ## The RDF mapping
 
@@ -145,6 +172,41 @@ source through the formatter rather than re-printing the graph, so comments,
 notes and spacing survive. Only the `.ttl` direction goes through the mapping.
 The syntax is still checked: every direction rejects notation the parser cannot
 read, so a save never quietly reformats a model that will not parse.
+
+## A worked example
+
+[`examples/rdf-interop-demo.sysml`](../examples/rdf-interop-demo.sysml) is the
+reference model for this document: a rover and its ground link, declared with
+packages, definitions, usages, ports, a connection, multiplicity, values and
+documentation — all inside the mapping — so it converts and comes back:
+
+```bash
+$ sysml examples/rdf-interop-demo.sysml -convert ttl -o /tmp/rover.ttl
+wrote /tmp/rover.ttl (ttl, 7937 bytes)
+$ sysml /tmp/rover.ttl -convert sysml -o /tmp/rover-back.sysml
+wrote /tmp/rover-back.sysml (sysml, 877 bytes)
+```
+
+Converting the returned notation again yields a byte-identical graph — the
+round-trip property described above. The `//` header comment is the one thing
+lost, as *Limitations* describes; the package's `doc` and `comment` are
+declarations and survive.
+
+[`examples/semantic-layer/demo.sysml`](../examples/semantic-layer/demo.sysml)
+converts too, as do the structure-only `parser_features_demo_*.kerml` files
+(except `..._advanced_bodies.kerml`, which computes a value, and
+`..._modifiers.kerml`, which declares one name twice). **None of the other
+`.sysml` demos convert**: each shows a behavior, so the conversion stops at a
+state, a region, an assignment, a value-computing `return` or a name two members
+of one body share.
+
+```bash
+$ sysml examples/state-machine-demo.sysml -convert ttl
+sysml: cannot convert the *ast.SubstateMember at examples/state-machine-demo.sysml:7:13
+```
+
+So a reader looking for a convertible model starts from the two `.sysml` files
+named above.
 
 ## Limitations
 
@@ -273,7 +335,7 @@ element it cannot place, rather than emitting a model with elements missing.
 | `internal/core/rdf` | Triple/graph model, Turtle writer, Turtle parser |
 | `internal/core/export` | `ToRDF` (AST → graph), `ToSysML` (graph → notation), and the `Convert` entry point |
 | `internal/repl` | `%save` |
-| `cmd/sysml` | `-convert`, `-from`, `-to`, `-o` |
+| `cmd/sysml` | `-convert`, `-from`, `-o` |
 
 The RDF layer is hand-written against the Turtle grammar rather than pulled in
 as a dependency: the subset needed here is small, and the parser rejects what it

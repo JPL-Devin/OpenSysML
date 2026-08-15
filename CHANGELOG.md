@@ -38,6 +38,37 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   raises each, and a literal expression that spends one is answered with that
   failure instead of "no declarations loaded".
 
+### `sysml` command line
+
+- **Breaking:** conversion is spelled `sysml model.sysml -convert ttl`: the model
+  is a positional argument as it is in every other mode, and `-convert` names the
+  format to convert it to. `-convert <file>` and `-to <format>` are gone — `-to`
+  reports the replacement rather than "flag provided but not defined" — and the
+  output path no longer chooses the format, so `-o /dev/null` or a FIFO needs
+  nothing extra. `-from` still names an input format the extension does not.
+- A flag may be written after the model it applies to (`sysml model.sysml -trace`),
+  which Go's flag package would otherwise read as two files to load.
+
+### Editor support
+
+- A first-party VS Code extension lives in `editors/vscode`: TextMate
+  highlighting for `.sysml` and `.kerml`, comment/bracket configuration, and an
+  LSP client that launches `sysml-lsp` from `systemica.server.path`, a
+  workspace's `bin/sysml-lsp`, or `PATH` — highlighting still works when no
+  server is found. It is built and side-loaded from this repository
+  (`make vscode-package`) and is published to no marketplace. The grammars are
+  generated from `internal/core/lexer.Keywords()` and a Go test fails when the
+  committed ones are stale, so highlighting cannot drift from the lexer.
+- LSP completion is typed and context-aware: items carry the kind, detail
+  (`partUsage : Vehicle`) and documentation that hover shows, `v.` offers the
+  members of `v`'s type — inherited ones included — and nothing else, `Pkg::`
+  offers that namespace's members, and the standard library's top-level names
+  are offered alongside the ones in scope. Prefix filtering stays on the client.
+- `sysml-lsp` serves a session over one reader: it used to start a second read
+  loop over its own stdio, so an editor's traffic raced two decoders and the
+  server died with corrupted framing ("missing Content-Length header") within
+  seconds of typing.
+
 ### Python bindings and `sysml-grpc`
 
 - `Instantiate` returns every instance reachable from the root, so a Python caller
@@ -75,6 +106,50 @@ is described in [docs/RELEASING.md](docs/RELEASING.md).
   class describes is accepted too, because instantiating a usage reports the
   usage's own FQN, which the client cannot relate to a definition.
   `unchecked(instance)` is the explicit escape hatch.
+- `Convert` writes a model back out — SysML/KerML notation or RDF Turtle, from a
+  loaded model named by its `model_hash`, a path the service opens, or content
+  carried inline — using the same exporter
+  `sysml -convert` uses, so a Python caller round-trips a model instead of only
+  reading one: `model.to_sysml()`, `model.to_turtle()`, `model.save("m.ttl")` and
+  `pysysml.convert(...)`. Reported as the `convert` capability, so an older
+  service fails naming the upgrade. A conversion that cannot be written faithfully
+  returns the diagnostics that explain it as a `ConversionError` rather than
+  partial output; `tolerate_syntax_errors` writes notation anyway and is rejected
+  for the graph directions, where an unparsed declaration would vanish silently.
+  A `Model` converts by hash, so a file edited between `load` and `save` does not
+  change what is written; a model since evicted from the service cache is
+  `NOT_FOUND` rather than something else, and `convert(file_path=...)` is how a
+  caller asks for the file as it stands now.
+- `ParseFile` hits its cache on the source it read — file name and content —
+  rather than on the `content_hash` the request carried, which is now ignored:
+  `pysysml` never sent one, so re-loading unchanged content re-parsed it and
+  reloaded the standard library every time — ~35 ms where the cache costs
+  ~0.5 ms — and a hash disagreeing with its content would have served an
+  unrelated model.
+- `python/scripts/bench_latency.py` reports p50/p95/p99 per client call, and
+  `python/README.md` documents the measurements and what they mean for a real-time
+  analytics loop.
+- `Model.eval(expression, context_symbol_id=...)` evaluates against the model it
+  is called on, so evaluation is no longer the one operation making a caller carry
+  the hash back to the connection: `model.eval("1+1")` for
+  `conn.eval("1+1", model.hash)`. The typed failures are the connection's —
+  `ExecutionError` for an expression that cannot be evaluated, `ModelNotFoundError`
+  for an evicted model.
+- Naming an element of the wrong kind raises `WrongKindError` (an
+  `ExecutionError`) from `verify_constraint`, `verify_requirement`,
+  `verify_satisfaction` and `calc`, as naming an element that does not exist
+  already did: verifying a part def as a constraint used to answer with a verdict
+  whose `holds` was false, telling a caller its model does not hold when the
+  answer was that it named a part def. The service reports the distinction as a
+  typed `FailureReason` on `Verdict`, `VerifySatisfactionResponse` and
+  `EvaluateCalcResponse`, so the client classifies it without reading the message
+  text.
+- A `host:port` address given as the host is read as one, on `connect` and on the
+  module-level helpers taking `host`/`port`: `connect("localhost:50123")` reaches
+  port 50123 instead of building the target `localhost:50123:50051` and reporting
+  a service start timeout for an address nobody asked for. A port named twice with
+  two values, and a port that is not a number, raise `ValueError` naming the
+  mistake.
 
 ## 0.0.5 — 2026-08-12
 

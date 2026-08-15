@@ -28,7 +28,7 @@ Statement coverage, measured today with `go test -cover ./...`:
 | Package | Coverage | Package | Coverage |
 |---|---|---|---|
 | `internal/core/format` | 96.6% | `internal/core/model` | 79.5% |
-| `internal/core/source` | 90.9% | `internal/core/deps` | 76.4% |
+| `internal/core/source` | 90.9% | | |
 | `internal/core/lexer` | 87.7% | `internal/lsp` | 72.4% |
 | `internal/core/libs` | 87.8% | `internal/core/lower` | 62.1% |
 | `internal/repl` | 86.9% | `internal/core/symbols` | 62.0% |
@@ -275,7 +275,7 @@ Both residual items are closed by the unit-resolution work; see `docs/SPEC_COMPL
 - **Port routing ignores direction and conjugation.** A message reaches every port connected by
   a connector in the same behavior body, and a port of the enclosing part is invisible to the
   behavior.
-- **Accept-parameter visibility.** The payload lives in shared token data, which scoping does
+- **Accept-parameter visibility.** The payload lives in the action's shared feature space, which scoping does
   not model, so a sibling node reading it by simple name reports unresolved.
 - **Transition endpoint names** are resolved at lowering, not at the name-resolution tier, so a
   misspelled endpoint surfaces late. Error timing is part of the contract (AGENTS.md §4):
@@ -333,6 +333,18 @@ Both residual items are closed by the unit-resolution work; see `docs/SPEC_COMPL
   `symbols/index.go` `LookupDirectChildrenFrom`, which drops what the target imported privately
   unless the referring namespace is the target itself (or nested in it) or the import is
   `import all`.
+- ~~**Element filters are parsed and then dropped.**~~ **Done.** A namespace's `filter` now
+  restricts the imported memberships it re-exports, and an import's or expose's `[...]`
+  restricts what that import brings in (KerML 8.2.4, SysML v2 7.4.4). The condition is a
+  model-level predicate over one candidate symbol — `semantics/filter.go`, not the runtime value
+  evaluator, since there is no instance at name-resolution time — evaluated against the
+  candidate's annotations from every form the parser accepts, with conformance through
+  `Model.AllSupertypes`. `symbols/index.go` records the conditions along each route to a
+  re-exported name and `resolve/filter.go` evaluates them, so the qualified and unqualified
+  routes agree and a restored index cache decides a filter the same way a parsed library does.
+  A condition outside the evaluated subset is reported (`passes/filter.go`) and not applied.
+  Still open: `@`/`@@` in the runtime evaluator (A4), and a view's exposed-element set as a
+  queryable API.
 
 ## A6 — implicit library import (do this LAST)
 

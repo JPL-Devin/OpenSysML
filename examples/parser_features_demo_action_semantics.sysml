@@ -7,9 +7,19 @@
 
 package ActionSemantics {
     
+    // The library is not implicitly visible: a bare name needs an import.
+    private import ScalarValues::*;
+    
+    // The actions the performs below refer to.
+    action ValidateInput;
+    action Transform;
+    action SaveResults;
+    
     // ===== Basic Action with Assign (Task 72) =====
     
     action InitializeCounter {
+        attribute counter : Integer;
+        
         assign counter := 0;
     }
     
@@ -24,6 +34,9 @@ package ActionSemantics {
     // ===== While Loop (Task 72) =====
     
     action IterateSequence {
+        attribute index : Integer;
+        attribute var : Integer;
+        
         assign index := 1;
         then while index <= 10 {
             assign var := index;
@@ -34,6 +47,9 @@ package ActionSemantics {
     // ===== If/Else Statement (Task 72) =====
     
     action ConditionalProcess {
+        attribute value : Integer;
+        attribute result : Integer;
+        
         if value > 0 {
             assign result := 1;
         } else {
@@ -45,6 +61,9 @@ package ActionSemantics {
     // Exact pattern from Actions.sysml forEachLoop
     
     action forEachLoop {
+        attribute index : Integer;
+        attribute var : Integer;
+        
         private action initialization
             assign index := 1;
         then private action whileLoop

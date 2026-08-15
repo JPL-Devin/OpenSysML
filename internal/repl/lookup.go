@@ -25,10 +25,13 @@ import (
 // inspect it.
 func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
-		return nil, "", fmt.Errorf("no declarations loaded")
+	var docScope *symbols.Scope
+	if doc != nil {
+		docScope = doc.Scope
 	}
-	idx := s.symbolIndex()
+	// The library is searched even from an empty session, so a qualified
+	// library name is not answered with "no declarations loaded".
+	idx := s.browseIndex()
 	if idx == nil {
 		return nil, "", fmt.Errorf("no declarations loaded")
 	}
@@ -37,7 +40,7 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 		matches := idx.LookupQualified(name)
 		switch len(matches) {
 		case 0:
-			return nil, "", fmt.Errorf("symbol %q not found", name)
+			return nil, "", s.notFoundError(name)
 		case 1:
 			// The index owns its own scope tree; map the hit back onto the
 			// document's tree so every command sees one symbol per declaration.
@@ -46,7 +49,7 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 			if fqn == "" {
 				fqn = name
 			}
-			if local := scopeSymbolFor(doc.Scope, sym.Decl); local != nil {
+			if local := scopeSymbolFor(docScope, sym.Decl); local != nil {
 				sym = local
 			}
 			return sym, fqn, nil
@@ -55,7 +58,7 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 		}
 	}
 
-	matches := collectInScopeTree(doc.Scope, name)
+	matches := collectInScopeTree(docScope, name)
 	switch len(matches) {
 	case 0:
 		// A name the session declares nowhere may still be visible where the
@@ -63,7 +66,12 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 		if sym, ok := resolve.New(idx).LookupName(s.promptScope(doc), name); ok && sym != nil {
 			return sym, idx.GetFQN(sym), nil
 		}
-		return nil, "", fmt.Errorf("symbol %q not found", name)
+		// A top-level library name (ISQ) is qualified by nothing, so the index
+		// registers it under the name itself.
+		if matches := idx.LookupQualified(name); len(matches) == 1 {
+			return matches[0], idx.GetFQN(matches[0]), nil
+		}
+		return nil, "", s.notFoundError(name)
 	case 1:
 		return matches[0], idx.GetFQN(matches[0]), nil
 	default:
@@ -119,6 +127,12 @@ func (s *Session) walkSlots(inst *runtime.Instance, name string, segments []stri
 		inst, name = child, name+"::"+seg
 	}
 	return inst, name
+}
+
+// unresolvedError reports a name nothing declares, in the wording every surface
+// uses for it: the parser's diagnostic and the runtime's sentinel.
+func unresolvedError(name string) error {
+	return fmt.Errorf("%w: %s", runtime.ErrUnresolvedReference, name)
 }
 
 // AmbiguousNameError reports a name that matched more than one declaration. It

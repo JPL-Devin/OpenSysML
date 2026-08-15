@@ -231,11 +231,10 @@ func TestActionExecutor_ActionExecutionNode(t *testing.T) {
 		t.Fatalf("step compute: %v", err)
 	}
 
-	// Token should have result in data
-	token := exec.tokens[0]
-	result, ok := token.Data["result"]
+	// The action's features should hold the result
+	result, ok := exec.data["result"]
 	if !ok {
-		t.Error("expected result in token data")
+		t.Error("expected result in action data")
 	}
 
 	// Check result value
@@ -248,7 +247,7 @@ func TestActionExecutor_ActionExecutionNode(t *testing.T) {
 	}
 
 	// Token should move to final node
-	if token.Location != final {
+	if exec.tokens[0].Location != final {
 		t.Error("expected token at final node")
 	}
 }
@@ -308,7 +307,10 @@ func TestActionExecutor_ForkNode(t *testing.T) {
 	}
 }
 
-func TestActionExecutor_ForkNode_DataIsolation(t *testing.T) {
+// TestActionExecutor_ForkNode_SharedFeatureSpace locks the value space of a
+// fork's branches: they read and write the one feature space of the action they
+// belong to, so a write in one branch is visible in the others.
+func TestActionExecutor_ForkNode_SharedFeatureSpace(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
 
 	initial := &ast.InitialNode{Name: "start"}
@@ -340,8 +342,8 @@ func TestActionExecutor_ForkNode_DataIsolation(t *testing.T) {
 
 	exec.initialize()
 
-	// Set token data before fork
-	exec.tokens[0].Data["x"] = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 100}}
+	// Set a feature value before the fork
+	exec.data["x"] = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 100}}
 
 	exec.stepToken(0) // start → fork
 
@@ -351,27 +353,20 @@ func TestActionExecutor_ForkNode_DataIsolation(t *testing.T) {
 		t.Fatalf("step fork: %v", err)
 	}
 
-	// Verify all 3 forked tokens have the value
-	for i, token := range exec.tokens {
-		val, ok := token.Data["x"]
-		if !ok {
-			t.Errorf("token %d missing 'x' in data", i)
-			continue
-		}
-		if val.Kind != ValConst || val.Const.Kind != semantics.ValInt || val.Const.Int != 100 {
-			t.Errorf("token %d has wrong value: %v", i, val)
-		}
+	if len(exec.tokens) != 3 {
+		t.Fatalf("expected 3 tokens after fork, got %d", len(exec.tokens))
 	}
 
-	// Modify one token's data
-	exec.tokens[0].Data["x"] = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 999}}
-
-	// Verify other tokens unaffected
-	if exec.tokens[1].Data["x"].Const.Int != 100 {
-		t.Error("token 1 data was affected by token 0 modification")
+	// The fork copies control, not values: the feature keeps the value it held.
+	if got := exec.data["x"]; got.Kind != ValConst || got.Const.Int != 100 {
+		t.Errorf("expected x = 100 after fork, got %v", got)
 	}
-	if exec.tokens[2].Data["x"].Const.Int != 100 {
-		t.Error("token 2 data was affected by token 0 modification")
+
+	// A write in one branch is a write to the action's feature, so every branch
+	// and the action's results see it.
+	exec.data["x"] = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 999}}
+	if got := exec.Results()["x"]; got.Const.Int != 999 {
+		t.Errorf("expected results to report x = 999, got %v", got)
 	}
 }
 
@@ -412,6 +407,65 @@ func TestActionExecutor_ForkNode_NoSuccessors(t *testing.T) {
 	expectedMsg := "fork node split has no successors"
 	if err.Error() != expectedMsg {
 		t.Errorf("expected error %q, got %q", expectedMsg, err.Error())
+	}
+}
+
+// A node with no succession out of it ends its flow: each forked branch retires
+// there, and the action completes once the last token has.
+func TestActionExecutor_NodeWithoutSuccessorsRetiresItsToken(t *testing.T) {
+	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
+
+	initial := &ast.InitialNode{Name: "start"}
+	fork := &ast.ForkNode{Name: "split"}
+	task1 := &ast.ActionExecutionNode{
+		Name:       "task1",
+		Expression: &ast.LiteralInteger{Value: "1"},
+	}
+	task2 := &ast.ActionExecutionNode{
+		Name:       "task2",
+		Expression: &ast.LiteralInteger{Value: "2"},
+	}
+
+	// initial → fork → [task1, task2], neither task having a successor.
+	actionSym := &symbols.Symbol{
+		Name: "EndsWithoutAFinalNode",
+		Kind: symbols.SymbolActionUsage,
+		Decl: &ast.Usage{
+			Kind:  ast.UsageAction,
+			Ident: ast.Identification{Name: "EndsWithoutAFinalNode"},
+			Members: []ast.Node{
+				initial, fork, task1, task2,
+				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "start"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "split"}}}},
+				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "split"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "task1"}}}},
+				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "split"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "task2"}}}},
+			},
+		},
+	}
+
+	exec, err := newActionExecutor(ctx, actionSym, nil)
+	if err != nil {
+		t.Fatalf("create executor: %v", err)
+	}
+
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+
+	if exec.State() != StateCompleted {
+		t.Errorf("expected StateCompleted, got %s", exec.State())
+	}
+	if len(exec.tokens) != 0 {
+		t.Errorf("expected every token retired, %d left", len(exec.tokens))
+	}
+	result, ok := exec.Results()["result"]
+	if !ok {
+		t.Fatal("expected the retired tokens to leave their data as results")
+	}
+	if result.Kind != ValConst || result.Const.Kind != semantics.ValInt {
+		t.Errorf("unexpected result: %v", result)
 	}
 }
 
@@ -506,11 +560,10 @@ func TestActionExecutor_JoinNode(t *testing.T) {
 		t.Error("expected token at final node")
 	}
 
-	// Token data should contain merged results from all tasks
-	token := exec.tokens[0]
-	result, ok := token.Data["result"]
+	// The branches wrote the same feature, so it holds the last write
+	result, ok := exec.data["result"]
 	if !ok {
-		t.Error("expected 'result' in merged token data")
+		t.Error("expected 'result' in the action's data")
 	}
 
 	// Last-write-wins: task3's result should be final (value 3)
@@ -724,7 +777,10 @@ func TestActionExecutor_MergeNode(t *testing.T) {
 	}
 }
 
-func TestActionExecutor_MergeNode_DataDiscard(t *testing.T) {
+// TestActionExecutor_MergeNode_ControlOnly checks that a merge discards the
+// tokens it does not pass but nothing the branches wrote: the value their
+// writes left in the action's feature space survives the discard.
+func TestActionExecutor_MergeNode_ControlOnly(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
 
 	// fork → [path1 sets x=1, path2 sets x=2] → merge → final
@@ -796,7 +852,6 @@ func TestActionExecutor_MergeNode_DataDiscard(t *testing.T) {
 	exec.stepToken(0) // step first task → moves to merge
 	exec.stepToken(1) // step second task → moves to merge
 
-	// Now 2 tokens at merge with different data
 	if len(exec.tokens) != 2 {
 		t.Fatalf("expected 2 tokens at merge, got %d", len(exec.tokens))
 	}
@@ -808,13 +863,10 @@ func TestActionExecutor_MergeNode_DataDiscard(t *testing.T) {
 		}
 	}
 
-	// Record both tokens' data
-	firstData := exec.tokens[0].Data["result"].Const.Int
-	secondData := exec.tokens[1].Data["result"].Const.Int
-
-	// Verify they're different
-	if firstData == secondData {
-		t.Fatal("expected tokens to have different data")
+	// Both branches wrote the same feature, so it holds the later write.
+	beforeMerge := exec.data["result"].Const.Int
+	if beforeMerge != 1 && beforeMerge != 2 {
+		t.Fatalf("expected result written by one of the branches, got %d", beforeMerge)
 	}
 
 	// Step first token through merge (wins, moves to final)
@@ -830,32 +882,24 @@ func TestActionExecutor_MergeNode_DataDiscard(t *testing.T) {
 
 	// Find which token is at final (winner)
 	var winnerIdx int
-	var winnerData int64
 	for i, tok := range exec.tokens {
 		if _, ok := tok.Location.(*ast.FinalNode); ok {
 			winnerIdx = i
-			winnerData = tok.Data["result"].Const.Int
 			break
 		}
-	}
-
-	// Winner data should match first token's data
-	if winnerData != firstData {
-		t.Errorf("expected winner to have first token's data (%d), got %d", firstData, winnerData)
 	}
 
 	// Step second token through merge (discarded)
 	loserIdx := 1 - winnerIdx
 	exec.stepToken(loserIdx)
 
-	// Should have 1 token at final with winner's data
 	if len(exec.tokens) != 1 {
 		t.Fatalf("expected 1 token after discard, got %d", len(exec.tokens))
 	}
 
-	finalData := exec.tokens[0].Data["result"].Const.Int
-	if finalData != winnerData {
-		t.Errorf("expected final token to have winner's data (%d), got %d", winnerData, finalData)
+	// Discarding a token discards no value.
+	if got := exec.data["result"].Const.Int; got != beforeMerge {
+		t.Errorf("expected result to stay %d after the merge, got %d", beforeMerge, got)
 	}
 }
 
@@ -984,8 +1028,8 @@ func TestActionExecutor_DecisionNode(t *testing.T) {
 
 		exec.initialize()
 
-		// Set x=15 in token data
-		exec.tokens[0].Data["x"] = Value{
+		// Set x=15 in the action's data
+		exec.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 15},
 		}
@@ -1016,8 +1060,8 @@ func TestActionExecutor_DecisionNode(t *testing.T) {
 
 		exec.initialize()
 
-		// Set x=5 in token data
-		exec.tokens[0].Data["x"] = Value{
+		// Set x=5 in the action's data
+		exec.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 5},
 		}
@@ -1089,7 +1133,7 @@ func TestActionExecutor_DecisionNode(t *testing.T) {
 		}
 
 		exec.initialize()
-		exec.tokens[0].Data["x"] = Value{
+		exec.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 50},
 		}
@@ -1178,7 +1222,7 @@ func TestActionExecutor_DecisionNode_ElseBranch(t *testing.T) {
 		}
 
 		exec.initialize()
-		exec.tokens[0].Data["x"] = Value{
+		exec.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 15},
 		}
@@ -1206,7 +1250,7 @@ func TestActionExecutor_DecisionNode_ElseBranch(t *testing.T) {
 		}
 
 		exec.initialize()
-		exec.tokens[0].Data["x"] = Value{
+		exec.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 5},
 		}
@@ -1370,11 +1414,11 @@ func TestActionExecutor_ObjectFlow(t *testing.T) {
 	exec.stepToken(0) // action1: execute, store result in "output" pin
 
 	// Verify action1 stored result in "output" pin
-	if _, ok := exec.tokens[0].Data["output"]; !ok {
+	if _, ok := exec.data["output"]; !ok {
 		t.Fatal("expected action1 to store result in 'output' pin")
 	}
 
-	outputVal := exec.tokens[0].Data["output"]
+	outputVal := exec.data["output"]
 	if outputVal.Kind != ValConst || outputVal.Const.Kind != semantics.ValInt || outputVal.Const.Int != 42 {
 		t.Errorf("expected output=42, got %v", outputVal)
 	}
@@ -1382,11 +1426,11 @@ func TestActionExecutor_ObjectFlow(t *testing.T) {
 	exec.stepToken(0) // action1 → action2 (control flow + data flow)
 
 	// Verify action2 received data in "input" pin
-	if _, ok := exec.tokens[0].Data["input"]; !ok {
+	if _, ok := exec.data["input"]; !ok {
 		t.Fatal("expected action2 to receive data in 'input' pin")
 	}
 
-	inputVal := exec.tokens[0].Data["input"]
+	inputVal := exec.data["input"]
 	if inputVal.Kind != ValConst || inputVal.Const.Kind != semantics.ValInt || inputVal.Const.Int != 42 {
 		t.Errorf("expected input=42, got %v", inputVal)
 	}
@@ -1869,7 +1913,7 @@ func TestActionExecutor_Integration_DecisionMerge(t *testing.T) {
 		}
 
 		exec.initialize()
-		exec.tokens[0].Data["x"] = Value{
+		exec.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 10},
 		}
@@ -1892,7 +1936,7 @@ func TestActionExecutor_Integration_DecisionMerge(t *testing.T) {
 		}
 
 		exec.initialize()
-		exec.tokens[0].Data["x"] = Value{
+		exec.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 3},
 		}
@@ -2201,7 +2245,7 @@ func TestActionExecutor_Integration_ParallelProcessing(t *testing.T) {
 		t.Fatalf("initialize: %v", err)
 	}
 
-	exec.tokens[0].Data["input"] = Value{
+	exec.data["input"] = Value{
 		Kind:  ValConst,
 		Const: semantics.Value{Kind: semantics.ValInt, Int: 100},
 	}

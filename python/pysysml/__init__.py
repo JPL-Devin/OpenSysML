@@ -3,7 +3,7 @@
 from importlib.metadata import PackageNotFoundError, version as _distribution_version
 
 from pysysml._version import VERSION as _declared_version
-from pysysml.connection import Connection
+from pysysml.connection import Connection, DEFAULT_PORT, split_target
 from pysysml.model import Model
 from pysysml.symbol import Symbol
 from pysysml.diagnostic import Diagnostic
@@ -11,20 +11,35 @@ from pysysml.instance import Instance
 from pysysml.typed import TypedObject
 from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
 from pysysml.capabilities import MissingCapabilityError, ServerInfo
+from pysysml.verdict import CalcResult, Verdict
+from pysysml.query import QueryElement, QueryError
+from pysysml.conversion import (
+    FORMAT_SYSML, FORMAT_TURTLE, Conversion, format_of_path,
+)
 from pysysml.errors import (
-    PySysMLError, ConnectionError, InstanceTypeError, RuntimeError, SlotError,
-    TypeMismatchError, UnsupportedValueError,
+    PySysMLError, ConnectionError, ConversionError, ExecutionError,
+    InstanceTypeError, InvalidRequestError, ModelError,
+    ModelFileNotFoundError, ModelNotFoundError, ServiceError,
+    ServiceTimeoutError, SlotError, SymbolNotFoundError, TypeMismatchError,
+    UnsupportedOperationError, UnsupportedValueError, WrongKindError,
 )
 
 __all__ = [
     "Connection", "Model", "Symbol", "Diagnostic", "Instance",
     "TypedObject", "TypeFacts", "Multiplicity", "Specialization", "SymbolFacts",
     "ServerInfo",
-    "PySysMLError", "ConnectionError", "InstanceTypeError",
-    "MissingCapabilityError", "RuntimeError", "SlotError",
-    "TypeMismatchError", "UnsupportedValueError",
-    "load", "connect",
+    "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
+    "Verdict", "CalcResult",
+    "QueryElement", "QueryError",
+    "PySysMLError", "ConnectionError", "ConversionError", "ExecutionError",
+    "InstanceTypeError", "InvalidRequestError", "MissingCapabilityError",
+    "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",
+    "ServiceError", "ServiceTimeoutError", "SlotError", "SymbolNotFoundError",
+    "TypeMismatchError", "UnsupportedOperationError", "UnsupportedValueError",
+    "WrongKindError",
+    "load", "connect", "convert",
     "eval", "instantiate",
+    "DEFAULT_PORT", "split_target",
     "__version__"
 ]
 
@@ -41,19 +56,25 @@ _default_connection = None
 _default_connection_params = None
 
 
-def _get_default_connection(host='localhost', port=50051):
+def _get_default_connection(host='localhost', port=None):
     """Get or create the default module-level connection.
     
     If called with different host/port than last time, creates new connection.
+    A ``host:port`` address written as the host names the same service as the
+    two given separately, so it reuses the same connection.
     
     Args:
-        host (str): Service hostname (default: 'localhost')
-        port (int): Service port (default: 50051)
+        host (str): Service hostname, or a ``host:port`` address
+        port (int, optional): Service port (default: 50051)
     
     Returns:
         Connection: Singleton default connection
+
+    Raises:
+        ValueError: If host names a port that is unreadable or disagrees with port
     """
     global _default_connection, _default_connection_params
+    host, port = split_target(host, port)
     params = (host, port)
     
     # Create new connection if params changed or no connection exists
@@ -67,64 +88,125 @@ def _get_default_connection(host='localhost', port=50051):
     return _default_connection
 
 
-def load(file_path, host='localhost', port=50051):
+def load(file_path, host='localhost', port=None, strict=False):
     """Load a SysML model from file using the default connection.
     
     Convenience function that uses a module-level singleton connection.
     
     Args:
         file_path (str): Path to .sysml file
-        host (str): Service hostname (default: 'localhost')
-        port (int): Service port (default: 50051)
+        host (str): Service hostname, or a ``host:port`` address
+        port (int, optional): Service port (default: 50051)
+        strict (bool): Refuse a model the service reported errors for, rather
+            than returning one whose lookups fail later
     
     Returns:
         Model: Parsed model object
     
     Raises:
-        grpc.RpcError: If file not found or gRPC error occurs
+        ModelFileNotFoundError: If the service cannot read file_path
+        ModelError: If strict and the model has error diagnostics
+        ConnectionError: If the service is unreachable
+        ValueError: If host names a port that is unreadable or disagrees with port
     """
     conn = _get_default_connection(host, port)
-    return conn.load(file_path)
+    return conn.load(file_path, strict=strict)
 
 
-def connect(host='localhost', port=50051, auto_start=True):
+def connect(host='localhost', port=None, auto_start=True):
     """Create a new connection to sysml-grpc service.
     
     Convenience function that creates a new Connection instance.
     
     Args:
-        host (str): Service hostname (default: 'localhost')
-        port (int): Service port (default: 50051)
+        host (str): Service hostname, or a ``host:port`` address, whose port is
+            used when no separate port is given (default: 'localhost')
+        port (int, optional): Service port (default: 50051)
         auto_start (bool): If True, automatically start service if not running (default: True)
     
     Returns:
         Connection: New connection instance
+
+    Raises:
+        ValueError: If host names a port that is unreadable or disagrees with port
+
+    Example:
+        >>> conn = pysysml.connect("localhost:50123")
+        >>> conn.port
+        50123
     """
+    host, port = split_target(host, port)
     return Connection(host, port, auto_start=auto_start)
 
 
-def eval(expression, file_path=None, model_hash=None, context_symbol_id=None):
+def convert(to_format, file_path=None, content=None, model_hash=None,
+            from_format='', tolerate_syntax_errors=False, host='localhost',
+            port=None):
+    """Write a model out in another format (module-level convenience).
+
+    Args:
+        to_format (str): 'sysml', 'kerml', 'text', 'ttl', 'turtle' or 'rdf'
+        file_path (str, optional): Path the service reads the source from
+        content (str, optional): Source carried inline
+        model_hash (str, optional): Hash of a loaded model, whose parsed source
+            is converted
+        from_format (str, optional): Format to read the source as; inferred from
+            file_path's extension when omitted, notation for a model_hash, and
+            required for inline content
+        tolerate_syntax_errors (bool): Write notation back out even when the
+            parser could not read all of it
+        host (str): Service hostname, or a ``host:port`` address
+        port (int, optional): Service port (default: 50051)
+
+    Returns:
+        Conversion: The converted model; ``str()`` of it is the text
+
+    Example:
+        >>> import pysysml
+        >>> turtle = pysysml.convert("ttl", file_path="model.sysml")
+        >>> turtle.write("model.ttl")
+        'model.ttl'
+    """
+    conn = _get_default_connection(host, port)
+    return conn.convert(
+        to_format,
+        file_path=file_path,
+        content=content,
+        model_hash=model_hash,
+        from_format=from_format,
+        tolerate_syntax_errors=tolerate_syntax_errors,
+    )
+
+
+def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
+         host='localhost', port=None):
     """Evaluate a SysML expression (module-level convenience).
+
+    A model in hand has :meth:`Model.eval`, which needs neither the hash nor the
+    connection; this form is for an expression evaluated against a file.
     
     Args:
         expression (str): SysML expression
         file_path (str, optional): Parse this file first, get model_hash
         model_hash (str, optional): Use existing model hash
         context_symbol_id (str, optional): Context for evaluation
+        host (str): Service hostname, or a ``host:port`` address
+        port (int, optional): Service port (default: 50051)
         
     Returns:
         Evaluated value
         
     Raises:
-        ValueError: If neither file_path nor model_hash provided, or if both provided
-        RuntimeError: If evaluation fails
+        ValueError: If neither file_path nor model_hash provided, if both are,
+            or if host names a port that is unreadable or disagrees with port
+        ExecutionError: If evaluation fails
         
     Example:
         >>> import pysysml
         >>> result = pysysml.eval("2 + 2", file_path="test.sysml")
         >>> print(result)  # 4
     """
-    conn = _get_default_connection()
+    conn = _get_default_connection(host, port)
     
     # Validate params: exactly one of file_path or model_hash required
     if file_path and model_hash:
@@ -140,27 +222,31 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None):
     return conn.eval(expression, model_hash, context_symbol_id)
 
 
-def instantiate(symbol_id, file_path=None, model_hash=None):
+def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',
+                port=None):
     """Instantiate a part/usage (module-level convenience).
     
     Args:
         symbol_id (str): FQN of symbol to instantiate
         file_path (str, optional): Parse this file first
         model_hash (str, optional): Use existing model hash
+        host (str): Service hostname, or a ``host:port`` address
+        port (int, optional): Service port (default: 50051)
         
     Returns:
         Instance: Instance object
         
     Raises:
-        ValueError: If neither file_path nor model_hash provided, or if both provided
-        RuntimeError: If instantiation fails
+        ValueError: If neither file_path nor model_hash provided, if both are,
+            or if host names a port that is unreadable or disagrees with port
+        ExecutionError: If instantiation fails
         
     Example:
         >>> import pysysml
         >>> instance = pysysml.instantiate("SPACECRAFT_WET", file_path="A1.sysml")
         >>> print(instance.id)
     """
-    conn = _get_default_connection()
+    conn = _get_default_connection(host, port)
     
     # Validate params: exactly one of file_path or model_hash required
     if file_path and model_hash:

@@ -1,0 +1,118 @@
+{
+  "name": "systemica-sysml",
+  "displayName": "SysML v2 (Systemica)",
+  "description": "SysML v2 and KerML syntax highlighting and language support backed by the Systemica language server.",
+  "version": "0.1.0",
+  "publisher": "open-mbee",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Open-MBEE/Systemica.git",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.86.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:sysml",
+    "onLanguage:kerml"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "sysml",
+        "aliases": [
+          "SysML v2",
+          "sysml"
+        ],
+        "extensions": [
+          ".sysml"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "kerml",
+        "aliases": [
+          "KerML",
+          "kerml"
+        ],
+        "extensions": [
+          ".kerml"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "sysml",
+        "scopeName": "source.sysml",
+        "path": "./syntaxes/sysml.tmLanguage.json"
+      },
+      {
+        "language": "kerml",
+        "scopeName": "source.kerml",
+        "path": "./syntaxes/kerml.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "SysML v2 (Systemica)",
+      "properties": {
+        "systemica.server.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Absolute path to the `sysml-lsp` executable. When empty, `sysml-lsp` is looked up on `PATH`."
+        },
+        "systemica.server.args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra arguments passed to the language server."
+        },
+        "systemica.server.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the language server. Turn this off to keep syntax highlighting only."
+        },
+        "systemica.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace the communication with the language server."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "systemica.restartServer",
+        "title": "SysML: Restart Language Server"
+      }
+    ]
+  },
+  "scripts": {
+    "grammar": "go run ./tools/gengrammar -out syntaxes",
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "npm run typecheck && npm run build -- --production && vsce package --no-dependencies --out systemica-sysml.vsix"
+  },
+  "dependencies": {
+    "vscode-languageclient": "9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.5",
+    "@types/vscode": "1.86.0",
+    "@vscode/vsce": "3.2.2",
+    "esbuild": "0.25.0",
+    "typescript": "5.7.3"
+  }
+}

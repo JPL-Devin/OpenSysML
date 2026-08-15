@@ -13,6 +13,15 @@ type RecordEntry struct {
 	WildcardImports []WildcardImport // for packages: its `import X::*` declarations
 	AliasTarget     string           // for aliases: raw target text of "alias X for Y"
 	Unit            *UnitFacts       // for measurement units: their reduction to base units
+
+	// Annotations are the metadata annotating the symbol, which an element
+	// filter classifies it by and its absent declaration would have stated.
+	Annotations []AnnotationFacts
+
+	// NamespaceFilters are the conditions of the namespace's `filter` members,
+	// compiled: they restrict what it re-exports, and the declaration they were
+	// written in is gone.
+	NamespaceFilters []*FilterPredicate
 }
 
 // AddRecords registers synthetic, AST-less symbols for a document directly by
@@ -33,6 +42,7 @@ func (idx *Index) AddRecords(name string, entries []RecordEntry) {
 			SuperFQNs:      e.Supers,
 			AliasTargetFQN: e.AliasTarget,
 			Unit:           e.Unit,
+			Annotations:    e.Annotations,
 		}
 		idx.register(e.FQN, sym)
 		idx.declaredAt[sym] = e.FQN
@@ -49,6 +59,7 @@ func (idx *Index) AddRecords(name string, entries []RecordEntry) {
 		if len(e.WildcardImports) > 0 {
 			idx.setWildcardImports(e.FQN, name, e.WildcardImports)
 		}
+		idx.SetNamespaceFilters(e.FQN, name, filtersFromPredicates(e.NamespaceFilters))
 	}
 }
 

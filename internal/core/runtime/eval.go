@@ -322,7 +322,7 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 		if declared {
 			return Value{}, fmt.Errorf("%w for feature %s", ErrNoValue, name)
 		}
-		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedFeature, name)
+		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedReference, name)
 	}
 
 	// Multi-part qualified names: A::B::x
@@ -341,7 +341,7 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 	// Resolve first part using resolver's qualified-name logic (handles global index)
 	currentSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, firstQN)
 	if !ok {
-		return Value{}, fmt.Errorf("unresolved first part of qualified name: %s", firstName.Text)
+		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedReference, firstName.Text)
 	}
 
 	// Walk remaining parts using model.LookupMember (spec requirement)
@@ -714,9 +714,15 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 		}
 	}
 
-	// Simplified: assume both are ValConst int/real
+	// Arithmetic is defined on constants; anything else names the operator and
+	// both operand types rather than reporting a bare mismatch.
 	if left.Kind != ValConst || right.Kind != ValConst {
-		return Value{}, ErrTypeMismatch
+		return Value{}, &OperandTypeError{
+			Op:    n.Operator.String(),
+			Left:  describeOperand(left),
+			Right: describeOperand(right),
+			Span:  n.Span(),
+		}
 	}
 
 	// Exponentiation shares the folder's implementation, so a folded and an
@@ -741,12 +747,12 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 			result = left.Const.Int * right.Const.Int
 		case ast.OpDiv:
 			if right.Const.Int == 0 {
-				return Value{}, fmt.Errorf("division by zero")
+				return Value{}, ErrDivisionByZero
 			}
 			result = left.Const.Int / right.Const.Int
 		case ast.OpMod:
 			if right.Const.Int == 0 {
-				return Value{}, fmt.Errorf("division by zero")
+				return Value{}, ErrDivisionByZero
 			}
 			result = left.Const.Int % right.Const.Int
 		}
@@ -768,7 +774,7 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 		result = leftReal / rightReal
 	case ast.OpMod:
 		if rightReal == 0 {
-			return Value{}, fmt.Errorf("division by zero")
+			return Value{}, ErrDivisionByZero
 		}
 		result = math.Mod(leftReal, rightReal)
 	}

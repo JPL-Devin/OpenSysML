@@ -37,7 +37,8 @@ Load a model first, then evaluate:
 sysml -e "someAttribute" model.sysml
 ```
 
-**Note:** Options (`-e`) must come BEFORE positional arguments (files).
+**Note:** flags may be written before or after the files — `sysml model.sysml -e "x"`
+and `sysml -e "x" model.sysml` do the same thing.
 
 ### Multiple Evaluations
 
@@ -92,18 +93,27 @@ done
 
 ### 5. CI/CD Integration
 
+A pipeline gates on the exit status: an expression that could not be evaluated
+exits `2`, and only a value on stdout is left to compare (see
+[Exit status](#exit-status)):
+
 ```bash
-# Check that calculated value matches expected
+# Check that a calculated value matches what is expected
 expected=42
-output=$(sysml -e "designParameter" design.sysml)
-actual=$(echo "$output" | grep "=" | awk '{print $2}')
+actual=$(sysml -e "designParameter" design.sysml | awk '/^ *=/ {print $2}') || exit $?
 if [ "$actual" = "$expected" ]; then
     echo "✓ Design parameter validated"
-    exit 0
 else
-    echo "✗ Design parameter mismatch: expected $expected, got $actual"
+    echo "✗ Design parameter mismatch: expected $expected, got $actual" >&2
     exit 1
 fi
+```
+
+Constraint, requirement and satisfy verdicts gate the same way, and report
+themselves:
+
+```bash
+sysml -satisfy -constraint MassBudget design.sysml   # 0 held, 1 answered false, 2 undecided
 ```
 
 ### 6. Use REPL Meta Commands
@@ -125,6 +135,9 @@ echo "%load model.sysml
 | `--debug` | | Report every diagnostic over the whole session buffer, with the pass that produced it |
 | `--quiet` | | Report errors only, suppressing warnings |
 | `--trace` | | Report each execution step: expression evaluation, calc invocation, action tokens, state transitions |
+| `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf` (see [RDF_INTEROP.md](../docs/RDF_INTEROP.md)) |
+| `--from <format>` | | Input format for `--convert` (default: from the input's extension) |
+| `--output <file>` | `-o` | Write the conversion to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
 
@@ -135,6 +148,9 @@ echo "%load model.sysml
 ```
 sysml [options] [file...]
 ```
+
+Flags may be written before or after the files. A file named like a flag is read
+as a file after `--`, which ends the flags: `sysml -trace -- -m.sysml`.
 
 ## Examples
 
@@ -182,16 +198,88 @@ sysml>
 
 ## Error Handling
 
-Errors are written to stderr with exit code 1:
+**On every run that is not a prompt, what was asked for goes to stdout and what
+went wrong goes to stderr.** Evaluated values, conversion output, verdict lines
+and the `✓` echoes of what a load declared are results; model diagnostics —
+errors and warnings alike — and anything that stopped the run are findings, and
+so is the `wrote <file> …` note a `-convert -o` prints when it succeeds, which is
+kept off stdout so a conversion can be piped.
+
+A file that cannot be read ends the run:
 
 ```bash
-sysml missing.sysml
-# stderr: error loading missing.sysml: open missing.sysml: no such file or directory
-# exit code: 1
-
-sysml -e "nonexistent" model.sysml 2> errors.log
-# stderr written to errors.log
+$ sysml missing.sysml
+sysml: cannot read missing.sysml: no such file or directory
+$ echo $?
+2
 ```
+
+A model that does not analyse cleanly answers nothing, so its diagnostics end the
+run rather than an evaluation being reported against a model nobody could read:
+
+```bash
+$ sysml -e "1+1" bad.sysml 2>/dev/null
+$ echo $?
+2
+$ sysml -e "1+1" bad.sysml 2>&1 >/dev/null
+bad.sysml:2:39: error: expected an expression
+  part def Vehicle { attribute mass = ; }
+                                      ^
+sysml: bad.sysml did not analyse cleanly
+```
+
+An expression that cannot be evaluated is reported the same way, leaving what the
+load declared on stdout:
+
+```bash
+$ sysml -e "Demo::Vehicle::nope" model.sysml
+✓ package Demo
+sysml: unresolved reference: Demo::Vehicle::nope
+$ echo $?
+2
+```
+
+So `2> errors.log` collects everything a script would otherwise have to read the
+results for, plus the `wrote …` note of a successful `-convert -o` and any
+warning the model raised — neither of which changes the status, so a non-empty
+log is not by itself a failure. The status is.
+
+## Exit status
+
+The whole contract, which is the same whatever the run was asked to do. This is
+the one place it is written down; [docs/QUICKSTART.md](../docs/QUICKSTART.md)
+links here.
+
+| Status | Means |
+|--------|-------|
+| `0` | What was asked for was done: every file loaded and analysed cleanly, every `-e` expression produced a value, every check held, a conversion was written. Warnings leave the status `0`. |
+| `1` | The model answered false: a constraint, requirement or satisfaction assertion the model decided did not hold. Only a verdict reports this status. |
+| `2` | What was asked for could not be done, so the model answered nothing: a file that could not be read, a model that did not analyse cleanly, an unresolved name, a check that could not be made, a conversion that could not be written, a misused flag or an invalid `SYSML_MAX_*` value. |
+
+```bash
+$ sysml -constraint MassBudget model.sysml; echo $?      # a verdict the model decided
+✗ Constraint MassBudget failed
+1
+
+$ sysml -debug -quiet model.sysml; echo $?
+sysml: -debug and -quiet are mutually exclusive
+2
+
+$ SYSML_MAX_STEPS=abc sysml -e "1+1"; echo $?
+sysml: SYSML_MAX_STEPS="abc" is not an integer: set it to a positive number of evaluation steps (default 10000000)
+2
+
+$ sysml examples/state-machine-demo.sysml -convert ttl; echo $?
+sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7:13: save to .sysml or .kerml instead, which writes the source exactly; see docs/RDF_INTEROP.md § Limitations
+2
+```
+
+The prompt is the exception: a line it could not carry out is reported and the
+session goes on, and `%quit` or Ctrl-D exits `0`. `sysml model.sysml` at a
+terminal loads the model, reports what analysis found, and opens the prompt with
+status `0` — the prompt is where the model gets fixed. The same command with its
+lines coming from a pipe or a file gates: it exits `2` for a model that did not
+analyse cleanly.
 
 ## Use Cases
 
@@ -204,10 +292,13 @@ sysml -e "nonexistent" model.sysml 2> errors.log
 
 ## Tips
 
-- Put options (`-e`, `-v`) **before** file arguments
 - Use `%help` in REPL to see all meta commands
 - Combine multiple `-e` flags to evaluate related expressions
 - Load common definitions before custom models
-- Check exit codes: 0 = success, 1 = error
-- Redirect stderr separately from stdout for error handling
+- Read [Exit status](#exit-status) before gating a pipeline on one: `0` means the
+  model answered what was asked, `1` that it answered false, `2` that it answered
+  nothing
+- Results are on **stdout** and findings — diagnostics, warnings, whatever
+  stopped the run — on **stderr**, so `> model.ttl` and `2> errors.log` separate
+  them
 - Use shell pipes for REPL automation: `echo "%load file.sysml" | sysml`
