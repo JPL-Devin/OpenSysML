@@ -88,7 +88,7 @@
     sysml:owningNamespace <urn:sysmlv2:element:Quoted%20Names> ;
     sysx:memberIndex "4"^^xsd:integer ;
     sysml:declaredName "off model" ;
-    sysml:type "'Not Declared Here'" ;
+    sysml:type "Not Declared Here" ;
     sysx:hasBody "false"^^xsd:boolean .
 
 <urn:sysmlv2:element:Quoted%20Names::state>

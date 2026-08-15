@@ -760,13 +760,17 @@ func (d *decoder) referenceList(el *element, property string) []string {
 
 // referenceName renders a reference term as the name to write in source.
 //
-// A literal is a name that resolved outside this model, and is written as it
-// was. An element IRI is written relative to the scope the reference appears
-// in — the same name the author would have written — falling back to the full
-// qualified name when the target is not in scope.
+// A literal is a name that resolved outside this model, quoted where the
+// notation needs it, except an expression literal, which is already the text it
+// was written as. An element IRI is written relative to the scope the reference
+// appears in — the same name the author would have written — falling back to the
+// full qualified name when the target is not in scope.
 func (d *decoder) referenceName(term rdf.Term, scope string) string {
 	if term.IsLiteral() {
-		return term.Value
+		if term.Datatype == rdf.Systemica+dtExpression {
+			return term.Value
+		}
+		return qualifiedNameText(term.Value)
 	}
 	qname, ok := rdf.QualifiedNameOf(term.Value)
 	if !ok {

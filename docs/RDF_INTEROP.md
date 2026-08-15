@@ -130,7 +130,10 @@ decode back exactly.
   inside the model and as plain literals where it does not: `sysml:type`
   (the `:` clause), `specializes`, `subsets`, `redefines`, `references`,
   `crosses`, `disjointFrom`, `intersects`, `inverseOf`, `unions`, `chains`,
-  `includes`, `via`, `annotates`, `subject`
+  `includes`, `via`, `annotates`, `subject`. A literal carries the name itself,
+  without the quotes an unrestricted name is written with; a target that is an
+  expression rather than a name (a feature chain, say) is carried as the text it
+  was written as, typed `sysx:Expression` to tell the two apart.
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity
 - `sysml:value` — a feature's value
 - `sysml:importedNamespace`, `sysml:aliasedElement`, `sysml:client`,

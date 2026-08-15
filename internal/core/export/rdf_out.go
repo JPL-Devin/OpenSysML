@@ -51,6 +51,10 @@ const (
 	xCondition       = "condition"
 )
 
+// dtExpression is the datatype of a relationship target that is not a name but
+// an expression, carried as the text it was written as rather than as a name.
+const dtExpression = "Expression"
+
 // Metaclass names for the constructs that have no SysML metaclass of their own
 // in this mapping.
 const (
@@ -549,7 +553,7 @@ func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Rela
 			e.graph.Add(subject, e.sysml(property), e.reference(owner, qualifiedText(name)))
 			continue
 		}
-		e.graph.Add(subject, e.sysml(property), rdf.String(e.text(rel.Target)))
+		e.graph.Add(subject, e.sysml(property), rdf.TypedLiteral(e.text(rel.Target), rdf.Systemica+dtExpression))
 	}
 }
 
@@ -604,9 +608,9 @@ func (e *encoder) reference(owner, name string) rdf.Term {
 		}
 		scope = scope[:cut]
 	}
-	// A name that links to nothing is carried as notation, so a name needing
-	// the quotes of an unrestricted name keeps them.
-	return rdf.String(qualifiedNameText(name))
+	// A name that links to nothing is carried as the plain name; the quotes an
+	// unrestricted name needs are notation, added when it is written back out.
+	return rdf.String(name)
 }
 
 func (e *encoder) text(node ast.Node) string {
