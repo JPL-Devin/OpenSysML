@@ -194,11 +194,7 @@ func (s *Session) checkSatisfy(name string) []Verdict {
 	assertions := ctx.SatisfyAssertionsIn(scope)
 	if len(assertions) == 0 {
 		// Nothing was checked, so nothing is claimed about the model.
-		return []Verdict{{
-			Subject: name,
-			Status:  VerdictUnresolved,
-			Lines:   []string{fmt.Sprintf("no satisfaction assertion in %s", where)},
-		}}
+		return []Verdict{unresolvedVerdict(name, fmt.Sprintf("no satisfaction assertion in %s", where))}
 	}
 	verdicts := make([]Verdict, 0, len(assertions))
 	for _, a := range assertions {

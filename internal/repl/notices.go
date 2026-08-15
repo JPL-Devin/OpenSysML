@@ -143,6 +143,16 @@ func instancesGoneNote(n, version int) string {
 		countOf(n, "instance was", "instances were"), version)
 }
 
+// instancesPartlyGoneNote reports the objects a submission dropped alongside the
+// ones it kept, which a list of the survivors would not otherwise mention.
+func instancesPartlyGoneNote(n, version int) string {
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf("(%s also dropped when the declarations changed at submission %d — re-run %%instantiate)",
+		countOf(n, "instance was", "instances were"), version)
+}
+
 func countOf(n int, one, many string) string {
 	if n == 1 {
 		return "1 " + one
@@ -157,7 +167,10 @@ type endedSession struct {
 	kind     string // "action" or "state machine"
 	name     string // the behavior that was being debugged
 	rootName string // the declaration whose resubmission ended it
-	version  int    // the submission that did it
+	// objectGone records that what ended it was the loss of the object performing
+	// the behavior, which rootName then names.
+	objectGone bool
+	version    int // the submission that did it
 }
 
 // reason explains an ended debugging session in the past tense, for a command
@@ -165,6 +178,10 @@ type endedSession struct {
 func (e *endedSession) reason() string {
 	if e == nil {
 		return ""
+	}
+	if e.objectGone {
+		return fmt.Sprintf("the %s session for %q ended when the object %s performing it was dropped at submission %d",
+			e.kind, e.name, e.rootName, e.version)
 	}
 	return fmt.Sprintf("the %s session for %q ended when %s was redeclared at submission %d",
 		e.kind, e.name, e.rootName, e.version)

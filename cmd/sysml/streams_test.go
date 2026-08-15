@@ -91,6 +91,14 @@ func TestStreamsAndStatus(t *testing.T) {
 		stderr: []string{"sysml: unresolved reference: Rover::nosuch"},
 		absent: []string{"error: unresolved reference"},
 	}, {
+		// The line goes through the same boundary as the other undecided
+		// verdicts, so the command reports it under the command's prefix.
+		name:   "a model that states no satisfaction assertion decides nothing",
+		model:  warningModel,
+		args:   []string{"-satisfy"},
+		status: exitUnevaluable,
+		stderr: []string{"no satisfaction assertion in the session"},
+	}, {
 		name:   "a check the model decided false stays status 1",
 		model:  checkModel,
 		args:   []string{"-constraint", "Rover::TooHeavy"},

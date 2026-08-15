@@ -610,18 +610,58 @@ follow them with the cheap canaries: `%action tally` + `%continue` → `total = 
 `Session.accept` (internal/repl/session.go) drops any earlier snippet whose **declared names**
 intersect the new submission's. So typing `package Demo { part def Trailer { ... } }` to *add* a
 member to an already-loaded `package Demo` **replaces the whole package** — `Demo::Vehicle` and
-friends become `unresolved reference: …`, while `%instances` still lists the now-orphaned instance and
-instance IDs restart. When you just want to add declarations mid-session, use a **different package
+friends become `unresolved reference: …`, and the instances of them are dropped (with a notice) since
+the declarations they were built from are gone. When you just want to add declarations mid-session, use a **different package
 name**. When you want to prove that newly-typed declarations are visible to the qualified-name path
 (the `s.idx`/`s.rtCtx`/`s.instances` invalidation in `Submit`), a fresh package avoids conflating the
 two behaviors.
 
-`Submit` also resets `s.instances`, so **any** submission wipes previously created instances:
-expect `%instances` → `(no instances created)` right afterwards, the next `%instantiate` to get
-`ID: 1`, and `%slots` on a still-valid symbol to say `no instance of "…" (use %instantiate first)`
-rather than printing stale slots. An active `%action`/`%state` debugging session is *deliberately*
-not reset by a submission — it keeps running against the executor built from the older document. Per
-the maintainer this is intended; do not report it as a bug.
+`Submit` **carries instances over** what a submission did not change (`internal/repl/carryover.go`,
+`runtime.Adopt`): after an unrelated `part def B;`, `%instances` still lists the instance with the
+**same ID**, `%slots` still prints its values, and the next `%instantiate` gets a *fresh* ID rather
+than `ID: 1`. What the submission invalidated still goes — redeclaring the instance's own definition,
+or a declaration its features are typed by — and then the notice
+`note: N instance(s) … dropped because the declarations changed` is expected, with `%instances`
+saying so too (`(no instances created; …)`, or `(… also dropped …)` when only some went). An active
+`%action`/`%state` debugging session likewise survives an unrelated submission and ends, with a
+notice naming the declaration, when what it depends on changes.
+
+Recipes that actually distinguish working from broken here (used to verify PR #168):
+
+- **Survival:** `part def A { attribute x : ScalarValues::Integer = 1; }` + `%instantiate A` +
+  `part def B;` → no drop notice, `%instances` → `A (ID: 1)`, `%slots A` → `x = 1`. The parent
+  commit's binary (see the contrast-binary recipe) prints the drop notice and
+  `error: no instance of "A"` on the same input, so run both on camera.
+- **Partial loss:** instantiate two definitions, then redeclare only one → `note: 1 instance was
+  dropped …` plus `%instances` listing the survivor and
+  `(1 instance was also dropped when the declarations changed at submission N — re-run %instantiate)`.
+  A `part def D { part t : T; }` instance is dropped by redeclaring `T`, not only `D`.
+- **Fresh IDs:** the next `%instantiate` after a survival gets the next unused ID (2, 3, …); an ID
+  restarting at 1 while an older instance still lists is the failure signature.
+- **Debugger:** `%tokens` is the action-side inspector — `%current` answers
+  `no active state machine session` for an action session, which is not a bug. After the session
+  ends, `%step`/`%current` report `error: no active … session: … ended when <name> was redeclared at
+  submission N`.
+- **Performer-based end notice:** to lose the *object* without superseding the behavior, keep them in
+  separate packages (`package P { part def Ship { action tally { … } } }`,
+  `package Q { part s : P::Ship; }`, `%instantiate Q::s`, `%action P::Ship::tally Q::s`) and then
+  resubmit `package Q` with an extra member → `note: action debugging session for "P::Ship::tally"
+  ended (the object Q::s performing it was dropped)`. Redeclaring `P` instead names the declaration.
+- **Value expressions are re-derived, not invalidated** (as of the `runtime.Adopt` change in
+  PR #168): a carried slot whose feature has a value expression (`attribute m = double(3.0);`) is
+  reset to unmaterialized, so the new context recomputes it from the declarations the expression
+  reads *now*. Redeclaring `calc def double` with `x * 3.0` therefore keeps `ID: 1` and prints **no**
+  drop notice, while `%slots A` moves `6.00 → 9.00`; the same holds through chains
+  (`outer` calling `inner`: `7.00 → 10.00`; `attribute h = g * 2.0` read by `m`: `11.00 → 15.00`).
+  The assertion that catches the earlier stale-value bug is **`%eval` must agree with `%slots`** after
+  every such change — a `%slots` that keeps the old number while `%eval` of the same expression
+  returns the new one is the failure signature. Slots materialized some other way (composite parts,
+  connector ends, collections) must keep their carried values *and* nested instance IDs
+  (`w = Instance(ID: 2)`). Drops are still expected for the instance's own redeclared definition and
+  for a change to a declaration one of its features is typed by.
+- **Never put a literal TAB in piped REPL input** (`printf '…\t…' | ./bin/sysml`): readline enters
+  completion mode and the process dies with `panic: bytes: negative Repeat count`. Use spaces in
+  one-line rehearsal snippets.
 
 Also: analysis still runs over the whole accumulated buffer, but since PR #65 the **report** is
 scoped to the submission just made, so one bad snippet no longer keeps re-printing its error on
@@ -630,9 +670,10 @@ later submissions. Two consequences when testing:
 - Reported line/column numbers are **relative to what you just typed** (`Result.Offset` /
   `baseLine()` in `internal/repl/render.go`), so a one-line submission reports `1:36:` no matter how
   much is already in the buffer. Only `%verbosity debug` numbers against the whole buffer.
-- While an earlier error is unresolved, a later clean submission prints
-  `note: an earlier session error is unresolved, so deeper checks may not have run here (see it with
-  -debug)` before its summary. That note is expected, not a failure.
+- While an earlier error is unresolved, the next clean submission prints
+  `note: deeper checks may not have run here: the error on buffer line N is unresolved (see it with
+  -debug)` before its summary. That note is expected, not a failure — and it is printed **once**, not
+  on every later submission, so its absence on the ones after is also expected.
 
 Still true: accidentally typing a shell command like `clear` at the `>` prompt is parsed as SysML
 and pollutes the buffer. `%clear` resets the session.
@@ -1329,7 +1370,8 @@ Traps found while testing it:
 - **`part def ;` is *not* a bad line** — it parses as an anonymous part def and prints `✓ part def`.
   To show the prompt surviving a bad line, use `%eval nope` (unresolved) and
   `part def B { attribute q : ; }` (syntax error), then a following `%eval 6*7` → `= 42` as proof the
-  session continued. Expect the `note: an earlier session error is unresolved …` line afterwards.
+  session continued. Expect the `note: deeper checks may not have run here: the error on buffer line
+  N is unresolved …` line on the submission after the bad one.
 - `-convert ttl` of most models fails on unsupported constructs — a **constraint member** is one
   (`cannot convert the constraint member at …`, exit 2). That makes a check-oriented fixture a useful
   negative row but useless as the clean-conversion row; use
@@ -1371,8 +1413,8 @@ piped-stdin form *before* recording, so the recorded run is one clean pass; anyt
 over a pipe is not visible in the video and should be reported as weaker evidence.
 
 **Never type `clear` at the `sysml>` prompt while recording.** It is submitted as SysML, not run by
-the shell, so it leaves an unresolved session error and every later submission gains a
-`note: an earlier session error is unresolved, so deeper checks may not have run here` line that
+the shell, so it leaves an unresolved session error and the next submission gains a
+`note: deeper checks may not have run here: the error on buffer line N is unresolved` line that
 looks like a defect in the frame. Clear the screen *before* starting the REPL (`clear; ./bin/sysml`),
 scroll instead with `shift+PageUp`/`shift+PageDown` when long output (`%builtins`, `%help`) runs off
 the top, or quit and restart the REPL for a clean screen.

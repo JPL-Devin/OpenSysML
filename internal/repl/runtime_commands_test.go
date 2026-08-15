@@ -150,21 +150,20 @@ func TestLookupSeesDeclarationsAddedAfterFirstLookup(t *testing.T) {
 	wants(t, run(t, s, "%eval Demo::Trailer::mass"), "900.00")
 }
 
-// A submission discards the runtime context, which restarts instance IDs, so
-// instances created before it must not survive into the new one.
-func TestInstancesDoNotOutliveTheirRuntimeContext(t *testing.T) {
+// An instance does not outlive the declaration it is of: redeclaring that
+// definition rewrites what its slots mean, so the object built from the old one
+// goes, and the listing says why rather than reading like a fresh session.
+func TestInstancesDoNotOutliveTheirDeclaration(t *testing.T) {
 	s := NewSession()
 	s.Submit(`package Demo { part def Vehicle { attribute mass = 1500.0; } }`)
 	wants(t, run(t, s, "%instantiate Demo::Vehicle"), "ID: 1")
 	wants(t, run(t, s, "%instances"), "Demo::Vehicle")
 
-	s.Submit(`package Demo { part def Trailer { attribute mass = 900.0; } }`)
-	// The empty listing now says why it is empty: on its own it reads like a
-	// fresh session, which is how the loss used to go unnoticed.
+	s.Submit(`package Demo { part def Vehicle { attribute mass = 900.0; } }`)
 	wants(t, run(t, s, "%instances"),
 		"no instances created", "1 instance was dropped when the declarations changed at submission 2")
-	wants(t, run(t, s, "%instantiate Demo::Trailer"), "ID: 1")
-	rejects(t, run(t, s, "%instances"), "Demo::Vehicle")
+	wants(t, run(t, s, "%instantiate Demo::Vehicle"), "ID: 1")
+	wants(t, run(t, s, "%slots Demo::Vehicle"), "mass = 900.00")
 }
 
 func TestSlotsWithoutInstance(t *testing.T) {

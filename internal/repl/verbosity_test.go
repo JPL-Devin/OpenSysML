@@ -34,10 +34,54 @@ func TestBlockedAnalysisIsNotReportedAsClean(t *testing.T) {
 	s := NewSession()
 	s.Submit("namespace N { import Missing::X; }")
 	got := strings.Join(renderResult(s.Submit("package P { }"), VerbosityNormal), "\n")
-	wants(t, got, "an earlier session error is unresolved")
+	// The blocking error is named by the buffer line it is on, which is what
+	// makes it something to go and fix.
+	wants(t, got, "deeper checks may not have run here", "buffer line 1")
 
 	clean := strings.Join(renderResult(NewSession().Submit("package P { }"), VerbosityNormal), "\n")
 	rejects(t, clean, "unresolved")
+}
+
+// The warning belongs to the error, not to every command typed after it: an
+// error that stands is named once, and named again only when a different one
+// starts blocking the checks.
+func TestBlockingErrorIsNamedOnceNotOnEverySubmission(t *testing.T) {
+	s := NewSession()
+	s.Submit("namespace N { import Missing::X; }")
+	first := strings.Join(renderResult(s.Submit("package P { }"), VerbosityNormal), "\n")
+	wants(t, first, "deeper checks may not have run here")
+
+	again := strings.Join(renderResult(s.Submit("package Q { }"), VerbosityNormal), "\n")
+	rejects(t, again, "deeper checks")
+
+	// A second, different blocker is worth saying, and is counted with the first.
+	s.Submit("namespace M { import Absent::Y; }")
+	third := strings.Join(renderResult(s.Submit("package R { }"), VerbosityNormal), "\n")
+	wants(t, third, "deeper checks may not have run here", "1 error elsewhere in the buffer")
+}
+
+// A report that leaves the note out has said nothing to be quiet about: a
+// submission rendered at debug verbosity, or one with errors of its own, does
+// not use up the one warning the standing error gets.
+func TestBlockingErrorIsStillNamedWhenTheNoteWasNotPrinted(t *testing.T) {
+	s := NewSession()
+	s.Submit("namespace N { import Missing::X; }")
+
+	debug := strings.Join(renderResult(s.Submit("package P { }"), VerbosityDebug), "\n")
+	rejects(t, debug, "deeper checks may not have run here")
+
+	named := strings.Join(renderResult(s.Submit("package Q { }"), VerbosityNormal), "\n")
+	wants(t, named, "deeper checks may not have run here", "buffer line 1")
+
+	// Nor does a submission reporting errors of its own, which is what there is
+	// to read there instead of the note.
+	other := NewSession()
+	other.Submit("namespace N { import Missing::X; }")
+	res := other.Submit("package R { import Gone::Z; }")
+	rejects(t, strings.Join(renderResult(res, VerbosityNormal), "\n"), "deeper checks may not have run here")
+	if key := other.notedBlocker.reportedKey(); key != "" {
+		t.Errorf("notedBlocker = %q after a report that left the note out", key)
+	}
 }
 
 // The summary covers what this submission declared, not the whole buffer.
