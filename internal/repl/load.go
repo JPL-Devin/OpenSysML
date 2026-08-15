@@ -4,13 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 
 	"github.com/Open-MBEE/Systemica/internal/core/project"
 )
 
 // LoadPaths loads model files into the session. Each path names a file, a
-// directory to walk for .sysml/.kerml files, or a glob pattern. Every file is
+// directory to walk for .sysml/.kerml files, a glob pattern, or standard input
+// as a lone "-", whose contents are reported as <stdin>. Every file is
 // accepted before the buffer is analyzed, so the order files are loaded in does
 // not affect name resolution: a file may reference a declaration another file
 // loaded after it makes. Diagnostics name the file they belong to and count
@@ -53,20 +53,20 @@ func (s *Session) loadPathsReport(paths []string) (LoadReport, error) {
 		return LoadReport{}, err
 	}
 	srcs := make([]SourceFile, 0, len(files))
+	names := make([]string, 0, len(files))
 	for _, file := range files {
-		// #nosec G304 -- the file is one the user named, or one found under a
-		// directory or pattern they named.
-		data, err := os.ReadFile(file)
+		name, data, err := project.ReadFile(file)
 		if err != nil {
-			return LoadReport{}, readError(file, err)
+			return LoadReport{}, readError(name, err)
 		}
-		srcs = append(srcs, SourceFile{Name: file, Text: string(data)})
+		names = append(names, name)
+		srcs = append(srcs, SourceFile{Name: name, Text: string(data)})
 	}
 	var loaded []string
 	if len(files) > 1 {
 		loaded = append(loaded, fmt.Sprintf("loaded %d files:", len(files)))
-		for _, file := range files {
-			loaded = append(loaded, "  "+file)
+		for _, name := range names {
+			loaded = append(loaded, "  "+name)
 		}
 	}
 	found, declared := renderSplit(s.submitFiles(srcs), s.verbosity)

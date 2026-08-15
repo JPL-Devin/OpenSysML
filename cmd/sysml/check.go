@@ -173,7 +173,7 @@ func runChecks(files []string, exprs []string, c checks) int {
 	if sess.HasErrors() {
 		rep.diags(sess.LocatedDiagnostics())
 		rep.problem(sess.DiagnosticLines())
-		rep.failed(fmt.Sprintf("%s did not analyse cleanly; no check was made", strings.Join(files, ", ")))
+		rep.failed(fmt.Sprintf("%s did not analyse cleanly; no check was made", namedModels(files)))
 		return rep.finish()
 	}
 	for _, output := range loaded {
@@ -187,7 +187,7 @@ func runChecks(files []string, exprs []string, c checks) int {
 	// parsing the report reads the warnings the printed load output carries.
 	rep.diags(sess.LocatedDiagnostics())
 	if c.validate {
-		rep.info([]string{fmt.Sprintf("✓ %s: no errors", strings.Join(files, ", "))})
+		rep.info([]string{fmt.Sprintf("✓ %s: no errors", namedModels(files))})
 	}
 
 	for _, expr := range exprs {

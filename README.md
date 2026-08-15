@@ -10,9 +10,9 @@ A complete, production-grade SysML v2 implementation in Go—providing language 
 
 **Download pre-built binaries:**
 ```bash
-# Linux x64
-wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-linux-amd64.tar.gz
-tar xzf sysml-linux-amd64.tar.gz && sudo mv sysml-linux-amd64 /usr/local/bin/sysml
+# Linux x64 (use systemica-linux-arm64.tar.gz on arm64)
+wget https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-linux-amd64.tar.gz
+tar xzf systemica-linux-amd64.tar.gz && sudo mv sysml sysml-lsp /usr/local/bin/
 
 # macOS (Intel or Apple Silicon) — see the note below
 brew install Open-MBEE/tap/systemica

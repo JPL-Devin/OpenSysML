@@ -174,6 +174,11 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "notation is reformatted, Turtle is normalized.\n")
 	fmt.Fprintf(w, "\nFlags may be written before or after the model they apply to. A file named like\n")
 	fmt.Fprintf(w, "a flag is read as a file after --, which ends the flags: sysml -trace -- -m.sysml\n")
+	fmt.Fprintf(w, "\nReading from standard input:\n")
+	fmt.Fprintf(w, "  cat model.sysml | sysml -validate -           # A lone - names standard input\n")
+	fmt.Fprintf(w, "  cat model.sysml | sysml - -convert ttl -from sysml\n")
+	fmt.Fprintf(w, "\nWhat was read from standard input is called <stdin> in diagnostics, and a file\n")
+	fmt.Fprintf(w, "really named \"-\" is read by naming it ./- instead.\n")
 	fmt.Fprintf(w, "\nProfiling a run:\n")
 	fmt.Fprintf(w, "  sysml -validate -memstats model.sysml            # Report what the run cost, on stderr\n")
 	fmt.Fprintf(w, "  sysml -validate -memprofile heap.out model.sysml # Write a heap profile for go tool pprof\n")
@@ -352,7 +357,7 @@ func loadFiles(sess *repl.Session, files []string) (int, error) {
 	writeLines(os.Stdout, report.Loaded)
 	writeLines(os.Stderr, report.Found)
 	if report.Errors {
-		fmt.Fprintf(os.Stderr, "sysml: %s did not analyse cleanly\n", strings.Join(files, ", "))
+		fmt.Fprintf(os.Stderr, "sysml: %s did not analyse cleanly\n", namedModels(files))
 		return exitUnevaluable, nil
 	}
 	writeLines(os.Stdout, report.Declared)
