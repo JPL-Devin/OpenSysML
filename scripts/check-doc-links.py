@@ -64,7 +64,7 @@ def main() -> int:
             target, _, fragment = link.partition("#")
             if target:
                 dest = (md.parent / target).resolve()
-                if not str(dest).startswith(str(root)):
+                if not dest.is_relative_to(root):
                     failures.append(f"{md}: escapes the repository: {link}")
                     continue
                 if not dest.exists():
