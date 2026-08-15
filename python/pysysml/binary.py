@@ -240,8 +240,16 @@ def download_binary(version='latest', github_repo=None):
                 f"Binary may be corrupted or tampered with."
             )
         
-        # Checksum valid - move to final location
-        os.rename(temp_path, binary_path)
+        # Checksum valid - move to final location. os.replace overwrites a cache
+        # being replaced, which os.rename refuses to do on Windows.
+        try:
+            os.replace(temp_path, binary_path)
+        except OSError as e:
+            os.remove(temp_path)
+            raise ConnectionError(
+                f"Downloaded {version} but could not install it at {binary_path}: {e}. "
+                f"A running service holding that file is the usual cause."
+            )
         
         # Make executable
         os.chmod(binary_path, 0o755)

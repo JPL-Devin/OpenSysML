@@ -77,7 +77,7 @@ def test_download_binary():
         with patch('builtins.open', mock_open(read_data=mock_binary_data)):
             with patch('os.makedirs'):
                 with patch('os.chmod'):
-                    with patch('os.rename'):
+                    with patch('os.replace'):
                         result = download_binary(version='v0.1.0')
                         
                         expected_path = get_binary_path()
@@ -150,7 +150,7 @@ def test_download_binary_verifies_checksum():
             with patch('builtins.open', mock_open(read_data=mock_binary_data)):
                 with patch('os.makedirs'):
                     with patch('os.chmod'):
-                        with patch('os.rename'):
+                        with patch('os.replace'):
                             result = download_binary(version, github_repo)
                             
                             # Should have called urlopen twice (checksum + binary)
@@ -236,7 +236,7 @@ def test_download_binary_latest_resolves_tag():
             ]
             with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
                 with patch('builtins.open', mock_open(read_data=mock_binary_data)):
-                    with patch('os.makedirs'), patch('os.chmod'), patch('os.rename'):
+                    with patch('os.makedirs'), patch('os.chmod'), patch('os.replace'):
                         download_binary(version='latest')
 
             mock_resolve.assert_called_once_with('Open-MBEE/Systemica')
@@ -272,6 +272,51 @@ def test_download_binary_records_the_release(cache):
     with open(metadata_path()) as f:
         assert json.load(f) == {'version': 'v0.0.7', 'sha256': checksum}
     assert cached_release() == 'v0.0.7'
+
+
+def test_download_binary_overwrites_the_cache_it_replaces(cache):
+    """Test a download installs over an existing cache, as replacing one must."""
+    cache(b'the release before', version='v0.0.5')
+    data = b'the release asked for'
+    checksum = hashlib.sha256(data).hexdigest()
+    responses = [
+        Mock(__enter__=Mock(return_value=Mock(read=Mock(
+            return_value=f"{checksum}  sysml-grpc-linux-amd64\n".encode()))),
+            __exit__=Mock(return_value=False)),
+        Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=data))),
+             __exit__=Mock(return_value=False)),
+    ]
+    with patch('urllib.request.urlopen', side_effect=responses):
+        with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
+            path = download_binary(version='v0.0.7')
+
+    with open(path, 'rb') as f:
+        assert f.read() == data
+    assert cached_release() == 'v0.0.7'
+    assert not os.path.exists(path + '.tmp')
+
+
+def test_download_binary_reports_a_cache_it_cannot_install_over(cache):
+    """Test a binary held open by a running service is reported, not raised raw."""
+    from pysysml.errors import ConnectionError
+    binary_path = cache(version='v0.0.5')
+    data = b'the release asked for'
+    checksum = hashlib.sha256(data).hexdigest()
+    responses = [
+        Mock(__enter__=Mock(return_value=Mock(read=Mock(
+            return_value=f"{checksum}  sysml-grpc-linux-amd64\n".encode()))),
+            __exit__=Mock(return_value=False)),
+        Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=data))),
+             __exit__=Mock(return_value=False)),
+    ]
+    with patch('urllib.request.urlopen', side_effect=responses):
+        with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
+            with patch('os.replace', side_effect=PermissionError('in use')):
+                with pytest.raises(ConnectionError, match='could not install it'):
+                    download_binary(version='v0.0.7')
+
+    assert not os.path.exists(binary_path + '.tmp')
+    assert cached_release() == 'v0.0.5'
 
 
 def test_cached_release_unknown_when_binary_was_replaced(cache):
