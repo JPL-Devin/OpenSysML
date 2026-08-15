@@ -407,6 +407,44 @@ def test_a_service_lacking_only_a_capability_is_never_stopped(
         owned.wait(timeout=5)
 
 
+def test_a_replacement_that_could_not_take_the_address_is_reported(
+    running_service, tmp_home, monkeypatch
+):
+    """A replacement that never served the address is not taken for one.
+
+    The old service can keep listening — ownership is heuristic — in which case
+    the started one exits and the health probe is answered by what was refused.
+    """
+    port = running_service(version="v0.0.5")
+    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+
+    owned = _fake_owned_service(port)
+    _record_pidfile(owned.pid)
+    monkeypatch.setattr(
+        "pysysml.connection.ensure_binary", lambda **kwargs: _exiting_binary()
+    )
+    monkeypatch.setattr("pysysml.connection.cached_release", lambda: "v0.0.7")
+
+    with pytest.warns(RuntimeWarning, match="replaced the sysml-grpc service"):
+        with pytest.raises(StaleServiceError) as excinfo:
+            Connection(port=port)
+
+    assert "kept serving the address" in excinfo.value.reason
+    # Nothing is recorded, so no dead pid is left standing for the real service.
+    assert not os.path.exists(_get_pidfile_path())
+    assert not os.path.exists(_get_refcount_path())
+    owned.wait(timeout=5)
+
+
+def _exiting_binary():
+    """An executable that exits at once, as one that cannot bind the port does."""
+    path = os.path.join(tempfile.mkdtemp(), "sysml-grpc")
+    with open(path, "w") as f:
+        f.write(f"#!{sys.executable}\nraise SystemExit(1)\n")
+    os.chmod(path, 0o755)
+    return path
+
+
 def _free_port():
     """A port nothing is listening on, for a service started by the client."""
     with socket.socket() as sock:

@@ -1263,6 +1263,11 @@ class Connection:
                 
                 for attempt in range(max_retries):
                     time.sleep(retry_delay)
+                    # An answer proves the address is served, not that it is
+                    # served by the process started here — one that could not
+                    # bind the address exits and leaves the old one answering.
+                    if process.poll() is not None:
+                        self._service_started_here_died(process.poll())
                     if self._probe_service(self.host, self.port, timeout=2.0):
                         # Write PID file for reference counting
                         pidfile_path = _get_pidfile_path()
@@ -1296,6 +1301,31 @@ class Connection:
                 f"Another process may be starting the service."
             )
     
+    def _service_started_here_died(self, exit_code):
+        """Report a service started here that exited instead of serving.
+
+        Args:
+            exit_code (int): What it exited with
+
+        Raises:
+            StaleServiceError: If another service still serves the address, so
+                returning would talk to the one just refused
+            ConnectionError: If nothing serves the address
+        """
+        self._process = None
+        if self._probe_service(self.host, self.port, timeout=2.0):
+            raise StaleServiceError(
+                self._address,
+                f"the service started here exited ({exit_code}) while another "
+                f"one kept serving the address, which is therefore not the "
+                f"service that was asked for",
+                f"stop whatever holds {self._address} yourself, then retry; or "
+                f"reach another one with connect(port=<other port>)",
+            )
+        raise ConnectionError(
+            f"Service exited with code {exit_code} without serving {self._address}"
+        )
+
     def _cleanup_service(self):
         """Clean up service process with reference counting."""
         if self._cleaned_up or not self._holds_refcount:
