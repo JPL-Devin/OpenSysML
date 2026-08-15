@@ -675,9 +675,43 @@ func (idx *Index) routesOnward(doc, sourceFQN string, sym *Symbol, gate []Elemen
 	}
 	out := make([][]ElementFilter, 0, len(inherited))
 	for _, route := range inherited {
-		out = append(out, append(append([]ElementFilter{}, route...), gate...))
+		out = append(out, addFilters(route, gate))
 	}
 	return out
+}
+
+// addFilters composes two routes' conditions, dropping one the route already
+// carries: conditions apply conjunctively, so repeating one adds nothing — and a
+// cycle of filtered imports would otherwise compose forever.
+func addFilters(route, add []ElementFilter) []ElementFilter {
+	out := append([]ElementFilter{}, route...)
+	for _, f := range add {
+		if !hasFilter(out, f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// hasFilter reports whether a route already carries the condition f.
+func hasFilter(route []ElementFilter, f ElementFilter) bool {
+	for _, have := range route {
+		if have.Same(f) {
+			return true
+		}
+	}
+	return false
+}
+
+// filtersSubsume reports whether a route conditioned by a admits everything one
+// conditioned by b does, which holds when a's conditions are a subset of b's.
+func filtersSubsume(a, b []ElementFilter) bool {
+	for _, f := range a {
+		if !hasFilter(b, f) {
+			return false
+		}
+	}
+	return true
 }
 
 // reexportGated is reexport, additionally recording the element-filter
@@ -705,42 +739,24 @@ func (idx *Index) reexportGated(fqn string, sym *Symbol, doc string, private boo
 }
 
 // record adds a route to the claim, unless one of the same visibility already
-// admits at least as much: an unconditional route makes the conditional ones
-// beside it redundant, and re-expanding an importer records nothing new. It
-// reports whether the claim now admits more than it did.
+// admits at least as much — an unconditional route makes the conditional ones
+// beside it redundant, and re-expanding an importer records nothing new. Keeping
+// only the routes no other subsumes also bounds the set, which is what lets a
+// cycle of filtered imports settle. It reports whether the claim now admits more
+// than it did.
 func (c *reexportClaim) record(route gateRoute) bool {
 	for _, have := range c.routes {
-		if have.private != route.private {
-			continue
-		}
-		if len(have.filters) == 0 || sameFilters(have.filters, route.filters) {
+		if have.private == route.private && filtersSubsume(have.filters, route.filters) {
 			return false
 		}
 	}
-	if len(route.filters) == 0 {
-		kept := make([]gateRoute, 0, len(c.routes)+1)
-		for _, have := range c.routes {
-			if have.private != route.private {
-				kept = append(kept, have)
-			}
-		}
-		c.routes = kept
-	}
-	c.routes = append(c.routes, route)
-	return true
-}
-
-// sameFilters reports whether two routes impose the same conditions in the same
-// order.
-func sameFilters(a, b []ElementFilter) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if !a[i].Same(b[i]) {
-			return false
+	kept := make([]gateRoute, 0, len(c.routes)+1)
+	for _, have := range c.routes {
+		if have.private != route.private || !filtersSubsume(route.filters, have.filters) {
+			kept = append(kept, have)
 		}
 	}
+	c.routes = append(kept, route)
 	return true
 }
 

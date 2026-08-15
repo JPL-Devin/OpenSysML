@@ -2,6 +2,7 @@ package symbols
 
 import (
 	"testing"
+	"time"
 
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -616,6 +617,32 @@ func TestExpandWildcardImportsCarriesAWidenedRouteOnward(t *testing.T) {
 			if len(routes) != 1 || len(routes[0]) != 0 {
 				t.Fatalf("run %d: %s is gated by %v, want a single unconditional route", i, fqn, routes)
 			}
+		}
+	}
+}
+
+// A cycle of filtered imports settles: composing a route with a condition it
+// already carries adds nothing, so the routes stay bounded and expansion
+// terminates instead of composing ever longer condition chains.
+func TestExpandWildcardImportsSettlesOnACycleOfFilters(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml", "package A { part def X; }")
+	addDoc(t, idx, "b.sysml", "package B { public import A::*[@a]; public import C::*[@c]; }")
+	addDoc(t, idx, "c.sysml", "package C { public import B::*[@b]; }")
+
+	done := make(chan struct{})
+	go func() { defer close(done); idx.ExpandWildcardImports() }()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("expansion did not settle on a cycle of filtered imports")
+	}
+
+	x := lookupOne(t, idx, "A::X")
+	for fqn, want := range map[string]int{"B::X": 1, "C::X": 2} {
+		routes := idx.ReexportGates("", fqn, x, "")
+		if len(routes) != 1 || len(routes[0]) != want {
+			t.Errorf("%s is gated by %v, want a single route of %d conditions", fqn, routes, want)
 		}
 	}
 }
