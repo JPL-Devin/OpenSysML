@@ -28,7 +28,7 @@ from pysysml.connection import (
     _get_pidfile_path,
     _get_refcount_path,
 )
-from pysysml.errors import ConnectionError, StaleServiceError
+from pysysml.errors import ChecksumMismatchError, ConnectionError, StaleServiceError
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 
 
@@ -288,6 +288,34 @@ def test_a_service_this_client_started_is_kept_when_replacing_it_gains_nothing(
         with pytest.raises(StaleServiceError) as excinfo:
             Connection(port=port)
         assert "serve the same build again" in excinfo.value.remedy
+        assert owned.poll() is None  # still running
+    finally:
+        owned.terminate()
+        owned.wait(timeout=5)
+
+
+def test_a_download_that_fails_its_checksum_is_raised_not_read_as_a_mismatch(
+    running_service, tmp_home, monkeypatch
+):
+    """A possibly tampered download is never reported as \"the same build\".
+
+    The replacement check resolves the binary, so the one failure the client
+    refuses to treat as a transport failure must pass through it.
+    """
+    port = running_service(version="v0.0.5")
+    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+
+    owned = _fake_owned_service(port)
+    _record_pidfile(owned.pid)
+
+    def refuse(**kwargs):
+        raise ChecksumMismatchError("sha256 of the download does not match")
+
+    monkeypatch.setattr("pysysml.connection.ensure_binary", refuse)
+
+    try:
+        with pytest.raises(ChecksumMismatchError):
+            Connection(port=port)
         assert owned.poll() is None  # still running
     finally:
         owned.terminate()

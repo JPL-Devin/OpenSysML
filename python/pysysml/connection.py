@@ -23,6 +23,7 @@ from pysysml.capabilities import (
 from pysysml.conversion import Conversion
 from pysysml.diagnostic import Diagnostic
 from pysysml.errors import (
+    ChecksumMismatchError,
     ConnectionError,
     ConversionError,
     ExecutionError,
@@ -1079,10 +1080,13 @@ class Connection:
         """Whether starting the binary would serve the release asked for.
 
         Stopping a service to start the same build gains nothing, so a
-        replacement that cannot differ is reported instead of made.
+        replacement that cannot differ is reported instead of made. A download
+        failing its checksum is raised, never read as "the same build".
         """
         try:
             ensure_binary(version=self._version)
+        except ChecksumMismatchError:
+            raise
         except PySysMLError:
             return False
         return cached_release() == required
