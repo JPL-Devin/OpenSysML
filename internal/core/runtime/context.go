@@ -523,14 +523,14 @@ func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Sc
 }
 
 // ExecuteAction executes an action definition/usage to completion.
-// Returns final token data from the action's execution.
+// Returns the values the action's features hold when it completed.
 func (ctx *Context) ExecuteAction(action *symbols.Symbol) (map[string]Value, error) {
 	return ctx.ExecuteActionWithInputs(action, nil)
 }
 
-// ExecuteActionWithInputs executes an action, seeding the initial token with the
+// ExecuteActionWithInputs executes an action, seeding its feature space with the
 // provided input parameter bindings (keyed by parameter name). Inputs override
-// action attribute defaults of the same name. Returns final token data.
+// action attribute defaults of the same name. Returns the final feature values.
 func (ctx *Context) ExecuteActionWithInputs(action *symbols.Symbol, inputs map[string]Value) (map[string]Value, error) {
 	return ctx.ExecuteActionPerformedBy(action, nil, inputs)
 }
@@ -562,8 +562,8 @@ func (ctx *Context) ExecuteActionPerformedBy(action *symbols.Symbol, self *Insta
 		return nil, fmt.Errorf("execute action: %w", err)
 	}
 
-	// Return accumulated results from final nodes
-	return exec.results, nil
+	// Return the values the action's features hold once it completed
+	return exec.Results(), nil
 }
 
 // ExecuteState executes a state machine, processing events until completion or suspension.

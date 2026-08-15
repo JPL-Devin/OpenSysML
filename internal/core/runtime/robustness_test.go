@@ -21,6 +21,7 @@ import (
 func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
 	t.Run("action_whose_last_node_has_no_succession", testActionWhoseLastNodeHasNoSuccession)
+	t.Run("fork_branches_assigning_the_same_feature", testForkBranchesAssigningTheSameFeature)
 	t.Run("decision_no_satisfied_guard", testDecisionNoSatisfiedGuard)
 	t.Run("state_dangling_transition", testStateDanglingTransition)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
@@ -1365,6 +1366,71 @@ func testActionWhoseLastNodeHasNoSuccession(t *testing.T) {
 		}
 		if len(exec.Tokens()) != 0 {
 			t.Fatalf("step %d past the end revived %d token(s)", i+1, len(exec.Tokens()))
+		}
+	}
+}
+
+// testForkBranchesAssigningTheSameFeature: concurrent branches writing one feature
+// are unordered by the spec; the runtime resolves them by its own step order.
+func testForkBranchesAssigningTheSameFeature(t *testing.T) {
+	src := `
+		package test {
+			action clash {
+				attribute x : Integer = 0;
+
+				first start;
+				fork split;
+				action left { assign x := 1; }
+				action right { assign x := 2; }
+				join sync;
+				done end;
+
+				then start split;
+				then split left;
+				then split right;
+				then left sync;
+				then right sync;
+				then sync end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "clash", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action clash not found")
+	}
+
+	var first semantics.Value
+	for run := 0; run < 3; run++ {
+		exec, err := ctx.CreateActionExecutor(sym)
+		if err != nil {
+			t.Fatalf("run %d create action executor: %v", run+1, err)
+		}
+		if err := exec.RunToCompletion(); err != nil {
+			t.Fatalf("run %d conflicting writes: %v", run+1, err)
+		}
+		if exec.State() != StateCompleted {
+			t.Fatalf("run %d left state %s", run+1, exec.State())
+		}
+
+		got, ok := exec.Results()["x"]
+		if !ok {
+			t.Fatalf("run %d lost the contested feature x", run+1)
+		}
+		if got.Kind != ValConst || got.Const.Kind != semantics.ValInt {
+			t.Fatalf("run %d gave x a non-integer value: %+v", run+1, got)
+		}
+		if got.Const.Int != 1 && got.Const.Int != 2 {
+			t.Fatalf("run %d gave x %d, which neither branch assigned", run+1, got.Const.Int)
+		}
+		if run == 0 {
+			first = got.Const
+			continue
+		}
+		if got.Const.Int != first.Int {
+			t.Fatalf("run %d gave x %d after run 1 gave %d: execution is not deterministic",
+				run+1, got.Const.Int, first.Int)
 		}
 	}
 }

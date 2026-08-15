@@ -1,0 +1,29 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="action" abstract=false variation=false name="ParallelWork"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Integer
+            (*ast.QualifiedName))
+          (LiteralInteger value="0")))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Integer
+            (*ast.QualifiedName))
+          (LiteralInteger value="0")))
+      (InitialNode name="start" successor="")
+      (ForkNode name="split")
+      (Membership visibility="default"
+        (Usage kind="action" name="left" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.AssignmentActionNode)))
+      (Membership visibility="default"
+        (Usage kind="action" name="right" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.AssignmentActionNode)))
+      (JoinNode name="sync")
+      (FinalNode name="end")
+      (SuccessionEdge source="start" target="split")
+      (SuccessionEdge source="split" target="left")
+      (SuccessionEdge source="split" target="right")
+      (SuccessionEdge source="left" target="sync")
+      (SuccessionEdge source="right" target="sync")
+      (SuccessionEdge source="sync" target="end"))))

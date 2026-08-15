@@ -8,11 +8,11 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/lower"
 )
 
-// Token represents a control/data token in action execution.
+// Token represents a control token in action execution. It carries no values of
+// its own: the action's features are one space every token shares (see ActionExecutor.Data).
 type Token struct {
-	ID       int64            // Unique token ID
-	Location ast.Node         // Current node position
-	Data     map[string]Value // Token data (parameters, flow values)
+	ID       int64    // Unique token ID
+	Location ast.Node // Current node position
 
 	// Wait records that this token is parked at an accept node: the accept
 	// found no message it could consume, so the action is suspended there

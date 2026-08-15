@@ -1606,10 +1606,14 @@ func (s *Session) doTokens() ([]string, bool, error) {
 		}
 
 		out = append(out, fmt.Sprintf("  Token %d @ %s", tok.ID, locName))
-		if len(tok.Data) > 0 {
-			for k, v := range tok.Data {
-				out = append(out, fmt.Sprintf("    %s = %s", k, formatValue(v)))
-			}
+	}
+
+	// A token carries no values of its own: every one of them reads and writes
+	// the action's features, so those are shown once.
+	if values := namedValues(exec.Data()); len(values) > 0 {
+		out = append(out, "  Values:")
+		for _, v := range values {
+			out = append(out, fmt.Sprintf("    %s = %s", v.Name, v.Value))
 		}
 	}
 
