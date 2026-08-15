@@ -626,6 +626,31 @@ saying so too (`(no instances created; …)`, or `(… also dropped …)` when o
 `%action`/`%state` debugging session likewise survives an unrelated submission and ends, with a
 notice naming the declaration, when what it depends on changes.
 
+Recipes that actually distinguish working from broken here (used to verify PR #168):
+
+- **Survival:** `part def A { attribute x : ScalarValues::Integer = 1; }` + `%instantiate A` +
+  `part def B;` → no drop notice, `%instances` → `A (ID: 1)`, `%slots A` → `x = 1`. The parent
+  commit's binary (see the contrast-binary recipe) prints the drop notice and
+  `error: no instance of "A"` on the same input, so run both on camera.
+- **Partial loss:** instantiate two definitions, then redeclare only one → `note: 1 instance was
+  dropped …` plus `%instances` listing the survivor and
+  `(1 instance was also dropped when the declarations changed at submission N — re-run %instantiate)`.
+  A `part def D { part t : T; }` instance is dropped by redeclaring `T`, not only `D`.
+- **Fresh IDs:** the next `%instantiate` after a survival gets the next unused ID (2, 3, …); an ID
+  restarting at 1 while an older instance still lists is the failure signature.
+- **Debugger:** `%tokens` is the action-side inspector — `%current` answers
+  `no active state machine session` for an action session, which is not a bug. After the session
+  ends, `%step`/`%current` report `error: no active … session: … ended when <name> was redeclared at
+  submission N`.
+- **Performer-based end notice:** to lose the *object* without superseding the behavior, keep them in
+  separate packages (`package P { part def Ship { action tally { … } } }`,
+  `package Q { part s : P::Ship; }`, `%instantiate Q::s`, `%action P::Ship::tally Q::s`) and then
+  resubmit `package Q` with an extra member → `note: action debugging session for "P::Ship::tally"
+  ended (the object Q::s performing it was dropped)`. Redeclaring `P` instead names the declaration.
+- **Never put a literal TAB in piped REPL input** (`printf '…\t…' | ./bin/sysml`): readline enters
+  completion mode and the process dies with `panic: bytes: negative Repeat count`. Use spaces in
+  one-line rehearsal snippets.
+
 Also: analysis still runs over the whole accumulated buffer, but since PR #65 the **report** is
 scoped to the submission just made, so one bad snippet no longer keeps re-printing its error on
 later submissions. Two consequences when testing:
