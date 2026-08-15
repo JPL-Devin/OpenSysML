@@ -1715,3 +1715,34 @@ printf 'part def A { attribute x : Integer = 1; }\n' | ./bin/sysml | grep -c 'di
   multi-line continuation (`...>`) and silently swallows subsequent lines. Press `ctrl+c` to abandon
   the buffer — it flushes the accumulated parse errors and returns a clean `sysml>` prompt, which is
   itself a good no-panic assertion.
+
+## Constraint/requirement checks: which object the verdict is about (PR #176)
+
+`-constraint`/`-requirement` (and `%constraint`/`%requirement`) pick their subject in this order:
+the object instantiated under the name the condition was reached by, else the *single* session
+object whose type conforms to the type declaring the condition, else declared defaults.
+
+- The suffix is the tell: a verdict about an object reads
+  `✗ Constraint P::Sensor::inRange failed (on P::hot ID: 1)`, a defaults-only verdict has **no
+  `(on …)` suffix**. Assert the suffix, not just ✓/✗ — a defaults evaluation of a fixture whose
+  defaults happen to hold looks like a pass either way.
+- Exit statuses (`cmd/sysml/status.go`): 0 holds, 1 fails, **2 unevaluable/unresolved**. The
+  ambiguity answer is exit 2 with the message
+  `X is carried by more than one object of this session (a, b): check it on one of them, …`,
+  written to **stderr** with a `sysml:` prefix (`error:` in the REPL) and with **no ✓/✗ line** —
+  so a build step never reads a verdict that was not decided.
+- Build a fixture where the *def* declares a default that satisfies the condition and the *usage*
+  redefines it to violate it (`attribute reading = 50.0` vs `:>> reading = 150.0`). Without the
+  default, the pre-fix binary errors with `unresolved reference: reading` instead of the silent
+  `✓ passed`, and the contrast is much less convincing.
+- Carriers include subtypes: `part def Heavy :> Sensor`, `part hotter :> hot`, an abstract def's
+  usage, and a `variation part` all count — instantiating two of them makes the check ambiguous.
+  An instance of an unrelated type does **not** count and leaves the defaults path.
+- Wording quirk worth knowing: a condition that cannot be evaluated (uninitialized slot) still
+  prints `✗ … failed` but exits **2**, and it does carry the `(on …)` suffix.
+- Known blind spot (not fixed by #176): `%eval P::Sensor::reading` still answers the declared
+  default (`= 50.00`) while an object of `Sensor` with `reading = 150` is instantiated; only the
+  constraint/requirement checks do subject selection.
+- `%slots <usage>` is the independent oracle — `inRange: <constraint: violated>` must agree with
+  the verdict for the same object. Declaring anything new in the REPL drops all instances, so a
+  following check silently reverts to defaults (assert the missing `(on …)` suffix there).

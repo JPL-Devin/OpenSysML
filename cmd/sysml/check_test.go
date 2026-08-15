@@ -131,6 +131,28 @@ func TestCheckExitStatus(t *testing.T) {
 		2, "no value for feature lander")
 }
 
+// TestCheckOfInheritedConstraintAfterInstantiate checks what `-instantiate p
+// -constraint C` promises: the verdict, and so the exit status a build step reads,
+// is about the object of p rather than about C's declared defaults.
+func TestCheckOfInheritedConstraintAfterInstantiate(t *testing.T) {
+	binary := buildCLI(t)
+	const model = `package P {
+    part def Sensor {
+        attribute reading = 0.0;
+        constraint inRange { reading <= 100.0 }
+    }
+    part hot : Sensor { attribute :>> reading = 140.0; }
+}
+`
+	wantReport(t, check(t, binary, model, "-instantiate", "P::hot", "-constraint", "P::Sensor::inRange"),
+		1, "✗ Constraint P::Sensor::inRange failed (on P::hot ID: 1)")
+
+	// With no object of the constraint's type the check is about declared
+	// defaults, which hold.
+	wantReport(t, check(t, binary, model, "-constraint", "P::Sensor::inRange"),
+		0, "✓ Constraint P::Sensor::inRange passed")
+}
+
 // TestCheckSatisfyThroughCLI checks the requirement-traceability gate, both over
 // the whole model and for one element's assertions.
 func TestCheckSatisfyThroughCLI(t *testing.T) {

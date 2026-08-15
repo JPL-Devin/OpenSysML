@@ -3,6 +3,7 @@ package repl
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -102,13 +103,16 @@ func (s *Session) checkConstraint(name string) Verdict {
 		return *bad
 	}
 
-	inst, owner := s.owningInstance(target.fqn)
-	passed, err := target.ctx.EvaluateConstraintOn(target.sym, target.scope, inst)
-	// A name that declares something else is a wrong argument, not a verdict:
-	// reporting it as a failed constraint would read as a fault in the model.
-	if errors.Is(err, runtime.ErrNotAConstraint) {
+	// A name that declares something else is a wrong argument, not a verdict, and
+	// is answered so before a subject is chosen for it.
+	if err := runtime.RequireConstraint(target.sym); err != nil {
 		return unresolvedVerdict(name, err.Error())
 	}
+	inst, owner, bad := s.checkSubject(name, target)
+	if bad != nil {
+		return *bad
+	}
+	passed, err := target.ctx.EvaluateConstraintOn(target.sym, target.scope, inst)
 	if err != nil || !passed {
 		return Verdict{Subject: name, Status: failedStatus(err), Lines: []string{
 			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
@@ -132,13 +136,16 @@ func (s *Session) checkRequirement(name string) Verdict {
 		return *bad
 	}
 
-	inst, owner := s.owningInstance(target.fqn)
-	passed, err := target.ctx.EvaluateRequirementOn(target.sym, target.scope, inst)
-	// As for a constraint: a name of another kind is a wrong argument rather
-	// than an unsatisfied requirement.
-	if errors.Is(err, runtime.ErrNotARequirement) {
+	// As for a constraint: a name of another kind is a wrong argument, settled
+	// before a subject is chosen.
+	if err := runtime.RequireRequirement(target.sym); err != nil {
 		return unresolvedVerdict(name, err.Error())
 	}
+	inst, owner, bad := s.checkSubject(name, target)
+	if bad != nil {
+		return *bad
+	}
+	passed, err := target.ctx.EvaluateRequirementOn(target.sym, target.scope, inst)
 	if err != nil || !passed {
 		return Verdict{Subject: name, Status: failedStatus(err), Lines: []string{
 			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),
@@ -211,6 +218,27 @@ type checkTarget struct {
 	fqn   string
 	scope *symbols.Scope
 	ctx   *runtime.Context
+}
+
+// checkSubject is the object a check is about: the one instantiated under the name it
+// was reached by, else the single carrier. Several carriers yield the third result;
+// none leaves the check about declared defaults.
+func (s *Session) checkSubject(name string, target checkTarget) (*runtime.Instance, string, *Verdict) {
+	if inst, owner := s.owningInstance(target.fqn); inst != nil {
+		return inst, owner, nil
+	}
+	carriers := s.carrierInstances(target.sym)
+	switch len(carriers) {
+	case 0:
+		return nil, "", nil
+	case 1:
+		return s.instances[carriers[0]], carriers[0], nil
+	default:
+		bad := unresolvedVerdict(name, fmt.Sprintf(
+			"%s is carried by more than one object of this session (%s): check it on one of them, or start a session holding the one you mean",
+			name, strings.Join(carriers, ", ")))
+		return nil, "", &bad
+	}
 }
 
 // resolveCheckTarget resolves the element a constraint/requirement check names.
