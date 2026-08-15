@@ -1157,8 +1157,8 @@ Testing notes that generalize to any future built-in:
   declaration. That divergence is a known rough edge of the built-in dispatch, not a new bug —
   report it as expected, and use `import SystemicaMathFunctions::*;` in fixtures to avoid it.
 - Fixture gotchas when writing action fixtures by hand: `done` is a reserved keyword (use another
-  name), successions must use the `first start; … done end; then a b;` form (the
-  `first a then b;` form yields `action has multiple initial nodes`), and `and`/`or` are
+  name), a body has one start so only one `first` end (chain the rest as `first a then b; then b c;`
+  — two `first` ends yield `action has multiple initial nodes`), and `and`/`or` are
   `unsupported operator` in constraint bodies — keep constraint expressions to a single comparison.
 
 ## Testing parser changes end-to-end (keyword/symbol parity, dispatch rewrites)
