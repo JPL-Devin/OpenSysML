@@ -22,11 +22,9 @@ SKIP_PREFIX = ("http://", "https://", "mailto:", "tel:", "ftp://")
 
 
 def slugs(heading: str) -> set[str]:
-    """GitHub's heading slug: lowercased, punctuation dropped, spaces to dashes.
+    """GitHub's heading slug: lowercased, punctuation dropped, a dash per space.
 
-    GitHub dashes every space, so punctuation dropped between words leaves a run
-    of dashes; the collapsed spelling is accepted too, since that is what a
-    reader writes by hand.
+    Dropped punctuation leaves a run of dashes; the collapsed spelling is accepted too.
     """
     text = re.sub(r"`|\*|_|<[^>]+>", "", heading)
     text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
