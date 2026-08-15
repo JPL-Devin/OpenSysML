@@ -41,6 +41,18 @@ func loadSource(t *testing.T, src string) *Session {
 	return s
 }
 
+// rejectVerdict checks that a verdict's report does not say something, which is
+// how wording that contradicts its status is caught.
+func rejectVerdict(t *testing.T, v Verdict, substrings ...string) {
+	t.Helper()
+	joined := strings.Join(v.Lines, "\n")
+	for _, unwanted := range substrings {
+		if strings.Contains(joined, unwanted) {
+			t.Errorf("report of %q says %q, got:\n%s", v.Subject, unwanted, joined)
+		}
+	}
+}
+
 // wantVerdict checks a verdict's status and that its report says so.
 func wantVerdict(t *testing.T, v Verdict, want VerdictStatus, substrings ...string) {
 	t.Helper()
@@ -88,11 +100,9 @@ func TestCheckRequirementStatus(t *testing.T) {
 		"unresolved reference: nosuch")
 }
 
-// TestConditionThatCouldNotBeEvaluated checks that an evaluation which could not
-// be carried out is not counted against the model: a requirement over an unbound
-// subject decided nothing, however it is reported.
-func TestConditionThatCouldNotBeEvaluated(t *testing.T) {
-	s := loadSource(t, `package Landing {
+// unevaluableFixture states a condition over a subject nothing binds, so its
+// evaluation cannot be carried out at all.
+const unevaluableFixture = `package Landing {
     part def Lander { attribute verticalSpeed; }
     requirement def TouchdownRequirement {
         subject lander : Lander;
@@ -100,10 +110,42 @@ func TestConditionThatCouldNotBeEvaluated(t *testing.T) {
     }
     requirement touchdown : TouchdownRequirement;
 }
-`)
-	wantVerdict(t, s.CheckRequirement("Landing::touchdown"), VerdictUnresolved,
-		"✗ Requirement Landing::touchdown failed",
+`
+
+// TestConditionThatCouldNotBeEvaluated checks that an evaluation which could not
+// be carried out is not counted against the model: a requirement over an unbound
+// subject decided nothing, and its report says so rather than reading as a
+// failure a reader would draw the opposite conclusion from.
+func TestConditionThatCouldNotBeEvaluated(t *testing.T) {
+	s := loadSource(t, unevaluableFixture)
+
+	v := s.CheckRequirement("Landing::touchdown")
+	wantVerdict(t, v, VerdictUnresolved,
+		"? Requirement Landing::touchdown could not be evaluated",
 		"no value for feature lander")
+	rejectVerdict(t, v, "Requirement Landing::touchdown failed", "✗")
+}
+
+// TestSatisfactionThatCouldNotBeEvaluated checks the third verdict surface: an
+// assertion whose evaluation failed reads as undecided, as its exit status is.
+func TestSatisfactionThatCouldNotBeEvaluated(t *testing.T) {
+	s := loadSource(t, `package Landing {
+    part def Lander { attribute verticalSpeed; }
+    requirement def TouchdownRequirement {
+        subject lander : Lander;
+        require lander.verticalSpeed <= 1.5;
+    }
+    requirement touchdown : TouchdownRequirement;
+    part lander1 : Lander;
+    part context { assert satisfy touchdown by lander1; }
+}
+`)
+	verdicts := s.CheckSatisfy("Landing::context")
+	if len(verdicts) != 1 {
+		t.Fatalf("got %d verdicts, want 1: %v", len(verdicts), verdicts)
+	}
+	wantVerdict(t, verdicts[0], VerdictUnresolved, "could not be evaluated")
+	rejectVerdict(t, verdicts[0], "fails", "✗")
 }
 
 // TestCheckOnInstantiatedObject checks that a check made after InstantiateNamed
@@ -179,6 +221,62 @@ func TestCheckOfConditionCarriedBySeveralObjectsIsUnresolved(t *testing.T) {
 		"carried by more than one object", "P::cold, P::hot")
 	wantVerdict(t, s.CheckRequirement("P::Sensor::ok"), VerdictUnresolved,
 		"carried by more than one object")
+}
+
+// TestEvalOfInheritedFeatureIsAboutTheObject: %eval must choose the subject a
+// check does, or the same session answers a condition about the object and the
+// feature it reads about the definition's default.
+func TestEvalOfInheritedFeatureIsAboutTheObject(t *testing.T) {
+	s := loadSource(t, inheritedConditionFixture)
+	if _, err := s.InstantiateNamed("P::hot"); err != nil {
+		t.Fatalf("InstantiateNamed: %v", err)
+	}
+
+	out, err := s.EvalExpr("P::Sensor::reading")
+	if err != nil {
+		t.Fatalf("EvalExpr: %v", err)
+	}
+	got := strings.Join(out, "\n")
+	for _, want := range []string{"(on P::hot ID: 1)", "= 140.00"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("%%eval missing %q, got:\n%s", want, got)
+		}
+	}
+}
+
+// Several objects carrying the feature is the same question it is for a check,
+// so %eval names them rather than answering about one of them.
+func TestEvalOfFeatureCarriedBySeveralObjectsIsRefused(t *testing.T) {
+	s := loadSource(t, inheritedConditionFixture)
+	for _, name := range []string{"P::hot", "P::cold"} {
+		if _, err := s.InstantiateNamed(name); err != nil {
+			t.Fatalf("InstantiateNamed(%s): %v", name, err)
+		}
+	}
+
+	_, err := s.EvalExpr("P::Sensor::reading")
+	if err == nil {
+		t.Fatal("eval chose between two objects carrying the feature")
+	}
+	for _, want := range []string{"carried by more than one object", "P::cold, P::hot"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error missing %q: %v", want, err)
+		}
+	}
+}
+
+// Without an object the declared default is still an answer, and it claims no
+// object.
+func TestEvalWithoutAnObjectUsesDeclaredDefaults(t *testing.T) {
+	s := loadSource(t, inheritedConditionFixture)
+	out, err := s.EvalExpr("P::Sensor::reading")
+	if err != nil {
+		t.Fatalf("EvalExpr: %v", err)
+	}
+	got := strings.Join(out, "\n")
+	if !strings.Contains(got, "= 0.00") || strings.Contains(got, "(on ") {
+		t.Errorf("%%eval without an object reported:\n%s", got)
+	}
 }
 
 // A name of another kind is answered as such however many objects of its type

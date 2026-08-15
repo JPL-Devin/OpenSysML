@@ -398,7 +398,7 @@ exit=2
 
 $ sysml -requirement MyModel::healthy checks.sysml; echo "exit=$?"
 ✓ package MyModel
-✗ Requirement MyModel::healthy failed
+? Requirement MyModel::healthy could not be evaluated
   Error: requirement healthy: require condition evaluation failed: no value for feature sensor
 exit=2
 ```

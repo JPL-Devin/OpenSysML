@@ -98,13 +98,13 @@ func TestRequirementViolationIsAVerdictNotAnError(t *testing.T) {
 }
 
 // A constraint over a feature nothing declares is still an error, distinct from
-// a violated assertion.
+// a violated assertion, and reads as one rather than as a model that failed.
 func TestConstraintEvaluationErrorIsNotAViolation(t *testing.T) {
 	s := NewSession()
 	s.Submit(`package Bad { constraint broken { assert nonexistent > 0; } }`)
 	got := run(t, s, "%constraint Bad::broken")
-	wants(t, got, "✗ Constraint Bad::broken failed", "Error:")
-	rejects(t, got, "Assertion evaluated to false")
+	wants(t, got, "? Constraint Bad::broken could not be evaluated", "Error:")
+	rejects(t, got, "Assertion evaluated to false", "Constraint Bad::broken failed", "✗")
 }
 
 // --- Debugger session lifetime across submissions ---

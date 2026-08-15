@@ -126,6 +126,37 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 	return names
 }
 
+// AmbiguousSubjectError reports a feature or condition several of the session's
+// objects carry, so which one an answer would be about is a question.
+type AmbiguousSubjectError struct {
+	Name     string
+	Carriers []string
+}
+
+func (e *AmbiguousSubjectError) Error() string {
+	return fmt.Sprintf("%s is carried by more than one object of this session (%s): name one of them, or start a session holding the one you mean",
+		e.Name, strings.Join(e.Carriers, ", "))
+}
+
+// subjectFor is the object an answer about sym is about: the one
+// instantiated under the name it was reached by, else the single carrier. Several
+// carriers are an AmbiguousSubjectError; none leaves the answer about declared
+// defaults. name is the spelling to report, fqn the resolved one.
+func (s *Session) subjectFor(name, fqn string, sym *symbols.Symbol) (*runtime.Instance, string, error) {
+	if inst, owner := s.owningInstance(fqn); inst != nil {
+		return inst, owner, nil
+	}
+	carriers := s.carrierInstances(sym)
+	switch len(carriers) {
+	case 0:
+		return nil, "", nil
+	case 1:
+		return s.instances[carriers[0]], carriers[0], nil
+	default:
+		return nil, "", &AmbiguousSubjectError{Name: name, Carriers: carriers}
+	}
+}
+
 // walkSlots follows a chain of part slots from inst. An unwalkable segment
 // yields no object, since binding to an ancestor would answer about the wrong one.
 func (s *Session) walkSlots(inst *runtime.Instance, name string, segments []string) (*runtime.Instance, string) {

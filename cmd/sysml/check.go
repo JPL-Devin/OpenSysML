@@ -190,21 +190,22 @@ func runChecks(files []string, exprs []string, c checks) int {
 		rep.info([]string{fmt.Sprintf("✓ %s: no errors", namedModels(files))})
 	}
 
-	for _, expr := range exprs {
-		output, err := sess.EvalExpr(expr)
+	// An object first: a constraint, requirement or expression about a feature of
+	// a part is answered about the object that carries it, and only an existing
+	// one can be.
+	for _, name := range c.instantiate {
+		output, err := sess.InstantiateNamed(name)
 		if err != nil {
-			rep.failed(fmt.Sprintf("%s: %v", expr, err))
+			rep.failed(err.Error())
 			return rep.finish()
 		}
 		rep.info(output)
 	}
 
-	// An object first: a constraint or requirement of a part is checked against
-	// the object that carries it, and only an existing one can be.
-	for _, name := range c.instantiate {
-		output, err := sess.InstantiateNamed(name)
+	for _, expr := range exprs {
+		output, err := sess.EvalExpr(expr)
 		if err != nil {
-			rep.failed(err.Error())
+			rep.failed(fmt.Sprintf("%s: %v", expr, err))
 			return rep.finish()
 		}
 		rep.info(output)

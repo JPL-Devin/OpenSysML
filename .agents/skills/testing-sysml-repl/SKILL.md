@@ -1738,11 +1738,42 @@ object whose type conforms to the type declaring the condition, else declared de
 - Carriers include subtypes: `part def Heavy :> Sensor`, `part hotter :> hot`, an abstract def's
   usage, and a `variation part` all count — instantiating two of them makes the check ambiguous.
   An instance of an unrelated type does **not** count and leaves the defaults path.
-- Wording quirk worth knowing: a condition that cannot be evaluated (uninitialized slot) still
-  prints `✗ … failed` but exits **2**, and it does carry the `(on …)` suffix.
-- Known blind spot (not fixed by #176): `%eval P::Sensor::reading` still answers the declared
-  default (`= 50.00`) while an object of `Sensor` with `reading = 150` is instantiated; only the
-  constraint/requirement checks do subject selection.
+- Since PR #180 a condition that **could not be evaluated** (uninitialized slot, unbound subject)
+  prints `? <what> could not be evaluated` + `  Error: <why>` and exits **2**; it keeps the
+  `(on …)` suffix when it is about an object. Before #180 it printed `✗ … failed` / `✗ … fails`.
+  Assert all three states in one pass — `✓ … passed` exit 0, `✗ … failed` exit 1 (with
+  `Assertion evaluated to false: <condition>`), `? … could not be evaluated` exit 2 — and grep the
+  **verdict line only** for the old wording: the `Error:` reason legitimately contains the words
+  "evaluation failed", so a bare `grep -c failed` over the whole output is a false positive.
+  `%slots` mirrors the three states as `<constraint: satisfied>` / `<constraint: violated>` /
+  `<constraint: not evaluated: …>` (the `not evaluated:` prefix is #180's). `-json` reports
+  `"status": "unresolved"`, `"exit": 2` and the same `?` line.
+- CLI checks refuse to run at all on a model that does not analyse cleanly
+  (`… did not analyse cleanly; no check was made`, exit 2), so an unevaluable-verdict fixture must
+  itself be error-free — put the `assert nonexistent > 0` style constraint in a *separate* file
+  from the unbound-subject requirement, or the CLI never reaches the verdict.
+- PR #180 made `%eval` pick the same subject as the checks (`Session.subjectFor`): with `P::hot`
+  instantiated, `%eval P::Sensor::reading` answers `= 140.00 (on P::hot ID: 1)`; with `P::hot` and
+  `P::cold` both instantiated it refuses with `error: … is carried by more than one object of this
+  session (P::cold, P::hot): name one of them, …`; with nothing instantiated it answers the
+  declared default and prints **no** `(on …)`. Subtype carriers (`part hotter :> hot`) work too.
+- Still a blind spot after #180: a **nested part** whose value is redefined on the instantiated
+  object is not the subject. With `part o : Outer { part :>> b { attribute :>> c = 99.0; } }`,
+  `%slots A::o` shows `c = 99.00` and `small: <constraint: violated>`, yet `%eval A::Outer::b::c`
+  answers `= 5.00` and `%constraint A::Inner::small` says `passed` (identical on the parent
+  commit, so it is pre-existing, not a regression — but it reads as a contradiction and may be
+  worth flagging). Also `%eval A::b::c` (skipping the def segment) is `unresolved reference` in
+  both revisions; the resolvable spellings are `A::Outer::b::c` and `A::Inner::c`.
+- `-instantiate` objects are created **before** `-e` expressions since PR #180, so
+  `sysml -instantiate P::hot -e P::Sensor::reading m.sysml` prints the instance line first and
+  answers `140.00 (on P::hot ID: 1)`; the parent binary answered `0.00`. Any change to
+  `cmd/sysml/check.go`'s ordering needs the other combinations re-walked: multiple `-e` (still in
+  flag order), `-e` with `-constraint` (exit 1), a failing `-e` (aborts with exit 2 before later
+  `-e`s), `-validate`, and `cat m.sysml | sysml -e '1+1'` (piped stdin works for `-e`, but named
+  checks over piped stdin refuse with `no model to check; name the file …`).
+- Konsole typing trap: the `✗` glyph does not survive the computer tool's `type` action into a
+  shell command (it arrives empty, and `grep -e ''` then matches every line). Build the pattern in
+  the shell instead: `X=$(printf '\u2717'); … | grep -nE "$X|could not be evaluated"`.
 - `%slots <usage>` is the independent oracle — `inRange: <constraint: violated>` must agree with
   the verdict for the same object. Declaring anything new in the REPL drops all instances, so a
   following check silently reverts to defaults (assert the missing `(on …)` suffix there).

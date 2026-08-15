@@ -126,9 +126,41 @@ func TestCheckExitStatus(t *testing.T) {
 		2, "✗ Constraint Rover::TooHeavy failed", "unresolved reference: nosuch")
 
 	// A requirement whose subject nothing binds decided nothing about the model,
-	// however the prompt words it, so it is not reported as a failure.
-	wantReport(t, check(t, binary, checkModel, "-requirement", "Rover::touchdown"),
-		2, "no value for feature lander")
+	// so the report says so rather than contradicting the status a script reads.
+	undecided := check(t, binary, checkModel, "-requirement", "Rover::touchdown")
+	wantReport(t, undecided, 2,
+		"? Requirement Rover::touchdown could not be evaluated", "no value for feature lander")
+	rejectReport(t, undecided, "✗ Requirement Rover::touchdown failed")
+}
+
+// rejectReport checks that a report does not say something, which is how wording
+// that contradicts the exit status is caught.
+func rejectReport(t *testing.T, got runOutcome, substrings ...string) {
+	t.Helper()
+	for _, unwanted := range substrings {
+		if strings.Contains(got.output(), unwanted) {
+			t.Errorf("report says %q:\n%s", unwanted, got.output())
+		}
+	}
+}
+
+// TestEvalAfterInstantiateThroughCLI: `-instantiate p -e f` answers about the
+// object of p, as a check of a condition over f does, rather than about the
+// declared default.
+func TestEvalAfterInstantiateThroughCLI(t *testing.T) {
+	binary := buildCLI(t)
+	const model = `package P {
+    part def Sensor { attribute reading = 0.0; }
+    part hot : Sensor { attribute :>> reading = 140.0; }
+}
+`
+	wantReport(t, check(t, binary, model, "-instantiate", "P::hot", "-e", "P::Sensor::reading"),
+		0, "(on P::hot ID: 1)", "= 140.00")
+
+	// With no object the declared default is the answer, claiming no object.
+	answered := check(t, binary, model, "-e", "P::Sensor::reading")
+	wantReport(t, answered, 0, "= 0.00")
+	rejectReport(t, answered, "(on ")
 }
 
 // TestCheckOfInheritedConstraintAfterInstantiate checks what `-instantiate p
