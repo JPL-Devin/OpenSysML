@@ -24,14 +24,32 @@ func TestUnresolvedReferenceSuggestsSpelling(t *testing.T) {
 			want: "unresolved reference: Integer — did you mean ScalarValues::Integer?",
 		},
 		{
-			name: "typo suggests the nearest name",
-			src:  "part def A { attribute x : Intger; }",
-			want: "did you mean ScalarValues::Integer",
+			name:   "typo suggests the nearest name and nothing further out",
+			src:    "part def A { attribute x : Intger; }",
+			want:   "unresolved reference: Intger — did you mean ScalarValues::Integer?",
+			absent: " or ",
 		},
 		{
-			name: "typo of a library name declared elsewhere",
-			src:  "part def A { attribute x : Whel; }",
-			want: "did you mean ",
+			name: "the user's own declaration rules out a distant library name",
+			src:  "part def Wheel;\npart w : Whel;",
+			want: "unresolved reference: Whel — did you mean Wheel?",
+		},
+		{
+			name:   "a name too short for a typo to be identifiable is not guessed",
+			src:    "part w : Wh;",
+			want:   "unresolved reference: Wh",
+			absent: "did you mean",
+		},
+		{
+			name:   "a name matching nothing is not guessed",
+			src:    "part p : Zzzqqwwvv;",
+			want:   "unresolved reference: Zzzqqwwvv",
+			absent: "did you mean",
+		},
+		{
+			name: "a typo of an imported library name is offered as written",
+			src:  "package T { private import ScalarValues::*; part def A { attribute x : Intger; } }",
+			want: "unresolved reference: Intger — did you mean Integer?",
 		},
 		{
 			name:   "a qualified name is not second-guessed",

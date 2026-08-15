@@ -72,6 +72,13 @@ type Index struct {
 	// expansion to the importers a change can reach instead of the whole workspace.
 	dirtyNS     map[string]nsChange
 	lastTargets map[string][]resolvedImport
+
+	// libraryDocs names the documents that hold bundled library content rather
+	// than the workspace's own, and librarySyms the symbols they declare, so a
+	// consumer can tell a library name from one the user wrote. Both are dropped
+	// with the document.
+	libraryDocs map[string]bool
+	librarySyms map[*Symbol]bool
 }
 
 // nsChange is what happened to a namespace's direct members since the last
@@ -104,6 +111,8 @@ func NewIndex() *Index {
 		children:      make(map[string]map[string]bool),
 		dirtyNS:       make(map[string]nsChange),
 		lastTargets:   make(map[string][]resolvedImport),
+		libraryDocs:   make(map[string]bool),
+		librarySyms:   make(map[*Symbol]bool),
 	}
 }
 
@@ -523,12 +532,17 @@ func (idx *Index) RemoveDocument(name string) {
 		return
 	}
 
+	library := idx.libraryDocs[name]
 	for _, e := range idx.contributions[name] {
 		if idx.declaredAt[e.sym] == e.fqn {
 			delete(idx.declaredAt, e.sym)
+			if library {
+				delete(idx.librarySyms, e.sym)
+			}
 		}
 		idx.deregister(e.fqn, e.sym)
 	}
+	delete(idx.libraryDocs, name)
 	delete(idx.contributions, name)
 	delete(idx.docRoots, name)
 
@@ -549,6 +563,24 @@ func (idx *Index) RemoveDocument(name string) {
 	delete(idx.docReexports, name)
 
 	idx.ExpandWildcardImports()
+}
+
+// MarkLibrary records that the named document holds bundled library content,
+// not the workspace's own. Call it after the document is added: adding a
+// document removes its previous contributions, and the mark with them. Only
+// what the document declares is marked, not the names it re-exports.
+func (idx *Index) MarkLibrary(name string) {
+	idx.libraryDocs[name] = true
+	for _, e := range idx.contributions[name] {
+		if idx.declaredAt[e.sym] == e.fqn {
+			idx.librarySyms[e.sym] = true
+		}
+	}
+}
+
+// Library reports whether sym is declared by bundled library content.
+func (idx *Index) Library(sym *Symbol) bool {
+	return sym != nil && idx.librarySyms[sym]
 }
 
 // knows reports whether the index holds anything for the named document.

@@ -69,22 +69,23 @@ func (t *Table) Qualified(name string) []string {
 	return out
 }
 
-// Nearest returns the registered simple names closest to word by edit distance,
-// within the tolerance a typo of that length justifies.
-func (t *Table) Nearest(word string) []string {
+// Neighbours returns the registered simple names within word's edit-distance
+// budget, closest first, at most NeighbourLimit of them: what a caller scores
+// against the scope the name was written in.
+func (t *Table) Neighbours(word string) []Neighbour {
 	n := len([]rune(word))
-	tolerance := toleranceFor(n)
+	budget := Budget(n)
 	lower := strings.ToLower(word)
-	var hits []scored
-	for l := n - tolerance; l <= n+tolerance; l++ {
+	var hits []Neighbour
+	for l := n - budget; l <= n+budget; l++ {
 		for _, c := range t.byLength[l] {
 			if c.name == word {
 				continue
 			}
-			if d := EditDistance(lower, c.lower); d <= tolerance {
-				hits = append(hits, scored{name: c.name, dist: d})
+			if EditDistance(lower, c.lower) <= budget {
+				hits = append(hits, Neighbour{Name: c.name, Distance: EditDistance(word, c.name)})
 			}
 		}
 	}
-	return rank(hits)
+	return nearestFirst(hits)
 }
