@@ -21,6 +21,22 @@ func TestExpandStdinIsNeitherStattedNorGlobbed(t *testing.T) {
 	}
 }
 
+// TestExpandKeepsStdinApartFromAFileNamedDash checks that naming both the stream
+// and the file called "-" beside it loads both, neither taken for the other.
+func TestExpandKeepsStdinApartFromAFileNamedDash(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "-"), "package Dash { }\n")
+	t.Chdir(dir)
+
+	got, err := Expand([]string{Stdin, "./-"})
+	if err != nil {
+		t.Fatalf("Expand: %v", err)
+	}
+	if len(got) != 2 || got[0] != Stdin || got[1] != "./-" {
+		t.Fatalf("Expand = %v, want [%s ./-]", got, Stdin)
+	}
+}
+
 // TestReadFileNamesWhatItRead checks that a file is reported under the path that
 // named it, which is what diagnostics about it are counted from.
 func TestReadFileNamesWhatItRead(t *testing.T) {

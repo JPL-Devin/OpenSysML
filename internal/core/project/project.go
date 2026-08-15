@@ -183,8 +183,12 @@ func walk(dir string, visited map[string]bool, out *[]string) error {
 }
 
 // absKey is the identity a path is deduplicated under: its absolute form when
-// that can be computed, the path itself otherwise.
+// that can be computed, the path itself otherwise. Standard input keeps its own
+// identity, being no file, least of all the one called "-" beside it.
 func absKey(path string) string {
+	if IsStdin(path) {
+		return Stdin
+	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return path
