@@ -285,6 +285,8 @@ def test_ensure_service_starts_when_needed(tmp_home):
                         with patch('subprocess.Popen') as mock_popen:
                             mock_process = Mock()
                             mock_process.pid = 12345
+                            # A running process polls as None.
+                            mock_process.poll.return_value = None
                             mock_popen.return_value = mock_process
                             
                             with patch('atexit.register') as mock_atexit:
@@ -315,7 +317,9 @@ def test_ensure_service_timeout(tmp_home):
                     
                     # Mock _probe_service: always returns False (never starts)
                     with patch.object(conn, '_probe_service', return_value=False):
-                        with patch('subprocess.Popen'):
+                        with patch('subprocess.Popen') as mock_popen:
+                            mock_popen.return_value = Mock(pid=12345)
+                            mock_popen.return_value.poll.return_value = None
                             with patch('time.sleep'):  # Speed up test
                                 from pysysml.errors import ConnectionError
                                 try:
@@ -396,6 +400,7 @@ def test_ensure_service_uses_lockfile(tmp_home):
         with patch('os.path.exists', side_effect=mock_exists):
             with patch('subprocess.Popen') as mock_popen:
                 mock_popen.return_value = Mock(pid=12345)
+                mock_popen.return_value.poll.return_value = None
                 
                 # Mock time.sleep to skip retries
                 with patch('time.sleep'):

@@ -6,26 +6,31 @@ import os
 import psutil
 import subprocess
 import time
+import warnings
 from filelock import FileLock, Timeout
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
-from pysysml.binary import ensure_binary
+from pysysml.binary import cached_release, ensure_binary, resolve_latest_version
 from pysysml.capabilities import (
     CAPABILITY_CONVERT,
     CAPABILITY_QUERY,
     CAPABILITY_VERIFICATION,
     ServerInfo,
+    mismatch_reason,
     require,
     upgrade_remedy,
 )
 from pysysml.conversion import Conversion
 from pysysml.diagnostic import Diagnostic
 from pysysml.errors import (
+    ChecksumMismatchError,
     ConnectionError,
     ConversionError,
     ExecutionError,
     ModelFileNotFoundError,
     ModelNotFoundError,
+    PySysMLError,
+    StaleServiceError,
     UnsupportedValueError,
     WrongKindError,
     from_rpc_error,
@@ -38,6 +43,9 @@ from pysysml.verdict import CalcResult, Verdict
 
 #: Port the service listens on when a caller names none.
 DEFAULT_PORT = 50051
+
+#: A required release not looked up yet, distinct from 'none required'.
+_UNRESOLVED = object()
 
 
 def split_target(host, port=None):
@@ -196,6 +204,53 @@ def _is_pidfile_stale():
         return (True, None)
 
 
+def _read_refcount():
+    """How many clients hold a reference to the service. Caller must hold lockfile."""
+    refcount_path = _get_refcount_path()
+    try:
+        with open(refcount_path, 'r') as f:
+            return int(f.read().strip())
+    except (FileNotFoundError, ValueError):
+        return 0
+
+
+def _remove_service_state():
+    """Forget the pidfile and refcount of a service that is gone.
+
+    Caller must hold the lockfile.
+    """
+    for path in (_get_pidfile_path(), _get_refcount_path()):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+
+
+def _stop_process(process):
+    """Stop a service process, killing it if it will not terminate.
+
+    Args:
+        process (psutil.Process): The process to stop
+
+    Returns:
+        bool: Whether the process is gone afterwards
+    """
+    try:
+        process.terminate()
+        process.wait(timeout=5)
+    except psutil.NoSuchProcess:
+        pass
+    except (psutil.TimeoutExpired, psutil.AccessDenied):
+        try:
+            process.kill()
+            process.wait(timeout=5)
+        except psutil.NoSuchProcess:
+            pass
+        except (psutil.TimeoutExpired, psutil.AccessDenied):
+            return False
+    return True
+
+
 class Connection:
     """Manages connection to sysml-grpc service.
     
@@ -206,7 +261,8 @@ class Connection:
         port (int): Service port
     """
     
-    def __init__(self, host='localhost', port=None, auto_start=True):
+    def __init__(self, host='localhost', port=None, auto_start=True,
+                 version=None, require_capabilities=None):
         """Initialize connection to sysml-grpc service.
         
         Args:
@@ -214,10 +270,23 @@ class Connection:
                 is used when no separate port is given (default: 'localhost')
             port (int, optional): Service port (default: 50051)
             auto_start (bool): If True, automatically start service if not running (default: True)
+            version (str, optional): Release tag the service must report, or
+                'latest'. Defaults to $PYSYSML_GRPC_VERSION, the same tag the
+                binary cache is checked against; without either, whatever
+                release answers is accepted. Checked whether the service is
+                started here or managed by the caller, though only a service
+                this client started can be replaced. A caller-managed service
+                that is not listening yet is checked at the first call instead.
+            require_capabilities (iterable, optional): Capability names the
+                service must report, checked once at connect time rather than
+                when the first call needing one is made
 
         Raises:
             ValueError: If host names a port that is unreadable or disagrees
                 with port
+            StaleServiceError: If another release is already listening on the
+                address and this client may not stop it
+            MissingCapabilityError: If the service lacks a required capability
         """
         host, port = split_target(host, port)
         self.host = host
@@ -231,14 +300,65 @@ class Connection:
         self._server_info = None
         # Only connections that took a reference may release one on close.
         self._holds_refcount = False
+        self._version = version or os.environ.get('PYSYSML_GRPC_VERSION') or None
+        self._required_capabilities = frozenset(require_capabilities or ())
+        self._resolved_release = _UNRESOLVED
+        # A caller-managed service that was not listening yet is checked at the
+        # first handshake, so auto_start=False stays free of eager I/O.
+        self._check_release_on_handshake = False
         
         # Auto-start service if requested
         if auto_start:
             self._ensure_service()
         
         self._channel = grpc.insecure_channel(self._address)
-        self._stub = sysml_pb2_grpc.SysMLServiceStub(self._channel)
+        self._service = sysml_pb2_grpc.SysMLServiceStub(self._channel)
+        try:
+            if not auto_start:
+                self._check_managed_service_release()
+            for capability in sorted(self._required_capabilities):
+                require(self.server_info(), capability, upgrade_remedy(capability))
+        except BaseException:
+            # A refused connection is never returned, so nothing else can
+            # release its channel or the reference it took on the service.
+            self.close()
+            raise
     
+    def _check_managed_service_release(self):
+        """Check the release of a service this client was told not to start.
+
+        Nothing can be started in its place, so a mismatch is reported rather
+        than acted on; ownership does not matter, since nothing is stopped. A
+        service the caller manages may not be listening yet, so one that cannot
+        be asked is checked at the first handshake instead of refused here.
+        """
+        if self._required_release() is None:
+            return
+        info = self._running_service_info()
+        if info is None:
+            self._check_release_on_handshake = True
+            return
+        self._raise_if_release_mismatch(info)
+
+    def _raise_if_release_mismatch(self, info):
+        """Report a service that is not the release asked for.
+
+        Raises:
+            StaleServiceError: If what it reports differs from the requirement
+        """
+        required = self._required_release()
+        if required is None:
+            return
+        reason = mismatch_reason(info, version=required)
+        if reason is not None:
+            raise StaleServiceError(
+                self._address, reason,
+                f"reach a {required} service with connect(port=<its port>), or "
+                f"accept what is running by passing version=None and unsetting "
+                f"$PYSYSML_GRPC_VERSION",
+                info=info,
+            )
+
     def close(self):
         """Close the gRPC channel and decrement refcount."""
         if self._channel:
@@ -253,6 +373,17 @@ class Connection:
         """Context manager exit."""
         self.close()
     
+    @property
+    def _stub(self):
+        """The service stub, with any release check still owed done first.
+
+        Every call goes through here, so a service that came up after the client
+        was built is checked at whichever call reaches it first.
+        """
+        if self._check_release_on_handshake:
+            self.server_info()
+        return self._service
+
     def server_info(self):
         """Ask the service what it is and what it supports.
 
@@ -263,11 +394,15 @@ class Connection:
             ServerInfo: Reported version and capabilities. ``answered`` is False
                 when the service predates the GetServerInfo RPC, in which case
                 it claims no capabilities.
+
+        Raises:
+            StaleServiceError: If a release was asked for and this first answer
+                shows the service is another one
         """
         if self._server_info is None:
             request = sysml_pb2.ServerInfoRequest()
             try:
-                response = self._stub.GetServerInfo(request)
+                response = self._service.GetServerInfo(request)
             except grpc.RpcError as e:
                 if e.code() != grpc.StatusCode.UNIMPLEMENTED:
                     raise from_rpc_error(e) from e
@@ -284,6 +419,11 @@ class Connection:
                     answered=True,
                     origin=self._origin,
                 )
+        # Cleared only once the check passes, so a mismatch keeps being reported
+        # instead of the connection turning usable after one error.
+        if self._check_release_on_handshake:
+            self._raise_if_release_mismatch(self._server_info)
+            self._check_release_on_handshake = False
         return self._server_info
 
     def load(self, file_path, strict=False):
@@ -871,6 +1011,217 @@ class Connection:
         finally:
             channel.close()
     
+    def _running_service_info(self, timeout=5.0):
+        """Ask the service already listening what it is, over a channel of its own.
+
+        Args:
+            timeout (float): RPC timeout in seconds
+
+        Returns:
+            ServerInfo or None: What it reported; ``answered`` is False when it
+                predates the handshake, which is itself an answer, and None when
+                the call failed, so nothing was learned
+        """
+        channel = grpc.insecure_channel(self._address)
+        try:
+            stub = sysml_pb2_grpc.SysMLServiceStub(channel)
+            response = stub.GetServerInfo(
+                sysml_pb2.ServerInfoRequest(), timeout=timeout
+            )
+        except grpc.RpcError as e:
+            if e.code() != grpc.StatusCode.UNIMPLEMENTED:
+                return None
+            return ServerInfo(
+                version='',
+                capabilities=frozenset(),
+                answered=False,
+                origin=self._origin,
+            )
+        finally:
+            channel.close()
+        return ServerInfo(
+            version=response.version,
+            capabilities=frozenset(response.capabilities),
+            answered=True,
+            origin=self._origin,
+        )
+
+    def _required_release(self):
+        """Release tag the service must report, or None if none is required.
+
+        An unresolvable 'latest' requires nothing, as for the binary cache. The
+        answer is resolved once, so every check of a connection uses the same one.
+        """
+        if self._resolved_release is _UNRESOLVED:
+            if self._version != 'latest':
+                self._resolved_release = self._version
+            else:
+                try:
+                    self._resolved_release = resolve_latest_version()
+                except ConnectionError:
+                    self._resolved_release = None
+        return self._resolved_release
+
+    def _started_by_this_client(self):
+        """The service process this client's records say it started on this port.
+
+        Ownership is read from the pidfile and the process's command line, so a
+        service the user started is never taken for one of ours.
+
+        Returns:
+            psutil.Process or None: The owned process, or None if there is none
+        """
+        stale, process = _is_pidfile_stale()
+        if stale or process is None:
+            return None
+        try:
+            cmdline = process.cmdline()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return None
+        if cmdline[-2:] != ['-port', str(self.port)]:
+            return None
+        return process
+
+    def _adopt_running_service(self):
+        """Take over the service already listening, or make room for the one asked for.
+
+        Caller must hold the lockfile.
+
+        Returns:
+            bool: True when the running service was adopted, False when it was
+                stopped and one must now be started in its place
+
+        Raises:
+            MissingCapabilityError: If it is the release asked for but lacks a
+                required capability, which no replacement could add
+            StaleServiceError: If it is not the service asked for and this
+                client may not, or cannot usefully, stop it
+        """
+        required = self._required_release()
+        info = self._running_service_info()
+        if info is None:
+            # A handshake that failed says nothing about the service, so it is
+            # neither trusted for the rest of the session nor stopped.
+            if required is None:
+                # A required capability is checked over the connection's own
+                # channel, which asks again rather than trusting a failed call,
+                # and no replacement could add one without another release.
+                self._hold_running_service(None)
+                return True
+            raise StaleServiceError(
+                self._address,
+                "the GetServerInfo call to it failed, so it cannot be shown to "
+                "be the service that was asked for",
+                "retry, since the service may answer next time; or reach "
+                "another one with connect(port=<other port>)",
+            )
+
+        release_reason = mismatch_reason(info, version=required)
+        capability_reason = mismatch_reason(
+            info, capabilities=self._required_capabilities
+        )
+        if release_reason is None and capability_reason is None:
+            self._hold_running_service(info)
+            return True
+        if release_reason is None:
+            # Only another release can report other capabilities, so a service
+            # that is the release asked for is reported, never stopped. The
+            # shortfall is the documented one, whoever started the service.
+            for capability in sorted(self._required_capabilities):
+                require(info, capability, upgrade_remedy(capability))
+
+        reason = "; ".join(
+            r for r in (release_reason, capability_reason) if r is not None
+        )
+        self._replace_mismatched_service(reason, info, required)
+        return False
+
+    def _hold_running_service(self, info):
+        """Take a reference on the service already listening.
+
+        Caller must hold the lockfile. ``info`` is None when the handshake could
+        not be made, so it is asked again over the connection's own channel.
+        """
+        self._server_info = info
+        _increment_refcount()
+        self._holds_refcount = True
+        atexit.register(self._cleanup_service)
+
+    def _replacement_serves(self, required):
+        """Whether starting the binary would serve the release asked for.
+
+        Stopping a service to start the same build gains nothing, so a
+        replacement that cannot differ is reported instead of made. A download
+        failing its checksum is raised, never read as "the same build".
+        """
+        try:
+            ensure_binary(version=self._version)
+        except ChecksumMismatchError:
+            raise
+        except PySysMLError:
+            return False
+        return cached_release() == required
+
+    def _replace_mismatched_service(self, reason, info, required):
+        """Stop a mismatched service, if this client started it and nothing else uses it.
+
+        Caller must hold the lockfile. A service this client cannot show to be
+        its own is reported rather than killed: the user may be running it
+        deliberately.
+
+        Args:
+            reason (str): How the running service differs from the one asked for
+            info (ServerInfo): What it reported about itself
+            required (str): Release tag the replacement must report
+
+        Raises:
+            StaleServiceError: If this client may not stop it, or stopping it
+                would only start the same build again
+        """
+        process = self._started_by_this_client()
+        if process is None:
+            raise StaleServiceError(
+                self._address, reason,
+                f"stop the service listening on {self._address} yourself, then "
+                f"retry so this client starts the one it asks for; or reach "
+                f"another one with connect(port=<other port>); or ask for what "
+                f"is running by unsetting $PYSYSML_GRPC_VERSION",
+                info=info,
+            )
+        holders = _read_refcount()
+        if holders > 0:
+            raise StaleServiceError(
+                self._address, reason,
+                f"{holders} other pysysml connection(s) still hold this "
+                f"service, so it is not this client's to stop; close them and "
+                f"retry, or reach a service of your own with "
+                f"connect(port=<other port>)",
+                info=info,
+            )
+        if not self._replacement_serves(required):
+            raise StaleServiceError(
+                self._address, reason,
+                f"this client started that service, but the binary it would "
+                f"start in its place cannot be shown to be {required}, so "
+                f"stopping it would serve the same build again; make {required} "
+                f"reachable (or ask for the release you have) and retry",
+                info=info,
+            )
+        if not _stop_process(process):
+            raise StaleServiceError(
+                self._address, reason,
+                f"this client started that service but could not stop it "
+                f"(pid {process.pid}); stop it yourself and retry",
+                info=info,
+            )
+        warnings.warn(
+            f"replaced the sysml-grpc service this client started on "
+            f"{self._address}: {reason}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        _remove_service_state()
+
     def _ensure_service(self):
         """Ensure sysml-grpc service is running, with lockfile coordination.
         
@@ -905,18 +1256,15 @@ class Connection:
                 
                 # Check if service already running (another process may have started it)
                 if self._probe_service(self.host, self.port):
-                    # Service running - increment refcount and return
                     self._origin = (
                         f"service already listening on {self._address}, "
                         f"not started by this client"
                     )
-                    _increment_refcount()
-                    self._holds_refcount = True
-                    atexit.register(self._cleanup_service)
-                    return
+                    if self._adopt_running_service():
+                        return
                 
                 # Get binary path
-                binary_path = ensure_binary()
+                binary_path = ensure_binary(version=self._version)
                 if not os.path.exists(binary_path):
                     raise ConnectionError(f"Binary not found after download: {binary_path}")
                 self._origin = f"{binary_path}, started by this client"
@@ -937,6 +1285,10 @@ class Connection:
                 
                 for attempt in range(max_retries):
                     time.sleep(retry_delay)
+                    # One that could not bind the address exits and leaves the
+                    # old service answering the probe.
+                    if process.poll() is not None:
+                        self._service_started_here_died(process.poll())
                     if self._probe_service(self.host, self.port, timeout=2.0):
                         # Write PID file for reference counting
                         pidfile_path = _get_pidfile_path()
@@ -970,6 +1322,31 @@ class Connection:
                 f"Another process may be starting the service."
             )
     
+    def _service_started_here_died(self, exit_code):
+        """Report a service started here that exited instead of serving.
+
+        Args:
+            exit_code (int): What it exited with
+
+        Raises:
+            StaleServiceError: If another service still serves the address, so
+                returning would talk to the one just refused
+            ConnectionError: If nothing serves the address
+        """
+        self._process = None
+        if self._probe_service(self.host, self.port, timeout=2.0):
+            raise StaleServiceError(
+                self._address,
+                f"the service started here exited ({exit_code}) while another "
+                f"one kept serving the address, which is therefore not the "
+                f"service that was asked for",
+                f"stop whatever holds {self._address} yourself, then retry; or "
+                f"reach another one with connect(port=<other port>)",
+            )
+        raise ConnectionError(
+            f"Service exited with code {exit_code} without serving {self._address}"
+        )
+
     def _cleanup_service(self):
         """Clean up service process with reference counting."""
         if self._cleaned_up or not self._holds_refcount:

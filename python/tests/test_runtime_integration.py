@@ -225,3 +225,47 @@ class TestRuntimeIntegration:
 
         result = self.conn.execute_state("Test::Machine", model.hash)
         assert result["states_visited"] == ["init", "Running", "done"]
+
+    def test_the_model_answers_the_hash_taking_calls_itself(self):
+        """Every call taking a model_hash is reachable on the model it is about.
+
+        A script that loaded a model has no reason to carry its hash back to the
+        connection, so the model-level call must answer the same.
+        """
+        src = '''
+        package Test {
+            part def SimplePart {
+                attribute mass : Integer = 100;
+            }
+            action addFive {
+                attribute result : Integer = 0;
+                first start;
+                action inner {
+                    assign result := result + 5;
+                }
+                done end;
+                then start inner;
+                then inner end;
+            }
+            state Machine {
+                initial init;
+                state Running;
+                final done;
+
+                init then Running;
+                Running then done;
+            }
+        }
+        '''
+        model = self.conn.load_from_content(src)
+
+        assert model.instantiate("Test::SimplePart").mass == 100
+        assert model.execute_action("Test::addFive") == self.conn.execute_action(
+            "Test::addFive", model.hash
+        )
+        assert model.execute_action("Test::addFive", inputs={"result": 10})[
+            "result"
+        ] == 15
+        assert model.execute_state("Test::Machine") == self.conn.execute_state(
+            "Test::Machine", model.hash
+        )

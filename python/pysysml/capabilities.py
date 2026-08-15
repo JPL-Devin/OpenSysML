@@ -12,7 +12,7 @@ then ``False``, and no capability is claimed.
 """
 
 from dataclasses import dataclass
-from typing import FrozenSet
+from typing import FrozenSet, Iterable, Optional
 
 from pysysml.binary import get_binary_path
 from pysysml.errors import PySysMLError
@@ -108,6 +108,43 @@ def upgrade_remedy(capability: str) -> str:
         f"{cached} when that is another release, or build one with `make build-grpc` "
         f"and start it yourself"
     )
+
+
+def mismatch_reason(
+    info: ServerInfo, version: Optional[str] = None,
+    capabilities: Iterable[str] = (),
+) -> Optional[str]:
+    """Why ``info`` is not the service that was asked for, or ``None`` when it is.
+
+    A release is compared as an exact tag, since version strings are not ordered:
+    a build that cannot be shown to be the one asked for is a mismatch.
+
+    Args:
+        info: What the running service reported about itself
+        version: Release tag the client asks for, or ``None`` to ask for none
+        capabilities: Capability names the client asks for
+
+    Returns:
+        How the service differs from what was asked for, or ``None``
+    """
+    reasons = []
+    if version is not None:
+        if not info.answered:
+            reasons.append(
+                f"it did not answer GetServerInfo, so it cannot be shown to be "
+                f"the {version} that was asked for"
+            )
+        elif info.version != version:
+            reasons.append(
+                f"it reports version {info.version or 'unknown'}, but "
+                f"{version} was asked for"
+            )
+    missing = sorted(c for c in capabilities if not info.has(c))
+    if missing:
+        named = ", ".join(repr(c) for c in missing)
+        noun = "capabilities" if len(missing) > 1 else "capability"
+        reasons.append(f"it does not report the {named} {noun} this client requires")
+    return "; ".join(reasons) or None
 
 
 def require(info: ServerInfo, capability: str, remedy: str) -> None:
