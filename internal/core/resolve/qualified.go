@@ -63,7 +63,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 
 	// Walk remaining segments as local members of the current symbol's scope.
 	from := r.ReferringNamespaceFQN(scope)
-	curFQN := cur.Name
+	curFQN := r.registeredFQN(cur)
 	for i, seg := range qn.Parts[1:] {
 		var all []*symbols.Symbol
 
@@ -121,16 +121,23 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 			return resolution{nil, false}
 		}
 		cur = all[0]
-		// A symbol restored from a cache record carries its fully-qualified name,
-		// which is where its own members are registered.
-		if strings.Contains(cur.Name, "::") {
-			curFQN = cur.Name
-		} else {
-			curFQN = memberFQN
-		}
+		curFQN = r.registeredFQN(cur)
 		r.recordPart(qn, i+1, cur)
 	}
 	return resolution{cur, true}
+}
+
+// registeredFQN is the name a symbol's own members are indexed under: the path
+// the index walks for a parsed symbol, and the already-qualified name a symbol
+// restored from a cache record carries.
+func (r *Resolver) registeredFQN(sym *symbols.Symbol) string {
+	if r.idx == nil || sym == nil {
+		return ""
+	}
+	if fqn := withoutEmptySegments(r.idx.GetFQN(sym)); fqn != "" {
+		return fqn
+	}
+	return sym.Name
 }
 
 // ReferringNamespaceFQN returns the fully-qualified name of the namespace a
