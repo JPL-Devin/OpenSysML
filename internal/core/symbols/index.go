@@ -98,7 +98,16 @@ type Index struct {
 // is not defeated by a route that no longer exists.
 type reexportClaim struct {
 	public bool
-	routes [][]ElementFilter
+	routes []gateRoute
+}
+
+// gateRoute is one route a name reached a namespace by: the conditions it
+// imposes, and whether the import that made it was private, which keeps the
+// route out of a lookup made from outside that namespace (KerML 8.2.3.3) —
+// a private unfiltered import must not defeat a public filtered one.
+type gateRoute struct {
+	private bool
+	filters []ElementFilter
 }
 
 // nsChange is what happened to a namespace's direct members since the last
@@ -658,7 +667,9 @@ func (idx *Index) reexportedAt(fqn string) []*Symbol {
 // further namespace imports the filtering one onward, and the target's several
 // routes each stay a route of their own.
 func (idx *Index) routesOnward(doc, sourceFQN string, sym *Symbol, gate []ElementFilter) [][]ElementFilter {
-	inherited := idx.ReexportGates(doc, sourceFQN, sym)
+	// The importing namespace is outside the one it imports from, so only that
+	// one's public routes reach it.
+	inherited := idx.ReexportGates(doc, sourceFQN, sym, "")
 	if len(inherited) == 0 {
 		return [][]ElementFilter{gate}
 	}
@@ -682,42 +693,47 @@ func (idx *Index) reexportGated(fqn string, sym *Symbol, doc string, private boo
 	if claim == nil {
 		return
 	}
-	for _, route := range claim.routes {
-		if len(route) == 0 {
-			return // an unconditional route already admits everything
-		}
-	}
 	for _, gate := range gates {
-		if len(gate) == 0 {
-			claim.routes = [][]ElementFilter{nil}
-			return
-		}
-		if sameRouteRecorded(claim.routes, gate) {
-			continue // this route's conditions are already recorded
-		}
-		claim.routes = append(claim.routes, gate)
+		claim.record(gateRoute{private: private, filters: gate})
 	}
 }
 
-// sameRouteRecorded reports whether routes already holds the conditions of this
-// one, so that re-expanding an importer does not record it twice.
-func sameRouteRecorded(routes [][]ElementFilter, gate []ElementFilter) bool {
-	for _, route := range routes {
-		if len(route) != len(gate) {
+// record adds a route to the claim, unless one of the same visibility already
+// admits at least as much: an unconditional route makes the conditional ones
+// beside it redundant, and re-expanding an importer records nothing new.
+func (c *reexportClaim) record(route gateRoute) {
+	for _, have := range c.routes {
+		if have.private != route.private {
 			continue
 		}
-		same := true
-		for i := range route {
-			if !route[i].Same(gate[i]) {
-				same = false
-				break
-			}
-		}
-		if same {
-			return true
+		if len(have.filters) == 0 || sameFilters(have.filters, route.filters) {
+			return
 		}
 	}
-	return false
+	if len(route.filters) == 0 {
+		kept := make([]gateRoute, 0, len(c.routes)+1)
+		for _, have := range c.routes {
+			if have.private != route.private {
+				kept = append(kept, have)
+			}
+		}
+		c.routes = kept
+	}
+	c.routes = append(c.routes, route)
+}
+
+// sameFilters reports whether two routes impose the same conditions in the same
+// order.
+func sameFilters(a, b []ElementFilter) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !a[i].Same(b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // ReexportGates returns the element-filter conditions the name fqn is subject to
@@ -730,26 +746,38 @@ func sameRouteRecorded(routes [][]ElementFilter, gate []ElementFilter) bool {
 // admits the element when any route's conditions all hold: a candidate every
 // route rejects is not a member of the namespace it appears under, so no route
 // to it resolves (KerML 8.2.4).
-func (idx *Index) ReexportGates(doc, fqn string, sym *Symbol) [][]ElementFilter {
+// A private import's route only answers a lookup made from within the importing
+// namespace, which from names ("" for one made from anywhere else).
+func (idx *Index) ReexportGates(doc, fqn string, sym *Symbol, from string) [][]ElementFilter {
 	claims := idx.reexportDocs[reexportKey{fqn: fqn, sym: sym}]
-	if parent, _ := splitFQN(fqn); parent == "" {
+	parent, _ := splitFQN(fqn)
+	if parent == "" {
 		// Each document owns its root namespace alone, so only the routes of the
-		// document looking the name up gate it.
-		return claims[doc].gateRoutes()
+		// document looking the name up gate it — and they are its own.
+		return claims[doc].gateRoutes(true)
 	}
+	inside := withinNamespace(from, parent)
 	var out [][]ElementFilter
 	for _, claim := range claims {
-		out = append(out, claim.routes...)
+		out = append(out, claim.gateRoutes(inside)...)
 	}
 	return out
 }
 
-// gateRoutes returns the routes a claim recorded, and none for an absent claim.
-func (c *reexportClaim) gateRoutes() [][]ElementFilter {
+// gateRoutes returns the conditions of the routes a claim recorded that a lookup
+// may take, and none for an absent claim.
+func (c *reexportClaim) gateRoutes(private bool) [][]ElementFilter {
 	if c == nil {
 		return nil
 	}
-	return c.routes
+	out := make([][]ElementFilter, 0, len(c.routes))
+	for _, route := range c.routes {
+		if route.private && !private {
+			continue
+		}
+		out = append(out, route.filters)
+	}
+	return out
 }
 
 // nonZeroFilters drops the absent conditions of an unfiltered import.

@@ -71,6 +71,32 @@ func TestFilteredImportHidesARejectedElement(t *testing.T) {
 	}
 }
 
+// A private import surfaces a name only within the importing namespace (KerML
+// 8.2.3.3), so its unfiltered route must not make a name a public filtered
+// import rejects reachable from outside.
+func TestAPrivateImportDoesNotDefeatAPublicFilterFromOutside(t *testing.T) {
+	idx := expandedIndexOf(t, map[string]string{
+		"lib.sysml": filterLib,
+		"app.sysml": `package Safe {
+			private import Lib::*;
+			public import Lib::*[@Safety];
+		}
+		package Out { }`,
+	})
+	safe := scopeOf(t, idx.DocumentRoot("app.sysml"), "Safe")
+	out := scopeOf(t, idx.DocumentRoot("app.sysml"), "Out")
+
+	if _, ok := judgingResolver(idx).ResolveQualified(out, qn(false, "Safe", "Radio")); ok {
+		t.Error("Safe's public import filters Radio out, so it must not resolve from outside Safe")
+	}
+	if _, ok := judgingResolver(idx).ResolveQualified(out, qn(false, "Safe", "SafeBelt")); !ok {
+		t.Error("Safe's public import admits SafeBelt, which must resolve from outside Safe")
+	}
+	if _, ok := judgingResolver(idx).ResolveName(safe, "Radio", ident("Radio")); !ok {
+		t.Error("Safe's own private import is unfiltered, so Radio is visible within Safe")
+	}
+}
+
 // A namespace's `filter` members restrict the memberships its imports bring in,
 // and leave the members it declares itself alone (KerML 8.2.4).
 func TestNamespaceFilterKeepsDeclaredMembers(t *testing.T) {

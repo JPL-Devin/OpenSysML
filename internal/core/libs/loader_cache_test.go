@@ -264,7 +264,7 @@ func admittedNames(t *testing.T, idx *symbols.Index) map[string]bool {
 			if len(syms) != 1 {
 				t.Fatalf("%s names %d symbols, want 1", fqn, len(syms))
 			}
-			routes := idx.ReexportGates("", fqn, syms[0])
+			routes := idx.ReexportGates("", fqn, syms[0], "")
 			admitted := len(routes) == 0 // declared here, or surfaced unconditionally
 			for _, route := range routes {
 				passes := true

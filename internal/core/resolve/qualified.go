@@ -79,7 +79,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		memberFQN := curFQN + "::" + seg.Text
 		if len(all) == 0 && r.idx != nil {
 			found := r.idx.LookupQualifiedFrom(memberFQN, from)
-			candidates := r.admittedUnder(r.documentOf(scope), memberFQN, found)
+			candidates := r.admittedUnder(r.documentOf(scope), from, memberFQN, found)
 			switch {
 			case len(candidates) == 1:
 				all = candidates
@@ -191,7 +191,7 @@ func (r *Resolver) lookupGlobalTop(scope *symbols.Scope, name string) (*symbols.
 	}
 	// A name reached here may be one a filtered import surfaced at a document's
 	// root, so the conditions of the routes registering it decide it here too.
-	syms := r.admittedUnder(r.documentOf(scope), name, r.idx.LookupQualified(name))
+	syms := r.admittedUnder(r.documentOf(scope), r.ReferringNamespaceFQN(scope), name, r.idx.LookupQualified(name))
 	if len(syms) == 1 {
 		return syms[0], 1
 	}

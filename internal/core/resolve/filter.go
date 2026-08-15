@@ -52,15 +52,15 @@ func (r *Resolver) documentOf(scope *symbols.Scope) string {
 	return r.idx.DocumentOfRoot(rootOf(scope))
 }
 
-// admitsUnderName reports whether cand is reachable under the name fqn, given
-// the conditions the index recorded for each route re-exporting it
-// (symbols.Index.ReexportGates). One route's conditions all have to hold; any
-// admitting route admits the name.
-func (r *Resolver) admitsUnderName(doc, fqn string, cand *symbols.Symbol) bool {
+// admitsUnderName reports whether cand is reachable under the name fqn from the
+// namespace from, given the conditions the index recorded for each route
+// re-exporting it (symbols.Index.ReexportGates). One route's conditions all have
+// to hold; any admitting route admits the name.
+func (r *Resolver) admitsUnderName(doc, from, fqn string, cand *symbols.Symbol) bool {
 	if r.idx == nil {
 		return true
 	}
-	routes := r.idx.ReexportGates(doc, fqn, cand)
+	routes := r.idx.ReexportGates(doc, fqn, cand, from)
 	if len(routes) == 0 {
 		return true
 	}
@@ -74,17 +74,17 @@ func (r *Resolver) admitsUnderName(doc, fqn string, cand *symbols.Symbol) bool {
 
 // admittedUnder keeps the candidates a lookup of the name fqn may reach, i.e.
 // the ones the conditions gating that name select (see admitsUnderName).
-func (r *Resolver) admittedUnder(doc, fqn string, cands []*symbols.Symbol) []*symbols.Symbol {
+func (r *Resolver) admittedUnder(doc, from, fqn string, cands []*symbols.Symbol) []*symbols.Symbol {
 	kept := cands
 	for i, sym := range cands {
-		if r.admitsUnderName(doc, fqn, sym) {
+		if r.admitsUnderName(doc, from, fqn, sym) {
 			continue
 		}
 		// Copy on first rejection, so an unfiltered lookup keeps its slice.
 		kept = make([]*symbols.Symbol, 0, len(cands))
 		kept = append(kept, cands[:i]...)
 		for _, s := range cands[i+1:] {
-			if r.admitsUnderName(doc, fqn, s) {
+			if r.admitsUnderName(doc, from, fqn, s) {
 				kept = append(kept, s)
 			}
 		}
