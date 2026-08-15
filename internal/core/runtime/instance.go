@@ -31,6 +31,19 @@ type Instance struct {
 	// keptAnonymous holds the identities those objects had before a carry-over, in
 	// declaration order, which the ones materialized again here take back.
 	keptAnonymous []int64
+
+	// keptConnectors holds, per slot of a named connector, the identity the object
+	// of it had before a carry-over, which the one materialized again takes back.
+	keptConnectors map[*Slot]int64
+}
+
+// keepConnector remembers the identity the object of a named connector slot had,
+// so the one materialized again against the new declarations keeps it.
+func (inst *Instance) keepConnector(slot *Slot, id int64) {
+	if inst.keptConnectors == nil {
+		inst.keptConnectors = make(map[*Slot]int64)
+	}
+	inst.keptConnectors[slot] = id
 }
 
 // Slot holds the runtime value(s) for one feature.

@@ -321,6 +321,68 @@ func TestInstanceRederivesAValueWhenAnExpressionItReadsChanges(t *testing.T) {
 	wants(t, run(t, s, "%slots A"), "m = 9.00")
 }
 
+// A connector holds the features it connects rather than values of its own, so
+// an end reads what the feature holds now: a change to what a connected value is
+// computed from must not leave the end disagreeing with it.
+func TestConnectorEndsAreReadAgainAfterADependencyChanges(t *testing.T) {
+	s := NewSession()
+	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 2.0; }")
+	s.Submit(`package Demo {
+		part def A { attribute x = double(3.0); }
+		part def B { attribute y = 1.0; }
+		part def Sys { part a : A; part b : B; connection c1 connect a.x to b.y; }
+	}`)
+	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
+	wants(t, run(t, s, "%slots Demo::Sys"), "x = 6.00", "c1 = Instance(ID: 4)", "source = 6.00")
+
+	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
+	// The end reads the new value, under the identity the connector kept.
+	wants(t, run(t, s, "%slots Demo::Sys"), "x = 9.00", "c1 = Instance(ID: 4)", "source = 9.00")
+
+	// Nothing else took that identity.
+	wants(t, run(t, s, "%instantiate Demo::A"), "ID: 5")
+}
+
+// A variation's default states which variant an object selects rather than a
+// value to compute, so the object bound to it is the same object across a
+// submission rather than one materialized again under a new identity.
+func TestSelectedVariantKeepsItsIdentity(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package Demo {
+		part def Engine { attribute size = 1.0; }
+		abstract part family {
+			variation part engine : Engine {
+				variant part electric : Engine;
+				variant part petrol : Engine;
+			}
+		}
+		part sedan :> family { part :>> engine = engine::electric; }
+	}`)
+	wants(t, run(t, s, "%instantiate Demo::sedan"), "ID: 1")
+	wants(t, run(t, s, "%slots Demo::sedan"), "engine = electric (Instance ID: 2)")
+
+	if res := s.Submit("part def Widget;"); len(res.Notices) != 0 {
+		t.Fatalf("an unrelated declaration reported %v", res.Notices)
+	}
+	wants(t, run(t, s, "%slots Demo::sedan"), "engine = electric (Instance ID: 2)")
+	wants(t, run(t, s, "%instantiate Demo::Engine"), "ID: 3")
+
+	// A change to which variant is selected still invalidates the object.
+	res := s.Submit(`package Demo {
+		part def Engine { attribute size = 1.0; }
+		abstract part family {
+			variation part engine : Engine {
+				variant part electric : Engine;
+				variant part petrol : Engine;
+			}
+		}
+		part sedan :> family { part :>> engine = engine::petrol; }
+	}`)
+	if !hasNotice(res, "dropped because the declarations changed") {
+		t.Fatalf("notices = %v, want the object of the changed selection dropped", res.Notices)
+	}
+}
+
 // The declarations an expression reads are reached through other expressions
 // too, so a change two reads away is seen as well.
 func TestInstanceRederivesAValueThroughAChainOfReads(t *testing.T) {

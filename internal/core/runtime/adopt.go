@@ -167,12 +167,12 @@ func (obj *Instance) held() []Value {
 
 // carried returns the values the object keeps across a carry-over: what a value
 // expression states is left out, since it is derived again rather than kept.
-func (obj *Instance) carried() []Value {
+func (obj *Instance) carried(ctx *Context) []Value {
 	names := obj.slotNames()
 	out := make([]Value, 0, 2*len(names)+len(obj.Ends))
 	for _, name := range names {
 		slot := obj.Slots[name]
-		if slot.derived() {
+		if ctx.derivedSlot(slot) || ctx.connectorSlot(slot) {
 			continue
 		}
 		out = append(out, slot.Value, slot.Values)
@@ -183,10 +183,22 @@ func (obj *Instance) carried() []Value {
 	return out
 }
 
-// derived reports whether the slot holds what a value expression states, which a
-// new context computes again from the declarations that expression now reads.
-func (s *Slot) derived() bool {
-	return s.Feature != nil && s.Feature.DefaultValue != nil
+// derivedSlot reports whether the slot holds what a value expression states,
+// which a new context computes again from the declarations that expression now
+// reads. What a variation's default states is a variant rather than a value, so
+// the object bound to it is carried instead of bound again.
+func (ctx *Context) derivedSlot(s *Slot) bool {
+	if s.Feature == nil || s.Feature.DefaultValue == nil {
+		return false
+	}
+	return !ctx.model.IsVariationFeature(s.Feature.Symbol)
+}
+
+// connectorSlot reports whether the slot holds the object of a connector, which
+// holds the features it connects rather than values of its own, so a new context
+// attaches its ends again rather than keeping what they read before.
+func (ctx *Context) connectorSlot(s *Slot) bool {
+	return s.Feature != nil && ctx.model.IsConnectorUsage(s.Feature.Symbol)
 }
 
 // walkValue visits a value and everything nested in it.
@@ -392,7 +404,7 @@ func (a *adoption) plan(obj *Instance) error {
 		plan.features[name] = feat
 	}
 	a.plans[obj.ID] = plan
-	for _, val := range obj.carried() {
+	for _, val := range obj.carried(a.prev) {
 		if err := a.planValue(fqn, val); err != nil {
 			return err
 		}
@@ -523,7 +535,17 @@ func (a *adoption) commit() {
 			slot.Feature = plan.featureFor(name, slot)
 			// A value an expression states is derived again here, so it cannot go
 			// stale against what that expression now reads.
-			if slot.derived() {
+			if a.ctx.derivedSlot(slot) {
+				slot.Value, slot.Values, slot.Materialized = Value{}, Value{}, false
+				continue
+			}
+			// A connector reads the features the `connect` clause names, which are
+			// read again here — under the identity its object had, which names the
+			// same connector.
+			if a.ctx.connectorSlot(slot) {
+				if id, held := slot.Value.Object(); held {
+					plan.obj.keepConnector(slot, id)
+				}
 				slot.Value, slot.Values, slot.Materialized = Value{}, Value{}, false
 				continue
 			}

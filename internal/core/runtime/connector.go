@@ -40,10 +40,11 @@ func (ctx *Context) materializeConnectorSlot(owner *Instance, slot *Slot, name s
 			Err:       errors.New("a connector of more than one object has no set of ends to attach"),
 		}
 	}
-	conn, err := ctx.materializeConnector(owner, slot.Feature.Symbol, ctx.connectorBaseOf(slot.Feature))
+	conn, err := ctx.materializeConnectorAs(owner, slot.Feature.Symbol, ctx.connectorBaseOf(slot.Feature), owner.keptConnectors[slot])
 	if err != nil {
 		return err
 	}
+	delete(owner.keptConnectors, slot)
 	slot.Value = Value{Kind: ValInstance, Instance: conn.ID}
 	slot.Materialized = true
 	return nil
