@@ -136,6 +136,7 @@ func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
 			WildcardImports: wildcardImportEntries(s.WildcardImports),
 			AliasTarget:     s.AliasTarget,
 			Unit:            unitFactsEntry(s.Unit),
+			Dimension:       s.Dimension,
 
 			Annotations:      s.Annotations,
 			NamespaceFilters: s.NamespaceFilters,

@@ -35,7 +35,10 @@ type Model struct {
 
 	unitTerms    map[*symbols.Symbol]UnitTerm // measurement units reduced to base units
 	reducingUnit map[*symbols.Symbol]bool     // units being reduced, to detect a cycle
-	libSymbols   map[string]*symbols.Symbol   // library elements resolved by qualified name
+
+	dimensions   map[*symbols.Symbol]dimensionResult // units to the dimension they measure in
+	dimensioning map[*symbols.Symbol]bool            // units whose dimension is being derived, to detect a cycle
+	libSymbols   map[string]*symbols.Symbol          // library elements resolved by qualified name
 
 	// Element-filter evaluation: conditions compiled once per expression, their
 	// verdicts memoized per candidate, and the metadata annotating each candidate
@@ -68,7 +71,10 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		conjSupers:     make(map[*symbols.Symbol][]conjugatedType),
 		unitTerms:      make(map[*symbols.Symbol]UnitTerm),
 		reducingUnit:   make(map[*symbols.Symbol]bool),
-		libSymbols:     make(map[string]*symbols.Symbol),
+
+		dimensions:   make(map[*symbols.Symbol]dimensionResult),
+		dimensioning: make(map[*symbols.Symbol]bool),
+		libSymbols:   make(map[string]*symbols.Symbol),
 
 		filterPreds:    make(map[ast.Node]*symbols.FilterPredicate),
 		filterVerdicts: make(map[filterKey]filterVerdict),
