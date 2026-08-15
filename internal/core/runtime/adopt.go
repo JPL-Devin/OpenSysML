@@ -534,8 +534,9 @@ func (a *adoption) commit() {
 			plan.obj.Ends[i].Value = a.rewrite(plan.obj.Ends[i].Value)
 		}
 		// The connectors the owner names no name are reached by no name here, so
-		// they are materialized again against the declarations as they are now.
-		plan.obj.anonymous = nil
+		// they are materialized again against the declarations as they are now —
+		// under the identities they had, which name the same connectors.
+		plan.obj.keptAnonymous, plan.obj.anonymous = plan.obj.anonymous, nil
 		a.ctx.registerInstance(plan.obj)
 		a.ctx.ids.atLeast(id + 1)
 	}

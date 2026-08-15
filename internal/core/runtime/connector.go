@@ -96,6 +96,12 @@ func (ctx *Context) connectorEndFeatures(typeSym *symbols.Symbol, declared map[s
 // the context of owner, the instance whose features its ends name. base is the
 // type the object is materialized from.
 func (ctx *Context) materializeConnector(owner *Instance, connSym, base *symbols.Symbol) (*Instance, error) {
+	return ctx.materializeConnectorAs(owner, connSym, base, 0)
+}
+
+// materializeConnectorAs materializes a connector under the given identity, 0 for
+// the next one the context hands out.
+func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbols.Symbol, id int64) (*Instance, error) {
 	ends := ctx.model.ConnectorEndAttachments(connSym)
 	if len(ends) == 0 {
 		return nil, fmt.Errorf("%w: %s declares no end to attach", ErrConnectorEnd, connectorName(connSym))
@@ -114,7 +120,7 @@ func (ctx *Context) materializeConnector(owner *Instance, connSym, base *symbols
 	ctx.materializingConnectors[key] = true
 	defer delete(ctx.materializingConnectors, key)
 
-	inst, err := ctx.Instantiate(base)
+	inst, err := ctx.instantiateAs(base, id)
 	if err != nil {
 		return nil, err
 	}
@@ -233,15 +239,25 @@ func (inst *Instance) OwnedConnectors(ctx *Context) ([]*Instance, error) {
 		return inst.anonymousConnectors(ctx)
 	}
 	inst.anonymous = []int64{}
-	for _, member := range ctx.anonymousConnectors(inst.Type) {
-		conn, err := ctx.materializeConnector(inst, member, member)
+	for i, member := range ctx.anonymousConnectors(inst.Type) {
+		conn, err := ctx.materializeConnectorAs(inst, member, member, inst.keptIdentity(i))
 		if err != nil {
 			inst.anonymous = nil
 			return nil, err
 		}
 		inst.anonymous = append(inst.anonymous, conn.ID)
 	}
+	inst.keptAnonymous = nil
 	return inst.anonymousConnectors(ctx)
+}
+
+// keptIdentity returns the identity the instance's i-th anonymous connector had
+// before a carry-over, 0 when it had none.
+func (inst *Instance) keptIdentity(i int) int64 {
+	if i >= len(inst.keptAnonymous) {
+		return 0
+	}
+	return inst.keptAnonymous[i]
 }
 
 // anonymousConnectors returns the objects the instance's anonymous connectors

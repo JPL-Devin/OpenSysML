@@ -138,6 +138,7 @@ func TestAdoptCarriesAnObjectOwningAnAnonymousConnector(t *testing.T) {
 	} else if len(conns) != 1 {
 		t.Fatalf("the object owns %d anonymous connectors, want 1", len(conns))
 	}
+	before := obj.anonymous[0]
 	shapes := prev.ShapesOf(obj)
 
 	ctx := contextOver(t, adoptConnectSrc+"\npart def Widget;")
@@ -153,6 +154,10 @@ func TestAdoptCarriesAnObjectOwningAnAnonymousConnector(t *testing.T) {
 	}
 	if _, found := ctx.Instance(conns[0].ID); !found {
 		t.Errorf("the connector object %d is not held by the context that materialized it", conns[0].ID)
+	}
+	// It is the same connector of the same object, so it is named the same.
+	if conns[0].ID != before {
+		t.Errorf("the connector object is %d after the carry-over, want the identity %d it had", conns[0].ID, before)
 	}
 	port := slotInstance(t, ctx, obj, "a", "p")
 	if end := conns[0].Ends[0].Value; !holdsObject(end, port.ID) {

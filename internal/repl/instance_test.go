@@ -236,8 +236,8 @@ func TestInstanceSurvivesUnrelatedDeclaration(t *testing.T) {
 }
 
 // A connector its owner declares no name for costs the object nothing: it is
-// materialized again in the resolution the submission produced, so the object
-// survives an unrelated declaration and its connector is still shown.
+// materialized again in the resolution the submission produced, under the
+// identity it had, so the object survives an unrelated declaration whole.
 func TestInstanceOwningAnAnonymousConnectorSurvives(t *testing.T) {
 	s := NewSession()
 	s.Submit(`package Demo {
@@ -247,15 +247,38 @@ func TestInstanceOwningAnAnonymousConnectorSurvives(t *testing.T) {
 		part def Sys { part a : A; part b : B; connect a.p to b.q; }
 	}`)
 	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
-	wants(t, run(t, s, "%slots Demo::Sys"), "(anonymous connector)")
+	slots := run(t, s, "%slots Demo::Sys")
+	wants(t, slots, "(anonymous connector)")
+	connector := connectorLine(t, slots)
 
-	if res := s.Submit("part def Widget;"); len(res.Notices) != 0 {
-		t.Fatalf("unrelated declaration reported %v", res.Notices)
+	for _, decl := range []string{"part def Widget;", "part def Gadget;"} {
+		if res := s.Submit(decl); len(res.Notices) != 0 {
+			t.Fatalf("%s reported %v", decl, res.Notices)
+		}
+		listing := run(t, s, "%instances")
+		wants(t, listing, "Demo::Sys (ID: 1)")
+		rejects(t, listing, "dropped")
+		// The same connector of the same object is named the same, submission
+		// after submission, rather than costing an identity each time.
+		if got := connectorLine(t, run(t, s, "%slots Demo::Sys")); got != connector {
+			t.Errorf("after %s the connector reads %q, want %q", decl, got, connector)
+		}
 	}
-	listing := run(t, s, "%instances")
-	wants(t, listing, "Demo::Sys (ID: 1)")
-	rejects(t, listing, "dropped")
-	wants(t, run(t, s, "%slots Demo::Sys"), "(anonymous connector)")
+	// Nothing else took the identity the connector kept.
+	wants(t, run(t, s, "%instantiate Demo::A"), "ID: 7")
+}
+
+// connectorLine returns the line of a %slots listing that holds the object's
+// anonymous connector.
+func connectorLine(t *testing.T, listing string) string {
+	t.Helper()
+	for _, line := range strings.Split(listing, "\n") {
+		if strings.Contains(line, "(anonymous connector)") {
+			return strings.TrimSpace(line)
+		}
+	}
+	t.Fatalf("no anonymous connector in:\n%s", listing)
+	return ""
 }
 
 // An object is invalidated by a change to what its declaration depends on, not
