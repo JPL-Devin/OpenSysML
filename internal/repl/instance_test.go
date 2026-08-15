@@ -344,8 +344,7 @@ func TestConnectorEndsAreReadAgainAfterADependencyChanges(t *testing.T) {
 }
 
 // A collection holds copies of what the features subsetting it hold, so it is
-// collected again when one of those is derived from a declaration that changed:
-// otherwise one object reads two values for the same thing.
+// collected again when one of those is derived from a declaration that changed.
 func TestCollectionIsCollectedAgainAfterADependencyChanges(t *testing.T) {
 	s := NewSession()
 	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 2.0; }")

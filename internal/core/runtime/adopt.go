@@ -194,10 +194,9 @@ func (ctx *Context) derivedSlot(s *Slot) bool {
 	return !ctx.model.IsVariationFeature(s.Feature.Symbol)
 }
 
-// collectedSlot reports whether the slot holds a collection of values copied out
-// of the features subsetting it, which are read again here rather than kept: one
-// of them may be derived from a declaration that changed. A collection holding
-// objects is kept, since those objects are carried over under their identities.
+// collectedSlot reports whether the slot holds values copied out of the features
+// subsetting it, which are read again here since one of them may be derived from
+// a declaration that changed. A collection of objects is kept: they are carried.
 func (ctx *Context) collectedSlot(s *Slot) bool {
 	if !s.Materialized || (s.Values.Kind != ValSequence && s.Values.Kind != ValSet) {
 		return false
@@ -211,9 +210,8 @@ func (ctx *Context) collectedSlot(s *Slot) bool {
 	return !object
 }
 
-// connectorSlot reports whether the slot holds the object of a connector, which
-// holds the features it connects rather than values of its own, so a new context
-// attaches its ends again rather than keeping what they read before.
+// connectorSlot reports whether the slot holds the object of a connector, whose
+// ends a new context attaches again rather than keeping what they read before.
 func (ctx *Context) connectorSlot(s *Slot) bool {
 	return s.Feature != nil && ctx.model.IsConnectorUsage(s.Feature.Symbol)
 }
