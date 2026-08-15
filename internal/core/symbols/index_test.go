@@ -667,6 +667,27 @@ func TestAPrivateRouteDoesNotAnswerALookupFromOutside(t *testing.T) {
 	}
 }
 
+// A root-level re-export belongs to the importing document's own root namespace,
+// so a lookup made in another document does not reach it.
+func TestARootReexportIsVisibleOnlyInItsOwnDocument(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { part def Belt; }")
+	addDoc(t, idx, "importer.sysml", "import Base::*;")
+	addDoc(t, idx, "other.sysml", "package Other;")
+	idx.ExpandWildcardImports()
+
+	belt := lookupOne(t, idx, "Base::Belt")
+	if !idx.ReexportVisible("importer.sysml", "Belt", belt) {
+		t.Error("the importing document's own root import surfaces Belt there")
+	}
+	if idx.ReexportVisible("other.sysml", "Belt", belt) {
+		t.Error("another document does not see a name imported into importer.sysml's root")
+	}
+	if !idx.ReexportVisible("other.sysml", "Base::Belt", belt) {
+		t.Error("Base::Belt is declared, not re-exported, and is visible everywhere")
+	}
+}
+
 // lookupOne returns the single symbol registered under fqn.
 func lookupOne(t *testing.T, idx *Index, fqn string) *Symbol {
 	t.Helper()

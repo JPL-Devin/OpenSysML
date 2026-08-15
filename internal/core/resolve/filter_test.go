@@ -97,6 +97,32 @@ func TestAPrivateImportDoesNotDefeatAPublicFilterFromOutside(t *testing.T) {
 	}
 }
 
+// A root-level import surfaces its names in the importing document's own root
+// namespace, so another document neither sees them nor escapes the filter that
+// selected them.
+func TestARootImportSurfacesNamesInItsOwnDocumentOnly(t *testing.T) {
+	idx := expandedIndexOf(t, map[string]string{
+		"lib.sysml":  filterLib,
+		"safe.sysml": "import Lib::*[@Safety];",
+		"other.sysml": `package Other {
+			part a :> SafeBelt;
+		}`,
+	})
+	r := judgingResolver(idx)
+	other := scopeOf(t, idx.DocumentRoot("other.sysml"), "Other")
+
+	if _, ok := r.ResolveName(other, "SafeBelt", ident("SafeBelt")); ok {
+		t.Error("another document does not see what safe.sysml imported into its own root")
+	}
+	if _, ok := r.ResolveName(other, "Radio", ident("Radio")); ok {
+		t.Error("Radio is filtered out of safe.sysml's root and not in another document's")
+	}
+	safe := idx.DocumentRoot("safe.sysml")
+	if _, ok := r.ResolveName(safe, "SafeBelt", ident("SafeBelt")); !ok {
+		t.Error("the importing document itself reaches the name its filter admits")
+	}
+}
+
 // A namespace's `filter` members restrict the memberships its imports bring in,
 // and leave the members it declares itself alone (KerML 8.2.4).
 func TestNamespaceFilterKeepsDeclaredMembers(t *testing.T) {

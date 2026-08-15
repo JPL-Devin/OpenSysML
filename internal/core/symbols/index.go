@@ -764,6 +764,21 @@ func (idx *Index) ReexportGates(doc, fqn string, sym *Symbol, from string) [][]E
 	return out
 }
 
+// ReexportVisible reports whether a lookup made in doc reaches sym under the
+// name fqn. A root-level name a wildcard import surfaced is a member of the
+// importing document's own root namespace, so it is not visible in another
+// document (KerML 8.2.3.3); a name under a namespace is visible wherever that
+// namespace is.
+func (idx *Index) ReexportVisible(doc, fqn string, sym *Symbol) bool {
+	if parent, _ := splitFQN(fqn); parent != "" {
+		return true
+	}
+	if !idx.reexported[fqn][sym] {
+		return true // declared under this name rather than borrowed
+	}
+	return idx.reexportDocs[reexportKey{fqn: fqn, sym: sym}][doc] != nil
+}
+
 // gateRoutes returns the conditions of the routes a claim recorded that a lookup
 // may take, and none for an absent claim.
 func (c *reexportClaim) gateRoutes(private bool) [][]ElementFilter {

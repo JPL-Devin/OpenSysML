@@ -53,12 +53,15 @@ func (r *Resolver) documentOf(scope *symbols.Scope) string {
 }
 
 // admitsUnderName reports whether cand is reachable under the name fqn from the
-// namespace from, given the conditions the index recorded for each route
-// re-exporting it (symbols.Index.ReexportGates). One route's conditions all have
-// to hold; any admitting route admits the name.
+// namespace from: a route re-exporting it has to reach a lookup made there
+// (symbols.Index.ReexportVisible) and one route's conditions all have to hold
+// (symbols.Index.ReexportGates).
 func (r *Resolver) admitsUnderName(doc, from, fqn string, cand *symbols.Symbol) bool {
 	if r.idx == nil {
 		return true
+	}
+	if !r.idx.ReexportVisible(doc, fqn, cand) {
+		return false
 	}
 	routes := r.idx.ReexportGates(doc, fqn, cand, from)
 	if len(routes) == 0 {
