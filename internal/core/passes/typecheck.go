@@ -294,17 +294,6 @@ func (tc *typeChecker) checkConjugatedTyping(scope *symbols.Scope, rel *ast.Rela
 
 func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.SymbolKind) string {
 	isDef, defKind, useKind, direction := decl.isDef, decl.defKind, decl.useKind, decl.direction
-	// Every SysML definition specializes a KerML type (a part def is a Structure,
-	// an action def a Behavior …), so a KerML type declaration is a valid target
-	// of any kind and no mismatch against it can be asserted.
-	if target == symbols.SymbolKerMLType && rel != ast.RelSpecializes {
-		// That a definition may not subset or redefine a feature is a property of
-		// the declaration, so the target's kind does not excuse it.
-		if isDef && (rel == ast.RelSubsets || rel == ast.RelRedefines) {
-			return fmt.Sprintf("a definition may not %s a feature", rel)
-		}
-		return ""
-	}
 	switch rel {
 	case ast.RelSpecializes:
 		want := defSymbolKind(defKind)
@@ -362,6 +351,12 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		// connects is typed by (`end supplierPort : FuelOutPort`), so the usage-kind
 		// taxonomy does not constrain it.
 		if decl.isEnd {
+			return ""
+		}
+		// Every SysML definition specializes a KerML type (a part def is a
+		// Structure, an action def a Behavior …), so a KerML type may type a usage
+		// of any kind (KerML 1.0 §8.3.4).
+		if target == symbols.SymbolKerMLType {
 			return ""
 		}
 		// An `individual` or `snapshot` usage is an occurrence usage, and an

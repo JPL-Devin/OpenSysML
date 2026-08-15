@@ -36,6 +36,18 @@ func TestTypeCheckDefinitionSubsetsKerMLType(t *testing.T) {
 	}
 }
 
+// A KerML type is not a requirement usage, so satisfying one is still an error:
+// the exemption covers the kind taxonomy, not the shape rules.
+func TestTypeCheckSatisfyKerMLType(t *testing.T) {
+	diags := typeDiags(t, "classifier T; part def Car { satisfy T; }")
+	if len(diags) != 1 {
+		t.Fatalf("expected one type diagnostic, got %v", diags)
+	}
+	if !strings.Contains(diags[0].Message, "satisfy target must be a requirement usage") {
+		t.Errorf("got %q", diags[0].Message)
+	}
+}
+
 // A target of a kind that classifies nothing a declaration may be typed by
 // still reports a mismatch: only KerML type declarations are exempt.
 func TestTypeCheckUnclassifiedTargetStillMismatches(t *testing.T) {
