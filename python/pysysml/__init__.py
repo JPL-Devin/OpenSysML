@@ -11,19 +11,30 @@ from pysysml.instance import Instance
 from pysysml.typed import TypedObject
 from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
 from pysysml.capabilities import MissingCapabilityError, ServerInfo
+from pysysml.verdict import CalcResult, Verdict
+from pysysml.conversion import (
+    FORMAT_SYSML, FORMAT_TURTLE, Conversion, format_of_path,
+)
 from pysysml.errors import (
-    PySysMLError, ConnectionError, InstanceTypeError, RuntimeError, SlotError,
-    TypeMismatchError, UnsupportedValueError,
+    PySysMLError, ConnectionError, ConversionError, ExecutionError,
+    InstanceTypeError, InvalidRequestError, ModelError,
+    ModelFileNotFoundError, ModelNotFoundError, ServiceError,
+    ServiceTimeoutError, SlotError, SymbolNotFoundError, TypeMismatchError,
+    UnsupportedOperationError, UnsupportedValueError,
 )
 
 __all__ = [
     "Connection", "Model", "Symbol", "Diagnostic", "Instance",
     "TypedObject", "TypeFacts", "Multiplicity", "Specialization", "SymbolFacts",
     "ServerInfo",
-    "PySysMLError", "ConnectionError", "InstanceTypeError",
-    "MissingCapabilityError", "RuntimeError", "SlotError",
-    "TypeMismatchError", "UnsupportedValueError",
-    "load", "connect",
+    "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
+    "Verdict", "CalcResult",
+    "PySysMLError", "ConnectionError", "ConversionError", "ExecutionError",
+    "InstanceTypeError", "InvalidRequestError", "MissingCapabilityError",
+    "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",
+    "ServiceError", "ServiceTimeoutError", "SlotError", "SymbolNotFoundError",
+    "TypeMismatchError", "UnsupportedOperationError", "UnsupportedValueError",
+    "load", "connect", "convert",
     "eval", "instantiate",
     "__version__"
 ]
@@ -67,7 +78,7 @@ def _get_default_connection(host='localhost', port=50051):
     return _default_connection
 
 
-def load(file_path, host='localhost', port=50051):
+def load(file_path, host='localhost', port=50051, strict=False):
     """Load a SysML model from file using the default connection.
     
     Convenience function that uses a module-level singleton connection.
@@ -76,15 +87,19 @@ def load(file_path, host='localhost', port=50051):
         file_path (str): Path to .sysml file
         host (str): Service hostname (default: 'localhost')
         port (int): Service port (default: 50051)
+        strict (bool): Refuse a model the service reported errors for, rather
+            than returning one whose lookups fail later
     
     Returns:
         Model: Parsed model object
     
     Raises:
-        grpc.RpcError: If file not found or gRPC error occurs
+        ModelFileNotFoundError: If the service cannot read file_path
+        ModelError: If strict and the model has error diagnostics
+        ConnectionError: If the service is unreachable
     """
     conn = _get_default_connection(host, port)
-    return conn.load(file_path)
+    return conn.load(file_path, strict=strict)
 
 
 def connect(host='localhost', port=50051, auto_start=True):
@@ -103,6 +118,45 @@ def connect(host='localhost', port=50051, auto_start=True):
     return Connection(host, port, auto_start=auto_start)
 
 
+def convert(to_format, file_path=None, content=None, model_hash=None,
+            from_format='', tolerate_syntax_errors=False, host='localhost',
+            port=50051):
+    """Write a model out in another format (module-level convenience).
+
+    Args:
+        to_format (str): 'sysml', 'kerml', 'text', 'ttl', 'turtle' or 'rdf'
+        file_path (str, optional): Path the service reads the source from
+        content (str, optional): Source carried inline
+        model_hash (str, optional): Hash of a loaded model, whose parsed source
+            is converted
+        from_format (str, optional): Format to read the source as; inferred from
+            file_path's extension when omitted, notation for a model_hash, and
+            required for inline content
+        tolerate_syntax_errors (bool): Write notation back out even when the
+            parser could not read all of it
+        host (str): Service hostname (default: 'localhost')
+        port (int): Service port (default: 50051)
+
+    Returns:
+        Conversion: The converted model; ``str()`` of it is the text
+
+    Example:
+        >>> import pysysml
+        >>> turtle = pysysml.convert("ttl", file_path="model.sysml")
+        >>> turtle.write("model.ttl")
+        'model.ttl'
+    """
+    conn = _get_default_connection(host, port)
+    return conn.convert(
+        to_format,
+        file_path=file_path,
+        content=content,
+        model_hash=model_hash,
+        from_format=from_format,
+        tolerate_syntax_errors=tolerate_syntax_errors,
+    )
+
+
 def eval(expression, file_path=None, model_hash=None, context_symbol_id=None):
     """Evaluate a SysML expression (module-level convenience).
     
@@ -117,7 +171,7 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None):
         
     Raises:
         ValueError: If neither file_path nor model_hash provided, or if both provided
-        RuntimeError: If evaluation fails
+        ExecutionError: If evaluation fails
         
     Example:
         >>> import pysysml
@@ -153,7 +207,7 @@ def instantiate(symbol_id, file_path=None, model_hash=None):
         
     Raises:
         ValueError: If neither file_path nor model_hash provided, or if both provided
-        RuntimeError: If instantiation fails
+        ExecutionError: If instantiation fails
         
     Example:
         >>> import pysysml

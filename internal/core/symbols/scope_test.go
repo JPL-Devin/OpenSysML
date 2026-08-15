@@ -51,6 +51,28 @@ func TestScopeParentAndChildren(t *testing.T) {
 	}
 }
 
+func TestScopeChildForFindsTheScopeADeclarationOwns(t *testing.T) {
+	root := NewScope(nil, nil)
+	first, second := &ast.Package{}, &ast.Package{}
+	firstScope, secondScope := NewScope(root, first), NewScope(root, second)
+	root.AddChild(firstScope)
+	root.AddChild(secondScope)
+	root.AddChild(NewScope(root, nil)) // a scope no declaration owns
+
+	if got := root.ChildFor(first); got != firstScope {
+		t.Errorf("ChildFor(first) = %v, want the first child", got)
+	}
+	if got := root.ChildFor(second); got != secondScope {
+		t.Errorf("ChildFor(second) = %v, want the second child", got)
+	}
+	if got := root.ChildFor(&ast.Package{}); got != nil {
+		t.Errorf("ChildFor(a declaration with no scope here) = %v, want nil", got)
+	}
+	if got := root.ChildFor(nil); got != nil {
+		t.Errorf("ChildFor(nil) = %v, want nil", got)
+	}
+}
+
 func TestScopeDefineDuplicateKeepsAll(t *testing.T) {
 	root := NewScope(nil, nil)
 	a := &Symbol{Name: "X", Kind: SymbolPackage}

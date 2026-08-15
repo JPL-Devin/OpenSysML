@@ -42,10 +42,13 @@ type resolution struct {
 // Resolver performs lazy name resolution over a symbol index, memoizing results
 // keyed by the reference AST node and collecting diagnostics.
 type Resolver struct {
-	idx         *symbols.Index
-	memo        map[ast.Node]resolution
-	resolving   map[ast.Node]bool // cycle detection
-	parts       map[*ast.QualifiedName][]*symbols.Symbol
+	idx       *symbols.Index
+	memo      map[ast.Node]resolution
+	resolving map[ast.Node]bool // cycle detection
+	parts     map[*ast.QualifiedName][]*symbols.Symbol
+	// imports are the import declarations of a namespace-bearing node, found once
+	// and kept: see (*Resolver).importsOf.
+	imports     map[ast.Node][]*ast.Import
 	Diagnostics []Diagnostic
 	// quiet is nonzero while a lookup is made on behalf of a semantic query
 	// rather than a reference in the document being resolved.
@@ -73,6 +76,7 @@ func New(idx *symbols.Index) *Resolver {
 		memo:      map[ast.Node]resolution{},
 		resolving: map[ast.Node]bool{},
 		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
+		imports:   map[ast.Node][]*ast.Import{},
 		naming:    map[*symbols.Symbol]bool{},
 		nsFilters: map[*symbols.Scope][]symbols.ElementFilter{},
 

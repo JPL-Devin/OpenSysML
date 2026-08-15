@@ -103,6 +103,31 @@ jobs:
           name: coverage
           path: coverage.txt
 
+  vscode-extension:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      # Type-check, bundle and package. The generated TextMate grammars are
+      # gated by go test ./editors/... in the job above.
+      - name: Package the extension
+        working-directory: editors/vscode
+        run: |
+          npm ci
+          npm run package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension
+          path: editors/vscode/systemica-sysml.vsix
+
   python-test:
     name: Python client tests
     needs: build-and-test

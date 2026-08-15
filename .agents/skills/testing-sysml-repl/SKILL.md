@@ -34,6 +34,64 @@ Then `/tmp/old-sysml` vs `./bin/sysml` on identical input is the strongest evide
 it rules out "the test would have passed anyway". Especially valuable for diagnostic wording and
 line/column numbers, where a screenshot of the new behavior alone proves nothing.
 
+## Profiling flags: `-memstats`, `-cpuprofile`, `-memprofile` (PR #156)
+
+`main()` is a one-liner over `runCLI()` returning an exit status, so every profile is flushed by a
+`defer` before the process exits. That makes **exit codes the main regression risk** of any change
+in `cmd/sysml/main.go`: walk every mode and assert the status, since a `return` mistranslated from
+`os.Exit` is invisible in the output text. Values observed at bb0cfdc:
+
+| command | exit |
+|---|---|
+| `-version`, `-eval '1+2'`, `-validate <clean>`, `<m> -convert sysml -o f`, `<m> -eval '1+1'` | 0 |
+| `-validate <model with errors>` (reported as `did not analyse cleanly; no check was made`) | 2 |
+| `<m> -convert sysml -validate` (refuses: "check it in its own run"; writes no file) | 2 |
+| `-debug -quiet`, `SYSML_MAX_STEPS=abc …`, `-cpuprofile`/`-memprofile` on an unwritable path | 2 |
+
+- `-memstats` writes exactly one line to **stderr** (`sysml: 637ms wall, 242.6 MiB allocated in
+  … allocations over … collections, … MiB taken from the OS`). Prove the split with
+  `>out 2>err` and `cat` both — a memstats line on stdout would break `-convert -o /dev/stdout`
+  and JSON reporting.
+- It fires for the interactive REPL too, after `goodbye`, because it runs in the deferred stop.
+  This is the cheapest check that the profile flush survives the REPL path.
+- Heap profiles are written at end of run, when the model is already unreachable, so read them as
+  `go tool pprof -top -sample_index=alloc_space <file>` (plain `-top` shows inuse_space and looks
+  almost empty). Expect `parser.(*Parser).fill` / `parseUsage` and `symbols.*` at the top.
+- A 0-byte profile, or `unrecognized profile format` from pprof, is the signature of the flush not
+  happening — treat it as a failure of the runCLI change rather than a pprof problem.
+- Unwritable-path errors must abort before any model work: assert no `✓` line is printed.
+- Generate a load big enough for the numbers to be meaningful (a ~28k-line model with several
+  hundred `part def`s allocates ~240 MiB, ~600 ms); `/tmp/m*.sysml` generators from earlier
+  sessions may still be around.
+
+## Diagnostics-unchanged checks for core refactors
+
+For perf refactors in `internal/core` (scope indexes, resolve memoization, redefinition-owner
+lookup) the only convincing evidence is a **byte-for-byte diff against a binary built from the
+parent commit** (see the contrast-binary recipe above):
+
+```bash
+for f in inherit_ok noinherit imports_ok imports_bad; do
+  diff <(./bin/sysml -validate /tmp/pt/$f.sysml 2>&1; echo $?) \
+       <(/tmp/old-sysml -validate /tmp/pt/$f.sysml 2>&1; echo $?) >/dev/null \
+    && echo "$f: IDENTICAL" || echo "$f: DIFFERS"
+done
+```
+
+Fixtures that actually exercise the redefinition-owner path:
+
+- **clean:** `part def Base { attribute speed : SpeedType; }`, `part def Car :> Base;`,
+  `part def RaceCar :> Car { attribute speed : SpeedType :>> Base::speed; }` — inheritance through
+  a chain must stay clean.
+- **still an error:** the same `:>> Base::speed` inside a `part def Other` that does *not*
+  specialize `Base` → `error: speed redefines speed, but speed is not an inherited member of Other`
+  (code `redefinition-no-inherited`).
+- Note an unqualified `attribute :>> weight : Real;` naming a member nothing declares reports
+  `unresolved reference: weight` from name resolution instead, never `redefinition-no-inherited` —
+  use the **qualified** `:>> Base::speed` form to reach the constraint pass.
+- Imports: a wildcard `import Lib::*` plus a nested `import Lib::Inner::Wheel` for the positive
+  case, and a usage of an undeclared type for the negative (`unresolved reference: Gearbox`).
+
 ## Two ways to drive it
 
 1. **Non-interactive (fast, for exploration and expected-value discovery).** The REPL reads a
@@ -270,7 +328,7 @@ because the obvious ones cannot:
   (`state working { attribute localGain = 4.0; entry { assign result := localGain + pkgBonus; } }`),
   and for nesting a substate inside a `region` must declare one read by its own entry action.
   A broken build reports `error: event processing failed: enter state: entry action: eval assignment
-  RHS: unresolved feature: localGain`.
+  RHS: unresolved reference: localGain`.
 - **Always include a shadowing case, because the failure mode is a wrong value, not an error.** Give
   a state (or an action, or a loop/if block) a member whose name also exists at package level with a
   *different* value, and assert the inner one wins. A build that hands out the enclosing scope
@@ -310,14 +368,14 @@ because the obvious ones cannot:
   invalidate the other snippet. `./bin/sysml <file>` per variant keeps the runs independent.
 - Meta-commands are only understood at the `sysml>` prompt: a shell habit like `clear; %action foo`
   is parsed as SysML, pollutes the session buffer, and can make an already-loaded package's symbols
-  stop resolving (`symbol "DescentR::propagate" not found`). Type shell and REPL commands in
+  stop resolving (`unresolved reference: DescentR::propagate`). Type shell and REPL commands in
   separate turns, and `%clear` (or restart) if a stray line lands in the buffer.
 - `%satisfy` takes no argument (every satisfaction assertion the model states) or the name of the
   element stating them, since `assert satisfy … by …` is anonymous.
 - Instances are keyed by resolved FQN, so `%instantiate Vehicle` then `%slots Demo::Vehicle` must
   hit the same `ID`, and the reverse spelling too. Differing IDs = broken keying.
 - Qualified attribute access works with a full FQN (`%eval Demo::Engine::power` → `= 300.00`) but a
-  **partial** qualification (`%eval Engine::power`) is `symbol ... not found` — the qualified path
+  **partial** qualification (`%eval Engine::power`) is `unresolved reference: …` — the qualified path
   goes through the index, which wants the whole FQN. Expect this, don't file it as a bug without
   checking intent.
 - `%break <node>`: unknown node names are rejected *with the valid node list*; after a stop,
@@ -552,7 +610,7 @@ follow them with the cheap canaries: `%action tally` + `%continue` → `total = 
 `Session.accept` (internal/repl/session.go) drops any earlier snippet whose **declared names**
 intersect the new submission's. So typing `package Demo { part def Trailer { ... } }` to *add* a
 member to an already-loaded `package Demo` **replaces the whole package** — `Demo::Vehicle` and
-friends become `symbol ... not found`, while `%instances` still lists the now-orphaned instance and
+friends become `unresolved reference: …`, while `%instances` still lists the now-orphaned instance and
 instance IDs restart. When you just want to add declarations mid-session, use a **different package
 name**. When you want to prove that newly-typed declarations are visible to the qualified-name path
 (the `s.idx`/`s.rtCtx`/`s.instances` invalidation in `Submit`), a fresh package avoids conflating the
@@ -594,7 +652,7 @@ package Lib { part def Widget { attribute size = 3.0; } }
 package P { public import Lib::*; }
 %instantiate P::Widget      -> ✓ Created instance of Lib::Widget    (resolved FQN is the DECLARING one)
 package P { }               -> replaces the earlier snippet (same declared name)
-%instantiate P::Widget      -> error: symbol "P::Widget" not found  (re-export unwound)
+%instantiate P::Widget      -> error: unresolved reference: P::Widget  (re-export unwound)
 %instantiate Lib::Widget    -> ✓ Created instance of Lib::Widget    (purge must not over-remove)
 package P { public import Lib::*; }
 %instantiate P::Widget      -> ✓ ... again, and never "is ambiguous"
@@ -603,7 +661,7 @@ package P { public import Lib::*; }
 Notes that save time:
 
 - A re-export registers the symbol under the importing namespace but **never copies its subtree**:
-  `P::Widget` resolves while `%eval P::Widget::size` is `symbol ... not found`. Use the declaring
+  `P::Widget` resolves while `%eval P::Widget::size` is `unresolved reference: …`. Use the declaring
   FQN (`%eval Lib::Widget::size` → `= 3.00`). This is intended (confirmed by the maintainer).
 - Resubmitting the same importing package several times must keep resolving and must never produce
   `is ambiguous` — duplicate re-export registrations would surface as ambiguity, so assert the
@@ -808,6 +866,52 @@ unauthenticated GitHub API, so repeated runs flip from a truthful `HTTP Error 40
 misleading `HTTP Error 403: rate limit exceeded` — rehearse sparingly and report the 404 wording,
 not whichever one the recording happened to catch.
 
+### Verification RPCs, typed errors and strict loading (`pysysml` Tier 3, PR #149)
+
+The verification questions the REPL answers with `%constraint`, `%requirement`, `%satisfy` and
+`%calc` are also RPCs (`internal/grpc/verify.go`), wrapped as `Model.verify_constraint /
+verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from Python:
+
+- Use a **clean venv** — the box's default `python3` may carry an incompatible `protobuf`, which
+  fails at `import pysysml`. A venv with `pip install -e python/` (e.g. `~/pv`) is the reliable
+  interpreter; rebuild with `make build-grpc` and **re-copy** `bin/sysml-grpc` to
+  `~/.pysysml/bin/` after every rebuild or the client silently auto-starts the old binary.
+- Argument order bites: `Connection.eval(expression, model_hash)`,
+  `Connection.instantiate(symbol_id, model_hash)`, `Connection.verify_constraint(symbol_id,
+  model_hash, subject_symbol_id=…)`, `Connection.calc(symbol_id, model_hash, arguments=[…])` —
+  hash **second**. On `Model` the hash is implicit and the kwarg is `subject=`. There is no
+  `Connection.evaluate`. Getting the order wrong yields a confusing
+  `ModelNotFoundError: model not found: Demo::sedan`.
+- `Instance.slots` is a **property** (a dict), not a method; unmaterialized slots (constraint and
+  requirement usages) appear as `SlotError` values inside it, which is expected.
+- The three-way semantics worth asserting separately: a condition evaluating **false** is a
+  verdict (`holds False`, `.condition` set, `.error == ''`, `raise_for_error()` silent); a
+  **failure to evaluate** is `.error` non-empty with `.evaluated False` and
+  `raise_for_error()` raising `ExecutionError`; an **unanswerable request** (unknown symbol)
+  raises `ExecutionError` from the call. Force the middle case with a requirement whose
+  attribute is never bound (`requirement loose : SpeedRequirement;` with `maxSpeed` unbound) —
+  the error reads `no value for feature maxSpeed`.
+- A subject of an unrelated type is *not* rejected: `verify_constraint(c, subject=<an attribute
+  or a calc>)` instantiates it and answers from declared defaults. If you need a raising subject,
+  use a name that does not exist (`unresolved reference: …`).
+- `verify_satisfaction(fqn)` narrowed to an element that states no assertion returns an **empty
+  list**, so `satisfied()` is vacuously `True`; the `"<x> states no satisfaction assertion"`
+  error branch in `verify.go` only fires for a scope-less symbol and is hard to reach.
+- Each verdict from `verify_satisfaction()` carries the **whole response's** instance graph, so
+  `verdict.instances` includes other assertions' subjects — filter on `verdict.instance_id`.
+- Model-cache eviction is testable for real (the service caches 100 models, `-cache-size`):
+  load a model, then `load_from_content` 120 throwaway packages, then call any RPC with the old
+  hash → `ModelNotFoundError`. Takes ~1 minute; run it in the background.
+- Capability negotiation against an "old" service can be simulated without an old binary:
+  `conn._server_info = ServerInfo(version='old', capabilities=frozenset({'convert'}),
+  answered=True, origin='simulated')` → the verify calls raise `MissingCapabilityError` before
+  any RPC. Label it as simulated in the report.
+- gRPC status translation lives in `pysysml/errors.py`: assert both the pysysml class and the
+  builtin it also is (`ModelFileNotFoundError`/`FileNotFoundError`,
+  `InvalidRequestError`/`ValueError`, `ConnectionError`/`ConnectionError`,
+  `ExecutionError`/`RuntimeError`) and that `__cause__` is the original `grpc.RpcError`. A dead
+  service is reproducible with `pysysml.connect(port=50123, auto_start=False)`.
+
 ## Typed codegen (`python -m pysysml.generate`, Tier 2)
 
 `python -m pysysml.generate <model.sysml> [-o out.py] [--host --port]` loads the model through
@@ -962,7 +1066,7 @@ Three cheap, high-signal sweeps:
    assertions that separate working from broken are: `%slots` lists the member as **`x = 5`**
    (broken revisions show `sn = 5` with `x = 1`, or a bogus `redefines = <unknown>` slot);
    `%eval T::A::x` **and** `%eval T::A::sn` both evaluate; and an action body doing
-   `assign total := total + x` completes instead of `unresolved feature: x`. Load-level `✓ package T`
+   `assign total := total + x` completes instead of `unresolved reference: x`. Load-level `✓ package T`
    proves nothing here.
 
 Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
@@ -976,7 +1080,7 @@ consumers reading `Usage.Ident.Name` break silently downstream. The probes that 
 fixed from broken, each with a visible A/B against `main`:
 
 - **Attribute default** — `attribute redefines x = 5;` in an action body with a statement reading
-  `x`; a lost name surfaces as `error: execution failed: eval assignment RHS: unresolved feature: x`,
+  `x`; a lost name surfaces as `error: execution failed: eval assignment RHS: unresolved reference: x`,
   not as a parse error.
 - **Step ordering** — `action redefines bump { … }` ordered by `then start bump; then bump end;`.
   A lost name fails at lowering: `succession edge references undefined target node`.
@@ -1039,7 +1143,7 @@ that imports `SI::*`. Consequences to test deliberately, because they surprise u
   `package Demo { attribute mass = 3.0; }`, `%eval mass * 2` = `6.00` but `%eval 1.0 [m]` starts
   failing `unresolved unit m` (Demo imports nothing).
 - With two packages, only the last one's members resolve unqualified (`%eval b * 3` works,
-  `%eval a + b` is `unresolved feature: a`); qualify them (`%eval P1::a + P2::b` = `3.00`).
+  `%eval a + b` is `unresolved reference: a`); qualify them (`%eval P1::a + P2::b` = `3.00`).
 - `%eval <unit>` (e.g. `%eval m`) resolves through that scope and answers
   `error: "m" has no value to evaluate`, not `symbol "m" not found` — the latter is the pre-fix
   signature.
@@ -1090,6 +1194,52 @@ its output rather than in an exit code — so assert on the exact rendered text:
   pre-existing rendering, not evidence of a new bug, so do not report it as one without an A/B
   against `main`.
 
+## Multi-file projects: `%load <path>...` and positional dirs/globs (PR #146)
+
+`sysml <dir|glob|file>...` and `%load <path>...` expand to model files via
+`internal/core/project.Expand`, and every file is accepted before one analysis pass
+(`Session.SubmitAll`), so load order does not affect name resolution. Shapes to expect:
+
+- More than one file prints a `loaded N files:` header listing each path (a single file prints no
+  header — a good tell that the multi-file path was taken).
+- Only `.sysml`/`.kerml` are collected; a `.md` sibling and any **hidden** directory (`.git`,
+  `.hidden`) are skipped. Put an unparseable file inside a `.hidden/` dir: any diagnostic from it
+  means the skip broke.
+- Errors are worth asserting verbatim: `no .sysml or .kerml files in <dir>`,
+  `no model files match "<pattern>"`, `load <file>: open <file>: no such file or directory`, and
+  `usage: %load <file|dir|glob>...` for a bare `%load`.
+- Duplicates dedupe by absolute path, so `file dir/` where `dir` contains `file` loads it once.
+- `~` and quoted paths with spaces work; quote globs in the REPL (`%load "/tmp/p/*.sysml"`) and on
+  the CLI so the shell does not pre-expand them.
+- `-convert` still takes exactly one file: a directory gives
+  `cannot tell the format of "<dir>": it has no extension, so pass -from`.
+
+**Two regressions fixed late in #146 — re-check both after any change to the load path:**
+
+1. *Per-file diagnostic positions.* Diagnostics from a load are printed as
+   `<file>:<line>:<col>: ...` with the line counted from that file's start. With `a-ok.sysml`
+   (5 lines) sorting before `b-bad.sysml` whose line 3 is `attribute z = ;`, a directory load must
+   report `/tmp/bp/b-bad.sysml:3:17:` — the same position the file reports when loaded alone. A
+   joined-buffer line (e.g. `9:17`) or a missing filename is the bug returning
+   (`Session.origins`/`Result.locate` attribute an offset to its file).
+2. *Every loaded file survives the load.* Two files of one load declaring the same top-level name
+   must both stay in the session (`%list` shows both); name-based snippet replacement only
+   supersedes **earlier** submissions. Retyping a declaration at the prompt must still replace what
+   a previous load put there.
+3. *Symlinked directories are walked.* `%load /tmp/link-to-proj` loads the files behind the link,
+   symlinked subdirectories included, each resolved directory at most once so a link cycle
+   terminates; a dangling link is skipped. A project reached through a symlink is a realistic
+   setup, so include one.
+
+To prove order-independence is real rather than accidental, name the referencing file **first**
+alphabetically (e.g. `a-uses.sysml` importing a package declared in `b-defs.sysml`). The pre-#146
+binary emits `unresolved reference: Defs` / `Widget` / `size` on exactly that input, which is the
+strongest available evidence.
+
+Trap while driving the REPL on camera: typing `clear` at the `sysml>` prompt not only errors
+(`1:1: error: expected a namespace member`) but leaves garbage in the session buffer that makes a
+subsequent `%eval Pkg::part.attr` fail with a parse error. `%clear` and re-`%load` recovers.
+
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
@@ -1116,6 +1266,61 @@ venv off the system interpreter:
 revision. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
 over a pipe is not visible in the video and should be reported as weaker evidence.
+
+**Never type `clear` at the `sysml>` prompt while recording.** It is submitted as SysML, not run by
+the shell, so it leaves an unresolved session error and every later submission gains a
+`note: an earlier session error is unresolved, so deeper checks may not have run here` line that
+looks like a defect in the frame. Clear the screen *before* starting the REPL (`clear; ./bin/sysml`),
+scroll instead with `shift+PageUp`/`shift+PageDown` when long output (`%builtins`, `%help`) runs off
+the top, or quit and restart the REPL for a clean screen.
+
+## Tab completion and anything else readline-driven (PR #148)
+
+This section and the next describe behavior added by PR #148 (which also adds `%search` and
+`%builtins`), so they apply only once that PR is on `main`.
+
+`cmd/sysml` installs an `AutoComplete` on the readline config, and **readline disables completion
+when the terminal reports a width of 0** — which is what a plain pipe reports. So
+`printf '%%bui\t\n' | ./bin/sysml` proves nothing about completion: the TAB is just swallowed.
+Two ways to drive it:
+
+1. **Konsole** (what belongs in a recording): send TAB with the computer tool's
+   `key: "Tab"`, and discard a line with `ctrl+u` between cases — note `ctrl+u` kills only to the
+   left of the cursor, so add `ctrl+k` first if the cursor is mid-line.
+2. **A pty harness** (for discovering expected values quickly, off camera): fork a pty, set the
+   window size, then write keystrokes. The essential part is the ioctl:
+
+   ```python
+   pid, fd = pty.fork()                     # child: os.execv("./bin/sysml", [...])
+   fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+   os.write(fd, b"%eval sqr\t")             # then read fd after a short settle
+   ```
+
+   The captured stream is full of `ESC[2K` redraws; grep the last redraw of the prompt line rather
+   than trying to read it as plain text.
+
+Completion cases worth covering, and their shapes: a unique meta-command prefix completes in place
+(`%bui`+TAB → `%builtins`), an ambiguous one lists on the second TAB
+(`%s`+TAB TAB → `%satisfy %save %search %slots %state %step %stop`), names after `%eval` come from
+session declarations, builtin function names and the library (`sqr`→`sqrt`), a qualified prefix
+offers **one segment at a time** (`ScalarValues::`+TAB lists only that package's members, never the
+whole library; `ScalarValues`+TAB inserts the `::` and lists the same members), and `%load`/`%save`
+complete filesystem paths with a trailing `/` on directories.
+Adversarial cases that all behaved correctly and are cheap to re-check: TAB with the cursor mid-line
+must keep the text to its right, TAB on an empty line lists (capped) names without hanging,
+completion into a nonexistent directory inserts nothing, and completion still works on a line long
+enough to wrap several terminal rows.
+
+## Where the prompt keeps its history (PR #148)
+
+History is `$XDG_STATE_HOME/sysml/history` when that variable is set (directory created 0700, file
+0600), else `~/.sysml_history`; older builds used `$TMPDIR/sysml-repl.history`, so a stale
+`/tmp/sysml-repl.history` may be left over from a contrast binary — delete it before asserting "the
+new build writes nothing to /tmp". Reuse across runs is testable without a second human: run the
+REPL, `%quit`, start it again and press `Up`. An unwritable location must degrade quietly (prompt
+starts, no warning, history in memory only) — exercise it with `XDG_STATE_HOME` pointing at a
+`chmod 500` directory *and* at a regular file, since those fail in different places
+(`MkdirAll` vs `OpenFile`).
 
 ## Connector usages and their ends (PR #132)
 
@@ -1165,7 +1370,7 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
   `engagementRing.ringPort` / `band.ringPort`, not the disconnected variant's ports. But the
   send/accept *routing* side cannot be driven: an action usage does not inherit its `action def`'s
   nodes (`initialize action: no initial node found`), `%action` cannot resolve a nested action of a
-  selecting part usage (`symbol "Route::sysDirect::comm" not found`), and a sibling
+  selecting part usage (`unresolved reference: Route::sysDirect::comm`), and a sibling
   `ref :>> link = link::direct;` in the same body does not bind the selection — the run still ends in
   `accept deadlock in action comm: nothing can post the awaited message`. What *is* testable, and
   worth doing, is the negative plus a positive control: a plain (non-variation)

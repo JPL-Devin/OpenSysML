@@ -1,7 +1,14 @@
 """Model class wrapping parsed SysML model."""
 
+import difflib
+
 from pysysml.symbol import Symbol
+from pysysml.conversion import FORMAT_SYSML, FORMAT_TURTLE, format_of_path
 from pysysml.diagnostic import Diagnostic
+from pysysml.errors import ModelError, SymbolNotFoundError
+
+#: Severity the service reports for a diagnostic that makes a model unusable.
+_SEVERITY_ERROR = "error"
 
 
 class Model:
@@ -13,15 +20,17 @@ class Model:
         diagnostics (list[Diagnostic]): Parse diagnostics (errors/warnings)
     """
     
-    def __init__(self, pb_response, client):
+    def __init__(self, pb_response, client, source_path=None):
         """Initialize Model from protobuf ParseFileResponse.
         
         Args:
             pb_response: sysml_pb2.ParseFileResponse protobuf message
             client: Client instance for symbol navigation
+            source_path (str, optional): Path the model was loaded from
         """
         self._pb = pb_response
         self._client = client
+        self._source_path = source_path
         self._hash = pb_response.model_hash
         self._root = Symbol(pb_response.root, client, self._hash)
         self._diagnostics = [
@@ -47,7 +56,133 @@ class Model:
     def diagnostics(self):
         """Get list of diagnostics."""
         return self._diagnostics
+
+    @property
+    def errors(self):
+        """The error-severity diagnostics, which are what makes a model unusable.
+
+        Returns:
+            list[Diagnostic]: Diagnostics of severity 'error', in report order
+        """
+        return [
+            d for d in self._diagnostics
+            if (d.severity or "").lower() == _SEVERITY_ERROR
+        ]
+
+    @property
+    def ok(self):
+        """Whether the service parsed and analysed this model without errors.
+
+        A model with errors is still returned and still navigable — that is how
+        a tool reports every problem at once — but its symbols may be missing or
+        unresolved, so lookups on it fail later. Test this, or load with
+        ``strict=True``, before treating a model as the model that was written.
+
+        Returns:
+            bool: True when no diagnostic has error severity
+        """
+        return not self.errors
+
+    def raise_for_errors(self):
+        """Raise :class:`~pysysml.errors.ModelError` unless :attr:`ok`.
+
+        Returns:
+            Model: self, so a call can be chained onto a load
+
+        Raises:
+            ModelError: If the model has error diagnostics. It carries them as
+                ``diagnostics`` and this model as ``model``.
+        """
+        errors = self.errors
+        if not errors:
+            return self
+        where = self._source_path or "the model"
+        summary = "; ".join(str(d) for d in errors[:3])
+        if len(errors) > 3:
+            summary += f"; ... and {len(errors) - 3} more"
+        raise ModelError(
+            f"{where} has {len(errors)} error(s): {summary}",
+            diagnostics=errors,
+            model=self,
+        )
     
+    @property
+    def source_path(self):
+        """Path this model was loaded from, or None if it was loaded inline."""
+        return self._source_path
+
+    def convert(self, to_format, tolerate_syntax_errors=False):
+        """Write this model out in one of the formats Systemica writes.
+
+        Converts the source this model was parsed from, not the file as it
+        stands now, so what is written is the model that was inspected: notation
+        keeps its comments and lexemes, re-indented, while Turtle carries what
+        the model declares. See ``docs/RDF_INTEROP.md``.
+
+        The service holds that source in its model cache, which is bounded, so a
+        model loaded long ago and many models back may have been evicted; load it
+        again, or convert its path through :meth:`Connection.convert`.
+
+        Args:
+            to_format (str): 'sysml', 'kerml', 'text', 'ttl', 'turtle' or 'rdf'
+            tolerate_syntax_errors (bool): Write notation back out even when the
+                parser could not read all of it
+
+        Returns:
+            Conversion: The converted model; ``str()`` of it is the text
+
+        Raises:
+            ConversionError: If the model could not be written in that format
+            MissingCapabilityError: If the service cannot convert
+            grpc.RpcError: If the service no longer holds this model
+        """
+        return self.connection.convert(
+            to_format,
+            model_hash=self._hash,
+            # A model came from ParseFile, which reads notation and nothing else.
+            from_format=FORMAT_SYSML,
+            tolerate_syntax_errors=tolerate_syntax_errors,
+        )
+
+    def to_sysml(self, tolerate_syntax_errors=False):
+        """Write this model out as SysML textual notation.
+
+        Returns:
+            Conversion: The notation; ``str()`` of it is the text
+        """
+        return self.convert(FORMAT_SYSML, tolerate_syntax_errors=tolerate_syntax_errors)
+
+    def to_turtle(self):
+        """Write this model out as an RDF graph in Turtle syntax.
+
+        Returns:
+            Conversion: The Turtle; ``str()`` of it is the text
+        """
+        return self.convert(FORMAT_TURTLE)
+
+    def save(self, path, to_format=None, tolerate_syntax_errors=False):
+        """Write this model to ``path``, in the format its extension names.
+
+        Args:
+            path (str): File to write, created or truncated
+            to_format (str, optional): Format to write, overriding the extension
+            tolerate_syntax_errors (bool): Write notation back out even when the
+                parser could not read all of it
+
+        Returns:
+            Conversion: What was written
+
+        Raises:
+            ValueError: If no to_format was given and the extension names none
+            ConversionError: If the model could not be written in that format
+        """
+        conversion = self.convert(
+            to_format or format_of_path(path),
+            tolerate_syntax_errors=tolerate_syntax_errors,
+        )
+        conversion.write(path)
+        return conversion
+
     def find(self, name):
         """Find symbol by short name or fully-qualified name (breadth-first).
 
@@ -58,7 +193,9 @@ class Model:
             name (str): Short name ("Vehicle") or FQN ("Demo::Vehicle")
 
         Returns:
-            Symbol or None: First matching symbol, or None if not found
+            Symbol or None: First matching symbol, or None if not found. Use
+            ``model[name]`` where a missing symbol is a failure, so it is
+            reported as one instead of as an AttributeError on None.
         """
         def matches(symbol):
             return symbol.name == name or symbol.id == name
@@ -101,6 +238,125 @@ class Model:
                 queue.append(child)
 
         return None
+
+    def verify_constraint(self, symbol_id, subject=None):
+        """Ask whether one of this model's constraints holds.
+
+        Args:
+            symbol_id (str): FQN of the constraint definition or usage
+            subject (str, optional): FQN of a part/usage to instantiate and
+                evaluate against, so the verdict is about concrete values
+
+        Returns:
+            Verdict: The answer; false is the model's answer, not an exception
+        """
+        return self._client.verify_constraint(
+            symbol_id, self._hash, subject_symbol_id=subject
+        )
+
+    def verify_requirement(self, symbol_id, subject=None):
+        """Ask whether one of this model's requirements is satisfied.
+
+        Args:
+            symbol_id (str): FQN of the requirement definition or usage
+            subject (str, optional): FQN of a part/usage to instantiate and
+                evaluate against
+
+        Returns:
+            Verdict: The answer
+        """
+        return self._client.verify_requirement(
+            symbol_id, self._hash, subject_symbol_id=subject
+        )
+
+    def verify_satisfaction(self, symbol_id=None):
+        """Ask whether this model's satisfaction assertions hold.
+
+        This is the scriptable form of "does this model satisfy its
+        requirements?": every ``assert satisfy ... by ...`` the model states,
+        each evaluated against an object of its subject.
+
+        Args:
+            symbol_id (str, optional): FQN limiting evaluation to the assertions
+                stated within that element, or to that element itself when it is
+                a named satisfaction assertion
+
+        Returns:
+            list[Verdict]: One verdict per assertion, in declaration order
+        """
+        return self._client.verify_satisfaction(self._hash, symbol_id=symbol_id)
+
+    def satisfied(self, symbol_id=None):
+        """Whether every satisfaction assertion evaluated holds.
+
+        A model stating no assertion is trivially satisfied, so read this
+        together with :meth:`verify_satisfaction` where that matters. An
+        assertion that could not be evaluated is not a holding one.
+
+        Args:
+            symbol_id (str, optional): FQN limiting evaluation, as in
+                :meth:`verify_satisfaction`
+
+        Returns:
+            bool: True when no assertion fails
+        """
+        return all(v.holds for v in self.verify_satisfaction(symbol_id))
+
+    def calc(self, symbol_id, arguments=None):
+        """Invoke one of this model's calculations.
+
+        Args:
+            symbol_id (str): FQN of the calc definition or usage
+            arguments (list, optional): Positional arguments, as Python values
+
+        Returns:
+            CalcResult: The value returned, or the outputs a calc usage computed
+        """
+        return self._client.calc(symbol_id, self._hash, arguments=arguments)
+
+    def __getitem__(self, name):
+        """Look a symbol up by short name or FQN, raising when there is none.
+
+        The raising counterpart of :meth:`find`: ``model["Vehicle"].attributes()``
+        names the symbol that is missing, where ``find`` would return None and
+        fail as an AttributeError on it one call later.
+
+        Args:
+            name (str): Short name ("Vehicle") or FQN ("Demo::Vehicle")
+
+        Returns:
+            Symbol: The matching symbol
+
+        Raises:
+            SymbolNotFoundError: If the model declares no such symbol. Also a
+                KeyError, and it names the closest declared names.
+        """
+        symbol = self.find(name)
+        if symbol is None:
+            raise SymbolNotFoundError(name, self._near_names(name))
+        return symbol
+
+    def __contains__(self, name):
+        """Whether a short name or FQN names a symbol in this model."""
+        return self.find(name) is not None
+
+    def _near_names(self, name):
+        """Declared names close enough to ``name`` to be what was meant.
+
+        Both short names and FQNs are candidates, since either is accepted by a
+        lookup and either may have been mistyped.
+        """
+        candidates = []
+        queue = [self.root]
+        while queue:
+            current = queue.pop(0)
+            for child in current.children():
+                if child.name:
+                    candidates.append(child.name)
+                if child.id and child.id != child.name:
+                    candidates.append(child.id)
+                queue.append(child)
+        return difflib.get_close_matches(name, candidates, n=3)
 
     def __str__(self):
         """String representation: 'Model: name (kind)'."""

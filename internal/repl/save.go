@@ -10,8 +10,9 @@ import (
 )
 
 // formatAdvice is the remedy for a save path whose format cannot be told. The
-// prompt has no -from/-to flags, so it names what it does have.
-const formatAdvice = "name the file with a .sysml, .kerml or .ttl extension"
+// prompt has no format flag, so it names the file name remedy first and the
+// command line's flag alongside it, in the words the command line uses.
+const formatAdvice = export.ExtensionAdvice + ", or pass -convert on the command line"
 
 // doSave writes the session's model to path. The format follows the file
 // extension: `.sysml`/`.kerml` writes the notation, `.ttl` writes RDF Turtle.

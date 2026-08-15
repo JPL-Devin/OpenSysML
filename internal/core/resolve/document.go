@@ -407,12 +407,7 @@ func (r *Resolver) nameConflict(sym, inherited *symbols.Symbol) {
 
 // childScope finds the child scope whose node is decl.
 func (r *Resolver) childScope(scope *symbols.Scope, decl ast.Node) *symbols.Scope {
-	for _, c := range scope.Children() {
-		if c.Node() == decl {
-			return c
-		}
-	}
-	return nil
+	return scope.ChildFor(decl)
 }
 
 func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {

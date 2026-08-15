@@ -120,6 +120,10 @@ func (e *UnknownFormatError) Error() string {
 	return msg
 }
 
+// ExtensionAdvice is the remedy every surface shares: the file name says which
+// format to write. A surface with a format flag names it alongside this.
+const ExtensionAdvice = "name the file with a .sysml, .kerml or .ttl extension"
+
 // Advise returns err with the surface's remedy attached when it is an
 // *UnknownFormatError, and unchanged otherwise.
 func Advise(err error, advice string) error {
@@ -153,6 +157,12 @@ func FormatOfPath(path string) (Format, error) {
 type SyntaxError struct {
 	Name     string
 	Messages []string
+	// Diags are the diagnostics behind Messages, for a caller that reports them
+	// with their spans. Empty when the input is not notation, since a Turtle
+	// reader reports a message and no span.
+	Diags []parser.Diagnostic
+	// File is what Diags' spans point into; nil when Diags is empty.
+	File *source.SourceFile
 }
 
 func (e *SyntaxError) Error() string {
@@ -255,5 +265,5 @@ func syntaxError(name string, file *source.SourceFile, p *parser.Parser) *Syntax
 		pos := lines.PosAt(diag.Span.Offset)
 		messages = append(messages, fmt.Sprintf("%d:%d: %s", pos.Line, pos.Col, diag.Message))
 	}
-	return &SyntaxError{Name: name, Messages: messages}
+	return &SyntaxError{Name: name, Messages: messages, Diags: p.Diagnostics, File: file}
 }

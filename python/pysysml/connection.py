@@ -10,9 +10,26 @@ from filelock import FileLock, Timeout
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
 from pysysml.binary import ensure_binary
-from pysysml.capabilities import ServerInfo
-from pysysml.errors import ConnectionError, UnsupportedValueError
+from pysysml.capabilities import (
+    CAPABILITY_CONVERT,
+    CAPABILITY_VERIFICATION,
+    ServerInfo,
+    require,
+)
+from pysysml.conversion import Conversion
+from pysysml.diagnostic import Diagnostic
+from pysysml.errors import (
+    ConnectionError,
+    ConversionError,
+    ExecutionError,
+    ModelFileNotFoundError,
+    ModelNotFoundError,
+    UnsupportedValueError,
+    from_rpc_error,
+    translate_rpc_errors,
+)
 from pysysml.values import value_to_python
+from pysysml.verdict import CalcResult, Verdict
 
 
 def _get_lockfile_path():
@@ -169,7 +186,7 @@ class Connection:
                 response = self._stub.GetServerInfo(request)
             except grpc.RpcError as e:
                 if e.code() != grpc.StatusCode.UNIMPLEMENTED:
-                    raise
+                    raise from_rpc_error(e) from e
                 self._server_info = ServerInfo(
                     version='',
                     capabilities=frozenset(),
@@ -185,35 +202,139 @@ class Connection:
                 )
         return self._server_info
 
-    def load(self, file_path):
+    def load(self, file_path, strict=False):
         """Load a SysML model from file.
         
         Args:
             file_path (str): Path to .sysml file
+            strict (bool): Refuse a model the service reported errors for,
+                instead of returning one whose lookups fail later. The
+                :class:`~pysysml.errors.ModelError` raised carries the model, so
+                its diagnostics stay inspectable.
         
         Returns:
             Model: Parsed model object
         
         Raises:
-            grpc.RpcError: If file not found or gRPC error occurs
+            ModelFileNotFoundError: If the service cannot read file_path
+            ModelError: If strict and the model has error diagnostics
+            ServiceError: If the service fails the call for any other reason
         """
         request = sysml_pb2.ParseFileRequest(file_path=file_path)
-        response = self._stub.ParseFile(request)
-        return Model(response, self)
+        with translate_rpc_errors(not_found=ModelFileNotFoundError):
+            response = self._stub.ParseFile(request)
+        model = Model(response, self, source_path=file_path)
+        if strict:
+            model.raise_for_errors()
+        return model
     
-    def load_from_content(self, content):
+    def load_from_content(self, content, strict=False):
         """Load a model from inline SysML content.
         
         Args:
             content (str): SysML source code
+            strict (bool): Refuse a model the service reported errors for
             
         Returns:
             Model: Parsed model object
+
+        Raises:
+            ModelError: If strict and the model has error diagnostics
         """
         request = sysml_pb2.ParseFileRequest(content=content)
-        response = self._stub.ParseFile(request)
-        return Model(response, self)
+        with translate_rpc_errors():
+            response = self._stub.ParseFile(request)
+        model = Model(response, self)
+        if strict:
+            model.raise_for_errors()
+        return model
     
+    def convert(self, to_format, file_path=None, content=None, model_hash=None,
+                from_format='', tolerate_syntax_errors=False):
+        """Write a model out in another of the formats Systemica writes.
+
+        The source is a loaded model, named by its hash, or one named the way
+        :meth:`load` names it: a path the service opens, or content carried
+        inline. A hash converts the source the service parsed, so a file edited
+        since the load does not change the answer; a path is read afresh.
+
+        Args:
+            to_format (str): Format to write: 'sysml', 'kerml', 'text', 'ttl',
+                'turtle' or 'rdf'
+            file_path (str, optional): Path the service reads the source from
+            content (str, optional): Source carried inline
+            model_hash (str, optional): Hash of a loaded model, whose parsed
+                source is converted
+            from_format (str, optional): Format to read the source as; inferred
+                from file_path's extension when omitted, notation for a
+                model_hash, and required for inline content
+            tolerate_syntax_errors (bool): Write notation back out even when the
+                parser could not read all of it, reporting its syntax errors as
+                the result's diagnostics. Notation to notation only: every other
+                direction builds a graph, where unreadable declarations would go
+                missing silently.
+
+        Returns:
+            Conversion: The converted model, the formats used and any tolerated
+                syntax errors
+
+        Raises:
+            ValueError: If other than one of file_path, content and model_hash
+                is given
+            MissingCapabilityError: If the service cannot convert
+            ConversionError: If the model could not be written in that format
+            InvalidRequestError: If a format is unknown
+            ModelFileNotFoundError: If the named file cannot be read
+            ModelNotFoundError: If the model is no longer cached
+        """
+        given = [
+            name
+            for name, value in (
+                ('file_path', file_path),
+                ('content', content),
+                ('model_hash', model_hash),
+            )
+            if value is not None
+        ]
+        if len(given) != 1:
+            raise ValueError(
+                "Provide exactly one of file_path, content or model_hash; got "
+                + (", ".join(given) if given else "none")
+            )
+        require(
+            self.server_info(),
+            CAPABILITY_CONVERT,
+            "upgrade the sysml-grpc service to a build whose GetServerInfo "
+            "reports 'convert'",
+        )
+
+        request = sysml_pb2.ConvertRequest(
+            to_format=to_format,
+            from_format=from_format,
+            tolerate_syntax_errors=tolerate_syntax_errors,
+        )
+        if file_path is not None:
+            request.file_path = file_path
+        elif content is not None:
+            request.content = content
+        else:
+            request.model_hash = model_hash
+
+        not_found = (
+            ModelFileNotFoundError if file_path is not None else ModelNotFoundError
+        )
+        with translate_rpc_errors(not_found=not_found):
+            response = self._stub.Convert(request)
+        diagnostics = [Diagnostic(d) for d in response.diagnostics]
+        if response.error:
+            raise ConversionError(response.error, diagnostics=diagnostics)
+        return Conversion(
+            content=response.content,
+            from_format=response.from_format,
+            to_format=response.to_format,
+            diagnostics=diagnostics,
+        )
+
     def get_symbol(self, model_hash, symbol_id):
         """Fetch symbol by ID from cached model.
         
@@ -228,7 +349,8 @@ class Connection:
             model_hash=model_hash,
             symbol_id=symbol_id,
         )
-        response = self._stub.GetSymbol(request)
+        with translate_rpc_errors():
+            response = self._stub.GetSymbol(request)
         
         if response.error:
             # Symbol not found or other error
@@ -248,23 +370,22 @@ class Connection:
             Value from expression (int, float, bool, str, Instance, etc.)
             
         Raises:
-            RuntimeError: If evaluation fails
+            ExecutionError: If evaluation fails
+            ModelNotFoundError: If the service no longer holds the model
             UnsupportedValueError: If the result cannot be represented on the wire
         """
-        from pysysml.errors import RuntimeError as PyRuntimeError
-        from pysysml.diagnostic import Diagnostic
-        
         req = sysml_pb2.EvaluateRequest(
             model_hash=model_hash,
             expression=expression,
             context_symbol_id=context_symbol_id or ""
         )
         
-        response = self._stub.Evaluate(req)
+        with translate_rpc_errors():
+            response = self._stub.Evaluate(req)
         
         if response.error:
             wrapped_diags = [Diagnostic(d) for d in response.diagnostics]
-            raise PyRuntimeError(response.error, diagnostics=wrapped_diags)
+            raise ExecutionError(response.error, diagnostics=wrapped_diags)
         
         # Convert protobuf Value to Python type
         return self._value_to_python(response.result)
@@ -280,22 +401,22 @@ class Connection:
             Instance object
             
         Raises:
-            RuntimeError: If instantiation fails
+            ExecutionError: If instantiation fails
+            ModelNotFoundError: If the service no longer holds the model
         """
-        from pysysml.errors import RuntimeError as PyRuntimeError
         from pysysml.instance import Instance
-        from pysysml.diagnostic import Diagnostic
         
         req = sysml_pb2.InstantiateRequest(
             model_hash=model_hash,
             symbol_id=symbol_id
         )
         
-        response = self._stub.Instantiate(req)
+        with translate_rpc_errors():
+            response = self._stub.Instantiate(req)
         
         if response.error:
             wrapped_diags = [Diagnostic(d) for d in response.diagnostics]
-            raise PyRuntimeError(response.error, diagnostics=wrapped_diags)
+            raise ExecutionError(response.error, diagnostics=wrapped_diags)
         
         graph = {inst.id: inst for inst in response.instances}
         return Instance(response.instance, graph)
@@ -314,11 +435,9 @@ class Connection:
                 so one such output does not discard the rest
             
         Raises:
-            RuntimeError: If execution fails
+            ExecutionError: If execution fails
+            ModelNotFoundError: If the service no longer holds the model
         """
-        from pysysml.errors import RuntimeError as PyRuntimeError
-        from pysysml.diagnostic import Diagnostic
-        
         # Convert Python inputs to protobuf Values
         pb_inputs = {name: self._python_to_value(val) for name, val in (inputs or {}).items()}
         
@@ -328,11 +447,12 @@ class Connection:
             inputs=pb_inputs
         )
         
-        response = self._stub.ExecuteAction(req)
+        with translate_rpc_errors():
+            response = self._stub.ExecuteAction(req)
         
         if response.error:
             wrapped_diags = [Diagnostic(d) for d in response.diagnostics]
-            raise PyRuntimeError(response.error, diagnostics=wrapped_diags)
+            raise ExecutionError(response.error, diagnostics=wrapped_diags)
         
         return self._values_to_python(response.outputs)
     
@@ -350,28 +470,200 @@ class Connection:
                 UnsupportedValueError in its place
             
         Raises:
-            RuntimeError: If execution fails
+            ExecutionError: If execution fails
+            ModelNotFoundError: If the service no longer holds the model
         """
-        from pysysml.errors import RuntimeError as PyRuntimeError
-        from pysysml.diagnostic import Diagnostic
-        
         req = sysml_pb2.ExecuteStateRequest(
             model_hash=model_hash,
             state_machine_symbol_id=state_machine_symbol_id,
             events=events or []
         )
         
-        response = self._stub.ExecuteState(req)
+        with translate_rpc_errors():
+            response = self._stub.ExecuteState(req)
         
         if response.error:
             wrapped_diags = [Diagnostic(d) for d in response.diagnostics]
-            raise PyRuntimeError(response.error, diagnostics=wrapped_diags)
+            raise ExecutionError(response.error, diagnostics=wrapped_diags)
         
         return {
             'states_visited': list(response.states_visited),
             'final_context': self._values_to_python(response.final_context),
         }
     
+    def verify_constraint(self, symbol_id, model_hash, subject_symbol_id=None):
+        """Ask whether a constraint holds, as the REPL's ``%constraint`` does.
+
+        Args:
+            symbol_id (str): FQN of the constraint definition or usage
+            model_hash (str): Hash from ParseFile response
+            subject_symbol_id (str, optional): FQN of a part/usage to
+                instantiate and evaluate against, so the verdict is about
+                concrete values rather than declared defaults
+
+        Returns:
+            Verdict: The answer. A condition that evaluated to false is that
+                answer, not an exception; a failure to evaluate is reported as
+                ``verdict.error``.
+
+        Raises:
+            ExecutionError: If the request could not be answered at all — an
+                unknown symbol, a subject that could not be instantiated
+            MissingCapabilityError: If the service cannot verify
+            ModelNotFoundError: If the service no longer holds the model
+        """
+        self._require_verification()
+        request = sysml_pb2.VerifyConstraintRequest(
+            model_hash=model_hash,
+            symbol_id=symbol_id,
+            subject_symbol_id=subject_symbol_id or "",
+        )
+        with translate_rpc_errors():
+            response = self._stub.VerifyConstraint(request)
+        return self._verdict_of(response)
+
+    def verify_requirement(self, symbol_id, model_hash, subject_symbol_id=None):
+        """Ask whether a requirement is satisfied, as ``%requirement`` does.
+
+        Args:
+            symbol_id (str): FQN of the requirement definition or usage
+            model_hash (str): Hash from ParseFile response
+            subject_symbol_id (str, optional): FQN of a part/usage to
+                instantiate and evaluate against
+
+        Returns:
+            Verdict: The answer
+
+        Raises:
+            ExecutionError: If the request could not be answered at all
+            MissingCapabilityError: If the service cannot verify
+            ModelNotFoundError: If the service no longer holds the model
+        """
+        self._require_verification()
+        request = sysml_pb2.VerifyRequirementRequest(
+            model_hash=model_hash,
+            symbol_id=symbol_id,
+            subject_symbol_id=subject_symbol_id or "",
+        )
+        with translate_rpc_errors():
+            response = self._stub.VerifyRequirement(request)
+        return self._verdict_of(response)
+
+    def verify_satisfaction(self, model_hash, symbol_id=None):
+        """Ask whether the model's satisfaction assertions hold, as ``%satisfy`` does.
+
+        Each assertion is evaluated against an object of its subject, built for
+        the call, so a verdict is about the values that subject holds.
+
+        Args:
+            model_hash (str): Hash from ParseFile response
+            symbol_id (str, optional): FQN limiting evaluation to the assertions
+                stated within that element, or to that element itself when it is
+                a named satisfaction assertion. Omitted evaluates every
+                assertion the model states.
+
+        Returns:
+            list[Verdict]: One verdict per assertion, in declaration order. A
+                model stating no assertion gives an empty list.
+
+        Raises:
+            ExecutionError: If the request could not be answered at all
+            MissingCapabilityError: If the service cannot verify
+            ModelNotFoundError: If the service no longer holds the model
+        """
+        self._require_verification()
+        request = sysml_pb2.VerifySatisfactionRequest(
+            model_hash=model_hash,
+            symbol_id=symbol_id or "",
+        )
+        with translate_rpc_errors():
+            response = self._stub.VerifySatisfaction(request)
+
+        diagnostics = [Diagnostic(d) for d in response.diagnostics]
+        if response.error:
+            raise ExecutionError(response.error, diagnostics=diagnostics)
+        instances = self._instances_of(response)
+        return [
+            Verdict(pb_verdict, instances=instances, diagnostics=diagnostics)
+            for pb_verdict in response.verdicts
+        ]
+
+    def calc(self, symbol_id, model_hash, arguments=None):
+        """Invoke a calculation, as the REPL's ``%calc`` does.
+
+        Arguments are bound positionally. A calc usage named with no arguments
+        binds its inputs from its own members and reports every output feature
+        it computes (SysML 7.17).
+
+        Args:
+            symbol_id (str): FQN of the calc definition or usage
+            model_hash (str): Hash from ParseFile response
+            arguments (list, optional): Positional arguments, as Python values
+
+        Returns:
+            CalcResult: The value an invocation returned, or the output features
+                a calc usage computed
+
+        Raises:
+            ExecutionError: If the calculation could not be evaluated
+            MissingCapabilityError: If the service cannot verify
+            ModelNotFoundError: If the service no longer holds the model
+        """
+        self._require_verification()
+        request = sysml_pb2.EvaluateCalcRequest(
+            model_hash=model_hash,
+            symbol_id=symbol_id,
+            arguments=[self._python_to_value(arg) for arg in (arguments or [])],
+        )
+        with translate_rpc_errors():
+            response = self._stub.EvaluateCalc(request)
+
+        diagnostics = [Diagnostic(d) for d in response.diagnostics]
+        if response.error:
+            raise ExecutionError(response.error, diagnostics=diagnostics)
+
+        outputs = {}
+        for output in response.outputs:
+            try:
+                outputs[output.name] = self._value_to_python(output.value)
+            except UnsupportedValueError as exc:
+                outputs[output.name] = exc
+        value = None
+        if not outputs and response.HasField('result'):
+            value = self._value_to_python(response.result)
+        return CalcResult(value, outputs, diagnostics=diagnostics)
+
+    def _require_verification(self):
+        """Refuse a verification the connected service does not implement."""
+        require(
+            self.server_info(),
+            CAPABILITY_VERIFICATION,
+            "upgrade the sysml-grpc service to a build whose GetServerInfo "
+            "reports 'verification'",
+        )
+
+    def _verdict_of(self, response):
+        """Wrap a single-verdict verification response, raising its failure."""
+        diagnostics = [Diagnostic(d) for d in response.diagnostics]
+        if response.error:
+            raise ExecutionError(response.error, diagnostics=diagnostics)
+        return Verdict(
+            response.verdict,
+            instances=self._instances_of(response),
+            diagnostics=diagnostics,
+        )
+
+    def _instances_of(self, response):
+        """Wrap the instance graph a verification returned, roots first."""
+        from pysysml.instance import Instance
+
+        graph = {inst.id: inst for inst in response.instances}
+        wrappers = {}
+        return [
+            Instance(pb_inst, graph, _wrappers=wrappers)
+            for pb_inst in response.instances
+        ]
+
     def _python_to_value(self, py_value):
         """Convert Python type to protobuf Value."""
         from pysysml.instance import Instance

@@ -15,7 +15,8 @@ type Scope struct {
 	memberOrder      []string             // name keys in first-seen order (for deterministic enumeration)
 	anonymousMembers []*Symbol            // anonymous symbols (no name) that aren't in members map
 	children         []*Scope
-	bodyLocal        bool // declarations live only inside the owning body
+	childByNode      map[ast.Node]*Scope // declaration node -> the child scope it owns
+	bodyLocal        bool                // declarations live only inside the owning body
 }
 
 // NewScope creates an empty scope with the given parent and owning node.
@@ -50,7 +51,26 @@ func (s *Scope) markBodyLocal() { s.bodyLocal = true }
 func (s *Scope) Children() []*Scope { return s.children }
 
 // AddChild appends a child scope.
-func (s *Scope) AddChild(c *Scope) { s.children = append(s.children, c) }
+func (s *Scope) AddChild(c *Scope) {
+	s.children = append(s.children, c)
+	if node := c.Node(); node != nil {
+		if s.childByNode == nil {
+			s.childByNode = make(map[ast.Node]*Scope)
+		}
+		if _, ok := s.childByNode[node]; !ok {
+			s.childByNode[node] = c
+		}
+	}
+}
+
+// ChildFor returns the child scope the given declaration owns, or nil. It is the
+// first such child, as two children of one node are one body scoped twice.
+func (s *Scope) ChildFor(node ast.Node) *Scope {
+	if node == nil {
+		return nil
+	}
+	return s.childByNode[node]
+}
 
 // Define registers sym under the given name key. Multiple symbols may share a
 // key (duplicate declarations); all are retained in definition order.

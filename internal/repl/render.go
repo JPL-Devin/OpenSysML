@@ -3,6 +3,9 @@ package repl
 import (
 	"fmt"
 	"strings"
+	"unicode"
+
+	"golang.org/x/text/width"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
@@ -18,12 +21,83 @@ type Result struct {
 	Diagnostics []passes.Diagnostic // eager analysis over the whole buffer
 	Source      string              // the full joined <repl> content (Task 6 caret rendering)
 	Offset      int                 // byte offset in Source where THIS submission begins
+	Origins     []Origin            // the files of THIS submission, in buffer order
 	Notices     []string            // side effects of the submission, e.g. a debugging session it ended
+
+	// own locates this submission inside Source when it was merged into text
+	// already in the buffer, which is not one tail region. Empty for a
+	// submission appended whole, where everything from Offset on is its own.
+	own []source.Span
+}
+
+// Origin locates one file of a submission in the buffer, so a diagnostic is
+// reported against that file and its own line numbering.
+type Origin struct {
+	Name   string
+	Offset int
+}
+
+// locate returns the file a buffer offset belongs to and the offset that file
+// starts at. An offset outside the files of this submission belongs to the
+// submission as a whole, which is reported without a file name.
+func (r Result) locate(offset int) (string, int) {
+	for i, o := range r.Origins {
+		if offset < o.Offset {
+			continue
+		}
+		if i+1 == len(r.Origins) || offset < r.Origins[i+1].Offset {
+			return o.Name, o.Offset
+		}
+	}
+	return "", r.Offset
+}
+
+// lineOf is the 1-based buffer line a byte offset falls on.
+func (r Result) lineOf(offset int) int {
+	if offset > len(r.Source) {
+		offset = len(r.Source)
+	}
+	return strings.Count(r.Source[:offset], "\n") + 1
+}
+
+// diagLocation names the file a diagnostic came from and the buffer line that
+// file — or, for a prompt submission, the submission — starts on.
+func (r Result) diagLocation(offset int) (string, int) {
+	name, start := r.locate(offset)
+	return name, r.lineOf(start)
 }
 
 // mine reports whether a span belongs to the submission just made rather than
 // to an earlier one still sitting in the buffer.
-func (r Result) mine(span source.Span) bool { return span.Offset >= r.Offset }
+func (r Result) mine(span source.Span) bool {
+	if len(r.own) == 0 {
+		return span.Offset >= r.Offset
+	}
+	for _, o := range r.own {
+		if span.Offset >= o.Offset && span.Offset < o.End() {
+			return true
+		}
+	}
+	return false
+}
+
+// holdsMine reports whether a span overlaps this submission, which is what
+// credits a merged addition to the declaration it was added to, and a whole
+// snippet's span to every declaration inside it.
+func (r Result) holdsMine(span source.Span) bool {
+	if len(r.own) == 0 {
+		return span.Offset >= r.Offset
+	}
+	for _, o := range r.own {
+		if o.Offset >= span.Offset && o.Offset < span.End() {
+			return true
+		}
+		if span.Offset >= o.Offset && span.Offset < o.End() {
+			return true
+		}
+	}
+	return false
+}
 
 // renderSummary returns one accepted line per top-level member: "✓ <kind> <name>".
 func renderSummary(members []ast.Node) []string {
@@ -107,15 +181,16 @@ func qnString(qn *ast.QualifiedName) string {
 //	    <source line>
 //	    <caret span>
 //
-// baseLine is the buffer line the reported submission starts on, so reported
-// line numbers count from what the user typed rather than from the top of the
-// accumulated buffer. Pass 1 to number against the whole buffer. When origin is
+// locate maps a diagnostic's buffer offset to the file it came from and the
+// buffer line that file starts on, so a block names its file and counts lines
+// from what the user submitted rather than from the top of the accumulated
+// buffer; pass wholeBuffer to number against the buffer instead. When origin is
 // set each block also carries the pass that produced the diagnostic.
 //
-// Note: byte-column carets assume ASCII/monospace alignment; multi-byte runes
-// before the caret will misalign by display width. Acceptable for v1 — the LSP
-// server owns UTF-16 correctness; the REPL caret is only a terminal aid.
-func renderDiagnostics(diags []passes.Diagnostic, src string, baseLine int, origin bool) []string {
+// Columns and carets are counted in printed cells, so a line with multi-byte
+// runes before the finding still points at it; the LSP server owns UTF-16
+// correctness separately.
+func renderDiagnostics(diags []passes.Diagnostic, src string, locate func(offset int) (string, int), origin bool) []string {
 	if len(diags) == 0 {
 		return nil
 	}
@@ -124,15 +199,27 @@ func renderDiagnostics(diags []passes.Diagnostic, src string, baseLine int, orig
 	var out []string
 	for _, d := range diags {
 		p := sf.Lines().PosAt(d.Span.Offset)
-		head := fmt.Sprintf("%d:%d: %s: %s", p.Line-baseLine+1, p.Col, d.Severity.String(), d.Message)
+		file, baseLine := locate(d.Span.Offset)
+		where := ""
+		if file != "" {
+			where = file + ":"
+		}
+		srcLine := ""
+		if p.Line-1 >= 0 && p.Line-1 < len(lines) {
+			srcLine = lines[p.Line-1]
+		}
+		col := p.Col
+		if p.Col-1 <= len(srcLine) {
+			col = displayWidth(srcLine[:p.Col-1]) + 1
+		}
+		head := fmt.Sprintf("%s%d:%d: %s: %s", where, p.Line-baseLine+1, col, d.Severity.String(), d.Message)
 		if origin {
 			head += fmt.Sprintf(" [%s]", diagOrigin(d))
 		}
 		out = append(out, head)
 		if p.Line-1 >= 0 && p.Line-1 < len(lines) {
-			srcLine := lines[p.Line-1]
 			out = append(out, srcLine)
-			out = append(out, caretLine(p.Col, d.Span.Len, len(srcLine)))
+			out = append(out, caretLine(srcLine, p.Col-1, d.Span.Len))
 		}
 	}
 	return out
@@ -152,25 +239,44 @@ func diagOrigin(d passes.Diagnostic) string {
 	return strings.Join(parts, "/")
 }
 
-// caretLine builds "   ^~~~" with (col-1) leading spaces and a caret span of
-// width max(1, spanLen), clamped so it never runs past the source line.
-func caretLine(col, spanLen, lineLen int) string {
-	if col < 1 {
-		col = 1
+// exprError reports msg against a one-line expression the way a declaration
+// diagnostic is reported: position, source echo and caret. base is the offset
+// the expression starts at in the text span was measured in.
+// The reported column counts printed cells, not bytes, so it agrees with the
+// caret under the echo.
+func exprError(expr, msg string, span source.Span, base int) error {
+	start := span.Offset - base
+	if start < 0 {
+		start = 0
 	}
-	lead := col - 1
-	width := spanLen
+	if start > len(expr) {
+		start = len(expr)
+	}
+	return fmt.Errorf("1:%d: %s\n%s\n%s", displayWidth(expr[:start])+1, msg, expr, caretLine(expr, start, span.Len))
+}
+
+// caretLine builds "   ^~~~" under the span starting at byte offset start of
+// line, measured in printed cells so multi-byte runes stay aligned.
+func caretLine(line string, start, spanLen int) string {
+	if start < 0 {
+		start = 0
+	}
+	if start > len(line) {
+		start = len(line)
+	}
+	end := start + spanLen
+	if end > len(line) {
+		end = len(line)
+	}
+	width := 0
+	if end > start {
+		width = displayWidth(line[start:end])
+	}
 	if width < 1 {
 		width = 1
 	}
-	if lead+width > lineLen {
-		width = lineLen - lead
-		if width < 1 {
-			width = 1
-		}
-	}
 	var b strings.Builder
-	b.WriteString(strings.Repeat(" ", lead))
+	b.WriteString(strings.Repeat(" ", displayWidth(line[:start])))
 	b.WriteByte('^')
 	if width > 1 {
 		b.WriteString(strings.Repeat("~", width-1))
@@ -178,19 +284,37 @@ func caretLine(col, spanLen, lineLen int) string {
 	return b.String()
 }
 
+// displayWidth is the number of terminal cells s occupies: two for the East
+// Asian wide and fullwidth runes, one for everything else, and none for the
+// combining marks that render on the rune before them.
+func displayWidth(s string) int {
+	cells := 0
+	for _, r := range s {
+		switch {
+		case unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r):
+		case width.LookupRune(r).Kind() == width.EastAsianWide,
+			width.LookupRune(r).Kind() == width.EastAsianFullwidth:
+			cells += 2
+		default:
+			cells++
+		}
+	}
+	return cells
+}
+
 // renderResult produces the printable lines for a submission at the given
-// verbosity: the notices it caused, the diagnostics that verbosity admits, and
-// the summary of what it declared. A submission that failed to analyse gets
-// diagnostics instead of a summary, since it declared nothing usable.
+// verbosity: the diagnostics that verbosity admits, the summary of what it
+// declared, and last the notices it caused, which read as consequences of the
+// summary above them. A submission that failed to analyse gets diagnostics
+// instead of a summary, since it declared nothing usable.
 func renderResult(r Result, v Verbosity) []string {
 	if v >= VerbosityDebug {
 		return renderDebug(r)
 	}
 	diags := scopedDiagnostics(r, v)
-	out := append([]string(nil), r.Notices...)
-	out = append(out, renderDiagnostics(diags, r.Source, r.baseLine(), false)...)
+	out := renderDiagnostics(diags, r.Source, r.diagLocation, false)
 	if hasError(diags) {
-		return out
+		return append(out, r.Notices...)
 	}
 	// A validation tier is skipped once a lower tier errors anywhere in the
 	// buffer, so a clean report on this submission would otherwise read as a
@@ -198,17 +322,18 @@ func renderResult(r Result, v Verbosity) []string {
 	if r.analysisBlocked() {
 		out = append(out, blockedNote)
 	}
-	return append(out, renderSummary(r.ownMembers())...)
+	out = append(out, renderSummary(r.ownMembers())...)
+	return append(out, r.Notices...)
 }
 
 // renderDebug reports everything the analysis produced over the whole buffer,
 // at buffer-absolute positions, plus where this submission landed in it.
 func renderDebug(r Result) []string {
-	out := append([]string(nil), r.Notices...)
-	out = append(out, fmt.Sprintf("[debug] submission at buffer line %d; %d diagnostic(s) over the whole buffer",
-		r.baseLine(), len(r.Diagnostics)))
-	out = append(out, renderDiagnostics(r.Diagnostics, r.Source, 1, true)...)
-	return append(out, renderSummary(r.Members)...)
+	out := []string{fmt.Sprintf("[debug] submission at buffer line %d; %d diagnostic(s) over the whole buffer",
+		r.baseLine(), len(r.Diagnostics))}
+	out = append(out, renderDiagnostics(r.Diagnostics, r.Source, wholeBuffer, true)...)
+	out = append(out, renderSummary(r.Members)...)
+	return append(out, r.Notices...)
 }
 
 // scopedDiagnostics keeps the diagnostics of this submission that the verbosity
@@ -255,7 +380,7 @@ func hasError(diags []passes.Diagnostic) bool {
 func (r Result) ownMembers() []ast.Node {
 	out := make([]ast.Node, 0, len(r.Members))
 	for _, m := range r.Members {
-		if r.mine(m.Span()) {
+		if r.holdsMine(m.Span()) {
 			out = append(out, m)
 		}
 	}
@@ -264,5 +389,14 @@ func (r Result) ownMembers() []ast.Node {
 
 // baseLine is the 1-based buffer line this submission starts on.
 func (r Result) baseLine() int {
-	return strings.Count(r.Source[:r.Offset], "\n") + 1
+	return r.lineOf(r.Offset)
+}
+
+// wholeBuffer numbers diagnostics against the accumulated buffer, naming no file.
+func wholeBuffer(int) (string, int) { return "", 1 }
+
+// inFile reports every diagnostic against file, numbering from its first line,
+// for a caller that already knows which source it is rendering.
+func inFile(file string) func(int) (string, int) {
+	return func(int) (string, int) { return file, 1 }
 }
