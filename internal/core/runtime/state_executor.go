@@ -354,6 +354,9 @@ func (e *StateExecutor) dispatchEvent(event Event) error {
 	case EventTime:
 		// Fire transition - handle both old (TransitionEdge) and new (lower.Transition) for backward compatibility
 		if lowerTrans, ok := event.Payload.(*lower.Transition); ok {
+			// The timer has expired, so it is no longer running: a transition that
+			// does not leave its source state re-arms it for the next round.
+			delete(e.timerScheduled, lowerTrans)
 			sourceState, _ := lowerTrans.Source.(*ast.StateNode)
 			if sourceState != nil && !e.inActiveConfiguration(sourceState) {
 				// The source was left before this event came up, so the transition

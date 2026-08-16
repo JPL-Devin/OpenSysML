@@ -212,6 +212,11 @@ func (e *StateExecutor) moveWithinRegion(region *ast.StateRegion, trans *lower.T
 	// when the least common ancestor lies above it: the state owning the region
 	// stays active and is not re-entered.
 	lca := e.getLCA(source, target)
+	// A transition out of a composite state is external even inside a region: the
+	// source is exited and re-entered when it encloses the target.
+	if declared, isState := trans.Source.(*ast.StateNode); isState && e.encloses(declared, target) {
+		lca = e.graph.ParentState[declared]
+	}
 	if !e.regionContains(region, lca) {
 		lca = e.graph.RegionOwner[region]
 	}

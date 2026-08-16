@@ -292,6 +292,33 @@ func TestOneRegionsInnerTransitionLeavesAConcurrentRegionsOwnTransition(t *testi
 	assertVisits(t, exec.stateVisits, "start", "Working", "lstart", "rstart", "l1", "r1", "l2", "r2")
 }
 
+// A timed transition looping back to its own simple state re-arms its timer, so
+// it fires once per period rather than only the first time.
+func TestTimedSelfTransitionFiresEveryPeriod(t *testing.T) {
+	exec := stateExecutorForSource(t, "sm", `package test {
+		state sm {
+			attribute ticks : Integer = 0;
+
+			initial start;
+			state s;
+			start then s;
+			transition s to s accept after 1 do assign ticks := ticks + 1;
+		}
+	}`)
+
+	for step := 0; step < 3; step++ {
+		if err := exec.ProcessNextEvent(); err != nil {
+			t.Fatalf("step %d: %v", step, err)
+		}
+	}
+	if got := exec.StateData()["ticks"]; got.Const.Int != 2 {
+		t.Errorf("timed self-transition fired %v times over three steps, want 2", got.Const.Int)
+	}
+	if exec.EventQueue().Len() != 1 {
+		t.Errorf("expected the timer re-armed for the next period, queue holds %d events", exec.EventQueue().Len())
+	}
+}
+
 func assertCurrentState(t *testing.T, exec *StateExecutor, want string) {
 	t.Helper()
 	current, _ := exec.CurrentState().(*ast.StateNode)
