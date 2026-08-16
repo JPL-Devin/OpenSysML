@@ -201,6 +201,15 @@ func TestCollectionResults(t *testing.T) {
 		{"xs->excludingAt(2)", []int64{1, 3}},
 		{"xs->excludingAt(1, 2)", []int64{3}},
 		{"xs->excludingAt(1, 3)", nil},
+		// includingAt inserts before the given position, shifting the tail right,
+		// so the result is longer by the values inserted and size+1 appends.
+		{"xs->includingAt(9, 1)", []int64{9, 1, 2, 3}},
+		{"xs->includingAt(9, 2)", []int64{1, 9, 2, 3}},
+		{"xs->includingAt(9, 4)", []int64{1, 2, 3, 9}},
+		{"SequenceFunctions::includingAt(xs, 9, 3)", []int64{1, 2, 9, 3}},
+		{"xs->includingAt(ys, 2)", []int64{1, 2, 4, 2, 3}},
+		{"xs->includingAt((), 2)", []int64{1, 2, 3}},
+		{"()->includingAt(9, 1)", []int64{9}},
 	}
 	for _, tt := range tests {
 		got, err := evalCollectionExpr(t, tt.expr)
@@ -317,6 +326,10 @@ func TestCollectionOperationErrors(t *testing.T) {
 		// An index outside the sequence names no element to remove and is
 		// reported, where the vendored body would answer the sequence unchanged
 		// (docs/project/spec-compliance.md records the divergence).
+		{"xs->includingAt(9, 5)", ErrIndexOutOfRange},
+		{"xs->includingAt(9, 0)", ErrIndexOutOfRange},
+		{"()->includingAt(9, 2)", ErrIndexOutOfRange},
+		{"xs->includingAt(9, 1.5)", ErrTypeMismatch},
 		{"xs->excludingAt(4)", ErrIndexOutOfRange},
 		{"xs->excludingAt(2, 1)", ErrIndexOutOfRange},
 		{"xs->excludingAt(2, 9)", ErrIndexOutOfRange},

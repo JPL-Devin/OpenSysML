@@ -121,6 +121,7 @@ var metaCommandTable = []metaCommand{
 
 	{group: "Library discovery:", name: "%search", args: "<substring>", desc: "list the declared and library symbols whose qualified name contains <substring>"},
 	{group: "Library discovery:", name: "%builtins", desc: "list the library functions this build implements directly"},
+	{group: "Library discovery:", name: "%view", args: "<name>", desc: "show what a view exposes, and the views nested in it"},
 
 	{group: "Runtime commands:", name: "%instantiate", args: "<name>", desc: "create an instance of a part def"},
 	{group: "Runtime commands:", name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
@@ -251,6 +252,11 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		return s.doSearch(nameText(fields[1]))
 	case "%builtins":
 		return s.doBuiltins()
+	case "%view":
+		if len(fields) < 2 {
+			return []string{"usage: %view <name>"}, false, nil
+		}
+		return s.doView(fields[1])
 	case "%quit", "%exit":
 		return []string{"goodbye"}, true, nil
 	case "%instantiate":
@@ -1621,16 +1627,16 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 	result, err := ctx.CheckSatisfactionOn(a, subject)
 	subject, owner = s.reportedSubject(result, subject, owner)
 	if unevaluable(err) {
-		return unevaluableVerdict(a.Text(), a.Text(), err, subject, owner)
+		return unevaluableVerdict(satisfyText(a), satisfyText(a), err, subject, owner)
 	}
 	if err != nil || !result.Holds {
-		return Verdict{Subject: a.Text(), Status: VerdictFails, Lines: []string{
-			fmt.Sprintf("✗ %s fails%s", a.Text(), onInstance(subject, owner)),
+		return Verdict{Subject: satisfyText(a), Status: VerdictFails, Lines: []string{
+			fmt.Sprintf("✗ %s fails%s", satisfyText(a), onInstance(subject, owner)),
 			"  " + verdictDetail("Required condition", err),
 		}}
 	}
-	return Verdict{Subject: a.Text(), Status: VerdictHolds, Lines: []string{
-		fmt.Sprintf("✓ %s holds%s", a.Text(), onInstance(subject, owner)),
+	return Verdict{Subject: satisfyText(a), Status: VerdictHolds, Lines: []string{
+		fmt.Sprintf("✓ %s holds%s", satisfyText(a), onInstance(subject, owner)),
 	}}
 }
 

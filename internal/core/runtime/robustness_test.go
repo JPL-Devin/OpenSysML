@@ -36,6 +36,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
+	t.Run("calc_unbound_keyword_named_parameter", testCalcUnboundKeywordNamedParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
 	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
 	t.Run("calc_without_result", testCalcWithoutResult)
@@ -91,6 +92,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("block_flow_of_unexecutable_member", testBlockFlowOfUnexecutableMember)
 	t.Run("non_terminating_loop_performing_an_action", testNonTerminatingLoopPerformingAnAction)
 	t.Run("for_over_a_value_no_expression_makes_iterable", testForOverAValueNoExpressionMakesIterable)
+	t.Run("for_over_a_scalar", testForOverAScalar)
 	t.Run("statement_directly_in_an_action_body", testStatementDirectlyInAnActionBody)
 	t.Run("flow_end_naming_no_node", testFlowEndNamingNoNode)
 	t.Run("flow_naming_no_pin", testFlowNamingNoPin)
@@ -437,7 +439,14 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"ComplexFunctions::'/'(ys, (0.0, 0.0))", ErrDivisionByZero},
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
 		{"ComplexFunctions::ToString(ys)", ErrUnevaluableLibraryFunction},
-		{"SequenceFunctions::includingAt(xs, 9, 2)", ErrUnevaluableLibraryFunction},
+		// includingAt inserts before a position of 1..size+1, so an index past the
+		// end of the sequence names no insertion point and is reported rather than
+		// appending or dropping the values.
+		{"SequenceFunctions::includingAt(xs, 9, 5)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt(xs, 9, 0)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt((), 9, 2)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt(xs, 9, 1.5)", ErrTypeMismatch},
+		{"SequenceFunctions::includingAt(xs, 9)", ErrCalcArity},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
@@ -464,6 +473,7 @@ func testStringOperandOfTheWrongKind(t *testing.T) {
 		{`StringFunctions::Length(1)`, ErrTypeMismatch},
 		{`StringFunctions::Length(xs)`, ErrTypeMismatch},
 		{`StringFunctions::Substring("abc", 1, 9)`, ErrIndexOutOfRange},
+		{`StringFunctions::Substring("héllo", 1, 6)`, ErrIndexOutOfRange},
 		{`StringFunctions::Substring("abc", 0, 2)`, ErrIndexOutOfRange},
 		{`StringFunctions::Substring("abc", "1", 2)`, ErrTypeMismatch},
 		{`StringFunctions::Substring("abc", 1)`, ErrCalcArity},
@@ -2068,6 +2078,35 @@ func testCalcUnboundParameter(t *testing.T) {
 	}
 }
 
+// testCalcUnboundKeywordNamedParameter: a parameter named with a keyword is a
+// parameter like any other, so leaving it unbound reports, never panics.
+func testCalcUnboundKeywordNamedParameter(t *testing.T) {
+	src := `
+		package test {
+			calc classify {
+				in 'type': Integer;
+				in 'state': Integer;
+				return 'type' + 'state';
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "classify", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("classify calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatalf("expected an unbound parameter error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("expected ErrUnboundParameter, got: %v", err)
+	}
+}
+
 // testCalcTooManyArguments: more arguments than parameters has no binding, so it
 // reports an arity error instead of dropping the extras.
 func testCalcTooManyArguments(t *testing.T) {
@@ -3053,6 +3092,46 @@ func testForOverAValueNoExpressionMakesIterable(t *testing.T) {
 		if !strings.Contains(err.Error(), describeValue(value)) {
 			t.Errorf("error does not name the value: %v", err)
 		}
+	}
+}
+
+// testForOverAScalar: a `for` whose input is a scalar fails with a typed error
+// rather than iterating once over the coercion elementsOf would make of it.
+func testForOverAScalar(t *testing.T) {
+	src := `
+		package test {
+			action counter {
+				attribute single : Integer = 7;
+				attribute visited : Integer = 0;
+				first start;
+				action iterate {
+					for s in single {
+						assign visited := visited + 1;
+					}
+				}
+				done end;
+				then start iterate;
+				then iterate end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "counter", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action counter not found")
+	}
+
+	result, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatalf("the action completed with %v, want a typed error", result)
+	}
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("execution failed with %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "an Integer is not one") {
+		t.Errorf("error does not name the value it was given: %v", err)
 	}
 }
 

@@ -22,11 +22,19 @@ type dropReport struct {
 	// "P::A". Anything running against one of them (or something under it) is
 	// stale; what the submission left alone is not.
 	gone []string
+	// reopened names a namespace a loaded file opened again, which stays a
+	// declaration of its own rather than contributing to the earlier one.
+	reopened string
 }
 
 // notice renders the report as the line the user is told about it, so no
 // declaration ever disappears silently.
 func (d dropReport) notice() string {
+	if d.reopened != "" {
+		name := notationName(d.reopened)
+		return fmt.Sprintf("note: %s is opened by more than one loaded file; each opening stays a declaration of its own, so a member of one is not visible unqualified in the other — qualify it (%s::member)",
+			name, name)
+	}
 	if d.decl == "" {
 		return ""
 	}

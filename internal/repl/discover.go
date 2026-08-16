@@ -131,7 +131,7 @@ func (s *Session) suggestSymbol(name string) []string {
 	}
 	var out []string
 	for _, last := range suggest.Nearest(simple, suggest.SimpleNames(idx)) {
-		if cands := suggest.Qualified(idx, last); len(cands) > 0 {
+		if cands := s.qualifiedSuggestions(idx, last); len(cands) > 0 {
 			out = append(out, cands[0])
 		}
 	}
@@ -181,7 +181,7 @@ func (s *Session) notFoundError(name string) error {
 	msg := err.Error()
 	if !strings.Contains(name, "::") {
 		if idx := s.browseIndex(); idx != nil {
-			if qualified := suggest.With(msg, name, suggest.Qualified(idx, name)); qualified != msg {
+			if qualified := suggest.With(msg, name, s.qualifiedSuggestions(idx, name)); qualified != msg {
 				return suggestionError(err, msg, qualified)
 			}
 		}

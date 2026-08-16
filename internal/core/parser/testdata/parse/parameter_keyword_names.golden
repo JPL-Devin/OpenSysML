@@ -1,0 +1,30 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ParameterKeywordNames" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Anything"))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Classify"
+          (Membership visibility="default"
+            (Usage kind="part" name="type" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Anything
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="state" ref=true direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Anything
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="in" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Anything
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="item" name="scene" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Anything
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="seq" ref=false direction="in" composite=false derived=false ordered=true nonunique=true
+              (Relationship kind="typing" target=Anything
+                (*ast.QualifiedName))
+              (Multiplicity range=true
+                (LiteralInteger value="0")
+                (LiteralInfinity)))))))))
