@@ -246,6 +246,14 @@ def test_a_unit_renders_as_written_and_reduced():
     assert unit("", ()).dimensionless
     assert unit("SI::m").reduction() == "SI::metre"
 
+    # Powers that cancel measure nothing, however the factors were written.
+    cancelled = unit(
+        "SI::m*SI::m/SI::m/SI::m",
+        (("SI::metre", 2.0), ("SI::metre", -2.0)),
+    )
+    assert cancelled.dimensionless
+    assert cancelled.commensurable(unit("", ()))
+
 
 def test_a_slot_that_failed_is_still_an_error():
     """A quantity slot the service could not evaluate reports, not returns."""

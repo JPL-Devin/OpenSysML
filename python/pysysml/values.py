@@ -83,7 +83,7 @@ class Unit:
     @property
     def dimensionless(self) -> bool:
         """Whether the unit reduces to no base unit, as a count or a ratio does."""
-        return not self.factors
+        return not self.exponents()
 
     def exponents(self) -> Dict[str, float]:
         """The reduction as base unit → exponent, order-independent: repeated
