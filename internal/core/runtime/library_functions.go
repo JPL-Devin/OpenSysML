@@ -872,6 +872,12 @@ func checkedReal(x float64) (Value, error) {
 	return Value{Kind: ValConst, Const: res}, nil
 }
 
+// argumentOmitted reports an argument as not given for a [0..1] parameter: null,
+// and equally an empty collection, which KerML holds to be the same no value.
+func argumentOmitted(val Value) bool {
+	return len(elementsOf(val)) == 0
+}
+
 // scalarArg reads a scalar numeric argument: the NumericalValue a scalar-vector
 // product or a Complex component is declared as.
 func scalarArg(name, param string, val Value) (semantics.Value, error) {
@@ -938,7 +944,7 @@ func vectorAdd(name string, ctx *Context, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	if args[1].Kind == ValNull {
+	if argumentOmitted(args[1]) {
 		return ctx.vectorValue(v)
 	}
 	w, err := vectorElements(name, "w", args[1])
@@ -960,7 +966,7 @@ func vectorSubtract(name string, ctx *Context, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	if args[1].Kind == ValNull {
+	if argumentOmitted(args[1]) {
 		zeros := make([]semantics.Value, len(v))
 		for i, elem := range v {
 			zeros[i] = zeroLike(elem)
@@ -1357,7 +1363,7 @@ func complexPower(name string, ctx *Context, args []Value) (Value, error) {
 // complexEquals is ComplexFunctions::'==', which declares both operands [0..1]:
 // two empty operands are equal, an empty one and a value are not.
 func complexEquals(name string, _ *Context, args []Value) (Value, error) {
-	xGiven, yGiven := args[0].Kind != ValNull, args[1].Kind != ValNull
+	xGiven, yGiven := !argumentOmitted(args[0]), !argumentOmitted(args[1])
 	if !xGiven || !yGiven {
 		return boolValue(xGiven == yGiven), nil
 	}
@@ -1391,7 +1397,7 @@ func complexOperands(name string, args []Value) (x, y complex128, given bool, er
 	if err != nil {
 		return 0, 0, false, err
 	}
-	if args[1].Kind == ValNull {
+	if argumentOmitted(args[1]) {
 		return x, 0, false, nil
 	}
 	y, err = asComplex(name, "y", args[1])

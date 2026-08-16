@@ -637,6 +637,48 @@ func TestLibraryFunctionOptionalOperand(t *testing.T) {
 	}
 }
 
+// An empty collection written for the optional operand is the same no value as
+// null, so the call answers as the one-argument form rather than reporting.
+func TestLibraryFunctionEmptyOptionalOperand(t *testing.T) {
+	got, err := applyLibrary(t, "VectorFunctions::cartesian+", realVec(1, 2), vec())
+	if err != nil {
+		t.Fatalf("cartesian+((1.0, 2.0), ()) = error %v", err)
+	}
+	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != 1 || elements[1].Real != 2 {
+		t.Fatalf("cartesian+((1.0, 2.0), ()) = %v, want (1.0, 2.0)", got)
+	}
+
+	got, err = applyLibrary(t, "VectorFunctions::cartesian-", realVec(1, 2), vec())
+	if err != nil {
+		t.Fatalf("cartesian-((1.0, 2.0), ()) = error %v", err)
+	}
+	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != -1 || elements[1].Real != -2 {
+		t.Fatalf("cartesian-((1.0, 2.0), ()) = %v, want (-1.0, -2.0)", got)
+	}
+
+	got, err = applyLibrary(t, "ComplexFunctions::+", realVec(1, 2), vec())
+	if err != nil {
+		t.Fatalf("+(1.0 + 2.0i, ()) = error %v", err)
+	}
+	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != 1 || elements[1].Real != 2 {
+		t.Fatalf("+(1.0 + 2.0i, ()) = %v, want 1.0 + 2.0i", got)
+	}
+
+	for _, tc := range []struct {
+		args []Value
+		want bool
+	}{
+		{[]Value{vec(), vec()}, true},
+		{[]Value{vec(), nullValue()}, true},
+		{[]Value{realVec(1, 2), vec()}, false},
+	} {
+		got, err := applyLibrary(t, "ComplexFunctions::==", tc.args...)
+		if err != nil || got.Kind != ValConst || got.Const.Bool != tc.want {
+			t.Errorf("==(%v) = (%v, %v), want %v", tc.args, got, err, tc.want)
+		}
+	}
+}
+
 // A named argument binds to the parameter name the vendored vector and Complex
 // signatures declare, whichever order the call names them in.
 func TestVectorAndComplexNamedArguments(t *testing.T) {
