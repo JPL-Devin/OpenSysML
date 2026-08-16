@@ -150,7 +150,7 @@ declared raises `TypeMismatchError` rather than returning a wrongly typed value.
 | `Complex`, `Number` | `object`, with a comment naming the type |
 | a type resolved outside the model (e.g. a library type) | `object`, with a comment naming its FQN |
 | an unresolved or absent type | `object`, with a comment naming what was written |
-| `specializes` a definition in the model | Python base class |
+| `specializes`, `subsets` or `redefines` a definition in the model | Python base class |
 
 The fallback is always `object` and always says why in the property's docstring;
 no feature is given a type the model does not support, and `Any` is never used to
@@ -162,12 +162,17 @@ dodge one.
   item, occurrence, individual, port, enum) become properties. Action, state,
   calc, constraint, requirement, connection, flow, interface, allocation and case
   usages are not instance slots and are skipped.
-- **`subsets` and `redefines`.** Reported by the service and available on
-  `Symbol.specializations`, but only `specializes` becomes a Python base class. A
-  redefinition that narrows a feature's type is emitted with its own declared
-  type, which Python does not check against the base property.
-- **Multiple inheritance.** Emitted in declaration order; a SysML hierarchy whose
-  Python equivalent has no consistent MRO produces a module that fails to import.
+- **Redefinition narrowing.** A redefinition reuses the redefined feature's name,
+  so its property overrides the base class's, and takes over the type and
+  multiplicity it does not restate; a redefinition that *narrows* the type is
+  emitted with its own declared type, which Python does not check against the
+  base property.
+- **Multiple inheritance.** Emitted in declaration order, a target named twice
+  appearing once, and a base another declared base already specializes is left
+  implicit (`Hybrid :> Vehicle, Electric` with `Electric :> Vehicle` emits
+  `class Hybrid(Electric)`). A hierarchy that linearizes no way at all keeps the
+  bases it can and names the left-out edge in a comment, rather than emitting a
+  module that fails to import.
 - **Generics and enumerations.** No generic parameters. An `enumDef` becomes a plain
   class rather than a Python `Enum`; a usage typed by it is `EnumLiteral`, which
   carries the literal's declaration identity but does not enumerate its siblings.
