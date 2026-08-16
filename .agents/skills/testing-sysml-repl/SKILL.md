@@ -457,8 +457,10 @@ An action token that reaches an `accept` with no matching message **parks** inst
 - Satisfiable: `internal/core/runtime/testdata/conformance/action_send_accept.sysml`
   (`%action communicator`) — `%break counter` pauses on the accept node, and resuming completes with
   `number = 50` / `n = 50` (the typed accept skips the String and takes the Integer). Loading these
-  fixtures prints a tier-2 `unresolved reference: n` diagnostic for the `assign` that reads the
-  accepted parameter; the runtime still binds it, so don't mistake that for a new failure.
+  fixtures used to print a tier-2 `unresolved reference: n` diagnostic for the `assign` that reads
+  the accepted parameter while the runtime bound it anyway; **PR #196 fixed that**, so on current
+  revisions loading them must be clean. Seeing that diagnostic again is a regression of the
+  accept-payload scope contribution, not harness noise.
 - Unsatisfiable: write a one-accept action with nothing sending to it. `%step` → `State: Waiting`,
   and `%continue` must return a typed
   `accept deadlock in action <name>: nothing can post the awaited message (...)` — **never** hang.
@@ -466,6 +468,42 @@ An action token that reaches an `accept` with no matching message **parks** inst
   `no active action session`.
 
 Always run these under `timeout` when driving over a pipe; a hang is the failure mode to catch.
+
+### An accept node's payload as a body-scoped name (PR #196)
+
+`internal/core/resolve/accept_payload.go` contributes `action r accept msg : T;`'s payload to the
+**body** the accept node is declared in, so sibling nodes read it by simple name. Test it on both
+surfaces — `bin/sysml -validate f.sysml` for the diagnostic and
+`printf '%%load f\n%%action <n>\n%%continue\n%%quit\n' | timeout 30 ./bin/sysml` for the value —
+because check-clean alone never proves the runtime bound anything.
+
+- The A/B against a parent-commit binary is what makes this convincing: the same model gives
+  `error: unresolved reference: msg — did you mean test::communicator::receiver::msg?` (exit 2) on
+  the old binary and `✓ … no errors` on the new one. Payload names must be **non-keyword** —
+  `accept first : Integer` is parsed as an initial node and derails the whole graph with
+  `action has multiple initial nodes`; `first`, `after`, `then` are all reserved.
+- Positive shapes worth one run each, with the numbers a correct build gives (send value in
+  parens): later sibling reads `msg + 1` (42 → `seen = 43`); nested `if msg > 5` + `while` in a
+  sibling node (7 → `total = 21`); two accepts binding `alpha`/`beta` (11, 30 → `sum = 41`);
+  reader declared textually **before** the accept but sequenced after it (4 → `seen = 5`).
+- **Shadowing is the case only a value can catch.** A package-level `attribute msg : Integer = 1;`
+  keeps the model check-clean on *both* binaries, so assert `seen = 9` (the sent payload) and not
+  `1`. Note a *body*-level `attribute msg = 111` in the same action is a weak probe: the accept
+  writes the same value slot, so `seen = 9` either way — prefer the package-level form.
+- Negatives that must stay `unresolved reference: msg` at exit 2, and each exercises a different
+  guard: a misspelling in the same body (now gains `— did you mean msg?`); a **sibling** action's
+  node in the same package; a package-level `attribute` initializer; a wildcard
+  `import src::communicator::*` into another package; and a `part def` body declaring an action
+  node with the accept (`sharesBodyFeatureSpace` rejects a part — this one is easy to forget).
+- A node that executes **before** the accept binds must fail, not read stale data:
+  `error: execution failed: eval assignment RHS: unresolved reference: msg` in ~0.1 s, with
+  `%tokens` afterwards still showing `Token 1 @ <node>` (session survives).
+- A **qualified** `receiver::msg` reference resolves at check time and then fails the run with
+  `usage receiver::msg has no value` — identical on both binaries, i.e. pre-existing rather than a
+  regression of this change. Always A/B it before reporting it as a defect.
+- Cheap corpus gate for a resolve change: loop `internal/core/runtime/testdata/conformance/*.sysml`
+  and `examples/*.sysml` comparing `grep -c 'error:'` counts new vs old binary and print only files
+  where new > old (~1 min).
 
 ## Standard SysML v2 behavioral notation (flows, triggers, sends, transition effects)
 
