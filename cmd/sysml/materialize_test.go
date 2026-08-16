@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -184,5 +185,106 @@ func TestCheckReportsMaterializationDiagnosticsAsJSON(t *testing.T) {
 		if !strings.Contains(got.stdout, want) {
 			t.Errorf("the JSON report is missing %q:\n%s", want, got.stdout)
 		}
+	}
+}
+
+// unmaterializableModel binds two values to a feature declaring no multiplicity,
+// so reading the slot finds a default that does not conform to 1..1.
+const unmaterializableModel = `package Demo { attribute def X { attribute bad : ScalarValues::Real = (1.0, 2.0); }
+               part def R { attribute b : X; } }
+`
+
+// TestPipedSessionExitsOnAMaterializationFailure checks the exit-status rule for a
+// session driven from a pipe: a command that reported a slot it could not
+// materialize answered nothing about it, so the run exits 2 with the diagnostic
+// rendered, while a conforming model still exits 0.
+func TestPipedSessionExitsOnAMaterializationFailure(t *testing.T) {
+	binary := buildCLI(t)
+
+	cases := []struct {
+		name   string
+		stdin  string
+		model  string
+		status int
+		want   []string
+	}{{
+		name:   "a slot listing that could not materialize leaves the run undecided",
+		stdin:  "%instantiate Demo::R\n%slots Demo::R\n",
+		model:  unmaterializableModel,
+		status: exitUnevaluable,
+		want:   []string{"bad: <error:", "multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1"},
+	}, {
+		name:   "an evaluation of the same slot leaves the run undecided",
+		stdin:  "%instantiate Demo::R\n%eval bad\n",
+		model:  unmaterializableModel,
+		status: exitUnevaluable,
+		want:   []string{"error: evaluation failed", "multiplicity violation"},
+	}, {
+		name:   "an evaluation pinned to the object holding it leaves the run undecided",
+		stdin:  "%instantiate Demo::R\n%eval in Demo::R::b : bad\n",
+		model:  unmaterializableModel,
+		status: exitUnevaluable,
+		want:   []string{"error:", "multiplicity violation"},
+	}, {
+		name:   "a name that is no slot of the object decides nothing",
+		stdin:  "%instantiate Demo::R\n%eval nosuch\n",
+		model:  unmaterializableModel,
+		status: exitHolds,
+		want:   []string{"error:"},
+	}, {
+		name:   "quitting after the failure was reported does not report success",
+		stdin:  "%instantiate Demo::R\n%slots Demo::R\n%quit\n",
+		model:  unmaterializableModel,
+		status: exitUnevaluable,
+		want:   []string{"bad: <error:"},
+	}, {
+		name:   "a model whose slots materialize exits on what analysis found",
+		stdin:  "%instantiate Rover::pack\n%slots Rover::pack\n%quit\n",
+		model:  checkModel,
+		status: exitHolds,
+		want:   []string{"capacity = 100"},
+	}}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := runPiped(t, binary, tc.stdin, tc.model)
+			if got.status != tc.status {
+				t.Errorf("exit status = %d, want %d\n%s", got.status, tc.status, got.output())
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(got.output(), want) {
+					t.Errorf("the session did not report %q:\n%s", want, got.output())
+				}
+			}
+		})
+	}
+}
+
+// TestSessionStatusAtATerminal checks that the prompt is unaffected: at a terminal
+// the session is where an unusable model gets fixed, so what a command could not
+// materialize is reported at the prompt without deciding the run.
+func TestSessionStatusAtATerminal(t *testing.T) {
+	failure := []error{errors.New("slot X.bad: multiplicity violation")}
+
+	cases := []struct {
+		name     string
+		loaded   int
+		terminal bool
+		failures []error
+		want     int
+	}{
+		{"a failure at the prompt decides nothing", exitHolds, true, failure, exitHolds},
+		{"a model that did not analyse decides nothing at the prompt", exitUnevaluable, true, nil, exitHolds},
+		{"a failure over a pipe leaves the run undecided", exitHolds, false, failure, exitUnevaluable},
+		{"a pipe over a model that analysed reports success", exitHolds, false, nil, exitHolds},
+		{"a pipe keeps what the load found", exitUnevaluable, false, nil, exitUnevaluable},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sessionStatus(tc.loaded, tc.terminal, tc.failures); got != tc.want {
+				t.Errorf("sessionStatus = %d, want %d", got, tc.want)
+			}
+		})
 	}
 }

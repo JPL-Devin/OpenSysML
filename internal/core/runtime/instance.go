@@ -195,14 +195,28 @@ func (ctx *Context) checkDefaultCount(inst *Instance, slot *Slot, name string, v
 }
 
 // GetSlot retrieves the slot for the named feature, materializing it lazily
-// if it's a composite feature that hasn't been accessed yet.
+// if it's a composite feature that hasn't been accessed yet. A slot that could
+// not be materialized is marked as such — it unwraps to ErrSlotMaterialization —
+// so a caller can tell it from any other failure to evaluate, whatever the
+// expression it surfaced through.
 func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
-	defer ctx.beginRun()()
-
-	slot, ok := inst.Slots[name]
-	if !ok {
+	if _, ok := inst.Slots[name]; !ok {
+		// Naming no slot of the object is no materialization of one.
 		return nil, fmt.Errorf("slot %q not found in instance %d (type %s)", name, inst.ID, inst.Type.Name)
 	}
+	slot, err := inst.materializeSlot(ctx, name)
+	if err != nil {
+		return nil, &SlotError{Err: err}
+	}
+	return slot, nil
+}
+
+// materializeSlot is GetSlot's materialization: the slot's value, evaluated and
+// checked against the multiplicity governing its feature the first time it is read.
+func (inst *Instance) materializeSlot(ctx *Context, name string) (*Slot, error) {
+	defer ctx.beginRun()()
+
+	slot := inst.Slots[name]
 
 	// If already materialized, return
 	if slot.Materialized {

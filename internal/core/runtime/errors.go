@@ -214,6 +214,12 @@ var (
 	// those features, so the restatement could only be silently dropped.
 	ErrValuedFeatureRestated = errors.New("feature both valued and restated in a body")
 
+	// ErrSlotMaterialization marks an error as a slot that could not be
+	// materialized, whatever kept it from materializing. Reading a slot is what
+	// finds such a failure, so a surface reporting one answered nothing about
+	// that slot rather than deciding anything about the model.
+	ErrSlotMaterialization = errors.New("slot could not be materialized")
+
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
 	// it can be created.
@@ -235,6 +241,17 @@ func (e *ViolationError) Error() string {
 }
 
 func (e *ViolationError) Unwrap() error { return ErrViolated }
+
+// SlotError marks a slot that could not be materialized. It reads as the error
+// that kept the slot from materializing and unwraps to it as well as to
+// ErrSlotMaterialization, so a caller tests either.
+type SlotError struct {
+	Err error
+}
+
+func (e *SlotError) Error() string { return e.Err.Error() }
+
+func (e *SlotError) Unwrap() []error { return []error{ErrSlotMaterialization, e.Err} }
 
 // OperandTypeError reports an operator applied to operand types it is not
 // defined for, naming the operator and both operands and carrying the span of

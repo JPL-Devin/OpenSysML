@@ -371,6 +371,7 @@ func (s *Session) doEvalLine(tail string) ([]string, bool, error) {
 	}
 	lines, err := s.evalIn(name, expr)
 	if err != nil {
+		s.noteIfMaterializationFailure(err)
 		return []string{"error: " + err.Error()}, false, nil
 	}
 	return lines, false, nil
@@ -502,6 +503,7 @@ func nameText(arg string) string {
 func (s *Session) doEval(expr string) ([]string, bool, error) {
 	lines, err := s.evalExpr(expr)
 	if err != nil {
+		s.noteIfMaterializationFailure(err)
 		return []string{"error: " + err.Error()}, false, nil
 	}
 	return lines, false, nil
@@ -895,7 +897,11 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 		"Slots:",
 	}
 	w := &slotWalk{ctx: ctx, onPath: map[*symbols.Symbol]bool{inst.Type: true}, budget: maxSlotLines}
-	return append(lines, w.lines(inst, "  ", 0)...), false, nil
+	listing := w.lines(inst, "  ", 0)
+	// A slot the listing rendered as an error is one the session could not answer
+	// about, which a non-interactive run exits on.
+	s.noteMaterializationFailure(w.errs...)
+	return append(lines, listing...), false, nil
 }
 
 const (
@@ -914,6 +920,9 @@ type slotWalk struct {
 	ctx    *runtime.Context
 	onPath map[*symbols.Symbol]bool
 	budget int
+	// errs are the slots the listing could not materialize, rendered as errors in
+	// its lines and reported as findings about the model by the caller.
+	errs []error
 }
 
 func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []string {
@@ -947,6 +956,7 @@ func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []str
 		}
 		slot, err := inst.GetSlot(w.ctx, feat.Name)
 		if err != nil {
+			w.errs = append(w.errs, err)
 			lines = w.emit(lines, fmt.Sprintf("%s%s: <error: %v>", indent, feat.Name, err))
 			continue
 		}
@@ -969,6 +979,7 @@ func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []str
 func (w *slotWalk) connectors(inst *runtime.Instance, indent string) []string {
 	conns, err := inst.OwnedConnectors(w.ctx)
 	if err != nil {
+		w.errs = append(w.errs, err)
 		return w.emit(nil, fmt.Sprintf("%s(anonymous connector): <error: %v>", indent, err))
 	}
 	var lines []string
