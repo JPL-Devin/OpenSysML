@@ -305,7 +305,7 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 			FailureReason: failureReason(err),
 		}, nil
 	}
-	return &pb.EvaluateCalcResponse{Result: ValueToProto(result)}, nil
+	return &pb.EvaluateCalcResponse{Result: ValueToProto(result, v.cached.Index)}, nil
 }
 
 // calcUsageOutputs evaluates a calc usage from its own member values. It reports
@@ -327,7 +327,7 @@ func (v *verifyContext) calcUsageOutputs(sym *symbols.Symbol) ([]*pb.CalcOutput,
 	for _, out := range outputs {
 		pbOutputs = append(pbOutputs, &pb.CalcOutput{
 			Name:  out.Name,
-			Value: ValueToProto(out.Value),
+			Value: ValueToProto(out.Value, v.cached.Index),
 		})
 	}
 	return pbOutputs, true, nil

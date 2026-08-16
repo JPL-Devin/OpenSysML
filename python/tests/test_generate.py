@@ -128,6 +128,29 @@ def test_element_type_scalar_definition_maps_to_its_scalar():
     assert mapped.decoder == "_t.as_float"
 
 
+def test_element_type_enumeration_is_a_literal():
+    """An enumeration-typed usage holds a literal, not an instance of the enum def."""
+    mapped = element_type(
+        TypeFacts(declared="Color", resolved_id="D::Color", resolved_kind="enumDef"),
+        {"D::Color": "Color"},
+    )
+    assert mapped.annotation == "_t.EnumLiteral"
+    assert mapped.decoder == "_t.as_enum_literal"
+
+
+def test_element_type_valued_enumeration_maps_to_its_scalar():
+    """A literal declaring a value of its own evaluates to that value."""
+    mapped = element_type(
+        TypeFacts(
+            declared="Code", resolved_id="D::Code", resolved_kind="enumDef",
+            primitive="Integer",
+        ),
+        {"D::Code": "Code"},
+    )
+    assert mapped.annotation == "int"
+    assert mapped.decoder == "_t.as_int"
+
+
 def test_element_type_unmapped_primitive_is_object():
     """Complex and Number have no sound Python type and say so."""
     mapped = element_type(TypeFacts(primitive="Complex"), {})

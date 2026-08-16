@@ -1,0 +1,9 @@
+{
+  "type": "instance",
+  "instantiate": "test::Vehicle",
+  "constraints": {
+    "tagged": true,
+    "namedSelf": true,
+    "notComfort": true
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "inputs": [
+    {"type": "Integer", "value": 3}
+  ],
+  "error": "operator '<' is not defined for a string and an Integer"
+}

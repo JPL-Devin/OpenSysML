@@ -1,0 +1,9 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "inputs": [
+    {"type": "String", "value": "apple"},
+    {"type": "String", "value": "banana"}
+  ],
+  "result": {"type": "Boolean", "value": true}
+}

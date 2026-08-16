@@ -327,6 +327,43 @@ Both residual items are closed by the unit-resolution work; see `docs/project/sp
   `lower.Unsupported` and reported when reached, since neither has succession semantics inside a
   block. Executing them means giving a block its own token flow.
 
+## A11 — string operators and the string function library — done
+
+Found in the 0.0.8 pre-release audit: no operator was defined over two strings (`s + "d"` reported
+`operator '+' is not defined for a string and a string`) and no `StringFunctions` declaration was
+evaluable, so a model that builds a message, compares text or measures a string could not run.
+
+Landed: every function the vendored `StringFunctions` declares is evaluable, and each of the
+operators it declares evaluates over two String operands — `runtime/library_functions.go`
+`registerStringFunctions` (`'+'`, `Length`, `Substring`, `'<'`, `'>'`, `'<='`, `'>='`, `'=='`,
+`ToString`) plus the operator dispatch in `runtime/eval.go` (`evalArithmetic` for `'+'`,
+`evalComparison` for the four comparisons). Semantics, and where each comes from:
+
+- **Length counts characters, not bytes**: one per Unicode code point, so `Length("héllo")` is 5
+  though the string is 6 bytes. The declaration returns `Natural[1]`, a count of the string's
+  characters, and the KerML 1.0 String description is a sequence of characters; a byte count would
+  depend on the encoding, which the library never mentions.
+- **Substring positions are 1-based and inclusive**, over characters, matching the library's own
+  `SequenceFunctions::subsequence` (`in lower`/`in upper`, `Positive` indices elsewhere in the
+  library). A position outside `1..Length(x)` is `ErrIndexOutOfRange` rather than clamped, and an
+  upper below lower selects no character, exactly as `subsequence` answers nothing for such a range.
+- **Comparison is by character order**: UTF-8 orders bytes as it orders code points, so a Go string
+  comparison *is* code-point order.
+- **No coercion**: an operand that is not a String is an `OperandTypeError` wrapping
+  `ErrTypeMismatch`, naming the operator and both operand types. `'=='` specializes
+  `DataFunctions::'=='`, so as an *operator* `s == 3` is `false` (equality is defined over any two
+  values); called explicitly, `StringFunctions::'=='` declares `String[0..1]` operands and reports a
+  non-String argument, like every other signature in the package. `'=='` over `[0..1]` operands also
+  answers for an omitted one: two omitted operands are equal, an omitted one and a string are not.
+- The library declares `Length` and `Substring`, not `size`/`substring` — the audit's repro used the
+  latter spelling, which no vendored file declares, so the implemented names follow the library.
+
+Conformance cases `string_operators`, `string_comparison`, `string_functions`, `string_empty`,
+`string_substring_out_of_range`, `string_compared_with_a_number`; unit coverage in
+`runtime/eval_operator_test.go` and `runtime/library_functions_test.go`, the latter's
+`TestVendoredFunctionsAreAllDispatchable` now gating `StringFunctions` so a declaration cannot drift
+away from an implementation; robustness case `string_operand_of_the_wrong_kind`.
+
 ## A10 — an enumeration literal has no runtime value — done
 
 Landed: a literal declaring no value evaluates to itself — `runtime.Value{Kind: ValEnumLiteral}`
@@ -374,8 +411,17 @@ literal (`Level::high.n`), and an enum-typed default materializes: the reproduct
   re-exported name and `resolve/filter.go` evaluates them, so the qualified and unqualified
   routes agree and a restored index cache decides a filter the same way a parsed library does.
   A condition outside the evaluated subset is reported (`passes/filter.go`) and not applied.
-  Still open: `@`/`@@` in the runtime evaluator (A4), and a view's exposed-element set as a
-  queryable API.
+  ~~Still open: `@`/`@@` in the runtime evaluator (A4), and a view's exposed-element set as a
+  queryable API.~~ **Done.** `runtime/eval.go` `evalClassification` evaluates `@`/`@@` as
+  operators of an ordinary expression — a constraint, a calc body, an `%eval` — against the
+  element its subject denotes (an explicit name, `self`, or the object being evaluated), and
+  reaches its verdict through the same `semantics/filter.go` predicate an element filter is
+  decided by (`Model.EvalClassification`), so the two paths cannot drift; a subject or type
+  outside the evaluable subset is reported (`ErrFilterUnevaluable`) rather than answered false.
+  `semantics/expose.go` `Model.ExposedElements` answers a view's exposed set, enumerated through
+  `resolve/filter.go` `Resolver.ImportedElements` so exposes are admitted and filtered exactly as
+  name resolution admits them, with `Model.NestedViews` to walk a view tree. Still open: a REPL
+  surface for the query (see the `%view` proposal in the A5 PR).
 
 ## A6 — implicit library import (do this LAST)
 
@@ -384,23 +430,59 @@ literal (`Level::high.n`), and an enum-typed default materializes: the reproduct
 unresolved references resolve for the wrong reason. Gate it with a **file-by-file** corpus diff,
 never the total, and land it only while the corpus sits at its 98/100 ceiling.
 
-## A7 — parser items, verify before tasking
+## A7 — parser items, verified — done
 
-- `individual part ip : Vehicle;` parses as a usage of kind `individual` named `part`, so it is
-  not a part usage at all. PR #51 attempted this and was **closed**: making the modifier
-  nameable that way made `individual part : Vehicle` indistinguishable from
-  `individual item : Integer`, while `ref item : Integer` — a modifier in the same position —
-  was left alone. Read that thread before starting. The right shape is on the naming side:
-  require an explicit name and diagnose the ambiguous form. Reaches
-  `internal/core/symbols/builder.go`, since the modifier is also not reflected in the symbol
-  kind.
-- `for step in c { … }` is rejected: `parseForAction` wants an `Identifier`, and `step` is the
-  KerML keyword, so the loop becomes an error node with three diagnostics. The keyword-in-name
-  handling that `parser/defusage.go` `atKindPrefix` does for declarations is missing here (and
-  the REPL does not print load-time parse diagnostics, so the file looks accepted).
-- `action a { in snapshot ; }` parses with zero diagnostics — an anonymous untyped parameter is
-  silently accepted (also `in event ;`). Reproduce first; it was never re-verified after the
-  occurrence-modifier work.
+Every item was reproduced on `main` at `89b14fd` first; the observation is recorded with the fix
+because two of the four descriptions no longer matched the code.
+
+- ~~`individual part ip : Vehicle;` parses as a usage of kind `individual` named `part`.~~
+  **Done, and the description was already stale:** at `89b14fd` that form parses as a part usage
+  named `ip`, so PR #51's failure mode is gone. What did reproduce is the other half — the
+  modifier reached neither the kind nor the symbol kind (`individual ip : Vehicle` was a plain
+  `attributeUsage`), and the nameless `individual part : Vehicle` was accepted silently. A lone
+  occurrence modifier now declares its own kind (`parser/defusage.go` `modifierImpliedKind`:
+  `individual` → individual usage, `snapshot`/`timeslice`/`event` → occurrence usage, per
+  SysML.xtext `IndividualUsage`, `PortionUsage`, `EventOccurrenceUsage`), so
+  `symbols/builder.go` classifies it as `individualUsage`/`occurrenceUsage`. A modifier followed
+  by a kind keyword and no name keeps that kind — `individual part` and `individual item` stay
+  distinct, which is what #51 lost — and is reported as `ambiguous-modifier-kind`
+  (`warnAmbiguousModifierKind`), for `ref` on the same footing as `individual`, `snapshot` and
+  `timeslice`.
+- ~~`for step in c { … }` is rejected.~~ **Done.** The loop variable is a usage declaration
+  (SysML.xtext `ForVariableDeclaration: UsageDeclaration`), so `parseForAction` now names it with
+  `parseIdentification` rather than demanding an `Identifier`: any keyword may name the loop
+  variable, with the usual `reserved-keyword-name` warning. Reproduced as described — two errors,
+  and the recovery misread `in` as a step usage and `c` as an enum usage. Still open (the REPL
+  layer is not touched here): `internal/repl` does not print load-time parse diagnostics, so a
+  file with parse errors still looks accepted when loaded from the REPL.
+- ~~`action a { in snapshot ; }` is silently accepted.~~ **Done, and it is legal.** SysML.xtext
+  makes the declaration of a usage optional (`Usage: UsageDeclaration? UsageCompletion`), so an
+  anonymous parameter is well-formed and needs no diagnostic. It did build a symbol, but as a
+  plain part usage: the parameter path recorded `snapshot`/`event` and then ignored them.
+  `parseDirectionParameter` now shares `modifierImpliedKind` and `warnAmbiguousModifierKind` with
+  declarations (a direction is a usage prefix — SysML.xtext `RefPrefix`), so `in snapshot ;` and
+  `in event ;` are anonymous occurrence usages and `in individual v : Vehicle` an individual
+  usage. Still open: a parameter with no kind keyword at all (`in x : Real`) keeps the parameter
+  path's own *part* default, where the same declaration outside a parameter list is a plain
+  feature; that default is load-bearing for existing goldens and is out of scope here.
+- ~~**A7-4 (0.0.8 audit): a KerML `datatype` is classified as an attribute usage.**~~ **Done.**
+  In a `.kerml` file, `datatype D; classifier C specializes D; feature f : D;` reported `class
+  cannot specialize attributeUsage` and `type must be a definition, found attributeUsage`, so
+  nothing could specialize `D` or be typed by it; `function` failed the same way through
+  `calcUsage`, while `class`, `struct`, `assoc`, `behavior` and `interaction` were already clean.
+  The root cause was that `symbols/builder.go` `classifyUsage` decided a `datatype` from its
+  relationships — `datatype Real specializes Complex` was a definition, bare `datatype D;` a
+  usage — so a `datatype` is now a definition whatever it specializes, and `feature f : D;` is
+  clean. `function` is deliberately left a `calcUsage`: a KerML function is invoked as a calc and
+  the runtime resolves it through `SymbolCalcUsage`, so classifying it as a type breaks every
+  library operator (`IntegerFunctions::+` and the rest) — the fidelity gap there is that nothing
+  distinguishes a function *definition* from a calc usage, which needs a function kind in
+  `ast.UsageKind`. Still open, and outside this item's files: `classifier C specializes D;` now
+  reports `class cannot specialize attributeDef (kind mismatch)`, because
+  `passes/typecheck.go` `specializationDiag` requires a plain `classifier` to specialize another
+  classifier-kind definition, and reports it as `class`. KerML 1.0 §8.3.2 makes a `DataType` a
+  `Classifier`, and only `Class` is disjoint with it (§8.3.3), so a plain `classifier` may
+  specialize a datatype; the kind-compatibility matrix is the error site A7-4 forbids patching.
 
 ## A8 — a nested feature redefined on an object is not the subject of a check or an `%eval`
 

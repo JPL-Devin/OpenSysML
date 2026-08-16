@@ -72,9 +72,9 @@ type Value struct {
 	Literal *symbols.Symbol
 }
 
-// enumLiteral is the value an enumeration literal that declares no value of its
-// own evaluates to: the identity of that literal.
-func enumLiteral(sym *symbols.Symbol) Value {
+// NewEnumLiteral is the value an enumeration literal that declares no value of
+// its own evaluates to: the identity of that literal.
+func NewEnumLiteral(sym *symbols.Symbol) Value {
 	return Value{Kind: ValEnumLiteral, Literal: sym}
 }
 

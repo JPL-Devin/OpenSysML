@@ -1,0 +1,8 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "inputs": [
+    {"type": "String", "value": "abc"}
+  ],
+  "error": "sequence index out of range: function StringFunctions::Substring upper 9 is outside 1..3"
+}
