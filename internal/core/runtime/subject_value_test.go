@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
@@ -174,6 +175,43 @@ func TestNestedSubjectUnderSuppliedObject(t *testing.T) {
 	}
 	if satisfied {
 		t.Error("small on top: satisfied = true, want the nested object's redefined value to violate it")
+	}
+}
+
+// Carriers are named by the definition they are objects of, so an object of a
+// nested usage and one of the definition itself are not named as if they were
+// different kinds of thing.
+func TestAmbiguousCarriersAreNamedAlike(t *testing.T) {
+	src := `package test {
+	part def Leaf {
+		attribute value : Real = 1.0;
+		constraint small { value < 10.0 }
+	}
+	part def Node {
+		part leaf : Leaf;
+	}
+	part plain : Node;
+	part redefined : Node {
+		part :>> leaf {
+			attribute :>> value = 99.0;
+		}
+	}
+}`
+	ctx, pkg := nestedSubjectFixture(t, src)
+	for _, name := range []string{"plain", "redefined"} {
+		if _, err := ctx.Instantiate(memberPath(t, pkg, name)); err != nil {
+			t.Fatalf("instantiate %s: %v", name, err)
+		}
+	}
+	small := memberPath(t, pkg, "Leaf", "small")
+	_, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+	if !errors.Is(err, ErrAmbiguousSubject) {
+		t.Fatalf("small with two carriers: err = %v, want ErrAmbiguousSubject", err)
+	}
+	for _, want := range []string{"Leaf #3", "Leaf #4 (leaf)"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%q does not name a carrier %q", err, want)
+		}
 	}
 }
 

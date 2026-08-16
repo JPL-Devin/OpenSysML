@@ -194,7 +194,7 @@ func (ctx *Context) conditionSubject(sym *symbols.Symbol, self *Instance) (*Inst
 		return carriers[0], nil
 	}
 	return nil, fmt.Errorf("%w: %s is carried by %s: check it on one of them",
-		ErrAmbiguousSubject, sym.Name, strings.Join(objectLabels(carriers), ", "))
+		ErrAmbiguousSubject, sym.Name, strings.Join(ctx.objectLabels(carriers), ", "))
 }
 
 // declaringType is the type whose objects carry sym, nil when sym is declared
@@ -351,18 +351,41 @@ func heldObjects(val Value) []int64 {
 	return out
 }
 
-// objectLabels names objects as a diagnostic can quote them: their type and
-// identity, since an object of a nested part has no name of its own.
-func objectLabels(instances []*Instance) []string {
+// objectLabels names objects as a diagnostic can quote them: the definition each
+// is an object of and its identity, so two objects of one definition are named
+// alike whether they materialize it directly or through a usage — whose name is
+// added, since an object of a nested part has no name of its own.
+func (ctx *Context) objectLabels(instances []*Instance) []string {
 	out := make([]string, 0, len(instances))
 	for _, inst := range instances {
 		name := "object"
-		if inst.Type != nil && inst.Type.Name != "" {
-			name = inst.Type.Name
+		if def := ctx.definitionOf(inst.Type); def != nil && def.Name != "" {
+			name = def.Name
 		}
-		out = append(out, fmt.Sprintf("%s #%d", name, inst.ID))
+		label := fmt.Sprintf("%s #%d", name, inst.ID)
+		if inst.Type != nil && inst.Type.Name != "" && inst.Type.Name != name {
+			label += " (" + inst.Type.Name + ")"
+		}
+		out = append(out, label)
 	}
 	return out
+}
+
+// definitionOf is the definition objects of sym are objects of: sym itself when
+// it declares one, else the nearest definition it specializes.
+func (ctx *Context) definitionOf(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
+	if _, ok := sym.Decl.(*ast.Definition); ok {
+		return sym
+	}
+	for _, super := range ctx.model.AllSupertypes(sym) {
+		if _, ok := super.Decl.(*ast.Definition); ok {
+			return super
+		}
+	}
+	return sym
 }
 
 // conditionHolds evaluates one condition: an expression, or a group that holds
