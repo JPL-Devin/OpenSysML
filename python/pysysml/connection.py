@@ -671,13 +671,22 @@ class Connection:
         
         return response.symbol
     
-    def eval(self, expression, model_hash, context_symbol_id=None):
+    def eval(
+        self,
+        expression,
+        model_hash,
+        context_symbol_id=None,
+        subject_symbol_id=None,
+    ):
         """Evaluate a SysML expression.
         
         Args:
             expression (str): SysML expression (e.g., "2 + 2")
             model_hash (str): Hash from ParseFile response
             context_symbol_id (str, optional): Symbol FQN for context scope
+            subject_symbol_id (str, optional): FQN of a part/usage to
+                instantiate and evaluate against, so a feature reads that
+                object's value rather than the declared default
             
         Returns:
             Value from expression (int, float, bool, str, Instance, etc.)
@@ -690,7 +699,8 @@ class Connection:
         req = sysml_pb2.EvaluateRequest(
             model_hash=model_hash,
             expression=expression,
-            context_symbol_id=context_symbol_id or ""
+            context_symbol_id=context_symbol_id or "",
+            subject_symbol_id=subject_symbol_id or "",
         )
         
         with translate_rpc_errors():

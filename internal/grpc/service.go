@@ -257,6 +257,20 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 		}, nil
 	}
 
+	// A subject is both what the expression is evaluated against and, unless a
+	// context is named, the namespace its features are named in — the way the
+	// prompt evaluates in the context it pinned.
+	var subject *symbols.Symbol
+	if req.SubjectSymbolId != "" {
+		syms := lookupNamed(cached.Index, req.SubjectSymbolId)
+		if len(syms) == 0 {
+			return &pb.EvaluateResponse{
+				Error: fmt.Sprintf("subject not found: %s", req.SubjectSymbolId),
+			}, nil
+		}
+		subject = syms[0]
+	}
+
 	// Determine scope
 	var scope *symbols.Scope
 	if req.ContextSymbolId != "" {
@@ -265,6 +279,9 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 		if len(syms) > 0 && syms[0].Scope != nil {
 			scope = syms[0].Scope
 		}
+	}
+	if scope == nil && subject != nil {
+		scope = evalScope(subject, cached)
 	}
 	if scope == nil {
 		// Use document root as default scope
@@ -276,8 +293,19 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	semModel := semantics.NewModel(resolver)
 	runtimeCtx := s.newRuntime(semModel, resolver)
 
+	var self *runtime.Instance
+	if subject != nil {
+		inst, err := runtimeCtx.Instantiate(subject)
+		if err != nil {
+			return &pb.EvaluateResponse{
+				Error: fmt.Sprintf("instantiation of subject %s failed: %v", req.SubjectSymbolId, err),
+			}, nil
+		}
+		self = inst
+	}
+
 	// Create eval context and evaluate
-	evalCtx := runtime.NewEvalContext(runtimeCtx, scope)
+	evalCtx := runtime.NewEvalContextIn(runtimeCtx, scope, self)
 	result, err := evalCtx.Eval(exprNode)
 	if err != nil {
 		return &pb.EvaluateResponse{
@@ -288,6 +316,22 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	return &pb.EvaluateResponse{
 		Result: ValueToProto(result),
 	}, nil
+}
+
+// evalScope is the namespace a subject's features are named in: its own scope,
+// so a member is named unqualified, else the scope it was declared in. Mirrors
+// the REPL's contextScope.
+func evalScope(sym *symbols.Symbol, cached *CachedModel) *symbols.Scope {
+	switch {
+	case sym == nil:
+		return nil
+	case sym.Scope != nil:
+		return sym.Scope
+	case sym.OwnerScope != nil:
+		return sym.OwnerScope
+	default:
+		return cached.Index.DocumentRoot(cached.Source.Name())
+	}
 }
 
 // Instantiate creates a runtime instance of a part/usage

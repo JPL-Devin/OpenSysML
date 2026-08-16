@@ -9,7 +9,13 @@ from pysysml.symbol import Symbol
 from pysysml.diagnostic import Diagnostic
 from pysysml.instance import Instance
 from pysysml.typed import TypedObject
-from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
+from pysysml.typefacts import (
+    AttributeFacts,
+    Multiplicity,
+    Specialization,
+    SymbolFacts,
+    TypeFacts,
+)
 from pysysml.capabilities import MissingCapabilityError, ServerInfo
 from pysysml.verdict import CalcResult, Verdict
 from pysysml.query import QueryElement, QueryError
@@ -29,6 +35,7 @@ from pysysml.errors import (
 __all__ = [
     "Connection", "Model", "Symbol", "Diagnostic", "Instance",
     "TypedObject", "TypeFacts", "Multiplicity", "Specialization", "SymbolFacts",
+    "AttributeFacts",
     "ServerInfo",
     "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
     "Verdict", "CalcResult",
@@ -42,7 +49,7 @@ __all__ = [
     "TypeMismatchError", "UnsupportedOperationError", "UnsupportedValueError",
     "WrongKindError",
     "load", "connect", "convert",
-    "eval", "instantiate",
+    "evaluate", "eval", "instantiate",
     "DEFAULT_PORT", "split_target",
     "__version__"
 ]
@@ -195,7 +202,7 @@ def convert(to_format, file_path=None, content=None, model_hash=None,
 
 
 def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
-         host='localhost', port=None):
+         subject=None, host='localhost', port=None):
     """Evaluate a SysML expression (module-level convenience).
 
     A model in hand has :meth:`Model.eval`, which needs neither the hash nor the
@@ -206,6 +213,9 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
         file_path (str, optional): Parse this file first, get model_hash
         model_hash (str, optional): Use existing model hash
         context_symbol_id (str, optional): Context for evaluation
+        subject (str, optional): FQN of a part/usage to instantiate and evaluate
+            against, so a feature reads that object's value rather than the
+            declared default
         host (str): Service hostname, or a ``host:port`` address
         port (int, optional): Service port (default: 50051)
         
@@ -235,7 +245,16 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
         model = conn.load(file_path)
         model_hash = model.hash
     
-    return conn.eval(expression, model_hash, context_symbol_id)
+    return conn.eval(
+        expression,
+        model_hash,
+        context_symbol_id=context_symbol_id,
+        subject_symbol_id=subject,
+    )
+
+
+#: Non-shadowing name for :func:`eval`; both are the same function and supported.
+evaluate = eval
 
 
 def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',

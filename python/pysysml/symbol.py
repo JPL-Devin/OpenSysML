@@ -2,7 +2,13 @@
 
 from typing import List, Optional, TYPE_CHECKING
 
-from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
+from pysysml.typefacts import (
+    AttributeFacts,
+    Multiplicity,
+    Specialization,
+    SymbolFacts,
+    TypeFacts,
+)
 
 if TYPE_CHECKING:
     from pysysml.proto import sysml_pb2
@@ -11,6 +17,27 @@ if TYPE_CHECKING:
 # Matched case-insensitively so older PascalCase producers still work.
 ATTRIBUTE_KINDS = frozenset({"attributedef", "attributeusage"})
 PART_KINDS = frozenset({"partdef", "partusage"})
+
+
+def _type_text(symbol, attribute_facts) -> Optional[str]:
+    """Name a member's type: its own resolved type, else what the service resolved
+    for it as an attribute."""
+    facts = symbol.type_facts
+    if facts is not None:
+        text = facts.resolved_id or facts.declared or facts.primitive
+        if text:
+            return text
+    if attribute_facts is not None and attribute_facts.type:
+        return attribute_facts.type
+    return None
+
+
+def _multiplicity_text(symbol) -> Optional[str]:
+    """Render a member's declared multiplicity as ``lower..upper``, or None."""
+    multiplicity = symbol.multiplicity
+    if multiplicity is None:
+        return None
+    return f"{multiplicity.lower}..{multiplicity.upper}"
 
 
 class Symbol:
@@ -37,6 +64,7 @@ class Symbol:
         self._client = client
         self._model_hash = model_hash
         self._children_cache = None
+        self._attributes_cache = None
     
     @property
     def id(self) -> str:
@@ -77,6 +105,16 @@ class Symbol:
         """Return all generalization edges declared on this symbol."""
         return [Specialization.from_pb(spec) for spec in self._pb.specializations]
 
+    def attribute_facts(self) -> List[AttributeFacts]:
+        """Return every attribute this symbol has, own and inherited, with its
+        resolved type, constant default value and unit.
+
+        This is the attribute set the service resolved, so unlike
+        :meth:`attributes` it needs no further RPC and reports each attribute's
+        default value.
+        """
+        return [AttributeFacts.from_pb(attr) for attr in self._pb.attributes]
+
     def facts(self) -> SymbolFacts:
         """Return this symbol's static facts, detached from the protobuf message."""
         return SymbolFacts(
@@ -86,6 +124,7 @@ class Symbol:
             type=self.type_facts,
             multiplicity=self.multiplicity,
             specializations=tuple(self.specializations),
+            attributes=tuple(self.attribute_facts()),
         )
 
     def children(self) -> List["Symbol"]:
@@ -115,12 +154,53 @@ class Symbol:
         return result
     
     def attributes(self) -> List["Symbol"]:
-        """Return child symbols that are attribute definitions or usages.
-        
+        """Return the attribute symbols this symbol has, own and inherited.
+
+        Ordered as the service reports the attribute set, so an attribute
+        inherited from a supertype is included and a redefinition masks the
+        declaration it redefines. An inherited attribute is fetched from the
+        supertype that declares it, so it carries its own facts.
+
         Returns:
             List of attribute Symbol objects
         """
-        return [child for child in self.children() if child.kind.lower() in ATTRIBUTE_KINDS]
+        if self._attributes_cache is not None:
+            return self._attributes_cache
+
+        declared = [child for child in self.children() if child.kind.lower() in ATTRIBUTE_KINDS]
+        by_name = {child.name: child for child in declared}
+        for inherited in self._inherited_attributes(set()):
+            by_name.setdefault(inherited.name, inherited)
+
+        reported = [attr.name for attr in self._pb.attributes]
+        ordered = [by_name[name] for name in reported if name in by_name]
+        # A declared attribute the service did not report — an unnamed one, or an
+        # older service — is still this symbol's, so it is kept.
+        ordered += [child for child in declared if child.name not in reported]
+
+        self._attributes_cache = ordered
+        return ordered
+
+    def _inherited_attributes(self, visited: set) -> List["Symbol"]:
+        """Return the attribute symbols this symbol's supertypes declare, nearest first."""
+        if self._client is None or self.id in visited:
+            return []
+        visited.add(self.id)
+
+        result = []
+        for spec in self.specializations:
+            if spec.kind == "typing" or not spec.target_id or spec.target_id in visited:
+                continue
+            info = self._client.get_symbol(self._model_hash, spec.target_id)
+            if info is None:
+                continue
+            supertype = Symbol(info, self._client, self._model_hash)
+            result += [
+                child for child in supertype.children()
+                if child.kind.lower() in ATTRIBUTE_KINDS
+            ]
+            result += supertype._inherited_attributes(visited)
+        return result
     
     def parts(self) -> List["Symbol"]:
         """Return child symbols that are part definitions or usages.
@@ -145,14 +225,16 @@ class Symbol:
         return None
     
     def to_dataframe(self):
-        """Convert children to pandas DataFrame.
-        
-        Creates a DataFrame with columns: name, kind, id.
-        Requires pandas to be installed.
-        
+        """Convert this symbol's members to a pandas DataFrame.
+
+        One row per child, plus one per attribute inherited from a supertype,
+        with columns: name, kind, id, type, multiplicity, value, unit,
+        inherited. ``value`` and ``unit`` are an attribute's default where the
+        service resolved a constant one, and are None where it did not.
+
         Returns:
-            pandas.DataFrame with child symbols
-            
+            pandas.DataFrame with this symbol's members
+
         Raises:
             ImportError: If pandas is not installed
         """
@@ -163,18 +245,29 @@ class Symbol:
                 "pandas is required for to_dataframe(). "
                 "Install with: pip install pandas"
             )
-        
-        children = self.children()
-        if not children:
-            return pd.DataFrame(columns=['name', 'kind', 'id'])
-        
+
+        rows = list(self.children())
+        child_ids = {child.id for child in rows}
+        inherited_ids = {attr.id for attr in self.attributes() if attr.id not in child_ids}
+        rows += [attr for attr in self.attributes() if attr.id in inherited_ids]
+
+        columns = ['name', 'kind', 'id', 'type', 'multiplicity', 'value', 'unit', 'inherited']
+        if not rows:
+            return pd.DataFrame(columns=columns)
+
+        facts = {attr.name: attr for attr in self.attribute_facts()}
         data = {
-            'name': [child.name for child in children],
-            'kind': [child.kind for child in children],
-            'id': [child.id for child in children],
+            'name': [row.name for row in rows],
+            'kind': [row.kind for row in rows],
+            'id': [row.id for row in rows],
+            'type': [_type_text(row, facts.get(row.name)) for row in rows],
+            'multiplicity': [_multiplicity_text(row) for row in rows],
+            'value': [facts[row.name].value if row.name in facts else None for row in rows],
+            'unit': [facts[row.name].unit or None if row.name in facts else None for row in rows],
+            'inherited': [row.id in inherited_ids for row in rows],
         }
-        
-        return pd.DataFrame(data)
+
+        return pd.DataFrame(data, columns=columns)
     
     def __str__(self) -> str:
         """Return human-readable string representation."""

@@ -179,8 +179,15 @@ class TestModuleLevelAPI:
             
             assert result == 42
             mock_conn.load.assert_called_once_with("test.sysml")
-            mock_conn.eval.assert_called_once_with("6 * 7", "model-abc", None)
+            mock_conn.eval.assert_called_once_with(
+                "6 * 7", "model-abc", context_symbol_id=None, subject_symbol_id=None
+            )
     
+    def test_pysysml_evaluate_is_the_non_shadowing_name_for_eval(self):
+        """evaluate is exported beside eval and is the same function."""
+        assert pysysml.evaluate is pysysml.eval
+        assert {"evaluate", "eval"} <= set(pysysml.__all__)
+
     def test_pysysml_instantiate_with_hash(self):
         """Test module-level instantiate() with model_hash."""
         with patch('pysysml.Connection') as MockConnection:
@@ -246,7 +253,35 @@ class TestModuleLevelAPI:
             assert result == 100
             mock_conn.load.assert_called_once_with("test.sysml")
             # Verify context_symbol_id passes through
-            mock_conn.eval.assert_called_once_with("x + y", "model-xyz", "ctx-123")
+            mock_conn.eval.assert_called_once_with(
+                "x + y",
+                "model-xyz",
+                context_symbol_id="ctx-123",
+                subject_symbol_id=None,
+            )
+
+    def test_pysysml_eval_with_subject(self):
+        """Test eval() passes subject through to conn.eval()."""
+        with patch('pysysml.Connection') as MockConnection:
+            mock_conn = Mock()
+            MockConnection.return_value = mock_conn
+
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
+
+            mock_conn.eval.return_value = 1200.0
+
+            result = pysysml.eval(
+                "mass", model_hash="model-xyz", subject="Demo::sedan"
+            )
+
+            assert result == 1200.0
+            mock_conn.eval.assert_called_once_with(
+                "mass",
+                "model-xyz",
+                context_symbol_id=None,
+                subject_symbol_id="Demo::sedan",
+            )
     
     def test_pysysml_instantiate_missing_both_params(self):
         """Test instantiate() raises ValueError if neither file_path nor model_hash."""

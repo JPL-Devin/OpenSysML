@@ -304,6 +304,114 @@ def test_render_module_emits_bases_before_subclasses():
     assert source.index("class Vehicle(") < source.index("class Car(Vehicle)")
 
 
+@pytest.mark.parametrize("kind", ["subsets", "redefines"])
+def test_render_module_makes_every_generalization_edge_a_base(kind):
+    """A subsets or redefines edge becomes a base class, like specializes does."""
+    car = definition(
+        "Demo::Car",
+        specializations=[Specialization(kind=kind, declared="Vehicle", target_id="Demo::Vehicle")],
+    )
+    source = render_module([car, definition("Demo::Vehicle")])
+    assert "class Car(Vehicle):" in source
+    assert source.index("class Vehicle(") < source.index("class Car(Vehicle)")
+
+
+def test_render_module_keeps_multiple_supertypes_in_declaration_order():
+    """Several generalization edges become several bases, in declaration order."""
+    hybrid = definition(
+        "Demo::Hybrid",
+        specializations=[
+            Specialization(kind="specializes", declared="Vehicle", target_id="Demo::Vehicle"),
+            Specialization(kind="subsets", declared="Electric", target_id="Demo::Electric"),
+            # A repeated target is one base class, not two.
+            Specialization(kind="redefines", declared="Vehicle", target_id="Demo::Vehicle"),
+        ],
+    )
+    source = render_module([hybrid, definition("Demo::Vehicle"), definition("Demo::Electric")])
+    assert "class Hybrid(Vehicle, Electric):" in source
+
+
+def test_render_module_drops_a_base_python_cannot_linearize():
+    """An order Python has no MRO for keeps the module importable and says what it left out."""
+    vehicle = definition("Demo::Vehicle")
+    electric = definition(
+        "Demo::Electric",
+        specializations=[Specialization(kind="specializes", declared="Vehicle", target_id="Demo::Vehicle")],
+    )
+    # Vehicle before Electric is unlinearizable: Electric is already a Vehicle.
+    hybrid = definition(
+        "Demo::Hybrid",
+        specializations=[
+            Specialization(kind="specializes", declared="Vehicle", target_id="Demo::Vehicle"),
+            Specialization(kind="specializes", declared="Electric", target_id="Demo::Electric"),
+        ],
+    )
+    source = render_module([hybrid, electric, vehicle])
+    assert "class Hybrid(Vehicle):" in source
+    assert "# specializes Demo::Electric, left out: Python cannot linearize it" in source
+    namespace: dict = {}
+    exec(compile(source, "demo_types.py", "exec"), namespace)
+    assert namespace["Hybrid"].__mro__[1] is namespace["Vehicle"]
+
+
+def test_collect_definitions_takes_type_and_multiplicity_from_a_redefinition():
+    """A redefining feature that restates neither type nor multiplicity inherits both."""
+    root = FakeSymbol(
+        SymbolFacts(id="Demo", name="Demo", kind="package"),
+        [
+            FakeSymbol(SymbolFacts(id="Demo::Engine", name="Engine", kind="partDef")),
+            FakeSymbol(
+                SymbolFacts(id="Demo::Base", name="Base", kind="partDef"),
+                [
+                    FakeSymbol(
+                        SymbolFacts(
+                            id="Demo::Base::engine",
+                            name="engine",
+                            kind="partUsage",
+                            type=TypeFacts(declared="Engine", resolved_id="Demo::Engine"),
+                            multiplicity=Multiplicity("0", "*"),
+                        )
+                    )
+                ],
+            ),
+            FakeSymbol(
+                SymbolFacts(
+                    id="Demo::Car",
+                    name="Car",
+                    kind="partDef",
+                    specializations=(
+                        Specialization(kind="specializes", declared="Base", target_id="Demo::Base"),
+                    ),
+                ),
+                [
+                    FakeSymbol(
+                        SymbolFacts(
+                            id="Demo::Car::engine",
+                            name="engine",
+                            kind="partUsage",
+                            specializations=(
+                                Specialization(
+                                    kind="redefines",
+                                    declared="engine",
+                                    target_id="Demo::Base::engine",
+                                ),
+                            ),
+                        )
+                    )
+                ],
+            ),
+        ],
+    )
+
+    definitions = {d.id: d for d in collect_definitions(root)}
+    redefining = definitions["Demo::Car"].features[0]
+    assert redefining.facts.type.resolved_id == "Demo::Engine"
+    assert redefining.facts.multiplicity == Multiplicity("0", "*")
+
+    source = render_module(list(definitions.values()))
+    assert '_t.list_slot(self, "engine", _t.as_typed(Engine))' in source
+
+
 def test_render_module_notes_ungenerated_base():
     """A specialization outside the model is reported in a comment, not silently dropped."""
     car = definition(

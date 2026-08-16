@@ -55,6 +55,27 @@ class TestModelSurfaceIntegration:
     def test_eval_in_a_context(self):
         assert self.model.eval("mass", context_symbol_id="Demo::sedan") == 1200.0
 
+    def test_eval_against_a_subject_reads_that_object(self):
+        # The object's redefinition wins over the definition's default, the way
+        # %eval does after %instantiate.
+        assert self.model.eval("mass", context_symbol_id="Demo::Vehicle") == 1500.0
+        assert self.model.eval("mass", subject="Demo::sedan") == 1200.0
+        assert self.model.eval("mass * 2", subject="Demo::sedan") == 2400.0
+
+    def test_eval_against_a_subject_in_a_named_context(self):
+        assert (
+            self.model.eval(
+                "mass",
+                context_symbol_id="Demo::Vehicle",
+                subject="Demo::sedan",
+            )
+            == 1200.0
+        )
+
+    def test_eval_raises_for_an_unknown_subject(self):
+        with pytest.raises(ExecutionError):
+            self.model.eval("mass", subject="Demo::nope")
+
     @pytest.mark.parametrize("expression", ["1/0", "nope", '1 + "a"'])
     def test_eval_raises_for_an_expression_it_cannot_evaluate(self, expression):
         with pytest.raises(ExecutionError):

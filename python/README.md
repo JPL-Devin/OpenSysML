@@ -14,7 +14,10 @@ import pysysml
 model = pysysml.load("model.sysml", strict=True)   # raises on error diagnostics
 print(model.eval("1 + 2 * 3"))                     # 7
 
+print(model.eval("mass", subject="Demo::sedan"))   # 1200.0 — that object, not the default
+
 vehicle = model["Vehicle"]                         # by short name or FQN
+vehicle.attributes()                               # own and inherited, with resolved facts
 inst = model.instantiate("Demo::Vehicle")
 inst.mass                                          # 1500.0 [kg] — a Quantity
 
@@ -82,6 +85,77 @@ version tests therefore require the tree under test to be the installed
 distribution — `pip install -e python/`. A wheel of another version installed
 beside the source tree makes them fail with that remedy: the artifact is what is
 stale, not the declaration.
+
+## Generated typed classes
+
+`python -m pysysml.generate model.sysml -o model_types.py` emits one class per
+SysML *definition*, and the generated hierarchy follows the model's
+generalization edges: `specializes`, `subsets` and `redefines` all become base
+classes, because Python has a single notion of inheritance. What tells the two
+apart is the members, not the bases:
+
+- a **redefinition** reuses the redefined feature's name, so its property
+  overrides the base class's property of that name, and takes over the type and
+  multiplicity it does not restate (`attribute :>> mass = 2.0;` stays `float`,
+  and a redefined `0..*` feature stays a `list[...]`);
+- a **subset** under a new name adds a property beside the base class's one, and
+  likewise inherits the type and multiplicity it leaves out.
+
+With **multiple supertypes**, bases are emitted in declaration order, a target
+named twice appearing once, and Python resolves members left to right by its
+usual MRO. A model can ask for an order Python has no MRO for (a base that is
+already a base of an earlier base); rather than emit a module that fails to
+import, the generator keeps the bases it can linearize and records what it left
+out as a comment on the class, naming the edge:
+
+```python
+class Hybrid(Vehicle):
+    # specializes Demo::Electric, left out: Python cannot linearize it with the bases above
+```
+
+A base outside the generated model is reported the same way. Both are the model's
+hierarchy being wider than Python's, not facts being discarded — the service
+reports every edge, and `Symbol.specializations` still carries them all.
+
+**Limitation, unchanged:** only structural usages (`attribute`, `part`, `item`,
+`occurrence`, `individual`, `port`, `enum`) become properties. Behavioral and
+connector usages — `action`, `state`, `calc`, `constraint`, `requirement`,
+`connection`, `flow`, `interface`, `allocation`, `case` — are not instance slots,
+so a generated class has no member for them; reach them through
+`model["Demo::Vehicle"]`, `verify_constraint` and `verify_satisfaction`.
+
+## Names that shadow builtins
+
+Two names in the package have the name of a Python builtin: the module-level
+`pysysml.eval` (the builtin `eval`) and `pysysml.errors.RuntimeError` (the
+builtin exception, kept as a deprecated alias of `ExecutionError` and already out
+of `pysysml.errors.__all__`, so a star-import no longer binds it). Neither
+shadows anything when reached through the package, which is the style to prefer:
+
+```python
+import pysysml
+
+pysysml.evaluate("1 + 2", file_path="model.sysml")   # or pysysml.eval, the same function
+model.eval("mass", subject="Demo::sedan")            # a method shadows nothing
+```
+
+```python
+from pysysml import eval          # shadows the builtin in this module — don't
+```
+
+Guidance for this package and for code around it:
+
+- **`pysysml.evaluate` is the non-shadowing name for `pysysml.eval`.** Both are
+  the same function and both are supported; new code should prefer `evaluate`.
+- Import the package, not its names, for anything named like a builtin; if you
+  must import the name, alias it (`from pysysml import eval as sysml_eval`).
+- Catch `pysysml.ExecutionError` (or its base `pysysml.PySysMLError`), never
+  `pysysml.errors.RuntimeError`, which warns and is due for removal.
+- Do not name a new public function or exception after a builtin.
+
+`pysysml.eval` is the published name as of 0.2.0 and keeps working. Removing it
+is a breaking change and the maintainer's call; the rename proposal is in the
+pull request that added this section.
 
 ## Running the tests
 
