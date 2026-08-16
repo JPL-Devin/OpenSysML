@@ -118,15 +118,42 @@ func (s *Session) Diagnostics() []passes.Diagnostic {
 	return s.diagnostics()
 }
 
-// HasErrors reports whether analysis found something that stops the model from
-// being run, as against something worth saying about a model that does run.
+// HasErrors reports whether the session found the model wrong: something analysis
+// found, or a slot a command could not materialize. It is what a non-interactive
+// run exits on.
 func (s *Session) HasErrors() bool {
+	return s.hasAnalysisErrors() || len(s.MaterializationFailures()) > 0
+}
+
+// hasAnalysisErrors reports whether analysis found something that stops the model
+// from being run at all.
+func (s *Session) hasAnalysisErrors() bool {
 	for _, d := range s.Diagnostics() {
 		if d.Severity == passes.SeverityError {
 			return true
 		}
 	}
 	return false
+}
+
+// MaterializationFailures reports the slots the session's commands could not
+// materialize, in the order they were reported: a command that rendered one
+// answered nothing about that slot.
+func (s *Session) MaterializationFailures() []error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.materializeFailures)
+}
+
+// noteMaterializationFailure records slots a command could not materialize. It is
+// a record of what the session answered, so it stands once the object is gone.
+// Callers hold s.mu.
+func (s *Session) noteMaterializationFailure(errs ...error) {
+	for _, err := range errs {
+		if err != nil {
+			s.materializeFailures = append(s.materializeFailures, err)
+		}
+	}
 }
 
 // Diagnostic is one finding about the session's model, located in it, for a

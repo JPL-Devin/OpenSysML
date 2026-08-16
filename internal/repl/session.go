@@ -85,6 +85,10 @@ type Session struct {
 	// lost records the objects the session no longer holds, and what took them.
 	lost instanceLoss
 
+	// materializeFailures are the slots a command of this session reported it
+	// could not materialize, which a non-interactive run exits on.
+	materializeFailures []error
+
 	// notedBlocker identifies the unresolved error the session has already
 	// reported as blocking the deeper checks, so it is named once rather than on
 	// every submission after it.

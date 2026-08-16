@@ -308,8 +308,9 @@ func newSession() *repl.Session {
 }
 
 // runInteractiveWithFiles loads what was named and takes lines from the prompt.
-// A model that did not analyse leaves the status of a run that decided nothing,
-// except at a terminal, where the prompt that opens is where it gets fixed.
+// A model that did not analyse, or a slot a command could not materialize, leaves
+// the status of a run that decided nothing, except at a terminal, where the
+// prompt that opens is where it gets fixed.
 func runInteractiveWithFiles(files []string) int {
 	sess := newSession()
 	rl, err := readline.NewEx(&readline.Config{
@@ -324,19 +325,31 @@ func runInteractiveWithFiles(files []string) int {
 	}
 	defer rl.Close()
 
-	status, err := loadFiles(sess, files)
+	loaded, err := loadFiles(sess, files)
 	if err != nil {
 		return fail(err)
 	}
-	if atTerminal() {
-		status = exitHolds
-	}
+	terminal := atTerminal()
 
 	fmt.Println("SysML v2 REPL — %help for commands, Ctrl-D to exit")
 	if err := repl.Loop(&rlReader{rl: rl}, os.Stdout, sess); err != nil {
 		return fail(err)
 	}
-	return status
+	return sessionStatus(loaded, terminal, sess.MaterializationFailures())
+}
+
+// sessionStatus is the status a prompt session leaves: at a terminal the session
+// is where an unusable model gets fixed, so it decides nothing, and otherwise the
+// run is undecided if the model did not analyse or a command reported a slot it
+// could not materialize.
+func sessionStatus(loaded int, terminal bool, materializeFailures []error) int {
+	if terminal {
+		return exitHolds
+	}
+	if len(materializeFailures) > 0 {
+		return exitUnevaluable
+	}
+	return loaded
 }
 
 // loadFiles submits every positional path — a file, a directory to walk or a

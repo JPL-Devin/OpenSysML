@@ -295,16 +295,22 @@ Materializing an object is part of the run, so what it finds is a diagnostic
 about the model: `-instantiate` reports every slot it could not materialize —
 a default whose value count does not conform to the multiplicity governing its
 feature, which is the assumed `1..1` for a feature that declares none — and
-`-validate` reports `no errors` only for a run that found none. The prompt
-surface is to follow: a `%slots` rendering that carries `<error: …>` means
-materialization failed, so a piped session that produced one is to exit `2`
-rather than report success — today it exits on what analysis found alone, and
-the rule is stated here for the surface that has yet to adopt it.
+`-validate` reports `no errors` only for a run that found none. The prompt surface
+follows the same rule: a command that rendered a slot it could not materialize —
+a `%slots` listing carrying `<error: …>`, or an `%eval` of such a slot — answered
+nothing about it, so a session driven from a pipe exits `2` rather than reporting
+success, whatever analysis found.
 
 ```bash
 $ sysml model.sysml -instantiate test::craft -validate; echo $?
 error: slot craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1
 sysml: model.sysml did not materialize cleanly
+2
+
+$ printf '%%instantiate test::craft\n%%slots test::craft\n' | sysml model.sysml; echo $?
+Instance: test::craft (ID: 1)
+Slots:
+  volumes: <error: slot craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1>
 2
 ```
 
@@ -320,7 +326,7 @@ session goes on, and `%quit` or Ctrl-D exits `0`. `sysml model.sysml` at a
 terminal loads the model, reports what analysis found, and opens the prompt with
 status `0` — the prompt is where the model gets fixed. The same command with its
 lines coming from a pipe or a file gates: it exits `2` for a model that did not
-analyse cleanly.
+analyse cleanly, and for one whose slots a command could not materialize.
 
 ## Use Cases
 
