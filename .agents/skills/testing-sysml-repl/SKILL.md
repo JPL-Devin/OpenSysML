@@ -2097,3 +2097,48 @@ ones — comparing IDs is the only way to tell "held the objects the default nam
 Two gotchas when recording this area in Konsole: the REPL does **not** expand shell variables, so
 `%load $CONF/x.sysml` fails with a path error — type full relative paths; and `part derived : …`
 draws a `"derived" is a reserved keyword` warning that is unrelated to the defaults under test.
+
+## String values and StringFunctions (PR #211)
+
+A model that declares `String`/`Integer`/`Boolean` attributes needs `import ScalarValues::*;` —
+without it every type annotation reports `unresolved reference: String — did you mean
+ScalarValues::String?` and `-validate` exits 2 before any string behavior runs, which looks like a
+feature failure but is a fixture bug. Add `import StringFunctions::*;` to call `Length`/`Substring`
+unqualified inside a model (the REPL's `-e` mode resolves those two unqualified with no import,
+because they are aliased in `library_functions.go`'s unqualified map; the other StringFunctions
+names always need the `StringFunctions::` prefix).
+
+Discriminators that separate a working string runtime from a broken one:
+
+- **Characters, not bytes.** `Length("héllo")` is 5 (6 bytes), `Length("日本語")` is 3 (9 bytes),
+  `Substring("héllo", 2, 3)` is `"él"`. A byte-based implementation answers 6/9 or returns mojibake,
+  so always use a non-ASCII fixture — an ASCII-only test passes either way.
+- **Substring is 1-based and inclusive**, with `lower > upper` returning `""` rather than erroring,
+  while `lower < 1` or `upper > Length` gives `sequence index out of range: function
+  StringFunctions::Substring lower 0 is outside 1..5` and exit 2.
+- **The `==` split is deliberate**: `"a" == 3` evaluates to `false` (it specializes
+  `DataFunctions::'=='`), while the explicit `StringFunctions::'=='("a", 3)` is a type mismatch.
+  Test both; only one of them being right is the likely regression.
+- A string against an Integer/quantity/sequence must say
+  `type mismatch: operator '<' is not defined for a string and a quantity` (naming both types).
+
+### Driving these cases through a GUI terminal
+
+- **xdotool cannot type CJK into Konsole** — `type` with `日本語` silently delivers nothing, so
+  `Length("日本語")` arrives as `Length("")` and answers 0, which reads as a failure in the video.
+  Latin-1 accents (`héllo`, `naïve`) do type fine. Put any CJK (and any quoted-operator name such as
+  `StringFunctions::'=='`, which shell quoting mangles when typed inline) into a small
+  `/tmp/*.sh` written from a tool shell, then `cat` it and `bash` it on camera — the `cat` shows the
+  reviewer exactly what ran.
+- At the `sysml>` prompt a bare expression like `("a","b")->includes("b")` is parsed as a
+  declaration (`1:1: error: expected a namespace member`). Prefix expressions with `%eval`.
+- `%slots <PartDefName>` (not the part usage path) is what follows `%instantiate <PartDefName>`;
+  `%slots Msg::g` reports `no instance of "Msg::g"`.
+- **Escapes are stored raw**, so `Length("a\"b")` is 4 and the value renders as `"a\\\"b"`. This is
+  pre-existing lexer behavior (identical on the parent commit) — verify against a contrast binary
+  before reporting it as a string-runtime defect.
+- A 512 KiB string built by doubling inside a `for` loop (`acc = acc + acc` ×16, then
+  `Length(acc)` → 524288) completes in seconds; use it as the cheap no-hang/no-quadratic check.
+  Note that a calc whose body assigns to a `return acc` feature returns no value when *invoked from
+  another calc's expression* (`calculation returned no value`), so compute the length inside the
+  same body rather than wrapping the loop calc in another one.
