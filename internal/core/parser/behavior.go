@@ -245,10 +245,21 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		isEvent = true
 	}
 
-	// Parse optional kind keyword (item, feature, port, etc)
-	// If next token is keyword and recognized kind, consume it
-	// Otherwise treat next token as name (kind defaults to generic feature)
-	var kind ast.UsageKind = ast.UsagePart // default to generic feature
+	mods := featureMods{
+		direction:    direction,
+		isReference:  isRef,
+		isIndividual: isIndividual,
+		portion:      portion,
+		isEvent:      isEvent,
+	}
+	p.warnAmbiguousModifierKind(mods)
+
+	// A parameter's kind keyword is optional; a lone occurrence modifier declares the
+	// kind, and with no keyword at all the parameter is a generic feature.
+	kind := ast.UsagePart
+	if k, kw := modifierImpliedKind(mods); kw != "" {
+		kind = k
+	}
 	if p.at(lexer.Keyword) {
 		kindKeyword := p.peek().KeywordID
 		recognized := false
@@ -1068,9 +1079,14 @@ func (p *Parser) parseLoopAction(tok lexer.Token) ast.Node {
 func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 
-	// Parse iteration variable name
-	varTok, ok := p.expect(lexer.Identifier, "expected variable name after 'for'")
-	if !ok {
+	// The loop variable is a usage declaration (SysML.xtext ForVariableDeclaration), so
+	// a keyword may name it — `in` excepted, since it ends the declaration.
+	var variable ast.Identification
+	if !p.atKeyword("in") {
+		variable = p.parseIdentification()
+	}
+	if variable.Name == "" {
+		p.error(p.peek().Span, "expected variable name after 'for'")
 		en := &ast.ErrorNode{Message: "expected variable name"}
 		en.NodeSpan = p.spanFrom(start)
 		return en
@@ -1090,12 +1106,9 @@ func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
 	// Parse body as an action body parameter (SysML.xtext ForLoopNode).
 	if p.atKeyword("action") {
 		node := &ast.WhileLoopActionNode{
-			Kind: ast.LoopFor,
-			Body: p.parseActionBodyParameter(),
-			Variable: ast.Identification{
-				Name:     p.src.Text(varTok.Span),
-				NameSpan: varTok.Span,
-			},
+			Kind:       ast.LoopFor,
+			Body:       p.parseActionBodyParameter(),
+			Variable:   variable,
 			Collection: collection,
 		}
 		node.NodeSpan = p.spanFrom(start)
@@ -1144,12 +1157,9 @@ func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
 	// A `for` loop has no condition: iteration is driven by the collection, and
 	// the variable it binds each element to is a member of the loop's body scope.
 	node := &ast.WhileLoopActionNode{
-		Kind: ast.LoopFor,
-		Body: body,
-		Variable: ast.Identification{
-			Name:     p.src.Text(varTok.Span),
-			NameSpan: varTok.Span,
-		},
+		Kind:       ast.LoopFor,
+		Body:       body,
+		Variable:   variable,
 		Collection: collection,
 	}
 	node.NodeSpan = p.spanFrom(start)

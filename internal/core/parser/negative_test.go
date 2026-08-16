@@ -75,7 +75,8 @@ func TestNegative(t *testing.T) {
 		{"anonymous_nary_connect_empty", "part def C { connect (); }"},
 
 		// Occurrence modifiers (`individual`, `snapshot`) on a usage.
-		{"individual_modifier_no_member", "individual ;"},
+		// `individual ;` is well-formed (SysML.xtext Usage: UsageDeclaration?) and is
+		// covered by TestParseUsageOccurrenceModifiers instead.
 		{"individual_usage_no_type", "individual testSystem : ;"},
 		{"individual_usage_no_body", "individual testSystem : TestSystem"},
 		{"snapshot_usage_no_type", "snapshot occurrence takeoff : ;"},

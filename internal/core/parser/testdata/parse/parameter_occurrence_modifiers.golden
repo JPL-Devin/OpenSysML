@@ -1,0 +1,35 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ParameterModifiers" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="occurrence" abstract=false variation=false name="Flight"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle"))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Observe"
+          (Membership visibility="default"
+            (Usage kind="occurrence" name="" ref=false direction="in" composite=false derived=false ordered=false nonunique=false snapshot=true))
+          (Membership visibility="default"
+            (Usage kind="occurrence" name="" ref=false direction="in" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="part" name="" ref=false direction="in" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="part" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="individual" name="v" ref=false direction="in" composite=false derived=false ordered=false nonunique=false individual=true
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="occurrence" name="atStart" ref=false direction="in" composite=false derived=false ordered=false nonunique=false snapshot=true
+              (Relationship kind="typing" target=Flight
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="item" name="cargoInFlight" ref=false direction="in" composite=false derived=false ordered=false nonunique=false timeslice=true))
+          (Membership visibility="default"
+            (Usage kind="part" name="mass" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="counter" ref=true direction="inout" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName)))))))))

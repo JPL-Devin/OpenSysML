@@ -10,7 +10,7 @@
           (Relationship kind="specializes" target=Vehicle
             (*ast.QualifiedName))))
       (Membership visibility="default"
-        (Usage kind="attribute" name="testSystem" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+        (Usage kind="individual" name="testSystem" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
           (Relationship kind="typing" target=TestSystem
             (*ast.QualifiedName))))
       (Membership visibility="default"
@@ -36,7 +36,7 @@
       (Membership visibility="default"
         (Definition kind="part" abstract=false variation=false name="System"
           (Membership visibility="default"
-            (Usage kind="attribute" name="testVehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+            (Usage kind="individual" name="testVehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
               (Relationship kind="typing" target=TestSystem
                 (*ast.QualifiedName))))
           (Membership visibility="default"
@@ -54,10 +54,10 @@
           (Membership visibility="default"
             (Usage kind="action" name="collectData" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Membership visibility="default"
-                (Usage kind="part" name="subjectVehicle" ref=false direction="in" composite=false derived=false ordered=false nonunique=false individual=true
+                (Usage kind="individual" name="subjectVehicle" ref=false direction="in" composite=false derived=false ordered=false nonunique=false individual=true
                   (Relationship kind="typing" target=TestSystem
                     (*ast.QualifiedName))))
               (Membership visibility="default"
-                (Usage kind="part" name="vehicleState" ref=false direction="in" composite=false derived=false ordered=false nonunique=false snapshot=true
+                (Usage kind="occurrence" name="vehicleState" ref=false direction="in" composite=false derived=false ordered=false nonunique=false snapshot=true
                   (Relationship kind="typing" target=Flight
                     (*ast.QualifiedName)))))))))))

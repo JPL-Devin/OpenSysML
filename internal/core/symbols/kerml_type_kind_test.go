@@ -11,7 +11,7 @@ import (
 // from their usage kind rather than left unclassified.
 func TestKerMLTypeDeclarationsAreClassified(t *testing.T) {
 	src := "package P { class C; classifier D; struct S; assoc A; behavior B; " +
-		"interaction I; predicate Q; step s; }"
+		"interaction I; predicate Q; step s; datatype T; function F; }"
 	root := Build(parser.New(source.New("p.kerml", []byte(src))).ParseFile())
 	pkg, ok := root.LookupLocal("P")
 	if !ok {
@@ -21,6 +21,9 @@ func TestKerMLTypeDeclarationsAreClassified(t *testing.T) {
 		"C": SymbolKerMLType, "D": SymbolKerMLType, "S": SymbolKerMLType,
 		"A": SymbolKerMLType, "B": SymbolKerMLType, "I": SymbolKerMLType,
 		"Q": SymbolKerMLType, "s": SymbolActionUsage,
+		// `datatype` and `function` carry a feature usage kind, so the keyword
+		// decides their classification (KerML 1.0 §8.3.2, §9.2.2).
+		"T": SymbolKerMLType, "F": SymbolKerMLType,
 	}
 	for name, kind := range want {
 		sym, ok := pkg.Scope.LookupLocal(name)
