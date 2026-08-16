@@ -109,7 +109,7 @@
 - Qualified name resolution (A::B::C)
 - Type coercion (Integer→Real)
 - Unresolved reference error handling
-- KerML function library: the scalar numeric functions of `RealFunctions`, `RationalFunctions`, `NumericalFunctions`, `IntegerFunctions`, `NaturalFunctions` and `TrigFunctions` (see the Function Library row below)
+- KerML function library: the numeric functions of `RealFunctions`, `RationalFunctions`, `NumericalFunctions`, `IntegerFunctions`, `NaturalFunctions`, `TrigFunctions`, `VectorFunctions` and `ComplexFunctions`, plus the library feature values `TrigFunctions::pi` and `ComplexFunctions::i` (see the Function Library row below)
 
 **Name Resolution:**
 - Inherited feature resolution (follows specialization chains)
@@ -500,6 +500,24 @@ square root of a negative, an inverse sine outside `[-1.0, 1.0]`, a `floor`
 beyond the Integer range — is reported at evaluation rather than returned as a
 NaN, an infinity or a wrapped integer.
 
+Beyond the scalars, a **vector** is the sequence of its elements — which is what
+`VectorValues` declares a `NumericalVectorValue` to be, `elements` with a
+`dimension` equal to their number — and a **Complex** is the two-element sequence
+`(re, im)` that `ComplexFunctions::rect` constructs, a Real being a Complex with
+a zero imaginary part (`ScalarValues` declares `Real :> Complex`). The runtime has
+no vector and no complex value kind of its own, so an operation whose argument is
+a *collection of* vectors or of Complex values cannot tell it from one flat
+vector or one Complex and is reported by name rather than answered (below).
+
+A library **feature** — a named constant a library declares and gives no
+evaluable value — takes its value from a seam of its own: `libraryFeatures` maps
+the feature's qualified name to a Go thunk, consulted only for a symbol a library
+document declared, so ordinary name resolution decides and a model's own `pi`
+keeps its own value. The value is recomputed per read rather than cached, which
+keeps a vector-valued feature from sharing one sequence between readers and keeps
+the value independent of whether the library index cache was warm (a warm cache
+restores library symbols without their AST).
+
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
 | `RealFunctions`: `sqrt`, `abs`, `floor`, `round`, `max`, `min` | `runtime/library_functions.go` | `TestLibraryFunctionValues` | ✅ Faithful |
@@ -508,14 +526,24 @@ NaN, an infinity or a wrapped integer.
 | `TrigFunctions`: `sin`, `cos`, `tan`, `cot`, `arcsin`, `arccos`, `arctan` | `runtime/library_functions.go` | `TestLibraryFunctionValues` | ✅ Faithful |
 | Domain, arity and argument-type failures reported at evaluation | `runtime/library_functions.go` `bindAndApply` | `TestLibraryFunctionErrors` | ✅ Faithful |
 | A declaration with a body is evaluated from that body | `runtime/library_functions.go` `libraryFunctionFor` | `TestLibraryFunctionDoesNotHijackADeclaredBody` | ✅ Faithful |
-| Named argument binds to the parameter the signature declares (`sin(theta = 0.0)`) | `runtime/library_functions.go` `bindAndApply` | `TestLibraryFunctionNamedArguments` | ✅ Faithful |
+| Named argument binds to the parameter the signature declares (`sin(theta = 0.0)`); a name no parameter carries is reported (`ErrUnknownParameter`) rather than absorbed by an omitted `[0..1]` parameter | `runtime/library_functions.go` `bindAndApply`, `checkNamedArguments` | `TestLibraryFunctionNamedArguments`, `TestVectorAndComplexNamedArguments`, `TestVectorAndComplexUnknownNamedArgument` | ✅ Faithful |
+| `TrigFunctions::deg`/`rad`, whose library bodies (`theta * 180 / pi`, `theta * pi / 180`) had no evaluable `pi` | `runtime/library_functions.go` (`degreesFromRadians`/`radiansFromDegrees`, over `libraryPi`) | `TestTrigDegreesAndRadians`; conformance `calc_library_trig_degrees` (`deg(rad(180.0))`), `calc_library_trig_degrees.trace.golden` | ✅ Faithful |
+| `VectorFunctions`: `VectorOf`/`CartesianVectorOf`/`CartesianThreeVectorOf`, `isZeroVector`, `'+'`, `'-'` (binary and the one-argument negation the signature's `[0..1]` second parameter allows), `inner`, `norm`, `angle`, `scalarVectorMult`/`'*'`, `vectorScalarMult`, `vectorScalarDiv`, each with the `cartesian*` specialization the library declares of it | `runtime/library_functions.go` `registerVectorFunctions` | `TestVectorFunctionValues`, `TestVectorFunctionScalarValues`, `TestVectorAndComplexNamedArguments`, `TestVectorAndComplexFunctionErrors`; conformance `calc_library_vector_functions`, `calc_library_vector_norm` (+ golden traces) | ⚠️ Approximate: a vector is the sequence of its elements, so a mismatched dimension, a non-numeric element, an element or inner product outside the range of its kind, Real or Integer (`elementArith`, `intArith`, `checkedNumeric`) and a zero vector where an angle or a direction is asked for are typed errors, while a collection *of* vectors has no representation (below) |
+| `ComplexFunctions`: `rect`, `polar`, `re`, `im`, `isZero`, `isUnit`, `abs`, `arg`, `'+'`, `'-'` (both arities), `'*'`, `'/'`, `'**'`/`'^'`, `'=='` | `runtime/library_functions.go` `registerComplexFunctions` | `TestComplexFunctionValues`, `TestComplexFunctionScalarValues`, `TestLibraryFunctionOptionalOperand`, `TestLibraryFunctionEmptyOptionalOperand` (an empty collection written for a `[0..1]` operand is the same no value as null, `argumentOmitted`); conformance `calc_library_complex_functions` (`i * i` is `-1.0`) | ⚠️ Approximate: a Complex is the `(re, im)` pair, so a Real binds to a Complex parameter, division by zero is reported, and a collection of Complex values has no representation (below) |
+| A library **feature** with a library-supplied value: `TrigFunctions::pi` (which the library fixes by an invariant, not a value), `ComplexFunctions::i` (`rect(0.0, 1.0)`), `VectorFunctions::cartesian3DZeroVector` | `runtime/library_functions.go` `libraryFeatures`, `registerLibraryFeature`, `Context.libraryFeatureValue`, `libraryFeatureByName` | `TestLibraryFeatureValue`, `TestLibraryFeatureValueFromACachedSymbol`, `TestLibraryFeatureValueLeavesAModelsOwnFeatureAlone`, `TestLibraryFeatureValueUnrepresentable`, `TestLibraryFeatureByName`, `TestLibraryFeatureImaginaryUnit` | 🚧 Known failure: the seam and its values are in place and `deg`/`rad` compute over `pi`, but *reading* `pi` as a name still reports `has no value to evaluate` — the read has to consult the seam in `runtime/eval.go` `evalName`, a file owned by a sibling PR in this wave (see the escalation in this PR) |
+| A library declaration is answered by its built-in even where the vendored declaration carries a body, since a warm library index cache restores library symbols without their AST and the result must not depend on the cache | `runtime/library_functions.go` `libraryFunctionFor`, `Context.libraryDeclared` | `TestLibraryFunctionAnswersALibraryDeclarationWithABody`, `TestLibraryFunctionDoesNotHijackADeclaredBody` (a model's own declaration keeps its body) | ✅ Faithful |
+| A declaration this runtime has no representation for the values of reports itself by name (`ErrUnevaluableLibraryFunction`), never a wrong result | `runtime/library_functions.go` `registerUnevaluable` | `TestUnevaluableLibraryFunctionsNameThemselves`, `TestVendoredFunctionsAreAllDispatchable` (every vendored declaration of these packages either computes or names itself); conformance `calc_library_unevaluable_function` | ✅ Faithful |
 
-Found, not fixed — numeric library features that remain unevaluable:
+Found, not fixed — numeric library declarations that remain unevaluable. Each
+reports itself by name rather than answering:
 
 | Not implemented | Why |
 |---|---|
-| `VectorFunctions`, `MatrixFunctions` | Needs a vector value in the evaluator; every value is scalar today. |
-| `ComplexFunctions` | Needs a complex value kind. |
+| `MatrixFunctions` | The vendored Kernel Function Library declares no such package — only `docs/` mention it — so there is nothing to dispatch. Not implemented rather than invented. |
+| `VectorFunctions::sum`/`sum0`, `ComplexFunctions::sum`/`product` | An aggregation over a collection of vectors or of Complex values: a sequence of them flattens, so the grouping the aggregation sums over is already lost in the argument. Needs a vector and a complex value kind in `runtime/value.go`. |
+| `VectorFunctions::cartesianZeroVector` | Declared as the 1-, 2- and 3-dimensional zero vectors as one feature of three vectors, which a flat sequence cannot hold. `cartesian3DZeroVector` has a value. |
+| `ComplexFunctions::ToString`/`ToComplex` | No string notation for a Complex value is defined; inventing a rendering would make `ToComplex(ToString(x))` a value nothing else in the library agrees on. |
+| Reading a library feature by name (`TrigFunctions::pi`, `ComplexFunctions::i`, `VectorFunctions::cartesian3DZeroVector`) | The seam answers, but nothing consults it on a name read: that hook belongs in `runtime/eval.go` `evalName` (sibling-owned). Verified in the REPL: every feature name reports `has no value to evaluate`, and `cartesianZeroVector` shows that generic message rather than its typed unevaluable reason. |
 | Library functions in the checker's own name resolution | An unqualified call to a library function the model does not import evaluates, but the `unresolved-reference` diagnostic still reports the name; importing `RealFunctions::*` clears it. |
 
 ### Sequence Indexing and Collection Operations (KerML §9.3 `SequenceFunctions`, `CollectionFunctions`, `ControlFunctions`)
@@ -588,9 +616,9 @@ wrong answer:
 
 | Not implemented | Why |
 |---|---|
-| `SequenceFunctions::includingAt` | The vendored body is `(seq->subsequence(1, index - 1), values, seq->subsequence(index + 1))`, which drops the element at `index` rather than inserting before it. Implementing it literally would silently lose an element; implementing the evident intent would invent semantics the vendored library does not state. Left out until the OMG text is adjudicated (compare `excludingAt`, whose body is consistent and which is implemented). |
+| `SequenceFunctions::includingAt` | The vendored body is `(seq->subsequence(1, index - 1), values, seq->subsequence(index + 1))`, which drops the element at `index` rather than inserting before it. Implementing it literally would silently lose an element; implementing the evident intent would invent semantics the vendored library does not state. Left out until the OMG text is adjudicated (compare `excludingAt`, whose body is consistent and which is implemented). A call to it reports itself by name (`runtime/library_functions.go` `registerUnevaluable`, `TestUnevaluableLibraryFunctionsNameThemselves`) rather than resolving to the vendored body. |
 | `CollectionFunctions::'array#'` and the `Array`/`Matrix` collections | Needs a multi-dimensional array value; the runtime's collection values are a sequence and a set. |
-| `ComplexFunctions::sum`/`product`, `VectorFunctions`/`MatrixFunctions` aggregation | Needs a complex and a vector value kind (see the numeric library table above). |
+| `ComplexFunctions::sum`/`product`, `VectorFunctions::sum`/`sum0` | The other operations of both packages are implemented (see the numeric library table above); an aggregation over a *collection of* vectors or of Complex values is not, since a sequence of them flattens and loses the grouping it sums over. |
 | A reducer named rather than written (`->reduce min`, as the library's own `minimize` is defined) | A function-valued *name* is not a runtime value: `reduce` takes the body expression form (`->reduce {in a; in b; …}`), and `minimize`/`maximize` are implemented directly rather than through `reduce min`. A named reducer is reported as a type error, not read as a body. |
 | `SequenceFunctions::add`/`addAt`/`remove`/`removeAt`, `CollectionFunctions` mutators | These are `behavior`s, not functions: they declare an `inout` sequence, so they need mutable accumulation the language layer does not have. Deliberately out of scope. |
 | Set coverage in the conformance corpus | No expression of the language produces a set today — a `ValSet` arises only through the embedding API — so the operations over a set are pinned at the unit level (`TestCollectionOperationsOverSets`, `elementsOf`) rather than by a `.sysml` fixture. A set-valued expression is separate work. |
