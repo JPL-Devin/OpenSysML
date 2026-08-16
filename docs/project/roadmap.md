@@ -317,6 +317,21 @@ Both residual items are closed by the unit-resolution work; see `docs/project/sp
   `lower.Unsupported` and reported when reached, since neither has succession semantics inside a
   block. Executing them means giving a block its own token flow.
 
+## A10 — an enumeration literal has no runtime value — done
+
+Landed: a literal declaring no value evaluates to itself — `runtime.Value{Kind: ValEnumLiteral}`
+holding the literal's declaration symbol, so identity is the declaration and nothing else (not an
+ordinal, not its name as a string). Two literals are equal exactly when they are the same
+declaration, so a literal of another enumeration compares false rather than reporting, matching how
+Systemica compares any two values of unrelated types; the static type checker is the tier that
+reports the mismatch (`passes/typecheck_value.go`, `cannot bind a value of type Size to a feature
+typed by Color`). A literal specializing a scalar type (`enum def GradePoints :> Real { A = 4.0; }`)
+evaluates to the value it declares, since such a literal *is* that value and has to compute as one.
+A literal is an occurrence of its enumeration, so its own features are read off one object per
+literal (`Level::high.n`), and an enum-typed default materializes: the reproduction prints
+`c = Color::red`. `runtime/value.go`, `eval.go`, `semantics/enumeration.go`, conformance cases
+`enum_literal_default_slot`, `enum_literal_own_attributes`, `enum_literal_scalar_valued`.
+
 ## A5 — visibility rules
 
 - ~~**Protected imports are treated as private.**~~ **Done.** A protected or public import now

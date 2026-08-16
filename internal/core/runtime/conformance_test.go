@@ -945,6 +945,8 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 		return Value{Kind: ValNull}
 	case "Variant":
 		t.Fatalf("a variant is named by the model, so it cannot be built from a case value")
+	case "EnumLiteral":
+		t.Fatalf("an enumeration literal is declared by the model, so it cannot be built from a case value")
 	case "Quantity":
 		v, ok := ev.Value.(float64)
 		if !ok {
@@ -1024,6 +1026,15 @@ func validateValue(t *testing.T, name string, expected ExpectedValue, actual Val
 		want := expected.Value.(string)
 		if actual.Variant.Name != want {
 			t.Errorf("%s: variant = %q, want %q", name, actual.Variant.Name, want)
+		}
+	case "EnumLiteral":
+		if actual.Kind != ValEnumLiteral || actual.Literal == nil {
+			t.Errorf("%s: type = %v, want EnumLiteral", name, actual.Kind)
+			return
+		}
+		want := expected.Value.(string)
+		if got := actual.LiteralText(); got != want {
+			t.Errorf("%s: literal = %q, want %q", name, got, want)
 		}
 	case "Quantity":
 		if actual.Kind != ValQuantity || actual.Quantity == nil {

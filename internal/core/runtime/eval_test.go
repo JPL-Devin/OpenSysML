@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -501,5 +502,159 @@ func TestEval_Track1Integration(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// enumSource declares the enumerations the literal tests evaluate against: one
+// of plain literals, one whose literals carry attributes of their own.
+const enumSource = `
+package D {
+	enum def Color { red; green; blue; }
+	enum def Level {
+		low { attribute n = 1; }
+		high { attribute n = 9; }
+	}
+	enum def Grade { A = 4; B = 3; }
+}
+attribute test = %s;
+`
+
+// evalEnumExpr evaluates expr against the enumerations enumSource declares.
+func evalEnumExpr(t *testing.T, expr string) (Value, error) {
+	t.Helper()
+	model, resolver, root := parseAndBuildModel(t, fmt.Sprintf(enumSource, expr))
+	ctx := NewContext(model, resolver, 1000)
+	testSym := resolveSymbol(t, root, "test")
+	return ctx.Eval(testSym.Decl.(*ast.Usage).Value)
+}
+
+// TestEval_EnumerationLiteralIsAValue pins that a literal evaluates to the
+// identity of that literal, which is what renders and what compares.
+func TestEval_EnumerationLiteralIsAValue(t *testing.T) {
+	val, err := evalEnumExpr(t, "D::Color::red")
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if val.Kind != ValEnumLiteral {
+		t.Fatalf("kind = %v, want ValEnumLiteral", val.Kind)
+	}
+	if val.Literal == nil || val.Literal.Name != "red" {
+		t.Fatalf("literal = %v, want red", val.Literal)
+	}
+	if got := val.LiteralText(); got != "Color::red" {
+		t.Errorf("LiteralText() = %q, want %q", got, "Color::red")
+	}
+	if got := FormatTraceValue(val); got != "Color::red" {
+		t.Errorf("FormatTraceValue() = %q, want %q", got, "Color::red")
+	}
+	if got := describeOperand(val); got != "the enumeration literal Color::red" {
+		t.Errorf("describeOperand() = %q", got)
+	}
+}
+
+// TestEval_EnumerationLiteralEquality pins that literal equality is identity:
+// the same literal is equal to itself, and no other literal is equal to it,
+// including one of another enumeration.
+func TestEval_EnumerationLiteralEquality(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want bool
+	}{
+		{"D::Color::red == D::Color::red", true},
+		{"D::Color::red != D::Color::red", false},
+		{"D::Color::red == D::Color::green", false},
+		{"D::Color::red != D::Color::green", true},
+		{"D::Color::red == D::Level::low", false},
+		{"D::Color::red != D::Level::low", true},
+		{"D::Color::red === D::Color::red", true},
+		{"D::Color::red === D::Color::blue", false},
+		{"D::Color::red == 1", false},
+		{"D::Color::red == \"red\"", false},
+	} {
+		t.Run(tt.expr, func(t *testing.T) {
+			val, err := evalEnumExpr(t, tt.expr)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if val.Kind != ValConst || val.Const.Kind != semantics.ValBool {
+				t.Fatalf("value = %v, want a Boolean", val)
+			}
+			if val.Const.Bool != tt.want {
+				t.Errorf("%s = %v, want %v", tt.expr, val.Const.Bool, tt.want)
+			}
+		})
+	}
+}
+
+// TestEval_EnumerationLiteralOwnAttributes pins that a literal is an occurrence
+// of its enumeration: the attributes it declares are readable through it, and
+// each literal holds its own.
+func TestEval_EnumerationLiteralOwnAttributes(t *testing.T) {
+	for expr, want := range map[string]int64{
+		"D::Level::low.n":  1,
+		"D::Level::high.n": 9,
+	} {
+		val, err := evalEnumExpr(t, expr)
+		if err != nil {
+			t.Fatalf("Eval %s: %v", expr, err)
+		}
+		if val.Kind != ValConst || val.Const.Kind != semantics.ValInt || val.Const.Int != want {
+			t.Errorf("%s = %v, want %d", expr, val, want)
+		}
+	}
+}
+
+// TestEval_EnumerationLiteralReadTwiceIsOneObject pins that the object a literal
+// stands for is materialized once, so reading its attributes repeatedly reads
+// the same occurrence rather than piling up objects.
+func TestEval_EnumerationLiteralReadTwiceIsOneObject(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t,
+		fmt.Sprintf(enumSource, "D::Level::high.n == D::Level::high.n"))
+	ctx := NewContext(model, resolver, 1000)
+	testSym := resolveSymbol(t, root, "test")
+	val, err := ctx.Eval(testSym.Decl.(*ast.Usage).Value)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if val.Kind != ValConst || !val.Const.Bool {
+		t.Fatalf("value = %v, want true", val)
+	}
+	if len(ctx.instances) != 1 {
+		t.Errorf("materialized %d objects, want 1", len(ctx.instances))
+	}
+}
+
+// TestEval_EnumerationLiteralWithAValue pins that a literal of an enumeration
+// giving its literals values evaluates to the value it declares.
+func TestEval_EnumerationLiteralWithAValue(t *testing.T) {
+	val, err := evalEnumExpr(t, "D::Grade::A")
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if val.Kind != ValConst || val.Const.Kind != semantics.ValInt || val.Const.Int != 4 {
+		t.Fatalf("value = %v, want 4", val)
+	}
+}
+
+// TestEval_EnumerationLiteralInASet pins that a set holds one element per
+// literal: the same literal added twice is one member, two literals are two.
+func TestEval_EnumerationLiteralInASet(t *testing.T) {
+	red, err := evalEnumExpr(t, "D::Color::red")
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	green, err := evalEnumExpr(t, "D::Color::green")
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	set := NewSet()
+	set.Add(red)
+	set.Add(red)
+	set.Add(green)
+	if set.Size() != 2 {
+		t.Errorf("set size = %d, want 2", set.Size())
+	}
+	if !set.Contains(red) || !set.Contains(green) {
+		t.Errorf("set %v does not hold both literals", set.Elements())
 	}
 }
