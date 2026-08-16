@@ -153,7 +153,7 @@ func (sc *SymbolContext) attributeValue(sym *symbols.Symbol) (*pb.Value, string)
 	if !ok {
 		return nil, unit
 	}
-	return ValueToProto(runtime.Value{Kind: runtime.ValConst, Const: val}), unit
+	return ValueToProto(runtime.Value{Kind: runtime.ValConst, Const: val}, sc.Index), unit
 }
 
 // writesValue reports whether an attribute's declaration states a default of
