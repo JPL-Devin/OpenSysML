@@ -171,28 +171,47 @@ func (ctx *Context) EvaluateSatisfaction(a *SatisfyAssertion) (bool, error) {
 // A false verdict is returned as a *ViolationError, which unwraps to
 // ErrViolated: it is an answer about the model, not a failure to evaluate.
 func (ctx *Context) EvaluateSatisfactionOn(a *SatisfyAssertion, subject *Instance) (bool, error) {
+	result, err := ctx.CheckSatisfactionOn(a, subject)
+	return result.Holds, err
+}
+
+// CheckSatisfactionOn evaluates a satisfaction assertion as
+// EvaluateSatisfactionOn does and also reports the object it turned out to be
+// about.
+func (ctx *Context) CheckSatisfactionOn(a *SatisfyAssertion, subject *Instance) (CheckResult, error) {
 	defer ctx.beginRun()()
 
 	if a == nil || a.Symbol == nil {
-		return false, ErrNotASatisfaction
+		return CheckResult{Subject: subject}, ErrNotASatisfaction
 	}
 	// The assertion is evaluated as the requirement usage it is: it inherits the
 	// conditions of the requirement it references and the values that
 	// requirement binds, plus any it rebinds itself.
 	target := a.Symbol
 	if a.Requirement == nil && a.RequirementRef != "" {
-		return false, fmt.Errorf("%s: %w: %s", a.Text(), ErrNoRequirement, a.RequirementRef)
+		return CheckResult{Subject: subject}, fmt.Errorf("%s: %w: %s", a.Text(), ErrNoRequirement, a.RequirementRef)
 	}
 	if a.Requirement == nil && !declaresConditions(a.Symbol) {
-		return false, fmt.Errorf("%s: %w", a.Text(), ErrNoRequirement)
+		return CheckResult{Subject: subject}, fmt.Errorf("%s: %w", a.Text(), ErrNoRequirement)
 	}
 
 	if subject == nil && a.SubjectRef != "" {
 		inst, err := ctx.SatisfySubject(a)
 		if err != nil {
-			return false, err
+			return CheckResult{}, err
 		}
 		subject = inst
+	}
+
+	// The requirement being satisfied chooses the object its conditions read the
+	// same way `%requirement` does, so an object holding the carrier nested
+	// answers about that nested object rather than about the declaration.
+	if a.Requirement != nil {
+		resolved, err := ctx.checkSubject("satisfaction", a.Text(), a.Requirement, subject)
+		if err != nil {
+			return CheckResult{}, err
+		}
+		subject = resolved
 	}
 
 	scope := target.OwnerScope
@@ -204,11 +223,11 @@ func (ctx *Context) EvaluateSatisfactionOn(a *SatisfyAssertion, subject *Instanc
 	// are when the requirement is evaluated directly.
 	bindings, err := ctx.memberBindings(target, a.Text(), members, subject, subject)
 	if err != nil {
-		return false, err
+		return CheckResult{Subject: subject}, err
 	}
 
 	conds := conditionsOf(members)
-	return ctx.evaluateConditions(conditionCheck{
+	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:  target,
 		kind: "satisfaction",
 		what: "require condition",
@@ -220,6 +239,7 @@ func (ctx *Context) EvaluateSatisfactionOn(a *SatisfyAssertion, subject *Instanc
 		bindings: bindings,
 		negated:  a.Negated,
 	}, conds)
+	return CheckResult{Holds: holds, Subject: subject}, err
 }
 
 // SatisfySubject returns an object of the feature a satisfaction assertion names

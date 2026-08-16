@@ -1,0 +1,9 @@
+{
+  "type": "satisfy",
+  "evaluate": "test::analysisContext",
+  "libraries": true,
+  "assertions": {
+    "satisfy Inner::lim by low": true,
+    "satisfy Inner::lim by high": false
+  }
+}

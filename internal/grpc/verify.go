@@ -155,10 +155,11 @@ func (s *Service) VerifyConstraint(ctx context.Context, req *pb.VerifyConstraint
 		return &pb.VerifyConstraintResponse{Error: err.Error()}, nil
 	}
 
-	holds, evalErr := v.runtime.EvaluateConstraintOn(sym, v.declaringScope(sym), inst)
+	result, evalErr := v.runtime.CheckConstraintOn(sym, v.declaringScope(sym), inst)
+	subject := subjectOf(result, inst)
 	return &pb.VerifyConstraintResponse{
-		Verdict:   v.verdict(verdictConstraint, sym, "", inst, holds, evalErr),
-		Instances: v.instanceGraph(inst),
+		Verdict:   v.verdict(verdictConstraint, sym, "", subject, result.Holds, evalErr),
+		Instances: v.instanceGraph(subject),
 	}, nil
 }
 
@@ -178,10 +179,11 @@ func (s *Service) VerifyRequirement(ctx context.Context, req *pb.VerifyRequireme
 		return &pb.VerifyRequirementResponse{Error: err.Error()}, nil
 	}
 
-	holds, evalErr := v.runtime.EvaluateRequirementOn(sym, v.declaringScope(sym), inst)
+	result, evalErr := v.runtime.CheckRequirementOn(sym, v.declaringScope(sym), inst)
+	subject := subjectOf(result, inst)
 	return &pb.VerifyRequirementResponse{
-		Verdict:   v.verdict(verdictRequirement, sym, "", inst, holds, evalErr),
-		Instances: v.instanceGraph(inst),
+		Verdict:   v.verdict(verdictRequirement, sym, "", subject, result.Holds, evalErr),
+		Instances: v.instanceGraph(subject),
 	}, nil
 }
 
@@ -251,9 +253,20 @@ func (v *verifyContext) satisfyVerdict(a *runtime.SatisfyAssertion) (*pb.Verdict
 		}
 		subject = inst
 	}
-	holds, err := v.runtime.EvaluateSatisfactionOn(a, subject)
-	return v.verdict(verdictSatisfy, a.Symbol, a.Text(), subject, holds, err),
+	result, err := v.runtime.CheckSatisfactionOn(a, subject)
+	subject = subjectOf(result, subject)
+	return v.verdict(verdictSatisfy, a.Symbol, a.Text(), subject, result.Holds, err),
 		v.instanceGraph(subject)
+}
+
+// subjectOf is the object a verdict is about: the one the runtime evaluated the
+// check against, which for a check reached through a nested redefinition is not
+// the object supplied. fallback covers a check that never reached evaluation.
+func subjectOf(result runtime.CheckResult, fallback *runtime.Instance) *runtime.Instance {
+	if result.Subject != nil {
+		return result.Subject
+	}
+	return fallback
 }
 
 // EvaluateCalc invokes a calculation, as the REPL's %calc does: a calc usage
