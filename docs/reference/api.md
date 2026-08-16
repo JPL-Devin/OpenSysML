@@ -494,6 +494,14 @@ Language Server Protocol implementation.
 - **`Server`** — LSP server
   - `Run(ctx context.Context, conn io.ReadWriteCloser) error`
 
+**Transport:** stdio only. `sysml-lsp` also accepts `--stdio`/`-stdio` as an explicit no-op, because
+standard language clients (including the bundled VS Code extension) name the transport on the command
+line. Any other unknown flag is still rejected with exit status 2.
+
+**Lifecycle (LSP 3.17):** `shutdown` is answered, after which every request other than `exit` is answered
+`InvalidRequest` (`-32600`) and non-`exit` notifications are dropped. `exit` makes `Run` return and the
+process terminate — status 0 after a preceding `shutdown`, 1 otherwise.
+
 **Current Capabilities:**
 - Document synchronization (open/change/close)
 - Diagnostics (syntax + semantic errors)

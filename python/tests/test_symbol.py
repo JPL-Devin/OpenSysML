@@ -2,6 +2,11 @@
 
 import pytest
 from unittest.mock import Mock
+from pysysml.capabilities import (
+    CAPABILITY_SYMBOL_ATTRIBUTES,
+    MissingCapabilityError,
+    ServerInfo,
+)
 from pysysml.symbol import Symbol
 from pysysml.proto import sysml_pb2
 
@@ -276,3 +281,251 @@ class TestSymbolAttributes:
 
         assert [attr.name for attr in parent.attributes()] == ["mass"]
         assert [part.name for part in parent.parts()] == ["engine"]
+
+
+class TestSymbolAttributeFacts:
+    """Test the attribute facts the service resolves, which must never be empty
+    for an element that has attributes."""
+
+    def _car(self, mock_client):
+        """Wrap the reported Car as a Symbol."""
+        return Symbol(self._car_info(mock_client), mock_client, "model_abc123")
+
+    def _car_info(self, mock_client):
+        """Build a Car as the service reports it: one own attribute, one
+        inherited from Base, each with resolved type and default value."""
+        base_info = sysml_pb2.SymbolInfo(
+            id="Demo::Base",
+            name="Base",
+            kind="partDef",
+            child_ids=["Demo::Base::label"],
+            attributes=[
+                sysml_pb2.AttributeInfo(
+                    name="label",
+                    type="ScalarValues::String",
+                    value=sysml_pb2.Value(string_value="base"),
+                ),
+            ],
+        )
+        symbols = {
+            "Demo::Car::mass": sysml_pb2.SymbolInfo(
+                id="Demo::Car::mass",
+                name="mass",
+                kind="attributeUsage",
+                type_info=sysml_pb2.TypeInfo(
+                    declared="ISQ::MassValue",
+                    resolved_id="ISQBase::MassValue",
+                    quantity=True,
+                    unit="SI::kg",
+                ),
+                multiplicity=sysml_pb2.MultiplicityInfo(lower="1", upper="1"),
+            ),
+            "Demo::Car::engine": sysml_pb2.SymbolInfo(
+                id="Demo::Car::engine", name="engine", kind="partUsage"
+            ),
+            "Demo::Base": base_info,
+            "Demo::Base::label": sysml_pb2.SymbolInfo(
+                id="Demo::Base::label",
+                name="label",
+                kind="attributeUsage",
+                type_info=sysml_pb2.TypeInfo(resolved_id="ScalarValues::String"),
+            ),
+        }
+        mock_client.get_symbol.side_effect = lambda _hash, symbol_id: symbols.get(symbol_id)
+
+        car_info = sysml_pb2.SymbolInfo(
+            id="Demo::Car",
+            name="Car",
+            kind="partDef",
+            child_ids=["Demo::Car::mass", "Demo::Car::engine"],
+            specializations=[
+                sysml_pb2.Specialization(
+                    kind="specializes",
+                    declared="Base",
+                    target_id="Demo::Base",
+                    target_kind="partDef",
+                ),
+            ],
+            attributes=[
+                sysml_pb2.AttributeInfo(
+                    name="mass",
+                    type="ISQBase::MassValue",
+                    value=sysml_pb2.Value(real_value=1600.0),
+                    unit="SI::kg",
+                ),
+                sysml_pb2.AttributeInfo(
+                    name="label",
+                    type="ScalarValues::String",
+                    value=sysml_pb2.Value(string_value="base"),
+                ),
+                sysml_pb2.AttributeInfo(name="derived", type="ScalarValues::Real"),
+            ],
+        )
+        return car_info
+
+    def test_attribute_facts_reports_type_value_and_unit(self):
+        """attribute_facts() carries the facts the service resolved, not an empty list."""
+        facts = self._car(Mock()).attribute_facts()
+
+        assert [fact.name for fact in facts] == ["mass", "label", "derived"]
+        assert facts[0].type == "ISQBase::MassValue"
+        assert facts[0].value == 1600.0
+        assert facts[0].unit == "SI::kg"
+        assert facts[1].value == "base"
+        # An attribute whose default is not a model-level constant has no value.
+        assert facts[2].value is None
+        assert facts[2].unit == ""
+
+    def test_facts_include_attributes(self):
+        """facts() carries the attribute set, so a generated view can use it."""
+        facts = self._car(Mock()).facts()
+
+        assert [attr.name for attr in facts.attributes] == ["mass", "label", "derived"]
+
+    def test_attributes_include_inherited_ones(self):
+        """attributes() reports an inherited attribute, fetched from its declaring type."""
+        car = self._car(Mock())
+
+        attributes = car.attributes()
+
+        assert [attr.name for attr in attributes] == ["mass", "label"]
+        assert attributes[1].id == "Demo::Base::label"
+        assert car.get_attr("label").id == "Demo::Base::label"
+
+    def test_attributes_of_a_typed_usage_come_from_its_type(self):
+        """A usage written as `part car : Car` has the attributes Car declares."""
+        mock_client = Mock()
+        car_info = self._car_info(mock_client)
+        usage_info = sysml_pb2.SymbolInfo(
+            id="Demo::car",
+            name="car",
+            kind="partUsage",
+            specializations=[
+                sysml_pb2.Specialization(
+                    kind="typing",
+                    declared="Car",
+                    target_id="Demo::Car",
+                    target_kind="partDef",
+                ),
+            ],
+            attributes=list(car_info.attributes),
+        )
+        symbols = mock_client.get_symbol.side_effect
+        mock_client.get_symbol.side_effect = (
+            lambda _hash, symbol_id: car_info if symbol_id == "Demo::Car"
+            else symbols(_hash, symbol_id)
+        )
+
+        usage = Symbol(usage_info, mock_client, "model_abc123")
+
+        assert [attr.name for attr in usage.attributes()] == ["mass", "label"]
+        assert usage.get_attr("mass").id == "Demo::Car::mass"
+
+    def test_to_dataframe_does_not_lend_a_value_to_a_same_named_member(self):
+        """A member of another kind sharing an attribute's name carries no value."""
+        pd = pytest.importorskip("pandas")
+        mock_client = Mock()
+        base_info = sysml_pb2.SymbolInfo(
+            id="Demo::Base",
+            name="Base",
+            kind="partDef",
+            child_ids=["Demo::Base::mass"],
+            attributes=[
+                sysml_pb2.AttributeInfo(
+                    name="mass",
+                    type="ScalarValues::Real",
+                    value=sysml_pb2.Value(real_value=1000.0),
+                ),
+            ],
+        )
+        symbols = {
+            "Demo::Base": base_info,
+            "Demo::Base::mass": sysml_pb2.SymbolInfo(
+                id="Demo::Base::mass", name="mass", kind="attributeUsage"
+            ),
+            # A part usage of the same simple name as the inherited attribute.
+            "Demo::Car::mass": sysml_pb2.SymbolInfo(
+                id="Demo::Car::mass", name="mass", kind="partUsage"
+            ),
+        }
+        mock_client.get_symbol.side_effect = lambda _hash, symbol_id: symbols.get(symbol_id)
+        car = Symbol(
+            sysml_pb2.SymbolInfo(
+                id="Demo::Car",
+                name="Car",
+                kind="partDef",
+                child_ids=["Demo::Car::mass"],
+                specializations=[
+                    sysml_pb2.Specialization(
+                        kind="specializes", declared="Base", target_id="Demo::Base"
+                    ),
+                ],
+                attributes=list(base_info.attributes),
+            ),
+            mock_client,
+            "model_abc123",
+        )
+
+        frame = car.to_dataframe()
+
+        part = frame[frame["id"] == "Demo::Car::mass"].iloc[0]
+        assert pd.isna(part["value"])
+        assert pd.isna(part["unit"])
+        attribute = frame[frame["id"] == "Demo::Base::mass"].iloc[0]
+        assert attribute["value"] == 1000.0
+
+    def test_to_dataframe_reports_attribute_facts(self):
+        """to_dataframe() reports each member's type, multiplicity, value and unit."""
+        pd = pytest.importorskip("pandas")
+        frame = self._car(Mock()).to_dataframe()
+
+        assert list(frame.columns) == [
+            "name", "kind", "id", "type", "multiplicity", "value", "unit", "inherited",
+        ]
+        assert list(frame["name"]) == ["mass", "engine", "label"]
+
+        mass = frame[frame["name"] == "mass"].iloc[0]
+        assert mass["type"] == "ISQBase::MassValue"
+        assert mass["multiplicity"] == "1..1"
+        assert mass["value"] == 1600.0
+        assert mass["unit"] == "SI::kg"
+        assert not mass["inherited"]
+
+        engine = frame[frame["name"] == "engine"].iloc[0]
+        assert pd.isna(engine["value"])
+        assert pd.isna(engine["unit"])
+
+        label = frame[frame["name"] == "label"].iloc[0]
+        assert label["value"] == "base"
+        assert label["inherited"]
+
+    def test_attribute_facts_name_a_service_that_cannot_resolve_them(self):
+        """An older service's empty set is reported as a missing capability, not as none."""
+        mock_client = Mock()
+        mock_client.server_info.return_value = ServerInfo(
+            version="v0.0.1", capabilities=frozenset({"type_facts"}),
+            answered=True, origin="an old sysml-grpc",
+        )
+        car = self._car(mock_client)
+
+        with pytest.raises(MissingCapabilityError) as excinfo:
+            car.attribute_facts()
+        assert excinfo.value.capability == CAPABILITY_SYMBOL_ATTRIBUTES
+
+        with pytest.raises(MissingCapabilityError):
+            car.to_dataframe()
+
+        # Navigation that does not depend on the resolved set keeps working.
+        assert [child.name for child in car.children()] == ["mass", "engine"]
+
+    def test_to_dataframe_of_a_symbol_with_no_members(self):
+        """An element with no members still has the full column set."""
+        pytest.importorskip("pandas")
+        empty = Symbol(sysml_pb2.SymbolInfo(id="Demo::Engine", name="Engine", kind="partDef"), None, "h")
+
+        frame = empty.to_dataframe()
+
+        assert list(frame.columns) == [
+            "name", "kind", "id", "type", "multiplicity", "value", "unit", "inherited",
+        ]
+        assert frame.empty

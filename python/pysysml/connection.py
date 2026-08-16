@@ -14,6 +14,7 @@ from pysysml.model import Model
 from pysysml.binary import cached_release, ensure_binary, resolve_latest_version
 from pysysml.capabilities import (
     CAPABILITY_CONVERT,
+    CAPABILITY_EVALUATE_SUBJECT,
     CAPABILITY_QUERY,
     CAPABILITY_VERIFICATION,
     ServerInfo,
@@ -672,13 +673,22 @@ class Connection:
         
         return response.symbol
     
-    def eval(self, expression, model_hash, context_symbol_id=None):
+    def eval(
+        self,
+        expression,
+        model_hash,
+        context_symbol_id=None,
+        subject_symbol_id=None,
+    ):
         """Evaluate a SysML expression.
         
         Args:
             expression (str): SysML expression (e.g., "2 + 2")
             model_hash (str): Hash from ParseFile response
             context_symbol_id (str, optional): Symbol FQN for context scope
+            subject_symbol_id (str, optional): FQN of a part/usage to
+                instantiate and evaluate against, so a feature reads that
+                object's value rather than the declared default
             
         Returns:
             Value from expression (int, float, bool, str, Instance, etc.)
@@ -688,10 +698,20 @@ class Connection:
             ModelNotFoundError: If the service no longer holds the model
             UnsupportedValueError: If the result cannot be represented on the wire
         """
+        if subject_symbol_id:
+            # A service that ignores the subject would answer with the declared
+            # default, which is indistinguishable from the object's own value.
+            require(
+                self.server_info(),
+                CAPABILITY_EVALUATE_SUBJECT,
+                upgrade_remedy(CAPABILITY_EVALUATE_SUBJECT),
+            )
+
         req = sysml_pb2.EvaluateRequest(
             model_hash=model_hash,
             expression=expression,
-            context_symbol_id=context_symbol_id or ""
+            context_symbol_id=context_symbol_id or "",
+            subject_symbol_id=subject_symbol_id or "",
         )
         
         with translate_rpc_errors():

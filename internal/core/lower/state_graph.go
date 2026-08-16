@@ -42,8 +42,9 @@ type StateGraph struct {
 	// States in the machine (flat list, includes nested)
 	States []*ast.StateNode
 
-	// Pseudostates (choice, junction, etc.)
-	Pseudostates map[string]*ast.PseudostateNode
+	// Pseudostates of the machine in declaration order. Not keyed by name:
+	// sibling regions may declare same-named pseudostates.
+	Pseudostates []*ast.PseudostateNode
 
 	// PseudostateOwner: pseudostate -> the composite state that declares it,
 	// absent for one declared directly in the machine. A history pseudostate
@@ -130,85 +131,22 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	// resolver, one that has a tree names its endpoints from that tree alone.
 	switch {
 	case scope == nil:
-		endpoints = localEndpoints(stateMachineDecl)
+		endpoints, scope = localEndpoints(stateMachineDecl)
 	case endpoints == nil:
 		endpoints = scopeEndpoints{machine: scope}
 	}
-	graph := &StateGraph{
-		Scope:            scope,
-		vertexOf:         make(map[ast.Node]ast.Node),
-		endpoints:        endpoints,
-		StateScopes:      make(map[*ast.StateNode]*symbols.Scope),
-		Behaviors:        make(map[*ast.StateNode]*StateBehaviors),
-		declOf:           make(map[*ast.StateNode]ast.Node),
-		States:           make([]*ast.StateNode, 0),
-		Pseudostates:     make(map[string]*ast.PseudostateNode),
-		PseudostateOwner: make(map[*ast.PseudostateNode]*ast.StateNode),
-		Transitions:      make(map[ast.Node][]*Transition),
-		CompositeStates:  make(map[*ast.StateNode][]*ast.StateRegion),
-		RegionInitials:   make(map[*ast.StateRegion]*ast.StateNode),
-		ParentState:      make(map[*ast.StateNode]*ast.StateNode),
-		RegionOwner:      make(map[*ast.StateRegion]*ast.StateNode),
-		RegionOf:         make(map[*ast.StateNode]*ast.StateRegion),
-		Deferred:         make(map[*ast.StateNode][]ast.Node),
-	}
+	graph := newStateGraph(scope, endpoints)
 
-	// Extract members
-	var members []ast.Node
-	switch n := stateMachineDecl.(type) {
-	case *ast.Usage:
-		members = n.Members
-	case *ast.Definition:
-		members = n.Members
-	default:
-		return nil, fmt.Errorf("state machine must be Usage or Definition, got %T", stateMachineDecl)
+	members, err := machineMembers(stateMachineDecl)
+	if err != nil {
+		return nil, err
 	}
 
 	graph.Connections = lowerConnections(members, OwnerBehavior, scope)
 	graph.Attributes = lowerAttributes(members)
 
-	// First pass: collect states and pseudostates
-	for _, member := range members {
-		actualMember := unwrapMembership(member)
-
-		switch n := actualMember.(type) {
-		case *ast.StateNode:
-			if err := collectStates(graph, n, nil, graph.stateScope(scope, n)); err != nil {
-				return nil, err
-			}
-		case *ast.Usage:
-			// Handle state usages: state declarations parsed as Usage with Kind=UsageState
-			if n.Kind == ast.UsageState {
-				// The state node records the usage it came from, so its scope is the
-				// one that usage declares: build it before asking for the scope.
-				state := stateNodeFromUsage(graph, n)
-				if err := collectStates(graph, state, nil, graph.stateScope(scope, state)); err != nil {
-					return nil, err
-				}
-			}
-		case *ast.SubstateMember:
-			// Substate declarations: state <name>;
-			// Create a StateNode from the name
-			stateNode := &ast.StateNode{
-				Name: n.Name,
-			}
-			stateNode.NodeSpan = n.NodeSpan
-			graph.declOf[stateNode] = n
-			if err := collectStates(graph, stateNode, nil, graph.stateScope(scope, stateNode)); err != nil {
-				return nil, err
-			}
-		case *ast.StateRegion:
-			// Top-level region: collect its states, which no state is the parent of
-			if err := collectRegionStates(graph, n, nil, childScope(scope, n)); err != nil {
-				return nil, err
-			}
-		case *ast.PseudostateNode:
-			graph.addPseudostate(n)
-		case *ast.DeferMember:
-			// The machine's own body has no state to defer for: an event deferred
-			// there would be retained for the whole run and never redelivered.
-			return nil, fmt.Errorf("defer must be declared inside a state, not in the state machine body")
-		}
+	if err := collectVertices(graph, members, scope); err != nil {
+		return nil, err
 	}
 
 	// Second pass: identify composite states with regions AND handle top-level regions
@@ -248,7 +186,7 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	}
 
 	// Third pass: collect transitions
-	if err := collectTransitions(graph, members, nil, nil, scope); err != nil {
+	if err := collectTransitions(graph, members, nil, scope); err != nil {
 		return nil, err
 	}
 
@@ -366,6 +304,83 @@ func stateNodeFromUsage(graph *StateGraph, usage *ast.Usage) *ast.StateNode {
 		}
 	}
 	return state
+}
+
+// newStateGraph is an empty graph of a machine whose body scope is scope and
+// whose endpoints resolve through endpoints.
+func newStateGraph(scope *symbols.Scope, endpoints Endpoints) *StateGraph {
+	return &StateGraph{
+		Scope:            scope,
+		vertexOf:         make(map[ast.Node]ast.Node),
+		endpoints:        endpoints,
+		StateScopes:      make(map[*ast.StateNode]*symbols.Scope),
+		Behaviors:        make(map[*ast.StateNode]*StateBehaviors),
+		declOf:           make(map[*ast.StateNode]ast.Node),
+		States:           make([]*ast.StateNode, 0),
+		Pseudostates:     make([]*ast.PseudostateNode, 0),
+		PseudostateOwner: make(map[*ast.PseudostateNode]*ast.StateNode),
+		Transitions:      make(map[ast.Node][]*Transition),
+		CompositeStates:  make(map[*ast.StateNode][]*ast.StateRegion),
+		RegionInitials:   make(map[*ast.StateRegion]*ast.StateNode),
+		ParentState:      make(map[*ast.StateNode]*ast.StateNode),
+		RegionOwner:      make(map[*ast.StateRegion]*ast.StateNode),
+		RegionOf:         make(map[*ast.StateNode]*ast.StateRegion),
+		Deferred:         make(map[*ast.StateNode][]ast.Node),
+	}
+}
+
+// machineMembers is the body of a state machine declaration.
+func machineMembers(stateMachineDecl ast.Node) ([]ast.Node, error) {
+	switch n := stateMachineDecl.(type) {
+	case *ast.Usage:
+		return n.Members, nil
+	case *ast.Definition:
+		return n.Members, nil
+	}
+	return nil, fmt.Errorf("state machine must be Usage or Definition, got %T", stateMachineDecl)
+}
+
+// collectVertices records every state and pseudostate the machine body declares,
+// which are the vertices its transitions may name (UML 2.5.1 §14.2.3.9).
+func collectVertices(graph *StateGraph, members []ast.Node, scope *symbols.Scope) error {
+	for _, member := range members {
+		switch n := unwrapMembership(member).(type) {
+		case *ast.StateNode:
+			if err := collectStates(graph, n, nil, graph.stateScope(scope, n)); err != nil {
+				return err
+			}
+		case *ast.Usage:
+			// `state <name> { … }`, parsed as a usage rather than a state node.
+			if n.Kind == ast.UsageState {
+				// The state node records the usage it came from, so its scope is the
+				// one that usage declares: build it before asking for the scope.
+				state := stateNodeFromUsage(graph, n)
+				if err := collectStates(graph, state, nil, graph.stateScope(scope, state)); err != nil {
+					return err
+				}
+			}
+		case *ast.SubstateMember:
+			// `state <name>;`, which declares a state with no body.
+			stateNode := &ast.StateNode{Name: n.Name}
+			stateNode.NodeSpan = n.NodeSpan
+			graph.declOf[stateNode] = n
+			if err := collectStates(graph, stateNode, nil, graph.stateScope(scope, stateNode)); err != nil {
+				return err
+			}
+		case *ast.StateRegion:
+			// Top-level region: collect its states, which no state is the parent of
+			if err := collectRegionStates(graph, n, nil, childScope(scope, n)); err != nil {
+				return err
+			}
+		case *ast.PseudostateNode:
+			graph.addPseudostate(n)
+		case *ast.DeferMember:
+			// The machine's own body has no state to defer for: an event deferred
+			// there would be retained for the whole run and never redelivered.
+			return fmt.Errorf("defer must be declared inside a state, not in the state machine body")
+		}
+	}
+	return nil
 }
 
 // collectStates recursively collects states and builds parent relationships.
@@ -491,19 +506,24 @@ func collectDeferred(graph *StateGraph, state *ast.StateNode) error {
 	return nil
 }
 
-// findStateByName looks up a state by qualified name.
-func findStateByName(states []*ast.StateNode, qname *ast.QualifiedName) *ast.StateNode {
-	if qname == nil || len(qname.Parts) == 0 {
+// endpointVertex is the vertex a succession's or a marker's endpoint names, or
+// nil when it names none: the same resolution a transition's endpoints get, so a
+// nested or region-local vertex is reached and a same-named one elsewhere is not.
+// A succession naming no vertex is left out of the graph, which the
+// name-resolution tier reports about (UML 2.5.1 §14.2.3.9 leniency).
+func (g *StateGraph) endpointVertex(scope *symbols.Scope, qn *ast.QualifiedName) ast.Node {
+	node, err := g.vertex(scope, qn)
+	if err != nil {
 		return nil
 	}
+	return node
+}
 
-	targetName := qname.Parts[len(qname.Parts)-1].Text
-	for _, state := range states {
-		if state.Name == targetName {
-			return state
-		}
-	}
-	return nil
+// endpointState is endpointVertex where only a state will do, as for the state a
+// machine or a region starts in.
+func (g *StateGraph) endpointState(scope *symbols.Scope, qn *ast.QualifiedName) *ast.StateNode {
+	state, _ := g.endpointVertex(scope, qn).(*ast.StateNode)
+	return state
 }
 
 // addVertex records the graph node standing for a state, and for the
@@ -517,7 +537,7 @@ func (g *StateGraph) addVertex(state *ast.StateNode) {
 
 // addPseudostate records a pseudostate as a vertex of the graph.
 func (g *StateGraph) addPseudostate(ps *ast.PseudostateNode) {
-	g.Pseudostates[ps.Name] = ps
+	g.Pseudostates = append(g.Pseudostates, ps)
 	g.vertexOf[ps] = ps
 }
 
@@ -535,14 +555,18 @@ func (g *StateGraph) vertex(scope *symbols.Scope, qn *ast.QualifiedName) (ast.No
 	}
 	node, ok := g.vertexOf[decl]
 	if !ok {
-		return nil, fmt.Errorf("transition endpoint %s names a %s that is not a vertex of this state machine", endpointText(qn), vertexKind(decl))
+		return nil, fmt.Errorf(NotAVertexFormat, endpointText(qn), VertexKind(decl))
 	}
 	return node, nil
 }
 
-// vertexKind names what an endpoint reached in modelling terms, for a message a
+// NotAVertexFormat reports an endpoint naming an element outside the machine's
+// vertices, shared by the check reporting it and the lowering backstopping it.
+const NotAVertexFormat = "transition endpoint %s names a %s that is not a vertex of this state machine"
+
+// VertexKind names what an endpoint reached in modelling terms, for a message a
 // modeller reads.
-func vertexKind(decl ast.Node) string {
+func VertexKind(decl ast.Node) string {
 	switch decl.(type) {
 	case *ast.StateNode, *ast.SubstateMember, *ast.Usage:
 		return "state"
@@ -731,10 +755,10 @@ func relationshipTarget(usage *ast.Usage, kinds ...ast.RelationshipKind) *ast.Qu
 
 // collectTransitions recursively processes member lists to collect transitions.
 // Handles top-level members and region members.
-// regionStates limits state lookup to states within a specific region (nil = all states).
 // containingState is the enclosing state for sourceless transitions (nil at top level).
-// scope is the scope the members were declared in.
-func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates []*ast.StateNode, containingState ast.Node, scope *symbols.Scope) error {
+// scope is the scope the members were declared in, in which their endpoints name
+// the vertices they reach.
+func collectTransitions(graph *StateGraph, memberList []ast.Node, containingState ast.Node, scope *symbols.Scope) error {
 
 	for _, member := range memberList {
 		actualMember := unwrapMembership(member)
@@ -767,27 +791,20 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 					}
 
 					if sourceQName != nil && targetQName != nil {
+						sourceVertex := graph.endpointVertex(scope, sourceQName)
+						targetVertex := graph.endpointVertex(scope, targetQName)
 
-						// Use regionStates for scoped lookup if provided, otherwise all states
-						searchScope := regionStates
-						if searchScope == nil {
-							searchScope = graph.States
-						}
-
-						sourceState := findStateByName(searchScope, sourceQName)
-						targetState := findStateByName(searchScope, targetQName)
-
-						if sourceState != nil && targetState != nil {
+						if sourceVertex != nil && targetVertex != nil {
 							trans := &Transition{
-								Source:    sourceState,
-								Target:    targetState,
+								Source:    sourceVertex,
+								Target:    targetVertex,
 								Trigger:   nil, // Completion transition
 								Guard:     nil,
 								Effect:    nil,
 								Scope:     scope,
 								BodyScope: scope,
 							}
-							graph.Transitions[sourceState] = append(graph.Transitions[sourceState], trans)
+							graph.Transitions[sourceVertex] = append(graph.Transitions[sourceVertex], trans)
 						}
 					}
 				}
@@ -795,7 +812,7 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 				// Handle state usages (state X { ... }) - recurse into members
 				// This state usage can contain transitions (accept...then, etc.)
 				// Pass this Usage node as the containing state for sourceless transitions
-				if err := collectTransitions(graph, n.Members, nil, n, childScope(scope, n)); err != nil {
+				if err := collectTransitions(graph, n.Members, n, childScope(scope, n)); err != nil {
 					return err
 				}
 			}
@@ -804,11 +821,7 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 			// This means "initial pseudostate transitions to state Y"
 			// Mark Y as the initial state (no intermediate state for the initial node)
 			if n.Successor != nil {
-				searchScope := regionStates
-				if searchScope == nil {
-					searchScope = graph.States
-				}
-				targetState := findStateByName(searchScope, n.Successor)
+				targetState := graph.endpointState(scope, n.Successor)
 				if targetState != nil {
 					targetState.IsInitial = true
 				}
@@ -816,33 +829,30 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 		case *ast.SuccessionEdge:
 			// Handle succession statements: `source then target;`
 			// Create completion transition from source to target
-			searchScope := regionStates
-			if searchScope == nil {
-				searchScope = graph.States
-			}
-
-			sourceState := findStateByName(searchScope, n.Source)
-			targetState := findStateByName(searchScope, n.Target)
+			sourceVertex := graph.endpointVertex(scope, n.Source)
+			targetVertex := graph.endpointVertex(scope, n.Target)
 
 			// `entry; then off;` — a succession out of the body's own entry
 			// subaction names the state it starts in (SysML 7.19.3), the same as
 			// `initial start; start then off;`.
-			if sourceState == nil && targetState != nil && isEntrySubaction(n.SourceMember) {
-				targetState.IsInitial = true
-				continue
+			if sourceVertex == nil && isEntrySubaction(n.SourceMember) {
+				if target, ok := targetVertex.(*ast.StateNode); ok {
+					target.IsInitial = true
+					continue
+				}
 			}
 
-			if sourceState != nil && targetState != nil {
+			if sourceVertex != nil && targetVertex != nil {
 				trans := &Transition{
-					Source:    sourceState,
-					Target:    targetState,
+					Source:    sourceVertex,
+					Target:    targetVertex,
 					Trigger:   nil, // Completion transition
 					Guard:     nil,
 					Effect:    nil,
 					Scope:     scope,
 					BodyScope: scope,
 				}
-				graph.Transitions[sourceState] = append(graph.Transitions[sourceState], trans)
+				graph.Transitions[sourceVertex] = append(graph.Transitions[sourceVertex], trans)
 			}
 		case *ast.TransitionEdge:
 			// Legacy: explicit TransitionEdge nodes (from hand-built tests)
@@ -869,23 +879,13 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, regionStates [
 			if stateScope == nil {
 				stateScope = graph.stateScope(scope, n)
 			}
-			if err := collectTransitions(graph, n.Substates, nil, n, stateScope); err != nil {
+			if err := collectTransitions(graph, n.Substates, n, stateScope); err != nil {
 				return err
 			}
 		case *ast.StateRegion:
-			// The states this region declares, in collection order: a transition
-			// declared inside a region names them, and collecting states already
-			// recorded which region declares each one.
-			var statesInRegion []*ast.StateNode
-			for _, state := range graph.States {
-				if graph.RegionOf[state] == n {
-					statesInRegion = append(statesInRegion, state)
-				}
-			}
-
-			// Recurse into region members with scoped state list
-			// Regions are orthogonal - transitions within them don't inherit a containing state
-			if err := collectTransitions(graph, n.States, statesInRegion, nil, childScope(scope, n)); err != nil {
+			// Regions are orthogonal: a transition in one inherits no containing
+			// state, and names its vertices from the region's own scope.
+			if err := collectTransitions(graph, n.States, nil, childScope(scope, n)); err != nil {
 				return err
 			}
 		}

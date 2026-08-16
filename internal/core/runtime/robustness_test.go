@@ -30,10 +30,13 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_transition_endpoint_misspelled", testStateTransitionEndpointMisspelled)
 	t.Run("state_transition_endpoint_in_another_machine", testStateTransitionEndpointInAnotherMachine)
 	t.Run("state_transition_endpoint_never_resolved", testStateTransitionEndpointNeverResolved)
+	t.Run("state_transition_endpoint_naming_a_first_marker", testStateTransitionEndpointNamingAFirstMarker)
+	t.Run("state_junction_without_an_outgoing_transition", testStateJunctionWithoutAnOutgoingTransition)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
+	t.Run("calc_unbound_keyword_named_parameter", testCalcUnboundKeywordNamedParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
 	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
 	t.Run("calc_without_result", testCalcWithoutResult)
@@ -434,7 +437,14 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"ComplexFunctions::'/'(ys, (0.0, 0.0))", ErrDivisionByZero},
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
 		{"ComplexFunctions::ToString(ys)", ErrUnevaluableLibraryFunction},
-		{"SequenceFunctions::includingAt(xs, 9, 2)", ErrUnevaluableLibraryFunction},
+		// includingAt inserts before a position of 1..size+1, so an index past the
+		// end of the sequence names no insertion point and is reported rather than
+		// appending or dropping the values.
+		{"SequenceFunctions::includingAt(xs, 9, 5)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt(xs, 9, 0)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt((), 9, 2)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt(xs, 9, 1.5)", ErrTypeMismatch},
+		{"SequenceFunctions::includingAt(xs, 9)", ErrCalcArity},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
@@ -461,6 +471,7 @@ func testStringOperandOfTheWrongKind(t *testing.T) {
 		{`StringFunctions::Length(1)`, ErrTypeMismatch},
 		{`StringFunctions::Length(xs)`, ErrTypeMismatch},
 		{`StringFunctions::Substring("abc", 1, 9)`, ErrIndexOutOfRange},
+		{`StringFunctions::Substring("héllo", 1, 6)`, ErrIndexOutOfRange},
 		{`StringFunctions::Substring("abc", 0, 2)`, ErrIndexOutOfRange},
 		{`StringFunctions::Substring("abc", "1", 2)`, ErrTypeMismatch},
 		{`StringFunctions::Substring("abc", 1)`, ErrCalcArity},
@@ -963,8 +974,9 @@ func testStateTransitionEndpointNeverResolved(t *testing.T) {
 }
 
 // testStateTransitionEndpointInAnotherMachine: an endpoint naming a state of a
-// different machine resolves, so no name diagnostic reports it; lowering must
-// report it rather than drop the edge, since nothing else would.
+// different machine resolves, so no name diagnostic reports it; the state
+// transition check reports it, and lowering backstops the check with a typed
+// error rather than dropping the edge.
 func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
 	src := `package test {
 		state Other {
@@ -1005,6 +1017,73 @@ func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "*ast.") {
 		t.Errorf("the message a modeller reads names a Go type: %v", err)
+	}
+}
+
+// testStateTransitionEndpointNamingAFirstMarker: a `first m then x` marker is no
+// vertex, so an endpoint naming one is reported by the state transition check and
+// backstopped here with a typed error rather than a panic.
+func testStateTransitionEndpointNamingAFirstMarker(t *testing.T) {
+	src := `package test {
+		state Machine {
+			initial init;
+			state busy;
+			state other;
+			first marker then other;
+			init then busy;
+			transition busy to marker;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	_, err := newStateExecutor(ctx, sym, nil)
+	if err == nil {
+		t.Fatal("expected an error for an endpoint naming a marker rather than a vertex")
+	}
+	if !strings.Contains(err.Error(), "not a vertex of this state machine") {
+		t.Errorf("expected the error to say the endpoint is not a vertex, got %v", err)
+	}
+	if strings.Contains(err.Error(), "*ast.") {
+		t.Errorf("the message a modeller reads names a Go type: %v", err)
+	}
+}
+
+// testStateJunctionWithoutAnOutgoingTransition: a junction no transition leaves
+// routes a transition reaching it nowhere, which the state transition check
+// reports; reaching it at run time errors rather than panicking or hanging.
+func testStateJunctionWithoutAnOutgoingTransition(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state busy;
+			junction stuck;
+			init then busy;
+			transition busy to stuck;
+		}
+	}`)
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- exec.RunToCompletion() }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected an error for a junction no transition leaves")
+		}
+		if !strings.Contains(err.Error(), "junction stuck has no outgoing transitions") {
+			t.Errorf("expected the error to name the junction, got %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("RunToCompletion hung on a junction no transition leaves")
 	}
 }
 
@@ -1989,6 +2068,35 @@ func testCalcUnboundParameter(t *testing.T) {
 	// Invoke with only 1 argument (missing y)
 	xVal := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
 	result, err := ctx.InvokeCalc(sym, []Value{xVal}, rootScope)
+	if err == nil {
+		t.Fatalf("expected an unbound parameter error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("expected ErrUnboundParameter, got: %v", err)
+	}
+}
+
+// testCalcUnboundKeywordNamedParameter: a parameter named with a keyword is a
+// parameter like any other, so leaving it unbound reports, never panics.
+func testCalcUnboundKeywordNamedParameter(t *testing.T) {
+	src := `
+		package test {
+			calc classify {
+				in 'type': Integer;
+				in 'state': Integer;
+				return 'type' + 'state';
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "classify", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("classify calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
 	if err == nil {
 		t.Fatalf("expected an unbound parameter error, calc returned %+v", result)
 	}

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pysysml import typed as _t
 
-SYSML_GENERATOR_VERSION = "1"
+SYSML_GENERATOR_VERSION = "2"
 """Emission schema this module was generated with."""
 
 SYSML_MODEL_HASH = "sha256:fdfb382a055a458ee6d161e64d120ddf0f4711b3d38a7279e0fc3536ff194fdf"

@@ -23,7 +23,7 @@
 ### Reference facts (verified — do not re-derive)
 - **Runtime execution APIs** on `internal/core/runtime/context.go`: `ExecuteAction` (`:310`), `ExecuteState` (`:337`), `CreateActionExecutor` (`:379`), `CreateStateExecutor` (`:395`), `InvokeCalc` (`:228`), `EvaluateConstraint` (`:81`), `EvaluateRequirement` (`:148`).
 - **Executors:** `ActionExecutor` (`internal/core/runtime/action_executor.go`): `Step()` (`:66`), `RunToCompletion()` (`:136`), `Tokens()` (`:670`), `SetBreakpoint()` (`:687`), `SetTrace()`. `StateExecutor` (`internal/core/runtime/state_executor.go`): `ProcessNextEvent()` (`:543`), `CurrentState()` (`:502`), `SetTrace()`.
-- **Oracle:** OMG SysML-v2 Pilot Implementation (2026-05, commit `4c289b926`) is the behavioral-semantics reference (UML 2.5.1 activity/state-machine alignment claimed in `docs/internals/architecture.md:206`).
+- **Oracle:** OMG SysML-v2 Pilot Implementation (2026-05, commit `4c289b926`) is the behavioral-semantics reference, over the SysML v2 metamodel and the bundled KerML semantic library (`internal/core/libs/stdlib/`); see the spec-alignment paragraph in `docs/internals/architecture.md`, which states when UML 2.5.1 is a fallback at all. Later phase records in this note predate that rule and still say "UML/KerML".
 - **Conformance gate:** `internal/core/runtime/conformance_test.go` runs `.sysml` + `.expected.json` pairs from `internal/core/runtime/testdata/conformance/`. Known failures in `known_failures.txt`.
 - **Trace gate:** `internal/core/runtime/trace_test.go` compares executor output against `.trace.golden` files.
 

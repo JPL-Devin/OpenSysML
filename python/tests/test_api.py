@@ -175,12 +175,44 @@ class TestModuleLevelAPI:
             mock_conn.load.return_value = mock_model
             mock_conn.eval.return_value = 42
             
-            result = pysysml.eval("6 * 7", file_path="test.sysml")
+            result = pysysml.evaluate("6 * 7", file_path="test.sysml")
             
             assert result == 42
             mock_conn.load.assert_called_once_with("test.sysml")
-            mock_conn.eval.assert_called_once_with("6 * 7", "model-abc", None)
+            mock_conn.eval.assert_called_once_with(
+                "6 * 7", "model-abc", context_symbol_id=None, subject_symbol_id=None
+            )
     
+    def test_pysysml_eval_still_works_and_warns(self):
+        """The deprecated name evaluates the same way, warning about itself."""
+        with patch('pysysml.Connection') as MockConnection:
+            mock_conn = Mock()
+            MockConnection.return_value = mock_conn
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
+            mock_conn.eval.return_value = 42
+
+            with pytest.warns(DeprecationWarning, match="pysysml.evaluate"):
+                result = pysysml.eval("6 * 7", model_hash="model-abc")
+
+            assert result == 42
+        # The name to write is exported; the deprecated one is not.
+        assert "evaluate" in pysysml.__all__
+        assert "eval" not in pysysml.__all__
+
+    def test_pysysml_evaluate_takes_the_address_positionally(self):
+        """subject comes last, so a positional call still binds host and port."""
+        with patch('pysysml.Connection') as MockConnection:
+            mock_conn = Mock()
+            MockConnection.return_value = mock_conn
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
+            mock_conn.eval.return_value = 4
+
+            pysysml.evaluate("2 + 2", None, "model-abc", None, "localhost", 50123)
+
+            assert MockConnection.call_args.args[:2] == ("localhost", 50123)
+
     def test_pysysml_instantiate_with_hash(self):
         """Test module-level instantiate() with model_hash."""
         with patch('pysysml.Connection') as MockConnection:
@@ -211,7 +243,7 @@ class TestModuleLevelAPI:
             pysysml._default_connection_params = None
             
             with pytest.raises(ValueError, match="Must provide either"):
-                pysysml.eval("2 + 2")
+                pysysml.evaluate("2 + 2")
     
     def test_pysysml_eval_with_both_params(self):
         """Test eval() raises ValueError when both file_path and model_hash provided."""
@@ -224,7 +256,7 @@ class TestModuleLevelAPI:
             pysysml._default_connection_params = None
             
             with pytest.raises(ValueError, match="Provide either file_path or model_hash, not both"):
-                pysysml.eval("2 + 2", file_path="test.sysml", model_hash="hash-abc")
+                pysysml.evaluate("2 + 2", file_path="test.sysml", model_hash="hash-abc")
     
     def test_pysysml_eval_with_context(self):
         """Test eval() passes context_symbol_id through to conn.eval()."""
@@ -241,12 +273,40 @@ class TestModuleLevelAPI:
             mock_conn.load.return_value = mock_model
             mock_conn.eval.return_value = 100
             
-            result = pysysml.eval("x + y", file_path="test.sysml", context_symbol_id="ctx-123")
+            result = pysysml.evaluate("x + y", file_path="test.sysml", context_symbol_id="ctx-123")
             
             assert result == 100
             mock_conn.load.assert_called_once_with("test.sysml")
             # Verify context_symbol_id passes through
-            mock_conn.eval.assert_called_once_with("x + y", "model-xyz", "ctx-123")
+            mock_conn.eval.assert_called_once_with(
+                "x + y",
+                "model-xyz",
+                context_symbol_id="ctx-123",
+                subject_symbol_id=None,
+            )
+
+    def test_pysysml_eval_with_subject(self):
+        """Test eval() passes subject through to conn.eval()."""
+        with patch('pysysml.Connection') as MockConnection:
+            mock_conn = Mock()
+            MockConnection.return_value = mock_conn
+
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
+
+            mock_conn.eval.return_value = 1200.0
+
+            result = pysysml.evaluate(
+                "mass", model_hash="model-xyz", subject="Demo::sedan"
+            )
+
+            assert result == 1200.0
+            mock_conn.eval.assert_called_once_with(
+                "mass",
+                "model-xyz",
+                context_symbol_id=None,
+                subject_symbol_id="Demo::sedan",
+            )
     
     def test_pysysml_instantiate_missing_both_params(self):
         """Test instantiate() raises ValueError if neither file_path nor model_hash."""

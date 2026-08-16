@@ -1,7 +1,7 @@
 # Pseudostates Design - Choice and Junction
 
 **Status:** Implemented — choice, junction, fork, join, entry/exit points and history, including pseudostates reached from inside an orthogonal region  
-**UML Reference:** UML 2.5.1 §14.2.3.4 (Pseudostates)
+**Semantic Reference:** choice and junction are KerML performances — `ControlPerformances::DecisionPerformance` (`outgoingHBLink: HappensBefore[1]`) and `MergePerformance` (`incomingHBLink: HappensBefore[1]`), with `StatePerformances::StatePerformance specializes DecisionPerformance`. Fork/join in a state body, history and entry/exit points have no SysML v2 notation and no KerML performance, so UML 2.5.1 §14.2.3.4 (Pseudostates) is their reference semantics only; the notation for all of them is a Systemica extension.
 
 ## Overview
 
@@ -21,7 +21,15 @@ Pseudostates are transient vertices in state machines that enable complex contro
 - All outgoing guards must be mutually exclusive and complete
 - Deterministic - no runtime evaluation order
 
-### UML Semantics (UML 2.5.1 §14.2.3.4.3-4)
+### Semantics
+
+KerML gives the branching itself: a `DecisionPerformance` "represents the selection of one of
+the Successions that have the DecisionPerformance behavior as their source", and
+`outgoingHBLink: HappensBefore[1]` makes that exactly one — a branching point is left by exactly
+one succession, choice and junction alike. Since `StatePerformance specializes
+DecisionPerformance`, a state is left the same way. What KerML does not distinguish is *when* the
+guards are read, which is the choice/junction difference below; UML 2.5.1 §14.2.3.4.3-4 is the
+reference for that distinction:
 
 **Choice:**
 > "A choice vertex is a dynamic conditional branch. The guards on the outgoing transitions are evaluated only when the choice is entered, at run time."
@@ -275,8 +283,9 @@ package JunctionTest {
 
 ## References
 
-- UML 2.5.1 §14.2.3.4.3 (Choice Pseudostates)
-- UML 2.5.1 §14.2.3.4.4 (Junction Pseudostates)
+- KerML `ControlPerformances::DecisionPerformance` / `MergePerformance` (stdlib `Kernel Libraries/Kernel Semantic Library/ControlPerformances.kerml`) — one outgoing / one incoming `HappensBefore` link
+- KerML `StatePerformances::StatePerformance specializes DecisionPerformance`
+- UML 2.5.1 §14.2.3.4.3-4 (Choice / Junction Pseudostates) — for guard evaluation timing only
 - SysML v2 Pilot Implementation (state machine examples)
 
 ## Fork and Join
@@ -337,7 +346,8 @@ otherwise overwrite it, then:
   state is the one entered;
 - when the owner has never been exited there is nothing to restore, so the
   history's own outgoing transition supplies the target — UML's default history
-  transition.
+  transition, UML being the reference semantics for history, which SysML v2 and
+  KerML have no counterpart for.
 
 Entering a branch nested below a region runs the entry behaviors of the states
 above it inside that region, so a restored deep configuration is not entered
