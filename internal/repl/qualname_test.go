@@ -160,5 +160,11 @@ func TestQuotedNameFailuresAreReportedNotPanics(t *testing.T) {
 		if len(out) == 0 {
 			t.Errorf("%s: reported nothing", line)
 		}
+		// The failure echoes what was typed, not the same text quoted again.
+		for _, l := range out {
+			if strings.Contains(l, "''") && !strings.Contains(line, "''") {
+				t.Errorf("%s: reported %q, which quotes the argument twice", line, l)
+			}
+		}
 	}
 }

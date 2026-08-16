@@ -171,8 +171,13 @@ func (s *Session) declaredSymbolNames() []string {
 // qualified name the index does know it under, or the nearest spellings.
 func (s *Session) notFoundError(name string) error {
 	// Spelled as the notation writes it, so the name in the failure is the name
-	// that was typed.
-	err := unresolvedError(notationName(name))
+	// that was typed — text still carrying quotes is one the notation could not
+	// read as a name, and is reported as typed rather than quoted again.
+	shown := name
+	if !strings.Contains(name, "'") {
+		shown = notationName(name)
+	}
+	err := unresolvedError(shown)
 	msg := err.Error()
 	if !strings.Contains(name, "::") {
 		if idx := s.browseIndex(); idx != nil {
