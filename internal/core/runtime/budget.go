@@ -37,7 +37,14 @@ const (
 	// DefaultMaxElements bounds the collection elements one evaluation holds,
 	// ~104MB of Values.
 	DefaultMaxElements int64 = 1000000
+	// DefaultMaxCalcDepth bounds the nested calc invocations one evaluation holds
+	// on the stack, ~10KB each.
+	DefaultMaxCalcDepth int64 = 10000
 )
+
+// MaxCalcDepthCeiling is the highest calc depth budget a run may be given: past
+// it the goroutine stack, whose exhaustion is fatal, would stop a runaway first.
+const MaxCalcDepthCeiling int64 = 25000
 
 // Environment variables overriding the defaults above, following the
 // SYSML_LIBRARY_PATH convention.
@@ -47,18 +54,20 @@ const (
 	MaxStateEventsEnvVar = "SYSML_MAX_EVENTS"
 	MaxDoStepsEnvVar     = "SYSML_MAX_DO_STEPS"
 	MaxElementsEnvVar    = "SYSML_MAX_ELEMENTS"
+	MaxCalcDepthEnvVar   = "SYSML_MAX_CALC_DEPTH"
 )
 
-// Budgets bounds one run of the runtime. The five bounds count incommensurable
+// Budgets bounds one run of the runtime. The six bounds count incommensurable
 // things — expression evaluations, action token-flow steps, state machine
-// events, do activity actions and materialized collection elements — so raising
-// one says nothing about the others.
+// events, do activity actions, materialized collection elements and nested calc
+// invocations — so raising one says nothing about the others.
 type Budgets struct {
 	MaxSteps       int64
 	MaxActionSteps int64
 	MaxStateEvents int64
 	MaxDoSteps     int64
 	MaxElements    int64
+	MaxCalcDepth   int64
 }
 
 // DefaultBudgets returns the bounds a run uses when the environment names no
@@ -70,6 +79,7 @@ func DefaultBudgets() Budgets {
 		MaxStateEvents: DefaultMaxStateEvents,
 		MaxDoSteps:     DefaultMaxDoSteps,
 		MaxElements:    DefaultMaxElements,
+		MaxCalcDepth:   DefaultMaxCalcDepth,
 	}
 }
 
@@ -80,24 +90,32 @@ type budgetVar struct {
 	def    int64
 	counts string
 	field  func(*Budgets) *int64
+	// ceiling is the highest usable value, or zero where any positive value is.
+	ceiling int64
 }
 
 // budgetVars is every configurable bound, in the order they are reported.
 var budgetVars = []budgetVar{
-	{MaxStepsEnvVar, DefaultMaxSteps, "evaluation steps", func(b *Budgets) *int64 { return &b.MaxSteps }},
-	{MaxActionStepsEnvVar, DefaultMaxActionSteps, "action token-flow steps", func(b *Budgets) *int64 { return &b.MaxActionSteps }},
-	{MaxStateEventsEnvVar, DefaultMaxStateEvents, "state machine events", func(b *Budgets) *int64 { return &b.MaxStateEvents }},
-	{MaxDoStepsEnvVar, DefaultMaxDoSteps, "do activity steps", func(b *Budgets) *int64 { return &b.MaxDoSteps }},
-	{MaxElementsEnvVar, DefaultMaxElements, "collection elements", func(b *Budgets) *int64 { return &b.MaxElements }},
+	{MaxStepsEnvVar, DefaultMaxSteps, "evaluation steps", func(b *Budgets) *int64 { return &b.MaxSteps }, 0},
+	{MaxActionStepsEnvVar, DefaultMaxActionSteps, "action token-flow steps", func(b *Budgets) *int64 { return &b.MaxActionSteps }, 0},
+	{MaxStateEventsEnvVar, DefaultMaxStateEvents, "state machine events", func(b *Budgets) *int64 { return &b.MaxStateEvents }, 0},
+	{MaxDoStepsEnvVar, DefaultMaxDoSteps, "do activity steps", func(b *Budgets) *int64 { return &b.MaxDoSteps }, 0},
+	{MaxElementsEnvVar, DefaultMaxElements, "collection elements", func(b *Budgets) *int64 { return &b.MaxElements }, 0},
+	{MaxCalcDepthEnvVar, DefaultMaxCalcDepth, "nested calc invocations", func(b *Budgets) *int64 { return &b.MaxCalcDepth }, MaxCalcDepthCeiling},
 }
 
-// Validate reports every bound that is not positive. A run under a non-positive
-// bound could make no progress at all.
+// Validate reports every bound that is not positive, which would let a run make
+// no progress at all, or above its ceiling, which would fail unrecoverably.
 func (b Budgets) Validate() error {
 	var errs []error
 	for _, v := range budgetVars {
-		if n := *v.field(&b); n <= 0 {
+		n := *v.field(&b)
+		if n <= 0 {
 			errs = append(errs, fmt.Errorf("%s budget must be greater than zero, got %d (%s)", v.counts, n, v.env))
+			continue
+		}
+		if v.ceiling > 0 && n > v.ceiling {
+			errs = append(errs, fmt.Errorf("%s budget must be at most %d, got %d (%s)", v.counts, v.ceiling, n, v.env))
 		}
 	}
 	return errors.Join(errs...)
@@ -143,6 +161,9 @@ func budgetFromValue(v budgetVar, raw string) (int64, error) {
 	if n <= 0 {
 		return 0, fmt.Errorf("%s=%q must be greater than zero: the budget is what stops a runaway run (default %d)", v.env, raw, v.def)
 	}
+	if v.ceiling > 0 && n > v.ceiling {
+		return 0, fmt.Errorf("%s=%q must be at most %d: past that a runaway run would exhaust the stack instead of reporting the budget (default %d)", v.env, raw, v.ceiling, v.def)
+	}
 	return n, nil
 }
 
@@ -154,6 +175,7 @@ func (ctx *Context) Budgets() Budgets {
 		MaxStateEvents: ctx.maxStateEvents,
 		MaxDoSteps:     ctx.maxDoSteps,
 		MaxElements:    ctx.maxElements,
+		MaxCalcDepth:   ctx.maxCalcDepth,
 	}
 }
 
@@ -169,5 +191,6 @@ func (ctx *Context) SetBudgets(b Budgets) error {
 	ctx.maxStateEvents = b.MaxStateEvents
 	ctx.maxDoSteps = b.MaxDoSteps
 	ctx.maxElements = b.MaxElements
+	ctx.maxCalcDepth = b.MaxCalcDepth
 	return nil
 }

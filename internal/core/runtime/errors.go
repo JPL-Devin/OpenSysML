@@ -97,8 +97,8 @@ var (
 	ErrNoClock = errors.New("no clock to wait on")
 
 	// ErrCalcRecursionLimit is returned when calc invocation nests deeper than
-	// maxCalcNestingDepth, which a recursive calc would otherwise do until the
-	// process ran out of stack.
+	// the run's calc depth budget, which an unbounded recursion would otherwise
+	// do until the process ran out of stack.
 	ErrCalcRecursionLimit = errors.New("calc recursion limit exceeded")
 
 	// ErrViolated is returned when an asserted constraint or a required

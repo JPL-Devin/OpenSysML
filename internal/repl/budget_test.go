@@ -26,7 +26,7 @@ func TestSetBudgets(t *testing.T) {
 
 	s.instances["P::Q"] = &runtime.Instance{ID: 1}
 
-	want := runtime.Budgets{MaxSteps: 4200, MaxActionSteps: 42, MaxStateEvents: 43, MaxDoSteps: 44, MaxElements: 45}
+	want := runtime.Budgets{MaxSteps: 4200, MaxActionSteps: 42, MaxStateEvents: 43, MaxDoSteps: 44, MaxElements: 45, MaxCalcDepth: 46}
 	if err := s.SetBudgets(want); err != nil {
 		t.Fatalf("SetBudgets: %v", err)
 	}
@@ -46,9 +46,10 @@ func TestSetBudgets(t *testing.T) {
 	}
 
 	for _, bad := range []runtime.Budgets{
-		{MaxSteps: 0, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: 1},
-		{MaxSteps: 1, MaxActionSteps: 1, MaxStateEvents: -1, MaxDoSteps: 1, MaxElements: 1},
-		{MaxSteps: 1, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: -1},
+		{MaxSteps: 0, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: 1, MaxCalcDepth: 1},
+		{MaxSteps: 1, MaxActionSteps: 1, MaxStateEvents: -1, MaxDoSteps: 1, MaxElements: 1, MaxCalcDepth: 1},
+		{MaxSteps: 1, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: -1, MaxCalcDepth: 1},
+		{MaxSteps: 1, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: 1, MaxCalcDepth: -1},
 		{},
 	} {
 		if err := s.SetBudgets(bad); err == nil {
@@ -75,7 +76,8 @@ func TestBudgetCommandShowsEveryBound(t *testing.T) {
 		runtime.MaxStateEventsEnvVar,
 		runtime.MaxDoStepsEnvVar,
 		"4242",
-		runtime.MaxElementsEnvVar)
+		runtime.MaxElementsEnvVar,
+		runtime.MaxCalcDepthEnvVar)
 }
 
 // TestAdvanceIsBoundedBySessionBudgets: %advance drains a machine that never

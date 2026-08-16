@@ -64,6 +64,7 @@ func clearBudgetEnv(t *testing.T) {
 		runtime.MaxStateEventsEnvVar,
 		runtime.MaxDoStepsEnvVar,
 		runtime.MaxElementsEnvVar,
+		runtime.MaxCalcDepthEnvVar,
 	} {
 		t.Setenv(name, "")
 	}
@@ -79,6 +80,7 @@ func TestNewServiceRejectsUnusableBudget(t *testing.T) {
 		runtime.MaxStateEventsEnvVar,
 		runtime.MaxDoStepsEnvVar,
 		runtime.MaxElementsEnvVar,
+		runtime.MaxCalcDepthEnvVar,
 	}
 	for _, name := range vars {
 		for _, value := range []string{"0", "-1", "plenty"} {
