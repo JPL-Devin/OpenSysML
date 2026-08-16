@@ -30,6 +30,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_transition_endpoint_misspelled", testStateTransitionEndpointMisspelled)
 	t.Run("state_transition_endpoint_in_another_machine", testStateTransitionEndpointInAnotherMachine)
 	t.Run("state_transition_endpoint_never_resolved", testStateTransitionEndpointNeverResolved)
+	t.Run("state_transition_endpoint_naming_a_first_marker", testStateTransitionEndpointNamingAFirstMarker)
+	t.Run("state_junction_without_an_outgoing_transition", testStateJunctionWithoutAnOutgoingTransition)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("state_cross_region_transitions_ping_pong", testStateCrossRegionTransitionsPingPong)
@@ -964,8 +966,9 @@ func testStateTransitionEndpointNeverResolved(t *testing.T) {
 }
 
 // testStateTransitionEndpointInAnotherMachine: an endpoint naming a state of a
-// different machine resolves, so no name diagnostic reports it; lowering must
-// report it rather than drop the edge, since nothing else would.
+// different machine resolves, so no name diagnostic reports it; the state
+// transition check reports it, and lowering backstops the check with a typed
+// error rather than dropping the edge.
 func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
 	src := `package test {
 		state Other {
@@ -1006,6 +1009,73 @@ func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "*ast.") {
 		t.Errorf("the message a modeller reads names a Go type: %v", err)
+	}
+}
+
+// testStateTransitionEndpointNamingAFirstMarker: a `first m then x` marker is no
+// vertex, so an endpoint naming one is reported by the state transition check and
+// backstopped here with a typed error rather than a panic.
+func testStateTransitionEndpointNamingAFirstMarker(t *testing.T) {
+	src := `package test {
+		state Machine {
+			initial init;
+			state busy;
+			state other;
+			first marker then other;
+			init then busy;
+			transition busy to marker;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	_, err := newStateExecutor(ctx, sym, nil)
+	if err == nil {
+		t.Fatal("expected an error for an endpoint naming a marker rather than a vertex")
+	}
+	if !strings.Contains(err.Error(), "not a vertex of this state machine") {
+		t.Errorf("expected the error to say the endpoint is not a vertex, got %v", err)
+	}
+	if strings.Contains(err.Error(), "*ast.") {
+		t.Errorf("the message a modeller reads names a Go type: %v", err)
+	}
+}
+
+// testStateJunctionWithoutAnOutgoingTransition: a junction no transition leaves
+// routes a transition reaching it nowhere, which the state transition check
+// reports; reaching it at run time errors rather than panicking or hanging.
+func testStateJunctionWithoutAnOutgoingTransition(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state busy;
+			junction stuck;
+			init then busy;
+			transition busy to stuck;
+		}
+	}`)
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- exec.RunToCompletion() }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected an error for a junction no transition leaves")
+		}
+		if !strings.Contains(err.Error(), "junction stuck has no outgoing transitions") {
+			t.Errorf("expected the error to name the junction, got %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("RunToCompletion hung on a junction no transition leaves")
 	}
 }
 
