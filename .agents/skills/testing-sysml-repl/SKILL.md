@@ -2503,3 +2503,23 @@ binaries now. The unpinned-download refusal is testable offline-ish with
 `HOME=/tmp/fakehome $PY -c "...ensure_binary(version='v9.9.9')"`, which keeps the real
 `~/.pysysml/bin` cache intact; the opt-in out of it is per repository
 (`PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>`, or `=1` for any).
+- **Since the rename, `pysysml.evaluate` is the real module-level evaluator and `pysysml.eval` is a
+  forwarder that emits `DeprecationWarning` and is out of `pysysml.__all__`.** Test both sides:
+  `evaluate(...)` must produce **zero** DeprecationWarnings (catch them with
+  `warnings.catch_warnings(record=True)` + `simplefilter("always")`), `eval(...)` must return the
+  identical value and warn exactly once with a message naming `pysysml.evaluate`, and
+  `from pysysml import *` must bind `evaluate` but not `eval`. `subject` is the **last** parameter of
+  `evaluate` precisely so a pre-rename positional call
+  `eval(expr, None, hash, None, host, port)` still binds host/port — prove that argument really is the
+  host by also calling it with a bogus address (`"203.0.113.9", 59999`) and requiring a
+  `ConnectionError`; that call takes ~30-60s to time out, so give the runner a generous timeout.
+- **`pysysml.errors.RuntimeError` is a warn-on-access alias of `ExecutionError`** served by the module
+  `__getattr__` and absent from `errors.__all__`. Check it by *catching a real failure* with it
+  (`except pysysml.errors.RuntimeError` around a cyclic-slot eval), not just by identity.
+- **`generate.py` elides a base that another declared base already specializes, silently and by design**
+  (`_without_implied`): `part def Backwards :> Vehicle, Hybrid` where `Hybrid :> Vehicle` emits
+  `class Backwards(Hybrid):` with **no** comment, because `Vehicle` is still in the MRO. Only a base the
+  class genuinely does not inherit gets `# … left out: Python cannot linearize it with the bases above`.
+  To exercise the comment path you need a real C3 conflict, e.g. `X :> A, B`, `Y :> B, A`, `M :> X, Y`
+  → `class M(X):` plus the `left out` note. Asserting the comment on a merely redundant base is a
+  false negative.
