@@ -166,6 +166,37 @@ func TestAcceptPayloadNotSharedByAPartBody(t *testing.T) {
 	}
 }
 
+// A payload with no declared name of its own binds nothing at execution, so it
+// must not mask the feature whose name it borrows (KerML 7.3.4.5).
+func TestAcceptPayloadWithoutADeclaredNameDoesNotMaskIt(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `
+		package P {
+			item def Shutdown;
+			attribute shutDown : Shutdown;
+			action A {
+				attribute taken : Shutdown;
+				action interrupt accept ::> shutDown;
+				action handle { assign taken := shutDown; }
+			}
+		}
+	`)
+	assertNoUnresolved(t, r)
+
+	pkg := scopeNamed(t, r, "d.sysml", "P")
+	body := scopeNamed(t, r, "d.sysml", "A")
+	outer, ok := pkg.LookupLocal("shutDown")
+	if !ok {
+		t.Fatal("the package declares no attribute named shutDown")
+	}
+	sym, ok := r.LookupName(body, "shutDown")
+	if !ok {
+		t.Fatal("shutDown does not resolve in the action body")
+	}
+	if sym.Decl != outer.Decl {
+		t.Errorf("shutDown resolved to %v, want the body's own attribute", sym.Decl)
+	}
+}
+
 // scopeNamed returns the scope owned by the declaration called name in doc.
 func scopeNamed(t *testing.T, r *Resolver, doc, name string) *symbols.Scope {
 	t.Helper()

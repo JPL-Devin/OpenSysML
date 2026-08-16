@@ -72,12 +72,14 @@ func sharesBodyFeatureSpace(node ast.Node) bool {
 }
 
 // acceptPayloadName returns the name a node's accept member binds its payload
-// under; a trigger expression (`accept when x > 1`) declares no payload.
+// under; a trigger expression (`accept when x > 1`) declares no payload. The name
+// is the declared one, as lower.Accept.ParamName is: a payload naming itself
+// after a referenced feature (`accept ::> shutDown`) binds nothing at execution,
+// so it must not mask that feature here either.
 func acceptPayloadName(decl ast.Node) (string, bool) {
 	payload, ok := decl.(*ast.Usage)
 	if !ok || !payload.IsAccept || payload.Value != nil {
 		return "", false
 	}
-	name, _ := ast.EffectiveName(payload)
-	return name, name != ""
+	return payload.Ident.Name, payload.Ident.Name != ""
 }
