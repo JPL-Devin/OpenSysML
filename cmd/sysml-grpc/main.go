@@ -23,10 +23,12 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
+// Build metadata, set by the linker: the names match the -X flags the Makefile
+// and the release build pass, so a released binary reports what it was built from.
 var (
-	version   = "dev"
-	commit    = "unknown"
-	buildDate = "unknown"
+	Version   = "dev"
+	Commit    = "unknown"
+	BuildTime = "unknown"
 )
 
 func main() {
@@ -40,9 +42,9 @@ func main() {
 	flag.Parse()
 
 	if *showVer {
-		fmt.Printf("sysml-grpc version %s\n", version)
-		fmt.Printf("commit: %s\n", commit)
-		fmt.Printf("built: %s\n", buildDate)
+		fmt.Printf("sysml-grpc version %s\n", Version)
+		fmt.Printf("commit: %s\n", Commit)
+		fmt.Printf("built: %s\n", BuildTime)
 		os.Exit(0)
 	}
 
@@ -64,13 +66,13 @@ func main() {
 	slog.SetDefault(logger)
 
 	slog.Info("Starting sysml-grpc server",
-		"version", version,
-		"commit", commit,
-		"buildDate", buildDate,
+		"version", Version,
+		"commit", Commit,
+		"buildTime", BuildTime,
 	)
 
 	// Create gRPC service (cache is internal to the service)
-	svc, err := sysmlgrpc.NewService(*cacheSize, version)
+	svc, err := sysmlgrpc.NewService(*cacheSize, Version)
 	if err != nil {
 		slog.Error("Invalid service configuration", "error", err)
 		os.Exit(1)
@@ -79,7 +81,7 @@ func main() {
 	// Start health check server
 	healthSrv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", *healthPort),
-		Handler:           healthHandler(version),
+		Handler:           healthHandler(Version),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {

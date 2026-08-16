@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/Open-MBEE/Systemica/internal/core/export"
+	"github.com/Open-MBEE/Systemica/internal/core/project"
 )
 
 // deprecatedFlag rejects a flag that has been replaced, so the old spelling
@@ -22,7 +23,7 @@ func (f *deprecatedFlag) Set(string) error { return errors.New(f.instead) }
 //
 // The input format is taken from -from when given and from the file extension
 // otherwise; the model itself is a positional argument, as it is for every other
-// mode of the command.
+// mode of the command, and a lone "-" names standard input.
 func runConvert(files []string) error {
 	to, err := parseTargetFormat(convertFormat)
 	if err != nil {
@@ -41,12 +42,11 @@ func runConvert(files []string) error {
 		return err
 	}
 
-	// #nosec G304 -- the input file is the one named on the command line.
-	data, err := os.ReadFile(input)
+	name, data, err := project.ReadFile(input)
 	if err != nil {
 		return err
 	}
-	out, err := export.Convert(input, data, from, to)
+	out, err := export.Convert(name, data, from, to)
 	if err != nil {
 		return err
 	}
@@ -86,10 +86,14 @@ func namesAFile(value string) bool {
 }
 
 // resolveFormat returns the format named by the flag, or the one the path's
-// extension implies.
+// extension implies. Standard input carries no extension to read it from, so
+// -from is the only thing that can name its format.
 func resolveFormat(flagValue, path string) (export.Format, error) {
 	if flagValue != "" {
 		return export.ParseFormat(flagValue)
+	}
+	if project.IsStdin(path) {
+		return 0, errors.New("standard input carries no file name to take the format from; name it with -from, as `-from sysml`")
 	}
 	f, err := export.FormatOfPath(path)
 	return f, export.Advise(err, "pass -from, or "+export.ExtensionAdvice)

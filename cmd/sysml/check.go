@@ -173,7 +173,7 @@ func runChecks(files []string, exprs []string, c checks) int {
 	if sess.HasErrors() {
 		rep.diags(sess.LocatedDiagnostics())
 		rep.problem(sess.DiagnosticLines())
-		rep.failed(fmt.Sprintf("%s did not analyse cleanly; no check was made", strings.Join(files, ", ")))
+		rep.failed(fmt.Sprintf("%s did not analyse cleanly; no check was made", namedModels(files)))
 		return rep.finish()
 	}
 	for _, output := range loaded {
@@ -187,24 +187,25 @@ func runChecks(files []string, exprs []string, c checks) int {
 	// parsing the report reads the warnings the printed load output carries.
 	rep.diags(sess.LocatedDiagnostics())
 	if c.validate {
-		rep.info([]string{fmt.Sprintf("✓ %s: no errors", strings.Join(files, ", "))})
+		rep.info([]string{fmt.Sprintf("✓ %s: no errors", namedModels(files))})
+	}
+
+	// An object first: a constraint, requirement or expression about a feature of
+	// a part is answered about the object that carries it, and only an existing
+	// one can be.
+	for _, name := range c.instantiate {
+		output, err := sess.InstantiateNamed(name)
+		if err != nil {
+			rep.failed(err.Error())
+			return rep.finish()
+		}
+		rep.info(output)
 	}
 
 	for _, expr := range exprs {
 		output, err := sess.EvalExpr(expr)
 		if err != nil {
 			rep.failed(fmt.Sprintf("%s: %v", expr, err))
-			return rep.finish()
-		}
-		rep.info(output)
-	}
-
-	// An object first: a constraint or requirement of a part is checked against
-	// the object that carries it, and only an existing one can be.
-	for _, name := range c.instantiate {
-		output, err := sess.InstantiateNamed(name)
-		if err != nil {
-			rep.failed(err.Error())
 			return rep.finish()
 		}
 		rep.info(output)

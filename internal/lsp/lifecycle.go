@@ -24,6 +24,14 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 			},
 			DocumentFormattingProvider: true,
 			RenameProvider:             &protocol.RenameOptions{PrepareProvider: true},
+			SemanticTokensProvider: &semanticTokensProvider{
+				Legend: semanticTokensLegend(),
+				Full:   true,
+				Range:  true,
+			},
+			CodeActionProvider: &protocol.CodeActionOptions{
+				CodeActionKinds: []protocol.CodeActionKind{protocol.QuickFix},
+			},
 		},
 		ServerInfo: &protocol.ServerInfo{
 			Name:    "sysml-lsp",

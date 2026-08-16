@@ -1,5 +1,5 @@
 // Structure only, so `sysml -convert ttl` round-trips it: see
-// docs/RDF_INTEROP.md for what the mapping covers.
+// docs/reference/rdf-mapping.md for what the mapping covers.
 package RdfInteropDemo {
     doc /* A rover and its ground link, in structure only. */
 

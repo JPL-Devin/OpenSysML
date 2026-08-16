@@ -196,3 +196,22 @@ class TestSymbolNotFoundError:
 
     def test_it_is_a_key_error_because_the_lookup_is_a_subscript(self):
         assert isinstance(SymbolNotFoundError("X"), KeyError)
+
+
+class TestPackageSurface:
+    def test_every_exception_is_catchable_from_the_package(self):
+        # A caller catches what the package exports; an exception reachable only
+        # under pysysml.errors is one a documented failure cannot be caught by.
+        import pysysml
+
+        exceptions = {
+            name for name in errors.__all__
+            if isinstance(getattr(errors, name), type)
+            and issubclass(getattr(errors, name), BaseException)
+        }
+        missing = sorted(
+            name for name in exceptions
+            if getattr(pysysml, name, None) is not getattr(errors, name)
+        )
+        assert missing == []
+        assert exceptions <= set(pysysml.__all__)

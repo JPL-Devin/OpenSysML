@@ -17,7 +17,7 @@ import (
 )
 
 // Query property names, as the SysML v2 API & Services standard's clients write
-// them. docs/API.md documents what each one reports.
+// them. docs/reference/api.md documents what each one reports.
 const (
 	QueryPropID                = "@id"
 	QueryPropType              = "@type"
@@ -162,7 +162,7 @@ func present(value string) (string, bool) {
 }
 
 // QueryPropertyNames returns every queryable property name, sorted. It is what
-// an unknown-property error lists, and what docs/API.md's table documents.
+// an unknown-property error lists, and what docs/reference/api.md's table documents.
 func QueryPropertyNames() []string {
 	out := make([]string, 0, len(queryProperties))
 	for name := range queryProperties {
@@ -175,7 +175,7 @@ func QueryPropertyNames() []string {
 // metamodelTypeNames maps Systemica's symbol kinds onto the metamodel type names
 // the standard's clients write as `@type`, and is the single source of truth for
 // that mapping. Where the metamodel has no distinct type — an individual is an
-// occurrence with isIndividual set — the closest one it has is used; docs/API.md
+// occurrence with isIndividual set — the closest one it has is used; docs/reference/api.md
 // reproduces the table and records those choices.
 var metamodelTypeNames = map[symbols.SymbolKind]string{
 	symbols.SymbolPackage:               "Package",

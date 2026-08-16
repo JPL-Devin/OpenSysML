@@ -117,7 +117,7 @@ class Model:
         Converts the source this model was parsed from, not the file as it
         stands now, so what is written is the model that was inspected: notation
         keeps its comments and lexemes, re-indented, while Turtle carries what
-        the model declares. See ``docs/RDF_INTEROP.md``.
+        the model declares. See ``docs/reference/rdf-mapping.md``.
 
         The service holds that source in its model cache, which is bounded, so a
         model loaded long ago and many models back may have been evicted; load it
@@ -189,7 +189,7 @@ class Model:
         Takes the standard's ``Query`` JSON, so a payload written for the
         standard's API works verbatim, or the same thing as keywords. The query
         model has no graph traversal: "everything under this element" is a
-        ``scope``, not a constraint. See ``docs/API.md``.
+        ``scope``, not a constraint. See ``docs/reference/api.md``.
 
         Args:
             payload (dict, optional): The standard's ``Query`` object
@@ -295,6 +295,66 @@ class Model:
         """
         return self._client.eval(
             expression, self._hash, context_symbol_id=context_symbol_id
+        )
+
+    def instantiate(self, symbol_id):
+        """Build an object of one of this model's parts or usages.
+
+        Args:
+            symbol_id (str): FQN of the part/usage to instantiate
+
+        Returns:
+            Instance: The object built, with its slots and nested objects
+
+        Raises:
+            ExecutionError: If the element could not be instantiated
+            ModelNotFoundError: If the service no longer holds this model
+
+        Example:
+            >>> model.instantiate("Demo::Vehicle").mass
+            1500.0
+        """
+        return self._client.instantiate(symbol_id, self._hash)
+
+    def execute_action(self, action_symbol_id, inputs=None):
+        """Execute one of this model's actions.
+
+        Args:
+            action_symbol_id (str): FQN of the action definition or usage
+            inputs (dict, optional): Input parameter name → Python value
+
+        Returns:
+            dict: Output parameter name → value; an output the wire format
+                cannot represent is reported as an UnsupportedValueError in its
+                place, so one such output does not discard the rest
+
+        Raises:
+            ExecutionError: If the action could not be executed
+            ModelNotFoundError: If the service no longer holds this model
+        """
+        return self._client.execute_action(
+            action_symbol_id, self._hash, inputs=inputs
+        )
+
+    def execute_state(self, state_machine_symbol_id, events=None):
+        """Execute one of this model's state machines.
+
+        Args:
+            state_machine_symbol_id (str): FQN of the state machine definition
+                or usage
+            events (list, optional): Event names to process, in order
+
+        Returns:
+            dict: {'states_visited': [...], 'final_context': {...}}; a context
+                value the wire format cannot represent is reported as an
+                UnsupportedValueError in its place
+
+        Raises:
+            ExecutionError: If the state machine could not be executed
+            ModelNotFoundError: If the service no longer holds this model
+        """
+        return self._client.execute_state(
+            state_machine_symbol_id, self._hash, events=events
         )
 
     def verify_constraint(self, symbol_id, subject=None):

@@ -282,6 +282,11 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if kw := v.Keyword; kw != "" && kw != v.Kind.String() && kw != v.Portion.Keyword() {
 			fmt.Fprintf(b, ` keyword=%q`, kw)
 		}
+		// The prefix says what the declaration is for: an asserted constraint
+		// reads differently from a declared one.
+		if v.PrefixKeyword != "" {
+			fmt.Fprintf(b, ` prefix=%q`, v.PrefixKeyword)
+		}
 		if v.IsEnd {
 			b.WriteString(` end=true`)
 		}
@@ -407,6 +412,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		return
 	case *ConstraintMember:
 		fmt.Fprintf(b, `(ConstraintMember assert=%t negated=%t`, v.IsAssert, v.IsNegated)
+		if v.Keyword != "" {
+			fmt.Fprintf(b, ` keyword=%q`, v.Keyword)
+		}
 		if v.Expression == nil {
 			// Nested-constraint form: assert constraint [name] { expr }
 			if v.Name != "" {

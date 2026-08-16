@@ -4,15 +4,15 @@ A complete, production-grade SysML v2 implementation in Go—providing language 
 
 ## Quick Start
 
-**Get started in 5 minutes:** [Quick Start Guide](docs/QUICKSTART.md)
+**Get started in 5 minutes:** [the guide](docs/guide/)
 
 ### Install
 
 **Download pre-built binaries:**
 ```bash
-# Linux x64
-wget https://github.com/Open-MBEE/Systemica/releases/latest/download/sysml-linux-amd64.tar.gz
-tar xzf sysml-linux-amd64.tar.gz && sudo mv sysml-linux-amd64 /usr/local/bin/sysml
+# Linux x64 (use systemica-linux-arm64.tar.gz on arm64)
+wget https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-linux-amd64.tar.gz
+tar xzf systemica-linux-amd64.tar.gz && sudo mv sysml sysml-lsp /usr/local/bin/
 
 # macOS (Intel or Apple Silicon) — see the note below
 brew install Open-MBEE/tap/systemica
@@ -36,8 +36,8 @@ make build
 > `curl`, which never sets that attribute, so `brew install` avoids the prompt entirely.
 > Fallback if you download the tarball directly (`curl -fL ... systemica-darwin-arm64.tar.gz`,
 > then `xattr -d com.apple.quarantine`): see
-> [Quick Start](docs/QUICKSTART.md#macos-gatekeeper). Signing/notarization is the eventual
-> fix — [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
+> [the guide](docs/guide/01-install.md#macos-gatekeeper). Signing/notarization is the eventual
+> fix — [docs/project/macos-distribution.md](docs/project/macos-distribution.md).
 >
 > Install by the **fully-qualified** name. Homebrew 6 requires third-party taps to be trusted
 > before their Ruby is loaded, and `brew install Open-MBEE/tap/systemica` trusts just that
@@ -133,9 +133,9 @@ sysml> %advance 30
 
 **Think Python/Rust/Go tooling, but for SysML v2:**
 
-- **Language Server** — A standard LSP server (`sysml-lsp`) with live diagnostics, semantic hover, go-to-definition, find references, completion, workspace-wide symbol search, formatting and rename. A VS Code extension with TextMate grammars for `.sysml` and `.kerml` ships in [editors/vscode](editors/vscode), and any editor with a generic LSP client can drive the server directly — [QUICKSTART](docs/QUICKSTART.md#language-server-ide-support) walks through both. *Not yet:* the extension is built from source rather than published to a marketplace, and the server implements neither semantic tokens nor code actions.
+- **Language Server** — A standard LSP server (`sysml-lsp`) with live diagnostics, semantic hover, go-to-definition, find references, completion, workspace-wide symbol search, formatting, rename, semantic tokens and quick fixes. A VS Code extension with TextMate grammars for `.sysml` and `.kerml` ships in [editors/vscode](editors/vscode), and any editor with a generic LSP client can drive the server directly — [guide chapter 8](docs/guide/08-editors.md) walks through both. *Not yet:* the extension is built from source rather than published to a marketplace, and the server answers no semantic token delta requests or signature help.
 - **Interactive REPL** — Exploratory modeling environment: define models incrementally, evaluate expressions on-the-fly, instantiate parts, run calculations, inspect runtime state—like IPython/Jupyter for systems engineering.
-- **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (activity fork/join parallelism, decision guards, hierarchical/orthogonal states, choice/junction pseudostates, TimeEvent/ChangeEvent/AcceptEvent, sourceless transitions). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured behavioral coverage.
+- **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (activity fork/join parallelism, decision guards, hierarchical/orthogonal states, choice/junction pseudostates, TimeEvent/ChangeEvent/AcceptEvent, sourceless transitions). See [spec compliance](docs/project/spec-compliance.md) for measured behavioral coverage.
 - **Python Client Library** — gRPC-based Python bindings for programmatic access: parse models, resolve symbols, evaluate expressions, instantiate parts, execute actions/state machines. Includes IPython display hooks for Jupyter notebooks and pandas DataFrame integration. Constraint, requirement, satisfaction and calc verdicts are available as RPCs (`verify_constraint`, `verify_requirement`, `verify_satisfaction`, `calc`).
 - **Modern Toolchain** — Incremental compilation, bundled standard library, persistent semantic caches. A model is a set of files, named on the command line or opened by the editor.
 
@@ -160,22 +160,22 @@ sysml> %advance 30
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (81 golden ASTs, 127 negative tests) |
+| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (82 golden ASTs, 127 negative tests) |
 | Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 80 calc/constraint/requirement/satisfy cases passing) |
 | Action execution engine (Tier 5) | ✅ Complete (50 conformance cases passing) |
 | State machine runtime (Tier 5) | ✅ Complete (41 conformance cases: transitions, accept events, sourceless) |
 | REPL debugging commands | ✅ Complete — `%constraint`, `%requirement`, `%satisfy` and `%calc` also answer from the command line (`-constraint`, `-requirement`, `-satisfy`, `-calc`) and over gRPC, on one evaluation |
-| Model save & SysML ↔ RDF Turtle conversion (`%save`, `sysml -convert`) | ✅ Complete for model **structure** (packages, definitions, usages, ports, connections, values, documentation) — a behavioral member is refused, see [RDF_INTEROP.md § Limitations](docs/RDF_INTEROP.md#limitations); worked example: [examples/rdf-interop-demo.sysml](examples/rdf-interop-demo.sysml) |
+| Model save & SysML ↔ RDF Turtle conversion (`%save`, `sysml -convert`) | ✅ Complete for model **structure** (packages, definitions, usages, ports, connections, values, documentation) — a behavioral member is refused, see [the RDF mapping](docs/reference/rdf-mapping.md#limitations); worked example: [examples/rdf-interop-demo.sysml](examples/rdf-interop-demo.sysml) |
 | Standard library bundling | ✅ Complete |
-| LSP server implementation | ✅ Diagnostics, hover, go-to-definition, references, symbols, completion, formatting, rename (semantic tokens, code actions, signature help not implemented) |
+| LSP server implementation | ✅ Diagnostics, hover, go-to-definition, references, symbols, completion, formatting, rename, semantic tokens (full + range), code actions (quick fixes) — semantic token deltas and signature help not implemented |
 | gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime, verification, conversion and Query RPCs) |
 | Python client library | ✅ Complete for the RPCs that exist (connection lifecycle, parse/symbols/eval/instantiate/execute, constraint/requirement/satisfaction/calc verification, conversion, Query, IPython hooks, DataFrame) |
 
 **Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).
-**Test coverage:** 3,597 tests and subtests (3,592 pass, 5 skip themselves; 1,932 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 81 golden ASTs, 127 negatives, 211 conformance cases, 69 golden traces, 146 robustness subtests.
+**Test coverage:** 3,687 tests and subtests (3,682 pass, 5 skip themselves; 1,994 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 82 golden ASTs, 127 negatives, 211 conformance cases, 69 golden traces, 146 robustness subtests.
 **Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
-**Behavioral execution:** Calc/constraint/requirement/satisfy fully functional. Action/state executors complete with nested invocation, control flow keywords, loop and conditional statements, send statement (211/211 conformance tests passing). See [SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md) for measured compliance (~98% faithful implementation).
-**Training examples:** 98/100 files clean (2 files, 4 errors), gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [docs/TRAINING_EXAMPLES.md](docs/TRAINING_EXAMPLES.md) for analysis.
+**Behavioral execution:** Calc/constraint/requirement/satisfy fully functional. Action/state executors complete with nested invocation, control flow keywords, loop and conditional statements, send statement (211/211 conformance tests passing). See [spec compliance](docs/project/spec-compliance.md) for measured compliance (~98% faithful implementation).
+**Training examples:** 98/100 files clean (2 files, 4 errors), gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [training examples](docs/project/training-examples.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
 ## Architecture
@@ -253,7 +253,7 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 - Every commit: Build + test
 - Tagged releases (`v*`): the suite runs again on the tagged commit, then multi-platform
   binaries are published to GitHub Releases. Maintainer procedure:
-  [docs/RELEASING.md](docs/RELEASING.md); what changed per release:
+  [docs/project/releasing.md](docs/project/releasing.md); what changed per release:
   [CHANGELOG.md](CHANGELOG.md)
 - The Python client is released on its own tag (`pysysml-v*`), which uploads `pysysml` to
   PyPI — its version is not coupled to the core's, since it resolves a `sysml-grpc` binary
@@ -263,7 +263,7 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 `sysml-lsp-<os>-<arch>.tar.gz`), `systemica-<os>-<arch>.tar.gz` bundles containing both
 binaries, and `SHA256SUMS.txt`. macOS binaries are not Developer ID signed or notarized and
 Windows binaries are not Authenticode signed — see
-[docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
+[docs/project/macos-distribution.md](docs/project/macos-distribution.md).
 
 ## Building
 
@@ -322,10 +322,13 @@ See [python/INSTALL.md](python/INSTALL.md) for detailed installation and usage i
 
 ## Documentation
 
-- **[Quick Start Guide](docs/QUICKSTART.md)** — Get up and running in 5 minutes
-- **[Architecture](docs/ARCHITECTURE.md)** — Complete system architecture, core pipeline, runtime tiers
-- **[Saving & RDF Interop](docs/RDF_INTEROP.md)** — Saving models, and converting between SysML notation and RDF Turtle
+- **[The guide](docs/guide/)** — install, first model, CLI, REPL, checks, behavior, saving, editors, Python
+- **[Reference](docs/reference/)** — CLI flags, REPL commands, environment, Go and Python APIs, RDF mapping
+- **[Internals](docs/internals/architecture.md)** — the pipeline, the tiers, testing and performance
+- **[Project status](docs/project/spec-compliance.md)** — spec compliance, roadmap, releasing
 - **[Examples](examples/)** — Runtime demos and behavioral model examples
+
+The full map is [docs/README.md](docs/README.md).
 
 ## License
 

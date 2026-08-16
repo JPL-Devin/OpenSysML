@@ -2,7 +2,112 @@
 
 Notable changes per release. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
-is described in [docs/RELEASING.md](docs/RELEASING.md).
+is described in [docs/project/releasing.md](docs/project/releasing.md).
+
+## 0.0.8 — 2026-08-15
+
+### Diagnostics
+
+- A comparison or sum of quantities whose dimensions are both statically
+  determined and incommensurable (`mass < 1000.0 [m]`) is reported as a
+  type-tier warning at validation time, from the stdlib `QuantityDimension`
+  power factors, instead of only when the expression is evaluated. Evaluation
+  keeps its hard error and a warning changes no exit status; a dimension a
+  declaration does not determine stays unknown and is not reported.
+
+### REPL
+
+- A check of a condition declared on a definition is answered about the object
+  that carries it, so `%constraint`, `%requirement` and `-constraint` on an
+  instantiated model report the object's values rather than the declaration's
+  defaults — a violating model used to be answered `✓ passed` with exit 0.
+- `%eval` reads the object carrying the feature when the session holds one, so a
+  check and an `%eval` in the same session no longer answer about different
+  subjects; where several objects carry the feature it refuses to choose.
+- A condition whose evaluation could not be carried out is worded as undecided
+  (`? … could not be evaluated`) and names why, keeping exit 2, where it used to
+  print a failure while exiting 2.
+
+### `sysml` command line
+
+- A lone `-` names standard input wherever a model path is taken, `-convert`
+  included, and is reported as `<stdin>`; it is read even when stdin is
+  `/dev/null`, and stays distinct from a file named `-`.
+- `sysml-lsp` parses its command line with the `flag` package, so `-version`
+  works and an unreadable flag is a usage error rather than protocol mode.
+
+### Editor support
+
+- `textDocument/semanticTokens/full` and `/range` are implemented, over a new
+  `internal/core/highlight` package, and `textDocument/codeAction` answers
+  quick fixes carried as structured edits from the layer that reported the
+  diagnostic — a located semicolon, a near-miss spelling, an importable
+  namespace. Token deltas are not implemented and are not advertised.
+
+### RDF interoperability
+
+- The members that state a condition — a constraint body's conditions, a
+  requirement's assumptions and required conditions, a subject and a result —
+  have a mapping, so converting a model with a constraint no longer aborts.
+  Conditions are carried as `sysx:condition` notation, as every
+  expression-valued position in this mapping is.
+- Turtle written back as SysML spells the notation: an unrestricted name gets
+  its quotes, so a model with a quoted name re-parses.
+
+### Python bindings and `sysml-grpc`
+
+- `sysml-grpc -version` reports the metadata the linker sets, where a released
+  binary said `version dev / commit unknown`.
+- A cached `~/.pysysml/bin/sysml-grpc` records the release and repository it was
+  downloaded from beside it, and a cache from another release is replaced rather
+  than served. A failed integrity check is its own `ChecksumMismatchError` and
+  is never answered from the cache; a download that fails on the network keeps
+  the working binary.
+- A service already listening is asked what it is and compared against the
+  release and capabilities asked for, raising `StaleServiceError` naming the
+  remedy instead of a `MissingCapabilityError` on the first newer call. It is
+  stopped only when this client started it and no other client holds it.
+- `Model` gained `instantiate`, `execute_action` and `execute_state`, so every
+  call taking a model hash is reachable on the model it is about. `pysysml`
+  0.2.0 carries these.
+- `ChecksumMismatchError` is exported from `pysysml`, where it was reachable
+  only as `pysysml.errors.ChecksumMismatchError` while every other documented
+  exception was on the package.
+
+### Documentation
+
+- The pages are organized by what a reader is doing rather than by the feature
+  that landed: a numbered handbook under `docs/guide/`, looked-up material under
+  `docs/reference/`, design and internals under `docs/internals/`, and status
+  under `docs/project/`. `QUICKSTART.md` and `RDF_INTEROP.md` are split into the
+  chapters they were, the guide content stranded in `examples/*.md` and
+  `python/README.md` is folded in, and the paths the released README linked leave
+  pointers behind. `scripts/check-doc-links.py` gates every relative link and
+  heading anchor in CI.
+
+### Release automation
+
+- Release assets are published with `ghr -replace` rather than `-delete`, which
+  is an alias of `-recreate`: it deleted the release *and* its tag ref and
+  recreated it empty, wiping hand-written release notes, title and the
+  prerelease/latest flags on every re-run of the workflow for a tag.
+- The Homebrew tap updates itself from a scheduled workflow in
+  `Open-MBEE/homebrew-tap`, reading the latest release's `SHA256SUMS.txt`, with
+  `scripts/render-homebrew-formula.sh` left as the manual fallback.
+
+### Known limitations
+
+- Converting a model whose behavior is stated as action or state nodes to RDF
+  still reports the node and aborts (initial nodes, `perform`, `send`,
+  `terminate`, loop nodes, state regions): 71 of the 120 models under `examples/`
+  convert.
+- A nested feature redefined on an instantiated object is not yet the subject of
+  a check or an `%eval`, so those answer about the declaration while `%slots`
+  shows the instantiated value.
+- A `calc` body written without `return` is not expression-type-checked, so no
+  static dimensional warning is reported inside it.
+- Submitting any declaration to the REPL ends an active `%action` or `%state`
+  debugging session.
 
 ## 0.0.7 — 2026-08-15
 
@@ -79,7 +184,7 @@ are listed here rather than under a heading of their own.
   fork duplicates control and not values: concurrent branches are steps of the
   one performance, so both branches' assignments survive where the last token to
   retire used to overwrite the others. Which write decides a feature two branches
-  both assign is step order, stated in `docs/SPEC_COMPLIANCE.md`.
+  both assign is step order, stated in `docs/project/spec-compliance.md`.
 - A runtime failure names SysML kinds and operands rather than Go types, a
   recursion reports a frame count and names the calc it collapsed, and a division
   by zero is reported as one.
@@ -271,7 +376,7 @@ are listed here rather than under a heading of their own.
   semantic model, with `model.query()` accepting the standard's JSON payloads
   verbatim. The standard's model has no traversal or transitive closure, so this
   is an interop surface for its clients rather than a query language;
-  `docs/API.md` and `docs/SPEC_COMPLIANCE.md` state what is supported. An
+  `docs/reference/api.md` and `docs/project/spec-compliance.md` state what is supported. An
   element with no qualified identity — a doc note, an anonymous usage, a
   `connect` — is omitted rather than answered under a non-unique `@id`.
 
@@ -281,7 +386,7 @@ are listed here rather than under a heading of their own.
   namespace's members or child scopes once per member. Child scopes are indexed
   by the declaration owning them, a namespace's imports are memoized, and a
   member's owner is found through the scope's owner link.
-  `docs/PERFORMANCE.md` records the measurements.
+  `docs/internals/performance.md` records the measurements.
 - `ParseFile` hits its cache on the source it read, so re-loading unchanged
   content costs ~0.5 ms instead of re-parsing and reloading the standard library
   (~35 ms).
@@ -295,7 +400,7 @@ are listed here rather than under a heading of their own.
 
 ### Documentation
 
-- `README.md`, `docs/QUICKSTART.md` and `examples/CLI_USAGE.md` describe the
+- `README.md`, `docs/guide/` and `docs/reference/cli.md` describe the
   shipped command line, editor and RDF surfaces, including the exit-status
   contract and the streams each finding is written to. The claims that overstated
   what ships — dependency management, and the IDE and Python verification
@@ -465,7 +570,7 @@ are listed here rather than under a heading of their own.
   directions, round-tripping packages, definitions, usages, features, imports,
   connectors, successions (including a `then` written as a body member) and
   satisfy assertions. What the mapping normalizes and what it refuses is
-  documented in [docs/RDF_INTEROP.md](docs/RDF_INTEROP.md); a refused construct
+  documented in [docs/reference/rdf-mapping.md](docs/reference/rdf-mapping.md); a refused construct
   is reported with its node and position rather than dropped.
 - Removing a document unwinds what its wildcard re-exports contributed, so a
   name a removed file re-exported no longer resolves, and the workspace reuses
@@ -488,7 +593,7 @@ are listed here rather than under a heading of their own.
   metadata and `pysysml.__version__` both read — a tag that disagrees with it
   fails the job before anything is uploaded. `python/setup.py` is gone;
   `pyproject.toml` declares the build. See
-  [docs/RELEASING.md](docs/RELEASING.md#releasing-pysysml-to-pypi).
+  [docs/project/releasing.md](docs/project/releasing.md#releasing-pysysml-to-pypi).
 
 ### Known limitations
 
@@ -499,7 +604,7 @@ are listed here rather than under a heading of their own.
   `entry`/`do`/`exit` (`cannot convert the *ast.RequireMember at <file>:<line>`).
   A requirement stating a condition, and any state machine or action body with
   statements, must be saved as `.sysml`. The full list is in
-  [docs/RDF_INTEROP.md](docs/RDF_INTEROP.md).
+  [docs/reference/rdf-mapping.md](docs/reference/rdf-mapping.md).
 - The REPL's prompt evaluates in the *last* namespace the session declared. After
   typing a second package, the first package's members and the units its imports
   brought in are reached by qualified name only (`1.0 [SI::m]`, not `1.0 [m]`).
@@ -513,7 +618,7 @@ are listed here rather than under a heading of their own.
   shows `diameter = Instance(ID: n)` with `(no features)` under it.
 - The macOS and Windows binaries are unsigned, so a browser download is
   quarantined by Gatekeeper or flagged by SmartScreen. Install with Homebrew or
-  `curl`; see [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
+  `curl`; see [docs/project/macos-distribution.md](docs/project/macos-distribution.md).
 
 ## 0.0.4 — 2026-08-10
 
@@ -532,7 +637,7 @@ The first tagged release.
 - Tiered validation (syntax → name resolution → typing → constraints), where a
   failing tier suppresses the ones above it rather than reporting noise.
 - Measured spec compliance, rule by rule, in
-  [docs/SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md); 98/100 of the OMG
+  [docs/project/spec-compliance.md](docs/project/spec-compliance.md); 98/100 of the OMG
   training corpus parses and analyzes clean, with the two remaining files
   pinned as upstream source bugs.
 
@@ -587,7 +692,7 @@ The first tagged release.
   `sysml-grpc-<os>-<arch>` binaries with `.sha256` sidecars, for linux/amd64,
   linux/arm64, darwin/amd64, darwin/arm64 and windows/amd64, with
   `SHA256SUMS.txt` over all of them. macOS and Windows binaries are unsigned —
-  see [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
+  see [docs/project/macos-distribution.md](docs/project/macos-distribution.md).
 
 ### Known limitations
 

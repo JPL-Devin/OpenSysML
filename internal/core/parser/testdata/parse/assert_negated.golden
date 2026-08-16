@@ -8,19 +8,19 @@
       (Membership visibility="default"
         (Usage kind="part" name="context" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
-            (Usage kind="constraint" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false negated=true
+            (Usage kind="constraint" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert" negated=true
               (ConstraintMember assert=true negated=false
                 (OperatorExpr operator="<"
                   (LiteralInteger value="1")
                   (LiteralInteger value="2")))))
           (Membership visibility="default"
-            (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false negated=true
+            (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert" negated=true
               (Relationship kind="subsets" target=touchdown
                 (*ast.QualifiedName))
               (Relationship kind="by" target=lander
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="constraint" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="constraint" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert"
               (ConstraintMember assert=true negated=false
                 (OperatorExpr operator="<"
                   (LiteralInteger value="1")

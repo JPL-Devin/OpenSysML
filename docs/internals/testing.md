@@ -43,7 +43,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 **Purpose:** Verify AST structure matches expected output
 
 - **Test:** `TestGolden` (internal/core/parser/)
-- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (81 representative files)
+- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (82 representative files)
 - **Goldens:** `testdata/parse/*.golden` (AST dumps)
 - **Acceptance:** Parse output matches golden file
 
@@ -93,7 +93,7 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 **Purpose:** Lock in parse structure before execution changes
 
 - **Location:** `internal/core/parser/testdata/parse/` (behavioral fixtures)
-- **Coverage:** 81 fixtures in total, behavioral ones among them
+- **Coverage:** 82 fixtures in total, behavioral ones among them
 - **Acceptance:** `TestGolden` passes, AST dumps match expectations
 
 **Behavioral fixtures:**
@@ -212,7 +212,7 @@ When adding execution support for actions, states, calc, constraints, requiremen
 3. ✅ Add conformance case: `.sysml` + `.expected.json` in `internal/core/runtime/testdata/conformance/`
 4. ✅ Add golden trace case: `.trace.golden` for ordering-sensitive features
 5. ✅ Add robustness test for failure modes (deadlock, unbound params, missing refs)
-6. ✅ Update `docs/SPEC_COMPLIANCE.md` with semantic rule → implementation → test → status
+6. ✅ Update `docs/project/spec-compliance.md` with semantic rule → implementation → test → status
 7. ✅ Verify all tests pass: `go test ./internal/core/parser/ ./internal/core/runtime/`
 
 ---

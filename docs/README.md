@@ -1,36 +1,39 @@
-# Systemica Documentation
+# Systemica documentation
 
-## Getting Started
+## Using it
 
-- **[Quick Start Guide](QUICKSTART.md)** — Install, run your first model, explore the REPL (5 min read)
-- **[Architecture Overview](ARCHITECTURE.md)** — System design, module structure, pipeline (30 min read)
+**[The guide](guide/)** — a handbook, in reading order: [install](guide/01-install.md),
+[your first model](guide/02-first-model.md), [the command line](guide/03-command-line.md),
+[the REPL](guide/04-repl.md), [checks](guide/05-checking.md), [behavior](guide/06-behavior.md),
+[saving and RDF](guide/07-saving-and-rdf.md), [editors](guide/08-editors.md),
+[Python](guide/09-python.md), [troubleshooting](guide/10-troubleshooting.md).
 
-## Reference
+Runnable models are in [examples/](../examples/), with a catalog of what each one shows.
 
-- **[API Documentation](API.md)** — Complete public API reference for all packages
-- **[Grammar Reference](grammar/README.md)** — SysML v2 grammar production mapping and parser implementation
-- **[Saving & RDF Interop](RDF_INTEROP.md)** — `%save`, `sysml -convert`, and the SysML ↔ RDF Turtle mapping
-- **[macOS Distribution](MACOS_DISTRIBUTION.md)** — Gatekeeper/quarantine analysis and the code-signing decision record
+## Looking one thing up
 
-## Implementation Status
+- **[CLI](reference/cli.md)** — every flag of `sysml`, the modes, and the exit status
+- **[REPL commands](reference/repl-commands.md)** — every `%` command and its arguments
+- **[Environment variables](reference/environment.md)** — the bounds one run may spend, and paths
+- **[Go API](reference/api.md)** — the public API of every package
+- **[Python API](reference/python-api.md)** — `pysysml`, its generated typed classes and latency
+- **[RDF mapping](reference/rdf-mapping.md)** — which triples a model becomes, and what is not mapped
+- **[Grammar](reference/grammar/README.md)** — grammar production → parser implementation
 
-- **[Spec Compliance](SPEC_COMPLIANCE.md)** — What's implemented, what's faithful to UML/SysML specs, what's approximate
-- **[Testing Strategy](TESTING.md)** — Test contracts, coverage policy, how to verify correctness
-- **[Performance and Memory](PERFORMANCE.md)** — How to profile the binary, what a large model costs to load and run
-- **[Training Examples](TRAINING_EXAMPLES.md)** — Status of OMG training materials (98/100 clean)
-- **[Roadmap](ROADMAP.md)** — The known gaps and release follow-through, in the order they should be picked up
+## How it works
 
-## Development
+- **[Architecture](internals/architecture.md)** — the pipeline, the tiers, the test contracts
+- **[Testing](internals/testing.md)** — the test contracts each kind of change must satisfy
+- **[Performance](internals/performance.md)** — profiling, and what a large model costs
+- **[Design notes](internals/design/)** and **[plans](internals/notes/)** — for maintainers
 
-- **[Contributing Guide](../CONTRIBUTING.md)** — How to contribute (code, issues, discussions)
-- **[Releasing](RELEASING.md)** — How a release is cut: pre-tag gate, tagging, published artifacts, Homebrew
-- **[Development Docs](development/)** — Historical plans, implementation notes (for maintainers)
+## Where the project stands
 
----
+- **[Spec compliance](project/spec-compliance.md)** — faithful, approximate, or not implemented
+- **[Training examples](project/training-examples.md)** — the OMG corpus, 98/100 clean
+- **[Roadmap](project/roadmap.md)** — the known gaps, in the order they should be picked up
+- **[Releasing](project/releasing.md)** — the pre-tag gate, tagging, artifacts, Homebrew
+- **[macOS distribution](project/macos-distribution.md)** — Gatekeeper and the signing decision
+- **[Demo](project/demo.md)** — a scripted walkthrough of the whole surface
 
-## Quick Links
-
-- **Source:** [github.com/Open-MBEE/Systemica](https://github.com/Open-MBEE/Systemica)
-- **License:** Apache 2.0
-- **Go Module:** `github.com/Open-MBEE/Systemica`
-- **Go Version:** 1.25+
+Contributing, including where a new page belongs, is [CONTRIBUTING.md](../CONTRIBUTING.md).

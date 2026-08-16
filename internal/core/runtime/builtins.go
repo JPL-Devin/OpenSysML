@@ -114,7 +114,7 @@ func init() {
 		// is an Integer, as its `return : Integer[1]` declares.
 		// ComplexFunctions and VectorFunctions declare sum and product too, over
 		// values this runtime has no representation of; they are left out rather
-		// than answered wrongly (docs/SPEC_COMPLIANCE.md).
+		// than answered wrongly (docs/project/spec-compliance.md).
 		"NumericalFunctions::sum":     builtinNumericalSum,
 		"NumericalFunctions::product": builtinNumericalProduct,
 		// IntegerFunctions::'..', the range, whose result the library declares

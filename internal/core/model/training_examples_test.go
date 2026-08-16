@@ -254,7 +254,7 @@ func writeTrainingExpected(t *testing.T, total int, got map[string]int) {
 
 	var b strings.Builder
 	b.WriteString("# Files in the pinned OMG training corpus that still report semantic errors,\n")
-	b.WriteString("# as \"<error count>\\t<path>\". See docs/TRAINING_EXAMPLES.md for why each one\n")
+	b.WriteString("# as \"<error count>\\t<path>\". See docs/project/training-examples.md for why each one\n")
 	b.WriteString("# fails; regenerate with:\n")
 	b.WriteString("#   go test ./internal/core/model -run TestTrainingExamplesSemanticErrors -update-training\n")
 	fmt.Fprintf(&b, "# files: %d\n", total)

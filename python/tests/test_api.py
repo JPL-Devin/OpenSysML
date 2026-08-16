@@ -117,7 +117,10 @@ class TestModuleLevelAPI:
             result = pysysml.connect()
             
             # Should create new connection with defaults
-            MockConnection.assert_called_once_with('localhost', 50051, auto_start=True)
+            MockConnection.assert_called_once_with(
+                'localhost', 50051, auto_start=True, version=None,
+                require_capabilities=None,
+            )
             
             assert result == mock_conn
     
@@ -131,7 +134,10 @@ class TestModuleLevelAPI:
             result = pysysml.connect(host="example.com", port=9999, auto_start=False)
             
             # Should create connection with custom params
-            MockConnection.assert_called_once_with('example.com', 9999, auto_start=False)
+            MockConnection.assert_called_once_with(
+                'example.com', 9999, auto_start=False, version=None,
+                require_capabilities=None,
+            )
             
             assert result == mock_conn
     

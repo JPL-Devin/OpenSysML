@@ -365,6 +365,7 @@ func (ec *exprChecker) featurePrimType(sym *symbols.Symbol) semantics.PrimType {
 }
 
 func (ec *exprChecker) inferOperator(scope *symbols.Scope, e *ast.OperatorExpr) semantics.PrimType {
+	ec.checkDimensions(scope, e)
 	switch e.Operator {
 	case ast.OpNot:
 		return ec.checkUnaryBoolean(scope, e)

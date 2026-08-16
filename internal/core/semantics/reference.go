@@ -83,7 +83,7 @@ func referenceScope(sym *symbols.Symbol) *symbols.Scope {
 // takePicture` makes takePicture's members reachable as `takePhoto.focus`.
 // It is kept out of DirectSupertypes because that relation also drives
 // conformance and implicit typing, which this implementation does not yet
-// derive from reference subsetting — see docs/SPEC_COMPLIANCE.md.
+// derive from reference subsetting — see docs/project/spec-compliance.md.
 func (m *Model) MemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil {
 		return nil

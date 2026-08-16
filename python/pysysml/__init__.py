@@ -17,11 +17,13 @@ from pysysml.conversion import (
     FORMAT_SYSML, FORMAT_TURTLE, Conversion, format_of_path,
 )
 from pysysml.errors import (
-    PySysMLError, ConnectionError, ConversionError, ExecutionError,
+    PySysMLError, ChecksumMismatchError, ConnectionError, ConversionError,
+    ExecutionError,
     InstanceTypeError, InvalidRequestError, ModelError,
     ModelFileNotFoundError, ModelNotFoundError, ServiceError,
-    ServiceTimeoutError, SlotError, SymbolNotFoundError, TypeMismatchError,
-    UnsupportedOperationError, UnsupportedValueError, WrongKindError,
+    ServiceTimeoutError, SlotError, StaleServiceError, SymbolNotFoundError,
+    TypeMismatchError, UnsupportedOperationError, UnsupportedValueError,
+    WrongKindError,
 )
 
 __all__ = [
@@ -31,10 +33,12 @@ __all__ = [
     "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
     "Verdict", "CalcResult",
     "QueryElement", "QueryError",
-    "PySysMLError", "ConnectionError", "ConversionError", "ExecutionError",
+    "PySysMLError", "ChecksumMismatchError", "ConnectionError",
+    "ConversionError", "ExecutionError",
     "InstanceTypeError", "InvalidRequestError", "MissingCapabilityError",
     "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",
-    "ServiceError", "ServiceTimeoutError", "SlotError", "SymbolNotFoundError",
+    "ServiceError", "ServiceTimeoutError", "SlotError", "StaleServiceError",
+    "SymbolNotFoundError",
     "TypeMismatchError", "UnsupportedOperationError", "UnsupportedValueError",
     "WrongKindError",
     "load", "connect", "convert",
@@ -113,7 +117,8 @@ def load(file_path, host='localhost', port=None, strict=False):
     return conn.load(file_path, strict=strict)
 
 
-def connect(host='localhost', port=None, auto_start=True):
+def connect(host='localhost', port=None, auto_start=True, version=None,
+            require_capabilities=None):
     """Create a new connection to sysml-grpc service.
     
     Convenience function that creates a new Connection instance.
@@ -123,12 +128,20 @@ def connect(host='localhost', port=None, auto_start=True):
             used when no separate port is given (default: 'localhost')
         port (int, optional): Service port (default: 50051)
         auto_start (bool): If True, automatically start service if not running (default: True)
+        version (str, optional): Release tag the service must report, or
+            'latest'; defaults to $PYSYSML_GRPC_VERSION. Checked whether the
+            service is started here or managed by the caller
+        require_capabilities (iterable, optional): Capability names the service
+            must report, checked at connect time
     
     Returns:
         Connection: New connection instance
 
     Raises:
         ValueError: If host names a port that is unreadable or disagrees with port
+        StaleServiceError: If another release is already listening on the
+            address and this client may not stop it
+        MissingCapabilityError: If the service lacks a required capability
 
     Example:
         >>> conn = pysysml.connect("localhost:50123")
@@ -136,7 +149,10 @@ def connect(host='localhost', port=None, auto_start=True):
         50123
     """
     host, port = split_target(host, port)
-    return Connection(host, port, auto_start=auto_start)
+    return Connection(
+        host, port, auto_start=auto_start, version=version,
+        require_capabilities=require_capabilities,
+    )
 
 
 def convert(to_format, file_path=None, content=None, model_hash=None,
@@ -225,7 +241,10 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
 def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',
                 port=None):
     """Instantiate a part/usage (module-level convenience).
-    
+
+    A model in hand has :meth:`Model.instantiate`, which needs neither the hash
+    nor the connection; this form is for instantiating out of a file.
+
     Args:
         symbol_id (str): FQN of symbol to instantiate
         file_path (str, optional): Parse this file first

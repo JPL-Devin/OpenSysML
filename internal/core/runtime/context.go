@@ -352,6 +352,38 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 	return ctx.EvaluateConstraintOn(sym, scope, nil)
 }
 
+// RequireConstraint returns an ErrNotAConstraint usage error unless sym
+// declares a constraint, so a caller can settle the kind before evaluating.
+func RequireConstraint(sym *symbols.Symbol) error {
+	switch decl := sym.Decl.(type) {
+	case *ast.Definition:
+		if decl.Kind == ast.DefConstraint {
+			return nil
+		}
+	case *ast.Usage:
+		if decl.Kind == ast.UsageConstraint {
+			return nil
+		}
+	}
+	return notOfKind(ErrNotAConstraint, sym, "constraint")
+}
+
+// RequireRequirement returns an ErrNotARequirement usage error unless sym
+// declares a requirement.
+func RequireRequirement(sym *symbols.Symbol) error {
+	switch decl := sym.Decl.(type) {
+	case *ast.Definition:
+		if decl.Kind == ast.DefRequirement {
+			return nil
+		}
+	case *ast.Usage:
+		if decl.Kind == ast.UsageRequirement {
+			return nil
+		}
+	}
+	return notOfKind(ErrNotARequirement, sym, "requirement")
+}
+
 // EvaluateConstraintOn evaluates a constraint against a concrete instance: a
 // feature the constraint names resolves to that instance's slot, so the same
 // constraint can pass for one instance and fail for another. A nil instance
@@ -359,17 +391,8 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
 	defer ctx.beginRun()()
 
-	switch decl := sym.Decl.(type) {
-	case *ast.Definition:
-		if decl.Kind != ast.DefConstraint {
-			return false, notOfKind(ErrNotAConstraint, sym, "constraint")
-		}
-	case *ast.Usage:
-		if decl.Kind != ast.UsageConstraint {
-			return false, notOfKind(ErrNotAConstraint, sym, "constraint")
-		}
-	default:
-		return false, notOfKind(ErrNotAConstraint, sym, "constraint")
+	if err := RequireConstraint(sym); err != nil {
+		return false, err
 	}
 
 	// Evaluate every condition the constraint states, inherited ones included.
@@ -505,17 +528,8 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
 	defer ctx.beginRun()()
 
-	switch decl := sym.Decl.(type) {
-	case *ast.Definition:
-		if decl.Kind != ast.DefRequirement {
-			return false, notOfKind(ErrNotARequirement, sym, "requirement")
-		}
-	case *ast.Usage:
-		if decl.Kind != ast.UsageRequirement {
-			return false, notOfKind(ErrNotARequirement, sym, "requirement")
-		}
-	default:
-		return false, notOfKind(ErrNotARequirement, sym, "requirement")
+	if err := RequireRequirement(sym); err != nil {
+		return false, err
 	}
 
 	// Requirement-local bindings are shared by every member, whichever scope it

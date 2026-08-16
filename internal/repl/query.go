@@ -81,6 +81,22 @@ func unresolvedVerdict(subject, msg string) Verdict {
 	return Verdict{Subject: subject, Status: VerdictUnresolved, Lines: []string{"error: " + msg}}
 }
 
+// unevaluable reports whether an evaluation error left a check undecided, as
+// against the model itself answering the condition false.
+func unevaluable(err error) bool {
+	return err != nil && failedStatus(err) == VerdictUnresolved
+}
+
+// unevaluableVerdict reports a condition whose evaluation could not be carried
+// out, saying so and naming why: it decided nothing, so its text must not read
+// as a verdict against the model. what names the condition, e.g. "Constraint C".
+func unevaluableVerdict(subject, what string, err error, inst *runtime.Instance, owner string) Verdict {
+	return Verdict{Subject: subject, Status: VerdictUnresolved, Lines: []string{
+		fmt.Sprintf("? %s could not be evaluated%s", what, onInstance(inst, owner)),
+		fmt.Sprintf("  Error: %v", err),
+	}}
+}
+
 // withTrace prefixes a verdict with the execution trace its evaluation produced,
 // so a caller outside the prompt reports what `%trace on` reports there.
 func (s *Session) withTrace(v Verdict) Verdict {
@@ -102,15 +118,21 @@ func (s *Session) checkConstraint(name string) Verdict {
 		return *bad
 	}
 
-	inst, owner := s.owningInstance(target.fqn)
-	passed, err := target.ctx.EvaluateConstraintOn(target.sym, target.scope, inst)
-	// A name that declares something else is a wrong argument, not a verdict:
-	// reporting it as a failed constraint would read as a fault in the model.
-	if errors.Is(err, runtime.ErrNotAConstraint) {
+	// A name that declares something else is a wrong argument, not a verdict, and
+	// is answered so before a subject is chosen for it.
+	if err := runtime.RequireConstraint(target.sym); err != nil {
 		return unresolvedVerdict(name, err.Error())
 	}
+	inst, owner, bad := s.checkSubject(name, target)
+	if bad != nil {
+		return *bad
+	}
+	passed, err := target.ctx.EvaluateConstraintOn(target.sym, target.scope, inst)
+	if unevaluable(err) {
+		return unevaluableVerdict(name, "Constraint "+name, err, inst, owner)
+	}
 	if err != nil || !passed {
-		return Verdict{Subject: name, Status: failedStatus(err), Lines: []string{
+		return Verdict{Subject: name, Status: VerdictFails, Lines: []string{
 			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
 			"  " + verdictDetail("Assertion", err),
 		}}
@@ -132,15 +154,21 @@ func (s *Session) checkRequirement(name string) Verdict {
 		return *bad
 	}
 
-	inst, owner := s.owningInstance(target.fqn)
-	passed, err := target.ctx.EvaluateRequirementOn(target.sym, target.scope, inst)
-	// As for a constraint: a name of another kind is a wrong argument rather
-	// than an unsatisfied requirement.
-	if errors.Is(err, runtime.ErrNotARequirement) {
+	// As for a constraint: a name of another kind is a wrong argument, settled
+	// before a subject is chosen.
+	if err := runtime.RequireRequirement(target.sym); err != nil {
 		return unresolvedVerdict(name, err.Error())
 	}
+	inst, owner, bad := s.checkSubject(name, target)
+	if bad != nil {
+		return *bad
+	}
+	passed, err := target.ctx.EvaluateRequirementOn(target.sym, target.scope, inst)
+	if unevaluable(err) {
+		return unevaluableVerdict(name, "Requirement "+name, err, inst, owner)
+	}
 	if err != nil || !passed {
-		return Verdict{Subject: name, Status: failedStatus(err), Lines: []string{
+		return Verdict{Subject: name, Status: VerdictFails, Lines: []string{
 			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),
 			"  " + verdictDetail("Required condition", err),
 		}}
@@ -211,6 +239,17 @@ type checkTarget struct {
 	fqn   string
 	scope *symbols.Scope
 	ctx   *runtime.Context
+}
+
+// checkSubject is the object a check is about, as `%eval` answers about the same
+// one. A subject that is a question yields the third result.
+func (s *Session) checkSubject(name string, target checkTarget) (*runtime.Instance, string, *Verdict) {
+	inst, owner, err := s.subjectFor(name, target.fqn, target.sym)
+	if err != nil {
+		bad := unresolvedVerdict(name, err.Error())
+		return nil, "", &bad
+	}
+	return inst, owner, nil
 }
 
 // resolveCheckTarget resolves the element a constraint/requirement check names.

@@ -363,9 +363,14 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		}
 	}
 	if sym != nil {
-		// An instantiated owner makes this a question about that object: read
-		// the slot, which carries the value the instance actually holds.
-		if inst, owner := s.owningInstance(fqn); inst != nil {
+		// An object carrying the feature makes this a question about that object,
+		// as a check of a condition is: read the slot, which holds the value the
+		// object actually has, rather than the value the declaration defaults to.
+		inst, owner, subjErr := s.subjectFor(expr, fqn, sym)
+		if subjErr != nil {
+			return nil, subjErr
+		}
+		if inst != nil {
 			if _, ok := inst.Slots[sym.Name]; ok {
 				slot, err := inst.GetSlot(ctx, sym.Name)
 				if err != nil {
@@ -878,8 +883,8 @@ func featureVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *
 		return "", false
 	}
 	switch {
-	case err != nil && !errors.Is(err, runtime.ErrViolated):
-		return fmt.Sprintf("<%s: %v>", kind, err), true
+	case unevaluable(err):
+		return fmt.Sprintf("<%s: not evaluated: %v>", kind, err), true
 	case err != nil || !passed:
 		return fmt.Sprintf("<%s: violated>", kind), true
 	default:
@@ -1336,13 +1341,10 @@ func declaringScope(sym *symbols.Symbol, root *symbols.Scope) *symbols.Scope {
 // names the kind of condition, e.g. "Assertion" or "Required condition".
 func verdictDetail(what string, err error) string {
 	var violation *runtime.ViolationError
-	switch {
-	case errors.As(err, &violation):
+	if errors.As(err, &violation) {
 		return fmt.Sprintf("%s evaluated to false: %s", what, violation.Condition)
-	case err == nil || errors.Is(err, runtime.ErrViolated):
-		return what + " evaluated to false"
 	}
-	return fmt.Sprintf("Error: %v", err)
+	return what + " evaluated to false"
 }
 
 // onInstance renders the " (on <owner> ID: n)" suffix that marks a result as
@@ -1389,8 +1391,11 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 		}
 	}
 	holds, err := ctx.EvaluateSatisfactionOn(a, subject)
+	if unevaluable(err) {
+		return unevaluableVerdict(a.Text(), a.Text(), err, subject, owner)
+	}
 	if err != nil || !holds {
-		return Verdict{Subject: a.Text(), Status: failedStatus(err), Lines: []string{
+		return Verdict{Subject: a.Text(), Status: VerdictFails, Lines: []string{
 			fmt.Sprintf("✗ %s fails%s", a.Text(), onInstance(subject, owner)),
 			"  " + verdictDetail("Required condition", err),
 		}}

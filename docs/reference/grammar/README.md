@@ -61,8 +61,8 @@ Grammar conformance is validated through parsing **OMG's own files**:
    - See: `internal/core/libs/stdlib_conformance_test.go`
    - These files are the **source of truth** for correct parsing
 
-2. **Training Examples** - 100 OMG training files (97/100 clean)
-   - See: `docs/TRAINING_EXAMPLES.md`
+2. **Training Examples** - 100 OMG training files (current result in the page below)
+   - See: `docs/project/training-examples.md`
 
 3. **Golden AST Tests** - 33 fixtures with expected AST output
    - See: `internal/core/parser/testdata/parse/`

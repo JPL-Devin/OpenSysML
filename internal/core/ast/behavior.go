@@ -354,7 +354,10 @@ type ResultMember struct {
 // Syntax: assert <expression>; or assume <expression>;
 type ConstraintMember struct {
 	NodeBase
-	IsAssert   bool   // true for 'assert', false for 'assume'
+	IsAssert bool // true for 'assert', false for 'assume'
+	// Keyword is the keyword the condition was written with: "assert",
+	// "assume", or "" for a bare condition, which asserts implicitly.
+	Keyword    string
 	IsNegated  bool   // true if 'not' keyword present (assert not expr)
 	Expression Node   // the constraint expression, nil when stated through Body
 	Name       string // name of the nested constraint, when it has one
@@ -373,6 +376,9 @@ type SubjectMember struct {
 	Relationships []*Relationship // specializations written after the type (`:>> RequirementCheck::subj`)
 	Body          []Node          // optional nested members
 	BindingExpr   Node            // value part: `subject = <expr>;` or a declaration's `= expr` / `default expr`
+	// HasBody records that the declaration was written with braces, which an
+	// empty body does not otherwise show.
+	HasBody bool
 }
 
 // AssumeMember represents an assumption in a requirement body.

@@ -141,16 +141,24 @@ direction *is* a real AST print, so a round-trip through Turtle is the way to se
 A useful corollary: to prove "no relationship was recorded", count the triples in the `.ttl`, never
 grep the reformatted `.sysml`.
 
-Models that convert to Turtle are a narrow set: anything with state substates or a `calc` result
-member still fails with `cannot convert the *ast.SubstateMember/…ResultMember at …`, so use a
-plain `package Demo { part def Engine { attribute power = 300.0; } }` for `.ttl` assertions rather
-than a file from `examples/`.
+Models that convert to Turtle are a narrow set, but the set grows: **condition members
+(constraint/requirement `assert`/`assume`/`require`, `subject`, `return`) map since PR #182**, while
+state and action nodes still do not. Anything with a state substate, an initial node, `perform`,
+`send`, an assignment or prefix metadata still fails with
+`cannot convert the <thing> at <file>:<line>:<col>: save to .sysml or .kerml instead …` and exit 2.
+How many of `examples/` convert is measured in `docs/project/roadmap.md` § D6; most of the
+training copies do, so a Turtle test can use real models — the Constraints/Requirements/
+Analysis/Verification training packages are the richest. A useful sweep, which also proves "the message is clear and it never panics":
 
-**Not one file in `examples/*.sysml` or `internal/repl/testdata/*.sysml` converts to `ttl`** — every
-one fails on an unsupported construct (`*ast.SubstateMember`, `*ast.ResultMember`, `*ast.StateNode`,
-`*ast.StateRegion`, `*ast.ConstraintMember`, `*ast.AssignmentActionNode`, `*ast.InitialNode`,
-`*ast.SubjectMember`, or a `duplicate declaration of "result"`). So a Turtle test needs a
-hand-written fixture; this one round-trips and yields exactly 1180 bytes of Turtle:
+```bash
+find examples -name '*.sysml' -print0 | while IFS= read -r -d '' f; do
+  out=$(./bin/sysml -convert ttl "$f" -o /tmp/e.ttl 2>&1) \
+    && echo "OK $f" || echo "FAIL $f :: $(echo "$out" | head -1)"
+done | sort | uniq -c        # note -print0: many training paths contain spaces
+```
+
+A hand-written fixture is still the smallest positive case; this one round-trips and yields exactly
+1180 bytes of Turtle:
 
 ```
 package Demo {
@@ -182,6 +190,37 @@ for f in examples/*.sysml internal/repl/testdata/*.sysml; do
   cmp -s /tmp/p1 /tmp/p2 && echo idempotent || echo "NOT IDEMPOTENT: $f"
 done | sort | uniq -c
 ```
+
+## Proving a Turtle round trip loses nothing
+
+`.sysml -> .ttl -> .sysml` is never byte-equal to the input (the back direction is a canonical AST
+print: it spells out `in attribute x`, `return attribute`, adds the `;` after a bare condition and
+re-indents). So assert **fixed points and AST identity**, never input-equality:
+
+- `model.sysml -> a.ttl -> a.sysml -> b.ttl` with `diff a.ttl b.ttl` empty — this simultaneously
+  proves the emitted Turtle is well-formed and reloadable and that nothing was lost.
+- `b.ttl -> b.sysml` and `diff a.sysml b.sysml` empty (notation fixed point).
+- Strongest: compare the **parsed AST** of the original and of the round trip. There is no CLI dump
+  flag, so build a throwaway `main.go` that calls `parser.New(source.New(path, bytes)).ParseFile()`
+  and prints `ast.Dump(f)`. It must live *inside* the repo module (`internal/…` blocks an outside
+  module), so `mkdir tmp_dumpcmd && go build -o /tmp/dump ./tmp_dumpcmd && rm -rf tmp_dumpcmd`, then
+  `diff <(/tmp/dump orig.sysml) <(/tmp/dump rt.sysml)`. Empty output is the no-silent-data-loss
+  proof; `git status --porcelain` afterwards confirms the repo is untouched.
+
+Two round-trip failure classes are **pre-existing** (reproduce them with a binary from the parent
+commit before reporting them as regressions):
+
+- **Quoted names are printed unquoted.** `package 'Package Example'` comes back as
+  `package Package Example {` and `<'1'>` as `<1>`, so the re-parse fails with
+  `1:17: expected '{' or ';'`. Most `examples/sysml-v2-training` files use quoted names, so sanitize
+  them (`sed -E "s/package '([^']*)'/package P/"`) before a round-trip sweep, or the whole sweep is
+  red for one unrelated printer bug.
+- `ref` on an `end` attribute is dropped and `redefines`/`typing` relationship order is swapped in a
+  couple of models.
+
+Also note the parser rejects `require constraint <name> { … }` (a *named* nested constraint after
+`require`/`assume`): `expected '{' after 'require constraint'`. Only the anonymous form and the
+`require R { … }` reference form parse, so an export test cannot cover the named variant.
 
 ## Argument order and the `--` marker
 
@@ -644,14 +683,22 @@ follow them with the cheap canaries: `%action tally` + `%continue` → `total = 
 
 ## Session-accumulation trap (bites both testers and features)
 
-`Session.accept` (internal/repl/session.go) drops any earlier snippet whose **declared names**
-intersect the new submission's. So typing `package Demo { part def Trailer { ... } }` to *add* a
-member to an already-loaded `package Demo` **replaces the whole package** — `Demo::Vehicle` and
-friends become `unresolved reference: …`, and the instances of them are dropped (with a notice) since
-the declarations they were built from are gone. When you just want to add declarations mid-session, use a **different package
-name**. When you want to prove that newly-typed declarations are visible to the qualified-name path
-(the `s.idx`/`s.rtCtx`/`s.instances` invalidation in `Submit`), a fresh package avoids conflating the
-two behaviors.
+Whether re-typing a namespace **adds to** it or **replaces** it depends on where the earlier one
+came from (`mergeSubmission`, internal/repl/merge.go):
+
+- **Typed earlier at the prompt → merged.** `package Demo { part def Trailer; }` folds into the
+  `package Demo` already typed: `note: added to the existing package Demo (its other members are
+  kept)`, and `Demo::Vehicle` still resolves. Re-typing a *member* replaces that member and says
+  so (`note: added to the existing package Demo, replacing part def Wheel`), which is also what
+  drops the instances built from it.
+- **Loaded from a file (`%load`) → replaced.** A loaded snippet keeps its identity, so
+  `package ActionExecutorDemo { part def Trailer; }` after loading that example reports
+  `note: replaced package ActionExecutorDemo (action def SimpleAction, action sequential, action
+forkJoin, action conditional no longer declared)` — every member it declared — and the
+  file's members are gone. This is the shape that bites a test written against a `%load`ed
+  fixture — use a **different package name** to add declarations there.
+- An **empty body** (`package Demo { }`) is the deliberate way to empty a namespace, and a
+  submission with a different header (or declaring more than one thing) replaces rather than merges.
 
 `Submit` **carries instances over** what a submission did not change (`internal/repl/carryover.go`,
 `runtime.Adopt`): after an unrelated `part def B;`, `%instances` still lists the instance with the
@@ -849,12 +896,12 @@ type name in trace output means a node kind is missing from that switch.
 
 ## Spot-checking the docs against the binary
 
-`docs/QUICKSTART.md` and `README.md` contain REPL transcripts that are easy to let rot. Verify them
+`docs/guide/` and `README.md` contain REPL transcripts that are easy to let rot. Verify them
 by **typing them by hand** at the prompt in a GUI terminal, not over a pipe: some failure modes (a
 blank line inside a braced declaration ending the submission early) only exist interactively.
 Discover the expected values over a pipe first, then do one clean recorded pass.
 
-As of PR #107 the QUICKSTART/README action- and state-debugging transcripts are real captured output
+As of PR #107 the guide and README action- and state-debugging transcripts are real captured output
 and match the binary verbatim, including the hint lines
 (`Use %step to advance, %tokens to inspect, %continue to run to completion`,
 `Use %tokens to inspect, %step or %continue to resume`,
@@ -868,8 +915,8 @@ Traps worth re-checking after any doc or REPL edit:
   comes back as a single `✓ state X` with zero diagnostics.
 - **`%save` over an existing file appends `(replaced the existing file)`.** A doc block whose earlier
   step created or loaded that same file must show the suffix. Byte counts are exact and
-  content-dependent (`saved 181 bytes of sysml` / `saved 1872 bytes of ttl` for the QUICKSTART
-  `MyModel` file) — recompute them whenever the sample model changes.
+  content-dependent (`saved 181 bytes of sysml` / `saved 1872 bytes of ttl` for the
+  `MyModel` file of guide chapter 7) — recompute them whenever the sample model changes.
 - **Snippets using `Real` need `import ScalarValues::*;` in the session**, or the submission is
   rejected with `error: unresolved reference: Real` and no `✓` echo. A snippet relying on an import
   made in an earlier, separate doc section fails for a reader who starts a fresh REPL there.
@@ -896,7 +943,47 @@ Do **not** start the service by hand. `Connection._ensure_service`
 (`python/pysysml/connection.py`) probes `localhost:50051` and spawns the binary itself; letting it
 auto-start is both the realistic user path and the only way it writes its pidfile. Attaching to a
 service you started yourself makes `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
-fail — that is the documented `docs/ROADMAP.md` §P1 gap, not a new bug.
+fail — that is the documented `docs/project/roadmap.md` §P1 gap, not a new bug.
+
+### Service lifecycle, the stale-service check and `require_capabilities` (PR #181)
+
+Since PR #181 `Connection` interrogates whatever is *already* listening (`GetServerInfo`) and
+compares it against the release asked for (`connect(version=...)` or `$PYSYSML_GRPC_VERSION`) plus
+`require_capabilities=[...]`; a mismatch raises `pysysml.StaleServiceError`. To test that surface
+you **do** need a hand-started service — that is precisely the "foreign process" case:
+
+```bash
+./bin/sysml-grpc -port 50099 &                   # a port other than 50051 keeps the auto-start
+                                                 # tests independent
+PYSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> StaleServiceError
+```
+
+- Ownership is decided in `_started_by_this_client`: `~/.pysysml/sysml-grpc.pid` must name the
+  process **and** its cmdline must end `['-port', str(port)]`. A hand-started service has no
+  pidfile, so it must be reported and left running — assert `psutil.pid_exists(pid)` *and* that a
+  subsequent connect still serves (`model.instantiate(...)`), not just that an exception was raised.
+- A locally built binary reports the **commit** as its version (`version e695687`), not a `vX.Y.Z`
+  tag, so any `PYSYSML_GRPC_VERSION=v0.0.x` is a mismatch — handy, and it also means asking for a
+  tag while a dev build runs will *always* raise.
+- Capability names the service reports today: `convert`, `query`, `type_facts`, `verification`.
+  A bogus `require_capabilities=['time_travel']` surfaces as `MissingCapabilityError` whoever
+  started the service (only a release mismatch is a `StaleServiceError`), and it resolves in
+  <0.2 s — time the run so a hang is visible as a number.
+- With `auto_start=False` the release check is lazy: a service that was not listening when the
+  client was built is checked at the first call of *any* kind, so assert it through `conn.load(...)`
+  and not only through `conn.server_info()`.
+- `pysysml` has **no module-level `load_from_content`**; use `conn.load_from_content(...)`.
+- Lifecycle state lives in `~/.pysysml/sysml-grpc.{pid,refcount,lock}`. Reset a clean auto-start
+  state with `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc.pid ~/.pysysml/sysml-grpc.refcount`
+  (`-x`, never `-f`, which matches your own shell — see the pkill trap below).
+  Refcount behaviour worth asserting both within one process (two `connect()`s) and across two
+  processes: 1 → 2 → 1, service still serving the remaining holder, and pidfile/refcount removed
+  only when the last one closes.
+- The known-failing pair with a service on :50051
+  (`test_integration.py::…::test_load_nonexistent_file_real_server`,
+  `test_lifecycle.py::…::test_service_shuts_down_when_last_process_exits`) reproduces on `main`;
+  run `pytest tests/ -q` from `python/` both with and without a listener so you can tell a new
+  failure from those two.
 
 Client API shapes that are easy to get wrong:
 
@@ -937,9 +1024,24 @@ failure raises `pysysml.errors.RuntimeError` with the executor's message
 yourself, `pysysml.connect("localhost", 50551, auto_start=False)` avoids the
 `Binary not found at ~/.pysysml/bin/sysml-grpc` error — but prefer the auto-start path per above.
 
+Fixture trap when proving `Model.execute_action` / `Model.execute_state` "exist and work": an action
+that only declares parameters (`action add : Add { in x = 2.0; out z = x + y; }`) validates clean but
+raises `ExecutionError: initialize action: no initial node found in action add` — there is nothing to
+execute. Do not read that as a broken RPC; borrow a body-bearing fixture instead, e.g.
+`internal/core/runtime/testdata/conformance/action_body_local_calc_usage.sysml`
+(`execute_action("test::run")` → `{'v': 2.0, 'i': 3, 'doubled': 4.0, 'acc': 12.0}`) and
+`state_anonymous_action_body.sysml`
+(`execute_state("Test::Bodies")` → `states_visited ['start','working','nstart','nested','done']`,
+`final_context {'log': 321879}`). Those two doubles are the cheapest end-to-end proof that both
+RPCs really run rather than merely being present on the object.
+
 Suite baseline: `cd python && python -m pytest tests/ -q` with no service running should be
 `148 passed, 24 skipped` (~40s; it was `75 passed, 18 skipped` before the Tier 1/Tier 2 client
-work), and `158 passed, 14 skipped` with a service running. The skips are the integration
+work), and `158 passed, 14 skipped` with a service running. As of the 0.0.8 prep branch
+(`b0f5f23`) that baseline is `368 passed, 26 skipped` in ~42 s from the repo root
+(`python -m pytest python/tests/ -q`), with one expected `UserWarning` from
+`test_a_cache_survives_a_replacement_that_cannot_be_downloaded` — re-measure rather than trusting an
+older count. The skips are the integration
 tests gating on a live service. `pytest` is **not**
 installed in `~/pysysml-venv` by default — `~/pysysml-venv/bin/pip install pytest` first, or
 `python -m pytest` fails with `No module named pytest` (the `pytest` on `PATH` belongs to an
@@ -967,6 +1069,32 @@ naming the path or URL. `PYSYSML_GITHUB_REPO` overrides the repo. Beware: these 
 unauthenticated GitHub API, so repeated runs flip from a truthful `HTTP Error 404: Not Found` to a
 misleading `HTTP Error 403: rate limit exceeded` — rehearse sparingly and report the 404 wording,
 not whichever one the recording happened to catch.
+
+#### The stale-*cache* decision is testable offline (PR #178)
+
+`stale_cache_reason(version, github_repo=None)` decides whether `~/.pysysml/bin/sysml-grpc` may
+answer for a requested release, and it needs no network — drive it directly and write the sidecar
+`~/.pysysml/bin/sysml-grpc.json` (`{"version":…, "sha256":…, "repo":…}`) by hand. The four shapes
+worth asserting, with the wording each produces:
+
+| sidecar | asked for | reason |
+|---|---|---|
+| absent | `v0.0.8` | `… was not downloaded by this client, so which release it is cannot be told` |
+| `v0.0.7` + **true** sha256 of the file | `v0.0.8` | `… is v0.0.7, but v0.0.8 was asked for` |
+| `v0.0.7` + wrong sha256 (hand-swapped binary) | `v0.0.8` | falls back to the "not downloaded by this client" wording |
+| `v0.0.8` but `"repo":"someone/Systemica-fork"` | `v0.0.8` | `… was downloaded from someone/Systemica-fork, but v0.0.8 of Open-MBEE/Systemica was asked for` |
+
+- The digest is re-verified (`cached_release`), so a *true* sha256 in the sidecar is what makes the
+  "is v0.0.7" branch reachable — a placeholder digest silently tests the wrong branch.
+- `stale_cache_reason(None)` is `None` **by design**: with `$PYSYSML_GRPC_VERSION` unset any cached
+  binary is taken on faith. So before any Python check, `cp bin/sysml-grpc ~/.pysysml/bin/` —
+  otherwise a binary from an older release answers as if it were your build, and
+  `~/.pysysml/bin/sysml-grpc -version` is the one-line way to confirm which build you are testing.
+- `ensure_binary(version=…)` on a stale cache emits `UserWarning: Replacing the cached sysml-grpc: …`
+  and then, when the download fails (403/404 in a sandbox), a second
+  `UserWarning: Keeping the cached sysml-grpc … could not be downloaded` and returns the old path.
+  That is the only observable half of the replacement without network; say so rather than claiming
+  the replacement was proven. Always back up the cache + sidecar and restore them afterwards.
 
 ### Verification RPCs, typed errors and strict loading (`pysysml` Tier 3, PR #149)
 
@@ -1048,7 +1176,7 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   ~47 elements under `Base`/`Occurrences`/`Links`/`Clocks` come back with **no** `@type` (their
   symbol kind is `SymbolUnknown`), so they never match `@type =` but are kept by its `inverse`; ~12
   `*Definition`s (e.g. `ScalarValues::Boolean`) come back with **no** `isAbstract`. Any claim in
-  docs/API.md that the `@type` mapping is total is a doc bug unless it is scoped to "every kind a
+  docs/reference/api.md that the `@type` mapping is total is a doc bug unless it is scoped to "every kind a
   parsed declaration can have".
 - Property-absence is the documented shape throughout: `owner` absent for a top-level package,
   `type` absent for an untyped attribute, `declaredName` absent for an *effective* name. A one-line
@@ -1715,3 +1843,203 @@ printf 'part def A { attribute x : Integer = 1; }\n' | ./bin/sysml | grep -c 'di
   multi-line continuation (`...>`) and silently swallows subsequent lines. Press `ctrl+c` to abandon
   the buffer — it flushes the accumulated parse errors and returns a clean `sysml>` prompt, which is
   itself a good no-panic assertion.
+
+## Constraint/requirement checks: which object the verdict is about (PR #176)
+
+`-constraint`/`-requirement` (and `%constraint`/`%requirement`) pick their subject in this order:
+the object instantiated under the name the condition was reached by, else the *single* session
+object whose type conforms to the type declaring the condition, else declared defaults.
+
+- The suffix is the tell: a verdict about an object reads
+  `✗ Constraint P::Sensor::inRange failed (on P::hot ID: 1)`, a defaults-only verdict has **no
+  `(on …)` suffix**. Assert the suffix, not just ✓/✗ — a defaults evaluation of a fixture whose
+  defaults happen to hold looks like a pass either way.
+- Exit statuses (`cmd/sysml/status.go`): 0 holds, 1 fails, **2 unevaluable/unresolved**. The
+  ambiguity answer is exit 2 with the message
+  `X is carried by more than one object of this session (a, b): check it on one of them, …`,
+  written to **stderr** with a `sysml:` prefix (`error:` in the REPL) and with **no ✓/✗ line** —
+  so a build step never reads a verdict that was not decided.
+- Build a fixture where the *def* declares a default that satisfies the condition and the *usage*
+  redefines it to violate it (`attribute reading = 50.0` vs `:>> reading = 150.0`). Without the
+  default, the pre-fix binary errors with `unresolved reference: reading` instead of the silent
+  `✓ passed`, and the contrast is much less convincing.
+- Carriers include subtypes: `part def Heavy :> Sensor`, `part hotter :> hot`, an abstract def's
+  usage, and a `variation part` all count — instantiating two of them makes the check ambiguous.
+  An instance of an unrelated type does **not** count and leaves the defaults path.
+- Since PR #180 a condition that **could not be evaluated** (uninitialized slot, unbound subject)
+  prints `? <what> could not be evaluated` + `  Error: <why>` and exits **2**; it keeps the
+  `(on …)` suffix when it is about an object. Before #180 it printed `✗ … failed` / `✗ … fails`.
+  Assert all three states in one pass — `✓ … passed` exit 0, `✗ … failed` exit 1 (with
+  `Assertion evaluated to false: <condition>`), `? … could not be evaluated` exit 2 — and grep the
+  **verdict line only** for the old wording: the `Error:` reason legitimately contains the words
+  "evaluation failed", so a bare `grep -c failed` over the whole output is a false positive.
+  `%slots` mirrors the three states as `<constraint: satisfied>` / `<constraint: violated>` /
+  `<constraint: not evaluated: …>` (the `not evaluated:` prefix is #180's). `-json` reports
+  `"status": "unresolved"`, `"exit": 2` and the same `?` line.
+- CLI checks refuse to run at all on a model that does not analyse cleanly
+  (`… did not analyse cleanly; no check was made`, exit 2), so an unevaluable-verdict fixture must
+  itself be error-free — put the `assert nonexistent > 0` style constraint in a *separate* file
+  from the unbound-subject requirement, or the CLI never reaches the verdict.
+- PR #180 made `%eval` pick the same subject as the checks (`Session.subjectFor`): with `P::hot`
+  instantiated, `%eval P::Sensor::reading` answers `= 140.00 (on P::hot ID: 1)`; with `P::hot` and
+  `P::cold` both instantiated it refuses with `error: … is carried by more than one object of this
+  session (P::cold, P::hot): name one of them, …`; with nothing instantiated it answers the
+  declared default and prints **no** `(on …)`. Subtype carriers (`part hotter :> hot`) work too.
+- Still a blind spot after #180: a **nested part** whose value is redefined on the instantiated
+  object is not the subject. With `part o : Outer { part :>> b { attribute :>> c = 99.0; } }`,
+  `%slots A::o` shows `c = 99.00` and `small: <constraint: violated>`, yet `%eval A::Outer::b::c`
+  answers `= 5.00` and `%constraint A::Inner::small` says `passed` (identical on the parent
+  commit, so it is pre-existing, not a regression — but it reads as a contradiction and may be
+  worth flagging). Also `%eval A::b::c` (skipping the def segment) is `unresolved reference` in
+  both revisions; the resolvable spellings are `A::Outer::b::c` and `A::Inner::c`.
+- `-instantiate` objects are created **before** `-e` expressions since PR #180, so
+  `sysml -instantiate P::hot -e P::Sensor::reading m.sysml` prints the instance line first and
+  answers `140.00 (on P::hot ID: 1)`; the parent binary answered `0.00`. Any change to
+  `cmd/sysml/check.go`'s ordering needs the other combinations re-walked: multiple `-e` (still in
+  flag order), `-e` with `-constraint` (exit 1), a failing `-e` (aborts with exit 2 before later
+  `-e`s), `-validate`, and `cat m.sysml | sysml -e '1+1'` (piped stdin works for `-e`, but named
+  checks over piped stdin refuse with `no model to check; name the file …`).
+- Konsole typing trap: the `✗` glyph does not survive the computer tool's `type` action into a
+  shell command (it arrives empty, and `grep -e ''` then matches every line). Build the pattern in
+  the shell instead: `X=$(printf '\u2717'); … | grep -nE "$X|could not be evaluated"`.
+- `%slots <usage>` is the independent oracle — `inRange: <constraint: violated>` must agree with
+  the verdict for the same object. Declaring anything new in the REPL drops all instances, so a
+  following check silently reverts to defaults (assert the missing `(on …)` suffix there).
+
+## A lone `-` as standard input (PR #179)
+
+`internal/core/project.ReadFile` reads `os.Stdin` once (memoized with `sync.Once`) whenever a path
+is exactly `-`, names it `<stdin>` in diagnostics, and refuses a terminal with
+`standard input is a terminal; redirect it or name a file`. That makes stdin usable in every
+path-taking mode: `-validate`, `-e`, `-calc`, `-constraint`, `-action`, `-state`, `-convert`, and a
+plain positional load.
+
+The convincing test is a **paired run**: `bin/sysml -validate m.sysml` against
+`cat m.sysml | bin/sysml -validate -`, for a clean *and* a broken model. Everything but the model
+name must match, including the line:column of each diagnostic and the exit status (0 / 2). Build the
+parent revision (see the contrast-binary recipe) to show the same pipe answering
+`sysml: cannot read -: no such file or directory` before the change.
+
+Cases worth walking, with what they should answer:
+
+| command | expected |
+|---|---|
+| `cat m | sysml a.sysml - -validate` | `✓ a.sysml, <stdin>: no errors` — flags may follow the paths |
+| `cat m | sysml -validate - -` | `✓ <stdin>, <stdin>: no errors`, exit 0 (one memoized read, no hang) |
+| `: | sysml -validate -` | `✓ <stdin>: no errors`, exit 0 — empty stdin is an empty model, not an error |
+| `head -c 200000 /dev/urandom | sysml -validate -` | ~1800 `<stdin>:L:C: error: expected a namespace member`, exit 2 |
+| `sysml -convert ttl -` | refused: `standard input carries no file name to take the format from`, exit 2 |
+| `cat m | sysml - -convert ttl -from sysml` | conversion on stdout; `-o f` writes `wrote f (ttl, N bytes)` |
+| `cd d && sysml -validate ./-` | reads a file *really* named `-`; a bare `-` in that directory still reads the pipe |
+| `%load -` at the interactive prompt | `error: cannot read <stdin>: standard input is a terminal…`, and the REPL keeps going |
+
+Two traps when testing this:
+
+- **Always wrap in `timeout`.** The whole risk of the change is a run that blocks on a stdin nobody
+  redirected. For the terminal case a pipe is not enough — give the process a real tty with
+  `script -qec "timeout 10 bin/sysml -validate -; echo TTYSTATUS=\$?" /dev/null </dev/null`; it must
+  print the refusal immediately with status 2.
+- **Do not read the exit status through `| head`.** `$?` is then `head`'s, and `${PIPESTATUS[0]}` is
+  `cat`'s; a SIGPIPE kill shows up as 141 and looks like a defect. Redirect to files
+  (`>out 2>err; echo $?`) and grep them instead.
+- Piping a *model* into a plain `sysml -` also consumes the prompt stream, so the REPL prints its
+  banner and exits at once with the load's status — expected, not a hang. Inside a piped prompt
+  session, `%load -` swallows the remaining script lines as model text, which is worth noting but is
+  inherent to one stdin.
+
+## `sysml-lsp` command line (PR #179)
+
+`cmd/sysml-lsp` parses args with a `flag.FlagSet`: `-version`/`--version`/`-v` print the version and
+`-h`/`-help` the usage, both on **stdout** with status 0; an undefined flag or a stray positional
+argument prints `flag provided but not defined: …` / `sysml-lsp: unexpected argument "…"` plus the
+usage on **stderr** with status 2, and nothing on stdout. Assert the stream split
+(`>out 2>err`, then `wc -c <out`), not just the text — the point of the change is that a misuse no
+longer enters protocol mode and dies with `failed reading header line: EOF` (which is what the parent
+binary does, exit 1).
+
+With no args it still speaks LSP. Drive it from Python: write
+`Content-Length: N\r\n\r\n<json>` frames to stdin, read the header line, blank line, then N bytes.
+`initialize` must answer `"capabilities"` with `completionProvider`, and `shutdown` `{"result":null}`.
+**Pre-existing, not a regression:** after the `exit` notification the process only ends when stdin is
+closed, and then reports `sysml-lsp: failed reading header line: EOF` with status 1 — identical on the
+parent binary, so verify against the contrast binary before reporting it.
+
+## Static dimension (unit-commensurability) warnings (PR #184)
+
+`checkDimensions` (`internal/core/passes/typecheck_dimension.go`) emits a **type-tier warning** for
+`+ - < > <= >= == !=` when both operand dimensions are statically known and incommensurable, e.g.
+`operator '<' combines incommensurable quantities: ISQBase::MassValue (dimension M) and m (dimension L)`.
+It is a warning, so `-validate` still exits **0**; evaluating the same constraint still fails with
+`incommensurable units: cannot express m (SI::metre) in kg (1000·SI::gram)` and exit **2**. `-quiet`
+suppresses it; `-json` reports it as `"severity":"warning","pass":"type","code":"type.expr"` with
+`"exit": 0`.
+
+Fixture gotchas that cost time here:
+
+- Every fixture needs `public import ScalarValues::*;` if it mentions `Real`/`Boolean`, else
+  `unresolved reference: Real — did you mean ScalarValues::Real?` aborts before any check runs
+  (`did not analyse cleanly; no check was made`, exit 2) and the test proves nothing.
+- Unit names are the stdlib's: `t`, `deg`, `degC` do **not** resolve; `°`/`°C` do not even lex in a
+  `[...]` unit position. Use `g`, `K`, `rad`, `Hz`, `Bq`, `N * m`, `J`. `ISQ::TemperatureValue` is an
+  **alias** for `ISQBase::ThermodynamicTemperatureValue`.
+- **Naming an attribute `m` shadows `SI::metre`**, so `1.0 [m]` inside that scope is not a quantity
+  at all and every dimension check there goes silent. The runtime says so explicitly
+  (`m resolves to the attributeUsage m declared in …, shadowing the measurement unit SI::metre`).
+  Never name a fixture attribute after a unit unless shadowing is the thing under test.
+
+Cache interaction: `libs.formatVersion` bumped 15→16 and the cache persists `DimensionFacts`
+(`~/.cache/sysml-ls/libs`, or `$XDG_CACHE_HOME/sysml-ls/libs`). To exercise both paths,
+`rm -rf ~/.cache/sysml-ls/libs` and run **the very first** validation on the file you care about —
+only that first run is cold, since it repopulates the cache for every later file in the same loop.
+Known cosmetic divergence: cold names the quantity type by leaf name (`MassValue`), warm by
+qualified name (`ISQBase::MassValue`); assert verdicts and exit codes rather than byte-identical text.
+
+Silent-by-design shapes (assert zero `warning:` lines): commensurable comparisons (mm vs m, m/s vs
+km/h), dimensionless arithmetic, `xs#(1)` indexing, an untyped attribute later `assign`ed a quantity,
+a calc *invocation* result operand, and a calc body written without `return` (`calc def C { in q : …;
+q < 1.0 [m] }` never warns, while the `return : Boolean = …` form does). A **typed** parameter
+(`in q : ISQ::MassValue`) *does* warn — its dimension is statically known — and an operand whose type
+is reached through a stdlib **alias** currently does **not** warn even though the un-aliased twin does.
+
+Cheap false-positive sweep, worth running for any diagnostic-adding pass:
+
+```bash
+for f in $(find examples testdata -name '*.sysml'); do ./bin/sysml -validate "$f" 2>&1 \
+  | grep 'incommensurable quantities'; done   # expect no output (403 files, ~90 s)
+```
+
+## Verifying hand-written release notes against built binaries
+
+When asked whether release notes are honest, judge each sentence separately and re-measure every
+number rather than quoting the table.
+
+- **Transcripts are layout-sensitive.** A quoted diagnostic like `model.sysml:6:9: warning: …` is
+  reproducible only if the fixture puts the offending expression on that exact line/column. Put the
+  comparison on its own line at the quoted column (`constraint c {` on the line above) and copy the
+  fixture to the quoted file name (`/tmp/model.sysml`) before deciding a transcript is wrong.
+- **Model sweeps: quote your loop.** `examples/sysml-v2-training/*` directory names contain spaces,
+  so `for f in $(find examples -name '*.sysml')` word-splits and inflates the count (395 tokens for
+  110 files) while every conversion fails on the broken path. Always use
+  `while IFS= read -r f; do … done < <(find examples -name '*.sysml' | sort)`.
+- **Round-trip claims need a validity control.** Many training files do not validate standalone
+  (their dependencies live in sibling files), so a ttl→sysml re-validation failure is not proof that
+  the round trip is lossy. Measure three numbers: converted, converted-and-original-validates, and
+  round-tripped. Over the 120 `.sysml` + `.kerml` models under `examples/` at 0.0.8 that is
+  71 / 44 / 44 (65 / 38 / 38 counting the 110 `.sysml` files alone — state the denominator, since
+  the published limitation counts both languages).
+- **Counted rows go stale fast, and the Python row depends on the environment.** With no service
+  listening (what CI does) `pytest python/tests/ -q` is 369 passed / 26 skipped at 0.0.8; with a
+  service already listening the integration tests run instead of skipping *and* two lifecycle tests
+  fail by design, because they assert this client owns the service it started. Measure the row the
+  no-service way and say so. `go test -race -count=1 ./...` was 3,682 pass / 5 skip / 3,687 total.
+- **Error-class claims: check the export path.** A class can exist in `pysysml.errors` and be absent
+  from the package surface — `hasattr(pysysml, name)` is the check, and
+  `TestPackageSurface` in `python/tests/test_errors.py` now locks every exception in
+  `errors.__all__` onto `pysysml`.
+- **LSP capability claims** are cheap to check with a framed JSON-RPC driver: assert
+  `semanticTokensProvider` has `full: true`, `range: true` and no `delta` key anywhere, that
+  `range` returns strictly fewer tokens than `full`, that `semanticTokens/full/delta` answers
+  `-32601` and the server still serves a later request, and that each code action carries a
+  `WorkspaceEdit` whose `newText` actually fixes the file. A missing-semicolon fix needs a fixture
+  the parser recovers with a fix on — `action def A { first start }` yields `Insert ';'`; a plain
+  attribute declaration yields a diagnostic with no fix.

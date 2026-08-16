@@ -1,6 +1,9 @@
 package resolve
 
-import "github.com/Open-MBEE/Systemica/internal/core/source"
+import (
+	"github.com/Open-MBEE/Systemica/internal/core/quickfix"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
+)
 
 // Diagnostic is a name-resolution problem tied to a source span.
 type Diagnostic struct {
@@ -8,6 +11,9 @@ type Diagnostic struct {
 	Message string
 	// Code names the kind of problem; empty leaves it to the message.
 	Code string
+	// Fixes are the unambiguous edits resolving the diagnostic, offered by an
+	// editor as quick fixes.
+	Fixes []quickfix.Fix
 }
 
 // CodeNameConflict marks a name declared twice in one namespace, counting the

@@ -296,13 +296,10 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		multiplicity = p.parseMultiplicity()
 	}
 
-	// Optional typing and relationships (: Type, :> SuperType, ::> Redefines, etc)
-	var relationships []*ast.Relationship
-	if p.at(lexer.Colon) || p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) ||
-		p.at(lexer.ColonColonGt) || p.at(lexer.ColonEq) {
-		rels := p.parseRelationships(true)
-		relationships = append(relationships, rels...)
-	}
+	// Optional typing and relationships, written either as an operator (`:>`) or
+	// as the keyword it stands for (`subsets`); parseRelationships consumes
+	// nothing when neither begins the token at the cursor.
+	relationships := p.parseRelationships(true)
 
 	// Optional multiplicity after relationships if not already parsed (e.g., :> target[mult])
 	if multiplicity == nil && p.at(lexer.LBracket) {
@@ -1707,12 +1704,15 @@ func (p *Parser) parseConstraintMember() ast.Node {
 
 	var isAssert bool
 	var isNegated bool
+	var keyword string
 
 	// Check for 'assert' or 'assume' keyword
 	if p.acceptKeyword("assert") {
 		isAssert = true
+		keyword = "assert"
 	} else if p.acceptKeyword("assume") {
 		isAssert = false
+		keyword = "assume"
 	} else {
 		// Bare expression (implicit assert) - common in invariants
 		// Example: inv piPrecision { RealFunctions::round(pi * 1E20) == 314159265358979323846.0 }
@@ -1726,7 +1726,7 @@ func (p *Parser) parseConstraintMember() ast.Node {
 
 	// A nested constraint states its conditions in a body rather than inline:
 	// assert constraint [<name>] { <expr> }
-	if node := p.tryParseNestedConstraint(start, isAssert, isNegated); node != nil {
+	if node := p.tryParseNestedConstraint(start, isAssert, isNegated, keyword); node != nil {
 		return node
 	}
 
@@ -1738,6 +1738,7 @@ func (p *Parser) parseConstraintMember() ast.Node {
 
 	node := &ast.ConstraintMember{
 		IsAssert:   isAssert,
+		Keyword:    keyword,
 		IsNegated:  isNegated,
 		Expression: expr,
 	}
@@ -1932,6 +1933,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 
 	if p.at(lexer.LBrace) {
 		p.advance()
+		node.HasBody = true
 		node.Body = p.parseRequirementBody()
 	} else {
 		p.expect(lexer.Semicolon, "expected ';' or '{' after subject declaration")
@@ -2054,7 +2056,7 @@ func (p *Parser) tryParseConstraintReference() (*ast.QualifiedName, []ast.Node, 
 // nested-constraint form of a constraint member, and returns nil when the member
 // is not that form — `constraint` is a valid feature name, so an expression may
 // legitimately start with it.
-func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool) ast.Node {
+func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool, keyword string) ast.Node {
 	if !p.atKeyword("constraint") {
 		return nil
 	}
@@ -2072,6 +2074,7 @@ func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool) a
 	p.advance() // consume '{'
 	node := &ast.ConstraintMember{
 		IsAssert:  isAssert,
+		Keyword:   keyword,
 		IsNegated: isNegated,
 		Name:      name,
 		Body:      p.parseNestedConstraintConditions(),
