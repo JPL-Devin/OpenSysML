@@ -21,9 +21,10 @@ func TestKerMLTypeDeclarationsAreClassified(t *testing.T) {
 		"C": SymbolKerMLType, "D": SymbolKerMLType, "S": SymbolKerMLType,
 		"A": SymbolKerMLType, "B": SymbolKerMLType, "I": SymbolKerMLType,
 		"Q": SymbolKerMLType, "s": SymbolActionUsage,
-		// `datatype` and `function` carry a feature usage kind, so the keyword
-		// decides their classification (KerML 1.0 §8.3.2, §9.2.2).
-		"T": SymbolKerMLType, "F": SymbolKerMLType,
+		// A `datatype` is a definition even with no specialization to name it one.
+		"T": SymbolAttributeDef,
+		// `function` stays a calc: the runtime resolves an invocation through it.
+		"F": SymbolCalcUsage,
 	}
 	for name, kind := range want {
 		sym, ok := pkg.Scope.LookupLocal(name)

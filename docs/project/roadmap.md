@@ -399,10 +399,19 @@ because two of the four descriptions no longer matched the code.
   cannot specialize attributeUsage` and `type must be a definition, found attributeUsage`, so
   nothing could specialize `D` or be typed by it; `function` failed the same way through
   `calcUsage`, while `class`, `struct`, `assoc`, `behavior` and `interaction` were already clean.
-  `symbols/builder.go` `classifyUsage` now classifies a classifier-level KerML keyword as
-  `kermlType` regardless of the usage kind the parser assigns it. Still open: the `-validate`
-  listing labels these from the AST usage kind, so they print as `attribute D` / `calc D`; a
-  faithful label needs `ast.UsageKind` to carry a datatype and a function kind.
+  The root cause was that `symbols/builder.go` `classifyUsage` decided a `datatype` from its
+  relationships — `datatype Real specializes Complex` was a definition, bare `datatype D;` a
+  usage — so a `datatype` is now a definition whatever it specializes, and `feature f : D;` is
+  clean. `function` is deliberately left a `calcUsage`: a KerML function is invoked as a calc and
+  the runtime resolves it through `SymbolCalcUsage`, so classifying it as a type breaks every
+  library operator (`IntegerFunctions::+` and the rest) — the fidelity gap there is that nothing
+  distinguishes a function *definition* from a calc usage, which needs a function kind in
+  `ast.UsageKind`. Still open, and outside this item's files: `classifier C specializes D;` now
+  reports `class cannot specialize attributeDef (kind mismatch)`, because
+  `passes/typecheck.go` `specializationDiag` requires a plain `classifier` to specialize another
+  classifier-kind definition, and reports it as `class`. KerML 1.0 §8.3.2 makes a `DataType` a
+  `Classifier`, and only `Class` is disjoint with it (§8.3.3), so a plain `classifier` may
+  specialize a datatype; the kind-compatibility matrix is the error site A7-4 forbids patching.
 
 ## A8 — a nested feature redefined on an object is not the subject of a check or an `%eval`
 

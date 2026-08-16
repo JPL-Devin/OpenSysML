@@ -471,13 +471,6 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 	}
 }
 
-// kermlTypeKeywords are classifier-level KerML keywords carrying a feature usage
-// kind; the others (`class`, `struct`, …) already reach SymbolKerMLType by kind.
-var kermlTypeKeywords = map[string]bool{
-	"datatype": true,
-	"function": true,
-}
-
 // classifyUsage determines the correct symbol kind for a usage AST node.
 // Per Phase 4: Parser treats some keywords (like 'datatype') uniformly as usage.
 // Builder classifies based on semantic context (relationships, body structure).
@@ -487,10 +480,10 @@ var kermlTypeKeywords = map[string]bool{
 // - Attribute usage with typing or subsets/redefines → AttributeUsage
 // - All other usages → use usageSymbolKind directly
 func classifyUsage(u *ast.Usage) SymbolKind {
-	// A KerML classifier-level keyword declares a type, not a feature: `datatype D`
-	// is a DataType and `function F` a Function, so both can be specialized and typed by.
-	if kermlTypeKeywords[u.Keyword] {
-		return SymbolKerMLType
+	// A `datatype` declares a KerML DataType (KerML 1.0 §8.3.2): a definition whatever
+	// it specializes, unlike the `attribute`/`feature` keywords classified below.
+	if u.Keyword == "datatype" {
+		return SymbolAttributeDef
 	}
 	// Only classify attribute usages (datatype, attribute, feature keywords)
 	if u.Kind != ast.UsageAttribute {
