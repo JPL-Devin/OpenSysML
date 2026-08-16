@@ -66,7 +66,8 @@ func (e *StateExecutor) pseudostateTarget(ps *ast.PseudostateNode) (*ast.StateNo
 
 // pseudostateBranch returns the outgoing transition a pseudostate routes along:
 // the first whose guard is satisfied, in declaration order, an unguarded one
-// being UML's else branch.
+// being the default branch. Exactly one succession is taken, as KerML
+// `DecisionPerformance::outgoingHBLink: HappensBefore[1]` requires.
 func (e *StateExecutor) pseudostateBranch(ps *ast.PseudostateNode) (*lower.Transition, error) {
 	outgoing := e.graph.Transitions[ps]
 	if len(outgoing) == 0 {

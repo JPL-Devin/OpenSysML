@@ -1,6 +1,6 @@
 # SysML v2 Specification Compliance
 
-**Purpose:** Document implementation coverage of SysML v2 / KerML / UML 2.5.1 behavioral semantics.
+**Purpose:** Document implementation coverage of SysML v2 / KerML behavioral semantics. UML 2.5.1 is cited only as reference semantics for a Systemica extension the SysML v2 notation has no production for and the bundled KerML semantic library (`internal/core/libs/stdlib/`) no performance for.
 
 **Related:** [`TESTING.md`](../internals/testing.md) (test contracts), [`ARCHITECTURE.md`](../internals/architecture.md) (runtime architecture)
 
@@ -134,7 +134,7 @@
 
 Each row documents one behavioral semantic feature:
 
-- **Semantic Rule**: UML 2.5.1 / KerML / SysML v2 spec reference
+- **Semantic Rule**: the governing reference — the SysML v2 metamodel or the bundled KerML semantic library, and UML 2.5.1 only where neither has the concept
 - **Implementation**: File:function implementing the semantics
 - **Test Case**: Conformance/robustness test(s) exercising the feature
 - **Status**: 
@@ -337,7 +337,7 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 
 ⚠️ A requirement feature that carries no value of its own is read from the satisfying object's feature of that name, which is how a requirement stated over the values it checks (`attribute verticalSpeed;` compared against a limit) reaches a verdict from `by`. The spec supplies a subject's values to a requirement through the subject parameter (`subject lander : Lander;` then `lander.verticalSpeed`) or an explicit binding, not by matching names, so this fallback — the same one `%requirement` applies on an instance — is an approximation, and a requirement whose unbound feature happens to share a name with an unrelated feature of the subject would be checked against it. A requirement whose value comes from neither its own binding nor the subject (the lunar lander model's `actualVerticalSpeed`, produced by an analysis) still has no value to check and reports `ErrNoValue`.
 
-### Action (UML 2.5.1 §16 Activities)
+### Action (SysML v2 Actions — `Systems Library/Actions.sysml`, over KerML `Performances`)
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
@@ -387,7 +387,7 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 | Deadlock detection | `action_executor.go:72` Step | `action_executor_test.go:TestActionExecutor_Deadlock_JoinStarvation` | ✅ Faithful |
 | Step budget enforcement | `context.go` incrementStep; budget configured by `SYSML_MAX_STEPS` (`budget.go` `BudgetsFromEnv`) | `robustness_test.go:testStepBudgetExceeded`, `budget_test.go:TestRaisedBudgetRunsLongerLoop` | ✅ Faithful (the reported limit is the effective one, and names the variable that raises it) |
 
-### State Machine (UML 2.5.1 §14 StateMachines)
+### State Machine (SysML v2 States — `Systems Library/States.sysml`, over KerML `StatePerformances`)
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
@@ -773,7 +773,7 @@ semantics layer over the conjugation parity of the typing/specialization chain.
   subsetting inherits them to.
 - Conjugation is not a runtime concept here: nothing is executed differently for
   a conjugated port, because ports carry no transfer semantics in the runtime
-  yet (see "Major UML/SysML Features Not Implemented").
+  yet (see "Major Features Not Implemented").
 - A `snapshot`/`timeslice` portion is recorded on the usage and resolves like any
   occurrence usage, but the runtime does not relate a portion to the occurrence
   it is a portion of, and no time ordering between portions is derived.
@@ -892,7 +892,7 @@ are tracked here):
 | Scalar type inference for a bare feature reference (`passes/typecheck_expr.go` `infer`) | A condition that is a plain name — `while total { … }`, `total : Integer` — infers Unknown, so `checkBoolean` passes it and the executor reports it (`runtime/action_statements.go` `evalCondition`) instead. Once a feature reference infers its declared scalar type, this becomes a typecheck error like the literal and operator cases, and the runtime check goes back to being unreachable. |
 | Specialization edges in the library index (`libs/loader.go` `recordEntries` drops `Supers`) | `implicitUsageBases` maps each usage kind to its stdlib base *definition* because the base *feature* the spec has usages subset would be a dead end for member lookup. With the edges recorded, the map should name the base feature the spec names. |
 
-### Major UML/SysML Features Not Implemented
+### Major Features Not Implemented (UML-referenced; no SysML v2 notation or KerML performance)
 
 **Activity Diagrams (Advanced):**
 - Interruptible regions
@@ -929,7 +929,6 @@ are tracked here):
 **Intentionally Unspecified (No Normative Semantics):**
 - Verification verdict evaluation (VerdictKind/PassIf) - SysML v2 §9.3.2: "evaluation... intentionally not specified normatively"
 - Variability/variation selection - SysML v2 §9.4: "Selection of variants is not specified normatively" — Systemica selects the variant a variation usage is bound to (`attribute :>> cut = cut::cutIdeal;`) and errors on an unselected, unknown, or multiply-selected variation; see the Variation and Variant map
-- Streaming pin behavior - UML 2.5.1 §16.2.4: "Specific streaming behavior is tool-dependent"
 - View/viewpoint rendering - SysML v2 §10.2: "rendering semantics intentionally left to tools"
 - Allocation execution - SysML v2 §9.2.4: syntax defined, execution semantics not normative
 
