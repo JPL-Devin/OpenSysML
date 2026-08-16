@@ -297,9 +297,11 @@ a default whose value count does not conform to the multiplicity governing its
 feature, which is the assumed `1..1` for a feature that declares none — and
 `-validate` reports `no errors` only for a run that found none. The prompt surface
 follows the same rule: a command that rendered a slot it could not materialize —
-a `%slots` listing carrying `<error: …>`, or an `%eval` of such a slot — answered
-nothing about it, so a session driven from a pipe exits `2` rather than reporting
-success, whatever analysis found.
+a `%slots` listing carrying `<error: …>`, or an `%eval` of such a slot, pinned to
+a context (`%eval in <name> : <expr>`) or not — answered nothing about it, so a
+session driven from a pipe exits `2` rather than reporting success, whatever
+analysis found. A name that is no slot of the object is a request the command got
+wrong, not a slot that failed to materialize, and does not change the status.
 
 ```bash
 $ sysml model.sysml -instantiate test::craft -validate; echo $?

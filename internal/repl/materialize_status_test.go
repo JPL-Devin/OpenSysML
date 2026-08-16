@@ -68,6 +68,34 @@ func TestEvalCarriesMaterializationFailureIntoStatus(t *testing.T) {
 	}
 }
 
+// A pinned %eval reads the same slot through the object it names, so which form
+// of the command surfaced the failure does not decide whether it is recorded.
+func TestPinnedEvalCarriesMaterializationFailureIntoStatus(t *testing.T) {
+	s := submitted(t, unmaterializableModel)
+	wants(t, run(t, s, "%instantiate Demo::R"), "Created instance")
+
+	wants(t, run(t, s, "%eval in Demo::R::b : bad"), "error:", "multiplicity violation")
+	if !s.HasErrors() {
+		t.Error("a pinned evaluation of a slot that does not materialize did not reach the session status")
+	}
+	if got := s.MaterializationFailures(); len(got) == 0 ||
+		!errors.Is(got[0], runtime.ErrSlotMaterialization) {
+		t.Errorf("materialization failures = %v, want the slot the runtime could not materialize", got)
+	}
+}
+
+// A name that is no slot of the object is a request the command got wrong, not a
+// slot that failed to materialize, so it decides nothing about the model.
+func TestEvalOfAnUnknownSlotIsNoMaterializationFailure(t *testing.T) {
+	s := submitted(t, conformingModel)
+	run(t, s, "%instantiate Demo::R")
+	run(t, s, "%eval nosuch")
+
+	if got := s.MaterializationFailures(); len(got) != 0 {
+		t.Errorf("materialization failures = %v, want none", got)
+	}
+}
+
 // A model whose slots all materialize leaves the session with nothing unanswered.
 func TestSlotsOfAConformingModelLeaveNoFailure(t *testing.T) {
 	s := submitted(t, conformingModel)

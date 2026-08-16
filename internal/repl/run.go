@@ -145,6 +145,16 @@ func (s *Session) MaterializationFailures() []error {
 	return slices.Clone(s.materializeFailures)
 }
 
+// noteIfMaterializationFailure records an error a command reported when it is a
+// slot that could not be materialized, so which command surfaced it — a slot
+// listing, an evaluation, a pinned one — does not decide whether it is recorded.
+// Callers hold s.mu.
+func (s *Session) noteIfMaterializationFailure(err error) {
+	if errors.Is(err, runtime.ErrSlotMaterialization) {
+		s.noteMaterializationFailure(err)
+	}
+}
+
 // noteMaterializationFailure records slots a command could not materialize. It is
 // a record of what the session answered, so it stands once the object is gone.
 // Callers hold s.mu.

@@ -371,6 +371,7 @@ func (s *Session) doEvalLine(tail string) ([]string, bool, error) {
 	}
 	lines, err := s.evalIn(name, expr)
 	if err != nil {
+		s.noteIfMaterializationFailure(err)
 		return []string{"error: " + err.Error()}, false, nil
 	}
 	return lines, false, nil
@@ -502,6 +503,7 @@ func nameText(arg string) string {
 func (s *Session) doEval(expr string) ([]string, bool, error) {
 	lines, err := s.evalExpr(expr)
 	if err != nil {
+		s.noteIfMaterializationFailure(err)
 		return []string{"error: " + err.Error()}, false, nil
 	}
 	return lines, false, nil
@@ -559,7 +561,6 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 			if _, ok := inst.Slots[sym.Name]; ok {
 				slot, err := inst.GetSlot(ctx, sym.Name)
 				if err != nil {
-					s.noteMaterializationFailure(err)
 					return nil, fmt.Errorf("evaluation failed: %w", err)
 				}
 				return []string{

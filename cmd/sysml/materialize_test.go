@@ -220,6 +220,18 @@ func TestPipedSessionExitsOnAMaterializationFailure(t *testing.T) {
 		status: exitUnevaluable,
 		want:   []string{"error: evaluation failed", "multiplicity violation"},
 	}, {
+		name:   "an evaluation pinned to the object holding it leaves the run undecided",
+		stdin:  "%instantiate Demo::R\n%eval in Demo::R::b : bad\n",
+		model:  unmaterializableModel,
+		status: exitUnevaluable,
+		want:   []string{"error:", "multiplicity violation"},
+	}, {
+		name:   "a name that is no slot of the object decides nothing",
+		stdin:  "%instantiate Demo::R\n%eval nosuch\n",
+		model:  unmaterializableModel,
+		status: exitHolds,
+		want:   []string{"error:"},
+	}, {
 		name:   "quitting after the failure was reported does not report success",
 		stdin:  "%instantiate Demo::R\n%slots Demo::R\n%quit\n",
 		model:  unmaterializableModel,
