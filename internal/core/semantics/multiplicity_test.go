@@ -101,6 +101,31 @@ func TestMultiplicityNoneWhenAbsent(t *testing.T) {
 	}
 }
 
+// A feature that declares no multiplicity holds exactly one value, so the
+// effective multiplicity of a bare usage is the assumed 1..1.
+func TestEffectiveMultiplicityAssumesOne(t *testing.T) {
+	m, root := buildModel(t, "part def C { part a; part b [0..*]; }")
+	c := sym(t, root, "C")
+
+	a, _ := c.Scope.LookupLocal("a")
+	if r := m.EffectiveMultiplicityOf(a); r != AssumedRange() {
+		t.Errorf("EffectiveMultiplicityOf(a) = %+v, want %+v", r, AssumedRange())
+	}
+	if msg := m.EffectiveMultiplicityOf(a).CountViolation(2); msg == "" {
+		t.Error("two values conform to an undeclared multiplicity, want a violation")
+	}
+
+	// A declared multiplicity is the effective one, assumed nowhere.
+	b, _ := c.Scope.LookupLocal("b")
+	declared, ok := m.MultiplicityOf(b)
+	if !ok {
+		t.Fatal("MultiplicityOf(b) not ok")
+	}
+	if r := m.EffectiveMultiplicityOf(b); r != declared {
+		t.Errorf("EffectiveMultiplicityOf(b) = %+v, want the declared %+v", r, declared)
+	}
+}
+
 // CountViolation is the shared wording for a count against a multiplicity: an
 // unbounded or unknown bound admits any count, either side of a stated one does
 // not.

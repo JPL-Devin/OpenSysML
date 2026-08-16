@@ -14,12 +14,8 @@ type EffectiveFeature struct {
 	OwnerType    *symbols.Symbol // type that declares this feature (may be supertype)
 	Type         *symbols.Symbol // resolved type (nil if untyped)
 	Multiplicity semantics.Range // declared or inherited (default 1..1)
-	// MultiplicityStated is false when Multiplicity is the assumed 1..1 rather
-	// than one the model wrote, so a check can tell an assumption from a
-	// declaration.
-	MultiplicityStated bool
-	DefaultValue       ast.Node        // value-binding expression (nil if none)
-	DefaultDecl        *symbols.Symbol // feature the DefaultValue was written on (nil if none)
+	DefaultValue ast.Node        // value-binding expression (nil if none)
+	DefaultDecl  *symbols.Symbol // feature the DefaultValue was written on (nil if none)
 }
 
 // DefaultScope returns the scope DefaultValue resolves its names in, which for
@@ -107,7 +103,7 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 		mult, multStated := ctx.extractMultiplicity(memberSym)
 		if !multStated {
 			if inherited, ok := ctx.redefinedMultiplicity(memberSym, typeSym); ok {
-				mult, multStated = inherited, true
+				mult = inherited
 			}
 		}
 		defaultVal := ctx.extractDefaultValue(memberSym)
@@ -121,14 +117,13 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 
 		// Store feature; last one wins (redefinition/masking)
 		featureMap[name] = EffectiveFeature{
-			Name:               name,
-			Symbol:             memberSym,
-			OwnerType:          ownerType,
-			Type:               typ,
-			Multiplicity:       mult,
-			MultiplicityStated: multStated,
-			DefaultValue:       defaultVal,
-			DefaultDecl:        defaultDecl,
+			Name:         name,
+			Symbol:       memberSym,
+			OwnerType:    ownerType,
+			Type:         typ,
+			Multiplicity: mult,
+			DefaultValue: defaultVal,
+			DefaultDecl:  defaultDecl,
 		}
 	}
 
@@ -202,16 +197,11 @@ func (ctx *Context) declaredType(featureSym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
-// extractMultiplicity returns the multiplicity a feature declares. stated is
-// false when it declares none and 1..1 is assumed.
+// extractMultiplicity returns the multiplicity governing a feature. stated is
+// false when it declares none and the assumed 1..1 governs it instead.
 func (ctx *Context) extractMultiplicity(featureSym *symbols.Symbol) (r semantics.Range, stated bool) {
-	if mult, ok := ctx.model.MultiplicityOf(featureSym); ok {
-		return mult, true
-	}
-	return semantics.Range{
-		Lower: semantics.Bound{Value: 1, Known: true},
-		Upper: semantics.Bound{Value: 1, Known: true},
-	}, false
+	_, stated = ctx.model.MultiplicityOf(featureSym)
+	return ctx.model.EffectiveMultiplicityOf(featureSym), stated
 }
 
 // extractDefaultValue returns the default-value expression for a feature (nil if none).

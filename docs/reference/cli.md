@@ -146,7 +146,7 @@ written in, so the verdicts after it are about that object:
 
 | Flag | Checks |
 |------|--------|
-| `-validate` | Nothing about the model's conditions: only that it analyses cleanly |
+| `-validate` | Nothing about the model's conditions: only that it analyses cleanly, and that the objects `-instantiate` asked for materialized |
 | `-constraint <name>` | One constraint, as `%constraint` does |
 | `-requirement <name>` | One requirement, as `%requirement` does |
 | `-satisfy` | Every satisfaction assertion the model states |
@@ -271,7 +271,7 @@ links here.
 |--------|-------|
 | `0` | What was asked for was done: every file loaded and analysed cleanly, every `-e` expression produced a value, every check held, a conversion was written. Warnings leave the status `0`. |
 | `1` | The model answered false: a constraint, requirement or satisfaction assertion the model decided did not hold. Only a verdict reports this status. |
-| `2` | What was asked for could not be done, so the model answered nothing: a file that could not be read, a model that did not analyse cleanly, an unresolved name, a check that could not be made, a conversion that could not be written, a misused flag or an invalid `SYSML_MAX_*` value. |
+| `2` | What was asked for could not be done, so the model answered nothing: a file that could not be read, a model that did not analyse cleanly, an object whose slots did not materialize, an unresolved name, a check that could not be made, a conversion that could not be written, a misused flag or an invalid `SYSML_MAX_*` value. |
 
 ```bash
 $ sysml -constraint MassBudget model.sysml; echo $?      # a verdict the model decided
@@ -290,6 +290,30 @@ $ sysml examples/state-machine-demo.sysml -convert ttl; echo $?
 sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7:13: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
 2
 ```
+
+Materializing an object is part of the run, so what it finds is a diagnostic
+about the model: `-instantiate` reports every slot it could not materialize —
+a default whose value count does not conform to the multiplicity governing its
+feature, which is the assumed `1..1` for a feature that declares none — and
+`-validate` reports `no errors` only for a run that found none. The prompt
+surface is to follow: a `%slots` rendering that carries `<error: …>` means
+materialization failed, so a piped session that produced one is to exit `2`
+rather than report success — today it exits on what analysis found alone, and
+the rule is stated here for the surface that has yet to adopt it.
+
+```bash
+$ sysml model.sysml -instantiate test::craft -validate; echo $?
+error: slot craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1
+sysml: model.sysml did not materialize cleanly
+2
+```
+
+Nesting multiplies, and reading a slot materializes the objects it holds, so the
+check is bounded, as the `%slots` listing is: a model wide enough to spend that
+budget, deeper than the walk descends, or one whose part holds its own kind is
+reported as checked in part (`warning: … materialization is bounded; not every
+slot was checked`, and `no errors in the slots checked`) rather than read to the
+end. Being no model error, that leaves the status `0`.
 
 The prompt is the exception: a line it could not carry out is reported and the
 session goes on, and `%quit` or Ctrl-D exits `0`. `sysml model.sysml` at a
