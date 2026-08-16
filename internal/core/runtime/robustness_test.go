@@ -76,6 +76,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("flow_end_naming_no_node", testFlowEndNamingNoNode)
 	t.Run("flow_naming_no_pin", testFlowNamingNoPin)
 	t.Run("accept_payload_without_a_value", testAcceptPayloadWithoutAValue)
+	t.Run("accept_payload_read_before_it_is_bound", testAcceptPayloadReadBeforeItIsBound)
 	t.Run("flow_from_a_node_that_produced_nothing", testFlowFromANodeThatProducedNothing)
 	t.Run("action_accept_time_trigger", testActionAcceptTimeTrigger)
 	t.Run("action_accept_non_boolean_change_trigger", testActionAcceptNonBooleanChangeTrigger)
@@ -2347,6 +2348,30 @@ func testAcceptPayloadWithoutAValue(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Ping") {
 		t.Errorf("error does not name the accepted signal: %v", err)
+	}
+}
+
+// testAcceptPayloadReadBeforeItIsBound: the payload is a declaration of the body
+// wherever the body resolves, so a node running before the accept binds it
+// resolves the name and finds no value — reported, not read as an empty value.
+func testAcceptPayloadReadBeforeItIsBound(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			attribute seen : Integer = 0;
+			first start;
+			action reader { assign seen := msg; }
+			action waiter accept msg : Integer;
+			done end;
+			then start reader;
+			then reader waiter;
+			then waiter end;
+		}
+	}`)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("err = %v; want ErrUnresolvedReference", err)
+	}
+	if !strings.Contains(err.Error(), "msg") {
+		t.Errorf("error does not name the payload: %v", err)
 	}
 }
 
