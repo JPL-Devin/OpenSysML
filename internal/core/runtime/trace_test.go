@@ -172,6 +172,11 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string, exp
 		}
 		exec.SetTrace(trace)
 
+		// The case's events drive the trace too, so ordering under an event —
+		// which transition wins, and in what order states are left — is recorded
+		// rather than only the initial entry.
+		injectEvents(t, exec, expected.Events)
+
 		if err := exec.RunToCompletion(); err != nil {
 			t.Fatalf("state execution: %v", err)
 		}

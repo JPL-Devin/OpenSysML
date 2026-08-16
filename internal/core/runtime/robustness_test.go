@@ -122,6 +122,10 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("behavior_performing_an_action_and_stating_a_body", testBehaviorPerformingAnActionAndStatingABody)
 	t.Run("qualified_assignment_target_in_a_state_effect", testQualifiedAssignmentTargetInAStateEffect)
 	t.Run("call_of_unhandled_operation", testCallOfUnhandledOperation)
+	t.Run("signal_no_level_of_a_composite_state_accepts", testSignalNoLevelOfACompositeStateAccepts)
+	t.Run("stale_composite_timer_in_a_region", testStaleCompositeTimerInARegion)
+	t.Run("composite_self_transition_with_no_substate_to_re_enter", testCompositeSelfTransitionWithNoSubstateToReEnter)
+	t.Run("exit_of_nested_regions_with_a_history_pseudostate", testExitOfNestedRegionsWithAHistoryPseudostate)
 	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 	t.Run("perform_of_missing_action", testPerformOfMissingAction)
 	t.Run("perform_reference_cycle", testPerformReferenceCycle)
@@ -1341,6 +1345,152 @@ func testCallOfUnhandledOperation(t *testing.T) {
 	current, ok := exec.CurrentState().(*ast.StateNode)
 	if !ok || current.Name != "waiting" {
 		t.Errorf("expected the unhandled call to leave the machine in waiting, got %v", exec.CurrentState())
+	}
+}
+
+// testSignalNoLevelOfACompositeStateAccepts: a signal neither the active substate
+// nor any composite state enclosing it accepts is dropped by run-to-completion,
+// so walking outward for a trigger ends in the machine standing still rather than
+// erroring or hanging.
+func testSignalNoLevelOfACompositeStateAccepts(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state outer {
+				state middle {
+					state inner;
+					state other;
+					transition inner to other accept step;
+				}
+				state recovered;
+				transition middle to recovered accept abort;
+			}
+			state stopped;
+			init then inner;
+			transition outer to stopped accept shutdown;
+		}
+	}`)
+	exec.SendSignal("unknown", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	current, ok := exec.CurrentState().(*ast.StateNode)
+	if !ok || current.Name != "inner" {
+		t.Errorf("expected the unaccepted signal to leave the machine in inner, got %v", exec.CurrentState())
+	}
+}
+
+// testCompositeSelfTransitionWithNoSubstateToReEnter: a composite state that
+// declares no starting substate is re-entered by its own self-transition without
+// erroring or hanging, and stays active with no substate of its own.
+func testCompositeSelfTransitionWithNoSubstateToReEnter(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state Working {
+				state Step1;
+			}
+			init then Working::Step1;
+			transition Working to Working accept restart;
+		}
+	}`)
+	exec.SendSignal("restart", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	current, ok := exec.CurrentState().(*ast.StateNode)
+	if !ok || current.Name != "Working" {
+		t.Errorf("expected the re-entered composite state to be active, got %v", exec.CurrentState())
+	}
+}
+
+// testStaleCompositeTimerInARegion: a time trigger on a composite state inside an
+// orthogonal region whose composite is left before the timer expires is dropped,
+// leaving the sibling region where it was rather than erroring or hanging.
+func testStaleCompositeTimerInARegion(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state working {
+				region left {
+					initial lstart;
+					state grouping {
+						state step1;
+						accept after 5 then late;
+					}
+					state moved;
+					state late;
+					transition lstart to step1;
+					transition grouping to moved accept skip;
+				}
+				region right {
+					initial rstart;
+					state watching;
+					then rstart watching;
+				}
+			}
+			init then working;
+		}
+	}`)
+	exec.SendSignal("skip", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	active := make(map[string]bool)
+	for _, state := range exec.ActiveStates() {
+		active[state.Name] = true
+	}
+	if !active["moved"] || !active["watching"] || active["late"] {
+		t.Errorf("expected the stale composite timer to leave moved and watching active, got %v", active)
+	}
+}
+
+// testExitOfNestedRegionsWithAHistoryPseudostate: leaving a composite state whose
+// region holds another composite with a region of its own, then returning through a
+// deep history, restores the recorded configuration rather than erroring or hanging.
+func testExitOfNestedRegionsWithAHistoryPseudostate(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state outer {
+				region left {
+					initial lstart;
+					state grouping {
+						region inner {
+							initial gstart;
+							state g1;
+							state g2;
+							transition gstart to g1;
+							transition g1 to g2 accept advance;
+						}
+					}
+					transition lstart to grouping;
+				}
+				region right {
+					initial rstart;
+					state watching;
+					transition rstart to watching;
+				}
+				deep history resume;
+			}
+			state away;
+			init then outer;
+			transition outer to away accept leave;
+			transition away to resume accept back;
+		}
+	}`)
+	for _, signal := range []string{"advance", "leave", "back"} {
+		exec.SendSignal(signal, nil)
+		if err := exec.RunToCompletion(); err != nil {
+			t.Fatalf("run to completion after %s: %v", signal, err)
+		}
+	}
+	active := make(map[string]bool)
+	for _, state := range exec.ActiveStates() {
+		active[state.Name] = true
+	}
+	if !active["g2"] || !active["watching"] {
+		t.Errorf("expected the deep history to restore g2 and watching, got %v", active)
 	}
 }
 

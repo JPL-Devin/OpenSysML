@@ -154,7 +154,7 @@ func (e *StateExecutor) activeLeavesBelow(state *ast.StateNode) []*ast.StateNode
 // just made active below and including state.
 func (e *StateExecutor) scheduleFromEntered(state *ast.StateNode) error {
 	for _, leaf := range e.activeLeavesBelow(state) {
-		if err := e.scheduleTransitionsForState(leaf); err != nil {
+		if err := e.scheduleFromLeaf(leaf); err != nil {
 			return fmt.Errorf("schedule transitions: %w", err)
 		}
 	}
@@ -213,15 +213,22 @@ func (e *StateExecutor) moveWithinRegion(region *ast.StateRegion, trans *lower.T
 	// when the least common ancestor lies above it: the state owning the region
 	// stays active and is not re-entered.
 	lca := e.getLCA(source, target)
+	// A transition out of a composite state is external even inside a region: the
+	// source is exited and re-entered when it encloses the target.
+	if declared, isState := trans.Source.(*ast.StateNode); isState && e.encloses(declared, target) {
+		lca = e.graph.ParentState[declared]
+	}
 	if !e.regionContains(region, lca) {
 		lca = e.graph.RegionOwner[region]
 	}
 
 	delete(e.activeConfig.regionStates, region)
+	leaving := make([]*ast.StateNode, 0)
 	for current := source; current != nil && current != lca && e.regionContains(region, current); current = e.graph.ParentState[current] {
-		if err := e.exitState(current); err != nil {
-			return fmt.Errorf("exit state: %w", err)
-		}
+		leaving = append(leaving, current)
+	}
+	if err := e.exitStates(leaving); err != nil {
+		return err
 	}
 
 	if err := e.runEffect(trans); err != nil {
@@ -285,10 +292,12 @@ func (e *StateExecutor) leaveRegion(region *ast.StateRegion, trans *lower.Transi
 	// The target is outside the composite state: exit it and its ancestors up to
 	// the least common ancestor, then enter down to the target.
 	lca := e.getLCA(owner, target)
+	leaving := make([]*ast.StateNode, 0)
 	for current := owner; current != nil && current != lca; current = e.graph.ParentState[current] {
-		if err := e.exitState(current); err != nil {
-			return fmt.Errorf("exit state: %w", err)
-		}
+		leaving = append(leaving, current)
+	}
+	if err := e.exitStates(leaving); err != nil {
+		return err
 	}
 	if err := e.runEffect(trans); err != nil {
 		return err
@@ -307,10 +316,12 @@ func (e *StateExecutor) leaveTopRegions(trans *lower.Transition, source, target 
 			continue
 		}
 		delete(e.activeConfig.regionStates, region)
+		leaving := make([]*ast.StateNode, 0)
 		for current := active; current != nil; current = e.graph.ParentState[current] {
-			if err := e.exitState(current); err != nil {
-				return fmt.Errorf("exit state: %w", err)
-			}
+			leaving = append(leaving, current)
+		}
+		if err := e.exitStates(leaving); err != nil {
+			return err
 		}
 	}
 	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
