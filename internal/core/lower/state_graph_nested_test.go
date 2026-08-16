@@ -70,7 +70,7 @@ func TestToStateGraph_NestedPseudostateOwner(t *testing.T) {
 		t.Fatalf("ToStateGraph: %v", err)
 	}
 
-	pick := graph.Pseudostates["pick"]
+	pick := pseudostateNamed(graph, "pick")
 	if pick == nil {
 		t.Fatal("pseudostate declared inside outer was not collected")
 	}
@@ -96,7 +96,7 @@ func TestToStateGraph_TopLevelPseudostateHasNoOwner(t *testing.T) {
 		t.Fatalf("ToStateGraph: %v", err)
 	}
 
-	pick := graph.Pseudostates["pick"]
+	pick := pseudostateNamed(graph, "pick")
 	if pick == nil {
 		t.Fatal("choice pseudostate not collected")
 	}
@@ -207,4 +207,164 @@ func scopeOfNode(scope *symbols.Scope, node ast.Node) *symbols.Scope {
 		}
 	}
 	return nil
+}
+
+// A succession names its endpoints the way a transition does, so one whose
+// target is a pseudostate reaches it rather than being left out of the graph.
+func TestSuccessionReachesAPseudostate(t *testing.T) {
+	root, machine := parseStateUsage(t, `
+		package test {
+			state Machine {
+				initial start;
+				state busy;
+				junction route;
+				state done;
+
+				start then busy;
+				busy then route;
+				route then done;
+			}
+		}
+	`)
+	graph := graphOf(t, root, machine)
+
+	route := pseudostateNamed(graph, "route")
+	if route == nil {
+		t.Fatal("junction route was not collected")
+	}
+	if len(graph.Transitions[route]) != 1 {
+		t.Fatalf("transitions out of route = %d, want the succession `route then done`", len(graph.Transitions[route]))
+	}
+	if target := graph.Transitions[route][0].Target; target != ast.Node(stateNamed(graph, "done")) {
+		t.Fatalf("route leads to %v, want done", target)
+	}
+	if !leadsTo(graph, stateNamed(graph, "busy"), route) {
+		t.Fatal("the succession `busy then route` is not in the graph")
+	}
+}
+
+// A succession qualifying its target reaches the vertex it names, not the first
+// one of that simple name: two composite states may each declare a `work`.
+func TestSuccessionQualifiedTargetNamesTheVertexItQualifies(t *testing.T) {
+	root, machine := parseStateUsage(t, `
+		package test {
+			state Machine {
+				initial start;
+				state alpha {
+					state work;
+				}
+				state beta {
+					state work;
+				}
+
+				start then alpha;
+				alpha then beta::work;
+			}
+		}
+	`)
+	graph := graphOf(t, root, machine)
+
+	alpha := stateNamed(graph, "alpha")
+	if len(graph.Transitions[alpha]) != 1 {
+		t.Fatalf("transitions out of alpha = %d, want the succession `alpha then beta::work`", len(graph.Transitions[alpha]))
+	}
+	target, ok := graph.Transitions[alpha][0].Target.(*ast.StateNode)
+	if !ok {
+		t.Fatalf("alpha leads to %T, want a state", graph.Transitions[alpha][0].Target)
+	}
+	if owner := graph.ParentState[target]; owner == nil || owner.Name != "beta" {
+		t.Fatalf("alpha leads to the work of %v, want beta's", owner)
+	}
+}
+
+// Two regions may declare same-named pseudostates, and each is its own vertex.
+func TestSameNamedPseudostatesInSiblingRegionsAreBothCollected(t *testing.T) {
+	root, machine := parseStateUsage(t, `
+		package test {
+			state Machine {
+				initial start;
+				state running {
+					region left {
+						initial lstart;
+						state lidle;
+						junction pick;
+						lstart then lidle;
+						lidle then pick;
+						pick then lidle;
+					}
+					region right {
+						initial rstart;
+						state ridle;
+						junction pick;
+						rstart then ridle;
+						ridle then pick;
+						pick then ridle;
+					}
+				}
+				start then running;
+			}
+		}
+	`)
+	graph := graphOf(t, root, machine)
+
+	var picks []*ast.PseudostateNode
+	for _, ps := range graph.Pseudostates {
+		if ps.Name == "pick" {
+			picks = append(picks, ps)
+		}
+	}
+	if len(picks) != 2 {
+		t.Fatalf("pseudostates named pick = %d, want one per region", len(picks))
+	}
+	if picks[0] == picks[1] {
+		t.Fatal("the two regions share one pseudostate node")
+	}
+	for _, pick := range picks {
+		if len(graph.Transitions[pick]) != 1 {
+			t.Fatalf("transitions out of a pick = %d, want its own region's", len(graph.Transitions[pick]))
+		}
+		target, ok := graph.Transitions[pick][0].Target.(*ast.StateNode)
+		if !ok {
+			t.Fatalf("a pick leads to %T, want a state", graph.Transitions[pick][0].Target)
+		}
+		if graph.RegionOf[target] != graph.RegionOf[graph.PseudostateOwner[pick]] &&
+			graph.RegionOf[target] == nil {
+			t.Fatalf("a pick leads to %s, which no region declares", target.Name)
+		}
+	}
+}
+
+// graphOf lowers the machine src declares with the scope tree of its document.
+func graphOf(t *testing.T, root *ast.RootNamespace, machine *ast.Usage) *StateGraph {
+	t.Helper()
+	idx := symbols.NewIndexFromDoc("test.sysml", root)
+	scope := scopeOfNode(idx.DocumentRoot("test.sysml"), machine)
+	if scope == nil {
+		t.Fatal("the index has no scope for the machine")
+	}
+	graph, err := ToStateGraph(machine, scope)
+	if err != nil {
+		t.Fatalf("ToStateGraph: %v", err)
+	}
+	return graph
+}
+
+// stateNamed is the graph's state with that simple name, or nil.
+func stateNamed(graph *StateGraph, name string) *ast.StateNode {
+	for _, state := range graph.States {
+		if state.Name == name {
+			return state
+		}
+	}
+	return nil
+}
+
+// leadsTo reports whether a transition of the graph goes from source to target.
+func leadsTo(graph *StateGraph, source, target ast.Node) bool {
+	for _, trans := range graph.Transitions[source] {
+		if trans.Target == target {
+			return true
+		}
+	}
+	return false
 }
