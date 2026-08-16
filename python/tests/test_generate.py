@@ -135,11 +135,15 @@ def test_element_type_unmapped_primitive_is_object():
     assert "Complex" in mapped.comment
 
 
-def test_element_type_quantity_is_object_with_unit():
-    """A quantity maps to object and names its unit."""
+def test_element_type_quantity_is_a_quantity_naming_its_unit():
+    """A quantity maps to the Quantity class, whatever scalar it is written over."""
     mapped = element_type(TypeFacts(primitive="Real", quantity=True, unit="kg"), {})
-    assert mapped.annotation == "object"
+    assert mapped.annotation == "_t.Quantity"
+    assert mapped.decoder == "_t.as_quantity"
     assert "kg" in mapped.comment
+
+    unitless = element_type(TypeFacts(primitive="Real", quantity=True), {})
+    assert unitless.annotation == "_t.Quantity"
 
 
 def test_element_type_unresolved_and_untyped():

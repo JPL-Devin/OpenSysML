@@ -1,6 +1,8 @@
 package grpc
 
 import (
+	"errors"
+	"fmt"
 	"math"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
@@ -281,20 +283,152 @@ func ValueToProto(val runtime.Value) *pb.Value {
 		}
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: variant selection"}}
 	case runtime.ValQuantity:
-		// The wire Value has no magnitude-and-unit form, and sending the bare
-		// magnitude would drop the unit, so the value is reported unsupported.
-		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: quantity value"}}
+		pq := QuantityToProto(val.Quantity)
+		if pq == nil {
+			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: quantity with a non-numeric magnitude"}}
+		}
+		return &pb.Value{Kind: &pb.Value_Quantity{Quantity: pq}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}
 }
 
-// ProtoToValue converts a protobuf Value to a runtime.Value. It is the inverse
-// of ValueToProto and is used to bind gRPC-supplied inputs into the runtime.
-func ProtoToValue(pv *pb.Value) runtime.Value {
-	if pv == nil {
-		return runtime.Value{Kind: runtime.ValNull}
+// QuantityToProto marshals a quantity: the magnitude in the unit written, plus
+// what that unit reduces to. Reports nil for a magnitude that is not a number.
+func QuantityToProto(q *runtime.Quantity) *pb.Quantity {
+	if q == nil {
+		return nil
 	}
+	pq := &pb.Quantity{Unit: q.Unit.Text, UnitTerm: unitTermToProto(q.Unit.Term)}
+	switch q.Num.Kind {
+	case semantics.ValInt:
+		pq.Magnitude = &pb.Quantity_IntMagnitude{IntMagnitude: q.Num.Int}
+	case semantics.ValReal:
+		pq.Magnitude = &pb.Quantity_RealMagnitude{RealMagnitude: q.Num.Real}
+	default:
+		return nil
+	}
+	return pq
+}
+
+// unitTermToProto marshals a unit's reduction to base units, naming each base
+// unit by qualified name: a symbol pointer means nothing to another process.
+func unitTermToProto(term semantics.UnitTerm) *pb.UnitTerm {
+	pt := &pb.UnitTerm{ScaleNum: term.Scale.Num, ScaleDen: term.Scale.Den}
+	for _, f := range term.Factors {
+		pt.Factors = append(pt.Factors, &pb.UnitFactor{
+			UnitId:   symbols.FQNOf(f.Unit),
+			Exponent: f.Exponent,
+		})
+	}
+	return pt
+}
+
+var (
+	// ErrQuantityNeedsIndex reports a quantity converted from the wire without
+	// the model's symbols, which its base units can only be resolved against.
+	ErrQuantityNeedsIndex = errors.New("a quantity needs the model's symbols to be converted from the wire")
+
+	// ErrUnknownBaseUnit reports a base unit the model does not declare, so no
+	// unit can be rebuilt from the reduction naming it.
+	ErrUnknownBaseUnit = errors.New("unknown base unit")
+
+	// ErrUnitScaleUnusable reports a unit reduction whose scale has no
+	// denominator, which no magnitude can be converted through.
+	ErrUnitScaleUnusable = errors.New("unit scale is not a usable ratio")
+)
+
+// ProtoToValueIn converts a protobuf Value to a runtime.Value in the model idx
+// describes, resolving a quantity's base units by name. Inverse of ValueToProto.
+func ProtoToValueIn(pv *pb.Value, idx *symbols.Index) (runtime.Value, error) {
+	if pv == nil {
+		return runtime.Value{Kind: runtime.ValNull}, nil
+	}
+	switch k := pv.GetKind().(type) {
+	case *pb.Value_Quantity:
+		return ProtoToQuantity(k.Quantity, idx)
+	case *pb.Value_Sequence:
+		seq := runtime.NewSequence()
+		if k.Sequence != nil {
+			for _, elem := range k.Sequence.Elements {
+				val, err := ProtoToValueIn(elem, idx)
+				if err != nil {
+					return runtime.Value{}, err
+				}
+				seq.Append(val)
+			}
+		}
+		return runtime.Value{Kind: runtime.ValSequence, Sequence: seq}, nil
+	default:
+		return protoToScalar(pv), nil
+	}
+}
+
+// ProtoToQuantity rebuilds a quantity from the wire: the magnitude as sent, in
+// the unit as written, over the base units idx resolves its reduction to.
+func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index) (runtime.Value, error) {
+	if pq == nil {
+		return runtime.Value{Kind: runtime.ValNull}, nil
+	}
+	if idx == nil && len(pq.GetUnitTerm().GetFactors()) > 0 {
+		return runtime.Value{}, fmt.Errorf("%w: %s", ErrQuantityNeedsIndex, pq.GetUnit())
+	}
+	term, err := protoToUnitTerm(pq.GetUnitTerm(), idx)
+	if err != nil {
+		return runtime.Value{}, err
+	}
+
+	var num semantics.Value
+	switch m := pq.GetMagnitude().(type) {
+	case *pb.Quantity_IntMagnitude:
+		num = semantics.Value{Kind: semantics.ValInt, Int: m.IntMagnitude}
+	case *pb.Quantity_RealMagnitude:
+		num = semantics.Value{Kind: semantics.ValReal, Real: m.RealMagnitude}
+	default:
+		return runtime.Value{}, fmt.Errorf("quantity in %q carries no magnitude", pq.GetUnit())
+	}
+
+	quantity := &runtime.Quantity{Num: num, Unit: runtime.Unit{Text: pq.GetUnit(), Term: term}}
+	return runtime.Value{Kind: runtime.ValQuantity, Quantity: quantity}, nil
+}
+
+// protoToUnitTerm rebuilds a unit's reduction. A base unit the model does not
+// declare uniquely is an error, not a factor over no symbol.
+func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index) (semantics.UnitTerm, error) {
+	if pt == nil {
+		// A unit the service could not reduce; dimension one describes no base unit.
+		return semantics.UnitTerm{Scale: semantics.UnitScale(1)}, nil
+	}
+	if pt.GetScaleDen() == 0 {
+		return semantics.UnitTerm{}, fmt.Errorf("%w: %g/%g", ErrUnitScaleUnusable, pt.GetScaleNum(), pt.GetScaleDen())
+	}
+	term := semantics.UnitTerm{Scale: semantics.Scale{Num: pt.GetScaleNum(), Den: pt.GetScaleDen()}}
+	for _, f := range pt.GetFactors() {
+		matches := idx.LookupQualified(f.GetUnitId())
+		if len(matches) != 1 {
+			return semantics.UnitTerm{}, fmt.Errorf("%w: %s", ErrUnknownBaseUnit, f.GetUnitId())
+		}
+		term.Factors = append(term.Factors, semantics.UnitFactor{
+			Unit:     matches[0],
+			Exponent: f.GetExponent(),
+		})
+	}
+	return term, nil
+}
+
+// ProtoToValue converts a protobuf Value with no model to resolve names against,
+// so a quantity arrives invalid; a caller holding one uses ProtoToValueIn.
+func ProtoToValue(pv *pb.Value) runtime.Value {
+	val, err := ProtoToValueIn(pv, nil)
+	if err != nil {
+		return runtime.Value{Kind: runtime.ValInvalid}
+	}
+	return val
+}
+
+// protoToScalar converts the arms of Value that name no symbol and hold no
+// nested value.
+func protoToScalar(pv *pb.Value) runtime.Value {
 	switch k := pv.GetKind().(type) {
 	case *pb.Value_IntValue:
 		return runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: k.IntValue}}
@@ -306,14 +440,6 @@ func ProtoToValue(pv *pb.Value) runtime.Value {
 		return runtime.Value{Kind: runtime.ValString, Str: k.StringValue}
 	case *pb.Value_InstanceId:
 		return runtime.Value{Kind: runtime.ValInstance, Instance: k.InstanceId}
-	case *pb.Value_Sequence:
-		seq := runtime.NewSequence()
-		if k.Sequence != nil {
-			for _, elem := range k.Sequence.Elements {
-				seq.Append(ProtoToValue(elem))
-			}
-		}
-		return runtime.Value{Kind: runtime.ValSequence, Sequence: seq}
 	case *pb.Value_Null:
 		return runtime.Value{Kind: runtime.ValNull}
 	default:

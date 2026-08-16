@@ -12,6 +12,24 @@ from typing import Callable, ClassVar, List, Optional, Set, TypeVar
 
 from pysysml.errors import InstanceTypeError, TypeMismatchError
 from pysysml.instance import Instance
+from pysysml.values import Quantity
+
+# Re-exported so a generated module annotates a quantity property as `_t.Quantity`
+# and needs no import of its own.
+__all__ = [
+    "Quantity",
+    "TypedObject",
+    "as_bool",
+    "as_float",
+    "as_int",
+    "as_object",
+    "as_quantity",
+    "as_str",
+    "as_typed",
+    "list_slot",
+    "optional_slot",
+    "slot",
+]
 
 T = TypeVar("T")
 TypedObjectT = TypeVar("TypedObjectT", bound="TypedObject")
@@ -141,6 +159,13 @@ def as_str(feature_name: str, value: object) -> str:
     if isinstance(value, str):
         return value
     raise _mismatch(feature_name, "str", value)
+
+
+def as_quantity(feature_name: str, value: object) -> Quantity:
+    """Decode a quantity slot value: a magnitude and the unit it is expressed in."""
+    if isinstance(value, Quantity):
+        return value
+    raise _mismatch(feature_name, "Quantity", value)
 
 
 def as_object(feature_name: str, value: object) -> object:

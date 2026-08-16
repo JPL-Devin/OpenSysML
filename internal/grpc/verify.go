@@ -283,9 +283,18 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 		}
 	}
 
+	// Converted against the model's index, so a quantity argument keeps the base
+	// units it is commensurable with instead of arriving as an unusable value.
 	args := make([]runtime.Value, 0, len(req.Arguments))
 	for _, arg := range req.Arguments {
-		args = append(args, ProtoToValue(arg))
+		val, cerr := ProtoToValueIn(arg, v.cached.Index)
+		if cerr != nil {
+			return &pb.EvaluateCalcResponse{
+				Error:         fmt.Sprintf("calc argument could not be read: %v", cerr),
+				FailureReason: failureReason(cerr),
+			}, nil
+		}
+		args = append(args, val)
 	}
 
 	result, err := v.runtime.InvokeCalc(sym, args, v.declaringScope(sym))
