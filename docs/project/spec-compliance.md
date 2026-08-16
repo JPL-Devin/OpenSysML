@@ -1146,11 +1146,21 @@ the `@type` mapping and the comparison choices.
   own FQN (`Demo::myCar`), which the client cannot relate to the definition typing
   it. A wrong-typed instance is therefore caught only when its type has a generated
   class of its own; `unchecked(instance)` bypasses the check deliberately
-- connection.py:488 - PID ownership check uses substring match - spoofable
+- a service `pysysml` did not spawn is never stopped by it: attaching takes no ownership
+  reference and writes no state, so only the spawning process stops the service it recorded,
+  when its last connection is released. The record authenticates the pid it names by the
+  process start time written with it, so a reused pid is cleaned up rather than signalled
+  (`connection.py:_write_ownership_record`, `_authenticate_record`,
+  python/tests/test_lifecycle.py, test_stale_service.py)
 - an `instance_id` outside an `Instantiate` response (an `Evaluate` result, say)
   is still a bare int64: those responses carry no instance graph to resolve it
 - __init__.py:11-16 - Shadows builtins (RuntimeError, eval)
-- binary.py:82,89 - Checksum same-origin (no pinned hash)
+- a downloaded binary is verified against the digest `binary.py:PINNED_SHA256` pins for its
+  release, independent of the origin that served it; a version with no pin fails rather than
+  falling back to the served `.sha256`, unless `$PYSYSML_ALLOW_UNPINNED_DOWNLOAD` names that
+  repository (or is `1`) and accepts same-origin trust. A pysysml release pins only service releases published before it, so a
+  newer service needs a newer pysysml or that opt-in
+  (`scripts/pin_release_checksums.py`, python/tests/test_binary.py)
 
 **Standard behavioral notation:**
 - a succession written at namespace level (`first part1::action1 then requirement1;`) is

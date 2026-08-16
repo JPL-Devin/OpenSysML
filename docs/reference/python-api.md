@@ -180,8 +180,20 @@ created singleton connection instead. A `host:port` address written as the host
 is read as one — `connect("localhost:50123")` reaches port 50123 — and a port
 named twice with two values raises `ValueError` naming the disagreement rather
 than timing out against an address nobody asked for. The helpers taking
-`host`/`port` (`load`, `eval`, `convert`, `instantiate`) read it the same way. The service is reference-counted across
-processes, so the last client to exit shuts it down.
+`host`/`port` (`load`, `eval`, `convert`, `instantiate`) read it the same way.
+
+`pysysml` never stops a service it did not start. A service it starts is
+reference-counted *within the process that started it* and stopped when the last
+connection holding it is closed or the interpreter exits; a connection that
+attaches to a service already listening takes no reference and leaves it running,
+whatever it does. The service is recorded in `~/.pysysml/sysml-grpc-<port>.pid`
+(`$PYSYSML_STATE_DIR` overrides the directory) as its pid and process start time
+plus the pid and start time of the process that started it, and every one of
+those pids is re-checked against the start time written for it — a pid the
+operating system has reused is a stale record, cleaned up rather than signalled,
+and a command line that merely looks like `sysml-grpc` is not identity. A service
+that crashes leaves such a record; the next connection removes it and starts one
+of its own.
 
 A service *already listening* on the port is checked the way the cached binary
 is: it is asked what it is with `GetServerInfo`, and a release other than the one
@@ -190,10 +202,10 @@ of serving an old build whose first newer call fails as a
 `MissingCapabilityError`. `connect(version=…, require_capabilities=[…])` asks
 explicitly; `PYSYSML_GRPC_VERSION` asks for a release for the binary cache and
 the running service alike, and with neither set whatever answers is accepted.
-Such a service is stopped only when this client's own pidfile says it started it,
-no other client still holds it, and the binary that would be started in its place
-can be shown to be the release asked for — a service you are running deliberately
-is never killed, and one is never stopped only to start the same build again, so
+Such a service is stopped only when this process started it, no connection of its
+own still holds it, and the binary that would be started in its place can be
+shown to be the release asked for — a service you are running deliberately is
+never killed, and one is never stopped only to start the same build again, so
 the remedy asks you to stop it, name another port, or accept what is running. A
 service that only lacks a required *capability* is therefore always reported as
 `MissingCapabilityError`, never replaced: capabilities come with a release, so
@@ -208,6 +220,10 @@ lazy: a service of yours that is not listening yet is checked once it answers.
 pytest python/tests/                    # unit tests
 pytest -m integration python/tests/     # needs a running sysml-grpc
 
+# Tests needing a service skip without one; CI sets this so an absent service
+# fails the run instead of quietly passing.
+PYSYSML_REQUIRE_SERVICE=1 pytest python/tests/
+
 # Regenerate the committed golden generated file (needs a running sysml-grpc)
 python -m pysysml.generate internal/repl/testdata/vehicle_package.sysml \
     -o python/tests/golden/vehicle_types.py
@@ -220,7 +236,7 @@ make python-proto
 ## Modules
 
 - `binary.py` — locates, downloads and checksum-verifies `sysml-grpc`
-- `connection.py` — gRPC channel, service lifecycle, cross-process refcounting
+- `connection.py` — gRPC channel, service lifecycle, ownership of services it started
 - `model.py` — a parsed model: root symbol and diagnostics
 - `symbol.py` — lazy symbol proxy, fetches children on demand
 - `instance.py` — instantiated object and its slots

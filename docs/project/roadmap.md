@@ -123,23 +123,25 @@ This is where the release just changed shape: `sysml-grpc-<os>-<arch>` binaries 
 `.sha256` sidecar, and `pysysml` downloads and verifies one, so a Python user no longer needs a
 Go toolchain. That makes the following gaps user-visible for the first time.
 
-## P1 — the integration tests skip in CI, and cannot simply be un-skipped
+## P1 — the integration tests skip in CI — done
 
-`python/tests/test_integration.py` and `test_runtime_integration.py` (20 tests) skip themselves
-unless a service answers on `localhost:50051`. CI installs the binary but starts nothing, so
-they skip there too, and the client↔service path has never been exercised by CI.
+The 20 tests in `python/tests/test_integration.py` and `test_runtime_integration.py` skipped
+themselves unless a service answered on `localhost:50051`, and CI started none, so the
+client↔service path was never exercised there. Starting one was not the fix on its own: the
+ownership model shut down services the process had not spawned, so
+`test_service_shuts_down_when_last_process_exits` failed as soon as a service ran.
 
-Starting a service in the `python-test` job is **not** the fix on its own — verified: with one
-running, the 20 tests pass but `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
-fails, because `Connection._ensure_service` returns early when it probes a healthy service and
-writes no pidfile, so the refcount can never shut that service down and the test cannot find a
-pid to watch. Half of that ownership model is now in place: a connection releases a reference
-only if it took one, so attaching with `auto_start=False` no longer shuts down a service the
-process never started. The rest of the gap remains: the test still stops a service another
-live process owns, leaving a stale pidfile and refcount behind. Decide the rest of the
-ownership model first — pysysml should probably not kill a service it did not spawn, and the
-test should then not require it to — then start the service in CI. The
-job's comment in `.circleci/config.yml` records this.
+The ownership rule decided and implemented: **pysysml never stops a service it did not spawn.**
+A connection attaching to a service already listening takes no reference and leaves it running;
+a service `pysysml` starts is refcounted within the starting process only (`_OWNED_SERVICES`,
+keyed by state dir and port), against the `(pid, create_time)` the reference was taken on, and
+stopped once when its last reference goes. That test now spawns its own service on its own port
+and state dir and asserts *that* one dies (`TestOwnershipOfASpawnedService`).
+
+Both `python-test` jobs (`.github/workflows/pr.yml` is the gate that runs on a PR;
+`.circleci/config.yml` matches it) start `sysml-grpc` on 50051, wait for the port and run with
+`PYSYSML_REQUIRE_SERVICE=1`, which turns "no service, so skip" into a failure — a developer
+without a binary still skips.
 
 ## P2 — a nested object is unreachable over gRPC — done
 
@@ -172,12 +174,20 @@ become base classes.
 
 ## P4 — smaller Python-side items, all recorded in `docs/project/spec-compliance.md`
 
-- `connection.py` verifies a pid is the service by substring-matching its cmdline — spoofable.
+- ~~`connection.py` verifies a pid is the service by substring-matching its cmdline — spoofable.~~
+  **Done:** the spawner writes the service's pid *and* process start time (plus its own), and a
+  pid is trusted only while `psutil.Process(pid).create_time()` still matches; a reused pid or a
+  lookalike cmdline is a stale record, cleaned up and never signalled.
 - `pysysml.eval` and `pysysml.RuntimeError` shadow builtins.
 - `SymbolToProto.Attributes` is always empty (`convert.go:40`), so `Symbol.attributes()` and
   `to_dataframe()` under-report.
-- The download verifies a checksum served from the same origin as the binary, which detects
-  corruption but not a compromised release; a pinned hash per version would be stronger.
+- ~~The download verifies a checksum served from the same origin as the binary, which detects
+  corruption but not a compromised release; a pinned hash per version would be stronger.~~
+  **Done:** `PINNED_SHA256` in `binary.py` pins every asset's SHA-256 per release, generated from
+  the published assets by `python/scripts/pin_release_checksums.py`; an unpinned release is
+  refused rather than falling back to the sidecar, unless
+  `$PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1`) accepts same-origin trust
+  explicitly, for the repository it names.
 - `Model.eval` takes a scope, not a subject, so an expression cannot be evaluated against an
   object the way `%eval` does after `%instantiate`: `verify_constraint` takes a subject, `eval`
   does not, and a caller reads the declared default instead. Carrying the subject to
