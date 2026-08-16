@@ -316,7 +316,9 @@ grpc` and switch on status codes; the original `grpc.RpcError` stays reachable a
 ```
 PySysMLError
 ├── ConnectionError            service unreachable or would not start (UNAVAILABLE)
-│   └── StaleServiceError      another release is already listening on that address
+│   ├── StaleServiceError      another release is already listening on that address
+│   └── ChecksumMismatchError  a download contradicts the digest pinned for it
+│       └── UnpinnedReleaseError  this pysysml pins no digest for that release
 ├── ServiceError               any other status the service failed a call with
 │   ├── ModelNotFoundError     the model hash is no longer in the service cache
 │   ├── ModelFileNotFoundError the service could not read the path (also FileNotFoundError)
@@ -355,6 +357,23 @@ remains as a deprecated alias of `ExecutionError` (same class, so existing
 over renaming alone because it fixes existing code that never caught the old
 class, and the alias is excluded from `__all__` so a star-import no longer
 shadows the built-in.
+
+### Names that no longer shadow a built-in
+
+Both names the package used to bind over a Python built-in were renamed before
+0.2.0 published, so no deprecation cycle is owed:
+
+| Old name | Use instead |
+| --- | --- |
+| `pysysml.eval` | `pysysml.evaluate` |
+| `pysysml.RuntimeError`, `pysysml.errors.RuntimeError` | `pysysml.ExecutionError` |
+
+Each old name still resolves to the same object — `pysysml.eval` *is*
+`pysysml.evaluate` and `pysysml.RuntimeError` *is* `ExecutionError`, so existing
+snippets and `except` clauses keep working — and emits a `DeprecationWarning` on
+access. Neither is in `__all__`, so `from pysysml import *` no longer binds over
+`eval` or `RuntimeError`. The `Model.eval`/`Connection.eval` *methods* keep their
+name: an attribute of an object shadows nothing.
 
 ## Writing a model back out
 

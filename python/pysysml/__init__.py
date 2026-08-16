@@ -1,7 +1,6 @@
 """pysysml - Python client library for Systemica SysML v2 parser."""
 
 import warnings
-from importlib.metadata import PackageNotFoundError, version as _distribution_version
 
 from pysysml._version import VERSION as _declared_version
 from pysysml.connection import Connection, DEFAULT_PORT, split_target
@@ -30,8 +29,8 @@ from pysysml.errors import (
     InstanceTypeError, InvalidRequestError, ModelError,
     ModelFileNotFoundError, ModelNotFoundError, ServiceError,
     ServiceTimeoutError, SlotError, StaleServiceError, SymbolNotFoundError,
-    TypeMismatchError, UnsupportedOperationError, UnsupportedValueError,
-    WrongKindError,
+    TypeMismatchError, UnpinnedReleaseError, UnsupportedOperationError,
+    UnsupportedValueError, WrongKindError,
 )
 
 __all__ = [
@@ -48,7 +47,8 @@ __all__ = [
     "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",
     "ServiceError", "ServiceTimeoutError", "SlotError", "StaleServiceError",
     "SymbolNotFoundError",
-    "TypeMismatchError", "UnsupportedOperationError", "UnsupportedValueError",
+    "TypeMismatchError", "UnpinnedReleaseError",
+    "UnsupportedOperationError", "UnsupportedValueError",
     "WrongKindError",
     "load", "connect", "convert",
     # "eval" is deprecated in favour of "evaluate", so it is not exported.
@@ -57,13 +57,10 @@ __all__ = [
     "__version__"
 ]
 
-try:
-    # The version of the distribution actually installed, so a wheel reports
-    # what was published rather than a string kept in step by hand.
-    __version__ = _distribution_version("pysysml")
-except PackageNotFoundError:
-    # Running from a source tree that was never installed.
-    __version__ = _declared_version
+# The declaration ships beside this module, so this is the version of the code
+# being imported: right for an editable install, whose dist-info metadata is
+# frozen at install time, and the same value a wheel's metadata is built from.
+__version__ = _declared_version
 
 # Module-level default connection (lazy singleton)
 _default_connection = None
@@ -257,20 +254,6 @@ def evaluate(expression, file_path=None, model_hash=None, context_symbol_id=None
     )
 
 
-def eval(*args, **kwargs):
-    """Deprecated name for :func:`evaluate`, which does not shadow the built-in.
-
-    Same arguments and result; slated for removal in 1.0.0.
-    """
-    warnings.warn(
-        "pysysml.eval is deprecated and will be removed in 1.0.0; "
-        "use pysysml.evaluate, which does not shadow the built-in eval",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return evaluate(*args, **kwargs)
-
-
 def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',
                 port=None):
     """Instantiate a part/usage (module-level convenience).
@@ -312,3 +295,25 @@ def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',
         model_hash = model.hash
     
     return conn.instantiate(symbol_id, model_hash)
+
+
+#: Names that shadowed a built-in, and what each is called now. Served through
+#: __getattr__ so a star-import no longer binds over the built-in.
+_RENAMED_NAMES = {"eval": "evaluate", "RuntimeError": "ExecutionError"}
+
+
+def __getattr__(name):
+    """Serve a renamed name with the object it became, warning about its use.
+
+    ``pysysml.eval`` is :func:`evaluate` and ``pysysml.RuntimeError`` is
+    :class:`~pysysml.errors.ExecutionError`, so existing snippets keep working.
+    """
+    replacement = _RENAMED_NAMES.get(name)
+    if replacement is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    warnings.warn(
+        f"pysysml.{name} is deprecated; use pysysml.{replacement} instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return globals()[replacement]

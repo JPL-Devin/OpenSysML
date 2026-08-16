@@ -8,7 +8,11 @@ import platform
 import stat
 import urllib.request
 import warnings
-from pysysml.errors import ChecksumMismatchError, ConnectionError
+from pysysml.errors import (
+    ChecksumMismatchError,
+    ConnectionError,
+    UnpinnedReleaseError,
+)
 
 # Releases publish sysml-grpc-<goos>-<goarch> raw, with a .sha256 sidecar.
 # PYSYSML_GITHUB_REPO overrides the repository they are fetched from.
@@ -119,21 +123,21 @@ def expected_digest(version, asset, served_digest, github_repo=None):
 
     Raises:
         ChecksumMismatchError: If the served digest contradicts the pinned one,
-            which is a release republished with another binary, or if nothing is
-            pinned for it and same-origin trust was not allowed explicitly
+            which is a release republished with another binary
+        UnpinnedReleaseError: If nothing is pinned for it and same-origin trust
+            was not allowed explicitly
     """
     repo = github_repo or default_github_repo()
     pinned = pinned_digest(version, asset, repo)
     if pinned is None:
         if not unpinned_downloads_allowed(repo):
-            raise ChecksumMismatchError(
+            raise UnpinnedReleaseError(
                 f"pysysml pins no SHA-256 digest for {asset} of {version} of {repo}, so "
                 f"the only checksum available is the one served beside the binary, which "
                 f"a compromised release would serve too. Upgrade pysysml to a release "
                 f"that pins {version}, ask for a pinned release with version=, or accept "
                 f"same-origin trust for this repository by setting "
-                f"${ALLOW_UNPINNED_ENV}={repo} (or =1 for any repository).",
-                unpinned=True,
+                f"${ALLOW_UNPINNED_ENV}={repo} (or =1 for any repository)."
             )
         warnings.warn(
             f"pysysml pins no digest for {asset} of {version} of {repo}; verifying it "
@@ -363,8 +367,8 @@ def download_binary(version='latest', github_repo=None):
     
     Raises:
         ChecksumMismatchError: If the download does not match the digest pinned
-            for it, the release serves a digest contradicting the pin, or nothing
-            is pinned for it
+            for it, or the release serves a digest contradicting the pin
+        UnpinnedReleaseError: If nothing is pinned for the release
         ConnectionError: If the download or its installation fails
     """
     github_repo = github_repo or default_github_repo()
@@ -510,10 +514,10 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
     # Download binary with explicit version
     try:
         return download_binary(version=version, github_repo=github_repo)
-    except ChecksumMismatchError as e:
-        # A download that may have been tampered with is not a reason to fall back;
-        # a release this pysysml simply pins nothing for contradicts nothing.
-        if not e.unpinned or cached is None:
+    except UnpinnedReleaseError as e:
+        # A release this pysysml pins nothing for contradicts nothing, so a
+        # working cache stands.
+        if cached is None:
             raise
         warnings.warn(
             f"Keeping the cached sysml-grpc at {cached}: {version} was not downloaded "
@@ -521,6 +525,10 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
             stacklevel=2,
         )
         return cached
+    except ChecksumMismatchError:
+        # A download that may have been tampered with is never answered from the
+        # cache, so it must not reach the ConnectionError fallback below.
+        raise
     except ConnectionError as e:
         if cached is None:
             raise

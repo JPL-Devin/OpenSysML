@@ -1,6 +1,6 @@
 """Symbol class for navigating the semantic model."""
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Protocol, TYPE_CHECKING
 
 from pysysml.capabilities import (
     CAPABILITY_SYMBOL_ATTRIBUTES,
@@ -22,6 +22,16 @@ if TYPE_CHECKING:
 # Matched case-insensitively so older PascalCase producers still work.
 ATTRIBUTE_KINDS = frozenset({"attributedef", "attributeusage"})
 PART_KINDS = frozenset({"partdef", "partusage"})
+
+
+class SymbolSource(Protocol):
+    """What a symbol needs of the connection it navigates through."""
+
+    def get_symbol(self, model_hash: str, symbol_id: str) -> Any:
+        """The ``SymbolInfo`` for an id, or None when the model has no such symbol."""
+
+    def server_info(self) -> Any:
+        """What the service reports about itself, for a capability check."""
 
 
 def _type_text(symbol, attribute_facts) -> Optional[str]:
@@ -57,7 +67,8 @@ class Symbol:
         kind: SysML element kind (e.g., "partDef", "attributeUsage")
     """
     
-    def __init__(self, pb_symbol: "sysml_pb2.SymbolInfo", client: Optional[object], model_hash: str):
+    def __init__(self, pb_symbol: "sysml_pb2.SymbolInfo", client: Optional[SymbolSource],
+                 model_hash: str):
         """Initialize Symbol from SymbolInfo protobuf.
         
         Args:
@@ -68,8 +79,8 @@ class Symbol:
         self._pb = pb_symbol
         self._client = client
         self._model_hash = model_hash
-        self._children_cache = None
-        self._attributes_cache = None
+        self._children_cache: Optional[List["Symbol"]] = None
+        self._attributes_cache: Optional[List["Symbol"]] = None
     
     @property
     def id(self) -> str:
@@ -343,7 +354,7 @@ class Symbol:
             html.append(f'<p><strong>Children:</strong> {len(children)} symbol(s)</p>')
             
             # Group by kind
-            by_kind = {}
+            by_kind: Dict[str, List["Symbol"]] = {}
             for child in children:
                 by_kind.setdefault(child.kind, []).append(child)
             

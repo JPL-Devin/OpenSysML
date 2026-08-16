@@ -29,6 +29,13 @@ def _load_pin_script():
 pin = _load_pin_script()
 
 
+@pytest.fixture(autouse=True)
+def token(monkeypatch):
+    """Every release API call is authenticated, so the tests carry a token too."""
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+
+
 def test_the_table_it_reads_is_the_one_the_package_uses():
     """It reads the pins with ast, so they cannot drift from the module's."""
     assert pin.pinned_table() == PINNED_SHA256
@@ -188,3 +195,54 @@ def test_checking_passes_when_every_pin_still_holds(monkeypatch):
     )
 
     assert pin.check(table) == []
+
+
+class TestGitHubToken:
+    """The release API is read authenticated, and says so when it cannot be."""
+
+    def test_the_token_is_read_from_the_environment(self, monkeypatch):
+        assert pin.github_token() == "test-token"
+        monkeypatch.delenv("GITHUB_TOKEN")
+        monkeypatch.setenv("GH_TOKEN", "fallback-token")
+        assert pin.github_token() == "fallback-token"
+
+    def test_no_token_is_a_typed_error_naming_the_variable_and_the_scope(self, monkeypatch):
+        """The failure names what to set and what it must be able to do."""
+        monkeypatch.delenv("GITHUB_TOKEN")
+        with pytest.raises(pin.MissingTokenError) as exc:
+            pin.github_token()
+        message = str(exc.value)
+        assert "$GITHUB_TOKEN" in message and "$GH_TOKEN" in message
+        assert "public_repo" in message and "releasing.md" in message
+        assert isinstance(exc.value, pin.PinError)
+
+    def test_a_release_is_not_read_unauthenticated(self, monkeypatch):
+        """No token stops the call rather than making it and hitting a 403."""
+        monkeypatch.delenv("GITHUB_TOKEN")
+        called = []
+        monkeypatch.setattr(pin.urllib.request, "urlopen",
+                            lambda *a, **k: called.append(a) or None)
+        with pytest.raises(pin.MissingTokenError):
+            pin.release_assets("Open-MBEE/Systemica", "v9.9.9")
+        assert called == []
+
+    def test_the_token_authenticates_the_request(self, monkeypatch):
+        """The token reaches the request, so the call is not rate-limited per address."""
+        requests = []
+
+        def urlopen(request, timeout=None):
+            requests.append(request)
+            return _fake_urlopen(
+                '{"assets": [{"name": "sysml-grpc-linux-amd64", '
+                '"browser_download_url": "u1"}]}'
+            )(request)
+
+        monkeypatch.setattr(pin.urllib.request, "urlopen", urlopen)
+        pin.release_assets("Open-MBEE/Systemica", "v9.9.9")
+        assert requests[0].get_header("Authorization") == "Bearer test-token"
+
+    def test_the_command_reports_a_missing_token_as_an_error(self, monkeypatch, capsys):
+        """It is the script's failure too, not a traceback."""
+        monkeypatch.delenv("GITHUB_TOKEN")
+        assert pin.main(["--version", "v9.9.9"]) == 1
+        assert "$GITHUB_TOKEN" in capsys.readouterr().err

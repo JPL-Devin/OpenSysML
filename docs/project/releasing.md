@@ -93,6 +93,14 @@ fails the suite fails the release workflow before anything is published.
 Platforms: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64,
 windows/amd64.
 
+Before any of it is stored or published, `build-release` runs each host-platform
+binary and fails the release unless `--version` reports `CIRCLE_TAG`. The ldflags
+are the only thing stamping the tag into a binary, and a binary reporting `dev`
+or a stale tag looks the same on the release page as a correct one — that is how
+an artifact whose version disagreed with its tag reached a release once already.
+The check runs the linux/amd64 builds; the cross-compiled ones cannot run on the
+executor, so each is checked for the tag string the ldflags write into it.
+
 `publish-github-release` uploads them with `ghr`, using a token from
 `GITHUB_TOKEN`, `GH_TOKEN` or `CIRCLE_TOKEN` in the CircleCI project settings.
 It runs with `-replace`, so re-running the workflow for the same tag replaces
@@ -156,6 +164,25 @@ one alongside it).
    [MACOS_DISTRIBUTION.md](macos-distribution.md), which gives the workarounds
    and what signing would take.
 
+### Pinned release digests
+
+`pysysml` refuses to run a `sysml-grpc` binary it has no digest for, so a new
+core release has to be pinned into `PINNED_SHA256` in `python/pysysml/binary.py`
+before a client release can resolve it:
+
+```bash
+export GITHUB_TOKEN=...   # must be able to read this repository's releases
+python python/scripts/pin_release_checksums.py --version v0.0.8 --write
+```
+
+The token is required, not an optimization: the script reads the release's assets
+through the GitHub releases API, and unauthenticated calls are rate-limited per
+address and fail as an opaque HTTP 403. `GH_TOKEN` is read as well. The scope
+needed is read access to this repository's releases — `public_repo` for a classic
+token, `Contents: read` for a fine-grained one; nothing is written through the
+API. Without either variable the script fails immediately with
+`MissingTokenError` naming the variable, rather than at the first request.
+
 ## Releasing pysysml to PyPI
 
 The Python client in `python/` is published to PyPI as
@@ -187,13 +214,18 @@ irreversible upload hanging off it.
 - `python/pyproject.toml` has `dynamic = ["version"]` and reads
   `pysysml._version.VERSION` (there is no `setup.py` any more —
   `pyproject.toml` declares the build);
-- `pysysml.__version__` reports the version of the *installed* distribution
-  (`importlib.metadata`), falling back to the declaration in an uninstalled
-  source tree.
+- `pysysml.__version__` reports that declaration, which ships beside the module
+  and is therefore the version of the code being imported. A wheel's metadata is
+  generated from it, so the two agree there; an editable install's dist-info is
+  written once, at install time, and a checkout that bumps `VERSION` afterwards
+  would otherwise report the version it had when `pip install -e` ran.
 
 `python/tests/test_version.py` fails if a second version literal reappears
 anywhere under `python/`, or if the declaration, the installed metadata and
-`__version__` stop agreeing.
+`__version__` stop agreeing. Where the install is editable, the tests locate the
+package through the install's own PEP 610 record (`pysysml/_dist.py`) rather than
+the dist-info's directory, which for an editable install is a site-packages path
+holding no `pysysml/` at all.
 
 The tag must name the declared version. `python/scripts/check_version.py` is run
 by the job before anything is built, and fails loudly otherwise:

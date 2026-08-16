@@ -46,14 +46,26 @@ class ChecksumMismatchError(ConnectionError):
     failure and answered from whatever was cached before.
 
     Attributes:
-        unpinned (bool): True when the refusal is only that this pysysml pins no
-            digest for the release, so nothing contradicts anything and a
-            working cached binary may still be used
+        unpinned (bool): False for a real mismatch; see
+            :class:`UnpinnedReleaseError`, which is the only one it is True for
     """
 
-    def __init__(self, message, code=None, unpinned=False):
-        super().__init__(message, code=code)
-        self.unpinned = unpinned
+    #: A digest contradicts another one, which is what this class means.
+    unpinned = False
+
+
+class UnpinnedReleaseError(ChecksumMismatchError):
+    """Raised when this pysysml pins no digest for the release being downloaded.
+
+    Nothing contradicts anything here, so calling it a checksum mismatch named
+    the wrong cause: the release is simply not one this pysysml vouches for. A
+    :class:`ChecksumMismatchError` still, so an ``except`` clause written before
+    this class existed keeps catching it, and a working cached binary may still
+    be used because no download is under suspicion.
+    """
+
+    #: Told apart from a mismatch by class; the flag is kept for older callers.
+    unpinned = True
 
 
 class StaleServiceError(ConnectionError):
@@ -402,6 +414,7 @@ __all__ = [
     "StaleServiceError",
     "SymbolNotFoundError",
     "TypeMismatchError",
+    "UnpinnedReleaseError",
     "UnsupportedOperationError",
     "UnsupportedValueError",
     "WrongKindError",

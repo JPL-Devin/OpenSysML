@@ -1,5 +1,7 @@
 """Tests for pysysml module-level convenience API."""
 
+import warnings
+
 import pytest
 from unittest.mock import patch, MagicMock, Mock
 import pysysml
@@ -160,8 +162,8 @@ class TestModuleLevelAPI:
             assert result2 == mock_conn2
             assert result1 != result2
     
-    def test_pysysml_eval_with_file(self):
-        """Test module-level eval() loads file."""
+    def test_pysysml_evaluate_with_file(self):
+        """Test module-level evaluate() loads file."""
         with patch('pysysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
@@ -232,8 +234,8 @@ class TestModuleLevelAPI:
             assert result.id == 999
             mock_conn.instantiate.assert_called_once_with("Part", "hash-xyz")
     
-    def test_pysysml_eval_missing_both_params(self):
-        """Test eval() raises ValueError if neither file_path nor model_hash."""
+    def test_pysysml_evaluate_missing_both_params(self):
+        """Test evaluate() raises ValueError if neither file_path nor model_hash."""
         with patch('pysysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
@@ -245,8 +247,8 @@ class TestModuleLevelAPI:
             with pytest.raises(ValueError, match="Must provide either"):
                 pysysml.evaluate("2 + 2")
     
-    def test_pysysml_eval_with_both_params(self):
-        """Test eval() raises ValueError when both file_path and model_hash provided."""
+    def test_pysysml_evaluate_with_both_params(self):
+        """Test evaluate() raises ValueError when both file_path and model_hash provided."""
         with patch('pysysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
@@ -258,8 +260,8 @@ class TestModuleLevelAPI:
             with pytest.raises(ValueError, match="Provide either file_path or model_hash, not both"):
                 pysysml.evaluate("2 + 2", file_path="test.sysml", model_hash="hash-abc")
     
-    def test_pysysml_eval_with_context(self):
-        """Test eval() passes context_symbol_id through to conn.eval()."""
+    def test_pysysml_evaluate_with_context(self):
+        """Test evaluate() passes context_symbol_id through to conn.eval()."""
         with patch('pysysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
@@ -333,3 +335,49 @@ class TestModuleLevelAPI:
             
             with pytest.raises(ValueError, match="Provide either file_path or model_hash, not both"):
                 pysysml.instantiate("Part", file_path="test.sysml", model_hash="hash-abc")
+
+
+class TestRenamedNames:
+    """The two names that shadowed a built-in, and the aliases left behind."""
+
+    def test_the_old_names_resolve_to_the_new_objects(self):
+        """`pysysml.eval` is `evaluate` and `pysysml.RuntimeError` is `ExecutionError`."""
+        for old, new in (("eval", pysysml.evaluate), ("RuntimeError", pysysml.ExecutionError)):
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                alias = getattr(pysysml, old)
+            assert alias is new
+            assert len(caught) == 1
+            assert issubclass(caught[0].category, DeprecationWarning)
+            assert new.__name__ in str(caught[0].message)
+
+    def test_an_old_snippet_still_runs_through_the_alias(self):
+        """A script written against `pysysml.eval` keeps working, warning included."""
+        with patch('pysysml.Connection') as MockConnection:
+            mock_conn = Mock()
+            MockConnection.return_value = mock_conn
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
+            mock_conn.eval.return_value = 4
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                assert pysysml.eval("2 + 2", model_hash="h") == 4
+
+            mock_conn.eval.assert_called_once_with(
+                "2 + 2", "h", context_symbol_id=None, subject_symbol_id=None
+            )
+
+    def test_the_old_names_no_longer_shadow_a_builtin_on_star_import(self):
+        """Which is the point of the rename: `import *` binds neither name."""
+        assert "eval" not in pysysml.__all__ and "evaluate" in pysysml.__all__
+        assert "RuntimeError" not in pysysml.__all__
+
+        namespace = {}
+        exec("from pysysml import *", namespace)
+        assert "eval" not in namespace and "RuntimeError" not in namespace
+        assert namespace["evaluate"] is pysysml.evaluate
+
+    def test_a_name_the_package_never_had_is_still_an_attribute_error(self):
+        with pytest.raises(AttributeError, match="no attribute 'nope'"):
+            pysysml.nope

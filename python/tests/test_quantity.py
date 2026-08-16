@@ -5,9 +5,11 @@ it behaves; against the real ``sysml-grpc`` binary, that a model's quantity slot
 — written, derived, compound-unit and nested — read back as quantities.
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
 
-from pysysml.errors import SlotError, UnsupportedValueError
+from pysysml.errors import ExecutionError, SlotError, UnsupportedValueError
 from pysysml.instance import Instance
 from pysysml.proto import sysml_pb2
 from pysysml.values import (
@@ -17,6 +19,7 @@ from pysysml.values import (
     UnitFactor,
     value_to_python,
 )
+from tests.service_gate import skip_or_fail_without_service
 
 # Reductions of the units these tests measure with, as the service sends them.
 METRE = (("SI::metre", 1.0),)
@@ -100,6 +103,96 @@ def test_a_named_unit_with_no_reduction_is_reported():
     # A magnitude under no unit at all is dimension one, which is what it means.
     unnamed = value_to_python(sysml_pb2.Value(quantity=sysml_pb2.Quantity(real_magnitude=5.0)))
     assert unnamed.unit.dimensionless
+
+
+def test_a_quantity_encodes_as_the_message_the_service_decodes():
+    """What is sent is what is read back: magnitude in the unit written, reduced."""
+    kmh = Quantity(5.4, unit("SI::km/SI::h", METRE_PER_SECOND, 5.0, 18.0))
+
+    sent = kmh.to_pb()
+
+    assert sent.unit == "SI::km/SI::h"
+    assert sent.WhichOneof('magnitude') == 'real_magnitude'
+    assert sent.real_magnitude == 5.4
+    assert (sent.unit_term.scale_num, sent.unit_term.scale_den) == (5.0, 18.0)
+    assert [(f.unit_id, f.exponent) for f in sent.unit_term.factors] == list(METRE_PER_SECOND)
+    assert Quantity.from_pb(sent) == kmh
+
+
+def test_an_integer_magnitude_is_sent_as_an_integer():
+    """Integer and Real stay apart on the way out, as they do on the way in."""
+    sent = Quantity(3, unit("SI::m")).to_pb()
+
+    assert sent.WhichOneof('magnitude') == 'int_magnitude'
+    assert sent.int_magnitude == 3
+    assert isinstance(Quantity.from_pb(sent).magnitude, int)
+
+
+def test_a_dimensionless_quantity_is_sent_as_dimension_one():
+    """A magnitude under no unit means dimension one, and says so on the wire."""
+    sent = Quantity(2.0, Unit()).to_pb()
+
+    assert sent.unit == ""
+    assert sent.HasField('unit_term')
+    assert list(sent.unit_term.factors) == []
+    assert Quantity.from_pb(sent).unit.dimensionless
+
+
+def test_an_unreduced_unit_is_refused_before_it_is_sent():
+    """A unit named with no reduction measures nothing the service can relate."""
+    with pytest.raises(UnsupportedValueError, match="no reduction to base units"):
+        Quantity(5.0, Unit(text="Furlongs::furlong")).to_pb()
+
+    assert not Unit(text="Furlongs::furlong").reduced
+    assert Unit(text="SI::m", factors=(UnitFactor("SI::metre", 1.0),)).reduced
+    # A named unit that is a bare scale — a percentage — carries a reduction.
+    assert Unit(text="Percent::percent", scale_num=1.0, scale_den=100.0).reduced
+
+
+def test_a_named_unit_that_reduces_to_dimension_one_is_sent_back():
+    """``SI::rad`` is ``m/m``: reduced, and told apart from an absent reduction
+    by the reduction having been given rather than by what it reduces to."""
+    radians = Quantity.from_pb(
+        sysml_pb2.Quantity(
+            unit="SI::rad",
+            unit_term=sysml_pb2.UnitTerm(scale_num=1.0, scale_den=1.0),
+            real_magnitude=1.5,
+        )
+    )
+
+    assert radians.unit.reduced and radians.unit.dimensionless
+    assert not Unit(text="SI::rad").reduced
+
+    sent = radians.to_pb()
+
+    assert sent.unit == "SI::rad"
+    assert sent.HasField('unit_term') and list(sent.unit_term.factors) == []
+    assert Quantity.from_pb(sent) == radians
+
+
+def test_a_magnitude_that_is_not_a_number_is_refused():
+    """Booleans and strings are not magnitudes, however they cast."""
+    for magnitude in (True, "5.0", None):
+        with pytest.raises(UnsupportedValueError, match="neither an Integer nor a Real"):
+            Quantity(magnitude, unit("SI::m")).to_pb()
+
+
+def test_a_quantity_argument_is_encoded_as_a_quantity_value():
+    """The request carries the quantity itself, not a bare magnitude."""
+    from pysysml import Connection
+
+    with patch('grpc.insecure_channel'), \
+            patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as stub_cls:
+        stub_cls.return_value = Mock()
+        conn = Connection(auto_start=False)
+
+        mass = Quantity(5.0, unit("SI::kg", GRAM, scale_num=1000.0))
+        value = conn._python_to_value(mass)
+        nested = conn._python_to_value([mass])
+
+        assert value.WhichOneof('kind') == 'quantity'
+        assert Quantity.from_pb(value.quantity) == mass
+        assert Quantity.from_pb(nested.sequence.elements[0].quantity) == mass
 
 
 def test_a_quantity_slot_reads_off_an_instance():
@@ -282,12 +375,36 @@ package Q {
         attribute plainMass : ScalarValues::Real = 2.0;
         attribute derivedSpeed = 10.0 [SI::m] / 2.0 [SI::s];
         attribute writtenSpeed = 5.4 [SI::km/SI::h];
+        // A ratio unit: SI declares rad as m/m, so it reduces to dimension one.
+        attribute turn : ISQ::AngularMeasureValue = 1.5 [SI::rad];
         attribute length = 3 [SI::m];
         part engine : Engine;
 
         constraint withinLimit {
             mass <= 2000.0 [SI::kg]
         }
+    }
+
+    calc echo {
+        in q;
+        // Parenthesized: a bare name after `return` declares the return feature.
+        return (q);
+    }
+
+    calc overHalfATonne {
+        in q;
+        return q > 500.0 [SI::kg];
+    }
+
+    action addHalfATonne {
+        attribute m = 0.0 [SI::kg];
+        first start;
+        action inner {
+            assign m := m + 500.0 [SI::kg];
+        }
+        done end;
+        then start inner;
+        then inner end;
     }
 }
 """
@@ -308,10 +425,14 @@ class TestQuantityAgainstTheService:
         except grpc.RpcError as exc:
             if exc.code() != grpc.StatusCode.NOT_FOUND:
                 self.conn = None
-                pytest.skip("sysml-grpc service not running")
-        except Exception:
+                skip_or_fail_without_service(
+                    f"the sysml-grpc service on localhost:50051 answered {exc.code()}"
+                )
+        except Exception as exc:
             self.conn = None
-            pytest.skip("sysml-grpc service not running")
+            skip_or_fail_without_service(
+                f"no sysml-grpc service could be reached on localhost:50051 ({exc})"
+            )
         self.model = self.conn.load_from_content(QUANTITY_MODEL)
 
     def teardown_method(self):
@@ -350,6 +471,65 @@ class TestQuantityAgainstTheService:
 
         assert speed == Quantity(2.5, speed.unit)
         assert speed.unit.text == "SI::m/SI::s"
+
+    def test_a_quantity_sent_as_a_calc_argument_round_trips(self):
+        """Send → evaluate → read back: the magnitude and the unit as written."""
+        mass = self.conn.instantiate("Q::Car", self.model.hash).mass
+
+        echoed = self.conn.calc("Q::echo", self.model.hash, arguments=[mass]).value
+
+        assert isinstance(echoed, Quantity)
+        assert echoed.magnitude == mass.magnitude
+        assert echoed.unit.text == mass.unit.text == "SI::kg"
+        assert echoed.unit.exponents() == {"SI::gram": 1.0}
+        assert echoed == mass
+
+        # An integer magnitude sent stays an integer, in its own unit.
+        length = Quantity(3, unit("SI::m"))
+        back = self.conn.calc("Q::echo", self.model.hash, arguments=[length]).value
+        assert back.magnitude == 3 and isinstance(back.magnitude, int)
+        assert back.unit.text == "SI::m"
+
+    def test_a_quantity_in_a_ratio_unit_round_trips(self):
+        """An angle read off the wire goes back out: dimension one is a reduction."""
+        turn = self.conn.instantiate("Q::Car", self.model.hash).turn
+
+        assert turn.unit.text == "SI::rad" and turn.unit.dimensionless
+
+        echoed = self.conn.calc("Q::echo", self.model.hash, arguments=[turn]).value
+
+        assert echoed == turn
+        assert echoed.magnitude == 1.5 and echoed.unit.text == "SI::rad"
+
+    def test_a_sent_quantity_is_commensurable_with_the_models_own_units(self):
+        """The reduction sent is what the service compares against, not the magnitude."""
+        kilograms = Quantity(1200.0, unit("SI::kg", GRAM, scale_num=1000.0))
+        grams = Quantity(400.0, unit("SI::g", GRAM))
+
+        assert self.conn.calc("Q::overHalfATonne", self.model.hash, arguments=[kilograms]).value
+        assert not self.conn.calc("Q::overHalfATonne", self.model.hash, arguments=[grams]).value
+
+    def test_a_quantity_input_binds_into_an_action(self):
+        """An action input given as a quantity is added to, not discarded."""
+        base = self.conn.execute_action("Q::addHalfATonne", self.model.hash)
+        assert base["m"] == Quantity(500.0, unit("SI::kg", GRAM, scale_num=1000.0))
+
+        out = self.conn.execute_action(
+            "Q::addHalfATonne",
+            self.model.hash,
+            inputs={"m": Quantity(1200.0, unit("SI::kg", GRAM, scale_num=1000.0))},
+        )
+
+        assert out["m"] == Quantity(1700.0, unit("SI::kg", GRAM, scale_num=1000.0))
+        assert out["m"].unit.text == "SI::kg"
+
+    def test_a_unit_the_model_does_not_declare_is_refused_with_its_name(self):
+        """A base unit no model declares is an error naming it, never a bare number."""
+        invented = Quantity(5.0, unit("Furlongs::furlong", (("Furlongs::furlong", 1.0),)))
+
+        with pytest.raises(ExecutionError) as excinfo:
+            self.conn.calc("Q::echo", self.model.hash, arguments=[invented])
+        assert "Furlongs::furlong" in str(excinfo.value)
 
     def test_a_verdict_over_quantities_carries_the_quantity_it_is_about(self):
         """A constraint over quantities holds, and its subject's slot is readable."""

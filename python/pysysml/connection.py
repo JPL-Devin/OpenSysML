@@ -8,6 +8,7 @@ import psutil
 import subprocess
 import time
 import warnings
+from typing import Any, Dict, Tuple
 from filelock import FileLock, Timeout
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
@@ -34,13 +35,14 @@ from pysysml.errors import (
     ModelNotFoundError,
     PySysMLError,
     StaleServiceError,
+    UnpinnedReleaseError,
     UnsupportedValueError,
     WrongKindError,
     from_rpc_error,
     translate_rpc_errors,
 )
 from pysysml.query import build_query, elements_of
-from pysysml.values import value_to_python
+from pysysml.values import Quantity, value_to_python
 from pysysml.verdict import CalcResult, Verdict
 
 
@@ -63,7 +65,7 @@ _START_TIME_TOLERANCE = 1e-3
 #: process that spawned a service, so it is not shared through a file: no other
 #: process may stop that service, and this one stops it when its own last
 #: reference is released.
-_OWNED_SERVICES = {}
+_OWNED_SERVICES: Dict[Tuple[str, int], Dict[str, Any]] = {}
 
 
 def split_target(host, port=None):
@@ -1027,6 +1029,8 @@ class Connection:
             return sysml_pb2.Value(null="")
         elif isinstance(py_value, Instance):
             return sysml_pb2.Value(instance_id=py_value.id)
+        elif isinstance(py_value, Quantity):
+            return sysml_pb2.Value(quantity=py_value.to_pb())
         elif isinstance(py_value, EnumLiteral):
             return sysml_pb2.Value(enum_literal=sysml_pb2.EnumLiteral(
                 literal_id=py_value.literal_id,
@@ -1261,10 +1265,10 @@ class Connection:
         """
         try:
             ensure_binary(version=self._version)
-        except ChecksumMismatchError as e:
-            if not e.unpinned:
-                raise
+        except UnpinnedReleaseError:
             return False
+        except ChecksumMismatchError:
+            raise
         except PySysMLError:
             return False
         return cached_release() == required

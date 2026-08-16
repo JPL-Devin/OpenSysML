@@ -86,6 +86,7 @@ python-proto: ## Regenerate Python protobuf stubs
 	@$(PYTHON) -c "import grpc_tools.protoc" >/dev/null 2>&1 || { echo "Error: grpcio-tools not installed. Run: $(PYTHON) -m pip install grpcio-tools"; exit 1; }
 	$(PYTHON) -m grpc_tools.protoc --proto_path=api/proto \
 	       --python_out=$(PYTHON_DIR)/pysysml/proto \
+	       --pyi_out=$(PYTHON_DIR)/pysysml/proto \
 	       --grpc_python_out=$(PYTHON_DIR)/pysysml/proto \
 	       api/proto/sysml.proto
 	@# generated stubs import each other by top-level name; make it package-relative
