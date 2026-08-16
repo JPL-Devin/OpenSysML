@@ -306,6 +306,11 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 				if semantics.EnumerationOwning(sym) != nil {
 					return ec.enumLiteralValue(sym)
 				}
+				// A library feature's value comes from the feature seam, not its
+				// declared body: a warm library cache restores symbols without AST.
+				if val, ok, err := ec.ctx.libraryFeatureValue(sym); ok {
+					return val, err
+				}
 				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
 					if ec.resolving == nil {
 						ec.resolving = map[string]bool{}
@@ -384,6 +389,12 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 			return Value{}, fmt.Errorf("member %s not found in %s", memberName, currentSym.Name)
 		}
 		currentSym = nextSym
+	}
+
+	// A library feature reads through the feature seam, whatever the library
+	// declares for it and whether or not the cache kept its declaration.
+	if val, ok, err := ec.ctx.libraryFeatureValue(currentSym); ok {
+		return val, err
 	}
 
 	// Evaluate the final symbol's declaration

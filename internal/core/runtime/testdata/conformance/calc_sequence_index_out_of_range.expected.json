@@ -1,4 +1,4 @@
 {
   "type": "calc",
-  "error": "sequence index out of range"
+  "error": "index out of range: sequence index 4 is outside 1..3"
 }

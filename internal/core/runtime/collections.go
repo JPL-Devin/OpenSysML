@@ -380,6 +380,30 @@ func builtinSequenceExcluding(ec *EvalContext, args []Value) (Value, error) {
 	return ec.newSequence(kept)
 }
 
+// builtinSequenceIncludingAt inserts values before the 1-based index, shifting
+// the tail right; index size+1 appends. The vendored body drops the element at
+// index instead, recorded as an OMG source bug (docs/project/omg-issues.md).
+func builtinSequenceIncludingAt(ec *EvalContext, args []Value) (Value, error) {
+	const op = "SequenceFunctions::includingAt"
+	if err := checkArity(op, args, 3); err != nil {
+		return Value{}, err
+	}
+	elements, values := elementsOf(args[0]), elementsOf(args[1])
+	index, err := indexOf(op, args[2])
+	if err != nil {
+		return Value{}, err
+	}
+	if index < 1 || index > int64(len(elements))+1 {
+		return Value{}, fmt.Errorf("%w: %s insertion index %d is outside 1..%d",
+			ErrIndexOutOfRange, op, index, len(elements)+1)
+	}
+	inserted := make([]Value, 0, len(elements)+len(values))
+	inserted = append(inserted, elements[:index-1]...)
+	inserted = append(inserted, values...)
+	inserted = append(inserted, elements[index-1:]...)
+	return ec.newSequence(inserted)
+}
+
 // builtinSequenceSubsequence is SequenceFunctions::subsequence, the elements
 // from startIndex to endIndex inclusive (`(startIndex..endIndex)->collect {in
 // i; seq#(i)}`). endIndex defaults to the sequence's size, as the library
