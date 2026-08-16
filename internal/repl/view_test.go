@@ -87,16 +87,27 @@ func TestViewExposingNothingIsNoError(t *testing.T) {
 
 func TestViewOfANonViewIsTyped(t *testing.T) {
 	s := viewSession(t)
-	_, _, err := s.RunMeta("%view Demo::Vehicle")
-	if !errors.Is(err, semantics.ErrNotAView) {
+	if _, err := s.View("Demo::Vehicle"); !errors.Is(err, semantics.ErrNotAView) {
 		t.Errorf("err = %v, want semantics.ErrNotAView", err)
+	}
+	// At the prompt it is a line, as a mistyped constraint or instance name is.
+	out, _, err := s.RunMeta("%view Demo::Vehicle")
+	if err != nil {
+		t.Fatalf("a non-view should not fail the command: %v", err)
+	}
+	if text := strings.Join(out, "\n"); !strings.HasPrefix(text, "error: ") {
+		t.Errorf("out = %v, want an error line", out)
 	}
 }
 
 func TestViewOfAnUnknownNameReports(t *testing.T) {
 	s := viewSession(t)
-	if _, _, err := s.RunMeta("%view Demo::Nope"); err == nil {
-		t.Error("view of an unknown name did not report anything")
+	out, _, err := s.RunMeta("%view Demo::Nope")
+	if err != nil {
+		t.Fatalf("an unknown name should not fail the command: %v", err)
+	}
+	if text := strings.Join(out, "\n"); !strings.HasPrefix(text, "error: ") {
+		t.Errorf("view of an unknown name did not report anything: %v", out)
 	}
 }
 
