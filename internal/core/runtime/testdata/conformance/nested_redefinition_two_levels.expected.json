@@ -1,0 +1,13 @@
+{
+  "type": "instance",
+  "instantiate": "test::top",
+  "libraries": true,
+  "slots": {
+    "leafValue": {"type": "Real", "value": 99.0}
+  },
+  "constraints": {
+    "leafRedefined": true,
+    "redefinedOverSibling": true,
+    "intermediateRedefined": true
+  }
+}
