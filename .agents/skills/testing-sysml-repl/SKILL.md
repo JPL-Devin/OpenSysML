@@ -2127,6 +2127,40 @@ object whose type conforms to the type declaring the condition, else declared de
   commit, so it is pre-existing, not a regression — but it reads as a contradiction and may be
   worth flagging). Also `%eval A::b::c` (skipping the def segment) is `unresolved reference` in
   both revisions; the resolvable spellings are `A::Outer::b::c` and `A::Inner::c`.
+- **The nested-subject blind spot above was fixed (PRs #206/#219/#236).** Now `%constraint`,
+  `%requirement` and `%satisfy` evaluate the nested object and *name* it: with
+  `part o : Outer { part :>> b { attribute :>> c = 50.0; } }`,
+  `%constraint A::Inner::small` answers `✗ Constraint A::Inner::small failed (on A::o::b ID: 2)` —
+  `<session-held root>::<feature path>`, matching the `b = Instance(ID: 2)` line of `%slots A::o`.
+  Assert the *whole* suffix: a build that regressed to the outer holder still prints a `✗`, and the
+  pre-#236 binary prints the same `✗` line with **no suffix at all**, so ✓/✗ alone proves nothing.
+  Ordinary (non-nested) checks keep labelling the object handed in (`(on A::w ID: 3)`), and a
+  no-object run still prints no suffix.
+  - Such a label is **descriptive, not addressable**: `%slots A::o::b` answers
+    `error: no instance of "A::o::b"` and `%instances` lists only `A::o`. Worth reporting whenever
+    label spelling changes, and a good adversarial step after any "name the subject" PR.
+  - Multiplicity-materialized subjects read `(on A::car::wheels ID: 2)` in the REPL while gRPC still
+    reports the *definition* (`instance_type_id 'A::Bolt'`/`'A::Wheel'`) — the two surfaces disagree
+    by design so far; check both rather than assuming one from the other.
+- **Ambiguity carrier labels: check every fixture shape, they regress independently.** The message is
+  `ambiguous subject: <cond> is carried by <Def> #<id> (<feature path>), …`. Three shapes worth
+  running together, because a change that improves one can flatten another:
+  `front`/`rear` nested parts → `Bolt #4 (front::bolt), Bolt #5 (rear::bolt)` (pre-#236 both read
+  `(bolt)`); subsetting into a shared collection (`part subsystem : Component[*]` fed by
+  `part small : Component :> subsystem` / `large`) → at `658076e9` `Component #2 (small),
+  Component #3 (large)` but at #236 both read `(subsystem)`, because the label now shows the
+  features *walked* (the collection slot) rather than the declaration materialized; recursive
+  containment → `Leaf #2 (leaf), Leaf #5 (next::leaf)`. Always time the recursive/mutual fixtures
+  (`time ./bin/sysml recursive.sysml < cmds`, ~0.22 s) whenever the occurrence key changes.
+- **gRPC classifies an ambiguity since PR #236:** `FailureReason.FAILURE_REASON_AMBIGUOUS_SUBJECT`
+  (enum 3, `api/proto/sysml.proto`). pysysml exposes **no public property** for it — read
+  `verdict._pb.failure_reason` and name it with
+  `from pysysml.proto import sysml_pb2 as pb; pb.FailureReason.Name(...)`; `Verdict` has no
+  `failure_reason` attribute and `connection._failure_of` maps only `WRONG_KIND`, so a client
+  wanting to branch on ambiguity today reaches into a private field. An ordinary violated condition
+  comes back `holds=False` with `FAILURE_REASON_UNSPECIFIED` (0), i.e. "plain violation" is the unset
+  value — assert the ambiguous *and* the violated case in the same run so a hard-coded reason cannot
+  pass both.
 - `-instantiate` objects are created **before** `-e` expressions since PR #180, so
   `sysml -instantiate P::hot -e P::Sensor::reading m.sysml` prints the instance line first and
   answers `140.00 (on P::hot ID: 1)`; the parent binary answered `0.00`. Any change to
