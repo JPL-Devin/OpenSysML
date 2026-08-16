@@ -822,16 +822,30 @@ func realElements(name, param string, val Value) ([]float64, error) {
 }
 
 // vectorValue builds a vector from its elements, charging them against the run's
-// element budget as any other materialized collection.
+// element budget as any other materialized collection. An element that is not a
+// finite value of its kind is reported rather than carried into the vector.
 func (ctx *Context) vectorValue(elements []semantics.Value) (Value, error) {
 	if err := ctx.chargeElements(int64(len(elements))); err != nil {
 		return Value{}, err
 	}
 	out := make([]Value, len(elements))
 	for i, elem := range elements {
-		out[i] = Value{Kind: ValConst, Const: elem}
+		checked, err := checkedNumeric(elem)
+		if err != nil {
+			return Value{}, err
+		}
+		out[i] = Value{Kind: ValConst, Const: checked}
 	}
 	return sequenceOf(out), nil
+}
+
+// checkedNumeric screens a computed numeric value, so an arithmetic result that
+// overflowed the Real range is reported rather than returned as an infinity.
+func checkedNumeric(v semantics.Value) (semantics.Value, error) {
+	if v.Kind != semantics.ValReal {
+		return v, nil
+	}
+	return realResult(v.Real)
 }
 
 // realVector builds a vector of Reals, reporting an element that is not a finite
@@ -1095,7 +1109,11 @@ func vectorInner(name string, _ *Context, args []Value) (Value, error) {
 		}
 		sum = next
 	}
-	return Value{Kind: ValConst, Const: sum}, nil
+	checked, err := checkedNumeric(sum)
+	if err != nil {
+		return Value{}, err
+	}
+	return Value{Kind: ValConst, Const: checked}, nil
 }
 
 // vectorNorm is the norm (magnitude) of a vector, the square root of its inner
