@@ -20,7 +20,6 @@ type Server struct {
 	baseServer
 	ws     *model.Workspace
 	client protocol.Client
-	conn   jsonrpc2.Conn
 
 	// exited is closed by Exit so that Run returns from the read loop rather
 	// than a handler tearing the connection down under itself.
@@ -49,7 +48,6 @@ func (s *Server) Run(ctx context.Context, rwc io.ReadWriteCloser) error {
 	client := protocol.ClientDispatcher(conn, zap.NewNop())
 	ctx = protocol.WithClient(ctx, client)
 	s.client = client
-	s.conn = conn
 	conn.Go(ctx, runHandler(s))
 	select {
 	case <-conn.Done():
