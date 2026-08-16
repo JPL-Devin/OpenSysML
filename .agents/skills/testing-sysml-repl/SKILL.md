@@ -2816,3 +2816,95 @@ Two traps when writing these fixtures:
   because the conformance harness supplies imports the file omits; add `import ScalarValues::*;` in
   your own fixtures, and treat that one as pre-existing (the sweep confirms it is identical on both
   binaries).
+
+## Hierarchical / composite state machines: outward transitions, timers, history (PR #230)
+
+Whole families of state-executor changes (transitions declared on a composite state while a
+substate is active, exit-chain ordering, timer withdrawal, change triggers) are testable from the
+REPL with **no ports and no signals** if you encode observations as *decimal digits* in one
+attribute. This is the single most useful technique in this area:
+
+```
+attribute log : Integer = 0;
+state Outer { entry assign log := log * 10 + 1; exit assign log := log * 10 + 2; }
+```
+
+`%current` then prints e.g. `log = 32419`, which reads left-to-right as the exact order of the
+entries/exits/effects that ran. Give **every nesting level its own digit** — a duplicated exit
+(`…22…`) or a missing one is otherwise invisible, and a doubled exit is exactly the defect class
+that shows up when exit chains are refactored. Keep the digits distinct per level and put the
+transition effect last.
+
+Driving and reading:
+
+- Put fixtures under `$HOME` (e.g. `~/fixtures/pr<N>/`), never `/tmp` — `/tmp` is wiped between
+  sessions and you will lose an afternoon of fixtures. `%load` needs an **absolute** path.
+- A nested state reference must be **qualified**: `start then Working::Step1`, not `then Step1`.
+- A nested `initial` only takes effect inside an explicit `region { … }`. `state Outer { initial o;
+  state Mid { … } transition o to Mid; }` enters **Outer only** — `ActiveStates()`/`%current` show
+  no substate at all, and any test built on that shape silently probes the wrong thing. Wrap both
+  levels in regions and assert the pre-condition configuration before the interesting step.
+- `ActiveStates()` for a region-wrapped chain lists the *innermost* composites and leaves
+  (`map[Mid:true leaf:true]`), not every enclosing composite — assert on the leaf plus the state
+  you expect to survive, not on the outermost name.
+- In Konsole use `%quit`; `Ctrl-D` closes the terminal window and kills the recording. `ctrl+plus`
+  (not `ctrl+shift+plus`) changes the font size.
+- Batch a whole scenario into a `.script` file and pipe it (`timeout 30 ./bin/sysml < z.script`) to
+  discover values, then re-run the interesting ones interactively for the camera.
+- A per-fixture expectation table plus a tiny runner that prints `fixture | final state | log |
+  PASS/FAIL` turns a 30-fixture regression matrix into one screen of camera-friendly evidence, and
+  it fails loudly if a refactor moves any established value.
+
+Timers (`accept after N` + `%advance`) are the cheapest scheduling probe:
+
+- Advance to the **exact** expected instant and read `Remaining events:` (`1` = armed/re-armed,
+  `0` = spent) plus `No pending work - simulation time is now …` — that line is the clearest
+  signal that a timer was never re-armed.
+- To prove a queued time event is *withdrawn* when its state exits, the state must be left **and
+  re-entered**: `accept after 10` left at t=3 and re-entered at t=5 must fire at t=15, not t=10.
+  Add a second region with its own clock (`after 12`) so the ordering of two digits (`21` vs `12`)
+  is the discriminator instead of one absolute time.
+- Bound repeated exit/re-entry with a counter guard (`if trips == 0 do assign trips := trips + 1`)
+  or the fixture becomes an infinite loop.
+- **Pre-existing on every binary tested (not a PR regression):** a state that owns a
+  time-triggered transition ignores its own *signal* transitions, and signal transitions on leaves
+  inside top-level regions never fire. So drive timer fixtures purely with `accept after`, and
+  verify any such oddity against a contrast binary before reporting it.
+- `deep history resume;` works in REPL fixtures (`transition away to resume`) and doubles as an
+  exit-chain probe, since the return path re-runs the entry digits.
+- Once composite self-transitions re-enter their regions, a fixture whose signal poster sits
+  *inside* the self-transitioning composite becomes an infinite event loop; post from a sibling
+  region that is never re-entered.
+
+Change triggers (`accept when`) **cannot be driven from the REPL at all**: `pollChangeEvents` has
+no non-test caller (`grep -rn pollChangeEvents --include='*.go' .` → definition plus `*_test.go`),
+and no meta-command reaches it (`%advance`/`%step`/`%continue` are time and the *action* debugger).
+The REPL therefore parks in the source state with the condition already true — that is the
+documented ⚠️ Approximate row in `docs/project/spec-compliance.md`, not a defect. Show the grep on
+camera to justify covering the behavior with go tests instead:
+
+```go
+exec := stateExecutorForSource(t, "sm", `package test { state sm { … } }`)
+exec.RunToCompletion()
+exec.stateData["ready"] = boolValue(true)
+exec.pollChangeEvents()
+// read exec.ActiveStates() and exec.stateData["log"]
+```
+
+For an internal fix like this the strongest evidence is a worktree A/B:
+`git worktree add ~/wt<sha> <parent-sha>`, **copy the new test file (and any probe file) into the
+worktree** so `state_executor.go` is the only delta (`cmp -s` each file on camera to prove it),
+then run `go test -count=1 -run … -v ./internal/core/runtime` in both trees.
+
+Designing discriminating probes here is genuinely tricky — always confirm a probe **FAILs on the
+parent** before trusting it:
+
+- `getParentChain` is **leaf-first**, so a single active leaf already gets innermost-first
+  treatment; a probe with one leaf plus enclosing composites will pass on both revisions and prove
+  nothing.
+- The discriminating shape for innermost-wins/dedupe in the poll path needs a **sibling region
+  whose leaf watches nothing**, so its outward walk reaches the composite's own watched transition
+  while another region's leaf has its own: only a correct implementation keeps the composite alive.
+- Keep probe files out of the repo tree before running the gates (`rm` it, keep a `.txt` copy in
+  the fixtures dir) and confirm `git status --porcelain` is empty on camera, so the gates clearly
+  reflect the committed tree.
