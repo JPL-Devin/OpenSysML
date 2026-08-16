@@ -772,6 +772,12 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 		return Value{}, err
 	}
 
+	// '+' over two strings concatenates, the one arithmetic operator
+	// StringFunctions declares; a non-string operand is not coerced.
+	if n.Operator == ast.OpAdd && left.Kind == ValString && right.Kind == ValString {
+		return concatStrings(left.Str, right.Str), nil
+	}
+
 	// A quantity carries its unit through arithmetic: a sum converts, a product
 	// composes units.
 	if lq, rq, ok := quantityOperands(left, right); ok {
@@ -927,6 +933,24 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 	// across units without conversion.
 	if lq, rq, ok := quantityOperands(left, right); ok {
 		return compareQuantities(n.Operator, lq, rq)
+	}
+
+	// StringFunctions declares the comparisons over two String operands, so a
+	// string orders against a string and against nothing else.
+	if left.Kind == ValString || right.Kind == ValString {
+		if left.Kind != ValString || right.Kind != ValString {
+			return Value{}, &OperandTypeError{
+				Op:    n.Operator.String(),
+				Left:  describeOperand(left),
+				Right: describeOperand(right),
+				Span:  n.Span(),
+			}
+		}
+		ordered, err := compareStrings(n.Operator, left.Str, right.Str)
+		if err != nil {
+			return Value{}, err
+		}
+		return boolValue(ordered), nil
 	}
 
 	// Both must be ValConst

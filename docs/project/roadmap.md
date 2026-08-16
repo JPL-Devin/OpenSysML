@@ -317,6 +317,43 @@ Both residual items are closed by the unit-resolution work; see `docs/project/sp
   `lower.Unsupported` and reported when reached, since neither has succession semantics inside a
   block. Executing them means giving a block its own token flow.
 
+## A11 — string operators and the string function library — done
+
+Found in the 0.0.8 pre-release audit: no operator was defined over two strings (`s + "d"` reported
+`operator '+' is not defined for a string and a string`) and no `StringFunctions` declaration was
+evaluable, so a model that builds a message, compares text or measures a string could not run.
+
+Landed: every function the vendored `StringFunctions` declares is evaluable, and each of the
+operators it declares evaluates over two String operands — `runtime/library_functions.go`
+`registerStringFunctions` (`'+'`, `Length`, `Substring`, `'<'`, `'>'`, `'<='`, `'>='`, `'=='`,
+`ToString`) plus the operator dispatch in `runtime/eval.go` (`evalArithmetic` for `'+'`,
+`evalComparison` for the four comparisons). Semantics, and where each comes from:
+
+- **Length counts characters, not bytes**: one per Unicode code point, so `Length("héllo")` is 5
+  though the string is 6 bytes. The declaration returns `Natural[1]`, a count of the string's
+  characters, and the KerML 1.0 String description is a sequence of characters; a byte count would
+  depend on the encoding, which the library never mentions.
+- **Substring positions are 1-based and inclusive**, over characters, matching the library's own
+  `SequenceFunctions::subsequence` (`in lower`/`in upper`, `Positive` indices elsewhere in the
+  library). A position outside `1..Length(x)` is `ErrIndexOutOfRange` rather than clamped, and an
+  upper below lower selects no character, exactly as `subsequence` answers nothing for such a range.
+- **Comparison is by character order**: UTF-8 orders bytes as it orders code points, so a Go string
+  comparison *is* code-point order.
+- **No coercion**: an operand that is not a String is an `OperandTypeError` wrapping
+  `ErrTypeMismatch`, naming the operator and both operand types. `'=='` specializes
+  `DataFunctions::'=='`, so as an *operator* `s == 3` is `false` (equality is defined over any two
+  values); called explicitly, `StringFunctions::'=='` declares `String[0..1]` operands and reports a
+  non-String argument, like every other signature in the package. `'=='` over `[0..1]` operands also
+  answers for an omitted one: two omitted operands are equal, an omitted one and a string are not.
+- The library declares `Length` and `Substring`, not `size`/`substring` — the audit's repro used the
+  latter spelling, which no vendored file declares, so the implemented names follow the library.
+
+Conformance cases `string_operators`, `string_comparison`, `string_functions`, `string_empty`,
+`string_substring_out_of_range`, `string_compared_with_a_number`; unit coverage in
+`runtime/eval_operator_test.go` and `runtime/library_functions_test.go`, the latter's
+`TestVendoredFunctionsAreAllDispatchable` now gating `StringFunctions` so a declaration cannot drift
+away from an implementation; robustness case `string_operand_of_the_wrong_kind`.
+
 ## A10 — an enumeration literal has no runtime value — done
 
 Landed: a literal declaring no value evaluates to itself — `runtime.Value{Kind: ValEnumLiteral}`

@@ -124,6 +124,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
 	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
 	t.Run("numeric_library_call_that_has_no_value", testNumericLibraryCallThatHasNoValue)
+	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
 	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
 	t.Run("collection_operation_step_budget", testCollectionOperationStepBudget)
@@ -384,6 +385,35 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
 		{"ComplexFunctions::ToString(ys)", ErrUnevaluableLibraryFunction},
 		{"SequenceFunctions::includingAt(xs, 9, 2)", ErrUnevaluableLibraryFunction},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testStringOperandOfTheWrongKind: an operator or StringFunctions call given a
+// value that is not the String its signature declares is reported rather than
+// coerced, and a Substring position naming no character is reported rather than
+// clamped.
+func testStringOperandOfTheWrongKind(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{`"a" + 1`, ErrTypeMismatch},
+		{`1 + "a"`, ErrTypeMismatch},
+		{`"a" < 1`, ErrTypeMismatch},
+		{`"a" >= factor`, ErrTypeMismatch},
+		{`"a" < xs`, ErrTypeMismatch},
+		{`"a" - "b"`, ErrTypeMismatch},
+		{`StringFunctions::Length(1)`, ErrTypeMismatch},
+		{`StringFunctions::Length(xs)`, ErrTypeMismatch},
+		{`StringFunctions::Substring("abc", 1, 9)`, ErrIndexOutOfRange},
+		{`StringFunctions::Substring("abc", 0, 2)`, ErrIndexOutOfRange},
+		{`StringFunctions::Substring("abc", "1", 2)`, ErrTypeMismatch},
+		{`StringFunctions::Substring("abc", 1)`, ErrCalcArity},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
