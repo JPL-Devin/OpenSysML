@@ -86,23 +86,29 @@ func Returns(stmts []Statement) bool {
 		case Return:
 			return true
 		case If:
-			if Returns(s.Then.Statements) {
+			if blockReturns(s.Then) {
 				return true
 			}
-			if s.Else != nil && Returns(s.Else.Statements) {
+			if s.Else != nil && blockReturns(*s.Else) {
 				return true
 			}
 		case Loop:
-			if Returns(s.Body.Statements) {
+			if blockReturns(s.Body) {
 				return true
 			}
 		case Block:
-			if Returns(s.Statements) {
+			if blockReturns(s) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// blockReturns reports whether a block returns a value on some path, wherever
+// its statements live.
+func blockReturns(block Block) bool {
+	return Returns(block.Steps())
 }
 
 // isExpressionNode reports whether a body member is an expression rather than a

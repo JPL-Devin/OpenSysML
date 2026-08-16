@@ -1,0 +1,14 @@
+{
+  "type": "calc",
+  "evaluate": "test::isEven",
+  "inputs": [
+    {
+      "type": "Integer",
+      "value": 11
+    }
+  ],
+  "result": {
+    "type": "Boolean",
+    "value": false
+  }
+}

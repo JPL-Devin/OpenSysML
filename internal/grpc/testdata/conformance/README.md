@@ -36,7 +36,12 @@ A slot's `error` is a substring its `SlotValue.error` must contain; a slot witho
 carry no error.
 
 A value is `{"kind": <oneof field of pb.Value>, "value": <literal>}`, where `kind` is one of
-`int_value`, `real_value`, `bool_value`, `string_value`, `instance_id` or `null`. The
-assertion checks the oneof arm as well as the payload, so a value returned with the wrong
+`int_value`, `real_value`, `bool_value`, `string_value`, `instance_id`, `quantity` or `null`.
+The assertion checks the oneof arm as well as the payload, so a value returned with the wrong
 type fails; `instance_id` and `null` assert the arm only, since instance ids are assigned at
 runtime.
+
+A `quantity`'s literal is the string `"<magnitude> [<unit as written>] = <reduction>"`, for
+example `"5.4 [SI::km/SI::h] = 5/18·SI::metre·SI::second^-1"`: the magnitude in the unit it
+was written in, then what that unit reduces to. A reduction of `1` is a dimensionless unit and
+`absent` is a unit the service could not reduce.

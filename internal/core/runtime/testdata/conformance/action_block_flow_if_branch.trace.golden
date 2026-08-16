@@ -1,0 +1,22 @@
+step 1: token 1@choose
+stmt if
+    eval feature value -> 4
+    eval literal 3 -> 3
+  eval operator > -> true
+  stmt node double
+    stmt action body
+      stmt assign result
+          eval feature value -> 4
+          eval literal 2 -> 2
+        eval operator * -> 8
+  stmt node Halve
+    stmt perform
+step 1: token 1@compute
+      stmt assign halved
+          eval feature result -> 8
+          eval literal 2 -> 2
+        eval operator / -> 4
+step 2: token 1@finish
+step 3: no active tokens
+step 2: token 1@end
+step 3: no active tokens

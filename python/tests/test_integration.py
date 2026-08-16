@@ -5,37 +5,23 @@ They verify end-to-end functionality with real RPC calls (no mocks).
 
 Run with: pytest tests/test_integration.py
 Skip with: pytest tests/ -k "not integration"
+
+Without a service they skip, which is what a developer who has no binary wants;
+with $PYSYSML_REQUIRE_SERVICE set, as CI sets it, an absent service fails
+instead, since a skip that never runs exercises nothing.
 """
 
 import pytest
 import grpc
 from pysysml import Connection
+from pysysml.errors import ModelFileNotFoundError
+from tests.service_gate import fail_if_service_promised, is_server_available
 
+_AVAILABLE = is_server_available()
+fail_if_service_promised(_AVAILABLE)
 
-def is_server_available(host='localhost', port=50051, timeout=2):
-    """Check if sysml-grpc server is reachable."""
-    try:
-        from pysysml.proto import sysml_pb2_grpc, sysml_pb2
-        channel = grpc.insecure_channel(f'{host}:{port}')
-        stub = sysml_pb2_grpc.SysMLServiceStub(channel)
-        # Try a simple RPC to verify server is responsive
-        # Use GetDiagnostics with invalid hash - should return empty, not crash
-        request = sysml_pb2.DiagnosticsRequest(model_hash="health_check")
-        stub.GetDiagnostics(request, timeout=timeout)
-        channel.close()
-        return True
-    except grpc.RpcError as e:
-        # NOT_FOUND is expected for invalid hash - means server is working
-        if e.code() == grpc.StatusCode.NOT_FOUND:
-            return True
-        return False
-    except Exception:
-        return False
-
-
-# Skip all integration tests if server not running
 pytestmark = pytest.mark.skipif(
-    not is_server_available(),
+    not _AVAILABLE,
     reason="sysml-grpc server not running on localhost:50051"
 )
 
@@ -145,13 +131,19 @@ class TestIntegrationRealServer:
         # (Can't directly verify, but should not raise)
 
     def test_load_nonexistent_file_real_server(self):
-        """Verify file-not-found errors propagate from real server."""
+        """Verify a file the service cannot read raises the typed domain error.
+
+        The public contract is the domain exception, not the status it was
+        translated from, which stays reachable as __cause__.
+        """
         with Connection(auto_start=False) as conn:
-            with pytest.raises(grpc.RpcError) as exc_info:
+            with pytest.raises(ModelFileNotFoundError) as exc_info:
                 conn.load("/nonexistent/path/to/file.sysml")
-            
-            # Should get NotFound status
-            assert exc_info.value.code() == grpc.StatusCode.NOT_FOUND
+
+            assert exc_info.value.code == grpc.StatusCode.NOT_FOUND
+            # And is what the failure is, so os-level handling catches it.
+            assert isinstance(exc_info.value, FileNotFoundError)
+            assert exc_info.value.__cause__.code() == grpc.StatusCode.NOT_FOUND
 
     def test_get_symbol_with_real_server(self, tmp_path):
         """Verify get_symbol() works with real server."""

@@ -124,6 +124,10 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.infer(scope, m.Expression)
 	case *ast.SubjectMember:
 		tc.checkSubjectMember(scope, m)
+	default:
+		// A body member that is an expression is a value the body computes — a
+		// calc body whose result is its last expression — and is typed as one.
+		tc.expr.infer(scope, n)
 	}
 }
 

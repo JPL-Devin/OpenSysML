@@ -138,13 +138,13 @@ func collectAssignedOutputs(stmts []lower.Statement, declared, assigned map[stri
 				assigned[s.Target] = true
 			}
 		case lower.Block:
-			collectAssignedOutputs(s.Statements, declared, assigned)
+			collectAssignedOutputs(s.Steps(), declared, assigned)
 		case lower.Loop:
-			collectAssignedOutputs(s.Body.Statements, declared, assigned)
+			collectAssignedOutputs(s.Body.Steps(), declared, assigned)
 		case lower.If:
-			collectAssignedOutputs(s.Then.Statements, declared, assigned)
+			collectAssignedOutputs(s.Then.Steps(), declared, assigned)
 			if s.Else != nil {
-				collectAssignedOutputs(s.Else.Statements, declared, assigned)
+				collectAssignedOutputs(s.Else.Steps(), declared, assigned)
 			}
 		}
 	}

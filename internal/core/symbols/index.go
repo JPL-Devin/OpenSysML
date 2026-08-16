@@ -1344,6 +1344,12 @@ func (idx *Index) LookupDirectChildrenFrom(prefix, fromFQN string) []*Symbol {
 // GetFQN returns the fully-qualified name for a symbol by walking its owner scope chain.
 // Returns the local name if the symbol has no owner scope (root-level symbol).
 func (idx *Index) GetFQN(sym *Symbol) string {
+	return FQNOf(sym)
+}
+
+// FQNOf returns a symbol's fully-qualified name from its owner scope chain, so
+// a caller holding a symbol but no index can still name it.
+func FQNOf(sym *Symbol) string {
 	if sym == nil {
 		return ""
 	}

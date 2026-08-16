@@ -53,21 +53,17 @@ func (s *Session) recordCarryover() carryover {
 	return over
 }
 
-// carryOverObjects keeps the objects this submission did not invalidate,
-// rebinding each of them to the declarations of the new document, and reports the
-// ones it had to drop. An object goes when the declaration it is of was
-// superseded, when what that declaration resolves to is no longer the shape it
-// was materialized against, or when it holds something that cannot be carried
-// over — an unevaluated expression, say, which reads names the submission may
-// have changed.
-func (s *Session) carryOverObjects(over carryover, gone []string) []string {
+// carryOverObjects rebinds the session's objects to the new document's
+// declarations, keeping those whose shape the reload still resolves to — a reload
+// of unchanged text keeps them all — and reporting the ones it had to drop.
+func (s *Session) carryOverObjects(over carryover) []string {
 	if len(s.instances) == 0 {
 		return nil
 	}
 	kept := make(map[string]*runtime.Instance, len(over.objects))
 	ctx, err := s.getOrCreateRuntime()
 	for _, c := range over.objects {
-		if err != nil || supersededAny(gone, append([]string{c.fqn}, c.shapes.Types()...)) {
+		if err != nil {
 			continue
 		}
 		if ctx.Adopt(over.prev, c.shapes, c.obj) == nil {
@@ -81,22 +77,11 @@ func (s *Session) carryOverObjects(over carryover, gone []string) []string {
 	if dropped == 0 {
 		// Nothing went this time, so an earlier loss is no longer what a listing of
 		// the survivors has to explain: it was reported when it happened.
-		s.lostInstances, s.lostAt = 0, 0
+		s.lost = instanceLoss{}
 		return nil
 	}
-	s.lostInstances, s.lostAt = dropped, s.version
+	s.lost = lossAtSubmission(dropped, s.version)
 	return []string{instancesDroppedNotice(dropped)}
-}
-
-// supersededAny reports whether any of the declarations named was superseded by
-// this submission.
-func supersededAny(gone, fqns []string) bool {
-	for _, fqn := range fqns {
-		if _, ok := supersededBy(gone, fqn); ok {
-			return true
-		}
-	}
-	return false
 }
 
 // goneNames collects the declarations a submission superseded.

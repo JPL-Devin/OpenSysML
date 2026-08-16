@@ -24,7 +24,7 @@ Every call goes through `sysml-grpc`. `pysysml` starts one for you and expects t
 find it at `~/.pysysml/bin/sysml-grpc`. Three ways to put it there:
 
 ```bash
-# 1. Download the release build (checksum-verified against its .sha256 sidecar)
+# 1. Download the release build (verified against the digest pinned in pysysml)
 python -c "from pysysml.binary import download_binary; download_binary('latest')"
 
 # 2. Let pysysml.connect() download it on first use
@@ -48,6 +48,16 @@ triggers that check, so with `PYSYSML_GRPC_VERSION` unset a binary you put there
 yourself (option 3) is left alone. If the release asked for cannot be downloaded
 (no asset for your platform, no network), the cached binary keeps serving and the
 warning says so, rather than the connection failing.
+
+A download is checked against the SHA-256 `pysysml` pins for that release, not
+the `.sha256` served beside the binary: the sidecar comes from whoever served the
+binary, so it catches corruption but not a republished release. A release this
+`pysysml` pins no digest for is refused, naming the version, and keeps a working
+cached binary rather than trusting the served checksum; `export
+PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1` for any repository, which a
+fork's releases do not need) accepts same-origin trust explicitly for the repository
+it names, with a warning. `PYSYSML_STATE_DIR` moves the state directory
+(`~/.pysysml`) holding the binary cache and the service records.
 
 The published releases up to v0.0.4 carry the `sysml`/`sysml-lsp` archives only;
 `sysml-grpc` binaries are published from the next release onward, so until then

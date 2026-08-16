@@ -1,0 +1,8 @@
+{
+  "type": "calc",
+  "evaluate": "test::total",
+  "result": {
+    "type": "Integer",
+    "value": 32
+  }
+}

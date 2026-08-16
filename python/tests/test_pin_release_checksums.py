@@ -1,0 +1,190 @@
+"""Tests for the release tooling that pins per-version asset digests.
+
+The pins are what makes the download check independent of the serving origin, so
+the script that produces them is held to hashing what it downloaded, refusing a
+release whose sidecar disagrees, and rewriting the table without touching
+anything else in the module.
+"""
+
+import importlib.util
+import os
+import re
+
+import pytest
+
+from pysysml.binary import PINNED_SHA256, pinned_digest
+
+PYTHON_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PIN_SCRIPT = os.path.join(PYTHON_DIR, "scripts", "pin_release_checksums.py")
+
+
+def _load_pin_script():
+    """Load scripts/pin_release_checksums.py, which is tooling, not a module."""
+    spec = importlib.util.spec_from_file_location("pin_release_checksums", PIN_SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+pin = _load_pin_script()
+
+
+def test_the_table_it_reads_is_the_one_the_package_uses():
+    """It reads the pins with ast, so they cannot drift from the module's."""
+    assert pin.pinned_table() == PINNED_SHA256
+
+
+def test_rendering_the_table_it_read_changes_nothing():
+    """Rewriting without a new version is a no-op, so a diff is only new pins."""
+    with open(pin.BINARY_FILE, encoding="utf-8") as f:
+        source = f.read()
+    literal = re.search(r"^PINNED_SHA256 = \{.*?^\}\n", source, re.DOTALL | re.MULTILINE)
+    assert literal.group(0) == pin.render_table(pin.pinned_table())
+
+
+def test_a_pinned_version_is_reachable_through_the_package():
+    """A digest written by the script is what the download check looks up."""
+    version = sorted(PINNED_SHA256["Open-MBEE/Systemica"])[-1]
+    for asset, digest in PINNED_SHA256["Open-MBEE/Systemica"][version].items():
+        assert pinned_digest(version, asset, "Open-MBEE/Systemica") == digest
+
+
+def test_writing_a_release_adds_only_its_pins(tmp_path, monkeypatch):
+    """Pinning a release leaves the module, and the other releases, as they were."""
+    binary_file = tmp_path / "binary.py"
+    with open(pin.BINARY_FILE, encoding="utf-8") as f:
+        source = f.read()
+    binary_file.write_text(source)
+    monkeypatch.setattr(pin, "BINARY_FILE", str(binary_file))
+    monkeypatch.setattr(
+        pin, "digests_of", lambda repo, version: {"sysml-grpc-linux-amd64": "ab" * 32}
+    )
+
+    assert pin.main(["--version", "v9.9.9", "--write"]) == 0
+
+    table = pin.pinned_table(str(binary_file))
+    assert table["Open-MBEE/Systemica"]["v9.9.9"] == {"sysml-grpc-linux-amd64": "ab" * 32}
+    assert table["Open-MBEE/Systemica"]["v0.0.7"] == (
+        PINNED_SHA256["Open-MBEE/Systemica"]["v0.0.7"]
+    )
+    # Only the table changed: the rest of the module is untouched.
+    rest = re.sub(r"^PINNED_SHA256 = \{.*?^\}\n", "", binary_file.read_text(),
+                  flags=re.DOTALL | re.MULTILINE)
+    assert rest == re.sub(r"^PINNED_SHA256 = \{.*?^\}\n", "", source,
+                          flags=re.DOTALL | re.MULTILINE)
+
+
+def test_a_release_whose_sidecar_disagrees_is_not_pinned(monkeypatch):
+    """The digest is what was downloaded; a sidecar that differs fails the release."""
+    monkeypatch.setattr(
+        pin, "release_assets",
+        lambda repo, version: {"sysml-grpc-linux-amd64": "https://example/asset"},
+    )
+    monkeypatch.setattr(pin, "download_digest", lambda url: "ab" * 32)
+    monkeypatch.setattr(pin, "served_digest", lambda url: "cd" * 32)
+
+    with pytest.raises(pin.PinError, match="the release is inconsistent"):
+        pin.digests_of("Open-MBEE/Systemica", "v9.9.9")
+
+
+def test_a_release_without_a_sidecar_is_still_pinned(monkeypatch):
+    """The sidecar is a cross-check, not the source of the digest."""
+    monkeypatch.setattr(
+        pin, "release_assets",
+        lambda repo, version: {"sysml-grpc-linux-amd64": "https://example/asset"},
+    )
+    monkeypatch.setattr(pin, "download_digest", lambda url: "ab" * 32)
+    monkeypatch.setattr(pin, "served_digest", lambda url: None)
+
+    assert pin.digests_of("Open-MBEE/Systemica", "v9.9.9") == {
+        "sysml-grpc-linux-amd64": "ab" * 32
+    }
+
+
+def test_a_release_with_no_binaries_is_refused(monkeypatch):
+    """A release publishing no assets is refused, not pinned as an empty version."""
+    monkeypatch.setattr(pin.urllib.request, "urlopen", _fake_urlopen('{"assets": []}'))
+
+    with pytest.raises(pin.PinError, match="publishes no"):
+        pin.release_assets("Open-MBEE/Systemica", "v9.9.9")
+
+
+def test_only_service_binaries_are_pinned(monkeypatch):
+    """Checksums and other release files are not assets to pin."""
+    body = (
+        '{"assets": ['
+        '{"name": "sysml-grpc-linux-amd64", "browser_download_url": "u1"},'
+        '{"name": "sysml-grpc-linux-amd64.sha256", "browser_download_url": "u2"},'
+        '{"name": "sysml-linux-amd64", "browser_download_url": "u3"}]}'
+    )
+    monkeypatch.setattr(pin.urllib.request, "urlopen", _fake_urlopen(body))
+
+    assert pin.release_assets("Open-MBEE/Systemica", "v9.9.9") == {
+        "sysml-grpc-linux-amd64": "u1"
+    }
+
+
+def _fake_urlopen(body):
+    """A urlopen serving one body, so the release API is not called for real."""
+    class Response:
+        def read(self, *args):
+            nonlocal body
+            chunk, body = body, ""
+            return chunk.encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    return lambda request, timeout=None: Response()
+
+
+def test_checking_reports_a_republished_release(monkeypatch):
+    """A pinned asset that now hashes differently is a republished release."""
+    table = {"Open-MBEE/Systemica": {"v0.0.7": {"sysml-grpc-linux-amd64": "ab" * 32}}}
+    monkeypatch.setattr(
+        pin, "digests_of", lambda repo, version: {"sysml-grpc-linux-amd64": "cd" * 32}
+    )
+
+    problems = pin.check(table)
+    assert len(problems) == 1
+    assert "was republished" in problems[0]
+
+
+def test_checking_reports_an_asset_that_is_no_longer_published(monkeypatch):
+    """A pin with nothing behind it can never be satisfied, so it is reported."""
+    table = {"Open-MBEE/Systemica": {"v0.0.7": {"sysml-grpc-linux-amd64": "ab" * 32}}}
+    monkeypatch.setattr(pin, "digests_of", lambda repo, version: {})
+
+    assert pin.check(table) == [
+        "sysml-grpc-linux-amd64 of v0.0.7 of Open-MBEE/Systemica is no longer published"
+    ]
+
+
+def test_checking_reports_a_published_asset_nothing_pins(monkeypatch):
+    """A platform added to a release without a pin would download unpinned."""
+    table = {"Open-MBEE/Systemica": {"v0.0.7": {"sysml-grpc-linux-amd64": "ab" * 32}}}
+    monkeypatch.setattr(
+        pin, "digests_of",
+        lambda repo, version: {
+            "sysml-grpc-linux-amd64": "ab" * 32,
+            "sysml-grpc-linux-riscv64": "cd" * 32,
+        },
+    )
+
+    problems = pin.check(table)
+    assert problems == [
+        "sysml-grpc-linux-riscv64 of v0.0.7 of Open-MBEE/Systemica is published but unpinned"
+    ]
+
+
+def test_checking_passes_when_every_pin_still_holds(monkeypatch):
+    """The release the package pins is the release being served."""
+    table = {"Open-MBEE/Systemica": {"v0.0.7": {"sysml-grpc-linux-amd64": "ab" * 32}}}
+    monkeypatch.setattr(
+        pin, "digests_of", lambda repo, version: {"sysml-grpc-linux-amd64": "ab" * 32}
+    )
+
+    assert pin.check(table) == []

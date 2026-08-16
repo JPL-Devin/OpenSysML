@@ -206,6 +206,10 @@ func (t UnitTerm) Pow(exp float64) UnitTerm {
 	return normalizeTerm(out)
 }
 
+// Normalized restores the term's invariant: repeated base units summed, those
+// that cancel dropped, the rest ordered by name. For a term built from outside.
+func (t UnitTerm) Normalized() UnitTerm { return normalizeTerm(t) }
+
 // combine multiplies two terms, with the exponents of the second one signed by
 // sign, so that division shares multiplication's accumulation.
 func combine(a, b UnitTerm, sign float64) UnitTerm {

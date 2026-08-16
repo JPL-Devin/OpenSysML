@@ -27,6 +27,7 @@ from pysysml.generate import (
     render_module,
 )
 from pysysml.typed import TypedObject
+from tests.service_gate import fail_if_service_promised, is_server_available
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PYTHON_ROOT.parent
@@ -73,21 +74,13 @@ def load_golden():
 
 
 def service_available():
-    """Whether a sysml-grpc service can be reached on the default port."""
-    import grpc
+    """Whether a sysml-grpc service can be reached on the default port.
 
-    from pysysml.proto import sysml_pb2, sysml_pb2_grpc
-
-    try:
-        channel = grpc.insecure_channel("localhost:50051")
-        stub = sysml_pb2_grpc.SysMLServiceStub(channel)
-        stub.GetDiagnostics(sysml_pb2.DiagnosticsRequest(model_hash="health_check"), timeout=2)
-        channel.close()
-        return True
-    except grpc.RpcError as exc:
-        return exc.code() == grpc.StatusCode.NOT_FOUND
-    except Exception:
-        return False
+    Absent where one was promised, the tests below fail instead of skipping.
+    """
+    available = is_server_available()
+    fail_if_service_promised(available)
+    return available
 
 
 def test_golden_module_is_importable_and_typed():
@@ -143,6 +136,62 @@ def test_generated_code_is_mypy_clean_and_flags_misuse(tmp_path):
     assert misuse.returncode != 0
     assert 'has no attribute "mas"' in misuse.stdout
     assert 'Unsupported operand types for + ("float" and "str")' in misuse.stdout
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not mypy_available(), reason="mypy not installed")
+@pytest.mark.skipif(not service_available(), reason="sysml-grpc service not running")
+def test_a_generated_quantity_property_is_typed_as_a_quantity(tmp_path):
+    """A quantity property is a Quantity to mypy, so a unitless use is an error."""
+    from pysysml import Connection
+
+    source = tmp_path / "quantities.sysml"
+    source.write_text(
+        "package Q {\n"
+        "    part def Car {\n"
+        "        attribute mass : ISQ::MassValue = 1200.0 [SI::kg];\n"
+        "        attribute plainMass : ScalarValues::Real = 2.0;\n"
+        "    }\n"
+        "}\n"
+    )
+    with Connection(auto_start=False) as conn:
+        model = conn.load(str(source))
+        (tmp_path / "quantity_types.py").write_text(generate_source(model, source.read_text()))
+
+    (tmp_path / "usage_ok.py").write_text(
+        textwrap.dedent(
+            """
+            from pysysml.instance import Instance
+            from pysysml.values import Quantity
+            from quantity_types import Car
+
+
+            def check(inst: Instance) -> Quantity:
+                car = Car.from_instance(inst)
+                return car.mass + car.mass
+            """
+        )
+    )
+    (tmp_path / "usage_bad.py").write_text(
+        textwrap.dedent(
+            """
+            from pysysml.instance import Instance
+            from quantity_types import Car
+
+
+            def check(inst: Instance) -> None:
+                car = Car.from_instance(inst)
+                car.mass + car.plainMass
+            """
+        )
+    )
+
+    clean = run_mypy(tmp_path, "quantity_types.py", "usage_ok.py")
+    assert clean.returncode == 0, clean.stdout + clean.stderr
+
+    misuse = run_mypy(tmp_path, "usage_bad.py")
+    assert misuse.returncode != 0
+    assert "Quantity" in misuse.stdout
 
 
 @pytest.mark.skipif(not mypy_available(), reason="mypy not installed")
