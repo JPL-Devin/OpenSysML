@@ -186,8 +186,7 @@ func TestOneEventTakesOneTransitionPerActiveLeaf(t *testing.T) {
 }
 
 // Every leaf inside a composite state selects the same transition out of it, and
-// one event still takes that transition once: a self-transition re-enters the
-// regions rather than running its effect once per region.
+// one event still takes that transition once, re-entering both regions.
 func TestOneEventTakesACompositesTransitionOnce(t *testing.T) {
 	exec := stateExecutorForSource(t, "sm", `package test {
 		state sm {
@@ -216,6 +215,11 @@ func TestOneEventTakesACompositesTransitionOnce(t *testing.T) {
 	}
 	if got := exec.StateData()["log"]; got.Const.Int != 1 {
 		t.Errorf("one event ran the composite's effect %v times, want 1", got.Const.Int)
+	}
+	for _, state := range []string{"l1", "r1"} {
+		if visits := countVisits(exec.stateVisits, state); visits != 2 {
+			t.Errorf("state %s entered %d times, want 2 (initial entry and re-entry), visits: %v", state, visits, exec.stateVisits)
+		}
 	}
 }
 

@@ -113,6 +113,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("call_of_unhandled_operation", testCallOfUnhandledOperation)
 	t.Run("signal_no_level_of_a_composite_state_accepts", testSignalNoLevelOfACompositeStateAccepts)
 	t.Run("stale_composite_timer_in_a_region", testStaleCompositeTimerInARegion)
+	t.Run("composite_self_transition_with_no_substate_to_re_enter", testCompositeSelfTransitionWithNoSubstateToReEnter)
 	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 	t.Run("perform_of_missing_action", testPerformOfMissingAction)
 	t.Run("perform_reference_cycle", testPerformReferenceCycle)
@@ -1288,6 +1289,30 @@ func testSignalNoLevelOfACompositeStateAccepts(t *testing.T) {
 	current, ok := exec.CurrentState().(*ast.StateNode)
 	if !ok || current.Name != "inner" {
 		t.Errorf("expected the unaccepted signal to leave the machine in inner, got %v", exec.CurrentState())
+	}
+}
+
+// testCompositeSelfTransitionWithNoSubstateToReEnter: a composite state that
+// declares no starting substate is re-entered by its own self-transition without
+// erroring or hanging, and stays active with no substate of its own.
+func testCompositeSelfTransitionWithNoSubstateToReEnter(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state Working {
+				state Step1;
+			}
+			init then Working::Step1;
+			transition Working to Working accept restart;
+		}
+	}`)
+	exec.SendSignal("restart", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	current, ok := exec.CurrentState().(*ast.StateNode)
+	if !ok || current.Name != "Working" {
+		t.Errorf("expected the re-entered composite state to be active, got %v", exec.CurrentState())
 	}
 }
 

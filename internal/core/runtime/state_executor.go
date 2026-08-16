@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"math"
+	"sort"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lower"
@@ -549,9 +550,31 @@ func (e *StateExecutor) nestedIn(state, composite *ast.StateNode) bool {
 	return false
 }
 
-// activeLeaves returns the innermost active states, in region declaration order.
-// A state owning an active orthogonal region is not a leaf: the event is offered
-// to that region's active state, and reaches the owner walking outward.
+// encloses reports whether the composite state is the target or contains it. A
+// simple state is never enclosing: a self-transition on one stays put.
+func (e *StateExecutor) encloses(composite, target *ast.StateNode) bool {
+	if composite == nil || target == nil || !e.isComposite(composite) {
+		return false
+	}
+	return composite == target || e.nestedIn(target, composite)
+}
+
+// isComposite reports whether the state owns orthogonal regions or substates.
+func (e *StateExecutor) isComposite(state *ast.StateNode) bool {
+	if len(e.graph.CompositeStates[state]) > 0 {
+		return true
+	}
+	for _, parent := range e.graph.ParentState {
+		if parent == state {
+			return true
+		}
+	}
+	return false
+}
+
+// activeLeaves returns the innermost active states, ordered by the declaration of
+// the regions they lie in rather than by their depth. A state owning an active
+// orthogonal region is not a leaf: the event reaches it walking outward.
 func (e *StateExecutor) activeLeaves() []*ast.StateNode {
 	states := e.activeStates()
 	leaves := make([]*ast.StateNode, 0, len(states))
@@ -560,7 +583,52 @@ func (e *StateExecutor) activeLeaves() []*ast.StateNode {
 			leaves = append(leaves, state)
 		}
 	}
+	paths := make(map[*ast.StateNode][]int, len(leaves))
+	for _, leaf := range leaves {
+		paths[leaf] = e.regionPath(leaf)
+	}
+	sort.SliceStable(leaves, func(i, j int) bool {
+		return lessPath(paths[leaves[i]], paths[leaves[j]])
+	})
 	return leaves
+}
+
+// regionPath returns the declaration index of every region between the machine
+// and the state, outermost first, which orders concurrent states.
+func (e *StateExecutor) regionPath(state *ast.StateNode) []int {
+	chain := e.getParentChain(state)
+	path := make([]int, 0, len(chain))
+	for i := len(chain) - 1; i >= 0; i-- {
+		region := e.graph.RegionOf[chain[i]]
+		if region == nil {
+			continue
+		}
+		siblings := e.graph.TopRegions
+		if owner := e.graph.RegionOwner[region]; owner != nil {
+			siblings = e.graph.CompositeStates[owner]
+		}
+		for index, sibling := range siblings {
+			if sibling == region {
+				path = append(path, index)
+				break
+			}
+		}
+	}
+	return path
+}
+
+// lessPath orders two region paths lexicographically, a shorter path first where
+// one prefixes the other.
+func lessPath(a, b []int) bool {
+	for i := range a {
+		if i >= len(b) {
+			return false
+		}
+		if a[i] != b[i] {
+			return a[i] < b[i]
+		}
+	}
+	return len(a) < len(b)
 }
 
 // fireFrom takes a transition whose source is the given active state, which is
@@ -881,6 +949,11 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 		fromName = currentState.Name
 	}
 	lca := e.getLCA(currentState, targetState)
+	// An external transition out of a composite state leaves it even when the target
+	// is the state itself or one of its substates, so the boundary is its parent.
+	if source, isState := trans.Source.(*ast.StateNode); isState && e.encloses(source, targetState) {
+		lca = e.graph.ParentState[source]
+	}
 	statesToExit := make([]*ast.StateNode, 0)
 	current := currentState
 	for current != nil && current != lca {
