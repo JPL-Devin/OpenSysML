@@ -1,19 +1,25 @@
 """Tests for binary management module."""
 
+import copy
 import hashlib
 import http.client
 import json
 import os
 import platform
+import re
 import pytest
 from unittest.mock import patch, Mock, mock_open
 from pysysml.binary import (
+    PINNED_SHA256,
     cached_release,
     default_github_repo,
     detect_platform,
     get_binary_path,
     download_binary,
+    expected_digest,
     metadata_path,
+    pinned_digest,
+    release_asset_name,
     resolve_latest_version,
     stale_cache_reason,
     verify_checksum,
@@ -46,6 +52,25 @@ def cache(tmp_path, monkeypatch):
     return place
 
 
+@pytest.fixture(autouse=True)
+def pins(monkeypatch):
+    """Pin digests for the fake releases downloaded below.
+
+    Stands in for the table a release of pysysml ships, so nothing here depends
+    on the digests of the real published assets.
+    """
+    table = {}
+    monkeypatch.setattr('pysysml.binary.PINNED_SHA256', table)
+    monkeypatch.delenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', raising=False)
+
+    def pin(digest, version, goos='linux', goarch='amd64', repo='Open-MBEE/Systemica'):
+        asset = release_asset_name(goos, goarch)
+        table.setdefault(repo, {}).setdefault(version, {})[asset] = digest
+        return digest
+
+    return pin
+
+
 def test_detect_platform():
     """Test platform detection returns valid tuple."""
     os_name, arch = detect_platform()
@@ -60,11 +85,12 @@ def test_get_binary_path():
     assert path.endswith('sysml-grpc') or path.endswith('sysml-grpc.exe')
 
 
-def test_download_binary():
+def test_download_binary(pins):
     """Test binary download from GitHub releases."""
     # Mock binary download
     mock_binary_data = b'fake binary content'
     actual_checksum = hashlib.sha256(mock_binary_data).hexdigest()
+    pins(actual_checksum, 'v0.1.0')
     
     # Mock checksum file download
     mock_checksum_data = f"{actual_checksum}  sysml-grpc-linux-amd64\n".encode()
@@ -128,7 +154,7 @@ def test_ensure_binary_raises_without_version():
             ensure_binary()
 
 
-def test_download_binary_verifies_checksum():
+def test_download_binary_verifies_checksum(pins):
     """Test that download_binary fetches and verifies checksum."""
     import pytest
     version = 'v0.1.0'
@@ -137,6 +163,7 @@ def test_download_binary_verifies_checksum():
     # Mock binary download
     mock_binary_data = b'fake binary content'
     actual_checksum = hashlib.sha256(mock_binary_data).hexdigest()
+    pins(actual_checksum, version)
     
     # Mock checksum file download
     mock_checksum_data = f"{actual_checksum}  sysml-grpc-linux-amd64\n".encode()
@@ -164,8 +191,8 @@ def test_download_binary_verifies_checksum():
                             assert '.sha256' in checksum_url
 
 
-def test_download_binary_fails_on_checksum_mismatch():
-    """Test that download fails if checksum doesn't match."""
+def test_download_binary_fails_on_checksum_mismatch(pins):
+    """Test that download fails if the binary does not match the digest expected."""
     import pytest
     version = 'v0.1.0'
     github_repo = 'Open-MBEE/Systemica'
@@ -173,8 +200,9 @@ def test_download_binary_fails_on_checksum_mismatch():
     # Mock binary download
     mock_binary_data = b'fake binary content'
     
-    # Wrong checksum
+    # Wrong checksum, agreed on by the pin and the sidecar: the binary differs.
     wrong_checksum = 'deadbeef' * 8
+    pins(wrong_checksum, version)
     mock_checksum_data = f"{wrong_checksum}  sysml-grpc-linux-amd64\n".encode()
     
     with patch('urllib.request.urlopen') as mock_urlopen:
@@ -225,10 +253,11 @@ def test_resolve_latest_version_without_tag():
             resolve_latest_version('Open-MBEE/Systemica')
 
 
-def test_download_binary_latest_resolves_tag():
+def test_download_binary_latest_resolves_tag(pins):
     """Test version='latest' downloads from the resolved tag."""
     mock_binary_data = b'fake binary content'
     actual_checksum = hashlib.sha256(mock_binary_data).hexdigest()
+    pins(actual_checksum, 'v0.0.4')
     mock_checksum_data = f"{actual_checksum}  sysml-grpc-linux-amd64\n".encode()
 
     with patch('pysysml.binary.resolve_latest_version', return_value='v0.0.4') as mock_resolve:
@@ -257,10 +286,11 @@ def test_ensure_binary_downloads_version_from_env(monkeypatch):
             mock_download.assert_called_once_with(version='v0.0.4', github_repo=None)
 
 
-def test_download_binary_records_the_release(cache):
+def test_download_binary_records_the_release(cache, pins):
     """Test a download records which release the cache now holds."""
     data = b'fake binary content'
     checksum = hashlib.sha256(data).hexdigest()
+    pins(checksum, 'v0.0.7')
     responses = [
         Mock(__enter__=Mock(return_value=Mock(read=Mock(
             return_value=f"{checksum}  sysml-grpc-linux-amd64\n".encode()))),
@@ -281,11 +311,12 @@ def test_download_binary_records_the_release(cache):
     assert cached_release() == 'v0.0.7'
 
 
-def test_download_binary_overwrites_the_cache_it_replaces(cache):
+def test_download_binary_overwrites_the_cache_it_replaces(cache, pins):
     """Test a download installs over an existing cache, as replacing one must."""
     cache(b'the release before', version='v0.0.5')
     data = b'the release asked for'
     checksum = hashlib.sha256(data).hexdigest()
+    pins(checksum, 'v0.0.7')
     responses = [
         Mock(__enter__=Mock(return_value=Mock(read=Mock(
             return_value=f"{checksum}  sysml-grpc-linux-amd64\n".encode()))),
@@ -303,11 +334,12 @@ def test_download_binary_overwrites_the_cache_it_replaces(cache):
     assert not os.path.exists(path + '.tmp')
 
 
-def test_download_binary_reports_a_cache_it_cannot_install_over(cache):
+def test_download_binary_reports_a_cache_it_cannot_install_over(cache, pins):
     """Test a binary held open by a running service is reported, not raised raw."""
     binary_path = cache(version='v0.0.5')
     data = b'the release asked for'
     checksum = hashlib.sha256(data).hexdigest()
+    pins(checksum, 'v0.0.7')
     responses = [
         Mock(__enter__=Mock(return_value=Mock(read=Mock(
             return_value=f"{checksum}  sysml-grpc-linux-amd64\n".encode()))),
@@ -447,3 +479,65 @@ def test_a_dropped_connection_keeps_a_working_cache(cache):
                side_effect=http.client.RemoteDisconnected('closed')):
         assert stale_cache_reason('latest') is None
         assert ensure_binary(version='latest') == binary_path
+
+
+# The pins the table actually ships, kept before the fixture above replaces it.
+SHIPPED_PINS = copy.deepcopy(PINNED_SHA256)
+
+
+class TestPinnedDigests:
+    """The digest a download is checked against comes from pysysml, not the origin."""
+
+    def test_every_shipped_pin_is_a_sha256_of_a_known_asset(self):
+        """A malformed or misnamed pin would silently never match a download."""
+        assert SHIPPED_PINS, "no release is pinned, so every download is refused"
+        for repo, releases in SHIPPED_PINS.items():
+            assert '/' in repo
+            for version, assets in releases.items():
+                assert version.startswith('v')
+                for asset, digest in assets.items():
+                    assert asset.startswith('sysml-grpc-')
+                    assert re.fullmatch(r'[0-9a-f]{64}', digest), (repo, version, asset)
+
+    def test_each_pinned_release_covers_every_platform_published(self):
+        """A platform left unpinned refuses to install that release."""
+        published = {
+            release_asset_name(goos, goarch)
+            for goos in ('linux', 'darwin', 'windows')
+            for goarch in ('amd64', 'arm64')
+            if not (goos == 'windows' and goarch == 'arm64')
+        }
+        for repo, releases in SHIPPED_PINS.items():
+            for version, assets in releases.items():
+                assert set(assets) == published, f'{repo} {version}'
+
+    def test_a_release_with_no_pin_is_refused(self):
+        """Same-origin trust is not the silent fallback for an unpinned release."""
+        assert pinned_digest('v9.9.9', 'sysml-grpc-linux-amd64') is None
+        with pytest.raises(ChecksumMismatchError, match='pins no SHA-256 digest'):
+            expected_digest('v9.9.9', 'sysml-grpc-linux-amd64', 'ab' * 32)
+
+    def test_an_unpinned_release_may_be_accepted_explicitly(self, monkeypatch):
+        """Opting in falls back to the served checksum, saying what that means."""
+        monkeypatch.setenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', '1')
+        served = 'ab' * 32
+        with pytest.warns(RuntimeWarning, match='pins no digest'):
+            assert expected_digest('v9.9.9', 'sysml-grpc-linux-amd64', served) == served
+
+    def test_a_pin_is_preferred_to_the_digest_the_origin_serves(self, pins):
+        """The pin is what a download is verified against when the two agree."""
+        digest = pins('cd' * 32, 'v9.9.9')
+        assert expected_digest('v9.9.9', 'sysml-grpc-linux-amd64', digest) == digest
+
+    def test_a_release_republished_with_another_binary_is_refused(self, pins):
+        """A sidecar contradicting the pin is the case same-origin trust misses."""
+        pins('cd' * 32, 'v9.9.9')
+        with pytest.raises(ChecksumMismatchError, match='but pysysml pins'):
+            expected_digest('v9.9.9', 'sysml-grpc-linux-amd64', 'ef' * 32)
+
+    def test_a_download_of_an_unpinned_release_is_refused(self, cache):
+        """No pin stops the download before anything is fetched."""
+        with patch('urllib.request.urlopen') as urlopen:
+            with pytest.raises(ChecksumMismatchError, match='pins no SHA-256 digest'):
+                download_binary(version='v9.9.9')
+        assert urlopen.call_count == 1  # the sidecar only; no binary was fetched

@@ -12,7 +12,11 @@ import os
 import re
 import subprocess
 import sys
-from importlib.metadata import PackageNotFoundError, version as distribution_version
+from importlib.metadata import (
+    PackageNotFoundError,
+    distribution,
+    version as distribution_version,
+)
 
 import pytest
 
@@ -21,6 +25,39 @@ from pysysml._version import VERSION
 
 PYTHON_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHECK_VERSION = os.path.join(PYTHON_DIR, "scripts", "check_version.py")
+PYPROJECT = os.path.join(PYTHON_DIR, "pyproject.toml")
+
+
+def _installed_distribution():
+    """The installed pysysml distribution, or None when none is installed."""
+    try:
+        return distribution("pysysml")
+    except PackageNotFoundError:
+        return None
+
+
+def _skew(dist):
+    """How an installed distribution differs from the tree under test, if it does.
+
+    Args:
+        dist (importlib.metadata.Distribution): The installed distribution
+
+    Returns:
+        str or None: What is wrong and how to fix it, or None when the
+            distribution is the tree these tests import
+    """
+    imported = os.path.realpath(pysysml.__file__)
+    installed = os.path.realpath(str(dist.locate_file("pysysml/__init__.py")))
+    if installed == imported and dist.version == VERSION:
+        return None
+    return (
+        f"pysysml {dist.version!r} is installed from {installed}, while the tests "
+        f"import {imported}, which declares {VERSION!r}. These tests require the "
+        f"tree under test to be the installed distribution: run "
+        f"`pip install -e python/` (an artifact of another version installed "
+        f"beside the tree reports its own version, and the declaration is the "
+        f"single source of truth, so the artifact is what is stale)."
+    )
 
 
 def _load_check_version():
@@ -44,20 +81,42 @@ def test_declared_version_is_pep440():
 def test_dunder_version_matches_declaration():
     """`pysysml.__version__` agrees with the single declaration.
 
-    Installed, it comes from the distribution metadata, which setuptools filled
-    in from `_version.py`; from a source tree it falls back to the declaration
-    itself. Either way the two must not disagree.
+    Requires the tree under test to be the installed distribution (`pip install
+    -e python/`) or nothing to be installed: then the metadata setuptools filled
+    in from `_version.py`, and the fallback to the declaration itself, are both
+    the declared version.
     """
+    dist = _installed_distribution()
+    if dist is not None:
+        assert _skew(dist) is None, _skew(dist)
     assert pysysml.__version__ == VERSION
 
 
 def test_installed_metadata_matches_declaration():
-    """The installed distribution's version comes from the declaration."""
-    try:
-        installed = distribution_version("pysysml")
-    except PackageNotFoundError:
+    """The installed distribution's version comes from the declaration.
+
+    Skipped where nothing is installed, since a source tree has no metadata to
+    compare; a *stale* artifact is not a reason to skip, it is the skew.
+    """
+    dist = _installed_distribution()
+    if dist is None:
         pytest.skip("pysysml is not installed; nothing to compare metadata against")
-    assert installed == VERSION
+    assert _skew(dist) is None, _skew(dist)
+    assert distribution_version("pysysml") == VERSION
+
+
+def test_the_build_takes_the_version_from_the_declaration():
+    """The metadata is generated from the declaration, in any environment.
+
+    This holds whatever is installed, so it states the contract itself rather
+    than the environment the two tests above require.
+    """
+    with open(PYPROJECT, encoding="utf-8") as f:
+        pyproject = f.read()
+    assert 'dynamic = ["version"]' in pyproject
+    assert re.search(
+        r'version\s*=\s*\{\s*attr\s*=\s*"pysysml\._version\.VERSION"\s*\}', pyproject
+    )
 
 
 def test_no_second_version_declaration():

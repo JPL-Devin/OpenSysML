@@ -27,6 +27,7 @@ from pysysml.generate import (
     render_module,
 )
 from pysysml.typed import TypedObject
+from tests.service_gate import fail_if_service_promised, is_server_available
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PYTHON_ROOT.parent
@@ -73,21 +74,13 @@ def load_golden():
 
 
 def service_available():
-    """Whether a sysml-grpc service can be reached on the default port."""
-    import grpc
+    """Whether a sysml-grpc service can be reached on the default port.
 
-    from pysysml.proto import sysml_pb2, sysml_pb2_grpc
-
-    try:
-        channel = grpc.insecure_channel("localhost:50051")
-        stub = sysml_pb2_grpc.SysMLServiceStub(channel)
-        stub.GetDiagnostics(sysml_pb2.DiagnosticsRequest(model_hash="health_check"), timeout=2)
-        channel.close()
-        return True
-    except grpc.RpcError as exc:
-        return exc.code() == grpc.StatusCode.NOT_FOUND
-    except Exception:
-        return False
+    Absent where one was promised, the tests below fail instead of skipping.
+    """
+    available = is_server_available()
+    fail_if_service_promised(available)
+    return available
 
 
 def test_golden_module_is_importable_and_typed():

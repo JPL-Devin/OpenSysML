@@ -10,13 +10,21 @@ Run with: pytest tests/test_lifecycle.py -v
 Skip with: pytest tests/ -k "not integration"
 """
 
+import json
 import pytest
 import os
+import psutil
 import shutil
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pysysml
 from pysysml.binary import ensure_binary, get_binary_path
+from pysysml.connection import _OWNED_SERVICES, _get_pidfile_path, _service_key
+from tests.service_gate import (
+    free_port,
+    service_binary,
+    skip_or_fail_without_service,
+)
 
 
 @pytest.fixture
@@ -225,68 +233,113 @@ class TestLifecycleRobustness:
             
         except Exception as e:
             pytest.skip(f"Auto-lifecycle not available: {e}")
-    
-    def test_service_shuts_down_when_last_process_exits(self):
-        """Test that service terminates when reference count reaches 0."""
-        import time
-        import psutil
-        from pysysml.connection import _get_pidfile_path, _get_refcount_path
-        
-        # Clean state first - kill existing service + reset refcount
-        pidfile = _get_pidfile_path()
-        refcount_path = _get_refcount_path()
-        
-        if os.path.exists(pidfile):
-            with open(pidfile) as f:
-                old_pid = int(f.read().strip())
-            try:
-                psutil.Process(old_pid).kill()
-            except psutil.NoSuchProcess:
-                pass
-            os.remove(pidfile)
-        
-        if os.path.exists(refcount_path):
-            os.remove(refcount_path)
-        
-        # First connection increments refcount to 1
-        binary_path = get_binary_path()
-        with patch('pysysml.connection.ensure_binary') as mock_ensure:
-            mock_ensure.return_value = binary_path
-            
-            # Mock os.path.exists to return True for binary path check
-            real_exists = os.path.exists
-            def mock_exists(path):
-                if path == binary_path:
-                    return True
-                return real_exists(path)
-            
-            with patch('os.path.exists', side_effect=mock_exists):
-                conn1 = pysysml.connect(auto_start=True)
-                
-                # Get PID from pidfile
-                with open(pidfile) as f:
-                    pid = int(f.read().strip())
-                
-                # Service should be running
-                assert psutil.Process(pid).is_running()
-                
-                # Second connection increments to 2
-                conn2 = pysysml.connect(auto_start=True)
-                
-                # Close first connection (refcount -> 1)
-                conn1.close()
-                time.sleep(0.5)
-                
-                # Service should still be running
-                assert psutil.Process(pid).is_running()
-                
-                # Close second connection (refcount -> 0)
-                conn2.close()
-                time.sleep(0.5)
-                
-                # Service should be terminated
-                try:
-                    assert not psutil.Process(pid).is_running()
-                except psutil.NoSuchProcess:
-                    # Expected - process terminated
-                    pass
+
+
+@pytest.mark.integration
+class TestOwnershipOfASpawnedService:
+    """A service this process spawned, on a port and state directory of its own.
+
+    pysysml never stops a service it did not spawn, so these spawn their own
+    rather than asserting anything about whatever listens on the default port.
+    """
+
+    @pytest.fixture
+    def own_service(self, tmp_path, monkeypatch):
+        """A port and isolated state for a service this test spawns itself."""
+        binary = service_binary()
+        if binary is None:
+            skip_or_fail_without_service("no sysml-grpc binary is available to spawn")
+        monkeypatch.setenv("PYSYSML_STATE_DIR", str(tmp_path / "state"))
+        monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
+        monkeypatch.setattr(
+            "pysysml.connection.ensure_binary", lambda **kwargs: binary
+        )
+        port = free_port()
+        yield port
+        # Only this port's bookkeeping: another test's open connection still
+        # needs its own, or the service it spawned would never be stopped.
+        record = _OWNED_SERVICES.pop(_service_key(port), None)
+        if record is not None:
+            _kill_if_running(record['pid'])
+
+    def _recorded_pid(self, port):
+        """The pid recorded for the service spawned on a port."""
+        with open(_get_pidfile_path(port)) as f:
+            return json.load(f)["pid"]
+
+    def test_the_last_reference_released_stops_the_service_exactly_once(
+        self, own_service
+    ):
+        """A spawned service outlives every connection but the last."""
+        conn1 = pysysml.connect(port=own_service, auto_start=True)
+        pid = self._recorded_pid(own_service)
+        service = psutil.Process(pid)
+        assert service.is_running()
+
+        conn2 = pysysml.connect(port=own_service, auto_start=True)
+        # Both connections hold the one service this process spawned.
+        assert _OWNED_SERVICES[_service_key(own_service)]["refs"] == 2
+
+        conn1.close()
+        assert service.is_running()
+        # Closing twice releases one reference, not two.
+        conn1.close()
+        assert service.is_running()
+
+        conn2.close()
+        _wait_gone(service)
+        assert not service.is_running()
+        # The record goes with it, so no dead pid is left to be trusted.
+        assert not os.path.exists(_get_pidfile_path(own_service))
+        assert _service_key(own_service) not in _OWNED_SERVICES
+
+    def test_attaching_to_it_from_this_process_holds_it(self, own_service):
+        """A connection that finds the spawned service holds it too.
+
+        Otherwise the connection that spawned it could stop it while another is
+        still using it.
+        """
+        spawner = pysysml.connect(port=own_service, auto_start=True)
+        service = psutil.Process(self._recorded_pid(own_service))
+
+        attached = pysysml.connect(port=own_service, auto_start=True)
+        spawner.close()
+        assert service.is_running()
+
+        attached.close()
+        _wait_gone(service)
+        assert not service.is_running()
+
+    def test_a_crashed_service_leaves_recoverable_state(self, own_service):
+        """A record whose process is gone is cleaned, and a service starts again."""
+        conn = pysysml.connect(port=own_service, auto_start=True)
+        service = psutil.Process(self._recorded_pid(own_service))
+        service.kill()
+        _wait_gone(service)
+        conn.close()
+
+        with pysysml.connect(port=own_service, auto_start=True) as recovered:
+            started = psutil.Process(self._recorded_pid(own_service))
+            assert started.pid != service.pid
+            assert started.is_running()
+            assert recovered.server_info() is not None
+        _wait_gone(started)
+        assert not os.path.exists(_get_pidfile_path(own_service))
+
+
+def _kill_if_running(pid):
+    """Stop a service a failing test left behind, so the port is not held."""
+    try:
+        process = psutil.Process(pid)
+        process.kill()
+        _wait_gone(process)
+    except psutil.Error:
+        pass
+
+
+def _wait_gone(process, timeout=10):
+    """Wait for a process to exit, so an assertion is not made on the race."""
+    try:
+        process.wait(timeout=timeout)
+    except (psutil.NoSuchProcess, psutil.TimeoutExpired):
+        pass

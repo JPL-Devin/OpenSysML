@@ -6,6 +6,7 @@ runs a real gRPC server answering the handshake like a particular build, and
 drives ``Connection`` against it with a release asked for.
 """
 
+import json
 import os
 import socket
 import subprocess
@@ -14,6 +15,7 @@ import tempfile
 from concurrent import futures
 
 import grpc
+import psutil
 import pytest
 
 from pysysml.capabilities import (
@@ -25,8 +27,10 @@ from pysysml.capabilities import (
 )
 from pysysml.connection import (
     Connection,
+    _OWNED_SERVICES,
     _get_pidfile_path,
-    _get_refcount_path,
+    _service_key,
+    _write_ownership_record,
 )
 from pysysml.errors import ChecksumMismatchError, ConnectionError, StaleServiceError
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
@@ -77,11 +81,17 @@ def running_service():
 
 @pytest.fixture
 def tmp_home(tmp_path, monkeypatch):
-    """Isolate HOME so the pidfile and refcount are this test's own."""
+    """Isolate HOME and the state dir, so ownership records are this test's own."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
-    return home
+    monkeypatch.setenv("PYSYSML_STATE_DIR", str(home / ".pysysml"))
+    before = set(_OWNED_SERVICES)
+    yield home
+    # Drop only what this test recorded: another test's connection still needs
+    # the bookkeeping for the service it spawned.
+    for key in set(_OWNED_SERVICES) - before:
+        del _OWNED_SERVICES[key]
 
 
 def test_a_foreign_service_of_another_release_is_reported_not_killed(
@@ -108,8 +118,8 @@ def test_a_foreign_service_of_another_release_is_reported_not_killed(
     monkeypatch.delenv("PYSYSML_GRPC_VERSION")
     with Connection(port=port, auto_start=False) as conn:
         assert conn.server_info().version == "v0.0.5"
-    assert not os.path.exists(_get_pidfile_path())
-    assert not os.path.exists(_get_refcount_path())
+    assert not os.path.exists(_get_pidfile_path(port))
+    assert _service_key(port) not in _OWNED_SERVICES
 
 
 def test_a_foreign_service_that_cannot_say_what_it_is_is_reported(
@@ -204,8 +214,8 @@ def test_a_refused_connection_releases_what_it_took(tmp_home, monkeypatch):
     with pytest.raises(MissingCapabilityError):
         Connection(port=port, require_capabilities=[CAPABILITY_QUERY])
 
-    assert not os.path.exists(_get_refcount_path())
-    assert not os.path.exists(_get_pidfile_path())
+    assert _service_key(port) not in _OWNED_SERVICES
+    assert not os.path.exists(_get_pidfile_path(port))
 
 
 def test_a_service_the_caller_manages_is_checked_too(
@@ -222,7 +232,7 @@ def test_a_service_the_caller_manages_is_checked_too(
         Connection(port=port, auto_start=False, version="v0.0.7")
 
     assert "v0.0.5" in excinfo.value.reason and "v0.0.7" in excinfo.value.reason
-    assert not os.path.exists(_get_refcount_path())
+    assert _service_key(port) not in _OWNED_SERVICES
     with Connection(port=port, auto_start=False) as conn:
         assert conn.server_info().version == "v0.0.5"
 
@@ -315,14 +325,24 @@ def test_a_deferred_check_is_made_by_whichever_call_comes_first(
 
 
 def test_a_matching_service_is_adopted(running_service, tmp_home, monkeypatch):
-    """A running service that is what was asked for is used, as before."""
+    """A running service that is what was asked for is used, and left alone.
+
+    This client did not spawn it, so it takes no ownership of it: nothing is
+    recorded, and closing the connection cannot stop somebody else's service.
+    """
     port = running_service(version="v0.0.7", capabilities=[CAPABILITY_CONVERT])
     monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
 
     with Connection(port=port, require_capabilities=[CAPABILITY_CONVERT]) as conn:
         assert conn.server_info().version == "v0.0.7"
-        # Adopted, so it is reference-counted like any shared service.
-        assert os.path.exists(_get_refcount_path())
+        assert _service_key(port) not in _OWNED_SERVICES
+        assert not os.path.exists(_get_pidfile_path(port))
+
+    # Attaching left nothing behind, and the service is still serving.
+    assert _service_key(port) not in _OWNED_SERVICES
+    assert not os.path.exists(_get_pidfile_path(port))
+    with Connection(port=port, auto_start=False) as conn:
+        assert conn.server_info().version == "v0.0.7"
 
 
 def test_a_service_asked_for_no_release_is_adopted_whatever_it_is(
@@ -351,10 +371,8 @@ def test_a_service_this_client_started_is_replaced(
     port = running_service(version="v0.0.5")
     monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
 
-    # Records of a service this client started on that port: a live process
-    # whose command line is a sysml-grpc serving it.
     owned = _fake_owned_service(port)
-    _record_pidfile(owned.pid)
+    _own_service(port, owned.pid)
 
     # Starting the replacement then fails on the binary, which is beside the
     # point: what this test is about is that the mismatched one was stopped.
@@ -368,7 +386,8 @@ def test_a_service_this_client_started_is_replaced(
             Connection(port=port)
 
     assert owned.poll() is not None  # the service it started was stopped
-    assert not os.path.exists(_get_pidfile_path())
+    assert not os.path.exists(_get_pidfile_path(port))
+    assert _service_key(port) not in _OWNED_SERVICES
 
 
 def test_a_service_another_connection_holds_is_not_replaced(
@@ -379,9 +398,7 @@ def test_a_service_another_connection_holds_is_not_replaced(
     monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
 
     owned = _fake_owned_service(port)
-    _record_pidfile(owned.pid)
-    with open(_get_refcount_path(), "w") as f:
-        f.write("1")
+    _own_service(port, owned.pid, refs=1)
 
     try:
         with pytest.raises(StaleServiceError) as excinfo:
@@ -405,7 +422,7 @@ def test_a_service_this_client_started_is_kept_when_replacing_it_gains_nothing(
     monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
 
     owned = _fake_owned_service(port)
-    _record_pidfile(owned.pid)
+    _own_service(port, owned.pid)
     monkeypatch.setattr(
         "pysysml.connection.ensure_binary", lambda **kwargs: "/nonexistent/sysml-grpc"
     )
@@ -433,7 +450,7 @@ def test_a_download_that_fails_its_checksum_is_raised_not_read_as_a_mismatch(
     monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
 
     owned = _fake_owned_service(port)
-    _record_pidfile(owned.pid)
+    _own_service(port, owned.pid)
 
     def refuse(**kwargs):
         raise ChecksumMismatchError("sha256 of the download does not match")
@@ -461,7 +478,7 @@ def test_a_service_lacking_only_a_capability_is_never_stopped(
     port = running_service(capabilities=[CAPABILITY_CONVERT])
 
     owned = _fake_owned_service(port)
-    _record_pidfile(owned.pid)
+    _own_service(port, owned.pid)
 
     try:
         with pytest.raises(MissingCapabilityError) as excinfo:
@@ -478,14 +495,14 @@ def test_a_replacement_that_could_not_take_the_address_is_reported(
 ):
     """A replacement that never served the address is not taken for one.
 
-    The old service can keep listening — ownership is heuristic — in which case
-    the started one exits and the health probe is answered by what was refused.
+    The old service can keep listening, in which case the started one exits and
+    the health probe is answered by what was refused.
     """
     port = running_service(version="v0.0.5")
     monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
 
     owned = _fake_owned_service(port)
-    _record_pidfile(owned.pid)
+    _own_service(port, owned.pid)
     monkeypatch.setattr(
         "pysysml.connection.ensure_binary", lambda **kwargs: _exiting_binary()
     )
@@ -497,9 +514,103 @@ def test_a_replacement_that_could_not_take_the_address_is_reported(
 
     assert "kept serving the address" in excinfo.value.reason
     # Nothing is recorded, so no dead pid is left standing for the real service.
-    assert not os.path.exists(_get_pidfile_path())
-    assert not os.path.exists(_get_refcount_path())
+    assert not os.path.exists(_get_pidfile_path(port))
+    assert _service_key(port) not in _OWNED_SERVICES
     owned.wait(timeout=5)
+
+
+class TestOwnershipIsAuthenticated:
+    """Which process a record names is proved, not guessed from a command line.
+
+    A pid alone is not identity: the operating system reuses pids, and any
+    process can be called sysml-grpc. Each of these leaves the process it
+    describes running, since none of them is the service this process spawned.
+    """
+
+    def test_a_record_naming_a_reused_pid_is_cleaned_not_trusted(
+        self, running_service, tmp_home, monkeypatch
+    ):
+        """A pid the record's start time does not match is another process."""
+        port = running_service(version="v0.0.5")
+        monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+        unrelated = _fake_owned_service(port)
+        # As if that pid had been the service's and been handed on since.
+        _write_record(
+            port, unrelated.pid, psutil.Process(unrelated.pid).create_time() - 60
+        )
+
+        try:
+            with pytest.raises(StaleServiceError) as excinfo:
+                Connection(port=port)
+            assert "stop the service listening" in excinfo.value.remedy
+            assert unrelated.poll() is None  # never signalled
+            # The unusable record is cleaned rather than left to be retried.
+            assert not os.path.exists(_get_pidfile_path(port))
+        finally:
+            unrelated.terminate()
+            unrelated.wait(timeout=5)
+
+    def test_a_record_another_process_wrote_is_not_this_process_s_to_act_on(
+        self, running_service, tmp_home, monkeypatch
+    ):
+        """Only the process that spawned a service may stop it."""
+        port = running_service(version="v0.0.5")
+        monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+        spawned_elsewhere = _fake_owned_service(port)
+        process = psutil.Process(spawned_elsewhere.pid)
+        _write_record(
+            port, process.pid, process.create_time(),
+            owner_pid=process.pid, owner_create_time=process.create_time(),
+        )
+
+        try:
+            with pytest.raises(StaleServiceError) as excinfo:
+                Connection(port=port)
+            assert "stop the service listening" in excinfo.value.remedy
+            assert spawned_elsewhere.poll() is None  # still running
+            # Another process's record, so not this one's to remove either.
+            assert os.path.exists(_get_pidfile_path(port))
+        finally:
+            spawned_elsewhere.terminate()
+            spawned_elsewhere.wait(timeout=5)
+
+    def test_a_process_that_only_looks_like_the_service_is_never_stopped(
+        self, running_service, tmp_home, monkeypatch
+    ):
+        """A command line is not identity: an unrecorded look-alike is not ours."""
+        port = running_service(version="v0.0.5")
+        monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+        script = os.path.join(tempfile.mkdtemp(), "sysml-grpc")
+        with open(script, "w") as f:
+            f.write("import time\nwhile True:\n    time.sleep(1)\n")
+        lookalike = subprocess.Popen([sys.executable, script, "-port", str(port)])
+
+        try:
+            with pytest.raises(StaleServiceError):
+                Connection(port=port)
+            assert lookalike.poll() is None  # still running
+        finally:
+            lookalike.terminate()
+            lookalike.wait(timeout=5)
+
+
+def _write_record(port, pid, create_time, owner_pid=None, owner_create_time=None):
+    """Write an ownership record verbatim, including one no longer authentic."""
+    record = {
+        "pid": pid,
+        "create_time": create_time,
+        "port": port,
+        "owner_pid": owner_pid if owner_pid is not None else os.getpid(),
+        "owner_create_time": (
+            owner_create_time if owner_create_time is not None
+            else psutil.Process().create_time()
+        ),
+    }
+    path = _get_pidfile_path(port)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(record, f)
+    return record
 
 
 def _exiting_binary():
@@ -519,11 +630,7 @@ def _free_port():
 
 
 def _fake_service_binary(capabilities=(), version="v0.0.7"):
-    """An executable serving the handshake like a release, for the start path.
-
-    Named sysml-grpc, since the lifecycle recognizes its own service by the
-    command line it started.
-    """
+    """An executable serving the handshake like a release, for the start path."""
     path = os.path.join(tempfile.mkdtemp(), "sysml-grpc")
     with open(path, "w") as f:
         f.write(f"""#!{sys.executable}
@@ -554,23 +661,31 @@ server.wait_for_termination()
 
 
 def _fake_owned_service(port):
-    """A live process whose command line looks like a service started for port.
+    """A live process standing in for a service this process spawned.
 
-    Ownership is read from the command line, so the stand-in needs one: what it
-    does is irrelevant, since the port is served by the fixture's server.
+    Identity comes from the record, not the command line, so the stand-in needs
+    no particular name: the port is served by the fixture's server anyway.
     """
-    script = os.path.join(tempfile.mkdtemp(), "sysml-grpc")
-    with open(script, "w") as f:
-        f.write("import time\nwhile True:\n    time.sleep(1)\n")
-    return subprocess.Popen([sys.executable, script, "-port", str(port)])
+    return subprocess.Popen(
+        [sys.executable, "-c", "import time\nwhile True:\n    time.sleep(1)\n"]
+    )
 
 
-def _record_pidfile(pid):
-    """Record pid as the service this client started, as _ensure_service does."""
-    path = _get_pidfile_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
-        f.write(f"{pid}\n")
+def _own_service(port, pid, refs=0):
+    """Record pid as the service this process spawned, as _ensure_service does.
+
+    Args:
+        port (int): Port it serves
+        pid (int): Its process id
+        refs (int): Connections in this process holding it
+    """
+    record = _write_ownership_record(port, pid, psutil.Process(pid).create_time())
+    _OWNED_SERVICES[_service_key(port)] = {
+        "pid": record["pid"],
+        "create_time": record["create_time"],
+        "refs": refs,
+    }
+    return record
 
 
 class TestMismatchReason:
