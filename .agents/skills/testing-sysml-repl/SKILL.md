@@ -2653,6 +2653,125 @@ With `PYSYSML_REQUIRE_SERVICE=1` and no service, collection must **error** (exit
 "none answers on localhost:50051"), never skip. A whole run must leave an operator-started service
 on 50051 with the same pid.
 
+## Orthogonal regions and cross-region transitions (`internal/core/runtime/state_region_transition.go`)
+
+A transition whose source and target sit in different orthogonal regions of the same composite
+state must exit only its source side, not the enclosing composite. The REPL surfaces needed to
+see that at all:
+
+- **`%trace on` is the only surface that shows exit/entry order.** `%current` shows the resulting
+  configuration; only the trace distinguishes "exited the source" from "exited and re-entered the
+  whole composite". Turn it on *before* the `%advance` that fires the transition, and assert on the
+  absence of lines too (`no exit: <composite>`, no second `enter: <composite>`).
+- **`%current` prints one active state per active region**, joined by ` | `, and each name is the
+  state the region itself **declares** — a composite (`wrapper`), not the nested target inside it.
+  So `wrapper | rtarget` is the correct shape for a target nested one level deep, and a **repeated
+  name (`rtarget | rtarget`) is a bug signal**, not a rendering quirk: it means an outer region
+  recorded a state it does not declare. Do not dismiss duplicates as legitimate.
+- An emptied source region simply disappears from the list, so "the source region has no active
+  state" is asserted by its absence.
+- **Counter attributes, not state names, are the discriminator.** Give every state on the path an
+  `entry`/`exit` action incrementing its own counter (`wrapperExits`, `runningEntries`, …) and read
+  them from `%current`'s "State data". Exactly-once claims (`exit ran once`, `composite entered
+  once`) are unprovable from the configuration alone, and double-exit bugs are invisible without
+  them.
+- **Always build a contrast binary and run the same model through both** (recipe earlier in this
+  file). Cross-region models are easy to write so that they pass on the broken build too; the
+  contrast run is what proves the model is adversarial. **Pick the contrast commit by where the
+  defect lives:** the parent commit for a regression introduced by the PR, but `origin/main` when the
+  bug is pre-existing — a main-based contrast additionally proves the PR fixes a shipped defect
+  rather than one of its own making. Useful discriminating values seen historically: a pre-fix build
+  re-enters the composite forever and dies at the event budget; a build with the wrong recorded
+  active state prints a duplicated name; a build missing the widened concurrency test leaves the
+  target region's old state running (`<state>Exits = 0`) and prints it alongside the target
+  (`lstate | mid`); a build with the old `leaveRegion` clearing rule runs the same exit actions twice
+  (`midExits = 2`, `wrapperExits = 2`).
+
+Shapes worth covering, in increasing order of subtlety — each has broken independently:
+
+1. plain sibling-region target (`state_transition_cross_region.sysml`);
+2. a third sibling region that must keep its state (`..._third_region.sysml`);
+3. target nested one and two levels under a composite the target region is **already running**
+   (`..._nested_target.sysml`) — the abandoned inner state must exit;
+4. target nested under a composite that is **not** active there (`..._inactive_wrapper.sysml`);
+5. target region running a **different** composite, whose nested regions must be torn down;
+6. **source nested deeper than the target's region** (`..._deep_source.sysml`) — the source side
+   must be exited up to the shared region-set level (`exit: ideep` → `exit: wrapper`) while the
+   composite is untouched;
+7. outward exit past the composite, and a nested non-orthogonal move that must still stop at the
+   LCA (regressions for the `leaveRegion` / `getLCA` paths);
+8. **a region whose owning state is a plain substate** — the single highest-value shape, because it
+   broke the dispatch walk and the exit walk independently, in consecutive commits. Write it as
+   `region right { initial rs; state wrapper { state mid { region inner { … state ideep … } } }
+   then rs mid; }`: `mid` is declared directly in `wrapper`'s body, so it is **not** in
+   `graph.RegionOf`, and `then rs mid;` is what makes the inner region active. Any outward walk
+   written as `RegionOf[RegionOwner[…]]` returns nil here and silently takes a wrong branch, and any
+   "clear the region only when its entry is exactly this state" rule misses that `regionStates[right]`
+   is `mid`, a *descendant* of the `wrapper` being exited. Cover both directions from `ideep`: a
+   cross-region target (sibling region keeps a stale state → `lstate | mid`, `lidleExits = 0`) and a
+   target **outside** the whole composite (`mid`/`wrapper` exit actions run twice). The shipped
+   fixtures are `..._cross_region_substate_owner.sysml` and
+   `state_transition_leave_composite_substate_region.sysml`;
+9. ping-pong: two cross-region transitions targeting each other must stop with the typed
+   `Stopped at the event budget (N events; raise SYSML_MAX_EVENTS to allow more)`, never hang or
+   panic. Run the REPL as `SYSML_MAX_EVENTS=2000 ./bin/sysml` so the stop takes a second, and
+   follow it with `%eval 1+1` → `= 2` to show the session survived.
+
+**History interacts with region bookkeeping — always test it, with a control model.** A `deep
+history resume;` vertex inside a composite with orthogonal regions is the natural victim of any
+change to how a region records its active state: at ca7f3a89 the restore entered the region's
+*initial pseudostate* instead of the recorded composite, so the inner region restarted and the deep
+state was lost. To attribute such a failure correctly, write a control model with **no cross-region
+transition at all** (region reaches a nested state, machine leaves the composite, history resumes)
+and run it on both binaries — that separates "the cross-region path broke history" from "history is
+broken for any composite-in-a-region". Shallow history legitimately restarts the inner region, so
+only the deep variant discriminates. Read the restore in `%trace on`: `enter: <region initial
+pseudostate>` in place of `enter: <recorded state>` is the signature. Cover the **plain
+non-orthogonal** nesting too (one region, `first -> second`, `second::inner` running `a -> b`): it
+broke separately from the orthogonal case and its signature is an *inconsistent* `%current` such as
+`first | b`, where the outer region records a state whose inner region holds a descendant of a
+different one. Any change to `leaveRegion`/`exitState` bookkeeping can move history even when it
+looks like a pure exit-ordering fix, so re-run `restarts = 1` (shipped
+`state_deep_history_region_composite.sysml`) plus a control model whose restored configuration is
+visible (`lidle | wrapper | deepState`) as part of every such pass.
+
+**Write history/nesting models with an explicit `region <name> { … }` wrapper.** Substates declared
+directly in a state body (`state outer { state first; state second; }`) did not start in a history
+model — the machine stalled at `outer` and no transition fired — so a model written that way looks
+like a runtime failure when it is really an authoring shape the engine does not drive. Declare
+`state outer { region only { initial os; state first; … then os first; } }` instead. Note the
+exception exercised deliberately by shape 8 above: a substate *owning* a region
+(`state mid { region inner { … } }`) does run, provided the enclosing region's initial transition
+names it (`then rs mid;`).
+
+### Engine limitations that constrain how these models can be written
+
+All reproduce on several commits (not caused by any one PR), but they silently make a test vacuous:
+
+- **A transition whose source is a composite state never fires.** Put the "later trigger" that
+  leaves a composite on a nested **leaf** state instead; it exercises the same `leaveRegion` path.
+- **A timer declared directly on a composite state entered by a cross-region move is never
+  scheduled.** Use `%events` to confirm what is actually queued before trusting a `%advance`; leaf
+  timers are scheduled correctly.
+- **A guard-only transition is not re-evaluated for regions other than the one where the event
+  occurred**, so "a timer in region C flips a flag that fires a guarded transition in region A"
+  never happens. Drive each region with its own timed transition.
+- Stale-reaction probes are still the best evidence that an abandoned state is really gone: give it
+  `accept after N then boom` where `boom` sets a counter, advance past N, and assert the counter is
+  still 0 — a state left running in a region reacts and flips it.
+
+Practical notes for a recorded pass: shipped conformance fixtures under
+`internal/core/runtime/testdata/conformance/` emit harmless
+`unresolved reference: Integer — did you mean ScalarValues::Integer?` diagnostics (they omit the
+`ScalarValues::*` import); the runtime still executes and the `.expected.json` next to each fixture
+is the cheapest source of expected counter values. `/tmp` is wiped between sessions, so adversarial
+models and contrast binaries must be recreated each run — and when you recreate a model, **re-derive
+its state-def name from the file** (`grep -n 'state def' /tmp/…/model.sysml`) instead of trusting a
+name written in a previous run's plan: a rebuilt model can end up with a different name, and
+`%state Adv::WrongName` just reports `unresolved reference`, which is easy to misread as a runtime
+bug mid-recording. Typing `clear` at the `sysml>` prompt is parsed as SysML and errors — `%quit`
+first, then clear at the shell (this also rules out `clear; %load …` as a one-liner).
+
 `python/scripts/pin_release_checksums.py --check` hits the GitHub releases API for every pinned
 asset and dies with `HTTP Error 403: rate limit exceeded` once the unauthenticated budget is spent;
 it reads `$GITHUB_TOKEN`. Set it without putting the token on camera:
