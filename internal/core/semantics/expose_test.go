@@ -160,9 +160,8 @@ func TestExposedElementsOfANonView(t *testing.T) {
 	}
 }
 
-// A filtered recursive expose exposes an annotated element wherever it sits: the
-// walk reaches it through namespaces the filter itself rejects, which is what a
-// lookup through the same expose does.
+// A filtered recursive expose reaches an annotated element through namespaces
+// the filter itself rejects, as a lookup through the same expose does.
 func TestExposedElementsRecursiveExposeWithAFilterReachesNestedElements(t *testing.T) {
 	m, root := buildModel(t, `
 		metadata def Safety;
