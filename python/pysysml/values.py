@@ -236,7 +236,8 @@ class Quantity:
         if not isinstance(other, Quantity):
             return NotImplemented
         if not self.unit.commensurable(other.unit):
-            raise IncommensurableUnitsError("add", self.unit, other.unit)
+            operation = "add" if sign > 0 else "subtract"
+            raise IncommensurableUnitsError(operation, self.unit, other.unit)
         return Quantity(self.magnitude + sign * other.in_unit(self.unit), self.unit)
 
     def __neg__(self) -> "Quantity":

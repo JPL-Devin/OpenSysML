@@ -203,8 +203,11 @@ def test_addition_answers_in_the_left_unit_and_rejects_incommensurable_units():
     assert (metres + kilometres).unit.text == "SI::m"
     assert kilometres - metres == Quantity(0.999, unit("SI::km", METRE, scale_num=1000.0))
 
-    with pytest.raises(IncommensurableUnitsError, match="add"):
+    # The error names the operation the caller wrote, not the shared helper's.
+    with pytest.raises(IncommensurableUnitsError, match="cannot add"):
         metres + Quantity(1.0, unit("SI::s", SECOND))
+    with pytest.raises(IncommensurableUnitsError, match="cannot subtract"):
+        metres - Quantity(1.0, unit("SI::s", SECOND))
 
 
 def test_scaling_keeps_the_unit_and_negation_the_sign():
