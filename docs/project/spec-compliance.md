@@ -537,7 +537,7 @@ reports itself by name rather than answering:
 | `VectorFunctions::sum`/`sum0`, `ComplexFunctions::sum`/`product` | An aggregation over a collection of vectors or of Complex values: a sequence of them flattens, so the grouping the aggregation sums over is already lost in the argument. Needs a vector and a complex value kind in `runtime/value.go`. |
 | `VectorFunctions::cartesianZeroVector` | Declared as the 1-, 2- and 3-dimensional zero vectors as one feature of three vectors, which a flat sequence cannot hold. `cartesian3DZeroVector` has a value. |
 | `ComplexFunctions::ToString`/`ToComplex` | No string notation for a Complex value is defined; inventing a rendering would make `ToComplex(ToString(x))` a value nothing else in the library agrees on. |
-| Reading a library feature by name (`TrigFunctions::pi`) | The seam answers, but nothing consults it on a name read: that hook belongs in `runtime/eval.go` `evalName` (sibling-owned). |
+| Reading a library feature by name (`TrigFunctions::pi`, `ComplexFunctions::i`, `VectorFunctions::cartesian3DZeroVector`) | The seam answers, but nothing consults it on a name read: that hook belongs in `runtime/eval.go` `evalName` (sibling-owned). Verified in the REPL: every feature name reports `has no value to evaluate`, and `cartesianZeroVector` shows that generic message rather than its typed unevaluable reason. |
 | Library functions in the checker's own name resolution | An unqualified call to a library function the model does not import evaluates, but the `unresolved-reference` diagnostic still reports the name; importing `RealFunctions::*` clears it. |
 
 ### Sequence Indexing and Collection Operations (KerML §9.3 `SequenceFunctions`, `CollectionFunctions`, `ControlFunctions`)
