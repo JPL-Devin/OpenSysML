@@ -228,6 +228,11 @@ def element_type(type_facts: Optional[TypeFacts], names: Dict[str, str]) -> Pyth
         python = PRIMITIVE_TYPES[primitive]
         return PythonType(python, f"_t.as_{python}")
 
+    # An enumeration-typed feature holds one of the enumeration's literals, which
+    # is a value of its own rather than an instance of the generated class.
+    if type_facts.resolved_kind == "enumDef":
+        return PythonType("_t.EnumLiteral", "_t.as_enum_literal")
+
     if type_facts.resolved_id and type_facts.resolved_id in names:
         generated = names[type_facts.resolved_id]
         return PythonType(generated, f"_t.as_typed({generated})")

@@ -40,6 +40,12 @@ CAPABILITY_VERIFICATION = "verification"
 #: indistinguishable from a broken channel.
 CAPABILITY_QUERY = "query"
 
+#: An enumeration literal as ``Value.enum_literal``. Without it a literal is
+#: reported as an unsupported null, which is indistinguishable from a value the
+#: service could not evaluate.
+CAPABILITY_ENUM_VALUES = "enum_values"
+
+
 @dataclass(frozen=True)
 class ServerInfo:
     """Self-description of the service a :class:`~pysysml.connection.Connection` talks to.
