@@ -48,6 +48,14 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 		matches := idx.LookupQualified(name)
 		switch len(matches) {
 		case 0:
+			// A name may reach through a declared feature into its type
+			// (Outer::inner::b), which no declaration is registered under.
+			if sym, fqn := s.featureChainSymbol(name); sym != nil {
+				if local := scopeSymbolFor(docScope, sym.Decl); local != nil {
+					sym = local
+				}
+				return sym, fqn, nil
+			}
 			return nil, "", s.notFoundError(name)
 		case 1:
 			// The index owns its own scope tree; map the hit back onto the
@@ -118,8 +126,60 @@ func (s *Session) objectNamed(fqn string) (*runtime.Instance, string) {
 	return nil, ""
 }
 
-// carrierInstances names the session's objects of the type declaring sym, sorted:
-// an object of `part hot : Sensor` carries `Sensor::inRange`.
+// featureChainSymbol resolves a qualified name whose later segments are members
+// of the type of the segment before them (Outer::inner::b::c): the index
+// registers a declaration only under its own owner, so such a chain is walked
+// through the model's member lookup, which follows typing and specialization.
+// The second result is the fully-qualified name the symbol is declared under.
+func (s *Session) featureChainSymbol(name string) (*symbols.Symbol, string) {
+	segments := strings.Split(name, "::")
+	if len(segments) < 3 {
+		return nil, ""
+	}
+	idx := s.browseIndex()
+	ctx, err := s.getOrCreateRuntime()
+	if idx == nil || err != nil {
+		return nil, ""
+	}
+	model := ctx.Model()
+	// The longest prefix a declaration answers to is the chain's root, so a
+	// nested feature is preferred over the type it happens to share a name with.
+	for i := len(segments) - 1; i > 0; i-- {
+		matches := idx.LookupQualified(strings.Join(segments[:i], "::"))
+		if len(matches) != 1 {
+			continue
+		}
+		sym := matches[0]
+		walked := true
+		for _, seg := range segments[i:] {
+			member, ok := model.LookupMember(sym, seg)
+			if !ok || member == nil {
+				walked = false
+				break
+			}
+			sym = member
+		}
+		if !walked {
+			continue
+		}
+		fqn := idx.GetFQN(sym)
+		if fqn == "" {
+			fqn = name
+		}
+		return sym, fqn
+	}
+	return nil, ""
+}
+
+// carrierLimit bounds the object graph a subject is searched through, so a
+// deeply nested or richly connected model cannot make a lookup unbounded.
+const carrierLimit = 2000
+
+// carrierInstances names the session's objects of the type declaring sym,
+// sorted: an object of `part hot : Sensor` carries `Sensor::inRange`. Nested
+// objects carry the features of their own type too, so `Spec::c` is carried by
+// the `o::inner::b` a redefinition gave a value on, not only by a top-level
+// object.
 func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 	if sym == nil || sym.OwnerScope == nil {
 		return nil
@@ -134,14 +194,66 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 	}
 	model := ctx.Model()
 	var names []string
+	seen := make(map[int64]bool, len(s.instances))
+	queue := make([]carrier, 0, len(s.instances))
 	for name, inst := range s.instances {
-		if inst == nil || !model.Conforms(inst.Type, declaring) {
+		if inst != nil {
+			queue = append(queue, carrier{name: name, inst: inst})
+		}
+	}
+	sort.Slice(queue, func(i, j int) bool { return queue[i].name < queue[j].name })
+	for visited := 0; len(queue) > 0 && visited < carrierLimit; visited++ {
+		cur := queue[0]
+		queue = queue[1:]
+		if seen[cur.inst.ID] {
 			continue
 		}
-		names = append(names, name)
+		seen[cur.inst.ID] = true
+		if model.Conforms(cur.inst.Type, declaring) {
+			names = append(names, cur.name)
+			// A feature is read from the outermost object carrying it; its own
+			// nested objects are of other types and are not searched again.
+			continue
+		}
+		queue = append(queue, nestedObjects(ctx, cur)...)
 	}
 	sort.Strings(names)
 	return names
+}
+
+// carrier is an object reachable from the session's objects, under the
+// qualified name it is reached by.
+type carrier struct {
+	name string
+	inst *runtime.Instance
+}
+
+// nestedObjects returns the objects held in an object's slots, in slot-name
+// order, each under the name it is reached by.
+func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
+	slots := make([]string, 0, len(of.inst.Slots))
+	for name := range of.inst.Slots {
+		slots = append(slots, name)
+	}
+	sort.Strings(slots)
+	out := make([]carrier, 0, len(slots))
+	for _, name := range slots {
+		// A part slot holds its object only once it is asked for.
+		slot, err := of.inst.GetSlot(ctx, name)
+		if err != nil || slot == nil {
+			continue
+		}
+		id, isObject := slot.Value.Object()
+		if !isObject {
+			continue
+		}
+		child, ok := ctx.Instance(id)
+		if !ok || child == nil {
+			continue
+		}
+		out = append(out, carrier{name: of.name + "::" + name, inst: child})
+	}
+	return out
 }
 
 // AmbiguousSubjectError reports a feature or condition several of the session's
@@ -169,7 +281,12 @@ func (s *Session) subjectFor(name, fqn string, sym *symbols.Symbol) (*runtime.In
 	case 0:
 		return nil, "", nil
 	case 1:
-		return s.instances[carriers[0]], carriers[0], nil
+		// A carrier may be nested, so it is reached the way any object name is.
+		inst, owner := s.objectNamed(carriers[0])
+		if inst == nil {
+			return nil, "", nil
+		}
+		return inst, owner, nil
 	default:
 		return nil, "", &AmbiguousSubjectError{Name: name, Carriers: carriers}
 	}

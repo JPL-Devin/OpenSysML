@@ -73,6 +73,37 @@ func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments 
 	return "", nil, dropReport{}, false
 }
 
+// reopenedNamespaces reports the namespaces a loaded file opens that another
+// loaded file already opened. Two files that open `package P` declare two
+// packages of that name rather than one shared package — KerML gives a package
+// no way to be reopened — so the load says so instead of leaving the user with
+// unresolved references between them.
+func (s *Session) reopenedNamespaces(key string, root *ast.RootNamespace) []dropReport {
+	if root == nil {
+		return nil
+	}
+	var out []dropReport
+	for _, m := range root.Members {
+		name := memberName(m)
+		if name == "" {
+			continue
+		}
+		if _, hasBody := bodyMembers(m); !hasBody {
+			continue
+		}
+		for _, sn := range s.snippets {
+			if sn.origin == "" || sn.key == key || sn.open {
+				continue
+			}
+			if _, ok := namedNamespace(sn.src, name); ok {
+				out = append(out, dropReport{reopened: name})
+				break
+			}
+		}
+	}
+	return out
+}
+
 // soleNamespace returns the namespace declaration a submission consists of. A
 // submission declaring more than one thing is replaced wholesale, since its text
 // cannot be split between snippets without losing what sits between them.

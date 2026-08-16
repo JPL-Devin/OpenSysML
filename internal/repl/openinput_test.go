@@ -1,0 +1,206 @@
+package repl
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/passes"
+)
+
+// hasSyntaxError reports whether a result carries a syntax error, which is what
+// an unreadable submission is reported as.
+func hasSyntaxError(res Result) bool {
+	for _, d := range res.Diagnostics {
+		if d.Source == "syntax" && d.Severity == passes.SeverityError {
+			return true
+		}
+	}
+	return false
+}
+
+// tempFile writes src to a file of its own and returns its path.
+func tempFile(t *testing.T, name, src string) string {
+	t.Helper()
+	return writeFile(t, filepath.Join(t.TempDir(), name), src)
+}
+
+// The poison case: a loaded file the parser cannot close absorbs whatever is
+// submitted next, so the next declaration must be read on its own terms.
+func TestLoadedOpenFileDoesNotPoisonTheNextSubmission(t *testing.T) {
+	s := NewSession()
+	bad := tempFile(t, "bad.sysml", "package Broken {\n    part def A\n")
+
+	if _, err := s.LoadFile(bad); err != nil {
+		t.Fatal(err)
+	}
+	res := s.Submit("package Good { part def B; attribute n : ScalarValues::Real = 2.0; }")
+
+	if len(res.Declared) != 1 || res.Declared[0] != "Good" {
+		t.Fatalf("declared = %v, want [Good]", res.Declared)
+	}
+	for _, name := range []string{"Good", "Good::B", "Good::n"} {
+		if _, _, err := s.lookupSymbol(name); err != nil {
+			t.Errorf("%s did not resolve after the bad load: %v", name, err)
+		}
+	}
+	// The good declaration is a namespace of its own, not a member the open
+	// package swallowed.
+	if lines, err := s.EvalExpr("Good::n"); err != nil {
+		t.Errorf("%%eval Good::n after the bad load: %v", err)
+	} else if !strings.Contains(strings.Join(lines, "\n"), "2.00") {
+		t.Errorf("%%eval Good::n = %v, want the declared value", lines)
+	}
+	if out, _, err := s.runMeta("%instantiate Good::B"); err != nil {
+		t.Errorf("%%instantiate after the bad load: %v", err)
+	} else if strings.Contains(strings.Join(out, "\n"), "error") {
+		t.Errorf("%%instantiate after the bad load: %v", out)
+	}
+}
+
+// The reason must be visible: a load whose file does not parse says so, in the
+// prompt's own formatting, and leaves the session in error for a non-interactive
+// run to exit on.
+func TestLoadReportsSyntaxDiagnostics(t *testing.T) {
+	s := NewSession()
+	bad := tempFile(t, "bad.sysml", "package Broken {\n    part def A\n")
+
+	out, err := s.LoadFile(bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(out, "\n"), "error:") {
+		t.Errorf("load printed no diagnostics: %v", out)
+	}
+	if !s.HasErrors() {
+		t.Error("HasErrors should be true after loading a file that does not parse")
+	}
+	lines := strings.Join(s.DiagnosticLines(), "\n")
+	if !strings.Contains(lines, "bad.sysml") || !strings.Contains(lines, "error:") {
+		t.Errorf("diagnostic lines do not name the file and the error:\n%s", lines)
+	}
+	located := s.LocatedDiagnostics()
+	if len(located) == 0 {
+		t.Fatal("located diagnostics are empty")
+	}
+	for _, d := range located {
+		if !strings.HasSuffix(d.File, "bad.sysml") || d.Line == 0 {
+			t.Errorf("diagnostic is not placed in the loaded file: %+v", d)
+		}
+	}
+}
+
+// The summary surface is the one a non-interactive load prints; it must not
+// swallow the reason either.
+func TestLoadFileSummaryReportsSyntaxDiagnostics(t *testing.T) {
+	s := NewSession()
+	bad := tempFile(t, "bad.sysml", "package Broken {\n    part def A\n")
+
+	out, err := s.LoadFileSummary(bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(out, "\n"), "error:") {
+		t.Errorf("summary load printed no diagnostics: %v", out)
+	}
+	if !s.HasErrors() {
+		t.Error("HasErrors should be true after a summary load of a file that does not parse")
+	}
+}
+
+// A file that parses but whose analysis fails is a different case: it is accepted
+// and reported by the deeper tiers, and the load still counts as an error.
+func TestLoadReportsUnresolvedReference(t *testing.T) {
+	s := NewSession()
+	path := tempFile(t, "unresolved.sysml", "package P { part a : Missing; }\n")
+
+	out, err := s.LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(out, "\n"), "unresolved reference") {
+		t.Errorf("load printed no unresolved reference: %v", out)
+	}
+	if !s.HasErrors() {
+		t.Error("HasErrors should be true for a file with an unresolved reference")
+	}
+}
+
+// Reloading the file once it is fixed clears the report: the masked submission is
+// superseded like any other reading of the same file.
+func TestReloadingAFixedFileClearsItsSyntaxError(t *testing.T) {
+	s := NewSession()
+	path := filepath.Join(t.TempDir(), "work.sysml")
+	if err := os.WriteFile(path, []byte("package Work {\n    part def A\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.LoadFile(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("package Work { part def A; }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.LoadFile(path); err != nil {
+		t.Fatal(err)
+	}
+	if s.HasErrors() {
+		t.Errorf("the fixed file should leave no errors: %v", s.DiagnosticLines())
+	}
+	if _, _, err := s.lookupSymbol("Work::A"); err != nil {
+		t.Errorf("Work::A did not resolve after the reload: %v", err)
+	}
+}
+
+// Typed input that leaves an enclosure open is masked the same way, and the
+// declarations already in the buffer are untouched.
+func TestOpenTypedSubmissionKeepsTheBuffer(t *testing.T) {
+	s := NewSession()
+	s.Submit("package Kept { part def A; }")
+	res := s.Submit("/* oops")
+	if !hasSyntaxError(res) {
+		t.Errorf("an unterminated comment should be reported: %v", res.Diagnostics)
+	}
+	if _, _, err := s.lookupSymbol("Kept::A"); err != nil {
+		t.Errorf("Kept::A did not survive the open submission: %v", err)
+	}
+	next := s.Submit("package Later { part def B; }")
+	if len(next.Declared) != 1 || next.Declared[0] != "Later" {
+		t.Errorf("declared = %v, want [Later]", next.Declared)
+	}
+	if _, _, err := s.lookupSymbol("Later::B"); err != nil {
+		t.Errorf("Later::B did not resolve after the open submission: %v", err)
+	}
+	// The text is still the user's to save.
+	if !strings.Contains(strings.Join(s.List(), "\n"), "/* oops") {
+		t.Errorf("the open submission should still be listed: %v", s.List())
+	}
+}
+
+// Robustness: input the parser cannot read is answered with a typed error rather
+// than a panic or a hang, whichever surface it reaches.
+func TestOpenSubmissionSurfacesStayTyped(t *testing.T) {
+	for _, src := range []string{
+		"package P {",
+		"/* unterminated",
+		"part def 'unterminated",
+		"package P { part x : ",
+		"}}}",
+		"package P { state def S { entry; then ",
+	} {
+		s := NewSession()
+		res := s.Submit(src)
+		if len(res.Diagnostics) == 0 {
+			t.Errorf("%q produced no diagnostics", src)
+		}
+		// Every command must answer, not panic, over a session holding it.
+		for _, cmd := range []string{"%list", "%symbols", "%check", "%eval 1 + 1", "%view P"} {
+			if _, _, err := s.runMeta(cmd); err != nil && strings.Contains(err.Error(), "panic") {
+				t.Errorf("%q over %q: %v", cmd, src, err)
+			}
+		}
+		if _, _, err := s.lookupSymbol("Nothing"); err == nil {
+			t.Errorf("%q: an undeclared name should not resolve", src)
+		}
+	}
+}
