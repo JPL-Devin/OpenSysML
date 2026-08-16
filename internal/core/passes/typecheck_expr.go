@@ -63,7 +63,7 @@ func (ec *exprChecker) checkUsageValue(scope *symbols.Scope, u *ast.Usage) {
 		}
 	}
 	ec.checkValueConformance(scope, u)
-	ec.checkValueCount(u)
+	ec.checkValueCount(scope, u)
 }
 
 // declaredPrimType returns the scalar type a usage is typed by, or PrimUnknown.

@@ -1,0 +1,10 @@
+{
+	"type": "instance",
+	"instantiate": "test::bad",
+	"slots": {
+		"few": {"error": "multiplicity violation: 2 value(s) bound to a feature with multiplicity lower bound 3"},
+		"many": {"error": "multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1"},
+		"none": {"error": "multiplicity violation: 0 value(s) bound to a feature with multiplicity lower bound 1"},
+		"stowed": {"error": "multiplicity violation: 2 value(s) bound to a feature with multiplicity lower bound 3"}
+	}
+}
