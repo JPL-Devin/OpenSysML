@@ -426,19 +426,20 @@ def _base_plan(definitions: Sequence[Definition]) -> Dict[str, Tuple[Tuple[str, 
 
     for definition in _in_dependency_order(definitions):
         kept: List[str] = []
-        dropped: List[str] = []
         declared = [
-            base_id for base_id in definition.base_ids
-            if base_id in generated and base_id in linearizations
+            base_id for base_id in dict.fromkeys(definition.base_ids)
+            if base_id in generated
         ]
-        for base_id in _without_implied(declared, linearizations):
+        candidates = [base_id for base_id in declared if base_id in linearizations]
+        for base_id in _without_implied(candidates, linearizations):
             if _linearize(definition.id, kept + [base_id], linearizations) is None:
-                dropped.append(base_id)
-            else:
-                kept.append(base_id)
-        linearizations[definition.id] = _linearize(definition.id, kept, linearizations) or [
-            definition.id
-        ]
+                continue
+            kept.append(base_id)
+        line = _linearize(definition.id, kept, linearizations) or [definition.id]
+        linearizations[definition.id] = line
+        # Anything the class does not end up inheriting, directly or through a kept
+        # base, is reported rather than silently lost.
+        dropped = [base_id for base_id in declared if base_id not in line]
         plan[definition.id] = (tuple(kept), tuple(dropped))
     return plan
 

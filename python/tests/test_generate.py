@@ -414,6 +414,68 @@ def test_render_module_drops_a_base_python_cannot_linearize():
     assert namespace["Both"].__mro__[1] is namespace["One"]
 
 
+def test_render_module_reports_a_base_left_implicit_by_a_base_that_is_then_dropped():
+    """A base only a dropped base implied is reported, not silently lost."""
+    left = definition("Demo::Left")
+    right = definition("Demo::Right")
+    extra = definition("Demo::Extra")
+    one = definition(
+        "Demo::One",
+        specializations=[
+            Specialization(kind="specializes", declared="Left", target_id="Demo::Left"),
+            Specialization(kind="specializes", declared="Right", target_id="Demo::Right"),
+        ],
+    )
+    two = definition(
+        "Demo::Two",
+        specializations=[
+            Specialization(kind="specializes", declared="Right", target_id="Demo::Right"),
+            Specialization(kind="specializes", declared="Left", target_id="Demo::Left"),
+            Specialization(kind="specializes", declared="Extra", target_id="Demo::Extra"),
+        ],
+    )
+    # Extra is implied by Two, but Two has no MRO alongside One, so dropping Two
+    # takes Extra with it.
+    both = definition(
+        "Demo::Both",
+        specializations=[
+            Specialization(kind="specializes", declared="One", target_id="Demo::One"),
+            Specialization(kind="subsets", declared="Extra", target_id="Demo::Extra"),
+            Specialization(kind="specializes", declared="Two", target_id="Demo::Two"),
+        ],
+    )
+    source = render_module([both, one, two, left, right, extra])
+    assert "class Both(One):" in source
+    assert "# subsets Demo::Extra, left out" in source
+    assert "# specializes Demo::Two, left out" in source
+    namespace: dict = {}
+    exec(compile(source, "demo_types.py", "exec"), namespace)
+    assert not issubclass(namespace["Both"], namespace["Extra"])
+
+
+def test_render_module_reports_a_base_in_a_generalization_cycle():
+    """A cyclic edge no base order can express is named in a comment."""
+    first = definition(
+        "Demo::First",
+        specializations=[
+            Specialization(kind="specializes", declared="Second", target_id="Demo::Second")
+        ],
+    )
+    second = definition(
+        "Demo::Second",
+        specializations=[
+            Specialization(kind="specializes", declared="First", target_id="Demo::First")
+        ],
+    )
+    source = render_module([first, second])
+    assert "left out" in source
+    namespace: dict = {}
+    exec(compile(source, "demo_types.py", "exec"), namespace)
+    assert issubclass(namespace["First"], namespace["Second"]) != issubclass(
+        namespace["Second"], namespace["First"]
+    )
+
+
 def test_collect_definitions_takes_type_and_multiplicity_from_a_redefinition():
     """A redefining feature that restates neither type nor multiplicity inherits both."""
     root = FakeSymbol(
