@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sync"
 
 	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
@@ -17,15 +18,23 @@ import (
 // serves the Language Server Protocol over a jsonrpc2 stream.
 type Server struct {
 	baseServer
-	ws           *model.Workspace
-	client       protocol.Client
-	conn         jsonrpc2.Conn
-	shutdownDone bool
+	ws     *model.Workspace
+	client protocol.Client
+	conn   jsonrpc2.Conn
+
+	// exited is closed by Exit so that Run returns from the read loop rather
+	// than a handler tearing the connection down under itself.
+	exited   chan struct{}
+	exitOnce sync.Once
+
+	mu               sync.Mutex
+	shutdownReceived bool
+	exitReceived     bool
 }
 
 // NewServer returns a Server bound to ws.
 func NewServer(ws *model.Workspace) *Server {
-	return &Server{ws: ws}
+	return &Server{ws: ws, exited: make(chan struct{})}
 }
 
 // Run wires the server to a stdio-style stream and blocks until the connection
@@ -42,15 +51,24 @@ func (s *Server) Run(ctx context.Context, rwc io.ReadWriteCloser) error {
 	s.client = client
 	s.conn = conn
 	conn.Go(ctx, runHandler(s))
-	<-conn.Done()
-	return conn.Err()
+	select {
+	case <-conn.Done():
+		return conn.Err()
+	case <-s.exited:
+		// The exit notification ends the session: the stream is released here,
+		// where nothing is waiting on it, and the session is not in error.
+		_ = conn.Close()
+		return nil
+	}
 }
 
 // runHandler is the chain a served session reads with: cancellation, async
 // dispatch so one slow request cannot stall the stream, and a reply per request.
 func runHandler(s *Server) jsonrpc2.Handler {
 	serve := s.changeHandler(protocol.ServerHandler(s, jsonrpc2.MethodNotFoundHandler))
-	return cancelHandler(jsonrpc2.AsyncHandler(jsonrpc2.ReplyHandler(serve)))
+	// The lifecycle wrapper runs outside AsyncHandler so that shutdown, exit and
+	// the messages after them are ordered as the client sent them.
+	return s.lifecycleHandler(cancelHandler(jsonrpc2.AsyncHandler(jsonrpc2.ReplyHandler(serve))))
 }
 
 // cancelHandler is protocol.CancelHandler with an id decode that accepts the

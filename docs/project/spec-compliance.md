@@ -1217,3 +1217,15 @@ the `@type` mapping and the comparison choices.
   cannot send one until that lands with the rest of the Python API surface
 
 These are documented for transparency; none block production use.
+
+---
+
+## Language Server (`internal/lsp`, `cmd/sysml-lsp`)
+
+**Standard:** LSP 3.17 § Lifecycle Messages. **Reference:** docs/reference/api.md § `internal/lsp`.
+
+| Rule | Implementation (file:function) | Tests | Status |
+|---|---|---|---|
+| The server is started by an editor over stdin/stdout, and a client that names the transport on the command line (`--stdio`, as `TransportKind.stdio` sends) is served rather than rejected | `cmd/sysml-lsp/main.go` `run` (explicit `stdio` flag; Go's `flag` accepts `-stdio` and `--stdio`) | `cmd/sysml-lsp/lifecycle_test.go:TestStdioTransportServesTheLifecycle` (both spellings, built binary over pipes), `cmd/sysml-lsp/main_test.go:TestCommandLine` | ✅ Faithful — the flag is a documented no-op because stdio is the only transport; every *other* unknown flag still exits 2 with usage, so a typo is not swallowed |
+| `shutdown` is answered, and afterwards every request but `exit` is answered `InvalidRequest` (`-32600`); a non-`exit` notification is dropped | `internal/lsp/lifecycle.go` `Server.Shutdown`, `Server.lifecycleHandler` (wraps the handler chain on the read loop, ahead of async dispatch) | `internal/lsp/lifecycle_test.go:TestAfterShutdownOnlyExitIsServed`, `:TestNotificationAfterShutdownIsDropped`, `cmd/sysml-lsp/lifecycle_test.go:TestRequestAfterShutdownIsInvalidRequest` | ✅ Faithful |
+| `exit` ends the process: status 0 after a preceding `shutdown`, 1 otherwise | `internal/lsp/lifecycle.go` `Server.Exit`, `Server.ExitCode`; `internal/lsp/server.go` `Server.Run` (returns on the exit signal and closes the connection itself); `cmd/sysml-lsp/main.go` `serve` | `internal/lsp/lifecycle_test.go:TestExitEndsTheSessionWithTheStatusLSPRequires`, `cmd/sysml-lsp/lifecycle_test.go:TestExitAfterShutdownEndsTheProcess`, `:TestExitWithoutShutdownIsNonzero`, `:TestClosedStreamEndsTheProcess` | ✅ Faithful — `Run` returns rather than being killed from a handler, so the process leaves no server behind per editor window |
