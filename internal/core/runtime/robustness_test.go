@@ -76,6 +76,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("nested_condition_subject_is_ambiguous", testNestedConditionSubjectIsAmbiguous)
+	t.Run("satisfaction_subject_is_ambiguous", testSatisfactionSubjectIsAmbiguous)
 	t.Run("recursive_composition_subject_search", testRecursiveCompositionSubjectSearch)
 	t.Run("duplicate_objects_of_one_declaration", testDuplicateObjectsOfOneDeclaration)
 	t.Run("duplicate_objects_holding_a_plain_part", testDuplicateObjectsHoldingAPlainPart)
@@ -2643,6 +2644,44 @@ func testNestedConditionSubjectIsAmbiguous(t *testing.T) {
 	}
 }
 
+// testSatisfactionSubjectIsAmbiguous: a satisfaction assertion whose `by` object
+// holds two objects of the requirement's owner has no one subject either, and
+// reports it as ErrAmbiguousSubject rather than picking one.
+func testSatisfactionSubjectIsAmbiguous(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				requirement lim { require value < 10.0; }
+			}
+			part def Top {
+				part slow : Leaf { attribute :>> value = 2.0; }
+				part fast : Leaf { attribute :>> value = 99.0; }
+			}
+			part top : Top;
+			assert satisfy Leaf::lim by top;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	pkg := memberPath(t, rootScope, "test")
+	assertions := ctx.SatisfyAssertionsIn(pkg.Scope)
+	if len(assertions) != 1 {
+		t.Fatalf("assertions = %d, want the one the package states", len(assertions))
+	}
+	result, err := ctx.CheckSatisfactionOn(assertions[0], nil)
+	if !errors.Is(err, ErrAmbiguousSubject) {
+		t.Fatalf("holds = %t, err = %v, want ErrAmbiguousSubject", result.Holds, err)
+	}
+	if result.Holds {
+		t.Error("an ambiguous subject is no verdict")
+	}
+}
+
 // testRecursiveCompositionSubjectSearch: searching for the object a check is
 // about does not walk a design containing its own kind forever; it answers about
 // the declaration, since no object of the checked type is there.
@@ -2880,6 +2919,13 @@ func testPartsSubsettingOneCollection(t *testing.T) {
 	}
 	if satisfied {
 		t.Error("an ambiguous subject is no verdict")
+	}
+	// The two objects reached through one collection are told apart by the
+	// declaration each materializes, not by the feature holding both.
+	for _, want := range []string{"(small)", "(large)"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name a carrier %q", err, want)
+		}
 	}
 }
 

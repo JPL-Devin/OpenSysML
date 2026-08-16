@@ -1624,11 +1624,12 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 			s.instances[owner] = inst
 		}
 	}
-	holds, err := ctx.EvaluateSatisfactionOn(a, subject)
+	result, err := ctx.CheckSatisfactionOn(a, subject)
+	subject, owner = s.reportedSubject(result, subject, owner)
 	if unevaluable(err) {
 		return unevaluableVerdict(satisfyText(a), satisfyText(a), err, subject, owner)
 	}
-	if err != nil || !holds {
+	if err != nil || !result.Holds {
 		return Verdict{Subject: satisfyText(a), Status: VerdictFails, Lines: []string{
 			fmt.Sprintf("✗ %s fails%s", satisfyText(a), onInstance(subject, owner)),
 			"  " + verdictDetail("Required condition", err),
