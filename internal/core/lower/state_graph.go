@@ -39,11 +39,6 @@ type StateGraph struct {
 	// endpoints resolves what a transition endpoint names.
 	endpoints Endpoints
 
-	// endpointsReported is true when endpoints is the name-resolution tier's own
-	// resolver, whose diagnostics reach the user, so lowering need not report an
-	// endpoint it rejected.
-	endpointsReported bool
-
 	// States in the machine (flat list, includes nested)
 	States []*ast.StateNode
 
@@ -131,28 +126,26 @@ func ToStateGraph(stateMachineDecl ast.Node, scope *symbols.Scope) (*StateGraph,
 // ToStateGraphWithEndpoints lowers a state machine, building its transitions
 // from the endpoints the name-resolution tier already resolved.
 func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, endpoints Endpoints) (*StateGraph, error) {
-	reported := endpoints != nil && scope != nil
-	if !reported {
+	if endpoints == nil || scope == nil {
 		endpoints = localEndpoints(stateMachineDecl)
 	}
 	graph := &StateGraph{
-		Scope:             scope,
-		vertexOf:          make(map[ast.Node]ast.Node),
-		endpoints:         endpoints,
-		endpointsReported: reported,
-		StateScopes:       make(map[*ast.StateNode]*symbols.Scope),
-		Behaviors:         make(map[*ast.StateNode]*StateBehaviors),
-		declOf:            make(map[*ast.StateNode]ast.Node),
-		States:            make([]*ast.StateNode, 0),
-		Pseudostates:      make(map[string]*ast.PseudostateNode),
-		PseudostateOwner:  make(map[*ast.PseudostateNode]*ast.StateNode),
-		Transitions:       make(map[ast.Node][]*Transition),
-		CompositeStates:   make(map[*ast.StateNode][]*ast.StateRegion),
-		RegionInitials:    make(map[*ast.StateRegion]*ast.StateNode),
-		ParentState:       make(map[*ast.StateNode]*ast.StateNode),
-		RegionOwner:       make(map[*ast.StateRegion]*ast.StateNode),
-		RegionOf:          make(map[*ast.StateNode]*ast.StateRegion),
-		Deferred:          make(map[*ast.StateNode][]ast.Node),
+		Scope:            scope,
+		vertexOf:         make(map[ast.Node]ast.Node),
+		endpoints:        endpoints,
+		StateScopes:      make(map[*ast.StateNode]*symbols.Scope),
+		Behaviors:        make(map[*ast.StateNode]*StateBehaviors),
+		declOf:           make(map[*ast.StateNode]ast.Node),
+		States:           make([]*ast.StateNode, 0),
+		Pseudostates:     make(map[string]*ast.PseudostateNode),
+		PseudostateOwner: make(map[*ast.PseudostateNode]*ast.StateNode),
+		Transitions:      make(map[ast.Node][]*Transition),
+		CompositeStates:  make(map[*ast.StateNode][]*ast.StateRegion),
+		RegionInitials:   make(map[*ast.StateRegion]*ast.StateNode),
+		ParentState:      make(map[*ast.StateNode]*ast.StateNode),
+		RegionOwner:      make(map[*ast.StateRegion]*ast.StateNode),
+		RegionOf:         make(map[*ast.StateNode]*ast.StateRegion),
+		Deferred:         make(map[*ast.StateNode][]ast.Node),
 	}
 
 	// Extract members
@@ -531,9 +524,9 @@ func (g *StateGraph) vertex(scope *symbols.Scope, qn *ast.QualifiedName) (ast.No
 	if qn == nil {
 		return nil, fmt.Errorf("transition endpoint names nothing")
 	}
-	decl, ok := g.endpoints.Endpoint(scope, qn)
+	decl, ok, reported := g.endpoints.Endpoint(scope, qn)
 	if !ok {
-		if g.endpointsReported {
+		if reported {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("transition endpoint %s names no state or pseudostate", endpointText(qn))

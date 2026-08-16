@@ -29,6 +29,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_dangling_transition", testStateDanglingTransition)
 	t.Run("state_transition_endpoint_misspelled", testStateTransitionEndpointMisspelled)
 	t.Run("state_transition_endpoint_in_another_machine", testStateTransitionEndpointInAnotherMachine)
+	t.Run("state_transition_endpoint_never_resolved", testStateTransitionEndpointNeverResolved)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
@@ -803,6 +804,38 @@ func testStateTransitionEndpointMisspelled(t *testing.T) {
 	}
 	if got := exec.getCurrentState(); got == nil || got.Name != "busy" {
 		t.Errorf("expected the machine to halt in 'busy', got %v", got)
+	}
+}
+
+// testStateTransitionEndpointNeverResolved: executed without a name-resolution
+// pass, as a service handler may, nothing reported the misspelled endpoint, so
+// lowering reports it rather than running a machine missing an edge.
+func testStateTransitionEndpointNeverResolved(t *testing.T) {
+	src := `package test {
+		state Machine {
+			initial init;
+			state busy;
+			final done;
+			init then busy;
+			transition busy to donee;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	_, err := newStateExecutor(ctx, sym, nil)
+	if err == nil {
+		t.Fatal("expected an error for an endpoint no name-resolution pass reported")
+	}
+	if !strings.Contains(err.Error(), "donee") {
+		t.Errorf("expected the error to name the endpoint, got %v", err)
 	}
 }
 

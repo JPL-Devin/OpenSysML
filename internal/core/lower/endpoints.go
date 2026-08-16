@@ -9,9 +9,9 @@ import (
 // Endpoints resolves the vertex a transition endpoint names, implemented by the
 // name-resolution tier (*resolve.Resolver) so lowering matches no names itself.
 type Endpoints interface {
-	// Endpoint returns the declaration qn names, written in scope, and whether it
-	// names a vertex at all.
-	Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool)
+	// Endpoint returns the declaration qn names, written in scope, whether it names
+	// a vertex at all, and whether a failure was already reported to the user.
+	Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (decl ast.Node, ok, reported bool)
 }
 
 // machineEndpoints resolves every endpoint of one machine from a single scope,
@@ -21,7 +21,7 @@ type machineEndpoints struct {
 	scope    *symbols.Scope
 }
 
-func (m machineEndpoints) Endpoint(_ *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool) {
+func (m machineEndpoints) Endpoint(_ *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool, bool) {
 	return m.resolver.Endpoint(m.scope, qn)
 }
 

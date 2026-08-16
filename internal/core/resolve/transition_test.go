@@ -5,7 +5,42 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
+
+// transitionTargetIn returns the target name of the first transition declared
+// in root, the name node name resolution keyed its verdict by.
+func transitionTargetIn(t *testing.T, root *ast.RootNamespace) *ast.QualifiedName {
+	t.Helper()
+	var walk func(members []ast.Node) *ast.QualifiedName
+	walk = func(members []ast.Node) *ast.QualifiedName {
+		for _, member := range members {
+			if membership, ok := member.(*ast.Membership); ok {
+				member = membership.Member
+			}
+			switch n := member.(type) {
+			case *ast.TransitionMember:
+				return n.Target
+			case *ast.Definition:
+				if qn := walk(n.Members); qn != nil {
+					return qn
+				}
+			case *ast.Usage:
+				if qn := walk(n.Members); qn != nil {
+					return qn
+				}
+			}
+		}
+		return nil
+	}
+	qn := walk(root.Members)
+	if qn == nil {
+		t.Fatal("no transition member found")
+	}
+	return qn
+}
 
 // A transition endpoint naming a vertex of its machine resolves, whether the
 // vertex is a sibling, a nested state, a state of a sibling orthogonal region,
@@ -157,10 +192,43 @@ func TestEndpointLookupForLoweringReportsNothing(t *testing.T) {
 		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
 	}
 	qn := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "nowhere"}}}
-	if _, ok := r.Endpoint(nil, qn); ok {
+	_, ok, reported := r.Endpoint(nil, qn)
+	if ok {
 		t.Error("an endpoint naming nothing resolved")
+	}
+	if reported {
+		t.Error("a failure nothing reported was called reported")
 	}
 	if len(r.Diagnostics) != 0 {
 		t.Errorf("a lookup made for lowering reported: %v", r.Diagnostics)
+	}
+}
+
+// An endpoint the document's own resolution reported is reported, so lowering
+// leaves the edge out rather than reporting it a second time.
+func TestEndpointLookupSaysWhatNameResolutionReported(t *testing.T) {
+	src := `
+		state def M {
+			entry; then idle;
+			state idle;
+			state busy;
+			transition idle to nowhere;
+		}
+	`
+	p := parser.New(source.New("d.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	r := New(symbols.NewIndexFromDoc("d.sysml", root))
+	r.ResolveDocument("d.sysml", root)
+
+	qn := transitionTargetIn(t, root)
+	_, ok, reported := r.Endpoint(nil, qn)
+	if ok {
+		t.Error("an endpoint naming nothing resolved")
+	}
+	if !reported {
+		t.Errorf("the endpoint was reported by name resolution: %v", r.Diagnostics)
 	}
 }
