@@ -122,3 +122,67 @@ package Facade { public import V::vehicle::*; }                        # remove 
 
 `-debug` prints `submission at buffer line N; K diagnostic(s) over the whole buffer`, which is the
 clearest evidence that the retroactive re-derivation happened.
+
+## `@` / `@@` classification as an *expression* (PR #209 onward)
+
+`@`/`@@` are also evaluable in ordinary expressions (`%eval`, constraint/calc bodies), and the claim
+under test is that they answer with the *same* predicate an element filter uses. Test the two paths
+side by side on **one model**, and expect them to be able to disagree:
+
+```
+./bin/sysml /tmp/filt.sysml -validate     # filter path: `import Lib::*[@Meta::Safety]` must leave
+                                          # `part b :> Radio;` unresolved and `:> Belt` clean
+./bin/sysml            # then: %load /tmp/filt.sysml ; %eval Lib::Belt @ Meta::Safety
+```
+
+- **`-eval` refuses a model that does not analyse cleanly** (`did not analyse cleanly; no check was
+  made`, exit 2). Since the filter fixture *deliberately* carries an unresolved reference, the
+  agreement check has to go through the REPL's `%load` + `%eval`, not `<model> -eval '…'`.
+- **Where the element is declared can change the answer, so run every case twice.** Once with the
+  model `%load`ed, once with the same fixture under `SYSML_LIBRARY_PATH=/tmp/flib` +
+  `XDG_CACHE_HOME=/tmp/fc` (stdlib copied in alongside). A green library run is not evidence for the
+  load path, and vice versa: the REPL reindexes on each submission, so one element exists as a
+  distinct `*symbols.Symbol` per generation, and identity-based comparison of annotation types made
+  annotations evaluate `false` in the loaded-document path while the restored-library path was
+  `true` (fixed at f01b92f by `indexedElement` + name-based `conformsByName` fallback in
+  `semantics/filter.go`; locked by `TestClassificationOfASubjectFromAnotherIndexGeneration`).
+  The cheap canary for a regression of that class: after `%load`, submit two unrelated packages
+  (`package extra { part def Later; }`) to force reindexing, then re-run the same `@` expression —
+  it must still be `true`. Check subtype conformance in **both directions** too
+  (`airBag @ CrashSafety` true, `seatBelt @ CrashSafety` false), since a name-based fallback that
+  ignores direction would pass the positive case alone.
+- **`go test -run TestExecutionConformance ./internal/core/runtime` can pass while the binary fails
+  the same fixture.** Conformance builds its own index; the REPL/CLI path does not. Always re-run
+  conformance fixtures through the binary:
+  `./bin/sysml <fixture> -instantiate test::Vehicle -constraint test::Vehicle::tagged`.
+- **Contrast with the parent commit.** Before classification-as-expression existed the binary said
+  `error: unsupported operator: '@': classification needs the runtime type of a value…`. A wrong
+  `= false` on the new binary is therefore a *reported error turned into a silent wrong answer* —
+  the strongest framing for the report, so build `/tmp/old-sysml` from the parent first.
+- **Failure modes to cover** (all must be `error: filter condition cannot be evaluated: …`, never
+  `= false`): `42 @ T` (`a constant denotes no element to classify`), `"s" @ T` (`a string …`),
+  `x @ NoSuch` (`the metadata type … does not resolve`), bare `@ T` (`` `@` leaves its subject
+  implicit and no object is being evaluated``). Garbage (`%eval @@`, `x @`, `x @@@ y`, `(@T`,
+  `x @ 42`) must be parse errors; follow with `%eval 1 + 1` → `= 2` to prove the session survived.
+- **Session-poisoning canary:** submit one garbage line (`oops garbage`) *after* a `%load`, then
+  `%eval 1 + 1` (works) and `%eval X @ T` (observed: `error: parse failed: expected a namespace
+  member`, permanently, for every later `@`/`@@`). The classification path re-parses session text
+  that plain arithmetic does not, so run this ordering explicitly — a clean piped run without a
+  preceding `%load` will *not* reproduce it.
+
+## Views: `ExposedElements` / `NestedViews` (Go API only, no `%view` command)
+
+There is no REPL command for a view's exposed set, so drive `semantics.Model` from a throwaway test
+package (`internal/zzprobe/views_test.go`, deleted afterwards): `symbols.NewIndex()` →
+`model.LoadStdlibInto` → `idx.AddDocument` → `idx.ExpandWildcardImports()` → `resolve.New` →
+`semantics.NewModel` → `r.SetModel(m)` → `r.ResolveDocument`, then assert per view. Enumerate
+*named fixture FQNs*, never `idx.FQNs()` — the latter drowns the output in stdlib views.
+
+Fixture shapes worth having in one file: `expose Lib::*`, `expose Lib::**`, `expose Lib::*[@Meta::T]`,
+`expose Lib::**[@Meta::T]`, a single-membership `expose Lib::Belt`, a body-less `view emptyView;`, a
+view with a nested view, a `view viewOfView { expose V::outerView::**; }`, and a non-view `part def`.
+Observed contract at bcc84c0: recursive expose includes the **namespace itself** (`Lib`) plus
+grandchildren; a `private import` inside `Lib` still leaks its target (`Safety`) into `Lib::*` — and
+the REPL agrees, so check body resolution (`view probeA { expose Lib::*; part y :> Radio; }` clean vs
+the filtered `probeB` rejecting only `Radio`) before calling such a leak a bug. Non-views, packages,
+metadata defs and `nil` must all give `ErrNotAView` from *both* APIs; an empty view is `[]`, nil error.
