@@ -214,6 +214,19 @@ func declaringType(sym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
+// nestedFeature reports whether sym is a feature a type declares, whose objects
+// are reached through the object holding them. A definition nested in another is
+// not one: nothing holds it, objects materialize it in their own right.
+func nestedFeature(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	if _, ok := sym.Decl.(*ast.Usage); !ok {
+		return false
+	}
+	return declaringType(sym) != nil
+}
+
 // rootInstances returns the objects this runtime holds that materialize a
 // declaration of their own, in identity order: an object of a nested feature is
 // reached through the object holding it, and one a value expression materialized
@@ -223,7 +236,7 @@ func declaringType(sym *symbols.Symbol) *symbols.Symbol {
 func (ctx *Context) rootInstances() []*Instance {
 	latest := make(map[*symbols.Symbol]*Instance, len(ctx.instances))
 	for _, inst := range ctx.instances {
-		if inst == nil || declaringType(inst.Type) != nil {
+		if inst == nil || nestedFeature(inst.Type) {
 			continue
 		}
 		if held, ok := latest[inst.Type]; ok && held.ID > inst.ID {

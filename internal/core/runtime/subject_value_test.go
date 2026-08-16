@@ -177,6 +177,38 @@ func TestNestedSubjectUnderSuppliedObject(t *testing.T) {
 	}
 }
 
+// A definition nested in another definition is a declaration objects of their
+// own materialize, not a feature reached through a holder, so a condition it
+// declares is about such an object.
+func TestSubjectOfANestedDefinition(t *testing.T) {
+	src := `package test {
+	part def Outer {
+		part def Inner {
+			attribute value : Real = 1.0;
+			constraint small { value < 10.0 }
+		}
+		part def Big :> Inner {
+			attribute :>> value = 99.0;
+		}
+	}
+}`
+	ctx, pkg := nestedSubjectFixture(t, src)
+	small := memberPath(t, pkg, "Outer", "Inner", "small")
+	if satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope); err != nil || !satisfied {
+		t.Fatalf("small with no object: satisfied = %t, err = %v, want the declaration's answer", satisfied, err)
+	}
+	if _, err := ctx.Instantiate(memberPath(t, pkg, "Outer", "Big")); err != nil {
+		t.Fatalf("instantiate Big: %v", err)
+	}
+	satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("small on big: %v", err)
+	}
+	if satisfied {
+		t.Error("small on big: satisfied = true, want the object's 99.0 to violate it")
+	}
+}
+
 // Two objects redefining the same nested feature differently make the subject a
 // question, which is reported rather than answered from either of them.
 func TestNestedSubjectAmbiguous(t *testing.T) {
