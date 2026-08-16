@@ -617,6 +617,39 @@ to prove the session survived — `%tokens` still shows the token parked at the 
 `action node <n>: type mismatch: 'for' iterates a collection, and expression is not one` after it —
 and only for a value that states a *computation* (a body expression). See the next section.
 
+### `for` over a scalar is a typed error (PR #231)
+
+Since PR #231 `forElements` (`internal/core/runtime/statements.go`) only iterates a **sequence** or a
+**set**; `null` iterates zero times, and *everything else* — Integer, Real, Boolean, String, an
+expression — is `type mismatch: 'for' iterates a collection, and <describeValue> is not one`. Exact
+texts observed on `bin/sysml`, worth asserting verbatim:
+
+| input | message |
+|---|---|
+| scalar `Integer` / nested `for` whose inner input is scalar | `error: execution failed: action node <n>: type mismatch: 'for' iterates a collection, and an Integer is not one` |
+| `Boolean` | `… and a Boolean is not one` |
+| `String` | `… and string is not one` (no article — `describeValue` renders it lowercase) |
+| the same `for` in a **calc** body | `error: calc invocation failed: calc <fqn>: calculation body: type mismatch: 'for' iterates a collection, and an Integer is not one` |
+| attribute declared with **no value** (`attribute missing : Integer;`) | `error: execution failed: eval 'for' collection: unresolved reference: missing` — the loop input never reaches `forElements`, so do not expect the new wording here |
+
+Testing notes for this class of change:
+
+- The pre-fix contrast is the convincing frame: build the parent commit into `/tmp/old-sysml` and the
+  same model **completes** with the counter at `1` (and the scalar calc answers `4` instead of
+  erroring) — a silent single iteration, which is exactly what a broken build looks like.
+- Zero-iteration inputs must still *complete*: give the fixture an `assign marker := 1;` **after** the
+  loops so the `Results:` block proves execution continued (`emptyVisited = 0`, `nullVisited = 0`,
+  `marker = 1`), not just that nothing errored. `attribute absent : Integer[0..1] = null;` is the way
+  to get a `ValNull` loop input.
+- Check the strictness did **not** leak into `elementsOf` (collection operators, multiplicity):
+  `%eval SequenceFunctions::size(7)` → `= 1`, `%eval 7->size()` → `= 1`,
+  `%eval SequenceFunctions::isEmpty(7)` → `= false`.
+- `%calc` takes **positional** arguments only: `%calc P::C 4`. `%calc P::C n=4` answers
+  `error: named arguments are not supported here; pass arguments positionally`.
+- An entry action nested inside a part is reachable by its qualified path (`%action test::p::a`), which
+  is the REPL twin of the conformance harness's qualified `"evaluate": "test::p::a"`.
+- After every failing case, run `%eval 1+1` → `= 2` to prove the session survived.
+
 ### Block token flows: nested actions and `perform` in a loop body / `if` branch (PR #202)
 
 Before PR #202 a loop body or `if` branch containing an **action node** (a nested `action`
