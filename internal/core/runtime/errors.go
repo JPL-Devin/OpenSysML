@@ -201,6 +201,10 @@ var (
 	// variant, which selects no single configuration.
 	ErrMultipleVariants = errors.New("more than one variant selected")
 
+	// ErrNotALiteral is returned when a name qualified by an enumeration
+	// definition names something the enumeration does not declare as a literal.
+	ErrNotALiteral = errors.New("not a literal of the enumeration")
+
 	// ErrConflictingRedefinition is returned when one declaration values the
 	// same feature under two of its names: a redefinition renames one feature,
 	// so which of the two values it holds would be a silent pick.

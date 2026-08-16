@@ -78,6 +78,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("flow_end_naming_no_node", testFlowEndNamingNoNode)
 	t.Run("flow_naming_no_pin", testFlowNamingNoPin)
 	t.Run("accept_payload_without_a_value", testAcceptPayloadWithoutAValue)
+	t.Run("accept_payload_read_before_it_is_bound", testAcceptPayloadReadBeforeItIsBound)
 	t.Run("flow_from_a_node_that_produced_nothing", testFlowFromANodeThatProducedNothing)
 	t.Run("action_accept_time_trigger", testActionAcceptTimeTrigger)
 	t.Run("action_accept_non_boolean_change_trigger", testActionAcceptNonBooleanChangeTrigger)
@@ -125,6 +126,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
 	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
+	t.Run("numeric_library_call_that_has_no_value", testNumericLibraryCallThatHasNoValue)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
 	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
 	t.Run("collection_operation_step_budget", testCollectionOperationStepBudget)
@@ -152,6 +154,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("multiplicity_on_a_connector", testMultiplicityOnAConnector)
 	t.Run("connector_attached_to_itself", testConnectorAttachedToItself)
 	t.Run("mutually_attached_connectors", testMutuallyAttachedConnectors)
+	t.Run("enumeration_name_that_is_not_a_literal", testEnumerationNameThatIsNotALiteral)
+	t.Run("chain_through_a_literal_without_that_attribute", testChainThroughALiteralWithoutThatAttribute)
 }
 
 // testMultiplicityInfiniteLowerBound: `[*..*]` requires unboundedly many objects,
@@ -355,6 +359,34 @@ func testSequenceIndexNamesNoPosition(t *testing.T) {
 		{"()#(1)", ErrIndexOutOfRange},
 		{"xs#(1.5)", ErrTypeMismatch},
 		{"xs#(ys)", ErrTypeMismatch},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testNumericLibraryCallThatHasNoValue: a vector, Complex or sequence library
+// declaration that cannot answer reports itself — a malformed argument by kind or
+// dimension, an undefined result, or a declaration this runtime has no
+// representation for the values of — rather than computing something else.
+func testNumericLibraryCallThatHasNoValue(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{"VectorFunctions::cartesianInner(xs, ys)", ErrTypeMismatch},
+		{"VectorFunctions::'cartesian+'(xs, ys)", ErrTypeMismatch},
+		{"VectorFunctions::cartesianNorm(flags)", ErrTypeMismatch},
+		{"VectorFunctions::cartesianAngle(xs, (0.0, 0.0, 0.0))", semantics.ErrArithmeticDomain},
+		{"VectorFunctions::vectorScalarDiv(xs, 0)", ErrDivisionByZero},
+		{"VectorFunctions::cartesianInner(xs)", ErrCalcArity},
+		{"VectorFunctions::sum(xs)", ErrUnevaluableLibraryFunction},
+		{"ComplexFunctions::'/'(ys, (0.0, 0.0))", ErrDivisionByZero},
+		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
+		{"ComplexFunctions::ToString(ys)", ErrUnevaluableLibraryFunction},
+		{"SequenceFunctions::includingAt(xs, 9, 2)", ErrUnevaluableLibraryFunction},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
@@ -1090,8 +1122,8 @@ func testHistoryWithoutRecordOrDefault(t *testing.T) {
 }
 
 // testSendViaUnconnectedPort: a port with no connection reaches no one, so the
-// accept waiting on the message suspends forever — which must be reported as a
-// deadlock rather than hanging or binding nothing.
+// send itself is undeliverable — which must be reported where it was written
+// rather than left for the accept waiting on it to time out as a deadlock.
 func testSendViaUnconnectedPort(t *testing.T) {
 	_, err := executeActionSource(t, "pipeline", `package P {
 		action pipeline {
@@ -1109,8 +1141,8 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error: nothing connects outPort to inPort")
 	}
-	if !errors.Is(err, ErrAcceptDeadlock) {
-		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("expected ErrUnroutableSend, got: %v", err)
 	}
 }
 
@@ -2368,6 +2400,30 @@ func testAcceptPayloadWithoutAValue(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Ping") {
 		t.Errorf("error does not name the accepted signal: %v", err)
+	}
+}
+
+// testAcceptPayloadReadBeforeItIsBound: the payload is a declaration of the body
+// wherever the body resolves, so a node running before the accept binds it
+// resolves the name and finds no value — reported, not read as an empty value.
+func testAcceptPayloadReadBeforeItIsBound(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			attribute seen : Integer = 0;
+			first start;
+			action reader { assign seen := msg; }
+			action waiter accept msg : Integer;
+			done end;
+			then start reader;
+			then reader waiter;
+			then waiter end;
+		}
+	}`)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("err = %v; want ErrUnresolvedReference", err)
+	}
+	if !strings.Contains(err.Error(), "msg") {
+		t.Errorf("error does not name the payload: %v", err)
 	}
 }
 
@@ -4111,5 +4167,43 @@ func testUsageReadThroughAPartWithoutAnOutput(t *testing.T) {
 	}
 	if err != nil && !strings.Contains(err.Error(), "a, b") {
 		t.Errorf("error should name the outputs to read, got: %v", err)
+	}
+}
+
+// testEnumerationNameThatIsNotALiteral: a name qualified by an enumeration
+// designates one of its literals, so one it does not declare is reported with
+// the literals it does, never answered as an empty value.
+func testEnumerationNameThatIsNotALiteral(t *testing.T) {
+	src := `
+	package test {
+		enum def Color { red; green; blue; }
+		part def Car { attribute c : Color = Color::purple; }
+	}`
+	got, err := variationSlotInSource(t, src, "test::Car", "c")
+	if !errors.Is(err, ErrNotALiteral) {
+		t.Fatalf("c = (%v, %v), want ErrNotALiteral", got, err)
+	}
+	for _, name := range []string{"purple", "red", "green", "blue"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("error %q does not name %s", err, name)
+		}
+	}
+}
+
+// testChainThroughALiteralWithoutThatAttribute: a literal carries only the
+// features it declares, so reading another one off it is reported rather than
+// materializing an empty slot.
+func testChainThroughALiteralWithoutThatAttribute(t *testing.T) {
+	src := `
+	package test {
+		enum def Level { low { attribute n = 1; } high { attribute n = 9; } }
+		part def Sensor { attribute missing = Level::low.label; }
+	}`
+	got, err := variationSlotInSource(t, src, "test::Sensor", "missing")
+	if err == nil {
+		t.Fatalf("missing = %v, want an error naming the unknown member", got)
+	}
+	if !strings.Contains(err.Error(), "label") {
+		t.Errorf("error %q does not name the unknown member", err)
 	}
 }

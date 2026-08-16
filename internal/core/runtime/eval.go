@@ -293,6 +293,10 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 				if ec.ctx.model.VariationPointOwning(sym) != nil {
 					return variantReference(sym), nil
 				}
+				// A literal of an enumeration is a value of that enumeration.
+				if semantics.EnumerationOwning(sym) != nil {
+					return ec.enumLiteralValue(sym)
+				}
 				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
 					if ec.resolving == nil {
 						ec.resolving = map[string]bool{}
@@ -361,6 +365,13 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 					ErrNotAVariant, memberName, currentSym.Name,
 					ec.ctx.variantSummary(currentSym))
 			}
+			// A name qualified by an enumeration designates one of its literals,
+			// so one that is no literal is reported as such.
+			if currentSym.Kind == symbols.SymbolEnumerationDef {
+				return Value{}, fmt.Errorf("%w: %s is not a literal of %s (%s)",
+					ErrNotALiteral, memberName, currentSym.Name,
+					ec.ctx.enumerationSummary(currentSym))
+			}
 			return Value{}, fmt.Errorf("member %s not found in %s", memberName, currentSym.Name)
 		}
 		currentSym = nextSym
@@ -373,6 +384,11 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 		// equal to the variation that selected it.
 		if ec.ctx.model.VariationPointOwning(currentSym) != nil {
 			return variantReference(currentSym), nil
+		}
+		// A literal of an enumeration is a value of that enumeration, whether or
+		// not it declares one of its own.
+		if semantics.EnumerationOwning(currentSym) != nil {
+			return ec.enumLiteralValue(currentSym)
 		}
 		if decl.Value != nil {
 			val, err := ec.Eval(decl.Value)
@@ -490,6 +506,14 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 		return ec.chainOverElements(value, parts, from)
 	case ValInstance, ValVariant:
 		// handled below
+	case ValEnumLiteral:
+		// A literal is an occurrence of its enumeration, so its own features are
+		// read from the object that literal stands for.
+		inst, err := ec.ctx.enumLiteralObject(value.Literal)
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.chainMemberValue(Value{Kind: ValInstance, Instance: inst.ID}, parts, from)
 	default:
 		return Value{}, fmt.Errorf("cannot chain through non-instance member %s (%v)", from, value.Kind)
 	}
@@ -555,6 +579,58 @@ func (ec *EvalContext) chainOverElements(value Value, parts []ast.NameSegment, f
 		collected = append(collected, contributed...)
 	}
 	return sequenceOf(collected), nil
+}
+
+// enumLiteralValue is the value a literal declares — a scalar-specializing
+// enumeration's literal *is* its value — else the identity of the literal.
+func (ec *EvalContext) enumLiteralValue(sym *symbols.Symbol) (Value, error) {
+	value := semantics.LiteralValue(sym)
+	if value == nil {
+		return enumLiteral(sym), nil
+	}
+	val, err := ec.evalIn(declScope(sym)).Eval(value)
+	if err != nil {
+		return Value{}, fmt.Errorf("enumeration literal %s: %w", sym.Name, err)
+	}
+	return val, nil
+}
+
+// EnumerationLiteralValue is the value sym has when it is an enumeration
+// literal, reported as such so a caller holding only a symbol — an `%eval` of a
+// literal — answers with the value rather than "no value".
+func (ctx *Context) EnumerationLiteralValue(sym *symbols.Symbol) (Value, bool, error) {
+	if semantics.EnumerationOwning(sym) == nil {
+		return Value{}, false, nil
+	}
+	val, err := NewEvalContext(ctx, declScope(sym)).enumLiteralValue(sym)
+	return val, true, err
+}
+
+// enumLiteralObject returns the object a literal stands for, materialized once
+// so the features it carries read the same object every time.
+func (ctx *Context) enumLiteralObject(literal *symbols.Symbol) (*Instance, error) {
+	if literal == nil {
+		return nil, fmt.Errorf("%w: the literal was never resolved", ErrNotALiteral)
+	}
+	inst, err := ctx.occurrenceOf(literal)
+	if err != nil {
+		return nil, fmt.Errorf("enumeration literal %s: %w", literal.Name, err)
+	}
+	return inst, nil
+}
+
+// enumerationSummary names the literals an enumeration declares, for a report
+// about a qualified name that is none of them.
+func (ctx *Context) enumerationSummary(enum *symbols.Symbol) string {
+	literals := ctx.model.LiteralsOf(enum)
+	if len(literals) == 0 {
+		return "it declares no literals"
+	}
+	names := make([]string, 0, len(literals))
+	for _, lit := range literals {
+		names = append(names, lit.Name)
+	}
+	return "literals: " + strings.Join(names, ", ")
 }
 
 // unimplementedOperators names the operators the runtime does not evaluate and
@@ -1183,6 +1259,10 @@ func valueEqual(a, b Value) bool {
 	case ValVariant:
 		// A variation compares equal to the variant it selected.
 		return a.Variant == b.Variant
+	case ValEnumLiteral:
+		// A literal is its own identity: two literals are equal exactly when they
+		// are the same declaration, across enumerations included.
+		return a.Literal == b.Literal
 	case ValQuantity:
 		// Incommensurable units are not equal here: an equality that has to hold
 		// or fail (a set member, a sequence element) has no error to report.

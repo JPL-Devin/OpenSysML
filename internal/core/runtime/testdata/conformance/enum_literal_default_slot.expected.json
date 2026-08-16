@@ -1,0 +1,12 @@
+{
+  "type": "instance",
+  "instantiate": "test::Car",
+  "slots": {
+    "c": {"type": "EnumLiteral", "value": "Color::red"},
+    "isRed": {"type": "Boolean", "value": true},
+    "isGreen": {"type": "Boolean", "value": false},
+    "notGreen": {"type": "Boolean", "value": true},
+    "sameAsOtherEnum": {"type": "Boolean", "value": false},
+    "sameLiteralTwice": {"type": "Boolean", "value": true}
+  }
+}

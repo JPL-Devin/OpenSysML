@@ -382,6 +382,16 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 				}, nil
 			}
 		}
+		// An enumeration literal is a value even though it declares none.
+		if val, isLiteral, err := ctx.EnumerationLiteralValue(sym); isLiteral {
+			if err != nil {
+				return nil, fmt.Errorf("evaluation failed: %w", err)
+			}
+			return []string{
+				fmt.Sprintf("✓ %s", expr),
+				fmt.Sprintf("  = %s", formatValue(val)),
+			}, nil
+		}
 		usage, ok := sym.Decl.(*ast.Usage)
 		if !ok || usage.Value == nil {
 			return nil, fmt.Errorf("%q has no value to evaluate", expr)
@@ -952,6 +962,9 @@ func formatValue(val runtime.Value) string {
 			return fmt.Sprintf("%s (Instance ID: %d)", val.Variant.Name, val.Instance)
 		}
 		return val.Variant.Name
+	case runtime.ValEnumLiteral:
+		// A literal shows the enumeration it belongs to, as it is written.
+		return val.LiteralText()
 	case runtime.ValQuantity:
 		// A magnitude is a number like any other in a result table, so it is
 		// rendered as a bare one; the value itself keeps its full precision.

@@ -557,7 +557,9 @@ func TestRoutingHonorsTheSelectedVariantConnection(t *testing.T) {
 		if tt.selected != "" {
 			ctx.selectedVariants[variantSelection{variation: "link"}] = tt.selected
 		}
-		ctx.postVia(conns, Message{SignalType: "Ping"}, "outPort", nil)
+		if err := ctx.postVia(conns, Message{SignalType: "Ping"}, lower.Send{Target: "outPort", IsVia: true}, nil); err != nil {
+			t.Fatalf("selection %q: %v", tt.selected, err)
+		}
 		var got []string
 		for _, msg := range ctx.PendingMessages() {
 			got = append(got, msg.Port)
@@ -598,7 +600,9 @@ func TestRoutingIsPerOwnerVariantSelection(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", usage, err)
 		}
-		ctx.postVia(nil, Message{SignalType: "Ping"}, "outPort", self)
+		if err := ctx.postVia(nil, Message{SignalType: "Ping"}, lower.Send{Target: "outPort", IsVia: true}, self); err != nil {
+			t.Fatalf("%s: %v", usage, err)
+		}
 		var got []string
 		for _, msg := range ctx.PendingMessages() {
 			if msg.Object != self.ID {
