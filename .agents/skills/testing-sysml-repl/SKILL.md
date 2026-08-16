@@ -572,7 +572,57 @@ several steps, so a runaway loop (or an empty loop body, whose condition can nev
 in under a second (0.7 s measured). Always follow the failure with another meta-command (`%tokens`, `%instances`)
 to prove the session survived — `%tokens` still shows the token parked at the node with its partial value. A
 `for` over a non-collection gives
-`action node <n>: 'for' collection must be a sequence or a set, got constant`.
+`action node <n>: 'for' collection must be a sequence or a set, got constant` before PR #202, and
+`action node <n>: type mismatch: 'for' iterates a collection, and expression is not one` after it —
+and only for a value that states a *computation* (a body expression). See the next section.
+
+### Block token flows: nested actions and `perform` in a loop body / `if` branch (PR #202)
+
+Before PR #202 a loop body or `if` branch containing an **action node** (a nested `action`
+declaration, or a `perform`) aborted the run at lowering:
+`action node iterate: action usage "scale" in a body is not executable` /
+`'perform' in a body is not executable`. After it, the block becomes a token flow of its own
+(`internal/core/lower/block_graph.go`) and runs. That old message is the **ideal A/B contrast** —
+build the parent commit into `/tmp/old-sysml` (recipe above) and run the same model through both;
+the old binary aborting while the new one prints numbers is far stronger than a screenshot of the
+new numbers alone.
+
+Things that cost time when writing models for this area:
+
+- **A `perform Foo;` binds `Foo`'s `in` parameters by NAME from the enclosing scope**, and merges
+  its `out` values back under their own names. So `action def Bump { in i; out doubled; }` performed
+  inside `for i in 1..3` works because the loop variable is *also* called `i`; rename either side and
+  the run dies with `invoke action Bump: … unresolved reference: i` — which reads like a feature bug
+  but is just a name mismatch in the fixture. Always name the performed action's inputs after the
+  values that exist where it is performed.
+- **`perform <an action def>` also emits a pre-existing static diagnostic**
+  `error: references target must be a usage, found actionDef` on *every* revision (the shipped
+  conformance fixtures do it too) while still executing correctly. Do not report it as a regression;
+  check it against the contrast binary first.
+- **A nested action's own declarations do not leak outward.** Reading one after the node
+  (`assign x := local;`) fails at *name resolution* time, i.e. already at `%load`, with
+  `unresolved reference: local` — a cheaper and stronger no-leak assertion than inspecting Results.
+  Conversely a value declared *before* the nested action IS readable after it (one block scope), so
+  assert both directions.
+- **`%trace on` is the best evidence here**: it labels each block-flow node
+  (`stmt node scale`, `stmt node deeper`, `stmt node Bump` / `stmt perform`) under
+  `iteration N`, so "the perform ran once per iteration" and "the untaken branch ran nothing"
+  are directly visible (no `stmt node <else-branch-action>` line at all). Assert zero `ast.`
+  substrings in the trace — a Go type name there means a node kind is missing from the label switch.
+- The whole block flow still runs inside **one** token step, so `%step` jumps
+  `Token 1 @ start` → `@ iterate` (values still at their initial values) → `@ end` (final values).
+- A non-terminating `while` that performs an action fails with the **evaluation** step limit
+  (`eval assignment RHS: evaluation step limit exceeded (10000000 steps; …)`) in ~4 s, not the
+  action step limit — budget ~10 s, and don't assert on which of the five budgets trips.
+- To reach the `for`-over-a-non-collection error you need a **body expression**, e.g.
+  `attribute notACollection = { in j; j > 1 };` then `for i in notACollection`. Naming a `calc def`
+  (`for i in Mk`) gives `unresolved reference: Mk` instead and does not exercise the path.
+- **The shipped `*_block_flow_*` / `action_for_over_produced_collections` fixtures emit static
+  `unresolved reference` errors when loaded in the REPL** (`select` → "did you mean
+  `ControlFunctions::select`?", `Integer` → "did you mean `ScalarValues::Integer`?") because they
+  import only what the conformance harness needs. Execution still yields the right values, so this
+  is a fixture wart, not a runtime defect — but add the missing imports to your *own* models so the
+  recording is clean.
 
 ### Raising the budgets (PRs #83, #87)
 
@@ -1600,6 +1650,11 @@ venv off the system interpreter:
 revision. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
 over a pipe is not visible in the video and should be reported as weaker evidence.
+
+**`%stop` ends a debugging session but does NOT exit the REPL.** After `%stop` you are still at
+`sysml>`, so a shell command typed next (`clear; ./bin/sysml`) is submitted as SysML and leaves an
+unresolved session error that taints later submissions with
+`note: deeper checks may not have run here…`. Use `%quit` when you mean to get back to the shell.
 
 **Never type `clear` at the `sysml>` prompt while recording.** It is submitted as SysML, not run by
 the shell, so it leaves an unresolved session error and the next submission gains a
