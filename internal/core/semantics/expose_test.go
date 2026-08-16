@@ -159,3 +159,15 @@ func TestExposedElementsOfANonView(t *testing.T) {
 		t.Errorf("NestedViews(nil) error = %v, want ErrNotAView", err)
 	}
 }
+
+// A filtered recursive expose exposes an annotated element wherever it sits: the
+// walk reaches it through namespaces the filter itself rejects, which is what a
+// lookup through the same expose does.
+func TestExposedElementsRecursiveExposeWithAFilterReachesNestedElements(t *testing.T) {
+	m, root := buildModel(t, `
+		metadata def Safety;
+		package Lib { package Inner { #Safety part def A; part def B; } }
+		view v { expose Lib::**[@Safety]; }
+	`)
+	wantNames(t, "exposed set of v", exposedNames(t, m, sym(t, root, "v")), []string{"A"})
+}

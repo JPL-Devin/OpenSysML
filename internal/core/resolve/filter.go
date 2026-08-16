@@ -189,50 +189,59 @@ func (r *Resolver) ImportedElements(scope *symbols.Scope, imp *ast.Import) []*sy
 	return out.elems
 }
 
-// appendNamespaceMembers adds the members of target a namespace import surfaces,
-// declared ones first and then the ones only the index holds.
+// appendNamespaceMembers adds the members of target a namespace import surfaces.
 func (r *Resolver) appendNamespaceMembers(out *elementList, scope *symbols.Scope, target *symbols.Symbol, imp *ast.Import, admit func(*symbols.Symbol) bool) {
-	if target.Scope != nil {
-		for _, sym := range target.Scope.Members() {
-			if visibleThroughImport(imp, sym) && admit(sym) {
-				out.add(sym)
-			}
-		}
-	}
-	if r.idx == nil {
-		return
-	}
-	// Wildcard imports and restored libraries populate the index rather than a
-	// scope, and what target re-exports onward is what its own filters select.
-	var children []*symbols.Symbol
-	if importAllowsPrivate(imp) {
-		children = r.idx.LookupDirectChildren(target.Name)
-	} else {
-		children = r.idx.LookupDirectChildrenFrom(target.Name, r.ReferringNamespaceFQN(scope))
-	}
-	for _, sym := range children {
-		if !r.admitsUnderName("", r.ReferringNamespaceFQN(scope), target.Name+"::"+localNameOf(sym), sym) {
-			continue
-		}
+	for _, sym := range r.namespaceChildren(scope, target, imp) {
 		if visibleThroughImport(imp, sym) && admit(sym) {
 			out.add(sym)
 		}
 	}
 }
 
-// appendSubtree adds the descendants of target a recursive import surfaces,
-// walking the members it already admitted level by level.
+// namespaceChildren lists the members of target an import reaches, the declared
+// ones first and then the ones only the index holds — wildcard imports and
+// restored libraries populate the index rather than a scope. Reachability under
+// the name is decided here; visibility and element filters are not.
+func (r *Resolver) namespaceChildren(scope *symbols.Scope, target *symbols.Symbol, imp *ast.Import) []*symbols.Symbol {
+	children := &elementList{seen: map[*symbols.Symbol]bool{}}
+	if target.Scope != nil {
+		for _, sym := range target.Scope.Members() {
+			children.add(sym)
+		}
+	}
+	if r.idx == nil {
+		return children.elems
+	}
+	var indexed []*symbols.Symbol
+	if importAllowsPrivate(imp) {
+		indexed = r.idx.LookupDirectChildren(target.Name)
+	} else {
+		indexed = r.idx.LookupDirectChildrenFrom(target.Name, r.ReferringNamespaceFQN(scope))
+	}
+	for _, sym := range indexed {
+		if r.admitsUnderName("", r.ReferringNamespaceFQN(scope), target.Name+"::"+localNameOf(sym), sym) {
+			children.add(sym)
+		}
+	}
+	return children.elems
+}
+
+// appendSubtree adds the descendants of target a recursive import surfaces. The
+// walk descends into every member, admitted or not: a lookup through the import
+// reaches a nested element whatever its namespace was judged to be, so filtering
+// the descent would hide elements the import surfaces (see lookupInSubtree).
 func (r *Resolver) appendSubtree(out *elementList, scope *symbols.Scope, target *symbols.Symbol, imp *ast.Import, admit func(*symbols.Symbol) bool, seen map[*symbols.Symbol]bool) {
 	if target == nil || seen[target] || (target.Scope != nil && target.Scope.BodyLocal()) {
 		return
 	}
 	seen[target] = true
-	level := &elementList{seen: map[*symbols.Symbol]bool{}}
-	r.appendNamespaceMembers(level, scope, target, imp, admit)
-	for _, sym := range level.elems {
-		out.add(sym)
+	children := r.namespaceChildren(scope, target, imp)
+	for _, sym := range children {
+		if visibleThroughImport(imp, sym) && admit(sym) {
+			out.add(sym)
+		}
 	}
-	for _, sym := range level.elems {
+	for _, sym := range children {
 		r.appendSubtree(out, scope, sym, imp, admit, seen)
 	}
 }
