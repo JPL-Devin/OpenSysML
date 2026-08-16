@@ -2,7 +2,7 @@
 
 Notable changes per release. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
-is described in [docs/RELEASING.md](docs/RELEASING.md).
+is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
@@ -159,7 +159,7 @@ are listed here rather than under a heading of their own.
   fork duplicates control and not values: concurrent branches are steps of the
   one performance, so both branches' assignments survive where the last token to
   retire used to overwrite the others. Which write decides a feature two branches
-  both assign is step order, stated in `docs/SPEC_COMPLIANCE.md`.
+  both assign is step order, stated in `docs/project/spec-compliance.md`.
 - A runtime failure names SysML kinds and operands rather than Go types, a
   recursion reports a frame count and names the calc it collapsed, and a division
   by zero is reported as one.
@@ -351,7 +351,7 @@ are listed here rather than under a heading of their own.
   semantic model, with `model.query()` accepting the standard's JSON payloads
   verbatim. The standard's model has no traversal or transitive closure, so this
   is an interop surface for its clients rather than a query language;
-  `docs/API.md` and `docs/SPEC_COMPLIANCE.md` state what is supported. An
+  `docs/reference/api.md` and `docs/project/spec-compliance.md` state what is supported. An
   element with no qualified identity — a doc note, an anonymous usage, a
   `connect` — is omitted rather than answered under a non-unique `@id`.
 
@@ -361,7 +361,7 @@ are listed here rather than under a heading of their own.
   namespace's members or child scopes once per member. Child scopes are indexed
   by the declaration owning them, a namespace's imports are memoized, and a
   member's owner is found through the scope's owner link.
-  `docs/PERFORMANCE.md` records the measurements.
+  `docs/internals/performance.md` records the measurements.
 - `ParseFile` hits its cache on the source it read, so re-loading unchanged
   content costs ~0.5 ms instead of re-parsing and reloading the standard library
   (~35 ms).
@@ -375,7 +375,7 @@ are listed here rather than under a heading of their own.
 
 ### Documentation
 
-- `README.md`, `docs/QUICKSTART.md` and `examples/CLI_USAGE.md` describe the
+- `README.md`, `docs/guide/` and `docs/reference/cli.md` describe the
   shipped command line, editor and RDF surfaces, including the exit-status
   contract and the streams each finding is written to. The claims that overstated
   what ships — dependency management, and the IDE and Python verification
@@ -545,7 +545,7 @@ are listed here rather than under a heading of their own.
   directions, round-tripping packages, definitions, usages, features, imports,
   connectors, successions (including a `then` written as a body member) and
   satisfy assertions. What the mapping normalizes and what it refuses is
-  documented in [docs/RDF_INTEROP.md](docs/RDF_INTEROP.md); a refused construct
+  documented in [docs/reference/rdf-mapping.md](docs/reference/rdf-mapping.md); a refused construct
   is reported with its node and position rather than dropped.
 - Removing a document unwinds what its wildcard re-exports contributed, so a
   name a removed file re-exported no longer resolves, and the workspace reuses
@@ -568,7 +568,7 @@ are listed here rather than under a heading of their own.
   metadata and `pysysml.__version__` both read — a tag that disagrees with it
   fails the job before anything is uploaded. `python/setup.py` is gone;
   `pyproject.toml` declares the build. See
-  [docs/RELEASING.md](docs/RELEASING.md#releasing-pysysml-to-pypi).
+  [docs/project/releasing.md](docs/project/releasing.md#releasing-pysysml-to-pypi).
 
 ### Known limitations
 
@@ -579,7 +579,7 @@ are listed here rather than under a heading of their own.
   `entry`/`do`/`exit` (`cannot convert the *ast.RequireMember at <file>:<line>`).
   A requirement stating a condition, and any state machine or action body with
   statements, must be saved as `.sysml`. The full list is in
-  [docs/RDF_INTEROP.md](docs/RDF_INTEROP.md).
+  [docs/reference/rdf-mapping.md](docs/reference/rdf-mapping.md).
 - The REPL's prompt evaluates in the *last* namespace the session declared. After
   typing a second package, the first package's members and the units its imports
   brought in are reached by qualified name only (`1.0 [SI::m]`, not `1.0 [m]`).
@@ -593,7 +593,7 @@ are listed here rather than under a heading of their own.
   shows `diameter = Instance(ID: n)` with `(no features)` under it.
 - The macOS and Windows binaries are unsigned, so a browser download is
   quarantined by Gatekeeper or flagged by SmartScreen. Install with Homebrew or
-  `curl`; see [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
+  `curl`; see [docs/project/macos-distribution.md](docs/project/macos-distribution.md).
 
 ## 0.0.4 — 2026-08-10
 
@@ -612,7 +612,7 @@ The first tagged release.
 - Tiered validation (syntax → name resolution → typing → constraints), where a
   failing tier suppresses the ones above it rather than reporting noise.
 - Measured spec compliance, rule by rule, in
-  [docs/SPEC_COMPLIANCE.md](docs/SPEC_COMPLIANCE.md); 98/100 of the OMG
+  [docs/project/spec-compliance.md](docs/project/spec-compliance.md); 98/100 of the OMG
   training corpus parses and analyzes clean, with the two remaining files
   pinned as upstream source bugs.
 
@@ -667,7 +667,7 @@ The first tagged release.
   `sysml-grpc-<os>-<arch>` binaries with `.sha256` sidecars, for linux/amd64,
   linux/arm64, darwin/amd64, darwin/arm64 and windows/amd64, with
   `SHA256SUMS.txt` over all of them. macOS and Windows binaries are unsigned —
-  see [docs/MACOS_DISTRIBUTION.md](docs/MACOS_DISTRIBUTION.md).
+  see [docs/project/macos-distribution.md](docs/project/macos-distribution.md).
 
 ### Known limitations
 

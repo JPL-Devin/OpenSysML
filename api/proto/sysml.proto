@@ -500,7 +500,7 @@ message Constraint {
 message PrimitiveConstraint {
   // Negates the comparison's verdict.
   bool inverse = 1;
-  // Property to compare, as named in docs/API.md's query property table
+  // Property to compare, as named in docs/reference/api.md's query property table
   // ("@type", "name", "qualifiedName", ...). An unknown one fails the call.
   string property = 2;
   PrimitiveOperator operator = 3;

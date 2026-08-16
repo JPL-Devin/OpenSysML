@@ -13,7 +13,7 @@ import (
 const examplesDir = "../../../examples"
 
 // examplesKnownFailures records the shipped examples that are expected to
-// report errors, keyed by path with the reason. README and QUICKSTART point new
+// report errors, keyed by path with the reason. README and the guide point new
 // users at examples/, so an example that does not analyse cleanly is a bug
 // unless it is listed here on purpose.
 var examplesKnownFailures = map[string]string{}

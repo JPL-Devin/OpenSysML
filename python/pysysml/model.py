@@ -117,7 +117,7 @@ class Model:
         Converts the source this model was parsed from, not the file as it
         stands now, so what is written is the model that was inspected: notation
         keeps its comments and lexemes, re-indented, while Turtle carries what
-        the model declares. See ``docs/RDF_INTEROP.md``.
+        the model declares. See ``docs/reference/rdf-mapping.md``.
 
         The service holds that source in its model cache, which is bounded, so a
         model loaded long ago and many models back may have been evicted; load it
@@ -189,7 +189,7 @@ class Model:
         Takes the standard's ``Query`` JSON, so a payload written for the
         standard's API works verbatim, or the same thing as keywords. The query
         model has no graph traversal: "everything under this element" is a
-        ``scope``, not a constraint. See ``docs/API.md``.
+        ``scope``, not a constraint. See ``docs/reference/api.md``.
 
         Args:
             payload (dict, optional): The standard's ``Query`` object

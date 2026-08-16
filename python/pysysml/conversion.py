@@ -6,7 +6,7 @@ name them, so a script and a command line agree.
 
 A round trip is defined on the model, not on the bytes: notation written back
 out is re-indented from the original source, and a trip through Turtle returns
-an equivalent model rather than identical text. ``docs/RDF_INTEROP.md`` states
+an equivalent model rather than identical text. ``docs/reference/rdf-mapping.md`` states
 what survives.
 """
 

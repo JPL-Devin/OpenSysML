@@ -621,9 +621,9 @@ func (e *encoder) text(node ast.Node) string {
 }
 
 // rdfLimitationsNote is the remedy for a construct the RDF mapping does not
-// represent, as docs/RDF_INTEROP.md § Limitations states it.
+// represent, as docs/reference/rdf-mapping.md states it.
 const rdfLimitationsNote = "save to .sysml or .kerml instead, which writes the source exactly; " +
-	"see docs/RDF_INTEROP.md § Limitations"
+	"see docs/reference/rdf-mapping.md § Limitations"
 
 // nodeDescription names a construct the way the notation does — "part def",
 // "substate member" — so an error about one prints no Go type name.

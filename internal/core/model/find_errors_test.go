@@ -69,7 +69,7 @@ func TestFindDoneStartErrors(t *testing.T) {
 	}
 
 	if len(doneErrors) > 0 || len(startErrors) > 0 {
-		// Known OMG training bugs (documented in docs/TRAINING_EXAMPLES.md)
+		// Known OMG training bugs (documented in docs/project/training-examples.md)
 		knownBugs := map[string]bool{
 			"27. Occurrences/Time Slice and Snapshot Example.sysml": true,
 			"28. Individuals/Individuals and Time Slices.sysml":     true,

@@ -42,7 +42,7 @@ Statement coverage, measured today with `go test -cover ./...`:
 
 The corpus gate needs the corpus (`./scripts/download-training-examples.sh`) and never
 re-baseline `internal/core/model/testdata/training_examples_expected.txt`: adjudicate each
-drifted file and record the verdict in `docs/TRAINING_EXAMPLES.md`.
+drifted file and record the verdict in `docs/project/training-examples.md`.
 
 ---
 
@@ -63,7 +63,7 @@ git push origin v0.0.8
 The publish job needs `GITHUB_TOKEN`, `GH_TOKEN` or `CIRCLE_TOKEN` in the CircleCI project.
 Without one the tag builds artifacts and then fails at publish, having created no release.
 Nobody has verified which is set. Full procedure and post-tag verification:
-`docs/RELEASING.md`.
+`docs/project/releasing.md`.
 
 ## R2 — publish `pysysml` to PyPI (account-gated remainder)
 
@@ -73,7 +73,7 @@ into a clean virtualenv and only then uploading. The version is declared once, i
 `python/pysysml/_version.py`, and a tag that disagrees with it fails before upload. The
 package keeps its own version line on purpose: it resolves a `sysml-grpc` binary at runtime
 from whichever release the caller names, so its version and the core's are not lockstep.
-See `docs/RELEASING.md`.
+See `docs/project/releasing.md`.
 
 What remains is account-gated and cannot be done from a session: create the PyPI project's
 first release with an account-scoped token, then replace it with a project-scoped one; create
@@ -108,7 +108,7 @@ Open-MBEE/tap/systemica` has been verified end to end on Linux (install, `brew t
 
 macOS binaries are not Developer ID signed or notarized and Windows binaries are not
 Authenticode signed, so a browser download trips Gatekeeper or SmartScreen. Root-caused in
-`docs/MACOS_DISTRIBUTION.md`: it is `com.apple.quarantine`, not a missing signature — Go's
+`docs/project/macos-distribution.md`: it is `com.apple.quarantine`, not a missing signature — Go's
 linker already ad-hoc signs darwin/arm64 — so ad-hoc `codesign` in CI would change nothing.
 Notarization needs an Apple Developer account, a Developer ID certificate, an App Store Connect
 API key in CI and a macOS runner. Windows needs an OV/EV certificate. Both are purchases, not
@@ -152,7 +152,7 @@ composite slot materializes the object it holds and a self-referential part woul
 instantiate forever; an unexpanded child stays a bare id. A `GetInstance` RPC was
 rejected: runtime instances live in the request's `runtime.Context` and do not survive the
 call, so an id is only meaningful against the response that carried it — noted as a limitation
-in `docs/SPEC_COMPLIANCE.md`.
+in `docs/project/spec-compliance.md`.
 
 ## P3 — generated typed classes for a parsed model — done
 
@@ -169,7 +169,7 @@ magnitude-and-unit form (the same reason `ValueToProto` reports one as unsupport
 structural usages become properties, and that `subsets`/`redefines` are reported but do not
 become base classes.
 
-## P4 — smaller Python-side items, all recorded in `docs/SPEC_COMPLIANCE.md`
+## P4 — smaller Python-side items, all recorded in `docs/project/spec-compliance.md`
 
 - `connection.py` verifies a pid is the service by substring-matching its cmdline — spoofable.
 - `pysysml.eval` and `pysysml.RuntimeError` shadow builtins.
@@ -186,7 +186,7 @@ become base classes.
 
 # Track A — runtime and semantic gaps
 
-These are the ⚠️/❌ rows in `docs/SPEC_COMPLIANCE.md`, in descending order of value. Each is
+These are the ⚠️/❌ rows in `docs/project/spec-compliance.md`, in descending order of value. Each is
 one session under the §5.2 four-layer contract.
 
 ## A1 — a usage's bound parameter is not passed to inherited conditions — done
@@ -199,7 +199,7 @@ anonymous nested constraint (`require constraint { <expr> }`) are evaluated. `ru
 conformance cases `requirement_own_attribute`, `requirement_def_body_require`,
 `requirement_nested_constraint`, `requirement_violated`, `instance_constraint_bound_parameter`.
 
-What came out of it, recorded under Requirement in `docs/SPEC_COMPLIANCE.md`:
+What came out of it, recorded under Requirement in `docs/project/spec-compliance.md`:
 
 - **A1a — a quantity expression is not evaluated — done.** A quantity evaluates to a magnitude
   **and** the measurement reference it is written in (`Quantities::ScalarQuantityValue` is `num` +
@@ -219,7 +219,7 @@ What came out of it, recorded under Requirement in `docs/SPEC_COMPLIANCE.md`:
   `satisfy_subject_features`, `satisfy_inherited_conditions`, `satisfy_negated`,
   `satisfy_without_conditions`.
 
-  What is left, recorded as ⚠️ in `docs/SPEC_COMPLIANCE.md` under Requirement: a requirement
+  What is left, recorded as ⚠️ in `docs/project/spec-compliance.md` under Requirement: a requirement
   feature carrying no value of its own is read from the satisfying object's feature of that name,
   which the spec does not state — it supplies a subject's values through the subject parameter or
   an explicit binding. The fallback is the one `%requirement` already applies on an instance, and
@@ -261,9 +261,9 @@ Closed by the body-scope work. What the entry blamed was wrong on both counts, c
 The entry's model now passes in the REPL, pinned by
 `TestConstraintResolvesUnitsOfItsOwnPackage` (`internal/repl/runtime_commands_test.go`). The same
 defect in the action and state executors — where every evaluation used a nil scope — is fixed in
-the same change; see `docs/SPEC_COMPLIANCE.md` under "Scope of an expression in a behavior body".
+the same change; see `docs/project/spec-compliance.md` under "Scope of an expression in a behavior body".
 
-Both residual items are closed by the unit-resolution work; see `docs/SPEC_COMPLIANCE.md` under
+Both residual items are closed by the unit-resolution work; see `docs/project/spec-compliance.md` under
 "Name in the unit position of a quantity expression" and "Arguments of a `%calc` command".
 
 - A member whose name is a unit's shadows that unit — as ordinary name resolution prescribes
@@ -396,18 +396,15 @@ pass's reach, not in the dimension inference.
 None of these are capability gaps; the REPL executes models. They are the rough edges a new
 user meets.
 
-## B1 — a declaration ends an in-progress debugger session
+## B1 — a declaration ends an in-progress debugger session — done
 
-`Session.Submit` clears everything derived from the previous document, including `s.actionExec`
-and `s.stateExec`, so typing any declaration mid-session silently ends an `%action`/`%state`
-session and wipes instances. The maintainer accepted this as "fine for now" and asked for
-refinement: keep the session alive when the declarations it depends on are unchanged, or at
-minimum say the session was dropped instead of failing the next `%step`/`%advance` with "no
-active session".
-
-Related: `Session.accept` drops any earlier snippet whose declared names intersect the new one,
-so re-typing `package Demo { … }` to add a member replaces the whole package body rather than
-merging it.
+`Session.Submit` used to clear everything derived from the previous document, so any declaration
+typed mid-session silently ended an `%action`/`%state` session and wiped instances. It is now
+scoped to what the submission changed: `mergeSubmission` folds a re-typed namespace into the one
+already in the session instead of replacing its body, `carryOverObjects` carries instantiated
+objects whose declarations are untouched, and `dropStaleDebugSessions` ends only a session over a
+declaration the submission rewrote — reporting it as a `note:` rather than failing the next
+`%step` with "no active session". Documented in `docs/guide/04-repl.md`.
 
 ## B2 — `%eval` of a compound expression cannot reach a package member — done
 
@@ -440,7 +437,7 @@ Ordered by what a bug there would cost:
 
 Saving and SysML ↔ RDF Turtle conversion landed (`internal/core/rdf`,
 `internal/core/export`, `%save`, `sysml -convert`); see
-[`RDF_INTEROP.md`](RDF_INTEROP.md). What that work deliberately left open:
+[the RDF mapping](../reference/rdf-mapping.md). What that work deliberately left open:
 
 ## D1 — expressions are carried as source text, not as triples
 
@@ -491,7 +488,7 @@ filled it: SysML.xtext's `EmptySuccession` is `'then'` plus two empty ends and h
 `first <source> if <guard> then <target>` — so the field went without replacement, and
 `then part b if a;` is the syntax error it already was.
 
-What is left, recorded as ⚠️ in `docs/SPEC_COMPLIANCE.md`: a succession edge names its ends, so
+What is left, recorded as ⚠️ in `docs/project/spec-compliance.md`: a succession edge names its ends, so
 a `then` beside a member with no name — `then send Show(x) to screen;`, or a `then` after an
 anonymous member — declares an order this representation cannot carry. It warns
 (`unnamed-succession-end`) rather than silently dropping the keyword or failing a legal model.
@@ -504,7 +501,7 @@ change to the edge node, the lowering that resolves ends by name, and the RDF en
 own, and the prefix itself is recorded nowhere: both parse to the same node as the unprefixed
 form. A `notation → RDF → notation` round trip therefore returns `part a : A;` and a plain
 use-case reference, which is the one place the RDF mapping changes a model without reporting
-it (`docs/RDF_INTEROP.md`, *Limitations*).
+it (`docs/reference/rdf-mapping.md`, *Limitations*).
 
 The synonym keywords that *are* distinguishable — `datatype`, `feature`, `function`,
 `snapshot`, `timeslice`, `message`, `allocate` and the rest — are carried as
@@ -522,7 +519,7 @@ state body that carries nodes still reports the node and aborts: measured on the
 71 of the 120 models under `examples/` convert (8 of the 19 top-level models, 62 of the 100
 training copies, and the semantic-layer demo), and the 49 refusals are initial nodes, `perform`,
 `send`, `terminate`, loop nodes, state regions and substates, plus four duplicate declarations.
-`RDF_INTEROP.md` § Limitations lists the shapes. The fix is metaclasses for the behavioral
+`docs/reference/rdf-mapping.md` § Limitations lists the shapes. The fix is metaclasses for the behavioral
 nodes, not a wider fallback — a graph missing a model's steps would be worse than a refusal.
 
 ---
@@ -551,7 +548,7 @@ Lessons that survived the last two batches, unchanged because they keep applying
 2. **P1** and **P2** next: the release now ships the service binary, so the Python surface is
    the newest promise and the least CI-verified.
 3. **A2** — A1 is done end to end, so it is the limitation the changelog still admits to — then **A4**/**A5** in
-   parallel (they share only `docs/SPEC_COMPLIANCE.md`; the two `state_executor.go` items in A4
+   parallel (they share only `docs/project/spec-compliance.md`; the two `state_executor.go` items in A4
    must run one at a time).
 4. **A6** last, gated on a per-file corpus diff.
 5. **B1**, **B2** and **Track C** are good filler sessions: small, isolated, and each closes a

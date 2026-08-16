@@ -5,7 +5,7 @@ which does not set the `com.apple.quarantine` extended attribute, so a Homebrew-
 `sysml` never triggers the Gatekeeper "developer cannot be verified" prompt. (Homebrew
 applies quarantine only to *casks* — hence the cask-only `--no-quarantine` flag — not to
 formulae.) It is the accepted stopgap until the releases are Developer ID signed and
-notarized; see [docs/MACOS_DISTRIBUTION.md](../../docs/MACOS_DISTRIBUTION.md).
+notarized; see [docs/project/macos-distribution.md](../../docs/project/macos-distribution.md).
 
 `Formula/systemica.rb` here is the maintained source of the formula. It carries
 `__TAG__` / `__SHA256_*__` placeholders and is **not installable as-is**;
