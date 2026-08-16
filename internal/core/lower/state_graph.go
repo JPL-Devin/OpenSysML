@@ -522,19 +522,16 @@ func (g *StateGraph) addPseudostate(ps *ast.PseudostateNode) {
 }
 
 // vertex is the graph node a transition endpoint names: name resolution says
-// which declaration it reaches, and lowering collected a vertex from that. A nil
-// node with a nil error is an endpoint the name-resolution tier already reported;
-// every other failure is an error, since nothing else reports it.
+// which declaration it reaches, and lowering collected a vertex from that. An
+// endpoint naming no vertex yields a nil node and no error — the name-resolution
+// tier reports it, and how strictly the machine then runs is the runtime's call.
 func (g *StateGraph) vertex(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, error) {
 	if qn == nil {
 		return nil, fmt.Errorf("transition endpoint names nothing")
 	}
-	decl, ok, reported := g.endpoints.Endpoint(scope, qn)
+	decl, ok := g.endpoints.Endpoint(scope, qn)
 	if !ok {
-		if reported {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("transition endpoint %s names no state or pseudostate", endpointText(qn))
+		return nil, nil
 	}
 	node, ok := g.vertexOf[decl]
 	if !ok {

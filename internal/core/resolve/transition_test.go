@@ -218,21 +218,18 @@ func TestEndpointLookupForLoweringReportsNothing(t *testing.T) {
 		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
 	}
 	qn := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "nowhere"}}}
-	_, ok, reported := r.Endpoint(nil, qn)
+	_, ok := r.Endpoint(nil, qn)
 	if ok {
 		t.Error("an endpoint naming nothing resolved")
-	}
-	if reported {
-		t.Error("a failure nothing reported was called reported")
 	}
 	if len(r.Diagnostics) != 0 {
 		t.Errorf("a lookup made for lowering reported: %v", r.Diagnostics)
 	}
 }
 
-// An endpoint the document's own resolution reported is reported, so lowering
-// leaves the edge out rather than reporting it a second time.
-func TestEndpointLookupSaysWhatNameResolutionReported(t *testing.T) {
+// An endpoint the document's own resolution reported names no vertex for
+// lowering either, which leaves the edge out rather than reporting it again.
+func TestEndpointLookupForLoweringDoesNotReportTwice(t *testing.T) {
 	src := `
 		state def M {
 			entry; then idle;
@@ -250,12 +247,15 @@ func TestEndpointLookupSaysWhatNameResolutionReported(t *testing.T) {
 	r.ResolveDocument("d.sysml", root)
 
 	qn := transitionTargetIn(t, root)
-	_, ok, reported := r.Endpoint(nil, qn)
-	if ok {
+	if _, ok := r.Endpoint(nil, qn); ok {
 		t.Error("an endpoint naming nothing resolved")
 	}
-	if !reported {
-		t.Errorf("the endpoint was reported by name resolution: %v", r.Diagnostics)
+	before := len(r.Diagnostics)
+	if _, ok := r.Endpoint(nil, qn); ok {
+		t.Error("an endpoint naming nothing resolved")
+	}
+	if len(r.Diagnostics) != before {
+		t.Errorf("lowering's lookup reported the endpoint a second time: %v", r.Diagnostics)
 	}
 }
 

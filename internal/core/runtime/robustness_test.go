@@ -846,8 +846,9 @@ func testStateTransitionEndpointMisspelled(t *testing.T) {
 }
 
 // testStateTransitionEndpointNeverResolved: executed without a name-resolution
-// pass, as a service handler may, nothing reported the misspelled endpoint, so
-// lowering reports it rather than running a machine missing an edge.
+// pass, as the REPL and the service handlers do, an endpoint naming nothing
+// leaves its edge out; the machine still runs, and the misspelling is reported
+// by whoever resolves the document rather than by lowering.
 func testStateTransitionEndpointNeverResolved(t *testing.T) {
 	src := `package test {
 		state Machine {
@@ -868,12 +869,26 @@ func testStateTransitionEndpointNeverResolved(t *testing.T) {
 	if sym == nil {
 		t.Fatal("Machine not found")
 	}
-	_, err := newStateExecutor(ctx, sym, nil)
-	if err == nil {
-		t.Fatal("expected an error for an endpoint no name-resolution pass reported")
+	exec, err := newStateExecutor(ctx, sym, nil)
+	if err != nil {
+		t.Fatalf("newStateExecutor: %v", err)
 	}
-	if !strings.Contains(err.Error(), "donee") {
-		t.Errorf("expected the error to name the endpoint, got %v", err)
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- exec.RunToCompletion() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("RunToCompletion: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("RunToCompletion hung on an endpoint no resolution pass reported")
+	}
+	if got := exec.getCurrentState(); got == nil || got.Name != "busy" {
+		t.Errorf("expected the machine to halt in 'busy', got %v", got)
 	}
 }
 

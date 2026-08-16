@@ -49,18 +49,16 @@ func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 }
 
 // Endpoint returns the declaration an endpoint names, which lowering builds its
-// edges from (lower.Endpoints); the lookup itself reports nothing. A failure is
-// reported only when this resolver already resolved the endpoint out loud, which
-// is what a memoized failure records; lowering reports the rest.
-func (r *Resolver) Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool, bool) {
+// edges from (lower.Endpoints); the lookup itself reports nothing, since this
+// tier reports an endpoint naming no vertex when it resolves the document.
+func (r *Resolver) Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool) {
 	var sym *symbols.Symbol
 	var ok bool
 	r.aside(func() { sym, ok = r.ResolveEndpoint(scope, qn) })
 	if ok && sym != nil {
-		return sym.Decl, true, false
+		return sym.Decl, true
 	}
-	_, reported := r.endpoints[qn]
-	return nil, false, reported
+	return nil, false
 }
 
 // VertexInScope finds the vertex an endpoint names from the scope tree alone,

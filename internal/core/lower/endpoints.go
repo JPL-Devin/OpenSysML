@@ -9,9 +9,9 @@ import (
 // Endpoints resolves the vertex a transition endpoint names, implemented by the
 // name-resolution tier (*resolve.Resolver) so lowering matches no names itself.
 type Endpoints interface {
-	// Endpoint returns the declaration qn names, written in scope, whether it names
-	// a vertex at all, and whether a failure was already reported to the user.
-	Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (decl ast.Node, ok, reported bool)
+	// Endpoint returns the declaration qn names, written in scope, and whether it
+	// names a vertex at all.
+	Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (decl ast.Node, ok bool)
 }
 
 // machineEndpoints resolves every endpoint of one machine from that machine's
@@ -22,21 +22,19 @@ type machineEndpoints struct {
 	scope    *symbols.Scope
 }
 
-func (m machineEndpoints) Endpoint(_ *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool, bool) {
+func (m machineEndpoints) Endpoint(_ *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool) {
 	return m.resolver.Endpoint(m.scope, qn)
 }
 
 // scopeEndpoints resolves an endpoint from the caller's own scope tree, for a
-// machine lowered with that tree but without the resolver over its document. It
-// reports nothing: the name-resolution tier never saw these endpoints.
+// machine lowered with that tree but without the resolver over its document.
 type scopeEndpoints struct{ machine *symbols.Scope }
 
-func (s scopeEndpoints) Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool, bool) {
+func (s scopeEndpoints) Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool) {
 	if scope == nil {
 		scope = s.machine
 	}
-	decl, ok := resolve.VertexInScope(scope, qn)
-	return decl, ok, false
+	return resolve.VertexInScope(scope, qn)
 }
 
 // localEndpoints indexes a machine no document declares — a hand-built one in a

@@ -1,7 +1,6 @@
 package lower
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -106,10 +105,11 @@ func TestToStateGraph_TopLevelPseudostateHasNoOwner(t *testing.T) {
 	}
 }
 
-// Lowered without the name-resolution tier's resolver, nothing else reports an
-// endpoint that names no vertex, so lowering reports it here.
-func TestToStateGraph_EndpointNamingNoVertexIsReportedWithoutAResolver(t *testing.T) {
-	_, err := ToStateGraph(stateUsageIn(t, `
+// An endpoint naming no vertex leaves its edge out of the graph rather than
+// failing the lowering: the name-resolution tier reports the name, and a machine
+// missing one edge still runs (UML 2.5.1 14.2.3.9 leniency).
+func TestToStateGraph_EndpointNamingNoVertexLeavesTheEdgeOut(t *testing.T) {
+	machine := stateUsageIn(t, `
 		package test {
 			state Machine {
 				initial start;
@@ -118,12 +118,29 @@ func TestToStateGraph_EndpointNamingNoVertexIsReportedWithoutAResolver(t *testin
 				transition busy to nowhere;
 			}
 		}
-	`), nil)
-	if err == nil {
-		t.Fatal("expected an error for an endpoint naming no vertex")
+	`)
+	graph, err := ToStateGraph(machine, nil)
+	if err != nil {
+		t.Fatalf("ToStateGraph: %v", err)
 	}
-	if got := err.Error(); !strings.Contains(got, "nowhere") {
-		t.Errorf("expected the error to name the endpoint, got %q", got)
+	for from, transitions := range graph.Transitions {
+		for _, transition := range transitions {
+			if transition.Target == nil {
+				t.Errorf("transition from %v was lowered with no target", from)
+			}
+		}
+	}
+	var busy *ast.StateNode
+	for _, state := range graph.States {
+		if state.Name == "busy" {
+			busy = state
+		}
+	}
+	if busy == nil {
+		t.Fatal("busy was not collected")
+	}
+	if got := graph.Transitions[busy]; len(got) != 0 {
+		t.Errorf("expected no transition out of busy, got %d", len(got))
 	}
 }
 
