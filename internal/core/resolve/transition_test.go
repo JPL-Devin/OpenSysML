@@ -154,6 +154,32 @@ func TestResolveEndpointMisspelledIsReportedWithASuggestion(t *testing.T) {
 	}
 }
 
+// A qualified endpoint's fix corrects the spelling of the vertex it names and
+// keeps the qualifiers saying which state the vertex lives in.
+func TestResolveEndpointMisspelledQualifiedFixKeepsTheQualifier(t *testing.T) {
+	src := `state def M {
+	entry; then alpha;
+	state alpha { entry; then work; state work; }
+	state beta { entry; then work; state work; }
+	transition beta::workk to alpha;
+}`
+	r := resolveDoc(t, "d.sysml", src)
+	if len(r.Diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic, got %v", r.Diagnostics)
+	}
+	fixes := r.Diagnostics[0].Fixes
+	if len(fixes) != 1 {
+		t.Fatalf("expected one fix, got %v", fixes)
+	}
+	edit := fixes[0].Edits[0]
+	if got := src[edit.Span.Offset : edit.Span.Offset+edit.Span.Len]; got != "workk" {
+		t.Errorf("expected the fix to replace the last segment, it replaces %q", got)
+	}
+	if edit.NewText != "work" {
+		t.Errorf("expected the fix to write work, got %q", edit.NewText)
+	}
+}
+
 // An endpoint that resolves to something which is not a vertex names no state a
 // transition can start or end at, which the name-resolution tier reports.
 func TestResolveEndpointNotAVertexIsReported(t *testing.T) {

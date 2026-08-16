@@ -552,12 +552,18 @@ func endpointText(qn *ast.QualifiedName) string {
 // scope is the scope the edge was declared in.
 func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge, scope *symbols.Scope) (*Transition, error) {
 	source, err := graph.vertex(scope, edge.Source)
-	if err != nil || source == nil {
-		return nil, fmt.Errorf("transition edge references undefined source state %v", edge.Source)
+	if err != nil {
+		return nil, err
+	}
+	if source == nil {
+		return nil, fmt.Errorf("transition edge references undefined source state %s", endpointText(edge.Source))
 	}
 	target, err := graph.vertex(scope, edge.Target)
-	if err != nil || target == nil {
-		return nil, fmt.Errorf("transition edge references undefined target state %v", edge.Target)
+	if err != nil {
+		return nil, err
+	}
+	if target == nil {
+		return nil, fmt.Errorf("transition edge references undefined target state %s", endpointText(edge.Target))
 	}
 
 	return &Transition{

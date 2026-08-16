@@ -25,12 +25,14 @@ func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 	res := resolution{sym: sym, ok: ok}
 	switch {
 	case !ok:
-		span := qn.Span()
+		last := qn.Parts[len(qn.Parts)-1]
 		r.report(Diagnostic{
-			Span:    span,
+			Span:    qn.Span(),
 			Message: r.endpointMessage(scope, qn),
 			Code:    "unresolved",
-			Fixes:   endpointFixes(qnText(qn), span, r.vertexSuggestions(scope, qn)),
+			// A suggestion names a vertex, so it replaces the last segment alone,
+			// leaving the qualifiers saying which state or region it lives in.
+			Fixes: endpointFixes(last.Text, last.Span, r.vertexSuggestions(scope, qn)),
 		})
 	case !isVertex(sym.Decl):
 		r.report(Diagnostic{
@@ -200,23 +202,30 @@ func scopeName(scope *symbols.Scope) string {
 	return ast.SimpleName(scope.Node())
 }
 
-// vertexNames lists the names of the vertices declared in scope's subtree.
+// vertexNames lists the distinct names of the vertices declared in scope's
+// subtree: a name declared in two regions is one suggestion, not two.
 func vertexNames(scope *symbols.Scope) []string {
-	if scope == nil {
-		return nil
-	}
 	var names []string
-	for _, key := range scope.MemberNames() {
-		for _, sym := range scope.LookupLocalAll(key) {
-			if isVertex(sym.Decl) {
-				names = append(names, key)
-				break
+	seen := map[string]bool{}
+	var walk func(scope *symbols.Scope)
+	walk = func(scope *symbols.Scope) {
+		if scope == nil {
+			return
+		}
+		for _, key := range scope.MemberNames() {
+			for _, sym := range scope.LookupLocalAll(key) {
+				if isVertex(sym.Decl) && !seen[key] {
+					seen[key] = true
+					names = append(names, key)
+					break
+				}
 			}
 		}
+		for _, child := range scope.Children() {
+			walk(child)
+		}
 	}
-	for _, child := range scope.Children() {
-		names = append(names, vertexNames(child)...)
-	}
+	walk(scope)
 	return names
 }
 
