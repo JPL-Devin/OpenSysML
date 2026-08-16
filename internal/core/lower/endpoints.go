@@ -14,15 +14,19 @@ type Endpoints interface {
 	Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (decl ast.Node, ok, reported bool)
 }
 
-// machineEndpoints resolves every endpoint of one machine from a single scope,
-// for a machine lowered without the scope tree its endpoints were written in.
+// machineEndpoints resolves the endpoints of one machine, from where each was
+// written when the caller knows that scope, and from the machine's own body when
+// it does not — a machine lowered without the scope tree it was declared in.
 type machineEndpoints struct {
 	resolver *resolve.Resolver
 	scope    *symbols.Scope
 }
 
-func (m machineEndpoints) Endpoint(_ *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool, bool) {
-	return m.resolver.Endpoint(m.scope, qn)
+func (m machineEndpoints) Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool, bool) {
+	if scope == nil {
+		scope = m.scope
+	}
+	return m.resolver.Endpoint(scope, qn)
 }
 
 // localEndpoints indexes a machine no document declares — a hand-built one in a
