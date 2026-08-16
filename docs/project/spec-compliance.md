@@ -1139,5 +1139,10 @@ the `@type` mapping and the comparison choices.
   for compatibility; `specializations` is the complete list
 - runtime instances are request-local, so an id is resolvable only against the
   response that carried it; there is no RPC that fetches an instance by id later
+- a quantity is read from every outbound path, but an `ExecuteAction` input carrying
+  one binds `ValInvalid`: `service.go` decodes inputs with the context-free
+  `ProtoToValue`, which has no `*symbols.Index` to resolve the reduction's base units
+  against. `ProtoToValueIn` is the index-aware decoder that reports why (`EvaluateCalc`
+  uses it); the input path is migrated with the rest of the Python API surface
 
 These are documented for transparency; none block production use.
