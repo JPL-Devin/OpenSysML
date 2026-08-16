@@ -28,6 +28,8 @@ func failureReason(err error) pb.FailureReason {
 	switch {
 	case err == nil:
 		return pb.FailureReason_FAILURE_REASON_UNSPECIFIED
+	case errors.Is(err, runtime.ErrAmbiguousSubject):
+		return pb.FailureReason_FAILURE_REASON_AMBIGUOUS_SUBJECT
 	case errors.Is(err, runtime.ErrNotAConstraint),
 		errors.Is(err, runtime.ErrNotARequirement),
 		errors.Is(err, runtime.ErrNotASatisfaction),

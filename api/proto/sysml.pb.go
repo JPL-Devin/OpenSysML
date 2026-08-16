@@ -26,9 +26,10 @@ const (
 type FailureReason int32
 
 const (
-	FailureReason_FAILURE_REASON_UNSPECIFIED FailureReason = 0 // no failure, or one not classified
-	FailureReason_FAILURE_REASON_EVALUATION  FailureReason = 1 // the condition or calculation could not be evaluated
-	FailureReason_FAILURE_REASON_WRONG_KIND  FailureReason = 2 // the symbol named declares something else
+	FailureReason_FAILURE_REASON_UNSPECIFIED       FailureReason = 0 // no failure, or one not classified
+	FailureReason_FAILURE_REASON_EVALUATION        FailureReason = 1 // the condition or calculation could not be evaluated
+	FailureReason_FAILURE_REASON_WRONG_KIND        FailureReason = 2 // the symbol named declares something else
+	FailureReason_FAILURE_REASON_AMBIGUOUS_SUBJECT FailureReason = 3 // several objects carry the element; name one as the subject
 )
 
 // Enum value maps for FailureReason.
@@ -37,11 +38,13 @@ var (
 		0: "FAILURE_REASON_UNSPECIFIED",
 		1: "FAILURE_REASON_EVALUATION",
 		2: "FAILURE_REASON_WRONG_KIND",
+		3: "FAILURE_REASON_AMBIGUOUS_SUBJECT",
 	}
 	FailureReason_value = map[string]int32{
-		"FAILURE_REASON_UNSPECIFIED": 0,
-		"FAILURE_REASON_EVALUATION":  1,
-		"FAILURE_REASON_WRONG_KIND":  2,
+		"FAILURE_REASON_UNSPECIFIED":       0,
+		"FAILURE_REASON_EVALUATION":        1,
+		"FAILURE_REASON_WRONG_KIND":        2,
+		"FAILURE_REASON_AMBIGUOUS_SUBJECT": 3,
 	}
 )
 
@@ -4056,11 +4059,12 @@ const file_sysml_proto_rawDesc = "" +
 	"properties\x1a=\n" +
 	"\x0fPropertiesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*m\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\x93\x01\n" +
 	"\rFailureReason\x12\x1e\n" +
 	"\x1aFAILURE_REASON_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19FAILURE_REASON_EVALUATION\x10\x01\x12\x1d\n" +
-	"\x19FAILURE_REASON_WRONG_KIND\x10\x02*\x92\x01\n" +
+	"\x19FAILURE_REASON_WRONG_KIND\x10\x02\x12$\n" +
+	" FAILURE_REASON_AMBIGUOUS_SUBJECT\x10\x03*\x92\x01\n" +
 	"\x11PrimitiveOperator\x12\"\n" +
 	"\x1ePRIMITIVE_OPERATOR_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18PRIMITIVE_OPERATOR_EQUAL\x10\x01\x12\x1e\n" +

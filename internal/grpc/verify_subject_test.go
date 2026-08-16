@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
@@ -66,5 +67,58 @@ func TestVerifyConstraintNamesTheNestedSubject(t *testing.T) {
 	}
 	if pressure.Value.GetRealValue() != 5.0 {
 		t.Errorf("pressure = %v, want the redefined 5", pressure)
+	}
+}
+
+// ambiguousSubjectModelSource redefines the same nested feature on two objects of
+// the same car, so no one of them is the object a check is about.
+const ambiguousSubjectModelSource = `package Demo {
+	part def Bolt {
+		attribute torque = 1.0;
+		constraint tight {
+			assert torque > 10.0;
+		}
+	}
+	part def Axle {
+		part bolt : Bolt;
+	}
+	part def Car {
+		part front : Axle {
+			part :>> bolt {
+				attribute :>> torque = 20.0;
+			}
+		}
+		part rear : Axle {
+			part :>> bolt {
+				attribute :>> torque = 30.0;
+			}
+		}
+	}
+	part car : Car;
+}
+`
+
+// An ambiguous subject is a check that was never made, so it arrives as a typed
+// reason rather than as a verdict of false a client would read as a violation.
+func TestVerifyConstraintReportsAnAmbiguousSubject(t *testing.T) {
+	srv := mustNewService(t, 10)
+	hash := mustVerifyModel(t, srv, ambiguousSubjectModelSource, "verify-ambiguous-subject")
+
+	resp, err := srv.VerifyConstraint(context.Background(), &pb.VerifyConstraintRequest{
+		ModelHash:       hash,
+		SymbolId:        "Demo::Bolt::tight",
+		SubjectSymbolId: "Demo::car",
+	})
+	if err != nil {
+		t.Fatalf("VerifyConstraint: %v", err)
+	}
+	if got := resp.Verdict.FailureReason; got != pb.FailureReason_FAILURE_REASON_AMBIGUOUS_SUBJECT {
+		t.Errorf("failure_reason = %v, want FAILURE_REASON_AMBIGUOUS_SUBJECT (error: %q)", got, resp.Verdict.Error)
+	}
+	// The message still names the carriers apart, which is what a caller acts on.
+	for _, want := range []string{"front::bolt", "rear::bolt"} {
+		if !strings.Contains(resp.Verdict.Error, want) {
+			t.Errorf("error %q does not name a carrier %q", resp.Verdict.Error, want)
+		}
 	}
 }

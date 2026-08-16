@@ -174,35 +174,35 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 // A nested object counts, since a redefinition on an object gives a nested
 // feature values of its own; no such object leaves the check about the
 // declaration.
-func (ctx *Context) conditionSubject(sym *symbols.Symbol, self *Instance) (*Instance, error) {
+func (ctx *Context) conditionSubject(sym *symbols.Symbol, self *Instance) (carrier, error) {
 	owner := declaringType(sym)
 	if owner == nil {
-		return self, nil
+		return carrier{instance: self, root: self}, nil
 	}
 	roots := []*Instance{self}
 	if self == nil {
 		roots = ctx.rootInstances()
 	} else if ctx.model.Conforms(self.Type, owner) {
-		return self, nil
+		return carrier{instance: self, root: self}, nil
 	}
 	carriers := ctx.carriersUnder(roots, owner)
 	switch len(carriers) {
 	case 0:
-		return self, nil
+		return carrier{instance: self, root: self}, nil
 	case 1:
 		return carriers[0], nil
 	}
-	return nil, fmt.Errorf("%w: %s is carried by %s: check it on one of them",
-		ErrAmbiguousSubject, sym.Name, strings.Join(ctx.objectLabels(carriers), ", "))
+	return carrier{}, fmt.Errorf("%w: %s is carried by %s: check it on one of them",
+		ErrAmbiguousSubject, sym.Name, strings.Join(ctx.carrierLabels(carriers), ", "))
 }
 
 // checkSubject resolves the object a check is about before its bindings are
 // evaluated, so the bindings and the conditions read one object. An ambiguity is
 // named after the checked element, as a verdict is.
-func (ctx *Context) checkSubject(kind, element string, sym *symbols.Symbol, self *Instance) (*Instance, error) {
+func (ctx *Context) checkSubject(kind, element string, sym *symbols.Symbol, self *Instance) (carrier, error) {
 	subject, err := ctx.conditionSubject(sym, self)
 	if err != nil {
-		return nil, fmt.Errorf("%s %s: %w", kind, element, err)
+		return carrier{}, fmt.Errorf("%s %s: %w", kind, element, err)
 	}
 	return subject, nil
 }
@@ -291,13 +291,13 @@ func (ctx *Context) heldObjectIDs() map[int64]bool {
 // descended into once per path, so recursive composition is a finite search, and
 // one object stands for each declaration reached, so objects a multiplicity
 // repeated are one candidate however deep the named declaration sits in them.
-func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*Instance {
-	var out []*Instance
+func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []carrier {
+	var out []carrier
 	seen := make(map[int64]bool, len(roots))
 	declared := make(map[carrierOccurrence]bool)
 	path := make(map[*symbols.Symbol]bool)
-	var descend func(inst *Instance, through string)
-	descend = func(inst *Instance, through string) {
+	var descend func(root, inst *Instance, through, features string)
+	descend = func(root, inst *Instance, through, features string) {
 		if inst == nil || seen[inst.ID] {
 			return
 		}
@@ -305,7 +305,7 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*I
 		occurrence := carrierOccurrence{through: through, decl: inst.Type}
 		if ctx.model.Conforms(inst.Type, owner) && !declared[occurrence] {
 			declared[occurrence] = true
-			out = append(out, inst)
+			out = append(out, carrier{instance: inst, root: root, features: features})
 		}
 		if inst.Type != nil {
 			if path[inst.Type] {
@@ -315,14 +315,26 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*I
 			defer delete(path, inst.Type)
 		}
 		for _, child := range ctx.nestedObjects(inst) {
-			descend(child.instance, through+"::"+child.feature)
+			nested := child.feature
+			if features != "" {
+				nested = features + "::" + child.feature
+			}
+			descend(root, child.instance, through+"::"+child.feature, nested)
 		}
 	}
 	for _, root := range roots {
-		descend(root, strconv.FormatInt(root.ID, 10))
+		descend(root, root, strconv.FormatInt(root.ID, 10), "")
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	sort.Slice(out, func(i, j int) bool { return out[i].instance.ID < out[j].instance.ID })
 	return out
+}
+
+// carrier is an object a search reached: the object the search started from and
+// the features walked from it name a nested one, which has no name of its own.
+type carrier struct {
+	instance *Instance
+	root     *Instance
+	features string
 }
 
 // carrierOccurrence identifies the declaration an object occurs as: the features
@@ -404,19 +416,21 @@ func heldObjects(val Value) []int64 {
 	return out
 }
 
-// objectLabels names objects as a diagnostic can quote them: the definition each
-// is an object of and its identity, so two objects of one definition are named
-// alike whether they materialize it directly or through a usage — whose name is
-// added, since an object of a nested part has no name of its own.
-func (ctx *Context) objectLabels(instances []*Instance) []string {
-	out := make([]string, 0, len(instances))
-	for _, inst := range instances {
+// carrierLabels names carriers as a diagnostic can quote them: the definition
+// each is an object of, its identity, and the feature path telling two apart.
+func (ctx *Context) carrierLabels(carriers []carrier) []string {
+	out := make([]string, 0, len(carriers))
+	for _, c := range carriers {
+		inst := c.instance
 		name := "object"
 		if def := ctx.definitionOf(inst.Type); def != nil && def.Name != "" {
 			name = def.Name
 		}
 		label := fmt.Sprintf("%s #%d", name, inst.ID)
-		if inst.Type != nil && inst.Type.Name != "" && inst.Type.Name != name {
+		switch {
+		case c.features != "":
+			label += " (" + c.features + ")"
+		case inst.Type != nil && inst.Type.Name != "" && inst.Type.Name != name:
 			label += " (" + inst.Type.Name + ")"
 		}
 		out = append(out, label)

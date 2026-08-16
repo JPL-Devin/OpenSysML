@@ -1618,11 +1618,12 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 			s.instances[owner] = inst
 		}
 	}
-	holds, err := ctx.EvaluateSatisfactionOn(a, subject)
+	result, err := ctx.CheckSatisfactionOn(a, subject)
+	subject, owner = s.reportedSubject(result, subject, owner)
 	if unevaluable(err) {
 		return unevaluableVerdict(a.Text(), a.Text(), err, subject, owner)
 	}
-	if err != nil || !holds {
+	if err != nil || !result.Holds {
 		return Verdict{Subject: a.Text(), Status: VerdictFails, Lines: []string{
 			fmt.Sprintf("✗ %s fails%s", a.Text(), onInstance(subject, owner)),
 			"  " + verdictDetail("Required condition", err),

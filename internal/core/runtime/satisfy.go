@@ -206,12 +206,13 @@ func (ctx *Context) CheckSatisfactionOn(a *SatisfyAssertion, subject *Instance) 
 	// The requirement being satisfied chooses the object its conditions read the
 	// same way `%requirement` does, so an object holding the carrier nested
 	// answers about that nested object rather than about the declaration.
+	var reached carrier // the object resolved to, named by where it was reached from
 	if a.Requirement != nil {
 		resolved, err := ctx.checkSubject("satisfaction", a.Text(), a.Requirement, subject)
 		if err != nil {
 			return CheckResult{}, err
 		}
-		subject = resolved
+		subject, reached = resolved.instance, resolved
 	}
 
 	scope := target.OwnerScope
@@ -223,7 +224,7 @@ func (ctx *Context) CheckSatisfactionOn(a *SatisfyAssertion, subject *Instance) 
 	// are when the requirement is evaluated directly.
 	bindings, err := ctx.memberBindings(target, a.Text(), members, subject, subject)
 	if err != nil {
-		return CheckResult{Subject: subject}, err
+		return satisfactionResult(false, subject, reached), err
 	}
 
 	conds := conditionsOf(members)
@@ -239,7 +240,17 @@ func (ctx *Context) CheckSatisfactionOn(a *SatisfyAssertion, subject *Instance) 
 		bindings: bindings,
 		negated:  a.Negated,
 	}, conds)
-	return CheckResult{Holds: holds, Subject: subject}, err
+	return satisfactionResult(holds, subject, reached), err
+}
+
+// satisfactionResult reports a verdict about subject, naming where a resolved
+// nested one was reached from. An assertion whose requirement resolved nothing
+// is still about the object `by` supplied.
+func satisfactionResult(holds bool, subject *Instance, reached carrier) CheckResult {
+	if reached.instance == nil {
+		return CheckResult{Holds: holds, Subject: subject, SubjectRoot: subject}
+	}
+	return checkResultOf(holds, reached)
 }
 
 // SatisfySubject returns an object of the feature a satisfaction assertion names

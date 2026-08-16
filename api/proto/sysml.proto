@@ -53,6 +53,7 @@ enum FailureReason {
   FAILURE_REASON_UNSPECIFIED = 0;  // no failure, or one not classified
   FAILURE_REASON_EVALUATION = 1;   // the condition or calculation could not be evaluated
   FAILURE_REASON_WRONG_KIND = 2;   // the symbol named declares something else
+  FAILURE_REASON_AMBIGUOUS_SUBJECT = 3;  // several objects carry the element; name one as the subject
 }
 
 // Verdict is one verification's answer: whether the condition held, and, when

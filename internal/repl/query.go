@@ -127,11 +127,12 @@ func (s *Session) checkConstraint(name string) Verdict {
 	if bad != nil {
 		return *bad
 	}
-	passed, err := target.ctx.EvaluateConstraintOn(target.sym, target.scope, inst)
+	result, err := target.ctx.CheckConstraintOn(target.sym, target.scope, inst)
+	inst, owner = s.reportedSubject(result, inst, owner)
 	if unevaluable(err) {
 		return unevaluableVerdict(name, "Constraint "+name, err, inst, owner)
 	}
-	if err != nil || !passed {
+	if err != nil || !result.Holds {
 		return Verdict{Subject: name, Status: VerdictFails, Lines: []string{
 			fmt.Sprintf("✗ Constraint %s failed%s", name, onInstance(inst, owner)),
 			"  " + verdictDetail("Assertion", err),
@@ -163,11 +164,12 @@ func (s *Session) checkRequirement(name string) Verdict {
 	if bad != nil {
 		return *bad
 	}
-	passed, err := target.ctx.EvaluateRequirementOn(target.sym, target.scope, inst)
+	result, err := target.ctx.CheckRequirementOn(target.sym, target.scope, inst)
+	inst, owner = s.reportedSubject(result, inst, owner)
 	if unevaluable(err) {
 		return unevaluableVerdict(name, "Requirement "+name, err, inst, owner)
 	}
-	if err != nil || !passed {
+	if err != nil || !result.Holds {
 		return Verdict{Subject: name, Status: VerdictFails, Lines: []string{
 			fmt.Sprintf("✗ Requirement %s failed%s", name, onInstance(inst, owner)),
 			"  " + verdictDetail("Required condition", err),
@@ -250,6 +252,43 @@ func (s *Session) checkSubject(name string, target checkTarget) (*runtime.Instan
 		return nil, "", &bad
 	}
 	return inst, owner, nil
+}
+
+// reportedSubject is the object a verdict is about and the name to report it
+// under: the runtime may answer about an object nested in the one supplied, or
+// in another the session holds, which is then named by the object it was reached
+// from and the features walked to it.
+func (s *Session) reportedSubject(result runtime.CheckResult, inst *runtime.Instance, owner string) (*runtime.Instance, string) {
+	if result.Subject == nil || result.Subject == inst {
+		return inst, owner
+	}
+	root := owner
+	if result.SubjectRoot != inst || root == "" {
+		root = s.instanceName(result.SubjectRoot)
+	}
+	if root == "" {
+		// An object under no name this session can report is not named at all,
+		// rather than reported under the wrong one.
+		return inst, owner
+	}
+	if result.SubjectPath == "" {
+		return result.Subject, root
+	}
+	return result.Subject, root + "::" + result.SubjectPath
+}
+
+// instanceName is the name the session holds inst under, empty for an object it
+// did not create.
+func (s *Session) instanceName(inst *runtime.Instance) string {
+	if inst == nil {
+		return ""
+	}
+	for name, held := range s.instances {
+		if held == inst {
+			return name
+		}
+	}
+	return ""
 }
 
 // resolveCheckTarget resolves the element a constraint/requirement check names.
