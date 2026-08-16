@@ -374,8 +374,17 @@ literal (`Level::high.n`), and an enum-typed default materializes: the reproduct
   re-exported name and `resolve/filter.go` evaluates them, so the qualified and unqualified
   routes agree and a restored index cache decides a filter the same way a parsed library does.
   A condition outside the evaluated subset is reported (`passes/filter.go`) and not applied.
-  Still open: `@`/`@@` in the runtime evaluator (A4), and a view's exposed-element set as a
-  queryable API.
+  ~~Still open: `@`/`@@` in the runtime evaluator (A4), and a view's exposed-element set as a
+  queryable API.~~ **Done.** `runtime/eval.go` `evalClassification` evaluates `@`/`@@` as
+  operators of an ordinary expression — a constraint, a calc body, an `%eval` — against the
+  element its subject denotes (an explicit name, `self`, or the object being evaluated), and
+  reaches its verdict through the same `semantics/filter.go` predicate an element filter is
+  decided by (`Model.EvalClassification`), so the two paths cannot drift; a subject or type
+  outside the evaluable subset is reported (`ErrFilterUnevaluable`) rather than answered false.
+  `semantics/expose.go` `Model.ExposedElements` answers a view's exposed set, enumerated through
+  `resolve/filter.go` `Resolver.ImportedElements` so exposes are admitted and filtered exactly as
+  name resolution admits them, with `Model.NestedViews` to walk a view tree. Still open: a REPL
+  surface for the query (see the `%view` proposal in the A5 PR).
 
 ## A6 — implicit library import (do this LAST)
 

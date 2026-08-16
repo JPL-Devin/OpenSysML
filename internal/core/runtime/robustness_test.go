@@ -163,6 +163,39 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("mutually_attached_connectors", testMutuallyAttachedConnectors)
 	t.Run("enumeration_name_that_is_not_a_literal", testEnumerationNameThatIsNotALiteral)
 	t.Run("chain_through_a_literal_without_that_attribute", testChainThroughALiteralWithoutThatAttribute)
+	t.Run("classification_outside_the_evaluable_subset", testClassificationOutsideTheEvaluableSubset)
+}
+
+// testClassificationOutsideTheEvaluableSubset: a classification the evaluator
+// cannot judge — no subject to classify, a subject that is a datum, an
+// unresolved metadata type, or a subject naming nothing — reports
+// ErrFilterUnevaluable rather than silently answering false.
+func testClassificationOutsideTheEvaluableSubset(t *testing.T) {
+	const model = `
+		metadata def Safety;
+		#Safety part def Belt;
+		attribute level = 3;
+	`
+	for _, tc := range []struct{ name, cond string }{
+		{"implicit subject outside an object", "@Safety"},
+		{"self outside an object", "self @ Safety"},
+		{"a datum subject", "42 @ Safety"},
+		{"a string subject", `"belt" @ Safety`},
+		{"an unresolved metadata type", "Belt @ Nonexistent"},
+	} {
+		src := model + "\nconstraint c { " + tc.cond + " }"
+		got, err := constraintVerdict(t, src, "c")
+		if got {
+			t.Errorf("%s: `%s` was satisfied, want a report", tc.name, tc.cond)
+		}
+		if !errors.Is(err, semantics.ErrFilterUnevaluable) {
+			t.Errorf("%s: `%s` err = %v, want ErrFilterUnevaluable", tc.name, tc.cond, err)
+		}
+	}
+	// A subject naming nothing is the unresolved reference it is, not a verdict.
+	if got, err := constraintVerdict(t, model+"\nconstraint c { Missing @ Safety }", "c"); got || err == nil {
+		t.Errorf("`Missing @ Safety` = %v err=%v, want a report", got, err)
+	}
 }
 
 // testMultiplicityInfiniteLowerBound: `[*..*]` requires unboundedly many objects,
