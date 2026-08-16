@@ -44,10 +44,10 @@ it is gone.
 
 ```
 sysml> %clear
-note: 1 object was dropped (the session was reset); %instantiate to create it again
-✓ Session cleared
+session cleared
+note: 1 instance was dropped because the session was reset; re-run %instantiate
 sysml> %instances
-No instances (1 object was dropped when the session was reset)
+(no instances created; 1 instance was dropped when the session was reset — re-run %instantiate)
 ```
 
 ## A name that needs quotes
