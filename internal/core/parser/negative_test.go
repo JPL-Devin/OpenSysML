@@ -82,6 +82,13 @@ func TestNegative(t *testing.T) {
 		{"snapshot_usage_no_type", "snapshot occurrence takeoff : ;"},
 		{"individual_parameter_no_type", "action a { in individual v : ; }"},
 
+		// A keyword names a parameter, so the keywords that state something else
+		// there are still read as that: a missing value or type is an error
+		// rather than a parameter so named.
+		{"keyword_named_parameter_no_type", "action a { in 'type' : ; }"},
+		{"parameter_default_no_value", "action a { in x default ; }"},
+		{"parameter_redefines_no_target", "action a { in redefines ; }"},
+
 		// A member-attached `then` sequences the members either side of it, so
 		// a body with nothing on one side, or a member the notation does not
 		// allow one before, declares no order and is rejected rather than
