@@ -27,6 +27,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("fork_branches_assigning_the_same_feature", testForkBranchesAssigningTheSameFeature)
 	t.Run("decision_no_satisfied_guard", testDecisionNoSatisfiedGuard)
 	t.Run("state_dangling_transition", testStateDanglingTransition)
+	t.Run("state_transition_endpoint_misspelled", testStateTransitionEndpointMisspelled)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
@@ -695,6 +696,66 @@ func testDeferOfNonDeferrableTrigger(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "only signal and call triggers can be deferred") {
 		t.Errorf("expected a deferrability error, got: %v", err)
+	}
+}
+
+// testStateTransitionEndpointMisspelled: a misspelled endpoint is a
+// name-resolution diagnostic, so lowering leaves the edge out and the machine
+// runs to a halt in the state it reached rather than panicking or hanging.
+func testStateTransitionEndpointMisspelled(t *testing.T) {
+	src := `package test {
+		state Machine {
+			initial init;
+			state busy;
+			final done;
+			init then busy;
+			transition busy to donee;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	ctx.resolver.ResolveDocument("<test>", file)
+
+	var endpoint *resolve.Diagnostic
+	for i, diag := range ctx.resolver.Diagnostics {
+		if strings.Contains(diag.Message, "donee") {
+			endpoint = &ctx.resolver.Diagnostics[i]
+		}
+	}
+	if endpoint == nil {
+		t.Fatalf("expected a name-resolution diagnostic for 'donee', got: %v", ctx.resolver.Diagnostics)
+	}
+	if endpoint.Code != "unresolved" {
+		t.Errorf("expected code %q, got %q", "unresolved", endpoint.Code)
+	}
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	exec, err := newStateExecutor(ctx, sym, nil)
+	if err != nil {
+		t.Fatalf("newStateExecutor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- exec.RunToCompletion() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("RunToCompletion: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("RunToCompletion hung on a machine whose transition names nothing")
+	}
+	if got := exec.getCurrentState(); got == nil || got.Name != "busy" {
+		t.Errorf("expected the machine to halt in 'busy', got %v", got)
 	}
 }
 

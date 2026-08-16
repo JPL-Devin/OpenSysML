@@ -47,6 +47,9 @@ type Resolver struct {
 	memo      map[ast.Node]resolution
 	resolving map[ast.Node]bool // cycle detection
 	parts     map[*ast.QualifiedName][]*symbols.Symbol
+	// endpoints are the vertices transition endpoints resolve to, memoized per
+	// name node: lowering consumes what this tier resolved (see ResolveEndpoint).
+	endpoints map[*ast.QualifiedName]resolution
 	// imports are the import declarations of a namespace-bearing node, found once
 	// and kept: see (*Resolver).importsOf.
 	imports     map[ast.Node][]*ast.Import
@@ -84,6 +87,7 @@ func New(idx *symbols.Index) *Resolver {
 		memo:      map[ast.Node]resolution{},
 		resolving: map[ast.Node]bool{},
 		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
+		endpoints: map[*ast.QualifiedName]resolution{},
 		imports:   map[ast.Node][]*ast.Import{},
 		naming:    map[*symbols.Symbol]bool{},
 		nsFilters: map[*symbols.Scope][]symbols.ElementFilter{},
