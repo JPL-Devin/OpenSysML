@@ -1,6 +1,6 @@
 """Conversion between protobuf Value/SlotValue messages and Python values."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Tuple, Union
 
 from pysysml.enumeration import EnumLiteral
@@ -60,12 +60,17 @@ class Unit:
         scale_num (float): Numerator of the scale factor over the base units
         scale_den (float): Denominator of that scale factor
         factors (tuple[UnitFactor, ...]): The base units it reduces to
+        reduction_given (bool): Whether that reduction was given rather than
+            defaulted, which is what a unit read off the wire carries
     """
 
     text: str = ""
     scale_num: float = 1.0
     scale_den: float = 1.0
     factors: Tuple[UnitFactor, ...] = ()
+    # Not part of the value: a reduction to dimension one at scale 1 is
+    # otherwise indistinguishable from no reduction at all.
+    reduction_given: bool = field(default=False, compare=False, repr=False)
 
     @classmethod
     def from_pb(cls, text, pb_unit_term=None) -> "Unit":
@@ -80,6 +85,7 @@ class Unit:
                 UnitFactor(factor.unit_id, factor.exponent)
                 for factor in pb_unit_term.factors
             ),
+            reduction_given=True,
         )
 
     def to_pb(self) -> "sysml_pb2.UnitTerm":
@@ -98,10 +104,12 @@ class Unit:
         """Whether the unit carries the reduction commensurability is decided over.
 
         A unit named with no reduction at all is unreduced; an unnamed one means
-        dimension one, which is a reduction.
+        dimension one, which is a reduction, as does a named unit whose
+        reduction the service gave — ``SI::rad`` is ``m/m``, so dimension one.
         """
         return bool(
             not self.text
+            or self.reduction_given
             or self.factors
             or (self.scale_num, self.scale_den) != (1.0, 1.0)
         )

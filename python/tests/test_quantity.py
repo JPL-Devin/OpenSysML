@@ -149,6 +149,27 @@ def test_an_unreduced_unit_is_refused_before_it_is_sent():
     assert Unit(text="Percent::percent", scale_num=1.0, scale_den=100.0).reduced
 
 
+def test_a_named_unit_that_reduces_to_dimension_one_is_sent_back():
+    """``SI::rad`` is ``m/m``: reduced, and told apart from an absent reduction
+    by the reduction having been given rather than by what it reduces to."""
+    radians = Quantity.from_pb(
+        sysml_pb2.Quantity(
+            unit="SI::rad",
+            unit_term=sysml_pb2.UnitTerm(scale_num=1.0, scale_den=1.0),
+            real_magnitude=1.5,
+        )
+    )
+
+    assert radians.unit.reduced and radians.unit.dimensionless
+    assert not Unit(text="SI::rad").reduced
+
+    sent = radians.to_pb()
+
+    assert sent.unit == "SI::rad"
+    assert sent.HasField('unit_term') and list(sent.unit_term.factors) == []
+    assert Quantity.from_pb(sent) == radians
+
+
 def test_a_magnitude_that_is_not_a_number_is_refused():
     """Booleans and strings are not magnitudes, however they cast."""
     for magnitude in (True, "5.0", None):
@@ -354,6 +375,8 @@ package Q {
         attribute plainMass : ScalarValues::Real = 2.0;
         attribute derivedSpeed = 10.0 [SI::m] / 2.0 [SI::s];
         attribute writtenSpeed = 5.4 [SI::km/SI::h];
+        // A ratio unit: SI declares rad as m/m, so it reduces to dimension one.
+        attribute turn : ISQ::AngularMeasureValue = 1.5 [SI::rad];
         attribute length = 3 [SI::m];
         part engine : Engine;
 
@@ -466,6 +489,17 @@ class TestQuantityAgainstTheService:
         back = self.conn.calc("Q::echo", self.model.hash, arguments=[length]).value
         assert back.magnitude == 3 and isinstance(back.magnitude, int)
         assert back.unit.text == "SI::m"
+
+    def test_a_quantity_in_a_ratio_unit_round_trips(self):
+        """An angle read off the wire goes back out: dimension one is a reduction."""
+        turn = self.conn.instantiate("Q::Car", self.model.hash).turn
+
+        assert turn.unit.text == "SI::rad" and turn.unit.dimensionless
+
+        echoed = self.conn.calc("Q::echo", self.model.hash, arguments=[turn]).value
+
+        assert echoed == turn
+        assert echoed.magnitude == 1.5 and echoed.unit.text == "SI::rad"
 
     def test_a_sent_quantity_is_commensurable_with_the_models_own_units(self):
         """The reduction sent is what the service compares against, not the magnitude."""
