@@ -39,6 +39,12 @@ DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz
 ```
 
 Workspace trust must be granted — Restricted Mode silently disables the extension (no LSP, no outline).
+The trust banner appears on the Welcome tab; "Manage" → "Trust" reloads the window.
+
+**Always open the repo *folder*, not a lone `.sysml` file.** `code <file.sysml>` gives the window no
+workspace folder, so `resolveServer` skips the `<workspace>/bin/sysml-lsp` fallback, finds nothing on
+PATH, and you get an empty "SysML v2" channel plus 0 problems — which looks exactly like a broken
+server. Launch with the repo root as the argument, then open the file from the Explorer.
 
 ## Server discovery (`editors/vscode/src/extension.ts`)
 
@@ -103,10 +109,30 @@ not the "No code actions available" message. Expected titles/edits:
 A fast way to learn exact titles/ranges before driving the GUI is a small stdio JSON-RPC probe
 script against `bin/sysml-lsp` (initialize → didOpen → semanticTokens/full → codeAction).
 
+## Lifecycle / process-leak testing (`cmd/sysml-lsp/main.go`, `internal/lsp/lifecycle.go`)
+
+- The client always appends `--stdio` (`vscode-languageclient/lib/node/main.js`: `TransportKind.stdio`
+  → `args.push('--stdio')`), so the server binary must accept that flag or the client crash-loops.
+- `pgrep -af sysml-lsp` run from a shell whose own command line contains the string `sysml-lsp`
+  matches that bash process and gives a false positive. Put the check in a tiny script
+  (`/tmp/lspcheck.sh`) and call it, so the output is only real servers.
+- Expected argv while a window is open: exactly one `<repo>/bin/sysml-lsp --stdio`. After **File →
+  Close Window** it must disappear within a few seconds; a surviving process is the leak bug.
+- Cheap, high-signal stdio probe for exit statuses (no GUI): initialize → `shutdown` → any request
+  (expect error `-32600`) → `exit` ⇒ process status 0; initialize → `exit` with no shutdown ⇒ status 1.
+  A process still alive after 10 s is the old bug.
+- A convincing **negative control** without touching the branch: `git worktree add /tmp/wt-main
+  origin/main`, `go build -o /tmp/sysml-lsp-main ./cmd/sysml-lsp` in it, copy over `bin/sysml-lsp`,
+  reopen the folder — the channel then shows `flag provided but not defined: -stdio`,
+  `Server process exited with code 2` and `crashed 5 times in the last 3 minutes`. Restore the fixed
+  binary and run **SysML: Restart Language Server** to recover in the same window (no relaunch needed).
+
 ## GUI driving pitfalls (cost real time here)
 
 - `ctrl+shift+u` via xdotool types a literal `u` into the editor instead of opening Output. Use the
   **View → Output** menu, or the Output tab in the bottom panel.
+- The **"SysML v2" channel is often missing from the Output panel's channel dropdown**. Reliable route:
+  Command Palette → **"Output: Show Output Channels..."** → type `SysML` → Enter.
 - `shift+alt+a` (Toggle Block Comment) does not reach VS Code; use Command Palette
   "Toggle Block Comment" instead. `ctrl+slash` works fine.
 - Typing long lines with `type` while the suggest widget is open silently swallows characters
