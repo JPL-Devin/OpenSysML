@@ -110,7 +110,9 @@ jobs:
       - run:
           name: Wait for the service to answer
           command: |
-            python3 - <<'PY'
+            # The backslash escapes the heredoc operator for a 2.1 config; the
+            # shell sees a plain heredoc.
+            python3 - \<<'PY'
             import socket, sys, time
 
             for _ in range(30):
