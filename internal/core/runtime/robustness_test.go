@@ -27,6 +27,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("fork_branches_assigning_the_same_feature", testForkBranchesAssigningTheSameFeature)
 	t.Run("decision_no_satisfied_guard", testDecisionNoSatisfiedGuard)
 	t.Run("state_dangling_transition", testStateDanglingTransition)
+	t.Run("state_transition_endpoint_misspelled", testStateTransitionEndpointMisspelled)
+	t.Run("state_transition_endpoint_in_another_machine", testStateTransitionEndpointInAnotherMachine)
+	t.Run("state_transition_endpoint_never_resolved", testStateTransitionEndpointNeverResolved)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
@@ -131,6 +134,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
 	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
 	t.Run("numeric_library_call_that_has_no_value", testNumericLibraryCallThatHasNoValue)
+	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
 	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
 	t.Run("collection_operation_step_budget", testCollectionOperationStepBudget)
@@ -160,6 +164,39 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("mutually_attached_connectors", testMutuallyAttachedConnectors)
 	t.Run("enumeration_name_that_is_not_a_literal", testEnumerationNameThatIsNotALiteral)
 	t.Run("chain_through_a_literal_without_that_attribute", testChainThroughALiteralWithoutThatAttribute)
+	t.Run("classification_outside_the_evaluable_subset", testClassificationOutsideTheEvaluableSubset)
+}
+
+// testClassificationOutsideTheEvaluableSubset: a classification the evaluator
+// cannot judge — no subject to classify, a subject that is a datum, an
+// unresolved metadata type, or a subject naming nothing — reports
+// ErrFilterUnevaluable rather than silently answering false.
+func testClassificationOutsideTheEvaluableSubset(t *testing.T) {
+	const model = `
+		metadata def Safety;
+		#Safety part def Belt;
+		attribute level = 3;
+	`
+	for _, tc := range []struct{ name, cond string }{
+		{"implicit subject outside an object", "@Safety"},
+		{"self outside an object", "self @ Safety"},
+		{"a datum subject", "42 @ Safety"},
+		{"a string subject", `"belt" @ Safety`},
+		{"an unresolved metadata type", "Belt @ Nonexistent"},
+	} {
+		src := model + "\nconstraint c { " + tc.cond + " }"
+		got, err := constraintVerdict(t, src, "c")
+		if got {
+			t.Errorf("%s: `%s` was satisfied, want a report", tc.name, tc.cond)
+		}
+		if !errors.Is(err, semantics.ErrFilterUnevaluable) {
+			t.Errorf("%s: `%s` err = %v, want ErrFilterUnevaluable", tc.name, tc.cond, err)
+		}
+	}
+	// A subject naming nothing is the unresolved reference it is, not a verdict.
+	if got, err := constraintVerdict(t, model+"\nconstraint c { Missing @ Safety }", "c"); got || err == nil {
+		t.Errorf("`Missing @ Safety` = %v err=%v, want a report", got, err)
+	}
 }
 
 // testMultiplicityInfiniteLowerBound: `[*..*]` requires unboundedly many objects,
@@ -391,6 +428,35 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
 		{"ComplexFunctions::ToString(ys)", ErrUnevaluableLibraryFunction},
 		{"SequenceFunctions::includingAt(xs, 9, 2)", ErrUnevaluableLibraryFunction},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testStringOperandOfTheWrongKind: an operator or StringFunctions call given a
+// value that is not the String its signature declares is reported rather than
+// coerced, and a Substring position naming no character is reported rather than
+// clamped.
+func testStringOperandOfTheWrongKind(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{`"a" + 1`, ErrTypeMismatch},
+		{`1 + "a"`, ErrTypeMismatch},
+		{`"a" < 1`, ErrTypeMismatch},
+		{`"a" >= factor`, ErrTypeMismatch},
+		{`"a" < xs`, ErrTypeMismatch},
+		{`"a" - "b"`, ErrTypeMismatch},
+		{`StringFunctions::Length(1)`, ErrTypeMismatch},
+		{`StringFunctions::Length(xs)`, ErrTypeMismatch},
+		{`StringFunctions::Substring("abc", 1, 9)`, ErrIndexOutOfRange},
+		{`StringFunctions::Substring("abc", 0, 2)`, ErrIndexOutOfRange},
+		{`StringFunctions::Substring("abc", "1", 2)`, ErrTypeMismatch},
+		{`StringFunctions::Substring("abc", 1)`, ErrCalcArity},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
@@ -779,6 +845,159 @@ func testDeferOfNonDeferrableTrigger(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "only signal and call triggers can be deferred") {
 		t.Errorf("expected a deferrability error, got: %v", err)
+	}
+}
+
+// testStateTransitionEndpointMisspelled: a misspelled endpoint is a
+// name-resolution diagnostic, so lowering leaves the edge out and the machine
+// runs to a halt in the state it reached rather than panicking or hanging.
+func testStateTransitionEndpointMisspelled(t *testing.T) {
+	src := `package test {
+		state Machine {
+			initial init;
+			state busy;
+			final done;
+			init then busy;
+			transition busy to donee;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	ctx.resolver.ResolveDocument("<test>", file)
+
+	var endpoint *resolve.Diagnostic
+	for i, diag := range ctx.resolver.Diagnostics {
+		if strings.Contains(diag.Message, "donee") {
+			endpoint = &ctx.resolver.Diagnostics[i]
+		}
+	}
+	if endpoint == nil {
+		t.Fatalf("expected a name-resolution diagnostic for 'donee', got: %v", ctx.resolver.Diagnostics)
+	}
+	if endpoint.Code != "unresolved" {
+		t.Errorf("expected code %q, got %q", "unresolved", endpoint.Code)
+	}
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	exec, err := newStateExecutor(ctx, sym, nil)
+	if err != nil {
+		t.Fatalf("newStateExecutor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- exec.RunToCompletion() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("RunToCompletion: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("RunToCompletion hung on a machine whose transition names nothing")
+	}
+	if got := exec.getCurrentState(); got == nil || got.Name != "busy" {
+		t.Errorf("expected the machine to halt in 'busy', got %v", got)
+	}
+}
+
+// testStateTransitionEndpointNeverResolved: executed without a name-resolution
+// pass, as the REPL and the service handlers do, an endpoint naming nothing
+// leaves its edge out; the machine still runs, and the misspelling is reported
+// by whoever resolves the document rather than by lowering.
+func testStateTransitionEndpointNeverResolved(t *testing.T) {
+	src := `package test {
+		state Machine {
+			initial init;
+			state busy;
+			final done;
+			init then busy;
+			transition busy to donee;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	exec, err := newStateExecutor(ctx, sym, nil)
+	if err != nil {
+		t.Fatalf("newStateExecutor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- exec.RunToCompletion() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("RunToCompletion: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("RunToCompletion hung on an endpoint no resolution pass reported")
+	}
+	if got := exec.getCurrentState(); got == nil || got.Name != "busy" {
+		t.Errorf("expected the machine to halt in 'busy', got %v", got)
+	}
+}
+
+// testStateTransitionEndpointInAnotherMachine: an endpoint naming a state of a
+// different machine resolves, so no name diagnostic reports it; lowering must
+// report it rather than drop the edge, since nothing else would.
+func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
+	src := `package test {
+		state Other {
+			initial start;
+			state running;
+			start then running;
+		}
+		state Machine {
+			initial init;
+			state busy;
+			init then busy;
+			transition busy to Other::running;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	ctx.resolver.ResolveDocument("<test>", file)
+
+	for _, diag := range ctx.resolver.Diagnostics {
+		if strings.Contains(diag.Message, "running") {
+			t.Fatalf("the endpoint resolves, so name resolution reports nothing: %v", diag)
+		}
+	}
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	_, err := newStateExecutor(ctx, sym, nil)
+	if err == nil {
+		t.Fatal("expected an error for an endpoint that is not a vertex of this machine")
+	}
+	if !strings.Contains(err.Error(), "not a vertex of this state machine") {
+		t.Errorf("expected the error to say the endpoint is not a vertex of this machine, got %v", err)
+	}
+	if strings.Contains(err.Error(), "*ast.") {
+		t.Errorf("the message a modeller reads names a Go type: %v", err)
 	}
 }
 
