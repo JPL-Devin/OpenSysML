@@ -480,6 +480,11 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 // - Attribute usage with typing or subsets/redefines → AttributeUsage
 // - All other usages → use usageSymbolKind directly
 func classifyUsage(u *ast.Usage) SymbolKind {
+	// A `datatype` declares a KerML DataType (KerML 1.0 §8.3.2): a definition whatever
+	// it specializes, unlike the `attribute`/`feature` keywords classified below.
+	if u.Keyword == "datatype" {
+		return SymbolAttributeDef
+	}
 	// Only classify attribute usages (datatype, attribute, feature keywords)
 	if u.Kind != ast.UsageAttribute {
 		return usageSymbolKind(u.Kind)

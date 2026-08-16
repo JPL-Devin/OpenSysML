@@ -67,7 +67,12 @@ func TestParseUsageOccurrenceModifiers(t *testing.T) {
 		wantIndividual bool
 		wantPortion    ast.PortionKind
 	}{
-		{"individual", "individual testSystem : TestSystem;", ast.UsageAttribute, true, ast.PortionNone},
+		// With no kind keyword after it, `individual` declares an occurrence usage
+		// itself (SysML.xtext IndividualUsage returns SysML::OccurrenceUsage).
+		{"individual", "individual testSystem : TestSystem;", ast.UsageIndividual, true, ast.PortionNone},
+		// The declaration is optional, so the keyword alone declares one too
+		// (SysML.xtext Usage: UsageDeclaration? UsageCompletion).
+		{"individual_empty", "individual ;", ast.UsageIndividual, true, ast.PortionNone},
 		// The modifier is orthogonal to the kind keyword, which still declares the kind.
 		{"individual_part", "individual part testVehicle : TestSystem;", ast.UsagePart, true, ast.PortionNone},
 		{"individual_occurrence", "individual occurrence testFlight : Flight;", ast.UsageOccurrence, true, ast.PortionNone},
@@ -111,7 +116,7 @@ func TestParseUsageOccurrenceModifiersInBody(t *testing.T) {
 		wantIndividual bool
 		wantPortion    ast.PortionKind
 	}{
-		{"individual", "individual testSystem : TestSystem;", ast.UsageAttribute, true, ast.PortionNone},
+		{"individual", "individual testSystem : TestSystem;", ast.UsageIndividual, true, ast.PortionNone},
 		{"individual_part", "individual part p;", ast.UsagePart, true, ast.PortionNone},
 		{"individual_occurrence", "individual occurrence o;", ast.UsageOccurrence, true, ast.PortionNone},
 		{"individual_snapshot", "individual snapshot s;", ast.UsageOccurrence, true, ast.PortionSnapshot},

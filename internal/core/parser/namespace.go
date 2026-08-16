@@ -147,6 +147,12 @@ func (p *Parser) parseQualifiedNameRelaxed() *ast.QualifiedName {
 // parseIdentification parses `<shortName> name?` or `name` or nothing.
 // A missing identification yields a zero-value Identification (no diagnostic).
 func (p *Parser) parseIdentification() ast.Identification {
+	return p.parseIdentificationStopping()
+}
+
+// parseIdentificationStopping parses an identification whose name may not be one of
+// stop: those keywords end the declaration rather than naming it.
+func (p *Parser) parseIdentificationStopping(stop ...string) ast.Identification {
 	var id ast.Identification
 	if p.at(lexer.Lt) {
 		p.advance() // <
@@ -167,6 +173,11 @@ func (p *Parser) parseIdentification() ast.Identification {
 	}
 	if p.at(lexer.Keyword) {
 		kw := p.peek().KeywordID
+		for _, s := range stop {
+			if kw == s {
+				return id
+			}
+		}
 		switch kw {
 		case "default", "connect", "allocate", "from", "to", "then", "first", "do", "of":
 			// These keywords have special syntax meaning, not valid as identifier names here

@@ -1,0 +1,35 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="AnonymousModifiedUsages" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle"))
+      (Membership visibility="default"
+        (Definition kind="occurrence" abstract=false variation=false name="Flight"))
+      (Membership visibility="default"
+        (Usage kind="part" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+          (Relationship kind="typing" target=Vehicle
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="item" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+          (Relationship kind="typing" target=Integer
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="item" name="" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Integer
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false snapshot=true
+          (Relationship kind="typing" target=Vehicle
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="item" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false timeslice=true
+          (Relationship kind="typing" target=Integer
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="individual" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+          (Relationship kind="typing" target=Vehicle
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="vehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+          (Relationship kind="typing" target=Vehicle
+            (*ast.QualifiedName)))))))
