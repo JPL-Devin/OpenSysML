@@ -42,6 +42,29 @@ Workspace trust must be granted — Restricted Mode silently disables the extens
 
 ## Server discovery (`editors/vscode/src/extension.ts`)
 
+**`--stdio` crash loop (seen at b3f16e4, pre-existing on `main`).** The client uses
+`TransportKind.stdio`, which makes vscode-languageclient append `--stdio` to the server argv, while
+`cmd/sysml-lsp/main.go` parses flags with `flag` and rejects unknown ones. The symptom is a toast
+`Client SysML v2 Language Server: connection to server is erroring. write EPIPE`, then in the
+"SysML v2" output channel `flag provided but not defined: -stdio` / `Usage: sysml-lsp [options]` /
+`Server process exited with code 2` and finally
+`server crashed 5 times in the last 3 minutes. The server will not be restarted.`
+`pgrep -a sysml-lsp` is empty and the Problems panel stays empty (which looks exactly like "the
+feature under test produces no diagnostics" — always check `pgrep` before believing that).
+Reproduce outside the editor with `./bin/sysml-lsp --stdio </dev/null`.
+Workaround for testing (no repo edit needed): a wrapper that drops argv, pointed at from the
+**Settings UI** (`Ctrl+,` → search `systemica.server.path`, User scope) — the setting has an
+`onDidChangeConfiguration` handler, so the server restarts on Enter and
+`Starting /tmp/lsp-wrap.sh` appears in the channel:
+
+```bash
+printf '#!/bin/sh\nexec /home/ubuntu/repos/Systemica/bin/sysml-lsp\n' > /tmp/lsp-wrap.sh
+chmod +x /tmp/lsp-wrap.sh
+```
+
+The proper fix (report it, do not apply it while testing) is either accepting/ignoring `-stdio` in
+`cmd/sysml-lsp/main.go` or dropping `transport` from the `ServerOptions` in `extension.ts`.
+
 Order is `systemica.server.path` → `<workspace>/bin/sysml-lsp` → `sysml-lsp` on PATH. On this box
 `sysml-lsp` is normally NOT on PATH, so a green run genuinely exercises the workspace `bin/` fallback.
 Proof lives in the **"SysML v2" output channel**: `Starting /home/.../bin/sysml-lsp`.
