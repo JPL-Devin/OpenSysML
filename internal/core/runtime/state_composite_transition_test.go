@@ -255,6 +255,60 @@ func TestChangeConditionOnACompositeStateFiresWhileASubstateIsActive(t *testing.
 	assertCurrentState(t, exec, "Done")
 }
 
+// A watched condition whose guard blocks its transition does not consume the poll:
+// the other regions still move on the conditions they watch, one transition each.
+func TestGuardBlockedChangeConditionDoesNotSilenceTheOtherRegions(t *testing.T) {
+	exec := stateExecutorForSource(t, "sm", `package test {
+		state sm {
+			attribute ready : Boolean = false;
+			attribute allowed : Boolean = false;
+
+			region left {
+				initial lstart;
+				state l1;
+				state lmoved;
+				transition lstart to l1;
+				transition l1 to lmoved accept when ready if allowed;
+			}
+			region right {
+				initial rstart;
+				state r1;
+				state rmoved;
+				transition rstart to r1;
+				transition r1 to rmoved accept when ready;
+			}
+		}
+	}`)
+
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	exec.stateData["ready"] = boolValue(true)
+	if err := exec.pollChangeEvents(); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+
+	active := make(map[string]bool)
+	for _, state := range exec.ActiveStates() {
+		active[state.Name] = true
+	}
+	if !active["l1"] || !active["rmoved"] {
+		t.Errorf("expected the blocked left region to stay in l1 and the right one to reach rmoved, got %v", active)
+	}
+
+	exec.stateData["allowed"] = boolValue(true)
+	if err := exec.pollChangeEvents(); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	active = make(map[string]bool)
+	for _, state := range exec.ActiveStates() {
+		active[state.Name] = true
+	}
+	if !active["lmoved"] {
+		t.Errorf("expected the left region to move once its guard holds, got %v", active)
+	}
+}
+
 // An enabled transition inside one region does not suppress the transition an
 // enclosing state offers a concurrent region: only the state a fired transition
 // left is disabled for this event.

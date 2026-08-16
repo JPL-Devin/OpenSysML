@@ -2002,21 +2002,32 @@ func stateActionName(u *ast.Usage) string {
 // pollChangeEvents checks ChangeEvent conditions for the outgoing transitions of
 // the active configuration, walking outward from each active leaf so that a
 // condition on an enclosing composite state is watched while a substate is
-// active. Fires the first transition whose condition became true.
+// active. Every leaf takes at most one transition, as a dispatched event's leaves
+// do, so concurrent regions each move on the conditions they watch.
 func (e *StateExecutor) pollChangeEvents() error {
 	for _, leaf := range e.activeLeaves() {
+		if !e.isActive(leaf) {
+			continue // a transition another leaf took has left it
+		}
 		for _, source := range e.getParentChain(leaf) {
 			fired, err := e.pollChangeEventsOf(source)
-			if err != nil || fired {
+			if err != nil {
 				return err
 			}
+			if fired {
+				break
+			}
+		}
+		if e.state == StateCompleted {
+			return nil
 		}
 	}
 	return nil
 }
 
 // pollChangeEventsOf fires the state's first change-triggered transition whose
-// condition holds, reporting whether one did.
+// condition holds and whose guard does not block it, reporting whether one moved
+// the machine. A blocked transition leaves the condition watched by the others.
 func (e *StateExecutor) pollChangeEventsOf(state *ast.StateNode) (bool, error) {
 	for _, trans := range e.graph.Transitions[state] {
 		if changeEvent, ok := trans.Trigger.(*ast.ChangeEvent); ok {
@@ -2035,10 +2046,17 @@ func (e *StateExecutor) pollChangeEventsOf(state *ast.StateNode) (bool, error) {
 				return false, fmt.Errorf("change condition must be boolean, got %v", condVal.Kind)
 			}
 
-			// Fire transition if true
-			if isTrueVal {
-				return true, e.fireFrom(state, trans)
+			if !isTrueVal {
+				continue
 			}
+			satisfied, err := e.passesGuard(trans)
+			if err != nil {
+				return false, fmt.Errorf("eval change guard: %w", err)
+			}
+			if !satisfied {
+				continue
+			}
+			return true, e.fireFrom(state, trans)
 		}
 	}
 
