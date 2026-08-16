@@ -8,6 +8,7 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -175,6 +176,25 @@ func (s *Session) featureChainSymbol(name string) (*symbols.Symbol, string) {
 // deeply nested or richly connected model cannot make a lookup unbounded.
 const carrierLimit = 2000
 
+// carriesDeclaration reports whether an object of type typ carries the feature
+// declared by decl: typ or a supertype of it is that declaration. Declarations
+// are compared, not symbols, because the index and the document each build a
+// symbol of their own for one declaration.
+func carriesDeclaration(model *semantics.Model, typ *symbols.Symbol, decl ast.Node) bool {
+	if typ == nil || decl == nil {
+		return false
+	}
+	if typ.Decl == decl {
+		return true
+	}
+	for _, sup := range model.AllSupertypes(typ) {
+		if sup != nil && sup.Decl == decl {
+			return true
+		}
+	}
+	return false
+}
+
 // carrierInstances names the session's objects of the type declaring sym,
 // sorted: an object of `part hot : Sensor` carries `Sensor::inRange`. Nested
 // objects carry the features of their own type too, so `Spec::c` is carried by
@@ -185,7 +205,7 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 		return nil
 	}
 	declaring := sym.OwnerScope.Owner()
-	if declaring == nil || len(s.instances) == 0 {
+	if declaring == nil || declaring.Decl == nil || len(s.instances) == 0 {
 		return nil
 	}
 	ctx, err := s.getOrCreateRuntime()
@@ -209,7 +229,7 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 			continue
 		}
 		seen[cur.inst.ID] = true
-		if model.Conforms(cur.inst.Type, declaring) {
+		if carriesDeclaration(model, cur.inst.Type, declaring.Decl) {
 			names = append(names, cur.name)
 			// A feature is read from the outermost object carrying it; its own
 			// nested objects are of other types and are not searched again.

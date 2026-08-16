@@ -48,6 +48,33 @@ func TestEvalThroughDeclarationHonorsNestedRedefinition(t *testing.T) {
 	}
 }
 
+// A later unrelated declaration re-analyzes the document, giving the same
+// declarations new symbols; the subject is still the object carrying them, so
+// the answer does not fall back to the declared default.
+func TestEvalThroughDeclarationKeepsItsSubjectAcrossSubmissions(t *testing.T) {
+	s := NewSession()
+	s.Submit(nestedRedefinitionModel)
+	if _, _, err := s.runMeta("%instantiate A::o"); err != nil {
+		t.Fatal(err)
+	}
+	s.Submit("package Extra { part def E; }")
+
+	for _, path := range []string{"A::Spec::c", "A::Outer::inner::b::c", "A::o::inner::b::c"} {
+		lines, err := s.EvalExpr(path)
+		if err != nil {
+			t.Errorf("%%eval %s after an unrelated submission: %v", path, err)
+			continue
+		}
+		got := strings.Join(lines, "\n")
+		if !strings.Contains(got, "9.00") {
+			t.Errorf("%%eval %s = %v, want the redefined value", path, lines)
+		}
+		if !strings.Contains(got, "A::o::inner::b") {
+			t.Errorf("%%eval %s = %v, want the carrying object named", path, lines)
+		}
+	}
+}
+
 // Without an object of the type, the declaration's own default is the answer:
 // nothing redefines it.
 func TestEvalThroughDeclarationWithoutObjectUsesDeclaredValue(t *testing.T) {
@@ -115,5 +142,10 @@ func TestCheckHonorsNestedRedefinitionThroughDeclaration(t *testing.T) {
 	v := s.CheckConstraint("A::Spec::high")
 	if !v.Holds() {
 		t.Errorf("constraint over the redefined value: %v", v.Lines)
+	}
+	// A re-analysis of the document leaves the check about the same object.
+	s.Submit("package Extra { part def E; }")
+	if v := s.CheckConstraint("A::Spec::high"); !v.Holds() {
+		t.Errorf("constraint after an unrelated submission: %v", v.Lines)
 	}
 }
