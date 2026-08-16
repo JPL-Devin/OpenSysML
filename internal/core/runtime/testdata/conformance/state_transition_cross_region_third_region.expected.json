@@ -1,0 +1,9 @@
+{
+  "type": "state",
+  "finalState": "rtarget+tidle",
+  "outputs": {
+    "crossed": {"type": "Integer", "value": 1},
+    "thirdEntries": {"type": "Integer", "value": 1},
+    "thirdExits": {"type": "Integer", "value": 0}
+  }
+}

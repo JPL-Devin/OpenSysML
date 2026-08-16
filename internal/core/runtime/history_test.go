@@ -241,6 +241,70 @@ func TestHistoryRestoresOrthogonalRegions(t *testing.T) {
 	}
 }
 
+// A region left by a transition that started inside its own composite state's
+// region still records the state it was left in, so a deep history restores that
+// composite state and its inner configuration instead of the region's initial state.
+func TestDeepHistoryRestoresARegionLeftFromInsideItsCompositeState(t *testing.T) {
+	istart := &ast.StateNode{Name: "istart", IsInitial: true}
+	ideep := &ast.StateNode{Name: "ideep"}
+	inner := &ast.StateRegion{Name: "inner", States: []ast.Node{istart, ideep}}
+	wrapper := &ast.StateNode{Name: "wrapper", Regions: []*ast.StateRegion{inner}}
+
+	lstart := &ast.StateNode{Name: "lstart", IsInitial: true}
+	lwork := &ast.StateNode{Name: "lwork"}
+	rstart := &ast.StateNode{Name: "rstart", IsInitial: true}
+	left := &ast.StateRegion{Name: "left", States: []ast.Node{lstart, lwork}}
+	right := &ast.StateRegion{Name: "right", States: []ast.Node{rstart, wrapper}}
+	history := &ast.PseudostateNode{Kind: ast.PseudostateDeepHistory, Name: "H"}
+	outer := &ast.StateNode{
+		Name:      "outer",
+		Regions:   []*ast.StateRegion{left, right},
+		Substates: []ast.Node{history},
+	}
+
+	exec := stateExecutorFor(t, &ast.Usage{
+		Kind:  ast.UsageState,
+		Ident: ast.Identification{Name: "Machine"},
+		Members: []ast.Node{
+			&ast.StateNode{Name: "init", IsInitial: true},
+			outer,
+			&ast.StateNode{Name: "away"},
+			transitionMember("init", "outer"),
+			transitionMember("lstart", "lwork"),
+			transitionMember("rstart", "wrapper"),
+			transitionMember("istart", "ideep"),
+			transitionMember("ideep", "away"),
+			transitionMember("away", "H"),
+		},
+	})
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	fire(t, exec, "init", "outer")
+	advanceRegion(t, exec, "left", "lstart", "lwork")
+	advanceRegion(t, exec, "right", "rstart", "wrapper")
+	advanceRegion(t, exec, "inner", "istart", "ideep")
+	// Leaving the composite state from inside its own region records both regions.
+	advanceRegion(t, exec, "inner", "ideep", "away")
+
+	mark := len(exec.stateVisits)
+	fire(t, exec, "away", "H")
+
+	restored := map[string]bool{}
+	for _, state := range exec.activeConfig.regionStates {
+		restored[state.Name] = true
+	}
+	if !restored["lwork"] || !restored["wrapper"] || !restored["ideep"] {
+		t.Errorf("restored regions = %v, want lwork, wrapper and ideep", restored)
+	}
+	for _, entered := range visitsAfter(exec, mark) {
+		if entered == "rstart" || entered == "istart" {
+			t.Errorf("history re-entered the initial state %s, visits: %v", entered, visitsAfter(exec, mark))
+		}
+	}
+}
+
 // A deep history restores a configuration nested below an orthogonal region:
 // entering the region at the innermost recorded state still runs the entry
 // behavior of the states above it inside that region.

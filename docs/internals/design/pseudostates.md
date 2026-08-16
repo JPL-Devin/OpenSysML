@@ -332,8 +332,11 @@ state body.
 **History** (`ast.PseudostateShallowHistory`, `ast.PseudostateDeepHistory`) is
 owned by the composite state it restores — `lower.StateGraph.PseudostateOwner`
 records that ownership — and re-enters the configuration that state was last left
-in. `exitState` records the configuration on the way out, per composite state: the
-substate that was active, and the active state of each orthogonal region.
+in. The configuration is recorded on the way out — the substate that was active by
+`exitState`, and the active state of each orthogonal region by `recordRegionHistory`
+as that region is left, whether by `exitState`, `leaveRegion` or `exitRegionTo`. A
+region left with no active state has its record dropped (`forgetRegionHistory`),
+since there is nothing to restore.
 
 `fireHistoryTransition` reads that record before leaving the source
 configuration, since a transition out of the owner's own substates would
@@ -386,21 +389,23 @@ state def RegionChoice {
   routes back into a pseudostate it already passed, a branch with no satisfied
   guard, and a branch into a fork, join or history all return typed errors rather
   than leaving the machine resting on a pseudostate.
-- **`moveWithinRegion`** handles a branch ending inside the source region: the
-  exit stops at the region boundary even when the least common ancestor lies
-  above it, so the state owning the region is neither exited nor re-entered and
-  every sibling region keeps the state it was in — including its entry behaviors,
-  which do not run again.
-- **`leaveRegion`** handles a branch ending outside the source region. The least
-  common ancestor is then above the region set, so the whole set is left: every
-  region is exited in declaration order — recording its configuration, so a later
-  history transition restores it — before the target is entered.
-  - A target in a **sibling region of the same composite state** re-enters that
-    state with one branch naming the target: the regions the branch does not name
-    restart at their initial states, since their previous configuration was left.
-  - A target **outside the composite state** exits it and its ancestors up to the
-    least common ancestor, then enters down to the target, entering that target's
-    own regions on the way.
+- **`moveBetweenRegions`** handles a branch ending inside the source region or
+  inside a region concurrent with it, which `concurrentRegionsFor` and
+  `siblingRegionContaining` classify. KerML `StateTransitionPerformance` orders
+  only `guard then transitionLinkSource.exit`, so `exitRegionTo` exits the source
+  and its descendants down to the boundary the target region keeps: the state
+  owning the regions is neither exited nor re-entered, and the regions holding
+  neither endpoint keep the states they were in, entry behaviors included. A
+  target nested inside a composite state the target region is already running
+  moves that inner region (`innermostActiveRegion`); a source nested deeper than
+  the target's region leaves its region set up to the level the two share, which
+  `enclosingRegion` finds even when the region's owning state is a substate.
+- **`leaveRegion`** handles a branch ending outside every enclosing region set.
+  The least common ancestor is then above the region set, so the whole set is
+  left: every region is exited in declaration order — recording its
+  configuration, so a later history transition restores it — before the composite
+  state and its ancestors up to the least common ancestor are exited and the
+  target is entered, entering that target's own regions on the way.
 - **`leaveTopRegions`** does the same for the machine's own regions, which no
   state owns. `lower.StateGraph.TopRegions` carries their declaration order, so
   the order regions are entered, exited and offered an event in is the declared

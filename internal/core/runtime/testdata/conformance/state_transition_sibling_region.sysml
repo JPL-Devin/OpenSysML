@@ -1,6 +1,8 @@
-// A transition naming a vertex of a sibling orthogonal region is legal (UML
-// 2.5.1 §14.2.3.9): the target is a vertex of the same machine, and taking it
-// re-enters the composite state, so the region not named restarts.
+// A transition naming a vertex of a sibling orthogonal region is legal: the
+// target is a vertex of the same machine, and taking it exits the source only —
+// KerML StatePerformances::StateTransitionPerformance orders
+// `guard then transitionLinkSource.exit` — so the composite state owning the two
+// regions is neither exited nor re-entered.
 package Test {
 	state def TransitionSiblingRegion {
 		attribute crossed : Integer = 0;

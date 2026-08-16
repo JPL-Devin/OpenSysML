@@ -1,0 +1,22 @@
+{
+  "type": "state",
+  "finalState": "away",
+  "outputs": {
+    "deepEntries": {
+      "type": "Integer",
+      "value": 2
+    },
+    "startEntries": {
+      "type": "Integer",
+      "value": 2
+    },
+    "trips": {
+      "type": "Integer",
+      "value": 2
+    },
+    "restarts": {
+      "type": "Integer",
+      "value": 1
+    }
+  }
+}
