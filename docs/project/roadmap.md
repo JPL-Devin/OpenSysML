@@ -405,16 +405,35 @@ scoped to what the submission changed: `mergeSubmission` folds a re-typed namesp
 already in the session instead of replacing its body, `carryOverObjects` carries instantiated
 objects whose declarations are untouched, and `dropStaleDebugSessions` ends only a session over a
 declaration the submission rewrote — reporting it as a `note:` rather than failing the next
-`%step` with "no active session". Documented in `docs/guide/04-repl.md`.
+`%step` with "no active session". The wholesale paths follow the same rule now: a `%load` carries an
+object over when the reloaded text still resolves the declaration to the shape the object was
+materialized against (`Context.Adopt` is what proves it), and `%clear`, which replaces every
+declaration and so can prove nothing, reports what it took and why — the next `%instances`, `%slots`
+or `%step` explains the loss instead of reading as a session that materialized nothing. Documented in
+`docs/guide/04-repl.md`.
 
 ## B2 — `%eval` of a compound expression cannot reach a package member — done
 
 The prompt evaluates in the namespace the session is working in (`Session.promptScope`), which is
 the namespace a member typed at the prompt would be written in, so `mass * 2` and `1.0 [m/s]` name
 that namespace's members and imports. What remains is a choice, not a defect: that namespace is the
-*last* one the session declared, so declaring a scratch package moves it and the earlier package's
-members and imports are then reached by qualified name only. Naming a context explicitly
-(`%eval in Demo::Vehicle : mass * 2`) or following the last `%instantiate` would decide it instead.
+*last* one the session declared. A context is now named explicitly to decide it:
+`%eval in Demo::Vehicle : mass * 2` evaluates in that element's namespace, and pinning a name an
+object was materialized under reads that object's slots, as an unpinned `%eval` does after
+`%instantiate`. The default is unchanged — the last declared namespace — so nothing moved under an
+existing session. Documented in `docs/guide/04-repl.md` and in `%help`.
+
+## B3 — a quoted fully-qualified name breaks the meta-commands — done
+
+A name the notation has to quote — a space, a keyword as a name, punctuation — was split on its
+space before it was parsed, so `%instantiate 'My Pkg'::Car` failed with `unresolved reference: 'My`
+while the CLI expression path and `%search` handled the same name. The prompt now reads a quoted
+unrestricted name as one argument (`parseArgs`, and the raw tail `%calc` takes), normalizes it to the
+name the index records at the one lookup every name-taking command shares (`Session.lookupSymbol`),
+and reports a resolved name back in the spelling that can be typed into the next command
+(`notationName`). The gRPC service follows the same rule: `internal/grpc/service.go` resolves a
+symbol ID written either way, so `Instantiate`, `GetSymbol`, `Evaluate`, `ExecuteAction` and
+`ExecuteState` accept `'My Pkg'::Car` as well as the unquoted `My Pkg::Car` clients already send.
 
 ---
 

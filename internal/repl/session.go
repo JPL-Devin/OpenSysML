@@ -73,10 +73,10 @@ type Session struct {
 	// Why the debugging sessions and the instances are gone, when a submission
 	// ended them. A command that finds nothing active reports this rather than
 	// leaving the user to guess.
-	endedAction   *endedSession
-	endedState    *endedSession
-	lostInstances int // how many instances the last submission that dropped any took
-	lostAt        int // the submission that dropped them
+	endedAction *endedSession
+	endedState  *endedSession
+	// lost records the objects the session no longer holds, and what took them.
+	lost instanceLoss
 
 	// notedBlocker identifies the unresolved error the session has already
 	// reported as blocking the deeper checks, so it is named once rather than on
@@ -170,8 +170,12 @@ func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 	}
 	s.budgets = budgets
 	// Dropping the context invalidates everything derived from it, instances
-	// included: their IDs restart with the next context.
+	// included: their IDs restart with the next context. What goes is recorded, so
+	// a later command explains it.
 	s.rtCtx = nil
+	if n := len(s.instances); n > 0 {
+		s.lost = lossOnBudgets(n)
+	}
 	s.instances = make(map[string]*runtime.Instance)
 	return nil
 }
@@ -526,7 +530,7 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 	s.rtCtx = nil
 	gone := goneNames(drops)
 	notices := dropNotices(drops)
-	notices = append(notices, s.carryOverObjects(over, gone)...)
+	notices = append(notices, s.carryOverObjects(over)...)
 	notices = append(notices, s.dropStaleDebugSessions(gone, over)...)
 	s.keepIdentitiesOf(over.prev)
 	// The diagnostics already carry their own "did you mean" hints.
@@ -630,6 +634,12 @@ func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, shapes *ru
 	return by, false, changed
 }
 
+// debugSessionResetEnded reports a debugging session a reset ended, which no
+// redeclaration accounts for.
+func debugSessionResetEnded(kind, name string) string {
+	return fmt.Sprintf("note: %s debugging session for %q ended (the session was reset)", kind, name)
+}
+
 func debugSessionEnded(kind, name, superseded string, objectGone bool) string {
 	if objectGone {
 		return fmt.Sprintf("note: %s debugging session for %q ended (the object %s performing it was dropped)", kind, name, superseded)
@@ -651,14 +661,19 @@ func supersededBy(gone []string, fqn string) (string, bool) {
 	return "", false
 }
 
-// Clear resets the session, dropping all accumulated declarations.
-func (s *Session) Clear() {
+// Clear resets the session, dropping all accumulated declarations. It returns
+// the notices for what the reset took with it.
+func (s *Session) Clear() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.clear()
+	return s.clear()
 }
 
-func (s *Session) clear() {
+// clear drops the document and everything derived from it. A reset replaces no
+// declaration, so nothing materialized from the old one can be rebound: what
+// goes is reported and recorded rather than silently emptied.
+func (s *Session) clear() []string {
+	notices, lost, endedAction, endedState := s.resetLoss()
 	s.ws.Remove(docName)
 	s.snippets = nil
 	s.version = 0
@@ -671,10 +686,28 @@ func (s *Session) clear() {
 	s.instances = make(map[string]*runtime.Instance)
 	s.actionExec = nil
 	s.stateExec = nil
-	s.endedAction = nil
-	s.endedState = nil
-	s.lostInstances, s.lostAt = 0, 0
+	s.lost, s.endedAction, s.endedState = lost, endedAction, endedState
 	s.notedBlocker.record("")
+	return notices
+}
+
+// resetLoss reports what a reset takes with it and records why, so a later
+// %instances, %slots or %step explains the loss instead of reading as a session
+// that never materialized anything.
+func (s *Session) resetLoss() (notices []string, lost instanceLoss, action, state *endedSession) {
+	if n := len(s.instances); n > 0 {
+		notices = append(notices, instancesResetNotice(n))
+		lost = lossOnReset(n)
+	}
+	if s.actionExec != nil {
+		notices = append(notices, debugSessionResetEnded("action", s.actionExec.name))
+		action = &endedSession{kind: "action", name: s.actionExec.name, reset: true}
+	}
+	if s.stateExec != nil {
+		notices = append(notices, debugSessionResetEnded("state", s.stateExec.name))
+		state = &endedSession{kind: "state machine", name: s.stateExec.name, reset: true}
+	}
+	return notices, lost, action, state
 }
 
 // getOrCreateRuntime lazily creates runtime context when first needed.

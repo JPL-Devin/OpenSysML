@@ -306,9 +306,9 @@ func (s *Session) instantiateNamed(name string) ([]string, error) {
 	// Keyed by the resolved name, so %slots finds the instance whichever
 	// spelling of the name created it.
 	s.instances[fqn] = inst
-	s.lostInstances, s.lostAt = 0, 0
+	s.lost = instanceLoss{}
 	return []string{
-		fmt.Sprintf("✓ Created instance of %s", fqn),
+		fmt.Sprintf("✓ Created instance of %s", notationName(fqn)),
 		fmt.Sprintf("  ID: %d", inst.ID),
 		fmt.Sprintf("  Use %%slots %s to inspect", name),
 	}, nil

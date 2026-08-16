@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"strings"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/libs"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
@@ -193,7 +195,7 @@ func (s *Service) GetSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.
 	}
 
 	// Lookup symbol by FQN
-	syms := cached.Index.LookupQualified(req.SymbolId)
+	syms := lookupNamed(cached.Index, req.SymbolId)
 	if len(syms) == 0 {
 		return &pb.SymbolResponse{
 			Error: fmt.Sprintf("symbol not found: %s", req.SymbolId),
@@ -259,7 +261,7 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	var scope *symbols.Scope
 	if req.ContextSymbolId != "" {
 		// Lookup context symbol
-		syms := cached.Index.LookupQualified(req.ContextSymbolId)
+		syms := lookupNamed(cached.Index, req.ContextSymbolId)
 		if len(syms) > 0 && syms[0].Scope != nil {
 			scope = syms[0].Scope
 		}
@@ -297,7 +299,7 @@ func (s *Service) Instantiate(ctx context.Context, req *pb.InstantiateRequest) (
 	}
 
 	// Lookup symbol
-	syms := cached.Index.LookupQualified(req.SymbolId)
+	syms := lookupNamed(cached.Index, req.SymbolId)
 	if len(syms) == 0 {
 		return &pb.InstantiateResponse{
 			Error: fmt.Sprintf("symbol not found: %s", req.SymbolId),
@@ -334,7 +336,7 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	}
 
 	// Lookup action symbol
-	syms := cached.Index.LookupQualified(req.ActionSymbolId)
+	syms := lookupNamed(cached.Index, req.ActionSymbolId)
 	if len(syms) == 0 {
 		return &pb.ExecuteActionResponse{
 			Error: fmt.Sprintf("action not found: %s", req.ActionSymbolId),
@@ -384,7 +386,7 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	}
 
 	// Lookup state machine symbol
-	syms := cached.Index.LookupQualified(req.StateMachineSymbolId)
+	syms := lookupNamed(cached.Index, req.StateMachineSymbolId)
 	if len(syms) == 0 {
 		return &pb.ExecuteStateResponse{
 			Error: fmt.Sprintf("state machine not found: %s", req.StateMachineSymbolId),
@@ -471,4 +473,43 @@ func collectChildIDs(scope *symbols.Scope, idx *symbols.Index) []string {
 func computeHash(content string) string {
 	hash := sha256.Sum256([]byte(content))
 	return fmt.Sprintf("%x", hash)
+}
+
+// lookupNamed resolves a symbol ID written in either spelling: the quoted,
+// notation-legal form a model author writes ('My Pkg'::Car), or the unquoted
+// spelling the index records (My Pkg::Car), which keeps working as it did.
+func lookupNamed(idx *symbols.Index, id string) []*symbols.Symbol {
+	if syms := idx.LookupQualified(id); len(syms) > 0 {
+		return syms
+	}
+	if plain, ok := unquotedName(id); ok && plain != id {
+		return idx.LookupQualified(plain)
+	}
+	return nil
+}
+
+// unquotedName is the name a notation-legal qualified name states, with the
+// quoting of its unrestricted segments removed, or false for an ID the notation
+// does not read as one whole name.
+func unquotedName(id string) (string, bool) {
+	if id == "" {
+		return "", false
+	}
+	p := parser.New(source.New("<symbol-id>", []byte(id)))
+	expr := p.ParseExpression()
+	if len(p.Diagnostics) > 0 || p.Offset() != len(id) {
+		return "", false
+	}
+	ref, ok := expr.(*ast.FeatureReference)
+	if !ok || ref.Name == nil || ref.Name.Global || len(ref.Name.Parts) == 0 {
+		return "", false
+	}
+	segments := make([]string, 0, len(ref.Name.Parts))
+	for _, part := range ref.Name.Parts {
+		if part.Text == "" {
+			return "", false
+		}
+		segments = append(segments, part.Text)
+	}
+	return strings.Join(segments, "::"), true
 }

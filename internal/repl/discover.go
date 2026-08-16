@@ -83,7 +83,9 @@ func (s *Session) doSearch(substr string) ([]string, bool, error) {
 	}
 	out := make([]string, 0, len(shown)+1)
 	for _, m := range shown {
-		out = append(out, fmt.Sprintf("%s  %s", m.fqn, m.kind))
+		// Spelled as the notation writes it, so a hit can be typed back into a
+		// command that takes a name.
+		out = append(out, fmt.Sprintf("%s  %s", notationName(m.fqn), m.kind))
 	}
 	if len(matches) > len(shown) {
 		out = append(out, fmt.Sprintf("(%d more; narrow the search)", len(matches)-len(shown)))
@@ -168,7 +170,9 @@ func (s *Session) declaredSymbolNames() []string {
 // notFoundError reports a name no declaration answers to, offering the
 // qualified name the index does know it under, or the nearest spellings.
 func (s *Session) notFoundError(name string) error {
-	err := unresolvedError(name)
+	// Spelled as the notation writes it, so the name in the failure is the name
+	// that was typed.
+	err := unresolvedError(notationName(name))
 	msg := err.Error()
 	if !strings.Contains(name, "::") {
 		if idx := s.browseIndex(); idx != nil {
