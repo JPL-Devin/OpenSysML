@@ -203,11 +203,11 @@ func runChecks(files []string, exprs []string, c checks) int {
 		for _, slotErr := range report.SlotErrors {
 			rep.finding(slotErr)
 		}
-		// Materializing a wide model costs an object per value, so the check is
-		// bounded; what it did not reach is unchecked rather than clean.
+		// Materializing a wide or recursive model costs an object per value, so the
+		// check is bounded; what it did not reach is unchecked rather than clean.
 		if report.Bounded {
 			bounded = true
-			rep.warn(fmt.Sprintf("%s: materialization stopped at its budget; not every slot was checked", name))
+			rep.warn(fmt.Sprintf("%s: materialization is bounded; not every slot was checked", name))
 		}
 	}
 

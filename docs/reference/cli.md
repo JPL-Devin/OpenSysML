@@ -308,10 +308,11 @@ sysml: model.sysml did not materialize cleanly
 ```
 
 Nesting multiplies, and reading a slot materializes the objects it holds, so the
-check is bounded: a model wide enough to spend that budget is reported as
-checked in part (`warning: … materialization stopped at its budget`, and
-`no errors in the slots checked`) rather than read to the end. Being no model
-error, that leaves the status `0`.
+check is bounded, as the `%slots` listing is: a model wide enough to spend that
+budget, deeper than the walk descends, or one whose part holds its own kind is
+reported as checked in part (`warning: … materialization is bounded; not every
+slot was checked`, and `no errors in the slots checked`) rather than read to the
+end. Being no model error, that leaves the status `0`.
 
 The prompt is the exception: a line it could not carry out is reported and the
 session goes on, and `%quit` or Ctrl-D exits `0`. `sysml model.sysml` at a

@@ -17,8 +17,9 @@ const (
 // slots were read. Slots are lazy, so a default that does not conform to its
 // feature's multiplicity is only found by reading it: a caller reporting on an
 // object it created calls this rather than leaving those diagnostics to whoever
-// reads a slot next. bounded is true when the walk spent its budget before
-// every slot was read, so what it did not reach is unreported rather than clean.
+// reads a slot next. bounded is true when the walk did not read every slot —
+// its budget was spent, or nesting it does not descend into was elided — so
+// what it did not reach is unreported rather than clean.
 func (ctx *Context) MaterializationErrors(inst *Instance) (errs []error, bounded bool) {
 	if inst == nil {
 		return nil, false
@@ -64,6 +65,9 @@ func (w *materializeWalk) walk(inst *Instance, depth int) {
 			continue
 		}
 		if held := w.ctx.CompositeTypeOf(feat); held != nil && (depth >= maxMaterializeDepth || w.onPath[held]) {
+			// A part deeper than the walk descends, or one of a kind being expanded
+			// above it, is elided: unchecked rather than clean.
+			w.bounded = true
 			continue
 		}
 		// A redefinition names the redefined feature again, and the two names read

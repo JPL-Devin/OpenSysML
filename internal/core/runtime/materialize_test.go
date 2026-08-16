@@ -60,8 +60,14 @@ func TestMaterializationErrorsOfAConformingObject(t *testing.T) {
 		}
 	`)
 
-	if errs, _ := ctx.MaterializationErrors(inst); len(errs) != 0 {
+	errs, bounded := ctx.MaterializationErrors(inst)
+	if len(errs) != 0 {
 		t.Errorf("MaterializationErrors = %v, want none", errs)
+	}
+	// The object holds its own kind, which the walk elides rather than expanding
+	// forever, so what it holds below that is unchecked rather than clean.
+	if !bounded {
+		t.Error("bounded = false, want the elided recursion reported as unchecked")
 	}
 	if errs, _ := ctx.MaterializationErrors(nil); errs != nil {
 		t.Errorf("MaterializationErrors(nil) = %v, want none", errs)

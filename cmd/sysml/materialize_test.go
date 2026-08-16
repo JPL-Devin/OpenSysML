@@ -93,7 +93,7 @@ func TestCheckReportsMaterializationDiagnostics(t *testing.T) {
 `,
 			object: "M::craft",
 			status: 0,
-			want:   []string{"materialization stopped at its budget"},
+			want:   []string{"materialization is bounded", "no errors in the slots checked"},
 		},
 	}
 
@@ -112,6 +112,51 @@ func TestCheckReportsMaterializationDiagnostics(t *testing.T) {
 			if tc.once != "" {
 				if n := strings.Count(got.output(), tc.once); n != 1 {
 					t.Errorf("%q reported %d times, want once:\n%s", tc.once, n, got.output())
+				}
+			}
+		})
+	}
+}
+
+// A violation under nesting the walk does not descend into is unfound, so the
+// run must report what it did not check rather than that there were no errors.
+func TestCheckDoesNotReportCleanWhenNestingWasElided(t *testing.T) {
+	binary := buildCLI(t)
+
+	deep := `package M {
+    private import ScalarValues::Real;
+    part def L9 { attribute volumes : Real = (1.0, 2.0); }
+    part def L8 { part c : L9; }
+    part def L7 { part c : L8; }
+    part def L6 { part c : L7; }
+    part def L5 { part c : L6; }
+    part def L4 { part c : L5; }
+    part def L3 { part c : L4; }
+    part def L2 { part c : L3; }
+    part def L1 { part c : L2; }
+    part def Craft { part c : L1; }
+    part craft : Craft;
+}
+`
+	recursive := `package M {
+    private import ScalarValues::Real;
+    part def Node { part child : Node; }
+    part def Craft { part root : Node; }
+    part craft : Craft;
+}
+`
+	for name, model := range map[string]string{"deeper than the walk descends": deep, "a part holding its own kind": recursive} {
+		t.Run(name, func(t *testing.T) {
+			got := check(t, binary, model, "-instantiate", "M::craft", "-validate")
+			if got.status != 0 {
+				t.Errorf("exit status = %d, want 0: an elision is no model error\n%s", got.status, got.output())
+			}
+			if !strings.Contains(got.output(), "materialization is bounded") {
+				t.Errorf("the run did not report what it left unchecked:\n%s", got.output())
+			}
+			for _, line := range strings.Split(got.output(), "\n") {
+				if strings.HasSuffix(line, "no errors") {
+					t.Errorf("a partly checked model was reported clean: %q\n%s", line, got.output())
 				}
 			}
 		})
