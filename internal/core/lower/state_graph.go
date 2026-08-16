@@ -139,7 +139,7 @@ func ToStateGraph(stateMachineDecl ast.Node, scope *symbols.Scope) (*StateGraph,
 		return nil, fmt.Errorf("state machine must be Usage or Definition, got %T", stateMachineDecl)
 	}
 
-	graph.Connections = lowerConnections(members, OwnerBehavior)
+	graph.Connections = lowerConnections(members, OwnerBehavior, scope)
 	graph.Attributes = lowerAttributes(members)
 
 	// First pass: collect states and pseudostates
@@ -607,7 +607,7 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 		Trigger:   classifyTrigger(member.Trigger),
 		Guard:     member.Guard,
 		Effect:    LowerBehaviors(member.Effect, bodyScope),
-		Via:       ast.SimpleName(member.Via),
+		Via:       FeaturePath(member.Via),
 		Scope:     scope,
 		BodyScope: bodyScope,
 	}, nil

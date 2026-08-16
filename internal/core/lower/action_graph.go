@@ -63,9 +63,10 @@ type Statement interface {
 // Send is a lowered send statement. Message stays an expression because its
 // value is only known at execution time.
 //
-// Target is the simple name the send addressed, empty for a broadcast. IsVia
-// records that the name is a port of the sender rather than a receiver, in which
-// case the message goes to whatever the graph's Connections join that port to.
+// Target is the name the send addressed, empty for a broadcast. IsVia records
+// that the name is a port of the sender rather than a receiver, in which case it
+// is the whole path the port was written as and the message goes to whatever the
+// graph's Connections join that port to.
 type Send struct {
 	Message ast.Node
 	Target  string
@@ -330,7 +331,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 		}
 	}
 
-	graph.Connections = lowerConnections(members, OwnerBehavior)
+	graph.Connections = lowerConnections(members, OwnerBehavior, scope)
 	graph.Attributes = lowerAttributes(members)
 
 	// `first a then b;` names the node the flow starts at rather than declaring an
@@ -487,9 +488,15 @@ func lowerBody(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 	switch m := member.(type) {
 	case *ast.SendStatement:
+		// A `via` target names a port of the sender, which a nested port names
+		// through its owner (`via p.q`); a receiver is named by one name.
+		target := ast.SimpleName(m.Target)
+		if m.IsVia {
+			target = FeaturePath(m.Target)
+		}
 		return Send{
 			Message: m.Message,
-			Target:  ast.SimpleName(m.Target),
+			Target:  target,
 			IsVia:   m.IsVia,
 			Scope:   scope,
 		}
@@ -603,13 +610,14 @@ func usageDescription(u *ast.Usage) string {
 
 // acceptPort returns the port an accept action routes through
 // (`action r accept msg : T via p`), which the parser records as a reference
-// relationship on the accept action, or "" when it named none.
+// relationship on the accept action, or "" when it named none. The port is the
+// whole path it was written as, so a nested one is the port it names.
 func acceptPort(node *ast.Usage) string {
 	for _, rel := range node.Relationships {
 		if rel == nil || rel.Kind != ast.RelVia {
 			continue
 		}
-		if name := ast.SimpleName(rel.Target); name != "" {
+		if name := FeaturePath(rel.Target); name != "" {
 			return name
 		}
 	}

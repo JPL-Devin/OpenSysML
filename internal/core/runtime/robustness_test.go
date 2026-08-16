@@ -1042,8 +1042,8 @@ func testHistoryWithoutRecordOrDefault(t *testing.T) {
 }
 
 // testSendViaUnconnectedPort: a port with no connection reaches no one, so the
-// accept waiting on the message suspends forever — which must be reported as a
-// deadlock rather than hanging or binding nothing.
+// send itself is undeliverable — which must be reported where it was written
+// rather than left for the accept waiting on it to time out as a deadlock.
 func testSendViaUnconnectedPort(t *testing.T) {
 	_, err := executeActionSource(t, "pipeline", `package P {
 		action pipeline {
@@ -1061,8 +1061,8 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error: nothing connects outPort to inPort")
 	}
-	if !errors.Is(err, ErrAcceptDeadlock) {
-		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("expected ErrUnroutableSend, got: %v", err)
 	}
 }
 

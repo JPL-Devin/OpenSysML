@@ -259,8 +259,8 @@ func TestLowerPlainConnectionCarriesNoVariant(t *testing.T) {
 	}
 }
 
-// An end reached through a chain attaches to the port the chain names, which is
-// its last segment: `sensor.out` joins `out`, not `sensor`.
+// An end reached through a chain attaches to the port the chain names, keeping
+// every segment: `sensor.out` joins that port, not another named `out`.
 func TestLowerConnectionEndFollowsAFeatureChain(t *testing.T) {
 	graph := actionGraphFor(t, `
 		action a {
@@ -275,8 +275,11 @@ func TestLowerConnectionEndFollowsAFeatureChain(t *testing.T) {
 	if len(graph.Connections) != 1 {
 		t.Fatalf("Connections = %v, want one connection", graph.Connections)
 	}
-	if got := PeerPorts(graph.Connections, "out"); len(got) != 1 || got[0] != "inPort" {
-		t.Errorf("PeerPorts(out) = %v, want [inPort]", got)
+	if got := PeerPorts(graph.Connections, "sensor.out"); len(got) != 1 || got[0] != "inPort" {
+		t.Errorf("PeerPorts(sensor.out) = %v, want [inPort]", got)
+	}
+	if got := PeerPorts(graph.Connections, "out"); got != nil {
+		t.Errorf("PeerPorts(out) = %v, want nothing: the end names sensor.out", got)
 	}
 }
 
@@ -317,7 +320,7 @@ func TestLowerObjectConnectionsAreOwnedByTheObject(t *testing.T) {
 			}
 		}
 	`)
-	conns := ToObjectConnections(def)
+	conns := ToObjectConnections(def, nil)
 	if len(conns) != 3 {
 		t.Fatalf("ToObjectConnections = %+v, want the plain connection and both variants", conns)
 	}
