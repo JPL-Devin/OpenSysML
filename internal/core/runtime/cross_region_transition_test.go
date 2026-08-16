@@ -61,6 +61,59 @@ func TestCrossRegionTransitionExitsSourceOnly(t *testing.T) {
 	}
 }
 
+// A cross-region transition whose target is nested inside the target region's
+// composite state moves that inner region: the composite state stays active and
+// the state it was running exits, leaving one active state per region.
+func TestCrossRegionTransitionIntoNestedTargetExitsTheAbandonedState(t *testing.T) {
+	exec := runStateMachine(t, "Machine", `package P {
+	state Machine {
+		attribute crossed : Integer = 0;
+		attribute innerExits : Integer = 0;
+		attribute wrapperEntries : Integer = 0;
+
+		initial init;
+		state running {
+			region left {
+				initial ls;
+				state lmid;
+				state lidle;
+				then ls lmid;
+				then lmid lidle;
+				transition lidle to rtarget if crossed == 0;
+			}
+			region right {
+				initial rs;
+				state wrapper {
+					entry { wrapperEntries = wrapperEntries + 1; }
+
+					region inner {
+						initial is;
+						state ridle { exit { innerExits = innerExits + 1; } }
+						state rtarget { entry { crossed = crossed + 1; } }
+						then is ridle;
+					}
+				}
+				then rs wrapper;
+			}
+		}
+
+		init then running;
+	}
+}`)
+
+	assertRegionConfig(t, exec, map[string]string{"right": "wrapper", "inner": "rtarget"})
+	for _, name := range []string{"wrapper", "running"} {
+		if got := countVisits(exec.stateVisits, name); got != 1 {
+			t.Errorf("%s entered %d times, want 1 (it is neither exited nor re-entered)", name, got)
+		}
+	}
+	for name, want := range map[string]int64{"crossed": 1, "innerExits": 1, "wrapperEntries": 1} {
+		if got := intValue(t, exec.stateData, name); got != want {
+			t.Errorf("%s = %d, want %d", name, got, want)
+		}
+	}
+}
+
 // Exiting a state exits its subperformances, so a transition out of a nested
 // non-orthogonal state still exits every state up to the endpoints' least common
 // ancestor.

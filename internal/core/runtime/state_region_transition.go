@@ -200,7 +200,7 @@ func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *l
 		return e.moveBetweenRegions(region, region, trans, target)
 	}
 	if sibling := e.siblingRegionContaining(region, target); sibling != nil {
-		return e.moveBetweenRegions(region, sibling, trans, target)
+		return e.moveBetweenRegions(region, e.innermostActiveRegion(sibling, target), trans, target)
 	}
 	return e.leaveRegion(region, trans, target)
 }
@@ -216,6 +216,33 @@ func (e *StateExecutor) siblingRegionContaining(region *ast.StateRegion, state *
 	for _, sibling := range siblings {
 		if sibling != region && e.regionContains(sibling, state) {
 			return sibling
+		}
+	}
+	return nil
+}
+
+// innermostActiveRegion descends from region through the already-active states on
+// the path to target, which stay active, and returns the region the move happens in.
+func (e *StateExecutor) innermostActiveRegion(region *ast.StateRegion, target *ast.StateNode) *ast.StateRegion {
+	for {
+		active, ok := e.activeConfig.regionStates[region]
+		if !ok || active == target {
+			return region
+		}
+		inner := e.regionUnder(active, target)
+		if inner == nil {
+			return region
+		}
+		region = inner
+	}
+}
+
+// regionUnder returns the orthogonal region of state that contains target, and
+// nil when target is not below one of state's own regions.
+func (e *StateExecutor) regionUnder(state, target *ast.StateNode) *ast.StateRegion {
+	for current := target; current != nil; current = e.graph.ParentState[current] {
+		if e.graph.ParentState[current] == state {
+			return e.graph.RegionOf[current]
 		}
 	}
 	return nil
