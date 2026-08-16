@@ -2043,3 +2043,46 @@ number rather than quoting the table.
   `WorkspaceEdit` whose `newText` actually fixes the file. A missing-semicolon fix needs a fixture
   the parser recovers with a fix on — `action def A { first start }` yields `Insert ';'`; a plain
   attribute declaration yields a diagnostic with no fix.
+
+## Symbol *kind* changes: `%search` is the only REPL probe (PR #210)
+
+When a change moves a declaration from one `symbols.SymbolKind` to another (modifier-driven usage
+kinds, KerML classifier classification, `classifyUsage` edits), `-validate` proves nothing: a model
+can be clean on both revisions while every kind is wrong. The probe is the REPL's
+`%search <prefix>`, which prints `<fqn>  <kind>` from `sym.Kind.String()`
+(`internal/repl/discover.go`, names in `internal/core/symbols/symbol.go`):
+
+```bash
+printf '%%load /tmp/m.sysml\n%%search Pkg::\n%%quit\n' | timeout 30 ./bin/sysml -quiet
+```
+
+- **Always search a `Pkg::` prefix, not a bare word.** `%search Observe` matched ~20 stdlib symbols
+  (ISQLight, VerificationCases) and truncated with `(9 more; narrow the search)`, burying the
+  model's own symbols. The trailing `::` also drops the package row itself.
+- `%list` only echoes the submitted source text and `renderMember` never reaches action-body
+  parameters, so it cannot show a parameter's kind. There is no `%kind`/`%hover` in the REPL.
+- **Anonymous usages are invisible to `%search`** (no name to index). To show that
+  `individual part : Vehicle;` or `in snapshot ;` still built something, use
+  `./bin/sysml <m> -convert sysml -o /dev/stdout` and assert the member round-trips
+  (`in snapshot;`, `in event;`, `in;`).
+- Warning-only changes need the **exit code** asserted explicitly: `-validate` prints warnings and
+  still ends `✓ no errors` with exit 0, so `echo "exit=$?"` is the difference between "warning" and
+  "error" in the recording. Count them with `-validate f 2>&1 | grep -c 'reserved keyword'`.
+- The A/B main binary is essential here: on `main` the same fixture printed
+  `attributeUsage`/`partUsage` for `individual i : V` and `in snapshot atStart : Flight`, which is
+  the only visible difference between fixed and broken.
+
+Pre-existing traps worth not re-reporting as regressions:
+
+- A bare `event e : O;` **declaration** reports `error: unresolved reference: e — did you mean
+  Demo::e?` on every revision — `event <name>` is read as naming an existing occurrence. Use
+  `occurrence takeoff : Flight; event takeoff;` for a clean fixture; the symbol is still built as
+  `occurrenceUsage`.
+- Fixtures using `Real`/`Integer` need `private import ScalarValues::*;` or `-validate` fails with
+  `unresolved reference: Real` and masks the kind assertions.
+- **Run the suite with a cold library index when you change classification.** The on-disk index
+  (`$XDG_CACHE_HOME/sysml-ls/libs`) caches stdlib symbol kinds, so a warm cache keeps returning the
+  old kinds and `go test ./...` passes locally while CI fails. Gate with
+  `export XDG_CACHE_HOME=$(mktemp -d) && go test -count=1 ./...`; this is how PR #210's
+  `function` → `kermlType` regression (every `IntegerFunctions` operator stopped being a calc,
+  `internal/repl/discover_test.go` pinned `ScalarValues::Integer attributeDef`) stayed hidden.
