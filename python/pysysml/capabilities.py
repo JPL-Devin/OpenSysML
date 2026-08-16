@@ -45,6 +45,15 @@ CAPABILITY_QUERY = "query"
 #: service could not evaluate.
 CAPABILITY_ENUM_VALUES = "enum_values"
 
+#: Evaluating an expression against an instantiated subject. Without it the
+#: subject is ignored and the answer is the declared default, which is
+#: indistinguishable from the object's own value.
+CAPABILITY_EVALUATE_SUBJECT = "evaluate_subject"
+
+#: Populated ``SymbolInfo.attributes``. Without it the attribute set is empty,
+#: which is indistinguishable from an element that has no attributes.
+CAPABILITY_SYMBOL_ATTRIBUTES = "symbol_attributes"
+
 
 @dataclass(frozen=True)
 class ServerInfo:

@@ -309,7 +309,9 @@ class TestModelEval:
         client.eval.return_value = 2
 
         assert self._model(client).eval("1+1") == 2
-        client.eval.assert_called_once_with("1+1", "hash1", context_symbol_id=None)
+        client.eval.assert_called_once_with(
+            "1+1", "hash1", context_symbol_id=None, subject_symbol_id=None
+        )
 
     def test_eval_passes_a_context_symbol(self):
         client = Mock()
@@ -318,7 +320,23 @@ class TestModelEval:
         model = self._model(client)
         assert model.eval("mass", context_symbol_id="Demo::sedan") == 1500.0
         client.eval.assert_called_once_with(
-            "mass", "hash1", context_symbol_id="Demo::sedan"
+            "mass",
+            "hash1",
+            context_symbol_id="Demo::sedan",
+            subject_symbol_id=None,
+        )
+
+    def test_eval_passes_a_subject_as_verify_constraint_does(self):
+        client = Mock()
+        client.eval.return_value = 1200.0
+
+        model = self._model(client)
+        assert model.eval("mass", subject="Demo::sedan") == 1200.0
+        client.eval.assert_called_once_with(
+            "mass",
+            "hash1",
+            context_symbol_id=None,
+            subject_symbol_id="Demo::sedan",
         )
 
     def test_eval_raises_what_the_connection_raises(self):

@@ -95,8 +95,8 @@ class TestModuleHelpersReadAnAddress:
     def test_helpers_reject_a_disagreeing_port(self):
         for call in (
             lambda: pysysml.load("demo.sysml", "localhost:50123", 50999),
-            lambda: pysysml.eval("1+1", model_hash="h", host="localhost:50123",
-                                 port=50999),
+            lambda: pysysml.evaluate("1+1", model_hash="h", host="localhost:50123",
+                                     port=50999),
             lambda: pysysml.instantiate("Demo::v", model_hash="h",
                                         host="localhost:50123", port=50999),
             lambda: pysysml.convert("sysml", model_hash="h",

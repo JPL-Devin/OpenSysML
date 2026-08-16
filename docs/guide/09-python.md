@@ -200,7 +200,7 @@ a value the wire format cannot represent is reported as an
 `UnsupportedValueError` in that entry, leaving the other entries intact.
 
 Every call about a loaded model is a `Model` method, and the module-level
-`pysysml.instantiate`/`eval`/`convert` remain for instantiating straight out of a
+`pysysml.instantiate`/`evaluate`/`convert` remain for instantiating straight out of a
 file (`pysysml.instantiate("Demo::Vehicle", file_path="model.sysml")`) or against
 a hash obtained elsewhere (`model_hash=…`).
 

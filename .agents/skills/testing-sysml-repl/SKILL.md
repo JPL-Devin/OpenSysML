@@ -1077,7 +1077,7 @@ Client API shapes that are easy to get wrong:
 
 - `Model.find(name)` returns **one `Symbol` or `None`**, not a list — iterating it raises
   `TypeError: 'Symbol' object is not iterable`. Use `.id` (FQN), `.name`, `.kind`.
-- `pysysml.instantiate(fqn, file_path=...)` and `pysysml.eval(expr, file_path=..., context_symbol_id=...)`
+- `pysysml.instantiate(fqn, file_path=...)` and `pysysml.evaluate(expr, file_path=..., context_symbol_id=...)`
   each take *exactly one* of `file_path` / `model_hash`.
 - `Instance.get_slot(name)` returns the raw protobuf `SlotValue`. Read it as
   `sv.materialized` and `sv.value.WhichOneof('kind')` → `real_value` / `int_value` / `instance_id` /
@@ -1096,7 +1096,7 @@ What the slot kinds mean (`ValueToProto`, `convert.go`):
   attributes (`attribute a = b + 1.0; attribute b = a + 1.0;`) — expect
   `slot Loop.a: slot Loop.b: cyclic slot dependency: Loop.a`, promptly, raised as `SlotError` by
   the client, and prove the service is still alive afterwards with a follow-up
-  `pysysml.eval('1 + 1', ...)`.
+  `pysysml.evaluate('1 + 1', ...)`.
 - A nested `part engine : Engine;` still marshals as bare `instance_id=N`, but
   `InstantiateResponse.instances` carries every instance reachable from the root, so Python
   expands the child too (`inst.engine.power`). An id is only resolvable against the response that
@@ -2205,6 +2205,55 @@ number rather than quoting the table.
   `WorkspaceEdit` whose `newText` actually fixes the file. A missing-semicolon fix needs a fixture
   the parser recovers with a fix on — `action def A { first start }` yields `Insert ';'`; a plain
   attribute declaration yields a diagnostic with no fix.
+
+## Subject-aware `Evaluate`, attribute metadata and generated classes (Track P, PR #218)
+
+- **`pandas` is not installed by the blueprint but `Symbol.to_dataframe()` needs it.** If
+  `to_dataframe()` raises `ModuleNotFoundError: No module named 'pandas'`, run
+  `$HOME/pv/bin/pip install pandas -q` first — the failure is environmental, not a product defect.
+- **Subject evaluation is the difference between the *declared default* and the *object's slot*.**
+  A fixture that distinguishes them is mandatory: `part def Vehicle { attribute mass = 1500.0; }`,
+  `part def Sedan :> Vehicle { attribute :>> mass = 1200.0; }`, `part sedan : Sedan;`. Then
+  `m.eval('mass', context_symbol_id='Demo::Vehicle')` must be `1500.0` while
+  `m.eval('mass', subject='Demo::sedan')` must be `1200.0`. Without the redefinition both paths
+  return the same number and the test proves nothing.
+  - On `Model` the kwarg is `subject=`; on `Connection.eval` it is `subject_symbol_id=` and the
+    model hash comes **second**. Module-level `pysysml.evaluate` also takes `subject=`; the
+    deprecated `pysysml.eval` forwards to it and warns `DeprecationWarning`.
+  - A `subject=` plus an explicit `context_symbol_id=` still reads the object, and derived slots
+    (`attribute doubled = mass * 2.0`) follow the object too.
+  - A *definition* as subject is accepted (it is instantiated and reads its own redefinition), and an
+    unrelated subject (e.g. an attribute) is tolerated rather than rejected — record those as
+    observed behavior, not failures. An unknown FQN gives `ExecutionError: subject not found: <fqn>`.
+  - A subject with a cyclic slot raises `ExecutionError: ... cyclic slot dependency: <feature>` and
+    the service must still answer afterwards — always follow such a case with `m.eval('1+1') == 2`.
+- **Cross-checking against the REPL needs fully-qualified expressions.** `%eval mass` on a model with
+  several `mass` features fails with `symbol "mass" is ambiguous`, whereas gRPC `subject=` resolves
+  the unqualified name inside the subject's scope. Use `%instantiate Demo::sedan` then
+  `%eval Demo::sedan::mass` / `%slots Demo::sedan` to compare; that is a surface divergence in name
+  resolution, not a wrong value. Drive it non-interactively with
+  `printf '%%load …\n%%instantiate …\n%%eval …\n%%quit\n' | ./bin/sysml`.
+- **Attribute metadata checks worth making**: own attributes come before inherited ones; a
+  redefinition masks the attribute it redefines (`Sedan.mass` = 1200.0, not two `mass` rows);
+  `attributes()` ids point at the *declaring* supertype (`Demo::Vehicle::name`); a **non-constant**
+  default such as `mass * 2.0` must report `value=None` rather than a guessed number; a quantity
+  default `120.0 [kg]` reports value and `unit='kg'` separately; an element with no attributes yields
+  `[]` and an empty DataFrame that still has all 8 columns
+  (`name,kind,id,type,multiplicity,value,unit,inherited`).
+- **Stdlib elements themselves are not reachable through `Model.find`/`m['ISQ::MassValue']` (returns
+  `None`)**, so "attributes of a stdlib element" can only be covered indirectly: declare
+  `attribute m : ISQBase::MassValue = 3.0 [kg];` in your own model and assert the *resolved* type
+  string `ISQBase::MassValue`.
+- **Generated classes**: `python -m pysysml.generate model.sysml -o out.py` then actually `import` the
+  module — an MRO bug only surfaces at import as
+  `TypeError: Cannot create a consistent method resolution order`. Assert `cls.__mro__` names against
+  the model (include multiple supertypes and a diamond), that a `:>>`/`subsets` feature inherits the
+  type/multiplicity it does not restate (`String[0..*]` → `-> list[str]`), and that any base Python
+  cannot linearize, or that has no generated class, is dropped **with a comment** such as
+  `# specializes G2::Hybrid, left out: Python cannot linearize it with the bases above` /
+  `# specializes ISQBase::MassValue, which has no generated class`.
+- **Quantity results carry the scalar on `Quantity.magnitude`, not `.value`** — a probe using `.value`
+  reports a false failure even when the runtime is correct.
 
 ## Symbol *kind* changes: `%search` is the only REPL probe (PR #210)
 
