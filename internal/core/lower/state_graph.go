@@ -42,9 +42,8 @@ type StateGraph struct {
 	// States in the machine (flat list, includes nested)
 	States []*ast.StateNode
 
-	// Pseudostates of the machine (choice, junction, etc.) in declaration order.
-	// Two regions may declare same-named pseudostates, so they are not keyed by
-	// name; PseudostateOwner says which composite state declares each.
+	// Pseudostates of the machine in declaration order. Not keyed by name:
+	// sibling regions may declare same-named pseudostates.
 	Pseudostates []*ast.PseudostateNode
 
 	// PseudostateOwner: pseudostate -> the composite state that declares it,

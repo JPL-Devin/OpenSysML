@@ -2152,3 +2152,104 @@ ones — comparing IDs is the only way to tell "held the objects the default nam
 Two gotchas when recording this area in Konsole: the REPL does **not** expand shell variables, so
 `%load $CONF/x.sysml` fails with a path error — type full relative paths; and `part derived : …`
 draws a `"derived" is a reserved keyword` warning that is unrelated to the defaults under test.
+
+## State-machine transition endpoint checking (PR #225 class)
+
+The check that a transition names a vertex of *its own* machine (and that a routing pseudostate is
+left by something) is a **name-resolution-tier pass**, so it is fully observable from
+`./bin/sysml -validate <f>` — no execution needed. Codes: `endpoint-not-of-machine`,
+`no-outgoing-transition`; messages are
+`transition endpoint <as written> names a <state|pseudostate|start marker|end marker|element> that
+is not a vertex of this state machine` and
+`<kind> <name> has no outgoing transition, so a transition reaching it terminates nowhere`.
+
+Because the pre-fix binary reports **nothing** for these models, the parent-commit contrast binary
+(see the worktree recipe above) is the strongest single frame: old = `✓ no errors` exit 0,
+new = error + `did not analyse cleanly` exit 2 on identical input.
+
+Fixture shapes that actually discriminate (all one-liners; `state def` and `state` usage both work):
+
+- Illegal, target of another machine: two `state def`s in one package, `transition busy to
+  Other::running;` → reported at the endpoint's column.
+- Illegal, marker as target: `first begin then off;` plus `transition on to begin;` → the message
+  says **"start marker"**, which is how you tell `VertexKind` is being consulted.
+- Illegal, dangling routing pseudostate: `junction route;` + `transition busy to route;` and no
+  transition out → reported at the `junction` declaration, not at the transition.
+
+False-positive traps to always include as *legal* rows, since each exercises a different branch:
+
+- A transition into a **sibling orthogonal region** (`transition lidle to rtarget;` across
+  `region left` / `region right`) — legal per UML §14.2.3.9.
+  `internal/core/runtime/testdata/conformance/state_transition_sibling_region.sysml` is the shipped
+  one; run it with `%state TransitionSiblingRegion` + `%advance 1` → `Current state: lidle | rtarget`
+  and `crossed = 1`.
+- `entry point into;` / `exit point outOf;` as endpoints (`state_entry_exit_points.sysml`).
+- A sourceless `accept after 5 then <s>;` written *inside* a state (source is implicit).
+- `first start then off;` with no `initial`.
+- A junction left by a **succession** (`route then finishedUp;`) rather than a `transition`, and a
+  `fork`/`join` reached by one — the pass tracks succession sources *by name*, so a regression here
+  shows up as a bogus `no-outgoing-transition`.
+- Two states with the **same name** in sibling regions (both `idle`) — must stay clean.
+
+Cheap whole-repo false-positive sweep (~40 s, 83 models at 11d0ed72, expect `differing: 0`):
+
+```bash
+for f in $(grep -rl 'state def\|state .*{' --include=*.sysml examples \
+             internal/core/runtime/testdata/conformance testdata | sort); do
+  a=$(./bin/sysml -validate "$f" 2>&1; echo $?); b=$(/tmp/old-sysml -validate "$f" 2>&1; echo $?)
+  [ "$a" != "$b" ] && echo "DIFFERS: $f"
+done
+```
+
+Error-timing contract worth re-checking whenever this area moves: a structurally empty
+`state def Empty { }` must `-validate` **clean** (exit 0) and only fail at
+`-state Empty` with `failed to create executor: initialize state machine: no initial state found in
+state machine Empty`. A check-time complaint there would be the regression.
+
+Two message hygiene probes: grep the diagnostics for `ast\.|StateNode|%!` (must be zero hits — the
+messages come from `lower.NotAVertexFormat`/`VertexKind`, not `%T`), and endpoints written as deep
+qualified names (`Outer::Inner::Deep::busy`) must be echoed **in full** in the message.
+
+Also note `done` is an inherited feature of `States::StateAction`, so naming a state `done` in your
+own fixture draws `name conflict: done is already the name of the inherited feature …` plus a
+reserved-keyword warning — pick `finished`/`finishedUp` instead, or the legal row fails for an
+unrelated reason.
+
+### Proving a succession or a pseudostate edge really fires (not just validates)
+
+`-validate` cannot tell you whether lowering silently *dropped* an edge — a dropped succession looks
+identical to a clean model. Make the edge observable instead: give the destination state an
+`entry { flag = 1; }` and read both the active state and the attribute back:
+
+```bash
+printf '%%state <Def>\n%%advance 5\n%%current\n%%quit\n' | timeout 60 ./bin/sysml <model>.sysml
+```
+
+`%current` prints `Current state: …` plus a `State data:` block with the attribute values, so
+"reached the state" and "ran its entry action" are separate evidence. Compare against a binary built
+from the *previous revision of the same branch* (not the PR base) to attribute the delta to one
+change. Useful discriminators in this area:
+
+- `x then <junction>; <junction> then <s>;` — an implementation that resolves succession endpoints by
+  simple *state* name drops the pseudostate hop entirely and the machine just stalls one state early.
+- Same-named `junction route;` in two sibling orthogonal regions, each routing to its own region's
+  end state with its own flag — if pseudostates are keyed by simple name, one overwrites the other
+  and *neither* flag gets set. Run it ~5 times; the ordering must be identical every run.
+- A regression row worth keeping: a succession to a **qualified nested** target
+  (`gate then P::Def::outer::r::deep;`) usually works on both old and new revisions, so it proves the
+  rewrite lost nothing rather than proving anything new.
+
+Two traps when writing these fixtures:
+
+- An unqualified target in another region resolves by ordinary name resolution first, so
+  `lidle then rtarget;` fails with `unresolved reference: rtarget — did you mean A::B::right::rtarget?`
+  on *every* revision. That is not a false positive; write the qualified name.
+- A succession carries **no guard**, so a cross-region succession re-enters the composite state, the
+  source region restarts, and the edge re-fires forever: the run ends on `Stopped at the event budget
+  (1000000 events; raise SYSML_MAX_EVENTS to allow more)`. That is a clean bounded stop, not a hang —
+  the state/attribute evidence is still valid. Use the guarded `transition a to b if flag == 0;` form
+  when you want the run to settle instead.
+- Running a shipped conformance model straight from the CLI can report `unresolved reference: Integer`
+  because the conformance harness supplies imports the file omits; add `import ScalarValues::*;` in
+  your own fixtures, and treat that one as pre-existing (the sweep confirms it is identical on both
+  binaries).
