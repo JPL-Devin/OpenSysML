@@ -1,0 +1,12 @@
+{
+  "type": "instance",
+  "instantiate": "test::Sensor",
+  "libraries": true,
+  "slots": {
+    "l": {"type": "EnumLiteral", "value": "Level::high"},
+    "highN": {"type": "Integer", "value": 9},
+    "lowN": {"type": "Integer", "value": 1},
+    "highLabel": {"type": "String", "value": "high"},
+    "readThroughSlot": {"type": "Integer", "value": 9}
+  }
+}

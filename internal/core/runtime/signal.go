@@ -97,14 +97,18 @@ func objectID(inst *Instance) int64 {
 	return inst.ID
 }
 
-// postVia routes a message out of a sending port: every port connected to it
-// receives a copy, since a connection joins ends without a direction. A port
-// with no connections reaches no one, which is not an error — the message is
-// simply never delivered, and an accept waiting for it stays suspended until
-// the run gives up with ErrAcceptDeadlock.
-func (ctx *Context) postVia(conns []lower.Connection, msg Message, sendingPort string, self *Instance) {
-	routable := ctx.realizedConnections(ctx.routableConnections(conns, self), self)
-	for _, peer := range lower.PeerPorts(routable, sendingPort) {
+// postVia routes a message out of a sending port: every port joined to it that
+// can receive the message gets a copy, which is the ends whose flow features
+// carry inward after conjugation. A send that reaches none of them is delivered
+// nowhere, which is a typed error rather than a message quietly dropped — the
+// model asked for a delivery the connections it declares cannot make.
+func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Send, self *Instance) error {
+	routable := ctx.realizedConnections(ctx.routableConnections(conns, self, send.Scope), self)
+	receiving, outbound := ctx.receivingEnds(routable, send.Target)
+	if len(receiving) == 0 {
+		return &UnroutableSendError{Port: send.Target, Outbound: outbound}
+	}
+	for _, peer := range receiving {
 		routed := msg
 		routed.Target = ""
 		routed.Port = peer
@@ -113,18 +117,19 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, sendingPort s
 		}
 		ctx.PostMessage(routed)
 	}
+	return nil
 }
 
 // post delivers a built message the way the send addressed it: routed through
 // the connections of the sending port, or straight onto the bus. self is the
 // object performing the behavior that sent it, nil for a behavior no object
 // performs.
-func (ctx *Context) post(conns []lower.Connection, msg Message, send lower.Send, self *Instance) {
+func (ctx *Context) post(conns []lower.Connection, msg Message, send lower.Send, self *Instance) error {
 	if send.IsVia {
-		ctx.postVia(conns, msg, send.Target, self)
-		return
+		return ctx.postVia(conns, msg, send, self)
 	}
 	ctx.PostMessage(msg)
+	return nil
 }
 
 // carriesSignal reports whether this message satisfies an accept of signalType.

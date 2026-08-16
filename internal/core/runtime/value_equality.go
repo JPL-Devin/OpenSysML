@@ -17,6 +17,7 @@ type valueKey struct {
 	instID  int64
 	colHash uint64
 	variant *symbols.Symbol
+	literal *symbols.Symbol
 }
 
 // valueKeyFunc extracts a comparable key from a Value.
@@ -45,6 +46,9 @@ func valueKeyFunc(v Value) valueKey {
 	case ValVariant:
 		// A selection is the variant it names, whatever object it materialized.
 		key.variant = v.Variant
+	case ValEnumLiteral:
+		// A literal is its own identity, so it keys on the declaration it names.
+		key.literal = v.Literal
 	case ValQuantity:
 		// Keyed on the base-unit form, so `1 [km]` and `1000 [m]` are one element.
 		if v.Quantity != nil {
