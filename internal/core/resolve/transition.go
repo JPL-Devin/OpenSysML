@@ -63,6 +63,27 @@ func (r *Resolver) Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (ast.No
 	return nil, false, reported
 }
 
+// VertexInScope finds the vertex an endpoint names from the scope tree alone,
+// innermost scope first, for a machine lowered without a resolver over its
+// document (lower.ToStateGraph): no index is consulted, so nothing outside the
+// scopes the endpoint was written in can answer it.
+func VertexInScope(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool) {
+	if scope == nil || qn == nil || len(qn.Parts) == 0 {
+		return nil, false
+	}
+	parts := qualifiedParts(qn)
+	machine := machineScope(scope)
+	for s := scope; s != nil; s = s.Parent() {
+		if sym, ok := firstVertex(s, parts); ok {
+			return sym.Decl, true
+		}
+		if s == machine {
+			break
+		}
+	}
+	return nil, false
+}
+
 // lookupEndpoint finds what an endpoint names: the declaration ordinary lookup
 // reaches, or else a vertex of the enclosing machine, which a transition may
 // name across a region or into a nested state (UML 2.5.1 14.2.3.9).

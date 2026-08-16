@@ -126,8 +126,13 @@ func ToStateGraph(stateMachineDecl ast.Node, scope *symbols.Scope) (*StateGraph,
 // ToStateGraphWithEndpoints lowers a state machine, building its transitions
 // from the endpoints the name-resolution tier already resolved.
 func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, endpoints Endpoints) (*StateGraph, error) {
-	if endpoints == nil || scope == nil {
+	// A machine no scope tree holds is indexed on its own; without the tier's
+	// resolver, one that has a tree names its endpoints from that tree alone.
+	switch {
+	case scope == nil:
 		endpoints = localEndpoints(stateMachineDecl)
+	case endpoints == nil:
+		endpoints = scopeEndpoints{machine: scope}
 	}
 	graph := &StateGraph{
 		Scope:            scope,

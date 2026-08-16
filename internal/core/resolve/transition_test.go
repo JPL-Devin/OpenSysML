@@ -258,3 +258,43 @@ func TestEndpointLookupSaysWhatNameResolutionReported(t *testing.T) {
 		t.Errorf("the endpoint was reported by name resolution: %v", r.Diagnostics)
 	}
 }
+
+// VertexInScope names an endpoint from the scope tree alone, for a machine
+// lowering has the tree of but no resolution pass over: the innermost vertex of
+// that spelling wins, and nothing outside the machine answers at all.
+func TestVertexInScopeNamesTheInnermostVertexAndNothingOutside(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `
+		state def M {
+			entry; then alpha;
+			state alpha {
+				entry; then work;
+				state work;
+			}
+			state beta {
+				entry; then work;
+				state work;
+				transition work to done;
+			}
+			state done;
+		}
+		state def Other {
+			entry; then idle;
+			state idle;
+		}
+	`)
+	beta := scopeNamed(t, r, "d.sysml", "beta")
+	work := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "work"}}}
+	decl, ok := VertexInScope(beta, work)
+	if !ok {
+		t.Fatal("work names no vertex from inside beta")
+	}
+	want := beta.LookupLocalAll("work")
+	if len(want) == 0 || want[0].Decl != decl {
+		t.Errorf("work resolved to %v, want beta's own work", decl)
+	}
+
+	outside := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "Other"}, {Text: "idle"}}}
+	if _, ok := VertexInScope(beta, outside); ok {
+		t.Error("a vertex of another machine answered a scope-only lookup")
+	}
+}

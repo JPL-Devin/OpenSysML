@@ -14,19 +14,29 @@ type Endpoints interface {
 	Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (decl ast.Node, ok, reported bool)
 }
 
-// machineEndpoints resolves the endpoints of one machine, from where each was
-// written when the caller knows that scope, and from the machine's own body when
-// it does not — a machine lowered without the scope tree it was declared in.
+// machineEndpoints resolves every endpoint of one machine from that machine's
+// own scope, indexed on its own: a machine lowered without the scope tree its
+// endpoints were written in has no other scope to name them from.
 type machineEndpoints struct {
 	resolver *resolve.Resolver
 	scope    *symbols.Scope
 }
 
-func (m machineEndpoints) Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool, bool) {
+func (m machineEndpoints) Endpoint(_ *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool, bool) {
+	return m.resolver.Endpoint(m.scope, qn)
+}
+
+// scopeEndpoints resolves an endpoint from the caller's own scope tree, for a
+// machine lowered with that tree but without the resolver over its document. It
+// reports nothing: the name-resolution tier never saw these endpoints.
+type scopeEndpoints struct{ machine *symbols.Scope }
+
+func (s scopeEndpoints) Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool, bool) {
 	if scope == nil {
-		scope = m.scope
+		scope = s.machine
 	}
-	return m.resolver.Endpoint(scope, qn)
+	decl, ok := resolve.VertexInScope(scope, qn)
+	return decl, ok, false
 }
 
 // localEndpoints indexes a machine no document declares — a hand-built one in a
