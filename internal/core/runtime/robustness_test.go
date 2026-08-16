@@ -114,6 +114,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("signal_no_level_of_a_composite_state_accepts", testSignalNoLevelOfACompositeStateAccepts)
 	t.Run("stale_composite_timer_in_a_region", testStaleCompositeTimerInARegion)
 	t.Run("composite_self_transition_with_no_substate_to_re_enter", testCompositeSelfTransitionWithNoSubstateToReEnter)
+	t.Run("exit_of_nested_regions_with_a_history_pseudostate", testExitOfNestedRegionsWithAHistoryPseudostate)
 	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 	t.Run("perform_of_missing_action", testPerformOfMissingAction)
 	t.Run("perform_reference_cycle", testPerformReferenceCycle)
@@ -1354,6 +1355,55 @@ func testStaleCompositeTimerInARegion(t *testing.T) {
 	}
 	if !active["moved"] || !active["watching"] || active["late"] {
 		t.Errorf("expected the stale composite timer to leave moved and watching active, got %v", active)
+	}
+}
+
+// testExitOfNestedRegionsWithAHistoryPseudostate: leaving a composite state whose
+// region holds another composite with a region of its own, then returning through a
+// deep history, restores the recorded configuration rather than erroring or hanging.
+func testExitOfNestedRegionsWithAHistoryPseudostate(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state outer {
+				region left {
+					initial lstart;
+					state grouping {
+						region inner {
+							initial gstart;
+							state g1;
+							state g2;
+							transition gstart to g1;
+							transition g1 to g2 accept advance;
+						}
+					}
+					transition lstart to grouping;
+				}
+				region right {
+					initial rstart;
+					state watching;
+					transition rstart to watching;
+				}
+				deep history resume;
+			}
+			state away;
+			init then outer;
+			transition outer to away accept leave;
+			transition away to resume accept back;
+		}
+	}`)
+	for _, signal := range []string{"advance", "leave", "back"} {
+		exec.SendSignal(signal, nil)
+		if err := exec.RunToCompletion(); err != nil {
+			t.Fatalf("run to completion after %s: %v", signal, err)
+		}
+	}
+	active := make(map[string]bool)
+	for _, state := range exec.ActiveStates() {
+		active[state.Name] = true
+	}
+	if !active["g2"] || !active["watching"] {
+		t.Errorf("expected the deep history to restore g2 and watching, got %v", active)
 	}
 }
 

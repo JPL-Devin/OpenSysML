@@ -562,6 +562,35 @@ func (e *StateExecutor) encloses(composite, target *ast.StateNode) bool {
 	return composite == target || e.nestedIn(target, composite)
 }
 
+// exitStates exits the states being left, innermost first.
+func (e *StateExecutor) exitStates(leaving []*ast.StateNode) error {
+	for _, state := range leaving {
+		if e.exitedByAncestorRegion(state, leaving) {
+			continue
+		}
+		if err := e.exitState(state); err != nil {
+			return fmt.Errorf("exit state: %w", err)
+		}
+	}
+	return nil
+}
+
+// exitedByAncestorRegion reports whether another state being left owns the region
+// the state is active in, and so exits it recursively.
+func (e *StateExecutor) exitedByAncestorRegion(state *ast.StateNode, leaving []*ast.StateNode) bool {
+	region := e.graph.RegionOf[state]
+	if region == nil {
+		return false
+	}
+	owner := e.graph.RegionOwner[region]
+	for _, other := range leaving {
+		if other == owner {
+			return true
+		}
+	}
+	return false
+}
+
 // isComposite reports whether the state owns orthogonal regions or substates.
 func (e *StateExecutor) isComposite(state *ast.StateNode) bool {
 	if len(e.graph.CompositeStates[state]) > 0 {
@@ -965,10 +994,8 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 	}
 
 	// Exit states (deepest to shallowest)
-	for _, state := range statesToExit {
-		if err := e.exitState(state); err != nil {
-			return fmt.Errorf("exit state: %w", err)
-		}
+	if err := e.exitStates(statesToExit); err != nil {
+		return err
 	}
 
 	// Execute transition effect
@@ -1856,9 +1883,20 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 		return nil
 	}
 
-	// Leaving a state stops its timers; re-entering it starts them again.
+	// A state's timers are destroyed when it is left: the event one already queued
+	// is withdrawn, so re-entering the state times a fresh interval.
+	timed := make(map[*lower.Transition]bool)
 	for _, trans := range e.graph.Transitions[state] {
 		delete(e.timerScheduled, trans)
+		if _, isTime := trans.Trigger.(*ast.TimeEvent); isTime {
+			timed[trans] = true
+		}
+	}
+	if len(timed) > 0 {
+		e.eventQueue.Withdraw(func(event Event) bool {
+			trans, ok := event.Payload.(*lower.Transition)
+			return ok && timed[trans]
+		})
 	}
 
 	// Check if this state is a composite state with regions
