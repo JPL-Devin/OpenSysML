@@ -1,5 +1,6 @@
 """pysysml - Python client library for Systemica SysML v2 parser."""
 
+import warnings
 from importlib.metadata import PackageNotFoundError, version as _distribution_version
 
 from pysysml._version import VERSION as _declared_version
@@ -50,7 +51,8 @@ __all__ = [
     "TypeMismatchError", "UnsupportedOperationError", "UnsupportedValueError",
     "WrongKindError",
     "load", "connect", "convert",
-    "evaluate", "eval", "instantiate",
+    # "eval" is deprecated in favour of "evaluate", so it is not exported.
+    "evaluate", "instantiate",
     "DEFAULT_PORT", "split_target",
     "__version__"
 ]
@@ -202,8 +204,8 @@ def convert(to_format, file_path=None, content=None, model_hash=None,
     )
 
 
-def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
-         host='localhost', port=None, subject=None):
+def evaluate(expression, file_path=None, model_hash=None, context_symbol_id=None,
+             host='localhost', port=None, subject=None):
     """Evaluate a SysML expression (module-level convenience).
 
     A model in hand has :meth:`Model.eval`, which needs neither the hash nor the
@@ -231,7 +233,7 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
         
     Example:
         >>> import pysysml
-        >>> result = pysysml.eval("2 + 2", file_path="test.sysml")
+        >>> result = pysysml.evaluate("2 + 2", file_path="test.sysml")
         >>> print(result)  # 4
     """
     conn = _get_default_connection(host, port)
@@ -255,8 +257,18 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
     )
 
 
-#: Non-shadowing name for :func:`eval`; both are the same function and supported.
-evaluate = eval
+def eval(*args, **kwargs):
+    """Deprecated name for :func:`evaluate`, which does not shadow the built-in.
+
+    Same arguments and result; slated for removal in 1.0.0.
+    """
+    warnings.warn(
+        "pysysml.eval is deprecated and will be removed in 1.0.0; "
+        "use pysysml.evaluate, which does not shadow the built-in eval",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return evaluate(*args, **kwargs)
 
 
 def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',

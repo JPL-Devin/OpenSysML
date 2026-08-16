@@ -132,16 +132,16 @@ so a generated class has no member for them; reach them through
 
 ## Names that shadow builtins
 
-Two names in the package have the name of a Python builtin: the module-level
-`pysysml.eval` (the builtin `eval`) and `pysysml.errors.RuntimeError` (the
-builtin exception, kept as a deprecated alias of `ExecutionError` and already out
-of `pysysml.errors.__all__`, so a star-import no longer binds it). Neither
-shadows anything when reached through the package, which is the style to prefer:
+Neither builtin name is a live part of the API any more: the module-level
+evaluation function is `pysysml.evaluate`, and the execution error is
+`pysysml.ExecutionError`. `pysysml.eval` and `pysysml.errors.RuntimeError`
+remain as deprecated aliases that warn on use, out of their modules' `__all__`,
+so a star-import binds neither.
 
 ```python
 import pysysml
 
-pysysml.evaluate("1 + 2", file_path="model.sysml")   # or pysysml.eval, the same function
+pysysml.evaluate("1 + 2", file_path="model.sysml")   # pysysml.eval warns
 model.eval("mass", subject="Demo::sedan")            # a method shadows nothing
 ```
 
@@ -151,17 +151,16 @@ from pysysml import eval          # shadows the builtin in this module — don't
 
 Guidance for this package and for code around it:
 
-- **`pysysml.evaluate` is the non-shadowing name for `pysysml.eval`.** Both are
-  the same function and both are supported; new code should prefer `evaluate`.
-- Import the package, not its names, for anything named like a builtin; if you
-  must import the name, alias it (`from pysysml import eval as sysml_eval`).
+- **Call `pysysml.evaluate`.** `pysysml.eval` still works and returns the same
+  result, warning `DeprecationWarning`; it goes away in 1.0.0.
+- Import the package, not its names, for anything named like a builtin.
 - Catch `pysysml.ExecutionError` (or its base `pysysml.PySysMLError`), never
   `pysysml.errors.RuntimeError`, which warns and is due for removal.
 - Do not name a new public function or exception after a builtin.
 
-`pysysml.eval` is the published name as of 0.2.0 and keeps working. Removing it
-is a breaking change and the maintainer's call; the rename proposal is in the
-pull request that added this section.
+0.2.0 therefore publishes `evaluate` as the name to write, with both builtin
+names deprecated rather than removed, so code written against 0.1.x keeps
+running until 1.0.0.
 
 ## Running the tests
 

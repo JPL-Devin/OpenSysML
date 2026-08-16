@@ -187,7 +187,7 @@ created singleton connection instead. A `host:port` address written as the host
 is read as one — `connect("localhost:50123")` reaches port 50123 — and a port
 named twice with two values raises `ValueError` naming the disagreement rather
 than timing out against an address nobody asked for. The helpers taking
-`host`/`port` (`load`, `eval`, `convert`, `instantiate`) read it the same way.
+`host`/`port` (`load`, `evaluate`, `convert`, `instantiate`) read it the same way.
 
 `pysysml` never stops a service it did not start. A service it starts is
 reference-counted *within the process that started it* and stopped when the last
