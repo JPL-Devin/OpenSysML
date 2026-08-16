@@ -153,7 +153,7 @@ func (e *StateExecutor) activeLeavesBelow(state *ast.StateNode) []*ast.StateNode
 // just made active below and including state.
 func (e *StateExecutor) scheduleFromEntered(state *ast.StateNode) error {
 	for _, leaf := range e.activeLeavesBelow(state) {
-		if err := e.scheduleTransitionsForState(leaf); err != nil {
+		if err := e.scheduleFromLeaf(leaf); err != nil {
 			return fmt.Errorf("schedule transitions: %w", err)
 		}
 	}

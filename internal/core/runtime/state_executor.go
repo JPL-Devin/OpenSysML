@@ -211,13 +211,22 @@ func (e *StateExecutor) getLCA(state1, state2 *ast.StateNode) *ast.StateNode {
 // scheduled too, and their timers are left alone while they stay active.
 func (e *StateExecutor) scheduleTransitionEvents() error {
 	for _, leaf := range e.activeLeaves() {
-		if err := e.scheduleTransitionsForState(leaf); err != nil {
+		if err := e.scheduleFromLeaf(leaf); err != nil {
 			return err
 		}
-		for _, ancestor := range e.getParentChain(leaf)[1:] {
-			if err := e.scheduleTimeTransitions(ancestor); err != nil {
-				return err
-			}
+	}
+	return nil
+}
+
+// scheduleFromLeaf schedules the outgoing transitions of an active leaf and the
+// time transitions of the composite states enclosing it.
+func (e *StateExecutor) scheduleFromLeaf(leaf *ast.StateNode) error {
+	if err := e.scheduleTransitionsForState(leaf); err != nil {
+		return err
+	}
+	for _, ancestor := range e.getParentChain(leaf)[1:] {
+		if err := e.scheduleTimeTransitions(ancestor); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -351,15 +360,12 @@ func (e *StateExecutor) dispatchEvent(event Event) error {
 				// no longer there.
 				return nil
 			}
-			// A transition out of a state that is the active state of an orthogonal
-			// region is region-local: it must not tear down the sibling regions
-			// unless its target lies outside the region set.
+			// A transition out of a state inside an orthogonal region is region-local:
+			// it must not tear down the sibling regions unless its target lies outside
+			// the region set. The source may be a composite state enclosing the
+			// region's active state, so the region is resolved by containment.
 			if sourceState != nil {
-				for _, region := range e.orderedActiveRegions() {
-					if e.activeConfig.regionStates[region] == sourceState {
-						return e.fireTransitionInRegion(region, lowerTrans)
-					}
-				}
+				return e.fireFrom(sourceState, lowerTrans)
 			}
 			return e.fireTransition(lowerTrans)
 		}

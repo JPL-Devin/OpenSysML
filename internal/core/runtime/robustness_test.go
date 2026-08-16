@@ -112,6 +112,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("qualified_assignment_target_in_a_state_effect", testQualifiedAssignmentTargetInAStateEffect)
 	t.Run("call_of_unhandled_operation", testCallOfUnhandledOperation)
 	t.Run("signal_no_level_of_a_composite_state_accepts", testSignalNoLevelOfACompositeStateAccepts)
+	t.Run("stale_composite_timer_in_a_region", testStaleCompositeTimerInARegion)
 	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 	t.Run("perform_of_missing_action", testPerformOfMissingAction)
 	t.Run("perform_reference_cycle", testPerformReferenceCycle)
@@ -1287,6 +1288,47 @@ func testSignalNoLevelOfACompositeStateAccepts(t *testing.T) {
 	current, ok := exec.CurrentState().(*ast.StateNode)
 	if !ok || current.Name != "inner" {
 		t.Errorf("expected the unaccepted signal to leave the machine in inner, got %v", exec.CurrentState())
+	}
+}
+
+// testStaleCompositeTimerInARegion: a time trigger on a composite state inside an
+// orthogonal region whose composite is left before the timer expires is dropped,
+// leaving the sibling region where it was rather than erroring or hanging.
+func testStaleCompositeTimerInARegion(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state working {
+				region left {
+					initial lstart;
+					state grouping {
+						state step1;
+						accept after 5 then late;
+					}
+					state moved;
+					state late;
+					transition lstart to step1;
+					transition grouping to moved accept skip;
+				}
+				region right {
+					initial rstart;
+					state watching;
+					then rstart watching;
+				}
+			}
+			init then working;
+		}
+	}`)
+	exec.SendSignal("skip", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	active := make(map[string]bool)
+	for _, state := range exec.ActiveStates() {
+		active[state.Name] = true
+	}
+	if !active["moved"] || !active["watching"] || active["late"] {
+		t.Errorf("expected the stale composite timer to leave moved and watching active, got %v", active)
 	}
 }
 

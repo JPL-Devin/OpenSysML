@@ -1,0 +1,8 @@
+{
+    "type": "state",
+    "finalState": "Recovered+Watching",
+    "stateVisits": ["start", "Working", "lstart", "rstart", "Grouping", "Step1", "Watching", "Recovered"],
+    "outputs": {
+        "log": {"type": "Integer", "value": 123}
+    }
+}
