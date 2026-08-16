@@ -42,11 +42,20 @@ const CapabilityQuery = "query"
 // as Value.enum_literal, rather than reporting it as an unsupported null.
 const CapabilityEnumValues = "enum_values"
 
+// CapabilityEvaluateSubject names the capability of evaluating an expression
+// against an instantiated subject, rather than ignoring the subject and
+// answering with the declared default.
+const CapabilityEvaluateSubject = "evaluate_subject"
+
+// CapabilitySymbolAttributes names the capability of populating
+// SymbolInfo.attributes, rather than always reporting none.
+const CapabilitySymbolAttributes = "symbol_attributes"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
-	CapabilityEnumValues,
+	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
 }
 
 // Capabilities returns the capability names this build of the service reports.

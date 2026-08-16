@@ -14,6 +14,7 @@ from pysysml.model import Model
 from pysysml.binary import cached_release, ensure_binary, resolve_latest_version
 from pysysml.capabilities import (
     CAPABILITY_CONVERT,
+    CAPABILITY_EVALUATE_SUBJECT,
     CAPABILITY_QUERY,
     CAPABILITY_VERIFICATION,
     ServerInfo,
@@ -697,6 +698,15 @@ class Connection:
             ModelNotFoundError: If the service no longer holds the model
             UnsupportedValueError: If the result cannot be represented on the wire
         """
+        if subject_symbol_id:
+            # A service that ignores the subject would answer with the declared
+            # default, which is indistinguishable from the object's own value.
+            require(
+                self.server_info(),
+                CAPABILITY_EVALUATE_SUBJECT,
+                upgrade_remedy(CAPABILITY_EVALUATE_SUBJECT),
+            )
+
         req = sysml_pb2.EvaluateRequest(
             model_hash=model_hash,
             expression=expression,

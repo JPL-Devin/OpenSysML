@@ -383,6 +383,35 @@ class TestSymbolAttributeFacts:
         assert attributes[1].id == "Demo::Base::label"
         assert car.get_attr("label").id == "Demo::Base::label"
 
+    def test_attributes_of_a_typed_usage_come_from_its_type(self):
+        """A usage written as `part car : Car` has the attributes Car declares."""
+        mock_client = Mock()
+        car = self._car(mock_client)
+        usage_info = sysml_pb2.SymbolInfo(
+            id="Demo::car",
+            name="car",
+            kind="partUsage",
+            specializations=[
+                sysml_pb2.Specialization(
+                    kind="typing",
+                    declared="Car",
+                    target_id="Demo::Car",
+                    target_kind="partDef",
+                ),
+            ],
+            attributes=list(car._pb.attributes),
+        )
+        symbols = mock_client.get_symbol.side_effect
+        mock_client.get_symbol.side_effect = (
+            lambda _hash, symbol_id: car._pb if symbol_id == "Demo::Car"
+            else symbols(_hash, symbol_id)
+        )
+
+        usage = Symbol(usage_info, mock_client, "model_abc123")
+
+        assert [attr.name for attr in usage.attributes()] == ["mass", "label"]
+        assert usage.get_attr("mass").id == "Demo::Car::mass"
+
     def test_to_dataframe_reports_attribute_facts(self):
         """to_dataframe() reports each member's type, multiplicity, value and unit."""
         pd = pytest.importorskip("pandas")

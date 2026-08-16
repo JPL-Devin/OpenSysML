@@ -182,14 +182,19 @@ class Symbol:
         return ordered
 
     def _inherited_attributes(self, visited: set) -> List["Symbol"]:
-        """Return the attribute symbols this symbol's supertypes declare, nearest first."""
+        """Return the attribute symbols this symbol's supertypes declare, nearest first.
+
+        Every generalization edge is followed, typing included: a usage written
+        as ``part car : Car`` has the attributes ``Car`` declares, which is what
+        the service reports for it.
+        """
         if self._client is None or self.id in visited:
             return []
         visited.add(self.id)
 
         result = []
         for spec in self.specializations:
-            if spec.kind == "typing" or not spec.target_id or spec.target_id in visited:
+            if not spec.target_id or spec.target_id in visited:
                 continue
             info = self._client.get_symbol(self._model_hash, spec.target_id)
             if info is None:
