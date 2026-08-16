@@ -2208,7 +2208,8 @@ func (p *Parser) parseStateMember() ast.Node {
 			p.advance()
 			return p.parsePseudostate(start, kw, ast.PseudostateJoin)
 		case "history":
-			// Bare `history <name>;` is shallow, as in UML's H vs H*.
+			// Bare `history <name>;` is shallow: SysML v2 has no history notation, so
+			// UML's H vs H* is the reference for this Systemica extension.
 			p.advance()
 			return p.parsePseudostate(start, kw, ast.PseudostateShallowHistory)
 		case "shallow", "deep":

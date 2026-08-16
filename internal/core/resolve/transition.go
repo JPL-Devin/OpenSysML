@@ -84,7 +84,8 @@ func VertexInScope(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool)
 
 // lookupEndpoint finds what an endpoint names: the declaration ordinary lookup
 // reaches, or else a vertex of the enclosing machine, which a transition may
-// name across a region or into a nested state (UML 2.5.1 14.2.3.9).
+// name across a region or into a nested state (`TransitionUsage::source` and
+// `::target : ActionUsage[1..1]`, stdlib `Systems Library/SysML.sysml`).
 func (r *Resolver) lookupEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
 	var sym *symbols.Symbol
 	var ok bool

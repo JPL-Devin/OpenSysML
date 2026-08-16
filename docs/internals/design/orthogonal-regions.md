@@ -2,7 +2,12 @@
 
 ## Overview
 
-Implement UML 2.5.1 §14.2.3.3 orthogonal regions (concurrent substates) for state machines.
+Implement orthogonal regions (concurrent substates) for state machines. `region` is a Systemica
+extension: SysML v2 has no notation for it, and the bundled libraries have no region performance,
+so UML 2.5.1 §14.2.3.3 is the reference semantics. The nearest library anchor is that only
+`States.sysml` `exclusiveStates` are sequenced (`succession stateSequencing first [0..1]
+exclusiveStates then [0..1] exclusiveStates`), so substates outside that set are not ordered
+against each other; concurrency across regions is not derived from it.
 
 **Goal:** Support multiple simultaneously active substates within a composite state (AND-composition).
 
@@ -356,7 +361,7 @@ state def Parallel {
 - Hierarchical states (parent/child) unchanged
 - stateStack for history tracking preserved
 
-## UML 2.5.1 Compliance
+## UML 2.5.1 Compliance (reference semantics for this extension)
 
 **Implemented:**
 - §14.2.3.3.1: Composite states with orthogonal regions
