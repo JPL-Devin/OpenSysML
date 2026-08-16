@@ -170,3 +170,14 @@ func TestExposedElementsRecursiveExposeWithAFilterReachesNestedElements(t *testi
 	`)
 	wantNames(t, "exposed set of v", exposedNames(t, m, sym(t, root, "v")), []string{"A"})
 }
+
+// A nested namespace sharing a top-level namespace's short name exposes its own
+// members: the walk keys the index by the qualified name, not the short one.
+func TestExposedElementsRecursiveExposeIntoANamespaceWithAReusedName(t *testing.T) {
+	m, root := buildModel(t, `
+		package Lib { package Inner { part def X; } }
+		package Inner { part def Y; }
+		view v { expose Lib::**; }
+	`)
+	wantNames(t, "exposed set of v", exposedNames(t, m, sym(t, root, "v")), []string{"Inner", "Lib", "X"})
+}

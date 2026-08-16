@@ -212,18 +212,32 @@ func (r *Resolver) namespaceChildren(scope *symbols.Scope, target *symbols.Symbo
 	if r.idx == nil {
 		return children.elems
 	}
+	prefix := r.indexedNameOf(target)
 	var indexed []*symbols.Symbol
 	if importAllowsPrivate(imp) {
-		indexed = r.idx.LookupDirectChildren(target.Name)
+		indexed = r.idx.LookupDirectChildren(prefix)
 	} else {
-		indexed = r.idx.LookupDirectChildrenFrom(target.Name, r.ReferringNamespaceFQN(scope))
+		indexed = r.idx.LookupDirectChildrenFrom(prefix, r.ReferringNamespaceFQN(scope))
 	}
 	for _, sym := range indexed {
-		if r.admitsUnderName("", r.ReferringNamespaceFQN(scope), target.Name+"::"+localNameOf(sym), sym) {
+		if r.admitsUnderName("", r.ReferringNamespaceFQN(scope), prefix+"::"+localNameOf(sym), sym) {
 			children.add(sym)
 		}
 	}
 	return children.elems
+}
+
+// indexedNameOf is the qualified name the index keys target's children under. A
+// symbol declared in a document carries its local name, so the nesting has to
+// come from the index.
+func (r *Resolver) indexedNameOf(target *symbols.Symbol) string {
+	if r.idx == nil {
+		return target.Name
+	}
+	if fqn := withoutEmptySegments(r.idx.GetFQN(target)); fqn != "" {
+		return fqn
+	}
+	return target.Name
 }
 
 // appendSubtree adds the descendants of target a recursive import surfaces. The
