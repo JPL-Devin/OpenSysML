@@ -140,3 +140,35 @@ func TestClassificationWithAnExplicitSubjectIsNotAFilterCondition(t *testing.T) 
 		t.Fatalf("the evaluator supplies the subject, so `seatBelt @ Safety` should hold: %v err=%v", got, err)
 	}
 }
+
+// A workspace that reindexes holds one element as a symbol per generation, and a
+// subject reaches the evaluator from whichever generation its scope came from.
+// The verdict is the element's, so it must not depend on which symbol it is.
+func TestClassificationOfASubjectFromAnotherIndexGeneration(t *testing.T) {
+	const src = metadataModel + "\nmetadata def Safety2 :> Safety;\n#Safety2 part def Harness;"
+	_, older := buildModel(t, src)
+	cases := []struct {
+		name string
+		cond string
+		want bool
+	}{
+		{"Belt", "@Safety", true},
+		{"seatBelt", "@Safety", true},
+		{"airBag", "@Safety", true},
+		{"radio", "@Comfort", true},
+		{"Harness", "@Safety", true},
+		{"keylessEntry", "@Safety", false},
+		{"Belt", "@Comfort", false},
+	}
+	for _, tc := range cases {
+		m, op, root := classificationOf(t, src, tc.cond)
+		stale := sym(t, older, tc.name)
+		if fresh := sym(t, root, tc.name); stale == fresh {
+			t.Fatalf("%s: the two generations should hold distinct symbols", tc.name)
+		}
+		got, err := m.EvalClassification(root, op, stale)
+		if err != nil || got != tc.want {
+			t.Fatalf("%q for a %s of an earlier generation = %v (err=%v), want %v", tc.cond, tc.name, got, err, tc.want)
+		}
+	}
+}

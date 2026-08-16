@@ -249,7 +249,7 @@ func (m *Model) EvalClassification(scope *symbols.Scope, e *ast.OperatorExpr, el
 		return false, UnevaluableClassification("there is no element to classify", spanOf(e))
 	}
 	pred := m.classificationPredicate(scope, e)
-	val, err := m.evalPredicate(pred, elem)
+	val, err := m.evalPredicate(pred, m.indexedElement(elem))
 	if err != nil {
 		return false, err
 	}
@@ -548,7 +548,7 @@ func (m *Model) metaclassConforms(cand *symbols.Symbol, typeFQN string) bool {
 		return false
 	}
 	if typ := m.symbolByFQN(typeFQN); typ != nil {
-		return m.Conforms(meta, typ)
+		return m.Conforms(meta, typ) || m.conformsByName(meta, typeFQN)
 	}
 	// The metaclass library is not loaded, so conformance can only be judged on
 	// the name the candidate's metaclass has.
@@ -560,17 +560,43 @@ func (m *Model) metaclassConforms(cand *symbols.Symbol, typeFQN string) bool {
 // indexed, and by qualified name otherwise, which is what a restored library's
 // annotation — recorded as the name of its type — allows.
 func (m *Model) annotationConforms(a annotation, typ *symbols.Symbol, typeFQN string) bool {
-	if a.typ != nil && typ != nil {
-		return m.Conforms(a.typ, typ)
+	if a.typ != nil && typ != nil && m.Conforms(a.typ, typ) {
+		return true
 	}
 	if a.typFQN != "" && a.typFQN == typeFQN {
 		return true
 	}
-	if a.typ != nil && typeFQN != "" {
-		for _, sup := range append([]*symbols.Symbol{a.typ}, m.AllSupertypes(a.typ)...) {
-			if m.fqnOf(sup) == typeFQN {
-				return true
-			}
+	return a.typ != nil && m.conformsByName(a.typ, typeFQN)
+}
+
+// indexedElement returns the symbol the index holds under sym's qualified name,
+// which is the one the annotations of an element are recorded against. A
+// workspace that reindexes holds one element as a symbol per generation, and an
+// expression is evaluated in whichever generation its scope came from.
+func (m *Model) indexedElement(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
+	if indexed := m.symbolByFQN(m.fqnOf(sym)); indexed != nil {
+		return indexed
+	}
+	return sym
+}
+
+// conformsByName reports whether sym or a supertype of it carries the qualified
+// name typeFQN. A workspace that reindexes holds one element as more than one
+// symbol across generations, and a name identifies one element (symbolByFQN
+// answers nothing for an ambiguous one), so the name decides what identity cannot.
+func (m *Model) conformsByName(sym *symbols.Symbol, typeFQN string) bool {
+	if sym == nil || typeFQN == "" {
+		return false
+	}
+	if m.fqnOf(sym) == typeFQN {
+		return true
+	}
+	for _, sup := range m.AllSupertypes(sym) {
+		if m.fqnOf(sup) == typeFQN {
+			return true
 		}
 	}
 	return false
