@@ -346,8 +346,9 @@ func (ctx *Context) registerInstance(inst *Instance) {
 	ctx.instances[inst.ID] = inst
 }
 
-// EvaluateConstraint evaluates a constraint definition/usage against the
-// declared defaults of the features it refers to.
+// EvaluateConstraint evaluates a constraint definition/usage naming no object:
+// against the single object of this runtime carrying it, the declared defaults
+// when there is none, ErrAmbiguousSubject when there are several.
 // Returns (satisfied, error). If IsAssert=true, violation is an error.
 // If IsAssert=false (assume), always returns (true, nil) but logs assumptions.
 func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope) (bool, error) {
@@ -388,8 +389,9 @@ func RequireRequirement(sym *symbols.Symbol) error {
 
 // EvaluateConstraintOn evaluates a constraint against a concrete instance: a
 // feature the constraint names resolves to that instance's slot, so the same
-// constraint can pass for one instance and fail for another. A nil instance
-// evaluates against declared defaults, as EvaluateConstraint does.
+// constraint can pass for one instance and fail for another. An instance that
+// does not carry the constraint itself is searched for the nested object that
+// does; a nil instance leaves the subject to EvaluateConstraint's rule.
 func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
 	defer ctx.beginRun()()
 
@@ -516,8 +518,8 @@ func bodyScope(sym *symbols.Symbol, fallback *symbols.Scope) *symbols.Scope {
 	return fallback
 }
 
-// EvaluateRequirement evaluates a requirement definition/usage against the
-// declared defaults of the features it refers to.
+// EvaluateRequirement evaluates a requirement definition/usage naming no object,
+// choosing its subject as EvaluateConstraint does.
 // Returns (satisfied, error). Validates subject/actor types and evaluates assume/require expressions.
 // Assume members always pass (trusted), require members must evaluate to true.
 func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scope) (bool, error) {
@@ -525,8 +527,9 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 }
 
 // EvaluateRequirementOn evaluates a requirement against a concrete instance,
-// binding the features it names to that instance's slots. A nil instance
-// evaluates against declared defaults, as EvaluateRequirement does.
+// binding the features it names to that instance's slots. The subject is chosen
+// as EvaluateConstraintOn chooses it; the subject/actor bindings, however, are
+// evaluated against the instance supplied rather than the subject chosen.
 func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
 	defer ctx.beginRun()()
 
