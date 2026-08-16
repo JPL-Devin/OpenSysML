@@ -892,8 +892,8 @@ func (e *StateExecutor) recordHistory(state *ast.StateNode) *historyRecord {
 // fireHistoryTransition takes a transition into a history pseudostate: the
 // composite state that owns it is re-entered in the configuration it was last
 // left in. Before the state has ever been exited there is nothing to restore, so
-// the history's own outgoing transition supplies the default target, exactly as
-// UML's default history transition does.
+// the history's own outgoing transition supplies the default target, as UML's
+// default history transition does (UML is the reference: no SysML v2 notation).
 //
 // A shallow history restores the substate that was active; a deep history keeps
 // descending, restoring the innermost one.

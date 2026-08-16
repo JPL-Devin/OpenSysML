@@ -20,26 +20,33 @@ The OMG textual notation covers state definitions/usages, `entry`/`do`/`exit`
 subactions and transitions (`SysML.xtext`, `StateDefinition` … `TransitionUsage`,
 around the `/* STATES */` section), and nothing else about state machines: there
 is no production for a pseudostate of any kind and none for event deferral.
-UML 2.5.1 §14.2.3.4 (Pseudostates) and the `State::deferrableTrigger` property of
-§14.2.3 (StateMachines) define the semantics, but their notation is diagrammatic:
-neither has a textual surface syntax to borrow.
+Some of these concepts nevertheless have semantics in the bundled KerML semantic
+library or the Systems Library, and those are the governing reference; UML 2.5.1
+§14.2.3.4 (Pseudostates) is cited only for the ones that have neither, whose
+notation there is diagrammatic and so has no textual surface syntax to borrow.
 
 Systemica therefore defines its own keywords for them, in a state body only.
 They are a documented extension, not an OMG notation:
 
-| Form | Meaning | UML concept |
+| Form | Meaning | Semantic reference |
 |------|---------|-------------|
-| `choice <name>;` | dynamic conditional branch | `choice` pseudostate |
-| `junction <name>;` | static branch/merge | `junction` pseudostate |
-| `fork <name>;` | parallel split | `fork` pseudostate |
-| `join <name>;` | parallel synchronization | `join` pseudostate |
-| `region <name> { … }` | orthogonal region | `Region` |
-| `history <name>;` | shallow history (UML `H`) | `shallowHistory` pseudostate |
-| `shallow history <name>;` | shallow history, spelled out | `shallowHistory` pseudostate |
-| `deep history <name>;` | deep history (UML `H*`) | `deepHistory` pseudostate |
-| `entry point <name>;` | entry point | `entryPoint` pseudostate |
-| `exit point <name>;` | exit point | `exitPoint` pseudostate |
-| `defer <event> [, <event>]*;` | events the state retains while active | `State::deferrableTrigger` |
+| `choice <name>;` | dynamic conditional branch | KerML `ControlPerformances::DecisionPerformance` — selects one of the successions leaving it, `outgoingHBLink: HappensBefore[1]` (notation is a Systemica invention) |
+| `junction <name>;` | static branch/merge | KerML `DecisionPerformance::outgoingHBLink[1]` / `MergePerformance::incomingHBLink[1]` (notation is a Systemica invention) |
+| `fork <name>;` | parallel split | UML `fork` pseudostate (a state-body fork has no SysML v2 or KerML counterpart; the action-level one is `Actions::ForkAction`) |
+| `join <name>;` | parallel synchronization | UML `join` pseudostate (a state-body join has no SysML v2 or KerML counterpart; the action-level one is `Actions::JoinAction`) |
+| `region <name> { … }` | orthogonal region | UML `Region` |
+| `history <name>;` | shallow history (UML `H`) | UML `shallowHistory` pseudostate |
+| `shallow history <name>;` | shallow history, spelled out | UML `shallowHistory` pseudostate |
+| `deep history <name>;` | deep history (UML `H*`) | UML `deepHistory` pseudostate |
+| `entry point <name>;` | entry point | UML `entryPoint` pseudostate |
+| `exit point <name>;` | exit point | UML `exitPoint` pseudostate |
+| `defer <event> [, <event>]*;` | events the state retains while active | KerML `StatePerformances::StatePerformance::deferrable: Transfer[0..*] subsets acceptable` — "transfers … can be considered for acceptance more than once"; dispatch order is `Occurrences::Occurrence::incomingTransferSort`, defaulting to `earlierFirstIncomingTransferSort` |
+
+The action-level `fork`/`join` control nodes are SysML v2's `Actions::ForkAction`
+and `JoinAction`, whose behavior "results from requiring that the target
+[respectively source] multiplicity of all outgoing [incoming] succession
+connectors be 1..1" — the library states no behavior of their own, a
+`ControlAction` having "no inherent behavior".
 
 Notes:
 
