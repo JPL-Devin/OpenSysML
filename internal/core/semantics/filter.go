@@ -569,18 +569,29 @@ func (m *Model) annotationConforms(a annotation, typ *symbols.Symbol, typeFQN st
 	return a.typ != nil && m.conformsByName(a.typ, typeFQN)
 }
 
-// indexedElement returns the symbol the index holds under sym's qualified name,
-// which is the one the annotations of an element are recorded against. A
-// workspace that reindexes holds one element as a symbol per generation, and an
-// expression is evaluated in whichever generation its scope came from.
+// indexedElement returns the symbol the index holds for sym's element, which is
+// the one its annotations are recorded against across index generations. A
+// body-local declaration is not indexed and bears an unqualified name, so it is
+// judged as itself rather than as a namesake of it.
 func (m *Model) indexedElement(sym *symbols.Symbol) *symbols.Symbol {
-	if sym == nil {
-		return nil
+	if sym == nil || bodyLocalSymbol(sym) {
+		return sym
 	}
-	if indexed := m.symbolByFQN(m.fqnOf(sym)); indexed != nil {
+	if indexed := m.symbolByFQN(m.fqnOf(sym)); indexed != nil && indexed.Kind == sym.Kind {
 		return indexed
 	}
 	return sym
+}
+
+// bodyLocalSymbol reports whether sym is declared inside a body, whose names
+// exist only within it.
+func bodyLocalSymbol(sym *symbols.Symbol) bool {
+	for scope := sym.OwnerScope; scope != nil; scope = scope.Parent() {
+		if scope.BodyLocal() {
+			return true
+		}
+	}
+	return false
 }
 
 // conformsByName reports whether sym or a supertype of it carries the qualified

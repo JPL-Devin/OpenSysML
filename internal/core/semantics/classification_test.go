@@ -172,3 +172,44 @@ func TestClassificationOfASubjectFromAnotherIndexGeneration(t *testing.T) {
 		}
 	}
 }
+
+// A body-local declaration is judged as itself: its name is unqualified, so a
+// top-level element of the same name must not answer for it.
+func TestClassificationOfABodyLocalNamesakeOfAnAnnotatedElement(t *testing.T) {
+	const src = `
+		metadata def Safety;
+		#Safety part def Belt;
+		calc def C {
+			attribute xs : Integer[*] = (1, 2);
+			attribute kept : Integer[*] = xs.?{in Belt; Belt > 1};
+			return : Integer = 1;
+		}
+	`
+	m, op, root := classificationOf(t, src, "@Safety")
+	local := bodyLocalMember(t, sym(t, root, "C"), "Belt")
+	got, err := m.EvalClassification(root, op, local)
+	if err != nil {
+		t.Fatalf("EvalClassification of a body-local Belt: unexpected error %v", err)
+	}
+	if got {
+		t.Fatalf("a body-local Belt is @Safety, so it was judged as the annotated top-level Belt")
+	}
+}
+
+// bodyLocalMember is the member named name of a body scope under owner.
+func bodyLocalMember(t *testing.T, owner *symbols.Symbol, name string) *symbols.Symbol {
+	t.Helper()
+	if owner.Scope == nil {
+		t.Fatalf("%s declares no scope", owner.Name)
+	}
+	for _, scope := range owner.Scope.Children() {
+		if !scope.BodyLocal() {
+			continue
+		}
+		if member, ok := scope.LookupLocal(name); ok {
+			return member
+		}
+	}
+	t.Fatalf("no body-local %q under %s", name, owner.Name)
+	return nil
+}
